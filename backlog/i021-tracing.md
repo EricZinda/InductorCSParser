@@ -1,0 +1,7 @@
+- Tracing
+    - Current state: Not implemented. ParseOptions has no TraceSink or TraceLevel; rules don't emit any trace output. The first time someone tries to debug a non-trivial grammar they'll need this.
+    - Design from docs/ProgrammingModel.md: `ParseOptions.TraceSink` is a `TextWriter?` (null means tracing off, which compiles down to a cheap null check the JIT can devirtualize). `ParseOptions.TraceLevel` gates verbosity. Every rule emits a line when it's tried and when it succeeds or fails. Indentation reflects transaction depth so nested rules visually nest in the output.
+    - Trace format should match the C++ version exactly, including the `1to2147483647Expression`-style template-unrolled names for the builtins. Doc: "the C++ test corpus has traced output captured in comments and docs, and matching the format lets us reuse those examples as reference material."
+    - Where tracing fires: lexer.Read calls, rule entry, rule success/failure, deepest-failure updates. Each write is one null check + one WriteLine when enabled.
+    - Priority: Second after LateBoundRule. The moment anyone tries to build a real grammar, debugging pain shows up. Tracing is how you get out of it.
+    - Done when: TraceSink produces output structurally matching a captured C++ trace for the Setting example; enabling tracing has negligible cost when TraceSink is null; trace output is legible (indented by depth, rule names visible).

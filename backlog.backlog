@@ -1,0 +1,21 @@
+<!-- backlog-viewer
+version: 1
+directory: ./backlog/
+formatId: bullet
+lineEnding: os
+numberingScheme: alphanumeric
+-->
+
+<!--
+  This is a pointer file for the Backlog Viewer VS Code extension.
+  Open it in VS Code to see the visual backlog editor.
+
+  Settings in the block above:
+    directory      - relative path to the folder of .md item files
+    formatId       - item format: h1-heading, h2-heading, bullet, paragraph, indentation
+    lineEnding     - line ending convention: lf, crlf, or os (platform default)
+    numberingScheme - file prefix style: numeric (0001, 0002) or alphanumeric (stable keys)
+
+  You can edit these settings by hand. The extension re-reads them each time
+  you open the file.
+-->

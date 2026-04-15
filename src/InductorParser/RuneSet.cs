@@ -1,0 +1,310 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Text;
+
+namespace InductorParser;
+
+public readonly struct RuneSet
+{
+    // A closed interval [Low, High] of Unicode code points. The internal
+    // representation of a RuneSet is a sorted, non-overlapping array of
+    // these. Named Interval (not Range) to avoid colliding with the public
+    // Range(...) factory method below.
+    private readonly record struct Interval(int Low, int High);
+
+    private readonly Interval[] _ranges;
+
+    private RuneSet(Interval[] ranges) => _ranges = ranges;
+
+    public bool Contains(int codepoint)
+    {
+        var ranges = _ranges;
+        if (ranges == null) return false;
+        for (int index = 0; index < ranges.Length; index++)
+        {
+            if (codepoint < ranges[index].Low) return false;
+            if (codepoint <= ranges[index].High) return true;
+        }
+        return false;
+    }
+
+    public bool Contains(char c) => Contains((int)c);
+    public bool Contains(Rune r) => Contains(r.Value);
+
+    public static RuneSet Single(char c) => Single((int)c);
+    public static RuneSet Single(Rune r) => Single(r.Value);
+    public static RuneSet Single(int codepoint)
+    {
+        ValidateScalarValue(codepoint, nameof(codepoint));
+        return new RuneSet(new[] { new Interval(codepoint, codepoint) });
+    }
+
+    public static RuneSet Range(char low, char high) => Range((int)low, (int)high);
+    public static RuneSet Range(Rune low, Rune high) => Range(low.Value, high.Value);
+    // Validates the endpoints themselves, not the interior of the range.
+    // That means Range(0, 0x10FFFF) is allowed even though the interval
+    // covers the surrogate block 0xD800..0xDFFF, which isn't a set of
+    // valid scalar values. The internal set ends up with "dead" slots in
+    // that block, which is harmless: the lexer never produces surrogate
+    // halves as token values, so no Contains() check against those slots
+    // can ever fire. Auto-splitting the range around the surrogate gap
+    // would be more principled but also more code for zero user-visible
+    // effect.
+    public static RuneSet Range(int low, int high)
+    {
+        ValidateScalarValue(low, nameof(low));
+        ValidateScalarValue(high, nameof(high));
+        if (high < low) throw new ArgumentException("high must be >= low");
+        return new RuneSet(new[] { new Interval(low, high) });
+    }
+
+    public static RuneSet Runes(string characters)
+    {
+        if (characters == null) throw new ArgumentNullException(nameof(characters));
+        var list = new List<Interval>();
+        for (int index = 0; index < characters.Length;)
+        {
+            int codepoint;
+            if (char.IsHighSurrogate(characters[index]) && index + 1 < characters.Length && char.IsLowSurrogate(characters[index + 1]))
+            {
+                codepoint = char.ConvertToUtf32(characters[index], characters[index + 1]);
+                index += 2;
+            }
+            else
+            {
+                codepoint = characters[index];
+                index++;
+            }
+            // Catches lone surrogate halves in the input string. A well-formed
+            // UTF-16 string shouldn't contain them, but we can't trust every
+            // caller's string to be well-formed.
+            if (!Rune.IsValid(codepoint))
+                throw new ArgumentException(
+                    $"Runes(string) encountered an invalid Unicode scalar value (0x{codepoint:X4}) at UTF-16 offset {index - 1}. " +
+                    "Lone surrogate halves aren't valid runes.",
+                    nameof(characters));
+            list.Add(new Interval(codepoint, codepoint));
+        }
+        return new RuneSet(Normalize(list));
+    }
+
+    // Shared validator for the int factories. A rune is any code point in
+    // 0..0x10FFFF except the surrogate halves 0xD800..0xDFFF. Rune.IsValid
+    // enforces both constraints.
+    private static void ValidateScalarValue(int codepoint, string parameterName)
+    {
+        if (!Rune.IsValid(codepoint))
+            throw new ArgumentOutOfRangeException(parameterName, codepoint,
+                "Must be a valid Unicode scalar value (0..0x10FFFF, excluding surrogates 0xD800..0xDFFF).");
+    }
+
+    public static RuneSet operator |(RuneSet a, RuneSet b)
+    {
+        var combined = new List<Interval>();
+        if (a._ranges != null) combined.AddRange(a._ranges);
+        if (b._ranges != null) combined.AddRange(b._ranges);
+        return new RuneSet(Normalize(combined));
+    }
+
+    private static Interval[] Normalize(List<Interval> ranges)
+    {
+        if (ranges.Count == 0) return Array.Empty<Interval>();
+        ranges.Sort((first, second) => first.Low.CompareTo(second.Low));
+        var merged = new List<Interval>();
+        var current = ranges[0];
+        for (int index = 1; index < ranges.Count; index++)
+        {
+            var next = ranges[index];
+            if (next.Low <= current.High + 1)
+            {
+                if (next.High > current.High) current = new Interval(current.Low, next.High);
+            }
+            else
+            {
+                merged.Add(current);
+                current = next;
+            }
+        }
+        merged.Add(current);
+        return merged.ToArray();
+    }
+
+    // Per-category cache. Each UnicodeCategory's set of scalar values is
+    // expensive to compute (a full 0..0x10FFFF scan), so we cache the result
+    // the first time anyone asks. Subsequent lookups are hash-table reads.
+    // Concurrent because nothing else in RuneSet holds a lock; multiple
+    // threads resolving Letters on startup are fine.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<UnicodeCategory, RuneSet> _categoryCache
+        = new System.Collections.Concurrent.ConcurrentDictionary<UnicodeCategory, RuneSet>();
+
+    // One UnicodeCategory is one RuneSet and it is cached (if used).
+    public static RuneSet Category(UnicodeCategory category)
+    {
+        if (_categoryCache.TryGetValue(category, out var cached)) return cached;
+        BuildCategories(new[] { category });
+        return _categoryCache[category];
+    }
+
+    // Composite built-ins. Letters is the union of the five "Letter"
+    // UnicodeCategory values; Digits is one category. Wrapped in Lazy so
+    // the union work happens once and is cached — without it, every access
+    // to RuneSet.Letters would redo the four | merges.
+    //
+    // The Lazy factory calls BuildCategories with the full batch first, so
+    // all five category scans happen in a single 0..0x10FFFF pass rather
+    // than five separate passes. Each subsequent Category(...) call lookup
+    // is then a cache hit.
+    private static readonly Lazy<RuneSet> _letters = new Lazy<RuneSet>(() =>
+        CategoriesUnion(
+            UnicodeCategory.UppercaseLetter,
+            UnicodeCategory.LowercaseLetter,
+            UnicodeCategory.TitlecaseLetter,
+            UnicodeCategory.ModifierLetter,
+            UnicodeCategory.OtherLetter));
+    private static readonly Lazy<RuneSet> _digits = new Lazy<RuneSet>(() =>
+        Category(UnicodeCategory.DecimalDigitNumber));
+
+    // Shared helper for built-ins: ensure every target category is cached
+    // (one scan for all missing targets), then union them in order.
+    private static RuneSet CategoriesUnion(params UnicodeCategory[] targets)
+    {
+        BuildCategories(targets);
+        var result = Category(targets[0]);
+        for (int index = 1; index < targets.Length; index++)
+            result = result | Category(targets[index]);
+        return result;
+    }
+
+    // Whitespace doesn't decompose cleanly into UnicodeCategory values
+    // (char.IsWhiteSpace includes a few specific Control-category code
+    // points like \t and \n, plus SpaceSeparator/LineSeparator/ParagraphSeparator).
+    // Keep it as its own predicate-based scan.
+    private static readonly Lazy<RuneSet> _whitespace = new Lazy<RuneSet>(BuildWhitespace);
+
+    // The set of Unicode scalar values that are letters in Unicode's
+    // General_Category sense (Lu, Ll, Lt, Lm, Lo). Matches what
+    // char.IsLetter and Rune.IsLetter consider a letter.
+    //
+    // Use this for things that are literally letters: identifier characters
+    // in a name, keyword text inside an alphabetic token, a rule that
+    // accepts 'a' through 'z' plus 'é' and '漢' and 'ж'.
+    //
+    // Do NOT use this as a way to match "any character" or "any content." It
+    // rejects digits, whitespace, punctuation, symbols, and any multi-rune
+    // grapheme like emoji. A grammar that wants "match everything up to the
+    // next delimiter" or "match anything the other rules didn't claim"
+    // should use the pass-through-text recipe (see docs/Recipes.md): either
+    // RuneNotIn(stopSet) for delimiter-based stops, or Not(stopRule) + AnyChar()
+    // for rule-based stops.
+    public static RuneSet Letters => _letters.Value;
+    public static RuneSet Digits => _digits.Value;
+    public static RuneSet Whitespace => _whitespace.Value;
+
+    public static class Ascii
+    {
+        public static readonly RuneSet Letters = Range('A', 'Z') | Range('a', 'z');
+        public static readonly RuneSet Digits = Range('0', '9');
+        public static readonly RuneSet Whitespace = Runes(" \t\r\n");
+    }
+
+    // Build from predicate over BMP code points only. Non-BMP whitespace
+    // is rare in real input and not needed for the smallest core.
+    private static RuneSet BuildWhitespace()
+    {
+        var list = new List<Interval>();
+        int? currentLow = null;
+        int currentHigh = 0;
+        for (int codepoint = 0; codepoint <= 0xFFFF; codepoint++)
+        {
+            // Skip the surrogate block: not valid Unicode scalar values.
+            // See BuildFromPredicate below for the full rationale.
+            if (codepoint >= 0xD800 && codepoint <= 0xDFFF) continue;
+            if (char.IsWhiteSpace((char)codepoint))
+            {
+                if (currentLow == null) { currentLow = codepoint; currentHigh = codepoint; }
+                else currentHigh = codepoint;
+            }
+            else if (currentLow != null)
+            {
+                list.Add(new Interval(currentLow.Value, currentHigh));
+                currentLow = null;
+            }
+        }
+        if (currentLow != null) list.Add(new Interval(currentLow.Value, currentHigh));
+        return new RuneSet(list.ToArray());
+    }
+
+    // Scan 0..0x10FFFF once and populate the cache with a RuneSet for every
+    // requested category that isn't already cached. Each code point's
+    // UnicodeCategory is looked up exactly once and compared against every
+    // target in the missing list. So asking for one category costs one
+    // full scan with one compare per codepoint; asking for five (the
+    // Letters case) costs one full scan with five compares per codepoint,
+    // not five full scans.
+    //
+    // The scan's expensive part is GetUnicodeCategory (internal table
+    // lookup in the BCL). Comparing enum values is nearly free. Batching
+    // saves (N - 1) * ~1M category lookups when bootstrapping a composite
+    // like Letters.
+    //
+    // Safe under concurrent callers: TryAdd is atomic, and two threads
+    // both computing the same category just mean the second result is
+    // discarded.
+    private static void BuildCategories(UnicodeCategory[] targets)
+    {
+        // Filter to just the categories that aren't already cached.
+        // Nothing forces callers to check first, so this method does it.
+        var missing = new List<UnicodeCategory>();
+        foreach (var target in targets)
+            if (!_categoryCache.ContainsKey(target) && !missing.Contains(target))
+                missing.Add(target);
+        if (missing.Count == 0) return;
+
+        // Parallel state, one slot per missing target.
+        var lists = new List<Interval>[missing.Count];
+        var currentLows = new int?[missing.Count];
+        var currentHighs = new int[missing.Count];
+        for (int index = 0; index < missing.Count; index++)
+            lists[index] = new List<Interval>();
+
+        for (int codepoint = 0; codepoint <= 0x10FFFF; codepoint++)
+        {
+            // Skip the surrogate block. These code units exist to encode
+            // supplementary-plane code points as UTF-16 pairs; they aren't
+            // valid Unicode scalar values (runes) on their own.
+            if (codepoint >= 0xD800 && codepoint <= 0xDFFF) continue;
+
+            // CharUnicodeInfo.GetUnicodeCategory has a (char) overload for BMP and
+            // a (string, int) overload for supplementary-plane code points. We
+            // pick the cheaper path for the BMP half.
+            UnicodeCategory category;
+            if (codepoint <= 0xFFFF)
+                category = CharUnicodeInfo.GetUnicodeCategory((char)codepoint);
+            else
+                category = CharUnicodeInfo.GetUnicodeCategory(char.ConvertFromUtf32(codepoint), 0);
+
+            for (int index = 0; index < missing.Count; index++)
+            {
+                if (category == missing[index])
+                {
+                    if (currentLows[index] == null) { currentLows[index] = codepoint; currentHighs[index] = codepoint; }
+                    else currentHighs[index] = codepoint;
+                }
+                else if (currentLows[index] != null)
+                {
+                    lists[index].Add(new Interval(currentLows[index]!.Value, currentHighs[index]));
+                    currentLows[index] = null;
+                }
+            }
+        }
+
+        // Close any still-open intervals, materialize RuneSets, publish to cache.
+        for (int index = 0; index < missing.Count; index++)
+        {
+            if (currentLows[index] != null)
+                lists[index].Add(new Interval(currentLows[index]!.Value, currentHighs[index]));
+            _categoryCache.TryAdd(missing[index], new RuneSet(lists[index].ToArray()));
+        }
+    }
+}
