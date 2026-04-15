@@ -1,5 +1,7 @@
 using NUnit.Framework;
+using InductorParser;
 using static InductorParser.Rules;
+using static InductorParser.Tests.TraceTestHelpers;
 
 namespace InductorParser.Tests;
 
@@ -85,5 +87,48 @@ public class OneOrMoreRuleTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
         Assert.That(result.ErrorMessage, Is.EqualTo("want at least one 'a'"));
+    }
+
+    [Test]
+    public void OneOrMore_trace_success_produces_expected_output()
+    {
+        // Loop runs four inner attempts: three succeed on 'a','b','c',
+        // the fourth hits EOF and fails. The failing iteration's
+        // RecordFailure at position 3 is strictly deeper than the
+        // initial 0, so the deepest-failure trace fires.
+        var sink = NewSink();
+        OneOrMore(RuneIn(RuneSet.Ascii.Letters)).Parse("abc",
+            new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "      Lexer.Read: 'a', Consumed: 1",
+            "      SUCC | RuneIn: found 'a', wanted one of '[A-Z,a-z]'",
+            "      Lexer.Read: 'b', Consumed: 2",
+            "      SUCC | RuneIn: found 'b', wanted one of '[A-Z,a-z]'",
+            "      Lexer.Read: 'c', Consumed: 3",
+            "      SUCC | RuneIn: found 'c', wanted one of '[A-Z,a-z]'",
+            "      Lexer.Read: '<EOF>', Consumed: 3",
+            "      FAIL | RuneIn: found '<EOF>', wanted one of '[A-Z,a-z]'",
+            "      Lexer.RecordFailure: new deepest failure at char 3",
+            "   SUCC | OneOrMore: count= 3"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void OneOrMore_trace_failure_produces_expected_output()
+    {
+        // First inner attempt fails at position 0 (not > initial 0, so
+        // no deepest-failure trace). OneOrMore then emits its own FAIL
+        // line with count= 0.
+        var sink = NewSink();
+        OneOrMore(Char('a')).Parse("z", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "      Lexer.Read: 'z', Consumed: 1",
+            "      FAIL | Char: found 'z', wanted 'a'",
+            "   FAIL | OneOrMore: count= 0"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
 }

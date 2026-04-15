@@ -32,6 +32,40 @@ public readonly struct RuneSet
     public bool Contains(char c) => Contains((int)c);
     public bool Contains(Rune r) => Contains(r.Value);
 
+    // Human-readable rendering of the range list, for trace output and
+    // debugger display. Produces "[a-z,A-Z,0-9]" style output with
+    // single-codepoint ranges collapsed to one char and long ranges
+    // rendered as low-high. Printable ASCII code points render as the
+    // literal character; everything else renders as U+XXXX. Keeps trace
+    // lines legible without dragging in the entire Unicode database.
+    public override string ToString()
+    {
+        var ranges = _ranges;
+        if (ranges == null || ranges.Length == 0) return "[]";
+        var sb = new StringBuilder();
+        sb.Append('[');
+        for (int index = 0; index < ranges.Length; index++)
+        {
+            if (index > 0) sb.Append(',');
+            var interval = ranges[index];
+            sb.Append(RenderCodepoint(interval.Low));
+            if (interval.High != interval.Low)
+            {
+                sb.Append('-');
+                sb.Append(RenderCodepoint(interval.High));
+            }
+        }
+        sb.Append(']');
+        return sb.ToString();
+    }
+
+    private static string RenderCodepoint(int codepoint)
+    {
+        if (codepoint >= 0x20 && codepoint <= 0x7E)
+            return ((char)codepoint).ToString();
+        return $"U+{codepoint:X4}";
+    }
+
     public static RuneSet Single(char c) => Single((int)c);
     public static RuneSet Single(Rune r) => Single(r.Value);
     public static RuneSet Single(int codepoint)

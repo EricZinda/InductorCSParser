@@ -16,9 +16,11 @@ internal sealed class OptionalRule : Rule
         var symbol = Inner.TryParse(lexer);
         if (symbol == null)
         {
+            TraceSuccess(lexer, $"count= 0");
             transaction.Commit();
             return new Symbol(Id, FlattenType, Array.Empty<Symbol>());
         }
+        TraceSuccess(lexer, $"count= 1");
         transaction.Commit();
         return new Symbol(Id, FlattenType, new[] { symbol });
     }

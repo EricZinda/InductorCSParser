@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using InductorParser;
 using static InductorParser.Rules;
+using static InductorParser.Tests.TraceTestHelpers;
 
 namespace InductorParser.Tests;
 
@@ -78,5 +79,31 @@ public class RuneInRuleTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorMessage, Is.EqualTo("expected ';'"));
+    }
+
+    [Test]
+    public void RuneIn_trace_success_produces_expected_output()
+    {
+        var sink = NewSink();
+        RuneIn(RuneSet.Ascii.Letters).Parse("x", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   Lexer.Read: 'x', Consumed: 1",
+            "   SUCC | RuneIn: found 'x', wanted one of '[A-Z,a-z]'"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void RuneIn_trace_failure_produces_expected_output()
+    {
+        var sink = NewSink();
+        RuneIn(RuneSet.Ascii.Letters).Parse("1", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   Lexer.Read: '1', Consumed: 1",
+            "   FAIL | RuneIn: found '1', wanted one of '[A-Z,a-z]'"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
 }

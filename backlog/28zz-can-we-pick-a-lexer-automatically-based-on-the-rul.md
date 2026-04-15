@@ -1,0 +1,1 @@
+- Can we pick a lexer automatically based on the rules?

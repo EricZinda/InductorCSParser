@@ -2,6 +2,7 @@ using System;
 using NUnit.Framework;
 using InductorParser;
 using static InductorParser.Rules;
+using static InductorParser.Tests.TraceTestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
 
 namespace InductorParser.Tests;
@@ -220,5 +221,31 @@ public class CharRuleTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
         Assert.That(result.ErrorMessage, Is.EqualTo("expected wave"));
+    }
+
+    [Test]
+    public void Char_trace_success_produces_expected_output()
+    {
+        var sink = NewSink();
+        Char('a').Parse("a", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   Lexer.Read: 'a', Consumed: 1",
+            "   SUCC | Char: found 'a'"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void Char_trace_failure_produces_expected_output()
+    {
+        var sink = NewSink();
+        Char('a').Parse("x", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   Lexer.Read: 'x', Consumed: 1",
+            "   FAIL | Char: found 'x', wanted 'a'"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
 }

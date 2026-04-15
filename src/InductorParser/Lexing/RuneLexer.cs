@@ -1,3 +1,6 @@
+using System.IO;
+using InductorParser.Tracing;
+
 namespace InductorParser.Lexing;
 
 // One token per Unicode code point (rune). Surrogate pairs are coalesced
@@ -5,6 +8,9 @@ namespace InductorParser.Lexing;
 public sealed class RuneLexer : Lexer
 {
     public RuneLexer(string input) : base(input) { }
+
+    public RuneLexer(string input, TextWriter? traceSink, TraceLevel traceLevel)
+        : base(input, traceSink, traceLevel) { }
 
     protected override int NextTokenLength(int startOffset)
     {

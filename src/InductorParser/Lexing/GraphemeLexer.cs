@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.IO;
+using InductorParser.Tracing;
 
 namespace InductorParser.Lexing;
 
@@ -17,6 +19,9 @@ namespace InductorParser.Lexing;
 public sealed class GraphemeLexer : Lexer
 {
     public GraphemeLexer(string input) : base(input) { }
+
+    public GraphemeLexer(string input, TextWriter? traceSink, TraceLevel traceLevel)
+        : base(input, traceSink, traceLevel) { }
 
     protected override int NextTokenLength(int startOffset)
     {

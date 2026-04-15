@@ -1,5 +1,7 @@
 using NUnit.Framework;
+using InductorParser;
 using static InductorParser.Rules;
+using static InductorParser.Tests.TraceTestHelpers;
 
 namespace InductorParser.Tests;
 
@@ -58,5 +60,47 @@ public class OptionalRuleTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
         Assert.That(result.ErrorMessage, Is.EqualTo("need 'c'"));
+    }
+
+    [Test]
+    public void Optional_trace_with_match_produces_expected_output()
+    {
+        // Optional opens its own transaction. And(Optional(Char('a')),
+        // Char('b')) on "ab": And at depth 1, Optional adds depth 2,
+        // the inner Char adds depth 3 (nine spaces).
+        var sink = NewSink();
+        And(Optional(Char('a')), Char('b'))
+            .Parse("ab", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "         Lexer.Read: 'a', Consumed: 1",
+            "         SUCC | Char: found 'a'",
+            "      SUCC | Optional: count= 1",
+            "      Lexer.Read: 'b', Consumed: 2",
+            "      SUCC | Char: found 'b'",
+            "   SUCC | And: found 2"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void Optional_trace_without_match_produces_expected_output()
+    {
+        // Inner fails, Optional still succeeds with count= 0. Char('b')
+        // then runs against the original position since Optional's
+        // commit didn't advance the lexer.
+        var sink = NewSink();
+        And(Optional(Char('a')), Char('b'))
+            .Parse("b", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "         Lexer.Read: 'b', Consumed: 1",
+            "         FAIL | Char: found 'b', wanted 'a'",
+            "      SUCC | Optional: count= 0",
+            "      Lexer.Read: 'b', Consumed: 1",
+            "      SUCC | Char: found 'b'",
+            "   SUCC | And: found 2"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
 }

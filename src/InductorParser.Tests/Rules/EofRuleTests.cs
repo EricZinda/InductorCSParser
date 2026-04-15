@@ -1,5 +1,7 @@
 using NUnit.Framework;
+using InductorParser;
 using static InductorParser.Rules;
+using static InductorParser.Tests.TraceTestHelpers;
 
 namespace InductorParser.Tests;
 
@@ -43,5 +45,34 @@ public class EofRuleTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
         Assert.That(result.ErrorMessage, Does.StartWith("Parse failed at offset 1"));
+    }
+
+    [Test]
+    public void Eof_trace_success_produces_expected_output()
+    {
+        // EofRule doesn't open a transaction and top-level Parse doesn't
+        // either, so the success line sits at depth 0 with no leading
+        // indentation. The message is empty, so there's no ": {detail}"
+        // tail either — the line reads simply "SUCC | Eof".
+        var sink = NewSink();
+        Eof().Parse("", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines("SUCC | Eof");
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void Eof_trace_failure_produces_expected_output()
+    {
+        // Wrapped in And so there's a transaction open when Eof fails,
+        // giving us a non-trivial indentation to pin.
+        var sink = NewSink();
+        And(Eof()).Parse("x", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   FAIL | Eof: found x",
+            "   FAIL | And: symbol #0"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
 }

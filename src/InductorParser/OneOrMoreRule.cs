@@ -17,6 +17,7 @@ internal sealed class OneOrMoreRule : Rule
         var firstSymbol = Inner.TryParse(lexer);
         if (firstSymbol == null)
         {
+            TraceFailure(lexer, $"count= 0");
             // Error Positioning: where OneOrMore started. Equivalently, where the
             // failing first inner started trying (they're the same offset
             // because the inner's transaction rolled back). OneOrMore only
@@ -37,6 +38,7 @@ internal sealed class OneOrMoreRule : Rule
             if (lexer.Position == positionBefore) break;
             matched.Add(nextSymbol);
         }
+        TraceSuccess(lexer, $"count= {matched.Count}");
         transaction.Commit();
         return new Symbol(Id, FlattenType, matched);
     }

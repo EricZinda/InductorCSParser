@@ -1,5 +1,7 @@
 using NUnit.Framework;
+using InductorParser;
 using static InductorParser.Rules;
+using static InductorParser.Tests.TraceTestHelpers;
 
 namespace InductorParser.Tests;
 
@@ -59,5 +61,41 @@ public class AndRuleTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
         Assert.That(result.ErrorMessage, Is.EqualTo("need a 'b'"));
+    }
+
+    [Test]
+    public void And_trace_success_produces_expected_output()
+    {
+        var sink = NewSink();
+        And(Char('a'), Char('b')).Parse("ab", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "      Lexer.Read: 'a', Consumed: 1",
+            "      SUCC | Char: found 'a'",
+            "      Lexer.Read: 'b', Consumed: 2",
+            "      SUCC | Char: found 'b'",
+            "   SUCC | And: found 2"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void And_trace_failure_produces_expected_output()
+    {
+        // "ax" advances past 'a', then Char('b') fails at position 1
+        // which is > the initial deepest (0), so the
+        // Lexer.RecordFailure trace fires too.
+        var sink = NewSink();
+        And(Char('a'), Char('b')).Parse("ax", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "      Lexer.Read: 'a', Consumed: 1",
+            "      SUCC | Char: found 'a'",
+            "      Lexer.Read: 'x', Consumed: 2",
+            "      FAIL | Char: found 'x', wanted 'b'",
+            "      Lexer.RecordFailure: new deepest failure at char 1",
+            "   FAIL | And: symbol #1"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
 }

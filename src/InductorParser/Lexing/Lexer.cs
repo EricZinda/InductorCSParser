@@ -1,4 +1,7 @@
 using System;
+using System.IO;
+using System.Runtime.CompilerServices;
+using InductorParser.Tracing;
 
 namespace InductorParser.Lexing;
 
@@ -6,42 +9,141 @@ public abstract class Lexer
 {
     // This is the one reference kept to the input string, which is immutable and shared by all Tokens and
     // Spans. The GC sees this one string object and tracks it; everything else is stack-resident
-    // structs that point back into this string. The GC never sees the Tokens or Spans, 
-    // so they never have to be tracked or reclaimed. 
+    // structs that point back into this string. The GC never sees the Tokens or Spans,
+    // so they never have to be tracked or reclaimed.
     private readonly string _input;
     private int _position;
     private int _deepestFailure;
     private string? _deepestFailureMessage;
 
+    // Trace destination and verbosity. Null sink means tracing is off.
+    // When set, every rule, Lexer.Read, and deepest-failure update writes 
+    // one line per event.
+    private readonly TextWriter? _traceSink;
+    private readonly TraceLevel _traceLevel;
+    
+    private int _transactionDepth;
+
     protected Lexer(string input)
+        : this(input, traceSink: null, traceLevel: TraceLevel.Normal)
+    {
+    }
+
+    protected Lexer(string input, TextWriter? traceSink, TraceLevel traceLevel)
     {
         _input = input ?? throw new ArgumentNullException(nameof(input));
+        _traceSink = traceSink;
+        _traceLevel = traceLevel;
     }
 
     public string Input => _input;
     public int Position => _position;
     public int DeepestFailure => _deepestFailure;
 
-    // The error message associated with the deepest failure seen so far, if
-    // the rule that failed at that position had one set via .WithError(...).
-    // Null when no rule at the deepest position set a custom message, or
-    // when nothing has failed yet.
+    // The error message associated with the deepest failure seen so far
+    // if one was set.
     public string? DeepestFailureMessage => _deepestFailureMessage;
 
     public bool IsEof => _position >= _input.Length;
+
+    internal int TransactionDepth => _transactionDepth;
+
+    internal bool IsTracing(TraceLevel level) =>
+        _traceSink != null && _traceLevel >= level;
+
+    // The `message` parameter is a TraceInterpolatedStringHandler, 
+    // which means callers can write `lexer.Trace(level, label, outcome, $"...")` 
+    // and the C# compiler will skip building the string when the sink is off or the level
+    // is gated out. No guard needed at the call site. See
+    // TraceInterpolatedStringHandler for how the compiler rewrite
+    // actually works.
+    //
+    // ----------------------------------------------------------------
+    // Cost when tracing is off (canonical reference for trace perf):
+    // ----------------------------------------------------------------
+    // Note that lexer.Trace(...) still gets called even when tracing
+    // is off — the TraceInterpolatedStringHandler argument only gates the
+    // expensive string-building work, not the method invocation
+    // itself. Trace stays cheap because:
+    //
+    //   1. The first thing inside Trace is a null check, so Trace
+    //      returns immediately without doing any indent/write work.
+    //      The Rule.TraceSuccess / TraceFailure helpers do the same
+    //      thing one layer up.
+    //   2. Trace carries [MethodImpl(MethodImplOptions.AggressiveInlining)],
+    //      so in Release builds the JIT folds the body into the caller.
+    //      What looks like a method call in the IL becomes a handful
+    //      of inline machine instructions.
+    //
+    // Net cost when tracing is off: about the same as the hand written
+    // alternative:
+    //
+    //     if (lexer.IsTracing(level))
+    //         lexer.WriteTraceLine(label, outcome, $"...");
+    //
+    // In Debug builds where AggressiveInlining
+    // is sometimes ignored, you do pay one real call frame per trace
+    // site.
+    // ----------------------------------------------------------------
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void Trace(
+        TraceLevel level,
+        string label,
+        TraceOutcome outcome,
+        [InterpolatedStringHandlerArgument("", nameof(level))]
+        TraceInterpolatedStringHandler message)
+    {
+        string? formatted = message.GetFormattedOrNull();
+        if (formatted == null) return;
+        WriteTraceLine(label, outcome, formatted);
+    }
+
+    // Write one trace line. Format:
+    //
+    //     {indent}{outcome}{label}{: message if non-empty}
+    //
+    //   * {indent}   3 spaces per open transaction, so nested rules
+    //                visually nest in the output.
+    //   * {outcome}  "SUCC | " or "FAIL | " for rule lines; empty for
+    //                Info lines (Lexer.Read / Lexer.RecordFailure).
+    //                Leading-column placement lets a reader scan down
+    //                a trace log and spot failures at a glance.
+    //   * {label}    identifier of who is emitting (e.g. "Char",
+    //                "settingName:OneOrMore", "Lexer.Read").
+    //   * {message}  per-line detail; ": " separator and message are
+    //                both omitted when message is empty, so
+    //                outcome-only lines like "SUCC | Eof" read cleanly.
+    //
+    // Fields are written incrementally rather than pre-concatenated to
+    // avoid allocating an intermediate string for every line.
+    internal void WriteTraceLine(string label, TraceOutcome outcome, string message)
+    {
+        for (int i = 0; i < _transactionDepth * 3; i++)
+            _traceSink!.Write(' ');
+        switch (outcome)
+        {
+            case TraceOutcome.Success: _traceSink!.Write("SUCC | "); break;
+            case TraceOutcome.Failure: _traceSink!.Write("FAIL | "); break;
+        }
+        _traceSink!.Write(label);
+        if (message.Length > 0)
+        {
+            _traceSink.Write(": ");
+            _traceSink.Write(message);
+        }
+        _traceSink.WriteLine();
+    }
 
     // Subclasses decide what one token means: one rune, one grapheme cluster,
     // etc. Called only when there is at least one char left in input.
     protected abstract int NextTokenLength(int startOffset);
 
-    // Token is a `readonly ref struct` (defined in Token.cs). Returning
+    // Token is a `readonly ref struct`. Returning
     // it copies the fields (a string reference, two ints, a bool, a
     // span) into the caller's storage rather than allocating on the
     // heap. For a struct this small the JIT usually returns it in
-    // registers and skips even the stack copy. Either way, no GC
-    // traffic.
+    // registers and skips even the stack copy. 
     //
-    // Each modifier on Token is pulling its weight:
     //   * `struct` keeps it off the heap. Value type semantics,
     //     returned by copying fields.
     //   * `readonly` means the fields never change after construction,
@@ -52,11 +154,16 @@ public abstract class Lexer
     //     span outliving its source string.
     public Token Read()
     {
-        if (IsEof) return new Token(_input, _position, 0, isEof: true);
+        if (IsEof)
+        {
+            Trace(TraceLevel.Diagnostic, "Lexer.Read", TraceOutcome.Info, $"'<EOF>', Consumed: {_position}");
+            return new Token(_input, _position, 0, isEof: true);
+        }
         int len = NextTokenLength(_position);
         if (len <= 0) len = 1; // defensive: never advance zero on a non-EOF read
         Token t = new Token(_input, _position, len, isEof: false);
         _position += len;
+        Trace(TraceLevel.Diagnostic, "Lexer.Read", TraceOutcome.Info, $"'{_input.Substring(t.Offset, t.Length)}', Consumed: {_position}");
         return t;
     }
 
@@ -66,7 +173,7 @@ public abstract class Lexer
     // post-read lexer position. That way `input[ErrorCharIndex]` gives the
     // actual wrong character on user-facing error reports.
     //
-    // Primitive rules save pre-read via transaction.StartPosition (single-
+    // Rules save pre-read via transaction.StartPosition (single-
     // read case) or a per-iteration local (multi-read lockstep). Composite
     // rules pass lexer.Position, which after a child's rollback equals
     // where that child started trying.
@@ -90,6 +197,7 @@ public abstract class Lexer
         {
             _deepestFailure = position;
             _deepestFailureMessage = errorMessage;
+            Trace(TraceLevel.Diagnostic, "Lexer.RecordFailure", TraceOutcome.Info, $"new deepest failure at char {position}");
             return;
         }
         if (position == _deepestFailure
@@ -131,19 +239,25 @@ public abstract class Lexer
     // Transaction is nested inside Lexer on purpose: the rollback logic
     // touches Lexer's private _position field, and nesting keeps that
     // access legitimate without widening visibility.
-    public Transaction BeginTransaction() => new Transaction(this, _position);
+    public Transaction BeginTransaction()
+    {
+        _transactionDepth++;
+        return new Transaction(this, _position);
+    }
 
     public struct Transaction : IDisposable
     {
         private readonly Lexer _lexer;
         private readonly int _savedPosition;
         private bool _settled;
+        private bool _depthPopped;
 
         internal Transaction(Lexer lexer, int savedPosition)
         {
             _lexer = lexer;
             _savedPosition = savedPosition;
             _settled = false;
+            _depthPopped = false;
         }
 
         // The lexer position at the moment this transaction opened. Rules
@@ -161,11 +275,27 @@ public abstract class Lexer
             _settled = true;
         }
 
+        // Dispose runs on every exit path (commit, rollback, normal return,
+        // exception). It does two things, each guarded by its own flag so
+        // the combination of explicit Commit()/Rollback() followed by
+        // implicit Dispose stays balanced:
+        //   * Restore the lexer position if the transaction wasn't settled.
+        //   * Pop the transaction-depth counter exactly once so trace
+        //     indentation mirrors the transaction nesting. The depth pop
+        //     has to happen regardless of commit vs. rollback, because the
+        //     rule that opened this transaction is unwinding either way.
         public void Dispose()
         {
-            if (_settled) return;
-            _lexer._position = _savedPosition;
-            _settled = true;
+            if (!_settled)
+            {
+                _lexer._position = _savedPosition;
+                _settled = true;
+            }
+            if (!_depthPopped)
+            {
+                _lexer._transactionDepth--;
+                _depthPopped = true;
+            }
         }
     }
 }

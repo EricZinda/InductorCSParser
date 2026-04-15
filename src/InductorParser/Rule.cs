@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
+using InductorParser.Tracing;
 
 namespace InductorParser;
 
@@ -56,6 +58,88 @@ public abstract class Rule
     // the "deepest failure wins" heuristic can surface it.
     protected internal string? ErrorMessage => _errorMessage;
 
+    // Cached rule class name for trace output, derived from GetType().Name
+    // in the constructor. The "Rule" suffix is stripped so "AndRule"
+    // becomes "And", "CharRule" becomes "Char", matching the trace
+    // naming convention. Reading this is a field load — cheaper than
+    // calling GetType().Name on every trace emission. Works under
+    // IL2CPP because it's baked in at construction time, not looked
+    // up via name-based reflection.
+    private readonly string _ruleTraceName;
+
+    // Compose the full trace label: "{Name}:{ruleName}" when the rule
+    // has a .As(name) set, else just "{ruleName}". Only .As() is used
+    // here — .WithError() sets the user-facing error message, not a
+    // rule identity, so it belongs in the trace line's body (see
+    // AppendErrorMessage) rather than as a label prefix.
+    private string BuildTraceLabel() =>
+        Name != null ? $"{Name}:{_ruleTraceName}" : _ruleTraceName;
+
+    // If the rule has .WithError(msg) set, append it in quotes after
+    // the trace body so a reader sees both what the rule actually
+    // tried ("found 'x', wanted 'a'") and the friendly message that
+    // would have surfaced to the user on a real parse failure
+    // ("expected an A"). Only used on failure lines; on success
+    // there is no error to report so the WithError message is
+    // omitted.
+    private string AppendErrorMessage(string body) =>
+        _errorMessage != null ? $"{body} \"{_errorMessage}\"" : body;
+
+    // Short-form trace helpers called from a rule's TryParse on the
+    // success or failure path. 
+    //
+    // [AggressiveInlining] lets the JIT fold the body into the caller
+    // so the off-path is a handler-construct + early return.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    protected void TraceSuccess(
+        Lexer lexer,
+        [InterpolatedStringHandlerArgument(nameof(lexer))]
+        TraceInterpolatedStringHandler message)
+    {
+        string? formatted = message.GetFormattedOrNull();
+        if (formatted == null) return;
+        lexer.WriteTraceLine(BuildTraceLabel(), TraceOutcome.Success, formatted);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    protected void TraceFailure(
+        Lexer lexer,
+        [InterpolatedStringHandlerArgument(nameof(lexer))]
+        TraceInterpolatedStringHandler message)
+    {
+        string? formatted = message.GetFormattedOrNull();
+        if (formatted == null) return;
+        lexer.WriteTraceLine(BuildTraceLabel(), TraceOutcome.Failure, AppendErrorMessage(formatted));
+    }
+
+    // Explicit-level overloads. Use when a trace should fire at a
+    // level other than Diagnostic (e.g. a summary line at Normal).
+    // The handler attribute threads nameof(level) through so the
+    // compiler picks the 5-arg TraceInterpolatedStringHandler ctor.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    protected void TraceSuccess(
+        Lexer lexer,
+        TraceLevel level,
+        [InterpolatedStringHandlerArgument(nameof(lexer), nameof(level))]
+        TraceInterpolatedStringHandler message)
+    {
+        string? formatted = message.GetFormattedOrNull();
+        if (formatted == null) return;
+        lexer.WriteTraceLine(BuildTraceLabel(), TraceOutcome.Success, formatted);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    protected void TraceFailure(
+        Lexer lexer,
+        TraceLevel level,
+        [InterpolatedStringHandlerArgument(nameof(lexer), nameof(level))]
+        TraceInterpolatedStringHandler message)
+    {
+        string? formatted = message.GetFormattedOrNull();
+        if (formatted == null) return;
+        lexer.WriteTraceLine(BuildTraceLabel(), TraceOutcome.Failure, AppendErrorMessage(formatted));
+    }
+
     // Shared sentinel for leaf rules that have no children. Array.Empty<T>()
     // already returns a singleton, so this isn't saving an allocation, just
     // naming the case and sparing leaf-rule constructions a new zero-length
@@ -79,6 +163,21 @@ public abstract class Rule
     {
         FlattenType = defaultFlatten;
         Children = children.Length > 0 ? children : NoChildren;
+        _ruleTraceName = DeriveRuleTraceName(GetType());
+    }
+
+    // Strip the "Rule" suffix so the trace label reads "And" instead
+    // of "AndRule". GetType() in a base constructor returns the
+    // derived runtime type (C# guarantee), so this resolves correctly
+    // for every subclass. Called once per rule instance in the ctor;
+    // the result is cached in _ruleTraceName so trace emission just
+    // reads a field.
+    private static string DeriveRuleTraceName(Type t)
+    {
+        string name = t.Name;
+        return name.EndsWith("Rule", StringComparison.Ordinal)
+            ? name.Substring(0, name.Length - 4)
+            : name;
     }
 
     // Replace this rule's children. The only production use is LateBoundRule,
@@ -203,8 +302,8 @@ public abstract class Rule
     {
         Compile();
         Lexer lexer = options.InputUnit == InputUnit.Rune
-            ? (Lexer)new RuneLexer(input)
-            : (Lexer)new GraphemeLexer(input);
+            ? (Lexer)new RuneLexer(input, options.TraceSink, options.TraceLevel)
+            : (Lexer)new GraphemeLexer(input, options.TraceSink, options.TraceLevel);
         var tree = TryParse(lexer);
         if (tree != null && lexer.IsEof)
             return ParseResult.Succeeded(tree);

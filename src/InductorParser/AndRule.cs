@@ -12,11 +12,13 @@ internal sealed class AndRule : Rule
     {
         using var transaction = lexer.BeginTransaction();
         var matched = new List<Symbol>();
-        foreach (var child in Children)
+        for (int symbolIndex = 0; symbolIndex < Children.Count; symbolIndex++)
         {
+            var child = Children[symbolIndex];
             var symbol = child.TryParse(lexer);
             if (symbol == null)
             {
+                TraceFailure(lexer, $"symbol #{symbolIndex}");
                 // Error Positioning: where the failing child started trying. After
                 // the child's transaction rolls back on its failure path,
                 // lexer.Position is exactly the child's own pre-read
@@ -28,6 +30,7 @@ internal sealed class AndRule : Rule
             }
             matched.Add(symbol);
         }
+        TraceSuccess(lexer, $"found {matched.Count}");
         transaction.Commit();
         return new Symbol(Id, FlattenType, matched);
     }

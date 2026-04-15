@@ -86,18 +86,21 @@ internal sealed class CharRule : Rule
             // of the whole attempt.
             if (token.IsEof)
             {
+                TraceFailure(lexer, $"found '<EOF>', wanted '{_expected}'");
                 lexer.RecordFailure(tokenStart, ErrorMessage);
                 return null;
             }
             if (consumed + token.Length > _expected.Length
                 || !token.Chars.SequenceEqual(_expected.AsSpan(consumed, token.Length)))
             {
+                TraceFailure(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted '{_expected}'");
                 lexer.RecordFailure(tokenStart, ErrorMessage);
                 return null;
             }
             consumed += token.Length;
         }
 
+        TraceSuccess(lexer, $"found '{_expected}'");
         transaction.Commit();
         return new Symbol(Id, FlattenType, lexer.Input.AsMemory(transaction.StartPosition, consumed));
     }

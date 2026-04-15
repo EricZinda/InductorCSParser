@@ -21,6 +21,7 @@ internal sealed class ZeroOrMoreRule : Rule
             if (lexer.Position == positionBefore) break;
             matched.Add(nextSymbol);
         }
+        TraceSuccess(lexer, $"count= {matched.Count}");
         return new Symbol(Id, FlattenType, matched);
     }
 }

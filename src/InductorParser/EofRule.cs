@@ -12,6 +12,7 @@ internal sealed class EofRule : Rule
     {
         if (!lexer.IsEof)
         {
+            TraceFailure(lexer, $"found {lexer.Input[lexer.Position]}");
             // Error Positioning: the position of the unexpected content. EofRule
             // doesn't read anything; it just checks whether we've reached
             // end-of-input. When the check fails, lexer.Position is
@@ -19,6 +20,7 @@ internal sealed class EofRule : Rule
             lexer.RecordFailure(lexer.Position, ErrorMessage);
             return null;
         }
+        TraceSuccess(lexer, $"");
         return new Symbol(Id, FlattenType, Array.Empty<Symbol>());
     }
 }
