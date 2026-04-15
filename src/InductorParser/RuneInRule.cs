@@ -21,7 +21,7 @@ internal sealed class RuneInRule : Rule
         _setRendered = runeSet.ToString();
     }
 
-    internal override Symbol? TryParse(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer)
     {
         using var transaction = lexer.BeginTransaction();
         var token = lexer.Read();

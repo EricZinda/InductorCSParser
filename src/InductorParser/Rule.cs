@@ -304,11 +304,43 @@ public abstract class Rule
         Lexer lexer = options.InputUnit == InputUnit.Rune
             ? (Lexer)new RuneLexer(input, options.TraceSink, options.TraceLevel)
             : (Lexer)new GraphemeLexer(input, options.TraceSink, options.TraceLevel);
-        var tree = TryParse(lexer);
+        lexer.ConfigureBudgets(options);
+        Symbol? tree;
+        try
+        {
+            tree = TryParse(lexer);
+        }
+        catch (ParseBudgetExceeded budget)
+        {
+            // The throw rode up through every active rule's `using var
+            // transaction = lexer.BeginTransaction()`, which rolled the
+            // lexer back frame by frame. lexer.Position now reflects
+            // wherever the unwind settled. We carry that as the
+            // ErrorCharIndex so callers get a coarse "how far did the
+            // parser get" hint for diagnostics.
+            return ParseResult.Aborted(budget.Outcome, lexer.Position, BuildBudgetMessage(budget.Outcome));
+        }
         if (tree != null && lexer.IsEof)
             return ParseResult.Succeeded(tree);
         var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
         return ParseResult.Failed(pos, BuildErrorMessage(lexer, pos));
+    }
+
+    private static string BuildBudgetMessage(ParseOutcome outcome)
+    {
+        switch (outcome)
+        {
+            case ParseOutcome.Timeout:
+                return "Parse aborted: timeout exceeded.";
+            case ParseOutcome.WorkLimitExceeded:
+                return "Parse aborted: maximum rule invocations exceeded.";
+            case ParseOutcome.DepthLimitExceeded:
+                return "Parse aborted: maximum recursion depth exceeded.";
+            case ParseOutcome.Canceled:
+                return "Parse aborted: cancellation requested.";
+            default:
+                return "Parse aborted.";
+        }
     }
 
     private static string BuildErrorMessage(Lexer lexer, int pos)
@@ -335,6 +367,32 @@ public abstract class Rule
         return $"Parse failed at offset {pos}: unexpected '{lexer.Input[pos]}'.";
     }
 
+    // The entry point every Rule call (top-level Parse and child
+    // Inner.TryParse) goes through. Bookkeeps the budget counters on the
+    // lexer (rule depth, total invocations, periodic timeout / cancellation
+    // poll) and then delegates to the subclass's TryParseRule. Wrapping
+    // it here means user-defined Rule subclasses that just override
+    // TryParseRule inherit catastrophic-backtracking protection with no
+    // extra work.
+    //
+    // The try/finally is what keeps depth balanced when a budget trips:
+    // ParseBudgetExceeded unwinds the stack, every frame's transaction
+    // `using` rolls back the lexer, and ExitRule decrements the depth
+    // counter on the way up. Rule.Parse catches the exception at the
+    // boundary and produces a ParseResult.Aborted.
+    internal Symbol? TryParse(Lexer lexer)
+    {
+        lexer.EnterRule();
+        try
+        {
+            return TryParseRule(lexer);
+        }
+        finally
+        {
+            lexer.ExitRule();
+        }
+    }
+
     // The matching method every subclass implements. Contract:
     //   * Open a transaction with lexer.BeginTransaction() at the top.
     //   * On success: call transaction.Commit() and return a Symbol subtree
@@ -345,7 +403,7 @@ public abstract class Rule
     //     this if you follow the transaction pattern).
     //   * Call lexer.RecordFailure() on the failure path so the
     //     "deepest failure wins" error-reporting heuristic works.
-    internal abstract Symbol? TryParse(Lexer lexer);
+    internal abstract Symbol? TryParseRule(Lexer lexer);
 
     internal void SetIdInternal(SymbolId id)
     {

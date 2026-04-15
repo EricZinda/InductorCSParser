@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Runtime.CompilerServices;
 using InductorParser.Tracing;
+using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace InductorParser.Lexing;
 
@@ -17,12 +18,31 @@ public abstract class Lexer
     private string? _deepestFailureMessage;
 
     // Trace destination and verbosity. Null sink means tracing is off.
-    // When set, every rule, Lexer.Read, and deepest-failure update writes 
+    // When set, every rule, Lexer.Read, and deepest-failure update writes
     // one line per event.
     private readonly TextWriter? _traceSink;
     private readonly TraceLevel _traceLevel;
-    
+
     private int _transactionDepth;
+
+    // Budget tracking. Set by ConfigureBudgets right after construction.
+    // Zero on either limit means "disabled" so the check can skip it.
+    private long _ruleInvocations;
+    private int _ruleDepth;
+    private long _maxRuleInvocations;
+    private int _maxDepth;
+    private TimeSpan _timeout;
+    private Stopwatch? _stopwatch;
+    private ParseCancellation? _cancellation;
+
+    // Periodic budget check fires every BudgetCheckInterval rule
+    // invocations rather than every one. Power of two so the check is a
+    // single bitwise AND in the hot path. 1024 keeps the per-call
+    // overhead invisible on well-formed input (a million-invocation parse
+    // does ~1000 wall-clock polls) while still tripping promptly enough
+    // that the Stopwatch and ParseCancellation checks feel responsive.
+    private const int BudgetCheckInterval = 1024;
+    private const int BudgetCheckMask = BudgetCheckInterval - 1;
 
     protected Lexer(string input)
         : this(input, traceSink: null, traceLevel: TraceLevel.Normal)
@@ -243,6 +263,66 @@ public abstract class Lexer
     {
         _transactionDepth++;
         return new Transaction(this, _position);
+    }
+
+    // Wire the per-parse runtime budgets onto the lexer. Called by
+    // Rule.Parse right after constructing the lexer and before the first
+    // rule fires. The Stopwatch is only allocated when a positive Timeout
+    // is set; TimeSpan.Zero means "disabled" and skips both the
+    // allocation and the per-check comparison.
+    internal void ConfigureBudgets(ParseOptions options)
+    {
+        _maxRuleInvocations = options.MaxRuleInvocations;
+        _maxDepth = options.MaxDepth;
+        _timeout = options.Timeout;
+        _cancellation = options.Cancellation;
+        _stopwatch = options.Timeout > TimeSpan.Zero ? Stopwatch.StartNew() : null;
+    }
+
+    // Called by Rule.TryParse on entry to every rule invocation. Two
+    // cheap counters plus a periodic deeper check.
+    //
+    // Depth is checked every call because (a) the comparison is one
+    // integer op and (b) catching it late means a stack overflow already
+    // crashed the host process, which is exactly what MaxDepth is here
+    // to prevent.
+    //
+    // The work limit, timeout, and cancellation flag are checked every
+    // BudgetCheckInterval invocations. The check is amortized so the
+    // overhead is invisible on well-formed input. The deterministic-work
+    // contract is preserved (off by at most one interval, but the trip
+    // point is fully determined by the rule-invocation count, which is
+    // grammar+input deterministic).
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void EnterRule()
+    {
+        _ruleDepth++;
+        if (_maxDepth > 0 && _ruleDepth > _maxDepth)
+            throw new ParseBudgetExceeded(ParseOutcome.DepthLimitExceeded);
+
+        _ruleInvocations++;
+        if ((_ruleInvocations & BudgetCheckMask) == 0)
+            CheckPeriodicBudgets();
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void ExitRule()
+    {
+        _ruleDepth--;
+    }
+
+    // Off the hot path on purpose: only invoked once every
+    // BudgetCheckInterval rule invocations, so making it a separate
+    // non-inlined method keeps EnterRule small enough for the JIT to
+    // inline cleanly.
+    private void CheckPeriodicBudgets()
+    {
+        if (_maxRuleInvocations > 0 && _ruleInvocations > _maxRuleInvocations)
+            throw new ParseBudgetExceeded(ParseOutcome.WorkLimitExceeded);
+        if (_stopwatch != null && _stopwatch.Elapsed >= _timeout)
+            throw new ParseBudgetExceeded(ParseOutcome.Timeout);
+        if (_cancellation != null && _cancellation.IsCanceled)
+            throw new ParseBudgetExceeded(ParseOutcome.Canceled);
     }
 
     public struct Transaction : IDisposable

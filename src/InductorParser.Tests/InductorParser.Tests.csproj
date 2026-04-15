@@ -18,4 +18,16 @@
     <ProjectReference Include="..\InductorParser\InductorParser.csproj" />
   </ItemGroup>
 
+  <!-- The Unity/ subfolder is its own self-contained Unity project for the
+       IL2CPP smoke test (see docs/TestArchitecture.md). Its Library/ contains
+       package-cache C# files that Unity regenerates on open; the SDK's default
+       **/*.cs glob would otherwise pull them into the dotnet-test build and
+       break compilation on machines where Unity has been opened. Exclude the
+       whole subtree from this project's compilation. -->
+  <ItemGroup>
+    <Compile Remove="Unity\**" />
+    <None Remove="Unity\**" />
+    <EmbeddedResource Remove="Unity\**" />
+  </ItemGroup>
+
 </Project>

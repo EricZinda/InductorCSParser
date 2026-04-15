@@ -258,6 +258,6 @@ public class TracingTests
             TraceSuccess(lexer, $"value: {Interlocked.Increment(ref sideEffectCount)}");
         }
 
-        internal override SyntaxTree.Symbol? TryParse(Lexer lexer) => null;
+        internal override SyntaxTree.Symbol? TryParseRule(Lexer lexer) => null;
     }
 }

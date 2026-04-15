@@ -16,6 +16,11 @@ public readonly struct ParseResult
     // Always 0 on a successful parse. Use with input[ErrorCharIndex] to
     // recover the offending character, after checking that the value is
     // less than input.Length (values equal to input.Length indicate EOF).
+    //
+    // For budget aborts (Timeout / WorkLimitExceeded / DepthLimitExceeded /
+    // Canceled) this carries the lexer position at the moment the budget
+    // tripped, which gives callers a coarse "how far did the parser get"
+    // hint useful for diagnostics.
     public int ErrorCharIndex { get; }
 
     public bool Success => Outcome == ParseOutcome.Success;
@@ -33,4 +38,10 @@ public readonly struct ParseResult
 
     public static ParseResult Failed(int errorCharIndex, string message) =>
         new ParseResult(ParseOutcome.GrammarMismatch, null, message, errorCharIndex);
+
+    // Parse aborted because a runtime budget tripped. The outcome
+    // identifies which one (Timeout, WorkLimitExceeded, DepthLimitExceeded,
+    // Canceled).
+    public static ParseResult Aborted(ParseOutcome outcome, int errorCharIndex, string message) =>
+        new ParseResult(outcome, null, message, errorCharIndex);
 }

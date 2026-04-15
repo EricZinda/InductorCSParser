@@ -7,7 +7,7 @@ internal sealed class OrRule : Rule
 {
     public OrRule(Rule[] children) : base(FlattenType.Flatten, children) { }
 
-    internal override Symbol? TryParse(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer)
     {
         for (int symbolIndex = 0; symbolIndex < Children.Count; symbolIndex++)
         {

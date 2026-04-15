@@ -10,7 +10,7 @@ internal sealed class OneOrMoreRule : Rule
 
     public OneOrMoreRule(Rule inner) : base(FlattenType.Flatten, inner) { }
 
-    internal override Symbol? TryParse(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer)
     {
         using var transaction = lexer.BeginTransaction();
         var matched = new List<Symbol>();

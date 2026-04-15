@@ -10,7 +10,7 @@ internal sealed class ZeroOrMoreRule : Rule
 
     public ZeroOrMoreRule(Rule inner) : base(FlattenType.Flatten, inner) { }
 
-    internal override Symbol? TryParse(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer)
     {
         var matched = new List<Symbol>();
         while (true)

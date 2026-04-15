@@ -103,7 +103,7 @@ public sealed class LateBoundRule : Rule
         "LateBoundRule.WithError(...) is not supported: the rule is transparent at parse " +
         "time, so its ErrorMessage is never consulted. Set .WithError(...) on the bound target instead.");
 
-    internal override Symbol? TryParse(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer)
     {
         // _target is guaranteed non-null here because Compile's validation
         // pass would have thrown on an unbound LateBoundRule before any

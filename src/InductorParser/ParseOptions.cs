@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using InductorParser.Tracing;
 
@@ -5,7 +6,7 @@ namespace InductorParser;
 
 public sealed class ParseOptions
 {
-    // Atomic unit the lexer reads. Default is grapheme so user-typed text 
+    // Atomic unit the lexer reads. Default is grapheme so user-typed text
     // behaves the way users expect, even though
     // the underlying StringInfo implementation has known gaps on pre-.NET 5
     // runtimes (see GraphemeLexer.cs and backlog/i001).
@@ -17,4 +18,45 @@ public sealed class ParseOptions
 
     // Gates how verbose the trace output is.
     public TraceLevel TraceLevel { get; set; } = TraceLevel.Diagnostic;
+
+    // Deterministic work budget. Every rule invocation increments a
+    // counter; when it exceeds this number, the parse aborts with
+    // ParseOutcome.WorkLimitExceeded. The default of 10_000_000 lets
+    // well-formed parses through (a 1 MB file runs through low millions
+    // of invocations on a typical grammar) and cleanly catches the
+    // catastrophic-backtracking shapes that produce tens of billions of
+    // invocations on tiny inputs. Set to 0 to disable.
+    public long MaxRuleInvocations { get; set; } = 10_000_000L;
+
+    // Maximum recursion depth (rule invocations currently on the call
+    // stack). Catches deeply nested but well-formed input (think 10,000
+    // open parens) before it blows the .NET call stack and crashes the
+    // host process. Independent of MaxRuleInvocations: a deeply nested
+    // input may use few invocations total. Set to 0 to disable.
+    public int MaxDepth { get; set; } = 1000;
+
+    // Wall-clock limit. The parse loop polls Stopwatch.Elapsed
+    // synchronously from inside its own loop, so the deadline trips
+    // even on WebGL where there is no background timer thread. Set to
+    // TimeSpan.Zero to disable, matching the MaxRuleInvocations / MaxDepth
+    // convention. Off by default because timeouts are inherently flaky
+    // (same input takes different time on different hardware) and would
+    // cause unpredictable test failures as a default.
+    public TimeSpan Timeout { get; set; } = TimeSpan.Zero;
+
+    // External cancellation signal. The caller holds the
+    // ParseCancellation and calls .Cancel() from wherever the cancel
+    // decision is made (button click, request handler, test); the parser
+    // polls IsCanceled inside its periodic budget check and aborts with
+    // ParseOutcome.Canceled. Null means no cancellation source.
+    //
+    // Deliberately a custom type, not System.Threading.CancellationToken:
+    // CancellationToken's CancelAfter shortcut silently fails on WebGL
+    // because it depends on a background timer thread. ParseCancellation
+    // exposes only manual Cancel(), so the broken-on-WebGL code path
+    // cannot be expressed. For a wall-clock deadline use Timeout above,
+    // which uses synchronous Stopwatch polling and works on every
+    // target. See ParseCancellation.cs for the bridge pattern from an
+    // existing CancellationToken.
+    public ParseCancellation? Cancellation { get; set; }
 }
