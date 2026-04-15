@@ -31,6 +31,11 @@ public class CharRuleTests
         Assert.That(rule.Id.Value, Is.EqualTo(GuitarRune));
     }
 
+#if !UNITY_INCLUDE_TESTS
+    // Multi-rune grapheme tests are CoreCLR-only. Under netstandard2.1 /
+    // IL2CPP the BCL's grapheme segmentation splits SkinTonedWaveGrapheme
+    // into two graphemes, not one, so Char(...) rejects it at construction
+    // before the test body runs. Tracked by backlog/r000.
     [Test]
     public void Char_string_with_multi_rune_grapheme_matches_under_grapheme_lexer()
     {
@@ -55,6 +60,7 @@ public class CharRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
+#endif
 
     [Test]
     public void Char_string_with_more_than_one_grapheme_throws_at_construction()
@@ -191,6 +197,11 @@ public class CharRuleTests
         Assert.That(result.ErrorMessage, Does.StartWith("Unexpected end of input"));
     }
 
+#if !UNITY_INCLUDE_TESTS
+    // Same CoreCLR-only rationale as the multi-rune grapheme tests above:
+    // Char(SkinTonedWaveGrapheme) throws at construction on netstandard2.1 /
+    // IL2CPP because that runtime's grapheme segmentation sees two
+    // graphemes where net8.0 sees one.
     [Test]
     public void Char_multi_rune_mismatch_on_first_token_reports_at_zero()
     {
@@ -222,6 +233,7 @@ public class CharRuleTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
         Assert.That(result.ErrorMessage, Is.EqualTo("expected wave"));
     }
+#endif
 
     [Test]
     public void Char_trace_success_produces_expected_output()

@@ -24,3 +24,10 @@ Packages/packages-lock.json
 
 # Artifacts from the IL2CPP test build.
 Build/
+
+# Test sources synced in from src/InductorParser.Tests/ by runil2cpptest.sh.
+# The .NET test project is the single source of truth; this tree is
+# recreated on each run. Unity generates .meta files next to each synced
+# .cs on import; they live and die with the folder.
+Assets/Tests/PlayMode/Synced/
+Assets/Tests/PlayMode/Synced.meta

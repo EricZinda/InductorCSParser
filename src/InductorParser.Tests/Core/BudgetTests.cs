@@ -188,8 +188,7 @@ public class BudgetTests
         // produce true catastrophic backtracking the way a regex would,
         // but the broader contract holds: any grammar/input combination
         // that runs the rule machinery past the configured budget aborts
-        // cleanly with WorkLimitExceeded instead of hanging. Done-when
-        // criterion from backlog/i022.
+        // cleanly with WorkLimitExceeded instead of hanging. 
         var rule = OneOrMore(OneOrMore(RuneIn(RuneSet.Letters)));
         var options = new ParseOptions { MaxRuleInvocations = 5_000 };
         var result = rule.Parse(new string('a', 100_000), options);

@@ -11,6 +11,13 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="InductorParser.Tests" />
+    <!-- The Unity IL2CPP smoke test asmdef produces an assembly named
+         InductorParser.PlayModeTests and runs the same test sources as
+         InductorParser.Tests (synced in by runil2cpptest.sh). The tests
+         subclass Rule and override its internal TryParseRule, so this
+         second IVT is required for the synced sources to compile under
+         Unity. See docs/TestArchitecture.md. -->
+    <InternalsVisibleTo Include="InductorParser.PlayModeTests" />
   </ItemGroup>
 
   <!-- After building the netstandard2.1 DLL (the one Unity's IL2CPP

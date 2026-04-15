@@ -1,5 +1,5 @@
 - Enriched error positions on ParseResult
-    - Current state: ParseResult only carries `	` (UTF-16 char offset into the input). Editors and IDE integrations expect more: line/column numbers for display, rune offsets for logical positions, grapheme offsets for caret positioning in rendered text.
+    - Current state: ParseResult only carries `ErrorCharOffset` (UTF-16 char offset into the input). Editors and IDE integrations expect more: line/column numbers for display, rune offsets for logical positions, grapheme offsets for caret positioning in rendered text.
     - Design from docs/ProgrammingAGrammar.md:
         ```csharp
         public int  ErrorCharOffset        { get; }   // UTF-16 char offset; use for input[...]

@@ -4,3 +4,4 @@ obj/
 *.suo
 .vs/
 test-results/
+TestResults*.xml

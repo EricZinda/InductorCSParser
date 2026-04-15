@@ -1,8 +1,11 @@
 #!/bin/bash
 #
-# Build the netstandard2.1 InductorParser.dll and run the PlayMode smoke
-# test under IL2CPP via Unity's batch mode. This is an IL2CPP tripwire
-# test to help ensure the parser works correctly on IL2CPP.
+# Build the netstandard2.1 InductorParser.dll and run the full
+# InductorParser.Tests suite under IL2CPP via Unity's batch mode. The
+# .NET test sources live in src/InductorParser.Tests/{Core,Rules,E2EExamples}/
+# and are the single source of truth; this script copies them into the
+# Unity PlayMode folder before Unity runs so the IL2CPP test pass exercises
+# the same coverage that dotnet test does.
 #
 # Usage:
 #   ./runil2cpptest.sh
@@ -26,6 +29,7 @@ LIBRARY_CSPROJ="$REPO_ROOT/src/InductorParser/InductorParser.csproj"
 RESULTS_DIR="$REPO_ROOT/test-results"
 RESULTS_XML="$RESULTS_DIR/il2cpp-playmode-results.xml"
 UNITY_LOG="$RESULTS_DIR/il2cpp-log.txt"
+SYNCED_TESTS_DIR="$UNITY_PROJECT/Assets/Tests/PlayMode/Synced"
 
 UNITY_VERSION="6000.3.13f1"
 
@@ -98,6 +102,17 @@ rm -f "$RESULTS_XML" "$UNITY_LOG"
 
 echo "=== Building netstandard2.1 InductorParser.dll ==="
 $DOTNET build "$LIBRARY_CSPROJ" -c Release -f netstandard2.1
+
+# Mirror the .NET test sources into Unity. The .NET test project
+# (src/InductorParser.Tests/) is the single source of truth for test
+# coverage; syncteststounity.sh copies a snapshot into the Unity PlayMode
+# asmdef's scope so Unity's test runner discovers and runs the same NUnit
+# tests under IL2CPP. The destination is .gitignored (Unity/.gitignore)
+# and cleaned each run. syncteststounity.sh is also safe to run on its own
+# when iterating in the Unity Editor's Test Runner window.
+echo ""
+echo "=== Syncing test sources into Unity PlayMode ==="
+"$SCRIPT_DIR/syncteststounity.sh"
 
 echo ""
 echo "=== Running PlayMode smoke test under IL2CPP (Unity batch mode) ==="
