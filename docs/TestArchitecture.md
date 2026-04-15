@@ -168,4 +168,24 @@ Each test method's name should describe the scenario, not the expected outcome. 
 dotnet test src/InductorParser.Tests/InductorParser.Tests.csproj
 ```
 
-The test project targets net8.0 and consumes the net8.0 build of the library. The netstandard2.1 build compiles but isn't exercised by `dotnet test` (that requires a Unity or NativeAOT pipeline, tracked in backlog i002). Assume that a clean suite run on net8.0 is the gate for landing a change.
+The test project targets net8.0 and consumes the net8.0 build of the library. A clean suite run on net8.0 is the gate for landing a change.
+
+## IL2CPP Smoke Test
+
+`dotnet test` runs against CoreCLR and only exercises the net8.0 build of the library. The netstandard2.1 build (the one Unity's IL2CPP scripting backend actually loads on iOS, WebGL, and Switch) is compile-checked on every build but never executed by the net8.0 test pass. CoreCLR is a JIT runtime and IL2CPP is AOT-only, so a library that passes every `dotnet test` can still fail on first load in a Unity IL2CPP player.
+
+The `src/InductorParser.Tests/Unity/` folder is a minimal Unity scaffold whose entire purpose is to catch that class of regression. It holds one Play Mode test that mirrors a subset of `E2EExamples/SettingExampleTests.cs`, an Editor script that flips the Standalone scripting backend to IL2CPP, and a run script that drives Unity in batch mode. It lives under `InductorParser.Tests/` because it's test infrastructure for the .NET library, not a separate Unity game. The scaffold is deliberately tiny: the library's real test coverage lives in `src/InductorParser.Tests/`, and the Unity project is a tripwire, not a second test suite.
+
+To run it:
+
+```
+./src/InductorParser.Tests/runil2cpptest.sh
+```
+
+The script builds the netstandard2.1 DLL (which the `CopyToUnity` target in `src/InductorParser/InductorParser.csproj` drops into `src/InductorParser.Tests/Unity/Assets/Plugins/`), then invokes Unity 6000.3.13f1 in batch mode with `-executeMethod InductorParser.Editor.IL2CPPTestRunner.Run`. That method sets `PlayerSettings.SetScriptingBackend(Standalone, IL2CPP)` and `SetApiCompatibilityLevel(Standalone, .NET_Standard)`, then uses `TestRunnerApi` to build a Standalone Player with IL2CPP and run the Play Mode tests on it. Results land at `test-results/il2cpp-playmode-results.xml` (at the repo root); the Unity log lands at `test-results/il2cpp-log.txt`.
+
+Requirements: Unity 6000.3.13f1 installed via Unity Hub (the version is pinned in `src/InductorParser.Tests/Unity/ProjectSettings/ProjectVersion.txt`), the IL2CPP build support module for the host platform, and Unity not currently open on the scaffold. The script preflight-checks all three and fails fast with a pointer at the fix (for example, "IL2CPP compiler not installed... Install via Unity Hub: Installs -> 6000.3.13f1 -> Add modules -> check Windows Build Support (IL2CPP)") so you don't sit through a multi-minute Unity startup only to hit "Currently selected scripting backend (IL2CPP) is not installed" at the end.
+
+A word on speed. This is slow. Really slow. A cold run from an empty `Unity/Library/` spends about a minute just on Unity's domain reload and package resolution before it even compiles any of our code, then another chunk on top of that to build the IL2CPP Standalone player and execute the test on it. Figure a few minutes end-to-end on a warm machine, longer on the first run after cloning the repo or after `Library/` is deleted. This is Unity's own startup cost, not anything the parser is doing. It's the main reason the IL2CPP test is a tripwire and not a primary loop: you run it before merging a risky change, not on every save. Keep the fast `dotnet test` loop for day-to-day work.
+
+What the smoke test is and isn't: it's the "does the whole thing load and parse under IL2CPP at all" check. It's deliberately not a parallel test suite. If an IL2CPP-specific bug slips past it (reflection over a stripped type, a generic that only instantiates in IL2CPP, a runtime codegen path that CoreCLR silently tolerates), add a narrow test that would have caught it, not a broader sweep. The comprehensive coverage stays in `InductorParser.Tests` under `dotnet test` because that loop is ~100ms and the IL2CPP loop is minutes per run.

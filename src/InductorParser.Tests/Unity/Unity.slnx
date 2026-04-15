@@ -1,0 +1,4 @@
+﻿<Solution>
+  <Project Path="InductorParser.Editor.csproj" />
+  <Project Path="InductorParser.PlayModeTests.csproj" />
+</Solution>

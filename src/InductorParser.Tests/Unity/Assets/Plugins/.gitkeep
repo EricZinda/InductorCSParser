@@ -1,0 +1,4 @@
+# The CopyToUnity target in src/InductorParser/InductorParser.csproj drops
+# InductorParser.dll (netstandard2.1 build) into this folder after every
+# build. The DLL itself is deliberately not committed so the Unity project
+# tracks the source rather than a stale binary.

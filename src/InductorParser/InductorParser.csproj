@@ -13,4 +13,15 @@
     <InternalsVisibleTo Include="InductorParser.Tests" />
   </ItemGroup>
 
+  <!-- After building the netstandard2.1 DLL (the one Unity's IL2CPP
+       scripting backend loads), drop it into the Unity IL2CPP smoke
+       test project under src/InductorParser.Tests/Unity/Assets/Plugins/
+       so the PlayMode smoke test assembly can reference it. The net8.0
+       build is only consumed by dotnet test and is not copied. -->
+  <Target Name="CopyToUnity" AfterTargets="Build"
+          Condition="'$(TargetFramework)' == 'netstandard2.1'">
+    <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll"
+          DestinationFolder="$(MSBuildThisFileDirectory)..\InductorParser.Tests\Unity\Assets\Plugins\" />
+  </Target>
+
 </Project>

@@ -1,0 +1,26 @@
+# Unity-generated artifacts. ProjectSettings/ and Packages/manifest.json
+# are committed; everything else Unity creates is derived output.
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+
+# Unity resolves Packages/packages-lock.json from manifest.json on open;
+# not committed to keep the scaffold minimal.
+Packages/packages-lock.json
+
+# IDE clutter.
+.vs/
+.idea/
+.vsconfig
+*.csproj
+*.sln
+!Unity.slnx
+
+# Artifacts from the IL2CPP test build.
+Build/

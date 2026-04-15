@@ -1,9 +1,0 @@
-- Test the library under IL2CPP, not just CoreCLR
-    - Current state: dotnet test runs the net8.0 build of the library against CoreCLR. The netstandard2.1 build (the one Unity actually loads) is compile-tested but never executed by tests. IL2CPP itself isn't exercised at all.
-    - Why this matters: IL2CPP is the production runtime for iOS, WebGL, and Switch. It bans runtime JIT, has different reflection semantics, and trips on patterns CoreCLR happily runs. A library that passes dotnet test can still die on first load in a Unity WebGL build. The architecture doc names this risk explicitly.
-    - There is no `dotnet test --runtime il2cpp`. IL2CPP is part of Unity's build pipeline, not a standalone .NET runtime.
-    - Two paths, neither cheap:
-        - Unity Test Framework, real IL2CPP. Set up a Unity project under Unity/ that references the netstandard2.1 DLL from src/InductorParser/bin/Release. Mirror the NUnit tests as Unity Play Mode tests. Build a Standalone IL2CPP player and run the test runner. Requires Unity license, requires CI runners with Unity installed if we want it automated. This is the only way to actually validate IL2CPP behavior.
-        - NativeAOT desktop approximation. Add `<IsAotCompatible>true</IsAotCompatible>` to the test project, run `dotnet publish` for a NativeAOT target, and execute the resulting native binary. Same constraints as IL2CPP (no JIT, no runtime codegen, rooted reflection only) but a different toolchain. Catches the same class of bug; not the same code path. Cheaper to set up because it doesn't require Unity.
-    - Recommended order: NativeAOT first as a tripwire that runs on every CI build. Unity Test Framework second when the library is actually being loaded into a Unity project worth testing against.
-    - Done when: there is at least one test pipeline (NativeAOT or Unity) that exercises the library under AOT-compiled native code and runs in CI.
