@@ -3,5 +3,6 @@ obj/
 *.user
 *.suo
 .vs/
+.claude/
 test-results/
 TestResults*.xml

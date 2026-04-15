@@ -51,20 +51,20 @@ public class RuneSetTests
         Assert.That(set.Contains(GuitarRune), Is.True);
     }
 
-#if !UNITY_INCLUDE_TESTS
-    // CoreCLR-only: under netstandard2.1 / IL2CPP, RuneSet.Runes("\uD800")
-    // returns normally instead of throwing. The polyfilled Rune.IsValid
-    // rejects 0xD800 correctly in isolation, so the root cause is
-    // something in the IL2CPP runtime path (possibly type-unification
-    // with a Unity-provided BCL Rune, possibly managed stripping).
-    // Tracked by backlog/r001.
     [Test]
     public void Runes_with_lone_surrogate_throws()
     {
-        // A lone high surrogate not followed by a low surrogate.
-        Assert.Throws<ArgumentException>(() => RuneSet.Runes("\uD800"));
+        // A lone high surrogate not followed by a low surrogate. Built at
+        // runtime instead of written as "\uD800" because IL2CPP sanitizes
+        // lone-surrogate code units in string *constants* to U+FFFD — by
+        // the time a literal "\uD800" reaches the test body under IL2CPP,
+        // the char has already been replaced with the Unicode replacement
+        // character and the test never exercises the surrogate path.
+        // Runtime-constructed strings preserve the char value the caller
+        // passed, which is what we want to pin here.
+        var loneSurrogate = new string((char)0xD800, 1);
+        Assert.Throws<ArgumentException>(() => RuneSet.Runes(loneSurrogate));
     }
-#endif
 
     [Test]
     public void Runes_with_valid_surrogate_pair_works()
