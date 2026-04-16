@@ -63,7 +63,13 @@ internal sealed class BetweenInclusiveRule : Rule
         // side-effects (consuming whitespace) but drop every symbol it
         // produces on the floor. On the JSON benchmark this is the single
         // biggest per-member allocation saved.
-        List<Symbol>? matched = discard ? null : new List<Symbol>();
+        //
+        // When discard is false we still defer the list allocation until
+        // a real (non-Discarded) child appears. Optional / ZeroOrMore that
+        // matches zero times (or matches only Delete-typed inners) then
+        // produces a wrapper Symbol that shares Array.Empty<Symbol>()
+        // instead of paying for a fresh empty list.
+        List<Symbol>? matched = null;
         int count = 0;
         while (count < AtMost)
         {
@@ -73,7 +79,10 @@ internal sealed class BetweenInclusiveRule : Rule
             // Guard against zero-width matches looping forever.
             if (lexer.Position == positionBefore) break;
             if (!discard && !ReferenceEquals(nextSymbol, Symbol.Discarded))
-                matched!.Add(nextSymbol);
+            {
+                matched ??= new List<Symbol>();
+                matched.Add(nextSymbol);
+            }
             count++;
         }
         if (count < AtLeast)
@@ -90,6 +99,6 @@ internal sealed class BetweenInclusiveRule : Rule
         TraceSuccess(lexer, $"count= {count}");
         transaction.Commit();
         if (discard) return Symbol.Discarded;
-        return new Symbol(Id, FlattenType, matched!);
+        return new Symbol(Id, FlattenType, (IReadOnlyList<Symbol>?)matched ?? Array.Empty<Symbol>());
     }
 }

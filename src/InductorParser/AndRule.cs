@@ -12,11 +12,14 @@ internal sealed class AndRule : Rule
     internal override Symbol? TryParseRule(Lexer lexer, bool discard)
     {
         using var transaction = lexer.BeginTransaction();
-        // When discard is true the And itself will collapse to Discarded
-        // on success, so skip the wrapper Symbol and the matched-list
-        // allocation. The per-iteration cost goes from "one child Symbol
-        // + list entry" to "nothing beyond what the child does."
-        List<Symbol>? matched = discard ? null : new List<Symbol>(Children.Count);
+        // Defer the matched-list allocation until the first non-Discarded
+        // child actually needs to land in it. When discard is true the
+        // And itself collapses to Discarded on success, so the list never
+        // exists. When discard is false but every child happens to be
+        // Delete-typed (e.g. And(OptionalWhitespace(), OptionalWhitespace())),
+        // the wrapper Symbol still gets built, but it shares the global
+        // Array.Empty<Symbol>() instead of a fresh empty list.
+        List<Symbol>? matched = null;
         for (int symbolIndex = 0; symbolIndex < Children.Count; symbolIndex++)
         {
             var child = Children[symbolIndex];
@@ -43,7 +46,10 @@ internal sealed class AndRule : Rule
             // LateBoundRule forwarding both pass a Discarded inner straight
             // through, even though their own FlattenType isn't Delete.
             if (!discard && !ReferenceEquals(symbol, Symbol.Discarded))
-                matched!.Add(symbol);
+            {
+                matched ??= new List<Symbol>(Children.Count);
+                matched.Add(symbol);
+            }
         }
         // Reaching here means every child matched, so the logical count
         // is simply Children.Count. The matched list may hold fewer
@@ -51,6 +57,6 @@ internal sealed class AndRule : Rule
         TraceSuccess(lexer, $"found {Children.Count}");
         transaction.Commit();
         if (discard) return Symbol.Discarded;
-        return new Symbol(Id, FlattenType, matched!);
+        return new Symbol(Id, FlattenType, (IReadOnlyList<Symbol>?)matched ?? Array.Empty<Symbol>());
     }
 }

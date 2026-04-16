@@ -1,5 +1,7 @@
+using System;
 using NUnit.Framework;
 using InductorParser;
+using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 
@@ -65,6 +67,26 @@ public class OptionalRuleTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
         Assert.That(result.ErrorMessage, Is.EqualTo("need 'c'"));
+    }
+
+    [Test]
+    public void Optional_with_no_match_shares_empty_children_singleton()
+    {
+        // p200 lazy-allocation contract: an Optional / ZeroOrMore that
+        // matches zero times must produce a wrapper Symbol whose Children
+        // field is the shared Array.Empty<Symbol>() singleton, not a
+        // freshly-allocated empty List<Symbol>. ReferenceEquals against
+        // Array.Empty<Symbol>() is the cleanest unit-test signal that the
+        // no-allocation path was actually taken; any future regression
+        // that goes back to "always new List" will trip this assertion.
+        var result = Optional(Char('x')).Parse("");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree, Is.Not.Null);
+        Assert.That(result.Tree!.Children, Is.Empty);
+        Assert.That(ReferenceEquals(result.Tree.Children, Array.Empty<Symbol>()),
+            Is.True,
+            "Optional with no match should reuse the shared empty array, not allocate a new list.");
     }
 
     [Test]
