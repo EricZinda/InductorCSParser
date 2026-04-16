@@ -209,7 +209,7 @@ public class ChordGrammarTests
     //     first-set pre-filter would skip the transaction+rollback cycle
     //     on branches that can't match. That's the step that should close
     //     the remaining gap to 2x. Tracked as a separate backlog item.
-    [Test, Ignore("Ratio is ~18x after p500; 2x needs Or first-set dispatch (separate backlog item).")]
+    [Test, Ignore("Ratio is ~17-18x after p500; 2x needs Or first-set dispatch (separate backlog item).")]
     public void Timing_grammar_is_within_two_times_compiled_regex()
     {
         const int iterations = 5_000;
