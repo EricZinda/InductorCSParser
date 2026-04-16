@@ -27,7 +27,7 @@ namespace InductorParser.PlayModeTests
                 Float().Flatten(FlattenType.Flatten),
                 Integer().Flatten(FlattenType.Flatten),
                 OneOrMore(RuneIn(RuneSet.Letters))
-            );
+            ).Flatten(FlattenType.None);
             var document = And(
                 settingName,
                 OptionalWhitespace(),

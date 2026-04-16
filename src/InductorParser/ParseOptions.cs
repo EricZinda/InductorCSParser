@@ -80,4 +80,14 @@ public sealed class ParseOptions
     // target. See ParseCancellation.cs for the bridge pattern from an
     // existing CancellationToken.
     public ParseCancellation? Cancellation { get; set; }
+
+    // When true, rules that would normally collapse their wrapper at
+    // parse time (because a post-hoc Flatten() would collapse it anyway)
+    // keep the wrapper in the raw tree. Turn this on to debug or inspect
+    // a parse tree whose shape matches the grammar one-to-one.
+    //
+    // The off-by-default path is identical to what Symbol.Flatten()
+    // would produce on the old tree — so turning this on recovers the
+    // pre-optimization tree shape exactly.
+    public bool PreserveFlattenWrappers { get; set; } = false;
 }

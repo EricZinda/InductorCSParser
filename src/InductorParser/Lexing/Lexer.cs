@@ -35,6 +35,13 @@ public abstract class Lexer
     private Stopwatch? _stopwatch;
     private ParseCancellation? _cancellation;
 
+    // Debug knob wired in from ParseOptions. Rules that would normally
+    // collapse their wrapper at parse time (because post-hoc Flatten
+    // would collapse it anyway) consult this flag to decide whether to
+    // keep the wrapper for grammar-shape-matches-tree debugging. See
+    // ParseOptions.PreserveFlattenWrappers.
+    internal bool PreserveFlattenWrappers { get; private set; }
+
     // Periodic budget check fires every BudgetCheckInterval rule
     // invocations rather than every one. Power of two so the check is a
     // single bitwise AND in the hot path. 1024 keeps the per-call
@@ -277,6 +284,7 @@ public abstract class Lexer
         _timeout = options.Timeout;
         _cancellation = options.Cancellation;
         _stopwatch = options.Timeout > TimeSpan.Zero ? Stopwatch.StartNew() : null;
+        PreserveFlattenWrappers = options.PreserveFlattenWrappers;
     }
 
     // Called by Rule.TryParse on entry to every rule invocation. Two

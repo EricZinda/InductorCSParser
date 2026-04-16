@@ -15,7 +15,7 @@ Related docs:
 
 A few terms used throughout these docs mean specific things in this library:
 
-**Parse tree.** The raw output of `rule.Parse(input)`. Contains every matched token: delimiters, whitespace, and individual character leaves. Mirrors the grammar 1:1. This is what you get back as `ParseResult.Tree`.
+**Parse tree.** The raw output of `rule.Parse(input)`. Contains every matched token: delimiters, whitespace, and individual character leaves. This is what you get back as `ParseResult.Tree`. Mirrors the grammar 1:1 with one exception: an `Or` rule whose `FlattenType` is the default `Flatten` has its wrapper spliced at parse time (the inner match is returned directly). A post-hoc `Symbol.Flatten()` call would splice it anyway, so doing it up front avoids a per-hit allocation, which matters because `Or` fires per character in character-class alternatives. Set `FlattenType.None` on the `Or` if you need the wrapper to appear in the tree, or enable `ParseOptions.PreserveFlattenWrappers` to turn the optimization off globally for debugging.
 
 **Syntax tree.** The output of `Symbol.FlattenInto(...)` (or the no-arg `Flatten()` overload). The flattening rules (`FlattenType.Delete` / `Flatten` / `None`) have collapsed the syntactic noise; what remains is the meaningful shape of what was parsed. Same `Symbol` type as the parse tree, different shape.
 

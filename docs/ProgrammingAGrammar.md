@@ -63,6 +63,8 @@ Two things happen automatically in this example but are worth knowing about for 
 
 Most rules do not need a name. `Find(someRule)` matches on the rule object itself, so as long as you have a reference to the rule you want to locate, you can find its nodes in the parse tree. The hello-world example never calls `.As(...)` and works fine.
 
+One exception to be aware of: `Or` rules with the default `FlattenType.Flatten` do not appear as wrappers in the parse tree. The parser splices the matched inner symbol into the parent directly, because a post-hoc `.Flatten()` call would do the same splice anyway, and `Or` fires per character in hot character-class alternatives. If you want to `Find(someOrRule)` and have it hit, set `FlattenType.None` on the `Or` to preserve its wrapper. (This is the same knob that makes a wrapper survive a post-hoc `.Flatten()` call.) For debugging, `ParseOptions.PreserveFlattenWrappers` disables the splice globally so the tree matches the grammar 1:1.
+
 Sometimes names do matter though: trace output, error messages, serialization. Trace output prints rule names to show which rule was tried at each position. Error messages quote the "deepest rule" that failed. Without names, these fall back to generated labels like `<anonymous>` or `rule#47`, which are technically correct but unpleasant to read.
 
 Here are different ways you can name rules:
@@ -233,7 +235,7 @@ var settingName = OneOrMore(RuneIn(RuneSet.Letters))
 
 Rules are immutable to the user. `OneOrMore(x).Flatten(FlattenType.None)` does not mutate the underlying `OneOrMore` rule, it returns a new wrapped rule with the flatten policy set. After `Compile` returns, the rule graph is sealed: calling `.As(...)`, `.Flatten(...)`, or any other mutation method on a sealed rule throws `InvalidOperationException`.
 
-Default values for `Flatten`, error messages, and so on match the C++ defaults from the original source. `OptionalWhitespace()` defaults to `FlattenType.Delete`. `Char('=')` defaults to `FlattenType.Delete`. `And(...)` defaults to `FlattenType.Flatten`. `Integer()` defaults to `FlattenType.None`. If you do not touch them, the parse tree comes out the same shape as the C++ version does.
+Default values for `Flatten`, error messages, and so on match the C++ defaults from the original source. `OptionalWhitespace()` defaults to `FlattenType.Delete`. `Char('=')` defaults to `FlattenType.Delete`. `And(...)` defaults to `FlattenType.Flatten`. `Integer()` defaults to `FlattenType.None`. If you do not touch them, the parse tree comes out the same shape as the C++ version does, with one deliberate departure: an `Or` with the default `FlattenType.Flatten` has its wrapper spliced at parse time rather than waiting for a post-hoc `.Flatten()` call, because the `Or` hot path is per-character and the wrapper is pure overhead there. Override to `FlattenType.None` on any `Or` whose wrapper you need in the raw tree, or flip `ParseOptions.PreserveFlattenWrappers` to recover C++-shape trees for debugging.
 
 ### User-Defined Rules
 
@@ -524,6 +526,15 @@ public sealed class ParseOptions
     /// Tracing sink. Null means tracing off.
     public TextWriter? TraceSink { get; set; }
     public TraceLevel TraceLevel { get; set; }
+
+    /// Debug knob: when true, rules that would normally collapse their
+    /// wrapper at parse time keep the wrapper in the raw tree, so the
+    /// tree shape matches the grammar one-to-one. Currently affects
+    /// `Or` with the default `FlattenType.Flatten` (which normally has
+    /// its single-child wrapper spliced at parse time). Off by default
+    /// because the optimization is worth ~15% wall time and ~25%
+    /// allocation on per-character `Or`s.
+    public bool PreserveFlattenWrappers { get; set; } = false;
 }
 
 public enum InputUnit { Grapheme, Rune }

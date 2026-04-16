@@ -65,7 +65,8 @@ public static class NameValueGrammar
             Float().Flatten(FlattenType.Flatten),
             Integer().Flatten(FlattenType.Flatten),
             OneOrMore(RuneIn(RuneSet.Letters))
-        ).As(nameof(SettingValue));
+        ).As(nameof(SettingValue))
+         .Flatten(FlattenType.None);
 
     public static readonly Rule Document =
         And(
@@ -90,9 +91,11 @@ var result = NameValueGrammar.Document.Parse(input);
 var name   = result.Tree.Find(NameValueGrammar.SettingName).ToString();
 ```
 
-The pattern has three pieces worth naming explicitly:
+The pattern has four pieces worth naming explicitly:
 
 **`.As(nameof(X))` on every public field**, including the root. The field name and the rule name stay in sync because `nameof` is compile-checked. IDE renames propagate. Trace output and error messages read naturally.
+
+**`.Flatten(FlattenType.None)` on the `Or`.** Without it, the parser splices the `Or`'s wrapper out at parse time (because a post-hoc `.Flatten()` call would splice it anyway, and the per-character `Or` hot path makes that wrapper pure overhead on many grammars). `.Flatten(FlattenType.None)` preserves the wrapper so `result.Tree.Find(SettingValue)` can locate it. Rules that don't need to be findable by reference (repetitions, `And` compositions whose children are individually findable) can stay at the default and skip this call.
 
 **`.Compile()` on the root field.** This forces the full finalization pass (id stamping, `LateBoundRule` resolution, freeze, validation) to run at type-init time rather than at first parse. Any grammar-construction error surfaces immediately when the class is first touched, which is a much better debugging experience than waiting for the first parse to reveal a broken grammar.
 
