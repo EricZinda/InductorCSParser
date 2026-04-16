@@ -459,6 +459,20 @@ Concrete case: `And(Optional(Literal("abc")), Char('x')).Parse("abdy")`. The Opt
 
 This isn't a bug; it's a property of the heuristic. Grammars that care about this can put `.WithError(...)` on the outer required rule, and the equal-depth message-claim rule will make that message appear even when the deepest position came from the optional branch. The full fix would require a different error model — something like tracking a separate "required-path failure" position alongside the deepest raw position — and no existing PEG library we've surveyed does that. The smallest core lives with the quirk and documents it.
 
+### LSP Position Semantics
+
+`ParseResult.ErrorLine` and `ErrorColumn` follow the Language Server Protocol's position conventions. LSP is the JSON-RPC protocol that VS Code, Neovim, JetBrains IDEs, and essentially every modern editor use to talk to language tooling. If a grammar author is going to forward a parse error into an editor, they are almost certainly going to do it through LSP, either directly or through a layer that speaks LSP. Matching LSP end-to-end means the integration is `new Diagnostic { Range = new Range(errorLine, errorColumn, ...) }` with no arithmetic in between. Pick a different convention and every caller writes the same `-1` shim forever.
+
+Three specific rules fall out:
+
+**Lines are 0-based.** The first line of the file is line 0, not line 1. This is the part that surprises people reading an error in isolation (editors display 1-based to humans), but the point of these fields is machine-to-machine handoff, not direct human display. If the caller wants 1-based for a user-facing error message they add one at the edge — exactly where the translation belongs.
+
+**Columns count UTF-16 code units, not runes or graphemes.** LSP 3.17 made the encoding negotiable via `PositionEncodingKind`, but UTF-16 is still the default every implementation ships with. Counting in UTF-16 means that a grapheme like 👋🏽 (two runes, four UTF-16 chars, one visible character) contributes four to the column count, same as what VS Code's internal buffer sees. The rune and grapheme counts live on their own properties (`ErrorRuneIndex`, `ErrorGraphemeIndex`) for callers whose mental model works in those units.
+
+**`\r\n` is one line break, attributed to the `\n`.** LSP treats the pair atomically: a position cannot fall between the `\r` and the `\n`. An `ErrorCharIndex` that somehow does land on the `\n` half (possible under `RuneLexer`, where the two are separate tokens) is reported on the prior line so the column stays non-negative. Grammars using the default `GraphemeLexer` never hit this case because the lexer tokenizes `\r\n` as a single grapheme cluster per UAX #29.
+
+The equivalent C++ library returns a character offset and nothing else, leaving line/column computation to the caller. The C# port bundles them because the caller almost always wants them anyway, and bundling lets us pick the convention once and document it once.
+
 ## Catastrophic Backtracking Design
 
 PEG parsers backtrack. Ordered choice with greedy matching makes most grammars linear in practice, but certain grammar shapes interact with certain inputs to produce exponential work. The classic shape is `OneOrMore(OneOrMore(A))` where `A` can match in multiple ways at the same cursor position: the parser ends up trying every partition of the matching prefix. You can write this accidentally. The original C++ parser has no defense against it, and a grammar that runs fine on your test corpus can hit a pathological input in production and spin for seconds or minutes.

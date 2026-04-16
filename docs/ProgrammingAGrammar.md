@@ -258,14 +258,18 @@ public readonly struct ParseResult
     public ParseOutcome  Outcome       { get; }   // why the parse ended
     public string        ErrorMessage  { get; }   // empty on success
 
-    // Position of the error.
-    public int  ErrorCharOffset        { get; }   // UTF-16 char offset; use for input[...]
-    public int  ErrorLine              { get; }   // 1-based line number for display
-    public int  ErrorColumn            { get; }   // 1-based column in UTF-16 chars (matches LSP)
+    // Position of the error. Line/column follow LSP conventions end-to-end:
+    // 0-based line, 0-based column in UTF-16 code units, \r\n as one
+    // atomic break. See ProgrammingModel.md "LSP Position Semantics" for
+    // why 0-based and why UTF-16. Add 1 at the edge if you want 1-based
+    // for a human-facing error message.
+    public int  ErrorCharIndex         { get; }   // UTF-16 char index; use for input[...]
+    public int  ErrorLine              { get; }   // 0-based line number (LSP)
+    public int  ErrorColumn            { get; }   // 0-based column in UTF-16 chars (LSP)
 
     // For callers that measure in other units. Derived lazily.
-    public int  ErrorOffsetInRunes     { get; }
-    public int  ErrorOffsetInGraphemes { get; }
+    public int  ErrorRuneIndex         { get; }
+    public int  ErrorGraphemeIndex     { get; }
 }
 
 public enum ParseOutcome
@@ -279,7 +283,7 @@ public enum ParseOutcome
 }
 ```
 
-Putting the error position into the result directly removes an entire class of C++ pitfall where you forgot to ask the lexer for the error before it went out of scope. `ErrorLine` and `ErrorColumn` are computed lazily from `ErrorCharOffset` and the original input string. The char-based trio (`ErrorCharOffset`, `ErrorLine`, `ErrorColumn`) is what editors that speak the LSP (VSCode, most others) use directly. The two extra offset properties (`ErrorOffsetInRunes`, `ErrorOffsetInGraphemes`) are there for callers that measure in other units; they are computed lazily from the char offset and cost nothing unless used.
+Putting the error position into the result directly removes an entire class of C++ pitfall where you forgot to ask the lexer for the error before it went out of scope. `ErrorLine` and `ErrorColumn` are computed lazily from `ErrorCharIndex` and the original input string. The char-based trio (`ErrorCharIndex`, `ErrorLine`, `ErrorColumn`) uses the same conventions the Language Server Protocol uses, so a caller forwarding a parse error into an editor through LSP does no arithmetic in between; see [ProgrammingModel.md](ProgrammingModel.md) for the full rationale. The two extra index properties (`ErrorRuneIndex`, `ErrorGraphemeIndex`) are there for callers that measure in other units; they are computed lazily from the char index and cost nothing unless used.
 
 The `Outcome` field distinguishes "the grammar did not match" from "we ran out of budget." A grammar mismatch means the input is invalid and you should show the user where. A timeout or work-limit exhaustion means the input might be valid but we could not decide in the budget we were given, and the caller might want to reject it as suspicious, retry with a looser budget, or show a different error to the user. See the "Catastrophic Backtracking and Timeouts" section below for the mechanics.
 

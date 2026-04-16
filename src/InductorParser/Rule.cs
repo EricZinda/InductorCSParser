@@ -318,12 +318,12 @@ public abstract class Rule
             // wherever the unwind settled. We carry that as the
             // ErrorCharIndex so callers get a coarse "how far did the
             // parser get" hint for diagnostics.
-            return ParseResult.Aborted(budget.Outcome, lexer.Position, BuildBudgetMessage(budget.Outcome));
+            return ParseResult.Aborted(budget.Outcome, lexer.Position, BuildBudgetMessage(budget.Outcome), lexer.Input);
         }
         if (tree != null && lexer.IsEof)
-            return ParseResult.Succeeded(tree);
+            return ParseResult.Succeeded(tree, lexer.Input);
         var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
-        return ParseResult.Failed(pos, BuildErrorMessage(lexer, pos));
+        return ParseResult.Failed(pos, BuildErrorMessage(lexer, pos), lexer.Input);
     }
 
     private static string BuildBudgetMessage(ParseOutcome outcome)

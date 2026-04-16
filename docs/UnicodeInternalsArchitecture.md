@@ -99,17 +99,17 @@ For GraphemeLexer, the token index is the grapheme count. For RuneLexer, the tok
 ```csharp
 public readonly struct ParseResult
 {
-    public int  ErrorCharOffset        { get; }   // UTF-16 char offset; use for input[...]
-    public int  ErrorLine              { get; }   // 1-based line number for display
-    public int  ErrorColumn            { get; }   // 1-based column in UTF-16 chars (matches LSP)
+    public int  ErrorCharIndex         { get; }   // UTF-16 char index; use for input[...]
+    public int  ErrorLine              { get; }   // 0-based line number (LSP)
+    public int  ErrorColumn            { get; }   // 0-based column in UTF-16 chars (LSP)
 
-    // For callers that measure in other units. Derived from the char offset.
-    public int  ErrorOffsetInRunes     { get; }
-    public int  ErrorOffsetInGraphemes { get; }
+    // For callers that measure in other units. Derived from the char index.
+    public int  ErrorRuneIndex         { get; }
+    public int  ErrorGraphemeIndex     { get; }
 }
 ```
 
-Three fields cover the common cases: `ErrorCharOffset` indexes into the input string directly, `ErrorLine` + `ErrorColumn` give the human-readable position (in UTF-16 chars, which is what LSP and every mainstream editor speaks). The two extra offset properties are there for callers that count in runes or graphemes instead; they are computed lazily from the char offset the one time they are asked for, so they cost nothing unless used. Column in rune or grapheme units is deliberately not exposed as a field because callers who need it can derive it from the corresponding offset cheaply and the combinatorial expansion was not worth it.
+Three fields cover the common cases: `ErrorCharIndex` indexes into the input string directly, `ErrorLine` + `ErrorColumn` give the editor-ready position (in UTF-16 chars, 0-based, following the Language Server Protocol end-to-end; see [ProgrammingModel.md](ProgrammingModel.md) "LSP Position Semantics" for the full rationale). The two extra index properties are there for callers that count in runes or graphemes instead; they are computed lazily from the char index the one time they are asked for, so they cost nothing unless used. Column in rune or grapheme units is deliberately not exposed as a field because callers who need it can derive it from the corresponding index cheaply and the combinatorial expansion was not worth it.
 
 ## Encoding Happens Firsts
 
