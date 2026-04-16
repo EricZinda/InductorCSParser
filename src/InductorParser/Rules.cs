@@ -48,7 +48,15 @@ public static class Rules
 
     public static Rule RuneIn(RuneSet cls) => new RuneInRule(cls);
 
+    // Shortcut for the common "one of these literal runes" case. Equivalent
+    // to RuneIn(RuneSet.Runes(runes)). When you need ranges, category unions,
+    // or complements, reach for RuneSet directly and pass it to the overload
+    // above.
+    public static Rule RuneIn(string runes) => new RuneInRule(RuneSet.Runes(runes));
+
     public static Rule RuneNotIn(RuneSet cls) => new RuneNotInRule(cls);
+
+    public static Rule RuneNotIn(string runes) => new RuneNotInRule(RuneSet.Runes(runes));
 
     public static Rule AnyChar() => new AnyCharRule();
 
