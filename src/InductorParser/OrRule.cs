@@ -18,6 +18,21 @@ internal sealed class OrRule : Rule
             {
                 TraceSuccess(lexer, $"symbol #{symbolIndex}");
                 transaction.Commit();
+                // FlattenType.Flatten on an Or means "post-hoc Flatten
+                // would splice the inner symbol straight back into the
+                // parent." That splice is the whole point of the wrapper,
+                // so do it at parse time and skip both the single-element
+                // Symbol[] and the wrapper Symbol. Grammar authors who
+                // need the Or's Id to appear in the tree (for Find or
+                // because the wrapper is structurally meaningful) opt
+                // into it the same way they'd survive a post-hoc
+                // .Flatten() call: set FlattenType.None.
+                //
+                // ParseOptions.PreserveFlattenWrappers forces the wrapper
+                // to stay so a debugging caller sees a tree whose shape
+                // matches the grammar one-to-one.
+                if (FlattenType == FlattenType.Flatten && !lexer.PreserveFlattenWrappers)
+                    return symbol;
                 return new Symbol(Id, FlattenType, new[] { symbol });
             }
         }
