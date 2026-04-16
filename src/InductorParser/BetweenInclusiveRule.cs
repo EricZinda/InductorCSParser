@@ -10,11 +10,11 @@ namespace InductorParser;
 // `inner` between `atLeast` and `atMost` times (both inclusive), fails
 // if it can't reach `atLeast`, and stops once it reaches `atMost`.
 //
-// The three legacy factories OneOrMore, ZeroOrMore, Optional are now
-// thin wrappers:
-//   OneOrMore(inner)  == BetweenInclusive(inner, 1, int.MaxValue)
-//   ZeroOrMore(inner) == BetweenInclusive(inner, 0, int.MaxValue)
-//   Optional(inner)   == BetweenInclusive(inner, 0, 1)
+// The four named factories are thin wrappers:
+//   OneOrMore(inner)      == BetweenInclusive(inner, 1, int.MaxValue)
+//   ZeroOrMore(inner)     == BetweenInclusive(inner, 0, int.MaxValue)
+//   Optional(inner)       == BetweenInclusive(inner, 0, 1)
+//   NOrMore(inner, n)     == BetweenInclusive(inner, n, int.MaxValue)
 //
 // The C++ original spells the same idea as
 // AtLeastAndAtMostExpression<T, AtLeast, AtMost>; renamed here because
