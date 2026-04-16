@@ -6,3 +6,4 @@ obj/
 .claude/
 test-results/
 TestResults*.xml
+BenchmarkDotNet.Artifacts/

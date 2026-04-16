@@ -1,0 +1,59 @@
+@namespace InductorParser.Benchmarks.Json.PegasusParsers
+@classname PegasusJsonParserGenerated
+@using System.Linq
+@using System.Globalization
+@using InductorParser.Benchmarks.Json
+@accessibility internal
+
+start <IJson> = _ v:value _ EOF { v }
+
+value <IJson>
+    = jsonString
+    / jsonObject
+    / jsonArray
+
+jsonString <IJson> = "\"" s:stringChar* "\"" { (IJson)new JsonString(string.Concat(s)) }
+
+stringChar <string>
+    = escape
+    / literal
+
+literal <string> = c:[^"\\] { c }
+
+escape <string>
+    = "\\" c:escapeSuffix { c }
+
+escapeSuffix <string>
+    = "\"" { "\"" }
+    / "\\" { "\\" }
+    / "/" { "/" }
+    / "b" { "\b" }
+    / "f" { "\f" }
+    / "n" { "\n" }
+    / "r" { "\r" }
+    / "t" { "\t" }
+    / "u" h1:hexDigit h2:hexDigit h3:hexDigit h4:hexDigit { char.ConvertFromUtf32(int.Parse(string.Concat(h1, h2, h3, h4), NumberStyles.HexNumber, CultureInfo.InvariantCulture)) }
+
+hexDigit <string> = c:[0-9a-fA-F] { c }
+
+jsonObject <IJson>
+    = "{" _ first:jsonMember rest:memberRest* _ "}"
+        { (IJson)new JsonObject(new Dictionary<string, IJson>(new[] { first }.Concat(rest))) }
+    / "{" _ "}" { (IJson)new JsonObject(new Dictionary<string, IJson>()) }
+
+memberRest <KeyValuePair<string, IJson>> = _ "," _ m:jsonMember { m }
+
+jsonMember <KeyValuePair<string, IJson>> = name:rawString _ ":" _ v:value { new KeyValuePair<string, IJson>(name, v) }
+
+rawString <string> = "\"" s:stringChar* "\"" { string.Concat(s) }
+
+jsonArray <IJson>
+    = "[" _ first:value rest:elementRest* _ "]"
+        { (IJson)new JsonArray(new[] { first }.Concat(rest).ToList()) }
+    / "[" _ "]" { (IJson)new JsonArray(new List<IJson>()) }
+
+elementRest <IJson> = _ "," _ v:value { v }
+
+_ = [ \t\r\n]*
+
+EOF = !.
