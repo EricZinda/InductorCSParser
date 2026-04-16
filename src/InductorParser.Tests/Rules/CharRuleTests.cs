@@ -31,19 +31,19 @@ public class CharRuleTests
         Assert.That(rule.Id.Value, Is.EqualTo(GuitarRune));
     }
 
-#if !UNITY_INCLUDE_TESTS
-    // Multi-rune grapheme tests are CoreCLR-only. Under netstandard2.1 /
-    // IL2CPP the BCL's grapheme segmentation splits SkinTonedWaveGrapheme
-    // into two graphemes, not one, so Char(...) rejects it at construction
-    // before the test body runs. Tracked by backlog/r000.
+    // Multi-rune grapheme tests. LatinEAcuteGrapheme (e + combining acute)
+    // segments the same way on every runtime including legacy StringInfo,
+    // because the base+combining-mark rule predates UAX #29. The known-broken
+    // multi-rune categories (skin tone, ZWJ, regional indicator, SARA AM)
+    // are exercised separately at the bottom of the file under #if.
     [Test]
     public void Char_string_with_multi_rune_grapheme_matches_under_grapheme_lexer()
     {
-        // SkinTonedWaveGrapheme is one grapheme made of two runes (4 UTF-16
+        // LatinEAcuteGrapheme is one grapheme made of two runes (2 UTF-16
         // chars). Under GraphemeLexer this is one token, so CharRule reads
         // one token and compares the whole expected.
-        var rule = Char(SkinTonedWaveGrapheme);
-        var result = rule.Parse(SkinTonedWaveGrapheme);
+        var rule = Char(LatinEAcuteGrapheme);
+        var result = rule.Parse(LatinEAcuteGrapheme);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
@@ -54,13 +54,12 @@ public class CharRuleTests
         // Same input as above but using the rune lexer. Here the lexer
         // produces two rune tokens, so CharRule reads both and compares
         // each in lockstep against the expected slices.
-        var rule = Char(SkinTonedWaveGrapheme);
-        var result = rule.Parse(SkinTonedWaveGrapheme,
+        var rule = Char(LatinEAcuteGrapheme);
+        var result = rule.Parse(LatinEAcuteGrapheme,
             new ParseOptions { InputUnit = InputUnit.Rune });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
-#endif
 
     [Test]
     public void Char_string_with_more_than_one_grapheme_throws_at_construction()
@@ -197,43 +196,40 @@ public class CharRuleTests
         Assert.That(result.ErrorMessage, Does.StartWith("Unexpected end of input"));
     }
 
-#if !UNITY_INCLUDE_TESTS
-    // Same CoreCLR-only rationale as the multi-rune grapheme tests above:
-    // Char(SkinTonedWaveGrapheme) throws at construction on netstandard2.1 /
-    // IL2CPP because that runtime's grapheme segmentation sees two
-    // graphemes where net8.0 sees one.
+    // Position-reporting tests for multi-rune Char under RuneLexer. Same
+    // reasoning as the multi-rune grapheme tests above: LatinEAcuteGrapheme
+    // segments identically on every runtime, so these don't need a gate.
     [Test]
     public void Char_multi_rune_mismatch_on_first_token_reports_at_zero()
     {
-        // Under RuneLexer, SkinTonedWaveGrapheme tokenizes into two rune
-        // tokens. Input "xy" is two single-char tokens. CharRule's lockstep
-        // fails at the first iteration where tokenStart is 0, so that's
-        // where the WithError message surfaces.
-        var rule = Char(SkinTonedWaveGrapheme).WithError("expected wave");
+        // Under RuneLexer, LatinEAcuteGrapheme tokenizes into two rune
+        // tokens ('e' and U+0301). Input "xy" is two single-char tokens.
+        // CharRule's lockstep fails at the first iteration where tokenStart
+        // is 0, so that's where the WithError message surfaces.
+        var rule = Char(LatinEAcuteGrapheme).WithError("expected e-acute");
         var result = rule.Parse("xy", new ParseOptions { InputUnit = InputUnit.Rune });
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected wave"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected e-acute"));
     }
 
     [Test]
     public void Char_multi_rune_mismatch_on_second_token_reports_at_second_token_start()
     {
-        // Under RuneLexer, SkinTonedWaveGrapheme tokenizes into two rune
-        // tokens of 2 chars each. Input (WavingHandGrapheme + "xy") has the
-        // first rune matching then diverges. Second iteration's pre-read
-        // position is 2, and that's where the offender starts. Not 0
-        // (whole-match start), not 4 (post-read).
-        var rule = Char(SkinTonedWaveGrapheme).WithError("expected wave");
-        var result = rule.Parse(WavingHandGrapheme + "xy",
+        // Under RuneLexer, LatinEAcuteGrapheme tokenizes into two BMP rune
+        // tokens of 1 char each. Input "ex" has the first rune matching
+        // then diverges. Second iteration's pre-read position is 1, and
+        // that's where the offender starts. Not 0 (whole-match start),
+        // not 2 (post-read).
+        var rule = Char(LatinEAcuteGrapheme).WithError("expected e-acute");
+        var result = rule.Parse("ex",
             new ParseOptions { InputUnit = InputUnit.Rune });
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected wave"));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected e-acute"));
     }
-#endif
 
     [Test]
     public void Char_trace_success_produces_expected_output()
@@ -260,4 +256,59 @@ public class CharRuleTests
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
+
+#if !UNITY_INCLUDE_TESTS
+    // Known-broken-on-legacy-StringInfo cases. Each test documents one
+    // UAX #29 rule category that pre-.NET 5 / IL2CPP StringInfo doesn't
+    // implement. Gated to net8.0 / CoreCLR because Char(...) rejects these
+    // at construction on the legacy walker (it sees more than one grapheme
+    // and throws). See docs/UnicodeGotchas.md "Pre-.NET 5 Grapheme
+    // Segmentation" and backlog/r000.
+
+    [Test]
+    public void Char_with_skin_tone_modifier_sequence_matches_one_grapheme_on_uax29_runtime()
+    {
+        // Modifier sequence: base emoji + skin-tone modifier. UAX #29 rule
+        // GB10/GB11. Two runes, one grapheme on UAX #29; legacy splits.
+        var rule = Char(SkinTonedWaveGrapheme);
+        var result = rule.Parse(SkinTonedWaveGrapheme);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
+
+    [Test]
+    public void Char_with_zwj_emoji_sequence_matches_one_grapheme_on_uax29_runtime()
+    {
+        // ZWJ sequence: base + ZWJ + joiner + variation selector. UAX #29
+        // rule GB11 with extended pictographic. Four runes, one grapheme on
+        // UAX #29; legacy splits at every ZWJ.
+        var rule = Char(WomanShruggingGrapheme);
+        var result = rule.Parse(WomanShruggingGrapheme);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
+
+    [Test]
+    public void Char_with_regional_indicator_pair_matches_one_grapheme_on_uax29_runtime()
+    {
+        // Regional indicator pair: two RI code points form one flag. UAX #29
+        // rule GB12/GB13. Two runes, one grapheme on UAX #29; legacy splits.
+        var rule = Char(USFlagGrapheme);
+        var result = rule.Parse(USFlagGrapheme);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
+
+    [Test]
+    public void Char_with_thai_sara_am_matches_one_grapheme_on_uax29_runtime()
+    {
+        // Thai SARA AM: consonant + SARA AM forms one extended grapheme
+        // cluster. The canonical SpacingMark case from UAX #29 rule GB9a.
+        // Two runes, one grapheme on UAX #29; legacy splits.
+        var rule = Char(ThaiKamGrapheme);
+        var result = rule.Parse(ThaiKamGrapheme);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
+#endif
 }

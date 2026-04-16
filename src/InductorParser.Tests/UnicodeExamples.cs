@@ -36,4 +36,31 @@ internal static class UnicodeExamples
     // as a "different emoji, same shape" mismatch example.
     public const int MusicalKeyboardRune = 0x1F3B9;
     public const string MusicalKeyboardGrapheme = "\uD83C\uDFB9";
+
+    // U+0301 combining acute. Combining mark; attaches to a base character
+    // to form a multi-rune grapheme. Not a standalone grapheme.
+    public const string CombiningAcuteText = "\u0301";
+
+    // é as e + combining acute. The textbook multi-rune grapheme: TWO runes,
+    // ONE grapheme (2 UTF-16 chars total). Works on every runtime including
+    // legacy StringInfo because the base+combining-mark rule predates UAX #29.
+    // Use this when a test needs a multi-rune grapheme that segments the same
+    // way on .NET 5+ and on Unity Mono / IL2CPP.
+    public const string LatinEAcuteGrapheme = "e" + CombiningAcuteText;
+
+    // 🤷‍♀️ woman shrugging. ZWJ emoji sequence: base shrug rune + ZWJ +
+    // female sign + emoji variation selector. UAX #29 sees ONE grapheme;
+    // legacy StringInfo splits it. Use this to test the ZWJ rule.
+    public const string WomanShruggingGrapheme = "\uD83E\uDD37\u200D\u2640\uFE0F";
+
+    // 🇺🇸 US flag. Two regional indicator code points (U + S). UAX #29 sees
+    // ONE grapheme; legacy StringInfo splits it. Use this to test the
+    // regional-indicator pairing rule.
+    public const string USFlagGrapheme = "\uD83C\uDDFA\uD83C\uDDF8";
+
+    // ก + ํา Thai "kam". SARA AM is the canonical extended-grapheme-cluster
+    // case (a vowel sign that visually composes with the preceding consonant).
+    // UAX #29 sees ONE grapheme; legacy StringInfo splits it. Use this to
+    // test the SARA AM rule.
+    public const string ThaiKamGrapheme = "\u0E01\u0E33";
 }

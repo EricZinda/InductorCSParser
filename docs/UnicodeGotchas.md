@@ -109,3 +109,34 @@ If you are doing emoji-sensitive parsing, be careful: variation selectors are pa
 All of these are Unicode surprises that live *outside* the lexer's tokenization decision. They fix either upstream (caller-side input preprocessing) or sideways (grammar-design choice of character classes and tolerance rules). None of them are fixed by switching lexer mode.
 
 If you want the parser to handle any of these natively someday, the "Open Questions" section of [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md) tracks which ones might eventually become first-class.
+
+## Pre-.NET 5 Grapheme Segmentation
+
+This one is different from the gotchas above. It isn't an input-side surprise the caller can preprocess away, and it isn't a grammar-design choice. It's the runtime under your feet behaving differently depending on which .NET you're on, and it only bites `GraphemeLexer`.
+
+`GraphemeLexer` calls `System.Globalization.StringInfo.GetNextTextElement` to find the next grapheme boundary. On .NET 5 and later this is UAX #29 conformant, because the BCL switched to ICU for globalization. On .NET Framework, .NET Core 3.x, and the Mono runtime that Unity ships (which IL2CPP compiles from), `StringInfo` still uses an algorithm Microsoft wrote before UAX #29 stabilized. It's roughly "Unicode 3.x grapheme cluster": base character plus combining marks, surrogate pairs as one unit, Hangul syllable basics. It's not extended-grapheme-cluster aware.
+
+What still works on the legacy runtimes:
+
+- ASCII.
+- Latin with combining diacritics. `é` as `e` + U+0301 is one grapheme.
+- Single-rune emoji like 🎸. One rune, one grapheme.
+- Most simple consonant-plus-mark sequences in Devanagari, Arabic, Hebrew.
+
+What breaks:
+
+- Emoji ZWJ sequences. The family 👨‍👩‍👧‍👦 splits at every ZWJ.
+- Emoji plus skin-tone modifier. 👋🏽 splits into two.
+- Regional indicator pairs (flag emoji). 🇺🇸 splits into two.
+- Thai SARA AM. "kam" (ก + ํา) splits.
+- Other extended-grapheme-cluster rules added after about 2003 (Prepend characters, Extended_Pictographic sequences).
+
+The common thread is timing. Combining marks have been in Unicode since the start, so the legacy walker handles them. Everything UAX #29 added later, especially the emoji rules from 2014 onward, the legacy walker doesn't know about. Microsoft updated `StringInfo` to ICU in .NET 5; Unity's Mono didn't follow, and IL2CPP compiles from that Mono.
+
+**Fix.** Three options, in order of effort:
+
+1. If the grammar doesn't actually need to tokenize emoji or complex-script text at the grapheme level, do nothing. ASCII, source code, config files, and most DSLs are unaffected.
+2. If a specific input causes trouble, switch that grammar to `RuneLexer` and handle the multi-rune sequence explicitly with a small rule. This trades grapheme convenience for one extra rule and works on every runtime.
+3. Vendor a UAX #29 implementation into the parser. Tracked in [backlog/r000](../backlog/r000-vendor-a-uax-#29-grapheme-cluster-implementation.md). Half a day of work, gives full conformance everywhere.
+
+The repo's test suite documents the broken cases explicitly. Look for tests gated behind `#if !UNITY_INCLUDE_TESTS` in [CharRuleTests.cs](../src/InductorParser.Tests/Rules/CharRuleTests.cs); each one is a category that the legacy walker mishandles.

@@ -31,3 +31,8 @@ Build/
 # .cs on import; they live and die with the folder.
 Assets/Tests/PlayMode/Synced/
 Assets/Tests/PlayMode/Synced.meta
+
+# Init scenes Unity drops into Assets/ when launching PlayMode tests in
+# batch mode. Filename has a per-run GUID; safe to ignore everywhere.
+Assets/InitTestScene*.unity
+Assets/InitTestScene*.unity.meta
