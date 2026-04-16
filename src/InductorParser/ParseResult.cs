@@ -12,6 +12,15 @@ public readonly struct ParseResult
     // extra reference field on the struct.
     private readonly string? _input;
 
+    // Reference to the root Rule the parse came from, kept so callers
+    // can resolve SymbolIds back to names/rules without threading the
+    // Rule through every call site. Lives on ParseResult (not on
+    // Symbol) because every matched rule allocates a Symbol and the
+    // design keeps per-node state minimal; one reference on ParseResult
+    // pays the cost once per parse. Null for default-constructed
+    // ParseResult values.
+    private readonly Rule? _grammar;
+
     public ParseOutcome Outcome { get; }
     public Symbol? Tree { get; }
     public string ErrorMessage { get; }
@@ -130,26 +139,46 @@ public readonly struct ParseResult
 
     public bool Success => Outcome == ParseOutcome.Success;
 
-    private ParseResult(ParseOutcome outcome, Symbol? tree, string errorMessage, int errorCharIndex, string? input)
+    // Resolve a SymbolId encountered in the parse tree back to its
+    // human-readable name, using the grammar this result came from.
+    // Delegates to Rule.NameOf; see that method's comment for the
+    // character-range fallback and rule-name logic. Returns null if
+    // the id isn't in the grammar or this ParseResult has no grammar
+    // reference (default-constructed).
+    public string? NameOf(SymbolId id) => _grammar?.NameOf(id);
+
+    // Resolve a Symbol to its human-readable name. Convenience wrapper
+    // around NameOf(symbol.Id) that swallows the null-check on symbol.
+    public string? Name(Symbol symbol) => symbol == null ? null : NameOf(symbol.Id);
+
+    // Render the parse tree to a string for debug output, using the
+    // grammar this result came from to resolve names. Returns the
+    // empty string if there is no tree (failure or abort). See
+    // SymbolExtensions.PrintTree for the output format.
+    public string PrintTree() =>
+        Tree == null || _grammar == null ? string.Empty : Tree.PrintTree(_grammar);
+
+    private ParseResult(ParseOutcome outcome, Symbol? tree, string errorMessage, int errorCharIndex, string? input, Rule? grammar)
     {
         Outcome = outcome;
         Tree = tree;
         ErrorMessage = errorMessage;
         ErrorCharIndex = errorCharIndex;
         _input = input;
+        _grammar = grammar;
     }
 
-    public static ParseResult Succeeded(Symbol tree, string input) =>
-        new ParseResult(ParseOutcome.Success, tree, string.Empty, 0, input);
+    public static ParseResult Succeeded(Symbol tree, string input, Rule grammar) =>
+        new ParseResult(ParseOutcome.Success, tree, string.Empty, 0, input, grammar);
 
-    public static ParseResult Failed(int errorCharIndex, string message, string input) =>
-        new ParseResult(ParseOutcome.GrammarMismatch, null, message, errorCharIndex, input);
+    public static ParseResult Failed(int errorCharIndex, string message, string input, Rule grammar) =>
+        new ParseResult(ParseOutcome.GrammarMismatch, null, message, errorCharIndex, input, grammar);
 
     // Parse aborted because a runtime budget tripped. The outcome
     // identifies which one (Timeout, WorkLimitExceeded, DepthLimitExceeded,
     // Canceled).
-    public static ParseResult Aborted(ParseOutcome outcome, int errorCharIndex, string message, string input) =>
-        new ParseResult(outcome, null, message, errorCharIndex, input);
+    public static ParseResult Aborted(ParseOutcome outcome, int errorCharIndex, string message, string input, Rule grammar) =>
+        new ParseResult(outcome, null, message, errorCharIndex, input, grammar);
 
     // Shared forward scan for ErrorLine and ErrorColumn. Counts line
     // terminators strictly before ErrorCharIndex:

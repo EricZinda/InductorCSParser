@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Text;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 using InductorParser.Tracing;
@@ -48,6 +49,11 @@ public abstract class Rule
     private bool _sealed;
     private bool _idAssigned;
     private string? _errorMessage;
+
+    // Lazily-built reverse index from SymbolId to human-readable name
+    // for every rule reachable from this root. Populated on the first
+    // NameOf call. Grammars that never ask never pay the allocation.
+    private Dictionary<SymbolId, string>? _nameIndex;
 
     public SymbolId Id { get; private set; }
     public string? Name { get; private set; }
@@ -307,6 +313,64 @@ public abstract class Rule
         return this;
     }
 
+    // Return the human-readable name for a SymbolId in this grammar, or
+    // null if the id isn't known. Two sources, tried in order:
+    //
+    //   1. Character range (0..0x10FFFF): render the code point as a
+    //      single-char string. A tree leaf with id 0x41 comes back as "A",
+    //      0x1F3B8 comes back as "🎸". Surrogate halves (0xD800..0xDFFF)
+    //      aren't valid scalar values and return null; no lexer produces
+    //      them as ids, so this only matters if a caller hand-built a bad
+    //      SymbolId.
+    //
+    //   2. Per-grammar rule index: a lazily-built Dictionary<SymbolId, Rule>
+    //      keyed on every rule reachable from this root. For a rule created
+    //      with .As("foo"), returns "foo". For an unnamed rule, returns the
+    //      class-derived trace name ("And", "OneOrMore", "Char",
+    //      "BetweenInclusive[1..3]"). Returns null if the id isn't in the
+    //      grammar.
+    //
+    // Intended for parse-tree walkers (which only carry SymbolIds, not Rule
+    // references) and for error-message rendering that wants to quote a
+    // rule's name. Tracing already has direct Rule access and doesn't
+    // need this path.
+    //
+    // Auto-compiles if the grammar hasn't been compiled yet, since ids
+    // aren't stable until Compile runs.
+    public string? NameOf(SymbolId id)
+    {
+        int value = id.Value;
+        if (value >= 0 && value < SymbolRanges.CharacterRangeEnd)
+        {
+            return Rune.IsValid(value) ? new Rune(value).ToString() : null;
+        }
+
+        Compile();
+        _nameIndex ??= BuildNameIndex();
+        return _nameIndex.TryGetValue(id, out var name) ? name : null;
+    }
+
+    private Dictionary<SymbolId, string> BuildNameIndex()
+    {
+        var map = new Dictionary<SymbolId, string>();
+        var visited = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
+        CollectNames(this, visited, map);
+        return map;
+    }
+
+    // Populate the reverse index by walking the sealed rule graph once.
+    // For each rule, prefer the user-supplied Name (from .As("foo")) and
+    // fall back to the class-derived trace name, which is what tracing
+    // shows for unnamed rules and what a tree-walker expects to see for
+    // things like And / OneOrMore / BetweenInclusive[1..3].
+    private static void CollectNames(Rule r, HashSet<Rule> visited, Dictionary<SymbolId, string> map)
+    {
+        if (!visited.Add(r)) return;
+        map[r.Id] = r.Name ?? r._ruleTraceName;
+        foreach (var child in r.Children)
+            CollectNames(child, visited, map);
+    }
+
     // Run the grammar against an input string. Auto-compiles on first call.
     // Default ParseOptions uses the GraphemeLexer; pass options explicitly
     // to switch to the RuneLexer or change other parse-time settings.
@@ -332,12 +396,12 @@ public abstract class Rule
             // wherever the unwind settled. We carry that as the
             // ErrorCharIndex so callers get a coarse "how far did the
             // parser get" hint for diagnostics.
-            return ParseResult.Aborted(budget.Outcome, lexer.Position, BuildBudgetMessage(budget.Outcome), lexer.Input);
+            return ParseResult.Aborted(budget.Outcome, lexer.Position, BuildBudgetMessage(budget.Outcome), lexer.Input, this);
         }
         if (tree != null && lexer.IsEof)
-            return ParseResult.Succeeded(tree, lexer.Input);
+            return ParseResult.Succeeded(tree, lexer.Input, this);
         var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
-        return ParseResult.Failed(pos, BuildErrorMessage(lexer, pos), lexer.Input);
+        return ParseResult.Failed(pos, BuildErrorMessage(lexer, pos), lexer.Input, this);
     }
 
     private static string BuildBudgetMessage(ParseOutcome outcome)
