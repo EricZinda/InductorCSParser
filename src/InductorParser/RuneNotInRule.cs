@@ -7,8 +7,9 @@ namespace InductorParser;
 // the token is not a single rune in the set. A RuneSet is a set of
 // Unicode code points, so under GraphemeLexer a multi-rune grapheme
 // (skin-toned emoji, ZWJ family, CJK + combining mark) is trivially not
-// in any set, since it isn't a single code point at all. RuneNotIn
-// therefore matches it, which is what lets ZeroOrMore(RuneNotIn(stopSet))
+// in any set, since it isn't a single code point at all. 
+
+// ZeroOrMore(RuneNotIn(stopSet)) is commonly used to 
 // sweep up arbitrary user-typed text while still stopping at the stop
 // characters.
 //
