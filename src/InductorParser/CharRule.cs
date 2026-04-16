@@ -59,7 +59,7 @@ internal sealed class CharRule : Rule
             SetIdInternal(new SymbolId(runeValue));
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
     {
         using var transaction = lexer.BeginTransaction();
         int consumed = 0;
@@ -102,6 +102,14 @@ internal sealed class CharRule : Rule
 
         TraceSuccess(lexer, $"found '{_expected}'");
         transaction.Commit();
+        // Default FlattenType for Char is Delete, so most Char matches
+        // return the shared Discarded sentinel and skip the per-match
+        // Symbol allocation entirely. Grammar authors who want the
+        // character in the tree can opt in with .Flatten(FlattenType.None)
+        // on the Char rule, or set ParseOptions.PreserveFlattenWrappers
+        // for a tree whose shape matches the grammar one-to-one.
+        if (discard)
+            return Symbol.Discarded;
         return new Symbol(Id, FlattenType, lexer.Input.AsMemory(transaction.StartPosition, consumed));
     }
 

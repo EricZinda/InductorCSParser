@@ -97,4 +97,19 @@ public static class InductorJsonParser
     }
 
     public static ParseResult Parse(string input) => Json.Parse(input, _options);
+
+    // Round-trip variant used by the spot-check. Parse-time Delete filtering
+    // would drop the JSON delimiters (Char('{'), '}', ',', ':', '"') from
+    // the tree, so Tree.ToString() on a normally-parsed value returns just
+    // the concatenated non-delimiter content rather than the original
+    // input. PreserveFlattenWrappers keeps every grammar node in the tree
+    // for verification purposes; it is not used by the benchmark runs.
+    private static readonly ParseOptions _roundTripOptions = new()
+    {
+        InputUnit = InputUnit.Rune,
+        MaxDepth = 0,
+        PreserveFlattenWrappers = true,
+    };
+
+    public static ParseResult ParseForRoundTrip(string input) => Json.Parse(input, _roundTripOptions);
 }

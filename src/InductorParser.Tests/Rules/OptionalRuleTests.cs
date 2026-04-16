@@ -8,13 +8,18 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class OptionalRuleTests
 {
+    // Tree.ToString() assertions below use PreserveFlattenWrappers so
+    // Char leaves (default FlattenType.Delete) survive parse-time
+    // filtering and appear in the concatenated view.
+    private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
+
     [Test]
     public void Optional_inner_match_is_consumed()
     {
         // Optional wraps a rule; when inner matches, that input is consumed
         // and the surrounding grammar sees the post-match position.
         var rule = And(Optional(Char('-')), Char('a'));
-        var result = rule.Parse("-a");
+        var result = rule.Parse("-a", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("-a"));
@@ -26,7 +31,7 @@ public class OptionalRuleTests
         // Inner doesn't match; Optional still succeeds with empty and the
         // surrounding grammar runs from the same position Optional started at.
         var rule = And(Optional(Char('-')), Char('a'));
-        var result = rule.Parse("a");
+        var result = rule.Parse("a", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("a"));

@@ -21,7 +21,7 @@ internal sealed class PeekRule : Rule
 
     private Rule Inner => Children[0];
 
-    internal override Symbol? TryParseRule(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
     {
         using var transaction = lexer.BeginTransaction();
         var innerResult = Inner.TryParse(lexer);
@@ -34,7 +34,11 @@ internal sealed class PeekRule : Rule
         TraceSuccess(lexer, $"inner matched");
         // The `using` rolls back the lexer on exit (no Commit), so even
         // though inner advanced the cursor during its TryParse, we're
-        // back where we started. Zero-width success.
+        // back where we started. Zero-width success — on the Delete
+        // default path, return the shared sentinel so we don't allocate a
+        // fresh empty Symbol per lookahead.
+        if (discard)
+            return Symbol.Discarded;
         return new Symbol(Id, FlattenType, Array.Empty<Symbol>());
     }
 }

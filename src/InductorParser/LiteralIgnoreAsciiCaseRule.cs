@@ -27,7 +27,7 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
         SetTraceName("LiteralIgnoreAsciiCase");
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
     {
         using var transaction = lexer.BeginTransaction();
         int consumed = 0;
@@ -54,6 +54,10 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
 
         TraceSuccess(lexer, $"found '{lexer.Input.Substring(transaction.StartPosition, consumed)}', wanted '{_expected}' (case-insensitive)");
         transaction.Commit();
+        // Default FlattenType is Delete: the common case collapses to the
+        // shared sentinel and skips the per-match Symbol allocation.
+        if (discard)
+            return Symbol.Discarded;
         return new Symbol(Id, FlattenType, lexer.Input.AsMemory(transaction.StartPosition, consumed));
     }
 
