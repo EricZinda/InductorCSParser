@@ -1,9 +1,0 @@
-- RuneClass set operators & (intersection) and ~ (complement)
-    - Current state: RuneClass has `|` (union) only. The doc promises intersection and complement as well. Grammars today can work around with `Or`/`RuneNotIn`, but the composition is less clean.
-    - Design from docs/ProgrammingModel.md:
-        - `&` (intersection): narrows one semantic set by another. `RuneClass.Letters & RuneClass.Range(0x0400, 0x04FF)` gives Cyrillic letters only, and stays correct as Unicode adds new Cyrillic characters to the base `Letters` class.
-        - `~` (complement): "all runes except these." Most useful combined with `&` as set difference: `RuneClass.Ascii.Letters & ~RuneClass.Runes("aeiouAEIOU")` gives consonants.
-        - Both operate on the sorted-range representation RuneClass already uses internally. Intersection and complement over sorted ranges are both linear single passes.
-    - Complement of the full 0..0x10FFFF range minus the class's ranges. Need to remember that surrogates (0xD800..0xDFFF) are never valid scalar values, so complement should exclude them (or not, depending on what RuneIn/RuneNotIn do at match time; today Token.RuneValue returns -1 for surrogates so set membership on surrogates is moot).
-    - Priority: Ergonomic. Grammars that want "letters except X" or "any code point except whitespace" work around by building unions by hand. Not urgent.
-    - Done when: `&` and `~` compile and produce the expected ranges; a test covers `Letters & ~Runes("aeiou")` and a script-restriction like `Letters & Range(0x0400, 0x04FF)`.

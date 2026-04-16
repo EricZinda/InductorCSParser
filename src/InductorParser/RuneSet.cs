@@ -5,12 +5,40 @@ using System.Text;
 
 namespace InductorParser;
 
-public readonly struct RuneSet
+// A set of Unicode scalar values (runes), used to describe character classes
+// for RuneIn and RuneNotIn. Build one with the factory methods (Single, Range,
+// Runes, Category) or one of the built-ins (Letters, Digits, Whitespace, and
+// their Ascii.* variants), then compose larger classes with the set operators:
+//
+//     |   union           a | b           runes in a or b
+//     &   intersection    a & b           runes in a and b
+//     ~   complement      ~a              runes not in a
+//
+// Set difference is the idiom a & ~b ("a minus b"). The operators return a
+// new RuneSet; the struct is immutable.
+//
+//     var unicodeIdentifier = RuneSet.Letters | RuneSet.Digits | RuneSet.Runes("_");
+//     var asciiConsonants   = RuneSet.Ascii.Letters & ~RuneSet.Runes("aeiouAEIOU");
+//     var cyrillicLetters   = RuneSet.Letters & RuneSet.Range(0x0400, 0x04FF);
+//
+// Internally a RuneSet is a sorted, non-overlapping, non-adjacent array of
+// code-point runs. That makes every operator linear in the number of runs,
+// which is small for typical grammars (Letters is a few dozen runs, not a
+// million code points). A grammar rule that uses RuneSet.Letters a thousand
+// times pays the Unicode-table scan once at startup and then a handful of
+// Contains() calls per match.
+//
+// RuneSet is a set of code points, not graphemes. Multi-rune graphemes
+// (emoji sequences, combining-mark clusters) aren't a single element of any
+// RuneSet. See docs/ProgrammingModel.md for how that interacts with the
+// grapheme lexer.
+public readonly struct RuneSet : IEquatable<RuneSet>
 {
-    // A closed interval [Low, High] of Unicode code points. The internal
-    // representation of a RuneSet is a sorted, non-overlapping array of
-    // these. Named Interval (not Range) to avoid colliding with the public
-    // Range(...) factory method below.
+    // One contiguous run of Unicode code points, inclusive on both ends:
+    // the closed interval [Low, High]. A RuneSet is represented as a sorted,
+    // non-overlapping, non-adjacent array of these runs. Named Interval
+    // (not Range) to avoid colliding with the public Range(...) factory
+    // method below.
     private readonly record struct Interval(int Low, int High);
 
     private readonly Interval[] _ranges;
@@ -31,6 +59,39 @@ public readonly struct RuneSet
 
     public bool Contains(char c) => Contains((int)c);
     public bool Contains(Rune r) => Contains(r.Value);
+
+    public bool IsEmpty => _ranges == null || _ranges.Length == 0;
+
+    // Value equality: two RuneSets are equal iff they contain the same runes.
+    // Normalize guarantees a canonical interval list (sorted, non-overlapping,
+    // non-adjacent), so equal sets necessarily have identical _ranges arrays.
+    // That reduces equality to a length check plus a pairwise Interval compare.
+    public bool Equals(RuneSet other)
+    {
+        var mine = _ranges;
+        var theirs = other._ranges;
+        int mineLength = mine?.Length ?? 0;
+        int theirsLength = theirs?.Length ?? 0;
+        if (mineLength != theirsLength) return false;
+        for (int index = 0; index < mineLength; index++)
+            if (mine![index] != theirs![index]) return false;
+        return true;
+    }
+
+    public override bool Equals(object? obj) => obj is RuneSet other && Equals(other);
+
+    public override int GetHashCode()
+    {
+        var ranges = _ranges;
+        if (ranges == null) return 0;
+        var hash = new HashCode();
+        for (int index = 0; index < ranges.Length; index++)
+            hash.Add(ranges[index]);
+        return hash.ToHashCode();
+    }
+
+    public static bool operator ==(RuneSet a, RuneSet b) => a.Equals(b);
+    public static bool operator !=(RuneSet a, RuneSet b) => !a.Equals(b);
 
     // Human-readable rendering of the range list, for trace output and
     // debugger display. Produces "[a-z,A-Z,0-9]" style output with
@@ -139,6 +200,81 @@ public readonly struct RuneSet
         if (a._ranges != null) combined.AddRange(a._ranges);
         if (b._ranges != null) combined.AddRange(b._ranges);
         return new RuneSet(Normalize(combined));
+    }
+
+    // Sorted-range intersection: walk both sets once, picking [max(low), min(high)]
+    // whenever the current intervals overlap, and advancing whichever interval
+    // ends first. Linear in the sum of the two interval counts. Both inputs are
+    // already normalized (sorted, non-overlapping, non-adjacent), and so is the
+    // result — adjacent overlap fragments can't appear because that would imply
+    // the inputs themselves had adjacent intervals, contradicting normalization.
+    public static RuneSet operator &(RuneSet a, RuneSet b)
+    {
+        var aRanges = a._ranges;
+        var bRanges = b._ranges;
+        if (aRanges == null || bRanges == null) return new RuneSet(Array.Empty<Interval>());
+        if (aRanges.Length == 0 || bRanges.Length == 0) return new RuneSet(Array.Empty<Interval>());
+
+        var result = new List<Interval>();
+        int aIndex = 0;
+        int bIndex = 0;
+        while (aIndex < aRanges.Length && bIndex < bRanges.Length)
+        {
+            int overlapLow = Math.Max(aRanges[aIndex].Low, bRanges[bIndex].Low);
+            int overlapHigh = Math.Min(aRanges[aIndex].High, bRanges[bIndex].High);
+            if (overlapLow <= overlapHigh)
+                result.Add(new Interval(overlapLow, overlapHigh));
+            // Advance past whichever interval ends first. The other may still
+            // overlap with the next interval in the first set.
+            if (aRanges[aIndex].High < bRanges[bIndex].High) aIndex++;
+            else bIndex++;
+        }
+        return new RuneSet(result.ToArray());
+    }
+
+    // Complement against the full set of Unicode scalar values: everything
+    // in 0..0x10FFFF except the surrogate block 0xD800..0xDFFF (which isn't
+    // a set of valid scalar values) and except the input set's intervals.
+    // Implementation walks the input intervals and emits the gaps between
+    // them, splitting any gap that straddles the surrogate block.
+    public static RuneSet operator ~(RuneSet a)
+    {
+        const int MinScalarValue = 0;
+        const int MaxScalarValue = 0x10FFFF;
+        var inputRanges = a._ranges;
+        var result = new List<Interval>();
+        int cursor = MinScalarValue;
+        if (inputRanges != null)
+        {
+            for (int index = 0; index < inputRanges.Length; index++)
+            {
+                if (cursor < inputRanges[index].Low)
+                    EmitIntervalSkippingSurrogates(result, cursor, inputRanges[index].Low - 1);
+                cursor = inputRanges[index].High + 1;
+            }
+        }
+        if (cursor <= MaxScalarValue)
+            EmitIntervalSkippingSurrogates(result, cursor, MaxScalarValue);
+        return new RuneSet(result.ToArray());
+    }
+
+    // Emit [low, high] into result, splitting around the surrogate block
+    // 0xD800..0xDFFF if the interval straddles it. Called only from the
+    // complement operator, where the input interval came from a gap
+    // calculation and is therefore guaranteed non-empty (low <= high).
+    private static void EmitIntervalSkippingSurrogates(List<Interval> result, int low, int high)
+    {
+        const int SurrogateLow = 0xD800;
+        const int SurrogateHigh = 0xDFFF;
+        if (high < SurrogateLow || low > SurrogateHigh)
+        {
+            result.Add(new Interval(low, high));
+            return;
+        }
+        if (low < SurrogateLow)
+            result.Add(new Interval(low, SurrogateLow - 1));
+        if (high > SurrogateHigh)
+            result.Add(new Interval(SurrogateHigh + 1, high));
     }
 
     private static Interval[] Normalize(List<Interval> ranges)
