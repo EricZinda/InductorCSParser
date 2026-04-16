@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text;
 using InductorParser.Tracing;
 
 namespace InductorParser;
@@ -11,6 +12,26 @@ public sealed class ParseOptions
     // the underlying StringInfo implementation has known gaps on pre-.NET 5
     // runtimes (see GraphemeLexer.cs and backlog/i001).
     public InputUnit InputUnit { get; set; } = InputUnit.Grapheme;
+
+    // Normalization form applied to the input before parsing. Default is the
+    // composed form (FormC), which is what almost every grammar wants and
+    // what essentially all web, source, and typed input already is. A
+    // grammar written against Char("café") (precomposed é, U+00E9) with this
+    // default will also match decomposed "cafe\u0301" input, because the
+    // normalizer rewrites the latter to the former before the lexer sees
+    // it. Set to null to skip normalization entirely (byte-exact
+    // round-trippability, at the cost of losing the safety net).
+    //
+    // Positions reported in ParseResult (ErrorCharIndex and its derived
+    // line/column/rune/grapheme properties) are ALWAYS into the caller's
+    // original input string, regardless of this setting. When normalization
+    // actually rewrites the input, the parser translates failure offsets
+    // back to original-string coordinates at the boundary, so callers never
+    // have to think about which coordinate system a position lives in. The
+    // common case where the input is already in the target form pays zero
+    // extra cost: String.Normalize returns the same string reference and
+    // the translation step is skipped.
+    public NormalizationForm? NormalizeInput { get; set; } = NormalizationForm.FormC;
 
     // Where trace output goes when the parser is tracing. Null means
     // tracing is off

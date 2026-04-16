@@ -42,8 +42,15 @@ public class CharRuleTests
         // LatinEAcuteGrapheme is one grapheme made of two runes (2 UTF-16
         // chars). Under GraphemeLexer this is one token, so CharRule reads
         // one token and compares the whole expected.
+        //
+        // NormalizeInput = null because the default NFC would rewrite the
+        // decomposed "e\u0301" input to the precomposed "\u00E9" before
+        // the lexer saw it, and the whole point of this test is that the
+        // rule and input sit in the same decomposed form at match time.
+        // NormalizationTests covers the NFC-on behavior separately.
         var rule = Char(LatinEAcuteGrapheme);
-        var result = rule.Parse(LatinEAcuteGrapheme);
+        var result = rule.Parse(LatinEAcuteGrapheme,
+            new ParseOptions { NormalizeInput = null });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
@@ -56,7 +63,7 @@ public class CharRuleTests
         // each in lockstep against the expected slices.
         var rule = Char(LatinEAcuteGrapheme);
         var result = rule.Parse(LatinEAcuteGrapheme,
-            new ParseOptions { InputUnit = InputUnit.Rune });
+            new ParseOptions { InputUnit = InputUnit.Rune, NormalizeInput = null });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
