@@ -65,7 +65,12 @@ public abstract class Rule
     // calling GetType().Name on every trace emission. Works under
     // IL2CPP because it's baked in at construction time, not looked
     // up via name-based reflection.
-    private readonly string _ruleTraceName;
+    //
+    // Subclasses whose trace name needs construction-time parameterization
+    // (e.g. BetweenInclusiveRule rendering its bounds as "BetweenInclusive[1..3]")
+    // call SetTraceName from their own constructor to overwrite the
+    // type-derived default.
+    private string _ruleTraceName;
 
     // Compose the full trace label: "{Name}:{ruleName}" when the rule
     // has a .As(name) set, else just "{ruleName}". Only .As() is used
@@ -165,6 +170,15 @@ public abstract class Rule
         Children = children.Length > 0 ? children : NoChildren;
         _ruleTraceName = DeriveRuleTraceName(GetType());
     }
+
+    // Replace this rule's trace label. Intended for use only from subclass
+    // constructors that need to bake construction-time parameters (like
+    // BetweenInclusiveRule's bounds) into the label. No ThrowIfSealed check
+    // here because at constructor time the rule isn't reachable from
+    // grammar code yet, so it can't have been compiled and sealed.
+    // Trace emission reads _ruleTraceName as a field load, so renaming
+    // here stays a one-time cost.
+    protected void SetTraceName(string name) => _ruleTraceName = name;
 
     // Strip the "Rule" suffix so the trace label reads "And" instead
     // of "AndRule". GetType() in a base constructor returns the

@@ -79,7 +79,7 @@ public void Char_multi_rune_mismatch_on_second_token_reports_at_second_token_sta
 
 ### Composite Rules
 
-Rules that wrap other rules and combine their results: `AndRule`, `OrRule`, `OneOrMoreRule`, `ZeroOrMoreRule`, `OptionalRule`.
+Rules that wrap other rules and combine their results: `AndRule`, `OrRule`, `BetweenInclusiveRule` (the body shared by `OneOrMore`/`ZeroOrMore`/`Optional`).
 
 Required tests beyond universal coverage:
 
@@ -136,7 +136,7 @@ Rules emit their traces via two base-class helpers, `TraceSuccess(lexer, $"...")
 
 **Per-rule trace tests live in each rule's own test file.** Every rule in `Rules/` must include at least one success-path trace test and at least one failure-path trace test (if the rule has a failure path; `ZeroOrMoreRule` has none). The tests pin the full trace output verbatim via `Assert.That(sink.ToString(), Is.EqualTo(...))`. This way, changing a rule's trace format produces a test failure in the rule's own file, right next to the code being edited, rather than in a central file the author might not have open. Shared helpers (`NewSink()`, `Lines(params string[])`) live in `TraceTestHelpers.cs` at the test project root and are pulled in via `using static InductorParser.Tests.TraceTestHelpers;`.
 
-Note on C++ trace mapping. The original InductorParser (C++) emits traces using template-unrolled class names like `CharacterSymbol::Parse`, `CharacterSetSymbol::Parse`, `1to2147483647Expression::Parse`, and so on. The C# port uses the rule's C# name instead (`Char`, `RuneIn`, `OneOrMore`). Captured C++ traces used for reference material need a one-time mental mapping: C++ `CharacterSymbol` → C# `Char`, C++ `CharacterSetSymbol` → C# `RuneIn`, C++ `EofSymbol` → C# `Eof`, C++ `AndExpression` → C# `And`, C++ `OrExpression` → C# `Or`, C++ `AtLeastAndAtMostExpression<T, 1, INT_MAX>` (`1to2147483647Expression`) → C# `OneOrMore`, C++ `<T, 0, INT_MAX>` → C# `ZeroOrMore`, C++ `<T, 0, 1>` → C# `Optional`.
+Note on C++ trace mapping. The original InductorParser (C++) emits traces using template-unrolled class names like `CharacterSymbol::Parse`, `CharacterSetSymbol::Parse`, `1to2147483647Expression::Parse`, and so on. The C# port uses the rule's C# name instead (`Char`, `RuneIn`, `OneOrMore`). Captured C++ traces used for reference material need a one-time mental mapping: C++ `CharacterSymbol` → C# `Char`, C++ `CharacterSetSymbol` → C# `RuneIn`, C++ `EofSymbol` → C# `Eof`, C++ `AndExpression` → C# `And`, C++ `OrExpression` → C# `Or`, C++ `AtLeastAndAtMostExpression<T, 1, INT_MAX>` (`1to2147483647Expression`) → C# `OneOrMore`, C++ `<T, 0, INT_MAX>` → C# `ZeroOrMore`, C++ `<T, 0, 1>` → C# `Optional`. The general `BetweenInclusive(inner, n, m)` traces as `BetweenInclusive[n..m]`.
 
 When you write a test that primarily exercises one of these concerns, put it in the corresponding file, not in a rule-specific file. When a test exercises a rule but happens to touch a cross-cutting concern, put it in the rule's file and keep the cross-cutting concern under test as a secondary focus.
 

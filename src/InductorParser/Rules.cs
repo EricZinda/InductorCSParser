@@ -49,9 +49,24 @@ public static class Rules
         return new OrRule(children);
     }
 
-    public static Rule OneOrMore(Rule inner) => new OneOrMoreRule(inner);
-    public static Rule ZeroOrMore(Rule inner) => new ZeroOrMoreRule(inner);
-    public static Rule Optional(Rule inner) => new OptionalRule(inner);
+    // BetweenInclusive(inner, n, m) matches inner between n and m times
+    // inclusive. The three count-rule shapes below are special cases of
+    // this primitive. Argument validation lives on BetweenInclusiveRule's
+    // constructor so every construction path goes through it.
+    public static Rule BetweenInclusive(Rule inner, int atLeast, int atMost) =>
+        new BetweenInclusiveRule(inner, atLeast, atMost);
+
+    // The three common shapes pass a friendly trace name so the trace
+    // reads as the factory name the grammar author chose (OneOrMore,
+    // ZeroOrMore, Optional) rather than the raw bounds notation.
+    public static Rule OneOrMore(Rule inner) =>
+        new BetweenInclusiveRule(inner, 1, int.MaxValue, "OneOrMore");
+
+    public static Rule ZeroOrMore(Rule inner) =>
+        new BetweenInclusiveRule(inner, 0, int.MaxValue, "ZeroOrMore");
+
+    public static Rule Optional(Rule inner) =>
+        new BetweenInclusiveRule(inner, 0, 1, "Optional");
     public static Rule Eof() => new EofRule();
 
     // [+|-]? Digit+

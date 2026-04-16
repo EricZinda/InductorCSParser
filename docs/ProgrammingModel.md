@@ -38,6 +38,7 @@ Every concept from the original `GettingStarted.md` has a direct C# counterpart:
 | `OneOrMoreExpression<T>`           | `OneOrMore(rule)`                               |
 | `ZeroOrMoreExpression<T>`          | `ZeroOrMore(rule)`                              |
 | `OptionalExpression<T>`            | `Optional(rule)`                                |
+| `AtLeastAndAtMostExpression<T,N,M>`| `BetweenInclusive(rule, n, m)`                  |
 | `CharacterSymbol<EqualString>`     | `Char('=')`                                     |
 | `CharacterSetSymbol<Chars>`        | `RuneIn(RuneSet.Letters)`                     |
 | `CharacterSetExceptSymbol<...>`    | `RuneNotIn(charClass)`                          |
@@ -380,15 +381,15 @@ A regex engine with greedy backtracking would:
 2. Then try to match the trailing `a` against EOF, fail.
 3. Back off the repetition to `"aa"`, try again, succeed on the trailing `a`.
 
-A PEG engine does NOT do step 3. Once `OneOrMore` matched `"aaa"`, those matches are committed. The outer `And` then tries `Char('a')` at EOF, fails, and the whole parse fails. Our `OneOrMoreRule` preserves this: the `while (true)` loop inside its `TryParse` commits each successful inner match as it goes, and the loop just stops when the inner fails on the next attempt. No rewind.
+A PEG engine does NOT do step 3. Once `OneOrMore` matched `"aaa"`, those matches are committed. The outer `And` then tries `Char('a')` at EOF, fails, and the whole parse fails. Our `BetweenInclusiveRule` (which `OneOrMore`, `ZeroOrMore`, and `Optional` all factory through) preserves this: the loop inside its `TryParse` commits each successful inner match as it goes, and the loop just stops when the inner fails on the next attempt. No rewind.
 
 This looks like a cost, and sometimes it is — grammars that worked in regex need to be restructured, usually with `Not(...)` lookahead to stop repetition one step short, or by splitting the repeated rule into a less-greedy form. The benefit is unambiguity: given a grammar and an input, PEG returns exactly one parse (or a fail), and the parse is whichever answer the ordered choices and greedy matches produced. Regex engines without this property have decades of scars from ambiguous patterns and catastrophic backtracking (ReDoS).
 
 Two corollaries of "no repetition backtracking" that show up in the implementation:
 
-**Each successful inner match is committed.** Inside `OneOrMoreRule.TryParse`, the inner `TryParse` opens its own transaction and commits on success. Once the first inner succeeds, the outer `OneOrMore`'s own transaction stays uncommitted only until the final result is decided; every matched-so-far position is locked in.
+**Each successful inner match is committed.** Inside `BetweenInclusiveRule.TryParse`, the inner `TryParse` opens its own transaction and commits on success. Once the first inner succeeds, the outer rule's own transaction stays uncommitted only until the final result is decided; every matched-so-far position is locked in.
 
-**Zero-width inner matches would loop forever.** `OneOrMore(Optional(X))` has an inner that always "succeeds" without consuming input. Without a guard, the greedy loop would match Optional(X) infinitely. Both `OneOrMoreRule` and `ZeroOrMoreRule` carry an `if (lexer.Position == before) break;` check that stops the loop when a match didn't advance. The C++ version has the same guard for the same reason.
+**Zero-width inner matches would loop forever.** `OneOrMore(Optional(X))` has an inner that always "succeeds" without consuming input. Without a guard, the greedy loop would match Optional(X) infinitely. `BetweenInclusiveRule` carries an `if (lexer.Position == before) break;` check that stops the loop when a match didn't advance, so all three derived factories inherit the protection. The C++ version has the same guard for the same reason.
 
 So, the full execution model is: ordered-choice backtracking between alternatives, greedy non-backtracking within repetition, and transaction-based rollback ties the two together. The catastrophic-backtracking patterns discussed in the next section are not about greed failing to back off; they're about ordered choice retrying at overlapping cursor positions when multiple alternatives interact badly.
 
@@ -440,7 +441,7 @@ A naive post-read implementation would record at 1 instead of 0, which equals `i
 
 **Multi-token primitive rules** (`CharRule`'s lockstep loop for multi-rune graphemes under `RuneLexer`, future `Literal`) read a sequence of tokens and fail when any one of them mismatches. The position is the start of the *specific* failing token, not the start of the whole attempt. A `Literal("abc")` that matches "ab" and fails on the third token reports offset 2, not offset 0. These rules track a per-iteration `tokenStart` local inside the loop.
 
-**Composite rules** (`AndRule`, `OrRule`, `OneOrMoreRule`, `OptionalRule`) don't introduce new positions of their own. They call `RecordFailure(lexer.Position, ...)` — the current lexer position after a child's transaction has rolled back — which equals where the child started trying. The child has already recorded at its own pre-read position (which is the same or deeper, depending on whether the child committed any sub-tokens before failing), so the composite's record either ties or is shallower, and deepest-failure-wins routes to the child's more-specific location. The composite still gets a chance to attach its `WithError` message via the equal-depth message-claim rule below.
+**Composite rules** (`AndRule`, `OrRule`, `BetweenInclusiveRule`) don't introduce new positions of their own. They call `RecordFailure(lexer.Position, ...)` — the current lexer position after a child's transaction has rolled back — which equals where the child started trying. The child has already recorded at its own pre-read position (which is the same or deeper, depending on whether the child committed any sub-tokens before failing), so the composite's record either ties or is shallower, and deepest-failure-wins routes to the child's more-specific location. The composite still gets a chance to attach its `WithError` message via the equal-depth message-claim rule below.
 
 ### Deepest Failure Wins
 
