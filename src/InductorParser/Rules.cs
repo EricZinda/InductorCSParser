@@ -33,6 +33,19 @@ public static class Rules
     // string is exactly one grapheme.
     public static Rule Char(string grapheme) => new CharRule(grapheme);
 
+    // Match an exact multi-character string in a single transaction. For a
+    // one-grapheme match use Char(string); Literal is the N-grapheme
+    // generalization and collapses what would otherwise be N Char rules
+    // (and N transactions) into one. Rejects empty strings at construction.
+    public static Rule Literal(string value) => new LiteralRule(value);
+
+    // ASCII-case-insensitive variant of Literal. Letters A-Z / a-z fold to
+    // the same match; non-ASCII code units compare bit-exact. The ASCII in
+    // the name is critical: full Unicode case folding is locale- and
+    // script-dependent and this primitive doesn't attempt it. See
+    // docs/UnicodeGotchas.md for the reasoning and limits.
+    public static Rule LiteralIgnoreAsciiCase(string value) => new LiteralIgnoreAsciiCaseRule(value);
+
     public static Rule RuneIn(RuneSet cls) => new RuneInRule(cls);
 
     public static Rule RuneNotIn(RuneSet cls) => new RuneNotInRule(cls);

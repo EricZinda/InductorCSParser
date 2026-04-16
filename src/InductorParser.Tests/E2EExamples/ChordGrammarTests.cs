@@ -195,14 +195,21 @@ public class ChordGrammarTests
     // Phase 0 gate. Grammar wall-clock time must stay within 2x of the
     // compiled regex over the full corpus.
     //
-    // Currently ignored: the naive combinator version clocks ~21x slower
-    // than the compiled regex. The bottleneck is per-word transaction
-    // overhead in CiWord, which expands "maj" into 3 RuneIn rules with
-    // 3 transactions. Shipping the Literal(string) primitive (backlog
-    // p500) collapses each word match to one transaction and should drop
-    // the ratio to ~10x; Or first-set dispatch on top of that would close
-    // the remaining gap. Re-enable this test after p500 lands and measure.
-    [Test, Ignore("Gated on backlog p500 (Literal primitive). Ratio sits at ~21x today; target is 2x.")]
+    // Currently ignored. History on this box (net8.0, Release, 5000 iters
+    // x 151 inputs):
+    //   - Naive combinator version (pre-p500, CiWord expanding to 3 RuneIn
+    //     rules per word): ~21x slower than compiled regex.
+    //   - After shipping Literal / LiteralIgnoreAsciiCase and switching CiWord
+    //     to LiteralIgnoreAsciiCase (p500): ~17-18x. Word matches now take one
+    //     transaction each instead of N, but each rune still takes one
+    //     lexer read so the savings are bounded by transaction overhead,
+    //     not read overhead.
+    //   - Next lever: Or first-set dispatch. Every alternation in this
+    //     grammar has a small, disjoint set of legal first characters; a
+    //     first-set pre-filter would skip the transaction+rollback cycle
+    //     on branches that can't match. That's the step that should close
+    //     the remaining gap to 2x. Tracked as a separate backlog item.
+    [Test, Ignore("Ratio is ~18x after p500; 2x needs Or first-set dispatch (separate backlog item).")]
     public void Timing_grammar_is_within_two_times_compiled_regex()
     {
         const int iterations = 5_000;

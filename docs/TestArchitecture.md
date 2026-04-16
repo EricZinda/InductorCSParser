@@ -55,7 +55,7 @@ public void RuneIn_mismatch_after_successful_matches_points_at_first_bad_char()
 
 ### Multi-Token Primitive Rules
 
-Rules that read multiple tokens in a lockstep loop. Today: `CharRule` for multi-rune graphemes. Future: `Literal`.
+Rules that read multiple tokens in a lockstep loop. Today: `CharRule` for multi-rune graphemes, `LiteralRule`, `LiteralIgnoreAsciiCaseRule`.
 
 Required tests beyond single-token coverage:
 

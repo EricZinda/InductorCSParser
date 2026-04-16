@@ -6,22 +6,12 @@ This doc lists the common gotchas, why they bite, and the idiomatic workaround f
 
 ## Case Folding Beyond ASCII
 
-The `LiteralIgnoreCase` helper does ASCII case-insensitive matching (A ↔ a) and is all most grammars need. Full Unicode case folding has script-specific surprises that neither lexer handles: German `ß` uppercases to `SS` (one character becomes two), Turkish has dotted-i and dotless-i as distinct letters, Greek final sigma (ς) folds to regular sigma only at word boundaries. The helper is labeled ASCII-only on purpose; extending it to full Unicode silently produces wrong results on Turkish, Greek, and German text.
+The `LiteralIgnoreAsciiCase` primitive does ASCII case-insensitive matching (A ↔ a) and is all most grammars need. Full Unicode case folding has script-specific surprises that neither lexer handles: German `ß` uppercases to `SS` (one character becomes two), Turkish has dotted-i and dotless-i as distinct letters, Greek final sigma (ς) folds to regular sigma only at word boundaries. The primitive is ASCII-only on purpose; extending it to full Unicode silently produces wrong results on Turkish, Greek, and German text.
 
-**Fix.** Use the ASCII-only helper and accept that case-insensitive matching of non-ASCII text is not supported:
+**Fix.** Use the built-in primitive and accept that case-insensitive matching of non-ASCII text is not supported:
 
 ```csharp
-// One character that matches either case (ASCII only)
-static Rule AnyCase(char c) =>
-    char.IsLetter(c)
-        ? RuneIn(RuneSet.Single(char.ToLower(c)) | RuneSet.Single(char.ToUpper(c)))
-        : Char(c);
-
-// A literal string where each letter matches either case
-static Rule LiteralIgnoreCase(string s) =>
-    And(s.Select(AnyCase).ToArray());
-
-public static readonly Rule SelectKeyword = LiteralIgnoreCase("select");
+public static readonly Rule SelectKeyword = LiteralIgnoreAsciiCase("select");
 ```
 
 Do not try to extend this to full Unicode case folding. It will get subtly wrong for Turkish, Greek, and German.
