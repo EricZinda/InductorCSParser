@@ -33,6 +33,20 @@ var paragraph = OneOrMore(inline).As(nameof(paragraph));
 
 Parse `Hello 🎸 **world** 你好 ` + "`code`" + ` done` and you get a tree where the guitar emoji lives in the first text node, the CJK in another, and `ToString()` reassembles each node losslessly. The default GraphemeLexer treats 🎸 and 你好 as individual characters, so the text nodes see them as single tokens. Even under RuneLexer the round-trip would still work (every rune gets captured), just with multi-rune graphemes showing up as multiple child nodes.
 
+### Stopping at a Multi-Character Terminator
+
+The `RuneNotIn` form above works when the stop is a small set of single characters. When the stop is a sequence, like `*/` closing a block comment or `-->` closing an XML comment, a character class can't express it. The idiom there is `ZeroOrMore(And(Not(stopRule), AnyChar()))`:
+
+```csharp
+var closeMarker = And(Char('*'), Char('/'));
+var blockComment = And(
+    Char('/'), Char('*'),
+    ZeroOrMore(And(Not(closeMarker), AnyChar())),
+    closeMarker);
+```
+
+Each iteration first checks that `closeMarker` does not match at the current cursor (`Not` is negative lookahead, zero-width), and only then consumes one character with `AnyChar()`. When `closeMarker` would fire, `Not` fails, the `And` fails, and the `ZeroOrMore` stops with the cursor sitting just before `*/`. The outer `And` then matches the terminator for real. `AnyChar()` handles multi-rune graphemes naturally under GraphemeLexer, same as `RuneNotIn`, so emoji and CJK in the comment body pass through unchanged.
+
 ## Organizing a Large Grammar as a Class
 
 Local variables work fine for small grammars. For anything bigger, you will want to organize rules across files and reference them by name from outside their defining scope. The natural C# shape for that is a static class, treated purely as a namespace for rule fields. Nothing in the library requires it, but the convention is worth documenting because most production grammars will end up here.

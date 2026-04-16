@@ -35,6 +35,14 @@ public static class Rules
 
     public static Rule RuneIn(RuneSet cls) => new RuneInRule(cls);
 
+    public static Rule RuneNotIn(RuneSet cls) => new RuneNotInRule(cls);
+
+    public static Rule AnyChar() => new AnyCharRule();
+
+    public static Rule Not(Rule inner) => new NotRule(inner);
+
+    public static Rule Peek(Rule inner) => new PeekRule(inner);
+
     public static Rule And(params Rule[] children)
     {
         if (children == null || children.Length == 0)
