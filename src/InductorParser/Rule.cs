@@ -478,7 +478,25 @@ public abstract class Rule
         lexer.EnterRule();
         try
         {
-            return TryParseRule(lexer);
+            // Compute the discard decision once per rule invocation and
+            // hand it to the subclass. Subclasses use it to skip Symbol /
+            // List / leaf allocations when the output would collapse to
+            // the shared Discarded sentinel anyway — the core parse-time
+            // Delete optimization. PreserveFlattenWrappers forces
+            // discard to false, so the debug path keeps every grammar
+            // node visible. The post-hoc Symbol.FlattenInto Delete
+            // branch still exists for trees built by hand outside the
+            // parse path.
+            bool discard = FlattenType == FlattenType.Delete && !lexer.PreserveFlattenWrappers;
+            var result = TryParseRule(lexer, discard);
+            // Safety net: if a subclass ignored the parameter and handed
+            // back a real Symbol anyway, normalize to Discarded so
+            // consumers can rely on the contract. Every in-tree subclass
+            // respects the flag, so this only fires on custom Rules that
+            // don't.
+            if (result != null && discard)
+                return Symbol.Discarded;
+            return result;
         }
         finally
         {
@@ -496,7 +514,16 @@ public abstract class Rule
     //     this if you follow the transaction pattern).
     //   * Call lexer.RecordFailure() on the failure path so the
     //     "deepest failure wins" error-reporting heuristic works.
-    internal abstract Symbol? TryParseRule(Lexer lexer);
+    //   * When the `discard` argument is true, return Symbol.Discarded
+    //     on success instead of allocating a real Symbol. The caller has
+    //     already decided this rule's output will be filtered at parse
+    //     time; allocating a Symbol just to have the shim throw it away
+    //     is wasteful. Composite rules should also use `discard` to
+    //     skip allocating their matched-children list. Rules that
+    //     ignore the parameter still get correct behavior — the shim
+    //     substitutes Discarded as a safety net — but they pay the
+    //     allocation.
+    internal abstract Symbol? TryParseRule(Lexer lexer, bool discard);
 
     internal void SetIdInternal(SymbolId id)
     {

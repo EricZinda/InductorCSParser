@@ -8,13 +8,18 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class NotRuleTests
 {
+    // Tree.ToString() assertions use PreserveFlattenWrappers so Not,
+    // Char, and AnyChar (all default FlattenType.Delete) stay in the
+    // tree and their text contributes to the concatenated view.
+    private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
+
     [Test]
     public void Not_succeeds_when_inner_fails_and_consumes_no_input()
     {
         // Not(Char('a')) on "b": Char('a') fails, Not succeeds and leaves
         // the cursor at 0. The trailing Char('b') then consumes 'b'.
         var rule = And(Not(Char('a')), Char('b'));
-        var result = rule.Parse("b");
+        var result = rule.Parse("b", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("b"));
@@ -63,7 +68,7 @@ public class NotRuleTests
             ZeroOrMore(And(Not(Char('!')), AnyChar())),
             Char('!'));
 
-        var result = rule.Parse("hello world!");
+        var result = rule.Parse("hello world!", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("hello world!"));
@@ -112,7 +117,7 @@ public class NotRuleTests
         // Same negative-lookahead semantics under RuneLexer.
         var rule = And(Not(Char('a')), AnyChar());
         var result = rule.Parse("b",
-            new ParseOptions { InputUnit = InputUnit.Rune });
+            new ParseOptions { InputUnit = InputUnit.Rune, PreserveFlattenWrappers = true });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("b"));

@@ -54,22 +54,31 @@ internal sealed class BetweenInclusiveRule : Rule
         return $"BetweenInclusive[{atLeast}..{upper}]";
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
     {
         using var transaction = lexer.BeginTransaction();
-        var matched = new List<Symbol>();
-        while (matched.Count < AtMost)
+        // Delete-typed wrapper (e.g. OptionalWhitespace) short-circuits to
+        // Discarded on success: no list, no wrapper Symbol, no per-rune
+        // leaf Symbols stored. We still run the inner loop for its lexer
+        // side-effects (consuming whitespace) but drop every symbol it
+        // produces on the floor. On the JSON benchmark this is the single
+        // biggest per-member allocation saved.
+        List<Symbol>? matched = discard ? null : new List<Symbol>();
+        int count = 0;
+        while (count < AtMost)
         {
             int positionBefore = lexer.Position;
             var nextSymbol = Inner.TryParse(lexer);
             if (nextSymbol == null) break;
             // Guard against zero-width matches looping forever.
             if (lexer.Position == positionBefore) break;
-            matched.Add(nextSymbol);
+            if (!discard && !ReferenceEquals(nextSymbol, Symbol.Discarded))
+                matched!.Add(nextSymbol);
+            count++;
         }
-        if (matched.Count < AtLeast)
+        if (count < AtLeast)
         {
-            TraceFailure(lexer, $"count= {matched.Count}");
+            TraceFailure(lexer, $"count= {count}");
             // Error Positioning: where this rule started. The transaction's
             // rollback (on the `using` exit below) restores lexer.Position
             // to that point. Recording at lexer.Position lets this rule's
@@ -78,8 +87,9 @@ internal sealed class BetweenInclusiveRule : Rule
             lexer.RecordFailure(lexer.Position, ErrorMessage);
             return null;
         }
-        TraceSuccess(lexer, $"count= {matched.Count}");
+        TraceSuccess(lexer, $"count= {count}");
         transaction.Commit();
-        return new Symbol(Id, FlattenType, matched);
+        if (discard) return Symbol.Discarded;
+        return new Symbol(Id, FlattenType, matched!);
     }
 }

@@ -36,10 +36,10 @@ public abstract class Lexer
     private ParseCancellation? _cancellation;
 
     // Debug knob wired in from ParseOptions. Rules that would normally
-    // collapse their wrapper at parse time (because post-hoc Flatten
-    // would collapse it anyway) consult this flag to decide whether to
-    // keep the wrapper for grammar-shape-matches-tree debugging. See
-    // ParseOptions.PreserveFlattenWrappers.
+    // apply parse-time tree-shape optimizations (Or wrapper elision or
+    // Delete-node filtering) consult this flag and skip the optimization
+    // when it's set, producing a tree whose shape matches the grammar
+    // one-to-one. See ParseOptions.PreserveFlattenWrappers.
     internal bool PreserveFlattenWrappers { get; private set; }
 
     // Periodic budget check fires every BudgetCheckInterval rule

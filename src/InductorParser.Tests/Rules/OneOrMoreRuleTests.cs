@@ -8,11 +8,16 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class OneOrMoreRuleTests
 {
+    // Tree.ToString() assertions use PreserveFlattenWrappers so the
+    // Char leaves (default FlattenType.Delete) stay in the tree and
+    // their text contributes to the concatenated view.
+    private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
+
     [Test]
     public void OneOrMore_matches_a_single_occurrence()
     {
         var rule = OneOrMore(Char('a'));
-        var result = rule.Parse("a");
+        var result = rule.Parse("a", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("a"));
@@ -22,7 +27,7 @@ public class OneOrMoreRuleTests
     public void OneOrMore_matches_multiple_occurrences_greedily()
     {
         var rule = OneOrMore(Char('a'));
-        var result = rule.Parse("aaaa");
+        var result = rule.Parse("aaaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("aaaa"));
@@ -38,7 +43,7 @@ public class OneOrMoreRuleTests
         // (The top-level Parse requires consuming all input, so a follow-up
         // rule is needed to pick up the remainder.)
         var rule = And(OneOrMore(Char('a')), OneOrMore(Char('b')));
-        var result = rule.Parse("aabb");
+        var result = rule.Parse("aabb", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("aabb"));

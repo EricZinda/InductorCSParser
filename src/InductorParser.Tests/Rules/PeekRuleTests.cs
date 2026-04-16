@@ -8,13 +8,18 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class PeekRuleTests
 {
+    // Tree.ToString() assertions use PreserveFlattenWrappers so Peek,
+    // Char, and AnyChar (all default FlattenType.Delete) stay in the
+    // tree and their text contributes to the concatenated view.
+    private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
+
     [Test]
     public void Peek_succeeds_when_inner_matches_and_consumes_no_input()
     {
         // Peek(Char('a')) on "a": confirms 'a' is ahead without consuming
         // it. The trailing Char('a') then consumes it for real.
         var rule = And(Peek(Char('a')), Char('a'));
-        var result = rule.Parse("a");
+        var result = rule.Parse("a", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("a"));
@@ -42,7 +47,7 @@ public class PeekRuleTests
             Char('a'),
             Char('b'));
 
-        var result = rule.Parse("ab");
+        var result = rule.Parse("ab", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("ab"));
@@ -53,7 +58,7 @@ public class PeekRuleTests
     {
         var rule = And(Peek(Char('x')), AnyChar());
         var result = rule.Parse("x",
-            new ParseOptions { InputUnit = InputUnit.Rune });
+            new ParseOptions { InputUnit = InputUnit.Rune, PreserveFlattenWrappers = true });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("x"));
@@ -86,11 +91,11 @@ public class PeekRuleTests
                 Peek(keywordElse),
                 keywordElse, Char(' '), AnyChar())));
 
-        var withElse = ifStatement.Parse("if x then 1 else 2");
+        var withElse = ifStatement.Parse("if x then 1 else 2", Debug());
         Assert.That(withElse.Success, Is.True, withElse.ErrorMessage);
         Assert.That(withElse.Tree!.ToString(), Is.EqualTo("if x then 1 else 2"));
 
-        var withoutElse = ifStatement.Parse("if x then 1");
+        var withoutElse = ifStatement.Parse("if x then 1", Debug());
         Assert.That(withoutElse.Success, Is.True, withoutElse.ErrorMessage);
         Assert.That(withoutElse.Tree!.ToString(), Is.EqualTo("if x then 1"));
     }

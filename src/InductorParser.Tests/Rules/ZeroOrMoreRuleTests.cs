@@ -11,6 +11,10 @@ public class ZeroOrMoreRuleTests
     // ZeroOrMore has no failure path at all, so this fixture only carries
     // success tests. The TestArchitecture doc calls this out explicitly.
 
+    // Tree.ToString() assertions use PreserveFlattenWrappers so Char
+    // leaves (default FlattenType.Delete) stay in the tree.
+    private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
+
     [Test]
     public void ZeroOrMore_with_zero_matches_succeeds_with_empty_consumption()
     {
@@ -18,7 +22,7 @@ public class ZeroOrMoreRuleTests
         // first attempt. ZeroOrMore catches that and succeeds with zero
         // children, leaving the lexer position unchanged.
         var rule = And(ZeroOrMore(Char('a')), Char('b'));
-        var result = rule.Parse("b");
+        var result = rule.Parse("b", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("b"));
@@ -28,7 +32,7 @@ public class ZeroOrMoreRuleTests
     public void ZeroOrMore_matches_multiple_occurrences_greedily()
     {
         var rule = And(ZeroOrMore(Char('a')), Char('b'));
-        var result = rule.Parse("aaab");
+        var result = rule.Parse("aaab", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("aaab"));
@@ -41,7 +45,7 @@ public class ZeroOrMoreRuleTests
         // inner rule fails. ZeroOrMore commits the two successful iterations
         // and hands 'b' off to the next rule in the And.
         var rule = And(ZeroOrMore(Char('a')), Char('b'), Char('c'));
-        var result = rule.Parse("aabc");
+        var result = rule.Parse("aabc", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("aabc"));

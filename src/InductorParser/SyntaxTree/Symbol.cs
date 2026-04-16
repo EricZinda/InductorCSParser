@@ -13,6 +13,19 @@ public sealed class Symbol
     // the use site inside the leaf constructor below.
     private static readonly IReadOnlyList<Symbol> EmptyChildren = Array.Empty<Symbol>();
 
+    // Parse-time sentinel a Rule.TryParse returns in place of a real Symbol
+    // when the rule's effective FlattenType is Delete. Consumers (AndRule /
+    // OrRule / BetweenInclusiveRule) filter this before it reaches the
+    // parent's Children list, so Delete-typed rules never contribute a
+    // wrapper Symbol, a matched-list allocation, or a leaf-per-rune entry
+    // to the final tree.
+    //
+    // Non-null so the "TryParse returned non-null" success signal still
+    // works for Delete rules. Never stored as a child of any real Symbol;
+    // consumers that see it treat it as "matched successfully, contributes
+    // nothing."
+    public static readonly Symbol Discarded = new Symbol(default, FlattenType.Delete, ReadOnlyMemory<char>.Empty);
+
     // Leaf symbols hold a slice (ReadOnlyMemory<char>) into the original
     // input string rather than a copied substring. This is the deferred-
     // materialization path: during parsing we never allocate a per-leaf
@@ -56,6 +69,14 @@ public sealed class Symbol
         _isLeaf = true;
     }
 
+    // ToString renders the text actually present in the tree: for leaves,
+    // the captured slice; for composites, the concatenated text of their
+    // kept children. Delete-typed rules that were filtered at parse time
+    // are not in the tree, so their text does not appear here either.
+    // Callers who want the full matched input should either keep the
+    // string they passed to Parse, or enable
+    // ParseOptions.PreserveFlattenWrappers to keep every grammar node
+    // (including Delete-typed ones) in the tree.
     public override string ToString()
     {
         if (_isLeaf) return _leafChars.ToString();

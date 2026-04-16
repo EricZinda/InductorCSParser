@@ -21,7 +21,7 @@ internal sealed class RuneInRule : Rule
         _setRendered = runeSet.ToString();
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
     {
         using var transaction = lexer.BeginTransaction();
         var token = lexer.Read();
@@ -38,6 +38,8 @@ internal sealed class RuneInRule : Rule
         }
         TraceSuccess(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted one of '{_setRendered}'");
         transaction.Commit();
+        if (discard)
+            return Symbol.Discarded;
         // Leaf symbol carries the rune as its id so ToString and tree shape match
         // the C++ behavior where character symbols have id == code point.
         return new Symbol(new SymbolId(token.RuneValue), FlattenType, token.Memory);

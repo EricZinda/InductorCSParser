@@ -29,7 +29,7 @@ internal sealed class NotRule : Rule
 
     private Rule Inner => Children[0];
 
-    internal override Symbol? TryParseRule(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
     {
         // The transaction rolls back whether inner succeeded or failed.
         // We never Commit, so the `using` exit restores the lexer.
@@ -44,7 +44,12 @@ internal sealed class NotRule : Rule
         }
         TraceSuccess(lexer, $"inner did not match");
         // Zero-width success: no children, no consumed text. The Delete
-        // flatten type keeps this from cluttering the syntax tree.
+        // flatten type keeps this from cluttering the syntax tree — and
+        // with parse-time Delete filtering, Not returns the shared
+        // Discarded sentinel on the common path instead of allocating a
+        // fresh empty Symbol per negative-lookahead check.
+        if (discard)
+            return Symbol.Discarded;
         return new Symbol(Id, FlattenType, Array.Empty<Symbol>());
     }
 }

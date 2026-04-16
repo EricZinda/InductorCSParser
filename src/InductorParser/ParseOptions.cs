@@ -81,13 +81,29 @@ public sealed class ParseOptions
     // existing CancellationToken.
     public ParseCancellation? Cancellation { get; set; }
 
-    // When true, rules that would normally collapse their wrapper at
-    // parse time (because a post-hoc Flatten() would collapse it anyway)
-    // keep the wrapper in the raw tree. Turn this on to debug or inspect
-    // a parse tree whose shape matches the grammar one-to-one.
+    // When true, the parser disables every parse-time tree-shape
+    // optimization and emits a tree whose structure matches the grammar
+    // one-to-one. Turn this on to debug or inspect a grammar.
     //
-    // The off-by-default path is identical to what Symbol.Flatten()
-    // would produce on the old tree — so turning this on recovers the
-    // pre-optimization tree shape exactly.
+    // Two optimizations are suppressed:
+    //
+    //   * Flatten-wrapper elision. An Or (or any FlattenType.Flatten
+    //     rule) normally returns its single matching child straight up
+    //     so the otherwise-collapsed wrapper never appears in the tree.
+    //     With the flag on, the wrapper stays.
+    //
+    //   * Delete-node filtering. A rule whose effective FlattenType is
+    //     Delete normally returns the shared Symbol.Discarded sentinel
+    //     and contributes no Symbol to the parent. With the flag on,
+    //     Delete-typed rules produce real Symbols and remain visible in
+    //     the raw tree, so a grammar author can see every Char('"'),
+    //     OptionalWhitespace, Not/Peek node exactly where the grammar
+    //     placed it.
+    //
+    // The off-by-default path produces a tree whose post-hoc
+    // Symbol.Flatten() output is identical to the pre-optimization
+    // Flatten output. Turning this flag on recovers the pre-optimization
+    // raw tree shape exactly — useful for PrintTree and Find(rule)
+    // queries against wrappers that would otherwise be elided.
     public bool PreserveFlattenWrappers { get; set; } = false;
 }

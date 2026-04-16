@@ -103,12 +103,18 @@ public sealed class LateBoundRule : Rule
         "LateBoundRule.WithError(...) is not supported: the rule is transparent at parse " +
         "time, so its ErrorMessage is never consulted. Set .WithError(...) on the bound target instead.");
 
-    internal override Symbol? TryParseRule(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
     {
         // _target is guaranteed non-null here because Compile's validation
         // pass would have thrown on an unbound LateBoundRule before any
         // parse could reach this method. The null-forgiving operator is
         // load-bearing for the compiler, not for defensive correctness.
+        //
+        // The `discard` arg is ignored: LateBoundRule's own FlattenType
+        // is never consulted (As / Flatten / WithError all throw), so the
+        // shim computed `discard` from a flag that doesn't apply to the
+        // tree we produce. The target's own TryParse will compute its
+        // own discard from its own FlattenType and handle it correctly.
         return _target!.TryParse(lexer);
     }
 

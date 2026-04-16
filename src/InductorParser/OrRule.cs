@@ -7,7 +7,7 @@ internal sealed class OrRule : Rule
 {
     public OrRule(Rule[] children) : base(FlattenType.Flatten, children) { }
 
-    internal override Symbol? TryParseRule(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
     {
         for (int symbolIndex = 0; symbolIndex < Children.Count; symbolIndex++)
         {
@@ -18,6 +18,14 @@ internal sealed class OrRule : Rule
             {
                 TraceSuccess(lexer, $"symbol #{symbolIndex}");
                 transaction.Commit();
+                // An Or whose own FlattenType is Delete returns Discarded
+                // up to the parent: the inner's Symbol is dropped entirely
+                // along with any wrapper we'd otherwise build. Suppressed
+                // when PreserveFlattenWrappers is set (via the `discard`
+                // flag) so the grammar-shape debug view keeps the Or
+                // node visible.
+                if (discard)
+                    return Symbol.Discarded;
                 // FlattenType.Flatten on an Or means "post-hoc Flatten
                 // would splice the inner symbol straight back into the
                 // parent." That splice is the whole point of the wrapper,
@@ -27,6 +35,12 @@ internal sealed class OrRule : Rule
                 // because the wrapper is structurally meaningful) opt
                 // into it the same way they'd survive a post-hoc
                 // .Flatten() call: set FlattenType.None.
+                //
+                // If the matching inner was itself Discarded (its own
+                // FlattenType was Delete), the Flatten-elide path
+                // propagates Discarded straight through, keeping the
+                // tree free of the sentinel: a Delete-typed child of an
+                // Or contributes nothing, same as in any other composite.
                 //
                 // ParseOptions.PreserveFlattenWrappers forces the wrapper
                 // to stay so a debugging caller sees a tree whose shape
