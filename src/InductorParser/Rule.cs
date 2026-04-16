@@ -379,9 +379,22 @@ public abstract class Rule
     public ParseResult Parse(string input, ParseOptions options)
     {
         Compile();
+
+        // Normalize before the lexer sees the input so grammars written
+        // against one composition form also match the other. The common
+        // case (input already in the target form, essentially all typed
+        // and web-sourced text) costs a single IsNormalized short-circuit
+        // inside String.Normalize and returns the same reference, so no
+        // allocation and no downstream translation. Null means "skip
+        // normalization entirely," which trades the safety net for
+        // byte-exact round-trippability.
+        string parseInput = options.NormalizeInput.HasValue
+            ? input.Normalize(options.NormalizeInput.Value)
+            : input;
+
         Lexer lexer = options.InputUnit == InputUnit.Rune
-            ? (Lexer)new RuneLexer(input, options.TraceSink, options.TraceLevel)
-            : (Lexer)new GraphemeLexer(input, options.TraceSink, options.TraceLevel);
+            ? (Lexer)new RuneLexer(parseInput, options.TraceSink, options.TraceLevel)
+            : (Lexer)new GraphemeLexer(parseInput, options.TraceSink, options.TraceLevel);
         lexer.ConfigureBudgets(options);
         Symbol? tree;
         try
@@ -396,12 +409,14 @@ public abstract class Rule
             // wherever the unwind settled. We carry that as the
             // ErrorCharIndex so callers get a coarse "how far did the
             // parser get" hint for diagnostics.
-            return ParseResult.Aborted(budget.Outcome, lexer.Position, BuildBudgetMessage(budget.Outcome), lexer.Input, this);
+            int abortPos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, lexer.Position, options.NormalizeInput);
+            return ParseResult.Aborted(budget.Outcome, abortPos, BuildBudgetMessage(budget.Outcome), input, this);
         }
         if (tree != null && lexer.IsEof)
-            return ParseResult.Succeeded(tree, lexer.Input, this);
+            return ParseResult.Succeeded(tree, input, this);
         var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
-        return ParseResult.Failed(pos, BuildErrorMessage(lexer, pos), lexer.Input, this);
+        int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, options.NormalizeInput);
+        return ParseResult.Failed(failurePos, BuildErrorMessage(lexer, pos), input, this);
     }
 
     private static string BuildBudgetMessage(ParseOutcome outcome)

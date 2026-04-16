@@ -144,7 +144,9 @@ public sealed class ParseOptions
 
 Callers who want byte-exact round-trippability (where `tree.ToString()` must match the original input character for character) set `NormalizeInput = null`. The tradeoff is that input in the "wrong" form will silently fail exact-match rules that are written for a specific composition.
 
-A consequence worth documenting: when normalization is on (the default), positions reported in `ParseResult` are into the *normalized* string, not the original. For input already in composed form (most input) the two are identical, so the distinction never matters. For genuinely decomposed input, positions drift from the original. Callers who set `NormalizeInput = null` skip normalization entirely and get positions into the original string directly, at the cost of losing the normalization safety net. See the Open Questions section for the "provide a position map" idea that would close the gap without forcing the opt-out.
+Positions reported in `ParseResult` (`ErrorCharIndex` and its derived line/column/rune/grapheme properties) are always into the caller's original input string, never into the normalized form. The parser normalizes internally for the lexer to operate on, then translates any failure offset back to original coordinates at the boundary. The common case pays zero extra cost: when input is already in the target form (essentially all typed and web-sourced text) `String.Normalize` returns the same reference and translation is a no-op. When input genuinely got rewritten, the parser does one O(n) grapheme walk at failure time to map the position back. Not paid on the success path.
+
+One consequence to know about: when the failure lands inside a combining character sequence that got composed (or vice-versa), the reported position is the start of that sequence in the original string, not a phantom position mid-sequence. That matches what an editor wants for highlight-the-bad-grapheme diagnostics anyway; you can't put a caret between an 'e' and its combining acute in any reasonable UI. This inherits the pre-.NET 5 `StringInfo` caveat noted on `GraphemeLexer`: a handful of real grapheme clusters segment incorrectly on legacy runtimes, and the translator uses the same primitive, so whatever the lexer saw, the translator sees.
 
 ## Problems The Lexer Does Not Solve
 
@@ -163,11 +165,9 @@ In `GraphemeLexer` mode this is redundant (the lexer already groups graphemes). 
 
 ## Open Questions
 
-Four Unicode-adjacent questions the first real grammar will need to answer.
+Three Unicode-adjacent questions the first real grammar will need to answer.
 
 **Unicode version pinning for GraphemeLexer.** Grapheme boundaries are defined by UAX #29, which Unicode updates with every release (new emoji, new ZWJ rules, occasional boundary changes). `GraphemeLexer` uses `StringInfo.GetTextElementEnumerator`, which pulls the Unicode version from the runtime. Same grammar parsing the same input can produce different trees on different .NET / Unity versions. For most grammars this is tolerable; for a grammar that wants cross-host determinism (a language spec, a shared file format), we would need to bundle our own UAX #29 tables pinned to a specific Unicode version. That is a real maintenance burden to take on but a real need for some callers. Defer until asked.
-
-**Normalization position mapping.** `ParseResult` positions are into the normalized string, not the original. When input is already in the composed form the two are identical; when it is not, they drift. `.NET`'s `String.Normalize` does not provide a map. Building one is ~50 lines (walk the input by "starter" runes, record `(origOffset, normalizedOffset)` checkpoints) and gives callers a `MapToOriginal(int)` helper. Do it later if someone hits the gap; defaulting to the normalized-position behavior is fine for v1 with documentation.
 
 **Full Unicode case folding.** The ASCII `LiteralIgnoreCase` helper covers HTTP headers, SQL keywords, HTML tag names, and most real needs. A full-Unicode version would handle Turkish dotless-i, German `ß`, Greek final sigma, and the rest of the locale-specific edge cases, at the cost of a big lookup table and locale awareness. Add when a grammar actually needs it.
 

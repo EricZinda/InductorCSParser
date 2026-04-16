@@ -52,8 +52,12 @@ public class RuneNotInRuleTests
         // rune in the set" predicate is trivially true for it: the token
         // isn't any single rune at all. This is the property that lets
         // ZeroOrMore(RuneNotIn(...)) sweep up arbitrary Unicode text.
+        // NormalizeInput = null so the decomposed "e\u0301" arrives at the
+        // lexer verbatim; the default NFC would compose it to "\u00E9" and
+        // collapse this test's "multi-rune grapheme" premise.
         var rule = RuneNotIn(RuneSet.Ascii.Letters);
-        var result = rule.Parse(LatinEAcuteGrapheme);
+        var result = rule.Parse(LatinEAcuteGrapheme,
+            new ParseOptions { NormalizeInput = null });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo(LatinEAcuteGrapheme));

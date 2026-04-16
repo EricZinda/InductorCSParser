@@ -35,8 +35,13 @@ public class AnyCharRuleTests
     {
         // Under GraphemeLexer LatinEAcuteGrapheme is one token (two runes,
         // one grapheme). AnyChar consumes the whole token as a single match.
+        //
+        // NormalizeInput = null so the two-rune decomposed form survives to
+        // the lexer; the default NFC would compose to a one-rune grapheme
+        // and undo this test's premise.
         var rule = AnyChar();
-        var result = rule.Parse(LatinEAcuteGrapheme);
+        var result = rule.Parse(LatinEAcuteGrapheme,
+            new ParseOptions { NormalizeInput = null });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo(LatinEAcuteGrapheme));
@@ -50,7 +55,7 @@ public class AnyCharRuleTests
         // the grammar has to ask for more to consume the rest.
         var rule = And(AnyChar(), AnyChar());
         var result = rule.Parse(LatinEAcuteGrapheme,
-            new ParseOptions { InputUnit = InputUnit.Rune });
+            new ParseOptions { InputUnit = InputUnit.Rune, NormalizeInput = null });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo(LatinEAcuteGrapheme));

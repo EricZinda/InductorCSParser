@@ -266,8 +266,14 @@ public class ErrorPositionTests
         // runes, TWO UTF-16 chars. This works on every runtime including
         // legacy StringInfo. Grammar matches the whole grapheme as one
         // token (under default GraphemeLexer) then fails on 'X'.
+        //
+        // NormalizeInput = null so the decomposed input survives to the
+        // lexer. The default NFC would compose to a one-char grapheme and
+        // the rune/grapheme counts the test is demonstrating wouldn't
+        // diverge anymore.
         var rule = And(OneOrMore(Char(LatinEAcuteGrapheme)), Eof());
-        var result = rule.Parse(LatinEAcuteGrapheme + "X");
+        var result = rule.Parse(LatinEAcuteGrapheme + "X",
+            new ParseOptions { NormalizeInput = null });
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));

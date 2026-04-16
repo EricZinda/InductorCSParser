@@ -25,14 +25,24 @@ public readonly struct ParseResult
     public Symbol? Tree { get; }
     public string ErrorMessage { get; }
 
-    // UTF-16 char index into the original input where the deepest failure
-    // was recorded. Valid range is [0, input.Length] inclusive:
+    // UTF-16 char index into the caller's ORIGINAL input string where the
+    // deepest failure was recorded. Valid range is [0, input.Length]
+    // inclusive:
     //   * 0 points at the very first character of the input.
     //   * input.Length points one past the last character (at end-of-input).
     //   * Intermediate values point at specific characters.
     // Always 0 on a successful parse. Use with input[ErrorCharIndex] to
     // recover the offending character, after checking that the value is
     // less than input.Length (values equal to input.Length indicate EOF).
+    //
+    // When ParseOptions.NormalizeInput rewrote the input internally, the
+    // parser translates the raw lexer position back to the caller's
+    // coordinate system before constructing this struct, so callers always
+    // index into the string they passed to Parse, never into the normalized
+    // form. On decomposed input whose failure lands inside a combining
+    // character sequence that got composed, the reported index is the start
+    // of that sequence in the original (matches what an editor wants for
+    // highlight-the-bad-grapheme diagnostics).
     //
     // For budget aborts (Timeout / WorkLimitExceeded / DepthLimitExceeded /
     // Canceled) this carries the lexer position at the moment the budget
