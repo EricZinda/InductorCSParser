@@ -25,7 +25,11 @@ public class PassThroughTextTests
             ZeroOrMore(RuneNotIn(RuneSet.Single('\n'))),
             Char('\n'));
 
-        var result = lineComment.Parse("// anything up to the newline\n");
+        // PreserveFlattenWrappers keeps the Char('/') leaves and the
+        // Char('\n') leaf in the tree so Tree.ToString reproduces the
+        // full comment text.
+        var result = lineComment.Parse("// anything up to the newline\n",
+            new ParseOptions { PreserveFlattenWrappers = true });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(),
@@ -64,7 +68,8 @@ public class PassThroughTextTests
             ZeroOrMore(And(Not(closeMarker), AnyChar())),
             closeMarker);
 
-        var result = blockComment.Parse("/* body with * inside but not-the-end */");
+        var result = blockComment.Parse("/* body with * inside but not-the-end */",
+            new ParseOptions { PreserveFlattenWrappers = true });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(),

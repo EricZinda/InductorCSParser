@@ -16,7 +16,7 @@ internal sealed class AnyCharRule : Rule
 {
     public AnyCharRule() : base(FlattenType.None) { }
 
-    internal override Symbol? TryParseRule(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
     {
         using var transaction = lexer.BeginTransaction();
         var token = lexer.Read();
@@ -28,6 +28,8 @@ internal sealed class AnyCharRule : Rule
         }
         TraceSuccess(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}'");
         transaction.Commit();
+        if (discard)
+            return Symbol.Discarded;
         // Same leaf-id convention as RuneInRule / RuneNotInRule: a single-
         // rune token carries the rune value as its id; a multi-rune token
         // falls through to the rule's Compile-assigned id.

@@ -11,8 +11,12 @@ public class OrRuleTests
     [Test]
     public void Or_returns_the_first_alternative_that_matches()
     {
+        // Char defaults to FlattenType.Delete, so the matched 'b' would
+        // be filtered out of the tree at parse time. PreserveFlattenWrappers
+        // keeps the Char leaf in the tree so Tree.ToString() shows the
+        // text that was actually matched.
         var rule = Or(Char('a'), Char('b'), Char('c'));
-        var result = rule.Parse("b");
+        var result = rule.Parse("b", new ParseOptions { PreserveFlattenWrappers = true });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("b"));

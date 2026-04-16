@@ -87,7 +87,10 @@ public class RuneNotInRuleTests
             ZeroOrMore(RuneNotIn(RuneSet.Single('\n'))),
             Char('\n'));
 
-        var result = rule.Parse("hello world\n");
+        // PreserveFlattenWrappers keeps the trailing Char('\n') in the
+        // tree so Tree.ToString reproduces the full matched line.
+        var result = rule.Parse("hello world\n",
+            new ParseOptions { PreserveFlattenWrappers = true });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("hello world\n"));

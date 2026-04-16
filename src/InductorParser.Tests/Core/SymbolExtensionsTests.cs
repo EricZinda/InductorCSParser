@@ -29,12 +29,13 @@ public class SymbolExtensionsTests
     [Test]
     public void PrintTree_renders_unnamed_composite_with_class_name()
     {
-        // Anonymous And rule — no user name — so the root renders with
-        // the class-derived "And" label. Single-rune Char leaves pin
-        // their id to the code point (see CharRule's ctor) so they go
-        // through the character path and render as `'x'`.
+        // Anonymous And rule, no user name, so the root renders with
+        // the class-derived "And" label. Char leaves default to
+        // FlattenType.Delete and are filtered at parse time under normal
+        // parsing; PreserveFlattenWrappers keeps them so PrintTree sees
+        // a shape matching the grammar one-to-one.
         var pair = And(Char('a'), Char('1'));
-        var result = pair.Parse("a1");
+        var result = pair.Parse("a1", new ParseOptions { PreserveFlattenWrappers = true });
         Assert.That(result.Success, Is.True);
 
         string expected =
@@ -49,13 +50,13 @@ public class SymbolExtensionsTests
     public void PrintTree_indents_nested_subtrees()
     {
         // Two levels of named And wrappers so the printed tree has real
-        // depth beyond just a root plus leaves. Char leaves still
-        // render as `'x'` because single-rune CharRule pins the leaf
-        // id to the code point.
+        // depth beyond just a root plus leaves. Char leaves default to
+        // FlattenType.Delete; PreserveFlattenWrappers keeps them so the
+        // printed tree shows both the composites and their char children.
         var first = And(Char('a'), Char('b')).As("first");
         var second = And(Char('c'), Char('d')).As("second");
         var pair = And(first, second).As("pair");
-        var result = pair.Parse("abcd");
+        var result = pair.Parse("abcd", new ParseOptions { PreserveFlattenWrappers = true });
         Assert.That(result.Success, Is.True);
 
         string expected =

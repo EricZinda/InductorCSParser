@@ -26,7 +26,7 @@ internal sealed class RuneNotInRule : Rule
         _setRendered = runeSet.ToString();
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
     {
         using var transaction = lexer.BeginTransaction();
         var token = lexer.Read();
@@ -49,6 +49,8 @@ internal sealed class RuneNotInRule : Rule
         }
         TraceSuccess(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted one not in '{_setRendered}'");
         transaction.Commit();
+        if (discard)
+            return Symbol.Discarded;
         // When the token is one rune the Symbol's id is that rune's code
         // point, matching RuneInRule's leaf shape. For multi-rune tokens
         // (grapheme clusters) there is no single code point to pin, so the

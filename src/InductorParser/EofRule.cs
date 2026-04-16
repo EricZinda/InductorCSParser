@@ -8,7 +8,7 @@ internal sealed class EofRule : Rule
 {
     public EofRule() : base(FlattenType.Delete) { }
 
-    internal override Symbol? TryParseRule(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
     {
         if (!lexer.IsEof)
         {
@@ -21,6 +21,8 @@ internal sealed class EofRule : Rule
             return null;
         }
         TraceSuccess(lexer, $"");
+        if (discard)
+            return Symbol.Discarded;
         return new Symbol(Id, FlattenType, Array.Empty<Symbol>());
     }
 }

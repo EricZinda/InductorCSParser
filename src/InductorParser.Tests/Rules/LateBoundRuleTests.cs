@@ -24,12 +24,17 @@ public class LateBoundRuleTests
         return sum;
     }
 
+    // Tree.ToString() assertions use PreserveFlattenWrappers so the
+    // Char('+') / Char('(') / Char(')') leaves (default FlattenType.Delete)
+    // stay in the tree and their text appears in the concatenated view.
+    private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
+
     [Test]
     public void Parses_linear_sum()
     {
         var root = BuildExpressionGrammar();
 
-        var result = root.Parse("1+2+3");
+        var result = root.Parse("1+2+3", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("1+2+3"));
@@ -40,7 +45,7 @@ public class LateBoundRuleTests
     {
         var root = BuildExpressionGrammar();
 
-        var result = root.Parse("(1+2)+3");
+        var result = root.Parse("(1+2)+3", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("(1+2)+3"));
@@ -51,7 +56,7 @@ public class LateBoundRuleTests
     {
         var root = BuildExpressionGrammar();
 
-        var result = root.Parse("((1+2)+(3+4))+5");
+        var result = root.Parse("((1+2)+(3+4))+5", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("((1+2)+(3+4))+5"));
