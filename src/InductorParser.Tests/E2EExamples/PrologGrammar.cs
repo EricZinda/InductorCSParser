@@ -48,16 +48,22 @@ public static class PrologGrammar
 
     // Comment: "% ...\r\n" OR "% ...<EOF>" OR "/* ... */"
     //
-    // The line-comment body uses a rule-based stop instead of
-    // RuneNotIn(CrlfChars). Under GraphemeLexer a CRLF grapheme is
-    // multi-rune and trivially passes RuneNotIn, which would mean
-    // the body greedily swallows the line-ending CRLF and the
-    // terminator never fires. Not(LineBreak) stops the body exactly
-    // at any form of line break regardless of lexer.
+    // Both bodies use StringChars with a rule-based stopper — it peeks
+    // the stopper on each rune and rolls back, so the terminator is
+    // left for the surrounding And to consume. StringChars replaces
+    // the manual ZeroOrMore(And(Not(stop), AnyChar())) idiom with a
+    // tight single-rule scan that returns one leaf Symbol over the
+    // matched body slice.
+    //
+    // The line-comment body specifically needs the Rule-stopper form
+    // (not RuneIn) because under GraphemeLexer a CRLF grapheme is
+    // multi-rune and trivially passes any RuneNotIn — which would
+    // greedily swallow the line-ending CRLF and leave the terminator
+    // nothing to match.
     public static readonly Rule Comment = Or(
         And(
             Char('%'),
-            ZeroOrMore(And(Not(LineBreak), AnyChar())),
+            StringChars(LineBreak),
             Or(
                 OneOrMore(LineBreak),
                 Eof()
@@ -65,7 +71,7 @@ public static class PrologGrammar
         ),
         And(
             Literal("/*"),
-            ZeroOrMore(And(Not(Literal("*/")), AnyChar())),
+            StringChars(Literal("*/")),
             Literal("*/")
         )
     );
@@ -97,12 +103,12 @@ public static class PrologGrammar
         Char('!'),
         And(
             Char('"'),
-            ZeroOrMore(RuneNotIn("\"")),
+            StringChars(RuneSet.Runes("\"")),
             Char('"')
         ),
         And(
             Char('\''),
-            ZeroOrMore(RuneNotIn("'")),
+            StringChars(RuneSet.Runes("'")),
             Char('\'')
         ),
         And(

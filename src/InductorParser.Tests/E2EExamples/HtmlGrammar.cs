@@ -83,7 +83,7 @@ public static class HtmlGrammar
         Char('='),
         OptionalWs,
         Char('\''),
-        ZeroOrMore(RuneNotIn("'")),
+        StringChars(RuneSet.Runes("'")),
         Char('\'')
     );
 
@@ -93,7 +93,7 @@ public static class HtmlGrammar
         Char('='),
         OptionalWs,
         Char('"'),
-        ZeroOrMore(RuneNotIn("\"")),
+        StringChars(RuneSet.Runes("\"")),
         Char('"')
     );
 
@@ -152,7 +152,7 @@ public static class HtmlGrammar
     // <!-- anything but "-->" -->
     public static readonly Rule Comment = And(
         Literal("<!--"),
-        ZeroOrMore(And(Not(Literal("-->")), AnyChar())),
+        StringChars(Literal("-->")),
         Literal("-->")
     );
 
@@ -174,9 +174,30 @@ public static class HtmlGrammar
         Char('>')
     );
 
+    // Stopper is the minimal "</style" prefix, not the full EndStyleTag
+    // rule. Two reasons:
+    //
+    //   * Semantics. EndStyleTag = "</style" OptionalWs ">". Using it as
+    //     the stopper would only stop at a complete end tag, so content
+    //     like "</styled" (where "</style" is followed by 'd') would pass
+    //     through as body and the scan would keep going. The HTML spec
+    //     says "</style" must be followed by space, ">", or "/"; anything
+    //     else is ill-formed. Stopping at the prefix catches this — if the
+    //     characters after don't form a valid end tag, EndStyleTag fails
+    //     and the outer rule fails loudly at the right spot.
+    //
+    //   * Cost. A Literal stopper is one string-compare per rune in a
+    //     peek transaction. EndStyleTag as a stopper would invoke a
+    //     compound rule (literal + OptionalWs + Char) per rune, noticeably
+    //     more work on the 99%-of-runes path where the stopper doesn't
+    //     match.
+    //
+    // General pattern: StringChars's stopper is the shortest unambiguous
+    // prefix of the terminator; the outer And re-matches the full
+    // terminator to consume it.
     public static readonly Rule NonReplaceableCharacterElement = And(
         StartStyleTag,
-        ZeroOrMore(And(Not(Literal("</style")), AnyChar())),
+        StringChars(Literal("</style")),
         EndStyleTag
     );
 

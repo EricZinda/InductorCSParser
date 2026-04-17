@@ -103,8 +103,14 @@ public static class BacklogGrammar
         Char('\n')
     );
 
+    // StringChars with a rule-based stopper scans forward peeking
+    // ParagraphTarget on each rune; when it matches, the peek rolls
+    // back and StringChars returns, leaving the target for the outer
+    // And to consume. Semantically identical to the manual
+    // ZeroOrMore(And(Not(target), AnyChar())) idiom, one rule instead
+    // of three.
     public static readonly Rule ParagraphSplit = And(
-        ZeroOrMore(And(Not(ParagraphTarget), AnyChar())),
+        StringChars(ParagraphTarget),
         ParagraphTarget,
         ZeroOrMore(AnyChar())
     );
