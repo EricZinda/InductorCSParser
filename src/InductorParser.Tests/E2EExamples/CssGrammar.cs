@@ -48,12 +48,12 @@ public static class CssGrammar
     private static readonly RuneSet HexDigitChars =
         RuneSet.Ascii.Digits | RuneSet.Runes("ABCDEFabcdef");
 
-    // /* comment */, matching the body on a rule-based stop so the
-    // terminator (two characters) can be recognized without a lookahead
-    // over the whole body. Same idiom as PassThroughTextTests.
+    // /* comment */, with the body as a single StringChars scan on a
+    // rule-based stopper. StringChars peeks the stopper on each rune
+    // and rolls back, so the closing "*/" is left for the outer And.
     public static readonly Rule BlockComment = And(
         Literal("/*"),
-        ZeroOrMore(And(Not(Literal("*/")), AnyChar())),
+        StringChars(Literal("*/")),
         Literal("*/")
     );
 
