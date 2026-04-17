@@ -83,6 +83,14 @@ public class RuneNotInRuleTests
         // The pass-through-text idiom: ZeroOrMore(RuneNotIn(stopSet)) matches
         // everything that isn't in the stop set, then the surrounding rule
         // handles the stop character. Here the stop is a single '\n'.
+        //
+        // WARNING: this idiom is LF-only under the default GraphemeLexer.
+        // A CRLF grapheme passes RuneNotIn unconditionally (it isn't a
+        // single rune, so it can't be in any single-rune set), which
+        // means the sweep silently consumes the CRLF and the trailing
+        // Char('\n') terminator then fails. For real line-based grammars,
+        // add Literal("\r\n") to both the stop set and the terminator.
+        // See docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer".
         var rule = And(
             ZeroOrMore(RuneNotIn(RuneSet.Single('\n'))),
             Char('\n'));

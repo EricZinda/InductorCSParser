@@ -83,6 +83,17 @@ public static class BacklogGrammar
     // \n\s*\n, unanchored. Middle restricted to non-newline whitespace
     // so the greedy PEG ZeroOrMore can't run past the terminating \n.
     // See the class comment above for why this preserves equivalence.
+    //
+    // WARNING: LF-only on purpose. The source regex in MergeableBacklog
+    // is "\n\s*\n", which in JS regex IS CRLF-agnostic (\s matches \r
+    // and \n both), but under the default GraphemeLexer the two Char('\n')
+    // anchors below reject CRLF line endings — "\r\n" is one grapheme
+    // cluster whose content is "\r\n", not "\n". The fixtures in
+    // MergeableBacklog's corpus are all LF-terminated, so the port stays
+    // faithful by matching only LF. If this rule ever parses real
+    // Windows-authored Markdown, it will need to add Literal("\r\n")
+    // anchors alongside the Char('\n') ones. See
+    // docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer".
     private static readonly RuneSet NonNewlineWhitespace =
         RuneSet.Whitespace & ~RuneSet.Runes("\n\r");
 

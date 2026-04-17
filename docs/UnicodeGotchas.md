@@ -94,6 +94,52 @@ var result = grammar.Parse(cleaned);
 
 If you are doing emoji-sensitive parsing, be careful: variation selectors are part of the encoded form of some emoji (the emoji-style heart, some keycap sequences), and stripping them can change which emoji the user sees.
 
+## CRLF Under GraphemeLexer
+
+Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 rule GB3), so `GraphemeLexer` hands the parser one two-char token whenever it sees a Windows line ending. This bites any line-based grammar that tries to match or stop on a bare `\n`:
+
+- `Char('\n')` matches a one-grapheme token whose content is exactly `'\n'`. The CRLF grapheme has content `"\r\n"`, so `Char('\n')` does *not* match it.
+- `RuneIn(RuneSet.Runes("\n"))` or `RuneIn(RuneSet.Runes("\r\n"))` matches a single-rune token whose rune is in the set. A CRLF grapheme is two runes, so it matches no single-rune set — it fails `RuneIn` regardless of what runes you put in the set.
+- `RuneNotIn(RuneSet.Runes("\n"))` does the opposite: multi-rune tokens pass `RuneNotIn` unconditionally. `ZeroOrMore(RuneNotIn(stopSet))` used to scan "everything up to a newline" will greedily swallow the terminating CRLF as body content instead of stopping at it, then the terminator fails because there is nothing left.
+
+`RuneLexer` doesn't have this problem; it emits `'\r'` and `'\n'` as separate tokens. The bite is `GraphemeLexer`-specific, which is the default.
+
+**Fix.** Add an explicit `Literal("\r\n")` alternative anywhere the grammar cares about line breaks. One helper covers the three idiomatic uses:
+
+```csharp
+// Match any of LF, CR, or the CRLF grapheme.
+private static readonly Rule LineBreak = Or(
+    Literal("\r\n"),
+    RuneIn(RuneSet.Runes("\r\n"))
+);
+
+// Whitespace that includes newlines: put the Literal first so the
+// longer alternative commits before the single-rune fallback.
+public static readonly Rule OptionalWhitespace = ZeroOrMore(Or(
+    Literal("\r\n"),
+    RuneIn(RuneSet.Ascii.Whitespace)
+));
+
+// Scanning "up to end of line" — use a rule-based stop with Not(LineBreak),
+// not RuneNotIn. RuneNotIn would silently eat the CRLF grapheme.
+public static readonly Rule LineComment = And(
+    Char('%'),
+    ZeroOrMore(And(Not(LineBreak), AnyChar())),
+    Or(OneOrMore(LineBreak), Eof())
+);
+```
+
+The three anti-patterns to avoid in any line-based grammar:
+
+```csharp
+// BROKEN on Windows line endings under GraphemeLexer.
+And(..., Char('\n'))                             // fails on CRLF input
+ZeroOrMore(RuneIn(RuneSet.Runes("\r\n")))        // skips zero CRLF graphemes
+ZeroOrMore(RuneNotIn(RuneSet.Single('\n')))      // swallows the CRLF terminator
+```
+
+If a grammar is a port of regex semantics that explicitly targets LF-only (some Markdown-style formats, for instance), the failure on CRLF is faithful to the source and you can leave `Char('\n')` as-is. Mark the grammar with a comment so the next reader knows the LF-only behavior is intentional, not an oversight.
+
 ## The Common Thread
 
 All of these are Unicode surprises that live *outside* the lexer's tokenization decision. They fix either upstream (caller-side input preprocessing) or sideways (grammar-design choice of character classes and tolerance rules). None of them are fixed by switching lexer mode.
