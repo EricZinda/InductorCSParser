@@ -82,53 +82,53 @@ Job=ShortRun  IterationCount=3  LaunchCount=1  WarmupCount=3
 
 | Method                  | Mean        | Ratio | Allocated  | Alloc Ratio |
 |------------------------ |------------:|------:|-----------:|------------:|
-| BigJson_SystemTextJson  |    25.51 μs |  1.00 |   24.12 KB |        1.00 |
-| BigJson_ParlotCompiled  |    59.33 μs |  2.33 |   95.76 KB |        3.97 |
-| BigJson_Parlot          |    61.11 μs |  2.40 |   95.76 KB |        3.97 |
-| BigJson_Newtonsoft      |    96.78 μs |  3.79 |  205.13 KB |        8.51 |
-| BigJson_InductorParser  |   300.16 μs | 11.77 |  363.23 KB |       15.06 |
-| BigJson_Pidgin          |   632.93 μs | 24.81 |    91.7 KB |        3.80 |
-| BigJson_Pegasus         |   736.83 μs | 28.89 | 3384.39 KB |      140.33 |
-| BigJson_Superpower      |   858.46 μs | 33.66 |  944.84 KB |       39.18 |
-| BigJson_Sprache         | 1,713.85 μs | 67.19 | 6927.52 KB |      287.24 |
+| BigJson_SystemTextJson  |    24.66 μs |  1.00 |   24.12 KB |        1.00 |
+| BigJson_ParlotCompiled  |    59.26 μs |  2.40 |   95.76 KB |        3.97 |
+| BigJson_Parlot          |    59.69 μs |  2.42 |   95.76 KB |        3.97 |
+| BigJson_Newtonsoft      |    98.67 μs |  4.00 |  205.13 KB |        8.51 |
+| BigJson_InductorParser  |   292.86 μs | 11.87 |  363.23 KB |       15.06 |
+| BigJson_Pidgin          |   639.74 μs | 25.94 |    91.7 KB |        3.80 |
+| BigJson_Pegasus         |   722.23 μs | 29.28 | 3384.39 KB |      140.33 |
+| BigJson_Superpower      |   857.96 μs | 34.79 |  944.84 KB |       39.18 |
+| BigJson_Sprache         | 1,693.27 μs | 68.66 | 6927.52 KB |      287.24 |
 |                         |             |       |            |             |
-| DeepJson_ParlotCompiled |    42.22 μs |  0.52 |   99.33 KB |        4.91 |
-| DeepJson_Parlot         |    42.34 μs |  0.52 |   99.33 KB |        4.91 |
-| DeepJson_Newtonsoft     |    54.49 μs |  0.67 |  181.16 KB |        8.95 |
-| DeepJson_SystemTextJson |    81.86 μs |  1.00 |   20.24 KB |        1.00 |
-| DeepJson_InductorParser |   197.39 μs |  2.41 |  208.68 KB |       10.31 |
-| DeepJson_Pegasus        |   320.41 μs |  3.91 | 1386.41 KB |       68.48 |
-| DeepJson_Pidgin         |   389.88 μs |  4.76 |  151.84 KB |        7.50 |
-| DeepJson_Sprache        | 1,466.15 μs | 17.91 |  3412.1 KB |      168.55 |
+| DeepJson_ParlotCompiled |    41.16 μs |  0.50 |   99.33 KB |        4.91 |
+| DeepJson_Parlot         |    41.42 μs |  0.51 |   99.33 KB |        4.91 |
+| DeepJson_Newtonsoft     |    57.83 μs |  0.71 |  181.16 KB |        8.95 |
+| DeepJson_SystemTextJson |    81.70 μs |  1.00 |   20.24 KB |        1.00 |
+| DeepJson_InductorParser |   190.17 μs |  2.33 |  208.68 KB |       10.31 |
+| DeepJson_Pegasus        |   325.52 μs |  3.98 | 1386.41 KB |       68.49 |
+| DeepJson_Pidgin         |   383.45 μs |  4.69 |  151.84 KB |        7.50 |
+| DeepJson_Sprache        | 1,494.11 μs | 18.29 |  3412.1 KB |      168.56 |
 | DeepJson_Superpower     |   **CRASH** |     — |          — |           — |
 |                         |             |       |            |             |
-| LongJson_SystemTextJson |    19.65 μs |  1.00 |   24.12 KB |        1.00 |
-| LongJson_ParlotCompiled |    52.06 μs |  2.65 |  121.18 KB |        5.02 |
-| LongJson_Parlot         |    52.17 μs |  2.65 |  121.18 KB |        5.02 |
-| LongJson_Newtonsoft     |    85.51 μs |  4.35 |   204.7 KB |        8.49 |
-| LongJson_InductorParser |   227.35 μs | 11.57 |  299.09 KB |       12.40 |
-| LongJson_Pidgin         |   453.62 μs | 23.08 |  120.25 KB |        4.99 |
-| LongJson_Pegasus        |   470.90 μs | 23.96 |  2433.8 KB |      100.92 |
-| LongJson_Superpower     |   672.56 μs | 34.22 |  753.57 KB |       31.25 |
-| LongJson_Sprache        | 1,314.88 μs | 66.90 | 5334.57 KB |      221.19 |
+| LongJson_SystemTextJson |    18.53 μs |  1.00 |   24.12 KB |        1.00 |
+| LongJson_Parlot         |    52.24 μs |  2.82 |  121.18 KB |        5.02 |
+| LongJson_ParlotCompiled |    52.53 μs |  2.83 |  121.18 KB |        5.02 |
+| LongJson_Newtonsoft     |    79.18 μs |  4.27 |   204.7 KB |        8.49 |
+| LongJson_InductorParser |   219.01 μs | 11.82 |  299.09 KB |       12.40 |
+| LongJson_Pidgin         |   435.52 μs | 23.50 |  120.25 KB |        4.99 |
+| LongJson_Pegasus        |   467.45 μs | 25.22 |  2433.8 KB |      100.92 |
+| LongJson_Superpower     |   669.08 μs | 36.10 |  753.57 KB |       31.25 |
+| LongJson_Sprache        | 1,315.09 μs | 70.97 | 5334.57 KB |      221.19 |
 |                         |             |       |            |             |
-| WideJson_SystemTextJson |    11.83 μs |  1.00 |   16.12 KB |        1.00 |
-| WideJson_ParlotCompiled |    28.87 μs |  2.44 |   43.37 KB |        2.69 |
-| WideJson_Parlot         |    29.69 μs |  2.51 |   43.37 KB |        2.69 |
-| WideJson_Newtonsoft     |    47.79 μs |  4.04 |  108.74 KB |        6.75 |
-| WideJson_InductorParser |   143.07 μs | 12.10 |  179.77 KB |       11.15 |
-| WideJson_Pidgin         |   366.52 μs | 30.99 |   40.48 KB |        2.51 |
-| WideJson_Pegasus        |   386.42 μs | 32.68 | 2023.66 KB |      125.56 |
-| WideJson_Superpower     |   445.58 μs | 37.68 |  479.72 KB |       29.76 |
-| WideJson_Sprache        |   756.59 μs | 63.98 | 3842.66 KB |      238.42 |
+| WideJson_SystemTextJson |    10.85 μs |  1.00 |   16.12 KB |        1.00 |
+| WideJson_Parlot         |    29.19 μs |  2.69 |   43.37 KB |        2.69 |
+| WideJson_ParlotCompiled |    29.38 μs |  2.71 |   43.37 KB |        2.69 |
+| WideJson_Newtonsoft     |    47.33 μs |  4.36 |  108.74 KB |        6.75 |
+| WideJson_InductorParser |   143.79 μs | 13.25 |  179.77 KB |       11.15 |
+| WideJson_Pidgin         |   350.43 μs | 32.29 |   40.48 KB |        2.51 |
+| WideJson_Pegasus        |   380.21 μs | 35.03 | 2023.66 KB |      125.56 |
+| WideJson_Superpower     |   432.99 μs | 39.90 |  479.72 KB |       29.76 |
+| WideJson_Sprache        |   727.67 μs | 67.05 | 3842.66 KB |      238.42 |
 
-Reading the table: InductorParser lands between 2.4x and 12.1x STJ depending on shape — roughly 11-12x on Big/Long/Wide (where string content dominates) and 2.4x on Deep (where nesting dominates and STJ's per-level validation cost narrows the gap). It sits at position 5 on every shape: above all other grammar-based parsers and right below Newtonsoft. **Parlot is still the clear winner among grammar-based parsers**, running at 2.4-2.7x STJ across every shape. Pidgin sits around 23-31x STJ once escapes are actually exercised. Sprache is consistently the slow end at 64-67x STJ. Pegasus, the only other PEG generator in the comparison, runs at 24-33x STJ.
+Reading the table: InductorParser lands between 2.3x and 13.3x STJ depending on shape — roughly 12-13x on Big/Long/Wide (where string content dominates) and 2.3x on Deep (where nesting dominates and STJ's per-level validation cost narrows the gap). It sits at position 5 on every shape: above all other grammar-based parsers and right below Newtonsoft. **Parlot is still the clear winner among grammar-based parsers**, running at 2.4-2.8x STJ across every shape. Pidgin sits around 24-32x STJ once escapes are actually exercised. Sprache is consistently the slow end at 67-71x STJ. Pegasus, the only other PEG generator in the comparison, runs at 25-35x STJ.
 
 **Superpower crashes on Deep.** 256 levels of nested objects overflow the .NET stack inside Superpower's combinator pipeline (it's an uncatchable `StackOverflowException`, not a parse error — the whole process dies). That's why there's no timing for `DeepJson_Superpower` in the table.
 
-**Parlot and Newtonsoft are actually *faster* than STJ on Deep** (0.52x-0.67x STJ). Deep has far fewer total characters than the other shapes (~2,600 vs 5,000-8,000), so parsers that are efficient per-token but have recursion overhead end up ahead. STJ pays a depth-validation cost at every level that dominates when the character-scanning work is light.
+**Parlot and Newtonsoft are actually *faster* than STJ on Deep** (0.50x-0.71x STJ). Deep has far fewer total characters than the other shapes (~2,600 vs 5,000-8,000), so parsers that are efficient per-token but have recursion overhead end up ahead. STJ pays a depth-validation cost at every level that dominates when the character-scanning work is light.
 
-The escape-handling story is instructive even at 3% escape density. Pidgin's LINQ-combinator approach routes every matched char through an `.Or(...)` between an escape parser and a regular-char parser — even a 3% actual escape rate is enough to keep that branch warm and expose its overhead (23-31x STJ). Parlot's `Terms.String` handled escapes all along via a specialized hot-path scanner, so it doesn't pay an incremental cost. InductorParser now has the same class of specialized scanner (`StringChars`, which collapses `ZeroOrMore(Or(literal, escape))` into one rule with a tight inline loop) and lands in the same 2-12x STJ band as the libraries that have always had one, not the 23-67x band occupied by libraries that still dispatch per character.
+The escape-handling story is instructive even at 3% escape density. Pidgin's LINQ-combinator approach routes every matched char through an `.Or(...)` between an escape parser and a regular-char parser — even a 3% actual escape rate is enough to keep that branch warm and expose its overhead (24-32x STJ). Parlot's `Terms.String` handled escapes all along via a specialized hot-path scanner, so it doesn't pay an incremental cost. InductorParser now has the same class of specialized scanner (`StringChars`, which collapses `ZeroOrMore(Or(literal, escape))` into one rule with a tight inline loop) and lands in the same 2-13x STJ band as the libraries that have always had one, not the 25-71x band occupied by libraries that still dispatch per character.
 
 Allocations tell the same story with different numbers. InductorParser allocates about 10-15x what STJ does, down from ~40-60x before the parse-time Delete filter, Or-wrapper elision, and string-body scanner shipped. Pegasus is worst for allocations (up to 170x STJ on Wide) because every grammar action produces a boxed intermediate. Sprache is nearly as bad at 170-290x. STJ is the floor at 1x because it doesn't produce a tree at all — it stores offset pointers into the input.
 

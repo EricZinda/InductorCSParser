@@ -44,4 +44,9 @@ internal sealed class RuneInRule : Rule
         // the C++ behavior where character symbols have id == code point.
         return new Symbol(new SymbolId(token.RuneValue), FlattenType, token.Memory);
     }
+
+    internal override RuleStart ComputeRuleStart()
+    {
+        return new RuleStart(_set, Advance.Always);
+    }
 }

@@ -41,4 +41,11 @@ internal sealed class PeekRule : Rule
             return Symbol.Discarded;
         return new Symbol(Id, FlattenType, Array.Empty<Symbol>());
     }
+
+    internal override RuleStart ComputeRuleStart()
+    {
+        // Zero-width predicate: rolls back regardless of inner result,
+        // never advances the lexer. FirstConsumedRunes is Empty 
+        return new RuleStart(RuneSet.Empty, Advance.Never);
+    }
 }

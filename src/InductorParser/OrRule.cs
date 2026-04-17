@@ -9,10 +9,46 @@ internal sealed class OrRule : Rule
 
     internal override Symbol? TryParseRule(Lexer lexer, bool discard)
     {
+        // Required-runes shortcut: peek the next rune once, then skip any
+        // child whose Advance is Always and whose FirstConsumedRunes rules the
+        // lookahead out. For a grammar with disjoint FirstConsumedRunes across
+        // branches (ChordGrammar's alternations, JSON's literalChar/escape
+        // split), this collapses N branch-and-rollback cycles down to 1.
+        //
+        // Children with Advance.Sometimes (Optional, ZeroOrMore, an And
+        // whose children aren't all consuming) or Advance.Never (Peek, Not,
+        // Eof) are always tried — a non-Always rule has at least one
+        // zero-rune success path, which can fire on any input including
+        // EOF, so the lookahead doesn't rule it out.
+        string input = lexer.Input;
+        int pos = lexer.Position;
+        int peekValue;
+        bool hasPeek;
+        if (pos >= input.Length)
+        {
+            hasPeek = false;
+            peekValue = -1;
+        }
+        else
+        {
+            hasPeek = Lexer.TryPeekRune(input, pos, out peekValue, out _);
+        }
+
         for (int symbolIndex = 0; symbolIndex < Children.Count; symbolIndex++)
         {
-            using var transaction = lexer.BeginTransaction();
             var child = Children[symbolIndex];
+            // Skip children the lookahead rules out. A child whose own
+            // WithError message is set is tried anyway so its error can
+            // still surface via the deepest-failure mechanism — we don't
+            // want to silence a rule that went out of its way to describe
+            // what it wanted.
+            if (child.Advance == Advance.Always
+                && child.ErrorMessage == null
+                && (!hasPeek || !child.FirstConsumedRunes.Contains(peekValue)))
+            {
+                continue;
+            }
+            using var transaction = lexer.BeginTransaction();
             var symbol = child.TryParse(lexer);
             if (symbol != null)
             {
@@ -60,5 +96,30 @@ internal sealed class OrRule : Rule
         // rule when nothing deeper is present.
         lexer.RecordFailure(lexer.Position, ErrorMessage);
         return null;
+    }
+
+    internal override RuleStart ComputeRuleStart()
+    {
+        // Or matches any of its children, so its FirstConsumedRunes is the
+        // union of children's FirstConsumedRunes.
+        //
+        // Advance:
+        //   Always    — every child advances. Or always advances too.
+        //   Never     — no child advances. Or never advances.
+        //   Sometimes — mixed (or matches are in different classes). Or
+        //               might or might not advance depending on branch.
+        RuneSet union = RuneSet.Empty;
+        bool allAlways = Children.Count > 0;
+        bool allNever = Children.Count > 0;
+        foreach (var child in Children)
+        {
+            union |= child.FirstConsumedRunes;
+            if (child.Advance != Advance.Always) allAlways = false;
+            if (child.Advance != Advance.Never) allNever = false;
+        }
+        Advance advance = allAlways
+            ? Advance.Always
+            : allNever ? Advance.Never : Advance.Sometimes;
+        return new RuleStart(union, advance);
     }
 }

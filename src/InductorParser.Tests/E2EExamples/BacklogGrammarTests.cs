@@ -19,7 +19,7 @@ namespace InductorParser.Tests;
 //    must come in within 2x of the compiled regex. Ignored today — the
 //    same combinator overhead that puts ChordGrammar at ~17-18x applies
 //    here, so we report ratios and leave the hard gate for the Or
-//    first-set dispatch work tracked separately.
+//    required-runes dispatch work tracked separately.
 [TestFixture]
 public class BacklogGrammarTests
 {
@@ -228,13 +228,23 @@ public class BacklogGrammarTests
             .Replace("\t", "\\t") + "\"";
     }
 
-    // Ignored. Ratios observed on this box (net8.0, Release, 5000 iters):
-    //   H1 51x, H2 26x, Bullet 8x, HrRun 4.5x, HrSpaced 9.4x, Paragraph 28x.
-    // Same root cause as ChordGrammarTests: combinator transaction overhead
-    // dominates on short inputs where the compiled regex is essentially a
-    // handful of char checks. Or first-set dispatch is the lever that
-    // closes the gap; tracked as a separate backlog item.
-    [Test, Ignore("Grammar is 4-51x slower than regex; 2x needs Or first-set dispatch (separate backlog item).")]
+    // Ignored. Ratios on this box (net8.0, Release, 5000 iters), pre and
+    // post Or required-runes dispatch (run-to-run noise on these short corpora
+    // is high — the per-case numbers swing by ~2x between runs):
+    //   H1:        51x  -> 25-42x
+    //   H2:        26x  -> 21-32x
+    //   Bullet:     8x  -> 5-16x
+    //   HrRun:    4.5x  -> 3-12x
+    //   HrSpaced: 9.4x  -> 9-14x
+    //   Paragraph: 28x  -> 20-45x
+    // Dispatch helps most when an Or / composite has many branches and a
+    // disjoint first-char set. These rules are simpler (one RuneIn or one
+    // Char at the head), so the combinator transaction overhead on the
+    // inner path is what dominates — same architectural bottleneck as
+    // ChordGrammar's remaining gap. A separate backlog item will target
+    // that tier (lazy transactions, allocation-free empty matches,
+    // compiled emitter, etc.).
+    [Test, Ignore("Grammar is still multi-x slower than regex; see comment above for tier needed to close the gap.")]
     public void Timing_grammar_is_within_two_times_compiled_regex()
     {
         const int iterations = 5_000;

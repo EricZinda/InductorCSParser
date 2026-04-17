@@ -127,6 +127,17 @@ public readonly struct RuneSet : IEquatable<RuneSet>
         return $"U+{codepoint:X4}";
     }
 
+    // The empty set, containing no runes. Equivalent to default(RuneSet),
+    // exposed as a named constant so callers can write RuneSet.Empty
+    // instead of relying on "default happens to mean empty."
+    public static readonly RuneSet Empty = default;
+
+    // The universal set, containing every valid Unicode scalar value
+    // (0..0x10FFFF minus the surrogate block). The complement of Empty.
+    // Used as the "unknown / anything goes" sentinel for Rule.FirstConsumedRunes
+    // so rules with no tighter information never get filtered out.
+    public static readonly RuneSet Universe = ~default(RuneSet);
+
     public static RuneSet Single(char c) => Single((int)c);
     public static RuneSet Single(Rune r) => Single(r.Value);
     public static RuneSet Single(int codepoint)

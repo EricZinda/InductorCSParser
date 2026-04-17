@@ -76,4 +76,17 @@ internal sealed class LiteralRule : Rule
             return Symbol.Discarded;
         return new Symbol(Id, FlattenType, lexer.Input.AsMemory(transaction.StartPosition, consumed));
     }
+
+    internal override RuleStart ComputeRuleStart()
+    {
+        // The only rune that can start a match of this literal is the first
+        // rune of the expected string. Advance is Always because a literal
+        // always consumes at least one rune to match. TryPeekRune decodes
+        // the first rune correctly even when it's a non-BMP code point that
+        // spans two UTF-16 chars (emoji, supplementary-plane CJK) —
+        // _expected[0] would hand back just the high surrogate, which isn't
+        // a valid rune.
+        Lexer.TryPeekRune(_expected, 0, out int first, out _);
+        return new RuleStart(RuneSet.Single(first), Advance.Always);
+    }
 }

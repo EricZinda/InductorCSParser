@@ -128,4 +128,19 @@ public sealed class LateBoundRule : Rule
                 "Call .Bind(targetRule) before calling Parse or Compile.");
         }
     }
+
+    internal override RuleStart ComputeRuleStart()
+    {
+        // LateBoundRule is transparent at parse time, so its RuleStart is
+        // just the target's. Compile's depth-first walk visits the target
+        // as our one child, so in the acyclic case the target's values are
+        // already populated by the time we land here. If the target graph
+        // forms a cycle back through this LateBoundRule, the cycle-detection
+        // path leaves whichever node it hit during recursion at the
+        // pessimistic default (Universe, Advance.Sometimes). That keeps
+        // OrRule conservative; a future pass could refine by re-walking
+        // until no FirstConsumedRunes changes if a grammar shows up where it
+        // matters.
+        return new RuleStart(_target!.FirstConsumedRunes, _target.Advance);
+    }
 }

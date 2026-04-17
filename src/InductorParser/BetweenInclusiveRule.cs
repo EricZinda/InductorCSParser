@@ -101,4 +101,25 @@ internal sealed class BetweenInclusiveRule : Rule
         if (discard) return Symbol.Discarded;
         return new Symbol(Id, FlattenType, (IReadOnlyList<Symbol>?)matched ?? Array.Empty<Symbol>());
     }
+
+    internal override RuleStart ComputeRuleStart()
+    {
+        // The first iteration has to start with whatever Inner starts with,
+        // so the FirstConsumedRunes come from there.
+        //
+        // Advance: AtLeast==0 (Optional, ZeroOrMore) lets the rule match
+        // zero iterations, which doesn't advance. If Inner sometimes or
+        // always advances, the rule is Sometimes (either the zero-
+        // iterations path, or an iteration that does advance). If Inner
+        // is Never, the whole rule is Never — no iteration ever advances.
+        //
+        // AtLeast>=1 forces us to run Inner at least once, so the rule's
+        // advance behavior matches Inner's.
+        Advance advance;
+        if (AtLeast == 0)
+            advance = Inner.Advance == Advance.Never ? Advance.Never : Advance.Sometimes;
+        else
+            advance = Inner.Advance;
+        return new RuleStart(Inner.FirstConsumedRunes, advance);
+    }
 }

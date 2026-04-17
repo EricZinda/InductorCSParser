@@ -113,6 +113,17 @@ internal sealed class CharRule : Rule
         return new Symbol(Id, FlattenType, lexer.Input.AsMemory(transaction.StartPosition, consumed));
     }
 
+    internal override RuleStart ComputeRuleStart()
+    {
+        // Whatever the expected grapheme is, its first rune is the only
+        // thing the lookahead has to match for this rule to have a chance.
+        // Multi-rune graphemes (ZWJ sequences, etc.) still pin the set to
+        // the first rune; the follow-on runes are checked by the rule's
+        // own lockstep compare against _expected.
+        Lexer.TryPeekRune(_expected, 0, out int first, out _);
+        return new RuleStart(RuneSet.Single(first), Advance.Always);
+    }
+
     // True iff the string is exactly one Unicode rune (one BMP char or
     // one surrogate pair). Works without depending on Rune.EnumerateRunes,
     // which isn't in netstandard2.1.

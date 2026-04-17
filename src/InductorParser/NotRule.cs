@@ -52,4 +52,12 @@ internal sealed class NotRule : Rule
             return Symbol.Discarded;
         return new Symbol(Id, FlattenType, Array.Empty<Symbol>());
     }
+
+    internal override RuleStart ComputeRuleStart()
+    {
+        // Zero-width predicate: rolls back regardless of inner result,
+        // never advances the lexer. FirstConsumedRunes is Empty (it doesn't
+        // consume anything, so the "starting rune" set is empty).
+        return new RuleStart(RuneSet.Empty, Advance.Never);
+    }
 }

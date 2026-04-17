@@ -83,4 +83,21 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
 
     private static bool IsAsciiLetter(char c) =>
         (uint)((c | 0x20) - 'a') <= ('z' - 'a');
+
+    internal override RuleStart ComputeRuleStart()
+    {
+        // First rune decides the lookahead. For an ASCII letter, include
+        // both cases so the caller's input in either case admits us.
+        // Non-letters (digits, punctuation) only match themselves — the
+        // same bit-exact rule AsciiCaseEquals applies to non-letter
+        // positions.
+        Lexer.TryPeekRune(_expected, 0, out int first, out _);
+        if (IsAsciiLetter((char)first))
+        {
+            int lower = first | 0x20;
+            int upper = lower & ~0x20;
+            return new RuleStart(RuneSet.Single(lower) | RuneSet.Single(upper), Advance.Always);
+        }
+        return new RuleStart(RuneSet.Single(first), Advance.Always);
+    }
 }

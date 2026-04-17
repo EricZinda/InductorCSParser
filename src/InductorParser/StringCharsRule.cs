@@ -299,4 +299,24 @@ internal sealed class StringCharsRule : Rule
         if (discard) return Symbol.Discarded;
         return new Symbol(Id, FlattenType, input.AsMemory(startPosition, length));
     }
+
+    internal override RuleStart ComputeRuleStart()
+    {
+        // StringChars always succeeds — a zero-length body is legal —
+        // but it also consumes runes when the input has matchable ones.
+        // That's Advance.Sometimes.
+        //
+        // FirstConsumedRunes: the body consumes any rune not in the stopper
+        // set (the stop check fires first in the scan loop, so a stopper
+        // rune is never consumed). That's ~_stopperSet for the RuneSet
+        // stopper path. A Rule-based stopper can't be rendered as a rune
+        // set, so we stay at Universe there. Escape-start runes — if a
+        // grammar has them — are typically outside the stopper set, which
+        // means ~_stopperSet already covers them; we don't need a separate
+        // union.
+        RuneSet firstConsumed = _stopperRule == null
+            ? ~_stopperSet
+            : RuneSet.Universe;
+        return new RuleStart(firstConsumed, Advance.Sometimes);
+    }
 }

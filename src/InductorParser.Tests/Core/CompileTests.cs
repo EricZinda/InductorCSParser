@@ -1,5 +1,7 @@
 using System;
 using NUnit.Framework;
+using InductorParser;
+using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 
@@ -36,5 +38,37 @@ public class CompileTests
         rule.Compile();
 
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
+    }
+
+    [Test]
+    public void Compile_throws_when_a_rule_reports_Advance_Never_with_non_empty_FirstConsumedRunes()
+    {
+        // Advance.Never means "never consumes on success," which logically
+        // forces FirstConsumedRunes to be Empty — if nothing is consumed,
+        // there can't be a set of possible first-consumed runes. A subclass
+        // that returns a non-empty set alongside Never is violating the
+        // contract, and the check here catches it at Compile time rather
+        // than letting the mismatch silently corrupt an enclosing AndRule's
+        // FirstConsumedRunes union.
+        var bad = new InconsistentRuleStartRule();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => bad.Compile());
+        Assert.That(ex!.Message, Does.Contain("InconsistentRuleStartRule"));
+        Assert.That(ex.Message, Does.Contain("Advance.Never"));
+    }
+
+    // Subclass that deliberately violates the RuleStart invariant. Lives
+    // here and not in the main InductorParser assembly because the check
+    // is defensive against authoring mistakes, not behavior any in-tree
+    // rule produces. InternalsVisibleTo makes the internal virtual
+    // overridable from the test assembly.
+    private sealed class InconsistentRuleStartRule : Rule
+    {
+        public InconsistentRuleStartRule() : base(FlattenType.None) { }
+
+        internal override Symbol? TryParseRule(Lexer lexer, bool discard) => null;
+
+        internal override RuleStart ComputeRuleStart()
+            => new RuleStart(RuneSet.Single('x'), Advance.Never);
     }
 }

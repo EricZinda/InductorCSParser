@@ -46,9 +46,23 @@ namespace InductorParser;
 // via ChildRules so Compile can walk the graph.
 public abstract class Rule
 {
+    // See below for description
     private bool _sealed;
     private bool _idAssigned;
     private string? _errorMessage;
+
+    // Allows for fast shortcutting when this rule is a child of OrRule:
+    //
+    //   FirstConsumedRunes — set of all possible first-consumed runes of
+    //                   a successful match.
+    //   Advance       — always / sometimes / never advances the lexer on
+    //                   success (see Advance.cs).
+    //
+    // Populated at Compile time. Pessimistic defaults (Universe, Sometimes)
+    // mean user subclasses that don't override ComputeRuleStart are never
+    // shortcutted.
+    internal RuneSet FirstConsumedRunes { get; private set; } = RuneSet.Universe;
+    internal Advance Advance { get; private set; } = Advance.Sometimes;
 
     // Lazily-built reverse index from SymbolId to human-readable name
     // for every rule reachable from this root. Populated on the first
@@ -308,6 +322,14 @@ public abstract class Rule
         visited.Clear();
         ValidateAll(this, visited);
 
+        // Compute FirstConsumedRunes / Advance for every reachable rule. OrRule
+        // reads these to skip children whose first rune can't match the
+        // lookahead. Done after Validate so LateBoundRule's _target is
+        // guaranteed non-null by the time we walk its child.
+        var computing = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
+        visited.Clear();
+        ComputeRuleStartAll(this, visited, computing);
+
         visited.Clear();
         SealAll(this, visited);
         return this;
@@ -525,6 +547,56 @@ public abstract class Rule
     //     allocation.
     internal abstract Symbol? TryParseRule(Lexer lexer, bool discard);
 
+    // Describe how this rule can begin matching. Called once per rule
+    // during Compile, in depth-first post-order so children's values
+    // are already populated. Returns the pessimistic default (Universe,
+    // Advance.Sometimes) so any user-defined Rule subclass that doesn't
+    // override this still works. Built-in 
+    // rules override to report something more specific.
+    //
+    // Subclass contract:
+    //
+    //   FirstConsumedRunes — set of all possible first-consumed runes of
+    //                   a successful match. Rules that never consume
+    //                   (Advance.Never) have Empty here; they may still
+    //                   gate on specific runes for success, but that's
+    //                   not what this field tracks. RuneSet.Universe
+    //                   means "could consume anything / unknown."
+    //
+    //   Advance       — always / sometimes / never advances the lexer on
+    //                   success (see Advance.cs). Only set Never if the
+    //                   rule truly cannot advance on any success path —
+    //                   enclosing combinators rely on the invariant to
+    //                   compute their own RuleStart correctly.
+    //
+    // Safe imprecision — when a subclass can't compute a tight answer, it
+    // can fall back to looser values without breaking correctness:
+    //
+    //   FirstConsumedRunes: a superset of the actual set is safe. OrRule
+    //     only uses it to filter Advance.Always children, so a superset
+    //     just means "don't filter as aggressively" — parses that should
+    //     succeed still succeed, we just run more branches than needed.
+    //     A subset is NOT safe: it would cause OrRule to skip children
+    //     that could actually match. RuneSet.Universe is the fully-safe
+    //     "I don't know" fallback.
+    //
+    //   Advance: the only safe fudge is Always -> Sometimes, which loses
+    //     the OrRule skip but never causes a real match to be missed.
+    //     All other direction changes (Sometimes -> Always, Never ->
+    //     anything, anything -> Never) are UNSAFE: they either cause
+    //     OrRule to filter out valid matches, or they cause enclosing
+    //     AndRule to miscompute its own FirstConsumedRunes by dropping
+    //     a contributing child from the union.
+    //
+    // The pessimistic default (Universe, Sometimes) returned by this
+    // method uses both safe fudges — it's the "just be correct, don't
+    // worry about speed" answer for subclasses that don't care about
+    // dispatch optimization.
+    internal virtual RuleStart ComputeRuleStart()
+    {
+        return new RuleStart(RuneSet.Universe, Advance.Sometimes);
+    }
+
     internal void SetIdInternal(SymbolId id)
     {
         Id = id;
@@ -618,6 +690,47 @@ public abstract class Rule
         r.ValidateCompiled();
         foreach (var child in r.Children)
             ValidateAll(child, visited);
+    }
+
+    // Depth-first, post-order walk with cycle detection. A rule's
+    // ComputeRuleStart reads its children's FirstConsumedRunes/Advance, so
+    // children have to be computed first. When a cycle is found
+    // (LateBoundRule pointing back into an Or that contains it, for
+    // instance), the in-progress rule is left at its pessimistic default
+    // (Universe, Advance.Sometimes) so the loop terminates.
+    // That's safe: OrRule will always try
+    // it, which is exactly the behavior before required-runes dispatch
+    // existed. 
+    // 
+    // A smarter algorithm could repeat the walk until no
+    // FirstConsumedRunes changes (each pass can only grow a FirstConsumedRunes, so this
+    // terminates), which would tighten the result for self-referential
+    // grammars and let OrRule skip more branches inside them. But the
+    // common case (LateBoundRule target is reachable via a non-cyclic
+    // path) converges correctly on the first visit, so the pessimistic
+    // fallback is enough for now.
+    private static void ComputeRuleStartAll(Rule r, HashSet<Rule> visited, HashSet<Rule> computing)
+    {
+        if (visited.Contains(r)) return;
+        if (!computing.Add(r)) return; // cycle: leave at pessimistic default
+        foreach (var child in r.Children)
+            ComputeRuleStartAll(child, visited, computing);
+        var start = r.ComputeRuleStart();
+        // Advance.Never means the rule never consumes on success, so
+        // FirstConsumedRunes must be Empty — anything else is dead data
+        // that would mislead a reader. Fail at Compile time so subclass
+        // authors find out immediately instead of debugging a wrong
+        // AndRule union somewhere else.
+        if (start.Advance == Advance.Never && !start.FirstConsumedRunes.IsEmpty)
+            throw new InvalidOperationException(
+                $"Rule '{r.GetType().Name}' returned Advance.Never with non-empty " +
+                $"FirstConsumedRunes. A rule that never advances can't have a set " +
+                $"of possible first-consumed runes — use RuneSet.Empty for " +
+                $"FirstConsumedRunes when Advance is Never.");
+        r.FirstConsumedRunes = start.FirstConsumedRunes;
+        r.Advance = start.Advance;
+        computing.Remove(r);
+        visited.Add(r);
     }
 
     private static void SealAll(Rule r, HashSet<Rule> visited)

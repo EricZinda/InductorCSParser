@@ -59,4 +59,39 @@ internal sealed class AndRule : Rule
         if (discard) return Symbol.Discarded;
         return new Symbol(Id, FlattenType, (IReadOnlyList<Symbol>?)matched ?? Array.Empty<Symbol>());
     }
+
+    internal override RuleStart ComputeRuleStart()
+    {
+        // Walk children in order, union each consuming child's FirstConsumedRunes
+        // (Advance != Never), stop at the first child whose Advance is
+        // Always — that child will consume a rune and thus disables the
+        // shortcut for later children. Never children (Peek, Not, Eof) are
+        // skipped from the union because they don't supply a consumed rune;
+        // they're gates, not contributors.
+        //
+        // Children before the first Always must be: Sometimes or Never. The
+        // Sometimes children might or might not consume on any given match;
+        // when they do, they're supplying the starting rune, so their
+        // FirstConsumedRunes must be in the union.
+        //
+        // And's overall Advance:
+        //   Always    — some child must consume (we hit an Always branch).
+        //   Never     — every child was Never (the And is all gates).
+        //   Sometimes — at least one Sometimes, no Always (the And might
+        //               advance or might not, depending on which children
+        //               take their consuming paths).
+        RuneSet union = RuneSet.Empty;
+        bool anyMightConsume = false;
+        foreach (var child in Children)
+        {
+            if (child.Advance != Advance.Never)
+            {
+                union |= child.FirstConsumedRunes;
+                anyMightConsume = true;
+            }
+            if (child.Advance == Advance.Always)
+                return new RuleStart(union, Advance.Always);
+        }
+        return new RuleStart(union, anyMightConsume ? Advance.Sometimes : Advance.Never);
+    }
 }

@@ -37,4 +37,9 @@ internal sealed class AnyCharRule : Rule
         SymbolId leafId = runeValue >= 0 ? new SymbolId(runeValue) : Id;
         return new Symbol(leafId, FlattenType, token.Memory);
     }
+
+    internal override RuleStart ComputeRuleStart()
+    {
+        return new RuleStart(RuneSet.Universe, Advance.Always);
+    }
 }

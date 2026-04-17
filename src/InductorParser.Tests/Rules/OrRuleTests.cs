@@ -74,16 +74,15 @@ public class OrRuleTests
     [Test]
     public void Or_trace_success_produces_expected_output()
     {
-        // Third alternative wins; each preceding alternative gets its
-        // own transaction (depth 2 inside Or's depth 1) and fails.
+        // Third alternative wins. Required-runes dispatch skips Char('a') and
+        // Char('b') on lookahead 'c' — their FirstConsumedRunes don't contain 'c'
+        // and neither is empty-capable — so only the matching Char('c')
+        // branch opens a transaction and emits trace lines. The
+        // nesting remains depth 2 (Or's transaction + Char's transaction).
         var sink = NewSink();
         Or(Char('a'), Char('b'), Char('c')).Parse("c", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
-            "      Lexer.Read: 'c', Consumed: 1",
-            "      FAIL | Char: found 'c', wanted 'a'",
-            "      Lexer.Read: 'c', Consumed: 1",
-            "      FAIL | Char: found 'c', wanted 'b'",
             "      Lexer.Read: 'c', Consumed: 1",
             "      SUCC | Char: found 'c'",
             "   SUCC | Or: symbol #2"
@@ -94,21 +93,15 @@ public class OrRuleTests
     [Test]
     public void Or_trace_failure_produces_expected_output()
     {
-        // Each alternative's transaction is per-iteration, not per-Or:
-        // when an alternative fails, its transaction disposes at the
-        // end of that for-loop iteration, so the depth returns to zero
-        // before the next alternative starts. By the time Or emits its
-        // FAIL line (after the loop), no transaction is open and the
-        // line carries no indentation. Empty detail message means
+        // Required-runes dispatch rules out both Char('a') and Char('b') on
+        // lookahead 'z', so no child transaction ever opens. By the time
+        // Or emits its FAIL line after the loop, no transaction is open
+        // and the line carries no indentation. Empty detail message means
         // there's no ": {detail}" tail, so the line reads "FAIL | Or".
         var sink = NewSink();
         Or(Char('a'), Char('b')).Parse("z", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
-            "      Lexer.Read: 'z', Consumed: 1",
-            "      FAIL | Char: found 'z', wanted 'a'",
-            "      Lexer.Read: 'z', Consumed: 1",
-            "      FAIL | Char: found 'z', wanted 'b'",
             "FAIL | Or"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));

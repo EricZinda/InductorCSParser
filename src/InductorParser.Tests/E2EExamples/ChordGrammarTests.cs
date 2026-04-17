@@ -197,19 +197,24 @@ public class ChordGrammarTests
     //
     // Currently ignored. History on this box (net8.0, Release, 5000 iters
     // x 151 inputs):
-    //   - Naive combinator version (pre-p500, CiWord expanding to 3 RuneIn
-    //     rules per word): ~21x slower than compiled regex.
-    //   - After shipping Literal / LiteralIgnoreAsciiCase and switching CiWord
-    //     to LiteralIgnoreAsciiCase (p500): ~17-18x. Word matches now take one
-    //     transaction each instead of N, but each rune still takes one
-    //     lexer read so the savings are bounded by transaction overhead,
-    //     not read overhead.
-    //   - Next lever: Or first-set dispatch. Every alternation in this
-    //     grammar has a small, disjoint set of legal first characters; a
-    //     first-set pre-filter would skip the transaction+rollback cycle
-    //     on branches that can't match. That's the step that should close
-    //     the remaining gap to 2x. Tracked as a separate backlog item.
-    [Test, Ignore("Ratio is ~17-18x after p500; 2x needs Or first-set dispatch (separate backlog item).")]
+    //   - Naive combinator version (pre-p500 / Literal): ~21x slower
+    //     than compiled regex. Every keyword expanded to N rune reads.
+    //   - After shipping Literal / LiteralIgnoreAsciiCase (earlier p500
+    //     work): ~17-18x. Word matches took one transaction each instead
+    //     of N, but transaction overhead still dominated.
+    //   - After Or required-runes dispatch (this p500): ~10-11x. OrRule now
+    //     peeks the lookahead at Compile-computed FirstConsumedRunes and skips
+    //     children whose first rune can't match, collapsing the N-way
+    //     alternations to whichever branch the lookahead allows.
+    //   - Remaining gap to 2x: transaction / allocation overhead on
+    //     the inner path where rules DO match. The outer And(...) still
+    //     opens a transaction for every Optional / ZeroOrMore wrapper
+    //     even when those happen to consume zero runes. Closing this
+    //     needs a different tier: lazier transaction opening (skip when
+    //     the child is a zero-width success), fewer per-iteration
+    //     allocations, or a compiled "state machine" emitter for
+    //     stable grammars. Tracked separately.
+    [Test, Ignore("Ratio is ~10-11x after Or required-runes dispatch; 2x needs a new tier (see comment above).")]
     public void Timing_grammar_is_within_two_times_compiled_regex()
     {
         const int iterations = 5_000;

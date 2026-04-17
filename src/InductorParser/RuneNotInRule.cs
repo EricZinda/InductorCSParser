@@ -58,4 +58,9 @@ internal sealed class RuneNotInRule : Rule
         SymbolId leafId = runeValue >= 0 ? new SymbolId(runeValue) : Id;
         return new Symbol(leafId, FlattenType, token.Memory);
     }
+
+    internal override RuleStart ComputeRuleStart()
+    {
+        return new RuleStart(~_set, Advance.Always);
+    }
 }

@@ -25,4 +25,12 @@ internal sealed class EofRule : Rule
             return Symbol.Discarded;
         return new Symbol(Id, FlattenType, Array.Empty<Symbol>());
     }
+
+    internal override RuleStart ComputeRuleStart()
+    {
+        // Eof only matches at end-of-input and never advances, so Advance
+        // is Never. No rune satisfies it either (EOF isn't a rune), so
+        // FirstConsumedRunes is Empty.
+        return new RuleStart(RuneSet.Empty, Advance.Never);
+    }
 }
