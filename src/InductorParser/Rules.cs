@@ -58,6 +58,21 @@ public static class Rules
 
     public static Rule RuneNotIn(string runes) => new RuneNotInRule(RuneSet.Runes(runes));
 
+    public static Rule StringChars(RuneSet stoppers) =>
+        new StringCharsRule(stoppers);
+
+    public static Rule StringChars(RuneSet stoppers, Rune escapeStart, Rule escapeEnd) =>
+        new StringCharsRule(stoppers, escapeStart, escapeEnd);
+
+    public static Rule StringChars(RuneSet stoppers, Rule escapeStart, Rule escapeEnd) =>
+        new StringCharsRule(stoppers, escapeStart, escapeEnd);
+
+    public static Rule StringChars(Rule stopper) =>
+        new StringCharsRule(stopper);
+
+    public static Rule StringChars(Rule stopper, Rune escapeStart, Rule escapeEnd) =>
+        new StringCharsRule(stopper, escapeStart, escapeEnd);
+
     public static Rule AnyChar() => new AnyCharRule();
 
     public static Rule Not(Rule inner) => new NotRule(inner);

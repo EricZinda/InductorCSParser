@@ -1,3 +1,4 @@
+using System.Text;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
@@ -43,6 +44,24 @@ namespace InductorParser.PlayModeTests
             Assert.That(result.Success, Is.True, result.ErrorMessage);
             Assert.That(result.Tree!.Find(settingName)!.ToString(), Is.EqualTo("setting"));
             Assert.That(result.Tree!.Find(settingValue)!.ToString(), Is.EqualTo("5"));
+        }
+
+        [Test]
+        public void StringChars_parses_under_il2cpp()
+        {
+            // Tripwire for the StringChars primitive under IL2CPP.
+            // Exercises the inline rune-decode helper
+            // (Lexer.TryPeekRune), the RuneSet-stopper fast path,
+            // and the single-rune escape start plus escape-end
+            // dispatch. Grammar mirrors a minimal JSON string body.
+            var escapeEnd = RuneIn(RuneSet.Runes("\"\\/bfnrt"));
+            var body = StringChars(RuneSet.Runes("\""), new Rune('\\'), escapeEnd);
+            var rule = And(Char('"'), body, Char('"'));
+
+            var result = rule.Parse("\"hello\\n\"");
+
+            Assert.That(result.Success, Is.True, result.ErrorMessage);
+            Assert.That(result.Tree!.ToString(), Is.EqualTo("hello\\n"));
         }
 
         [Test]
