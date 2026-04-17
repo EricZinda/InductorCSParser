@@ -100,9 +100,9 @@ public static class Rules
     public static Rule BetweenInclusive(Rule inner, int atLeast, int atMost) =>
         new BetweenInclusiveRule(inner, atLeast, atMost);
 
-    // The three common shapes pass a friendly trace name so the trace
-    // reads as the factory name the grammar author chose (OneOrMore,
-    // ZeroOrMore, Optional) rather than the raw bounds notation.
+    // The common shapes pass a friendly trace name so the trace reads
+    // as the factory name the grammar author chose (OneOrMore, ZeroOrMore,
+    // Optional, NOrMore) rather than the raw bounds notation.
     public static Rule OneOrMore(Rule inner) =>
         new BetweenInclusiveRule(inner, 1, int.MaxValue, "OneOrMore");
 
@@ -111,6 +111,14 @@ public static class Rules
 
     public static Rule Optional(Rule inner) =>
         new BetweenInclusiveRule(inner, 0, 1, "Optional");
+
+    // NOrMore(inner, n) == BetweenInclusive(inner, n, int.MaxValue). The
+    // shortcut exists so grammars that want "3+ of these" read like
+    // NOrMore(RuneIn("-*+"), 3) instead of BetweenInclusive(..., 3, int.MaxValue),
+    // matching how OneOrMore/ZeroOrMore replace the 0/1 cases. The trace
+    // name carries the lower bound so traces stay self-describing.
+    public static Rule NOrMore(Rule inner, int atLeast) =>
+        new BetweenInclusiveRule(inner, atLeast, int.MaxValue, $"NOrMore[{atLeast}]");
     public static Rule Eof() => new EofRule();
 
     // [+|-]? Digit+
