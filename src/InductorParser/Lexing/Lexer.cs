@@ -165,6 +165,44 @@ public abstract class Lexer
     // etc. Called only when there is at least one char left in input.
     protected abstract int NextTokenLength(int startOffset);
 
+    // Peek the rune at `pos` in `input` without advancing any lexer
+    // state. Writes the rune value and its UTF-16 length. Returns
+    // false for an isolated surrogate half (not a valid scalar).
+    //
+    // Always rune-scoped regardless of which concrete Lexer is in
+    // use: rules that scan rune-by-rune need consistent unit
+    // semantics even when the caller chose the Grapheme lexer for
+    // the outer parse. Callers that want grapheme-aware decoding
+    // should use Read + Token.Memory instead.
+    //
+    // Aggressive-inlined so the call site sees the same machine
+    // code the fully inline decoder would. Pulled out so the
+    // surrogate-pair logic lives in exactly one place instead of
+    // being re-implemented in every rule that peeks.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool TryPeekRune(string input, int pos, out int runeValue, out int runeLen)
+    {
+        char c0 = input[pos];
+        if (char.IsHighSurrogate(c0)
+            && pos + 1 < input.Length
+            && char.IsLowSurrogate(input[pos + 1]))
+        {
+            runeValue = char.ConvertToUtf32(c0, input[pos + 1]);
+            runeLen = 2;
+            return true;
+        }
+        if (char.IsSurrogate(c0))
+        {
+            // Isolated surrogate half. Not a valid scalar.
+            runeValue = -1;
+            runeLen = 0;
+            return false;
+        }
+        runeValue = c0;
+        runeLen = 1;
+        return true;
+    }
+
     // Token is a `readonly ref struct`. Returning
     // it copies the fields (a string reference, two ints, a bool, a
     // span) into the caller's storage rather than allocating on the

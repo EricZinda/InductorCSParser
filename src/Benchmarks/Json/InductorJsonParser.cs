@@ -1,3 +1,4 @@
+using System.Text;
 using global::InductorParser;
 using global::InductorParser.SyntaxTree;
 using static global::InductorParser.Rules;
@@ -34,28 +35,22 @@ public static class InductorJsonParser
 
     static InductorJsonParser()
     {
-        // A JSON string char is either:
-        //   * any rune except U+0022 ('"') and U+005C ('\') — the literal case
-        //   * a backslash followed by one of "/\bfnrt or a \uXXXX unicode escape
-        //
-        // InductorParser has no RuneNotIn primitive yet (see
-        // backlog/c000-pass-through-text-primitives); express the literal-char
-        // complement as positive ranges around the two excluded code points.
-        // Range endpoints must be valid scalar values but interior surrogate
-        // halves are harmless — the lexer never produces them.
-        var notQuoteOrBackslash =
-            RuneSet.Range(0, 0x21) |           // 0..!
-            RuneSet.Range(0x23, 0x5B) |         // #..[
-            RuneSet.Range(0x5D, 0x10FFFF);      // ]..max
-        var literalChar = RuneIn(notQuoteOrBackslash);
-
         var simpleEscape = RuneIn(RuneSet.Runes("\"\\/bfnrt"));
         var hexDigit = RuneIn(RuneSet.Ascii.Digits | RuneSet.Range('a', 'f') | RuneSet.Range('A', 'F'));
         var unicodeEscape = And(Char('u'), hexDigit, hexDigit, hexDigit, hexDigit);
-        var escapeSequence = And(Char('\\'), Or(simpleEscape, unicodeEscape));
+        var escapeEnd = Or(simpleEscape, unicodeEscape);
 
-        var stringChar = Or(literalChar, escapeSequence);
-        JsonString = And(Char('"'), ZeroOrMore(stringChar), Char('"')).As("string");
+        // StringChars collapses the per-character `ZeroOrMore(Or(body,
+        // escape))` hot loop into one rule that scans the whole string
+        // body in place. The stopper set is just the closing quote:
+        // the scan runs forward until it sees a ", and everything in
+        // between gets consumed as body (or dispatched to `escapeEnd`
+        // when a \ shows up). One leaf Symbol for the whole run, one
+        // escape dispatch per actual escape, no per-rune Symbol or
+        // transaction work for the body chars that dominate typical
+        // JSON payloads.
+        var stringBody = StringChars(RuneSet.Runes("\""), new Rune('\\'), escapeEnd);
+        JsonString = And(Char('"'), stringBody, Char('"')).As("string");
 
         var value = new LateBoundRule("value");
 
