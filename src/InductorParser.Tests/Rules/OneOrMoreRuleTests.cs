@@ -123,15 +123,14 @@ public class OneOrMoreRuleTests
     [Test]
     public void OneOrMore_trace_failure_produces_expected_output()
     {
-        // First inner attempt fails at position 0 (not > initial 0, so
-        // no deepest-failure trace). OneOrMore then emits its own FAIL
-        // line with count= 0.
+        // OneOrMore's first-rune lookahead skip proves Char('a') can't match
+        // on input "z" without reading (peek 'z' not in {'a'}), so OneOrMore
+        // emits its own FAIL line with count= 0 and no inner Read/FAIL
+        // trace appears. See BetweenInclusiveRule's skip branch.
         var sink = NewSink();
         OneOrMore(Char('a')).Parse("z", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
-            "      Lexer.Read: 'z', Consumed: 1",
-            "      FAIL | Char: found 'z', wanted 'a'",
             "   FAIL | OneOrMore: count= 0"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));

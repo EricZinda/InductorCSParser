@@ -57,6 +57,40 @@ internal sealed class BetweenInclusiveRule : Rule
     internal override Symbol? TryParseRule(Lexer lexer, bool discard)
     {
         using var transaction = lexer.BeginTransaction();
+        // First-rune lookahead skip: when Inner always advances and has no
+        // user-supplied error message, a single rune peek can prove Inner
+        // can't match on iteration zero. That kills the Inner.TryParse +
+        // transaction + Read + set-contains cycle the benchmark's no-match
+        // OptionalWhitespace() hits on every call. Same three hints
+        // OrRule reads per child (Advance, FirstConsumedRunes,
+        // ErrorMessage), so no new compile-time analysis.
+        //
+        // Gated off when PreserveFlattenWrappers so the debug tree keeps
+        // every grammar node visible one-to-one. Self-recursive grammars
+        // where FirstConsumedRunes falls back to Universe skip on their
+        // own (Contains is always true), which is the safe fallback.
+        if (Inner.Advance == Advance.Always
+            && Inner.ErrorMessage == null
+            && !lexer.PreserveFlattenWrappers)
+        {
+            string input = lexer.Input;
+            int pos = lexer.Position;
+            if (pos < input.Length
+                && Lexer.TryPeekRune(input, pos, out int peekValue, out _)
+                && !Inner.FirstConsumedRunes.Contains(peekValue))
+            {
+                if (AtLeast == 0)
+                {
+                    TraceSuccess(lexer, $"count= 0");
+                    transaction.Commit();
+                    if (discard) return Symbol.Discarded;
+                    return new Symbol(Id, FlattenType, Array.Empty<Symbol>());
+                }
+                TraceFailure(lexer, $"count= 0");
+                lexer.RecordFailure(lexer.Position, ErrorMessage);
+                return null;
+            }
+        }
         // Delete-typed wrapper (e.g. OptionalWhitespace) short-circuits to
         // Discarded on success: no list, no wrapper Symbol, no per-rune
         // leaf Symbols stored. We still run the inner loop for its lexer

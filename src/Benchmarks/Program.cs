@@ -25,7 +25,89 @@ public class Program
             return ParlotCompileCheck();
         }
 
+        if (args.Contains("--profile-inductor"))
+        {
+            return ProfileInductor(args);
+        }
+
+        if (args.Contains("--rule-counts"))
+        {
+            return RuleCounts(args);
+        }
+
         BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
+        return 0;
+    }
+
+    // Count rule invocations per Rule type across one full Big parse by
+    // running a traced parse and counting trace lines.
+    private static int RuleCounts(string[] args)
+    {
+        string shape = "big";
+        foreach (var a in args)
+            if (a.StartsWith("--shape=")) shape = a.Substring("--shape=".Length);
+        string input = shape switch
+        {
+            "big" => JsonBench.BuildJson(4, 4, 3).ToString()!,
+            "long" => JsonBench.BuildJson(256, 1, 1).ToString()!,
+            "deep" => JsonBench.BuildJson(1, 256, 1).ToString()!,
+            "wide" => JsonBench.BuildJson(1, 1, 256).ToString()!,
+            _ => throw new ArgumentException($"unknown shape {shape}")
+        };
+        Console.WriteLine($"Counting rule invocations for {shape}, input length {input.Length}");
+        var counts = RuleProfiler.CountByType(input, iterations: 1);
+        long total = 0;
+        foreach (var value in counts.Values) total += value;
+        Console.WriteLine($"Total trace outcomes: {total}");
+        Console.WriteLine();
+        Console.WriteLine($"{"Rule",-30} {"Count",10} {"% total",8}");
+        foreach (var (k, v) in counts.OrderByDescending(kv => kv.Value))
+        {
+            double pct = 100.0 * v / total;
+            Console.WriteLine($"{k,-30} {v,10} {pct,7:F2}%");
+        }
+        return 0;
+    }
+
+    // Run InductorParser in a tight loop on the Big-shape input for long
+    // enough to give dotnet-trace CPU sampling a usable population of
+    // stacks. Prints a "STARTING"/"DONE" marker around the hot loop so
+    // the profiler window can be cleanly reasoned about.
+    //
+    // Usage: launch this process under
+    //   dotnet-trace collect --providers Microsoft-DotNETCore-SampleProfiler --format speedscope -- <this exe> --profile-inductor
+    // Then filter the speedscope output to the samples between the
+    // markers.
+    private static int ProfileInductor(string[] args)
+    {
+        string shape = "big";
+        int iterations = 40000;
+        foreach (var a in args)
+        {
+            if (a.StartsWith("--shape=")) shape = a.Substring("--shape=".Length);
+            else if (a.StartsWith("--iters=")) iterations = int.Parse(a.Substring("--iters=".Length));
+        }
+        string input = shape switch
+        {
+            "big"  => JsonBench.BuildJson(4, 4, 3).ToString()!,
+            "long" => JsonBench.BuildJson(256, 1, 1).ToString()!,
+            "deep" => JsonBench.BuildJson(1, 256, 1).ToString()!,
+            "wide" => JsonBench.BuildJson(1, 1, 256).ToString()!,
+            _      => throw new ArgumentException($"unknown shape {shape}")
+        };
+
+        // Warm-up: JIT + fill tiered compilation.
+        for (int i = 0; i < 200; i++) InductorJsonParser.Parse(input);
+
+        Console.WriteLine($"STARTING profile: shape={shape} length={input.Length} iters={iterations}");
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        for (int i = 0; i < iterations; i++)
+        {
+            var r = InductorJsonParser.Parse(input);
+            if (!r.Success) throw new InvalidOperationException("parse failed");
+        }
+        stopwatch.Stop();
+        Console.WriteLine($"DONE profile: total={stopwatch.Elapsed.TotalSeconds:F3}s avg={stopwatch.Elapsed.TotalMicroseconds / iterations:F2}us/op");
         return 0;
     }
 

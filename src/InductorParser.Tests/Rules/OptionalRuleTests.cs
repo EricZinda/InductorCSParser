@@ -113,16 +113,16 @@ public class OptionalRuleTests
     [Test]
     public void Optional_trace_without_match_produces_expected_output()
     {
-        // Inner fails, Optional still succeeds with count= 0. Char('b')
-        // then runs against the original position since Optional's
-        // commit didn't advance the lexer.
+        // Optional's first-rune lookahead skip proves Char('a') can't match
+        // on input "b" without reading (peek 'b' not in {'a'}), so Optional
+        // succeeds with count= 0 immediately and no inner Read/FAIL trace
+        // appears. Char('b') then runs against the original position since
+        // Optional's commit didn't advance the lexer.
         var sink = NewSink();
         And(Optional(Char('a')), Char('b'))
             .Parse("b", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
-            "         Lexer.Read: 'b', Consumed: 1",
-            "         FAIL | Char: found 'b', wanted 'a'",
             "      SUCC | Optional: count= 0",
             "      Lexer.Read: 'b', Consumed: 1",
             "      SUCC | Char: found 'b'",
