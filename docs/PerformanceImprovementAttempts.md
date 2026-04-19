@@ -117,6 +117,86 @@ The measurement scaffolding in this doc is correct even if the implementation is
 
 ---
 
+## P700 revisited: Leaf Symbol Interning + Array-Backed Match Buffer (reverted)
+
+Engineering record of the two p700 sub-levers the earlier attempt (logged above) didn't get to: leaf Symbol interning (sub-lever a) and replacing `List<Symbol>` with a plain `Symbol[]` in composite rules (a lighter-weight version of sub-lever b's "SymbolChildren struct"). Both written, measured, and reverted.
+
+### What p700 sub-levers a and b asked for
+
+From the retired p700 backlog item, three sub-levers were proposed originally; the earlier attempt logged above targeted a fourth surface (discard propagation + empty-wrapper elision) and didn't move the needle. This attempt returns to the first two originals:
+
+1. (a) Leaf Symbol interning on `RuneInRule` / `RuneNotInRule` / `AnyCharRule`. Cache by (FlattenType, rune) so repeated matches of the same rune reuse one Symbol instance instead of allocating a fresh one per match.
+2. (b) A replacement for the `List<Symbol>` that `AndRule` and `BetweenInclusiveRule` use to accumulate matched children. The backlog item sketched this as an inline-buffer struct; this attempt tried the lighter-weight version first: a plain `Symbol[]` with doubling growth.
+
+Sub-lever (c) (compile-time `Or(Char, Char, ...)` → `RuneIn` rewrite) is still unimplemented; the JSON grammar already uses `RuneIn` directly everywhere so there was no hot path to target in the current benchmark.
+
+### What was actually tried
+
+**Sub-lever (a): leaf Symbol interning.** Added a per-Lexer cache on `Lexer` with a direct-indexed `Symbol?[128]` fast path for ASCII and a `Dictionary<long, Symbol>` fallback keyed on `(FlattenType << 32) | rune`. `RuneInRule`, `RuneNotInRule`, and `AnyCharRule` route single-rune success symbols through the cache instead of allocating per match. Cached Symbols carry a fresh 1- or 2-char string as their backing memory, not a slice of the current input, so the cache does not keep the input string alive past the parse.
+
+Scope choice: cache lives on the Lexer, not on the Rule. Rules are shared across threads and parses; a per-Rule cache would need a lock and would hold Memory references across parses. Per-Lexer keeps it single-threaded by contract (one Lexer per parse) and disposable with the parse.
+
+**Sub-lever (b): array-backed match buffer.** Replaced `List<Symbol>?` with `Symbol[]?` in `AndRule` and `BetweenInclusiveRule`. AndRule sizes the buffer at `Children.Count` upfront (tight upper bound: each child produces at most one non-Discarded Symbol, so no growth is ever needed). BetweenInclusiveRule starts at 4 and doubles via `Array.Resize`. Both trim to exact size via `Array.Copy` at the end when the filled count is short of the buffer length. The saving is the `List<T>` header (~24 B per populated wrapper) that the old code paid for on top of its internal array.
+
+Did not implement the full "SymbolChildren struct with 4 inline slots + overflow" design the p700 backlog sketched. An inline-slot struct would let the common case (2-3 matched children) skip the intermediate buffer allocation entirely, but it also makes the call-site code uglier and needs `Symbol.Children` to accept the struct instead of `IReadOnlyList<Symbol>`. Elected to measure the plain-array version first and only go bigger if the signal said yes.
+
+### Files touched (in the attempt)
+
+- [src/InductorParser/Lexing/Lexer.cs](../src/InductorParser/Lexing/Lexer.cs) — added per-Lexer leaf Symbol cache and `GetOrCreateRuneLeaf`.
+- [src/InductorParser/RuneInRule.cs](../src/InductorParser/RuneInRule.cs), [RuneNotInRule.cs](../src/InductorParser/RuneNotInRule.cs), [AnyCharRule.cs](../src/InductorParser/AnyCharRule.cs) — route single-rune success through the cache.
+- [src/InductorParser/AndRule.cs](../src/InductorParser/AndRule.cs) — `List<Symbol>?` to `Symbol[]?` with trim-on-short.
+- [src/InductorParser/BetweenInclusiveRule.cs](../src/InductorParser/BetweenInclusiveRule.cs) — `List<Symbol>?` to `Symbol[]?` with doubling growth and trim-on-short.
+
+Test surface: all 458 non-timing tests continued to pass. The round-trip spot-check (`dotnet run --project src/Benchmarks -- --spot-check`) confirmed byte-exact round-trip on all four JSON shapes.
+
+### Measurements
+
+BenchmarkDotNet ShortRunJob, 3 iterations per shape, on the same box as the P700 and P600 numbers above. Baseline was measured fresh on HEAD immediately before the code changes so the after-numbers compare directly rather than against README numbers from a different session. STJ row drifted less than 1% across the three runs, so the ratios are comparable.
+
+#### JSON benchmark
+
+```
+Shape   Stage          Mean (us)   Δ Mean     Alloc (KB)    Δ Alloc
+Big     baseline       290.33                 363.23
+        sub-a          293.36      +1.0%      358.48        -1.3%
+        sub-a+b        292.37      +0.7%      358.46        -1.3%
+Deep    baseline       188.39                 208.68
+        sub-a          186.87      -0.8%      208.41        -0.1%
+        sub-a+b        191.23      +1.5%      202.38        -3.0%
+Long    baseline       218.96                 299.09
+        sub-a          216.73      -1.0%      296.24        -1.0%
+        sub-a+b        220.37      +0.6%      292.20        -2.3%
+Wide    baseline       144.15                 179.77
+        sub-a          145.76      +1.1%      176.71        -1.7%
+        sub-a+b        147.72      +2.5%      180.63        +0.5%
+```
+
+StdDev on the mean numbers typically 0.3-1.8 us (around 1% of mean), so most deltas above are inside single-run noise. Wide's +2.5% with sub-a+b is outside that band but still small, and is probably the "allocate `Symbol[Children.Count]` upfront then trim" pattern paying slightly more than the `List` header it saved when 3 of 5 AndRule children get Delete-filtered on that shape.
+
+### Why the wins are small
+
+Sub-lever (a): the JSON grammar's hot leaf allocators aren't where this cache applies. `simpleEscape = RuneIn(...)` fires at roughly 3% of in-string characters (the escape-density the harness generates), `hexDigit` never fires because the generator excludes `\uXXXX`, and the RuneIn inside `OptionalWhitespace` hits the discard path because the wrapper is Delete-typed. `StringChars` produces one leaf per string body, not per character, and doesn't go through the RuneIn allocation path at all. That leaves simpleEscape as essentially the only non-trivial RuneIn allocation in the hot loop, and at 3% density there just isn't much to cache. The ~1% allocation drop we actually got is consistent with that scope.
+
+Sub-lever (b): trading `new List<Symbol>(capacity)` for `new Symbol[capacity]` saves roughly the `List<T>` header (~24 B) per populated wrapper. But for AndRule wrappers where most children are Delete-filtered (JsonMember has 5 children, 2 kept), the new code allocates `Symbol[5]` upfront and then a trimmed `Symbol[2]`, which is two allocations for around 88 B total. The old code allocated the List header plus a `Symbol[5]` internal array, also two allocations for about the same total. Same count, same size. The win lands only on BetweenInclusiveRule paths where the List used to grow its internal array (Deep and Long shapes see the biggest allocation drops, 2-3%), and even that win is modest because `List<T>` was already doing doubling growth too.
+
+Both results are consistent with what the earlier P700 attempt (discard propagation + empty-wrapper elision) and the P600 attempt (lazy transactions on primitives) already found: Symbol and list allocations are not the dominant cost on the JSON benchmark. The cost is the interpreter dispatch and Transaction cycle on every composite rule invocation, which only p800 (compiled state-machine emitter) addresses.
+
+### Why the attempt was reverted
+
+Neither sub-lever clears the "is this worth the permanent complexity" bar. Sub-lever (a) adds a per-Lexer cache field, a helper method on Lexer, and a load-bearing "use a fresh rune-only string, not an input slice" invariant that a future contributor could easily miss when hooking another primitive into the cache. Sub-lever (b) adds two growth paths (AndRule fixed-size, BetweenInclusive doubling) and a trim-on-short branch in two places where a single `List<T>` line used to be.
+
+For at most ~3% allocation on Deep/Long and essentially zero wall-clock change on any shape, neither carries its weight. The p800 compiled-emitter lever is the next real place to spend effort; everything allocation-side on the interpreter path has now been tried.
+
+The README paragraph this experiment set out to fact-check was updated at [src/Benchmarks/README.md](../src/Benchmarks/README.md) before the code attempt. It now frames the remaining gap against Parlot as interpreter overhead plus per-composite-rule Transaction bookkeeping, and points at p600/p700/p800 as the supporting evidence rather than claiming tree richness is the cost center.
+
+### What a future attempt should know
+
+- The "just swap `List<T>` for `Symbol[]`" refactor is a wash. If anyone returns to sub-lever (b), the version worth trying is the full inline-buffer struct (4 `Symbol` fields inline in a struct, plus optional overflow, with `Symbol.Children` accepting the struct). That's the only flavor of (b) with a meaningful allocation ceiling to hit, because it removes the intermediate buffer entirely for the common ≤4 case. It's also invasive to `Symbol`'s public surface.
+- Sub-lever (a) is structurally fine; it just has nothing to do at 3% escape density. A grammar with a hot `RuneIn` loop outside a Delete-typed wrapper (a tokenizer for keyword-heavy text, or ChordGrammar's `accidental` at larger corpus scale) would exercise it. The cache scaffolding is easy to reinstate from this attempt's git history if that need comes up.
+- Measurement harness from the earlier P700 and P600 entries still applies: JSON with `--filter "*_InductorParser" "*_SystemTextJson"` and `--spot-check` after any change that touches Symbol construction or composite-rule plumbing.
+
+---
+
 ## P600: Lazy Transaction Opening on Primitives and Optional/ZeroOrMore (reverted)
 
 Engineering record of an attempt at the (since-deleted) p600 backlog item. The changes were written, measured, and reverted.
