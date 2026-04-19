@@ -114,3 +114,115 @@ The measurement scaffolding in this doc is correct even if the implementation is
 - For JSON, run `dotnet run --project src/Benchmarks -- --filter "*_InductorParser" "*_SystemTextJson"` to measure just the two rows that matter. The filtered run still takes ~2 minutes but is much cheaper than the full 35-row table.
 - Validate with `dotnet run --project src/Benchmarks -- --spot-check` after any change that touches Symbol construction — it catches tree-shape regressions that don't show up in the tests because `ParseForRoundTrip` uses `PreserveFlattenWrappers=true`.
 - Empty-Flatten wrapper elision is a semantic change that needs the anonymous-only gate. Any future change in that direction has to thread the Name / ErrorMessage / pinned-Id checks through, or it'll silently break `Tree.Find(namedRule)` on empty containers.
+
+---
+
+## P600: Lazy Transaction Opening on Primitives and Optional/ZeroOrMore (reverted)
+
+Engineering record of an attempt at the (since-deleted) p600 backlog item. The changes were written, measured, and reverted.
+
+### What p600 asked for
+
+Every non-trivial rule opens a `Transaction` on entry via `Lexer.BeginTransaction()`. The Transaction is a struct (two int writes, two bool writes) plus a `_transactionDepth++` on the lexer for trace indentation plus a `Dispose` on every exit path. Two categories of rule don't need that full machinery:
+
+- Rules that always roll back (`PeekRule`, `NotRule`) — they never commit, so the only job of the Transaction is to restore position. A saved `int` does the same work with less bookkeeping.
+- Primitive rules that read at most one token before deciding (`CharRule`, `RuneInRule`, `RuneNotInRule`, `AnyCharRule`) — on failure the rule hasn't advanced past one rune, so rollback is trivially "restore saved position."
+- `BetweenInclusiveRule` with `AtLeast==0` (Optional, ZeroOrMore) — the rule can't fail in that configuration, so the outer rollback has nothing to roll back.
+
+Three tiers proposed, smallest to biggest, with the expectation that ChordGrammar's ~10x-compiled-regex ratio would drop to ~5-7x.
+
+### What was actually tried
+
+All three tiers implemented.
+
+Added `internal void Lexer.SetPosition(int)` (AggressiveInlining) so rules can rewind without opening a full Transaction.
+
+`BetweenInclusiveRule` split into two code paths: the existing `AtLeast > 0` path keeps the outer `using var transaction = lexer.BeginTransaction()`, and a new `AtLeast == 0` path runs the same iteration loop without the outer transaction and skips the now-dead `count < AtLeast` failure branch.
+
+`PeekRule` and `NotRule` swapped the Transaction for:
+
+```csharp
+int savedPosition = lexer.Position;
+var innerResult = Inner.TryParse(lexer);
+lexer.SetPosition(savedPosition);
+```
+
+The four primitive rules saved the position on entry and called `SetPosition` on every failure path before returning `null`; the success path just leaves the advanced position in place.
+
+Updated the Rule.TryParseRule contract comment to describe the saved-position pattern alongside Transaction.
+
+### Files touched (in the attempt)
+
+- [src/InductorParser/Lexing/Lexer.cs](../src/InductorParser/Lexing/Lexer.cs) — added `SetPosition`.
+- [src/InductorParser/BetweenInclusiveRule.cs](../src/InductorParser/BetweenInclusiveRule.cs) — AtLeast==0 path without outer Transaction.
+- [src/InductorParser/PeekRule.cs](../src/InductorParser/PeekRule.cs), [NotRule.cs](../src/InductorParser/NotRule.cs) — saved-position int (always restore).
+- [src/InductorParser/CharRule.cs](../src/InductorParser/CharRule.cs), [RuneInRule.cs](../src/InductorParser/RuneInRule.cs), [RuneNotInRule.cs](../src/InductorParser/RuneNotInRule.cs), [AnyCharRule.cs](../src/InductorParser/AnyCharRule.cs) — saved-position int (restore on failure).
+- [src/InductorParser/Rule.cs](../src/InductorParser/Rule.cs) — updated subclass contract comment.
+- ~15 test files — trace-output expected indentation shifted shallower because the primitives no longer bump `_transactionDepth`.
+
+Test surface: all 458 non-timing tests passed after updating trace expectations. No semantic change to parse results — only rollback mechanics and trace indentation.
+
+### Measurements
+
+Measurement protocol: stash production-rule changes, rebuild, run baseline; pop, rebuild, run after. For ChordGrammar and BacklogGrammar, both sides were measured fresh in the same session. For JSON the "after" was a fresh BenchmarkDotNet run and the baseline was the existing README numbers (also post-p500 master) — so the JSON baseline / after comparison straddles separate BDN sessions and picks up additional run-to-run noise.
+
+#### ChordGrammar timing (5000 iters × 151 inputs, ratio vs compiled regex)
+
+```
+                 run 1     run 2
+Baseline         10.50x     9.78x
+After            10.33x     9.67x
+```
+
+Flat within noise. The regex baseline itself drifted 15-20% run-to-run (Chord regex time swung 5.8ms to 7.3ms observed), so the ratio is the noisier number.
+
+#### BacklogGrammar per-case ratios (range over two runs per side)
+
+```
+              Baseline       After
+H1            37-48x         30-43x
+H2            26-29x         24-26x
+Bullet        12-16x          6-25x
+HrRun         5-6x            3-6x
+HrSpaced      9x              7-12x
+Paragraph    12-21x          19-37x
+```
+
+Every cell lands in the observed noise range of the other side. No consistent delta.
+
+#### JSON benchmark (BenchmarkDotNet ShortRunJob, 3 iterations)
+
+```
+Shape   Baseline Mean → After       Δ Mean       Baseline Alloc → After      Δ Alloc
+Big     292.86 → 294.61 μs          +0.6%        363.23 → 363.23 KB             0%
+Deep    190.17 → 181.39 μs          -4.6%        208.68 → 208.68 KB             0%
+Long    219.01 → 210.75 μs          -3.8%        299.09 → 299.09 KB             0%
+Wide    143.79 → 140.83 μs          -2.1%        179.77 → 179.77 KB             0%
+```
+
+STJ baseline drifted 11% on Big between the two BenchmarkDotNet sessions (24.66 → 27.36 μs), which is larger than any of the Mean deltas above. Read these as "within noise." Allocations unchanged, which is expected — p600 targeted transaction bookkeeping, not allocation sites.
+
+### Why the wins were small
+
+`Transaction` is already cheap in absolute terms. It's a struct, so stack-allocated — no GC pressure. Construction is two int writes plus two bool writes. `Dispose` is a flag read, maybe one int write, and one int decrement. Shaving that still leaves the rule body — `Lexer.Read`, the comparison against the expected rune or grapheme, the Symbol allocation on success — doing most of the work.
+
+The hot paths on the grammars measured aren't primitive-bound:
+
+- **ChordGrammar** spends its time in `Literal` / `Or` dispatch (already helped by p500's required-runes filter). The Char / RuneIn primitives aren't the bottleneck.
+- **JSON** spends its time in `StringChars` (already a specialized scanner that doesn't dispatch per character) and in the structural `And` / `ZeroOrMore` wrappers that build the output tree. Those still open Transactions and still allocate `List<Symbol>` wrappers — p600 didn't touch either.
+
+The backlog item's "ChordGrammar probably drops to ~5-7x" estimate was optimistic because it assumed primitive-rule overhead was a bigger slice of the hot path than it actually is.
+
+### Why the attempt was reverted
+
+Net neutral to slightly positive against the noise floor, against a permanent increase in API surface (new `Lexer.SetPosition` internal method) and a load-bearing invariant a future contributor could miss: primitive rules must call `SetPosition` on every failure path, while wrapper rules still use `BeginTransaction` / `Commit` / `Dispose`. Two parallel rollback patterns in the codebase, with the correctness burden on the implementer of each new rule to pick the right one.
+
+For essentially flat wall-clock and zero allocation change, the split pattern didn't carry its weight. The p600 backlog item was deleted along with the revert.
+
+### What future work should know
+
+The remaining hot-path cost isn't on the primitive-rule rollback surface — it's on the wrapper rules (And, Or, BetweenInclusive with AtLeast≥1) that actually use rollback, and on the allocations they produce. See p700 (per-iteration wrapper-allocation work) and p800 (compiled state-machine emitter for stable grammars) for the higher-ceiling levers.
+
+Don't re-attempt lazy transactions on primitives unless it's part of a compile-time specialization that also eliminates the Rule-to-Rule dispatch itself. Shaving the Transaction struct alone doesn't move the needle on the grammars we care about.
+
+One thing worth reusing if this ever gets revisited: the `AtLeast == 0` elision in `BetweenInclusiveRule` is the cleanest of the three tiers — no new API surface, no two-pattern problem, just dead-code removal. If a future attempt can measure a real win from that alone (it didn't stand out in isolation here because Chord doesn't hit it often on the hot path), it might ship standalone.
