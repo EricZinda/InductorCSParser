@@ -93,19 +93,33 @@ public readonly struct RuneSet : IEquatable<RuneSet>
     public static bool operator ==(RuneSet a, RuneSet b) => a.Equals(b);
     public static bool operator !=(RuneSet a, RuneSet b) => !a.Equals(b);
 
+    // Maximum number of ranges ToString renders before truncating.
+    // Large RuneSets (Unicode-category-wide classes like Letters) can
+    // hold hundreds of ranges, which would produce an unreadable trace
+    // line. Capping at 8 keeps trace output legible while preserving
+    // the useful information for small, hand-built classes. The
+    // truncated tail shows "+N more" so a reader can tell output was
+    // dropped.
+    private const int MaxRenderedRanges = 8;
+
     // Human-readable rendering of the range list, for trace output and
     // debugger display. Produces "[a-z,A-Z,0-9]" style output with
     // single-codepoint ranges collapsed to one char and long ranges
     // rendered as low-high. Printable ASCII code points render as the
-    // literal character, everything else renders as U+XXXX. Keeps trace
-    // lines legible without dragging in the entire Unicode database.
+    // literal character, everything else renders as U+XXXX. Classes
+    // with more than MaxRenderedRanges ranges are truncated with a
+    // "+N more" tail. Keeps trace lines legible without dragging in
+    // the entire Unicode database.
     public override string ToString()
     {
         var ranges = _ranges;
         if (ranges == null || ranges.Length == 0) return "[]";
         var sb = new StringBuilder();
         sb.Append('[');
-        for (int index = 0; index < ranges.Length; index++)
+        int rendered = ranges.Length <= MaxRenderedRanges
+            ? ranges.Length
+            : MaxRenderedRanges;
+        for (int index = 0; index < rendered; index++)
         {
             if (index > 0) sb.Append(',');
             var interval = ranges[index];
@@ -115,6 +129,12 @@ public readonly struct RuneSet : IEquatable<RuneSet>
                 sb.Append('-');
                 sb.Append(RenderCodepoint(interval.High));
             }
+        }
+        if (ranges.Length > MaxRenderedRanges)
+        {
+            sb.Append(",...+");
+            sb.Append(ranges.Length - MaxRenderedRanges);
+            sb.Append(" more");
         }
         sb.Append(']');
         return sb.ToString();

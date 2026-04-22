@@ -605,6 +605,35 @@ public class RuneSetTests
         Assert.That(RuneSet.Range(0, 0x1F).ToString(), Is.EqualTo("[U+0000-U+001F]"));
     }
 
+    [Test]
+    public void ToString_renders_up_to_eight_ranges_in_full()
+    {
+        // Eight non-adjacent single-rune ranges. All show, no tail.
+        var set = RuneSet.Runes("acegikmo");
+        Assert.That(set.ToString(), Is.EqualTo("[a,c,e,g,i,k,m,o]"));
+    }
+
+    [Test]
+    public void ToString_truncates_beyond_eight_ranges()
+    {
+        // Nine non-adjacent single-rune ranges. First eight show, a
+        // "+1 more" tail says the rest got dropped. Large classes like
+        // RuneSet.Letters would produce hundreds of ranges without
+        // this cap and make trace lines unreadable.
+        var set = RuneSet.Runes("acegikmoq");
+        Assert.That(set.ToString(), Is.EqualTo("[a,c,e,g,i,k,m,o,...+1 more]"));
+    }
+
+    [Test]
+    public void ToString_truncates_with_correct_count_for_large_class()
+    {
+        // Ten non-adjacent single-rune ranges. First eight show, "+2
+        // more" reports the remainder. Confirms the tail count tracks
+        // actual overflow rather than a fixed placeholder.
+        var set = RuneSet.Runes("acegikmoqs");
+        Assert.That(set.ToString(), Is.EqualTo("[a,c,e,g,i,k,m,o,...+2 more]"));
+    }
+
     // Union corners ----------------------------------------------------------
 
     [Test]

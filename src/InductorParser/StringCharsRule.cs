@@ -196,10 +196,14 @@ internal sealed class StringCharsRule : Rule
         string input = lexer.Input;
         int inputLen = input.Length;
 
-        while (true)
+        // Scan forward one rune at a time. The loop has three ways out:
+        // end-of-input (the while condition), a stopper match, or a
+        // malformed UTF-16 surrogate that can't form a rune. Each
+        // iteration consumes one rune as body, one escape sequence,
+        // or bails to one of those exits.
+        while (lexer.Position < inputLen)
         {
             int pos = lexer.Position;
-            if (pos >= inputLen) break;
 
             // Peek the next rune without advancing the lexer so the
             // fast stopper-check path can decide whether to consume.
@@ -321,10 +325,12 @@ internal sealed class StringCharsRule : Rule
         // set (the stop check fires first in the scan loop, so a stopper
         // rune is never consumed). That's ~_stopperSet for the RuneSet
         // stopper path. A Rule-based stopper can't be rendered as a rune
-        // set, so we stay at Universe there. Escape-start runes (if a
-        // grammar has them) are typically outside the stopper set, which
-        // means ~_stopperSet already covers them. We don't need a separate
-        // union.
+        // set, so we stay at Universe there. Escape-start runes, if a
+        // grammar has them, are always outside the stopper set: the
+        // scan loop checks the stopper before the escape, so an
+        // escape-start that was also a stopper would be unreachable
+        // dead code. That means ~_stopperSet already covers the
+        // escape path. No separate union needed.
         RuneSet firstConsumed = _stopperRule == null
             ? ~_stopperSet
             : RuneSet.Universe;

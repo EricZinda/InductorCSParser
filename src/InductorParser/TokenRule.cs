@@ -6,9 +6,10 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
-// Matches one grapheme by exact content. The expected grapheme is pinned
-// to a string at construction time and compared against the lexer's
-// output at match time.
+// Match input whose content is exactly one specified grapheme. How
+// many tokens the match reads depends on the configured lexer, see
+// below. The expected grapheme is stored as a string at construction
+// and compared against the lexer's output at match time.
 //
 // Under GraphemeLexer, a grapheme (even a multi-rune one like 👨‍👩‍👧‍👦)
 // arrives as a single token whose Chars span is the whole grapheme. The
