@@ -5,16 +5,18 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
-// BetweenInclusive(inner, atLeast, atMost) is the 
+// BetweenInclusive(atLeast, atMost, inner) is the
 // composite every other count rule reduces to. It greedily matches
 // `inner` between `atLeast` and `atMost` times (both inclusive), fails
 // if it can't reach `atLeast`, and stops once it reaches `atMost`.
 //
-// The four named factories are thin wrappers:
-//   OneOrMore(inner)      == BetweenInclusive(inner, 1, int.MaxValue)
-//   ZeroOrMore(inner)     == BetweenInclusive(inner, 0, int.MaxValue)
-//   Optional(inner)       == BetweenInclusive(inner, 0, 1)
-//   NOrMore(inner, n)     == BetweenInclusive(inner, n, int.MaxValue)
+// The named factories are thin wrappers:
+//   OneOrMore(inner)      == BetweenInclusive(1, int.MaxValue, inner)
+//   ZeroOrMore(inner)     == BetweenInclusive(0, int.MaxValue, inner)
+//   Optional(inner)       == BetweenInclusive(0, 1, inner)
+//   AtLeast(n, inner)     == BetweenInclusive(n, int.MaxValue, inner)
+//   AtMost(n, inner)      == BetweenInclusive(0, n, inner)
+//   Exactly(n, inner)     == BetweenInclusive(n, n, inner)
 internal sealed class BetweenInclusiveRule : Rule
 {
     internal int AtLeast { get; }

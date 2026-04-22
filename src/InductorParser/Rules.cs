@@ -439,13 +439,13 @@ public static class Rules
     /// </summary>
     /// <remarks>
     /// <see cref="OneOrMore"/>, <see cref="ZeroOrMore"/>,
-    /// <see cref="Optional"/>, <see cref="NOrMore"/>, and
-    /// <see cref="Exactly"/> are special cases of this composite.
-    /// Argument validation lives on
+    /// <see cref="Optional"/>, <see cref="AtLeast"/>,
+    /// <see cref="AtMost"/>, and <see cref="Exactly"/> are special
+    /// cases of this composite. Argument validation lives on
     /// <see cref="BetweenInclusiveRule"/>'s constructor so every
     /// construction path goes through it.
     /// </remarks>
-    public static Rule BetweenInclusive(Rule inner, int atLeast, int atMost) =>
+    public static Rule BetweenInclusive(int atLeast, int atMost, Rule inner) =>
         new BetweenInclusiveRule(inner, atLeast, atMost);
 
     /// <summary>
@@ -455,7 +455,7 @@ public static class Rules
     /// </summary>
     /// <remarks>
     /// Fails if the first attempt fails. Equivalent to
-    /// <c>BetweenInclusive(inner, 1, int.MaxValue)</c>.
+    /// <c>BetweenInclusive(1, int.MaxValue, inner)</c>.
     /// </remarks>
     public static Rule OneOrMore(Rule inner) =>
         new BetweenInclusiveRule(inner, 1, int.MaxValue, "OneOrMore");
@@ -467,7 +467,7 @@ public static class Rules
     /// </summary>
     /// <remarks>
     /// A zero-match run is legal. Equivalent to
-    /// <c>BetweenInclusive(inner, 0, int.MaxValue)</c>.
+    /// <c>BetweenInclusive(0, int.MaxValue, inner)</c>.
     /// </remarks>
     public static Rule ZeroOrMore(Rule inner) =>
         new BetweenInclusiveRule(inner, 0, int.MaxValue, "ZeroOrMore");
@@ -478,7 +478,7 @@ public static class Rules
     /// <see cref="FlattenType.Flatten"/>.
     /// </summary>
     /// <remarks>
-    /// Equivalent to <c>BetweenInclusive(inner, 0, 1)</c>.
+    /// Equivalent to <c>BetweenInclusive(0, 1, inner)</c>.
     /// </remarks>
     public static Rule Optional(Rule inner) =>
         new BetweenInclusiveRule(inner, 0, 1, "Optional");
@@ -491,16 +491,32 @@ public static class Rules
     /// </summary>
     /// <remarks>
     /// Equivalent to
-    /// <c>BetweenInclusive(inner, atLeast, int.MaxValue)</c>. The
-    /// shortcut exists so grammars that want "3+ of these" read
-    /// like <c>NOrMore(RuneIn("-*+"), 3)</c> instead of
-    /// <c>BetweenInclusive(..., 3, int.MaxValue)</c>, matching how
+    /// <c>BetweenInclusive(atLeast, int.MaxValue, inner)</c>. The
+    /// shortcut exists so grammars that want "3 or more of these"
+    /// read like <c>AtLeast(3, RuneIn("-*+"))</c> instead of
+    /// <c>BetweenInclusive(3, int.MaxValue, ...)</c>, matching how
     /// <see cref="OneOrMore"/> and <see cref="ZeroOrMore"/> replace
     /// the 0/1 cases. The trace name carries the lower bound so
     /// traces stay self-describing.
     /// </remarks>
-    public static Rule NOrMore(Rule inner, int atLeast) =>
-        new BetweenInclusiveRule(inner, atLeast, int.MaxValue, $"NOrMore[{atLeast}]");
+    public static Rule AtLeast(int atLeast, Rule inner) =>
+        new BetweenInclusiveRule(inner, atLeast, int.MaxValue, $"AtLeast[{atLeast}]");
+
+    /// <summary>
+    /// Match <paramref name="inner"/> zero to
+    /// <paramref name="atMost"/> times, greedy. Always succeeds
+    /// (a zero-match run is legal). Default
+    /// <see cref="FlattenType"/>:
+    /// <see cref="FlattenType.Flatten"/>.
+    /// </summary>
+    /// <remarks>
+    /// Equivalent to <c>BetweenInclusive(0, atMost, inner)</c>.
+    /// The shortcut is for the "up to N of these" shape: zero,
+    /// one, or up to <paramref name="atMost"/> matches. The trace
+    /// name carries the upper bound so traces stay self-describing.
+    /// </remarks>
+    public static Rule AtMost(int atMost, Rule inner) =>
+        new BetweenInclusiveRule(inner, 0, atMost, $"AtMost[{atMost}]");
 
     /// <summary>
     /// Match <paramref name="inner"/> exactly
@@ -509,15 +525,15 @@ public static class Rules
     /// <see cref="FlattenType.Flatten"/>.
     /// </summary>
     /// <remarks>
-    /// Equivalent to <c>BetweenInclusive(inner, count, count)</c>.
+    /// Equivalent to <c>BetweenInclusive(count, count, inner)</c>.
     /// The shortcut is for the "N of these, no more, no less"
     /// shape: four hex runes in a \uXXXX escape, three digits in
     /// an area code, etc. Reads as
-    /// <c>Exactly(RuneIn(RuneSet.Ascii.HexDigits), 4)</c> instead
-    /// of <c>BetweenInclusive(..., 4, 4)</c>. The trace name
+    /// <c>Exactly(4, RuneIn(RuneSet.Ascii.HexDigits))</c> instead
+    /// of <c>BetweenInclusive(4, 4, ...)</c>. The trace name
     /// carries the count so traces stay self-describing.
     /// </remarks>
-    public static Rule Exactly(Rule inner, int count) =>
+    public static Rule Exactly(int count, Rule inner) =>
         new BetweenInclusiveRule(inner, count, count, $"Exactly[{count}]");
 
     /// <summary>

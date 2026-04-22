@@ -135,7 +135,7 @@ public static class StringLiteralGrammars
         var octalDigit = RuneIn(RuneSet.Range('0', '7'));
 
         // \NNN  one to three octal digits
-        var octalEscape = BetweenInclusive(octalDigit, 1, 3);
+        var octalEscape = BetweenInclusive(1, 3, octalDigit);
 
         // \xNN  exactly two hex digits
         var hexEscape = And(Token('x'), hexDigit, hexDigit);

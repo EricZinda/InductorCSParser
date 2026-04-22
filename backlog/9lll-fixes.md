@@ -1,8 +1,6 @@
 - Fixes
-NOrMore should be AtLeast()
-There should be an AtMost() which is 0 to N. Create it in Rules and add comprehensive tests for it
-AtLeast and other helpers in Rules that take numbers should *start* with the numbers so they are more readable	
-
+Don't use the term "pins", use "verifies"
+	
 Replace Preserve-typed (and the other options) with the actual types when you speak about them: FlattenType.Preserve.  Put this in the docs as the right way to alk about htem	
 
     public override string ToString()
@@ -38,6 +36,16 @@ This seems like it should stop at some piont so it isn't ridiculous
         return hash.ToHashCode();
     }
 Sghouldn't this cache?
+
+        while (true)
+        {
+In StringChars.  I don't like it...
 	
+ Escape-start runes (if a
+        // grammar has them) are typically outside the stopper set, which
+        // means ~_stopperSet already covers them. We don't need a separate
+        // union.
+typicly sounds scary!
+
 Are there properties, constructors members or methods that aren't used by aything?
 	

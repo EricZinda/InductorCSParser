@@ -17,7 +17,7 @@ namespace InductorParser.Tests;
 //   * AndExpression<Args<A, B, ...>>           -> And(A, B, ...)
 //   * OrExpression<Args<A, B, ...>>            -> Or(A, B, ...)
 //   * OneOrMore/ZeroOrMore/Optional            -> OneOrMore/ZeroOrMore/Optional
-//   * AtLeastAndAtMostExpression<X, N, M>      -> BetweenInclusive(X, N, M)
+//   * AtLeastAndAtMostExpression<X, N, M>      -> BetweenInclusive(N, M, X)
 //   * LiteralExpression<"str">                 -> Literal("str")
 //   * CharacterSymbol<"c">                     -> Token(c)
 //   * CharacterSetExceptSymbol<"chars">        -> RuneNotIn("chars")
@@ -166,8 +166,8 @@ public static class CssGrammar
     public static readonly Rule ValueColorHex = And(
         Token('#'),
         Or(
-            BetweenInclusive(RuneIn(HexDigitChars), 6, 6),
-            BetweenInclusive(RuneIn(HexDigitChars), 3, 3)
+            BetweenInclusive(6, 6, RuneIn(HexDigitChars)),
+            BetweenInclusive(3, 3, RuneIn(HexDigitChars))
         ),
         Peek(Not(RuneIn(HexDigitChars)))
     );

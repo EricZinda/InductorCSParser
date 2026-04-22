@@ -16,7 +16,7 @@ public class ExactlyRuleTests
     [Test]
     public void Exactly_matches_when_input_has_exactly_N()
     {
-        var rule = Exactly(Token('a'), 3);
+        var rule = Exactly(3, Token('a'));
         var result = rule.Parse("aaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -26,7 +26,7 @@ public class ExactlyRuleTests
     [Test]
     public void Exactly_fails_when_input_has_fewer_than_N()
     {
-        var rule = Exactly(Token('a'), 3);
+        var rule = Exactly(3, Token('a'));
         var result = rule.Parse("aa");
 
         Assert.That(result.Success, Is.False);
@@ -39,7 +39,7 @@ public class ExactlyRuleTests
         // Exactly commits after the Nth match even when more would match.
         // Here the And requires the follow-up Token('a') to pick up the
         // fourth 'a'. If Exactly greedily consumed it, the And would fail.
-        var rule = And(Exactly(Token('a'), 3), Token('a'));
+        var rule = And(Exactly(3, Token('a')), Token('a'));
         var result = rule.Parse("aaaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -52,7 +52,7 @@ public class ExactlyRuleTests
         // Top-level Parse requires consuming all input, so the trailing
         // 'a' past the exact count causes the parse to fail even though
         // the Exactly rule itself matched three times.
-        var rule = Exactly(Token('a'), 3);
+        var rule = Exactly(3, Token('a'));
         var result = rule.Parse("aaaa");
 
         Assert.That(result.Success, Is.False);
@@ -61,7 +61,7 @@ public class ExactlyRuleTests
     [Test]
     public void Exactly_zero_succeeds_with_no_matches()
     {
-        var rule = And(Exactly(Token('a'), 0), Token('b'));
+        var rule = And(Exactly(0, Token('a')), Token('b'));
         var result = rule.Parse("b", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -71,7 +71,7 @@ public class ExactlyRuleTests
     [Test]
     public void Exactly_zero_does_not_consume_matching_input()
     {
-        var rule = And(Exactly(Token('a'), 0), OneOrMore(Token('a')));
+        var rule = And(Exactly(0, Token('a')), OneOrMore(Token('a')));
         var result = rule.Parse("aaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -81,7 +81,7 @@ public class ExactlyRuleTests
     [Test]
     public void Exactly_WithError_message_surfaces_on_failure()
     {
-        var rule = Exactly(Token('a'), 3)
+        var rule = Exactly(3, Token('a'))
             .WithError("need exactly 3 a's");
         var result = rule.Parse("ab");
 
@@ -94,14 +94,14 @@ public class ExactlyRuleTests
     public void Exactly_factory_rejects_negative_count()
     {
         Assert.Throws<System.ArgumentOutOfRangeException>(
-            () => Exactly(Token('a'), -1));
+            () => Exactly(-1, Token('a')));
     }
 
     [Test]
     public void Exactly_factory_rejects_null_inner()
     {
         Assert.Throws<System.ArgumentNullException>(
-            () => Exactly(null!, 3));
+            () => Exactly(3, null!));
     }
 
     [Test]
@@ -112,7 +112,7 @@ public class ExactlyRuleTests
         // trace appears, unlike OneOrMore/BetweenInclusive which probe
         // past their successful count.
         var sink = NewSink();
-        Exactly(RuneIn(RuneSet.Ascii.Letters), 3).Parse("abc",
+        Exactly(3, RuneIn(RuneSet.Ascii.Letters)).Parse("abc",
             new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
@@ -133,7 +133,7 @@ public class ExactlyRuleTests
         // Lookahead skip proves Token('a') can't match on 'z', so Exactly
         // emits its FAIL line with count= 0 and no inner Read/FAIL appears.
         var sink = NewSink();
-        Exactly(Token('a'), 3).Parse("z", new ParseOptions { TraceSink = sink });
+        Exactly(3, Token('a')).Parse("z", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "   FAIL | Exactly[3]: count= 0"

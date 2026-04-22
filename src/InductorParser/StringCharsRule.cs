@@ -47,10 +47,10 @@ namespace InductorParser;
 //
 // Worked examples: see
 // src/InductorParser.Tests/E2EExamples/StringLiteralGrammars.cs for
-// spec-accurate, runnable grammars that wire this leaf up to
+// runnable grammars that wire this leaf up to
 // real string syntaxes (JSON RFC 8259, Python single-line, Python
 // triple-quote, Python raw). The companion
-// StringLiteralGrammarsTests.cs pins their positive and negative
+// StringLiteralGrammarsTests.cs verifies their positive and negative
 // behavior, including the language-specific corner cases (JSON's
 // U+0000..U+001F control-char rejection, Python's "no raw newline
 // in single-line strings" rule, triple-quote's multi-rune boundary,

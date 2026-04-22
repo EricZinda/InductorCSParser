@@ -88,7 +88,7 @@ public class NameOfTests
     [Test]
     public void BetweenInclusive_rule_returns_name_with_bounds()
     {
-        var rule = BetweenInclusive(RuneIn(RuneSet.Letters), 1, 3);
+        var rule = BetweenInclusive(1, 3, RuneIn(RuneSet.Letters));
         rule.Compile();
 
         Assert.That(rule.NameOf(rule.Id), Is.EqualTo("BetweenInclusive[1..3]"));

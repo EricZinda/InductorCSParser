@@ -69,14 +69,14 @@ public static class BacklogGrammar
 
     // ^[-*+]{3,}$
     public static readonly Rule HrRun = And(
-        NOrMore(RuneIn("-*+"), 3),
+        AtLeast(3, RuneIn("-*+")),
         Eof()
     );
 
     // ^[-*+]( [-*+]){2,}$
     public static readonly Rule HrSpaced = And(
         RuneIn("-*+"),
-        NOrMore(And(Token(' '), RuneIn("-*+")), 2),
+        AtLeast(2, And(Token(' '), RuneIn("-*+"))),
         Eof()
     );
 

@@ -20,7 +20,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_exact_count_matches_exactly_N()
     {
-        var rule = BetweenInclusive(Token('a'), 3, 3);
+        var rule = BetweenInclusive(3, 3, Token('a'));
         var result = rule.Parse("aaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -30,7 +30,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_exact_count_fails_when_too_few()
     {
-        var rule = BetweenInclusive(Token('a'), 3, 3);
+        var rule = BetweenInclusive(3, 3, Token('a'));
         var result = rule.Parse("aa");
 
         Assert.That(result.Success, Is.False);
@@ -40,7 +40,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_exact_count_fails_when_too_many()
     {
-        var rule = BetweenInclusive(Token('a'), 3, 3);
+        var rule = BetweenInclusive(3, 3, Token('a'));
         var result = rule.Parse("aaaa");
 
         Assert.That(result.Success, Is.False);
@@ -49,7 +49,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_at_lower_bound_succeeds()
     {
-        var rule = BetweenInclusive(Token('a'), 2, 5);
+        var rule = BetweenInclusive(2, 5, Token('a'));
         var result = And(rule, OneOrMore(Token('b'))).Parse("aabbb", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -59,7 +59,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_at_upper_bound_succeeds()
     {
-        var rule = BetweenInclusive(Token('a'), 2, 5);
+        var rule = BetweenInclusive(2, 5, Token('a'));
         var result = And(rule, Token('b')).Parse("aaaaab", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -69,7 +69,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_stops_at_upper_bound_even_with_more_input()
     {
-        var rule = And(BetweenInclusive(Token('a'), 1, 3), OneOrMore(Token('a')));
+        var rule = And(BetweenInclusive(1, 3, Token('a')), OneOrMore(Token('a')));
         var result = rule.Parse("aaaaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -79,7 +79,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_one_below_lower_bound_fails()
     {
-        var rule = BetweenInclusive(Token('a'), 3, 5);
+        var rule = BetweenInclusive(3, 5, Token('a'));
         var result = rule.Parse("aa");
 
         Assert.That(result.Success, Is.False);
@@ -89,7 +89,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_zero_zero_succeeds_with_no_matches()
     {
-        var rule = And(BetweenInclusive(Token('a'), 0, 0), Token('b'));
+        var rule = And(BetweenInclusive(0, 0, Token('a')), Token('b'));
         var result = rule.Parse("b", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -99,7 +99,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_zero_zero_does_not_consume_matching_input()
     {
-        var rule = And(BetweenInclusive(Token('a'), 0, 0), OneOrMore(Token('a')));
+        var rule = And(BetweenInclusive(0, 0, Token('a')), OneOrMore(Token('a')));
         var result = rule.Parse("aaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -109,7 +109,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_failure_without_WithError_falls_back_to_positional_message()
     {
-        var rule = BetweenInclusive(Token('a'), 2, 4);
+        var rule = BetweenInclusive(2, 4, Token('a'));
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.False);
@@ -120,7 +120,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_WithError_message_surfaces_on_failure()
     {
-        var rule = BetweenInclusive(Token('a'), 2, 4)
+        var rule = BetweenInclusive(2, 4, Token('a'))
             .WithError("need 2 to 4 a's");
         var result = rule.Parse("ab");
 
@@ -133,28 +133,28 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_factory_rejects_negative_atLeast()
     {
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => BetweenInclusive(Token('a'), -1, 5));
+            () => BetweenInclusive(-1, 5, Token('a')));
     }
 
     [Test]
     public void BetweenInclusive_factory_rejects_atMost_less_than_atLeast()
     {
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => BetweenInclusive(Token('a'), 3, 2));
+            () => BetweenInclusive(3, 2, Token('a')));
     }
 
     [Test]
     public void BetweenInclusive_factory_rejects_null_inner()
     {
         Assert.Throws<ArgumentNullException>(
-            () => BetweenInclusive(null!, 0, 1));
+            () => BetweenInclusive(0, 1, null!));
     }
 
     [Test]
     public void BetweenInclusive_trace_success_produces_expected_output()
     {
         var sink = NewSink();
-        BetweenInclusive(RuneIn(RuneSet.Ascii.Letters), 2, 4)
+        BetweenInclusive(2, 4, RuneIn(RuneSet.Ascii.Letters))
             .Parse("abc", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
@@ -176,7 +176,7 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_trace_failure_produces_expected_output()
     {
         var sink = NewSink();
-        BetweenInclusive(Token('a'), 2, 4)
+        BetweenInclusive(2, 4, Token('a'))
             .Parse("a", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(

@@ -17,7 +17,7 @@ A few terms used throughout these docs mean specific things in this library:
 
 **Leaf rule.** A rule with no child rules. The matching logic consumes input directly (or doesn't consume at all, for zero-width predicates) rather than delegating to other rules. Token, Literal, LiteralIgnoreAsciiCase, RuneIn, RuneNotIn, AnyToken, StringChars, Eof, Not, Peek are all leaves. Use "leaf" rather than "primitive" or "terminal" when talking about this category.
 
-**Composite rule.** A rule built out of other rules. And, Or, BetweenInclusive (plus its wrappers OneOrMore, ZeroOrMore, Optional, NOrMore), and LateBoundRule are the composites. Use "composite" rather than "combinator."
+**Composite rule.** A rule built out of other rules. And, Or, BetweenInclusive (plus its wrappers OneOrMore, ZeroOrMore, Optional, AtLeast, AtMost, Exactly), and LateBoundRule are the composites. Use "composite" rather than "combinator."
 
 **Syntax tree.** The default output of `rule.Parse(input)`. Each rule's `FlattenType` has already been applied: `Delete` nodes are gone, `Flatten` wrappers have had their children lifted into the parent, and `None` wrappers stay with their own `Id`. `Tree.Find(rule)` works for `FlattenType.None` rules. `Flatten` or `Delete` rules intentionally do not appear, so Find returns null for them. Set `FlattenType.None` on a rule if you need its wrapper to appear in the tree. `Symbol.FlattenInto(...)` (or the no-arg `Flatten()` overload) still exists for trees built by hand outside the parse path, and is idempotent on a tree Parse already returned.
 
@@ -42,7 +42,7 @@ Every concept from the original `GettingStarted.md` has a direct C# counterpart:
 | `OneOrMoreExpression<T>`           | `OneOrMore(rule)`                               |
 | `ZeroOrMoreExpression<T>`          | `ZeroOrMore(rule)`                              |
 | `OptionalExpression<T>`            | `Optional(rule)`                                |
-| `AtLeastAndAtMostExpression<T,N,M>`| `BetweenInclusive(rule, n, m)`                  |
+| `AtLeastAndAtMostExpression<T,N,M>`| `BetweenInclusive(n, m, rule)`                  |
 | `CharacterSymbol<EqualString>`     | `Token('=')`                                     |
 | `CharacterSetSymbol<Chars>`        | `RuneIn(RuneSet.Letters)`                     |
 | `CharacterSetExceptSymbol<...>`    | `RuneNotIn(charClass)`                          |
