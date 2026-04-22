@@ -7,8 +7,9 @@ namespace InductorParser;
 // Matches one token if it's a single rune that belongs to the given
 // RuneSet. Under GraphemeLexer a multi-rune grapheme (skin-toned
 // emoji, ZWJ sequences, CJK + combining mark) fails because it isn't
-// a single code point. EOF also fails. Pairs with RuneNotInRule for
-// character-class matching.
+// a single code point. EOF also fails. RuneNotInRule is the mirror:
+// same rule, opposite membership test (one rune whose value is NOT
+// in the set).
 internal sealed class RuneInRule : Rule
 {
     private readonly RuneSet _set;

@@ -6,7 +6,7 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
-// This is the leaf a JSON / C++ / Python string body wants.
+// This is the leaf for a JSON / C++ / Python string body.
 // It is a specialized scanner for the "string body" grammar shape: scan runes
 // forward until a stopper character or characters is seen, handling escape sequences inline.
 // Collapses ZeroOrMore(Or(bodyRune, And(escapeStart, escapeEnd))) into one rule that
