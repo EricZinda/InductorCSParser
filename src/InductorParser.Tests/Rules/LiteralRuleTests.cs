@@ -204,7 +204,7 @@ public class LiteralRuleTests
     {
         // German sharp s does NOT match SS under this primitive (that
         // would require full Unicode case-insensitive matching, which
-        // we deliberately don't do). Document the behavior by pinning it.
+        // we deliberately don't do). Document the behavior by verifying it.
         var rule = LiteralIgnoreAsciiCase("straße");
         Assert.That(rule.Parse("STRASSE").Success, Is.False);
     }

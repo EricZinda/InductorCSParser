@@ -62,7 +62,7 @@ public class RuneSetTests
         // the char has already been replaced with the Unicode replacement
         // character and the test never exercises the surrogate path.
         // Runtime-constructed strings preserve the char value the caller
-        // passed, which is what we want to pin here.
+        // passed, which is what we want to verify here.
         var loneSurrogate = new string((char)0xD800, 1);
         Assert.Throws<ArgumentException>(() => RuneSet.Runes(loneSurrogate));
     }
@@ -423,8 +423,8 @@ public class RuneSetTests
     [Test]
     public void Contains_hits_exact_low_and_high_endpoints()
     {
-        // Endpoints are inclusive on both sides. Pin it so a future off-by-one
-        // in the < vs <= choice in Contains breaks loudly.
+        // Endpoints are inclusive on both sides. Lock it in so a future
+        // off-by-one in the < vs <= choice in Contains breaks loudly.
         var set = RuneSet.Range(10, 20);
 
         Assert.That(set.Contains(9), Is.False);
@@ -810,7 +810,7 @@ public class RuneSetTests
     {
         // The build loop explicitly skips 0xD800..0xDFFF (they aren't valid
         // scalar values), so asking for UnicodeCategory.Surrogate yields an
-        // empty set. Non-obvious and worth pinning.
+        // empty set. Non-obvious and worth verifying.
         var surrogates = RuneSet.Category(UnicodeCategory.Surrogate);
 
         Assert.That(surrogates.IsEmpty, Is.True);

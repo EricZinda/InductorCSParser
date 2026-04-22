@@ -19,13 +19,23 @@ A few terms used throughout these docs mean specific things in this library:
 
 **Composite rule.** A rule built out of other rules. And, Or, BetweenInclusive (plus its wrappers OneOrMore, ZeroOrMore, Optional, AtLeast, AtMost, Exactly), and LateBoundRule are the composites. Use "composite" rather than "combinator."
 
-**Syntax tree.** The default output of `rule.Parse(input)`. Each rule's `FlattenType` has already been applied: `Delete` nodes are gone, `Flatten` wrappers have had their children lifted into the parent, and `None` wrappers stay with their own `Id`. `Tree.Find(rule)` works for `FlattenType.None` rules. `Flatten` or `Delete` rules intentionally do not appear, so Find returns null for them. Set `FlattenType.None` on a rule if you need its wrapper to appear in the tree. `Symbol.FlattenInto(...)` (or the no-arg `Flatten()` overload) still exists for trees built by hand outside the parse path, and is idempotent on a tree Parse already returned.
+**Syntax tree.** The default output of `rule.Parse(input)`. Each rule's `FlattenType` has already been applied: `FlattenType.Delete` nodes are gone, `FlattenType.Flatten` wrappers have had their children lifted into the parent, and `FlattenType.Preserve` wrappers stay with their own `Id`. `Tree.Find(rule)` works for `FlattenType.Preserve` rules. `FlattenType.Flatten` or `FlattenType.Delete` rules intentionally do not appear, so Find returns null for them. Set `FlattenType.Preserve` on a rule if you need its wrapper to appear in the tree. `Symbol.FlattenInto(...)` (or the no-arg `Flatten()` overload) still exists for trees built by hand outside the parse path, and is idempotent on a tree Parse already returned.
 
-**Debug tree.** What you get back when `ParseOptions.PreserveFlattenWrappers` is on. Contains every matched token: delimiters, whitespace, individual character leaves, and every `Flatten` / `Delete` wrapper the grammar declares. Mirrors the grammar one-to-one. Useful for `PrintTree` output and for `Find`-queries against wrappers that would otherwise be removed. Not the default because most callers want the syntax tree.
+**Debug tree.** What you get back when `ParseOptions.PreserveFlattenWrappers` is on. Contains every matched token: delimiters, whitespace, individual leaf symbols, and every `FlattenType.Flatten` / `FlattenType.Delete` wrapper the grammar declares. Mirrors the grammar one-to-one. Useful for `PrintTree` output and for `Find`-queries against wrappers that would otherwise be removed. Not the default because most callers want the syntax tree.
 
 **AST.** Not used in this library's vocabulary. The C++ original has `Compiler<T>::ProcessAst` and calls the post-flatten artifact an AST, but the C# port deliberately avoids the term. A true AST in compiler tradition is the user's domain types (something like `Setting(name, value)`) produced by a hand-written compile pass over the syntax tree, not anything the library itself produces. Keeping "syntax tree" as the library's own term means a reader can later talk about "the AST" without overloading the word.
 
 The namespace `InductorParser.SyntaxTree` contains the primitives (`Symbol`, `SymbolId`, `FlattenType`, `SymbolRanges`) that participate in both trees. The namespace name points at the default output shape.
+
+### Writing About FlattenType
+
+When prose refers to a rule's `FlattenType`, use the full enum value ("`FlattenType.Preserve`", "`FlattenType.Flatten`", "`FlattenType.Delete`") rather than the shorthand "Preserve-typed" / "Flatten-typed" / "Delete-typed". The hyphenated form reads as writer jargon and leaves the reader guessing which type is meant. The full name is unambiguous, grep-able, and navigable in an IDE. Examples:
+
+- "a rule with `FlattenType.Preserve`" (not "a Preserve-typed rule")
+- "`FlattenType.Delete` children" (not "Delete-typed children")
+- "the parent is `FlattenType.Flatten`, so its children bubble up" (not "the parent is Flatten-typed, so ...")
+
+Bare `Preserve`, `Flatten`, `Delete` unqualified are fine only when the surrounding context has already said "FlattenType" in the same sentence or paragraph (e.g., "Its `FlattenType` defaults to `Delete`.").
 
 ## What We Are Keeping From C++
 
@@ -115,12 +125,12 @@ Notice what the struct does *not* carry: a human name. Names live on the grammar
 The id namespace is split into three non-overlapping ranges so different kinds of id never collide:
 
 ```
-0x000000..0x10FFFF   Character symbols (id equals the Unicode code point)
+0x000000..0x10FFFF   Rune symbols (id equals the Unicode code point)
 0x110000..0x1FFFFF   Built-in expression symbols
 0x200000..           Custom symbols from user-named rules
 ```
 
-Character symbols live at the bottom because `LexerSymbol` uses the code point as its id, and a rune can be anywhere from 0 to 0x10FFFF. Built-in expression ids live just above the Unicode range so they cannot collide with a character. Custom ids live above both. This is a deviation from the C++ numbering (which starts built-ins at 256 and customs at 16000), chosen because both of those ranges fall inside Unicode and would collide with character ids once the parser started seeing non-ASCII code points. Trace output prints the symbol name rather than the number, so the C++ reference traces still match textually.
+Rune symbols live at the bottom because `LexerSymbol` uses the code point as its id, and a rune can be anywhere from 0 to 0x10FFFF. Built-in expression ids live just above the Unicode range so they cannot collide with a rune. Custom ids live above both. This is a deviation from the C++ numbering (which starts built-ins at 256 and customs at 16000), chosen because both of those ranges fall inside Unicode and would collide with rune ids once the parser started seeing non-ASCII code points. Trace output prints the symbol name rather than the number, so the C++ reference traces still match textually.
 
 ## Why Symbol Is a Class, Not a Struct
 
@@ -214,7 +224,7 @@ The two semantics in prose:
 
 Because `Literal` tokenizes the same way the lexer does, a literal like `Literal("👨‍👩‍👧‍👦")` becomes one expected token under `GraphemeLexer` (the whole family-emoji grapheme) and seven expected tokens under `RuneLexer` (four people emoji plus three ZWJs). Either way, the literal matches input that contains the same sequence of characters.
 
-**`AnyToken()`.** Matches any single token regardless of content, as long as the lexer is not at EOF. Under `RuneLexer` it matches any rune. Under `GraphemeLexer` it matches any grapheme, including multi-rune ones. This is the "match one character, whatever it is" leaf.
+**`AnyToken()`.** Matches any single token regardless of content, as long as the lexer is not at EOF. Under `RuneLexer` it matches any rune. Under `GraphemeLexer` it matches any grapheme, including multi-rune ones. This is the "match one token, whatever it is" leaf.
 
 ### RuneSet: The Set Primitive
 

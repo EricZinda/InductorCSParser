@@ -32,9 +32,9 @@ public static class CssGrammar
 {
     // C++ WhitespaceChars = "\r\n\t ". The library's Whitespace() factory
     // uses the full Unicode whitespace class, which is stricter than
-    // what the C++ parser actually accepts. Pin to the ASCII-only set
-    // so the grammar decides the same way on inputs that contain NBSP
-    // or other Unicode whitespace.
+    // what the C++ parser actually accepts. Use the ASCII-only set so
+    // the grammar decides the same way on inputs that contain NBSP or
+    // other Unicode whitespace.
     private static readonly RuneSet WhitespaceChars = RuneSet.Ascii.Whitespace;
 
     // C++ Chars = ASCII letters only.

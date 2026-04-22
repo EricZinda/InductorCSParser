@@ -336,8 +336,8 @@ public abstract class Rule
     // Return the human-readable name for a SymbolId in this grammar, or
     // null if the id isn't known. Two sources, tried in order:
     //
-    //   1. Character range (0..0x10FFFF): render the code point as a
-    //      single-char string. A tree leaf with id 0x41 comes back as "A",
+    //   1. Rune range (0..0x10FFFF): render the code point as a
+    //      single-rune string. A tree leaf with id 0x41 comes back as "A",
     //      0x1F3B8 comes back as "🎸". Surrogate halves (0xD800..0xDFFF)
     //      aren't valid scalar values and return null. No lexer produces
     //      them as ids, so this only matters if a caller hand-built a bad
@@ -419,10 +419,11 @@ public abstract class Rule
             : (Lexer)new GraphemeLexer(parseInput, options.TraceSink, options.TraceLevel);
         lexer.ConfigureBudgets(options);
         Symbol? result;
-        // Pre-allocate a root list so a Flatten-typed root has somewhere
-        // to merge into. If root is Preserve-typed, TryParse nulls this
-        // out and rootList stays empty. If root is Delete, same. Only a
-        // Flatten root populates it.
+        // Pre-allocate a root list so a root with FlattenType.Flatten
+        // has somewhere to merge into. If root is FlattenType.Preserve,
+        // TryParse nulls this out and rootList stays empty. If root is
+        // FlattenType.Delete, same. Only a FlattenType.Flatten root
+        // populates it.
         var rootList = new List<Symbol>();
         try
         {
@@ -539,7 +540,7 @@ public abstract class Rule
             }
             else if (outputSymbols == null)
             {
-                // A Flatten-typed rule expects its caller to pass a list
+                // A rule with FlattenType.Flatten expects its caller to pass a list
                 // for it to write children into. When the caller passed
                 // null (Not/Peek throwing away inner's output, a Flatten
                 // root that didn't get a rootList, etc.), we allocate a
@@ -564,7 +565,7 @@ public abstract class Rule
             // Safety net: subclasses that ignored effectiveFlattenType
             // and handed back a real Symbol in Delete / Flatten mode
             // get normalized to Discarded so callers can rely on the
-            // contract (only Preserve-typed returns a wrapper Symbol).
+            // contract (only FlattenType.Preserve returns a wrapper Symbol).
             if (effectiveFlattenType != FlattenType.Preserve)
                 return Symbol.Discarded;
             return result;
@@ -618,9 +619,9 @@ public abstract class Rule
     // own wrap-mode list, or null when the caller has no list yet.
     //
     // ParseChild forwards that list only when the child would actually
-    // write into it (Flatten-typed, normal mode). Otherwise it passes
-    // null so a Preserve-typed or Delete-typed child wraps or discards
-    // normally. Rule.TryParse performs the same check as a safety net,
+    // write into it (FlattenType.Flatten, normal mode). Otherwise it
+    // passes null so a FlattenType.Preserve or FlattenType.Delete
+    // child wraps or discards normally. Rule.TryParse performs the same check as a safety net,
     // so a custom composite that forgets this helper still gets correct
     // behavior. This just makes the intent visible at the caller.
     protected Symbol? ParseChild(Rule child, Lexer lexer, List<Symbol>? outputSymbols)

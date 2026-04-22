@@ -3,8 +3,8 @@ using System.Text;
 
 namespace InductorParser.Tests;
 
-// Shared helpers for trace-format tests. Every rule's test file pins its
-// trace output verbatim via Assert.That(sink.ToString(), Is.EqualTo(...)),
+// Shared helpers for trace-format tests. Every rule's test file locks
+// in its trace output verbatim via Assert.That(sink.ToString(), Is.EqualTo(...)),
 // and the comparison only works if (a) the sink uses a platform-neutral
 // newline and (b) the expected-string builder matches that newline. These
 // two helpers are the convention.

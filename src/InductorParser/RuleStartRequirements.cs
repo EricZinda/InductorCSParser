@@ -16,11 +16,10 @@ namespace InductorParser;
 //
 //       For a rule that *always* consumes something on success
 //       (Advance.Always), lookahead being in FirstConsumedRunes is
-//       is necessary but not sufficient for success. Necessary because
-//       it must consume
-//       at least one character (lookahead, since it is first).
-//       Sufficient since it may consume more and fail: Literal "hello" has 'h' in its
-//       set but still fails on "hxxx".
+//       necessary but not sufficient for success. Necessary because
+//       it must consume at least one rune (the lookahead, since it
+//       is first). Sufficient since it may consume more and fail:
+//       Literal "hello" has 'h' in its set but still fails on "hxxx".
 //
 //       For Sometimes/Never rules it's only compositional info since it can't be
 //       used for the shortcut (see below).

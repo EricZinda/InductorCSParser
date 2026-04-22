@@ -109,7 +109,7 @@ public sealed class LateBoundRule : Rule
     // Return the set of runes this rule might consume first (can be a superset)
     // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
-    // that first character on success.
+    // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
     {
         // LateBoundRule is transparent at parse time, so its RuleStartRequirements is

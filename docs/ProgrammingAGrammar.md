@@ -138,12 +138,12 @@ public abstract class Rule
 }
 ```
 
-`rule.NameOf(someId)` consults two sources in order and returns the first match. For character-range ids (0..0x10FFFF) it renders the code point directly as a single-char string (`"A"` or `"漢"`). Otherwise it looks the id up in a per-grammar index built at compile time, which maps every reachable rule's id to the user's `.As(...)` name (if set) or the rule's class-derived name like `"And"`, `"OneOrMore"`, or `"BetweenInclusive[1..3]"`. Returns null if the id isn't in the grammar.
+`rule.NameOf(someId)` consults two sources in order and returns the first match. For rune-range ids (0..0x10FFFF) it renders the code point directly as a single-rune string (`"A"` or `"漢"`). Otherwise it looks the id up in a per-grammar index built at compile time, which maps every reachable rule's id to the user's `.As(...)` name (if set) or the rule's class-derived name like `"And"`, `"OneOrMore"`, or `"BetweenInclusive[1..3]"`. Returns null if the id isn't in the grammar.
 
 Built-in symbol ids live in a static class and use a numbering space chosen so the three kinds of symbol id never collide:
 
 ```
-0x000000..0x10FFFF   Character symbols (id equals the rune)
+0x000000..0x10FFFF   Rune symbols (id equals the rune)
 0x110000..0x1FFFFF   Built-in expression symbols
 0x200000..           Custom symbols from user-named rules
 ```

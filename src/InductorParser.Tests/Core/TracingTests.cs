@@ -42,7 +42,7 @@ public class TracingTests
     [Test]
     public void Rule_name_appears_in_trace_label()
     {
-        // .As("settingName") pins the user label. Rule.TraceLabel joins
+        // .As("settingName") sets the user label. Rule.TraceLabel joins
         // it with the rule's class name via ":", producing
         // "settingName:OneOrMore" as the full trace label.
         var sink = NewSink();

@@ -116,14 +116,14 @@ internal sealed class BetweenInclusiveRule : Rule
     // Return the set of runes this rule might consume first (can be a superset)
     // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
-    // that first character on success.
+    // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
     {
-        // We need to return *all* characters that *might* be consumed as the first charactr
-        // Then, we need to say if the first character will Always/Sometimes/Never be consumed
+        // We need to return *all* runes that *might* be consumed as the first rune.
+        // Then, we need to say if the first rune will Always/Sometimes/Never be consumed.
         //
         // For BetweenInclusive:
-        // The set of characters is defined by Inner, so we just return those.
+        // The set of runes is defined by Inner, so we just return those.
         // Inner defines whether the initial token is Always/Sometimes/Never consumed so we use that
         // *except* if atLeast is zero, because then we can
         // succeed and not advance. In that case, we are *at best* sometimes, but it depends on what inner

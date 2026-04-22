@@ -16,8 +16,8 @@ public class LexerSwitchTests
         // rune. Under the grapheme lexer the single token is 4 chars, which
         // TokenRule's length check rejects. Under the rune lexer the first
         // token would be just the 2-Token waving hand and the parse would
-        // succeed. Asserting failure here pins that no-options parsing uses
-        // the grapheme lexer.
+        // succeed. Asserting failure here verifies that no-options parsing
+        // uses the grapheme lexer.
         var rule = Token(WavingHandRune);
 
         var result = rule.Parse(SkinTonedWaveGrapheme);

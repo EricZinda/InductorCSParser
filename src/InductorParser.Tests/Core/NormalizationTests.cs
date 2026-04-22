@@ -134,8 +134,8 @@ public class NormalizationTests
     public void NormalizeInput_null_reports_positions_exactly_into_decomposed_input()
     {
         // With normalization off, the lexer sees the original bytes and
-        // positions are trivially into the original. This test pins that
-        // baseline so a future refactor can't silently regress it.
+        // positions are trivially into the original. This test locks in
+        // that baseline so a future refactor can't silently regress it.
         string input = CafeDecomposed + "X";
         var rule = And(Token('c'), Token('a'), Token('f'), Token('X'), Eof());
         var result = rule.Parse(input, new ParseOptions { NormalizeInput = null });
@@ -151,9 +151,9 @@ public class NormalizationTests
     [Test]
     public void NFC_default_is_FormC()
     {
-        // Pin the default so a careless refactor that flipped it to FormD
-        // or null would fail loudly here rather than break a hundred
-        // grammars silently.
+        // Lock in the default so a careless refactor that flipped it to
+        // FormD or null would fail loudly here rather than break a
+        // hundred grammars silently.
         var options = new ParseOptions();
         Assert.That(options.NormalizeInput, Is.EqualTo(NormalizationForm.FormC));
     }
@@ -272,9 +272,9 @@ public class NormalizationTests
         // FormKD does the same compatibility folding as FormKC but the
         // output is decomposed. For a pure-ASCII fold target ("fi") there's
         // no canonical decomposition, so FormKD output matches FormKC
-        // output here. This test pins that the FormKD path through the
-        // translator works end-to-end, not that the decomposed endpoint
-        // differs for this particular input.
+        // output here. This test verifies that the FormKD path through
+        // the translator works end-to-end, not that the decomposed
+        // endpoint differs for this particular input.
         var rule = And(Token('f'), Token('i'), Token('s'), Token('h'), Eof());
         var result = rule.Parse(FiLigature + "sh",
             new ParseOptions { NormalizeInput = NormalizationForm.FormKD });

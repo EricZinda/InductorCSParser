@@ -185,9 +185,10 @@ public static class Rules
     /// non-ASCII ones. ASCII letters (A-Z, a-z) in the pattern
     /// match either case in the input. Everything else (digits,
     /// punctuation, non-ASCII characters) compares bit-exact, so
-    /// the pattern "café" matches input "café" and "CAFé" (the
-    /// c/a/f case-fold, and é matches itself) but not "CAFÉ"
-    /// (because é is non-ASCII and doesn't case-fold to É).
+    /// the pattern "café" matches input "café" and "CAFé" (c/a/f
+    /// are ASCII letters and match case-insensitively, é matches
+    /// itself) but not "CAFÉ" (because é is non-ASCII and doesn't
+    /// match É under ASCII case-insensitive rules).
     ///
     /// The ASCII in the name is critical: full Unicode
     /// case-insensitive matching is locale- and script-dependent

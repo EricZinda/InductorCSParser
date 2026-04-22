@@ -38,21 +38,22 @@ public static class InductorJsonParser
         var simpleEscape = RuneIn(RuneSet.Runes("\"\\/bfnrt"));
         var hexDigit = RuneIn(RuneSet.Ascii.Digits | RuneSet.Range('a', 'f') | RuneSet.Range('A', 'F'));
         var unicodeEscape = And(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
-        // Delete-typed so StringCharsRule's per-escape TryParse call
-        // doesn't force Rule.TryParse to allocate a throwaway List<Symbol>.
+        // FlattenType.Delete so StringCharsRule's per-escape TryParse
+        // call doesn't force Rule.TryParse to allocate a throwaway
+        // List<Symbol>.
         // StringChars discards escapeEnd's Symbol anyway (it emits a
         // single leaf covering the whole string body), so the tree
         // shape is unchanged.
         var escapeEnd = Or(simpleEscape, unicodeEscape).Flatten(FlattenType.Delete);
 
-        // StringChars collapses the per-character `ZeroOrMore(Or(body,
+        // StringChars collapses the per-rune `ZeroOrMore(Or(body,
         // escape))` hot loop into one rule that scans the whole string
         // body in place. The stopper set is just the closing quote:
         // the scan runs forward until it sees a ", and everything in
         // between gets consumed as body (or dispatched to `escapeEnd`
         // when a \ shows up). One leaf Symbol for the whole run, one
         // escape dispatch per actual escape, no per-rune Symbol or
-        // transaction work for the body chars that dominate typical
+        // transaction work for the body runes that dominate typical
         // JSON payloads.
         var stringBody = StringChars(RuneSet.Runes("\""), new Rune('\\'), escapeEnd);
         JsonString = And(Token('"'), stringBody, Token('"')).As("string");

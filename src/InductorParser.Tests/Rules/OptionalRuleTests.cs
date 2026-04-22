@@ -72,9 +72,9 @@ public class OptionalRuleTests
     [Test]
     public void Optional_with_no_match_produces_empty_symbols()
     {
-        // Optional / ZeroOrMore that matches zero times is Flatten-typed,
-        // so no wrapper Symbol is ever produced: the empty match just
-        // leaves the root Symbols list empty. No per-rune leaves, no
+        // Optional / ZeroOrMore that matches zero times has
+        // FlattenType.Flatten, so no wrapper Symbol is ever produced:
+        // the empty match just leaves the root Symbols list empty. No per-rune leaves, no
         // BetweenInclusive wrapper, no children-list allocation survives
         // into the tree.
         var result = Optional(Token('x')).Parse("");

@@ -15,7 +15,7 @@ namespace InductorParser;
 //     ZeroOrMore(And(Not(stopRule), AnyToken()))
 //
 // Each iteration checks that stopRule doesn't match here, then consumes
-// one character and advances. When stopRule would match, Not fails, the
+// one token and advances. When stopRule would match, Not fails, the
 // And fails, and the ZeroOrMore stops leaving the cursor at the stop.
 internal sealed class NotRule : Rule
 {
@@ -33,9 +33,10 @@ internal sealed class NotRule : Rule
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         // Lookahead only: inner's result is thrown away regardless, so we
-        // pass null for outputSymbols. If inner is Flatten-typed (which
-        // normally writes its children into a caller-supplied list),
-        // Rule.TryParse gives it a throwaway list that nobody reads.
+        // pass null for outputSymbols. If inner has FlattenType.Flatten
+        // (which normally writes its children into a caller-supplied
+        // list), Rule.TryParse gives it a throwaway list that nobody
+        // reads.
         using var transaction = lexer.BeginTransaction();
         var innerResult = Inner.TryParse(lexer, outputSymbols: null);
         if (innerResult != null)
@@ -53,7 +54,7 @@ internal sealed class NotRule : Rule
     // Return the set of runes this rule might consume first (can be a superset)
     // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
-    // that first character on success.
+    // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
     {
         // Zero-width predicate: rolls back regardless of inner result,

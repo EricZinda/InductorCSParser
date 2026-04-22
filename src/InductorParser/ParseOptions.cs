@@ -73,16 +73,18 @@ public sealed class ParseOptions
     public ParseCancellation? Cancellation { get; set; }
 
     // When true, Parse returns a tree whose shape matches the grammar
-    // one-to-one: every Flatten-typed wrapper, every Delete-typed node,
-    // and every individual character leaf is present exactly where the
-    // grammar placed it. Turn this on to debug or inspect a grammar, to
-    // PrintTree the full structure, or to Find(rule) against wrappers
-    // that the default path would lift out.
+    // one-to-one: every FlattenType.Flatten wrapper, every
+    // FlattenType.Delete node, and every individual leaf symbol is
+    // present exactly where the grammar placed it. Turn this on to
+    // debug or inspect a grammar, to PrintTree the full structure, or
+    // to Find(rule) against wrappers that the default path would lift
+    // out.
     //
     // The off-by-default path applies each rule's FlattenType before
-    // returning so that Delete nodes are gone, Flatten-typed wrappers
-    // have their children lifted into the parent, and Preserve-typed
-    // wrappers remain as findable nodes. That is the shape most
+    // returning so that FlattenType.Delete nodes are gone,
+    // FlattenType.Flatten wrappers have their children lifted into
+    // the parent, and FlattenType.Preserve wrappers remain as
+    // findable nodes. That is the shape most
     // callers actually want to walk: the syntactic noise (delimiters,
     // whitespace, anonymous grouping wrappers) is already out of the
     // way. The consequence is that Tree.Find(rule) only hits rules

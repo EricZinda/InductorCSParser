@@ -61,7 +61,7 @@ public class StringCharsRuleTests
         // "abc|rest" scans 'a', 'b', 'c' as body, stops at '|' without
         // consuming it. The surrounding Token('|') then consumes the
         // '|' itself. Tree text is "abc" (the body) plus "" (the
-        // Delete-typed delimiter) = "abc".
+        // FlattenType.Delete delimiter) = "abc".
         var rule = InductorParser.Rules.And(StopOnPipe(), Token('|'));
         var result = rule.Parse("abc|");
 
@@ -146,9 +146,9 @@ public class StringCharsRuleTests
     public void StringChars_returns_single_leaf_covering_whole_match()
     {
         // Tree shape matters because the performance win of this
-        // primitive is "one Symbol per run, not one per rune." Pin
-        // the shape so a future change that accidentally splits the
-        // leaf back into per-rune pieces fails loudly.
+        // primitive is "one Symbol per run, not one per rune." Lock
+        // in the shape so a future change that accidentally splits
+        // the leaf back into per-rune pieces fails loudly.
         var result = StopOnPipe().Parse("hello");
         Assert.That(result.Success, Is.True);
 
@@ -272,7 +272,7 @@ public class StringCharsRuleTests
     [Test]
     public void StringChars_rule_based_stopper_does_not_consume_the_boundary()
     {
-        // Pin the peek-semantic: after StringChars succeeds, the
+        // Verify the peek-semantic: after StringChars succeeds, the
         // lexer position must sit at the START of the stopper, so
         // the surrounding grammar can match it.
         var stopper = Literal("END");

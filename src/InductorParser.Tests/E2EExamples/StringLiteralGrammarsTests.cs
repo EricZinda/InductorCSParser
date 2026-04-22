@@ -3,8 +3,8 @@ using InductorParser;
 
 namespace InductorParser.Tests;
 
-// End-to-end tests for StringLiteralGrammars. Each inner class pins
-// the positive and negative behavior of one grammar. For successful
+// End-to-end tests for StringLiteralGrammars. Each inner class
+// verifies the positive and negative behavior of one grammar. For successful
 // parses the test asserts that Tree.ToString() equals the expected
 // body text. The quote delimiters are FlattenType.Delete (TokenRule's
 // default) so they drop out of the tree and the body is what's left.

@@ -29,9 +29,9 @@ public class DiscardedAtParseTimeTests
         Assert.That(result.Success, Is.True, result.ErrorMessage);
 
         // Nothing survives into the tree. OptionalWhitespace is a
-        // Flatten-typed wrapper around Delete-typed children, so the
-        // parse-time filter drops every whitespace rune and the root's
-        // Symbols list comes back empty.
+        // FlattenType.Flatten wrapper around FlattenType.Delete
+        // children, so the parse-time filter drops every whitespace
+        // rune and the root's Symbols list comes back empty.
         Assert.That(result.Symbols, Is.Empty);
     }
 
@@ -41,8 +41,8 @@ public class DiscardedAtParseTimeTests
         // The realistic JSON-style shape: OptionalWhitespace sits between
         // two tokens inside an And. The top-level Symbols list should hold
         // the two token leaves only, with the whitespace contributing
-        // nothing. RuneIn is Preserve-typed so the token leaves survive. Their
-        // Id is the code point, so we assert on that.
+        // nothing. RuneIn has FlattenType.Preserve so the token leaves
+        // survive. Their Id is the code point, so we assert on that.
         var letter = RuneIn(RuneSet.Ascii.Letters);
         var rule = And(letter, OptionalWhitespace(), letter);
         var result = rule.Parse("a   b");

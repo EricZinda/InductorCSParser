@@ -7,8 +7,9 @@ namespace InductorParser.Tests;
 
 // Runtime defenses against catastrophic backtracking and stack-overflow on
 // malicious or pathological input. The library exposes four orthogonal
-// abort budgets through ParseOptions. This fixture pins the trip behavior
-// of each one and confirms they don't get in the way of normal parses.
+// abort budgets through ParseOptions. This fixture verifies the trip
+// behavior of each one and confirms they don't get in the way of normal
+// parses.
 [TestFixture]
 public class BudgetTests
 {
@@ -156,8 +157,8 @@ public class BudgetTests
     public void Null_Cancellation_does_not_abort_normal_parse()
     {
         // The default Cancellation (null) must not look canceled to the
-        // periodic check. Pinned because if we ever forget the null guard,
-        // every parse would NRE on the IsCanceled poll.
+        // periodic check. Verified here because if we ever forget the
+        // null guard, every parse would NRE on the IsCanceled poll.
         var rule = OneOrMore(RuneIn(RuneSet.Letters));
         var options = new ParseOptions { Cancellation = null };
         var result = rule.Parse(new string('a', 5000), options);

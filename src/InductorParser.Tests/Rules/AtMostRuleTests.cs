@@ -115,7 +115,7 @@ public class AtMostRuleTests
     {
         // AtMost always succeeds, so a WithError message on it never
         // reaches the deepest-failure slot. Document the behavior by
-        // pinning it. A failing parse here fails on the outer And,
+        // verifying it. A failing parse here fails on the outer And,
         // not on AtMost.
         var rule = And(
             AtMost(3, Token('a')).WithError("unreachable"),

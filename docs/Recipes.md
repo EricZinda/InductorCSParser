@@ -31,7 +31,7 @@ var inline    = Or(bold, code, text);
 var paragraph = OneOrMore(inline).As(nameof(paragraph));
 ```
 
-Parse `Hello 🎸 **world** 你好 ` + "`code`" + ` done` and you get a tree where the guitar emoji lives in the first text node, the CJK in another, and `ToString()` reassembles each node losslessly. The default GraphemeLexer treats 🎸 and 你好 as individual characters, so the text nodes see them as single tokens. Even under RuneLexer the round-trip would still work (every rune gets captured), just with multi-rune graphemes showing up as multiple child nodes.
+Parse `Hello 🎸 **world** 你好 ` + "`code`" + ` done` and you get a tree where the guitar emoji lives in the first text node, the CJK in another, and `ToString()` reassembles each node losslessly. The default GraphemeLexer treats 🎸 and each of 你 and 好 as individual graphemes, so the text nodes see them as single tokens. Even under RuneLexer the round-trip would still work (every rune gets captured), just with multi-rune graphemes showing up as multiple child nodes.
 
 ### Stopping at a Multi-Character Terminator
 
@@ -45,7 +45,7 @@ var blockComment = And(
     closeMarker);
 ```
 
-Each iteration first checks that `closeMarker` does not match at the current cursor (`Not` is negative lookahead, zero-width), and only then consumes one character with `AnyToken()`. When `closeMarker` would fire, `Not` fails, the `And` fails, and the `ZeroOrMore` stops with the cursor sitting just before `*/`. The outer `And` then matches the terminator for real. `AnyToken()` handles multi-rune graphemes naturally under GraphemeLexer, same as `RuneNotIn`, so emoji and CJK in the comment body pass through unchanged.
+Each iteration first checks that `closeMarker` does not match at the current cursor (`Not` is negative lookahead, zero-width), and only then consumes one token with `AnyToken()`. When `closeMarker` would fire, `Not` fails, the `And` fails, and the `ZeroOrMore` stops with the cursor sitting just before `*/`. The outer `And` then matches the terminator for real. `AnyToken()` handles multi-rune graphemes naturally under GraphemeLexer, same as `RuneNotIn`, so emoji and CJK in the comment body pass through unchanged.
 
 ## Organizing a Large Grammar as a Class
 

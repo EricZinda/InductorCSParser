@@ -17,7 +17,7 @@ You need to pick one as the parser's token. The stack, from the lowest physical 
 Each layer is a composition over the one below, so any string has a code-unit count, a code-point count, and a grapheme count, and the counts only diverge when the composition is non-trivial. Some examples:
 - For ASCII, all three are equal. 
 - For text that stays inside the first 65,536 code points (U+0000..U+FFFF) with no combining marks, all three are still equal. 
-- For a character above U+FFFF with no modifier (a lone 🎸, say), UTF-16 uses a surrogate pair so the code-unit count doubles while the code-point and grapheme counts stay the same. 
+- For a rune above U+FFFF with no modifier (a lone 🎸, say), UTF-16 uses a surrogate pair so the code-unit count doubles while the code-point and grapheme counts stay the same. 
 - For combining-mark text or emoji sequences (👋🏽, 👨‍👩‍👧‍👦), multiple code points form one grapheme, so the grapheme count falls below the code-point count.
 
 ### Text transformations (orthogonal)

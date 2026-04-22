@@ -65,7 +65,7 @@ public class EofRuleTests
     public void Eof_trace_failure_produces_expected_output()
     {
         // Wrapped in And so there's a transaction open when Eof fails,
-        // giving us a non-trivial indentation to pin.
+        // giving us a non-trivial indentation to verify.
         var sink = NewSink();
         And(Eof()).Parse("x", new ParseOptions { TraceSink = sink });
 

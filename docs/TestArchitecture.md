@@ -12,7 +12,7 @@ Test files in all three folders share the same `namespace InductorParser.Tests;`
 
 Related docs:
 
-- [ProgrammingModel.md](ProgrammingModel.md): the error-position principle and deepest-failure-wins semantics the tests pin down.
+- [ProgrammingModel.md](ProgrammingModel.md): the error-position principle and deepest-failure-wins semantics the tests lock in.
 - [ProgrammingAGrammar.md](ProgrammingAGrammar.md): the public API tests exercise.
 
 ## Universal Requirements
@@ -21,11 +21,11 @@ Every rule's test file, regardless of rule type, should cover these four categor
 
 **1. Success.** At least one test that parses input the rule accepts and verifies `result.Success` is true. Where the rule produces a Symbol the caller can inspect, assert the Symbol's shape (id, text via `ToString()`, children as applicable).
 
-**2. Failure position.** At least one test that parses input the rule rejects and asserts `result.ErrorCharIndex`. Position matters because it pins the error-position principle (the failing read's pre-read position) against regression. Without this assertion, a rule can silently drift back to post-read semantics without the test suite noticing.
+**2. Failure position.** At least one test that parses input the rule rejects and asserts `result.ErrorCharIndex`. Position matters because it locks in the error-position principle (the failing read's pre-read position) against regression. Without this assertion, a rule can silently drift back to post-read semantics without the test suite noticing.
 
-**3. Failure message propagation.** At least one test where the rule has a `.WithError("...")` set and the parse failure surfaces that exact message via `result.ErrorMessage`. This pins the equal-depth message-claim path in `RecordFailure` that lets rule authors attach user-friendly messages. Assert with `Is.EqualTo(...)`, not `Does.Contain(...)`. Contain-based assertions pass accidentally when the wrong message happens to share a substring.
+**3. Failure message propagation.** At least one test where the rule has a `.WithError("...")` set and the parse failure surfaces that exact message via `result.ErrorMessage`. This verifies the equal-depth message-claim path in `RecordFailure` that lets rule authors attach user-friendly messages. Assert with `Is.EqualTo(...)`, not `Does.Contain(...)`. Contain-based assertions pass accidentally when the wrong message happens to share a substring.
 
-**4. At least one test without WithError.** To pin the positional-fallback path in `BuildErrorMessage`. Without this, the fallback code could break silently. One `Does.StartWith("Unexpected end of input")` or `Does.StartWith("Parse failed at offset")` test per rule file is enough.
+**4. At least one test without WithError.** To verify the positional-fallback path in `BuildErrorMessage`. Without this, the fallback code could break silently. One `Does.StartWith("Unexpected end of input")` or `Does.StartWith("Parse failed at offset")` test per rule file is enough.
 
 ## Per-Rule-Type Requirements
 
@@ -84,7 +84,7 @@ Rules that wrap other rules and combine their results: `AndRule`, `OrRule`, `Bet
 Required tests beyond universal coverage:
 
 - **First-child failure.** Pass input the first child rejects. Assert the failure position comes from the first child's pre-read offset (usually 0 for a top-level test). Use different `WithError` messages on each child and assert the *correct* child's message appears, not just "something failed."
-- **Later-child failure.** Pass input the first child (or first several) accept, then the next child rejects. Assert the position is the later child's pre-read offset. Again with per-child `WithError` to pin which child's message surfaces.
+- **Later-child failure.** Pass input the first child (or first several) accept, then the next child rejects. Assert the position is the later child's pre-read offset. Again with per-child `WithError` to verify which child's message surfaces.
 - **Children that consume different amounts before failing.** Specifically for Or, construct alternatives where different branches advance different distances before failing. Assert the deepest-advancing branch's message wins (deepest-failure-wins) and position.
 - **Edge cases specific to the composite.** `OneOrMore` needs a "no matches" test. `Optional` needs a "inner fails, Optional succeeds with empty" test plus the known-PEG-quirk test where an Optional's inner depth beats the required rule's shallower depth. `ZeroOrMore` has no failure path at all (it always succeeds) so it needs zero-match and N-match success tests but no error-position tests.
 
@@ -120,7 +120,7 @@ Required tests:
 
 - **Zero-consumption.** Assert that parsing past the lookahead rule lands at the same position as before it ran. For `Peek(x).Parse(input)` followed by some tracking of where the lexer is, position should not have advanced.
 - **Forwarding correctness.** For `LateBoundRule`, tests should cover both bound and unbound states, and the expected error when `.Bind(...)` was skipped.
-- **No modifier acceptance where forbidden.** `LateBoundRule` specifically rejects `.As`, `.Flatten`, `.WithError` because it's transparent at parse time and those modifiers would silently do nothing. If another rule has similar no-ops, its tests should pin that too.
+- **No modifier acceptance where forbidden.** `LateBoundRule` specifically rejects `.As`, `.Flatten`, `.WithError` because it's transparent at parse time and those modifiers would silently do nothing. If another rule has similar no-ops, its tests should verify that too.
 
 ### Cross-Cutting Concerns (Not Per-Rule)
 
@@ -130,11 +130,11 @@ Some tests don't belong to any one rule's file. These live in `Core/`:
 - **WithError deepest-failure across multiple rules**: `Core/WithErrorTests.cs`. Tests that build grammars spanning several rules and assert the right message wins across them.
 - **Id assignment (Compile)**: `Core/IdAssignmentTests.cs`. Tests that verify the three-pass id assignment (pinned, named-hash, anonymous) behaves correctly.
 - **RuneSet behavior**: `Core/RuneSetTests.cs`. Tests for the `RuneSet` data type itself (not its consumers like `RuneInRule`).
-- **Tracing (cross-cutting concerns only)**: `Core/TracingTests.cs`. Covers behaviors that aren't any one rule's property: null TraceSink is a no-op, ParseOptions defaults (null sink, Diagnostic level), the trace-label fallback chain (Name > ErrorMessage > rule class name), `TraceLevel.Normal` suppresses output, `Lexer.Read` and `Lexer.RecordFailure` emit their own diagnostic lines, transaction depth returns to zero after a parse (regression guard, since running the same parse twice must produce identical trace output), and two side-effect proof tests (`Off_path_does_not_evaluate_interpolated_arguments`, `On_path_evaluates_interpolated_arguments_exactly_once`, plus `Rule_TraceSuccess_off_path_does_not_evaluate_interpolated_arguments`) that pin the C# interpolated-string-handler rewrite. They're the critical tests for "tracing is free when off."
+- **Tracing (cross-cutting concerns only)**: `Core/TracingTests.cs`. Covers behaviors that aren't any one rule's property: null TraceSink is a no-op, ParseOptions defaults (null sink, Diagnostic level), the trace-label fallback chain (Name > ErrorMessage > rule class name), `TraceLevel.Normal` suppresses output, `Lexer.Read` and `Lexer.RecordFailure` emit their own diagnostic lines, transaction depth returns to zero after a parse (regression guard, since running the same parse twice must produce identical trace output), and two side-effect proof tests (`Off_path_does_not_evaluate_interpolated_arguments`, `On_path_evaluates_interpolated_arguments_exactly_once`, plus `Rule_TraceSuccess_off_path_does_not_evaluate_interpolated_arguments`) that verify the C# interpolated-string-handler rewrite. They're the critical tests for "tracing is free when off."
 
 Rules emit their traces via two base-class helpers, `TraceSuccess(lexer, $"...")` and `TraceFailure(lexer, $"...")`, defined on `Rule`. The rule's class name (`"And"`, `"Token"`, etc.) is derived automatically from `GetType().Name` with the `"Rule"` suffix stripped and cached in the base constructor, so new rules get correct trace names without touching trace plumbing. Both helpers have explicit-level overloads (`TraceSuccess(lexer, level, $"...")`) for the rare case a rule wants to emit at something other than Diagnostic.
 
-**Per-rule trace tests live in each rule's own test file.** Every rule in `Rules/` must include at least one success-path trace test and at least one failure-path trace test (if the rule has a failure path; `ZeroOrMoreRule` has none). The tests pin the full trace output verbatim via `Assert.That(sink.ToString(), Is.EqualTo(...))`. This way, changing a rule's trace format produces a test failure in the rule's own file, right next to the code being edited, rather than in a central file the author might not have open. Shared helpers (`NewSink()`, `Lines(params string[])`) live in `TraceTestHelpers.cs` at the test project root and are pulled in via `using static InductorParser.Tests.TraceTestHelpers;`.
+**Per-rule trace tests live in each rule's own test file.** Every rule in `Rules/` must include at least one success-path trace test and at least one failure-path trace test (if the rule has a failure path; `ZeroOrMoreRule` has none). The tests lock in the full trace output verbatim via `Assert.That(sink.ToString(), Is.EqualTo(...))`. This way, changing a rule's trace format produces a test failure in the rule's own file, right next to the code being edited, rather than in a central file the author might not have open. Shared helpers (`NewSink()`, `Lines(params string[])`) live in `TraceTestHelpers.cs` at the test project root and are pulled in via `using static InductorParser.Tests.TraceTestHelpers;`.
 
 Note on C++ trace mapping. The original InductorParser (C++) emits traces using template-unrolled class names like `CharacterSymbol::Parse`, `CharacterSetSymbol::Parse`, `1to2147483647Expression::Parse`, and so on. The C# port uses the rule's C# name instead (`Token`, `RuneIn`, `OneOrMore`). Captured C++ traces used for reference material need a one-time mental mapping: C++ `CharacterSymbol` → C# `Token`, C++ `CharacterSetSymbol` → C# `RuneIn`, C++ `EofSymbol` → C# `Eof`, C++ `AndExpression` → C# `And`, C++ `OrExpression` → C# `Or`, C++ `AtLeastAndAtMostExpression<T, 1, INT_MAX>` (`1to2147483647Expression`) → C# `OneOrMore`, C++ `<T, 0, INT_MAX>` → C# `ZeroOrMore`, C++ `<T, 0, 1>` → C# `Optional`. The general `BetweenInclusive(inner, n, m)` traces as `BetweenInclusive[n..m]`.
 
@@ -154,7 +154,7 @@ Each test method's name should describe the scenario, not the expected outcome. 
 
 **Substring-matching on error messages.** `Does.Contain("'x'")` passes when the right message happens to include `'x'` but also when a completely unrelated failure happens to have `'x'` in it. Prefer `Is.EqualTo(...)` with a concrete WithError-attached message. Only fall back to substring when the message genuinely has variable content (like the positional fallback message with its dynamic offset).
 
-**Failure tests without `ErrorCharIndex` assertions.** Every parse-failure test should pin the position. Without it, the error-position principle can regress silently.
+**Failure tests without `ErrorCharIndex` assertions.** Every parse-failure test should lock in the position. Without it, the error-position principle can regress silently.
 
 **Tests that only assert `result.Success`.** `Assert.That(result.Success, Is.False)` is a sanity check but a weak one. Asserting position and message in the same test catches order-of-magnitude-more regressions for the same test-maintenance cost.
 

@@ -25,8 +25,8 @@ public sealed class Symbol
     // Shared Symbol a Rule.TryParse returns in place of a real one when
     // the rule's effective FlattenType is Delete. Consumers like AndRule
     // filter it out before it reaches the
-    // parent's Children list, so Delete-typed rules never contribute a
-    // Discarded Symbol to the final tree.
+    // parent's Children list, so rules with FlattenType.Delete never
+    // contribute a Discarded Symbol to the final tree.
     //
     // This is so that rules have something non-null to return from TryParse()
     // to indicate success. Null means failure. Never stored as a child of any real Symbol.
@@ -82,15 +82,16 @@ public sealed class Symbol
 
     // ToString renders the text actually present in the tree: for leaves,
     // the captured text, and for composites, the concatenated text of their
-    // children. On the default parse path, Delete-typed rules are
-    // gone (filtered during parse) and Flatten-typed wrappers have had
-    // their children lifted into the parent, so their own wrapper does
-    // not appear in the tree shape. The characters under them do,
-    // through their surviving Preserve-typed or leaf descendants. Callers
-    // who want to rebuild the exact input verbatim should either keep
-    // the string they passed to Parse, or enable
-    // ParseOptions.PreserveFlattenWrappers to keep every grammar node
-    // (including Delete-typed ones) in the tree.
+    // children. On the default parse path, FlattenType.Delete rules
+    // are gone (filtered during parse) and FlattenType.Flatten
+    // wrappers have had their children lifted into the parent, so
+    // their own wrapper does not appear in the tree shape. The
+    // characters under them do, through their surviving
+    // FlattenType.Preserve or leaf descendants. Callers who want to
+    // rebuild the exact input verbatim should either keep the string
+    // they passed to Parse, or enable ParseOptions.PreserveFlattenWrappers
+    // to keep every grammar node (including FlattenType.Delete ones)
+    // in the tree.
     public override string ToString()
     {
         if (_isLeaf) return _leafChars.ToString();

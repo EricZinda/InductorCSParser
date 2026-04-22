@@ -23,7 +23,7 @@ public class TokenRuleTests
     {
         // Guitar emoji is one rune and one grapheme, represented in UTF-16
         // as a surrogate pair. The "single rune" fast path in TokenRule
-        // should pin the id to GuitarRune.
+        // should set the id to GuitarRune.
         var rule = Token(GuitarGrapheme);
         var result = rule.Parse(GuitarGrapheme);
 
@@ -60,7 +60,7 @@ public class TokenRuleTests
     {
         // Same input as above but using the rune lexer. Here the lexer
         // produces two rune tokens, so TokenRule reads both and compares
-        // each in lockstep against the expected slices.
+        // each in lockstep against the corresponding section of the expected.
         var rule = Token(LatinEAcuteGrapheme);
         var result = rule.Parse(LatinEAcuteGrapheme,
             new ParseOptions { InputUnit = InputUnit.Rune, NormalizeInput = null });
