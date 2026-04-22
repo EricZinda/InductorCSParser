@@ -10,7 +10,7 @@ public abstract class Lexer
 {
     // _input is the one reference kept to the input string, which is immutable and shared by
     // every Token and ReadOnlySpan<char> the parser hands out. The GC sees this one string
-    // object and tracks it; everything else is stack-resident structs that point back into
+    // object and tracks it. Everything else is stack-resident structs that point back into
     // this string. The GC never sees the Tokens or ReadOnlySpan<char>s, so they never have
     // to be tracked or reclaimed.
     private readonly string _input;
@@ -279,7 +279,7 @@ public abstract class Lexer
     // inner rule commits and then an outer rule fails, the outer's
     // Dispose rolls the position back to the outer's saved point,
     // which is earlier than the inner's saved point. The inner's
-    // commit doesn't "promote" its reads to permanent; it only says
+    // commit doesn't "promote" its reads to permanent. It only says
     // "I personally wouldn't roll back here." Any ancestor is free
     // to roll further back. That is the PEG semantic: only the
     // outermost successful match is final, and a failure anywhere
@@ -288,7 +288,7 @@ public abstract class Lexer
     // Transaction is a struct (not a class) because every rule
     // invocation opens one, and allocating a new GC object each time
     // would dominate parse time. As a struct it lives inline in the
-    // caller's stack frame; constructing one is two field writes,
+    // caller's stack frame. Constructing one is two field writes,
     // disposing one is a flag read plus possibly one field write.
     //
     // Transaction is nested inside Lexer on purpose: the rollback logic
@@ -303,7 +303,7 @@ public abstract class Lexer
     // Wire the per-parse runtime budgets onto the lexer. Called by
     // Rule.Parse right after constructing the lexer and before the first
     // rule fires. The Stopwatch is only allocated when a positive Timeout
-    // is set; TimeSpan.Zero means "disabled" and skips both the
+    // is set. TimeSpan.Zero means "disabled" and skips both the
     // allocation and the per-check comparison.
     internal void ConfigureBudgets(ParseOptions options)
     {

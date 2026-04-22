@@ -107,7 +107,7 @@ public sealed class LateBoundRule : Rule
     }
 
     // Return the set of runes this rule might consume first (can be a superset)
-    // (RuneSet.Empty when Advance.Never; RuneSet.Universe means "I don't know").
+    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
     // that first character on success.
     internal override RuleStartRequirements ComputeRuleStart()
@@ -119,7 +119,7 @@ public sealed class LateBoundRule : Rule
         // forms a cycle back through this LateBoundRule, the cycle-detection
         // path leaves whichever node it hit during recursion at the
         // pessimistic default (Universe, Advance.Sometimes). That keeps
-        // OrRule conservative; a future pass could refine by re-walking
+        // OrRule conservative. A future pass could refine by re-walking
         // until no FirstConsumedRunes changes if a grammar shows up where it
         // matters.
         return new RuleStartRequirements(_target!.FirstConsumedRunes, _target.Advance);

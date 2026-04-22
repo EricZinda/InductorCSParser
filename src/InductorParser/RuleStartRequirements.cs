@@ -29,7 +29,7 @@ namespace InductorParser;
 //       success: Always / Sometimes / Never (see Advance.cs).
 //
 // Callers that want to see if they can skip a rule because it can't possibly
-// succeed don't inspect these fields directly; they call
+// succeed don't inspect these fields directly. They call
 // Rule.CannotMatchLookahead(peekRune), which combines them as:
 //
 //     Advance == Always && !FirstConsumedRunes.Contains(peek)
@@ -65,13 +65,13 @@ namespace InductorParser;
 //
 //        * Never child. Say Peek in And(Peek(X), Y): Peek never
 //          consumes, so Y reads the lookahead. Peek's FirstConsumedRunes
-//          is Empty and contributes nothing; Never tells the
+//          is Empty and contributes nothing. Never tells the
 //          composite "don't union my set into yours, move to the
 //          next sibling."
 //
 // Notes:
-//   * A superset of actual first-consumed runes is safe (just slower);
-//     a subset would cause enclosing rules to wrongly skip a rule that
+//   * A superset of actual first-consumed runes is safe (just slower).
+//     A subset would cause enclosing rules to wrongly skip a rule that
 //     could succeed. RuneSet.Universe means "I don't know, don't filter me."
 //   * Advance.Never requires FirstConsumedRunes == RuneSet.Empty
 //     (Compile enforces this) — a rule that never consumes can't have
@@ -81,7 +81,7 @@ namespace InductorParser;
 // FIRST-set analysis from classical parser theory. In LL(1), every
 // grammar symbol publishes a FIRST set (terminals that can begin any
 // derivation from it) and a nullable flag (can it derive the empty
-// string?). A predictive parser uses FIRST to dispatch; nullability
+// string?). A predictive parser uses FIRST to dispatch. Nullability
 // tells FIRST-composition "keep unioning past me" when computing
 // FIRST of a sequence — FIRST(XY) = FIRST(X) if X is not nullable,
 // else FIRST(X) ∪ FIRST(Y).

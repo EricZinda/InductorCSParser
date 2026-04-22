@@ -90,7 +90,7 @@ And(
 
 This is just the first form with a literal string instead of a `nameof`. The tradeoff is that a string literal does not update when you rename anything nearby, but there is usually nothing *to* rename for an inline rule.
 
-**`.As(SymbolId.Custom(42, "Thing"))` for pinned numeric ids.** If a grammar needs stable numeric ids across versions for serialization or cross-version debugging, pass a `SymbolId` directly instead of a string. The name still carries for debug output; the number stays fixed no matter how you refactor the code.
+**`.As(SymbolId.Custom(42, "Thing"))` for pinned numeric ids.** If a grammar needs stable numeric ids across versions for serialization or cross-version debugging, pass a `SymbolId` directly instead of a string. The name still carries for debug output. The number stays fixed no matter how you refactor the code.
 
 
 ### What `Compile` Actually Does
@@ -152,7 +152,7 @@ Built-in symbol ids live in a static class and use a numbering space chosen so t
 
 The parser operates on Unicode characters, not raw bytes. By default the lexer reads one grapheme cluster per step (so `👨‍👩‍👧‍👦` is one token, not seven), which is what you want for grammars that handle user-typed text. The full lexer story, including how to opt into rune-level lexing instead, lives in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). For grammar-authoring purposes, you can ignore the distinction until you hit emoji or combining-mark input, at which point the Unicode doc has the answer.
 
-`RuneSet` is a composable value type for character sets. The full API surface — built-ins, factory methods, and the `|`, `&`, `~` operators — lives in [ProgrammingModel.md](ProgrammingModel.md); the grammar-authoring shorthand is that you build a class out of built-ins and factory calls and combine them with `|` for union, `&` for intersection, and `~` for complement.
+`RuneSet` is a composable value type for character sets. The full API surface — built-ins, factory methods, and the `|`, `&`, `~` operators — lives in [ProgrammingModel.md](ProgrammingModel.md). The grammar-authoring shorthand is that you build a class out of built-ins and factory calls and combine them with `|` for union, `&` for intersection, and `~` for complement.
 
 Grammar code reads like:
 
@@ -179,7 +179,7 @@ Token(0x1F3B8)                   // same via int overload
 
 ### How Rules React to the Lexer
 
-The parser's token is a grapheme cluster by default (`GraphemeLexer`). Setting `ParseOptions.InputUnit = InputUnit.Rune` switches to rune-level lexing (`RuneLexer`); see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md) for the mechanics. The two modes change how specific rules behave:
+The parser's token is a grapheme cluster by default (`GraphemeLexer`). Setting `ParseOptions.InputUnit = InputUnit.Rune` switches to rune-level lexing (`RuneLexer`). See [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md) for the mechanics. The two modes change how specific rules behave:
 
 **Under `GraphemeLexer` (default):**
 
@@ -246,7 +246,7 @@ Default values for `Flatten`, error messages, and so on match the C++ defaults f
 - Emit trace output in the same format as built-in rules when `ParseOptions.TraceSink` is set, so grammar-wide traces remain readable.
 - Participate in `Compile`: declare yourself named via `.As(...)` if you want an id, declare flatten policy if it matters for tree shape, seal against modification after `Compile` returns.
 
-The full contract including method signatures and the lexer API will be documented alongside the implementation. For grammars that compose existing leaves (which is most grammars) you never need to derive; the built-in composites cover the PEG operators and the built-in leaves cover the character-class cases. User-defined rules matter when you are adding behavior the composites cannot express, for example a rule that consumes until a specific byte-level offset, a grammar-context-aware matcher that queries external state, or a custom character-boundary detector.
+The full contract including method signatures and the lexer API will be documented alongside the implementation. For grammars that compose existing leaves (which is most grammars) you never need to derive. The built-in composites cover the PEG operators and the built-in leaves cover the character-class cases. User-defined rules matter when you are adding behavior the composites cannot express, for example a rule that consumes until a specific byte-level offset, a grammar-context-aware matcher that queries external state, or a custom character-boundary detector.
 
 ## The Parse Result
 
@@ -285,7 +285,7 @@ public enum ParseOutcome
 }
 ```
 
-Putting the error position into the result directly removes an entire class of C++ pitfall where you forgot to ask the lexer for the error before it went out of scope. `ErrorLine` and `ErrorColumn` are computed lazily from `ErrorCharIndex` and the original input string. The char-based trio (`ErrorCharIndex`, `ErrorLine`, `ErrorColumn`) uses the same conventions the Language Server Protocol uses, so a caller forwarding a parse error into an editor through LSP does no arithmetic in between; see [ProgrammingModel.md](ProgrammingModel.md) for the full rationale. The two extra index properties (`ErrorRuneIndex`, `ErrorGraphemeIndex`) are there for callers that measure in other units; they are computed lazily from the char index and cost nothing unless used.
+Putting the error position into the result directly removes an entire class of C++ pitfall where you forgot to ask the lexer for the error before it went out of scope. `ErrorLine` and `ErrorColumn` are computed lazily from `ErrorCharIndex` and the original input string. The char-based trio (`ErrorCharIndex`, `ErrorLine`, `ErrorColumn`) uses the same conventions the Language Server Protocol uses, so a caller forwarding a parse error into an editor through LSP does no arithmetic in between. See [ProgrammingModel.md](ProgrammingModel.md) for the full rationale. The two extra index properties (`ErrorRuneIndex`, `ErrorGraphemeIndex`) are there for callers that measure in other units. They are computed lazily from the char index and cost nothing unless used.
 
 The `Outcome` field distinguishes "the grammar did not match" from "we ran out of budget." A grammar mismatch means the input is invalid and you should show the user where. A timeout or work-limit exhaustion means the input might be valid but we could not decide in the budget we were given, and the caller might want to reject it as suspicious, retry with a looser budget, or show a different error to the user. See the "Catastrophic Backtracking and Timeouts" section below for the mechanics.
 
@@ -487,7 +487,7 @@ The trace format matches the C++ version exactly, including the indentation-by-t
 
 ## Catastrophic Backtracking and Timeouts
 
-PEG parsers can backtrack pathologically on certain grammar/input combinations. The library's defense is a set of budgets on `ParseOptions` that abort the parse if any trips. Two of them default to protective values so naive callers are safe without thinking about it; the third is opt-in.
+PEG parsers can backtrack pathologically on certain grammar/input combinations. The library's defense is a set of budgets on `ParseOptions` that abort the parse if any trips. Two of them default to protective values so naive callers are safe without thinking about it. The third is opt-in.
 
 ```csharp
 public sealed class ParseOptions

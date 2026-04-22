@@ -14,7 +14,7 @@ namespace InductorParser;
 // sweep up arbitrary user-typed text while still stopping at the stop
 // characters.
 //
-// EOF never matches. The rule reads one token; at EOF the token has
+// EOF never matches. The rule reads one token. At EOF the token has
 // IsEof == true and the rule fails without advancing, same as RuneInRule.
 internal sealed class RuneNotInRule : Rule
 {
@@ -63,7 +63,7 @@ internal sealed class RuneNotInRule : Rule
     }
 
     // Return the set of runes this rule might consume first (can be a superset)
-    // (RuneSet.Empty when Advance.Never; RuneSet.Universe means "I don't know").
+    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
     // that first character on success.
     internal override RuleStartRequirements ComputeRuleStart()

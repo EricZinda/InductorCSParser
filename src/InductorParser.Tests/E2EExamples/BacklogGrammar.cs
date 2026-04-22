@@ -104,7 +104,7 @@ public static class BacklogGrammar
     );
 
     // StringChars with a rule-based stopper scans forward peeking
-    // ParagraphTarget on each rune; when it matches, the peek rolls
+    // ParagraphTarget on each rune. When it matches, the peek rolls
     // back and StringChars returns, leaving the target for the outer
     // And to consume. Semantically identical to the manual
     // ZeroOrMore(And(Not(target), AnyToken())) idiom, one rule instead

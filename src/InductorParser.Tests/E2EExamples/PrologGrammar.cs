@@ -206,7 +206,7 @@ public static class PrologGrammar
         //
         // The Not(variable) lookahead is what stops a Functor from
         // gobbling something that should parse as a variable. Under
-        // standard Prolog, "Foo" reads as a variable; without the
+        // standard Prolog, "Foo" reads as a variable. Without the
         // negative lookahead, Functor would match "Foo" as an atom with
         // no args and steal the parse. The Not only checks the
         // flavor-specific variable rule (CapitalizedVariableRule or
@@ -226,8 +226,8 @@ public static class PrologGrammar
         );
 
         // Term = Variable | Functor | List. Order matters: Variable
-        // first so "X" commits to the variable branch; Functor next
-        // because every functor-atom shape is also reached here; List
+        // first so "X" commits to the variable branch. Functor next
+        // because every functor-atom shape is also reached here. List
         // last because its "[" prefix doesn't collide with the other
         // two.
         var termDef = Or(variable, functor, list);
@@ -248,7 +248,7 @@ public static class PrologGrammar
 
         // Rule = Functor ws ":-" ws TermList?
         // The C++ writes ":-" as two separate char symbols
-        // (CharacterSymbol<Colon> + CharacterSymbol<Dash>); either form
+        // (CharacterSymbol<Colon> + CharacterSymbol<Dash>). Either form
         // is equivalent for matching. Using Literal(":-") here for
         // readability.
         var rule = And(

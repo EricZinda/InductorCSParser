@@ -37,7 +37,7 @@ public class AnyTokenRuleTests
         // one grapheme). AnyToken consumes the whole token as a single match.
         //
         // NormalizeInput = null so the two-rune decomposed form survives to
-        // the lexer; the default NFC would compose to a one-rune grapheme
+        // the lexer. The default NFC would compose to a one-rune grapheme
         // and undo this test's premise.
         var rule = AnyToken();
         var result = rule.Parse(LatinEAcuteGrapheme,

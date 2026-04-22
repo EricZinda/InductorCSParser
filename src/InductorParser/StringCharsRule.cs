@@ -23,7 +23,7 @@ namespace InductorParser;
 //   * Rule stopper (general path) — stop when a user-supplied rule
 //     matches. The rule is executed in a peek
 //     transaction that always rolls back, so the stopper itself isn't
-//     consumed; the surrounding grammar is still responsible for
+//     consumed. The surrounding grammar is still responsible for
 //     matching it. Handles multi-rune boundaries like C++ raw strings
 //     R"delim(...)delim" and Python triple-quote """...""".
 //
@@ -63,8 +63,8 @@ namespace InductorParser;
 internal sealed class StringCharsRule : Rule
 {
     // Stopper discrimination. _stopperRule != null selects the general
-    // path; otherwise _stopperSet is used. The general path is one
-    // predictable branch per rune; JSON-style grammars that take the
+    // path, otherwise _stopperSet is used. The general path is one
+    // predictable branch per rune. JSON-style grammars that take the
     // RuneSet path never pay for Rule dispatch.
     private readonly RuneSet _stopperSet;
     private readonly Rule? _stopperRule;
@@ -81,8 +81,8 @@ internal sealed class StringCharsRule : Rule
     //       rune. Covers multi-rune starts like $$ / ??, or any
     //       grammar where the start itself is a sub-rule.
     //
-    // The Symbol tree the start rule produces on success is discarded:
-    // our output is one leaf over the raw source text, so nothing a
+    // The Symbol tree the start rule produces on success is discarded.
+    // Our output is one leaf over the raw source text, so nothing a
     // child Symbol carries reaches the parent tree. Grammar authors
     // who want to skip the start's per-parse allocation can give the
     // start rule .Flatten(FlattenType.Delete), and the parse-time
@@ -94,7 +94,7 @@ internal sealed class StringCharsRule : Rule
     // _escapeEnd runs once per escape occurrence (not per rune), so
     // its cost is amortized across the whole escape sequence rather
     // than the whole string body. Whatever Symbol tree the end
-    // produces on success is allocated then discarded: our output
+    // produces on success is allocated then discarded. Our output
     // is one leaf over the raw source text, so nothing the end
     // carries reaches the parent tree. For an escape-heavy grammar
     // where that allocation registers, give the end
@@ -213,7 +213,7 @@ internal sealed class StringCharsRule : Rule
                 // surrounding grammar decide whether it's an error.
                 break;
 
-            // Stopper check. The RuneSet path is the fast case; the
+            // Stopper check. The RuneSet path is the fast case. The
             // Rule path opens a peek transaction that always rolls
             // back, so the stopper itself is never consumed by this
             // rule.
@@ -232,7 +232,7 @@ internal sealed class StringCharsRule : Rule
             }
 
             // Escape-start check. Single-rune and Rule forms are
-            // mutually exclusive; the constructor picks one.
+            // mutually exclusive. The constructor picks one.
             if (_hasEscape)
             {
                 if (_escapeStartRule != null)
@@ -308,7 +308,7 @@ internal sealed class StringCharsRule : Rule
     }
 
     // Return the set of runes this rule might consume first (can be a superset)
-    // (RuneSet.Empty when Advance.Never; RuneSet.Universe means "I don't know").
+    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
     // that first character on success.
     internal override RuleStartRequirements ComputeRuleStart()
@@ -323,7 +323,7 @@ internal sealed class StringCharsRule : Rule
         // stopper path. A Rule-based stopper can't be rendered as a rune
         // set, so we stay at Universe there. Escape-start runes — if a
         // grammar has them — are typically outside the stopper set, which
-        // means ~_stopperSet already covers them; we don't need a separate
+        // means ~_stopperSet already covers them. We don't need a separate
         // union.
         RuneSet firstConsumed = _stopperRule == null
             ? ~_stopperSet

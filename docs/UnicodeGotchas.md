@@ -2,7 +2,7 @@
 
 Some Unicode surprises cannot be fixed by the parser's lexer choice. Both `RuneLexer` and `GraphemeLexer` hit these identically, because they live outside the "what is a token?" question the lexers answer. The fix is always either caller-side preprocessing (clean the input before parsing) or grammar-design (pick the right `RuneSet`, add explicit tolerance rules).
 
-This doc lists the common gotchas, why they bite, and the idiomatic workaround for each. If you are choosing between `RuneLexer` and `GraphemeLexer`, see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md); that is a different decision.
+This doc lists the common gotchas, why they bite, and the idiomatic workaround for each. If you are choosing between `RuneLexer` and `GraphemeLexer`, see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). That is a different decision.
 
 ## Case-Insensitive Matching Beyond ASCII
 
@@ -51,7 +51,7 @@ var cleaned = string.Concat(input.EnumerateRunes()
 var result = grammar.Parse(cleaned);
 ```
 
-If your grammar uses `GraphemeLexer` and processes emoji sequences, do not strip ZWJ (U+200D) indiscriminately; you will break 👨‍👩‍👧‍👦 and similar sequences.
+If your grammar uses `GraphemeLexer` and processes emoji sequences, do not strip ZWJ (U+200D) indiscriminately. You will break 👨‍👩‍👧‍👦 and similar sequences.
 
 ## Homoglyph Confusables
 
@@ -76,7 +76,7 @@ public static readonly Rule LatinIdentifier =
     OneOrMore(RuneIn(LatinLetters | RuneSet.Ascii.Digits | RuneSet.Runes("_")));
 ```
 
-For full UAX #31 Script_Extensions-based detection (the standard algorithm for "is this identifier mixing scripts in a suspicious way"), use a dedicated library; the parser's `RuneSet` is the coarse-grained control.
+For full UAX #31 Script_Extensions-based detection (the standard algorithm for "is this identifier mixing scripts in a suspicious way"), use a dedicated library. The parser's `RuneSet` is the coarse-grained control.
 
 ## Variation Selectors
 
@@ -102,7 +102,7 @@ Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 ru
 - `RuneIn(RuneSet.Runes("\n"))` or `RuneIn(RuneSet.Runes("\r\n"))` matches a single-rune token whose rune is in the set. A CRLF grapheme is two runes, so it matches no single-rune set — it fails `RuneIn` regardless of what runes you put in the set.
 - `RuneNotIn(RuneSet.Runes("\n"))` does the opposite: multi-rune tokens pass `RuneNotIn` unconditionally. `ZeroOrMore(RuneNotIn(stopSet))` used to scan "everything up to a newline" will greedily swallow the terminating CRLF as body content instead of stopping at it, then the terminator fails because there is nothing left.
 
-`RuneLexer` doesn't have this problem; it emits `'\r'` and `'\n'` as separate tokens. The bite is `GraphemeLexer`-specific, which is the default.
+`RuneLexer` doesn't have this problem. It emits `'\r'` and `'\n'` as separate tokens. The bite is `GraphemeLexer`-specific, which is the default.
 
 **Fix.** Add an explicit `Literal("\r\n")` alternative anywhere the grammar cares about line breaks. One helper covers the three idiomatic uses:
 
@@ -167,7 +167,7 @@ What breaks:
 - Thai SARA AM. "kam" (ก + ํา) splits.
 - Other extended-grapheme-cluster rules added after about 2003 (Prepend characters, Extended_Pictographic sequences).
 
-The common thread is timing. Combining marks have been in Unicode since the start, so the legacy walker handles them. Everything UAX #29 added later, especially the emoji rules from 2014 onward, the legacy walker doesn't know about. Microsoft updated `StringInfo` to ICU in .NET 5; Unity's Mono didn't follow, and IL2CPP compiles from that Mono.
+The common thread is timing. Combining marks have been in Unicode since the start, so the legacy walker handles them. Everything UAX #29 added later, especially the emoji rules from 2014 onward, the legacy walker doesn't know about. Microsoft updated `StringInfo` to ICU in .NET 5. Unity's Mono didn't follow, and IL2CPP compiles from that Mono.
 
 **Fix.** Three options, in order of effort:
 
@@ -175,4 +175,4 @@ The common thread is timing. Combining marks have been in Unicode since the star
 2. If a specific input causes trouble, switch that grammar to `RuneLexer` and handle the multi-rune sequence explicitly with a small rule. This trades grapheme convenience for one extra rule and works on every runtime.
 3. Vendor a UAX #29 implementation into the parser. Tracked in [backlog/r000](../backlog/r000-vendor-a-uax-#29-grapheme-cluster-implementation.md). Half a day of work, gives full conformance everywhere.
 
-The repo's test suite documents the broken cases explicitly. Look for tests gated behind `#if !UNITY_INCLUDE_TESTS` in [TokenRuleTests.cs](../src/InductorParser.Tests/Rules/TokenRuleTests.cs); each one is a category that the legacy walker mishandles.
+The repo's test suite documents the broken cases explicitly. Look for tests gated behind `#if !UNITY_INCLUDE_TESTS` in [TokenRuleTests.cs](../src/InductorParser.Tests/Rules/TokenRuleTests.cs). Each one is a category that the legacy walker mishandles.

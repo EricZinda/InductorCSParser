@@ -54,7 +54,7 @@ Test surface: all 458 non-timing tests continued to pass. The round-trip spot-ch
 
 ### Measurements
 
-Measurement protocol: stash the working tree, build, run baseline; pop, build, run after. Each timing test ran three times per side because the short-corpus wall-clock tests swing ~2x between runs.
+Measurement protocol: stash the working tree, build, run baseline. Pop, build, run after. Each timing test ran three times per side because the short-corpus wall-clock tests swing ~2x between runs.
 
 #### ChordGrammar timing (5000 iters × 151 inputs, median of 3 runs)
 
@@ -78,7 +78,7 @@ HrSpaced      9-10x             7-10x
 Paragraph     18-28x            15-19x
 ```
 
-Within noise for most cases. HrRun, HrSpaced, and Paragraph showed modest improvement; the others landed in the same range as baseline.
+Within noise for most cases. HrRun, HrSpaced, and Paragraph showed modest improvement. The others landed in the same range as baseline.
 
 #### JSON benchmark (BenchmarkDotNet ShortRunJob, 3 iterations)
 
@@ -104,7 +104,7 @@ The p700 backlog item predicted that leaf Symbol interning (sub-lever a) or the 
 
 The net gain was under the threshold the user wanted to carry as permanent code complexity. The new `TryParseDiscarded` entry point doubles the Rule-to-Rule dispatch surface (two methods where there was one), and the anonymous-wrapper removal needs a load-bearing gate on `Name == null && ErrorMessage == null` that a future contributor could easily miss when adding a new modifier method or a new wrapper rule.
 
-For ~3% on Chord and ~5% allocation on JSON Deep/Long, the complexity didn't carry its weight. The p700 backlog item is still open; a future attempt should pick one of the three originally-proposed sub-levers (leaf Symbol interning, SymbolChildren struct, or compile-time `Or(Token, ...)` → `RuneIn` rewrite) where the allocation ceiling is higher.
+For ~3% on Chord and ~5% allocation on JSON Deep/Long, the complexity didn't carry its weight. The p700 backlog item is still open. A future attempt should pick one of the three originally-proposed sub-levers (leaf Symbol interning, SymbolChildren struct, or compile-time `Or(Token, ...)` → `RuneIn` rewrite) where the allocation ceiling is higher.
 
 ### What a future attempt should reuse
 
@@ -123,18 +123,18 @@ Engineering record of the two p700 sub-levers the earlier attempt (logged above)
 
 ### What p700 sub-levers a and b asked for
 
-From the retired p700 backlog item, three sub-levers were proposed originally; the earlier attempt logged above targeted a fourth surface (discard propagation + empty-wrapper removal) and didn't move the needle. This attempt returns to the first two originals:
+From the retired p700 backlog item, three sub-levers were proposed originally. The earlier attempt logged above targeted a fourth surface (discard propagation + empty-wrapper removal) and didn't move the needle. This attempt returns to the first two originals:
 
 1. (a) Leaf Symbol interning on `RuneInRule` / `RuneNotInRule` / `AnyTokenRule`. Cache by (FlattenType, rune) so repeated matches of the same rune reuse one Symbol instance instead of allocating a fresh one per match.
-2. (b) A replacement for the `List<Symbol>` that `AndRule` and `BetweenInclusiveRule` use to accumulate matched children. The backlog item sketched this as an inline-buffer struct; this attempt tried the lighter-weight version first: a plain `Symbol[]` with doubling growth.
+2. (b) A replacement for the `List<Symbol>` that `AndRule` and `BetweenInclusiveRule` use to accumulate matched children. The backlog item sketched this as an inline-buffer struct. This attempt tried the lighter-weight version first: a plain `Symbol[]` with doubling growth.
 
-Sub-lever (c) (compile-time `Or(Token, Token, ...)` → `RuneIn` rewrite) is still unimplemented; the JSON grammar already uses `RuneIn` directly everywhere so there was no hot path to target in the current benchmark.
+Sub-lever (c) (compile-time `Or(Token, Token, ...)` → `RuneIn` rewrite) is still unimplemented. The JSON grammar already uses `RuneIn` directly everywhere so there was no hot path to target in the current benchmark.
 
 ### What was actually tried
 
 **Sub-lever (a): leaf Symbol interning.** Added a per-Lexer cache on `Lexer` with a direct-indexed `Symbol?[128]` fast path for ASCII and a `Dictionary<long, Symbol>` fallback keyed on `(FlattenType << 32) | rune`. `RuneInRule`, `RuneNotInRule`, and `AnyTokenRule` route single-rune success symbols through the cache instead of allocating per match. Cached Symbols carry a fresh 1- or 2-char string as their backing memory, not a reference into the current input, so the cache does not keep the input string alive past the parse.
 
-Scope choice: cache lives on the Lexer, not on the Rule. Rules are shared across threads and parses; a per-Rule cache would need a lock and would hold Memory references across parses. Per-Lexer keeps it single-threaded by contract (one Lexer per parse) and disposable with the parse.
+Scope choice: cache lives on the Lexer, not on the Rule. Rules are shared across threads and parses. A per-Rule cache would need a lock and would hold Memory references across parses. Per-Lexer keeps it single-threaded by contract (one Lexer per parse) and disposable with the parse.
 
 **Sub-lever (b): array-backed match buffer.** Replaced `List<Symbol>?` with `Symbol[]?` in `AndRule` and `BetweenInclusiveRule`. AndRule sizes the buffer at `Children.Count` upfront (tight upper bound: each child produces at most one non-Discarded Symbol, so no growth is ever needed). BetweenInclusiveRule starts at 4 and doubles via `Array.Resize`. Both trim to exact size via `Array.Copy` at the end when the filled count is short of the buffer length. The saving is the `List<T>` header (~24 B per populated wrapper) that the old code paid for on top of its internal array.
 
@@ -185,14 +185,14 @@ Both results are consistent with what the earlier P700 attempt (discard propagat
 
 Neither sub-lever clears the "is this worth the permanent complexity" bar. Sub-lever (a) adds a per-Lexer cache field, a helper method on Lexer, and a load-bearing "use a fresh rune-only string, not a pointer into the input" invariant that a future contributor could easily miss when hooking another leaf into the cache. Sub-lever (b) adds two growth paths (AndRule fixed-size, BetweenInclusive doubling) and a trim-on-short branch in two places where a single `List<T>` line used to be.
 
-For at most ~3% allocation on Deep/Long and essentially zero wall-clock change on any shape, neither carries its weight. The p800 compiled-emitter lever is the next real place to spend effort; everything allocation-side on the interpreter path has now been tried.
+For at most ~3% allocation on Deep/Long and essentially zero wall-clock change on any shape, neither carries its weight. The p800 compiled-emitter lever is the next real place to spend effort. Everything allocation-side on the interpreter path has now been tried.
 
 The README paragraph this experiment set out to fact-check was updated at [src/Benchmarks/README.md](../src/Benchmarks/README.md) before the code attempt. It now frames the remaining gap against Parlot as interpreter overhead plus per-composite-rule Transaction bookkeeping, and points at p600/p700/p800 as the supporting evidence rather than claiming tree richness is the cost center.
 
 ### What a future attempt should know
 
 - The "just swap `List<T>` for `Symbol[]`" refactor is a wash. If anyone returns to sub-lever (b), the version worth trying is the full inline-buffer struct (4 `Symbol` fields inline in a struct, plus optional overflow, with `Symbol.Children` accepting the struct). That's the only flavor of (b) with a meaningful allocation ceiling to hit, because it removes the intermediate buffer entirely for the common ≤4 case. It's also invasive to `Symbol`'s public surface.
-- Sub-lever (a) is structurally fine; it just has nothing to do at 3% escape density. A grammar with a hot `RuneIn` loop outside a Delete-typed wrapper (a tokenizer for keyword-heavy text, or ChordGrammar's `accidental` at larger corpus scale) would exercise it. The cache scaffolding is easy to reinstate from this attempt's git history if that need comes up.
+- Sub-lever (a) is structurally fine. It just has nothing to do at 3% escape density. A grammar with a hot `RuneIn` loop outside a Delete-typed wrapper (a tokenizer for keyword-heavy text, or ChordGrammar's `accidental` at larger corpus scale) would exercise it. The cache scaffolding is easy to reinstate from this attempt's git history if that need comes up.
 - Measurement harness from the earlier P700 and P600 entries still applies: JSON with `--filter "*_InductorParser" "*_SystemTextJson"` and `--spot-check` after any change that touches Symbol construction or composite-rule plumbing.
 
 ---
@@ -227,7 +227,7 @@ var innerResult = Inner.TryParse(lexer);
 lexer.SetPosition(savedPosition);
 ```
 
-The four leaves saved the position on entry and called `SetPosition` on every failure path before returning `null`; the success path just leaves the advanced position in place.
+The four leaves saved the position on entry and called `SetPosition` on every failure path before returning `null`. The success path just leaves the advanced position in place.
 
 Updated the Rule.TryParseRule contract comment to describe the saved-position pattern alongside Transaction.
 
@@ -244,7 +244,7 @@ Test surface: all 458 non-timing tests passed after updating trace expectations.
 
 ### Measurements
 
-Measurement protocol: stash production-rule changes, rebuild, run baseline; pop, rebuild, run after. For ChordGrammar and BacklogGrammar, both sides were measured fresh in the same session. For JSON the "after" was a fresh BenchmarkDotNet run and the baseline was the existing README numbers (also post-p500 master) — so the JSON baseline / after comparison straddles separate BDN sessions and picks up additional run-to-run noise.
+Measurement protocol: stash production-rule changes, rebuild, run baseline. Pop, rebuild, run after. For ChordGrammar and BacklogGrammar, both sides were measured fresh in the same session. For JSON the "after" was a fresh BenchmarkDotNet run and the baseline was the existing README numbers (also post-p500 master) — so the JSON baseline / after comparison straddles separate BDN sessions and picks up additional run-to-run noise.
 
 #### ChordGrammar timing (5000 iters × 151 inputs, ratio vs compiled regex)
 
@@ -362,7 +362,7 @@ On Big, every eliminated invocation is a `RuneIn FAIL` from `OptionalWhitespace(
 
 ### Measurements
 
-Measurement protocol: stash the change, rebuild, run baseline 3x; pop, rebuild, run after 3x. Same box, same BenchmarkDotNet ShortRunJob, same 8-row filter (`*_InductorParser` + `*_SystemTextJson`). Baseline's Big row was captured on 2 of 3 runs because a concurrent source edit during run 2 invalidated that row — acceptable since the other shapes have 3 valid runs each and the "after" deltas are much larger than the single-run spread.
+Measurement protocol: stash the change, rebuild, run baseline 3x. Pop, rebuild, run after 3x. Same box, same BenchmarkDotNet ShortRunJob, same 8-row filter (`*_InductorParser` + `*_SystemTextJson`). Baseline's Big row was captured on 2 of 3 runs because a concurrent source edit during run 2 invalidated that row — acceptable since the other shapes have 3 valid runs each and the "after" deltas are much larger than the single-run spread.
 
 #### JSON benchmark (BenchmarkDotNet ShortRunJob, median of 3 runs)
 
@@ -388,10 +388,10 @@ This result reinforces the thesis in [src/Benchmarks/README.md](../src/Benchmark
 
 Small code footprint: one gated block at the top of `TryParseRule` that reads properties already computed at rule-construction time. No new API surface, no new compile-time analysis pass, no load-bearing invariant that a future contributor could miss when adding a new composite rule. Semantic transparency: when Inner would fail and cause the outer BetweenInclusive to succeed-with-zero-iterations or fail-as-unreached-lower-bound, the skip produces the same output tree and the same failure record. The `Inner.ErrorMessage == null` gate ensures user-supplied error messages still surface by running the inner path that would emit them.
 
-The only externally observable behavior change is trace output: diagnostic-level traces for calls the skip caught no longer include the inner `Lexer.Read` / FAIL lines. Two existing trace-expectation tests were updated; the rest already use `PreserveFlattenWrappers=true` (which gates the skip off) for their `Tree.ToString()` assertions.
+The only externally observable behavior change is trace output: diagnostic-level traces for calls the skip caught no longer include the inner `Lexer.Read` / FAIL lines. Two existing trace-expectation tests were updated. The rest already use `PreserveFlattenWrappers=true` (which gates the skip off) for their `Tree.ToString()` assertions.
 
 ### What future work should know
 
-- `OrRule` (p500) and now `BetweenInclusiveRule` (p750) are the two composite wrappers that open transactions on entry and can tolerate their child failing with zero advance — Or's "try next branch" and BetweenInclusive's "zero-iteration success for AtLeast==0" both have that shape. `AndRule` does not, because its child failing is propagating; there's no branch to skip to. So this pattern is applied everywhere it can be on the current interpreter.
+- `OrRule` (p500) and now `BetweenInclusiveRule` (p750) are the two composite wrappers that open transactions on entry and can tolerate their child failing with zero advance — Or's "try next branch" and BetweenInclusive's "zero-iteration success for AtLeast==0" both have that shape. `AndRule` does not, because its child failing is propagating. There's no branch to skip to. So this pattern is applied everywhere it can be on the current interpreter.
 - If p800 (compiled state-machine emitter) lands, this skip becomes redundant because the emitter will inline the peek-and-skip directly into the generated code. Until then, p750 makes p800's baseline ~10% faster and slightly harder to beat.
 - The verification harness from this attempt is reusable: `--rule-counts --shape=<big|deep|long|wide>` shows per-Rule trace outcome totals, which is the cleanest way to confirm a lookahead-style optimization actually fires on the intended invocations. The `RuneProfiler` plumbing lives in [src/Benchmarks/RuleProfiler.cs](../src/Benchmarks/RuleProfiler.cs) and the CLI hook in [src/Benchmarks/Program.cs](../src/Benchmarks/Program.cs).

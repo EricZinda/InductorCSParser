@@ -104,7 +104,7 @@ public readonly struct ParseResult
     public string? Name(Symbol symbol) => symbol == null ? null : NameOf(symbol.Id);
 
     // Render the tree to a string for debug output. If Symbols has one
-    // element, prints that; otherwise prints each top-level Symbol.
+    // element, prints that. Otherwise prints each top-level Symbol.
     public string PrintTree()
     {
         if (_symbols == null || _grammar == null) return string.Empty;

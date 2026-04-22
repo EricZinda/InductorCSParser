@@ -139,7 +139,7 @@ public class NameOfTests
     [Test]
     public void NameOf_is_stable_across_repeated_calls()
     {
-        // Second call hits the cached _nameIndex path; first call builds it.
+        // Second call hits the cached _nameIndex path. First call builds it.
         // Both should return the same answer.
         var rule = OneOrMore(RuneIn(RuneSet.Letters)).As("word");
         rule.Compile();

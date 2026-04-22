@@ -60,7 +60,7 @@ public static class HtmlGrammar
     // Attribute name: one or more characters that aren't whitespace, ", ',
     // >, /, =, or a control character. The null-byte and control-char
     // rules in the spec aren't enforced here (the C++ parser doesn't
-    // enforce them either); the visible ASCII excludes are what matters.
+    // enforce them either). The visible ASCII excludes are what matters.
     public static readonly Rule AttributeName =
         OneOrMore(RuneNotIn("\r\n\t \"'>/="));
 
@@ -181,7 +181,7 @@ public static class HtmlGrammar
     //     the stopper would only stop at a complete end tag, so content
     //     like "</styled" (where "</style" is followed by 'd') would pass
     //     through as body and the scan would keep going. The HTML spec
-    //     says "</style" must be followed by space, ">", or "/"; anything
+    //     says "</style" must be followed by space, ">", or "/". Anything
     //     else is ill-formed. Stopping at the prefix catches this — if the
     //     characters after don't form a valid end tag, EndStyleTag fails
     //     and the outer rule fails loudly at the right spot.
@@ -193,7 +193,7 @@ public static class HtmlGrammar
     //     match.
     //
     // General pattern: StringChars's stopper is the shortest unambiguous
-    // prefix of the terminator; the outer And re-matches the full
+    // prefix of the terminator. The outer And re-matches the full
     // terminator to consume it.
     public static readonly Rule NonReplaceableCharacterElement = And(
         StartStyleTag,
@@ -207,7 +207,7 @@ public static class HtmlGrammar
     public static readonly Rule Element = ElementForward;
 
     // Normal character element: StartTag (Element | (not-"<")+)* EndTag.
-    // The inner Or tries element recursion first; if we're not sitting
+    // The inner Or tries element recursion first. If we're not sitting
     // on a "<", the OneOrMore(not-"<") sweeps up a run of text instead.
     public static readonly Rule NormalCharacterElement = And(
         StartTag,
@@ -221,7 +221,7 @@ public static class HtmlGrammar
     // Ordering: comment first (starts with "<!--"), then the specific
     // <style> block (starts with "<style"), then void (ends with "/>")
     // before normal (ends with ">"). PEG doesn't peek the end, so we
-    // commit in source order; void must come before normal because the
+    // commit in source order. Void must come before normal because the
     // two share the same left prefix and only diverge at the closing
     // "/" vs ">".
     private static readonly Rule ElementDef = Or(
@@ -236,7 +236,7 @@ public static class HtmlGrammar
 
     // Document: any number of leading whitespace or comments, then one
     // root element, optional trailing whitespace, EOF. DOCTYPE and BOM
-    // aren't implemented here; the C++ version doesn't handle them
+    // aren't implemented here. The C++ version doesn't handle them
     // either.
     public static readonly Rule Document = And(
         ZeroOrMore(Or(

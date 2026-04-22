@@ -51,7 +51,7 @@ public class NotRuleTests
         var result = rule.Parse("ax");
 
         Assert.That(result.Success, Is.False);
-        // Token('a') at offset 0 succeeds; the overall parse fails because
+        // Token('a') at offset 0 succeeds. The overall parse fails because
         // input isn't fully consumed. What matters is that Not didn't
         // leave the cursor advanced — if it had, the trailing Token('a')
         // would have reported somewhere past offset 0.
@@ -62,7 +62,7 @@ public class NotRuleTests
     public void Not_rule_based_passthrough_stops_at_the_inner_rule()
     {
         // The rule-based pass-through idiom: consume any character that
-        // isn't the start of the stop rule. Here the stop is '!'; the
+        // isn't the start of the stop rule. Here the stop is '!'. The
         // body is arbitrary text up to (but not including) it.
         var rule = And(
             ZeroOrMore(And(Not(Token('!')), AnyToken())),

@@ -90,7 +90,7 @@ internal sealed class BetweenInclusiveRule : Rule
             // lexer (e.g. Optional, Peek, Not, or any composite of zero-width
             // children). Without this break the loop would spin forever on
             // ZeroOrMore(Optional(X)) and friends, incrementing count without
-            // making progress. Exit with whatever count we have; the AtLeast
+            // making progress. Exit with whatever count we have. The AtLeast
             // check below decides if that's enough to call the rule a success.
             if (lexer.Position == positionBefore) break;
             // Don't add child symbols if they are discarded
@@ -112,7 +112,7 @@ internal sealed class BetweenInclusiveRule : Rule
     }
 
     // Return the set of runes this rule might consume first (can be a superset)
-    // (RuneSet.Empty when Advance.Never; RuneSet.Universe means "I don't know").
+    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
     // that first character on success.
     internal override RuleStartRequirements ComputeRuleStart()

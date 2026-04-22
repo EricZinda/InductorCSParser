@@ -73,7 +73,7 @@ public static class CssGrammar
     // Strings can escape the quote character, include a line continuation
     // (\ followed by CRLF), or contain any other rune that isn't the
     // outer quote. The C++ version uses ReplaceExpression to rewrite
-    // the escaped form in the AST; for accept/reject purposes that
+    // the escaped form in the AST. For accept/reject purposes that
     // reduces to matching the escaped form as a two-rune literal.
     public static readonly Rule DoubleQuotedString = And(
         Token('"'),
@@ -111,7 +111,7 @@ public static class CssGrammar
 
     // (class|id|pseudo|type|*) (class|pseudo|id)*
     // Ordering mirrors the C++ Or: class/id/pseudo are distinguishable
-    // by their leading sigil; TypeSelector only fires when none of the
+    // by their leading sigil. TypeSelector only fires when none of the
     // others could, because it just matches a bare identifier.
     public static readonly Rule SimpleSelectorSequence = And(
         Or(ClassSelector, IdSelector, PseudoSelector, TypeSelector, UniversalSelector),

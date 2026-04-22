@@ -7,7 +7,7 @@ namespace InductorParser;
 public static class Rules
 {
     // Matches one grapheme by exact content. All four overloads funnel into
-    // TokenRule(string); the overloads exist for convenience and for early
+    // TokenRule(string). The overloads exist for convenience and for early
     // validation of their specific argument shape.
     public static Rule Token(char c)
     {
@@ -34,7 +34,7 @@ public static class Rules
     public static Rule Token(string grapheme) => new TokenRule(grapheme);
 
     // Match an exact multi-character string in a single transaction. For a
-    // one-grapheme match use Token(string); Literal is the N-grapheme
+    // one-grapheme match use Token(string). Literal is the N-grapheme
     // generalization and collapses what would otherwise be N Token rules
     // (and N transactions) into one. Rejects empty strings at construction.
     public static Rule Literal(string value) => new LiteralRule(value);

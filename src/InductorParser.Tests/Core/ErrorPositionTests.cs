@@ -7,8 +7,8 @@ namespace InductorParser.Tests;
 
 // Tests for the derived error-position properties on ParseResult:
 // ErrorLine, ErrorColumn, ErrorRuneIndex, ErrorGraphemeIndex. The
-// underlying ErrorCharIndex is covered by the per-rule test fixtures;
-// this file exercises the char-index -> (line, column, rune, grapheme)
+// underlying ErrorCharIndex is covered by the per-rule test fixtures.
+// This file exercises the char-index -> (line, column, rune, grapheme)
 // conversions specifically.
 //
 // ------------------------------------------------------------------
@@ -123,7 +123,7 @@ public class ErrorPositionTests
     {
         // Grammar consumes 'a's then demands Eof, so the failure position
         // lands on the first non-'a' char. Input "aa\n" fails at offset 2
-        // (the '\n' itself). '\n' is the line terminator; the index that
+        // (the '\n' itself). '\n' is the line terminator. The index that
         // lands ON it reports the line that just ended.
         var rule = And(OneOrMore(Token('a')), Eof());
         var result = rule.Parse("aa\n");
@@ -161,7 +161,7 @@ public class ErrorPositionTests
         // consumes "aa\r" (three runes) and the trailing Eof then fails
         // at offset 3 on the '\n'.
         //
-        // LSP says positions can't fall inside a line terminator; we
+        // LSP says positions can't fall inside a line terminator. We
         // attribute the '\n' to the prior line so the caller gets line 0
         // column 3 rather than some negative-column nonsense.
         var rule = And(
@@ -226,7 +226,7 @@ public class ErrorPositionTests
     public void Rune_index_collapses_surrogate_pair_to_one_rune()
     {
         // Guitar emoji (one rune, two UTF-16 chars) then 'X'. The grammar
-        // accepts OneOrMore(Token(guitar)) followed by Eof; fails on 'X'
+        // accepts OneOrMore(Token(guitar)) followed by Eof. Fails on 'X'
         // at char offset 2 (past the two UTF-16 halves of the guitar),
         // which is one rune in.
         var rule = And(OneOrMore(Token(GuitarGrapheme)), Eof());

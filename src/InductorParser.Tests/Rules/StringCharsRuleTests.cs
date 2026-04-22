@@ -10,7 +10,7 @@ namespace InductorParser.Tests;
 public class StringCharsRuleTests
 {
     // "Scan until pipe" — the simplest stopper-style setup. Body is
-    // any rune other than '|'; scan stops at the first '|' without
+    // any rune other than '|'. Scan stops at the first '|' without
     // consuming it. Mirrors the common "scan until the delimiter"
     // idiom that the stopper-based API is designed for.
     private static Rule StopOnPipe() => StringChars(RuneSet.Runes("|"));
@@ -49,7 +49,7 @@ public class StringCharsRuleTests
         var result = rule.Parse("|");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        // The StringChars leaf contributes an empty slice; Token('|')
+        // The StringChars leaf contributes an empty slice. Token('|')
         // is Delete so it drops out of the tree. Concatenated text is
         // "".
         Assert.That(result.Tree!.ToString(), Is.EqualTo(""));
@@ -256,7 +256,7 @@ public class StringCharsRuleTests
         // C++ raw-string / Python triple-quote flavor: the stop
         // condition is a multi-rune sequence. The stopper rule runs
         // in a peek transaction, so the stopper isn't consumed by
-        // StringChars; the surrounding grammar matches it after.
+        // StringChars. The surrounding grammar matches it after.
         var stopper = Literal("\"\"\"");
         var body = StringChars(stopper);
         var rule = InductorParser.Rules.And(body, Literal("\"\"\""));
@@ -264,7 +264,7 @@ public class StringCharsRuleTests
         var result = rule.Parse("hello \"world\" yes\"\"\"");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        // Body includes single '"' chars; only the triple-quote
+        // Body includes single '"' chars. Only the triple-quote
         // sequence terminates the scan.
         Assert.That(result.Tree!.ToString(), Is.EqualTo("hello \"world\" yes"));
     }

@@ -34,7 +34,7 @@ public class RuneInRuleTests
     [Test]
     public void RuneIn_EOF_on_empty_input_points_at_zero()
     {
-        // OneOrMore requires at least one letter; empty input can't satisfy
+        // OneOrMore requires at least one letter. Empty input can't satisfy
         // that. RuneIn sees EOF on its first read and records at its pre-
         // read position 0 with its WithError message.
         var rule = OneOrMore(RuneIn(RuneSet.Letters).WithError("need a letter"));
@@ -49,7 +49,7 @@ public class RuneInRuleTests
     [Test]
     public void RuneIn_mismatch_at_start_points_at_offender()
     {
-        // '1' is at offset 0; not a letter. RuneIn records its WithError
+        // '1' is at offset 0. Not a letter. RuneIn records its WithError
         // message at pre-read position 0.
         var rule = OneOrMore(RuneIn(RuneSet.Letters).WithError("need a letter"));
 

@@ -27,7 +27,7 @@ namespace InductorParser;
 // grapheme via StringInfo.GetNextTextElement. Token("ab") throws at
 // grammar-build time instead of silently failing at parse time. (Note:
 // on pre-.NET 5 runtimes StringInfo is not UAX #29 compliant, so the
-// grapheme count for exotic Unicode inputs can be wrong; see
+// grapheme count for exotic Unicode inputs can be wrong. See
 // backlog/r000.)
 //
 // If the expected grapheme is exactly one rune (the common case for
@@ -81,8 +81,8 @@ internal sealed class TokenRule : Rule
             int tokenStart = lexer.Position;
             var token = lexer.Read();
             // Error Positioning: tokenStart is where the specific failing token began.
-            // For a single-token match this equals transaction.StartPosition;
-            // for multi-token lockstep (multi-rune grapheme under RuneLexer)
+            // For a single-token match this equals transaction.StartPosition.
+            // For multi-token lockstep (multi-rune grapheme under RuneLexer)
             // it's the start of whichever token mismatched, not the start
             // of the whole attempt.
             if (token.IsEof)
@@ -120,7 +120,7 @@ internal sealed class TokenRule : Rule
     }
 
     // Return the set of runes this rule might consume first (can be a superset)
-    // (RuneSet.Empty when Advance.Never; RuneSet.Universe means "I don't know").
+    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
     // that first character on success.
     internal override RuleStartRequirements ComputeRuleStart()
@@ -128,7 +128,7 @@ internal sealed class TokenRule : Rule
         // Whatever the expected grapheme is, its first rune is the only
         // thing the lookahead has to match for this rule to have a chance.
         // Multi-rune graphemes (ZWJ sequences, etc.) still pin the set to
-        // the first rune; the follow-on runes are checked by the rule's
+        // the first rune. The follow-on runes are checked by the rule's
         // own lockstep compare against _expected.
         Lexer.TryPeekRune(_expected, 0, out int first, out _);
         return new RuleStartRequirements(RuneSet.Single(first), Advance.Always);

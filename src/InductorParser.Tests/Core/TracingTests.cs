@@ -139,7 +139,7 @@ public class TracingTests
         // exact expected trace output, and (b) the second parse
         // produces the same output as the first. Without (a), both
         // parses could silently produce the same wrong indentation
-        // and the test would pass; without (b), a depth-leak bug
+        // and the test would pass. Without (b), a depth-leak bug
         // that changed the second run would slip through.
         var sink1 = NewSink();
         var sink2 = NewSink();
@@ -207,7 +207,7 @@ public class TracingTests
         // Complement to the "off path" test above. When the handler's
         // shouldAppend=true, arguments must be evaluated exactly once
         // (not zero, not twice). Zero would mean AppendFormatted is
-        // never called even when tracing is on; two would mean the
+        // never called even when tracing is on. Two would mean the
         // compiler generated a spurious extra evaluation.
         var sink = NewSink();
         var lexer = new GraphemeLexer("x", sink, TraceLevel.Diagnostic);

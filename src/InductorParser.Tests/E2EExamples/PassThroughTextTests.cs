@@ -7,8 +7,8 @@ namespace InductorParser.Tests;
 // End-to-end checks that the pass-through-text primitives
 // (RuneNotIn, AnyToken, Not, Peek) compose into the two idioms the
 // backlog called out: delimiter-based stops and rule-based stops.
-// If one of the primitives regresses, a unit test will fail first;
-// this fixture catches the interaction failures that only show up
+// If one of the primitives regresses, a unit test will fail first.
+// This fixture catches the interaction failures that only show up
 // when the primitives work together.
 [TestFixture]
 public class PassThroughTextTests
@@ -91,7 +91,7 @@ public class PassThroughTextTests
     {
         // Peek is useful for disambiguating overlapping prefixes without
         // committing to the disambiguated branch. Here "if" and "iffy"
-        // share a prefix; Peek(Not(letter)) confirms the keyword really
+        // share a prefix. Peek(Not(letter)) confirms the keyword really
         // ends after "if" before the caller commits.
         var keywordIf = And(
             Token('i'),

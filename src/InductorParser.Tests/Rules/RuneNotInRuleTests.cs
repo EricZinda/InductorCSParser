@@ -53,7 +53,7 @@ public class RuneNotInRuleTests
         // isn't any single rune at all. This is the property that lets
         // ZeroOrMore(RuneNotIn(...)) sweep up arbitrary Unicode text.
         // NormalizeInput = null so the decomposed "e\u0301" arrives at the
-        // lexer verbatim; the default NFC would compose it to "\u00E9" and
+        // lexer verbatim. The default NFC would compose it to "\u00E9" and
         // collapse this test's "multi-rune grapheme" premise.
         var rule = RuneNotIn(RuneSet.Ascii.Letters);
         var result = rule.Parse(LatinEAcuteGrapheme,

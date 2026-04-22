@@ -10,7 +10,7 @@ public enum ParseOutcome
     Timeout,
 
     // ParseOptions.MaxRuleInvocations was reached. Deterministic work
-    // limit; the same input against the same grammar always trips at the
+    // limit. The same input against the same grammar always trips at the
     // same point.
     WorkLimitExceeded,
 

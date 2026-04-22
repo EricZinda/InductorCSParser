@@ -38,7 +38,7 @@ public class ExactlyRuleTests
     {
         // Exactly commits after the Nth match even when more would match.
         // Here the And requires the follow-up Token('a') to pick up the
-        // fourth 'a'; if Exactly greedily consumed it, the And would fail.
+        // fourth 'a'. If Exactly greedily consumed it, the And would fail.
         var rule = And(Exactly(Token('a'), 3), Token('a'));
         var result = rule.Parse("aaaa", Debug());
 

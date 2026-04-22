@@ -42,7 +42,7 @@ public static class StringLiteralGrammars
     // ========== Python triple-quote ==========
     //
     // """...""" Body is any rune including raw newlines and
-    // individual " chars; only three consecutive " terminates.
+    // individual " chars. Only three consecutive " terminates.
     // Escape processing matches single-line. Uses the Rule-stopper
     // overload since the boundary is multi-rune.
     public static readonly Rule PythonTripleQuote = BuildPythonTripleQuote();
@@ -52,7 +52,7 @@ public static class StringLiteralGrammars
     // r"..."  No escape processing. Any rune except the closing
     // quote is body (backslashes are literal). CPython's tokenizer
     // has a quirk where a raw string can't end in an odd number of
-    // backslashes; that quirk is lexer-level and isn't modeled
+    // backslashes. That quirk is lexer-level and isn't modeled
     // here.
     public static readonly Rule PythonRawSingleLine = BuildPythonRawSingleLine();
 
@@ -74,7 +74,7 @@ public static class StringLiteralGrammars
         var escapeEnd = Or(simpleEscape, unicodeEscape);
 
         // Stoppers: the closing quote plus every C0 control char.
-        // Range(0x00, 0x1F) covers U+0000..U+001F inclusive; those
+        // Range(0x00, 0x1F) covers U+0000..U+001F inclusive. Those
         // include TAB (0x09), LF (0x0A), and CR (0x0D) — all of
         // which JSON requires be escaped rather than embedded raw.
         var stoppers = RuneSet.Runes("\"") | RuneSet.Range(0x00, 0x1F);
@@ -98,7 +98,7 @@ public static class StringLiteralGrammars
         // Stopper is a multi-rune sequence — use the Rule-stopper
         // overload. The stopper rule runs in a peek transaction that
         // always rolls back, so the closing """ is NOT consumed by
-        // the body scan; the outer And's trailing Literal matches
+        // the body scan. The outer And's trailing Literal matches
         // it.
         var body = StringChars(
             Literal("\"\"\""),
@@ -110,7 +110,7 @@ public static class StringLiteralGrammars
 
     private static Rule BuildPythonRawSingleLine()
     {
-        // No escape start; the literal-only StringChars overload.
+        // No escape start. The literal-only StringChars overload.
         // Backslashes inside the body are just body content.
         var body = StringChars(RuneSet.Runes("\""));
         return And(Token('r'), Token('"'), body, Token('"')).As("pyRawString");
@@ -149,7 +149,7 @@ public static class StringLiteralGrammars
                            hexDigit, hexDigit, hexDigit, hexDigit);
 
         // \N{name}  Unicode character name. Real Python restricts
-        // name content to a printable-ASCII subset; we accept any
+        // name content to a printable-ASCII subset. We accept any
         // non-} rune as a simplifying sketch. Matches the shape,
         // not the validation.
         var nameChar = RuneIn(~RuneSet.Runes("}"));

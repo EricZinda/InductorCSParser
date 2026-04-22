@@ -220,7 +220,7 @@ public class BacklogGrammarTests
     private static string Display(string input)
     {
         // Control chars in the corpus would make failure output unreadable.
-        // \n, \t, \r get visible escapes; everything else shows as-is.
+        // \n, \t, \r get visible escapes. Everything else shows as-is.
         return "\"" + input
             .Replace("\\", "\\\\")
             .Replace("\n", "\\n")
@@ -260,7 +260,7 @@ public class BacklogGrammarTests
             ("Paragraph",  ParagraphRegex, BacklogGrammar.ParagraphSplit, ParagraphCorpus),
         };
 
-        // Warmup. Rule compile happens on the first Parse; both sides
+        // Warmup. Rule compile happens on the first Parse. Both sides
         // get a few thousand iterations so JIT settles too.
         for (int w = 0; w < 200; w++)
             foreach (var pair in pairs)

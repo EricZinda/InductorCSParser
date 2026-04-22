@@ -103,7 +103,7 @@ public static class InductorJsonParser
     // the tree, so Tree.ToString() on a normally-parsed value returns just
     // the concatenated non-delimiter content rather than the original
     // input. PreserveFlattenWrappers keeps every grammar node in the tree
-    // for verification purposes; it is not used by the benchmark runs.
+    // for verification purposes. It is not used by the benchmark runs.
     private static readonly ParseOptions _roundTripOptions = new()
     {
         InputUnit = InputUnit.Rune,

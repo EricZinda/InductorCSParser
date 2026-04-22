@@ -39,7 +39,7 @@ public class PeekRuleTests
     [Test]
     public void Peek_does_not_advance_the_cursor_even_when_inner_consumes_multiple_tokens()
     {
-        // Inner rule would consume two chars on success; Peek has to roll
+        // Inner rule would consume two chars on success. Peek has to roll
         // those back. The trailing And(Token('a'), Token('b')) consumes them
         // for real, proving the cursor is at 0 after Peek.
         var rule = And(
@@ -68,7 +68,7 @@ public class PeekRuleTests
     public void Peek_gates_optional_else_branch_in_if_statement()
     {
         // The if-statement example from PeekRule's class comment. Peek
-        // confirms the "else" keyword is ahead; if it is, the real
+        // confirms the "else" keyword is ahead. If it is, the real
         // keyword_else rule that follows consumes it for the parse tree.
         // If Peek fails the Optional short-circuits and leaves the cursor
         // wherever the then-branch ended.

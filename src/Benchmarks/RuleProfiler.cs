@@ -8,7 +8,7 @@ namespace InductorParser.Benchmarks;
 
 // Counts how many times each Rule subclass is invoked on a single Parse by
 // hooking Rule.TryParse via an AsyncLocal/static slot. This deliberately
-// ships as benchmark-project-local instrumentation; it opens a back door
+// ships as benchmark-project-local instrumentation. It opens a back door
 // into the library via a reflection call to a gated internal hook, not
 // via a public API, so library users don't see any of this.
 //

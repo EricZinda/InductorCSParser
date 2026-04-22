@@ -19,7 +19,7 @@ A few terms used throughout these docs mean specific things in this library:
 
 **Composite rule.** A rule built out of other rules. And, Or, BetweenInclusive (plus its wrappers OneOrMore, ZeroOrMore, Optional, NOrMore), and LateBoundRule are the composites. Use "composite" rather than "combinator."
 
-**Syntax tree.** The default output of `rule.Parse(input)`. Each rule's `FlattenType` has already been applied: `Delete` nodes are gone, `Flatten` wrappers have had their children lifted into the parent, and `None` wrappers stay with their own `Id`. `Tree.Find(rule)` works for `FlattenType.None` rules; `Flatten` or `Delete` rules intentionally do not appear, so Find returns null for them. Set `FlattenType.None` on a rule if you need its wrapper to appear in the tree. `Symbol.FlattenInto(...)` (or the no-arg `Flatten()` overload) still exists for trees built by hand outside the parse path, and is idempotent on a tree Parse already returned.
+**Syntax tree.** The default output of `rule.Parse(input)`. Each rule's `FlattenType` has already been applied: `Delete` nodes are gone, `Flatten` wrappers have had their children lifted into the parent, and `None` wrappers stay with their own `Id`. `Tree.Find(rule)` works for `FlattenType.None` rules. `Flatten` or `Delete` rules intentionally do not appear, so Find returns null for them. Set `FlattenType.None` on a rule if you need its wrapper to appear in the tree. `Symbol.FlattenInto(...)` (or the no-arg `Flatten()` overload) still exists for trees built by hand outside the parse path, and is idempotent on a tree Parse already returned.
 
 **Debug tree.** What you get back when `ParseOptions.PreserveFlattenWrappers` is on. Contains every matched token: delimiters, whitespace, individual character leaves, and every `Flatten` / `Delete` wrapper the grammar declares. Mirrors the grammar one-to-one. Useful for `PrintTree` output and for `Find`-queries against wrappers that would otherwise be removed. Not the default because most callers want the syntax tree.
 
@@ -134,7 +134,7 @@ A class Symbol has a unique memory address. `Find(someRule)` returns a specific 
 
 - A `HashSet<Symbol>` used to dedupe a tree walk ("have I visited this node?") distinguishes two instances that happen to carry identical field values. With a struct, structural equality wins, and two nodes with the same Id and same children would collapse into one set entry. "I saw this particular node" silently becomes "I saw a node with these field values."
 - A `Dictionary<Symbol, Metadata>` attaching information to specific tree positions keys on instance identity today. As a struct, it would key on field contents, so anything structurally equal collides.
-- Debugger views of a tree with shared subtrees show one expandable node for each instance; with a struct, every copy looks like a separate entry even when it represents the same position.
+- Debugger views of a tree with shared subtrees show one expandable node for each instance. With a struct, every copy looks like a separate entry even when it represents the same position.
 
 None of those patterns appear in this codebase yet. The Symbol API today is read-only tree traversal plus `Find`-by-rule. So the struct change would be fine for the code that exists. The worry is the code that doesn't exist yet. The first time a future user reaches for one of those patterns expecting reference semantics, they'd get value semantics and a silent bug.
 
@@ -161,15 +161,15 @@ The deeper question is framing: are parse-tree nodes "data without identity" (st
 
 The full contract including method signatures and the lexer API will be documented alongside the implementation.
 
-For grammars that compose existing leaves (which is most grammars) you never need to derive; the built-in composites cover the PEG operators and the built-in leaves cover the character-class cases. User-defined rules matter when you are adding behavior the composites cannot express, for example a rule that consumes until a specific byte-level offset, a grammar-context-aware matcher that queries external state, or a custom character-boundary detector.
+For grammars that compose existing leaves (which is most grammars) you never need to derive. The built-in composites cover the PEG operators and the built-in leaves cover the character-class cases. User-defined rules matter when you are adding behavior the composites cannot express, for example a rule that consumes until a specific byte-level offset, a grammar-context-aware matcher that queries external state, or a custom character-boundary detector.
 
 ## Why Two Lexers
 
-The parser ships two lexers: `GraphemeLexer` (default) and `RuneLexer`. Both produce one "token" per `Read()` call; they differ in what counts as a token. `GraphemeLexer` walks by Unicode grapheme cluster (UAX #29), `RuneLexer` walks by Unicode code point.
+The parser ships two lexers: `GraphemeLexer` (default) and `RuneLexer`. Both produce one "token" per `Read()` call. They differ in what counts as a token. `GraphemeLexer` walks by Unicode grapheme cluster (UAX #29), `RuneLexer` walks by Unicode code point.
 
 `GraphemeLexer` is the default because "one character" in the user's mental model is one grapheme (the guitar emoji 🎸 is one character, the family emoji 👨‍👩‍👧‍👦 is one character), and grammars that operate on user-typed text want that to be the unit they match. `RuneLexer` exists because some grammars specifically need rune-level access: parsing Unicode-category boundaries, walking combining-mark sequences individually, or implementing a Unicode library on top of the parser.
 
-The implementation details (how graphemes are detected, how position tracking works across the two, where the two produce different streams) live in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). The design rationale worth keeping here is: swapping the lexer is a `ParseOptions` field, not a grammar change, and grammars written against the `Rule` API work against either lexer. The rules whose behavior can observably differ between lexers are the ones that compare against a token directly (`Token`, `RuneIn`, `RuneNotIn`, `Literal`, `Peek`, `Not`); composite rules inherit any difference from a leaf inside them.
+The implementation details (how graphemes are detected, how position tracking works across the two, where the two produce different streams) live in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). The design rationale worth keeping here is: swapping the lexer is a `ParseOptions` field, not a grammar change, and grammars written against the `Rule` API work against either lexer. The rules whose behavior can observably differ between lexers are the ones that compare against a token directly (`Token`, `RuneIn`, `RuneNotIn`, `Literal`, `Peek`, `Not`). Composite rules inherit any difference from a leaf inside them.
 
 Where the two diverge on real input, the `RuneLexer` behavior is usually the buggy one: it was matching part of a grapheme as if it were a standalone character. `GraphemeLexer` fixes this by treating the whole sequence as one token. The reframing is "`GraphemeLexer` revealed that my grammar was silently wrong on multi-rune input," not "`GraphemeLexer` broke my grammar."
 
@@ -203,14 +203,14 @@ Every built-in rule that looks at token content reduces to one of four operation
 
 **`Token('=')`, `Token(Rune r)`, `Token(string grapheme)`.** Matches one grapheme, specified at rule-construction time. The `string` overload requires exactly one grapheme and is validated at construction by walking the argument with `StringInfo.GetTextElementEnumerator` and asserting a single element. The `char` and `Rune` overloads are convenience wrappers that build a one-grapheme string. At match time the rule pre-tokenizes its expected grapheme the same way the lexer will tokenize input and walks the expected sequence against `lexer.Read()` in lockstep, comparing `Chars` spans with `SequenceEqual`. Under `GraphemeLexer` that is a single-token compare. Under `RuneLexer` it is a one-to-N token compare (`Token("👋🏽")` expects two rune tokens — waving hand plus medium skin tone — so it reads two tokens and compares each).
 
-**`RuneIn(RuneSet cc)` and `RuneNotIn(RuneSet cc)`.** These are the rune-set tests. Both are defined in terms of the predicate "the token is exactly one rune *r*, and `cc.Contains(r)`." `RuneIn` matches when the predicate is true; `RuneNotIn` matches when it is false. The asymmetry that falls out of this is important: a multi-rune token never matches `RuneIn` (the predicate is false because the token is not one rune) but it *does* match `RuneNotIn` (the predicate is false, so the negation is true). This is what makes `OneOrMore(RuneNotIn(formattingChars))` sweep up emoji correctly in the pass-through-text recipe.
+**`RuneIn(RuneSet cc)` and `RuneNotIn(RuneSet cc)`.** These are the rune-set tests. Both are defined in terms of the predicate "the token is exactly one rune *r*, and `cc.Contains(r)`." `RuneIn` matches when the predicate is true. `RuneNotIn` matches when it is false. The asymmetry that falls out of this is important: a multi-rune token never matches `RuneIn` (the predicate is false because the token is not one rune) but it *does* match `RuneNotIn` (the predicate is false, so the negation is true). This is what makes `OneOrMore(RuneNotIn(formattingChars))` sweep up emoji correctly in the pass-through-text recipe.
 
 The two semantics in prose:
 
 - `RuneIn(class)` is existential: "is this token one of the runes in the class?" A multi-rune token is not any single rune, so no.
 - `RuneNotIn(class)` is universal: "does this token avoid all runes in the class?" A multi-rune token avoids every single-rune value, so yes.
 
-**`Literal(string s)`.** Tokenizes `s` the same way the lexer will tokenize input (grapheme-walk via `StringInfo.GetTextElementEnumerator` under `GraphemeLexer`, rune-walk via `string.EnumerateRunes()` under `RuneLexer`), caches the tokenized sequence at rule construction time, and matches by walking both sequences in lockstep comparing `Chars` spans with `SequenceEqual`. This is the only one of these types that can consume more than one token in a single match; the other three each look at exactly one token.
+**`Literal(string s)`.** Tokenizes `s` the same way the lexer will tokenize input (grapheme-walk via `StringInfo.GetTextElementEnumerator` under `GraphemeLexer`, rune-walk via `string.EnumerateRunes()` under `RuneLexer`), caches the tokenized sequence at rule construction time, and matches by walking both sequences in lockstep comparing `Chars` spans with `SequenceEqual`. This is the only one of these types that can consume more than one token in a single match. The other three each look at exactly one token.
 
 Because `Literal` tokenizes the same way the lexer does, a literal like `Literal("👨‍👩‍👧‍👦")` becomes one expected token under `GraphemeLexer` (the whole family-emoji grapheme) and seven expected tokens under `RuneLexer` (four people emoji plus three ZWJs). Either way, the literal matches input that contains the same sequence of characters.
 
@@ -285,7 +285,7 @@ RuneSet.Ascii.Identifier & ~RuneSet.Runes("_")
 ~(RuneSet.Whitespace | RuneSet.Category(UnicodeCategory.Control))
 ```
 
-`RuneIn(~X)` and `RuneNotIn(X)` match the same single-rune tokens, so at the outermost level the complement operator is redundant with `RuneNotIn`. The reason complement exists on the class is that `RuneNotIn` is a rule and cannot be fed back into another set expression; `~X` is a class and can be intersected, unioned, or handed to another `RuneIn` / `RuneNotIn`.
+`RuneIn(~X)` and `RuneNotIn(X)` match the same single-rune tokens, so at the outermost level the complement operator is redundant with `RuneNotIn`. The reason complement exists on the class is that `RuneNotIn` is a rule and cannot be fed back into another set expression. `~X` is a class and can be intersected, unioned, or handed to another `RuneIn` / `RuneNotIn`.
 
 Intersection and complement are niche compared to union. Most grammars use `|` dozens of times and never touch the other two. They earn their spot because they are cheap (sorted-range intersection and complement are single passes), and because when an author does need set difference, hand-enumerating the ranges goes stale the moment Unicode adds a new letter to the base class.
 
@@ -300,7 +300,7 @@ Internally a `RuneSet` is a sorted list of rune ranges. Union, intersection, and
 A few more rule types exist but do not touch token content directly:
 
 - `Peek(rule)` and `Not(rule)` run their inner rule without committing the transaction. Whatever the inner rule would do with tokens, `Peek` and `Not` inherit from that behavior. No special handling at the token level.
-- `And(...)`, `Or(...)`, `OneOrMore(...)`, `ZeroOrMore(...)`, `Optional(...)` are composites. They never inspect tokens themselves; they just sequence or alternate other rules.
+- `And(...)`, `Or(...)`, `OneOrMore(...)`, `ZeroOrMore(...)`, `Optional(...)` are composites. They never inspect tokens themselves. They just sequence or alternate other rules.
 - `Eof()` matches iff the lexer is at the end of input. Does not read a token.
 
 Everything else (flatten policies, error messages, named symbols) is metadata on the resulting `Symbol` tree, not comparison logic.
@@ -357,7 +357,7 @@ Each is a handful of lines. The common shape (start a transaction, read a token,
 Under `GraphemeLexer`, a multi-rune grapheme like 👨‍👩‍👧‍👦 arrives as a single token whose `Chars` span covers the whole sequence (eleven UTF-16 chars, seven runes). The ways a grammar can match it:
 
 - **`Token("👨‍👩‍👧‍👦")`** matches one grapheme by exact content. Construction-time validation rejects arguments that are not exactly one grapheme, so `Token("ab")` throws at grammar-build time instead of failing silently at parse time.
-- **`Literal("👨‍👩‍👧‍👦 and friends")`** matches a sequence of graphemes by exact content. Same pre-tokenize-then-lockstep logic as `Token`; the difference is that `Literal` accepts any length.
+- **`Literal("👨‍👩‍👧‍👦 and friends")`** matches a sequence of graphemes by exact content. Same pre-tokenize-then-lockstep logic as `Token`. The difference is that `Literal` accepts any length.
 - **`AnyToken()`** matches any token including multi-rune ones. Useful when the grammar is streaming text through as opaque content ("an identifier is any non-delimiter character").
 - **`RuneNotIn(someClass)`** matches multi-rune tokens because they are not in any single-rune class. This is the mechanism behind the pass-through-text recipe.
 
@@ -391,11 +391,11 @@ This looks like a cost, and sometimes it is — grammars that worked in regex ne
 
 Two corollaries of "no repetition backtracking" that show up in the implementation:
 
-**Each successful inner match is committed.** Inside `BetweenInclusiveRule.TryParse`, the inner `TryParse` opens its own transaction and commits on success. Once the first inner succeeds, the outer rule's own transaction stays uncommitted only until the final result is decided; every matched-so-far position is locked in.
+**Each successful inner match is committed.** Inside `BetweenInclusiveRule.TryParse`, the inner `TryParse` opens its own transaction and commits on success. Once the first inner succeeds, the outer rule's own transaction stays uncommitted only until the final result is decided. Every matched-so-far position is locked in.
 
 **Zero-width inner matches would loop forever.** `OneOrMore(Optional(X))` has an inner that always "succeeds" without consuming input. Without a guard, the greedy loop would match Optional(X) infinitely. `BetweenInclusiveRule` carries an `if (lexer.Position == before) break;` check that stops the loop when a match didn't advance, so all three derived factories inherit the protection. The C++ version has the same guard for the same reason.
 
-So, the full execution model is: ordered-choice backtracking between alternatives, greedy non-backtracking within repetition, and transaction-based rollback ties the two together. The catastrophic-backtracking patterns discussed in the next section are not about greed failing to back off; they're about ordered choice retrying at overlapping cursor positions when multiple alternatives interact badly.
+So, the full execution model is: ordered-choice backtracking between alternatives, greedy non-backtracking within repetition, and transaction-based rollback ties the two together. The catastrophic-backtracking patterns discussed in the next section are not about greed failing to back off. They're about ordered choice retrying at overlapping cursor positions when multiple alternatives interact badly.
 
 ## Parse Requires Consuming All Input
 
@@ -417,7 +417,7 @@ Why this default. Most grammars represent "what a valid input looks like end-to-
 
 The flip side is that grammars built piecewise can't be unit-tested in isolation by calling `Parse` on a prefix. If you have a `settingName` sub-rule and want to test it against `"setting"`, that works because `"setting"` is fully consumed. But testing it against `"setting = 5"` needs the whole grammar, not just `settingName.Parse(...)`. This shows up in the test suite: rules used in composition are tested standalone with inputs sized to match the rule, not inputs sized to match a real document.
 
-If you genuinely want prefix parsing in some future grammar, the workaround today is to wrap the grammar in something that swallows trailing content explicitly — `And(yourGrammar, ZeroOrMore(AnyToken))` once the `AnyToken` leaf lands (backlog i028). The library could grow a `ParseOptions.AllowTrailingInput` flag if a real use case shows up; for now the default catches more bugs than it causes.
+If you genuinely want prefix parsing in some future grammar, the workaround today is to wrap the grammar in something that swallows trailing content explicitly — `And(yourGrammar, ZeroOrMore(AnyToken))` once the `AnyToken` leaf lands (backlog i028). The library could grow a `ParseOptions.AllowTrailingInput` flag if a real use case shows up. For now the default catches more bugs than it causes.
 
 ## Where Errors Get Positioned
 
@@ -425,7 +425,7 @@ When a parse fails, the `ParseResult` carries an `ErrorCharIndex` that tells the
 
 The library commits to one rule:
 
-> Every rule records its failure at the start of the offending input — the position of the character or token it couldn't match. Composite rules don't introduce new positions; they propagate their children's recorded positions via deepest-failure-wins.
+> Every rule records its failure at the start of the offending input — the position of the character or token it couldn't match. Composite rules don't introduce new positions. They propagate their children's recorded positions via deepest-failure-wins.
 
 Concretely this means `input[result.ErrorCharIndex]` gives the actual character that didn't match, not the character after it. If the index equals `input.Length`, that's a genuine end-of-input case: the grammar wanted more and there wasn't any. The index never falls outside `[0, input.Length]`.
 
@@ -462,7 +462,7 @@ The deepest-failure-wins model works well in practice but has one characteristic
 
 Concrete case: `And(Optional(Literal("abc")), Token('x')).Parse("abdy")`. The Optional's inner reads "ab" and fails on 'd' vs 'c' at offset 2. Optional catches the failure and succeeds with empty children — so the overall grammar proceeds. Then Token('x') tries at offset 0, fails on 'a'. Deepest-failure-wins picks offset 2 (the abandoned Optional attempt), not offset 0 (the actually-required rule's failure). The user sees "unexpected 'd'" pointing at content inside what was supposedly optional.
 
-This isn't a bug; it's a property of the heuristic. Grammars that care about this can put `.WithError(...)` on the outer required rule, and the equal-depth message-claim rule will make that message appear even when the deepest position came from the optional branch. The full fix would require a different error model — something like tracking a separate "required-path failure" position alongside the deepest raw position — and no existing PEG library we've surveyed does that. The smallest core lives with the quirk and documents it.
+This isn't a bug. It's a property of the heuristic. Grammars that care about this can put `.WithError(...)` on the outer required rule, and the equal-depth message-claim rule will make that message appear even when the deepest position came from the optional branch. The full fix would require a different error model — something like tracking a separate "required-path failure" position alongside the deepest raw position — and no existing PEG library we've surveyed does that. The smallest core lives with the quirk and documents it.
 
 ### LSP Position Semantics
 
@@ -480,7 +480,7 @@ The equivalent C++ library returns a character offset and nothing else, leaving 
 
 ## Tracing Design
 
-The parser emits trace output that shows every rule attempt, its outcome (success/failure), and indentation that mirrors the transaction depth. Enable by setting `ParseOptions.TraceSink` to a `TextWriter`; leave it null and tracing is off. See [ProgrammingAGrammar.md](ProgrammingAGrammar.md#tracing) for usage examples.
+The parser emits trace output that shows every rule attempt, its outcome (success/failure), and indentation that mirrors the transaction depth. Enable by setting `ParseOptions.TraceSink` to a `TextWriter`. Leave it null and tracing is off. See [ProgrammingAGrammar.md](ProgrammingAGrammar.md#tracing) for usage examples.
 
 ### Why a Custom Tracer, Not System.Diagnostics.Trace or ILogger
 
@@ -510,7 +510,7 @@ The C# port builds in runtime defenses from the start.
 
 `MaxDepth` is a separate concern. It does not help with exponential backtracking, it helps with stack overflow on deeply nested but well-formed input. A JSON document nested 10,000 levels deep will not time out and will not exhaust the work budget, but it will blow the call stack before any of those triggers. `MaxDepth` catches it before the stack overflow crashes the whole process.
 
-The default settings are `MaxRuleInvocations = 10_000_000`, `MaxDepth = 1000`, `Timeout = null`. The two deterministic limits are on by default because they protect naive callers from catastrophic-backtracking and stack-overflow attacks without being flaky or hardware-dependent. `Timeout` stays opt-in because it is inherently flaky (same input takes different time on different hardware) and would cause unpredictable test failures as a default. `.NET`'s `Regex` shipped for over a decade without any of these defaults and produced a long parade of ReDoS vulnerabilities in real-world applications; a PEG engine is in the same failure class and should not repeat that history.
+The default settings are `MaxRuleInvocations = 10_000_000`, `MaxDepth = 1000`, `Timeout = null`. The two deterministic limits are on by default because they protect naive callers from catastrophic-backtracking and stack-overflow attacks without being flaky or hardware-dependent. `Timeout` stays opt-in because it is inherently flaky (same input takes different time on different hardware) and would cause unpredictable test failures as a default. `.NET`'s `Regex` shipped for over a decade without any of these defaults and produced a long parade of ReDoS vulnerabilities in real-world applications. A PEG engine is in the same failure class and should not repeat that history.
 
 ### Why CancellationTokenSource.CancelAfter Is Not Enough
 
@@ -556,7 +556,7 @@ public static readonly Rule FunctionDecl =
     );
 ```
 
-Complementary to the timeout budgets: timeouts catch the cases you did not anticipate, cuts prevent the cases you did. Worth adding later; not in the first pass.
+Complementary to the timeout budgets: timeouts catch the cases you did not anticipate, cuts prevent the cases you did. Worth adding later, not in the first pass.
 
 ### Packrat Memoization
 

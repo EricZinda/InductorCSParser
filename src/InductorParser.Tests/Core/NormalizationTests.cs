@@ -10,7 +10,7 @@ namespace InductorParser.Tests;
 // Tests for ParseOptions.NormalizeInput. Two promises the feature has to keep:
 //
 //   1. A grammar written in one composition form (the grammar author's
-//      choice; NFC is the default and what most people pick) matches input
+//      choice, NFC is the default and what most people pick) matches input
 //      in either form. "café" grammar accepts precomposed "café" (U+00E9)
 //      and decomposed "cafe\u0301" equally.
 //
@@ -185,7 +185,7 @@ public class NormalizationTests
         // decomposed input and asserting the index lands inside the
         // caller's original string, not past its end.
         //
-        // The decomposed form is 2 chars per grapheme; NFC squashes it to
+        // The decomposed form is 2 chars per grapheme. NFC squashes it to
         // 1 char. If the parser leaked the normalized-space lexer position
         // out unchanged, the assertion that ErrorCharIndex is within the
         // *original* input length would catch it. Input has to be long
@@ -211,7 +211,7 @@ public class NormalizationTests
     // forms rather than the lockstep walker.
     //
     // U+FB01 is LATIN SMALL LIGATURE FI, the textbook compatibility-fold
-    // example: one rune, one grapheme in the original; normalizes to "fi"
+    // example: one rune, one grapheme in the original. Normalizes to "fi"
     // (two runes, two graphemes).
     private const string FiLigature = "\uFB01";
 

@@ -41,7 +41,7 @@ public sealed class ParseOptions
     public TraceLevel TraceLevel { get; set; } = TraceLevel.Diagnostic;
 
     // Deterministic work budget. Every rule invocation increments a
-    // counter; when it exceeds this number, the parse aborts with
+    // counter. When it exceeds this number, the parse aborts with
     // ParseOutcome.WorkLimitExceeded. The default of 10_000_000 lets
     // well-formed parses through (a 1 MB file runs through low millions
     // of invocations on a typical grammar) and cleanly catches the
@@ -67,7 +67,7 @@ public sealed class ParseOptions
 
     // External cancellation signal. The caller holds the
     // ParseCancellation and calls .Cancel() from wherever the cancel
-    // decision is made (button click, request handler, test); the parser
+    // decision is made (button click, request handler, test). The parser
     // polls IsCanceled inside its periodic budget check and aborts with
     // ParseOutcome.Canceled. Null means no cancellation source.
     //
@@ -95,7 +95,7 @@ public sealed class ParseOptions
     // callers actually want to walk: the syntactic noise (delimiters,
     // whitespace, anonymous grouping wrappers) is already out of the
     // way. The consequence is that Tree.Find(rule) only hits rules
-    // whose FlattenType is Preserve; set .Flatten(FlattenType.Preserve)
+    // whose FlattenType is Preserve. Set .Flatten(FlattenType.Preserve)
     // on any rule whose wrapper you need to locate after parsing.
     public bool PreserveFlattenWrappers { get; set; } = false;
 }

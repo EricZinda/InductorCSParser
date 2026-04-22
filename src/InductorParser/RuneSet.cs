@@ -15,7 +15,7 @@ namespace InductorParser;
 //     ~   complement      ~a              runes not in a
 //
 // Set difference is the idiom a & ~b ("a minus b"). The operators return a
-// new RuneSet; the struct is immutable.
+// new RuneSet. The struct is immutable.
 //
 //     var unicodeIdentifier = RuneSet.Letters | RuneSet.Digits | RuneSet.Runes("_");
 //     var asciiConsonants   = RuneSet.Ascii.Letters & ~RuneSet.Runes("aeiouAEIOU");
@@ -97,7 +97,7 @@ public readonly struct RuneSet : IEquatable<RuneSet>
     // debugger display. Produces "[a-z,A-Z,0-9]" style output with
     // single-codepoint ranges collapsed to one char and long ranges
     // rendered as low-high. Printable ASCII code points render as the
-    // literal character; everything else renders as U+XXXX. Keeps trace
+    // literal character, everything else renders as U+XXXX. Keeps trace
     // lines legible without dragging in the entire Unicode database.
     public override string ToString()
     {
@@ -315,7 +315,7 @@ public readonly struct RuneSet : IEquatable<RuneSet>
     // Per-category cache. Each UnicodeCategory's set of scalar values is
     // expensive to compute (a full 0..0x10FFFF scan), so we cache the result
     // the first time anyone asks. Subsequent lookups are hash-table reads.
-    // Concurrent because nothing else in RuneSet holds a lock; multiple
+    // Concurrent because nothing else in RuneSet holds a lock. Multiple
     // threads resolving Letters on startup are fine.
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<UnicodeCategory, RuneSet> _categoryCache
         = new System.Collections.Concurrent.ConcurrentDictionary<UnicodeCategory, RuneSet>();
@@ -329,7 +329,7 @@ public readonly struct RuneSet : IEquatable<RuneSet>
     }
 
     // Composite built-ins. Letters is the union of the five "Letter"
-    // UnicodeCategory values; Digits is one category. Wrapped in Lazy so
+    // UnicodeCategory values. Digits is one category. Wrapped in Lazy so
     // the union work happens once and is cached — without it, every access
     // to RuneSet.Letters would redo the four | merges.
     //
@@ -422,7 +422,7 @@ public readonly struct RuneSet : IEquatable<RuneSet>
     // requested category that isn't already cached. Each code point's
     // UnicodeCategory is looked up exactly once and compared against every
     // target in the missing list. So asking for one category costs one
-    // full scan with one compare per codepoint; asking for five (the
+    // full scan with one compare per codepoint. Asking for five (the
     // Letters case) costs one full scan with five compares per codepoint,
     // not five full scans.
     //
@@ -454,7 +454,7 @@ public readonly struct RuneSet : IEquatable<RuneSet>
         for (int codepoint = 0; codepoint <= 0x10FFFF; codepoint++)
         {
             // Skip the surrogate block. These code units exist to encode
-            // supplementary-plane code points as UTF-16 pairs; they aren't
+            // supplementary-plane code points as UTF-16 pairs. They aren't
             // valid Unicode scalar values (runes) on their own.
             if (codepoint >= 0xD800 && codepoint <= 0xDFFF) continue;
 

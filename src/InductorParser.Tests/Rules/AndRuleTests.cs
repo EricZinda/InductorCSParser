@@ -26,7 +26,7 @@ public class AndRuleTests
     public void And_failure_without_WithError_falls_back_to_positional_message()
     {
         // No WithError on any child or on And itself. Token('b') records a
-        // null message at offset 1; the positional fallback renders.
+        // null message at offset 1. The positional fallback renders.
         var rule = And(Token('a'), Token('b'));
         var result = rule.Parse("ax");
 

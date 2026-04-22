@@ -211,8 +211,8 @@ public class ChordGrammarTests
     //     peeks one rune before opening a Transaction, and when Inner.Advance
     //     is Always and the peek isn't in Inner.FirstConsumedRunes, skips the
     //     Inner.TryParse entirely. Chord grammar has several Optional(...)
-    //     and ZeroOrMore(...) wrappers around keyword-starting patterns;
-    //     whenever the next rune proves Inner can't match, the skip collapses
+    //     and ZeroOrMore(...) wrappers around keyword-starting patterns.
+    //     Whenever the next rune proves Inner can't match, the skip collapses
     //     a full interpreter frame (EnterRule / BeginTransaction / Read /
     //     set-contains / RecordFailure / Dispose) into three comparisons.
     //   - Remaining gap to 2x: transaction / allocation overhead on

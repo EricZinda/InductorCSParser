@@ -13,7 +13,7 @@ namespace InductorParser.SyntaxTree;
 // Leaf: carries a ReadOnlyMemory<char> pointing into a section of
 //     the original input string. Used by rules that match content
 //     (Token, Literal, RuneIn, StringChars). ToString() returns the
-//     text it points at; the parse never copies input into a new
+//     text it points at. The parse never copies input into a new
 //     string.
 public sealed class Symbol
 {
@@ -64,7 +64,7 @@ public sealed class Symbol
         FlattenType = flattenType;
         // Collapse both null and empty to the shared Array.Empty<Symbol>()
         // singleton. Callers can pass null (easy) or hand off a list they
-        // allocated eagerly that ended up empty; the tree stores only the
+        // allocated eagerly that ended up empty. The tree stores only the
         // singleton in either case.
         Children = (children == null || children.Count == 0) ? EmptyChildren : children;
         _leafChars = ReadOnlyMemory<char>.Empty;
@@ -81,11 +81,11 @@ public sealed class Symbol
     }
 
     // ToString renders the text actually present in the tree: for leaves,
-    // the captured text; for composites, the concatenated text of their
+    // the captured text, and for composites, the concatenated text of their
     // children. On the default parse path, Delete-typed rules are
     // gone (filtered during parse) and Flatten-typed wrappers have had
     // their children lifted into the parent, so their own wrapper does
-    // not appear in the tree shape; the characters under them do,
+    // not appear in the tree shape. The characters under them do,
     // through their surviving Preserve-typed or leaf descendants. Callers
     // who want to rebuild the exact input verbatim should either keep
     // the string they passed to Parse, or enable

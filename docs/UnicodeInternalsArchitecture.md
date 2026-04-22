@@ -10,7 +10,7 @@ Unicode has a bunch of concepts a parser could engage with. They fall into three
 
 You need to pick one as the parser's token. The stack, from the lowest physical layer up, with each layer built from one or more of the layer below:
 
-- **Code units** (physical encoding): the fixed-width pieces a string is stored as. UTF-16 uses 16-bit code units; UTF-8 uses 8-bit code units (bytes). In .NET, `string` is an array of UTF-16 code units and `char` holds one code unit. One Unicode character (i.e. Code Point below) can span multiple code units (surrogate pairs in UTF-16, multi-byte sequences in UTF-8). In UTF-16 one code point is one or two code units; in UTF-8 one code point is one to four code units.  
+- **Code units** (physical encoding): the fixed-width pieces a string is stored as. UTF-16 uses 16-bit code units. UTF-8 uses 8-bit code units (bytes). In .NET, `string` is an array of UTF-16 code units and `char` holds one code unit. One Unicode character (i.e. Code Point below) can span multiple code units (surrogate pairs in UTF-16, multi-byte sequences in UTF-8). In UTF-16 one code point is one or two code units. In UTF-8 one code point is one to four code units.  
 - **Code points** (The atoms of Unicode): A code point is the actual number that represents one Unicode character: 0 to 0x10FFFF. The subset of unicode numbers that are actually valid Unicode characters are called *scalar values*. This is what .NET's `System.Text.Rune` holds. The others are used for code unit encoding by UTF-16. This is the level `RuneLexer` works at. 
 - **Grapheme clusters** (Actual Characters): Built from one or more code points via UAX #29 rules. A grapheme is what a human perceives as one character. It can be a single code point, like `p`. Also valid: `é` as `e` + "combining acute" is one grapheme built from two code points. 👨‍👩‍👧‍👦 is one grapheme built from seven code points. 👋🏽 is one grapheme built from two code points. This is the level `GraphemeLexer` works at and what the parser uses by default.
 
@@ -22,10 +22,10 @@ Each layer is a composition over the one below, so any string has a code-unit co
 
 ### Text transformations (orthogonal)
 
-Rewrites that produce a different rune sequence. These apply to runes; they are not a higher layer.
+Rewrites that produce a different rune sequence. These apply to runes, they are not a higher layer.
 
-- **Normalization**: canonical rewrites so that visually-identical text compares equal regardless of spelling. "café" as one precomposed rune and "café" as `e` + "combining accent" are different rune sequences but the same normalized text. There are four normalization forms defined by Unicode; the parser uses the *composed* form by default (the one that produces U+00E9 `é` as a single code point rather than `e` + combining acute). See the Normalization section below.
-- **Case-insensitive matching (Unicode)**: treating upper and lower case as equivalent across the full Unicode range. Not the same as `ToLower`: German `ß` pairs with `ss`, Turkish dotless-i behaves differently from dotted i, Greek final sigma pairs with regular sigma. The parser does not apply this by default; see the Workarounds section.
+- **Normalization**: canonical rewrites so that visually-identical text compares equal regardless of spelling. "café" as one precomposed rune and "café" as `e` + "combining accent" are different rune sequences but the same normalized text. There are four normalization forms defined by Unicode. The parser uses the *composed* form by default (the one that produces U+00E9 `é` as a single code point rather than `e` + combining acute). See the Normalization section below.
+- **Case-insensitive matching (Unicode)**: treating upper and lower case as equivalent across the full Unicode range. Not the same as `ToLower`: German `ß` pairs with `ss`, Turkish dotless-i behaves differently from dotted i, Greek final sigma pairs with regular sigma. The parser does not apply this by default. See the Workarounds section.
 
 ### Downstream algorithms (not parser concerns)
 
@@ -39,7 +39,7 @@ Nothing in this doc engages with these. They run outside the parser, on the pars
 
 ## The Two Lexers
 
-The parser exposes two lexers. Both produce one "token" per `Read()` call; they differ in what counts as a token.
+The parser exposes two lexers. Both produce one "token" per `Read()` call. They differ in what counts as a token.
 
 ### GraphemeLexer (default)
 
@@ -109,11 +109,11 @@ public readonly struct ParseResult
 }
 ```
 
-Three fields cover the common cases: `ErrorCharIndex` indexes into the input string directly, `ErrorLine` + `ErrorColumn` give the editor-ready position (in UTF-16 chars, 0-based, following the Language Server Protocol end-to-end; see [ProgrammingModel.md](ProgrammingModel.md) "LSP Position Semantics" for the full rationale). The two extra index properties are there for callers that count in runes or graphemes instead; they are computed lazily from the char index the one time they are asked for, so they cost nothing unless used. Column in rune or grapheme units is deliberately not exposed as a field because callers who need it can derive it from the corresponding index cheaply and the combinatorial expansion was not worth it.
+Three fields cover the common cases: `ErrorCharIndex` indexes into the input string directly, `ErrorLine` + `ErrorColumn` give the editor-ready position (in UTF-16 chars, 0-based, following the Language Server Protocol end-to-end. See [ProgrammingModel.md](ProgrammingModel.md) "LSP Position Semantics" for the full rationale). The two extra index properties are there for callers that count in runes or graphemes instead. They are computed lazily from the char index the one time they are asked for, so they cost nothing unless used. Column in rune or grapheme units is deliberately not exposed as a field because callers who need it can derive it from the corresponding index cheaply and the combinatorial expansion was not worth it.
 
 ## Encoding Happens Firsts
 
-The parser takes a `string`. Encoding is handled before the parser is ever called. If your document lives on disk as UTF-8, UTF-16, or some legacy codepage, decode it into a `string` with the appropriate `Encoding` class (`File.ReadAllText(path, Encoding.UTF8)`, `Encoding.Unicode.GetString(bytes)`, `Encoding.GetEncoding("Windows-1252").GetString(bytes)`, etc.) before calling `.Parse(...)`. By the time the parser sees the input it is a .NET `string` with no encoding tag; everything below is about how the lexer iterates those characters.
+The parser takes a `string`. Encoding is handled before the parser is ever called. If your document lives on disk as UTF-8, UTF-16, or some legacy codepage, decode it into a `string` with the appropriate `Encoding` class (`File.ReadAllText(path, Encoding.UTF8)`, `Encoding.Unicode.GetString(bytes)`, `Encoding.GetEncoding("Windows-1252").GetString(bytes)`, etc.) before calling `.Parse(...)`. By the time the parser sees the input it is a .NET `string` with no encoding tag. Everything below is about how the lexer iterates those characters.
 
 ```
 Disk/network                             Caller                          Parser
@@ -123,7 +123,7 @@ UTF-16 bytes   ─→ Encoding.Unicode     ─→ string (UTF-16) ─→ .Parse(
 Win-1252 bytes ─→ Encoding.GetEncoding("Windows-1252") ─→ string ─→ .Parse(...) ─→ token stream
 ```
 
-Unicode is the character set, a numbered list of characters. UTF-8, UTF-16, and UTF-32 are different ways to represent those numbers as bytes. A document stored as UTF-8 and a document stored as UTF-16 carry the same Unicode content; they differ only in how the text is laid out on disk. By the time the parser sees a `string` the original on-disk encoding is gone and irrelevant. .NET's `string` type holds Unicode content internally in UTF-16, 
+Unicode is the character set, a numbered list of characters. UTF-8, UTF-16, and UTF-32 are different ways to represent those numbers as bytes. A document stored as UTF-8 and a document stored as UTF-16 carry the same Unicode content. They differ only in how the text is laid out on disk. By the time the parser sees a `string` the original on-disk encoding is gone and irrelevant. .NET's `string` type holds Unicode content internally in UTF-16, 
 
 If the caller does not know the encoding of a file, they figure it out upstream (BOM sniffing, content-type headers, ask the user) and feed the parser a properly-decoded `string`.
 
@@ -146,7 +146,7 @@ Callers who want byte-exact round-trippability (where `tree.ToString()` must mat
 
 Positions reported in `ParseResult` (`ErrorCharIndex` and its derived line/column/rune/grapheme properties) are always into the caller's original input string, never into the normalized form. The parser normalizes internally for the lexer to operate on, then translates any failure offset back to original coordinates at the boundary. The common case pays zero extra cost: when input is already in the target form (essentially all typed and web-sourced text) `String.Normalize` returns the same reference and translation is a no-op. When input genuinely got rewritten, the parser does one O(n) grapheme walk at failure time to map the position back. Not paid on the success path.
 
-One consequence to know about: when the failure lands inside a combining character sequence that got composed (or vice-versa), the reported position is the start of that sequence in the original string, not a phantom position mid-sequence. That matches what an editor wants for highlight-the-bad-grapheme diagnostics anyway; you can't put a caret between an 'e' and its combining acute in any reasonable UI. This inherits the pre-.NET 5 `StringInfo` caveat noted on `GraphemeLexer`: a handful of real grapheme clusters segment incorrectly on legacy runtimes, and the translator uses the same primitive, so whatever the lexer saw, the translator sees.
+One consequence to know about: when the failure lands inside a combining character sequence that got composed (or vice-versa), the reported position is the start of that sequence in the original string, not a phantom position mid-sequence. That matches what an editor wants for highlight-the-bad-grapheme diagnostics anyway. You can't put a caret between an 'e' and its combining acute in any reasonable UI. This inherits the pre-.NET 5 `StringInfo` caveat noted on `GraphemeLexer`: a handful of real grapheme clusters segment incorrectly on legacy runtimes, and the translator uses the same primitive, so whatever the lexer saw, the translator sees.
 
 ## Problems The Lexer Does Not Solve
 
@@ -171,4 +171,4 @@ Three Unicode-adjacent questions the first real grammar will need to answer.
 
 **Full Unicode case-insensitive matching.** The ASCII `LiteralIgnoreAsciiCase` leaf covers HTTP headers, SQL keywords, HTML tag names, and most real needs. A full-Unicode version would handle Turkish dotless-i, German `ß`, Greek final sigma, and the rest of the locale-specific edge cases, at the cost of a big lookup table and locale awareness. Add when a grammar actually needs it.
 
-**Grapheme-level character classes.** `RuneClass.Letters` on GraphemeLexer matches single-rune letter graphemes. A more permissive rule ("any grapheme whose base rune is a letter, accepting trailing combining marks as part of the match") would work better for Devanagari and other scripts with genuine multi-rune letter graphemes that have no precomposed form. Requires deciding the semantics once and documenting them; worth doing if a real Devanagari-aware grammar ships.
+**Grapheme-level character classes.** `RuneClass.Letters` on GraphemeLexer matches single-rune letter graphemes. A more permissive rule ("any grapheme whose base rune is a letter, accepting trailing combining marks as part of the match") would work better for Devanagari and other scripts with genuine multi-rune letter graphemes that have no precomposed form. Requires deciding the semantics once and documenting them. Worth doing if a real Devanagari-aware grammar ships.

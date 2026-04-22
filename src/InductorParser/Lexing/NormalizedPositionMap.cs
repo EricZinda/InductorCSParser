@@ -141,7 +141,7 @@ internal static class NormalizedPositionMap
     // its own "defective" grapheme, and per-grapheme normalization can
     // differ from whole-string normalization by one grapheme's worth of
     // char offset. ErrorCharIndex stays a valid index into the original
-    // input; it just lands at an adjacent grapheme boundary instead of
+    // input. It just lands at an adjacent grapheme boundary instead of
     // the exact one. No editor highlight will notice the difference.
     private static int TranslateViaPerGraphemeNormalize(string original, int normalizedIndex, NormalizationForm form)
     {

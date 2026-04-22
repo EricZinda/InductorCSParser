@@ -7,7 +7,7 @@ namespace InductorParser.Tests;
 
 // Runtime defenses against catastrophic backtracking and stack-overflow on
 // malicious or pathological input. The library exposes four orthogonal
-// abort budgets through ParseOptions; this fixture pins the trip behavior
+// abort budgets through ParseOptions. This fixture pins the trip behavior
 // of each one and confirms they don't get in the way of normal parses.
 [TestFixture]
 public class BudgetTests
@@ -80,7 +80,7 @@ public class BudgetTests
     [Test]
     public void MaxDepth_zero_disables_the_depth_budget()
     {
-        // Same recursive grammar; with MaxDepth disabled the parse
+        // Same recursive grammar. With MaxDepth disabled the parse
         // completes (the input is short enough not to overflow the real
         // call stack).
         var aRule = new LateBoundRule("aRule");
@@ -203,7 +203,7 @@ public class BudgetTests
         // can index into the input without bounds-checking. Success-only
         // grammars like this one (every rune matches until the budget
         // trips) leave no recorded failure, so the position legitimately
-        // comes back as 0; the real progress-was-made case is covered by
+        // comes back as 0. The real progress-was-made case is covered by
         // Aborted_result_reflects_deepest_progress_when_failures_recorded
         // below.
         var rule = OneOrMore(RuneIn(RuneSet.Letters));

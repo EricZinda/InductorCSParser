@@ -18,7 +18,7 @@ internal sealed class EofRule : Rule
         {
             TraceFailure(lexer, $"found {lexer.Input[lexer.Position]}");
             // Error Positioning: the position of the unexpected content. EofRule
-            // doesn't read anything; it just checks whether we've reached
+            // doesn't read anything. It just checks whether we've reached
             // end-of-input. When the check fails, lexer.Position is
             // pointing straight at the stuff that shouldn't be here.
             lexer.RecordFailure(lexer.Position, ErrorMessage);
@@ -34,7 +34,7 @@ internal sealed class EofRule : Rule
     }
 
     // Return the set of runes this rule might consume first (can be a superset)
-    // (RuneSet.Empty when Advance.Never; RuneSet.Universe means "I don't know").
+    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
     // that first character on success.
     internal override RuleStartRequirements ComputeRuleStart()

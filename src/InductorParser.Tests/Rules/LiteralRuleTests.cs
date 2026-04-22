@@ -55,7 +55,7 @@ public class LiteralRuleTests
     {
         // Mixed width: a two-char BMP prefix, a supplementary-plane rune
         // (2 UTF-16 chars), and a BMP suffix. Under GraphemeLexer the
-        // guitar emoji is one token of length 2; the lockstep handles
+        // guitar emoji is one token of length 2. The lockstep handles
         // variable token widths naturally.
         var literal = "hi" + GuitarGrapheme + "!";
         var rule = Literal(literal);

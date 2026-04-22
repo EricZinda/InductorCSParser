@@ -133,7 +133,7 @@ public class StringLiteralGrammarsTests
         [Test]
         public void Terminator_is_earliest_triple_quote_not_greedy()
         {
-            // "abc""" is the whole literal; any remaining text is
+            // "abc""" is the whole literal. Any remaining text is
             // outside. Parsing as the literal ALONE should fail
             // because there's trailing content past the first """.
             var result = Rule.Parse("\"\"\"abc\"\"\"trailing");

@@ -5,8 +5,8 @@ using InductorParser.SyntaxTree;
 namespace InductorParser;
 
 // Matches the first child that succeeds. Tries
-// children left-to-right, committing to whichever one matches first;
-// if none match, the Or fails. Each child attempt runs in its own
+// children left-to-right, committing to whichever one matches first.
+// If none match, the Or fails. Each child attempt runs in its own
 // transaction so a failed alternative leaves the lexer where it was
 // before Or was called.
 internal sealed class OrRule : Rule
@@ -61,7 +61,7 @@ internal sealed class OrRule : Rule
     }
 
     // Return the set of runes this rule might consume first (can be a superset)
-    // (RuneSet.Empty when Advance.Never; RuneSet.Universe means "I don't know").
+    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
     // that first character on success.
     internal override RuleStartRequirements ComputeRuleStart()

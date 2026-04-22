@@ -4,7 +4,7 @@ namespace InductorParser;
 // one, hands it to ParseOptions, holds onto its reference, and calls
 // Cancel() from wherever the cancel decision is made (a UI button, an
 // upstream request handler, a test). The parser polls IsCanceled inside
-// its periodic budget check; on the next check after Cancel() fires, the
+// its periodic budget check. On the next check after Cancel() fires, the
 // parse aborts with ParseOutcome.Canceled.
 //
 // Why a custom type instead of the standard System.Threading.CancellationToken:

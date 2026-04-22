@@ -41,7 +41,7 @@ public class DiscardedAtParseTimeTests
         // The realistic JSON-style shape: OptionalWhitespace sits between
         // two tokens inside an And. The top-level Symbols list should hold
         // the two token leaves only, with the whitespace contributing
-        // nothing. RuneIn is Preserve-typed so the token leaves survive; their
+        // nothing. RuneIn is Preserve-typed so the token leaves survive. Their
         // Id is the code point, so we assert on that.
         var letter = RuneIn(RuneSet.Ascii.Letters);
         var rule = And(letter, OptionalWhitespace(), letter);

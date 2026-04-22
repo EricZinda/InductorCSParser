@@ -88,8 +88,8 @@ public static class ChordGrammar
         );
 
         // (add[2469]|add1[13]|b5|#5|b9|#9|#11|b13|no[357]|sus[24]?|alt)*
-        // Ordering: "add1" before "add" (longer prefix match for PEG); "#11"
-        // before "#5"/"#9" (again, longer first); "b13" before "b5"/"b9".
+        // Ordering: "add1" before "add" (longer prefix match for PEG). "#11"
+        // before "#5"/"#9" (again, longer first). "b13" before "b5"/"b9".
         // "sus[24]?" matches "sus", "sus2", or "sus4".
         var addMod = Or(
             And(LiteralIgnoreAsciiCase("add1"), RuneIn("13")),

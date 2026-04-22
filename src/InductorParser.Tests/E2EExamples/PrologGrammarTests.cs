@@ -146,7 +146,7 @@ public class PrologGrammarTests
         // (x is an atom either way). So there isn't much that's valid
         // under standard but invalid under HTN — both share most of
         // the grammar. The interesting divergence is that in HTN,
-        // a ? prefix MUST be followed by an atom; "?." has nothing
+        // a ? prefix MUST be followed by an atom. "?." has nothing
         // after the ? so it fails.
         "foo(?).",
     };
@@ -280,7 +280,7 @@ public class PrologGrammarTests
     // src/Tests/Prolog/PrologCompilerTests.cpp. Each section mirrors a
     // TestTryParse<Rule>("input", ...) call from the C++ file. Tests
     // that the C++ put in the "same for both VariableRule alternates"
-    // block go in the *_BothFlavors fields; tests that the C++ gated
+    // block go in the *_BothFlavors fields. Tests that the C++ gated
     // on htnStyle go in the per-flavor fields.
     // ---------------------------------------------------------------
 

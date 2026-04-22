@@ -18,7 +18,7 @@ public class OptionalRuleTests
     [Test]
     public void Optional_inner_match_is_consumed()
     {
-        // Optional wraps a rule; when inner matches, that input is consumed
+        // Optional wraps a rule. When inner matches, that input is consumed
         // and the surrounding grammar sees the post-match position.
         var rule = And(Optional(Token('-')), Token('a'));
         var result = rule.Parse("-a", Debug());
@@ -30,7 +30,7 @@ public class OptionalRuleTests
     [Test]
     public void Optional_inner_miss_succeeds_with_no_consumption()
     {
-        // Inner doesn't match; Optional still succeeds with empty and the
+        // Inner doesn't match. Optional still succeeds with empty and the
         // surrounding grammar runs from the same position Optional started at.
         var rule = And(Optional(Token('-')), Token('a'));
         var result = rule.Parse("a", Debug());

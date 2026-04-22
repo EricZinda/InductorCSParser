@@ -4,7 +4,7 @@ using InductorParser.Tracing;
 namespace InductorParser.Lexing;
 
 // One token per Unicode code point (rune). Runes above U+FFFF encode as
-// two UTF-16 chars in .NET (a surrogate pair); the lexer reads both as
+// two UTF-16 chars in .NET (a surrogate pair). The lexer reads both as
 // one 2-char token rather than splitting them. Every other rune fits in
 // a single char, so those tokens are 1 char long.
 public sealed class RuneLexer : Lexer

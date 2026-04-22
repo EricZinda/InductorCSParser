@@ -1,8 +1,8 @@
 namespace InductorParser.Tests;
 
 // Named Unicode constants used across test fixtures. Raw hex escapes and
-// surrogate-pair string literals don't tell you what they mean on sight;
-// names do. Naming convention:
+// surrogate-pair string literals don't tell you what they mean on sight.
+// Names do. Naming convention:
 //
 //   XxxRune      — int codepoint (U+xxxxx).
 //   XxxGrapheme  — UTF-16 string that tokenizes as exactly one grapheme.
@@ -17,7 +17,7 @@ internal static class UnicodeExamples
     public const int WavingHandRune = 0x1F44B;
     public const string WavingHandGrapheme = "\uD83D\uDC4B";
 
-    // 🏽 medium skin tone modifier. Combining modifier rune; attaches to a
+    // 🏽 medium skin tone modifier. Combining modifier rune that attaches to a
     // base character to form a multi-rune grapheme. Not typically rendered
     // standalone.
     public const int MediumSkinToneRune = 0x1F3FD;
@@ -25,7 +25,7 @@ internal static class UnicodeExamples
 
     // 👋🏽 waving hand + medium skin tone. ONE grapheme made of TWO runes
     // (4 UTF-16 chars total). Under the grapheme lexer this is a single
-    // token; under the rune lexer it's two tokens.
+    // token. Under the rune lexer it's two tokens.
     public const string SkinTonedWaveGrapheme = WavingHandGrapheme + MediumSkinToneText;
 
     // 🎸 guitar. One rune, one grapheme.
@@ -37,7 +37,7 @@ internal static class UnicodeExamples
     public const int MusicalKeyboardRune = 0x1F3B9;
     public const string MusicalKeyboardGrapheme = "\uD83C\uDFB9";
 
-    // U+0301 combining acute. Combining mark; attaches to a base character
+    // U+0301 combining acute. Combining mark that attaches to a base character
     // to form a multi-rune grapheme. Not a standalone grapheme.
     public const string CombiningAcuteText = "\u0301";
 
@@ -49,18 +49,18 @@ internal static class UnicodeExamples
     public const string LatinEAcuteGrapheme = "e" + CombiningAcuteText;
 
     // 🤷‍♀️ woman shrugging. ZWJ emoji sequence: base shrug rune + ZWJ +
-    // female sign + emoji variation selector. UAX #29 sees ONE grapheme;
-    // legacy StringInfo splits it. Use this to test the ZWJ rule.
+    // female sign + emoji variation selector. UAX #29 sees ONE grapheme.
+    // Legacy StringInfo splits it. Use this to test the ZWJ rule.
     public const string WomanShruggingGrapheme = "\uD83E\uDD37\u200D\u2640\uFE0F";
 
     // 🇺🇸 US flag. Two regional indicator code points (U + S). UAX #29 sees
-    // ONE grapheme; legacy StringInfo splits it. Use this to test the
+    // ONE grapheme. Legacy StringInfo splits it. Use this to test the
     // regional-indicator pairing rule.
     public const string USFlagGrapheme = "\uD83C\uDDFA\uD83C\uDDF8";
 
     // ก + ํา Thai "kam". SARA AM is the canonical extended-grapheme-cluster
     // case (a vowel sign that visually composes with the preceding consonant).
-    // UAX #29 sees ONE grapheme; legacy StringInfo splits it. Use this to
+    // UAX #29 sees ONE grapheme. Legacy StringInfo splits it. Use this to
     // test the SARA AM rule.
     public const string ThaiKamGrapheme = "\u0E01\u0E33";
 }

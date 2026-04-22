@@ -8,7 +8,7 @@ namespace InductorParser.Tests;
 // CSS (it's a full language, not a regex-replaceable pattern), so these
 // tests use valid/invalid corpora instead of cross-engine equivalence
 // like BacklogGrammarTests and ChordGrammarTests do. Every string in
-// ValidDocuments must parse; every string in InvalidDocuments must fail.
+// ValidDocuments must parse. Every string in InvalidDocuments must fail.
 [TestFixture]
 public class CssGrammarTests
 {
@@ -139,7 +139,7 @@ public class CssGrammarTests
         "p { color: rgba(1,2,3,4); }",      // alpha must be a Float
         "p { color: rgba(1 2 3 0.5); }",    // no commas
 
-        // Selector must lead with something; a bare combinator doesn't.
+        // Selector must lead with something. A bare combinator doesn't.
         "  > x { color: red; }",
 
         // Top-level garbage.

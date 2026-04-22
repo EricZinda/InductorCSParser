@@ -103,7 +103,7 @@ The pattern has four pieces worth naming explicitly:
 
 ## A Reusable Compiler Base Class
 
-The walkthrough in [ProgrammingAGrammar.md](ProgrammingAGrammar.md) shows a "compiler" as a plain function: take a rule and an input, return a typed result plus an optional error message. That form is simplest for one-off cases. When you have several compilers that share the same scaffolding, or you want a consistent `TryCompile` contract on a public API, it is worth writing a small base class once and inheriting from it. The library does not ship this as a built-in because the right shape is opinionated and every codebase tends to want it slightly different; here is the pattern to copy and adapt.
+The walkthrough in [ProgrammingAGrammar.md](ProgrammingAGrammar.md) shows a "compiler" as a plain function: take a rule and an input, return a typed result plus an optional error message. That form is simplest for one-off cases. When you have several compilers that share the same scaffolding, or you want a consistent `TryCompile` contract on a public API, it is worth writing a small base class once and inheriting from it. The library does not ship this as a built-in because the right shape is opinionated and every codebase tends to want it slightly different. Here is the pattern to copy and adapt.
 
 ```csharp
 // User-space base class. Put this somewhere reusable in your codebase.

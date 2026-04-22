@@ -189,7 +189,7 @@ public class JsonBench
     //   throughput.
     // * Representative JSON carrying natural text (log messages, product
     //   descriptions, user names with the occasional quoted phrase)
-    //   typically contains 1-5% escape-worthy characters; clean data
+    //   typically contains 1-5% escape-worthy characters. Clean data
     //   payloads (numerical / ID-heavy API responses) sit at roughly 0%.
     //   3% is the middle of the realistic range.
     // * Much above 5% starts measuring escape-decoding throughput

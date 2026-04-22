@@ -179,13 +179,13 @@ public class TokenRuleTests
     [Test]
     public void Token_int_boundary_values_are_validated_correctly()
     {
-        // 0xD7FF is the last scalar before the surrogate block; 0xE000 is
+        // 0xD7FF is the last scalar before the surrogate block. 0xE000 is
         // the first after. Both should build fine.
         Assert.DoesNotThrow(() => Token(0xD7FF));
         Assert.DoesNotThrow(() => Token(0xE000));
         // 0x10FFFF is the last valid Unicode scalar. Also fine.
         Assert.DoesNotThrow(() => Token(0x10FFFF));
-        // 0xDFFF is the last surrogate; still invalid.
+        // 0xDFFF is the last surrogate. Still invalid.
         Assert.Throws<ArgumentOutOfRangeException>(() => Token(0xDFFF));
     }
 
@@ -276,7 +276,7 @@ public class TokenRuleTests
     public void Token_with_skin_tone_modifier_sequence_matches_one_grapheme_on_uax29_runtime()
     {
         // Modifier sequence: base emoji + skin-tone modifier. UAX #29 rule
-        // GB10/GB11. Two runes, one grapheme on UAX #29; legacy splits.
+        // GB10/GB11. Two runes, one grapheme on UAX #29. Legacy splits.
         var rule = Token(SkinTonedWaveGrapheme);
         var result = rule.Parse(SkinTonedWaveGrapheme);
 
@@ -288,7 +288,7 @@ public class TokenRuleTests
     {
         // ZWJ sequence: base + ZWJ + joiner + variation selector. UAX #29
         // rule GB11 with extended pictographic. Four runes, one grapheme on
-        // UAX #29; legacy splits at every ZWJ.
+        // UAX #29. Legacy splits at every ZWJ.
         var rule = Token(WomanShruggingGrapheme);
         var result = rule.Parse(WomanShruggingGrapheme);
 
@@ -299,7 +299,7 @@ public class TokenRuleTests
     public void Token_with_regional_indicator_pair_matches_one_grapheme_on_uax29_runtime()
     {
         // Regional indicator pair: two RI code points form one flag. UAX #29
-        // rule GB12/GB13. Two runes, one grapheme on UAX #29; legacy splits.
+        // rule GB12/GB13. Two runes, one grapheme on UAX #29. Legacy splits.
         var rule = Token(USFlagGrapheme);
         var result = rule.Parse(USFlagGrapheme);
 
@@ -311,7 +311,7 @@ public class TokenRuleTests
     {
         // Thai SARA AM: consonant + SARA AM forms one extended grapheme
         // cluster. The canonical SpacingMark case from UAX #29 rule GB9a.
-        // Two runes, one grapheme on UAX #29; legacy splits.
+        // Two runes, one grapheme on UAX #29. Legacy splits.
         var rule = Token(ThaiKamGrapheme);
         var result = rule.Parse(ThaiKamGrapheme);
 
