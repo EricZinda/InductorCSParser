@@ -192,7 +192,8 @@ public class LiteralRuleTests
     public void LiteralIgnoreAsciiCase_leaves_non_letter_chars_strict()
     {
         // The 0x20 bit difference between '[' and '{', '@' and '`', etc.
-        // must NOT be treated as a case fold. Only A-Za-z fold.
+        // must NOT be treated as a case-insensitive match. Only A-Za-z
+        // get that treatment.
         var rule = LiteralIgnoreAsciiCase("a[b");
         Assert.That(rule.Parse("A[B").Success, Is.True);
         Assert.That(rule.Parse("A{B").Success, Is.False);
@@ -201,9 +202,9 @@ public class LiteralRuleTests
     [Test]
     public void LiteralIgnoreAsciiCase_rejects_non_ascii_case_variant()
     {
-        // German sharp s does NOT fold to SS under this primitive (that
-        // would require full Unicode case folding, which we deliberately
-        // don't do). Document the behavior by pinning it.
+        // German sharp s does NOT match SS under this primitive (that
+        // would require full Unicode case-insensitive matching, which
+        // we deliberately don't do). Document the behavior by pinning it.
         var rule = LiteralIgnoreAsciiCase("straße");
         Assert.That(rule.Parse("STRASSE").Success, Is.False);
     }

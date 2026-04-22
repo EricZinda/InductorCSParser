@@ -134,7 +134,7 @@ public readonly struct RuneSet : IEquatable<RuneSet>
 
     // The universal set, containing every valid Unicode scalar value
     // (0..0x10FFFF minus the surrogate block). The complement of Empty.
-    // Used as the "unknown / anything goes" sentinel for FirstConsumedRunes
+    // Used as the "unknown / anything goes" default for FirstConsumedRunes
     // (see RuleStartRequirements) so rules with no tighter information
     // never get filtered out.
     public static readonly RuneSet Universe = ~default(RuneSet);

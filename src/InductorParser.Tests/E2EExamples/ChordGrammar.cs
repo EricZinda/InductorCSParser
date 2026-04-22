@@ -23,11 +23,12 @@ namespace InductorParser.Tests;
 // (a/b/c/...) or are ordered longest-first (maj before m, 11/13 before 1)
 // so the commit happens on the right branch.
 //
-// Case-insensitivity: the regex's IgnoreCase flag folds ASCII letters only
-// in practice here (the special symbols ♯♭°øΔ only appear in their printed
-// form in real chord notation). Every case-folded keyword, including
-// single-letter ones like "m" and "o", goes through the library's
-// LiteralIgnoreAsciiCase leaf so each word is one transaction.
+// Case-insensitivity: the regex's IgnoreCase flag matches ASCII letters
+// in either case, and in practice that's all the matching we need here
+// (the special symbols ♯♭°øΔ only appear in their printed form in real
+// chord notation). Every case-insensitive keyword, including single-letter
+// ones like "m" and "o", goes through the library's LiteralIgnoreAsciiCase
+// leaf so each word is one transaction.
 public static class ChordGrammar
 {
     public static readonly Rule Chord = Build();
@@ -37,8 +38,9 @@ public static class ChordGrammar
         var root = RuneIn("ABCDEFGabcdefg");
 
         // Accidentals include b and x (and their uppercase pair under
-        // IgnoreCase: B is legal after the root via case-fold, same for X).
-        // Rare in real input but we have to mirror regex behavior.
+        // IgnoreCase: B is legal after the root via the case-insensitive
+        // match, same for X). Rare in real input but we have to mirror
+        // regex behavior.
         var accidental = RuneIn("#bB♯♭xX");
 
         // (maj|min|m|dim|°|o|aug|+|sus[24]?|5)?

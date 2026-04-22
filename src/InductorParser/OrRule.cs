@@ -4,9 +4,9 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
-// Matches the first child that succeeds (PEG ordered choice). Tries
+// Matches the first child that succeeds. Tries
 // children left-to-right, committing to whichever one matches first;
-// if none match the Or fails. Each child attempt runs in its own
+// if none match, the Or fails. Each child attempt runs in its own
 // transaction so a failed alternative leaves the lexer where it was
 // before Or was called.
 internal sealed class OrRule : Rule
@@ -18,9 +18,9 @@ internal sealed class OrRule : Rule
         string input = lexer.Input;
         int pos = lexer.Position;
         // Peek the next rune once for the skip shortcut. At EOF or on a
-        // malformed surrogate, use -1 as a sentinel that no FirstConsumedRunes
-        // contains, so an Always child is still correctly skipped (it would
-        // need to read a rune and there isn't one).
+        // malformed surrogate, use -1 (a value no FirstConsumedRunes can
+        // contain) so an Always child is still correctly skipped: it would
+        // need to read a rune and there isn't one.
         int peekValue = -1;
         if (pos < input.Length)
             Lexer.TryPeekRune(input, pos, out peekValue, out _);

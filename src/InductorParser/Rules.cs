@@ -39,10 +39,10 @@ public static class Rules
     // (and N transactions) into one. Rejects empty strings at construction.
     public static Rule Literal(string value) => new LiteralRule(value);
 
-    // ASCII-case-insensitive variant of Literal. Letters A-Z / a-z fold to
-    // the same match; non-ASCII code units compare bit-exact. The ASCII in
-    // the name is critical: full Unicode case folding is locale- and
-    // script-dependent and this leaf doesn't attempt it. See
+    // ASCII-case-insensitive variant of Literal. Letters A-Z / a-z match
+    // either case. Non-ASCII code units compare bit-exact. The ASCII in
+    // the name is critical: full Unicode case-insensitive matching is
+    // locale- and script-dependent and this leaf doesn't attempt it. See
     // docs/UnicodeGotchas.md for the reasoning and limits.
     public static Rule LiteralIgnoreAsciiCase(string value) => new LiteralIgnoreAsciiCaseRule(value);
 

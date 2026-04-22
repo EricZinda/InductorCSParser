@@ -18,11 +18,11 @@ namespace InductorParser;
 //
 // The match loop is the same lockstep pattern TokenRule uses: read a token,
 // compare its Chars span against the matching section of the expected string,
-// advance by token.Length. Under GraphemeLexer each iteration typically
-// consumes one grapheme worth of chars; under RuneLexer each iteration
-// consumes one rune. Same loop, both lexers, because SequenceEqual only
-// cares about the underlying chars lining up, not how the lexer chose to
-// group them.
+// advance by token.Length. Under GraphemeLexer each iteration consumes
+// exactly one grapheme worth of chars. Under RuneLexer each iteration
+// consumes exactly one rune. Same loop, both lexers, because SequenceEqual
+// only cares about the underlying chars lining up, not how the lexer chose
+// to group them.
 //
 // Error position on mismatch is the pre-read offset of the specific failing
 // token, not the start of the whole attempt. Same as TokenRule: this is what
@@ -72,7 +72,7 @@ internal sealed class LiteralRule : Rule
         TraceSuccess(lexer, $"found '{_expected}'");
         transaction.Commit();
         // Default FlattenType is Delete: the common case collapses to
-        // the shared sentinel and skips the per-match Symbol allocation.
+        // the shared Discarded value and skips the per-match Symbol allocation.
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
         var leafSymbol = new Symbol(Id, FlattenType, lexer.Input.AsMemory(transaction.StartPosition, consumed));

@@ -8,8 +8,8 @@ using static InductorParser.Rules;
 namespace InductorParser.Tests;
 
 // Parse-time Delete filtering. Rules whose effective FlattenType is Delete
-// return the shared Symbol.Discarded sentinel from TryParse, and composite
-// parents (And / Or / BetweenInclusive) filter the sentinel out of their
+// return the shared Symbol.Discarded value from TryParse, and composite
+// parents (And / Or / BetweenInclusive) filter it out of their
 // Children list. The post-hoc FlattenInto Delete branch still runs for
 // trees built by hand.
 [TestFixture]
@@ -60,7 +60,7 @@ public class DiscardedAtParseTimeTests
     }
 
     [Test]
-    public void Default_Delete_leaf_rules_return_the_shared_Discarded_sentinel()
+    public void Default_Delete_leaf_rules_return_the_shared_Discarded_value()
     {
         // Token, Not, Peek, Eof all default to FlattenType.Delete. Each
         // matches and contributes nothing at parse time, so a Delete rule

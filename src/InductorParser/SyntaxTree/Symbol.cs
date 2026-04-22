@@ -17,13 +17,13 @@ namespace InductorParser.SyntaxTree;
 //     string.
 public sealed class Symbol
 {
-    // Shared sentinel for the Children field on leaf symbols. Array.Empty<T>()
+    // Shared empty array for the Children field on leaf symbols. Array.Empty<T>()
     // already returns a singleton, so this isn't saving an allocation. It
     // just makes it clearer what is going on
     private static readonly IReadOnlyList<Symbol> EmptyChildren = Array.Empty<Symbol>();
 
-    // Parse-time sentinel a Rule.TryParse returns in place of a real Symbol
-    // when the rule's effective FlattenType is Delete. Consumers like AndRule
+    // Shared Symbol a Rule.TryParse returns in place of a real one when
+    // the rule's effective FlattenType is Delete. Consumers like AndRule
     // filter it out before it reaches the
     // parent's Children list, so Delete-typed rules never contribute a
     // Discarded Symbol to the final tree.

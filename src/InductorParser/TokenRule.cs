@@ -104,7 +104,7 @@ internal sealed class TokenRule : Rule
         TraceSuccess(lexer, $"found '{_expected}'");
         transaction.Commit();
         // Default FlattenType is Delete, so most Token matches end up
-        // in DiscardAndThrowaway and return the shared sentinel
+        // in the discard branch and return the shared Discarded value
         // (no per-match Symbol allocation). Grammar authors who want
         // the character in the tree opt in with .Flatten(FlattenType.Preserve)
         // on the Token rule.

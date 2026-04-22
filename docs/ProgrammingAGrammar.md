@@ -8,7 +8,7 @@ Related docs:
 
 - [ProgrammingModel.md](ProgrammingModel.md) — design and architecture of the library. Why it is shaped the way it is, what tradeoffs were made.
 - [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md) — lexer internals: code units, runes, graphemes, normalization, the two lexers.
-- [UnicodeGotchas.md](UnicodeGotchas.md) — caller-side Unicode concerns the lexer cannot fix (case folding, BOMs, homoglyphs, etc.).
+- [UnicodeGotchas.md](UnicodeGotchas.md) — caller-side Unicode concerns the lexer cannot fix (case-insensitive matching, BOMs, homoglyphs, etc.).
 - [Recipes.md](Recipes.md) — common grammar patterns: pass-through text, class-based grammar organization, a reusable compiler base class.
 
 ## Hello World Example

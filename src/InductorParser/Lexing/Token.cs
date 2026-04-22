@@ -81,7 +81,7 @@ public readonly ref struct Token
     // -1, so single-rune tests like TokenRule and RuneInRule fail correctly
     // without each caller having to special-case the multi-rune path.
     // Returned as int rather than System.Text.Rune because -1 is the "no
-    // single rune here" sentinel, and Rune has no invalid state.
+    // single rune here" marker, and Rune has no invalid state.
     public int RuneValue
     {
         get

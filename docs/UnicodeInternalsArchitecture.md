@@ -25,7 +25,7 @@ Each layer is a composition over the one below, so any string has a code-unit co
 Rewrites that produce a different rune sequence. These apply to runes; they are not a higher layer.
 
 - **Normalization**: canonical rewrites so that visually-identical text compares equal regardless of spelling. "café" as one precomposed rune and "café" as `e` + "combining accent" are different rune sequences but the same normalized text. There are four normalization forms defined by Unicode; the parser uses the *composed* form by default (the one that produces U+00E9 `é` as a single code point rather than `e` + combining acute). See the Normalization section below.
-- **Case folding**: Unicode-aware case-insensitive comparison. Not the same as `ToLower`: German `ß` folds to `ss`, Turkish dotless-i behaves differently from dotted i, Greek final sigma folds to sigma. The parser does not apply this by default; see the Workarounds section.
+- **Case-insensitive matching (Unicode)**: treating upper and lower case as equivalent across the full Unicode range. Not the same as `ToLower`: German `ß` pairs with `ss`, Turkish dotless-i behaves differently from dotted i, Greek final sigma pairs with regular sigma. The parser does not apply this by default; see the Workarounds section.
 
 ### Downstream algorithms (not parser concerns)
 
@@ -150,7 +150,7 @@ One consequence to know about: when the failure lands inside a combining charact
 
 ## Problems The Lexer Does Not Solve
 
-Some Unicode surprises cannot be fixed by choosing a different tokenization. Both lexers hit them identically: case folding beyond ASCII, BOMs, zero-width and invisible format characters, homoglyph confusables, variation selectors. They are caller-side preprocessing concerns or grammar-design concerns, not lexer concerns. See [UnicodeGotchas.md](UnicodeGotchas.md) for the list and the idiomatic workaround for each.
+Some Unicode surprises cannot be fixed by choosing a different tokenization. Both lexers hit them identically: case-insensitive matching beyond ASCII, BOMs, zero-width and invisible format characters, homoglyph confusables, variation selectors. They are caller-side preprocessing concerns or grammar-design concerns, not lexer concerns. See [UnicodeGotchas.md](UnicodeGotchas.md) for the list and the idiomatic workaround for each.
 
 ## RuneLexer-Specific: Grapheme Matching
 
@@ -169,6 +169,6 @@ Three Unicode-adjacent questions the first real grammar will need to answer.
 
 **Unicode version pinning for GraphemeLexer.** Grapheme boundaries are defined by UAX #29, which Unicode updates with every release (new emoji, new ZWJ rules, occasional boundary changes). `GraphemeLexer` uses `StringInfo.GetTextElementEnumerator`, which pulls the Unicode version from the runtime. Same grammar parsing the same input can produce different trees on different .NET / Unity versions. For most grammars this is tolerable; for a grammar that wants cross-host determinism (a language spec, a shared file format), we would need to bundle our own UAX #29 tables pinned to a specific Unicode version. That is a real maintenance burden to take on but a real need for some callers. Defer until asked.
 
-**Full Unicode case folding.** The ASCII `LiteralIgnoreAsciiCase` leaf covers HTTP headers, SQL keywords, HTML tag names, and most real needs. A full-Unicode version would handle Turkish dotless-i, German `ß`, Greek final sigma, and the rest of the locale-specific edge cases, at the cost of a big lookup table and locale awareness. Add when a grammar actually needs it.
+**Full Unicode case-insensitive matching.** The ASCII `LiteralIgnoreAsciiCase` leaf covers HTTP headers, SQL keywords, HTML tag names, and most real needs. A full-Unicode version would handle Turkish dotless-i, German `ß`, Greek final sigma, and the rest of the locale-specific edge cases, at the cost of a big lookup table and locale awareness. Add when a grammar actually needs it.
 
 **Grapheme-level character classes.** `RuneClass.Letters` on GraphemeLexer matches single-rune letter graphemes. A more permissive rule ("any grapheme whose base rune is a letter, accepting trailing combining marks as part of the match") would work better for Devanagari and other scripts with genuine multi-rune letter graphemes that have no precomposed form. Requires deciding the semantics once and documenting them; worth doing if a real Devanagari-aware grammar ships.
