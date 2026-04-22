@@ -27,10 +27,10 @@ public abstract class Lexer
     private int _transactionDepth;
 
     // Budget tracking. Set by ConfigureBudgets right after construction.
-    // The three limit fields (_maxRuleInvocations, _maxDepth, _timeout)
-    // are zero-disabled: a zero value means "no limit". 
+    // The three limit fields (_ruleCountLimit, _maxDepth, _timeout)
+    // are zero-disabled: a zero value means "no limit".
     // The counter fields (_ruleInvocations, _ruleDepth) accumulate as the parse runs.
-    private long _maxRuleInvocations;
+    private long _ruleCountLimit;
     private int _maxDepth;
     private TimeSpan _timeout;
 
@@ -307,7 +307,7 @@ public abstract class Lexer
     // allocation and the per-check comparison.
     internal void ConfigureBudgets(ParseOptions options)
     {
-        _maxRuleInvocations = options.MaxRuleInvocations;
+        _ruleCountLimit = options.RuleCountLimit;
         _maxDepth = options.MaxDepth;
         _timeout = options.Timeout;
         _cancellation = options.Cancellation;
@@ -323,12 +323,12 @@ public abstract class Lexer
     // crashed the host process, which is exactly what MaxDepth is here
     // to prevent.
     //
-    // The work limit, timeout, and cancellation flag are checked every
-    // BudgetCheckInterval invocations (1024). Per-call cost is a
+    // The rule-count limit, timeout, and cancellation flag are checked
+    // every BudgetCheckInterval invocations (1024). Per-call cost is a
     // single bitwise-AND, so the amortized overhead is invisible on
     // well-formed input. Tripping at interval boundaries instead of
     // exactly when the limit is reached means the parse may run up to
-    // 1023 invocations past MaxRuleInvocations before the abort fires,
+    // 1023 invocations past RuleCountLimit before the abort fires,
     // but that overshoot is predictable: the trip always happens at
     // the first interval boundary past the limit, and the invocation
     // count is a pure function of grammar + input. Run the same parse
@@ -358,8 +358,8 @@ public abstract class Lexer
     // inline cleanly.
     private void CheckPeriodicBudgets()
     {
-        if (_maxRuleInvocations > 0 && _ruleInvocations > _maxRuleInvocations)
-            throw new ParseBudgetExceeded(ParseOutcome.WorkLimitExceeded);
+        if (_ruleCountLimit > 0 && _ruleInvocations > _ruleCountLimit)
+            throw new ParseBudgetExceeded(ParseOutcome.RuleCountLimitExceeded);
         if (_stopwatch != null && _stopwatch.Elapsed >= _timeout)
             throw new ParseBudgetExceeded(ParseOutcome.Timeout);
         if (_cancellation != null && _cancellation.IsCanceled)

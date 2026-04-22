@@ -16,7 +16,7 @@ public readonly struct ParseResult
     // The top-level Symbols produced by the parse. For a Preserve-typed
     // root this has exactly one element (the root's wrapper). For a
     // Flatten-typed root whose children bubbled up, this is the flat
-    // list of those children. For a failed or aborted parse, empty.
+    // list of those children. For a failed or aborted parse, it is empty.
     public IReadOnlyList<Symbol> Symbols =>
         _symbols ?? System.Array.Empty<Symbol>();
 

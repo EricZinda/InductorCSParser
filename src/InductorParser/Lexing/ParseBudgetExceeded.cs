@@ -3,7 +3,7 @@ using System;
 namespace InductorParser.Lexing;
 
 // Exception thrown from the periodic budget check on
-// the lexer when MaxRuleInvocations, MaxDepth, the Timeout, or the
+// the lexer when RuleCountLimit, MaxDepth, the Timeout, or the
 // Cancellation trips. The throw unwinds through the rule stack,
 // rolling back every active lexer transaction via the existing `using`
 // scaffolding, and lands at the catch in Rule.Parse, which converts it

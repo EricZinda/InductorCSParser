@@ -26,7 +26,7 @@ public class BudgetTests
     }
 
     [Test]
-    public void MaxRuleInvocations_aborts_with_WorkLimitExceeded()
+    public void RuleCountLimit_aborts_with_RuleCountLimitExceeded()
     {
         // OneOrMore(RuneIn) on a long input does roughly two rule
         // invocations per character (OneOrMore once at the outer level
@@ -35,24 +35,24 @@ public class BudgetTests
         // somewhere past the configured limit, which is fine: the test
         // is asserting the outcome, not the exact trip point.
         var rule = OneOrMore(RuneIn(RuneSet.Letters));
-        var options = new ParseOptions { MaxRuleInvocations = 10 };
+        var options = new ParseOptions { RuleCountLimit = 10 };
         var result = rule.Parse(new string('a', 5000), options);
 
-        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.WorkLimitExceeded));
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.RuleCountLimitExceeded));
         Assert.That(result.ErrorMessage,
-            Is.EqualTo("Parse aborted: maximum rule invocations exceeded."));
+            Is.EqualTo("Parse aborted: rule-count limit exceeded."));
     }
 
     [Test]
-    public void MaxRuleInvocations_zero_disables_the_work_budget()
+    public void RuleCountLimit_zero_disables_the_rule_count_limit()
     {
-        // Same 5000-Token workload that trips MaxRuleInvocations = 10 in
+        // Same 5000-Token workload that trips RuleCountLimit = 10 in
         // the test above. With the limit set to 0, the periodic check
-        // skips the work-budget comparison entirely and the parse
+        // skips the rule-count comparison entirely and the parse
         // completes. Proves 0 is a real off switch, not just a value
         // small workloads happen to fit under.
         var rule = OneOrMore(RuneIn(RuneSet.Letters));
-        var options = new ParseOptions { MaxRuleInvocations = 0 };
+        var options = new ParseOptions { RuleCountLimit = 0 };
         var result = rule.Parse(new string('a', 5000), options);
 
         Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.Success));
@@ -86,7 +86,7 @@ public class BudgetTests
         var aRule = new LateBoundRule("aRule");
         aRule.Bind(Or(And(Token('a'), aRule), Token('a')));
 
-        var options = new ParseOptions { MaxDepth = 0, MaxRuleInvocations = 0 };
+        var options = new ParseOptions { MaxDepth = 0, RuleCountLimit = 0 };
         var result = aRule.Parse(new string('a', 50), options);
 
         Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.Success));
@@ -103,7 +103,7 @@ public class BudgetTests
         var options = new ParseOptions
         {
             Timeout = TimeSpan.FromTicks(1),
-            MaxRuleInvocations = 0,
+            RuleCountLimit = 0,
         };
         var result = rule.Parse(new string('a', 5000), options);
 
@@ -117,13 +117,13 @@ public class BudgetTests
     {
         // Same 5000-Token workload that trips Timeout = 1 tick in the
         // test above. Setting Timeout to Zero means "no deadline,"
-        // matching MaxRuleInvocations = 0 and MaxDepth = 0. The
-        // Stopwatch isn't even allocated.
+        // matching RuleCountLimit = 0 and MaxDepth = 0. The Stopwatch
+        // isn't even allocated.
         var rule = OneOrMore(RuneIn(RuneSet.Letters));
         var options = new ParseOptions
         {
             Timeout = TimeSpan.Zero,
-            MaxRuleInvocations = 0,
+            RuleCountLimit = 0,
         };
         var result = rule.Parse(new string('a', 5000), options);
 
@@ -143,7 +143,7 @@ public class BudgetTests
         var options = new ParseOptions
         {
             Cancellation = cancellation,
-            MaxRuleInvocations = 0,
+            RuleCountLimit = 0,
         };
         var result = rule.Parse(new string('a', 5000), options);
 
@@ -181,19 +181,19 @@ public class BudgetTests
     }
 
     [Test]
-    public void Pathological_nested_repetition_aborts_under_default_work_limit()
+    public void Pathological_nested_repetition_aborts_under_default_rule_count_limit()
     {
         // The doc-cited shape: OneOrMore(OneOrMore(A)) with A able to
         // match in multiple ways. Greedy PEG semantics mean this doesn't
         // produce true catastrophic backtracking the way a regex would,
-        // but the broader contract holds: any grammar/input combination
-        // that runs the rule machinery past the configured budget aborts
-        // cleanly with WorkLimitExceeded instead of hanging. 
+        // but the broader rule holds: any grammar/input combination that
+        // runs the rule machinery past the configured budget aborts
+        // cleanly with RuleCountLimitExceeded instead of hanging.
         var rule = OneOrMore(OneOrMore(RuneIn(RuneSet.Letters)));
-        var options = new ParseOptions { MaxRuleInvocations = 5_000 };
+        var options = new ParseOptions { RuleCountLimit = 5_000 };
         var result = rule.Parse(new string('a', 100_000), options);
 
-        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.WorkLimitExceeded));
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.RuleCountLimitExceeded));
     }
 
     [Test]
@@ -208,10 +208,10 @@ public class BudgetTests
         // below.
         var rule = OneOrMore(RuneIn(RuneSet.Letters));
         var input = new string('a', 5000);
-        var options = new ParseOptions { MaxRuleInvocations = 10 };
+        var options = new ParseOptions { RuleCountLimit = 10 };
         var result = rule.Parse(input, options);
 
-        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.WorkLimitExceeded));
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.RuleCountLimitExceeded));
         Assert.That(result.ErrorCharIndex, Is.InRange(0, input.Length));
     }
 
@@ -232,10 +232,10 @@ public class BudgetTests
         // rolled-back value of 0 would make this assertion fail.
         var rule = OneOrMore(Or(Literal("ab"), Token('a')));
         var input = new string('a', 5000);
-        var options = new ParseOptions { MaxRuleInvocations = 100 };
+        var options = new ParseOptions { RuleCountLimit = 100 };
         var result = rule.Parse(input, options);
 
-        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.WorkLimitExceeded));
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.RuleCountLimitExceeded));
         Assert.That(result.ErrorCharIndex, Is.GreaterThan(0),
             "ErrorCharIndex should reflect DeepestFailure, not the rolled-back lexer.Position.");
         Assert.That(result.ErrorCharIndex, Is.LessThanOrEqualTo(input.Length));

@@ -7,14 +7,14 @@ namespace InductorParser;
 // its periodic budget check. On the next check after Cancel() fires, the
 // parse aborts with ParseOutcome.Canceled.
 //
-// Why a custom type instead of the standard System.Threading.CancellationToken:
+// This is a custom type instead of the standard System.Threading.CancellationToken because
 // CancellationToken supports a .CancelAfter(timespan) shortcut on its
 // source that schedules the cancel through System.Threading.Timer, which
 // silently does nothing on WebGL because there is no background thread to
 // fire the timer callback. Code that compiles, passes desktop tests, and
 // looks correct in review then ships and never times out in production.
 // This type has no time-based API at all (only manual Cancel()), so the
-// foot-gun simply isn't expressible. For a wall-clock deadline, use
+// it bypasses the bug. For a wall-clock deadline, use
 // ParseOptions.Timeout instead, which uses synchronous Stopwatch polling
 // and works on every target.
 //

@@ -475,8 +475,8 @@ public abstract class Rule
         {
             case ParseOutcome.Timeout:
                 return "Parse aborted: timeout exceeded.";
-            case ParseOutcome.WorkLimitExceeded:
-                return "Parse aborted: maximum rule invocations exceeded.";
+            case ParseOutcome.RuleCountLimitExceeded:
+                return "Parse aborted: rule-count limit exceeded.";
             case ParseOutcome.DepthLimitExceeded:
                 return "Parse aborted: maximum recursion depth exceeded.";
             case ParseOutcome.Canceled:

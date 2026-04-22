@@ -190,14 +190,14 @@ public class NormalizationTests
         // out unchanged, the assertion that ErrorCharIndex is within the
         // *original* input length would catch it. Input has to be long
         // enough for OneOrMore to cross BudgetCheckInterval (1024) and
-        // trigger the periodic work-budget check.
+        // trigger the periodic rule-count check.
         string chunk = "e" + CombiningAcuteText;
         string input = string.Concat(Enumerable.Repeat(chunk, 5000));
         var rule = OneOrMore(AnyToken());
         var result = rule.Parse(input,
-            new ParseOptions { MaxRuleInvocations = 10 });
+            new ParseOptions { RuleCountLimit = 10 });
 
-        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.WorkLimitExceeded));
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.RuleCountLimitExceeded));
         Assert.That(result.ErrorCharIndex, Is.GreaterThanOrEqualTo(0));
         Assert.That(result.ErrorCharIndex, Is.LessThanOrEqualTo(input.Length),
             "abort position must be a valid index into the caller's original input");

@@ -279,7 +279,7 @@ public enum ParseOutcome
     Success,
     GrammarMismatch,       // rules did not match the input
     Timeout,               // ParseOptions.Timeout elapsed
-    WorkLimitExceeded,     // ParseOptions.MaxRuleInvocations exceeded
+    RuleCountLimitExceeded,  // ParseOptions.RuleCountLimit exceeded
     DepthLimitExceeded,    // ParseOptions.MaxDepth exceeded
     Canceled               // ParseOptions.CancellationToken fired
 }
@@ -287,7 +287,7 @@ public enum ParseOutcome
 
 Putting the error position into the result directly removes an entire class of C++ pitfall where you forgot to ask the lexer for the error before it went out of scope. `ErrorLine` and `ErrorColumn` are computed lazily from `ErrorCharIndex` and the original input string. The char-based trio (`ErrorCharIndex`, `ErrorLine`, `ErrorColumn`) uses the same conventions the Language Server Protocol uses, so a caller forwarding a parse error into an editor through LSP does no arithmetic in between. See [ProgrammingModel.md](ProgrammingModel.md) for the full rationale. The two extra index properties (`ErrorRuneIndex`, `ErrorGraphemeIndex`) are there for callers that measure in other units. They are computed lazily from the char index and cost nothing unless used.
 
-The `Outcome` field distinguishes "the grammar did not match" from "we ran out of budget." A grammar mismatch means the input is invalid and you should show the user where. A timeout or work-limit exhaustion means the input might be valid but we could not decide in the budget we were given, and the caller might want to reject it as suspicious, retry with a looser budget, or show a different error to the user. See the "Catastrophic Backtracking and Timeouts" section below for the mechanics.
+The `Outcome` field distinguishes "the grammar did not match" from "we ran out of budget." A grammar mismatch means the input is invalid and you should show the user where. A timeout or rule-count-limit exhaustion means the input might be valid but we could not decide in the budget we were given, and the caller might want to reject it as suspicious, retry with a looser budget, or show a different error to the user. See the "Catastrophic Backtracking and Timeouts" section below for the mechanics.
 
 ## The Symbol Tree
 
@@ -501,12 +501,14 @@ public sealed class ParseOptions
     /// UnicodeInternalsArchitecture.md for details on the tradeoffs.
     public InputUnit InputUnit { get; set; } = InputUnit.Grapheme;
 
-    /// Work limit: maximum rule invocations before the parse aborts.
-    /// Deterministic, independent of machine speed. Default catches
-    /// catastrophic backtracking without clipping legitimate multi-MB
-    /// parses. Raise it for genuinely huge inputs; lower it for tighter
-    /// control. Set to null to disable (not recommended for untrusted input).
-    public long? MaxRuleInvocations { get; set; } = 10_000_000;
+    /// Rule-count limit: maximum rule invocations before the parse aborts.
+    /// A pure count, not a wall-clock measurement, so the same input and
+    /// grammar trip at exactly the same point on every run regardless of
+    /// machine speed. Default catches catastrophic backtracking without
+    /// clipping legitimate multi-MB parses. Raise it for genuinely huge
+    /// inputs. Lower it for tighter control. Set to null to disable (not
+    /// recommended for untrusted input).
+    public long? RuleCountLimit { get; set; } = 10_000_000;
 
     /// Recursion depth limit. Protects against stack overflow on
     /// pathologically nested input like ((((((...)))))). Default is
@@ -515,9 +517,10 @@ public sealed class ParseOptions
     public int? MaxDepth { get; set; } = 1000;
 
     /// Wall-clock limit. Polled from inside the parse loop with Stopwatch.
-    /// Portable to every platform including WebGL. No default: interactive
-    /// callers set this for user-experience reasons; the work limit above
-    /// handles the security case deterministically.
+    /// Portable to every platform including WebGL. No default. Interactive
+    /// callers set this for user-experience reasons. The rule-count limit
+    /// above handles the security case with a count that doesn't vary
+    /// across machines.
     public TimeSpan? Timeout { get; set; }
 
     /// Standard .NET cancellation. Polled alongside Timeout.
@@ -542,11 +545,11 @@ public enum InputUnit { Grapheme, Rune }
 
 **What to actually do as a caller:**
 
-- For most code, the defaults are fine. The work limit protects against pathological input, the depth limit protects against stack overflow, and you do not need to think about either.
+- For most code, the defaults are fine. The rule-count limit protects against pathological input, the depth limit protects against stack overflow, and you do not need to think about either.
 - For interactive contexts (editor plugins, real-time feedback), add a `Timeout` so the user never waits too long: `new ParseOptions { Timeout = TimeSpan.FromMilliseconds(200) }`.
-- For parsing genuinely huge input (multi-hundred-MB JSON or similar), raise `MaxRuleInvocations` explicitly. Lower it tighter if you know your grammar should be fast: a small config file should not need a million rule invocations.
+- For parsing genuinely huge input (multi-hundred-MB JSON or similar), raise `RuleCountLimit` explicitly. Lower it tighter if you know your grammar should be fast: a small config file should not need a million rule invocations.
 - `MaxDepth = 1000` is enough for every real grammar. Only touch it if you have some exotic deeply-nested data format.
 
-When a budget trips, the parse returns a `ParseResult` with `Outcome` set to `Timeout`, `WorkLimitExceeded`, `DepthLimitExceeded`, or `Canceled` (not `GrammarMismatch`). Callers who need to distinguish "input was invalid" from "we ran out of budget" switch on `Outcome`.
+When a budget trips, the parse returns a `ParseResult` with `Outcome` set to `Timeout`, `RuleCountLimitExceeded`, `DepthLimitExceeded`, or `Canceled` (not `GrammarMismatch`). Callers who need to distinguish "input was invalid" from "we ran out of budget" switch on `Outcome`.
 
 For the design rationale behind these choices (why three budgets and not one, why `Timeout` is opt-in but the others default on, why `CancellationTokenSource.CancelAfter` alone is insufficient on WebGL, and future ideas like the cut operator and packrat memoization), see [ProgrammingModel.md](ProgrammingModel.md).
