@@ -58,7 +58,7 @@ public sealed class LateBoundRule : Rule
 
     // Naming a LateBoundRule is a bug: the name would derive a Name
     // and (via hashing) an Id, but neither is ever visible at parse time.
-    // Fail loudly instead of letting users build a rule whose Find
+    // Fail instead of letting users build a rule whose Find
     // silently returns null. Pass the debug name to the constructor.
     public override Rule As(string name) => throw new InvalidOperationException(
         "LateBoundRule.As(string) is not supported: the rule is transparent at parse " +

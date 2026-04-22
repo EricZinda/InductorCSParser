@@ -6,8 +6,8 @@ using InductorParser.SyntaxTree;
 namespace InductorParser;
 
 // Case-insensitive literal match, ASCII letters only. Same single-transaction
-// shape as LiteralRule; the only difference is the comparison folds ASCII
-// A-Z and a-z before testing equality. Non-ASCII code units compare bit-exact,
+// shape as LiteralRule; the only difference is the is case insensitive for ASCII. 
+// Non-ASCII code units compare bit-exact,
 // so Turkish dotless-I, German sharp-s, Greek sigma variants, etc. do NOT
 // match their upper/lower counterparts. That tradeoff is on purpose: full
 // Unicode case folding is locale-dependent and grammar-breaking, and the
@@ -56,7 +56,7 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
         TraceSuccess(lexer, $"found '{lexer.Input.Substring(transaction.StartPosition, consumed)}', wanted '{_expected}' (case-insensitive)");
         transaction.Commit();
         // Default FlattenType is Delete: the common case collapses to
-        // the shared sentinel and skips the per-match Symbol allocation.
+        // the shared FlattenType.Delete sentinel and skips the per-match Symbol allocation.
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
         var leafSymbol = new Symbol(Id, FlattenType, lexer.Input.AsMemory(transaction.StartPosition, consumed));
@@ -68,7 +68,7 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
         return leafSymbol;
     }
 
-    // ASCII-only case fold. Both sides compare bit-exact when either char
+    // ASCII-only case insenstive compare. Both sides compare bit-exact when either char
     // is outside A-Za-z; within A-Za-z the 0x20 bit difference is masked
     // out so 'A' and 'a' hash the same. Non-letters (digits, punctuation,
     // spaces) take the bit-exact path because (c | 0x20) is only a valid

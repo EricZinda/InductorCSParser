@@ -86,6 +86,12 @@ internal sealed class BetweenInclusiveRule : Rule
             int positionBefore = lexer.Position;
             var nextSymbol = ParseChild(Inner, lexer, outputSymbols);
             if (nextSymbol == null) break;
+            // Zero-width-match guard. Inner succeeded but didn't advance the
+            // lexer (e.g. Optional, Peek, Not, or any composite of zero-width
+            // children). Without this break the loop would spin forever on
+            // ZeroOrMore(Optional(X)) and friends, incrementing count without
+            // making progress. Exit with whatever count we have; the AtLeast
+            // check below decides if that's enough to call the rule a success.
             if (lexer.Position == positionBefore) break;
             // Don't add child symbols if they are discarded
             if (outputSymbols != null && !ReferenceEquals(nextSymbol, Symbol.Discarded))
