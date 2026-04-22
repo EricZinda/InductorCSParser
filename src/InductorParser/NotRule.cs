@@ -32,8 +32,10 @@ internal sealed class NotRule : Rule
 
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        // Lookahead only: inner's result is thrown away regardless.
-        // Pass null. Shim will allocate a scratch if inner is Flatten.
+        // Lookahead only: inner's result is thrown away regardless, so we
+        // pass null for outputSymbols. If inner is Flatten-typed (which
+        // normally writes its children into a caller-supplied list),
+        // Rule.TryParse gives it a throwaway list that nobody reads.
         using var transaction = lexer.BeginTransaction();
         var innerResult = Inner.TryParse(lexer, outputSymbols: null);
         if (innerResult != null)

@@ -420,9 +420,9 @@ public abstract class Rule
         lexer.ConfigureBudgets(options);
         Symbol? result;
         // Pre-allocate a root list so a Flatten-typed root has somewhere
-        // to merge into. If root is Preserve-typed, shim nulls this and
-        // rootList stays empty. If root is Delete, same. Only a Flatten
-        // root populates it.
+        // to merge into. If root is Preserve-typed, TryParse nulls this
+        // out and rootList stays empty. If root is Delete, same. Only a
+        // Flatten root populates it.
         var rootList = new List<Symbol>();
         try
         {
@@ -518,11 +518,11 @@ public abstract class Rule
     // TryParseRule inherit catastrophic-backtracking protection with no
     // extra work.
     //
-    // The shim also normalizes the subclass's view: it computes
+    // TryParse also normalizes the subclass's view: it computes
     // effectiveFlattenType (collapsing PreserveFlattenWrappers), and makes
     // outputSymbols non-null only in Flatten mode. Subclasses don't have
     // to re-check FlattenType or PreserveFlattenWrappers, they implement
-    // the three modes per the TryParseRule contract below.
+    // the three modes per the TryParseRule rules below.
     internal Symbol? TryParse(Lexer lexer, List<Symbol>? outputSymbols)
     {
         lexer.EnterRule();
@@ -539,12 +539,14 @@ public abstract class Rule
             }
             else if (outputSymbols == null)
             {
-                // Flatten requires a caller list. A caller
-                // that passed null (Not/Peek discarding inner, a Flatten
-                // root that didn't get a rootList, etc.) gets a scratch
-                // list here that will be GC'd when we return. Inner
-                // writes into it but nobody reads it. Just keeps the contract
-                // simple
+                // A Flatten-typed rule expects its caller to pass a list
+                // for it to write children into. When the caller passed
+                // null (Not/Peek throwing away inner's output, a Flatten
+                // root that didn't get a rootList, etc.), we allocate a
+                // throwaway list here. Inner writes into it but nobody
+                // reads it, and the list goes out of scope when this call
+                // returns. Keeps subclasses simple: they always get a
+                // list to write into.
                 outputSymbols = new List<Symbol>();
             }
             int savedCount = outputSymbols?.Count ?? 0;
@@ -580,8 +582,9 @@ public abstract class Rule
     //     input on failure (following the transaction pattern guarantees
     //     this). Call lexer.RecordFailure() so the "deepest failure wins"
     //     error-reporting heuristic can surface your rule's error message.
-    //     The shim rolls back any partial writes to outputSymbols for
-    //     you, so subclasses don't need to truncate on the failure path.
+    //     Rule.TryParse rolls back any partial writes to outputSymbols
+    //     for you, so subclasses don't need to truncate on the failure
+    //     path.
     //   * On success: call transaction.Commit() and return a non-null
     //     Symbol. What exactly you return depends on `effectiveFlattenType`:
     //       - Delete: emit nothing, return Symbol.Discarded.
@@ -617,10 +620,9 @@ public abstract class Rule
     // ParseChild forwards that list only when the child would actually
     // write into it (Flatten-typed, normal mode). Otherwise it passes
     // null so a Preserve-typed or Delete-typed child wraps or discards
-    // normally. Rule.TryParse's shim performs the same check as a
-    // safety net, so a custom composite that forgets this helper still
-    // gets correct behavior. This just makes the intent visible at
-    // the caller.
+    // normally. Rule.TryParse performs the same check as a safety net,
+    // so a custom composite that forgets this helper still gets correct
+    // behavior. This just makes the intent visible at the caller.
     protected Symbol? ParseChild(Rule child, Lexer lexer, List<Symbol>? outputSymbols)
     {
         var listForChild = child.FlattenType == FlattenType.Flatten && !lexer.PreserveFlattenWrappers

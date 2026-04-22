@@ -39,7 +39,7 @@ public static class InductorJsonParser
         var hexDigit = RuneIn(RuneSet.Ascii.Digits | RuneSet.Range('a', 'f') | RuneSet.Range('A', 'F'));
         var unicodeEscape = And(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
         // Delete-typed so StringCharsRule's per-escape TryParse call
-        // doesn't force the shim to allocate a scratch List<Symbol>.
+        // doesn't force Rule.TryParse to allocate a throwaway List<Symbol>.
         // StringChars discards escapeEnd's Symbol anyway (it emits a
         // single leaf covering the whole string body), so the tree
         // shape is unchanged.

@@ -103,6 +103,11 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
         // Non-letters (digits, punctuation) only match themselves. The
         // same bit-exact rule AsciiCaseEquals applies to non-letter
         // positions.
+        //
+        // TryPeekRune decodes the first rune correctly even when that rune
+        // takes two chars in the C# string (emoji, many CJK). Reading
+        // _expected[0] directly would return only the first char, which
+        // isn't a usable rune on its own.
         Lexer.TryPeekRune(_expected, 0, out int first, out _);
         if (IsAsciiLetter((char)first))
         {

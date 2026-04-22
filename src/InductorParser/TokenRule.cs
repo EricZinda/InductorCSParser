@@ -130,6 +130,11 @@ internal sealed class TokenRule : Rule
         // Multi-rune graphemes (ZWJ sequences, etc.) still pin the set to
         // the first rune. The follow-on runes are checked by the rule's
         // own lockstep compare against _expected.
+        //
+        // TryPeekRune decodes the first rune correctly even when that rune
+        // takes two chars in the C# string (emoji, many CJK). Reading
+        // _expected[0] directly would return only the first char, which
+        // isn't a usable rune on its own.
         Lexer.TryPeekRune(_expected, 0, out int first, out _);
         return new RuleStartRequirements(RuneSet.Single(first), Advance.Always);
     }

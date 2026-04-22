@@ -92,11 +92,12 @@ internal sealed class LiteralRule : Rule
     {
         // The only rune that can start a match of this literal is the first
         // rune of the expected string. Advance is Always because a literal
-        // always consumes at least one rune to match. TryPeekRune decodes
-        // the first rune correctly even when it's a supplementary-plane
-        // code point that spans two UTF-16 chars (emoji, CJK above
-        // U+FFFF). _expected[0] would hand back just the high surrogate,
-        // which isn't a valid rune.
+        // always consumes at least one rune to match.
+        //
+        // TryPeekRune decodes the first rune correctly even when that rune
+        // takes two chars in the C# string (emoji, many CJK). Reading
+        // _expected[0] directly would return only the first char, which
+        // isn't a usable rune on its own.
         Lexer.TryPeekRune(_expected, 0, out int first, out _);
         return new RuleStartRequirements(RuneSet.Single(first), Advance.Always);
     }
