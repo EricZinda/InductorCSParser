@@ -2,7 +2,7 @@
 
 Log of performance experiments on InductorParser. Each section is a self-contained record of one attempt: what was tried, how it was measured, what the numbers came back as, and whether the change shipped or was reverted. Append new attempts to the bottom over time.
 
-Shipped optimizations live in the code, in the p-series commit history, and in the running commentary in [ChordGrammarTests.cs](../src/InductorParser.Tests/E2EExamples/ChordGrammarTests.cs) (the "History on this box" comment above the timing test). This file is for attempts worth remembering even when the implementation didn't land — so the next contributor working on the same target doesn't redo the same experiment.
+Shipped optimizations live in the code, in the p-series commit history, and in the running commentary in [ChordGrammarTests.cs](../src/InductorParser.Tests/E2EExamples/ChordGrammarTests.cs) (the "History on this box" comment above the timing test). This file is for attempts worth remembering even when the implementation didn't land, so the next contributor working on the same target doesn't redo the same experiment.
 
 ---
 
@@ -34,21 +34,21 @@ var symbol = discard ? child.TryParseDiscarded(lexer) : child.TryParse(lexer);
 
 NotRule and PeekRule always go through `TryParseDiscarded` because they roll the transaction back and throw the inner's Symbol away regardless. LateBoundRule propagates `discard` through to its target.
 
-The two entry points keeps the !discard path at exactly the same cost as before (one branch at the composite rule, not per-invocation in the hot path). That detail matters — an early version of this change added a `forceDiscard` parameter to the single `TryParse` method and produced a measurable (~2%) regression on JSON because every rule invocation paid the extra `||` even when nothing was discarding.
+The two entry points keeps the !discard path at exactly the same cost as before (one branch at the composite rule, not per-invocation in the hot path). That detail matters. An early version of this change added a `forceDiscard` parameter to the single `TryParse` method and produced a measurable (~2%) regression on JSON because every rule invocation paid the extra `||` even when nothing was discarding.
 
 **Anonymous empty-Flatten wrapper removal.** When `AndRule` or `BetweenInclusiveRule` runs to completion with every child returning `Discarded` (so `matched` stays `null`), the default behavior is to allocate `new Symbol(Id, Flatten, Array.Empty<Symbol>())`. Post-hoc `Symbol.FlattenInto` would drop that zero-child wrapper to nothing anyway, so at parse time we can return `Discarded` directly and let the enclosing composite filter us out of its matched list.
 
-The removal only fires for **anonymous** wrappers: `Name == null && ErrorMessage == null && FlattenType == Flatten && !PreserveFlattenWrappers`. A user who called `.As("object")` on an AndRule wants that wrapper findable via `Tree.Find(rule)` even when the matched container is empty (think `{}` in JSON), so named wrappers are preserved. This gate is load-bearing — an earlier, ungated version broke JSON empty-object parsing silently because `JsonObject = And(...).As("object")` collapsed to Discarded on `{}` inputs, and nothing in the benchmark's round-trip path caught it.
+The removal only fires for **anonymous** wrappers: `Name == null && ErrorMessage == null && FlattenType == Flatten && !PreserveFlattenWrappers`. A user who called `.As("object")` on an AndRule wants that wrapper findable via `Tree.Find(rule)` even when the matched container is empty (think `{}` in JSON), so named wrappers are preserved. This gate is critical. An earlier, ungated version broke JSON empty-object parsing silently because `JsonObject = And(...).As("object")` collapsed to Discarded on `{}` inputs, and nothing in the benchmark's round-trip path caught it.
 
 ### Files touched (in the attempt)
 
-- [src/InductorParser/Rule.cs](../src/InductorParser/Rule.cs) — added `TryParseDiscarded`.
-- [src/InductorParser/AndRule.cs](../src/InductorParser/AndRule.cs) — discard propagation + empty-wrapper removal.
-- [src/InductorParser/BetweenInclusiveRule.cs](../src/InductorParser/BetweenInclusiveRule.cs) — same.
-- [src/InductorParser/OrRule.cs](../src/InductorParser/OrRule.cs) — discard propagation.
-- [src/InductorParser/NotRule.cs](../src/InductorParser/NotRule.cs) — always force-discard inner.
-- [src/InductorParser/PeekRule.cs](../src/InductorParser/PeekRule.cs) — same.
-- [src/InductorParser/LateBoundRule.cs](../src/InductorParser/LateBoundRule.cs) — propagate discard to target.
+- [src/InductorParser/Rule.cs](../src/InductorParser/Rule.cs): added `TryParseDiscarded`.
+- [src/InductorParser/AndRule.cs](../src/InductorParser/AndRule.cs): discard propagation + empty-wrapper removal.
+- [src/InductorParser/BetweenInclusiveRule.cs](../src/InductorParser/BetweenInclusiveRule.cs): same.
+- [src/InductorParser/OrRule.cs](../src/InductorParser/OrRule.cs): discard propagation.
+- [src/InductorParser/NotRule.cs](../src/InductorParser/NotRule.cs): always force-discard inner.
+- [src/InductorParser/PeekRule.cs](../src/InductorParser/PeekRule.cs): same.
+- [src/InductorParser/LateBoundRule.cs](../src/InductorParser/LateBoundRule.cs): propagate discard to target.
 
 Test surface: all 458 non-timing tests continued to pass. The round-trip spot-check (`dotnet run --project src/Benchmarks -- --spot-check`) confirmed no tree-shape regressions across Big / Long / Deep / Wide after the removal was gated.
 
@@ -90,11 +90,11 @@ Long    216.54 → 221.15 μs          299.09 → 285.09 KB           -4.7%
 Wide    143.46 → 145.43 μs          179.77 → 179.72 KB              0%
 ```
 
-Mean drifted +0.5% to +3.5% across shapes. StdDev on those runs was 0.4-3.0 μs, so the Mean shifts are at the edge of single-run noise — plausibly real, plausibly not. Allocation is the clean signal: Deep and Long dropped ~5-7%, Big and Wide unchanged.
+Mean drifted +0.5% to +3.5% across shapes. StdDev on those runs was 0.4-3.0 μs, so the Mean shifts are at the edge of single-run noise, plausibly real, plausibly not. Allocation is the clean signal: Deep and Long dropped ~5-7%, Big and Wide unchanged.
 
 ### Why the wins are small
 
-ChordGrammar's hot path has seven `Optional(keyword)` and `ZeroOrMore(keyword)` wrappers per successful chord parse, each of which produced an empty Flatten wrapper under the baseline. Removing them collapses those to Discarded. On paper that should be ~7 Symbol allocations saved per parse × 750,000 parses = ~5.25M Symbols saved. The test numbers say ~3% wall-clock, which suggests those Symbol allocations weren't the dominant cost — the transactions and per-child Rule dispatch are.
+ChordGrammar's hot path has seven `Optional(keyword)` and `ZeroOrMore(keyword)` wrappers per successful chord parse, each of which produced an empty Flatten wrapper under the baseline. Removing them collapses those to Discarded. On paper that should be ~7 Symbol allocations saved per parse × 750,000 parses = ~5.25M Symbols saved. The test numbers say ~3% wall-clock, which suggests those Symbol allocations weren't the dominant cost. The transactions and per-child Rule dispatch are.
 
 JSON's wins are concentrated on Deep and Long because those shapes have more empty-optional wrappers per parse (256 levels of empty `OptionalWhitespace()` and empty-body Optionals for the innermost object). Big and Wide have proportionally more real content, so the savings don't register above noise.
 
@@ -112,7 +112,7 @@ The measurement scaffolding in this doc is correct even if the implementation is
 
 - Un-ignore both `Timing_grammar_is_within_two_times_compiled_regex` tests temporarily. Run each three times per side. The Grammar absolute time is more stable than the ratio because the compiled regex baseline itself swings ~20% run-to-run.
 - For JSON, run `dotnet run --project src/Benchmarks -- --filter "*_InductorParser" "*_SystemTextJson"` to measure just the two rows that matter. The filtered run still takes ~2 minutes but is much cheaper than the full 35-row table.
-- Validate with `dotnet run --project src/Benchmarks -- --spot-check` after any change that touches Symbol construction — it catches tree-shape regressions that don't show up in the tests because `ParseForRoundTrip` uses `PreserveFlattenWrappers=true`.
+- Validate with `dotnet run --project src/Benchmarks -- --spot-check` after any change that touches Symbol construction. It catches tree-shape regressions that don't show up in the tests because `ParseForRoundTrip` uses `PreserveFlattenWrappers=true`.
 - Empty-Flatten wrapper removal is a semantic change that needs the anonymous-only gate. Any future change in that direction has to carry the Name / ErrorMessage / pinned-Id checks through, or it'll silently break `Tree.Find(namedRule)` on empty containers.
 
 ---
@@ -142,10 +142,10 @@ Did not implement the full "SymbolChildren struct with 4 inline slots + overflow
 
 ### Files touched (in the attempt)
 
-- [src/InductorParser/Lexing/Lexer.cs](../src/InductorParser/Lexing/Lexer.cs) — added per-Lexer leaf Symbol cache and `GetOrCreateRuneLeaf`.
-- [src/InductorParser/RuneInRule.cs](../src/InductorParser/RuneInRule.cs), [RuneNotInRule.cs](../src/InductorParser/RuneNotInRule.cs), [AnyTokenRule.cs](../src/InductorParser/AnyTokenRule.cs) — route single-rune success through the cache.
-- [src/InductorParser/AndRule.cs](../src/InductorParser/AndRule.cs) — `List<Symbol>?` to `Symbol[]?` with trim-on-short.
-- [src/InductorParser/BetweenInclusiveRule.cs](../src/InductorParser/BetweenInclusiveRule.cs) — `List<Symbol>?` to `Symbol[]?` with doubling growth and trim-on-short.
+- [src/InductorParser/Lexing/Lexer.cs](../src/InductorParser/Lexing/Lexer.cs): added per-Lexer leaf Symbol cache and `GetOrCreateRuneLeaf`.
+- [src/InductorParser/RuneInRule.cs](../src/InductorParser/RuneInRule.cs), [RuneNotInRule.cs](../src/InductorParser/RuneNotInRule.cs), [AnyTokenRule.cs](../src/InductorParser/AnyTokenRule.cs): route single-rune success through the cache.
+- [src/InductorParser/AndRule.cs](../src/InductorParser/AndRule.cs): `List<Symbol>?` to `Symbol[]?` with trim-on-short.
+- [src/InductorParser/BetweenInclusiveRule.cs](../src/InductorParser/BetweenInclusiveRule.cs): `List<Symbol>?` to `Symbol[]?` with doubling growth and trim-on-short.
 
 Test surface: all 458 non-timing tests continued to pass. The round-trip spot-check (`dotnet run --project src/Benchmarks -- --spot-check`) confirmed byte-exact round-trip on all four JSON shapes.
 
@@ -205,9 +205,9 @@ Engineering record of an attempt at the (since-deleted) p600 backlog item. The c
 
 Every non-trivial rule opens a `Transaction` on entry via `Lexer.BeginTransaction()`. The Transaction is a struct (two int writes, two bool writes) plus a `_transactionDepth++` on the lexer for trace indentation plus a `Dispose` on every exit path. Two categories of rule don't need that full machinery:
 
-- Rules that always roll back (`PeekRule`, `NotRule`) — they never commit, so the only job of the Transaction is to restore position. A saved `int` does the same work with less bookkeeping.
-- Primitive rules that read at most one token before deciding (`TokenRule`, `RuneInRule`, `RuneNotInRule`, `AnyTokenRule`) — on failure the rule hasn't advanced past one rune, so rollback is trivially "restore saved position."
-- `BetweenInclusiveRule` with `AtLeast==0` (Optional, ZeroOrMore) — the rule can't fail in that configuration, so the outer rollback has nothing to roll back.
+- Rules that always roll back (`PeekRule`, `NotRule`): they never commit, so the only job of the Transaction is to restore position. A saved `int` does the same work with less bookkeeping.
+- Primitive rules that read at most one token before deciding (`TokenRule`, `RuneInRule`, `RuneNotInRule`, `AnyTokenRule`): on failure the rule hasn't advanced past one rune, so rollback is trivially "restore saved position."
+- `BetweenInclusiveRule` with `AtLeast==0` (Optional, ZeroOrMore): the rule can't fail in that configuration, so the outer rollback has nothing to roll back.
 
 Three tiers proposed, smallest to biggest, with the expectation that ChordGrammar's ~10x-compiled-regex ratio would drop to ~5-7x.
 
@@ -233,18 +233,18 @@ Updated the Rule.TryParseRule contract comment to describe the saved-position pa
 
 ### Files touched (in the attempt)
 
-- [src/InductorParser/Lexing/Lexer.cs](../src/InductorParser/Lexing/Lexer.cs) — added `SetPosition`.
-- [src/InductorParser/BetweenInclusiveRule.cs](../src/InductorParser/BetweenInclusiveRule.cs) — AtLeast==0 path without outer Transaction.
-- [src/InductorParser/PeekRule.cs](../src/InductorParser/PeekRule.cs), [NotRule.cs](../src/InductorParser/NotRule.cs) — saved-position int (always restore).
-- [src/InductorParser/TokenRule.cs](../src/InductorParser/TokenRule.cs), [RuneInRule.cs](../src/InductorParser/RuneInRule.cs), [RuneNotInRule.cs](../src/InductorParser/RuneNotInRule.cs), [AnyTokenRule.cs](../src/InductorParser/AnyTokenRule.cs) — saved-position int (restore on failure).
-- [src/InductorParser/Rule.cs](../src/InductorParser/Rule.cs) — updated subclass contract comment.
-- ~15 test files — trace-output expected indentation shifted shallower because the leaves no longer bump `_transactionDepth`.
+- [src/InductorParser/Lexing/Lexer.cs](../src/InductorParser/Lexing/Lexer.cs): added `SetPosition`.
+- [src/InductorParser/BetweenInclusiveRule.cs](../src/InductorParser/BetweenInclusiveRule.cs): AtLeast==0 path without outer Transaction.
+- [src/InductorParser/PeekRule.cs](../src/InductorParser/PeekRule.cs), [NotRule.cs](../src/InductorParser/NotRule.cs): saved-position int (always restore).
+- [src/InductorParser/TokenRule.cs](../src/InductorParser/TokenRule.cs), [RuneInRule.cs](../src/InductorParser/RuneInRule.cs), [RuneNotInRule.cs](../src/InductorParser/RuneNotInRule.cs), [AnyTokenRule.cs](../src/InductorParser/AnyTokenRule.cs): saved-position int (restore on failure).
+- [src/InductorParser/Rule.cs](../src/InductorParser/Rule.cs): updated subclass contract comment.
+- ~15 test files: trace-output expected indentation shifted shallower because the leaves no longer bump `_transactionDepth`.
 
-Test surface: all 458 non-timing tests passed after updating trace expectations. No semantic change to parse results — only rollback mechanics and trace indentation.
+Test surface: all 458 non-timing tests passed after updating trace expectations. No semantic change to parse results, only rollback mechanics and trace indentation.
 
 ### Measurements
 
-Measurement protocol: stash production-rule changes, rebuild, run baseline. Pop, rebuild, run after. For ChordGrammar and BacklogGrammar, both sides were measured fresh in the same session. For JSON the "after" was a fresh BenchmarkDotNet run and the baseline was the existing README numbers (also post-p500 master) — so the JSON baseline / after comparison straddles separate BDN sessions and picks up additional run-to-run noise.
+Measurement protocol: stash production-rule changes, rebuild, run baseline. Pop, rebuild, run after. For ChordGrammar and BacklogGrammar, both sides were measured fresh in the same session. For JSON the "after" was a fresh BenchmarkDotNet run and the baseline was the existing README numbers (also post-p500 master), so the JSON baseline / after comparison straddles separate BDN sessions and picks up additional run-to-run noise.
 
 #### ChordGrammar timing (5000 iters × 151 inputs, ratio vs compiled regex)
 
@@ -280,16 +280,16 @@ Long    219.01 → 210.75 μs          -3.8%        299.09 → 299.09 KB        
 Wide    143.79 → 140.83 μs          -2.1%        179.77 → 179.77 KB             0%
 ```
 
-STJ baseline drifted 11% on Big between the two BenchmarkDotNet sessions (24.66 → 27.36 μs), which is larger than any of the Mean deltas above. Read these as "within noise." Allocations unchanged, which is expected — p600 targeted transaction bookkeeping, not allocation sites.
+STJ baseline drifted 11% on Big between the two BenchmarkDotNet sessions (24.66 → 27.36 μs), which is larger than any of the Mean deltas above. Read these as "within noise." Allocations unchanged, which is expected. p600 targeted transaction bookkeeping, not allocation sites.
 
 ### Why the wins were small
 
-`Transaction` is already cheap in absolute terms. It's a struct, so stack-allocated — no GC pressure. Construction is two int writes plus two bool writes. `Dispose` is a flag read, maybe one int write, and one int decrement. Shaving that still leaves the rule body — `Lexer.Read`, the comparison against the expected rune or grapheme, the Symbol allocation on success — doing most of the work.
+`Transaction` is already cheap in absolute terms. It's a struct, so stack-allocated, no GC pressure. Construction is two int writes plus two bool writes. `Dispose` is a flag read, maybe one int write, and one int decrement. Shaving that still leaves the rule body (`Lexer.Read`, the comparison against the expected rune or grapheme, the Symbol allocation on success) doing most of the work.
 
 The hot paths on the grammars measured aren't leaf-bound:
 
 - **ChordGrammar** spends its time in `Literal` / `Or` dispatch (already helped by p500's required-runes filter). The Token / RuneIn leaves aren't the bottleneck.
-- **JSON** spends its time in `StringChars` (already a specialized scanner that doesn't dispatch per character) and in the structural `And` / `ZeroOrMore` wrappers that build the output tree. Those still open Transactions and still allocate `List<Symbol>` wrappers — p600 didn't touch either.
+- **JSON** spends its time in `StringChars` (already a specialized scanner that doesn't dispatch per character) and in the structural `And` / `ZeroOrMore` wrappers that build the output tree. Those still open Transactions and still allocate `List<Symbol>` wrappers. p600 didn't touch either.
 
 The backlog item's "ChordGrammar probably drops to ~5-7x" estimate was optimistic because it assumed leaf-rule overhead was a bigger portion of the hot path than it actually is.
 
@@ -301,11 +301,11 @@ For essentially flat wall-clock and zero allocation change, the split pattern di
 
 ### What future work should know
 
-The remaining hot-path cost isn't on the leaf-rule rollback surface — it's on the composites (And, Or, BetweenInclusive with AtLeast≥1) that actually use rollback, and on the allocations they produce. See p700 (per-iteration wrapper-allocation work) and p800 (compiled state-machine emitter for stable grammars) for the higher-ceiling levers.
+The remaining hot-path cost isn't on the leaf-rule rollback surface. It's on the composites (And, Or, BetweenInclusive with AtLeast≥1) that actually use rollback, and on the allocations they produce. See p700 (per-iteration wrapper-allocation work) and p800 (compiled state-machine emitter for stable grammars) for the higher-ceiling levers.
 
 Don't re-attempt lazy transactions on leaves unless it's part of a compile-time specialization that also eliminates the Rule-to-Rule dispatch itself. Shaving the Transaction struct alone doesn't move the needle on the grammars we care about.
 
-One thing worth reusing if this ever gets revisited: the `AtLeast == 0` removal in `BetweenInclusiveRule` is the cleanest of the three tiers — no new API surface, no two-pattern problem, just dead-code removal. If a future attempt can measure a real win from that alone (it didn't stand out in isolation here because Chord doesn't hit it often on the hot path), it might ship standalone.
+One thing worth reusing if this ever gets revisited: the `AtLeast == 0` removal in `BetweenInclusiveRule` is the cleanest of the three tiers. No new API surface, no two-pattern problem, just dead-code removal. If a future attempt can measure a real win from that alone (it didn't stand out in isolation here because Chord doesn't hit it often on the hot path), it might ship standalone.
 
 ---
 
@@ -321,22 +321,22 @@ From [backlog/p750-first-rune-lookahead-skip-on-betweeninclusiverule.md](../back
 
 At the top of `BetweenInclusiveRule.TryParseRule`, before opening the iteration loop, three gates are checked:
 
-- `Inner.Advance == Advance.Always` — Inner must consume a rune to match, so the peek is decisive.
-- `Inner.ErrorMessage == null` — if the author set `.WithError(...)` on Inner, run it anyway so that message can surface via deepest-failure-wins (mirrors `OrRule`'s same gate).
-- `!lexer.PreserveFlattenWrappers` — debug-tree mode still sees the same Inner invocations the grammar declares.
+- `Inner.Advance == Advance.Always`: Inner must consume a rune to match, so the peek is decisive.
+- `Inner.ErrorMessage == null`: if the author set `.WithError(...)` on Inner, run it anyway so that message can surface via deepest-failure-wins (mirrors `OrRule`'s same gate).
+- `!lexer.PreserveFlattenWrappers`: debug-tree mode still sees the same Inner invocations the grammar declares.
 
 If all three pass, `pos < input.Length`, and the next rune isn't in `Inner.RequiredInitialRuneSet`, Inner definitely can't match the first iteration:
 
 - `AtLeast == 0` (`Optional`, `ZeroOrMore`): commit with zero iterations, return the empty-wrapper Symbol (or `Discarded` for Delete-typed wrappers).
 - `AtLeast > 0` (`OneOrMore`, `BetweenInclusive(n, m)` with n≥1): record failure at the start position and return null.
 
-The three hints consulted (`Advance`, `RequiredInitialRuneSet`, `ErrorMessage`) are the exact three `OrRule` already reads per child. No new compile-time analysis. Self-recursive grammars where `RequiredInitialRuneSet` falls back to `Universe` (via the cycle-detection path in `Rule.ComputeRuleStartAll`) never fire the skip because `Universe.Contains` is always true — safe fallback.
+The three hints consulted (`Advance`, `RequiredInitialRuneSet`, `ErrorMessage`) are the exact three `OrRule` already reads per child. No new compile-time analysis. Self-recursive grammars where `RequiredInitialRuneSet` falls back to `Universe` (via the cycle-detection path in `Rule.ComputeRuleStartAll`) never fire the skip because `Universe.Contains` is always true, a safe fallback.
 
 ### Files touched
 
-- [src/InductorParser/BetweenInclusiveRule.cs](../src/InductorParser/BetweenInclusiveRule.cs) — the lookahead-and-skip block before the existing iteration loop.
-- [src/InductorParser.Tests/Rules/OneOrMoreRuleTests.cs](../src/InductorParser.Tests/Rules/OneOrMoreRuleTests.cs) — `OneOrMore_trace_failure_produces_expected_output` no longer has the inner `Token FAIL` line.
-- [src/InductorParser.Tests/Rules/OptionalRuleTests.cs](../src/InductorParser.Tests/Rules/OptionalRuleTests.cs) — `Optional_trace_without_match_produces_expected_output` same story.
+- [src/InductorParser/BetweenInclusiveRule.cs](../src/InductorParser/BetweenInclusiveRule.cs): the lookahead-and-skip block before the existing iteration loop.
+- [src/InductorParser.Tests/Rules/OneOrMoreRuleTests.cs](../src/InductorParser.Tests/Rules/OneOrMoreRuleTests.cs): `OneOrMore_trace_failure_produces_expected_output` no longer has the inner `Token FAIL` line.
+- [src/InductorParser.Tests/Rules/OptionalRuleTests.cs](../src/InductorParser.Tests/Rules/OptionalRuleTests.cs): `Optional_trace_without_match_produces_expected_output` same story.
 
 Test surface: all 458 non-timing tests pass. Only two trace expectations shifted (much smaller than p600's ~15, because most trace tests already use `PreserveFlattenWrappers=true` for `Tree.ToString()` assertions, which gates the skip off). Spot-check (`dotnet run --project src/Benchmarks -- --spot-check`) confirms byte-exact round-trip across all four JSON shapes.
 
@@ -358,11 +358,11 @@ And FAIL             257           0     -257
 ZeroOrMore SUCC     1540        1283     -257
 ```
 
-On Big, every eliminated invocation is a `RuneIn FAIL` from `OptionalWhitespace()` — the grammar's trailing-comma branches don't fail on Big because the benchmark's JSON always has at least one member. On Deep, the same skip also short-circuits the `And` rule inside the outer `ZeroOrMore(And(OptionalWhitespace, Token(','), ...))`, so the `Token FAIL` and `And FAIL` rows drop to zero too. The ZeroOrMore SUCC drop is bookkeeping: the trailing-ZeroOrMore still emits one SUCC trace per call, but it no longer runs nested OptionalWhitespace ZeroOrMores inside the And that got skipped.
+On Big, every eliminated invocation is a `RuneIn FAIL` from `OptionalWhitespace()`. The grammar's trailing-comma branches don't fail on Big because the benchmark's JSON always has at least one member. On Deep, the same skip also short-circuits the `And` rule inside the outer `ZeroOrMore(And(OptionalWhitespace, Token(','), ...))`, so the `Token FAIL` and `And FAIL` rows drop to zero too. The ZeroOrMore SUCC drop is bookkeeping: the trailing-ZeroOrMore still emits one SUCC trace per call, but it no longer runs nested OptionalWhitespace ZeroOrMores inside the And that got skipped.
 
 ### Measurements
 
-Measurement protocol: stash the change, rebuild, run baseline 3x. Pop, rebuild, run after 3x. Same box, same BenchmarkDotNet ShortRunJob, same 8-row filter (`*_InductorParser` + `*_SystemTextJson`). Baseline's Big row was captured on 2 of 3 runs because a concurrent source edit during run 2 invalidated that row — acceptable since the other shapes have 3 valid runs each and the "after" deltas are much larger than the single-run spread.
+Measurement protocol: stash the change, rebuild, run baseline 3x. Pop, rebuild, run after 3x. Same box, same BenchmarkDotNet ShortRunJob, same 8-row filter (`*_InductorParser` + `*_SystemTextJson`). Baseline's Big row was captured on 2 of 3 runs because a concurrent source edit during run 2 invalidated that row, which is acceptable since the other shapes have 3 valid runs each and the "after" deltas are much larger than the single-run spread.
 
 #### JSON benchmark (BenchmarkDotNet ShortRunJob, median of 3 runs)
 
@@ -374,11 +374,11 @@ Long    215.72 → 190.00 μs         -11.9%        299.09 → 299.09 KB        
 Wide    143.58 → 128.82 μs         -10.3%        179.77 → 179.77 KB             0%
 ```
 
-StdDev on the per-run Mean numbers was 0.2-1.7 us (0.1-1.0% of Mean), so every Δ above is several standard deviations outside the noise floor. Allocations are unchanged because the skip doesn't alter what `BetweenInclusiveRule` returns — same empty-wrapper Symbol (or `Discarded`) as the full-loop path would produce.
+StdDev on the per-run Mean numbers was 0.2-1.7 us (0.1-1.0% of Mean), so every Δ above is several standard deviations outside the noise floor. Allocations are unchanged because the skip doesn't alter what `BetweenInclusiveRule` returns, the same empty-wrapper Symbol (or `Discarded`) as the full-loop path would produce.
 
 ### Why the win lands here when p600 and p700 didn't
 
-`Transaction` (p600's target) is a struct the JIT had already largely inlined. Empty-Flatten wrapper Symbols (p700's target) are cheap to allocate and short-lived. This skip is different in kind: it eliminates the entire `Inner.TryParse` *dispatch* — the virtual call through `Rule.TryParse`, the `EnterRule` / `ExitRule` pair, Inner's own `BeginTransaction`, the `Read` that actually reads the input buffer, the `_set.Contains` comparison against the expected rune set, the `RecordFailure` on the failure path, and the `Dispose` cycle at the end. For every invocation of a `ZeroOrMore` / `Optional` / `OneOrMore` whose lookahead rules Inner out, the cost drops from all of that to three comparisons and a return.
+`Transaction` (p600's target) is a struct the JIT had already largely inlined. Empty-Flatten wrapper Symbols (p700's target) are cheap to allocate and short-lived. This skip is different in kind: it eliminates the entire `Inner.TryParse` *dispatch*, which is the virtual call through `Rule.TryParse`, the `EnterRule` / `ExitRule` pair, Inner's own `BeginTransaction`, the `Read` that actually reads the input buffer, the `_set.Contains` comparison against the expected rune set, the `RecordFailure` on the failure path, and the `Dispose` cycle at the end. For every invocation of a `ZeroOrMore` / `Optional` / `OneOrMore` whose lookahead rules Inner out, the cost drops from all of that to three comparisons and a return.
 
 On Big that's 2089 skipped dispatches per parse. The measured -22 us Mean drop spread across those calls works out to ~10 ns per skipped dispatch, which is within the right order of magnitude for "virtual call + Read + set comparison + transaction open/dispose" on this platform.
 
@@ -392,6 +392,6 @@ The only externally observable behavior change is trace output: diagnostic-level
 
 ### What future work should know
 
-- `OrRule` (p500) and now `BetweenInclusiveRule` (p750) are the two composite wrappers that open transactions on entry and can tolerate their child failing with zero advance — Or's "try next branch" and BetweenInclusive's "zero-iteration success for AtLeast==0" both have that shape. `AndRule` does not, because its child failing is propagating. There's no branch to skip to. So this pattern is applied everywhere it can be on the current interpreter.
+- `OrRule` (p500) and now `BetweenInclusiveRule` (p750) are the two composite wrappers that open transactions on entry and can tolerate their child failing with zero advance. Or's "try next branch" and BetweenInclusive's "zero-iteration success for AtLeast==0" both have that shape. `AndRule` does not, because its child failing is propagating. There's no branch to skip to. So this pattern is applied everywhere it can be on the current interpreter.
 - If p800 (compiled state-machine emitter) lands, this skip becomes redundant because the emitter will inline the peek-and-skip directly into the generated code. Until then, p750 makes p800's baseline ~10% faster and slightly harder to beat.
 - The verification harness from this attempt is reusable: `--rule-counts --shape=<big|deep|long|wide>` shows per-Rule trace outcome totals, which is the cleanest way to confirm a lookahead-style optimization actually fires on the intended invocations. The `RuneProfiler` plumbing lives in [src/Benchmarks/RuleProfiler.cs](../src/Benchmarks/RuleProfiler.cs) and the CLI hook in [src/Benchmarks/Program.cs](../src/Benchmarks/Program.cs).

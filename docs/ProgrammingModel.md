@@ -6,10 +6,10 @@ If you want to write grammars, read [ProgrammingAGrammar.md](ProgrammingAGrammar
 
 Related docs:
 
-- [ProgrammingAGrammar.md](ProgrammingAGrammar.md) — user reference: how to write grammars with the library.
-- [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md) — lexer internals: code units, runes, graphemes, the two lexers, normalization.
-- [UnicodeGotchas.md](UnicodeGotchas.md) — caller-side Unicode concerns the lexer cannot fix.
-- [Recipes.md](Recipes.md) — common grammar patterns.
+- [ProgrammingAGrammar.md](ProgrammingAGrammar.md): user reference for how to write grammars with the library.
+- [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md): lexer internals (code units, runes, graphemes, the two lexers, normalization).
+- [UnicodeGotchas.md](UnicodeGotchas.md): caller-side Unicode concerns the lexer cannot fix.
+- [Recipes.md](Recipes.md): common grammar patterns.
 
 ## Terminology
 
@@ -148,7 +148,7 @@ Boxing at interface edges. Generic collections and span-based APIs keep the stru
 
 If Symbol allocation ever shows up as a real bottleneck in a profile, the right answer is probably a parse-scoped object pool rather than a struct conversion. Keep the class, recycle instances between parses, preserve identity semantics, preserve the API. A struct refactor would still be available later, but pooling captures most of the win without the churn.
 
-The deeper question is framing: are parse-tree nodes "data without identity" (struct territory, like `Point` or `DateTime`), or "nodes in a graph with distinct identity" (class territory, like DOM nodes or Roslyn's `SyntaxNode`)? Symbol sits on the boundary. The patterns people naturally want to apply to parse trees — dedup sets, annotation dictionaries, reference comparisons in debuggers and tooling — favor the class framing. So we paid the allocation cost and kept identity.
+The deeper question is framing: are parse-tree nodes "data without identity" (struct territory, like `Point` or `DateTime`), or "nodes in a graph with distinct identity" (class territory, like DOM nodes or Roslyn's `SyntaxNode`)? Symbol sits on the boundary. The patterns people naturally want to apply to parse trees (dedup sets, annotation dictionaries, reference comparisons in debuggers and tooling) favor the class framing. So we paid the allocation cost and kept identity.
 
 ## Rule Is Extensible
 
@@ -191,17 +191,17 @@ public readonly ref struct Token
 
 `Token` is a `ref struct` so it can carry a `Span<char>` into the original input without allocating. Each token is the section of input that the lexer consumed to produce it. Everything else is derived.
 
-Under `RuneLexer` every token is one rune wide by construction (the lexer emits one rune per read). Under `GraphemeLexer` most tokens are still one rune — ASCII, composed-form Latin, CJK, most punctuation are all one grapheme = one rune — but emoji sequences, regional-indicator flags, skin-tone modified emoji, Devanagari conjuncts, and decomposed-form combinations produce multi-rune tokens whose `Chars` span covers the whole grapheme.
+Under `RuneLexer` every token is one rune wide by construction (the lexer emits one rune per read). Under `GraphemeLexer` most tokens are still one rune (ASCII, composed-form Latin, CJK, most punctuation are all one grapheme = one rune), but emoji sequences, regional-indicator flags, skin-tone modified emoji, Devanagari conjuncts, and decomposed-form combinations produce multi-rune tokens whose `Chars` span covers the whole grapheme.
 
 The three position offsets let any caller (editors, IDE integrations, error messages) pick the unit they speak in without the parser having to compute the other two lazily later. All three are constant-time reads on the token.
 
-Rules that need to ask "is this token exactly one rune?" walk `Chars` with `EnumerateRunes()`. The enumerator is a `SpanRuneEnumerator` — a ref struct that allocates nothing — so the cost is two `MoveNext` calls in the common single-rune case, which is small enough that caching the answer as a bool on the token is not worth the extra field or the derived-state hazard.
+Rules that need to ask "is this token exactly one rune?" walk `Chars` with `EnumerateRunes()`. The enumerator is a `SpanRuneEnumerator` (a ref struct that allocates nothing), so the cost is two `MoveNext` calls in the common single-rune case, which is small enough that caching the answer as a bool on the token is not worth the extra field or the derived-state hazard.
 
 ### Comparing Tokens: The Four Leaves
 
 Every built-in rule that looks at token content reduces to one of four operations.
 
-**`Token('=')`, `Token(Rune r)`, `Token(string grapheme)`.** Matches one grapheme, specified at rule-construction time. The `string` overload requires exactly one grapheme and is validated at construction by walking the argument with `StringInfo.GetTextElementEnumerator` and asserting a single element. The `char` and `Rune` overloads are convenience wrappers that build a one-grapheme string. At match time the rule pre-tokenizes its expected grapheme the same way the lexer will tokenize input and walks the expected sequence against `lexer.Read()` in lockstep, comparing `Chars` spans with `SequenceEqual`. Under `GraphemeLexer` that is a single-token compare. Under `RuneLexer` it is a one-to-N token compare (`Token("👋🏽")` expects two rune tokens — waving hand plus medium skin tone — so it reads two tokens and compares each).
+**`Token('=')`, `Token(Rune r)`, `Token(string grapheme)`.** Matches one grapheme, specified at rule-construction time. The `string` overload requires exactly one grapheme and is validated at construction by walking the argument with `StringInfo.GetTextElementEnumerator` and asserting a single element. The `char` and `Rune` overloads are convenience wrappers that build a one-grapheme string. At match time the rule pre-tokenizes its expected grapheme the same way the lexer will tokenize input and walks the expected sequence against `lexer.Read()` in lockstep, comparing `Chars` spans with `SequenceEqual`. Under `GraphemeLexer` that is a single-token compare. Under `RuneLexer` it is a one-to-N token compare (`Token("👋🏽")` expects two rune tokens, waving hand plus medium skin tone, so it reads two tokens and compares each).
 
 **`RuneIn(RuneSet cc)` and `RuneNotIn(RuneSet cc)`.** These are the rune-set tests. Both are defined in terms of the predicate "the token is exactly one rune *r*, and `cc.Contains(r)`." `RuneIn` matches when the predicate is true. `RuneNotIn` matches when it is false. The asymmetry that falls out of this is important: a multi-rune token never matches `RuneIn` (the predicate is false because the token is not one rune) but it *does* match `RuneNotIn` (the predicate is false, so the negation is true). This is what makes `OneOrMore(RuneNotIn(formattingChars))` sweep up emoji correctly in the pass-through-text recipe.
 
@@ -274,7 +274,7 @@ RuneSet.Ascii.Letters & RuneSet.Ascii.HexDigits
 **`~` (complement)** is mostly useful combined with `&` as set difference (`A & ~B`). It is the only way to express "this class minus those elements" without hand-enumerating the result:
 
 ```csharp
-// Letters except vowels. No pre-built class; you build it by subtracting.
+// Letters except vowels. No pre-built class. You build it by subtracting.
 RuneSet.Ascii.Letters & ~RuneSet.Runes("aeiouAEIOU")
 
 // Identifier chars except underscore, for a language where '_' is reserved.
@@ -310,7 +310,7 @@ Everything else (flatten policies, error messages, named symbols) is metadata on
 Concretely, the four comparison leaves are all short:
 
 ```csharp
-// Token(string grapheme) — _tokenizedExpected is precomputed, length 1 under
+// Token(string grapheme): _tokenizedExpected is precomputed, length 1 under
 // GraphemeLexer and 1..N runes under RuneLexer
 using var tx = lexer.BeginTransaction();
 foreach (var expected in _tokenizedExpected)
@@ -332,7 +332,7 @@ if (!cc.Contains(rune)) return null;
 tx.Commit();
 return makeSymbolFrom(token);
 
-// Literal(string s) — _tokenizedLiteral is precomputed
+// Literal(string s): _tokenizedLiteral is precomputed
 using var tx = lexer.BeginTransaction();
 foreach (var expected in _tokenizedLiteral)
 {
@@ -366,7 +366,7 @@ What you *cannot* do:
 - **Define a `RuneSet` that includes specific multi-rune sequences.** A `RuneSet` is a set of code points, not a set of sequences. If you want to match "any of these specific multi-rune sequences," express it as `Or(Token(a), Token(b), Token(c))`, not as a character class.
 - **Test "is this grapheme a letter?" with `RuneIn(RuneSet.Letters)`** when the grapheme is multi-rune. The class is defined over single runes, so any multi-rune grapheme is outside it. If you want "any identifier character, including combining marks as part of a letter sequence," either switch to `RuneLexer` and consume each rune individually, or include Mark categories in a broader character class and accept that the grammar will capture combining marks as separate tokens under `RuneLexer`.
 
-The split that remains is between rune-set tests (`RuneIn`, `RuneNotIn`) and content-match leaves (`Token`, `Literal`). The set tests are defined over single runes by construction — a `RuneSet` is a set of code points — and the content-match leaves compare raw `Chars` spans, so they handle multi-rune graphemes naturally. A glance at a rule tells you which half of the API it lives in.
+The split that remains is between rune-set tests (`RuneIn`, `RuneNotIn`) and content-match leaves (`Token`, `Literal`). The set tests are defined over single runes by construction (a `RuneSet` is a set of code points), and the content-match leaves compare raw `Chars` spans, so they handle multi-rune graphemes naturally. A glance at a rule tells you which half of the API it lives in.
 
 ## Greedy Repetition, No Repetition Backtracking
 
@@ -387,7 +387,7 @@ A regex engine with greedy backtracking would:
 
 A PEG engine does NOT do step 3. Once `OneOrMore` matched `"aaa"`, those matches are committed. The outer `And` then tries `Token('a')` at EOF, fails, and the whole parse fails. Our `BetweenInclusiveRule` (which `OneOrMore`, `ZeroOrMore`, and `Optional` all factory through) preserves this: the loop inside its `TryParse` commits each successful inner match as it goes, and the loop just stops when the inner fails on the next attempt. No rewind.
 
-This looks like a cost, and sometimes it is — grammars that worked in regex need to be restructured, usually with `Not(...)` lookahead to stop repetition one step short, or by splitting the repeated rule into a less-greedy form. The benefit is unambiguity: given a grammar and an input, PEG returns exactly one parse (or a fail), and the parse is whichever answer the ordered choices and greedy matches produced. Regex engines without this property have decades of scars from ambiguous patterns and catastrophic backtracking (ReDoS).
+This looks like a cost, and sometimes it is. Grammars that worked in regex need to be restructured, usually with `Not(...)` lookahead to stop repetition one step short, or by splitting the repeated rule into a less-greedy form. The benefit is unambiguity: given a grammar and an input, PEG returns exactly one parse (or a fail), and the parse is whichever answer the ordered choices and greedy matches produced. Regex engines without this property have decades of scars from ambiguous patterns and catastrophic backtracking (ReDoS).
 
 Two corollaries of "no repetition backtracking" that show up in the implementation:
 
@@ -413,11 +413,11 @@ var result = rule.Parse("aabb");
 
 `OneOrMore(Token('a'))` greedily matches "aa" and stops because the next char isn't 'a'. The rule's own `TryParse` returned a tree happily. But the top-level `Parse` then checks `lexer.IsEof`, finds we're at offset 2 with "bb" still ahead, and turns the success into a failure.
 
-Why this default. Most grammars represent "what a valid input looks like end-to-end" — a settings file, an expression, a query. If a user types `setting = 5` without a trailing `;`, they want to hear "missing ;", not "I happily parsed `setting = 5` and ignored what came after." Silently dropping trailing input would mask the entire class of "your grammar accepted something it shouldn't have" bugs that grammar authors care most about catching.
+Why this default. Most grammars represent "what a valid input looks like end-to-end" (a settings file, an expression, a query). If a user types `setting = 5` without a trailing `;`, they want to hear "missing ;", not "I happily parsed `setting = 5` and ignored what came after." Silently dropping trailing input would mask the entire class of "your grammar accepted something it shouldn't have" bugs that grammar authors care most about catching.
 
 The flip side is that grammars built piecewise can't be unit-tested in isolation by calling `Parse` on a prefix. If you have a `settingName` sub-rule and want to test it against `"setting"`, that works because `"setting"` is fully consumed. But testing it against `"setting = 5"` needs the whole grammar, not just `settingName.Parse(...)`. This shows up in the test suite: rules used in composition are tested standalone with inputs sized to match the rule, not inputs sized to match a real document.
 
-If you genuinely want prefix parsing in some future grammar, the workaround today is to wrap the grammar in something that swallows trailing content explicitly — `And(yourGrammar, ZeroOrMore(AnyToken))` once the `AnyToken` leaf lands (backlog i028). The library could grow a `ParseOptions.AllowTrailingInput` flag if a real use case shows up. For now the default catches more bugs than it causes.
+If you genuinely want prefix parsing in some future grammar, the workaround today is to wrap the grammar in something that swallows trailing content explicitly, `And(yourGrammar, ZeroOrMore(AnyToken))` once the `AnyToken` leaf lands (backlog i028). The library could grow a `ParseOptions.AllowTrailingInput` flag if a real use case shows up. For now the default catches more bugs than it causes.
 
 ## Where Errors Get Positioned
 
@@ -425,7 +425,7 @@ When a parse fails, the `ParseResult` carries an `ErrorCharIndex` that tells the
 
 The library commits to one rule:
 
-> Every rule records its failure at the start of the offending input — the position of the character or token it couldn't match. Composite rules don't introduce new positions. They propagate their children's recorded positions via deepest-failure-wins.
+> Every rule records its failure at the start of the offending input, the position of the character or token it couldn't match. Composite rules don't introduce new positions. They propagate their children's recorded positions via deepest-failure-wins.
 
 Concretely this means `input[result.ErrorCharIndex]` gives the actual character that didn't match, not the character after it. If the index equals `input.Length`, that's a genuine end-of-input case: the grammar wanted more and there wasn't any. The index never falls outside `[0, input.Length]`.
 
@@ -445,14 +445,14 @@ A naive post-read implementation would record at 1 instead of 0, which equals `i
 
 **Multi-token leaves** (`TokenRule`'s lockstep loop for multi-rune graphemes under `RuneLexer`, `LiteralRule`) read a sequence of tokens and fail when any one of them mismatches. The position is the start of the *specific* failing token, not the start of the whole attempt. A `Literal("abc")` that matches "ab" and fails on the third token reports offset 2, not offset 0. These rules track a per-iteration `tokenStart` local inside the loop.
 
-**Composite rules** (`AndRule`, `OrRule`, `BetweenInclusiveRule`) don't introduce new positions of their own. They call `RecordFailure(lexer.Position, ...)` — the current lexer position after a child's transaction has rolled back — which equals where the child started trying. The child has already recorded at its own pre-read position (which is the same or deeper, depending on whether the child committed any sub-tokens before failing), so the composite's record either ties or is shallower, and deepest-failure-wins routes to the child's more-specific location. The composite still gets a chance to attach its `WithError` message via the equal-depth message-claim rule below.
+**Composite rules** (`AndRule`, `OrRule`, `BetweenInclusiveRule`) don't introduce new positions of their own. They call `RecordFailure(lexer.Position, ...)` (the current lexer position after a child's transaction has rolled back), which equals where the child started trying. The child has already recorded at its own pre-read position (which is the same or deeper, depending on whether the child committed any sub-tokens before failing), so the composite's record either ties or is shallower, and deepest-failure-wins routes to the child's more-specific location. The composite still gets a chance to attach its `WithError` message via the equal-depth message-claim rule below.
 
 ### Deepest Failure Wins
 
 Multiple rules can call `RecordFailure` during one parse. The lexer keeps track of the deepest position seen and the error message attached to that position. Two resolution rules:
 
 1. **Strictly deeper beats shallower.** A rule that records at offset 7 beats one that recorded at offset 3. The deeper record's message replaces whatever was there.
-2. **Equal depth, first-non-null-message wins.** When two rules record at the same position, the one with a non-null error message claims the message slot — but only if no one has claimed it yet. This is what lets a composite like `OneOrMore(...).WithError("Expected a setting name")` contribute its friendly message even though its inner leaf got there first with a null message.
+2. **Equal depth, first-non-null-message wins.** When two rules record at the same position, the one with a non-null error message claims the message slot, but only if no one has claimed it yet. This is what lets a composite like `OneOrMore(...).WithError("Expected a setting name")` contribute its friendly message even though its inner leaf got there first with a null message.
 
 The equal-depth restriction matters: without it, a shallow rule's `WithError` could steal the message slot from an unrelated deeper failure, which would produce misleading error output. Equal-depth-only keeps the two signals (position and message) aligned.
 
@@ -460,9 +460,9 @@ The equal-depth restriction matters: without it, a shallow rule's `WithError` co
 
 The deepest-failure-wins model works well in practice but has one characteristic quirk: `Optional(...)` rules whose inner gets deeper than the surrounding required path can "capture" the error message into a branch that was truly optional.
 
-Concrete case: `And(Optional(Literal("abc")), Token('x')).Parse("abdy")`. The Optional's inner reads "ab" and fails on 'd' vs 'c' at offset 2. Optional catches the failure and succeeds with empty children — so the overall grammar proceeds. Then Token('x') tries at offset 0, fails on 'a'. Deepest-failure-wins picks offset 2 (the abandoned Optional attempt), not offset 0 (the actually-required rule's failure). The user sees "unexpected 'd'" pointing at content inside what was supposedly optional.
+Concrete case: `And(Optional(Literal("abc")), Token('x')).Parse("abdy")`. The Optional's inner reads "ab" and fails on 'd' vs 'c' at offset 2. Optional catches the failure and succeeds with empty children, so the overall grammar proceeds. Then Token('x') tries at offset 0, fails on 'a'. Deepest-failure-wins picks offset 2 (the abandoned Optional attempt), not offset 0 (the actually-required rule's failure). The user sees "unexpected 'd'" pointing at content inside what was supposedly optional.
 
-This isn't a bug. It's a property of the heuristic. Grammars that care about this can put `.WithError(...)` on the outer required rule, and the equal-depth message-claim rule will make that message appear even when the deepest position came from the optional branch. The full fix would require a different error model — something like tracking a separate "required-path failure" position alongside the deepest raw position — and no existing PEG library we've surveyed does that. The smallest core lives with the quirk and documents it.
+This isn't a bug. It's a property of the heuristic. Grammars that care about this can put `.WithError(...)` on the outer required rule, and the equal-depth message-claim rule will make that message appear even when the deepest position came from the optional branch. The full fix would require a different error model (something like tracking a separate "required-path failure" position alongside the deepest raw position), and no existing PEG library we've surveyed does that. The smallest core lives with the quirk and documents it.
 
 ### LSP Position Semantics
 
@@ -470,7 +470,7 @@ This isn't a bug. It's a property of the heuristic. Grammars that care about thi
 
 Three specific rules fall out:
 
-**Lines are 0-based.** The first line of the file is line 0, not line 1. This is the part that surprises people reading an error in isolation (editors display 1-based to humans), but the point of these fields is machine-to-machine handoff, not direct human display. If the caller wants 1-based for a user-facing error message they add one at the edge — exactly where the translation belongs.
+**Lines are 0-based.** The first line of the file is line 0, not line 1. This is the part that surprises people reading an error in isolation (editors display 1-based to humans), but the point of these fields is machine-to-machine handoff, not direct human display. If the caller wants 1-based for a user-facing error message they add one at the edge, exactly where the translation belongs.
 
 **Columns count UTF-16 code units, not runes or graphemes.** LSP 3.17 made the encoding negotiable via `PositionEncodingKind`, but UTF-16 is still the default every implementation ships with. Counting in UTF-16 means that a grapheme like 👋🏽 (two runes, four UTF-16 chars, one visible character) contributes four to the column count, same as what VS Code's internal buffer sees. The rune and grapheme counts live on their own properties (`ErrorRuneIndex`, `ErrorGraphemeIndex`) for callers whose mental model works in those units.
 

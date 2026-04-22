@@ -13,7 +13,7 @@ public class BetweenInclusiveRuleTests
     // Token rules (default FlattenType.Delete) stay in the tree and their
     // text is visible in the concatenated output. Without the flag the
     // tree would contain only non-Delete nodes, which is the correct
-    // parse-time semantic — just not what these tests are looking at.
+    // parse-time semantic, just not what these tests are looking at.
     private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
 
 

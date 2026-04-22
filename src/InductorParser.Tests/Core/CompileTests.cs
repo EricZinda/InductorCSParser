@@ -44,7 +44,7 @@ public class CompileTests
     public void Compile_throws_when_a_rule_reports_Advance_Never_with_non_empty_FirstConsumedRunes()
     {
         // Advance.Never means "never consumes on success," which logically
-        // forces FirstConsumedRunes to be Empty — if nothing is consumed,
+        // forces FirstConsumedRunes to be Empty. If nothing is consumed,
         // there can't be a set of possible first-consumed runes. A subclass
         // that returns a non-empty set alongside Never is violating the
         // contract, and the check here catches it at Compile time rather

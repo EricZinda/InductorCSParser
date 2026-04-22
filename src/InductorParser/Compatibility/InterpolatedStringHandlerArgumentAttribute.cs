@@ -43,7 +43,7 @@
 // level and couldn't decide whether to skip the formatting.
 //
 // Note: the rewritten code still calls lexer.Trace(handler) even
-// when tracing is off — the if (shouldAppend) block only gates the
+// when tracing is off. The if (shouldAppend) block only gates the
 // expensive AppendLiteral/AppendFormatted work, not the method
 // invocation. See the cost-when-off comment block on Lexer.Trace
 // for why the call itself stays cheap.

@@ -40,7 +40,7 @@ public class OrRuleTests
     {
         // All three alternatives try at offset 0 and fail. Each records at
         // pre-read position 0 with its own WithError message. Equal depth,
-        // so the first-writer wins the message slot — that's Token('a'),
+        // so the first-writer wins the message slot. That's Token('a'),
         // which Or tries first.
         var rule = Or(Token('a').WithError("want 'a'"),
                       Token('b').WithError("want 'b'"),
@@ -75,8 +75,8 @@ public class OrRuleTests
     public void Or_trace_success_produces_expected_output()
     {
         // Third alternative wins. Required-runes dispatch skips Token('a') and
-        // Token('b') on lookahead 'c' — their FirstConsumedRunes don't contain 'c'
-        // and neither is empty-capable — so only the matching Token('c')
+        // Token('b') on lookahead 'c' (their FirstConsumedRunes don't contain 'c'
+        // and neither is empty-capable), so only the matching Token('c')
         // branch opens a transaction and emits trace lines. The
         // nesting remains depth 2 (Or's transaction + Token's transaction).
         var sink = NewSink();

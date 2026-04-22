@@ -40,7 +40,7 @@ static readonly HashSet<int> InvisibleFormat = new()
 {
     0x200B,  // zero-width space
     0x200C,  // zero-width non-joiner
-    0x200D,  // zero-width joiner — keep if you care about emoji ZWJ sequences!
+    0x200D,  // zero-width joiner (keep if you care about emoji ZWJ sequences!)
     0x00AD,  // soft hyphen
     0xFEFF,  // BOM / zero-width no-break space
 };
@@ -99,7 +99,7 @@ If you are doing emoji-sensitive parsing, be careful: variation selectors are pa
 Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 rule GB3), so `GraphemeLexer` hands the parser one two-char token whenever it sees a Windows line ending. This bites any line-based grammar that tries to match or stop on a bare `\n`:
 
 - `Token('\n')` matches a one-grapheme token whose content is exactly `'\n'`. The CRLF grapheme has content `"\r\n"`, so `Token('\n')` does *not* match it.
-- `RuneIn(RuneSet.Runes("\n"))` or `RuneIn(RuneSet.Runes("\r\n"))` matches a single-rune token whose rune is in the set. A CRLF grapheme is two runes, so it matches no single-rune set — it fails `RuneIn` regardless of what runes you put in the set.
+- `RuneIn(RuneSet.Runes("\n"))` or `RuneIn(RuneSet.Runes("\r\n"))` matches a single-rune token whose rune is in the set. A CRLF grapheme is two runes, so it matches no single-rune set. It fails `RuneIn` regardless of what runes you put in the set.
 - `RuneNotIn(RuneSet.Runes("\n"))` does the opposite: multi-rune tokens pass `RuneNotIn` unconditionally. `ZeroOrMore(RuneNotIn(stopSet))` used to scan "everything up to a newline" will greedily swallow the terminating CRLF as body content instead of stopping at it, then the terminator fails because there is nothing left.
 
 `RuneLexer` doesn't have this problem. It emits `'\r'` and `'\n'` as separate tokens. The bite is `GraphemeLexer`-specific, which is the default.
@@ -120,7 +120,7 @@ public static readonly Rule OptionalWhitespace = ZeroOrMore(Or(
     RuneIn(RuneSet.Ascii.Whitespace)
 ));
 
-// Scanning "up to end of line" — use a rule-based stop with Not(LineBreak),
+// Scanning "up to end of line": use a rule-based stop with Not(LineBreak),
 // not RuneNotIn. RuneNotIn would silently eat the CRLF grapheme.
 public static readonly Rule LineComment = And(
     Token('%'),

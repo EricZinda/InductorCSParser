@@ -47,7 +47,7 @@ public abstract class Rule
     private string? _errorMessage;
 
     // FirstConsumedRunes and Advance drive the "can I skip this rule?"
-    // shortcut. See RuleStartRequirements for the full story — the type
+    // shortcut. See RuleStartRequirements for the full story. The type
     // returned by ComputeRuleStart encapsulates these two. Populated at
     // Compile time. The pessimistic defaults
     // below (Universe, Sometimes) mean any user-defined Rule subclass that
@@ -98,7 +98,7 @@ public abstract class Rule
 
     // Compose the full trace label: "{Name}:{ruleName}" when the rule
     // has a .As(name) set, else just "{ruleName}". Only .As() is used
-    // here — .WithError() sets the user-facing error message, not a
+    // here. .WithError() sets the user-facing error message, not a
     // rule identity, so it belongs in the trace line's body (see
     // AppendErrorMessage) rather than as a label prefix.
     private string BuildTraceLabel() =>
@@ -145,7 +145,7 @@ public abstract class Rule
     // level other than Diagnostic (e.g. a summary line at Normal). The
     // InterpolatedStringHandlerArgument on the message parameter is
     // what routes `level` to the handler when the compiler rewrites
-    // the call — see TraceInterpolatedStringHandler for how that works.
+    // the call (see TraceInterpolatedStringHandler for how that works).
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected void TraceSuccess(
         Lexer lexer,
@@ -432,7 +432,7 @@ public abstract class Rule
         {
             // The throw rode up through every active rule's `using var
             // transaction = lexer.BeginTransaction()`, which rolled the
-            // lexer position back frame by frame — lexer.Position is now
+            // lexer position back frame by frame, so lexer.Position is now
             // back at 0. lexer.DeepestFailure isn't rolled back (it's a
             // high-water mark of failure positions), so it's the best
             // "how far did the parser get" hint we can give. Use the
@@ -542,7 +542,7 @@ public abstract class Rule
                 // Flatten requires a caller list. A caller
                 // that passed null (Not/Peek discarding inner, a Flatten
                 // root that didn't get a rootList, etc.) gets a scratch
-                // list here that will be GC'd when we return — inner
+                // list here that will be GC'd when we return. Inner
                 // writes into it but nobody reads it. Just keeps the contract
                 // simple
                 outputSymbols = new List<Symbol>();
@@ -581,7 +581,7 @@ public abstract class Rule
     //     this). Call lexer.RecordFailure() so the "deepest failure wins"
     //     error-reporting heuristic can surface your rule's error message.
     //     The shim rolls back any partial writes to outputSymbols for
-    //     you — subclasses don't need to truncate on the failure path.
+    //     you, so subclasses don't need to truncate on the failure path.
     //   * On success: call transaction.Commit() and return a non-null
     //     Symbol. What exactly you return depends on `effectiveFlattenType`:
     //       - Delete: emit nothing, return Symbol.Discarded.
@@ -592,9 +592,9 @@ public abstract class Rule
     //         itself.
     //       - Preserve: build a wrapper Symbol around your matched
     //         children (or leaf content) and return it.
-    //   * `outputSymbols` is the caller's list in Flatten mode (non-null
-    //     by contract — callers of Flatten rules are required to provide
-    //     one), null otherwise.
+    //   * `outputSymbols` is the caller's list in Flatten mode. It is
+    //     non-null by contract (callers of Flatten rules are required to
+    //     provide one), and null otherwise.
     //   * Subclass construction: pass child rules to the base constructor
     //     via `base(flattenType, children)`. The `Children` property is
     //     populated automatically and Compile walks it to assign ids and
@@ -602,15 +602,15 @@ public abstract class Rule
     //   * Optionally override ComputeRuleStart to publish this rule's
     //     FirstConsumedRunes and Advance (see RuleStartRequirements for
     //     the docs). Without an override the pessimistic defaults apply
-    //     and enclosing rules never shortcut this rule — correct but
-    //     slower.
+    //     and enclosing rules never shortcut this rule (correct but
+    //     slower).
     internal abstract Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols);
 
     // Helper for composite rules to call a child rule with the right
     // "write-here" list.
     //
     // `outputSymbols` is the list the caller is currently
-    // collecting its own matched children into — either the caller's
+    // collecting its own matched children into: either the caller's
     // caller's list (when the caller is writing into it), the caller's
     // own wrap-mode list, or null when the caller has no list yet.
     //
@@ -619,7 +619,7 @@ public abstract class Rule
     // null so a Preserve-typed or Delete-typed child wraps or discards
     // normally. Rule.TryParse's shim performs the same check as a
     // safety net, so a custom composite that forgets this helper still
-    // gets correct behavior — this just makes the intent visible at
+    // gets correct behavior. This just makes the intent visible at
     // the caller.
     protected Symbol? ParseChild(Rule child, Lexer lexer, List<Symbol>? outputSymbols)
     {
@@ -760,7 +760,7 @@ public abstract class Rule
             ComputeRuleStartAll(child, visited, computing);
         var start = r.ComputeRuleStart();
         // Advance.Never means the rule never consumes on success, so
-        // FirstConsumedRunes must be Empty — anything else is dead data
+        // FirstConsumedRunes must be Empty. Anything else is dead data
         // that would mislead a reader. Fail at Compile time so subclass
         // authors find out immediately instead of debugging a wrong
         // AndRule union somewhere else.
@@ -768,7 +768,7 @@ public abstract class Rule
             throw new InvalidOperationException(
                 $"Rule '{r.GetType().Name}' returned Advance.Never with non-empty " +
                 $"FirstConsumedRunes. A rule that never advances can't have a set " +
-                $"of possible first-consumed runes — use RuneSet.Empty for " +
+                $"of possible first-consumed runes. Use RuneSet.Empty for " +
                 $"FirstConsumedRunes when Advance is Never.");
         r.FirstConsumedRunes = start.FirstConsumedRunes;
         r.Advance = start.Advance;

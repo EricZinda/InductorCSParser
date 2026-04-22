@@ -74,7 +74,7 @@ namespace InductorParser.Tracing;
 //     up the AppendFormatted calls.
 //
 // If you're touching this file, run those two tests first. Build
-// success alone isn't enough — see the test comments for why.
+// success alone isn't enough. See the test comments for why.
 [InterpolatedStringHandler]
 public ref struct TraceInterpolatedStringHandler
 {

@@ -6,11 +6,11 @@ namespace InductorParser.SyntaxTree;
 // Identifies a rule (or a character leaf) in a parse tree. Every Symbol
 // carries one. The integer value's range tells you what kind of id it is:
 //
-//   * 0..0x10FFFF        — a character leaf. The id IS the Unicode code
+//   * 0..0x10FFFF        a character leaf. The id IS the Unicode code
 //                          point. `new SymbolId('a').Value == 0x61`. Use
 //                          ForRune to construct one with validation.
-//   * 0x110000..0x1FFFFF — built-in rule ids (see SymbolRanges).
-//   * 0x200000+          — user-defined or anonymous rule ids, assigned
+//   * 0x110000..0x1FFFFF built-in rule ids (see SymbolRanges).
+//   * 0x200000+          user-defined or anonymous rule ids, assigned
 //                          during Compile.
 //
 // Stored inline on every Symbol and compared by value, so lookups like

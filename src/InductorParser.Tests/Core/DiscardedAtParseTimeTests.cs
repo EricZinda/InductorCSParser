@@ -72,7 +72,7 @@ public class DiscardedAtParseTimeTests
         var notResult = And(Not(Token('y')), Token('x')).Parse("x");
         // Top-level And holds no children because both its children were
         // Discarded. And is Flatten, so its children bubble up to the
-        // root list — which is empty since the children were Discarded.
+        // root list, which is empty since the children were Discarded.
         Assert.That(notResult.Success, Is.True);
         Assert.That(notResult.Symbols, Is.Empty);
 

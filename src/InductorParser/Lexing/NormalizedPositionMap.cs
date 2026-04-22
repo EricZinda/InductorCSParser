@@ -21,8 +21,8 @@ namespace InductorParser.Lexing;
 //     characters a string has. They may swap one representation of "é"
 //     (two UTF-16 chars: "e" plus a combining accent) for another (one
 //     UTF-16 char: precomposed "é"), but either way it still counts as
-//     one visible character. Walking both strings in lockstep — one
-//     visible character per step on each side — stays in sync.
+//     one visible character. Walking both strings in lockstep, one
+//     visible character per step on each side, stays in sync.
 //     Cheapest path.
 //
 //   * Compatibility forms (FormKC, FormKD) CAN change the visible-

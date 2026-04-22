@@ -9,7 +9,7 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class StringCharsRuleTests
 {
-    // "Scan until pipe" — the simplest stopper-style setup. Body is
+    // "Scan until pipe": the simplest stopper-style setup. Body is
     // any rune other than '|'. Scan stops at the first '|' without
     // consuming it. Mirrors the common "scan until the delimiter"
     // idiom that the stopper-based API is designed for.
@@ -223,11 +223,11 @@ public class StringCharsRuleTests
 
         // Input contains no 'z' and no '|'. Every iteration would see
         // 'a' as non-stopper, zeroWidthStart matches empty, zeroWidthEnd
-        // matches empty — the guard fires and we break without consuming.
+        // matches empty. The guard fires and we break without consuming.
         var result = rule.Parse("aaa");
 
         // Result: zero-char match, EOF check fails because 'aaa' is
-        // unconsumed. We don't care about Success here — we care that
+        // unconsumed. We don't care about Success here, we care that
         // Parse returned at all.
         Assert.That(result, Is.Not.Null);
     }

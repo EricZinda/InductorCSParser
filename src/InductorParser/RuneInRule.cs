@@ -16,7 +16,7 @@ internal sealed class RuneInRule : Rule
     // Pre-rendered "[A-Z,a-z]" form of the set, computed once at
     // construction. Trace lines reference this instead of the RuneSet
     // directly so we don't re-render the same string on every traced
-    // match — the RuneSet is immutable, so the rendering is too.
+    // match. The RuneSet is immutable, so the rendering is too.
     // Worth caching because tracing is intended to be usable while
     // iterating on a grammar, not just for one-off debug runs.
     private readonly string _setRendered;

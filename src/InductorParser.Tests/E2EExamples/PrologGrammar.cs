@@ -21,7 +21,7 @@ public static class PrologGrammar
     private static readonly RuneSet CapitalChars = RuneSet.Range('A', 'Z');
     private static readonly RuneSet LetterDigitChars = RuneSet.Ascii.Letters | RuneSet.Ascii.Digits;
 
-    // (letter | digit | '_' | '-') — the set of characters allowed after the 
+    // (letter | digit | '_' | '-'): the set of characters allowed after the
     // first character of an identifier. shared by atoms, variables, and compound identifiers.
     private static readonly RuneSet IdentifierTailChars =
         LetterDigitChars | RuneSet.Runes("_-");
@@ -48,7 +48,7 @@ public static class PrologGrammar
 
     // Comment: "% ...\r\n" OR "% ...<EOF>" OR "/* ... */"
     //
-    // Both bodies use StringChars with a rule-based stopper — it peeks
+    // Both bodies use StringChars with a rule-based stopper. It peeks
     // the stopper on each rune and rolls back, so the terminator is
     // left for the surrounding And to consume. StringChars replaces
     // the manual ZeroOrMore(And(Not(stop), AnyToken())) idiom with a
@@ -57,7 +57,7 @@ public static class PrologGrammar
     //
     // The line-comment body specifically needs the Rule-stopper form
     // (not RuneIn) because under GraphemeLexer a CRLF grapheme is
-    // multi-rune and trivially passes any RuneNotIn — which would
+    // multi-rune and trivially passes any RuneNotIn, which would
     // greedily swallow the line-ending CRLF and leave the terminator
     // nothing to match.
     public static readonly Rule Comment = Or(
@@ -93,7 +93,7 @@ public static class PrologGrammar
     // first.
     //
     // Quoted forms don't handle escape sequences. The C++ grammar
-    // doesn't either — "\\'" inside a single-quoted atom would end the
+    // doesn't either. "\\'" inside a single-quoted atom would end the
     // atom at the first apostrophe regardless of the preceding
     // backslash. Keeping the same behavior for fidelity.
     public static readonly Rule Atom = Or(
@@ -210,7 +210,7 @@ public static class PrologGrammar
         // negative lookahead, Functor would match "Foo" as an atom with
         // no args and steal the parse. The Not only checks the
         // flavor-specific variable rule (CapitalizedVariableRule or
-        // HtnVariableRule), not the underscore form — "_foo" parses
+        // HtnVariableRule), not the underscore form. "_foo" parses
         // as a variable regardless, since Atom's bare branch doesn't
         // accept a leading underscore anyway.
         var functor = And(
@@ -260,7 +260,7 @@ public static class PrologGrammar
         );
 
         // Query = ws FunctorList ws "." ws Eof
-        // Queries are a single statement terminated by '.' — no
+        // Queries are a single statement terminated by '.', no
         // OneOrMore wrapper, unlike Document.
         var query = And(
             OptionalWhitespace,

@@ -100,7 +100,7 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
     {
         // First rune decides the lookahead. For an ASCII letter, include
         // both cases so the caller's input in either case admits us.
-        // Non-letters (digits, punctuation) only match themselves — the
+        // Non-letters (digits, punctuation) only match themselves. The
         // same bit-exact rule AsciiCaseEquals applies to non-letter
         // positions.
         Lexer.TryPeekRune(_expected, 0, out int first, out _);

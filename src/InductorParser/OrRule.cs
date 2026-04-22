@@ -70,9 +70,9 @@ internal sealed class OrRule : Rule
         // union of children's FirstConsumedRunes.
         //
         // Advance:
-        //   Always    — every child advances. Or always advances too.
-        //   Never     — no child advances. Or never advances.
-        //   Sometimes — mixed (or matches are in different classes). Or
+        //   Always:    every child advances. Or always advances too.
+        //   Never:     no child advances. Or never advances.
+        //   Sometimes: mixed (or matches are in different classes). Or
         //               might or might not advance depending on branch.
         RuneSet union = RuneSet.Empty;
         bool allAlways = Children.Count > 0;

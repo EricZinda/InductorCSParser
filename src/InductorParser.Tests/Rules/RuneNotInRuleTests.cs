@@ -35,7 +35,7 @@ public class RuneNotInRuleTests
     [Test]
     public void RuneNotIn_fails_at_EOF()
     {
-        // EOF is not "a rune not in the set" — it is no rune at all. Fail.
+        // EOF is not "a rune not in the set". It is no rune at all. Fail.
         var rule = RuneNotIn(RuneSet.Digits).WithError("wanted a non-digit");
         var result = rule.Parse("");
 

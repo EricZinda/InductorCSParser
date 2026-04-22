@@ -11,7 +11,7 @@ namespace InductorParser;
 // decide whether the child could possibly succeed. If not, it skips
 // dispatch entirely, avoiding a wasted transaction/read/rollback cycle.
 //
-//   FirstConsumedRunes — The set of runes that could be this rule's
+//   FirstConsumedRunes: The set of runes that could be this rule's
 //       first consumed rune.
 //
 //       For a rule that *always* consumes something on success
@@ -25,7 +25,7 @@ namespace InductorParser;
 //       For Sometimes/Never rules it's only compositional info since it can't be
 //       used for the shortcut (see below).
 //
-//   Advance — whether this rule consumes the lookahead rune on
+//   Advance: whether this rule consumes the lookahead rune on
 //       success: Always / Sometimes / Never (see Advance.cs).
 //
 // Callers that want to see if they can skip a rule because it can't possibly
@@ -74,7 +74,7 @@ namespace InductorParser;
 //     A subset would cause enclosing rules to wrongly skip a rule that
 //     could succeed. RuneSet.Universe means "I don't know, don't filter me."
 //   * Advance.Never requires FirstConsumedRunes == RuneSet.Empty
-//     (Compile enforces this) — a rule that never consumes can't have
+//     (Compile enforces this). A rule that never consumes can't have
 //     a set of "runes it would consume first."
 //
 // Why this algebra? It's essentially a tailored variant of LL(1)
@@ -83,7 +83,7 @@ namespace InductorParser;
 // derivation from it) and a nullable flag (can it derive the empty
 // string?). A predictive parser uses FIRST to dispatch. Nullability
 // tells FIRST-composition "keep unioning past me" when computing
-// FIRST of a sequence — FIRST(XY) = FIRST(X) if X is not nullable,
+// FIRST of a sequence. FIRST(XY) = FIRST(X) if X is not nullable,
 // else FIRST(X) ∪ FIRST(Y).
 //
 // We map directly:
@@ -96,8 +96,8 @@ namespace InductorParser;
 //     predicates (Peek, Not, Eof) that inspect the lookahead without
 //     consuming. Semantically it overlaps with Sometimes (both are
 //     "always nullable"), but we keep it distinct so Compile can
-//     enforce the invariant "Advance.Never ⇒ FirstConsumedRunes.Empty"
-//     — a zero-width rule can't have a meaningful set of first-consumed
+//     enforce the invariant "Advance.Never ⇒ FirstConsumedRunes.Empty".
+//     A zero-width rule can't have a meaningful set of first-consumed
 //     runes, and the check catches subclass authoring bugs at
 //     grammar-build time.
 //

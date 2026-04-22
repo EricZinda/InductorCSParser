@@ -193,7 +193,7 @@ public class JsonBench
     //   payloads (numerical / ID-heavy API responses) sit at roughly 0%.
     //   3% is the middle of the realistic range.
     // * Much above 5% starts measuring escape-decoding throughput
-    //   specifically — a fine thing to benchmark, but not "overall JSON
+    //   specifically, which is a fine thing to benchmark, but not "overall JSON
     //   parse speed on realistic input."
     //
     // 1 in 32 is cheap to check (single `Random.Next(32) == 0`) and large

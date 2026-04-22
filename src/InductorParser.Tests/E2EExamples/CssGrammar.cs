@@ -159,7 +159,7 @@ public static class CssGrammar
     // literal C++ port. Without it the grammar accepts "#fffff" by
     // matching the 3-digit arm and leaving "ff" to be parsed as a
     // separate identifier value in the OneOrMore value-list. That makes
-    // "color: #fffff;" parse as "color: #fff ff;" — technically valid
+    // "color: #fffff;" parse as "color: #fff ff;", technically valid
     // under the value-list production but almost never what the author
     // meant. The Peek demands a hex-digit boundary right after the color
     // so a hex run that's not exactly 3 or 6 digits fails outright.

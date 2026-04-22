@@ -55,7 +55,7 @@ public class ErrorPositionTests
     // Helper grammar that consumes any 'a', '\r', or '\n' (the prefix
     // chars used by these tests), then demands Eof. On inputs of the form
     // "<prefix>X..." the repetition eats the whole prefix including
-    // newlines and the outer Eof fails at the offset of the first 'X' —
+    // newlines and the outer Eof fails at the offset of the first 'X',
     // which is where the tests below want the deepest failure recorded.
     //
     // Library doesn't yet ship RuneNotIn / AnyToken, so the set is spelled
@@ -88,7 +88,7 @@ public class ErrorPositionTests
     [Test]
     public void Failure_at_offset_zero_reports_line_zero_column_zero()
     {
-        // "X..." — fails at the very first character.
+        // "X...": fails at the very first character.
         var result = ParseAtFailure("X");
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
@@ -99,7 +99,7 @@ public class ErrorPositionTests
     [Test]
     public void Failure_mid_line_reports_matching_char_and_column()
     {
-        // "aaaX" — fails at offset 3.
+        // "aaaX": fails at offset 3.
         var result = ParseAtFailure("aaaX");
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
@@ -110,7 +110,7 @@ public class ErrorPositionTests
     [Test]
     public void Failure_just_after_lone_newline_is_line_one_column_zero()
     {
-        // "aa\nX" — fails at offset 3 (the 'X').
+        // "aa\nX": fails at offset 3 (the 'X').
         var result = ParseAtFailure("aa\nX");
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
@@ -180,7 +180,7 @@ public class ErrorPositionTests
     [Test]
     public void Lone_CR_is_a_line_break()
     {
-        // "aa\rX" — old-Mac line ending. Fails at offset 3 ('X').
+        // "aa\rX": old-Mac line ending. Fails at offset 3 ('X').
         var result = ParseAtFailure("aa\rX");
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
@@ -191,7 +191,7 @@ public class ErrorPositionTests
     [Test]
     public void Failure_on_final_line_tracks_column_from_last_break()
     {
-        // "aa\naaaX" — fails at offset 6 ('X'), second line (line 1),
+        // "aa\naaaX": fails at offset 6 ('X'), second line (line 1),
         // column 3.
         var result = ParseAtFailure("aa\naaaX");
 
@@ -203,7 +203,7 @@ public class ErrorPositionTests
     [Test]
     public void Multiple_newlines_count_each_as_a_break()
     {
-        // "a\n\n\nX" — three line breaks between 'a' and 'X'. Fails at
+        // "a\n\n\nX": three line breaks between 'a' and 'X'. Fails at
         // offset 4 on line 3 (0-based), column 0.
         var result = ParseAtFailure("a\n\n\nX");
 
@@ -215,7 +215,7 @@ public class ErrorPositionTests
     [Test]
     public void Rune_index_counts_BMP_chars_one_each()
     {
-        // "abcX" — three BMP chars before the failure at offset 3.
+        // "abcX": three BMP chars before the failure at offset 3.
         var result = ParseAtFailure("aaaX");
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));

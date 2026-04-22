@@ -8,7 +8,7 @@ namespace InductorParser.Tests;
 // (src/FXPlatform/Languages/XmlCompiler.h), which parses XML with the
 // same HTML grammar and then walks the AST to validate that every start
 // tag matches its end tag. The grammar itself doesn't enforce tag
-// matching — that's an AST-walker responsibility that belongs in a
+// matching. That's an AST-walker responsibility that belongs in a
 // compiler, not a parser.
 //
 // So this fixture just validates that XML-shaped inputs parse (or fail
@@ -23,8 +23,8 @@ namespace InductorParser.Tests;
 // valid-corpus here for the same reason.
 //
 // TagName has been widened from the literal C++ port (see the note on
-// HtmlGrammar.TagName) so realistic XML fixtures — underscores, hyphens,
-// dots — parse.
+// HtmlGrammar.TagName) so realistic XML fixtures (underscores, hyphens,
+// dots) parse.
 [TestFixture]
 public class XmlGrammarTests
 {

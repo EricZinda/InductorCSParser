@@ -53,7 +53,7 @@ public class NotRuleTests
         Assert.That(result.Success, Is.False);
         // Token('a') at offset 0 succeeds. The overall parse fails because
         // input isn't fully consumed. What matters is that Not didn't
-        // leave the cursor advanced — if it had, the trailing Token('a')
+        // leave the cursor advanced. If it had, the trailing Token('a')
         // would have reported somewhere past offset 0.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     }

@@ -16,11 +16,11 @@ namespace InductorParser;
 // contains.
 //
 // There are two options for the string body stop condition:
-//   * RuneSet stoppers (fast path) — stop when the next rune is in the
+//   * RuneSet stoppers (fast path): stop when the next rune is in the
 //     set. Only does one RuneSet.Contains per rune and handles any grammar whose
 //     closing boundary is a single rune: JSON ", Python ' or ", C# $"..."
 //     closing, etc.
-//   * Rule stopper (general path) — stop when a user-supplied rule
+//   * Rule stopper (general path): stop when a user-supplied rule
 //     matches. The rule is executed in a peek
 //     transaction that always rolls back, so the stopper itself isn't
 //     consumed. The surrounding grammar is still responsible for
@@ -31,9 +31,9 @@ namespace InductorParser;
 // a "start" (what triggers escape mode) and an "end" (what follows and
 // completes the escape). For example in \n, the \ is the start and n is the
 // end.
-//   * Rune escapeStart — fast single-rune escape trigger (the JSON / C /
+//   * Rune escapeStart: fast single-rune escape trigger (the JSON / C /
 //     Python backslash case).
-//   * Rule escapeStart — general sub-rule escape trigger for multi-rune
+//   * Rule escapeStart: general sub-rule escape trigger for multi-rune
 //     starts like $$ / ??.
 //
 // The order of checks is: stopper first, then escape start.
@@ -313,7 +313,7 @@ internal sealed class StringCharsRule : Rule
     // that first character on success.
     internal override RuleStartRequirements ComputeRuleStart()
     {
-        // StringChars always succeeds — a zero-length body is legal —
+        // StringChars always succeeds (a zero-length body is legal),
         // but it also consumes runes when the input has matchable ones.
         // That's Advance.Sometimes.
         //
@@ -321,8 +321,8 @@ internal sealed class StringCharsRule : Rule
         // set (the stop check fires first in the scan loop, so a stopper
         // rune is never consumed). That's ~_stopperSet for the RuneSet
         // stopper path. A Rule-based stopper can't be rendered as a rune
-        // set, so we stay at Universe there. Escape-start runes — if a
-        // grammar has them — are typically outside the stopper set, which
+        // set, so we stay at Universe there. Escape-start runes (if a
+        // grammar has them) are typically outside the stopper set, which
         // means ~_stopperSet already covers them. We don't need a separate
         // union.
         RuneSet firstConsumed = _stopperRule == null

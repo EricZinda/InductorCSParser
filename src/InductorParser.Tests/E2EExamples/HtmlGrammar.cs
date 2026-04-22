@@ -99,7 +99,7 @@ public static class HtmlGrammar
 
     // Attribute. Try quoted first (they're the more specific prefix, since
     // an unquoted run would read past the quote), then unquoted, then empty.
-    // The empty-attribute branch is a bare AttributeName — it must be last
+    // The empty-attribute branch is a bare AttributeName, so it must be last
     // because every other attribute form also starts with an AttributeName.
     public static readonly Rule Attribute = Or(
         DoubleQuotedAttributeValueAttribute,
@@ -182,7 +182,7 @@ public static class HtmlGrammar
     //     like "</styled" (where "</style" is followed by 'd') would pass
     //     through as body and the scan would keep going. The HTML spec
     //     says "</style" must be followed by space, ">", or "/". Anything
-    //     else is ill-formed. Stopping at the prefix catches this — if the
+    //     else is ill-formed. Stopping at the prefix catches this. If the
     //     characters after don't form a valid end tag, EndStyleTag fails
     //     and the outer rule fails loudly at the right spot.
     //

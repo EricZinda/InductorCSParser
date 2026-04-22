@@ -92,7 +92,7 @@ public abstract class Lexer
 
     // Cost when tracing is off (canonical reference for trace perf):
     // Note that lexer.Trace(...) still gets called even when tracing
-    // is off — the TraceInterpolatedStringHandler argument only gates the
+    // is off. The TraceInterpolatedStringHandler argument only gates the
     // expensive string-building work, not the method invocation
     // itself. Trace stays cheap because:
     //
@@ -154,8 +154,8 @@ public abstract class Lexer
     // Peek the rune at `pos` in `input` without advancing any lexer
     // state. Writes the rune value and its UTF-16 length. Returns
     // false if the char at `pos` is a stray surrogate without its
-    // paired half — malformed UTF-16 that doesn't represent any real
-    // Unicode character.
+    // paired half (malformed UTF-16 that doesn't represent any real
+    // Unicode character).
     //
     // Always one rune at a time, regardless of which Lexer subclass
     // is in use. Rules that scan rune-by-rune need consistent
@@ -170,7 +170,7 @@ public abstract class Lexer
     //     using var transaction = lexer.BeginTransaction();
     //     var token = lexer.Read();
     //     // inspect token.Memory, token.Chars, etc.
-    //     // do NOT call transaction.Commit() — when the `using`
+    //     // do NOT call transaction.Commit(). When the `using`
     //     // block exits, Transaction.Dispose sees Commit wasn't
     //     // called and restores the lexer's position to where
     //     // BeginTransaction was called.
@@ -209,7 +209,7 @@ public abstract class Lexer
 
     // Advance one token and return it. The "one token" shape is decided
     // by the subclass (see NextTokenLength). Cheap: Token is a stack-only
-    // ref struct carrying offset+length into the input string — no
+    // ref struct carrying offset+length into the input string, no
     // allocation, no substring copying. See Token for why it's safe to
     // return one by value.
     public Token Read()
@@ -229,7 +229,7 @@ public abstract class Lexer
 
     // Record that a rule just failed at the given input position. The
     // callers' responsibility is to pass the position of the offending
-    // input — the *start* of the specific read that couldn't match, not the
+    // input: the *start* of the specific read that couldn't match, not the
     // post-read lexer position. That way `input[ErrorCharIndex]` gives the
     // actual wrong character on user-facing error reports.
     //
@@ -333,7 +333,7 @@ public abstract class Lexer
     // the first interval boundary past the limit, and the invocation
     // count is a pure function of grammar + input. Run the same parse
     // twice on the same input and both runs abort at the exact same
-    // invocation count — budget tests won't be flaky.
+    // invocation count, so budget tests won't be flaky.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void EnterRule()
     {

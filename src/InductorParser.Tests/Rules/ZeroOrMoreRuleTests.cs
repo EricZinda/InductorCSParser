@@ -77,7 +77,7 @@ public class ZeroOrMoreRuleTests
     public void ZeroOrMore_trace_with_zero_matches_produces_expected_output()
     {
         // ZeroOrMore has no failure path, so even "no matches" is a
-        // success — with count= 0. Wrapped in And so the indentation
+        // success, with count= 0. Wrapped in And so the indentation
         // shows the full transaction nesting.
         var sink = NewSink();
         And(ZeroOrMore(Token('a')), Eof())

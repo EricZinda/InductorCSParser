@@ -218,7 +218,7 @@ public readonly struct RuneSet : IEquatable<RuneSet>
     // whenever the current intervals overlap, and advancing whichever interval
     // ends first. Linear in the sum of the two interval counts. Both inputs are
     // already normalized (sorted, non-overlapping, non-adjacent), and so is the
-    // result — adjacent overlap fragments can't appear because that would imply
+    // result. Adjacent overlap fragments can't appear because that would imply
     // the inputs themselves had adjacent intervals, contradicting normalization.
     public static RuneSet operator &(RuneSet a, RuneSet b)
     {
@@ -330,7 +330,7 @@ public readonly struct RuneSet : IEquatable<RuneSet>
 
     // Composite built-ins. Letters is the union of the five "Letter"
     // UnicodeCategory values. Digits is one category. Wrapped in Lazy so
-    // the union work happens once and is cached — without it, every access
+    // the union work happens once and is cached. Without it, every access
     // to RuneSet.Letters would redo the four | merges.
     //
     // The Lazy factory calls BuildCategories with the full batch first, so

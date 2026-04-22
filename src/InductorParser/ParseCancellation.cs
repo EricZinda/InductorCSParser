@@ -13,7 +13,7 @@ namespace InductorParser;
 // silently does nothing on WebGL because there is no background thread to
 // fire the timer callback. Code that compiles, passes desktop tests, and
 // looks correct in review then ships and never times out in production.
-// This type has no time-based API at all — only manual Cancel() — so the
+// This type has no time-based API at all (only manual Cancel()), so the
 // foot-gun simply isn't expressible. For a wall-clock deadline, use
 // ParseOptions.Timeout instead, which uses synchronous Stopwatch polling
 // and works on every target.

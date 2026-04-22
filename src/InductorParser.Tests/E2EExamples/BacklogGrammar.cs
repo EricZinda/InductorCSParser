@@ -14,11 +14,11 @@ namespace InductorParser.Tests;
 //   Paragraph:  /\n\s*\n/                paragraphDetector.ts line 90
 //
 // The first five are anchored (^...$) so they map to an And(...) ending
-// in Eof(). Paragraph is unanchored — JS .test() returns true if the
+// in Eof(). Paragraph is unanchored. JS .test() returns true if the
 // pattern occurs anywhere. The PEG equivalent scans forward with
 // And(ZeroOrMore(And(Not(target), AnyToken())), target, ZeroOrMore(AnyToken()))
 // and relies on lexer.IsEof for Parse success, so the trailing
-// ZeroOrMore(AnyToken()) isn't decorative — it's what lets success happen
+// ZeroOrMore(AnyToken()) isn't decorative. It's what lets success happen
 // after the target fires mid-string.
 //
 // One subtle point on the paragraph split. JS regex \n\s*\n is greedy
@@ -87,7 +87,7 @@ public static class BacklogGrammar
     // WARNING: LF-only on purpose. The source regex in MergeableBacklog
     // is "\n\s*\n", which in JS regex IS CRLF-agnostic (\s matches \r
     // and \n both), but under the default GraphemeLexer the two Token('\n')
-    // anchors below reject CRLF line endings — "\r\n" is one grapheme
+    // anchors below reject CRLF line endings. "\r\n" is one grapheme
     // cluster whose content is "\r\n", not "\n". The fixtures in
     // MergeableBacklog's corpus are all LF-terminated, so the port stays
     // faithful by matching only LF. If this rule ever parses real

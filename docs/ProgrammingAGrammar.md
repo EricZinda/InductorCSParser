@@ -6,10 +6,10 @@ In this library a *rule* is a C# object. You build rules by calling factory func
 
 Related docs:
 
-- [ProgrammingModel.md](ProgrammingModel.md) — design and architecture of the library. Why it is shaped the way it is, what tradeoffs were made.
-- [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md) — lexer internals: code units, runes, graphemes, normalization, the two lexers.
-- [UnicodeGotchas.md](UnicodeGotchas.md) — caller-side Unicode concerns the lexer cannot fix (case-insensitive matching, BOMs, homoglyphs, etc.).
-- [Recipes.md](Recipes.md) — common grammar patterns: pass-through text, class-based grammar organization, a reusable compiler base class.
+- [ProgrammingModel.md](ProgrammingModel.md): design and architecture of the library. Why it is shaped the way it is, what tradeoffs were made.
+- [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md): lexer internals (code units, runes, graphemes, normalization, the two lexers).
+- [UnicodeGotchas.md](UnicodeGotchas.md): caller-side Unicode concerns the lexer cannot fix (case-insensitive matching, BOMs, homoglyphs, etc.).
+- [Recipes.md](Recipes.md): common grammar patterns (pass-through text, class-based grammar organization, a reusable compiler base class).
 
 ## Hello World Example
 
@@ -152,7 +152,7 @@ Built-in symbol ids live in a static class and use a numbering space chosen so t
 
 The parser operates on Unicode characters, not raw bytes. By default the lexer reads one grapheme cluster per step (so `👨‍👩‍👧‍👦` is one token, not seven), which is what you want for grammars that handle user-typed text. The full lexer story, including how to opt into rune-level lexing instead, lives in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). For grammar-authoring purposes, you can ignore the distinction until you hit emoji or combining-mark input, at which point the Unicode doc has the answer.
 
-`RuneSet` is a composable value type for character sets. The full API surface — built-ins, factory methods, and the `|`, `&`, `~` operators — lives in [ProgrammingModel.md](ProgrammingModel.md). The grammar-authoring shorthand is that you build a class out of built-ins and factory calls and combine them with `|` for union, `&` for intersection, and `~` for complement.
+`RuneSet` is a composable value type for character sets. The full API surface (built-ins, factory methods, and the `|`, `&`, `~` operators) lives in [ProgrammingModel.md](ProgrammingModel.md). The grammar-authoring shorthand is that you build a class out of built-ins and factory calls and combine them with `|` for union, `&` for intersection, and `~` for complement.
 
 Grammar code reads like:
 

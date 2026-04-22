@@ -16,7 +16,7 @@ namespace InductorParser.Tests;
 // 1. Equivalence. Every corpus input produces the same accept/reject
 //    verdict from reference regex and grammar.
 // 2. Timing. Same corpus, looped, wall-clock under Stopwatch. Grammar
-//    must come in within 2x of the compiled regex. Ignored today — the
+//    must come in within 2x of the compiled regex. Ignored today. The
 //    same composite overhead that puts ChordGrammar at ~17-18x applies
 //    here, so we report ratios and leave the hard gate for the Or
 //    required-runes dispatch work tracked separately.
@@ -40,7 +40,7 @@ public class BacklogGrammarTests
     private static readonly Regex HrSpacedRegex = new Regex(
         @"^[-*+]( [-*+]){2,}$", RegexOptions.Compiled);
 
-    // Unanchored in the source — JS .test() fires if the pattern occurs
+    // Unanchored in the source. JS .test() fires if the pattern occurs
     // anywhere. .NET Regex.IsMatch has the same default.
     private static readonly Regex ParagraphRegex = new Regex(
         @"\n\s*\n", RegexOptions.Compiled);
@@ -230,7 +230,7 @@ public class BacklogGrammarTests
 
     // Ignored. Ratios on this box (net8.0, Release, 5000 iters), pre and
     // post Or required-runes dispatch (run-to-run noise on these short corpora
-    // is high — the per-case numbers swing by ~2x between runs):
+    // is high, and the per-case numbers swing by ~2x between runs):
     //   H1:        51x  -> 25-42x
     //   H2:        26x  -> 21-32x
     //   Bullet:     8x  -> 5-16x
@@ -240,7 +240,7 @@ public class BacklogGrammarTests
     // Dispatch helps most when an Or / composite has many branches and a
     // disjoint first-char set. These rules are simpler (one RuneIn or one
     // Token at the head), so the composite transaction overhead on the
-    // inner path is what dominates — same architectural bottleneck as
+    // inner path is what dominates, the same architectural bottleneck as
     // ChordGrammar's remaining gap. A separate backlog item will target
     // that tier (lazy transactions, allocation-free empty matches,
     // compiled emitter, etc.).

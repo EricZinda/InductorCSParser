@@ -53,7 +53,7 @@ public class EofRuleTests
         // EofRule doesn't open a transaction and top-level Parse doesn't
         // either, so the success line sits at depth 0 with no leading
         // indentation. The message is empty, so there's no ": {detail}"
-        // tail either — the line reads simply "SUCC | Eof".
+        // tail either. The line reads simply "SUCC | Eof".
         var sink = NewSink();
         Eof().Parse("", new ParseOptions { TraceSink = sink });
 

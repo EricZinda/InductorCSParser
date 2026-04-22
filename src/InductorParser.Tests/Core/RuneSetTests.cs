@@ -57,7 +57,7 @@ public class RuneSetTests
     {
         // A lone high surrogate not followed by a low surrogate. Built at
         // runtime instead of written as "\uD800" because IL2CPP sanitizes
-        // lone-surrogate code units in string *constants* to U+FFFD — by
+        // lone-surrogate code units in string *constants* to U+FFFD. By
         // the time a literal "\uD800" reaches the test body under IL2CPP,
         // the char has already been replaced with the Unicode replacement
         // character and the test never exercises the surrogate path.
@@ -242,8 +242,8 @@ public class RuneSetTests
             | RuneSet.Range(14, 22) | RuneSet.Range(20, 30), Is.EqualTo(expected));
         // Double complement round-trip.
         Assert.That(~~expected, Is.EqualTo(expected));
-        // Complement split across surrogate block, then complement again —
-        // verifies the surrogate-split path doesn't leak adjacent intervals.
+        // Complement split across surrogate block, then complement again.
+        // Verifies the surrogate-split path doesn't leak adjacent intervals.
         Assert.That(~~RuneSet.Range(0xD7FE, 0xD7FE), Is.EqualTo(RuneSet.Range(0xD7FE, 0xD7FE)));
         // A & ~B chain through the full operator set.
         Assert.That(RuneSet.Range(1, 30) & ~RuneSet.Range(40, 50), Is.EqualTo(expected));
@@ -264,7 +264,7 @@ public class RuneSetTests
     public void Letters_covers_all_five_letter_categories()
     {
         // Letters is now built as a union of five Category calls. Verify it
-        // still behaves correctly — one sample per category.
+        // still behaves correctly (one sample per category).
         Assert.That(RuneSet.Letters.Contains('A'), Is.True);  // UppercaseLetter
         Assert.That(RuneSet.Letters.Contains('a'), Is.True);  // LowercaseLetter
         Assert.That(RuneSet.Letters.Contains('\u01C5'), Is.True); // TitlecaseLetter (ǅ)
@@ -327,7 +327,7 @@ public class RuneSetTests
         // Inside the expected intervals.
         foreach (int codepoint in new[] { 3, 4, 5, 10, 11, 12, 22, 23, 24, 25 })
             Assert.That(intersection.Contains(codepoint), Is.True, $"{codepoint} should be in A & B");
-        // Outside — in A but not B, in B but not A, or in neither.
+        // Outside: in A but not B, in B but not A, or in neither.
         foreach (int codepoint in new[] { 1, 2, 6, 9, 13, 14, 15, 20, 21, 26, 30 })
             Assert.That(intersection.Contains(codepoint), Is.False, $"{codepoint} should NOT be in A & B");
     }
@@ -340,7 +340,7 @@ public class RuneSetTests
         // class (Letters) by a script-range restriction.
         var cyrillicLetters = RuneSet.Letters & RuneSet.Range(0x0400, 0x04FF);
 
-        // ж (U+0436) is a Cyrillic letter — in both sets.
+        // ж (U+0436) is a Cyrillic letter (in both sets).
         Assert.That(cyrillicLetters.Contains(0x0436), Is.True);
         // A (U+0041) is a letter but not Cyrillic.
         Assert.That(cyrillicLetters.Contains('A'), Is.False);
@@ -529,7 +529,7 @@ public class RuneSetTests
     {
         // Normalize sorts and merges. Repeated characters collapse into one
         // interval each. Observable as a set with the same membership as the
-        // distinct-char version — and as the compact ToString.
+        // distinct-char version, and as the compact ToString.
         var set = RuneSet.Runes("aabbccba");
 
         Assert.That(set.Contains('a'), Is.True);
@@ -668,7 +668,7 @@ public class RuneSetTests
     [Test]
     public void Intersection_with_default_RuneSet_on_right_is_empty()
     {
-        // Mirrors the existing "default on left" test — both branches of the
+        // Mirrors the existing "default on left" test. Both branches of the
         // null-check in the operator should short-circuit to empty.
         var set = RuneSet.Single('x') & default(RuneSet);
 
@@ -680,8 +680,8 @@ public class RuneSetTests
     [Test]
     public void Complement_of_range_ending_at_surrogate_low_boundary()
     {
-        // Input ends at 0xD7FF. Complement is just [0xE000, 0x10FFFF] —
-        // no prefix, no surrogate slots, full suffix.
+        // Input ends at 0xD7FF. Complement is just [0xE000, 0x10FFFF].
+        // No prefix, no surrogate slots, full suffix.
         Assert.That(~RuneSet.Range(0, 0xD7FF), Is.EqualTo(RuneSet.Range(0xE000, 0x10FFFF)));
     }
 
@@ -710,7 +710,7 @@ public class RuneSetTests
     [Test]
     public void Digits_contains_decimal_digit_runes_across_scripts()
     {
-        // RuneSet.Digits is UnicodeCategory.DecimalDigitNumber — every
+        // RuneSet.Digits is UnicodeCategory.DecimalDigitNumber, every
         // decimal digit in every script, not just ASCII 0-9.
         Assert.That(RuneSet.Digits.Contains('0'), Is.True);
         Assert.That(RuneSet.Digits.Contains('9'), Is.True);

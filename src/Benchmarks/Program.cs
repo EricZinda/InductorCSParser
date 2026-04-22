@@ -200,8 +200,8 @@ public class Program
 
             // Superpower overflows the .NET stack on the 256-deep input
             // (verified: the process hard-crashes, not a catchable
-            // exception). Skipping it in the spot-check isn't a bye —
-            // the benchmark README reports the crash explicitly. Upstream
+            // exception). Skipping it in the spot-check isn't a bye.
+            // The benchmark README reports the crash explicitly. Upstream
             // Parlot's benchmark excludes it from the Deep category for
             // the same reason.
             if (shapeName == "Deep")
@@ -278,7 +278,7 @@ public class Program
         Console.WriteLine($"Input: {input.Length} chars (Big shape)");
         Console.WriteLine();
 
-        // Warmup — let JIT settle.
+        // Warmup, to let JIT settle.
         for (int i = 0; i < 100; i++)
         {
             uncompiled.Parse(input);

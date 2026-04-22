@@ -7,7 +7,7 @@ namespace InductorParser.Benchmarks.Json;
 
 // JSON grammar for the shape the JsonBench harness generates: strings,
 // objects, and arrays only. No numbers, booleans, nulls, or escape
-// sequences — the bench never generates them and the parser-combinator
+// sequences. The bench never generates them and the parser-combinator
 // competitors (Pidgin/Sprache/Superpower) don't handle them either. The
 // string rule accepts "any char except U+0022" so it does the same
 // per-char work the competitors do.

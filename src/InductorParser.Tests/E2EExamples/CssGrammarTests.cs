@@ -92,7 +92,7 @@ public class CssGrammarTests
         "/* head */ p { color: red; } /* tail */",
         "p /* mid */ { color: /* inline */ red; }",
 
-        // Empty declaration (just ";") is allowed by the grammar —
+        // Empty declaration (just ";") is allowed by the grammar.
         // C++ made the property:value part optional.
         "p { ; }",
         "p { color: red; ; }",
@@ -103,7 +103,7 @@ public class CssGrammarTests
         // values. "10xx" parses as "10" (number) followed by "xx"
         // (identifier), which is a real CSS pattern (e.g. "1px solid").
         // Hex colors have a boundary check that prevents the same
-        // split for "#fffff" — see InvalidDocuments.
+        // split for "#fffff" (see InvalidDocuments).
         "p { margin: 10xx; }",
     };
 

@@ -71,7 +71,7 @@ public class HtmlGrammarTests
         "text before <p></p>",
 
         // Mismatched close tag. The grammar itself only checks structural
-        // form, not tag-name matching — but EndTag expects "</TagName>",
+        // form, not tag-name matching, but EndTag expects "</TagName>",
         // and if the TagName doesn't appear at all or is just wrong-cased
         // nothing closes the outer element. However, this grammar IS
         // tolerant of tag-name mismatches (see XmlGrammarTests for the
@@ -100,7 +100,7 @@ public class HtmlGrammarTests
         "< p></p>",     // space after < isn't a tag name
 
         // Two roots is allowed by this grammar? Check. The grammar is
-        // ZeroOrMore(ws|comment) Element OptionalWs Eof — only one
+        // ZeroOrMore(ws|comment) Element OptionalWs Eof, so only one
         // element. So this must fail.
         "<p></p><p></p>",
     };

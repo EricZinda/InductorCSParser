@@ -144,7 +144,7 @@ public class PrologGrammarTests
         // Under HTN, a lowercase-leading bare atom IS a valid functor
         // but "likes(x, pizza)" is a valid statement under both flavors
         // (x is an atom either way). So there isn't much that's valid
-        // under standard but invalid under HTN — both share most of
+        // under standard but invalid under HTN. Both share most of
         // the grammar. The interesting divergence is that in HTN,
         // a ? prefix MUST be followed by an atom. "?." has nothing
         // after the ? so it fails.
@@ -387,7 +387,7 @@ public class PrologGrammarTests
     // those would parse as variables first).
     private static readonly string[] CppFunctorCorpus_HtnOnly =
     {
-        // Capitalized functor names — "Move" reads as a variable under
+        // Capitalized functor names. "Move" reads as a variable under
         // standard Prolog, which then has no way to form a compound term.
         "do(Move(unit,from,to),SetEnergy(energy,-(energy,moveCost)))",
         // '?' variables as arguments.

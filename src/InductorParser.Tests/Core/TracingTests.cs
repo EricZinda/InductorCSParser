@@ -20,8 +20,8 @@ public class TracingTests
     {
         // Smoke test: parse with the default (null) TraceSink. Catches
         // regressions where someone adds code that dereferences
-        // _traceSink without a null check before the handler runs —
-        // that kind of bug would throw a NullReferenceException here
+        // _traceSink without a null check before the handler runs.
+        // That kind of bug would throw a NullReferenceException here
         // rather than silently misbehaving. The stronger guarantee
         // ("nothing inside an interpolation hole runs when tracing is
         // off") is proven by Off_path_does_not_evaluate_interpolated_arguments
@@ -69,13 +69,13 @@ public class TracingTests
     public void WithError_message_appears_in_quotes_after_trace_body_on_failure()
     {
         // .WithError() is the user-facing error message, not a rule
-        // identity — it's the friendly thing a grammar author wants the
+        // identity. It's the friendly thing a grammar author wants the
         // end user to see when a parse fails. In trace output it gets
         // appended after the trace body in quotes, so a reader sees
         // both what the rule actually tried ("found 'x', wanted 'a'")
         // and the friendly message that would surface on a real parse
         // failure ("expected an A"). It does NOT appear as part of the
-        // trace label — that position is reserved for .As() names.
+        // trace label. That position is reserved for .As() names.
         var sink = NewSink();
         var rule = Token('a').WithError("expected an A");
         rule.Parse("x", new ParseOptions { TraceSink = sink });

@@ -4,9 +4,9 @@ namespace InductorParser.Tests;
 // surrogate-pair string literals don't tell you what they mean on sight.
 // Names do. Naming convention:
 //
-//   XxxRune      — int codepoint (U+xxxxx).
-//   XxxGrapheme  — UTF-16 string that tokenizes as exactly one grapheme.
-//   XxxText      — UTF-16 string that isn't necessarily a standalone
+//   XxxRune      int codepoint (U+xxxxx).
+//   XxxGrapheme  UTF-16 string that tokenizes as exactly one grapheme.
+//   XxxText      UTF-16 string that isn't necessarily a standalone
 //                  grapheme (e.g. a combining modifier).
 //
 // When adding a new symbol, state its rune-vs-grapheme status in the comment.

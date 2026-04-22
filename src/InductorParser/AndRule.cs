@@ -53,9 +53,9 @@ internal sealed class AndRule : Rule
         // point the first rune in the parse is gone and that's all we are talking about.
         // 
         // Then we can calculate And's own Advance:
-        //   Always    — at least one child had Advance.Always so And is guaranteed to consume too on success.
-        //   Never     — every child is Never.
-        //   Sometimes — otherwise.
+        //   Always:    at least one child had Advance.Always so And is guaranteed to consume too on success.
+        //   Never:     every child is Never.
+        //   Sometimes: otherwise.
         RuneSet union = RuneSet.Empty;
         bool anyMightConsume = false;
         foreach (var child in Children)

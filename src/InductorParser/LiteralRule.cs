@@ -95,9 +95,8 @@ internal sealed class LiteralRule : Rule
         // always consumes at least one rune to match. TryPeekRune decodes
         // the first rune correctly even when it's a supplementary-plane
         // code point that spans two UTF-16 chars (emoji, CJK above
-        // U+FFFF) —
-        // _expected[0] would hand back just the high surrogate, which isn't
-        // a valid rune.
+        // U+FFFF). _expected[0] would hand back just the high surrogate,
+        // which isn't a valid rune.
         Lexer.TryPeekRune(_expected, 0, out int first, out _);
         return new RuleStartRequirements(RuneSet.Single(first), Advance.Always);
     }
