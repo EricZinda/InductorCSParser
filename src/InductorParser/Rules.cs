@@ -119,6 +119,16 @@ public static class Rules
     // name carries the lower bound so traces stay self-describing.
     public static Rule NOrMore(Rule inner, int atLeast) =>
         new BetweenInclusiveRule(inner, atLeast, int.MaxValue, $"NOrMore[{atLeast}]");
+
+    // Exactly(inner, count) == BetweenInclusive(inner, count, count). The
+    // shortcut is for the "N of these, no more, no less" shape: four hex
+    // runes in a \uXXXX escape, three digits in an area code, etc. Reads
+    // as Exactly(RuneIn(RuneSet.Ascii.HexDigits), 4) instead of
+    // BetweenInclusive(..., 4, 4). The trace name carries the count so
+    // traces stay self-describing.
+    public static Rule Exactly(Rule inner, int count) =>
+        new BetweenInclusiveRule(inner, count, count, $"Exactly[{count}]");
+
     public static Rule Eof() => new EofRule();
 
     // [+|-]? Digit+
