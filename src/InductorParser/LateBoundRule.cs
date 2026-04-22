@@ -34,25 +34,6 @@ namespace InductorParser;
 // target. The produced Symbol carries the target rule's Id, not the
 // LateBoundRule's, because LateBoundRule is a structural placeholder,
 // not a meaningful grammar node.
-//
-// Why As/Flatten/WithError are forbidden. Because LateBoundRule is
-// transparent at parse time (TryParse just forwards to the target and
-// returns the target's Symbol), none of its own configuration is ever
-// consulted:
-//
-//   * Name and Id live on LateBoundRule but never appear on any Symbol,
-//     so tree.Find(lateBoundRule) silently returns null.
-//   * FlattenType lives on LateBoundRule but never applies, because the
-//     returned Symbol is the target's and carries the target's FlattenType.
-//   * ErrorMessage lives on LateBoundRule but is never passed to
-//     RecordFailure, because TryParse forwards without calling it.
-//
-// Every one of those modifier methods would silently do nothing, which
-// is exactly the kind of bug that surfaces mysteriously hours later.
-// So they all throw InvalidOperationException on LateBoundRule.
-// Set those things on the target rule instead. The one exception is a
-// debug name, which is useful for the "never bound" error message; pass
-// that to the constructor.
 public sealed class LateBoundRule : Rule
 {
     private readonly string? _debugName;
@@ -125,7 +106,10 @@ public sealed class LateBoundRule : Rule
         }
     }
 
-    // See the FirstConsumedRunes / Advance field docs on Rule for more information on what this does.
+    // Return the set of runes this rule might consume first (can be a superset)
+    // (RuneSet.Empty when Advance.Never; RuneSet.Universe means "I don't know").
+    // Then say whether the rule Always / Sometimes / Never consumes at least
+    // that first character on success.
     internal override RuleStartRequirements ComputeRuleStart()
     {
         // LateBoundRule is transparent at parse time, so its RuleStartRequirements is

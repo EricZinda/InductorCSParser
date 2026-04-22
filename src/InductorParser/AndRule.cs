@@ -40,7 +40,10 @@ internal sealed class AndRule : Rule
             : Symbol.Discarded;
     }
 
-    // See the FirstConsumedRunes / Advance field docs on Rule for more information on what this does.
+    // Return the set of runes this rule might consume first (can be a superset)
+    // (RuneSet.Empty when Advance.Never; RuneSet.Universe means "I don't know").
+    // Then say whether the rule Always / Sometimes / Never consumes at least
+    // that first character on success.
     internal override RuleStartRequirements ComputeRuleStart()
     {
         // We need to return the set of Runes that are necessary, but not sufficent for success.
