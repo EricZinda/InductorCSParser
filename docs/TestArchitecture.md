@@ -4,7 +4,7 @@ This doc describes what makes a rule's test file "comprehensive" in this codebas
 
 Tests live in `src/InductorParser.Tests/`, organized into three subfolders:
 
-- `Rules/` — one file per rule (`CharRuleTests.cs`, `RuneInRuleTests.cs`, `AndRuleTests.cs`, etc.), each named after the rule type with a `Tests` suffix.
+- `Rules/` — one file per rule (`TokenRuleTests.cs`, `RuneInRuleTests.cs`, `AndRuleTests.cs`, etc.), each named after the rule type with a `Tests` suffix.
 - `Core/` — cross-cutting concerns that don't belong to any one rule (`WithErrorTests.cs`, `LexerSwitchTests.cs`, `IdAssignmentTests.cs`, `RuneSetTests.cs`). Files are named after the concern.
 - `E2EExamples/` — end-to-end grammar tests that exercise full grammars built from the public API (e.g. `SettingExampleTests.cs`).
 
@@ -31,7 +31,7 @@ Every rule's test file, regardless of rule type, should cover these four categor
 
 ### Single-Token Primitive Rules
 
-Rules that call `lexer.Read()` exactly once. Today: `RuneInRule`, `EofRule` (which doesn't actually read but checks `lexer.IsEof`). The single-rune case of `CharRule` behaves the same way.
+Rules that call `lexer.Read()` exactly once. Today: `RuneInRule`, `EofRule` (which doesn't actually read but checks `lexer.IsEof`). The single-rune case of `TokenRule` behaves the same way.
 
 Required tests:
 
@@ -46,7 +46,7 @@ Example (from `RuneInRuleTests.cs`):
 public void RuneIn_mismatch_after_successful_matches_points_at_first_bad_char()
 {
     var rule = And(OneOrMore(RuneIn(RuneSet.Letters)),
-                   Char(';').WithError("expected ';'"));
+                   Token(';').WithError("expected ';'"));
     var result = rule.Parse("abc1");
     Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
     Assert.That(result.ErrorMessage, Is.EqualTo("expected ';'"));
@@ -55,7 +55,7 @@ public void RuneIn_mismatch_after_successful_matches_points_at_first_bad_char()
 
 ### Multi-Token Primitive Rules
 
-Rules that read multiple tokens in a lockstep loop. Today: `CharRule` for multi-rune graphemes, `LiteralRule`, `LiteralIgnoreAsciiCaseRule`.
+Rules that read multiple tokens in a lockstep loop. Today: `TokenRule` for multi-rune graphemes, `LiteralRule`, `LiteralIgnoreAsciiCaseRule`.
 
 Required tests beyond single-token coverage:
 
@@ -63,13 +63,13 @@ Required tests beyond single-token coverage:
 - **Mismatch on a later token.** Construct input that matches the first N-1 tokens successfully then diverges. Assert position equals the start of the Nth token (where `tokenStart` was captured in the Nth iteration), not the start of the whole match (offset 0) and not post-read (offset of the token after the failure).
 - **Both lexer modes where applicable.** For rules whose behavior changes between `GraphemeLexer` and `RuneLexer`, include at least one test under each via `new ParseOptions { InputUnit = InputUnit.Rune }`.
 
-Example (from `CharRuleTests.cs`):
+Example (from `TokenRuleTests.cs`):
 
 ```csharp
 [Test]
-public void Char_multi_rune_mismatch_on_second_token_reports_at_second_token_start()
+public void Token_multi_rune_mismatch_on_second_token_reports_at_second_token_start()
 {
-    var rule = Char("\uD83D\uDC4B\uD83C\uDFFD").WithError("expected wave");
+    var rule = Token("\uD83D\uDC4B\uD83C\uDFFD").WithError("expected wave");
     var result = rule.Parse("\uD83D\uDC4Bxy",
         new ParseOptions { InputUnit = InputUnit.Rune });
     Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
@@ -86,7 +86,7 @@ Required tests beyond universal coverage:
 - **First-child failure.** Pass input the first child rejects. Assert the failure position comes from the first child's pre-read offset (usually 0 for a top-level test). Use different `WithError` messages on each child and assert the *correct* child's message appears, not just "something failed."
 - **Later-child failure.** Pass input the first child (or first several) accept, then the next child rejects. Assert the position is the later child's pre-read offset. Again with per-child `WithError` to pin which child's message surfaces.
 - **Children that consume different amounts before failing.** Specifically for Or, construct alternatives where different branches advance different distances before failing. Assert the deepest-advancing branch's message wins (deepest-failure-wins) and position.
-- **Edge cases specific to the combinator.** `OneOrMore` needs a "no matches" test. `Optional` needs a "inner fails, Optional succeeds with empty" test plus the known-PEG-quirk test where an Optional's inner depth beats the required rule's shallower depth. `ZeroOrMore` has no failure path at all — it always succeeds — so it needs zero-match and N-match success tests but no error-position tests.
+- **Edge cases specific to the composite.** `OneOrMore` needs a "no matches" test. `Optional` needs a "inner fails, Optional succeeds with empty" test plus the known-PEG-quirk test where an Optional's inner depth beats the required rule's shallower depth. `ZeroOrMore` has no failure path at all — it always succeeds — so it needs zero-match and N-match success tests but no error-position tests.
 
 Example (from `AndRuleTests.cs`):
 
@@ -94,8 +94,8 @@ Example (from `AndRuleTests.cs`):
 [Test]
 public void And_later_child_failure_reports_at_deeper_position()
 {
-    var rule = And(Char('a').WithError("need an 'a'"),
-                   Char('b').WithError("need a 'b'"));
+    var rule = And(Token('a').WithError("need an 'a'"),
+                   Token('b').WithError("need a 'b'"));
     var result = rule.Parse("ax");
     Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     Assert.That(result.ErrorMessage, Is.EqualTo("need a 'b'"));
@@ -104,7 +104,7 @@ public void And_later_child_failure_reports_at_deeper_position()
 
 ### Rules with Construction-Time Validation
 
-Any rule (or factory) that validates its arguments and throws at build time. Today: `Char(char/Rune/int/string)` rejects surrogates, out-of-range values, multi-grapheme strings. `RuneSet.Single`/`Range`/`Runes` reject invalid scalar values.
+Any rule (or factory) that validates its arguments and throws at build time. Today: `Token(char/Rune/int/string)` rejects surrogates, out-of-range values, multi-grapheme strings. `RuneSet.Single`/`Range`/`Runes` reject invalid scalar values.
 
 Required tests:
 
@@ -132,11 +132,11 @@ Some tests don't belong to any one rule's file. These live in `Core/`:
 - **RuneSet behavior** → `Core/RuneSetTests.cs`. Tests for the `RuneSet` data type itself (not its consumers like `RuneInRule`).
 - **Tracing (cross-cutting concerns only)** → `Core/TracingTests.cs`. Covers behaviors that aren't any one rule's property: null TraceSink is a no-op, ParseOptions defaults (null sink, Diagnostic level), the trace-label fallback chain (Name > ErrorMessage > rule class name), `TraceLevel.Normal` suppresses output, `Lexer.Read` and `Lexer.RecordFailure` emit their own diagnostic lines, transaction depth returns to zero after a parse (regression guard — running the same parse twice must produce identical trace output), and two side-effect proof tests (`Off_path_does_not_evaluate_interpolated_arguments`, `On_path_evaluates_interpolated_arguments_exactly_once`, plus `Rule_TraceSuccess_off_path_does_not_evaluate_interpolated_arguments`) that pin the C# interpolated-string-handler rewrite — they're the load-bearing tests for "tracing is free when off."
 
-Rules emit their traces via two base-class helpers, `TraceSuccess(lexer, $"...")` and `TraceFailure(lexer, $"...")`, defined on `Rule`. The rule's class name (`"And"`, `"Char"`, etc.) is derived automatically from `GetType().Name` with the `"Rule"` suffix stripped and cached in the base constructor, so new rules get correct trace names without touching trace plumbing. Both helpers have explicit-level overloads (`TraceSuccess(lexer, level, $"...")`) for the rare case a rule wants to emit at something other than Diagnostic.
+Rules emit their traces via two base-class helpers, `TraceSuccess(lexer, $"...")` and `TraceFailure(lexer, $"...")`, defined on `Rule`. The rule's class name (`"And"`, `"Token"`, etc.) is derived automatically from `GetType().Name` with the `"Rule"` suffix stripped and cached in the base constructor, so new rules get correct trace names without touching trace plumbing. Both helpers have explicit-level overloads (`TraceSuccess(lexer, level, $"...")`) for the rare case a rule wants to emit at something other than Diagnostic.
 
 **Per-rule trace tests live in each rule's own test file.** Every rule in `Rules/` must include at least one success-path trace test and at least one failure-path trace test (if the rule has a failure path; `ZeroOrMoreRule` has none). The tests pin the full trace output verbatim via `Assert.That(sink.ToString(), Is.EqualTo(...))`. This way, changing a rule's trace format produces a test failure in the rule's own file, right next to the code being edited, rather than in a central file the author might not have open. Shared helpers (`NewSink()`, `Lines(params string[])`) live in `TraceTestHelpers.cs` at the test project root and are pulled in via `using static InductorParser.Tests.TraceTestHelpers;`.
 
-Note on C++ trace mapping. The original InductorParser (C++) emits traces using template-unrolled class names like `CharacterSymbol::Parse`, `CharacterSetSymbol::Parse`, `1to2147483647Expression::Parse`, and so on. The C# port uses the rule's C# name instead (`Char`, `RuneIn`, `OneOrMore`). Captured C++ traces used for reference material need a one-time mental mapping: C++ `CharacterSymbol` → C# `Char`, C++ `CharacterSetSymbol` → C# `RuneIn`, C++ `EofSymbol` → C# `Eof`, C++ `AndExpression` → C# `And`, C++ `OrExpression` → C# `Or`, C++ `AtLeastAndAtMostExpression<T, 1, INT_MAX>` (`1to2147483647Expression`) → C# `OneOrMore`, C++ `<T, 0, INT_MAX>` → C# `ZeroOrMore`, C++ `<T, 0, 1>` → C# `Optional`. The general `BetweenInclusive(inner, n, m)` traces as `BetweenInclusive[n..m]`.
+Note on C++ trace mapping. The original InductorParser (C++) emits traces using template-unrolled class names like `CharacterSymbol::Parse`, `CharacterSetSymbol::Parse`, `1to2147483647Expression::Parse`, and so on. The C# port uses the rule's C# name instead (`Token`, `RuneIn`, `OneOrMore`). Captured C++ traces used for reference material need a one-time mental mapping: C++ `CharacterSymbol` → C# `Token`, C++ `CharacterSetSymbol` → C# `RuneIn`, C++ `EofSymbol` → C# `Eof`, C++ `AndExpression` → C# `And`, C++ `OrExpression` → C# `Or`, C++ `AtLeastAndAtMostExpression<T, 1, INT_MAX>` (`1to2147483647Expression`) → C# `OneOrMore`, C++ `<T, 0, INT_MAX>` → C# `ZeroOrMore`, C++ `<T, 0, 1>` → C# `Optional`. The general `BetweenInclusive(inner, n, m)` traces as `BetweenInclusive[n..m]`.
 
 When you write a test that primarily exercises one of these concerns, put it in the corresponding file, not in a rule-specific file. When a test exercises a rule but happens to touch a cross-cutting concern, put it in the rule's file and keep the cross-cutting concern under test as a secondary focus.
 
@@ -144,11 +144,11 @@ End-to-end grammars built from the public API live in `E2EExamples/`. Examples t
 
 ## File Organization
 
-One test fixture per rule, in `Rules/`. File naming follows the rule's type name plus `Tests`: `Rules/CharRuleTests.cs` → `CharRule.cs`. Cross-cutting files in `Core/` are named after the concern (`WithErrorTests.cs`, `LexerSwitchTests.cs`).
+One test fixture per rule, in `Rules/`. File naming follows the rule's type name plus `Tests`: `Rules/TokenRuleTests.cs` → `TokenRule.cs`. Cross-cutting files in `Core/` are named after the concern (`WithErrorTests.cs`, `LexerSwitchTests.cs`).
 
 Tests inside a fixture are ordered loosely by category: success paths first, failure-position tests next, WithError-message tests after that, then edge cases and construction-time validation. This isn't enforced by tooling — it's a readability convention.
 
-Each test method's name should describe the scenario, not the expected outcome. `Char_mismatch_on_single_char_input_points_at_offender` beats `Char_should_fail_correctly`. Reading the fixture's method list tells you what cases are covered without opening any body.
+Each test method's name should describe the scenario, not the expected outcome. `Token_mismatch_on_single_char_input_points_at_offender` beats `Token_should_fail_correctly`. Reading the fixture's method list tells you what cases are covered without opening any body.
 
 ## Anti-Patterns
 

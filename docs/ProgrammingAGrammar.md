@@ -2,7 +2,7 @@
 
 This document is user reference: how to write grammars with the library. It shows what the API looks like, gives working examples end to end, and points at the other docs when you want depth on a specific topic.
 
-In this library a *rule* is a C# object. You build rules by calling factory functions like `And(...)`, `Or(...)`, `Char('=')`, you compose them into a grammar, and you call `.Parse(input)` on the root rule to get a tree back.
+In this library a *rule* is a C# object. You build rules by calling factory functions like `And(...)`, `Or(...)`, `Token('=')`, you compose them into a grammar, and you call `.Parse(input)` on the root rule to get a tree back.
 
 Related docs:
 
@@ -31,11 +31,11 @@ var settingValue = Or(
 var document = And(
     settingName,
     OptionalWhitespace(),
-    Char('='),
+    Token('='),
     OptionalWhitespace(),
     settingValue,
     OptionalWhitespace(),
-    Char(';')
+    Token(';')
 );
 
 var result = document.Parse("setting = 5;");
@@ -55,15 +55,15 @@ Four variables hold rules, one call to `.Parse(...)` returns a tree, and `result
 
 Compare that side by side with the C++ version from `GettingStarted.md` and you can see they line up rule by rule. Every C++ template instantiation becomes a C# factory call, and the trailing template parameters (flatten policy, symbol id, error message) become fluent method calls on the returned `Rule`. The `MySymbolID` class and the stack of `.As(MySymbolIds.X)` calls from the C++ tutorial are gone: lookups use the rule reference you already have in scope.
 
-The `using static InductorParser.Rules;` at the top is what lets us write `And(...)` and `Or(...)` and `Char('=')` without a class qualifier. It is the C# moral equivalent of `using namespace FXPlat;` in the C++ version. Grammars that want a cleaner look use this import. Grammars that want to be explicit can write `Rules.And(...)`.
+The `using static InductorParser.Rules;` at the top is what lets us write `And(...)` and `Or(...)` and `Token('=')` without a class qualifier. It is the C# moral equivalent of `using namespace FXPlat;` in the C++ version. Grammars that want a cleaner look use this import. Grammars that want to be explicit can write `Rules.And(...)`.
 
 Two things happen automatically in this example but are worth knowing about for when you want more control. First, the rule graph is finalized (validated, frozen, ids stamped on whatever named rules exist) on the first call to `.Parse(...)`. You can force this earlier by calling `.Compile()` on the root rule explicitly, which is useful when you want grammar-construction errors to surface at program startup rather than on first use. Second, nothing in this example has a symbol name: the rules are anonymous. Parsing works fine, `Find(someRule)` works fine (it matches on rule identity), but trace output and error messages will use generated placeholder names instead of human-readable ones. Adding explicit `.As(nameof(...))` calls for better names is covered in the next section for grammars that want them.
 
 ## Naming Rules
 
-Most rules do not need a name. `Find(someRule)` matches on the rule object itself, so as long as you have a reference to the rule you want to locate, you can find its nodes in the parse tree. The hello-world example never calls `.As(...)` and works fine.
+Most rules do not need a name. `Find(someRule)` matches on the rule object itself, so as long as you have a reference to the rule you want to locate, you can find its nodes in the tree. The hello-world example never calls `.As(...)` and works fine.
 
-One exception to be aware of: `Or` rules with the default `FlattenType.Flatten` do not appear as wrappers in the parse tree. The parser splices the matched inner symbol into the parent directly, because a post-hoc `.Flatten()` call would do the same splice anyway, and `Or` fires per character in hot character-class alternatives. If you want to `Find(someOrRule)` and have it hit, set `FlattenType.None` on the `Or` to preserve its wrapper. (This is the same knob that makes a wrapper survive a post-hoc `.Flatten()` call.) For debugging, `ParseOptions.PreserveFlattenWrappers` disables the splice globally so the tree matches the grammar 1:1.
+One caveat: `Find(rule)` only hits rules with `FlattenType.None`. Rules with the default `FlattenType.Flatten` (every `And`, `Or`, `OneOrMore`, `ZeroOrMore`, `Optional`, `BetweenInclusive`) have their children lifted up into the parent and their own wrapper removed from `ParseResult.Tree`, so Find cannot locate them. If you want to `Find(someRule)` and have it hit, set `FlattenType.None` on the rule to preserve its wrapper. For debugging, `ParseOptions.PreserveFlattenWrappers` turns the lift-up off globally so the tree matches the grammar one-to-one.
 
 Sometimes names do matter though: trace output, error messages, serialization. Trace output prints rule names to show which rule was tried at each position. Error messages quote the "deepest rule" that failed. Without names, these fall back to generated labels like `<anonymous>` or `rule#47`, which are technically correct but unpleasant to read.
 
@@ -83,7 +83,7 @@ The rule's id is derived deterministically from the string, and the name carries
 And(
     OneOrMore(RuneIn(RuneSet.Letters)).As("operatorName"),
     OptionalWhitespace(),
-    Char(':'),
+    Token(':'),
     /* ... */
 )
 ```
@@ -108,7 +108,7 @@ Expression.Bind(...) before running the parser.
 
 That is a much better failure mode than a runtime exception.
 
-**Freeze the rule graph.** After `Compile` returns, every rule in the graph is sealed. Calling `.As(...)`, `.Flatten(...)`, `.WithError(...)`, or any other modification method on a sealed rule throws `InvalidOperationException`. This makes the "effectively immutable" claim enforced rather than implicit, and it closes a footgun where user code could accidentally mutate a shared rule after parsing has started. One boolean flag per rule, one check per mutation method, negligible cost.
+**Freeze the rule graph.** After `Compile` returns, every rule in the graph is sealed. Calling `.As(...)`, `.Flatten(...)`, `.WithError(...)`, or any other modification method on a sealed rule throws `InvalidOperationException`. This makes the "effectively immutable" claim enforced rather than implicit, and it closes a bug where user code could accidentally mutate a shared rule after parsing has started. One boolean flag per rule, one check per mutation method, negligible cost.
 
 **Validate against obvious mistakes.** A handful of cheap sanity checks worth running once rather than discovering at parse time: two rules pinned to the same explicit `SymbolId.Custom(...)` number (that is a real bug, unlike hash collisions which just get probed), `LateBoundRule` bound to itself or a trivial cycle, and rules whose id somehow ended up unset. Unreachable rules are *not* flagged because a user might legitimately be building standalone rules to use elsewhere.
 
@@ -167,14 +167,14 @@ RuneIn(RuneSet.Range(new Rune(0x0370), new Rune(0x03FF)))       // Greek and Cop
 
 The default built-ins cover the full Unicode character set. `RuneSet.Letters` includes `é`, `漢`, `Ω`, `ж`, and every other letter in every script Unicode knows about. Grammars that specifically want ASCII-only use `RuneSet.Ascii.Letters` to say so explicitly.
 
-`Char(...)` takes a `char` for any character that fits in a C# char literal (code points U+0000..U+FFFF) and a `Rune` for characters above U+FFFF:
+`Token(...)` takes a `char` for any character that fits in a C# char literal (code points U+0000..U+FFFF) and a `Rune` for characters above U+FFFF:
 
 ```csharp
-Char('=')                       // ASCII
-Char('♭')                       // U+266D, fits in a char literal
-Char('漢')                      // U+6F22, fits in a char literal
-Char(new Rune(0x1F3B8))         // U+1F3B8 guitar emoji, above U+FFFF
-Char(0x1F3B8)                   // same via int overload
+Token('=')                       // ASCII
+Token('♭')                       // U+266D, fits in a char literal
+Token('漢')                      // U+6F22, fits in a char literal
+Token(new Rune(0x1F3B8))         // U+1F3B8 guitar emoji, above U+FFFF
+Token(0x1F3B8)                   // same via int overload
 ```
 
 ### How Rules React to the Lexer
@@ -183,7 +183,7 @@ The parser's token is a grapheme cluster by default (`GraphemeLexer`). Setting `
 
 **Under `GraphemeLexer` (default):**
 
-- `Char('=')` matches the `[=]` grapheme. Single-rune graphemes compare to a single rune by identity, so ASCII and other characters that fit in a C# char literal work as you would expect.
+- `Token('=')` matches the `[=]` grapheme. Single-rune graphemes compare to a single rune by identity, so ASCII and other characters that fit in a C# char literal work as you would expect.
 - `RuneSet.Letters` matches single-rune letter graphemes. For composed-form text (the default after normalization), almost all letters are single-rune graphemes, so this works as expected. Multi-rune letter graphemes (Devanagari conjuncts, decomposed-form sequences with no precomposed equivalent) do not match `RuneSet.Letters` because the grapheme contains more than one rune. Use a more permissive rule if you want those, or include Mark categories in your character class.
 - `Literal("café")` matches four graphemes, one per character in the literal.
 - Emoji sequences (👋🏽, 🇺🇸, 👨‍👩‍👧‍👦) match as single graphemes, which is almost always what you want.
@@ -192,7 +192,7 @@ The default is right for almost every grammar that handles user-supplied text, b
 
 **Under `RuneLexer` (opt-in):**
 
-- `Char('=')` same as `GraphemeLexer`: matches `[=]`.
+- `Token('=')` same as `GraphemeLexer`: matches `[=]`.
 - `RuneSet.Letters` matches single-rune letters, and in this mode a combining mark is a separate token. A rule that consumed a letter and then encountered a combining mark would stop at the combining mark (it is not a letter).
 - `Literal("café")` matches four runes if `café` uses the precomposed `é` (U+00E9), five runes if the `é` is stored as `e` + combining acute.
 - Emoji sequences come through as separate runes, so `👋🏽` is two units and `👨‍👩‍👧‍👦` is seven.
@@ -235,18 +235,18 @@ var settingName = OneOrMore(RuneIn(RuneSet.Letters))
 
 Rules are immutable to the user. `OneOrMore(x).Flatten(FlattenType.None)` does not mutate the underlying `OneOrMore` rule, it returns a new wrapped rule with the flatten policy set. After `Compile` returns, the rule graph is sealed: calling `.As(...)`, `.Flatten(...)`, or any other mutation method on a sealed rule throws `InvalidOperationException`.
 
-Default values for `Flatten`, error messages, and so on match the C++ defaults from the original source. `OptionalWhitespace()` defaults to `FlattenType.Delete`. `Char('=')` defaults to `FlattenType.Delete`. `And(...)` defaults to `FlattenType.Flatten`. `Integer()` defaults to `FlattenType.None`. If you do not touch them, the parse tree comes out the same shape as the C++ version does, with one deliberate departure: an `Or` with the default `FlattenType.Flatten` has its wrapper spliced at parse time rather than waiting for a post-hoc `.Flatten()` call, because the `Or` hot path is per-character and the wrapper is pure overhead there. Override to `FlattenType.None` on any `Or` whose wrapper you need in the raw tree, or flip `ParseOptions.PreserveFlattenWrappers` to recover C++-shape trees for debugging.
+Default values for `Flatten`, error messages, and so on match the C++ defaults from the original source. `OptionalWhitespace()` defaults to `FlattenType.Delete`. `Token('=')` defaults to `FlattenType.Delete`. `And(...)` defaults to `FlattenType.Flatten`. `Integer()` defaults to `FlattenType.None`. `Parse` applies these types to the tree before returning: `Delete` nodes are dropped, `Flatten` wrappers have their children lifted into the parent, and `None` wrappers survive. `ParseOptions.PreserveFlattenWrappers` turns the whole pass off and gives you back a grammar-shaped debug tree with every wrapper in place.
 
 ### User-Defined Rules
 
-`Rule` is an abstract class and users can derive from it to add matching logic the built-in combinators do not cover. The contract a subclass has to satisfy:
+`Rule` is an abstract class and users can derive from it to add matching logic the built-in composites do not cover. The contract a subclass has to satisfy:
 
 - Implement the matching method to either consume input and return a `Symbol` subtree (success) or return null and roll back its lexer transaction (failure). Never consume input on failure.
 - Use the lexer's transactional API (`Begin`, `Commit`, `Rollback`) so backtracking by outer rules works correctly.
 - Emit trace output in the same format as built-in rules when `ParseOptions.TraceSink` is set, so grammar-wide traces remain readable.
 - Participate in `Compile`: declare yourself named via `.As(...)` if you want an id, declare flatten policy if it matters for tree shape, seal against modification after `Compile` returns.
 
-The full contract including method signatures and the lexer API will be documented alongside the implementation. For grammars that compose existing primitives (which is most grammars) you never need to derive; the built-in combinators cover the PEG operators and the character-class primitives. User-defined rules matter when you are adding behavior the combinators cannot express, for example a rule that consumes until a specific byte-level offset, a grammar-context-aware matcher that queries external state, or a custom character-boundary detector.
+The full contract including method signatures and the lexer API will be documented alongside the implementation. For grammars that compose existing leaves (which is most grammars) you never need to derive; the built-in composites cover the PEG operators and the built-in leaves cover the character-class cases. User-defined rules matter when you are adding behavior the composites cannot express, for example a rule that consumes until a specific byte-level offset, a grammar-context-aware matcher that queries external state, or a custom character-boundary detector.
 
 ## The Parse Result
 
@@ -312,13 +312,13 @@ public class Symbol
 }
 ```
 
-`Find` and `FindAll` are a small addition. Walking a parse tree with raw indexing (`tree.children()[0].children()[3]` style, which is how the C++ tutorial does it) is fragile the moment you add an optional element. Search by rule reference is more robust and reads better in compiler code, and it plays nicely with IDE refactors: renaming the rule field updates every `Find(...)` call automatically.
+`Find` and `FindAll` are a small addition. Walking a tree with raw indexing (`tree.children()[0].children()[3]` style, which is how the C++ tutorial does it) is fragile the moment you add an optional element. Search by rule reference is more robust and reads better in compiler code, and it plays nicely with IDE refactors: renaming the rule field updates every `Find(...)` call automatically.
 
 `ToString()` is the same contract as the C++ version: concatenate all descendant character symbols in order. This is how you recover the original input text for any subtree.
 
 ### LINQ on the Symbol Tree
 
-Every traversal on `Symbol` is a direct LINQ target because each one is typed as `IReadOnlyList<Symbol>` or `IEnumerable<Symbol>`. The four entry points cover the four things you usually want to do with a parse tree:
+Every traversal on `Symbol` is a direct LINQ target because each one is typed as `IReadOnlyList<Symbol>` or `IEnumerable<Symbol>`. The four entry points cover the four things you usually want to do with a Symbol tree:
 
 ```csharp
 // Direct children (no recursion)
@@ -355,11 +355,11 @@ var document = And(
     OptionalWhitespace(),
     settingName,
     OptionalWhitespace(),
-    Char('='),
+    Token('='),
     OptionalWhitespace(),
     settingValue,
     OptionalWhitespace(),
-    Char(';'),
+    Token(';'),
     OptionalWhitespace(),
     Eof()
 ).As(nameof(document)).Compile();
@@ -414,7 +414,7 @@ var values = And(
     ZeroOrMore(
         And(
             OptionalWhitespace(),
-            Char(','),
+            Token(','),
             OptionalWhitespace(),
             valueAtom
         )
@@ -424,11 +424,11 @@ var values = And(
 var pair = And(
     key,
     OptionalWhitespace(),
-    Char('='),
+    Token('='),
     OptionalWhitespace(),
     values,
     OptionalWhitespace(),
-    Char(';')
+    Token(';')
 ).As(nameof(pair));
 
 var document = And(
@@ -527,13 +527,13 @@ public sealed class ParseOptions
     public TextWriter? TraceSink { get; set; }
     public TraceLevel TraceLevel { get; set; }
 
-    /// Debug knob: when true, rules that would normally collapse their
-    /// wrapper at parse time keep the wrapper in the raw tree, so the
-    /// tree shape matches the grammar one-to-one. Currently affects
-    /// `Or` with the default `FlattenType.Flatten` (which normally has
-    /// its single-child wrapper spliced at parse time). Off by default
-    /// because the optimization is worth ~15% wall time and ~25%
-    /// allocation on per-character `Or`s.
+    /// Debug knob: when true, `Parse` skips the flatten pass that normally
+    /// applies each rule's `FlattenType` before returning. `Delete` nodes
+    /// stay in the tree, `Flatten` wrappers stay in the tree, and the tree
+    /// shape matches the grammar one-to-one. Off by default because most
+    /// callers want the flattened syntax tree; flip it on for `PrintTree`
+    /// output and for `Find`-queries against wrappers that would otherwise
+    /// be lifted away.
     public bool PreserveFlattenWrappers { get; set; } = false;
 }
 

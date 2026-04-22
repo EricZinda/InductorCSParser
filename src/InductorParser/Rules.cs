@@ -7,42 +7,42 @@ namespace InductorParser;
 public static class Rules
 {
     // Matches one grapheme by exact content. All four overloads funnel into
-    // CharRule(string); the overloads exist for convenience and for early
+    // TokenRule(string); the overloads exist for convenience and for early
     // validation of their specific argument shape.
-    public static Rule Char(char c)
+    public static Rule Token(char c)
     {
         if (char.IsSurrogate(c))
             throw new ArgumentOutOfRangeException(nameof(c),
-                "Surrogate halves aren't valid grapheme content. Use Char(Rune) or Char(int) for a supplementary-plane code point.");
-        return new CharRule(c.ToString());
+                "Surrogate halves aren't valid grapheme content. Use Token(Rune) or Token(int) for a supplementary-plane code point.");
+        return new TokenRule(c.ToString());
     }
 
     // Rune's own ctor already enforces validity, so we just need to stringify.
-    public static Rule Char(Rune r) => new CharRule(r.ToString());
+    public static Rule Token(Rune r) => new TokenRule(r.ToString());
 
-    public static Rule Char(int codepoint)
+    public static Rule Token(int codepoint)
     {
         if (!Rune.IsValid(codepoint))
             throw new ArgumentOutOfRangeException(nameof(codepoint), codepoint,
                 "Not a valid Unicode scalar value (0..0x10FFFF, excluding surrogates 0xD800..0xDFFF).");
-        return new CharRule(new Rune(codepoint).ToString());
+        return new TokenRule(new Rune(codepoint).ToString());
     }
 
     // Match a whole grapheme, which may be multi-rune (ZWJ sequences, skin
-    // tone modifiers, etc.). The CharRule constructor validates that the
+    // tone modifiers, etc.). The TokenRule constructor validates that the
     // string is exactly one grapheme.
-    public static Rule Char(string grapheme) => new CharRule(grapheme);
+    public static Rule Token(string grapheme) => new TokenRule(grapheme);
 
     // Match an exact multi-character string in a single transaction. For a
-    // one-grapheme match use Char(string); Literal is the N-grapheme
-    // generalization and collapses what would otherwise be N Char rules
+    // one-grapheme match use Token(string); Literal is the N-grapheme
+    // generalization and collapses what would otherwise be N Token rules
     // (and N transactions) into one. Rejects empty strings at construction.
     public static Rule Literal(string value) => new LiteralRule(value);
 
     // ASCII-case-insensitive variant of Literal. Letters A-Z / a-z fold to
     // the same match; non-ASCII code units compare bit-exact. The ASCII in
     // the name is critical: full Unicode case folding is locale- and
-    // script-dependent and this primitive doesn't attempt it. See
+    // script-dependent and this leaf doesn't attempt it. See
     // docs/UnicodeGotchas.md for the reasoning and limits.
     public static Rule LiteralIgnoreAsciiCase(string value) => new LiteralIgnoreAsciiCaseRule(value);
 
@@ -73,7 +73,7 @@ public static class Rules
     public static Rule StringChars(Rule stopper, Rune escapeStart, Rule escapeEnd) =>
         new StringCharsRule(stopper, escapeStart, escapeEnd);
 
-    public static Rule AnyChar() => new AnyCharRule();
+    public static Rule AnyToken() => new AnyTokenRule();
 
     public static Rule Not(Rule inner) => new NotRule(inner);
 
@@ -95,7 +95,7 @@ public static class Rules
 
     // BetweenInclusive(inner, n, m) matches inner between n and m times
     // inclusive. The three count-rule shapes below are special cases of
-    // this primitive. Argument validation lives on BetweenInclusiveRule's
+    // this composite. Argument validation lives on BetweenInclusiveRule's
     // constructor so every construction path goes through it.
     public static Rule BetweenInclusive(Rule inner, int atLeast, int atMost) =>
         new BetweenInclusiveRule(inner, atLeast, atMost);
@@ -124,16 +124,16 @@ public static class Rules
     // [+|-]? Digit+
     public static Rule Integer() =>
         And(
-            Optional(Or(Char('+'), Char('-'))),
+            Optional(Or(Token('+'), Token('-'))),
             OneOrMore(RuneIn(RuneSet.Digits))
         );
 
     // -? Integer "." Integer
     public static Rule Float() =>
         And(
-            Optional(Char('-').Flatten(FlattenType.Flatten)),
+            Optional(Token('-').Flatten(FlattenType.Flatten)),
             Integer(),
-            Char('.').Flatten(FlattenType.None),
+            Token('.').Flatten(FlattenType.Preserve),
             Integer()
         );
 

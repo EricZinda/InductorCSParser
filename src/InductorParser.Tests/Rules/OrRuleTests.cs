@@ -11,11 +11,11 @@ public class OrRuleTests
     [Test]
     public void Or_returns_the_first_alternative_that_matches()
     {
-        // Char defaults to FlattenType.Delete, so the matched 'b' would
+        // Token defaults to FlattenType.Delete, so the matched 'b' would
         // be filtered out of the tree at parse time. PreserveFlattenWrappers
-        // keeps the Char leaf in the tree so Tree.ToString() shows the
+        // keeps the Token leaf in the tree so Tree.ToString() shows the
         // text that was actually matched.
-        var rule = Or(Char('a'), Char('b'), Char('c'));
+        var rule = Or(Token('a'), Token('b'), Token('c'));
         var result = rule.Parse("b", new ParseOptions { PreserveFlattenWrappers = true });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -27,7 +27,7 @@ public class OrRuleTests
     {
         // All alternatives fail, none have WithError. Null message at
         // offset 0, positional fallback renders.
-        var rule = Or(Char('a'), Char('b'), Char('c'));
+        var rule = Or(Token('a'), Token('b'), Token('c'));
         var result = rule.Parse("x");
 
         Assert.That(result.Success, Is.False);
@@ -40,11 +40,11 @@ public class OrRuleTests
     {
         // All three alternatives try at offset 0 and fail. Each records at
         // pre-read position 0 with its own WithError message. Equal depth,
-        // so the first-writer wins the message slot — that's Char('a'),
+        // so the first-writer wins the message slot — that's Token('a'),
         // which Or tries first.
-        var rule = Or(Char('a').WithError("want 'a'"),
-                      Char('b').WithError("want 'b'"),
-                      Char('c').WithError("want 'c'"));
+        var rule = Or(Token('a').WithError("want 'a'"),
+                      Token('b').WithError("want 'b'"),
+                      Token('c').WithError("want 'c'"));
 
         var result = rule.Parse("x");
 
@@ -57,12 +57,12 @@ public class OrRuleTests
     public void Or_child_that_consumes_deeper_wins_the_position_and_message()
     {
         // First branch matches "ab" then fails on 'x' at offset 2, recording
-        // its Char('c') WithError there. Second branch matches "a" then
-        // fails on 'b' at offset 1, recording its Char('d') WithError there.
+        // its Token('c') WithError there. Second branch matches "a" then
+        // fails on 'b' at offset 1, recording its Token('d') WithError there.
         // Deepest-wins picks offset 2, so the first branch's "need 'c'"
         // surfaces.
-        var rule = Or(And(Char('a'), Char('b'), Char('c').WithError("need 'c'")),
-                      And(Char('a'), Char('d').WithError("need 'd'")));
+        var rule = Or(And(Token('a'), Token('b'), Token('c').WithError("need 'c'")),
+                      And(Token('a'), Token('d').WithError("need 'd'")));
 
         var result = rule.Parse("abx");
 
@@ -74,17 +74,17 @@ public class OrRuleTests
     [Test]
     public void Or_trace_success_produces_expected_output()
     {
-        // Third alternative wins. Required-runes dispatch skips Char('a') and
-        // Char('b') on lookahead 'c' — their FirstConsumedRunes don't contain 'c'
-        // and neither is empty-capable — so only the matching Char('c')
+        // Third alternative wins. Required-runes dispatch skips Token('a') and
+        // Token('b') on lookahead 'c' — their FirstConsumedRunes don't contain 'c'
+        // and neither is empty-capable — so only the matching Token('c')
         // branch opens a transaction and emits trace lines. The
-        // nesting remains depth 2 (Or's transaction + Char's transaction).
+        // nesting remains depth 2 (Or's transaction + Token's transaction).
         var sink = NewSink();
-        Or(Char('a'), Char('b'), Char('c')).Parse("c", new ParseOptions { TraceSink = sink });
+        Or(Token('a'), Token('b'), Token('c')).Parse("c", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'c', Consumed: 1",
-            "      SUCC | Char: found 'c'",
+            "      SUCC | Token: found 'c'",
             "   SUCC | Or: symbol #2"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
@@ -93,13 +93,13 @@ public class OrRuleTests
     [Test]
     public void Or_trace_failure_produces_expected_output()
     {
-        // Required-runes dispatch rules out both Char('a') and Char('b') on
+        // Required-runes dispatch rules out both Token('a') and Token('b') on
         // lookahead 'z', so no child transaction ever opens. By the time
         // Or emits its FAIL line after the loop, no transaction is open
         // and the line carries no indentation. Empty detail message means
         // there's no ": {detail}" tail, so the line reads "FAIL | Or".
         var sink = NewSink();
-        Or(Char('a'), Char('b')).Parse("z", new ParseOptions { TraceSink = sink });
+        Or(Token('a'), Token('b')).Parse("z", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "FAIL | Or"

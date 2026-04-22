@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
@@ -8,10 +9,10 @@ namespace InductorParser;
 // rolls back the lexer regardless of what inner did, and succeeds iff
 // inner FAILED. Consumes no input on either path.
 //
-// Idiom: Not(stopRule) combined with AnyChar() is the rule-based "match
+// Idiom: Not(stopRule) combined with AnyToken() is the rule-based "match
 // everything up to the stop condition" pattern:
 //
-//     ZeroOrMore(And(Not(stopRule), AnyChar()))
+//     ZeroOrMore(And(Not(stopRule), AnyToken()))
 //
 // Each iteration checks that stopRule doesn't match here, then consumes
 // one character and advances. When stopRule would match, Not fails, the
@@ -29,35 +30,30 @@ internal sealed class NotRule : Rule
 
     private Rule Inner => Children[0];
 
-    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
+    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        // The transaction rolls back whether inner succeeded or failed.
-        // We never Commit, so the `using` exit restores the lexer.
+        // Lookahead only: inner's result is thrown away regardless.
+        // Pass null; shim will allocate a scratch if inner is Flatten.
         using var transaction = lexer.BeginTransaction();
-        var innerResult = Inner.TryParse(lexer);
+        var innerResult = Inner.TryParse(lexer, outputSymbols: null);
         if (innerResult != null)
         {
-            // Inner matched, which means Not fails.
             TraceFailure(lexer, $"inner matched");
             lexer.RecordFailure(transaction.StartPosition, ErrorMessage);
             return null;
         }
         TraceSuccess(lexer, $"inner did not match");
-        // Zero-width success: no children, no consumed text. The Delete
-        // flatten type keeps this from cluttering the syntax tree — and
-        // with parse-time Delete filtering, Not returns the shared
-        // Discarded sentinel on the common path instead of allocating a
-        // fresh empty Symbol per negative-lookahead check.
-        if (discard)
-            return Symbol.Discarded;
-        return new Symbol(Id, FlattenType, Array.Empty<Symbol>());
+        return effectiveFlattenType == FlattenType.Preserve
+            ? new Symbol(Id, FlattenType, Array.Empty<Symbol>())
+            : Symbol.Discarded;
     }
 
-    internal override RuleStart ComputeRuleStart()
+    // See the FirstConsumedRunes / Advance field docs on Rule for more information on what this does.
+    internal override RuleStartRequirements ComputeRuleStart()
     {
         // Zero-width predicate: rolls back regardless of inner result,
         // never advances the lexer. FirstConsumedRunes is Empty (it doesn't
         // consume anything, so the "starting rune" set is empty).
-        return new RuleStart(RuneSet.Empty, Advance.Never);
+        return new RuleStartRequirements(RuneSet.Empty, Advance.Never);
     }
 }

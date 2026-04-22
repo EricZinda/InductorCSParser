@@ -197,7 +197,7 @@ public class ChordGrammarTests
     //
     // Currently ignored. History on this box (net8.0, Release, 5000 iters
     // x 151 inputs):
-    //   - Naive combinator version (pre-p500 / Literal): ~21x slower
+    //   - Naive composite version (pre-p500 / Literal): ~21x slower
     //     than compiled regex. Every keyword expanded to N rune reads.
     //   - After shipping Literal / LiteralIgnoreAsciiCase (earlier p500
     //     work): ~17-18x. Word matches took one transaction each instead

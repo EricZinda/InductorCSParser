@@ -5,32 +5,39 @@ using InductorParser;
 
 namespace InductorParser.SyntaxTree;
 
+// A node in the parse tree produced by Rule.Parse. It has wwo shapes:
+//
+// Composite: carries a list of child Symbols. Used by rules that
+//     build structure (And, Or, OneOrMore wrapping content).
+//
+// Leaf: carries a ReadOnlyMemory<char> pointing into a section of
+//     the original input string. Used by rules that match content
+//     (Token, Literal, RuneIn, StringChars). ToString() returns the
+//     text it points at; the parse never copies input into a new
+//     string.
 public sealed class Symbol
 {
     // Shared sentinel for the Children field on leaf symbols. Array.Empty<T>()
-    // already returns a singleton, so this isn't saving an allocation; it's
-    // just a named alias that reads better than "Array.Empty<Symbol>()" at
-    // the use site inside the leaf constructor below.
+    // already returns a singleton, so this isn't saving an allocation. It
+    // just makes it clearer what is going on
     private static readonly IReadOnlyList<Symbol> EmptyChildren = Array.Empty<Symbol>();
 
     // Parse-time sentinel a Rule.TryParse returns in place of a real Symbol
-    // when the rule's effective FlattenType is Delete. Consumers (AndRule /
-    // OrRule / BetweenInclusiveRule) filter this before it reaches the
+    // when the rule's effective FlattenType is Delete. Consumers like AndRule
+    // filter it out before it reaches the
     // parent's Children list, so Delete-typed rules never contribute a
-    // wrapper Symbol, a matched-list allocation, or a leaf-per-rune entry
-    // to the final tree.
+    // Discarded Symbol to the final tree.
     //
-    // Non-null so the "TryParse returned non-null" success signal still
-    // works for Delete rules. Never stored as a child of any real Symbol;
+    // This is so that rules have something non-null to return from TryParse()
+    // to indicate success. Null means failure. Never stored as a child of any real Symbol.
     // consumers that see it treat it as "matched successfully, contributes
     // nothing."
     public static readonly Symbol Discarded = new Symbol(default, FlattenType.Delete, ReadOnlyMemory<char>.Empty);
 
-    // Leaf symbols hold a slice (ReadOnlyMemory<char>) into the original
-    // input string rather than a copied substring. This is the deferred-
-    // materialization path: during parsing we never allocate a per-leaf
-    // string, only when somebody calls ToString do we materialize the
-    // text.
+    // Leaf symbols hold a ReadOnlyMemory<char> into the original
+    // input string rather than a copied substring. This allows us to
+    // never allocate a string during parsing, only when somebody calls 
+    // ToString do we materialize the text.
     //
     // This does involve a tradeoff: a ReadOnlyMemory<char>
     // keeps its backing string alive for as long as the Memory itself is
@@ -51,11 +58,15 @@ public sealed class Symbol
     public FlattenType FlattenType { get; }
     public IReadOnlyList<Symbol> Children { get; }
 
-    public Symbol(SymbolId id, FlattenType flattenType, IReadOnlyList<Symbol> children)
+    public Symbol(SymbolId id, FlattenType flattenType, IReadOnlyList<Symbol>? children)
     {
         Id = id;
         FlattenType = flattenType;
-        Children = children;
+        // Collapse both null and empty to the shared Array.Empty<Symbol>()
+        // singleton. Callers can pass null (easy) or hand off a list they
+        // allocated eagerly that ended up empty; the tree stores only the
+        // singleton in either case.
+        Children = (children == null || children.Count == 0) ? EmptyChildren : children;
         _leafChars = ReadOnlyMemory<char>.Empty;
         _isLeaf = false;
     }
@@ -70,11 +81,14 @@ public sealed class Symbol
     }
 
     // ToString renders the text actually present in the tree: for leaves,
-    // the captured slice; for composites, the concatenated text of their
-    // kept children. Delete-typed rules that were filtered at parse time
-    // are not in the tree, so their text does not appear here either.
-    // Callers who want the full matched input should either keep the
-    // string they passed to Parse, or enable
+    // the captured text; for composites, the concatenated text of their
+    // children. On the default parse path, Delete-typed rules are
+    // gone (filtered during parse) and Flatten-typed wrappers have had
+    // their children lifted into the parent, so their own wrapper does
+    // not appear in the tree shape; the characters under them do,
+    // through their surviving Preserve-typed or leaf descendants. Callers
+    // who want to rebuild the exact input verbatim should either keep
+    // the string they passed to Parse, or enable
     // ParseOptions.PreserveFlattenWrappers to keep every grammar node
     // (including Delete-typed ones) in the tree.
     public override string ToString()
@@ -91,6 +105,10 @@ public sealed class Symbol
         foreach (var child in Children) child.AppendTo(builder);
     }
 
+    // Depth-first search for the first Symbol whose Id matches. Returns
+    // null if nothing matches. Use when you expect exactly one match
+    // (e.g. a named rule that appears once at a known position in the
+    // grammar).
     public Symbol? Find(Rule rule) => Find(rule.Id);
 
     public Symbol? Find(SymbolId id)
@@ -104,6 +122,9 @@ public sealed class Symbol
         return null;
     }
 
+    // Depth-first search that yields every matching Symbol. Use when
+    // the rule can appear multiple times (repetitions, alternations,
+    // recursive grammars).
     public IEnumerable<Symbol> FindAll(Rule rule) => FindAll(rule.Id);
 
     public IEnumerable<Symbol> FindAll(SymbolId id)
@@ -114,6 +135,9 @@ public sealed class Symbol
                 yield return found;
     }
 
+    // Depth-first walk that yields every Symbol in the tree, starting
+    // with this one. Use when you want to inspect or transform every
+    // node regardless of id.
     public IEnumerable<Symbol> Walk()
     {
         yield return this;
@@ -131,7 +155,7 @@ public sealed class Symbol
             case FlattenType.Flatten:
                 foreach (var child in Children) child.FlattenInto(result);
                 return;
-            default: // None
+            default: // Preserve
                 if (_isLeaf)
                 {
                     result.Add(this);
@@ -139,7 +163,13 @@ public sealed class Symbol
                 }
                 var keptChildren = new List<Symbol>();
                 foreach (var child in Children) child.FlattenInto(keptChildren);
-                result.Add(new Symbol(Id, FlattenType.None, keptChildren));
+                // if nothing was lifted out or dropped, the rebuild is identical to `this`
+                if (SameChildren(keptChildren, Children))
+                {
+                    result.Add(this);
+                    return;
+                }
+                result.Add(new Symbol(Id, FlattenType.Preserve, keptChildren));
                 return;
         }
     }
@@ -149,5 +179,13 @@ public sealed class Symbol
         var list = new List<Symbol>();
         FlattenInto(list);
         return list;
+    }
+    
+    private static bool SameChildren(List<Symbol> rebuilt, IReadOnlyList<Symbol> original)
+    {
+        if (rebuilt.Count != original.Count) return false;
+        for (int i = 0; i < rebuilt.Count; i++)
+            if (!ReferenceEquals(rebuilt[i], original[i])) return false;
+        return true;
     }
 }

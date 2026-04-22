@@ -14,7 +14,7 @@ public class WithErrorTests
         var settingName = OneOrMore(RuneIn(RuneSet.Letters))
             .WithError("Expected a setting name");
 
-        var document = And(settingName, Char('='), Char(';'));
+        var document = And(settingName, Token('='), Token(';'));
 
         // "1 = ;" fails at offset 0 because a digit is not a letter.
         var result = document.Parse("1 = ;");
@@ -30,12 +30,12 @@ public class WithErrorTests
     [Test]
     public void Generic_error_when_no_rule_set_WithError()
     {
-        var document = And(OneOrMore(RuneIn(RuneSet.Letters)), Char('='), Char(';'));
+        var document = And(OneOrMore(RuneIn(RuneSet.Letters)), Token('='), Token(';'));
 
         var result = document.Parse("ab");
 
         Assert.That(result.Success, Is.False);
-        // OneOrMore consumes "ab", advancing to offset 2. Char('=') tries
+        // OneOrMore consumes "ab", advancing to offset 2. Token('=') tries
         // at offset 2 and finds EOF; it records at offset 2. Since no rule
         // set WithError, the message falls back to the positional version.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
@@ -49,7 +49,7 @@ public class WithErrorTests
         // is deepest in the input should be the one the user sees.
         var name = OneOrMore(RuneIn(RuneSet.Letters)).WithError("need letters");
         var digits = OneOrMore(RuneIn(RuneSet.Digits)).WithError("need digits");
-        var doc = And(name, Char('='), digits);
+        var doc = And(name, Token('='), digits);
 
         // "ab=x" reaches the digits rule before failing (x is not a digit).
         // "need digits" should win over "need letters" because the digit

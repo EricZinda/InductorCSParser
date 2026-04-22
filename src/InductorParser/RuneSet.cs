@@ -376,7 +376,7 @@ public readonly struct RuneSet : IEquatable<RuneSet>
     // grapheme like emoji. A grammar that wants "match everything up to the
     // next delimiter" or "match anything the other rules didn't claim"
     // should use the pass-through-text recipe (see docs/Recipes.md): either
-    // RuneNotIn(stopSet) for delimiter-based stops, or Not(stopRule) + AnyChar()
+    // RuneNotIn(stopSet) for delimiter-based stops, or Not(stopRule) + AnyToken()
     // for rule-based stops.
     public static RuneSet Letters => _letters.Value;
     public static RuneSet Digits => _digits.Value;
@@ -389,8 +389,9 @@ public readonly struct RuneSet : IEquatable<RuneSet>
         public static readonly RuneSet Whitespace = Runes(" \t\r\n");
     }
 
-    // Build from predicate over BMP code points only. Non-BMP whitespace
-    // is rare in real input and not needed for the smallest core.
+    // Build from predicate over code points that fit in one UTF-16 char
+    // (U+0000..U+FFFF). Supplementary-plane whitespace is rare in real
+    // input and not needed for the smallest core.
     private static RuneSet BuildWhitespace()
     {
         var list = new List<Interval>();
@@ -456,9 +457,10 @@ public readonly struct RuneSet : IEquatable<RuneSet>
             // valid Unicode scalar values (runes) on their own.
             if (codepoint >= 0xD800 && codepoint <= 0xDFFF) continue;
 
-            // CharUnicodeInfo.GetUnicodeCategory has a (char) overload for BMP and
-            // a (string, int) overload for supplementary-plane code points. We
-            // pick the cheaper path for the BMP half.
+            // CharUnicodeInfo.GetUnicodeCategory has a (char) overload for
+            // code points that fit in one UTF-16 char (U+0000..U+FFFF) and
+            // a (string, int) overload for supplementary-plane code points.
+            // We pick the cheaper path for the single-char half.
             UnicodeCategory category;
             if (codepoint <= 0xFFFF)
                 category = CharUnicodeInfo.GetUnicodeCategory((char)codepoint);

@@ -14,7 +14,7 @@ namespace InductorParser.Tests;
 // body, closing delimiter) and nothing else. Callers that want to
 // embed these inside a larger grammar can wrap them the usual way.
 //
-// Tree shape: the quote delimiters are FlattenType.Delete (CharRule's
+// Tree shape: the quote delimiters are FlattenType.Delete (TokenRule's
 // default) and drop out of the parsed tree at parse time, so
 // Tree.ToString() on a successful parse returns just the body text.
 // That keeps the tests readable: no Find calls, just direct string
@@ -70,7 +70,7 @@ public static class StringLiteralGrammars
                               | RuneSet.Range('a', 'f')
                               | RuneSet.Range('A', 'F'));
         var simpleEscape = RuneIn(RuneSet.Runes("\"\\/bfnrt"));
-        var unicodeEscape = And(Char('u'), hexDigit, hexDigit, hexDigit, hexDigit);
+        var unicodeEscape = And(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
         var escapeEnd = Or(simpleEscape, unicodeEscape);
 
         // Stoppers: the closing quote plus every C0 control char.
@@ -80,7 +80,7 @@ public static class StringLiteralGrammars
         var stoppers = RuneSet.Runes("\"") | RuneSet.Range(0x00, 0x1F);
         var body = StringChars(stoppers, new Rune('\\'), escapeEnd);
 
-        return And(Char('"'), body, Char('"')).As("jsonString");
+        return And(Token('"'), body, Token('"')).As("jsonString");
     }
 
     private static Rule BuildPythonSingleLine()
@@ -90,7 +90,7 @@ public static class StringLiteralGrammars
             new Rune('\\'),
             BuildPythonEscapeEnd());
 
-        return And(Char('"'), body, Char('"')).As("pyLineString");
+        return And(Token('"'), body, Token('"')).As("pyLineString");
     }
 
     private static Rule BuildPythonTripleQuote()
@@ -113,7 +113,7 @@ public static class StringLiteralGrammars
         // No escape start; the literal-only StringChars overload.
         // Backslashes inside the body are just body content.
         var body = StringChars(RuneSet.Runes("\""));
-        return And(Char('r'), Char('"'), body, Char('"')).As("pyRawString");
+        return And(Token('r'), Token('"'), body, Token('"')).As("pyRawString");
     }
 
     // Python's escape end: try more-specific shapes before
@@ -138,13 +138,13 @@ public static class StringLiteralGrammars
         var octalEscape = BetweenInclusive(octalDigit, 1, 3);
 
         // \xNN  exactly two hex digits
-        var hexEscape = And(Char('x'), hexDigit, hexDigit);
+        var hexEscape = And(Token('x'), hexDigit, hexDigit);
 
         // \uNNNN  exactly four hex digits
-        var unicode4 = And(Char('u'), hexDigit, hexDigit, hexDigit, hexDigit);
+        var unicode4 = And(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
 
         // \UNNNNNNNN  exactly eight hex digits
-        var unicode8 = And(Char('U'),
+        var unicode8 = And(Token('U'),
                            hexDigit, hexDigit, hexDigit, hexDigit,
                            hexDigit, hexDigit, hexDigit, hexDigit);
 
@@ -153,7 +153,7 @@ public static class StringLiteralGrammars
         // non-} rune as a simplifying sketch. Matches the shape,
         // not the validation.
         var nameChar = RuneIn(~RuneSet.Runes("}"));
-        var namedEscape = And(Char('N'), Char('{'), OneOrMore(nameChar), Char('}'));
+        var namedEscape = And(Token('N'), Token('{'), OneOrMore(nameChar), Token('}'));
 
         // Simple single-char escapes. \0 is covered by octalEscape
         // so it isn't listed here.

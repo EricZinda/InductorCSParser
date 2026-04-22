@@ -1,8 +1,14 @@
+using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
+// Matches one token if it's a single rune that belongs to the given
+// RuneSet. Under GraphemeLexer a multi-rune grapheme (skin-toned
+// emoji, ZWJ sequences, CJK + combining mark) fails because it isn't
+// a single code point. EOF also fails. Pairs with RuneNotInRule for
+// character-class matching.
 internal sealed class RuneInRule : Rule
 {
     private readonly RuneSet _set;
@@ -15,13 +21,13 @@ internal sealed class RuneInRule : Rule
     // iterating on a grammar, not just for one-off debug runs.
     private readonly string _setRendered;
 
-    public RuneInRule(RuneSet runeSet) : base(FlattenType.None)
+    public RuneInRule(RuneSet runeSet) : base(FlattenType.Preserve)
     {
         _set = runeSet;
         _setRendered = runeSet.ToString();
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
+    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         using var transaction = lexer.BeginTransaction();
         var token = lexer.Read();
@@ -38,15 +44,20 @@ internal sealed class RuneInRule : Rule
         }
         TraceSuccess(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted one of '{_setRendered}'");
         transaction.Commit();
-        if (discard)
+        if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
-        // Leaf symbol carries the rune as its id so ToString and tree shape match
-        // the C++ behavior where character symbols have id == code point.
-        return new Symbol(new SymbolId(token.RuneValue), FlattenType, token.Memory);
+        var leafSymbol = new Symbol(new SymbolId(token.RuneValue), FlattenType, token.Memory);
+        if (effectiveFlattenType == FlattenType.Flatten)
+        {
+            outputSymbols!.Add(leafSymbol);
+            return Symbol.Discarded;
+        }
+        return leafSymbol;
     }
 
-    internal override RuleStart ComputeRuleStart()
+    // See the FirstConsumedRunes / Advance field docs on Rule for more information on what this does.
+    internal override RuleStartRequirements ComputeRuleStart()
     {
-        return new RuleStart(_set, Advance.Always);
+        return new RuleStartRequirements(_set, Advance.Always);
     }
 }

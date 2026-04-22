@@ -42,14 +42,14 @@ public class StringCharsRuleTests
     {
         // First rune is the stopper, so the scan exits immediately
         // without consuming. Same semantics as ZeroOrMore: zero
-        // matches is still a successful parse. Wrap it with Char('|')
+        // matches is still a successful parse. Wrap it with Token('|')
         // so the outer rule consumes the full input and the EOF check
         // passes.
-        var rule = InductorParser.Rules.And(StopOnPipe(), Char('|'));
+        var rule = InductorParser.Rules.And(StopOnPipe(), Token('|'));
         var result = rule.Parse("|");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        // The StringChars leaf contributes an empty slice; Char('|')
+        // The StringChars leaf contributes an empty slice; Token('|')
         // is Delete so it drops out of the tree. Concatenated text is
         // "".
         Assert.That(result.Tree!.ToString(), Is.EqualTo(""));
@@ -59,10 +59,10 @@ public class StringCharsRuleTests
     public void StringChars_stops_at_first_stopper_rune_without_consuming_it()
     {
         // "abc|rest" scans 'a', 'b', 'c' as body, stops at '|' without
-        // consuming it. The surrounding Char('|') then consumes the
+        // consuming it. The surrounding Token('|') then consumes the
         // '|' itself. Tree text is "abc" (the body) plus "" (the
         // Delete-typed delimiter) = "abc".
-        var rule = InductorParser.Rules.And(StopOnPipe(), Char('|'));
+        var rule = InductorParser.Rules.And(StopOnPipe(), Token('|'));
         var result = rule.Parse("abc|");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -181,7 +181,7 @@ public class StringCharsRuleTests
         var start = Literal("$$");
         var end = RuneIn(RuneSet.Ascii.Letters);
         var body = StringChars(RuneSet.Runes("|"), start, end);
-        var rule = InductorParser.Rules.And(body, Char('|'));
+        var rule = InductorParser.Rules.And(body, Token('|'));
 
         var result = rule.Parse("abc$xyz|");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -217,8 +217,8 @@ public class StringCharsRuleTests
         // uses for the same reason. A per-case timeout would be a
         // belt-and-suspenders backstop, but the core assertion here
         // is just "Parse returns in bounded time."
-        var zeroWidthStart = Optional(Char('z'));  // matches empty if 'z' isn't next
-        var zeroWidthEnd = Optional(Char('z'));
+        var zeroWidthStart = Optional(Token('z'));  // matches empty if 'z' isn't next
+        var zeroWidthEnd = Optional(Token('z'));
         var rule = StringChars(RuneSet.Runes("|"), zeroWidthStart, zeroWidthEnd);
 
         // Input contains no 'z' and no '|'. Every iteration would see
@@ -237,7 +237,7 @@ public class StringCharsRuleTests
     {
         // Starts are '$' OR '?'. Stopper is '|'. Demonstrates that
         // escapeStart can be a sub-rule, not just a fixed literal.
-        var start = Or(Char('$'), Char('?'));
+        var start = Or(Token('$'), Token('?'));
         var end = RuneIn(RuneSet.Ascii.Letters);
         var rule = StringChars(RuneSet.Runes("|"), start, end);
 
@@ -324,11 +324,11 @@ public class StringCharsRuleTests
         // "abc" + <surrogate> + "xyz|"
         // StringChars scans 'a', 'b', 'c' as body. At position 3 it
         // peeks the surrogate: TryPeekRune returns false, the scan
-        // breaks without throwing or looping. Outer Char('|') then
+        // breaks without throwing or looping. Outer Token('|') then
         // tries to match at position 3, can't match a surrogate, so
         // the whole parse fails with ErrorCharIndex pointing at 3.
         string input = "abc" + new string(loneSurrogate, 1) + "xyz|";
-        var rule = InductorParser.Rules.And(StopOnPipe(), Char('|'));
+        var rule = InductorParser.Rules.And(StopOnPipe(), Token('|'));
 
         var result = rule.Parse(input, NoNormalize);
 

@@ -88,14 +88,14 @@ public class RuneNotInRuleTests
         // A CRLF grapheme passes RuneNotIn unconditionally (it isn't a
         // single rune, so it can't be in any single-rune set), which
         // means the sweep silently consumes the CRLF and the trailing
-        // Char('\n') terminator then fails. For real line-based grammars,
+        // Token('\n') terminator then fails. For real line-based grammars,
         // add Literal("\r\n") to both the stop set and the terminator.
         // See docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer".
         var rule = And(
             ZeroOrMore(RuneNotIn(RuneSet.Single('\n'))),
-            Char('\n'));
+            Token('\n'));
 
-        // PreserveFlattenWrappers keeps the trailing Char('\n') in the
+        // PreserveFlattenWrappers keeps the trailing Token('\n') in the
         // tree so Tree.ToString reproduces the full matched line.
         var result = rule.Parse("hello world\n",
             new ParseOptions { PreserveFlattenWrappers = true });

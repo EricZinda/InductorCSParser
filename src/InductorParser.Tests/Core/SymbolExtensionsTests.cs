@@ -14,7 +14,7 @@ public class SymbolExtensionsTests
     [Test]
     public void PrintTree_renders_named_root_and_character_leaves()
     {
-        var word = OneOrMore(RuneIn(RuneSet.Letters)).As("word");
+        var word = OneOrMore(RuneIn(RuneSet.Letters)).As("word").Flatten(FlattenType.Preserve);
         var result = word.Parse("hi");
         Assert.That(result.Success, Is.True);
 
@@ -30,11 +30,11 @@ public class SymbolExtensionsTests
     public void PrintTree_renders_unnamed_composite_with_class_name()
     {
         // Anonymous And rule, no user name, so the root renders with
-        // the class-derived "And" label. Char leaves default to
+        // the class-derived "And" label. Token leaves default to
         // FlattenType.Delete and are filtered at parse time under normal
         // parsing; PreserveFlattenWrappers keeps them so PrintTree sees
         // a shape matching the grammar one-to-one.
-        var pair = And(Char('a'), Char('1'));
+        var pair = And(Token('a'), Token('1'));
         var result = pair.Parse("a1", new ParseOptions { PreserveFlattenWrappers = true });
         Assert.That(result.Success, Is.True);
 
@@ -50,11 +50,11 @@ public class SymbolExtensionsTests
     public void PrintTree_indents_nested_subtrees()
     {
         // Two levels of named And wrappers so the printed tree has real
-        // depth beyond just a root plus leaves. Char leaves default to
+        // depth beyond just a root plus leaves. Token leaves default to
         // FlattenType.Delete; PreserveFlattenWrappers keeps them so the
-        // printed tree shows both the composites and their char children.
-        var first = And(Char('a'), Char('b')).As("first");
-        var second = And(Char('c'), Char('d')).As("second");
+        // printed tree shows both the composites and their Token children.
+        var first = And(Token('a'), Token('b')).As("first");
+        var second = And(Token('c'), Token('d')).As("second");
         var pair = And(first, second).As("pair");
         var result = pair.Parse("abcd", new ParseOptions { PreserveFlattenWrappers = true });
         Assert.That(result.Success, Is.True);

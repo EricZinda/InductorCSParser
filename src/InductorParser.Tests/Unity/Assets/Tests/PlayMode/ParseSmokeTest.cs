@@ -28,15 +28,15 @@ namespace InductorParser.PlayModeTests
                 Float().Flatten(FlattenType.Flatten),
                 Integer().Flatten(FlattenType.Flatten),
                 OneOrMore(RuneIn(RuneSet.Letters))
-            ).Flatten(FlattenType.None);
+            ).Flatten(FlattenType.Preserve);
             var document = And(
                 settingName,
                 OptionalWhitespace(),
-                Char('='),
+                Token('='),
                 OptionalWhitespace(),
                 settingValue,
                 OptionalWhitespace(),
-                Char(';')
+                Token(';')
             );
 
             var result = document.Parse("setting = 5;");
@@ -56,7 +56,7 @@ namespace InductorParser.PlayModeTests
             // dispatch. Grammar mirrors a minimal JSON string body.
             var escapeEnd = RuneIn(RuneSet.Runes("\"\\/bfnrt"));
             var body = StringChars(RuneSet.Runes("\""), new Rune('\\'), escapeEnd);
-            var rule = And(Char('"'), body, Char('"'));
+            var rule = And(Token('"'), body, Token('"'));
 
             var result = rule.Parse("\"hello\\n\"");
 
@@ -69,7 +69,7 @@ namespace InductorParser.PlayModeTests
         {
             var rule = And(
                 OneOrMore(RuneIn(RuneSet.Letters)),
-                Char(';').WithError("expected ';'")
+                Token(';').WithError("expected ';'")
             );
 
             var result = rule.Parse("abc1");

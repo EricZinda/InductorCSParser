@@ -17,15 +17,15 @@ public class LateBoundRuleTests
     {
         var expression = new LateBoundRule("expression");
 
-        var term = Or(Integer(), And(Char('('), expression, Char(')')));
-        var sum = And(term, ZeroOrMore(And(Char('+'), term)));
+        var term = Or(Integer(), And(Token('('), expression, Token(')')));
+        var sum = And(term, ZeroOrMore(And(Token('+'), term)));
 
         expression.Bind(sum);
         return sum;
     }
 
     // Tree.ToString() assertions use PreserveFlattenWrappers so the
-    // Char('+') / Char('(') / Char(')') leaves (default FlattenType.Delete)
+    // Token('+') / Token('(') / Token(')') leaves (default FlattenType.Delete)
     // stay in the tree and their text appears in the concatenated view.
     private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
 
@@ -67,7 +67,7 @@ public class LateBoundRuleTests
     {
         var expression = new LateBoundRule("expression");
 
-        var term = Or(Integer(), And(Char('('), expression, Char(')')));
+        var term = Or(Integer(), And(Token('('), expression, Token(')')));
         // Forgot the .Bind(...) call.
 
         var ex = Assert.Throws<InvalidOperationException>(() => term.Compile());
@@ -82,7 +82,7 @@ public class LateBoundRuleTests
         // is supposed to auto-compile on first call, which should surface
         // the unbound-rule error before any parsing starts.
         var expression = new LateBoundRule("expression");
-        var term = Or(Integer(), And(Char('('), expression, Char(')')));
+        var term = Or(Integer(), And(Token('('), expression, Token(')')));
 
         Assert.Throws<InvalidOperationException>(() => term.Parse("1"));
     }
@@ -97,7 +97,7 @@ public class LateBoundRuleTests
 
         Assert.Throws<InvalidOperationException>(() => expression.As("someOtherName"));
         Assert.Throws<InvalidOperationException>(() => expression.As(new SymbolId(SymbolRanges.CustomRangeStart + 1)));
-        Assert.Throws<InvalidOperationException>(() => expression.Flatten(FlattenType.None));
+        Assert.Throws<InvalidOperationException>(() => expression.Flatten(FlattenType.Preserve));
         Assert.Throws<InvalidOperationException>(() => expression.WithError("Expected an expression"));
     }
 

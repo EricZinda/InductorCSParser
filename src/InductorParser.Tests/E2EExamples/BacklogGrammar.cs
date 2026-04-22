@@ -16,9 +16,9 @@ namespace InductorParser.Tests;
 // The first five are anchored (^...$) so they map to an And(...) ending
 // in Eof(). Paragraph is unanchored — JS .test() returns true if the
 // pattern occurs anywhere. The PEG equivalent scans forward with
-// And(ZeroOrMore(And(Not(target), AnyChar())), target, ZeroOrMore(AnyChar()))
+// And(ZeroOrMore(And(Not(target), AnyToken())), target, ZeroOrMore(AnyToken()))
 // and relies on lexer.IsEof for Parse success, so the trailing
-// ZeroOrMore(AnyChar()) isn't decorative — it's what lets success happen
+// ZeroOrMore(AnyToken()) isn't decorative — it's what lets success happen
 // after the target fires mid-string.
 //
 // One subtle point on the paragraph split. JS regex \n\s*\n is greedy
@@ -43,8 +43,8 @@ public static class BacklogGrammar
 
     // ^#(?!#)\s?(.*)$
     public static readonly Rule H1Heading = And(
-        Char('#'),
-        Not(Char('#')),
+        Token('#'),
+        Not(Token('#')),
         OptionalOneWhitespace,
         RestOfLine,
         Eof()
@@ -53,7 +53,7 @@ public static class BacklogGrammar
     // ^##(?!#)\s?(.*)$
     public static readonly Rule H2Heading = And(
         Literal("##"),
-        Not(Char('#')),
+        Not(Token('#')),
         OptionalOneWhitespace,
         RestOfLine,
         Eof()
@@ -76,7 +76,7 @@ public static class BacklogGrammar
     // ^[-*+]( [-*+]){2,}$
     public static readonly Rule HrSpaced = And(
         RuneIn("-*+"),
-        NOrMore(And(Char(' '), RuneIn("-*+")), 2),
+        NOrMore(And(Token(' '), RuneIn("-*+")), 2),
         Eof()
     );
 
@@ -86,32 +86,32 @@ public static class BacklogGrammar
     //
     // WARNING: LF-only on purpose. The source regex in MergeableBacklog
     // is "\n\s*\n", which in JS regex IS CRLF-agnostic (\s matches \r
-    // and \n both), but under the default GraphemeLexer the two Char('\n')
+    // and \n both), but under the default GraphemeLexer the two Token('\n')
     // anchors below reject CRLF line endings — "\r\n" is one grapheme
     // cluster whose content is "\r\n", not "\n". The fixtures in
     // MergeableBacklog's corpus are all LF-terminated, so the port stays
     // faithful by matching only LF. If this rule ever parses real
     // Windows-authored Markdown, it will need to add Literal("\r\n")
-    // anchors alongside the Char('\n') ones. See
+    // anchors alongside the Token('\n') ones. See
     // docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer".
     private static readonly RuneSet NonNewlineWhitespace =
         RuneSet.Whitespace & ~RuneSet.Runes("\n\r");
 
     private static readonly Rule ParagraphTarget = And(
-        Char('\n'),
+        Token('\n'),
         ZeroOrMore(RuneIn(NonNewlineWhitespace)),
-        Char('\n')
+        Token('\n')
     );
 
     // StringChars with a rule-based stopper scans forward peeking
     // ParagraphTarget on each rune; when it matches, the peek rolls
     // back and StringChars returns, leaving the target for the outer
     // And to consume. Semantically identical to the manual
-    // ZeroOrMore(And(Not(target), AnyChar())) idiom, one rule instead
+    // ZeroOrMore(And(Not(target), AnyToken())) idiom, one rule instead
     // of three.
     public static readonly Rule ParagraphSplit = And(
         StringChars(ParagraphTarget),
         ParagraphTarget,
-        ZeroOrMore(AnyChar())
+        ZeroOrMore(AnyToken())
     );
 }

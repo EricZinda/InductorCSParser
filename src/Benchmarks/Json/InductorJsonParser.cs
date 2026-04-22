@@ -37,8 +37,13 @@ public static class InductorJsonParser
     {
         var simpleEscape = RuneIn(RuneSet.Runes("\"\\/bfnrt"));
         var hexDigit = RuneIn(RuneSet.Ascii.Digits | RuneSet.Range('a', 'f') | RuneSet.Range('A', 'F'));
-        var unicodeEscape = And(Char('u'), hexDigit, hexDigit, hexDigit, hexDigit);
-        var escapeEnd = Or(simpleEscape, unicodeEscape);
+        var unicodeEscape = And(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
+        // Delete-typed so StringCharsRule's per-escape TryParse call
+        // doesn't force the shim to allocate a scratch List<Symbol>.
+        // StringChars discards escapeEnd's Symbol anyway (it emits a
+        // single leaf covering the whole string body), so the tree
+        // shape is unchanged.
+        var escapeEnd = Or(simpleEscape, unicodeEscape).Flatten(FlattenType.Delete);
 
         // StringChars collapses the per-character `ZeroOrMore(Or(body,
         // escape))` hot loop into one rule that scans the whole string
@@ -50,38 +55,38 @@ public static class InductorJsonParser
         // transaction work for the body chars that dominate typical
         // JSON payloads.
         var stringBody = StringChars(RuneSet.Runes("\""), new Rune('\\'), escapeEnd);
-        JsonString = And(Char('"'), stringBody, Char('"')).As("string");
+        JsonString = And(Token('"'), stringBody, Token('"')).As("string");
 
         var value = new LateBoundRule("value");
 
         JsonMember = And(
             JsonString,
             OptionalWhitespace(),
-            Char(':'),
+            Token(':'),
             OptionalWhitespace(),
             value
         ).As("member");
 
         JsonObject = And(
-            Char('{'),
+            Token('{'),
             OptionalWhitespace(),
             Optional(And(
                 JsonMember,
-                ZeroOrMore(And(OptionalWhitespace(), Char(','), OptionalWhitespace(), JsonMember))
+                ZeroOrMore(And(OptionalWhitespace(), Token(','), OptionalWhitespace(), JsonMember))
             )),
             OptionalWhitespace(),
-            Char('}')
+            Token('}')
         ).As("object");
 
         JsonArray = And(
-            Char('['),
+            Token('['),
             OptionalWhitespace(),
             Optional(And(
                 value,
-                ZeroOrMore(And(OptionalWhitespace(), Char(','), OptionalWhitespace(), value))
+                ZeroOrMore(And(OptionalWhitespace(), Token(','), OptionalWhitespace(), value))
             )),
             OptionalWhitespace(),
-            Char(']')
+            Token(']')
         ).As("array");
 
         var valueBody = Or(JsonString, JsonObject, JsonArray);
@@ -94,7 +99,7 @@ public static class InductorJsonParser
     public static ParseResult Parse(string input) => Json.Parse(input, _options);
 
     // Round-trip variant used by the spot-check. Parse-time Delete filtering
-    // would drop the JSON delimiters (Char('{'), '}', ',', ':', '"') from
+    // would drop the JSON delimiters (Token('{'), '}', ',', ':', '"') from
     // the tree, so Tree.ToString() on a normally-parsed value returns just
     // the concatenated non-delimiter content rather than the original
     // input. PreserveFlattenWrappers keeps every grammar node in the tree

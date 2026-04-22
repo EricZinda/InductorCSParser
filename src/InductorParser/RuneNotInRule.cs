@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
@@ -20,13 +21,13 @@ internal sealed class RuneNotInRule : Rule
     private readonly RuneSet _set;
     private readonly string _setRendered;
 
-    public RuneNotInRule(RuneSet runeSet) : base(FlattenType.None)
+    public RuneNotInRule(RuneSet runeSet) : base(FlattenType.Preserve)
     {
         _set = runeSet;
         _setRendered = runeSet.ToString();
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
+    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         using var transaction = lexer.BeginTransaction();
         var token = lexer.Read();
@@ -49,18 +50,21 @@ internal sealed class RuneNotInRule : Rule
         }
         TraceSuccess(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted one not in '{_setRendered}'");
         transaction.Commit();
-        if (discard)
+        if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
-        // When the token is one rune the Symbol's id is that rune's code
-        // point, matching RuneInRule's leaf shape. For multi-rune tokens
-        // (grapheme clusters) there is no single code point to pin, so the
-        // rule's Compile-assigned id is used instead.
         SymbolId leafId = runeValue >= 0 ? new SymbolId(runeValue) : Id;
-        return new Symbol(leafId, FlattenType, token.Memory);
+        var leafSymbol = new Symbol(leafId, FlattenType, token.Memory);
+        if (effectiveFlattenType == FlattenType.Flatten)
+        {
+            outputSymbols!.Add(leafSymbol);
+            return Symbol.Discarded;
+        }
+        return leafSymbol;
     }
 
-    internal override RuleStart ComputeRuleStart()
+    // See the FirstConsumedRunes / Advance field docs on Rule for more information on what this does.
+    internal override RuleStartRequirements ComputeRuleStart()
     {
-        return new RuleStart(~_set, Advance.Always);
+        return new RuleStartRequirements(~_set, Advance.Always);
     }
 }

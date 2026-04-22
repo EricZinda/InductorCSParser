@@ -39,7 +39,7 @@ public static class PrologGrammar
     // forcing callers to switch the lexer via ParseOptions.
     //
     // See docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer" for the
-    // full explanation of why RuneIn / RuneNotIn / Char('\n') all fail
+    // full explanation of why RuneIn / RuneNotIn / Token('\n') all fail
     // on CRLF input and the three-anti-patterns-to-avoid list.
     private static readonly Rule LineBreak = Or(
         Literal("\r\n"),
@@ -51,9 +51,9 @@ public static class PrologGrammar
     // Both bodies use StringChars with a rule-based stopper — it peeks
     // the stopper on each rune and rolls back, so the terminator is
     // left for the surrounding And to consume. StringChars replaces
-    // the manual ZeroOrMore(And(Not(stop), AnyChar())) idiom with a
+    // the manual ZeroOrMore(And(Not(stop), AnyToken())) idiom with a
     // tight single-rule scan that returns one leaf Symbol over the
-    // matched body slice.
+    // matched body text.
     //
     // The line-comment body specifically needs the Rule-stopper form
     // (not RuneIn) because under GraphemeLexer a CRLF grapheme is
@@ -62,7 +62,7 @@ public static class PrologGrammar
     // nothing to match.
     public static readonly Rule Comment = Or(
         And(
-            Char('%'),
+            Token('%'),
             StringChars(LineBreak),
             Or(
                 OneOrMore(LineBreak),
@@ -100,19 +100,19 @@ public static class PrologGrammar
         Float(),
         Integer(),
         OneOrMore(RuneIn(MathSymbolChars)),
-        Char('!'),
+        Token('!'),
         And(
-            Char('"'),
+            Token('"'),
             StringChars(RuneSet.Runes("\"")),
-            Char('"')
+            Token('"')
         ),
         And(
-            Char('\''),
+            Token('\''),
             StringChars(RuneSet.Runes("'")),
-            Char('\'')
+            Token('\'')
         ),
         And(
-            Or(RuneIn(LetterChars), Char('-')),
+            Or(RuneIn(LetterChars), Token('-')),
             ZeroOrMore(RuneIn(IdentifierTailChars))
         )
     );
@@ -120,7 +120,7 @@ public static class PrologGrammar
     // Variable body shared between both flavors: starts with '_', then
     // zero-or-more identifier-tail chars. "_foo", "_", "_X123-Y".
     private static readonly Rule UnderscoreVariable = And(
-        Char('_'),
+        Token('_'),
         ZeroOrMore(RuneIn(IdentifierTailChars))
     );
 
@@ -136,7 +136,7 @@ public static class PrologGrammar
     // name itself is scanned, which sidesteps the "is this capitalized?"
     // lookahead that standard Prolog needs.
     public static readonly Rule HtnVariableRule = And(
-        Char('?'),
+        Token('?'),
         Atom
     );
 
@@ -175,13 +175,13 @@ public static class PrologGrammar
             termForward,
             OptionalWhitespace,
             ZeroOrMore(And(
-                Char(','),
+                Token(','),
                 OptionalWhitespace,
                 termForward,
                 OptionalWhitespace
             )),
             Optional(And(
-                Char('|'),
+                Token('|'),
                 OptionalWhitespace,
                 termForward,
                 OptionalWhitespace
@@ -195,10 +195,10 @@ public static class PrologGrammar
         var list = Or(
             Literal("[]"),
             And(
-                Char('['),
+                Token('['),
                 OptionalWhitespace,
                 termList,
-                Char(']')
+                Token(']')
             )
         );
 
@@ -217,11 +217,11 @@ public static class PrologGrammar
             Not(variableFlavorRule),
             Atom,
             Optional(And(
-                Char('('),
+                Token('('),
                 OptionalWhitespace,
                 Optional(termList),
                 OptionalWhitespace,
-                Char(')')
+                Token(')')
             ))
         );
 
@@ -239,7 +239,7 @@ public static class PrologGrammar
             functor,
             OptionalWhitespace,
             ZeroOrMore(And(
-                Char(','),
+                Token(','),
                 OptionalWhitespace,
                 functor,
                 OptionalWhitespace
@@ -266,7 +266,7 @@ public static class PrologGrammar
             OptionalWhitespace,
             functorList,
             OptionalWhitespace,
-            Char('.'),
+            Token('.'),
             OptionalWhitespace,
             Eof()
         );
@@ -282,7 +282,7 @@ public static class PrologGrammar
                 OptionalWhitespace,
                 Or(rule, functor, list),
                 OptionalWhitespace,
-                Char('.'),
+                Token('.'),
                 OptionalWhitespace
             )),
             OptionalWhitespace,

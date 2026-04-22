@@ -63,16 +63,16 @@ public class RuneInRuleTests
     [Test]
     public void RuneIn_mismatch_after_successful_matches_points_at_first_bad_char()
     {
-        // OneOrMore(Letters) commits "abc" up to offset 3. Then Char(';')
+        // OneOrMore(Letters) commits "abc" up to offset 3. Then Token(';')
         // runs at offset 3, reads '1', and records its own WithError at
         // pre-read offset 3. That's deeper than the letter's WithError
         // (which is at offset 3 too, from the OneOrMore's terminating
         // attempt, but recorded first). First-writer at equal depth wins.
         //
-        // To make the test unambiguous we only put a WithError on Char(';')
+        // To make the test unambiguous we only put a WithError on Token(';')
         // so there's no contention.
         var rule = And(OneOrMore(RuneIn(RuneSet.Letters)),
-                       Char(';').WithError("expected ';'"));
+                       Token(';').WithError("expected ';'"));
 
         var result = rule.Parse("abc1");
 

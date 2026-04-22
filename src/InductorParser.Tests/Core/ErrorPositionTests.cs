@@ -58,7 +58,7 @@ public class ErrorPositionTests
     // newlines and the outer Eof fails at the offset of the first 'X' —
     // which is where the tests below want the deepest failure recorded.
     //
-    // Library doesn't yet ship RuneNotIn / AnyChar, so the set is spelled
+    // Library doesn't yet ship RuneNotIn / AnyToken, so the set is spelled
     // out explicitly. Tests that need a non-'a' prefix char inline their
     // own grammar.
     private static Rule AtFailureRule() =>
@@ -74,7 +74,7 @@ public class ErrorPositionTests
     [Test]
     public void Success_has_zero_positions_and_line_zero_column_zero()
     {
-        var rule = And(Char('a'), Eof());
+        var rule = And(Token('a'), Eof());
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True);
@@ -125,7 +125,7 @@ public class ErrorPositionTests
         // lands on the first non-'a' char. Input "aa\n" fails at offset 2
         // (the '\n' itself). '\n' is the line terminator; the index that
         // lands ON it reports the line that just ended.
-        var rule = And(OneOrMore(Char('a')), Eof());
+        var rule = And(OneOrMore(Token('a')), Eof());
         var result = rule.Parse("aa\n");
 
         Assert.That(result.Success, Is.False);
@@ -165,9 +165,9 @@ public class ErrorPositionTests
         // attribute the '\n' to the prior line so the caller gets line 0
         // column 3 rather than some negative-column nonsense.
         var rule = And(
-            Char('a'),
-            Char('a'),
-            Char('\r'),
+            Token('a'),
+            Token('a'),
+            Token('\r'),
             Eof());
         var result = rule.Parse("aa\r\n", new ParseOptions { InputUnit = InputUnit.Rune });
 
@@ -226,10 +226,10 @@ public class ErrorPositionTests
     public void Rune_index_collapses_surrogate_pair_to_one_rune()
     {
         // Guitar emoji (one rune, two UTF-16 chars) then 'X'. The grammar
-        // accepts OneOrMore(Char(guitar)) followed by Eof; fails on 'X'
+        // accepts OneOrMore(Token(guitar)) followed by Eof; fails on 'X'
         // at char offset 2 (past the two UTF-16 halves of the guitar),
         // which is one rune in.
-        var rule = And(OneOrMore(Char(GuitarGrapheme)), Eof());
+        var rule = And(OneOrMore(Token(GuitarGrapheme)), Eof());
         var result = rule.Parse(GuitarGrapheme + "X");
 
         Assert.That(result.Success, Is.False);
@@ -251,7 +251,7 @@ public class ErrorPositionTests
     public void Grapheme_index_collapses_supplementary_rune_to_one_grapheme()
     {
         // Guitar emoji is one grapheme and two UTF-16 chars.
-        var rule = And(OneOrMore(Char(GuitarGrapheme)), Eof());
+        var rule = And(OneOrMore(Token(GuitarGrapheme)), Eof());
         var result = rule.Parse(GuitarGrapheme + "X");
 
         Assert.That(result.Success, Is.False);
@@ -271,7 +271,7 @@ public class ErrorPositionTests
         // lexer. The default NFC would compose to a one-char grapheme and
         // the rune/grapheme counts the test is demonstrating wouldn't
         // diverge anymore.
-        var rule = And(OneOrMore(Char(LatinEAcuteGrapheme)), Eof());
+        var rule = And(OneOrMore(Token(LatinEAcuteGrapheme)), Eof());
         var result = rule.Parse(LatinEAcuteGrapheme + "X",
             new ParseOptions { NormalizeInput = null });
 
@@ -285,13 +285,13 @@ public class ErrorPositionTests
     public void EOF_failure_reports_line_and_column_of_virtual_position()
     {
         // Grammar consumes five specific chars then requires a sixth.
-        // Input "aa\naa" is five chars, so the Char(';') at the end hits
+        // Input "aa\naa" is five chars, so the Token(';') at the end hits
         // EOF at position 5: on line 1 ("aa"), column 2 (one past the
         // last 'a' in 0-based terms).
         var rule = And(
-            Char('a'), Char('a'), Char('\n'),
-            Char('a'), Char('a'),
-            Char(';'));
+            Token('a'), Token('a'), Token('\n'),
+            Token('a'), Token('a'),
+            Token(';'));
         var result = rule.Parse("aa\naa");
 
         Assert.That(result.Success, Is.False);

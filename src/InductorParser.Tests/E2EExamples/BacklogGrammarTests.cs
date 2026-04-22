@@ -17,7 +17,7 @@ namespace InductorParser.Tests;
 //    verdict from reference regex and grammar.
 // 2. Timing. Same corpus, looped, wall-clock under Stopwatch. Grammar
 //    must come in within 2x of the compiled regex. Ignored today — the
-//    same combinator overhead that puts ChordGrammar at ~17-18x applies
+//    same composite overhead that puts ChordGrammar at ~17-18x applies
 //    here, so we report ratios and leave the hard gate for the Or
 //    required-runes dispatch work tracked separately.
 [TestFixture]
@@ -239,7 +239,7 @@ public class BacklogGrammarTests
     //   Paragraph: 28x  -> 20-45x
     // Dispatch helps most when an Or / composite has many branches and a
     // disjoint first-char set. These rules are simpler (one RuneIn or one
-    // Char at the head), so the combinator transaction overhead on the
+    // Token at the head), so the composite transaction overhead on the
     // inner path is what dominates — same architectural bottleneck as
     // ChordGrammar's remaining gap. A separate backlog item will target
     // that tier (lazy transactions, allocation-free empty matches,

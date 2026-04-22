@@ -12,7 +12,7 @@
 //         [InterpolatedStringHandlerArgument("", nameof(level))]
 //         TraceInterpolatedStringHandler message)
 //
-// A call site like
+// A call like
 //
 //     lexer.Trace(TraceLevel.Diagnostic, "And", TraceOutcome.Success,
 //                 $"found {count}")
@@ -48,7 +48,7 @@
 // invocation. See the cost-when-off comment block on Lexer.Trace
 // for why the call itself stays cheap.
 //
-// Same story as InterpolatedStringHandlerAttribute.cs next door:
+// Same story as InterpolatedStringHandlerAttribute.cs:
 // netstandard2.1 doesn't ship this type, so we polyfill. The #if
 // gate keeps the polyfill out of the net8.0 build where the BCL
 // provides the real one. Marking it `internal` prevents public

@@ -1,14 +1,18 @@
 using System;
+using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
+// Succeeds only at end of input. Consumes nothing either way. Used as
+// the last element of a grammar's top-level rule to assert that the
+// parse consumed the entire input rather than stopping early.
 internal sealed class EofRule : Rule
 {
     public EofRule() : base(FlattenType.Delete) { }
 
-    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
+    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         if (!lexer.IsEof)
         {
@@ -21,16 +25,23 @@ internal sealed class EofRule : Rule
             return null;
         }
         TraceSuccess(lexer, $"");
-        if (discard)
-            return Symbol.Discarded;
-        return new Symbol(Id, FlattenType, Array.Empty<Symbol>());
+        // Zero-width: no children to merge. Delete and Flatten both
+        // return Discarded (nothing to add anywhere). Only Preserve
+        // builds the empty-children marker Symbol.
+        return effectiveFlattenType == FlattenType.Preserve
+            ? new Symbol(Id, FlattenType, Array.Empty<Symbol>())
+            : Symbol.Discarded;
     }
 
-    internal override RuleStart ComputeRuleStart()
+    // See the FirstConsumedRunes / Advance field docs on Rule for more information on what this does.
+    internal override RuleStartRequirements ComputeRuleStart()
     {
+        // We need to return *all* characters that *might* be consumed as the first charactr
+        // Then, we need to say if the first character will Always/Sometimes/Never be consumed
+        // For Eof:
         // Eof only matches at end-of-input and never advances, so Advance
         // is Never. No rune satisfies it either (EOF isn't a rune), so
         // FirstConsumedRunes is Empty.
-        return new RuleStart(RuneSet.Empty, Advance.Never);
+        return new RuleStartRequirements(RuneSet.Empty, Advance.Never);
     }
 }

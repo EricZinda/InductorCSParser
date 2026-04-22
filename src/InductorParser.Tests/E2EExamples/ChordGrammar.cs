@@ -27,7 +27,7 @@ namespace InductorParser.Tests;
 // in practice here (the special symbols ♯♭°øΔ only appear in their printed
 // form in real chord notation). Every case-folded keyword, including
 // single-letter ones like "m" and "o", goes through the library's
-// LiteralIgnoreAsciiCase primitive so each word is one transaction.
+// LiteralIgnoreAsciiCase leaf so each word is one transaction.
 public static class ChordGrammar
 {
     public static readonly Rule Chord = Build();
@@ -51,9 +51,9 @@ public static class ChordGrammar
             And(LiteralIgnoreAsciiCase("sus"), Optional(RuneIn("24"))),
             LiteralIgnoreAsciiCase("m"),
             LiteralIgnoreAsciiCase("o"),
-            Char('°'),
-            Char('+'),
-            Char('5')
+            Token('°'),
+            Token('+'),
+            Token('5')
         );
 
         // (6|7|9|11|13)?
@@ -62,9 +62,9 @@ public static class ChordGrammar
         var ext1 = Or(
             LiteralIgnoreAsciiCase("11"),
             LiteralIgnoreAsciiCase("13"),
-            Char('6'),
-            Char('7'),
-            Char('9')
+            Token('6'),
+            Token('7'),
+            Token('9')
         );
 
         // (maj|M|Δ|m|ø|°)?
@@ -72,17 +72,17 @@ public static class ChordGrammar
         var quality2 = Or(
             LiteralIgnoreAsciiCase("maj"),
             LiteralIgnoreAsciiCase("m"),
-            Char('Δ'),
-            Char('ø'),
-            Char('°')
+            Token('Δ'),
+            Token('ø'),
+            Token('°')
         );
 
         // (7|9|11|13)?
         var ext2 = Or(
             LiteralIgnoreAsciiCase("11"),
             LiteralIgnoreAsciiCase("13"),
-            Char('7'),
-            Char('9')
+            Token('7'),
+            Token('9')
         );
 
         // (add[2469]|add1[13]|b5|#5|b9|#9|#11|b13|no[357]|sus[24]?|alt)*
@@ -104,7 +104,7 @@ public static class ChordGrammar
         );
 
         // (\/[A-Ga-g][#b♯♭x]*)?
-        var slashBass = And(Char('/'), root, ZeroOrMore(accidental));
+        var slashBass = And(Token('/'), root, ZeroOrMore(accidental));
 
         return And(
             root,

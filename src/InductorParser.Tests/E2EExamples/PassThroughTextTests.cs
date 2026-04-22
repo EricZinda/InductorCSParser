@@ -5,7 +5,7 @@ using static InductorParser.Rules;
 namespace InductorParser.Tests;
 
 // End-to-end checks that the pass-through-text primitives
-// (RuneNotIn, AnyChar, Not, Peek) compose into the two idioms the
+// (RuneNotIn, AnyToken, Not, Peek) compose into the two idioms the
 // backlog called out: delimiter-based stops and rule-based stops.
 // If one of the primitives regresses, a unit test will fail first;
 // this fixture catches the interaction failures that only show up
@@ -21,7 +21,7 @@ public class PassThroughTextTests
         // naturally from ZeroOrMore stopping when the inner fails.
         //
         // WARNING: this example is LF-only on purpose. Under the default
-        // GraphemeLexer, "\r\n" is one grapheme cluster, so Char('\n')
+        // GraphemeLexer, "\r\n" is one grapheme cluster, so Token('\n')
         // does NOT match a CRLF line ending and RuneNotIn silently
         // swallows the CRLF grapheme as body content. If you are copying
         // this idiom for a line-based grammar that must accept Windows
@@ -30,13 +30,13 @@ public class PassThroughTextTests
         // docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer" for the
         // full pattern.
         var lineComment = And(
-            Char('/'),
-            Char('/'),
+            Token('/'),
+            Token('/'),
             ZeroOrMore(RuneNotIn(RuneSet.Single('\n'))),
-            Char('\n'));
+            Token('\n'));
 
-        // PreserveFlattenWrappers keeps the Char('/') leaves and the
-        // Char('\n') leaf in the tree so Tree.ToString reproduces the
+        // PreserveFlattenWrappers keeps the Token('/') leaves and the
+        // Token('\n') leaf in the tree so Tree.ToString reproduces the
         // full comment text.
         var result = lineComment.Parse("// anything up to the newline\n",
             new ParseOptions { PreserveFlattenWrappers = true });
@@ -54,10 +54,10 @@ public class PassThroughTextTests
         // grapheme like 🎸 passes RuneNotIn because it isn't any single
         // rune in the stop set. The comment body scoops it up cleanly.
         var lineComment = And(
-            Char('/'),
-            Char('/'),
+            Token('/'),
+            Token('/'),
             ZeroOrMore(RuneNotIn(RuneSet.Single('\n'))),
-            Char('\n'));
+            Token('\n'));
 
         var result = lineComment.Parse("// playing \uD83C\uDFB8 tonight\n");
 
@@ -67,15 +67,15 @@ public class PassThroughTextTests
     [Test]
     public void Block_comment_grammar_stops_at_multi_character_terminator()
     {
-        // Rule-based stop: ZeroOrMore(And(Not(stopRule), AnyChar())) is
+        // Rule-based stop: ZeroOrMore(And(Not(stopRule), AnyToken())) is
         // how you express "match until a multi-character terminator
         // would fire." A simple RuneNotIn can't express this because
         // the stop condition spans two characters.
-        var closeMarker = And(Char('*'), Char('/'));
+        var closeMarker = And(Token('*'), Token('/'));
         var blockComment = And(
-            Char('/'),
-            Char('*'),
-            ZeroOrMore(And(Not(closeMarker), AnyChar())),
+            Token('/'),
+            Token('*'),
+            ZeroOrMore(And(Not(closeMarker), AnyToken())),
             closeMarker);
 
         var result = blockComment.Parse("/* body with * inside but not-the-end */",
@@ -94,11 +94,11 @@ public class PassThroughTextTests
         // share a prefix; Peek(Not(letter)) confirms the keyword really
         // ends after "if" before the caller commits.
         var keywordIf = And(
-            Char('i'),
-            Char('f'),
+            Token('i'),
+            Token('f'),
             Peek(Not(RuneIn(RuneSet.Letters))));
 
-        var justIfResult = And(keywordIf, ZeroOrMore(AnyChar())).Parse("if x");
+        var justIfResult = And(keywordIf, ZeroOrMore(AnyToken())).Parse("if x");
         Assert.That(justIfResult.Success, Is.True, justIfResult.ErrorMessage);
 
         var iffyResult = keywordIf.Parse("iffy");

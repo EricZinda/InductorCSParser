@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
@@ -21,10 +22,11 @@ internal sealed class PeekRule : Rule
 
     private Rule Inner => Children[0];
 
-    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
+    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
+        // Lookahead only: inner's result is thrown away.
         using var transaction = lexer.BeginTransaction();
-        var innerResult = Inner.TryParse(lexer);
+        var innerResult = Inner.TryParse(lexer, outputSymbols: null);
         if (innerResult == null)
         {
             TraceFailure(lexer, $"inner did not match");
@@ -32,20 +34,16 @@ internal sealed class PeekRule : Rule
             return null;
         }
         TraceSuccess(lexer, $"inner matched");
-        // The `using` rolls back the lexer on exit (no Commit), so even
-        // though inner advanced the cursor during its TryParse, we're
-        // back where we started. Zero-width success — on the Delete
-        // default path, return the shared sentinel so we don't allocate a
-        // fresh empty Symbol per lookahead.
-        if (discard)
-            return Symbol.Discarded;
-        return new Symbol(Id, FlattenType, Array.Empty<Symbol>());
+        return effectiveFlattenType == FlattenType.Preserve
+            ? new Symbol(Id, FlattenType, Array.Empty<Symbol>())
+            : Symbol.Discarded;
     }
 
-    internal override RuleStart ComputeRuleStart()
+    // See the FirstConsumedRunes / Advance field docs on Rule for more information on what this does.
+    internal override RuleStartRequirements ComputeRuleStart()
     {
         // Zero-width predicate: rolls back regardless of inner result,
-        // never advances the lexer. FirstConsumedRunes is Empty 
-        return new RuleStart(RuneSet.Empty, Advance.Never);
+        // never advances the lexer. FirstConsumedRunes is Empty
+        return new RuleStartRequirements(RuneSet.Empty, Advance.Never);
     }
 }

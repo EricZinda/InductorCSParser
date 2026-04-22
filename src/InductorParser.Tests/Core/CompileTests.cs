@@ -19,7 +19,7 @@ public class CompileTests
         var rule = OneOrMore(RuneIn(RuneSet.Letters));
         rule.Compile();
 
-        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.None));
+        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
     }
 
     [Test]
@@ -57,18 +57,19 @@ public class CompileTests
         Assert.That(ex.Message, Does.Contain("Advance.Never"));
     }
 
-    // Subclass that deliberately violates the RuleStart invariant. Lives
+    // Subclass that deliberately violates the RuleStartRequirements invariant. Lives
     // here and not in the main InductorParser assembly because the check
     // is defensive against authoring mistakes, not behavior any in-tree
     // rule produces. InternalsVisibleTo makes the internal virtual
     // overridable from the test assembly.
     private sealed class InconsistentRuleStartRule : Rule
     {
-        public InconsistentRuleStartRule() : base(FlattenType.None) { }
+        public InconsistentRuleStartRule() : base(FlattenType.Preserve) { }
 
-        internal override Symbol? TryParseRule(Lexer lexer, bool discard) => null;
+        internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, System.Collections.Generic.List<Symbol>? outputSymbols) => null;
 
-        internal override RuleStart ComputeRuleStart()
-            => new RuleStart(RuneSet.Single('x'), Advance.Never);
+        // See RuleStartRequirements for more information on what this does.
+        internal override RuleStartRequirements ComputeRuleStart()
+            => new RuleStartRequirements(RuneSet.Single('x'), Advance.Never);
     }
 }

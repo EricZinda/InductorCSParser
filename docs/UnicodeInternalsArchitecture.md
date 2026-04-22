@@ -80,7 +80,7 @@ After composition normalization (default), most combining-mark cases collapse to
 
 Grammars are written against the `Rule` API and do not know which lexer is driving them. Changing `ParseOptions.InputUnit` swaps the lexer for the whole parse, and the same grammar works either way.
 
-For typical input (ASCII, or text inside the first 65,536 code points with default composition normalization on), the two lexers produce identical token streams and every rule behaves identically. The rules whose behavior *can* diverge are the ones that compare against a token directly: `Char`, `RuneIn`, `RuneNotIn`, `Literal`, `Peek`, `Not`. Composite rules (`And`, `Or`, `OneOrMore`, etc.) only differ by inheritance from a primitive rule inside them.
+For typical input (ASCII, or text inside the first 65,536 code points with default composition normalization on), the two lexers produce identical token streams and every rule behaves identically. The rules whose behavior *can* diverge are the ones that compare against a token directly: `Token`, `RuneIn`, `RuneNotIn`, `Literal`, `Peek`, `Not`. Composite rules (`And`, `Or`, `OneOrMore`, etc.) only differ by inheritance from a leaf inside them.
 
 Where the two lexers actually diverge, the `RuneLexer` behavior is usually the buggy one: it was matching part of a grapheme as if it were a standalone character. A grammar rule that consumes one rune from `👨‍👩‍👧‍👦` matches just the first 👨 under `RuneLexer` and leaves the other six runes (three ZWJs and three people emoji) dangling for subsequent rules to trip over, which is rarely what the grammar author intended. `GraphemeLexer` fixes this by treating the whole sequence as one token. The framing is less "`GraphemeLexer` broke my grammar" and more "`GraphemeLexer` revealed that my grammar was silently wrong on multi-rune input." `RuneLexer` is the right tool when you specifically want to see inside a grapheme (walking combining marks individually, rune-level Unicode category analysis, implementing a Unicode library on top of the parser), not for normal text processing.
 
@@ -90,7 +90,7 @@ Switching the lexer's token type does not force the parser to give up the other 
 
 - **Token index**: how many tokens consumed (graphemes for GraphemeLexer, runes for RuneLexer).
 - **Rune offset**: code-point offset into the input.
-- **Char offset**: UTF-16 code unit offset (matches `string[i]` behavior).
+- **Token offset**: UTF-16 code unit offset (matches `string[i]` behavior).
 
 For GraphemeLexer, the token index is the grapheme count. For RuneLexer, the token index and the rune offset are the same counter. In both cases, all three values are cheap to maintain because the lexer is already walking the input rune by rune internally.
 
@@ -154,7 +154,7 @@ Some Unicode surprises cannot be fixed by choosing a different tokenization. Bot
 
 ## RuneLexer-Specific: Grapheme Matching
 
-If you are running under `RuneLexer` but need one grapheme to act as a single token at specific rules, the library provides a `Grapheme()` rule primitive that consumes runes until the next UAX #29 boundary:
+If you are running under `RuneLexer` but need one grapheme to act as a single token at specific rules, the library provides a `Grapheme()` leaf that consumes runes until the next UAX #29 boundary:
 
 ```csharp
 // In RuneLexer mode, match one grapheme as a single unit at this point.
@@ -169,6 +169,6 @@ Three Unicode-adjacent questions the first real grammar will need to answer.
 
 **Unicode version pinning for GraphemeLexer.** Grapheme boundaries are defined by UAX #29, which Unicode updates with every release (new emoji, new ZWJ rules, occasional boundary changes). `GraphemeLexer` uses `StringInfo.GetTextElementEnumerator`, which pulls the Unicode version from the runtime. Same grammar parsing the same input can produce different trees on different .NET / Unity versions. For most grammars this is tolerable; for a grammar that wants cross-host determinism (a language spec, a shared file format), we would need to bundle our own UAX #29 tables pinned to a specific Unicode version. That is a real maintenance burden to take on but a real need for some callers. Defer until asked.
 
-**Full Unicode case folding.** The ASCII `LiteralIgnoreAsciiCase` primitive covers HTTP headers, SQL keywords, HTML tag names, and most real needs. A full-Unicode version would handle Turkish dotless-i, German `ß`, Greek final sigma, and the rest of the locale-specific edge cases, at the cost of a big lookup table and locale awareness. Add when a grammar actually needs it.
+**Full Unicode case folding.** The ASCII `LiteralIgnoreAsciiCase` leaf covers HTTP headers, SQL keywords, HTML tag names, and most real needs. A full-Unicode version would handle Turkish dotless-i, German `ß`, Greek final sigma, and the rest of the locale-specific edge cases, at the cost of a big lookup table and locale awareness. Add when a grammar actually needs it.
 
 **Grapheme-level character classes.** `RuneClass.Letters` on GraphemeLexer matches single-rune letter graphemes. A more permissive rule ("any grapheme whose base rune is a letter, accepting trailing combining marks as part of the match") would work better for Devanagari and other scripts with genuine multi-rune letter graphemes that have no precomposed form. Requires deciding the semantics once and documenting them; worth doing if a real Devanagari-aware grammar ships.

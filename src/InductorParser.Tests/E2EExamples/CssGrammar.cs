@@ -19,9 +19,9 @@ namespace InductorParser.Tests;
 //   * OneOrMore/ZeroOrMore/Optional            -> OneOrMore/ZeroOrMore/Optional
 //   * AtLeastAndAtMostExpression<X, N, M>      -> BetweenInclusive(X, N, M)
 //   * LiteralExpression<"str">                 -> Literal("str")
-//   * CharacterSymbol<"c">                     -> Char(c)
+//   * CharacterSymbol<"c">                     -> Token(c)
 //   * CharacterSetExceptSymbol<"chars">        -> RuneNotIn("chars")
-//   * NotLiteralExpression<"str">              -> ZeroOrMore(And(Not(Literal("str")), AnyChar()))
+//   * NotLiteralExpression<"str">              -> ZeroOrMore(And(Not(Literal("str")), AnyToken()))
 //   * WhitespaceSymbol / OptionalWhitespaceSymbol -> one-or-more / zero-or-more over WhitespaceChars
 //
 // PEG vs regex ordering: every Or below is written longest-first where
@@ -66,8 +66,8 @@ public static class CssGrammar
 
     // Identifier = (letter | _) (letter | digit | _ | -)*
     public static readonly Rule Identifier = And(
-        Or(RuneIn(LetterChars), Char('_')),
-        ZeroOrMore(Or(RuneIn(LetterOrDigitChars), Char('_'), Char('-')))
+        Or(RuneIn(LetterChars), Token('_')),
+        ZeroOrMore(Or(RuneIn(LetterOrDigitChars), Token('_'), Token('-')))
     );
 
     // Strings can escape the quote character, include a line continuation
@@ -76,38 +76,38 @@ public static class CssGrammar
     // the escaped form in the AST; for accept/reject purposes that
     // reduces to matching the escaped form as a two-rune literal.
     public static readonly Rule DoubleQuotedString = And(
-        Char('"'),
+        Token('"'),
         ZeroOrMore(Or(
             Literal("\\\""),
             Literal("\\\r\n"),
             RuneNotIn("\"")
         )),
-        Char('"')
+        Token('"')
     );
 
     public static readonly Rule SingleQuotedString = And(
-        Char('\''),
+        Token('\''),
         ZeroOrMore(Or(
             Literal("\\'"),
             Literal("\\\r\n"),
             RuneNotIn("'")
         )),
-        Char('\'')
+        Token('\'')
     );
 
     public static readonly Rule ValueString = Or(SingleQuotedString, DoubleQuotedString);
 
-    public static readonly Rule ClassSelector = And(Char('.'), Identifier);
-    public static readonly Rule IdSelector = And(Char('#'), Identifier);
+    public static readonly Rule ClassSelector = And(Token('.'), Identifier);
+    public static readonly Rule IdSelector = And(Token('#'), Identifier);
 
     public static readonly Rule PseudoSelector = And(
-        Char(':'),
-        Optional(Char(':')),
+        Token(':'),
+        Optional(Token(':')),
         Identifier
     );
 
     public static readonly Rule TypeSelector = Identifier;
-    public static readonly Rule UniversalSelector = Char('*');
+    public static readonly Rule UniversalSelector = Token('*');
 
     // (class|id|pseudo|type|*) (class|pseudo|id)*
     // Ordering mirrors the C++ Or: class/id/pseudo are distinguishable
@@ -130,24 +130,24 @@ public static class CssGrammar
     public static readonly Rule SelectorList = And(
         CssWhitespace,
         Selector,
-        ZeroOrMore(And(CssWhitespace, Char(','), CssWhitespace, Selector))
+        ZeroOrMore(And(CssWhitespace, Token(','), CssWhitespace, Selector))
     );
 
     // url("...") or url(anything-but-close-paren)
     public static readonly Rule ValueUrl = Or(
         And(
             Literal("url"),
-            Char('('),
-            Char('"'),
+            Token('('),
+            Token('"'),
             ZeroOrMore(RuneNotIn("\"")),
-            Char('"'),
-            Char(')')
+            Token('"'),
+            Token(')')
         ),
         And(
             Literal("url"),
-            Char('('),
+            Token('('),
             ZeroOrMore(RuneNotIn(")")),
-            Char(')')
+            Token(')')
         )
     );
 
@@ -164,7 +164,7 @@ public static class CssGrammar
     // meant. The Peek demands a hex-digit boundary right after the color
     // so a hex run that's not exactly 3 or 6 digits fails outright.
     public static readonly Rule ValueColorHex = And(
-        Char('#'),
+        Token('#'),
         Or(
             BetweenInclusive(RuneIn(HexDigitChars), 6, 6),
             BetweenInclusive(RuneIn(HexDigitChars), 3, 3)
@@ -175,11 +175,11 @@ public static class CssGrammar
     // rgba(int, int, int, float) with whitespace anywhere between pieces.
     public static readonly Rule ValueRgba = And(
         Literal("rgba"),
-        Char('('), CssWhitespace, Integer(), CssWhitespace,
-        Char(','), CssWhitespace, Integer(), CssWhitespace,
-        Char(','), CssWhitespace, Integer(), CssWhitespace,
-        Char(','), CssWhitespace, Float(), CssWhitespace,
-        Char(')')
+        Token('('), CssWhitespace, Integer(), CssWhitespace,
+        Token(','), CssWhitespace, Integer(), CssWhitespace,
+        Token(','), CssWhitespace, Integer(), CssWhitespace,
+        Token(','), CssWhitespace, Float(), CssWhitespace,
+        Token(')')
     );
 
     // Float before Integer: Integer would match the lead of a Float and
@@ -198,7 +198,7 @@ public static class CssGrammar
                 Literal("em")
             )
         ),
-        Char('0')
+        Token('0')
     );
 
     // colorHex | rgba | url | length | number | string | identifier.
@@ -222,26 +222,26 @@ public static class CssGrammar
         Optional(And(
             Identifier,
             CssWhitespace,
-            Char(':'),
+            Token(':'),
             CssWhitespace,
             OneOrMore(And(
                 DeclarationValue,
                 CssWhitespace,
-                Optional(And(Char(','), CssWhitespace))
+                Optional(And(Token(','), CssWhitespace))
             ))
         )),
-        Char(';')
+        Token(';')
     );
 
     // selector-list { declaration; declaration; ... }
     public static readonly Rule CssRule = And(
         SelectorList,
         CssWhitespace,
-        Char('{'),
+        Token('{'),
         CssWhitespace,
         ZeroOrMore(And(CssWhitespace, Declaration)),
         CssWhitespace,
-        Char('}')
+        Token('}')
     );
 
     public static readonly Rule Document = And(

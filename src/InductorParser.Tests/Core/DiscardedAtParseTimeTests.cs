@@ -28,71 +28,72 @@ public class DiscardedAtParseTimeTests
         var result = rule.Parse("   ");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
 
-        // The root of the tree is the Discarded sentinel itself — which
-        // has no children and empty text. No per-rune leaves, no wrapper
-        // Symbol for the ZeroOrMore.
-        Assert.That(result.Tree, Is.SameAs(Symbol.Discarded));
-        Assert.That(result.Tree!.Children, Is.Empty);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo(string.Empty));
+        // Nothing survives into the tree. OptionalWhitespace is a
+        // Flatten-typed wrapper around Delete-typed children, so the
+        // parse-time filter drops every whitespace rune and the root's
+        // Symbols list comes back empty.
+        Assert.That(result.Symbols, Is.Empty);
     }
 
     [Test]
     public void OptionalWhitespace_inside_composite_leaves_no_whitespace_children()
     {
         // The realistic JSON-style shape: OptionalWhitespace sits between
-        // two tokens inside an And. The And's Children should hold the
-        // two tokens only, with the whitespace contributing nothing.
-        // RuneIn is None-typed so the token leaves survive; their Id is
-        // the code point, so we assert on that.
+        // two tokens inside an And. The top-level Symbols list should hold
+        // the two token leaves only, with the whitespace contributing
+        // nothing. RuneIn is Preserve-typed so the token leaves survive; their
+        // Id is the code point, so we assert on that.
         var letter = RuneIn(RuneSet.Ascii.Letters);
         var rule = And(letter, OptionalWhitespace(), letter);
         var result = rule.Parse("a   b");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.Children.Count, Is.EqualTo(2));
-        Assert.That(result.Tree.Children[0].Id.Value, Is.EqualTo('a'));
-        Assert.That(result.Tree.Children[1].Id.Value, Is.EqualTo('b'));
-        // ToString reflects what's actually in the tree: the two letter
-        // leaves concatenated. The OptionalWhitespace was filtered at
-        // parse time, so its text doesn't appear here. Callers who want
-        // the full matched input should keep their own reference to it
-        // or run with PreserveFlattenWrappers=true.
-        Assert.That(result.Tree.ToString(), Is.EqualTo("ab"));
+        Assert.That(result.Symbols.Count, Is.EqualTo(2));
+        Assert.That(result.Symbols[0].Id.Value, Is.EqualTo('a'));
+        Assert.That(result.Symbols[1].Id.Value, Is.EqualTo('b'));
+        // Concatenated text reflects what's actually in the tree: the two
+        // letter leaves. The OptionalWhitespace was filtered at parse time,
+        // so its text doesn't appear here. Callers who want the full
+        // matched input should keep their own reference to it or run with
+        // PreserveFlattenWrappers=true.
+        Assert.That(string.Concat(result.Symbols), Is.EqualTo("ab"));
     }
 
     [Test]
     public void Default_Delete_leaf_rules_return_the_shared_Discarded_sentinel()
     {
-        // Char, Not, Peek, Eof all default to FlattenType.Delete. Each
-        // matches and returns the same singleton, so composite callers
-        // can filter via reference equality.
-        var charResult = Char('x').Parse("x");
-        Assert.That(charResult.Tree, Is.SameAs(Symbol.Discarded));
+        // Token, Not, Peek, Eof all default to FlattenType.Delete. Each
+        // matches and contributes nothing at parse time, so a Delete rule
+        // at the root produces an empty Symbols list.
+        var charResult = Token('x').Parse("x");
+        Assert.That(charResult.Success, Is.True);
+        Assert.That(charResult.Symbols, Is.Empty);
 
-        var notResult = And(Not(Char('y')), Char('x')).Parse("x");
+        var notResult = And(Not(Token('y')), Token('x')).Parse("x");
         // Top-level And holds no children because both its children were
-        // Discarded.
+        // Discarded. And is Flatten, so its children bubble up to the
+        // root list — which is empty since the children were Discarded.
         Assert.That(notResult.Success, Is.True);
-        Assert.That(notResult.Tree!.Children, Is.Empty);
+        Assert.That(notResult.Symbols, Is.Empty);
 
-        var peekResult = And(Peek(Char('x')), Char('x')).Parse("x");
+        var peekResult = And(Peek(Token('x')), Token('x')).Parse("x");
         Assert.That(peekResult.Success, Is.True);
-        Assert.That(peekResult.Tree!.Children, Is.Empty);
+        Assert.That(peekResult.Symbols, Is.Empty);
     }
 
     [Test]
     public void PreserveFlattenWrappers_disables_parse_time_Delete_filtering()
     {
         // Same grammar as the leaves-filter test, but with the debug
-        // flag on: the Char wrappers around and between the letters
+        // flag on: the Token wrappers around and between the letters
         // should survive into the tree so PrintTree and Find queries
         // see a shape that matches the grammar as written.
-        var rule = And(Char('a'), OptionalWhitespace(), Char('b'));
+        var rule = And(Token('a'), OptionalWhitespace(), Token('b'));
         var options = new ParseOptions { PreserveFlattenWrappers = true };
         var result = rule.Parse("a   b", options);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        // Three children: Char('a'), OptionalWhitespace wrapper, Char('b').
+        // Three children: Token('a'), OptionalWhitespace wrapper, Token('b').
         // None were filtered as Discarded.
         Assert.That(result.Tree!.Children.Count, Is.EqualTo(3));
         Assert.That(result.Tree.Children[0].FlattenType, Is.EqualTo(FlattenType.Delete));
@@ -111,8 +112,8 @@ public class DiscardedAtParseTimeTests
         // so code outside the parser that builds trees manually keeps
         // working exactly as before.
         var leaf = new Symbol(new SymbolId(1), FlattenType.Delete, "x".AsMemory());
-        var kept = new Symbol(new SymbolId(2), FlattenType.None, "y".AsMemory());
-        var composite = new Symbol(new SymbolId(3), FlattenType.None,
+        var kept = new Symbol(new SymbolId(2), FlattenType.Preserve, "y".AsMemory());
+        var composite = new Symbol(new SymbolId(3), FlattenType.Preserve,
             new Symbol[] { leaf, kept });
 
         var flattened = composite.Flatten();

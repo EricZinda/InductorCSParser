@@ -1,22 +1,23 @@
 using System;
+using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
 // Matches an exact multi-character string in a single transaction. This is
-// the N-character generalization of CharRule. Where CharRule's expected is
+// the N-character generalization of TokenRule. Where TokenRule's expected is
 // one grapheme, LiteralRule's expected is any non-empty string.
 //
-// Why a dedicated rule instead of And(Char('m'), Char('a'), Char('j'))? Each
-// Char opens its own transaction; a three-character And(Char, Char, Char)
+// Why a dedicated rule instead of And(Token('m'), Token('a'), Token('j'))? Each
+// Token opens its own transaction; a three-character And(Token, Token, Token)
 // does three BeginTransaction/Commit cycles and three RecordFailure slots.
 // Literal("maj") does one. For keyword-heavy grammars (chord notation, SQL
 // keywords, HTTP methods) this is the difference between per-keyword O(N)
 // transaction overhead and O(1).
 //
-// The match loop is the same lockstep pattern CharRule uses: read a token,
-// compare its Chars span against the matching slice of the expected string,
+// The match loop is the same lockstep pattern TokenRule uses: read a token,
+// compare its Chars span against the matching section of the expected string,
 // advance by token.Length. Under GraphemeLexer each iteration typically
 // consumes one grapheme worth of chars; under RuneLexer each iteration
 // consumes one rune. Same loop, both lexers, because SequenceEqual only
@@ -24,10 +25,10 @@ namespace InductorParser;
 // group them.
 //
 // Error position on mismatch is the pre-read offset of the specific failing
-// token, not the start of the whole attempt. Same as CharRule: this is what
+// token, not the start of the whole attempt. Same as TokenRule: this is what
 // "points-at-the-offender" means in a multi-token lockstep match.
 //
-// Default FlattenType is Delete, matching CharRule. The common case for a
+// Default FlattenType is Delete, matching TokenRule. The common case for a
 // literal is a keyword or delimiter the grammar wants to assert is present
 // but doesn't need to materialize in the output tree.
 internal sealed class LiteralRule : Rule
@@ -43,7 +44,7 @@ internal sealed class LiteralRule : Rule
         _expected = expected;
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
+    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         using var transaction = lexer.BeginTransaction();
         int consumed = 0;
@@ -70,23 +71,31 @@ internal sealed class LiteralRule : Rule
 
         TraceSuccess(lexer, $"found '{_expected}'");
         transaction.Commit();
-        // Default FlattenType is Delete: the common case collapses to the
-        // shared sentinel and skips the per-match Symbol allocation.
-        if (discard)
+        // Default FlattenType is Delete: the common case collapses to
+        // the shared sentinel and skips the per-match Symbol allocation.
+        if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
-        return new Symbol(Id, FlattenType, lexer.Input.AsMemory(transaction.StartPosition, consumed));
+        var leafSymbol = new Symbol(Id, FlattenType, lexer.Input.AsMemory(transaction.StartPosition, consumed));
+        if (effectiveFlattenType == FlattenType.Flatten)
+        {
+            outputSymbols!.Add(leafSymbol);
+            return Symbol.Discarded;
+        }
+        return leafSymbol;
     }
 
-    internal override RuleStart ComputeRuleStart()
+    // See the FirstConsumedRunes / Advance field docs on Rule for more information on what this does.
+    internal override RuleStartRequirements ComputeRuleStart()
     {
         // The only rune that can start a match of this literal is the first
         // rune of the expected string. Advance is Always because a literal
         // always consumes at least one rune to match. TryPeekRune decodes
-        // the first rune correctly even when it's a non-BMP code point that
-        // spans two UTF-16 chars (emoji, supplementary-plane CJK) —
+        // the first rune correctly even when it's a supplementary-plane
+        // code point that spans two UTF-16 chars (emoji, CJK above
+        // U+FFFF) —
         // _expected[0] would hand back just the high surrogate, which isn't
         // a valid rune.
         Lexer.TryPeekRune(_expected, 0, out int first, out _);
-        return new RuleStart(RuneSet.Single(first), Advance.Always);
+        return new RuleStartRequirements(RuneSet.Single(first), Advance.Always);
     }
 }

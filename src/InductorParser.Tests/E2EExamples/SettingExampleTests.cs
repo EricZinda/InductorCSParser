@@ -9,23 +9,23 @@ public class SettingExampleTests
 {
     private static (Rule document, Rule settingName, Rule settingValue) BuildGrammar()
     {
-        var settingName = OneOrMore(RuneIn(RuneSet.Letters));
+        var settingName = OneOrMore(RuneIn(RuneSet.Letters)).Flatten(FlattenType.Preserve);
 
         var settingValue = Or(
             Float().Flatten(FlattenType.Flatten),
             Integer().Flatten(FlattenType.Flatten),
             OneOrMore(RuneIn(RuneSet.Letters))
-        ).Flatten(FlattenType.None);
+        ).Flatten(FlattenType.Preserve);
 
         var document = And(
             settingName,
             OptionalWhitespace(),
-            Char('='),
+            Token('='),
             OptionalWhitespace(),
             settingValue,
             OptionalWhitespace(),
-            Char(';')
-        );
+            Token(';')
+        ).Flatten(FlattenType.Preserve);
 
         return (document, settingName, settingValue);
     }
@@ -75,7 +75,7 @@ public class SettingExampleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.GrammarMismatch));
-        // Char(';') tries at offset 11 (end of input) and finds EOF.
+        // Token(';') tries at offset 11 (end of input) and finds EOF.
         // Under the error-position principle the failure is recorded at
         // the pre-read position 11, which equals input.Length, so the
         // error message renders "Unexpected end of input".

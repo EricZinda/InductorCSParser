@@ -2,7 +2,7 @@
 //
 // C# 10's interpolated string handler feature requires this marker
 // attribute on the handler struct so the C# compiler knows to rewrite
-// $"..." call sites into AppendLiteral/AppendFormatted calls. The BCL
+// $"..." calls into AppendLiteral/AppendFormatted calls. The BCL
 // ships this type starting in .NET 6, but netstandard2.1 doesn't
 // include it. Without this polyfill, TraceInterpolatedStringHandler
 // fails to compile on the netstandard2.1 target with CS0246.

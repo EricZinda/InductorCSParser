@@ -6,9 +6,9 @@ This doc lists the common gotchas, why they bite, and the idiomatic workaround f
 
 ## Case Folding Beyond ASCII
 
-The `LiteralIgnoreAsciiCase` primitive does ASCII case-insensitive matching (A ↔ a) and is all most grammars need. Full Unicode case folding has script-specific surprises that neither lexer handles: German `ß` uppercases to `SS` (one character becomes two), Turkish has dotted-i and dotless-i as distinct letters, Greek final sigma (ς) folds to regular sigma only at word boundaries. The primitive is ASCII-only on purpose; extending it to full Unicode silently produces wrong results on Turkish, Greek, and German text.
+The `LiteralIgnoreAsciiCase` leaf does ASCII case-insensitive matching (A ↔ a) and is all most grammars need. Full Unicode case folding has script-specific surprises that neither lexer handles: German `ß` uppercases to `SS` (one character becomes two), Turkish has dotted-i and dotless-i as distinct letters, Greek final sigma (ς) folds to regular sigma only at word boundaries. The leaf is ASCII-only on purpose; extending it to full Unicode silently produces wrong results on Turkish, Greek, and German text.
 
-**Fix.** Use the built-in primitive and accept that case-insensitive matching of non-ASCII text is not supported:
+**Fix.** Use the built-in leaf and accept that case-insensitive matching of non-ASCII text is not supported:
 
 ```csharp
 public static readonly Rule SelectKeyword = LiteralIgnoreAsciiCase("select");
@@ -98,7 +98,7 @@ If you are doing emoji-sensitive parsing, be careful: variation selectors are pa
 
 Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 rule GB3), so `GraphemeLexer` hands the parser one two-char token whenever it sees a Windows line ending. This bites any line-based grammar that tries to match or stop on a bare `\n`:
 
-- `Char('\n')` matches a one-grapheme token whose content is exactly `'\n'`. The CRLF grapheme has content `"\r\n"`, so `Char('\n')` does *not* match it.
+- `Token('\n')` matches a one-grapheme token whose content is exactly `'\n'`. The CRLF grapheme has content `"\r\n"`, so `Token('\n')` does *not* match it.
 - `RuneIn(RuneSet.Runes("\n"))` or `RuneIn(RuneSet.Runes("\r\n"))` matches a single-rune token whose rune is in the set. A CRLF grapheme is two runes, so it matches no single-rune set — it fails `RuneIn` regardless of what runes you put in the set.
 - `RuneNotIn(RuneSet.Runes("\n"))` does the opposite: multi-rune tokens pass `RuneNotIn` unconditionally. `ZeroOrMore(RuneNotIn(stopSet))` used to scan "everything up to a newline" will greedily swallow the terminating CRLF as body content instead of stopping at it, then the terminator fails because there is nothing left.
 
@@ -123,8 +123,8 @@ public static readonly Rule OptionalWhitespace = ZeroOrMore(Or(
 // Scanning "up to end of line" — use a rule-based stop with Not(LineBreak),
 // not RuneNotIn. RuneNotIn would silently eat the CRLF grapheme.
 public static readonly Rule LineComment = And(
-    Char('%'),
-    ZeroOrMore(And(Not(LineBreak), AnyChar())),
+    Token('%'),
+    ZeroOrMore(And(Not(LineBreak), AnyToken())),
     Or(OneOrMore(LineBreak), Eof())
 );
 ```
@@ -133,12 +133,12 @@ The three anti-patterns to avoid in any line-based grammar:
 
 ```csharp
 // BROKEN on Windows line endings under GraphemeLexer.
-And(..., Char('\n'))                             // fails on CRLF input
+And(..., Token('\n'))                             // fails on CRLF input
 ZeroOrMore(RuneIn(RuneSet.Runes("\r\n")))        // skips zero CRLF graphemes
 ZeroOrMore(RuneNotIn(RuneSet.Single('\n')))      // swallows the CRLF terminator
 ```
 
-If a grammar is a port of regex semantics that explicitly targets LF-only (some Markdown-style formats, for instance), the failure on CRLF is faithful to the source and you can leave `Char('\n')` as-is. Mark the grammar with a comment so the next reader knows the LF-only behavior is intentional, not an oversight.
+If a grammar is a port of regex semantics that explicitly targets LF-only (some Markdown-style formats, for instance), the failure on CRLF is faithful to the source and you can leave `Token('\n')` as-is. Mark the grammar with a comment so the next reader knows the LF-only behavior is intentional, not an oversight.
 
 ## The Common Thread
 
@@ -175,4 +175,4 @@ The common thread is timing. Combining marks have been in Unicode since the star
 2. If a specific input causes trouble, switch that grammar to `RuneLexer` and handle the multi-rune sequence explicitly with a small rule. This trades grapheme convenience for one extra rule and works on every runtime.
 3. Vendor a UAX #29 implementation into the parser. Tracked in [backlog/r000](../backlog/r000-vendor-a-uax-#29-grapheme-cluster-implementation.md). Half a day of work, gives full conformance everywhere.
 
-The repo's test suite documents the broken cases explicitly. Look for tests gated behind `#if !UNITY_INCLUDE_TESTS` in [CharRuleTests.cs](../src/InductorParser.Tests/Rules/CharRuleTests.cs); each one is a category that the legacy walker mishandles.
+The repo's test suite documents the broken cases explicitly. Look for tests gated behind `#if !UNITY_INCLUDE_TESTS` in [TokenRuleTests.cs](../src/InductorParser.Tests/Rules/TokenRuleTests.cs); each one is a category that the legacy walker mishandles.

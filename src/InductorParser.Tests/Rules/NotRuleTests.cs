@@ -9,16 +9,16 @@ namespace InductorParser.Tests;
 public class NotRuleTests
 {
     // Tree.ToString() assertions use PreserveFlattenWrappers so Not,
-    // Char, and AnyChar (all default FlattenType.Delete) stay in the
+    // Token, and AnyToken (all default FlattenType.Delete) stay in the
     // tree and their text contributes to the concatenated view.
     private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
 
     [Test]
     public void Not_succeeds_when_inner_fails_and_consumes_no_input()
     {
-        // Not(Char('a')) on "b": Char('a') fails, Not succeeds and leaves
-        // the cursor at 0. The trailing Char('b') then consumes 'b'.
-        var rule = And(Not(Char('a')), Char('b'));
+        // Not(Token('a')) on "b": Token('a') fails, Not succeeds and leaves
+        // the cursor at 0. The trailing Token('b') then consumes 'b'.
+        var rule = And(Not(Token('a')), Token('b'));
         var result = rule.Parse("b", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -28,7 +28,7 @@ public class NotRuleTests
     [Test]
     public void Not_fails_when_inner_matches()
     {
-        var rule = Not(Char('a')).WithError("did not want an 'a'");
+        var rule = Not(Token('a')).WithError("did not want an 'a'");
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.False);
@@ -39,21 +39,21 @@ public class NotRuleTests
     [Test]
     public void Not_does_not_advance_the_cursor_even_when_inner_consumes_before_failing()
     {
-        // And(Char('a'), Char('b')) would consume two chars before failing
+        // And(Token('a'), Token('b')) would consume two chars before failing
         // on "ax" (reads 'a', then fails on 'x'). Wrapping it in Not, the
         // outer cursor must still be 0 after Not succeeds. The trailing
-        // Char('a') proves it: if Not had failed to roll back, Char('a')
+        // Token('a') proves it: if Not had failed to roll back, Token('a')
         // would look at offset 2 ('<EOF>') or later.
         var rule = And(
-            Not(And(Char('a'), Char('b'))),
-            Char('a'));
+            Not(And(Token('a'), Token('b'))),
+            Token('a'));
 
         var result = rule.Parse("ax");
 
         Assert.That(result.Success, Is.False);
-        // Char('a') at offset 0 succeeds; the overall parse fails because
+        // Token('a') at offset 0 succeeds; the overall parse fails because
         // input isn't fully consumed. What matters is that Not didn't
-        // leave the cursor advanced — if it had, the trailing Char('a')
+        // leave the cursor advanced — if it had, the trailing Token('a')
         // would have reported somewhere past offset 0.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     }
@@ -65,8 +65,8 @@ public class NotRuleTests
         // isn't the start of the stop rule. Here the stop is '!'; the
         // body is arbitrary text up to (but not including) it.
         var rule = And(
-            ZeroOrMore(And(Not(Char('!')), AnyChar())),
-            Char('!'));
+            ZeroOrMore(And(Not(Token('!')), AnyToken())),
+            Token('!'));
 
         var result = rule.Parse("hello world!", Debug());
 
@@ -98,9 +98,9 @@ public class NotRuleTests
                 //     one or more letters of either case
                 OneOrMore(RuneIn(RuneSet.Ascii.Letters)),
                 //   optional parenthesised single-letter argument
-                Optional( And(Char('('),
+                Optional( And(Token('('),
                               RuneIn(RuneSet.Ascii.Letters),
-                              Char(')'))));
+                              Token(')'))));
 
         // Lowercase-start parses as a functor, with or without arguments.
         Assert.That(functor.Parse("foo").Success, Is.True);
@@ -115,7 +115,7 @@ public class NotRuleTests
     public void Not_works_under_rune_lexer()
     {
         // Same negative-lookahead semantics under RuneLexer.
-        var rule = And(Not(Char('a')), AnyChar());
+        var rule = And(Not(Token('a')), AnyToken());
         var result = rule.Parse("b",
             new ParseOptions { InputUnit = InputUnit.Rune, PreserveFlattenWrappers = true });
 
@@ -126,15 +126,15 @@ public class NotRuleTests
     [Test]
     public void Not_trace_success_produces_expected_output()
     {
-        // Not opens a transaction (depth=1). Char inside opens its own
+        // Not opens a transaction (depth=1). Token inside opens its own
         // (depth=2) and fails on the Read. Not then emits its success
         // line at depth=1 and rolls back.
         var sink = NewSink();
-        Not(Char('a')).Parse("b", new ParseOptions { TraceSink = sink });
+        Not(Token('a')).Parse("b", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'b', Consumed: 1",
-            "      FAIL | Char: found 'b', wanted 'a'",
+            "      FAIL | Token: found 'b', wanted 'a'",
             "   SUCC | Not: inner did not match"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
@@ -144,11 +144,11 @@ public class NotRuleTests
     public void Not_trace_failure_produces_expected_output()
     {
         var sink = NewSink();
-        Not(Char('a')).Parse("a", new ParseOptions { TraceSink = sink });
+        Not(Token('a')).Parse("a", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | Char: found 'a'",
+            "      SUCC | Token: found 'a'",
             "   FAIL | Not: inner matched"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));

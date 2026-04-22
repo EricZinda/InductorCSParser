@@ -16,7 +16,7 @@ public sealed class ParseOptions
     // Normalization form applied to the input before parsing. Default is the
     // composed form (FormC), which is what almost every grammar wants and
     // what essentially all web, source, and typed input already is. A
-    // grammar written against Char("café") (precomposed é, U+00E9) with this
+    // grammar written against Token("café") (precomposed é, U+00E9) with this
     // default will also match decomposed "cafe\u0301" input, because the
     // normalizer rewrites the latter to the former before the lexer sees
     // it. Set to null to skip normalization entirely (byte-exact
@@ -81,29 +81,21 @@ public sealed class ParseOptions
     // existing CancellationToken.
     public ParseCancellation? Cancellation { get; set; }
 
-    // When true, the parser disables every parse-time tree-shape
-    // optimization and emits a tree whose structure matches the grammar
-    // one-to-one. Turn this on to debug or inspect a grammar.
+    // When true, Parse returns a tree whose shape matches the grammar
+    // one-to-one: every Flatten-typed wrapper, every Delete-typed node,
+    // and every individual character leaf is present exactly where the
+    // grammar placed it. Turn this on to debug or inspect a grammar, to
+    // PrintTree the full structure, or to Find(rule) against wrappers
+    // that the default path would lift out.
     //
-    // Two optimizations are suppressed:
-    //
-    //   * Flatten-wrapper elision. An Or (or any FlattenType.Flatten
-    //     rule) normally returns its single matching child straight up
-    //     so the otherwise-collapsed wrapper never appears in the tree.
-    //     With the flag on, the wrapper stays.
-    //
-    //   * Delete-node filtering. A rule whose effective FlattenType is
-    //     Delete normally returns the shared Symbol.Discarded sentinel
-    //     and contributes no Symbol to the parent. With the flag on,
-    //     Delete-typed rules produce real Symbols and remain visible in
-    //     the raw tree, so a grammar author can see every Char('"'),
-    //     OptionalWhitespace, Not/Peek node exactly where the grammar
-    //     placed it.
-    //
-    // The off-by-default path produces a tree whose post-hoc
-    // Symbol.Flatten() output is identical to the pre-optimization
-    // Flatten output. Turning this flag on recovers the pre-optimization
-    // raw tree shape exactly — useful for PrintTree and Find(rule)
-    // queries against wrappers that would otherwise be elided.
+    // The off-by-default path applies each rule's FlattenType before
+    // returning so that Delete nodes are gone, Flatten-typed wrappers
+    // have their children lifted into the parent, and Preserve-typed
+    // wrappers remain as findable nodes. That is the shape most
+    // callers actually want to walk: the syntactic noise (delimiters,
+    // whitespace, anonymous grouping wrappers) is already out of the
+    // way. The consequence is that Tree.Find(rule) only hits rules
+    // whose FlattenType is Preserve; set .Flatten(FlattenType.Preserve)
+    // on any rule whose wrapper you need to locate after parsing.
     public bool PreserveFlattenWrappers { get; set; } = false;
 }

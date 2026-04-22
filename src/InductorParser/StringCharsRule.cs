@@ -1,16 +1,17 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
-// This is the primitive a JSON / C++ / Python string body wants.
+// This is the leaf a JSON / C++ / Python string body wants.
 // It is a specialized scanner for the "string body" grammar shape: scan runes
 // forward until a stopper character or characters is seen, handling escape sequences inline.
 // Collapses ZeroOrMore(Or(bodyRune, And(escapeStart, escapeEnd))) into one rule that
 // does the scan in a tight loop and returns one leaf Symbol
-// covering the matched slice of input. One dispatch for the outer rule
+// covering the matched section of input. One dispatch for the outer rule
 // and one Symbol allocation per matched run, however many runes the run
 // contains.
 //
@@ -39,14 +40,14 @@ namespace InductorParser;
 //
 // The resulting Symbol carries a ReadOnlyMemory<char> over the
 // original input, same shape as RuneInRule's Symbol. ToString() returns
-// the raw source slice, including escape-start runes and their ends as written originally.
-// Callers who want to actually decode the escapes need to walk the slice themselves.
+// the raw source text, including escape-start runes and their ends as written originally.
+// Callers who want to actually decode the escapes need to walk that text themselves.
 // Lazy decoding means a syntax highlighter or a code-formatter, which WANTS the raw
 // source preserved, doesn't have to pay for it.
 //
 // Worked examples: see
 // src/InductorParser.Tests/E2EExamples/StringLiteralGrammars.cs for
-// spec-accurate, runnable grammars that wire this primitive up to
+// spec-accurate, runnable grammars that wire this leaf up to
 // real string syntaxes (JSON RFC 8259, Python single-line, Python
 // triple-quote, Python raw). The companion
 // StringLiteralGrammarsTests.cs pins their positive and negative
@@ -81,11 +82,11 @@ internal sealed class StringCharsRule : Rule
     //       grammar where the start itself is a sub-rule.
     //
     // The Symbol tree the start rule produces on success is discarded:
-    // our output is one leaf over the raw source slice, so nothing a
+    // our output is one leaf over the raw source text, so nothing a
     // child Symbol carries reaches the parent tree. Grammar authors
     // who want to skip the start's per-parse allocation can give the
     // start rule .Flatten(FlattenType.Delete), and the parse-time
-    // Delete filter will elide it.
+    // Delete filter will remove it.
     private readonly bool _hasEscape;
     private readonly int _escapeStartRune;
     private readonly Rule? _escapeStartRule;
@@ -94,11 +95,11 @@ internal sealed class StringCharsRule : Rule
     // its cost is amortized across the whole escape sequence rather
     // than the whole string body. Whatever Symbol tree the end
     // produces on success is allocated then discarded: our output
-    // is one leaf over the raw source slice, so nothing the end
+    // is one leaf over the raw source text, so nothing the end
     // carries reaches the parent tree. For an escape-heavy grammar
     // where that allocation registers, give the end
     // .Flatten(FlattenType.Delete) and the parse-time Delete filter
-    // elides the Symbol construction entirely. On an end failure,
+    // removes the Symbol construction entirely. On an end failure,
     // StringChars fails as a whole (a started escape that can't
     // complete isn't a well-formed body) and the outer transaction
     // rolls the lexer back to where StringChars opened.
@@ -106,7 +107,7 @@ internal sealed class StringCharsRule : Rule
 
     // FAST PATH, no escape. Per rune: one RuneSet.Contains.
     public StringCharsRule(RuneSet stoppers)
-        : base(FlattenType.None)
+        : base(FlattenType.Preserve)
     {
         _stopperSet = stoppers;
         _stopperRule = null;
@@ -121,7 +122,7 @@ internal sealed class StringCharsRule : Rule
     // RuneSet.Contains plus one int equality on non-stopper runes.
     // Covers JSON, C, C++ regular, Python single-line.
     public StringCharsRule(RuneSet stoppers, Rune escapeStart, Rule escapeEnd)
-        : base(FlattenType.None, escapeEnd)
+        : base(FlattenType.Preserve, escapeEnd)
     {
         if (escapeEnd == null)
             throw new ArgumentNullException(nameof(escapeEnd));
@@ -138,7 +139,7 @@ internal sealed class StringCharsRule : Rule
     // runes only. Use for multi-rune starts like $$ or a choice
     // across several starts.
     public StringCharsRule(RuneSet stoppers, Rule escapeStart, Rule escapeEnd)
-        : base(FlattenType.None, escapeStart, escapeEnd)
+        : base(FlattenType.Preserve, escapeStart, escapeEnd)
     {
         if (escapeStart == null)
             throw new ArgumentNullException(nameof(escapeStart));
@@ -157,7 +158,7 @@ internal sealed class StringCharsRule : Rule
     // the stopper (peek transaction, never consumed). Use for
     // multi-rune boundaries like C++ raw strings.
     public StringCharsRule(Rule stopper)
-        : base(FlattenType.None, stopper)
+        : base(FlattenType.Preserve, stopper)
     {
         if (stopper == null)
             throw new ArgumentNullException(nameof(stopper));
@@ -173,7 +174,7 @@ internal sealed class StringCharsRule : Rule
     // General stopper with single-rune escape start. Canonical use:
     // Python triple-quote """...""" with backslash escapes.
     public StringCharsRule(Rule stopper, Rune escapeStart, Rule escapeEnd)
-        : base(FlattenType.None, stopper, escapeEnd)
+        : base(FlattenType.Preserve, stopper, escapeEnd)
     {
         if (stopper == null)
             throw new ArgumentNullException(nameof(stopper));
@@ -188,7 +189,7 @@ internal sealed class StringCharsRule : Rule
         _escapeStartRule = null;
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
+    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         using var transaction = lexer.BeginTransaction();
         int startPosition = transaction.StartPosition;
@@ -223,7 +224,7 @@ internal sealed class StringCharsRule : Rule
             else
             {
                 using var peek = lexer.BeginTransaction();
-                var stopMatch = _stopperRule.TryParse(lexer);
+                var stopMatch = _stopperRule.TryParse(lexer, outputSymbols: null);
                 // No Commit: the `using` disposes the transaction and
                 // rolls the position back regardless of what the
                 // stopper rule consumed.
@@ -240,13 +241,13 @@ internal sealed class StringCharsRule : Rule
                     // transaction, so a start mismatch rolls the
                     // position back to `pos` and we fall through to
                     // consume the rune as body.
-                    var start = _escapeStartRule.TryParse(lexer);
+                    var start = _escapeStartRule.TryParse(lexer, outputSymbols: null);
                     if (start != null)
                     {
                         // Start committed. End failure is a hard
                         // failure: an escape sequence was started, so
                         // the input isn't a well-formed string body.
-                        var end = _escapeEnd!.TryParse(lexer);
+                        var end = _escapeEnd!.TryParse(lexer, outputSymbols: null);
                         if (end == null)
                         {
                             TraceFailure(lexer, $"bad escape end at offset {lexer.Position}");
@@ -275,7 +276,7 @@ internal sealed class StringCharsRule : Rule
                     // Single-rune start fast path. Consume the start,
                     // then hand off to the end.
                     lexer.Read();
-                    var end = _escapeEnd!.TryParse(lexer);
+                    var end = _escapeEnd!.TryParse(lexer, outputSymbols: null);
                     if (end == null)
                     {
                         TraceFailure(lexer, $"bad escape end at offset {pos + runeLen}");
@@ -296,11 +297,18 @@ internal sealed class StringCharsRule : Rule
         int length = lexer.Position - startPosition;
         TraceSuccess(lexer, $"{length} chars, stopper '{_stopperRendered}'");
         transaction.Commit();
-        if (discard) return Symbol.Discarded;
-        return new Symbol(Id, FlattenType, input.AsMemory(startPosition, length));
+        if (effectiveFlattenType == FlattenType.Delete) return Symbol.Discarded;
+        var leafSymbol = new Symbol(Id, FlattenType, input.AsMemory(startPosition, length));
+        if (effectiveFlattenType == FlattenType.Flatten)
+        {
+            outputSymbols!.Add(leafSymbol);
+            return Symbol.Discarded;
+        }
+        return leafSymbol;
     }
 
-    internal override RuleStart ComputeRuleStart()
+    // See the FirstConsumedRunes / Advance field docs on Rule for more information on what this does.
+    internal override RuleStartRequirements ComputeRuleStart()
     {
         // StringChars always succeeds — a zero-length body is legal —
         // but it also consumes runes when the input has matchable ones.
@@ -317,6 +325,6 @@ internal sealed class StringCharsRule : Rule
         RuneSet firstConsumed = _stopperRule == null
             ? ~_stopperSet
             : RuneSet.Universe;
-        return new RuleStart(firstConsumed, Advance.Sometimes);
+        return new RuleStartRequirements(firstConsumed, Advance.Sometimes);
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
@@ -10,7 +11,7 @@ namespace InductorParser;
 // so Turkish dotless-I, German sharp-s, Greek sigma variants, etc. do NOT
 // match their upper/lower counterparts. That tradeoff is on purpose: full
 // Unicode case folding is locale-dependent and grammar-breaking, and the
-// keyword-heavy grammars that want this primitive (SQL, HTTP methods, chord
+// keyword-heavy grammars that want this leaf (SQL, HTTP methods, chord
 // notation) only ever case-fold ASCII in practice. See docs/UnicodeGotchas.md
 // for the longer explanation.
 internal sealed class LiteralIgnoreAsciiCaseRule : Rule
@@ -27,7 +28,7 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
         SetTraceName("LiteralIgnoreAsciiCase");
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
+    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         using var transaction = lexer.BeginTransaction();
         int consumed = 0;
@@ -54,11 +55,17 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
 
         TraceSuccess(lexer, $"found '{lexer.Input.Substring(transaction.StartPosition, consumed)}', wanted '{_expected}' (case-insensitive)");
         transaction.Commit();
-        // Default FlattenType is Delete: the common case collapses to the
-        // shared sentinel and skips the per-match Symbol allocation.
-        if (discard)
+        // Default FlattenType is Delete: the common case collapses to
+        // the shared sentinel and skips the per-match Symbol allocation.
+        if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
-        return new Symbol(Id, FlattenType, lexer.Input.AsMemory(transaction.StartPosition, consumed));
+        var leafSymbol = new Symbol(Id, FlattenType, lexer.Input.AsMemory(transaction.StartPosition, consumed));
+        if (effectiveFlattenType == FlattenType.Flatten)
+        {
+            outputSymbols!.Add(leafSymbol);
+            return Symbol.Discarded;
+        }
+        return leafSymbol;
     }
 
     // ASCII-only case fold. Both sides compare bit-exact when either char
@@ -84,7 +91,8 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
     private static bool IsAsciiLetter(char c) =>
         (uint)((c | 0x20) - 'a') <= ('z' - 'a');
 
-    internal override RuleStart ComputeRuleStart()
+    // See the FirstConsumedRunes / Advance field docs on Rule for more information on what this does.
+    internal override RuleStartRequirements ComputeRuleStart()
     {
         // First rune decides the lookahead. For an ASCII letter, include
         // both cases so the caller's input in either case admits us.
@@ -96,8 +104,8 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
         {
             int lower = first | 0x20;
             int upper = lower & ~0x20;
-            return new RuleStart(RuneSet.Single(lower) | RuneSet.Single(upper), Advance.Always);
+            return new RuleStartRequirements(RuneSet.Single(lower) | RuneSet.Single(upper), Advance.Always);
         }
-        return new RuleStart(RuneSet.Single(first), Advance.Always);
+        return new RuleStartRequirements(RuneSet.Single(first), Advance.Always);
     }
 }

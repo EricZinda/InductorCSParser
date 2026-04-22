@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
@@ -20,8 +21,8 @@ namespace InductorParser;
 // The canonical pattern:
 //
 //     static readonly LateBoundRule Expression = new LateBoundRule("expression");
-//     static readonly Rule Term = Or(Integer(), And(Char('('), Expression, Char(')')));
-//     static readonly Rule Sum  = And(Term, ZeroOrMore(And(Char('+'), Term)));
+//     static readonly Rule Term = Or(Integer(), And(Token('('), Expression, Token(')')));
+//     static readonly Rule Sum  = And(Term, ZeroOrMore(And(Token('+'), Term)));
 //     static readonly Rule _init = Expression.Bind(Sum);
 //
 // Term sees Expression as a valid (but unbound) rule at construction
@@ -47,8 +48,8 @@ namespace InductorParser;
 //     RecordFailure, because TryParse forwards without calling it.
 //
 // Every one of those modifier methods would silently do nothing, which
-// is exactly the kind of footgun that produces mysterious bugs hours
-// later. So they all throw InvalidOperationException on LateBoundRule.
+// is exactly the kind of bug that surfaces mysteriously hours later.
+// So they all throw InvalidOperationException on LateBoundRule.
 // Set those things on the target rule instead. The one exception is a
 // debug name, which is useful for the "never bound" error message; pass
 // that to the constructor.
@@ -74,7 +75,7 @@ public sealed class LateBoundRule : Rule
         return this;
     }
 
-    // Naming a LateBoundRule is a footgun: the name would derive a Name
+    // Naming a LateBoundRule is a bug: the name would derive a Name
     // and (via hashing) an Id, but neither is ever visible at parse time.
     // Fail loudly instead of letting users build a rule whose Find
     // silently returns null. Pass the debug name to the constructor.
@@ -103,19 +104,14 @@ public sealed class LateBoundRule : Rule
         "LateBoundRule.WithError(...) is not supported: the rule is transparent at parse " +
         "time, so its ErrorMessage is never consulted. Set .WithError(...) on the bound target instead.");
 
-    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
+    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        // _target is guaranteed non-null here because Compile's validation
-        // pass would have thrown on an unbound LateBoundRule before any
-        // parse could reach this method. The null-forgiving operator is
-        // load-bearing for the compiler, not for defensive correctness.
-        //
-        // The `discard` arg is ignored: LateBoundRule's own FlattenType
-        // is never consulted (As / Flatten / WithError all throw), so the
-        // shim computed `discard` from a flag that doesn't apply to the
-        // tree we produce. The target's own TryParse will compute its
-        // own discard from its own FlattenType and handle it correctly.
-        return _target!.TryParse(lexer);
+        // _target is guaranteed non-null here: Compile's validation pass
+        // throws on an unbound LateBoundRule before any parse can reach
+        // this method. LateBoundRule is transparent at parse time, so
+        // discard is ignored (target computes its own) and the
+        // accumulator forwards straight through.
+        return ParseChild(_target!, lexer, outputSymbols);
     }
 
     protected override void ValidateCompiled()
@@ -129,9 +125,10 @@ public sealed class LateBoundRule : Rule
         }
     }
 
-    internal override RuleStart ComputeRuleStart()
+    // See the FirstConsumedRunes / Advance field docs on Rule for more information on what this does.
+    internal override RuleStartRequirements ComputeRuleStart()
     {
-        // LateBoundRule is transparent at parse time, so its RuleStart is
+        // LateBoundRule is transparent at parse time, so its RuleStartRequirements is
         // just the target's. Compile's depth-first walk visits the target
         // as our one child, so in the acyclic case the target's values are
         // already populated by the time we land here. If the target graph
@@ -141,6 +138,6 @@ public sealed class LateBoundRule : Rule
         // OrRule conservative; a future pass could refine by re-walking
         // until no FirstConsumedRunes changes if a grammar shows up where it
         // matters.
-        return new RuleStart(_target!.FirstConsumedRunes, _target.Advance);
+        return new RuleStartRequirements(_target!.FirstConsumedRunes, _target.Advance);
     }
 }

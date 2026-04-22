@@ -1,104 +1,67 @@
+using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
+// Matches the first child that succeeds (PEG ordered choice). Tries
+// children left-to-right, committing to whichever one matches first;
+// if none match the Or fails. Each child attempt runs in its own
+// transaction so a failed alternative leaves the lexer where it was
+// before Or was called.
 internal sealed class OrRule : Rule
 {
     public OrRule(Rule[] children) : base(FlattenType.Flatten, children) { }
 
-    internal override Symbol? TryParseRule(Lexer lexer, bool discard)
+    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        // Required-runes shortcut: peek the next rune once, then skip any
-        // child whose Advance is Always and whose FirstConsumedRunes rules the
-        // lookahead out. For a grammar with disjoint FirstConsumedRunes across
-        // branches (ChordGrammar's alternations, JSON's literalChar/escape
-        // split), this collapses N branch-and-rollback cycles down to 1.
-        //
-        // Children with Advance.Sometimes (Optional, ZeroOrMore, an And
-        // whose children aren't all consuming) or Advance.Never (Peek, Not,
-        // Eof) are always tried — a non-Always rule has at least one
-        // zero-rune success path, which can fire on any input including
-        // EOF, so the lookahead doesn't rule it out.
         string input = lexer.Input;
         int pos = lexer.Position;
-        int peekValue;
-        bool hasPeek;
-        if (pos >= input.Length)
-        {
-            hasPeek = false;
-            peekValue = -1;
-        }
-        else
-        {
-            hasPeek = Lexer.TryPeekRune(input, pos, out peekValue, out _);
-        }
+        // Peek the next rune once for the skip shortcut. At EOF or on a
+        // malformed surrogate, use -1 as a sentinel that no FirstConsumedRunes
+        // contains, so an Always child is still correctly skipped (it would
+        // need to read a rune and there isn't one).
+        int peekValue = -1;
+        if (pos < input.Length)
+            Lexer.TryPeekRune(input, pos, out peekValue, out _);
+
+        // If we are preserving this node, create a new list to capture its outputSymbols
+        if (effectiveFlattenType == FlattenType.Preserve)
+            outputSymbols = new List<Symbol>();
 
         for (int symbolIndex = 0; symbolIndex < Children.Count; symbolIndex++)
         {
             var child = Children[symbolIndex];
-            // Skip children the lookahead rules out. A child whose own
-            // WithError message is set is tried anyway so its error can
-            // still surface via the deepest-failure mechanism — we don't
-            // want to silence a rule that went out of its way to describe
-            // what it wanted.
-            if (child.Advance == Advance.Always
-                && child.ErrorMessage == null
-                && (!hasPeek || !child.FirstConsumedRunes.Contains(peekValue)))
+            // Skip children the shortcut proves can't match at this lookahead.
+            // The ErrorMessage == null guard preserves WithError message
+            // surfacing: a child with a friendly message still gets attempted
+            // so its failure can reach DeepestFailureMessage.
+            if (child.CannotMatchLookahead(peekValue) && child.ErrorMessage == null)
             {
                 continue;
             }
+
             using var transaction = lexer.BeginTransaction();
-            var symbol = child.TryParse(lexer);
+            var symbol = ParseChild(child, lexer, outputSymbols);
             if (symbol != null)
             {
                 TraceSuccess(lexer, $"symbol #{symbolIndex}");
                 transaction.Commit();
-                // An Or whose own FlattenType is Delete returns Discarded
-                // up to the parent: the inner's Symbol is dropped entirely
-                // along with any wrapper we'd otherwise build. Suppressed
-                // when PreserveFlattenWrappers is set (via the `discard`
-                // flag) so the grammar-shape debug view keeps the Or
-                // node visible.
-                if (discard)
-                    return Symbol.Discarded;
-                // FlattenType.Flatten on an Or means "post-hoc Flatten
-                // would splice the inner symbol straight back into the
-                // parent." That splice is the whole point of the wrapper,
-                // so do it at parse time and skip both the single-element
-                // Symbol[] and the wrapper Symbol. Grammar authors who
-                // need the Or's Id to appear in the tree (for Find or
-                // because the wrapper is structurally meaningful) opt
-                // into it the same way they'd survive a post-hoc
-                // .Flatten() call: set FlattenType.None.
-                //
-                // If the matching inner was itself Discarded (its own
-                // FlattenType was Delete), the Flatten-elide path
-                // propagates Discarded straight through, keeping the
-                // tree free of the sentinel: a Delete-typed child of an
-                // Or contributes nothing, same as in any other composite.
-                //
-                // ParseOptions.PreserveFlattenWrappers forces the wrapper
-                // to stay so a debugging caller sees a tree whose shape
-                // matches the grammar one-to-one.
-                if (FlattenType == FlattenType.Flatten && !lexer.PreserveFlattenWrappers)
-                    return symbol;
-                return new Symbol(Id, FlattenType, new[] { symbol });
+                // Don't add child symbols if they are discarded
+                if (outputSymbols != null && !ReferenceEquals(symbol, Symbol.Discarded))
+                    outputSymbols.Add(symbol);
+                return effectiveFlattenType == FlattenType.Preserve
+                    ? new Symbol(Id, FlattenType, outputSymbols)
+                    : Symbol.Discarded;
             }
         }
         TraceFailure(lexer, $"");
-        // Error Positioning: where OrRule itself started trying. All alternatives
-        // failed at or past this point and all rolled back, so
-        // lexer.Position sits at that shared starting offset. Each
-        // alternative has already recorded its own (possibly deeper)
-        // failure; this call exists so OrRule's own WithError message
-        // can claim the slot at its starting depth via the equal-depth
-        // rule when nothing deeper is present.
         lexer.RecordFailure(lexer.Position, ErrorMessage);
         return null;
     }
 
-    internal override RuleStart ComputeRuleStart()
+    // See the FirstConsumedRunes / Advance field docs on Rule for more information on what this does.
+    internal override RuleStartRequirements ComputeRuleStart()
     {
         // Or matches any of its children, so its FirstConsumedRunes is the
         // union of children's FirstConsumedRunes.
@@ -120,6 +83,6 @@ internal sealed class OrRule : Rule
         Advance advance = allAlways
             ? Advance.Always
             : allNever ? Advance.Never : Advance.Sometimes;
-        return new RuleStart(union, advance);
+        return new RuleStartRequirements(union, advance);
     }
 }

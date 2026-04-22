@@ -2,7 +2,7 @@ using System;
 
 namespace InductorParser.Lexing;
 
-// Internal control-flow exception thrown from the periodic budget check on
+// Exception thrown from the periodic budget check on
 // the lexer when MaxRuleInvocations, MaxDepth, the Timeout, or the
 // Cancellation trips. The throw unwinds through the rule stack,
 // rolling back every active lexer transaction via the existing `using`
