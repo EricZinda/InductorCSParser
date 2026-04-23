@@ -20,12 +20,12 @@ A rule is an instance. You build one by calling factory functions and you call `
 ```csharp
 using static InductorParser.Rules;
 
-var settingName = OneOrMore(RuneIn(RuneSet.Letters));
+var settingName = Identifier();
 
 var settingValue = Or(
     Float().Flatten(FlattenType.Flatten),
     Integer().Flatten(FlattenType.Flatten),
-    OneOrMore(RuneIn(RuneSet.Letters))
+    Identifier()
 );
 
 var document = And(
@@ -72,7 +72,7 @@ Here are different ways you can name rules:
 **`.As(nameof(X))` on a rule you have assigned to a variable or field.** This is the standard form. The C# compiler checks the `nameof` against the symbol in scope, so a rename via IDE refactor updates the string automatically:
 
 ```csharp
-var settingName = OneOrMore(RuneIn(RuneSet.Letters)).As(nameof(settingName));
+var settingName = Identifier().As(nameof(settingName));
 ```
 
 The rule's id is derived deterministically from the string, and the name carries through into trace output. 
@@ -81,7 +81,7 @@ The rule's id is derived deterministically from the string, and the name carries
 
 ```csharp
 And(
-    OneOrMore(RuneIn(RuneSet.Letters)).As("operatorName"),
+    Identifier().As("operatorName"),
     OptionalWhitespace(),
     Token(':'),
     /* ... */
@@ -225,7 +225,7 @@ public abstract class Rule
 Chaining is how you get the equivalent of the C++ trailing template args:
 
 ```csharp
-var settingName = OneOrMore(RuneIn(RuneSet.Letters))
+var settingName = Identifier()
     .As(nameof(settingName))
     .Flatten(FlattenType.None)
     .WithError("Expected a setting name");
@@ -343,12 +343,12 @@ Parsing turns text into a tree. Most callers want to go one step further and tur
 ```csharp
 using static InductorParser.Rules;
 
-var settingName  = OneOrMore(RuneIn(RuneSet.Letters)).As(nameof(settingName));
+var settingName  = Identifier().As(nameof(settingName));
 
 var settingValue = Or(
     Float().Flatten(FlattenType.Flatten),
     Integer().Flatten(FlattenType.Flatten),
-    OneOrMore(RuneIn(RuneSet.Letters))
+    Identifier()
 ).As(nameof(settingValue));
 
 var document = And(
@@ -398,7 +398,7 @@ To show how this scales, here is a mini settings file grammar where a document c
 ```csharp
 using static InductorParser.Rules;
 
-var key = OneOrMore(RuneIn(RuneSet.Letters | RuneSet.Digits | RuneSet.Runes("_")))
+var key = Identifier(extraStartRunes: RuneSet.Runes("_"))
     .As(nameof(key));
 
 // Private helper, not named because it never appears in the final tree

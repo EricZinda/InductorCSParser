@@ -4,6 +4,8 @@ This doc is about how the parser handles Unicode text at its lowest levels. Read
 
 ## Unicode In One Page
 
+[If you are already well-versed in Unicode, skip this section]
+
 Unicode has a bunch of concepts a parser could engage with. They fall into three categories, and it helps to separate them because they are not a single stack: they are a stack (representation levels), a set of orthogonal operations (text transformations), and a set of downstream algorithms (text analysis).
 
 ### Unicode Representation Hierarchy
@@ -111,7 +113,7 @@ public readonly struct ParseResult
 
 Three fields cover the common cases: `ErrorCharIndex` indexes into the input string directly, `ErrorLine` + `ErrorColumn` give the editor-ready position (in UTF-16 chars, 0-based, following the Language Server Protocol end-to-end. See [ProgrammingModel.md](ProgrammingModel.md) "LSP Position Semantics" for the full rationale). The two extra index properties are there for callers that count in runes or graphemes instead. They are computed lazily from the char index the one time they are asked for, so they cost nothing unless used. Column in rune or grapheme units is deliberately not exposed as a field because callers who need it can derive it from the corresponding index cheaply and the combinatorial expansion was not worth it.
 
-## Encoding Happens Firsts
+## Encoding Happens First
 
 The parser takes a `string`. Encoding is handled before the parser is ever called. If your document lives on disk as UTF-8, UTF-16, or some legacy codepage, decode it into a `string` with the appropriate `Encoding` class (`File.ReadAllText(path, Encoding.UTF8)`, `Encoding.Unicode.GetString(bytes)`, `Encoding.GetEncoding("Windows-1252").GetString(bytes)`, etc.) before calling `.Parse(...)`. By the time the parser sees the input it is a .NET `string` with no encoding tag. Everything below is about how the lexer iterates those characters.
 

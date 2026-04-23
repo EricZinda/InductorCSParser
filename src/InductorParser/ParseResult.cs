@@ -176,6 +176,23 @@ public readonly struct ParseResult
         return builder.ToString();
     }
 
+    // Debug-friendly rendering. On success, shows the parse tree
+    // (same output as PrintTree) so `Console.WriteLine(result)` in a
+    // REPL or debugger immediately shows what was parsed. On failure,
+    // a one-line summary with the outcome, character index, and the
+    // error message. Not intended as a stable format to parse against.
+    public override string ToString()
+    {
+        if (Outcome == ParseOutcome.Success)
+        {
+            if (_symbols == null || _grammar == null)
+                return "Success (empty ParseResult)";
+            string tree = PrintTree();
+            return tree.Length == 0 ? "Success (no symbols)" : "Success:\n" + tree;
+        }
+        return $"{Outcome} at char {ErrorCharIndex}: {ErrorMessage}";
+    }
+
     private ParseResult(ParseOutcome outcome, IReadOnlyList<Symbol>? symbols, string errorMessage, int errorCharIndex, string? input, Rule? grammar)
     {
         Outcome = outcome;

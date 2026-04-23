@@ -4,6 +4,108 @@ Some Unicode surprises cannot be fixed by the parser's lexer choice. Both `RuneL
 
 This doc lists the common gotchas, why they bite, and the idiomatic workaround for each. If you are choosing between `RuneLexer` and `GraphemeLexer`, see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). That is a different decision.
 
+## Identifier Matching
+
+Matching "an identifier" the way a programming language does is a solved Unicode problem. UAX #31 defines two properties, `XID_Start` and `XID_Continue`, and the default identifier is `XID_Start XID_Continue*`. Python, Rust, and C# all use this rule. The parser exposes it as `Rules.Identifier()`:
+
+```csharp
+var name = Identifier().As("name");
+```
+
+That accepts `foo`, `café`, `καλημέρα`, `ℼ`, and rejects `2foo`, `_foo` (underscore is not in XID_Start under strict UAX #31), and the Arabic ligature `ﷺ` (U+FDFA, which is a letter by General_Category but excluded because its NFKC decomposition is a full multi-word phrase).
+
+Two quiet wins you get for free:
+
+- **NFC equivalence (UAX #31 R4).** `ParseOptions.NormalizeInput` defaults to `NormalizationForm.FormC`, so `café` precomposed (U+00E9) and `café` as `e` + combining acute (U+0301) normalize to the same string before the lexer sees them, and both parse to the same identifier. You do not write any code for this.
+
+- **Spec-exact `XID_Start` and `XID_Continue` tables.** `RuneSet.XidStart` and `RuneSet.XidContinue` are available directly for grammars that compose their own identifier-shaped rules (keywords, sigiled names, qualified paths). They match UAX #31 exactly, including the Other_ID_Start additions (`U+2118` SCRIPT CAPITAL P, Mongolian letters) and the NFKC-unstable exclusions (the Arabic ligature set, Greek ypogegrammeni).
+
+Identifier matching works on every script under either lexer, including the scripts where a "letter" is a base character plus a vowel mark (Devanagari, Thai, Arabic-with-vowels). The grapheme lexer bundles those clusters into single tokens, but `Identifier()` uses [`WithinGrapheme`](#withingrapheme-general-purpose-sub-grapheme-matching) internally to walk each grapheme's runes and check them individually against the identifier rules. No `InputUnit.Rune` switch required:
+
+```csharp
+Identifier().Parse("हिन्दी");   // matches under the default grapheme lexer
+Identifier().Parse("กำ");        // Thai with SARA AM: also matches
+Identifier().Parse("καλημέρα"); // Greek: matches
+```
+
+### WithinGrapheme: general-purpose sub-grapheme matching
+
+`WithinGrapheme(innerRule)` is the building block `Identifier()` uses, exposed on its own for other grammar patterns that need to look inside a grapheme. It reads one outer token, runs the inner rule against that token's runes (as a mini rune-lexed stream), and requires the inner rule to consume every rune of the grapheme. Partial matches fail — graphemes are atomic.
+
+Uses beyond identifiers:
+
+```csharp
+// Accept any grapheme whose runes are all ASCII letters. Rejects "é"
+// (not ASCII) and decomposed "é" (two runes) alike.
+var asciiOnlyLetter = WithinGrapheme(RuneIn(RuneSet.Ascii.Letters));
+
+// Emoji-with-modifier matcher: one base emoji rune optionally followed
+// by skin-tone / ZWJ runes, all as one grapheme.
+var emojiCluster = WithinGrapheme(And(
+    RuneIn(emojiBaseSet),
+    ZeroOrMore(RuneIn(skinToneOrZwjSet))
+));
+
+// Hangul syllable expressed as jamo: leading + medial + optional trailing.
+var jamoCluster = WithinGrapheme(And(
+    RuneIn(leadingJamo),
+    RuneIn(medialJamo),
+    Optional(RuneIn(trailingJamo))
+));
+```
+
+Caveats: the inner rule runs against a fresh sub-lexer that does not share trace or budget state with the outer lexer. The inner parse is bounded by the grapheme's rune count (a few dozen at most), so runaway is impossible. Inner-rule symbols are discarded; `WithinGrapheme` emits one leaf per grapheme to the outer tree.
+
+### Matching specific languages
+
+`Identifier` takes two optional `RuneSet` parameters, `extraStartRunes` and `extraBodyRunes`, that get unioned into `XID_Start` and `XID_Continue` respectively. UAX #31 calls this a "profile extension." Combined with `ParseOptions.NormalizeInput`, these cover the real-world identifier rules of most languages that are built on UAX #31.
+
+Strict UAX #31 (the reference spec, no language-specific additions). Raku is the closest mainstream match.
+
+```csharp
+Identifier();  // defaults are the strict form
+```
+
+Python 3 identifiers, per [PEP 3131](https://peps.python.org/pep-3131/) and the [Language Reference](https://docs.python.org/3/reference/lexical_analysis.html#identifiers). Python adds `_` to Start and uses NFKC (not NFC) for equivalence.
+
+```csharp
+var python = Identifier(extraStartRunes: RuneSet.Runes("_"));
+var result = python.Parse(input, new ParseOptions
+{
+    NormalizeInput = NormalizationForm.FormKC,
+});
+```
+
+Rust identifiers, per the [Rust Reference](https://doc.rust-lang.org/reference/identifiers.html). Same profile as Python 3 (adds `_` to Start, uses NFKC). One Rust-specific rule this recipe does **not** enforce: Rust rejects bare `_` as an identifier, requiring `_ XID_Continue+`. If you need that, wrap the rule in an explicit check for the second character. For most grammars the practical difference is negligible.
+
+```csharp
+var rust = Identifier(extraStartRunes: RuneSet.Runes("_"));
+var result = rust.Parse(input, new ParseOptions
+{
+    NormalizeInput = NormalizationForm.FormKC,
+});
+```
+
+ECMAScript-style identifiers (JavaScript, TypeScript), per [ECMA-262 §12.7](https://tc39.es/ecma262/#sec-names-and-keywords). The shape is right (add `_` and `$` to both positions, no normalization), but note the caveat: ECMAScript officially uses `ID_Start` and `ID_Continue`, not the X variants. The parser only exposes the XID sets, which are a strict subset, so this recipe accepts slightly less than a spec-conformant JS engine would. The difference is a handful of exotic code points that almost never appear in real source.
+
+```csharp
+var ecmascript = Identifier(
+    extraStartRunes: RuneSet.Runes("_$"),
+    extraBodyRunes: RuneSet.Runes("$"));    // "_" is already in XID_Continue
+var result = ecmascript.Parse(input, new ParseOptions
+{
+    NormalizeInput = null,
+});
+```
+
+C# identifiers, per [ECMA-334 §7.4.3](https://www.ecma-international.org/publications-and-standards/standards/ecma-334/). C# allows `_` in Start and uses `L + Nl` as the start base. For grammars, `Identifier(extraStartRunes: RuneSet.Runes("_"))` with default NFC is a close match, accepting all the same code points in practice. The spec technically uses `ID_Start`-adjacent rules rather than XID, so this recipe is an approximation in the same sense as the ECMAScript one.
+
+Java identifiers use `Character.isJavaIdentifierStart` and `Character.isJavaIdentifierPart`, which are their own rule. Not reproducible via `Identifier` parameters alone; a Java-conforming grammar would compose against a custom `RuneSet` built from those predicates.
+
+Swift has its own enumerated list of ranges that resembles XID but is not a property reference. Not reproducible via `Identifier` parameters alone.
+
+If you are restricting to a specific script for security reasons (mixed-script phishing, homoglyph attacks), see the Homoglyph Confusables section below. `Identifier()` is the general-purpose match, not a script-restricted one.
+
 ## Case-Insensitive Matching Beyond ASCII
 
 The `LiteralIgnoreAsciiCase` leaf does ASCII case-insensitive matching (A ↔ a) and is all most grammars need. Full Unicode case-insensitive matching has script-specific surprises that neither lexer handles: German `ß` uppercases to `SS` (one character becomes two), Turkish has dotted-i and dotless-i as distinct letters, Greek final sigma (ς) pairs with regular sigma only at word boundaries. The leaf is ASCII-only on purpose. Extending it to full Unicode silently produces wrong results on Turkish, Greek, and German text.

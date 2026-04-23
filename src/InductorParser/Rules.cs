@@ -609,4 +609,104 @@ public static class Rules
     /// default to <see cref="FlattenType.Flatten"/>.
     /// </remarks>
     public static Rule OptionalWhitespace() => ZeroOrMore(RuneIn(RuneSet.Whitespace)).Flatten(FlattenType.Delete);
+
+    /// <summary>
+    /// Encodes the Unicode definition of a "programming language
+    /// identifier" that would be appropriate worldwide (UAX #31 R1). Default
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>,
+    /// so the match appears in the tree as one named node whose
+    /// children are the per-rune leaves.
+    /// </summary>
+    /// <param name="extraStartRunes">
+    /// Runes to union into <see cref="RuneSet.XidStart"/> for the
+    /// first character. UAX #31 calls this a "profile extension":
+    /// the base Start property plus language-specific additions.
+    /// Typical value for a programming-language grammar is
+    /// <c>RuneSet.Runes("_")</c>, which is what C#, Python, Rust,
+    /// and friends do on top of XID_Start. Defaults to
+    /// <see cref="RuneSet.Empty"/> (strict UAX #31).
+    /// </param>
+    /// <param name="extraBodyRunes">
+    /// Runes to union into <see cref="RuneSet.XidContinue"/> for
+    /// every character after the first. Same idea as
+    /// <paramref name="extraStartRunes"/>. ECMAScript, for example,
+    /// adds <c>$</c> to both positions. Defaults to
+    /// <see cref="RuneSet.Empty"/>.
+    /// </param>
+    /// <remarks>
+    /// The same word can be typed more than one way. "café" might be
+    /// stored with a single precomposed "é", or with a plain "e"
+    /// followed by a combining accent mark drawn on top. Both look
+    /// identical in an editor but differ byte-for-byte. By default
+    /// the parser treats them as the same identifier, so a grammar
+    /// doesn't have to care which form it gets.
+    /// <para>
+    /// Pass <c>NormalizeInput = null</c> on
+    /// <see cref="ParseOptions"/> to match bytes as-written. Pass
+    /// <c>NormalizationForm.FormKC</c> for a stronger rule that also
+    /// treats fullwidth <c>ｆｏｏ</c> and plain <c>foo</c>, or the
+    /// ligature <c>ﬀ</c> and <c>ff</c>, as the same identifier.
+    /// That's the Python 3 and Rust behavior.
+    /// The stronger rule can, however, collapse things
+    /// you may want kept distinct. It folds <c>ℓ</c> (script small L,
+    /// used in physics) into <c>l</c>, and <c>Ⅷ</c> (Roman numeral)
+    /// into <c>VIII</c>. A grammar that parses math or legal text
+    /// probably wants those distinctions. Identifier-heavy grammars
+    /// (Python source, say) almost always don't.
+    /// </para>
+    /// <para>
+    /// See docs/UnicodeGotchas.md for recipes that reproduce the
+    /// identifier rules of specific languages (Python 3, Rust,
+    /// ECMAScript) via these parameters plus NormalizeInput.
+    /// </para>
+    /// </remarks>
+    public static Rule Identifier(RuneSet extraStartRunes = default, RuneSet extraBodyRunes = default)
+    {
+        var start = RuneSet.XidStart | extraStartRunes;
+        var body = RuneSet.XidContinue | extraBodyRunes;
+        return And(
+            // First grapheme: starts with a Start rune, rest of its runes
+            // (if any) are Body runes. Under GraphemeLexer this handles
+            // precomposed "é", "ñ", etc. as single-rune graphemes and
+            // "हि"-style consonant+vowel-sign graphemes as multi-rune.
+            WithinGrapheme(And(RuneIn(start), ZeroOrMore(RuneIn(body)))),
+            // Subsequent graphemes: every rune must be a Body rune.
+            ZeroOrMore(WithinGrapheme(OneOrMore(RuneIn(body))))
+        ).Flatten(FlattenType.Preserve);
+    }
+
+    /// <summary>
+    /// Reads one token from the lexer and runs <paramref name="innerRule"/>
+    /// against the runes inside that token. Under
+    /// <see cref="InputUnit.Grapheme"/> (the default) the token is a
+    /// grapheme cluster that may span several runes, and the inner rule
+    /// walks them one at a time. Under <see cref="InputUnit.Rune"/> the
+    /// token is already one rune, so the inner rule sees a single-rune
+    /// stream and behaves as it would outside the wrapper. Default
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>.
+    /// </summary>
+    /// <param name="innerRule">
+    /// The rule to run against the grapheme's runes. Must consume every
+    /// rune of the grapheme on success; a rule that matches only a
+    /// prefix causes the whole <c>WithinGrapheme</c> to fail. Any rule
+    /// composition is allowed inside (<see cref="And"/>, <see cref="Or"/>,
+    /// <c>RuneIn</c>, etc.).
+    /// </param>
+    /// <remarks>
+    /// Building block for rules that care about grapheme-internal
+    /// structure. Used by <see cref="Identifier"/> to make identifier
+    /// matching work on Devanagari, Thai, Arabic-with-vowels, and other
+    /// scripts whose "letters" are multi-rune graphemes. Other uses:
+    /// emoji-with-modifier matchers (<c>WithinGrapheme(And(RuneIn(EmojiBase),
+    /// ZeroOrMore(RuneIn(SkinToneOrZWJ))))</c>), ASCII-only strictness
+    /// (<c>WithinGrapheme(RuneIn(RuneSet.Ascii.Letters))</c> rejects any
+    /// multi-rune grapheme), Hangul jamo clusters, etc.
+    /// <para>
+    /// One leaf Symbol is emitted per successful match, representing the
+    /// whole grapheme. Inner-rule symbols are discarded. Inner-rule
+    /// tracing is not propagated to the outer trace. The inner parse is
+    /// bounded by the grapheme's rune count, so runaway is impossible.
+    /// </para>
+    /// </remarks>
+    public static Rule WithinGrapheme(Rule innerRule) => new WithinGraphemeRule(innerRule);
 }

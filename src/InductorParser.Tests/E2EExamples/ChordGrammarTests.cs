@@ -207,11 +207,12 @@ public class ChordGrammarTests
     //     children whose first rune can't match, collapsing the N-way
     //     alternations to whichever branch the lookahead allows.
     //   - After first-rune lookahead skip on BetweenInclusiveRule (p750):
-    //     ~6-7x. BetweenInclusive (ZeroOrMore / Optional / OneOrMore) now
-    //     peeks one rune before opening a Transaction, and when Inner.Advance
-    //     is Always and the peek isn't in Inner.FirstConsumedRunes, skips the
-    //     Inner.TryParse entirely. Chord grammar has several Optional(...)
-    //     and ZeroOrMore(...) wrappers around keyword-starting patterns.
+    //     ~7-10x (three-run range on this box, 2026-04-22). BetweenInclusive
+    //     (ZeroOrMore / Optional / OneOrMore) now peeks one rune before
+    //     opening a Transaction, and when Inner.Advance is Always and the
+    //     peek isn't in Inner.FirstConsumedRunes, skips the Inner.TryParse
+    //     entirely. Chord grammar has several Optional(...) and
+    //     ZeroOrMore(...) wrappers around keyword-starting patterns.
     //     Whenever the next rune proves Inner can't match, the skip collapses
     //     a full interpreter frame (EnterRule / BeginTransaction / Read /
     //     set-contains / RecordFailure / Dispose) into three comparisons.
@@ -223,7 +224,7 @@ public class ChordGrammarTests
     //     the child is a zero-width success), fewer per-iteration
     //     allocations, or a compiled "state machine" emitter for
     //     stable grammars. Tracked separately (see backlog/p800).
-    [Test, Ignore("Ratio is ~6-7x after p750 first-rune skip; 2x needs a new tier (see comment above).")]
+    [Test, Ignore("Ratio is ~7-10x after p750 first-rune skip; 2x needs a new tier (see comment above).")]
     public void Timing_grammar_is_within_two_times_compiled_regex()
     {
         const int iterations = 5_000;

@@ -228,15 +228,17 @@ public class BacklogGrammarTests
             .Replace("\t", "\\t") + "\"";
     }
 
-    // Ignored. Ratios on this box (net8.0, Release, 5000 iters), pre and
-    // post Or required-runes dispatch (run-to-run noise on these short corpora
-    // is high, and the per-case numbers swing by ~2x between runs):
-    //   H1:        51x  -> 25-42x
-    //   H2:        26x  -> 21-32x
-    //   Bullet:     8x  -> 5-16x
-    //   HrRun:    4.5x  -> 3-12x
-    //   HrSpaced: 9.4x  -> 9-14x
-    //   Paragraph: 28x  -> 20-45x
+    // Ignored. Ratios on this box (net8.0, Release, 5000 iters). Three-run
+    // range as of 2026-04-22, which is after Or required-runes dispatch
+    // (p500) and BetweenInclusive first-rune skip (p750). Run-to-run noise
+    // on these short corpora is high; per-case numbers swing by ~2-3x
+    // between runs:
+    //   H1:        46-53x
+    //   H2:         8-27x
+    //   Bullet:     5-8x
+    //   HrRun:      5-6x
+    //   HrSpaced:   7-9x
+    //   Paragraph: 10-22x
     // Dispatch helps most when an Or / composite has many branches and a
     // disjoint first-char set. These rules are simpler (one RuneIn or one
     // Token at the head), so the composite transaction overhead on the

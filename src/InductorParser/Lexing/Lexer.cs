@@ -14,6 +14,14 @@ public abstract class Lexer
     // this string. The GC never sees the Tokens or ReadOnlySpan<char>s, so they never have
     // to be tracked or reclaimed.
     private readonly string _input;
+    // Exclusive upper bound on _position. Defaults to _input.Length (a
+    // lexer reads to end of input). Sub-lexer constructors bound this to
+    // a sub-range of the shared input string so rules like WithinGrapheme
+    // can run inner rules over a portion of the same string without
+    // allocating a Substring copy. Tokens and positions still use
+    // absolute offsets into _input, so outer error-position reporting
+    // works without translation.
+    private readonly int _endPosition;
     private int _position;
     private int _deepestFailure;
     private string? _deepestFailureMessage;
@@ -61,8 +69,26 @@ public abstract class Lexer
     }
 
     protected Lexer(string input, TextWriter? traceSink, TraceLevel traceLevel)
+        : this(input, startPosition: 0, endPosition: (input ?? throw new ArgumentNullException(nameof(input))).Length, traceSink, traceLevel)
+    {
+    }
+
+    // Bounded-range constructor used to build sub-lexers that read a
+    // portion of a shared input string. startPosition is the initial
+    // read cursor and endPosition is the exclusive upper bound (IsEof
+    // fires when _position reaches endPosition). Tokens still carry
+    // absolute offsets into the shared string so the outer parse's
+    // error-position reporting works uniformly whether positions come
+    // from the main lexer or a sub-lexer.
+    protected Lexer(string input, int startPosition, int endPosition, TextWriter? traceSink, TraceLevel traceLevel)
     {
         _input = input ?? throw new ArgumentNullException(nameof(input));
+        if ((uint)startPosition > (uint)_input.Length)
+            throw new ArgumentOutOfRangeException(nameof(startPosition), startPosition, "startPosition must be in [0, input.Length].");
+        if (endPosition < startPosition || endPosition > _input.Length)
+            throw new ArgumentOutOfRangeException(nameof(endPosition), endPosition, "endPosition must be in [startPosition, input.Length].");
+        _position = startPosition;
+        _endPosition = endPosition;
         _traceSink = traceSink;
         _traceLevel = traceLevel;
     }
@@ -75,7 +101,7 @@ public abstract class Lexer
     // if one was set.
     public string? DeepestFailureMessage => _deepestFailureMessage;
 
-    public bool IsEof => _position >= _input.Length;
+    public bool IsEof => _position >= _endPosition;
 
     internal int TransactionDepth => _transactionDepth;
 

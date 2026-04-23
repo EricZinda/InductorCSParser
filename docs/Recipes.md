@@ -47,6 +47,39 @@ var blockComment = And(
 
 Each iteration first checks that `closeMarker` does not match at the current cursor (`Not` is negative lookahead, zero-width), and only then consumes one token with `AnyToken()`. When `closeMarker` would fire, `Not` fails, the `And` fails, and the `ZeroOrMore` stops with the cursor sitting just before `*/`. The outer `And` then matches the terminator for real. `AnyToken()` handles multi-rune graphemes naturally under GraphemeLexer, same as `RuneNotIn`, so emoji and CJK in the comment body pass through unchanged.
 
+## Matching an Identifier
+
+Use `Identifier()` for a Unicode-aware identifier per UAX #31 (`XID_Start XID_Continue*`). It accepts `foo`, `café`, `καλημέρα`, Devanagari, Thai, and Arabic-with-vowels under the default grapheme lexer. No lexer mode switch required.
+
+```csharp
+var name = Identifier().As(nameof(name));
+```
+
+For the common "programming-language profile" that also allows leading underscore, add `_` to the Start set:
+
+```csharp
+var name = Identifier(extraStartRunes: RuneSet.Runes("_"));
+```
+
+For the broader profile that allows `_` and `$` (ECMAScript-style), add both:
+
+```csharp
+var name = Identifier(
+    extraStartRunes: RuneSet.Runes("_$"),
+    extraBodyRunes:  RuneSet.Runes("$"));   // "_" is already in XID_Continue
+```
+
+For NFKC equivalence (Python 3 and Rust behavior, where fullwidth `ｆｏｏ` and plain `foo` match the same identifier), set normalization to `FormKC`:
+
+```csharp
+var result = name.Parse(input, new ParseOptions
+{
+    NormalizeInput = NormalizationForm.FormKC,
+});
+```
+
+Per-language recipes and the full detail of what the Start and Continue sets cover live in [UnicodeGotchas.md § Identifier Matching](UnicodeGotchas.md#identifier-matching).
+
 ## Organizing a Large Grammar as a Class
 
 Local variables work fine for small grammars. For anything bigger, you will want to organize rules across files and reference them by name from outside their defining scope. The natural C# shape for that is a static class, treated purely as a namespace for rule fields. Nothing in the library requires it, but the convention is worth documenting because most production grammars will end up here.
@@ -57,14 +90,13 @@ using static InductorParser.Rules;
 public static class NameValueGrammar
 {
     public static readonly Rule SettingName =
-        OneOrMore(RuneIn(RuneSet.Letters))
-            .As(nameof(SettingName));
+        Identifier().As(nameof(SettingName));
 
     public static readonly Rule SettingValue =
         Or(
             Float().Flatten(FlattenType.Flatten),
             Integer().Flatten(FlattenType.Flatten),
-            OneOrMore(RuneIn(RuneSet.Letters))
+            Identifier()
         ).As(nameof(SettingValue))
          .Flatten(FlattenType.None);
 

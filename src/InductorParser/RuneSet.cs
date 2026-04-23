@@ -32,7 +32,7 @@ namespace InductorParser;
 // (emoji sequences, combining-mark clusters) aren't a single element of any
 // RuneSet. See docs/ProgrammingModel.md for how that interacts with the
 // grapheme lexer.
-public readonly struct RuneSet : IEquatable<RuneSet>
+public readonly partial struct RuneSet : IEquatable<RuneSet>
 {
     // One contiguous run of Unicode code points, inclusive on both ends:
     // the closed interval [Low, High]. A RuneSet is represented as a sorted,
@@ -184,6 +184,28 @@ public readonly struct RuneSet : IEquatable<RuneSet>
         ValidateScalarValue(high, nameof(high));
         if (high < low) throw new ArgumentException("high must be >= low");
         return new RuneSet(new[] { new Interval(low, high) });
+    }
+
+    // Construct a RuneSet from a list of code-point intervals. Each element
+    // is a closed range [Low, High]. The input doesn't need to be sorted or
+    // non-overlapping; Normalize takes care of that. Intended as the bulk
+    // factory for large hand-curated or generated tables that would be
+    // tedious to chain through the | operator.
+    internal static RuneSet FromRanges(ReadOnlySpan<(int Low, int High)> ranges)
+    {
+        var list = new List<Interval>(ranges.Length);
+        for (int index = 0; index < ranges.Length; index++)
+        {
+            var (low, high) = ranges[index];
+            ValidateScalarValue(low, nameof(ranges));
+            ValidateScalarValue(high, nameof(ranges));
+            if (high < low)
+                throw new ArgumentException(
+                    $"Range at index {index} has high ({high:X}) < low ({low:X}).",
+                    nameof(ranges));
+            list.Add(new Interval(low, high));
+        }
+        return new RuneSet(Normalize(list));
     }
 
     public static RuneSet Runes(string characters)

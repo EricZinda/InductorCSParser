@@ -9,12 +9,12 @@ public class SettingExampleTests
 {
     private static (Rule document, Rule settingName, Rule settingValue) BuildGrammar()
     {
-        var settingName = OneOrMore(RuneIn(RuneSet.Letters)).Flatten(FlattenType.Preserve);
+        var settingName = Identifier();
 
         var settingValue = Or(
-            Float().Flatten(FlattenType.Flatten),
-            Integer().Flatten(FlattenType.Flatten),
-            OneOrMore(RuneIn(RuneSet.Letters))
+            Float(),
+            Integer(),
+            Identifier()
         ).Flatten(FlattenType.Preserve);
 
         var document = And(
