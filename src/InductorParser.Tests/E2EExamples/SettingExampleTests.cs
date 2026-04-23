@@ -11,10 +11,19 @@ public class SettingExampleTests
     {
         var settingName = Identifier();
 
+        // A double-quoted string: opening ", a body that stops at the
+        // next ", then the closing ". The StringChars leaf scans the
+        // body in one tight loop. The Tokens default to FlattenType.Delete
+        // so the quotes themselves don't appear in the flattened match.
+        var quotedString = And(
+            Token('"'),
+            StringChars(RuneSet.Runes("\"")),
+            Token('"'));
+
         var settingValue = Or(
             Float(),
             Integer(),
-            Identifier()
+            quotedString
         ).Flatten(FlattenType.Preserve);
 
         var document = And(
@@ -47,10 +56,12 @@ public class SettingExampleTests
     {
         var (document, settingName, settingValue) = BuildGrammar();
 
-        var result = document.Parse("difficulty=hard;");
+        var result = document.Parse("difficulty=\"hard\";");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.Find(settingName)!.ToString(), Is.EqualTo("difficulty"));
+        // The quotes are Delete-flattened tokens, so the settingValue
+        // node's flattened text is just the body of the string.
         Assert.That(result.Tree!.Find(settingValue)!.ToString(), Is.EqualTo("hard"));
     }
 
@@ -89,7 +100,7 @@ public class SettingExampleTests
         var (document, settingName, settingValue) = BuildGrammar();
         document.Compile();
 
-        var result = document.Parse("alpha = beta;");
+        var result = document.Parse("alpha = \"beta\";");
 
         Assert.That(result.Success, Is.True);
         var nameSym = result.Tree!.Find(settingName);

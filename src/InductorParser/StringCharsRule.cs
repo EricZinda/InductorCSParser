@@ -16,11 +16,11 @@ namespace InductorParser;
 // contains.
 //
 // There are two options for the string body stop condition:
-//   * RuneSet stoppers (fast path): stop when the next rune is in the
+//   * RuneSet stopAt (fast path): stop when the next rune is in the
 //     set. Only does one RuneSet.Contains per rune and handles any grammar whose
 //     closing boundary is a single rune: JSON ", Python ' or ", C# $"..."
 //     closing, etc.
-//   * Rule stopper (general path): stop when a user-supplied rule
+//   * Rule stopAt (general path): stop when a user-supplied rule
 //     matches. The rule is executed in a peek
 //     transaction that always rolls back, so the stopper itself isn't
 //     consumed. The surrounding grammar is still responsible for
@@ -106,12 +106,12 @@ internal sealed class StringCharsRule : Rule
     private readonly Rule? _escapeEnd;
 
     // FAST PATH, no escape. Per rune: one RuneSet.Contains.
-    public StringCharsRule(RuneSet stoppers)
+    public StringCharsRule(RuneSet stopAt)
         : base(FlattenType.Preserve)
     {
-        _stopperSet = stoppers;
+        _stopperSet = stopAt;
         _stopperRule = null;
-        _stopperRendered = stoppers.ToString();
+        _stopperRendered = stopAt.ToString();
         _escapeEnd = null;
         _hasEscape = false;
         _escapeStartRune = -1;
@@ -121,14 +121,14 @@ internal sealed class StringCharsRule : Rule
     // FAST PATH, single-rune escape start. Per rune: one
     // RuneSet.Contains plus one int equality on non-stopper runes.
     // Covers JSON, C, C++ regular, Python single-line.
-    public StringCharsRule(RuneSet stoppers, Rune escapeStart, Rule escapeEnd)
+    public StringCharsRule(RuneSet stopAt, Rune escapeStart, Rule escapeEnd)
         : base(FlattenType.Preserve, escapeEnd)
     {
         if (escapeEnd == null)
             throw new ArgumentNullException(nameof(escapeEnd));
-        _stopperSet = stoppers;
+        _stopperSet = stopAt;
         _stopperRule = null;
-        _stopperRendered = stoppers.ToString();
+        _stopperRendered = stopAt.ToString();
         _escapeEnd = escapeEnd;
         _hasEscape = true;
         _escapeStartRune = escapeStart.Value;
@@ -138,16 +138,16 @@ internal sealed class StringCharsRule : Rule
     // General escape start. Adds one Rule.TryParse on non-stopper
     // runes only. Use for multi-rune starts like $$ or a choice
     // across several starts.
-    public StringCharsRule(RuneSet stoppers, Rule escapeStart, Rule escapeEnd)
+    public StringCharsRule(RuneSet stopAt, Rule escapeStart, Rule escapeEnd)
         : base(FlattenType.Preserve, escapeStart, escapeEnd)
     {
         if (escapeStart == null)
             throw new ArgumentNullException(nameof(escapeStart));
         if (escapeEnd == null)
             throw new ArgumentNullException(nameof(escapeEnd));
-        _stopperSet = stoppers;
+        _stopperSet = stopAt;
         _stopperRule = null;
-        _stopperRendered = stoppers.ToString();
+        _stopperRendered = stopAt.ToString();
         _escapeEnd = escapeEnd;
         _hasEscape = true;
         _escapeStartRune = -1;
@@ -157,14 +157,14 @@ internal sealed class StringCharsRule : Rule
     // General stopper, no escape. Per rune: one Rule.TryParse for
     // the stopper (peek transaction, never consumed). Use for
     // multi-rune boundaries like C++ raw strings.
-    public StringCharsRule(Rule stopper)
-        : base(FlattenType.Preserve, stopper)
+    public StringCharsRule(Rule stopAt)
+        : base(FlattenType.Preserve, stopAt)
     {
-        if (stopper == null)
-            throw new ArgumentNullException(nameof(stopper));
+        if (stopAt == null)
+            throw new ArgumentNullException(nameof(stopAt));
         _stopperSet = default;
-        _stopperRule = stopper;
-        _stopperRendered = $"rule {stopper.Name ?? stopper.GetType().Name}";
+        _stopperRule = stopAt;
+        _stopperRendered = $"rule {stopAt.Name ?? stopAt.GetType().Name}";
         _escapeEnd = null;
         _hasEscape = false;
         _escapeStartRune = -1;
@@ -173,16 +173,16 @@ internal sealed class StringCharsRule : Rule
 
     // General stopper with single-rune escape start. Canonical use:
     // Python triple-quote """...""" with backslash escapes.
-    public StringCharsRule(Rule stopper, Rune escapeStart, Rule escapeEnd)
-        : base(FlattenType.Preserve, stopper, escapeEnd)
+    public StringCharsRule(Rule stopAt, Rune escapeStart, Rule escapeEnd)
+        : base(FlattenType.Preserve, stopAt, escapeEnd)
     {
-        if (stopper == null)
-            throw new ArgumentNullException(nameof(stopper));
+        if (stopAt == null)
+            throw new ArgumentNullException(nameof(stopAt));
         if (escapeEnd == null)
             throw new ArgumentNullException(nameof(escapeEnd));
         _stopperSet = default;
-        _stopperRule = stopper;
-        _stopperRendered = $"rule {stopper.Name ?? stopper.GetType().Name}";
+        _stopperRule = stopAt;
+        _stopperRendered = $"rule {stopAt.Name ?? stopAt.GetType().Name}";
         _escapeEnd = escapeEnd;
         _hasEscape = true;
         _escapeStartRune = escapeStart.Value;

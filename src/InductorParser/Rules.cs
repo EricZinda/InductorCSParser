@@ -17,7 +17,7 @@ namespace InductorParser;
 /// whiteboard:
 /// <code>
 /// var expression = And(
-///     OneOrMore(RuneIn(RuneSet.Letters)),
+///     Identifier(),
 ///     OptionalWhitespace(),
 ///     Token('='),
 ///     OptionalWhitespace(),
@@ -220,7 +220,7 @@ public static class Rules
     ///     (RuneSet.Letters | RuneSet.Digits) &amp; RuneSet.Range(0x0000, 0x024F));
     /// </code>
     /// </remarks>
-    public static Rule RuneIn(RuneSet cls) => new RuneInRule(cls);
+    public static Rule RuneIn(RuneSet set) => new RuneInRule(set);
 
     /// <summary>
     /// Shortcut for the common "one of these literal runes" case.
@@ -245,7 +245,7 @@ public static class Rules
     /// as the body character in a bounded scan (for example,
     /// everything up to a closing quote).
     /// </remarks>
-    public static Rule RuneNotIn(RuneSet cls) => new RuneNotInRule(cls);
+    public static Rule RuneNotIn(RuneSet set) => new RuneNotInRule(set);
 
     /// <summary>
     /// Shortcut for "any rune except these specific ones."
@@ -259,13 +259,13 @@ public static class Rules
 
     /// <summary>
     /// Match a run of runes up to (but not including) a rune in
-    /// the stoppers set. Default <see cref="FlattenType"/>:
+    /// the stopAt set. Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
     /// Consumes at least one rune on success. One leaf that scans
     /// chars directly, which is a meaningful speedup over
-    /// <c>ZeroOrMore(RuneNotIn(stoppers))</c> for long strings.
+    /// <c>ZeroOrMore(RuneNotIn(stopAt))</c> for long strings.
     /// <code>
     /// // CSV field body: scan until the next comma or newline
     /// var field = StringChars(RuneSet.Runes(",\n"));
@@ -274,8 +274,8 @@ public static class Rules
     /// var lineCommentBody = StringChars(RuneSet.Runes("\r\n"));
     /// </code>
     /// </remarks>
-    public static Rule StringChars(RuneSet stoppers) =>
-        new StringCharsRule(stoppers);
+    public static Rule StringChars(RuneSet stopAt) =>
+        new StringCharsRule(stopAt);
 
     /// <summary>
     /// <see cref="StringChars(RuneSet)"/> with escape sequences.
@@ -296,8 +296,8 @@ public static class Rules
     ///     RuneIn("ntr\"\\"));
     /// </code>
     /// </remarks>
-    public static Rule StringChars(RuneSet stoppers, Rune escapeStart, Rule escapeEnd) =>
-        new StringCharsRule(stoppers, escapeStart, escapeEnd);
+    public static Rule StringChars(RuneSet stopAt, Rune escapeStart, Rule escapeEnd) =>
+        new StringCharsRule(stopAt, escapeStart, escapeEnd);
 
     /// <summary>
     /// Same as the Rune-valued escape-start overload, with a
@@ -317,8 +317,8 @@ public static class Rules
     ///     And(OneOrMore(RuneNotIn("}")), Token('}')));
     /// </code>
     /// </remarks>
-    public static Rule StringChars(RuneSet stoppers, Rule escapeStart, Rule escapeEnd) =>
-        new StringCharsRule(stoppers, escapeStart, escapeEnd);
+    public static Rule StringChars(RuneSet stopAt, Rule escapeStart, Rule escapeEnd) =>
+        new StringCharsRule(stopAt, escapeStart, escapeEnd);
 
     /// <summary>
     /// <see cref="StringChars(RuneSet)"/> with a rule-valued stop
@@ -337,8 +337,8 @@ public static class Rules
     /// var blockCommentBody = StringChars(Literal("*/"));
     /// </code>
     /// </remarks>
-    public static Rule StringChars(Rule stopper) =>
-        new StringCharsRule(stopper);
+    public static Rule StringChars(Rule stopAt) =>
+        new StringCharsRule(stopAt);
 
     /// <summary>
     /// Rule-stopper StringChars with escape sequences. Default
@@ -355,8 +355,8 @@ public static class Rules
     ///     RuneIn("\"\\"));
     /// </code>
     /// </remarks>
-    public static Rule StringChars(Rule stopper, Rune escapeStart, Rule escapeEnd) =>
-        new StringCharsRule(stopper, escapeStart, escapeEnd);
+    public static Rule StringChars(Rule stopAt, Rune escapeStart, Rule escapeEnd) =>
+        new StringCharsRule(stopAt, escapeStart, escapeEnd);
 
     /// <summary>
     /// Match any one token (one grapheme under GraphemeLexer, one

@@ -5,7 +5,7 @@ using static InductorParser.Rules;
 namespace InductorParser.Tests;
 
 // End-to-end string-literal grammars that exercise every StringChars
-// shape: RuneSet stoppers, Rule stoppers, single-rune escape starts,
+// shape: RuneSet stopAt, Rule stopAt, single-rune escape starts,
 // no-escape forms. These mirror the sketches in
 // StringCharsRule.cs's header comment, built out as runnable grammars
 // so the tests can feed real inputs through them.
@@ -73,12 +73,12 @@ public static class StringLiteralGrammars
         var unicodeEscape = And(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
         var escapeEnd = Or(simpleEscape, unicodeEscape);
 
-        // Stoppers: the closing quote plus every C0 control char.
+        // Stop-at set: the closing quote plus every C0 control char.
         // Range(0x00, 0x1F) covers U+0000..U+001F inclusive. Those
         // include TAB (0x09), LF (0x0A), and CR (0x0D), all of
         // which JSON requires be escaped rather than embedded raw.
-        var stoppers = RuneSet.Runes("\"") | RuneSet.Range(0x00, 0x1F);
-        var body = StringChars(stoppers, new Rune('\\'), escapeEnd);
+        var stopAt = RuneSet.Runes("\"") | RuneSet.Range(0x00, 0x1F);
+        var body = StringChars(stopAt, new Rune('\\'), escapeEnd);
 
         return And(Token('"'), body, Token('"')).As("jsonString");
     }
