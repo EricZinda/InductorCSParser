@@ -1,10 +1,11 @@
 The Inductor Parser (IP) is a loose port of the [Inductor C++ Parser](https://github.com/EricZinda/InductorParser), designed for C#.
 
+## Unicode First
 If you write grammars in IP, they are Unicode safe from the start. 
 
-Each token presented to a rule is a Unicode *Grapheme Cluster* which represents characters [*as the user perceives them*](https://www.unicode.org/reports/tr29/#Grapheme_Cluster_Boundaries). This means you don't have to wonder if your grammar will break or improperly slice apart characters if it encounters a file with non-ASCII characters or (gasp) *emojis* in it.  
-
-Default rules are smart about Unicode and use well thought through Unicode definitions for things like "whitespace" and "identifiers".
+- Each token presented to a rule is a Unicode *Grapheme Cluster* which represents characters [*as the user perceives them*](https://www.unicode.org/reports/tr29/#Grapheme_Cluster_Boundaries). This means you don't have to wonder if your grammar will break or improperly slice apart characters if it encounters a file with non-ASCII characters or (gasp) *emojis* in it.  
+- Built-in rules use Unicode worldwide-safe definitions for things like "whitespace" and "identifiers".
+- The parser defaults to normalizing input so that characters that can be written as multiple things get normalized to one (and the error indexes reverse this so it points to the right place in text)
 
 You can also pretend you never heard the word "Grapheme Cluster" and write rules naturally: it will still give you the right base to start from!
 
@@ -14,9 +15,10 @@ Here's a grammar for reading a simple setting, and examples that show how it han
 // Parse: Key = Value (e.g. Foo=5, Bar = 1.05, Goo = "some string")
 var settingName = Identifier().As("name");
 
+// "Rune" is the .Net term for Unicode Code Point
 var quotedString = And(
     Token('"'),
-    StringChars(stoppers=RuneSet.Runes("\"")),
+    StringChars(stopAt=RuneSet.Runes("\"")),
     Token('"'));
 
 var settingValue = Or(
@@ -33,46 +35,49 @@ var document = And(
     settingValue
 );
 
-var result = document.Parse("setting = 5");
-console.writeline(result) // name: "setting", value: "5"
+// Easy default case
+var result = document.Parse("setting = 5"); // name: "setting", value: "5"
 // Identifier() follows UAX #31, so anything Unicode calls a letter works
 document.Parse("Γειά = 5");    // name: "Γειά",    value: "5"
 document.Parse("привет = 1");  // name: "привет",  value: "1"
 document.Parse("你好 = 1");    // name: "你好",     value: "1"
-// é written as e + U+0301 combining acute is two code points that form one user-perceived character. The parser accepts it and the name's flattened text reads as you'd expect:
+// é written as e + U+0301 (accent mark) is two runes that
+// form one user-perceived character. The parser accepts it and 
+// the name's flattened text reads as you'd expect:
 document.Parse("café = 5");    // (é = e + U+0301) name: "café", value: "5"
-//In a Devanagari example, each grapheme is a consonant joined to a virama or vowel sign, sometimes three or four runes long:
-document.Parse("नमस्ते = 1;"); // name: "नमस्ते", value: "1"
+// In a Devanagari language example, each grapheme is a consonant
+// joined to a virama or vowel sign, sometimes three or four runes long
+document.Parse("नमस्ते = 1"); // name: "नमस्ते", value: "1"
 // 𠮷 is U+20BB7, one rune but two UTF-16 chars. 
-document.Parse("𠮷田 = 5;"); // name: "𠮷田", value: "5"
+document.Parse("𠮷田 = 5"); // name: "𠮷田", value: "5"
 // OptionalWhitespace() matches the Unicode whitespace category, not just ASCII
-document.Parse("setting\u00A0=\u00A05;");  // (non-breaking space)
-document.Parse("setting\u3000=\u30005;");  // (ideographic space) name: "setting", value: "5"
+document.Parse("setting\u00A0=\u00A05");  // (non-breaking space)
+document.Parse("setting\u3000=\u30005");  // (ideographic space) name: "setting", value: "5"
 // String values hold anything except the closing quote. 
 // Mixed scripts, emoji, and multi-rune graphemes all pass through untouched
-document.Parse("motto = \"你好 🎉 नमस्ते\";"); // name: "motto", value: "你好 🎉 नमस्ते"
-document.Parse("motto = \"👨\u200D👩\u200D👧\";");  // (ZWJ family) name: "motto", value: "👨‍👩‍👧"
-document.Parse("motto = \"🇺🇸\";");  // (regional-indicator flag) name: "motto", value: "🇺🇸"
+document.Parse("motto = \"你好 🎉 नमस्ते\""); // name: "motto", value: "你好 🎉 नमस्ते"
+document.Parse("motto = \"👨\u200D👩\u200D👧\"");  // (ZWJ family emoji) name: "motto", value: "👨‍👩‍👧"
+document.Parse("motto = \"🇺🇸\"");  // (regional-indicator flag) name: "motto", value: "🇺🇸"
 // Emoji aren't in the UAX #31 identifier set, so the parser rejects them 
 // the same way Python and Rust do:
-document.Parse("setting🎉 = 5;"); // GrammarMismatch at char 7
+document.Parse("setting🎉 = 5"); // GrammarMismatch at char 7
 ```
 Error positions are also designed for Unicode and reported in multiple units. When the input contains supplementary-plane letters, char index and rune index are different. When it contains multi-rune graphemes, rune index and grapheme index are different. This gives you the right tools for different jobs:
 
 ```CSharp
-//
-var result = document.Parse("𠮷田 = ;");
+var result = document.Parse("𠮷田 = ");
 // ErrorCharIndex=6, ErrorRuneIndex=5, ErrorGraphemeIndex=5
 // (each supplementary letter is two chars but one rune)
 
-var result = document.Parse("नमस्ते = ;");
+var result = document.Parse("नमस्ते = ");
 // ErrorCharIndex=9, ErrorRuneIndex=9, ErrorGraphemeIndex=7
 // (Devanagari is BMP, so chars == runes, but four of the name's
 //  six graphemes span two or three runes each)
 ```
 
+## Designed for Readability
 
-The whole point of building this parser is to be able to replace hieroglyphic Regex patterns or complicated, hard to debug parsing code with something that more readable, debuggable and understandable. Especially as I'm doing more and more reviewing of code written by LLMs, I've found it invaluable to have an LLM write pattern matching and parsing code in a form that I can actually review for correctness. Compare:
+The whole point of building this parser is to be able to replace hieroglyphic Regex patterns or complicated, hard to debug parsing code with something that more readable, debuggable and understandable. Especially as I'm doing more and more reviewing of code written by LLMs, I've found it invaluable to have an LLM write pattern matching and parsing code in a form that I can actually review for correctness. Compare some top Regex questions from StackOverflow:
 
 Match a line that doesn't contain the word "hede" (From https://stackoverflow.com/q/406230): 
 
@@ -81,15 +86,14 @@ Regex: ^((?!hede).)*$
 ```
 ```csharp
 Inductor Parser:
-
-var lineWithoutHede = 
-    And(
-        ZeroOrMore(And(
-                       Not(Literal("hede")), 
-                       AnyToken()
-                      )),
-        Eof()
-    );
+var lineWithoutHede = And(
+    ZeroOrMore(And(
+        Not(Literal("hede")),
+        Not(EndOfLine()),
+        AnyToken()
+    )),
+    EndOfLineOrEof()
+);
 ```
 
 Match numbers only (From https://stackoverflow.com/q/273141)
@@ -107,7 +111,7 @@ var numbersOnly = And(
 
 ```
 
-Regex expressions can sometimes introduce [denial-of-service attacks](https://en.wikipedia.org/wiki/ReDoS) (or just plain poor user experiences). Inductor Parser naturally avoids many of these patterns just by virtue of being a recursive descent parser and thus doesn't do backtracking. Further, it has 3 different stop modes to prevent runaway parses on unexpected or large documents.
+Regex expressions can sometimes introduce [denial-of-service attacks](https://en.wikipedia.org/wiki/ReDoS) (or just plain poor user experiences) when the encounter adversarial or unexpected text (`^\d+$` from above is a perfect example). Inductor Parser naturally avoids many of these patterns just by virtue of being a recursive descent parser and thus doesn't do backtracking, its replacement above doesn't have this problem. Further, it has 3 different stop modes to prevent runaway parses on unexpected or large documents.
 
 As I've been building a variant of a text editor, I wanted to make sure the fundamentals were solid for quickly and safely parsing worldwide text on many platforms. The parser:
 

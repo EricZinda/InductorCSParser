@@ -425,6 +425,28 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     public static RuneSet Digits => _digits.Value;
     public static RuneSet Whitespace => _whitespace.Value;
 
+    // The single-rune line terminators defined by UAX #18 Annex C:
+    // LF (U+000A), VT (U+000B), FF (U+000C), CR (U+000D), NEL (U+0085),
+    // LINE SEPARATOR (U+2028), and PARAGRAPH SEPARATOR (U+2029). This
+    // matches what Java's \R, ECMAScript's "line terminator" concept,
+    // and most modern regex engines treat as a newline rune.
+    //
+    // Named SingleRuneLineTerminators (not just LineTerminators) as a
+    // reminder that a RuneSet holds individual code points, not
+    // sequences. The CRLF two-rune pair is also a line terminator
+    // under UAX #18, but it can't live in a rune set. Grammars that
+    // want CRLF-as-one-terminator combine this set with a
+    // Literal("\r\n") alternative, which is what Rules.EndOfLine()
+    // does.
+    public static readonly RuneSet SingleRuneLineTerminators =
+          Single(0x000A)   // LF
+        | Single(0x000B)   // VT
+        | Single(0x000C)   // FF
+        | Single(0x000D)   // CR
+        | Single(0x0085)   // NEL
+        | Single(0x2028)   // LS
+        | Single(0x2029);  // PS
+
     public static class Ascii
     {
         public static readonly RuneSet Letters = Range('A', 'Z') | Range('a', 'z');

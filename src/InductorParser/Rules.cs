@@ -611,6 +611,50 @@ public static class Rules
     public static Rule OptionalWhitespace() => ZeroOrMore(RuneIn(RuneSet.Whitespace)).Flatten(FlattenType.Delete);
 
     /// <summary>
+    /// Match one Unicode line terminator per UAX #18 Annex C. Default is
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Delete"/>.
+    /// </summary>
+    /// <remarks>
+    /// Consumes one of:
+    /// <list type="bullet">
+    /// <item><description>CRLF (the two-rune sequence <c>\r\n</c>)</description></item>
+    /// <item><description>LF, VT, FF, CR, NEL, LINE SEPARATOR, or PARAGRAPH SEPARATOR
+    /// (the single-rune terminators in <see cref="RuneSet.SingleRuneLineTerminators"/>)</description></item>
+    /// </list>
+    /// CRLF is tried first so a CR immediately followed by an LF is
+    /// consumed as one terminator rather than split into two. 
+    /// </remarks>
+    public static Rule EndOfLine() => Or(
+        Literal("\r\n"),
+        RuneIn(RuneSet.SingleRuneLineTerminators)
+    ).Flatten(FlattenType.Delete);
+
+    /// <summary>
+    /// Match zero or one Unicode line terminator per UAX #18 Annex C.
+    /// Always succeeds. Default <see cref="FlattenType"/>:
+    /// <see cref="FlattenType.Delete"/> (applied by the factory).
+    /// </summary>
+    /// <remarks>
+    /// The "line terminator here, or none" shape. Same terminator set
+    /// and CRLF-first ordering as <see cref="EndOfLine"/>.
+    /// </remarks>
+    public static Rule OptionalEndOfLine() => Optional(EndOfLine()).Flatten(FlattenType.Delete);
+
+    /// <summary>
+    /// Match one Unicode line terminator or end-of-input. Default
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Delete"/>
+    /// (applied by the factory).
+    /// </summary>
+    /// <remarks>
+    /// The common "end of this line, whatever that means" shape for
+    /// line-based grammars. The last line of a document typically
+    /// isn't followed by a terminator, so a grammar that wants one at
+    /// the end of every line has to accept EOF as equivalent. Writing
+    /// this inline every time gets tedious.
+    /// </remarks>
+    public static Rule EndOfLineOrEof() => Or(EndOfLine(), Eof()).Flatten(FlattenType.Delete);
+
+    /// <summary>
     /// Encodes the Unicode definition of a "programming language
     /// identifier" that would be appropriate worldwide (UAX #31 R1). Default
     /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>,
