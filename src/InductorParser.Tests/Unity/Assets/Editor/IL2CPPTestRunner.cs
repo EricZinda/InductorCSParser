@@ -26,7 +26,7 @@ namespace InductorParser.Editor
     //   Unity -batchmode -projectPath src/InductorParser.Tests/Unity/
     //         -executeMethod InductorParser.Editor.IL2CPPTestRunner.Run
     //         -logFile ...
-    // Do NOT pass -quit. The method schedules an async test run; Unity
+    // Do NOT pass -quit. The method schedules an async test run. Unity
     // must stay alive until the RunFinished callback fires and calls
     // EditorApplication.Exit with the result code.
     public static class IL2CPPTestRunner

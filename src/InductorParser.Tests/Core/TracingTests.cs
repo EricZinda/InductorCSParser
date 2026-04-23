@@ -7,7 +7,7 @@ using static InductorParser.Tests.TraceTestHelpers;
 
 namespace InductorParser.Tests;
 
-// Cross-cutting trace-format tests. Per-rule trace output (Char, RuneIn,
+// Cross-cutting trace-format tests. Per-rule trace output (Token, RuneIn,
 // Eof, And, Or, OneOrMore, ZeroOrMore, Optional) is in
 // each rule's own test file, so the failure surfaces right next to the
 // rule being edited. This file covers the concerns that aren't any one
@@ -20,8 +20,8 @@ public class TracingTests
     {
         // Smoke test: parse with the default (null) TraceSink. Catches
         // regressions where someone adds code that dereferences
-        // _traceSink without a null check before the handler runs —
-        // that kind of bug would throw a NullReferenceException here
+        // _traceSink without a null check before the handler runs.
+        // That kind of bug would throw a NullReferenceException here
         // rather than silently misbehaving. The stronger guarantee
         // ("nothing inside an interpolation hole runs when tracing is
         // off") is proven by Off_path_does_not_evaluate_interpolated_arguments
@@ -42,7 +42,7 @@ public class TracingTests
     [Test]
     public void Rule_name_appears_in_trace_label()
     {
-        // .As("settingName") pins the user label. Rule.TraceLabel joins
+        // .As("settingName") sets the user label. Rule.TraceLabel joins
         // it with the rule's class name via ":", producing
         // "settingName:OneOrMore" as the full trace label.
         var sink = NewSink();
@@ -69,20 +69,20 @@ public class TracingTests
     public void WithError_message_appears_in_quotes_after_trace_body_on_failure()
     {
         // .WithError() is the user-facing error message, not a rule
-        // identity — it's the friendly thing a grammar author wants the
+        // identity. It's the friendly thing a grammar author wants the
         // end user to see when a parse fails. In trace output it gets
         // appended after the trace body in quotes, so a reader sees
         // both what the rule actually tried ("found 'x', wanted 'a'")
         // and the friendly message that would surface on a real parse
         // failure ("expected an A"). It does NOT appear as part of the
-        // trace label — that position is reserved for .As() names.
+        // trace label. That position is reserved for .As() names.
         var sink = NewSink();
-        var rule = Char('a').WithError("expected an A");
+        var rule = Token('a').WithError("expected an A");
         rule.Parse("x", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "   Lexer.Read: 'x', Consumed: 1",
-            "   FAIL | Char: found 'x', wanted 'a' \"expected an A\""
+            "   FAIL | Token: found 'x', wanted 'a' \"expected an A\""
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
@@ -91,16 +91,16 @@ public class TracingTests
     public void Lexer_Read_emits_one_line_per_token()
     {
         var sink = NewSink();
-        var rule = And(Char('a'), Char('b'), Char('c'));
+        var rule = And(Token('a'), Token('b'), Token('c'));
         rule.Parse("abc", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | Char: found 'a'",
+            "      SUCC | Token: found 'a'",
             "      Lexer.Read: 'b', Consumed: 2",
-            "      SUCC | Char: found 'b'",
+            "      SUCC | Token: found 'b'",
             "      Lexer.Read: 'c', Consumed: 3",
-            "      SUCC | Char: found 'c'",
+            "      SUCC | Token: found 'c'",
             "   SUCC | And: found 3"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
@@ -114,14 +114,14 @@ public class TracingTests
         // advances past 'a' then fails at position 1, which is > 0, so
         // the announcement appears.
         var sink = NewSink();
-        var rule = And(Char('a'), Char('b'));
+        var rule = And(Token('a'), Token('b'));
         rule.Parse("ax", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | Char: found 'a'",
+            "      SUCC | Token: found 'a'",
             "      Lexer.Read: 'x', Consumed: 2",
-            "      FAIL | Char: found 'x', wanted 'b'",
+            "      FAIL | Token: found 'x', wanted 'b'",
             "      Lexer.RecordFailure: new deepest failure at char 1",
             "   FAIL | And: symbol #1"
         );
@@ -139,19 +139,19 @@ public class TracingTests
         // exact expected trace output, and (b) the second parse
         // produces the same output as the first. Without (a), both
         // parses could silently produce the same wrong indentation
-        // and the test would pass; without (b), a depth-leak bug
+        // and the test would pass. Without (b), a depth-leak bug
         // that changed the second run would slip through.
         var sink1 = NewSink();
         var sink2 = NewSink();
-        var rule = And(Char('a'), Char('b'));
+        var rule = And(Token('a'), Token('b'));
         rule.Parse("ab", new ParseOptions { TraceSink = sink1 });
         rule.Parse("ab", new ParseOptions { TraceSink = sink2 });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | Char: found 'a'",
+            "      SUCC | Token: found 'a'",
             "      Lexer.Read: 'b', Consumed: 2",
-            "      SUCC | Char: found 'b'",
+            "      SUCC | Token: found 'b'",
             "   SUCC | And: found 2"
         );
         Assert.That(sink1.ToString(), Is.EqualTo(expected),
@@ -168,7 +168,7 @@ public class TracingTests
         // Diagnostic. With TraceLevel.Normal the sink stays empty even
         // though TraceSink is wired up.
         var sink = NewSink();
-        var rule = And(Char('a'), Char('b'));
+        var rule = And(Token('a'), Token('b'));
         rule.Parse("ab", new ParseOptions { TraceSink = sink, TraceLevel = TraceLevel.Normal });
 
         Assert.That(sink.ToString(), Is.Empty);
@@ -207,7 +207,7 @@ public class TracingTests
         // Complement to the "off path" test above. When the handler's
         // shouldAppend=true, arguments must be evaluated exactly once
         // (not zero, not twice). Zero would mean AppendFormatted is
-        // never called even when tracing is on; two would mean the
+        // never called even when tracing is on. Two would mean the
         // compiler generated a spurious extra evaluation.
         var sink = NewSink();
         var lexer = new GraphemeLexer("x", sink, TraceLevel.Diagnostic);
@@ -248,7 +248,7 @@ public class TracingTests
     // way to reach it from test code.
     private sealed class TraceProbeRule : Rule
     {
-        public TraceProbeRule() : base(SyntaxTree.FlattenType.None) { }
+        public TraceProbeRule() : base(SyntaxTree.FlattenType.Preserve) { }
 
         public void CallTraceSuccess(Lexer lexer, ref int sideEffectCount)
         {
@@ -258,6 +258,6 @@ public class TracingTests
             TraceSuccess(lexer, $"value: {Interlocked.Increment(ref sideEffectCount)}");
         }
 
-        internal override SyntaxTree.Symbol? TryParseRule(Lexer lexer) => null;
+        internal override SyntaxTree.Symbol? TryParseRule(Lexer lexer, SyntaxTree.FlattenType effectiveFlattenType, System.Collections.Generic.List<SyntaxTree.Symbol>? outputSymbols) => null;
     }
 }

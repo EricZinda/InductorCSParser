@@ -21,8 +21,8 @@ public static class PidginJsonParser
     private static readonly Parser<char, char> Comma = Char(',');
 
     // Decoded escape sequence: match "\" then one of the JSON escape
-    // suffixes, return the decoded char. \uXXXX is a unicode escape;
-    // the simple escapes map their suffix to the corresponding control
+    // suffixes, return the decoded char. \uXXXX is a unicode escape.
+    // The simple escapes map their suffix to the corresponding control
     // or literal char.
     private static readonly Parser<char, char> HexDigit =
         Token(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'));

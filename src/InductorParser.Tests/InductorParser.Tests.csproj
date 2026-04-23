@@ -30,4 +30,11 @@
     <EmbeddedResource Remove="Unity\**" />
   </ItemGroup>
 
+  <!-- Real-world Prolog / HTN fixture files from the InductorHtn repo,
+       used as end-to-end parse corpus for PrologGrammarTests. Copied to
+       the test output directory so tests can read them as plain files. -->
+  <ItemGroup>
+    <None Include="E2EExamples\PrologFixtures\*.htn;E2EExamples\PrologFixtures\*.pl" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

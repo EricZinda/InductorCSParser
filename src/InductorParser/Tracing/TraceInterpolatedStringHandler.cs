@@ -5,7 +5,8 @@ using InductorParser.Lexing;
 
 namespace InductorParser.Tracing;
 
-// Interpolated string handler for Lexer.Trace and the Rule
+// C# has a feature called "Interpolated string handler" and this is one
+// for Lexer.Trace and the Rule
 // TraceSuccess / TraceFailure helpers. Lets rule code write:
 //
 //     TraceSuccess(lexer, $"found {count}")
@@ -14,19 +15,19 @@ namespace InductorParser.Tracing;
 //
 //     lexer.Trace(TraceLevel.Diagnostic, label, outcome, $"found {count}")
 //
-// instead of having to wrap every emission site in a hand-written
+// instead of having to wrap every call in a hand-written guard like:
 //
 //     if (lexer.IsTracing(TraceLevel.Diagnostic))
 //         lexer.WriteTraceLine(label, outcome, $"found {count}");
 //
-// guard. The handler bakes the gate into the call by deferring the
+// The handler defers the
 // $"..." formatting until after IsTracing has decided the message
 // will actually be emitted, so callers pay nothing for the
 // formatting work when tracing is off.
 //
-// How the compiler uses this: when the C# compiler sees a $"..."
+// When the C# compiler sees a $"..."
 // expression passed to a parameter typed as
-// TraceInterpolatedStringHandler, it rewrites the call site to:
+// TraceInterpolatedStringHandler, it rewrites the call to:
 //
 //     var handler = new TraceInterpolatedStringHandler(literalLen, formattedCount, lexer, level, out bool shouldAppend);
 //     if (shouldAppend)
@@ -36,13 +37,16 @@ namespace InductorParser.Tracing;
 //     }
 //     lexer.Trace(level, label, outcome, handler);
 //
-// The constructor decides shouldAppend based on whether the sink is
-// attached and the level is gated in. When it's false, the compiler
-// skips every AppendLiteral / AppendFormatted call, so the int never
-// gets boxed, no ToString() runs, no StringBuilder gets allocated.
+// The constructor sets shouldAppend=true only when this message
+// will actually be emitted: tracing has somewhere to write to
+// (a TraceSink is configured) AND the configured trace level is
+// verbose enough to include this message's level. When shouldAppend
+// is false, the compiler skips every AppendLiteral / AppendFormatted
+// call, so the int never gets boxed, no ToString() runs, and no
+// StringBuilder gets allocated.
 //
 // The "" and nameof(level) in InterpolatedStringHandlerArgument on
-// Lexer.Trace tell the C# compiler which arguments to thread into
+// Lexer.Trace tell the C# compiler which arguments to include in
 // the constructor: "" means the receiver (the Lexer instance), and
 // "level" means the level parameter. Both are available at the call
 // site before the handler is built.
@@ -54,7 +58,7 @@ namespace InductorParser.Tracing;
 // Proof the rewrite is actually happening (not silently falling back
 // to eager $"..." formatting):
 // InductorParser.Tests/Core/TracingTests.cs has two side-effect tests
-// that are the source of truth here:
+// to make sure:
 //
 //   * Off_path_does_not_evaluate_interpolated_arguments
 //     places Interlocked.Increment inside the interpolation hole and
@@ -70,7 +74,7 @@ namespace InductorParser.Tracing;
 //     up the AppendFormatted calls.
 //
 // If you're touching this file, run those two tests first. Build
-// success alone isn't enough — see the test comments for why.
+// success alone isn't enough. See the test comments for why.
 [InterpolatedStringHandler]
 public ref struct TraceInterpolatedStringHandler
 {
@@ -103,9 +107,9 @@ public ref struct TraceInterpolatedStringHandler
         }
     }
 
-    // Diagnostic-default overload used by the short-form Rule helpers
+    // Overload used by the short-form Rule helpers
     // (Rule.TraceSuccess(lexer, $"...") / Rule.TraceFailure(lexer, $"...")).
-    // The handler attribute on those helpers only threads the lexer,
+    // The handler attribute on those helpers only adds the lexer argument,
     // so the compiler resolves this 4-arg constructor instead of the
     // 5-arg one above.
     public TraceInterpolatedStringHandler(
@@ -133,7 +137,7 @@ public ref struct TraceInterpolatedStringHandler
     // Called by Lexer.Trace and the Rule.TraceSuccess /
     // Rule.TraceFailure helpers to pull out the formatted message.
     // Null means the handler was constructed in the "don't emit"
-    // state; the caller uses that as its short-circuit signal.
+    // state. The caller uses that as its short-circuit signal.
     // Clearing the builder reference defends against accidental
     // double-use if the handler were ever kept alive past the call
     // (it isn't, because ref struct rules, but cheap insurance).

@@ -11,14 +11,18 @@ public class ZeroOrMoreRuleTests
     // ZeroOrMore has no failure path at all, so this fixture only carries
     // success tests. The TestArchitecture doc calls this out explicitly.
 
+    // Tree.ToString() assertions use PreserveFlattenWrappers so Token
+    // leaves (default FlattenType.Delete) stay in the tree.
+    private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
+
     [Test]
     public void ZeroOrMore_with_zero_matches_succeeds_with_empty_consumption()
     {
         // Input doesn't start with 'a', so the inner rule fails on its very
         // first attempt. ZeroOrMore catches that and succeeds with zero
         // children, leaving the lexer position unchanged.
-        var rule = And(ZeroOrMore(Char('a')), Char('b'));
-        var result = rule.Parse("b");
+        var rule = And(ZeroOrMore(Token('a')), Token('b'));
+        var result = rule.Parse("b", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("b"));
@@ -27,8 +31,8 @@ public class ZeroOrMoreRuleTests
     [Test]
     public void ZeroOrMore_matches_multiple_occurrences_greedily()
     {
-        var rule = And(ZeroOrMore(Char('a')), Char('b'));
-        var result = rule.Parse("aaab");
+        var rule = And(ZeroOrMore(Token('a')), Token('b'));
+        var result = rule.Parse("aaab", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("aaab"));
@@ -40,8 +44,8 @@ public class ZeroOrMoreRuleTests
         // Inner matches 'a' twice, then on the third try sees 'b' and the
         // inner rule fails. ZeroOrMore commits the two successful iterations
         // and hands 'b' off to the next rule in the And.
-        var rule = And(ZeroOrMore(Char('a')), Char('b'), Char('c'));
-        var result = rule.Parse("aabc");
+        var rule = And(ZeroOrMore(Token('a')), Token('b'), Token('c'));
+        var result = rule.Parse("aabc", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("aabc"));
@@ -73,15 +77,15 @@ public class ZeroOrMoreRuleTests
     public void ZeroOrMore_trace_with_zero_matches_produces_expected_output()
     {
         // ZeroOrMore has no failure path, so even "no matches" is a
-        // success — with count= 0. Wrapped in And so the indentation
+        // success, with count= 0. Wrapped in And so the indentation
         // shows the full transaction nesting.
         var sink = NewSink();
-        And(ZeroOrMore(Char('a')), Eof())
+        And(ZeroOrMore(Token('a')), Eof())
             .Parse("", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "         Lexer.Read: '<EOF>', Consumed: 0",
-            "         FAIL | Char: found '<EOF>', wanted 'a'",
+            "         FAIL | Token: found '<EOF>', wanted 'a'",
             "      SUCC | ZeroOrMore: count= 0",
             "   SUCC | Eof",
             "   SUCC | And: found 2"

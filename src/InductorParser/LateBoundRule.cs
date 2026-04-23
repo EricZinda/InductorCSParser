@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
@@ -20,8 +21,8 @@ namespace InductorParser;
 // The canonical pattern:
 //
 //     static readonly LateBoundRule Expression = new LateBoundRule("expression");
-//     static readonly Rule Term = Or(Integer(), And(Char('('), Expression, Char(')')));
-//     static readonly Rule Sum  = And(Term, ZeroOrMore(And(Char('+'), Term)));
+//     static readonly Rule Term = Or(Integer(), And(Token('('), Expression, Token(')')));
+//     static readonly Rule Sum  = And(Term, ZeroOrMore(And(Token('+'), Term)));
 //     static readonly Rule _init = Expression.Bind(Sum);
 //
 // Term sees Expression as a valid (but unbound) rule at construction
@@ -33,25 +34,6 @@ namespace InductorParser;
 // target. The produced Symbol carries the target rule's Id, not the
 // LateBoundRule's, because LateBoundRule is a structural placeholder,
 // not a meaningful grammar node.
-//
-// Why As/Flatten/WithError are forbidden. Because LateBoundRule is
-// transparent at parse time (TryParse just forwards to the target and
-// returns the target's Symbol), none of its own configuration is ever
-// consulted:
-//
-//   * Name and Id live on LateBoundRule but never appear on any Symbol,
-//     so tree.Find(lateBoundRule) silently returns null.
-//   * FlattenType lives on LateBoundRule but never applies, because the
-//     returned Symbol is the target's and carries the target's FlattenType.
-//   * ErrorMessage lives on LateBoundRule but is never passed to
-//     RecordFailure, because TryParse forwards without calling it.
-//
-// Every one of those modifier methods would silently do nothing, which
-// is exactly the kind of footgun that produces mysterious bugs hours
-// later. So they all throw InvalidOperationException on LateBoundRule.
-// Set those things on the target rule instead. The one exception is a
-// debug name, which is useful for the "never bound" error message; pass
-// that to the constructor.
 public sealed class LateBoundRule : Rule
 {
     private readonly string? _debugName;
@@ -74,9 +56,9 @@ public sealed class LateBoundRule : Rule
         return this;
     }
 
-    // Naming a LateBoundRule is a footgun: the name would derive a Name
+    // Naming a LateBoundRule is a bug: the name would derive a Name
     // and (via hashing) an Id, but neither is ever visible at parse time.
-    // Fail loudly instead of letting users build a rule whose Find
+    // Fail instead of letting users build a rule whose Find
     // silently returns null. Pass the debug name to the constructor.
     public override Rule As(string name) => throw new InvalidOperationException(
         "LateBoundRule.As(string) is not supported: the rule is transparent at parse " +
@@ -103,13 +85,14 @@ public sealed class LateBoundRule : Rule
         "LateBoundRule.WithError(...) is not supported: the rule is transparent at parse " +
         "time, so its ErrorMessage is never consulted. Set .WithError(...) on the bound target instead.");
 
-    internal override Symbol? TryParseRule(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        // _target is guaranteed non-null here because Compile's validation
-        // pass would have thrown on an unbound LateBoundRule before any
-        // parse could reach this method. The null-forgiving operator is
-        // load-bearing for the compiler, not for defensive correctness.
-        return _target!.TryParse(lexer);
+        // _target is guaranteed non-null here: Compile's validation pass
+        // throws on an unbound LateBoundRule before any parse can reach
+        // this method. LateBoundRule is transparent at parse time, so
+        // discard is ignored (target computes its own) and the
+        // accumulator forwards straight through.
+        return ParseChild(_target!, lexer, outputSymbols);
     }
 
     protected override void ValidateCompiled()
@@ -121,5 +104,24 @@ public sealed class LateBoundRule : Rule
                 $"Rule '{label}' is a LateBoundRule that was never bound. " +
                 "Call .Bind(targetRule) before calling Parse or Compile.");
         }
+    }
+
+    // Return the set of runes this rule might consume first (can be a superset)
+    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
+    // Then say whether the rule Always / Sometimes / Never consumes at least
+    // that first rune on success.
+    internal override RuleStartRequirements ComputeRuleStart()
+    {
+        // LateBoundRule is transparent at parse time, so its RuleStartRequirements is
+        // just the target's. Compile's depth-first walk visits the target
+        // as our one child, so in the acyclic case the target's values are
+        // already populated by the time we land here. If the target graph
+        // forms a cycle back through this LateBoundRule, the cycle-detection
+        // path leaves whichever node it hit during recursion at the
+        // pessimistic default (Universe, Advance.Sometimes). That keeps
+        // OrRule conservative. A future pass could refine by re-walking
+        // until no FirstConsumedRunes changes if a grammar shows up where it
+        // matters.
+        return new RuleStartRequirements(_target!.FirstConsumedRunes, _target.Advance);
     }
 }

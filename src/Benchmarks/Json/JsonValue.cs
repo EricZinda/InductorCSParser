@@ -45,7 +45,7 @@ public class JsonString : IJson
     // Re-emit a decoded string as JSON string content. Must be the inverse
     // of whatever decoding the grammars do, otherwise round-trip verification
     // in the spot-check fails. Scope: the escapes the input generator can
-    // emit — quote, backslash, and the five C-style control escapes. No \/
+    // emit (quote, backslash, and the five C-style control escapes). No \/
     // and no \uXXXX, because Newtonsoft's canonical output of a decoded
     // value won't re-emit those forms even if the input had them, so
     // including them would make the round-trip non-deterministic for

@@ -1,8 +1,15 @@
+using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
+// Matches one token if it's a single rune that belongs to the given
+// RuneSet. Under GraphemeLexer a multi-rune grapheme (skin-toned
+// emoji, ZWJ sequences, CJK + combining mark) fails because it isn't
+// a single code point. EOF also fails. RuneNotInRule is the mirror:
+// same rule, opposite membership test (one rune whose value is NOT
+// in the set).
 internal sealed class RuneInRule : Rule
 {
     private readonly RuneSet _set;
@@ -10,18 +17,18 @@ internal sealed class RuneInRule : Rule
     // Pre-rendered "[A-Z,a-z]" form of the set, computed once at
     // construction. Trace lines reference this instead of the RuneSet
     // directly so we don't re-render the same string on every traced
-    // match — the RuneSet is immutable, so the rendering is too.
+    // match. The RuneSet is immutable, so the rendering is too.
     // Worth caching because tracing is intended to be usable while
     // iterating on a grammar, not just for one-off debug runs.
     private readonly string _setRendered;
 
-    public RuneInRule(RuneSet runeSet) : base(FlattenType.None)
+    public RuneInRule(RuneSet runeSet) : base(FlattenType.Preserve)
     {
         _set = runeSet;
         _setRendered = runeSet.ToString();
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         using var transaction = lexer.BeginTransaction();
         var token = lexer.Read();
@@ -38,8 +45,23 @@ internal sealed class RuneInRule : Rule
         }
         TraceSuccess(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted one of '{_setRendered}'");
         transaction.Commit();
-        // Leaf symbol carries the rune as its id so ToString and tree shape match
-        // the C++ behavior where character symbols have id == code point.
-        return new Symbol(new SymbolId(token.RuneValue), FlattenType, token.Memory);
+        if (effectiveFlattenType == FlattenType.Delete)
+            return Symbol.Discarded;
+        var leafSymbol = new Symbol(new SymbolId(token.RuneValue), FlattenType, token.Memory);
+        if (effectiveFlattenType == FlattenType.Flatten)
+        {
+            outputSymbols!.Add(leafSymbol);
+            return Symbol.Discarded;
+        }
+        return leafSymbol;
+    }
+
+    // Return the set of runes this rule might consume first (can be a superset)
+    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
+    // Then say whether the rule Always / Sometimes / Never consumes at least
+    // that first rune on success.
+    internal override RuleStartRequirements ComputeRuleStart()
+    {
+        return new RuleStartRequirements(_set, Advance.Always);
     }
 }

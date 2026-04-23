@@ -88,7 +88,7 @@ public class NameOfTests
     [Test]
     public void BetweenInclusive_rule_returns_name_with_bounds()
     {
-        var rule = BetweenInclusive(RuneIn(RuneSet.Letters), 1, 3);
+        var rule = BetweenInclusive(1, 3, RuneIn(RuneSet.Letters));
         rule.Compile();
 
         Assert.That(rule.NameOf(rule.Id), Is.EqualTo("BetweenInclusive[1..3]"));
@@ -139,7 +139,7 @@ public class NameOfTests
     [Test]
     public void NameOf_is_stable_across_repeated_calls()
     {
-        // Second call hits the cached _nameIndex path; first call builds it.
+        // Second call hits the cached _nameIndex path. First call builds it.
         // Both should return the same answer.
         var rule = OneOrMore(RuneIn(RuneSet.Letters)).As("word");
         rule.Compile();

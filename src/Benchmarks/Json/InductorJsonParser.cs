@@ -1,3 +1,4 @@
+using System.Text;
 using global::InductorParser;
 using global::InductorParser.SyntaxTree;
 using static global::InductorParser.Rules;
@@ -6,7 +7,7 @@ namespace InductorParser.Benchmarks.Json;
 
 // JSON grammar for the shape the JsonBench harness generates: strings,
 // objects, and arrays only. No numbers, booleans, nulls, or escape
-// sequences — the bench never generates them and the parser-combinator
+// sequences. The bench never generates them and the parser-combinator
 // competitors (Pidgin/Sprache/Superpower) don't handle them either. The
 // string rule accepts "any char except U+0022" so it does the same
 // per-char work the competitors do.
@@ -34,59 +35,59 @@ public static class InductorJsonParser
 
     static InductorJsonParser()
     {
-        // A JSON string char is either:
-        //   * any rune except U+0022 ('"') and U+005C ('\') — the literal case
-        //   * a backslash followed by one of "/\bfnrt or a \uXXXX unicode escape
-        //
-        // InductorParser has no RuneNotIn primitive yet (see
-        // backlog/c000-pass-through-text-primitives); express the literal-char
-        // complement as positive ranges around the two excluded code points.
-        // Range endpoints must be valid scalar values but interior surrogate
-        // halves are harmless — the lexer never produces them.
-        var notQuoteOrBackslash =
-            RuneSet.Range(0, 0x21) |           // 0..!
-            RuneSet.Range(0x23, 0x5B) |         // #..[
-            RuneSet.Range(0x5D, 0x10FFFF);      // ]..max
-        var literalChar = RuneIn(notQuoteOrBackslash);
-
         var simpleEscape = RuneIn(RuneSet.Runes("\"\\/bfnrt"));
         var hexDigit = RuneIn(RuneSet.Ascii.Digits | RuneSet.Range('a', 'f') | RuneSet.Range('A', 'F'));
-        var unicodeEscape = And(Char('u'), hexDigit, hexDigit, hexDigit, hexDigit);
-        var escapeSequence = And(Char('\\'), Or(simpleEscape, unicodeEscape));
+        var unicodeEscape = And(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
+        // FlattenType.Delete so StringCharsRule's per-escape TryParse
+        // call doesn't force Rule.TryParse to allocate a throwaway
+        // List<Symbol>.
+        // StringChars discards escapeEnd's Symbol anyway (it emits a
+        // single leaf covering the whole string body), so the tree
+        // shape is unchanged.
+        var escapeEnd = Or(simpleEscape, unicodeEscape).Flatten(FlattenType.Delete);
 
-        var stringChar = Or(literalChar, escapeSequence);
-        JsonString = And(Char('"'), ZeroOrMore(stringChar), Char('"')).As("string");
+        // StringChars collapses the per-rune `ZeroOrMore(Or(body,
+        // escape))` hot loop into one rule that scans the whole string
+        // body in place. The stopper set is just the closing quote:
+        // the scan runs forward until it sees a ", and everything in
+        // between gets consumed as body (or dispatched to `escapeEnd`
+        // when a \ shows up). One leaf Symbol for the whole run, one
+        // escape dispatch per actual escape, no per-rune Symbol or
+        // transaction work for the body runes that dominate typical
+        // JSON payloads.
+        var stringBody = StringChars(RuneSet.Runes("\""), new Rune('\\'), escapeEnd);
+        JsonString = And(Token('"'), stringBody, Token('"')).As("string");
 
         var value = new LateBoundRule("value");
 
         JsonMember = And(
             JsonString,
             OptionalWhitespace(),
-            Char(':'),
+            Token(':'),
             OptionalWhitespace(),
             value
         ).As("member");
 
         JsonObject = And(
-            Char('{'),
+            Token('{'),
             OptionalWhitespace(),
             Optional(And(
                 JsonMember,
-                ZeroOrMore(And(OptionalWhitespace(), Char(','), OptionalWhitespace(), JsonMember))
+                ZeroOrMore(And(OptionalWhitespace(), Token(','), OptionalWhitespace(), JsonMember))
             )),
             OptionalWhitespace(),
-            Char('}')
+            Token('}')
         ).As("object");
 
         JsonArray = And(
-            Char('['),
+            Token('['),
             OptionalWhitespace(),
             Optional(And(
                 value,
-                ZeroOrMore(And(OptionalWhitespace(), Char(','), OptionalWhitespace(), value))
+                ZeroOrMore(And(OptionalWhitespace(), Token(','), OptionalWhitespace(), value))
             )),
             OptionalWhitespace(),
-            Char(']')
+            Token(']')
         ).As("array");
 
         var valueBody = Or(JsonString, JsonObject, JsonArray);
@@ -97,4 +98,19 @@ public static class InductorJsonParser
     }
 
     public static ParseResult Parse(string input) => Json.Parse(input, _options);
+
+    // Round-trip variant used by the spot-check. Parse-time Delete filtering
+    // would drop the JSON delimiters (Token('{'), '}', ',', ':', '"') from
+    // the tree, so Tree.ToString() on a normally-parsed value returns just
+    // the concatenated non-delimiter content rather than the original
+    // input. PreserveFlattenWrappers keeps every grammar node in the tree
+    // for verification purposes. It is not used by the benchmark runs.
+    private static readonly ParseOptions _roundTripOptions = new()
+    {
+        InputUnit = InputUnit.Rune,
+        MaxDepth = 0,
+        PreserveFlattenWrappers = true,
+    };
+
+    public static ParseResult ParseForRoundTrip(string input) => Json.Parse(input, _roundTripOptions);
 }

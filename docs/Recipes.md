@@ -22,30 +22,30 @@ var bold = And(
 ).As(nameof(bold));
 
 var code = And(
-    Char('`'),
+    Token('`'),
     OneOrMore(RuneNotIn(RuneSet.Runes("`"))),
-    Char('`')
+    Token('`')
 ).As(nameof(code));
 
 var inline    = Or(bold, code, text);
 var paragraph = OneOrMore(inline).As(nameof(paragraph));
 ```
 
-Parse `Hello 🎸 **world** 你好 ` + "`code`" + ` done` and you get a tree where the guitar emoji lives in the first text node, the CJK in another, and `ToString()` reassembles each node losslessly. The default GraphemeLexer treats 🎸 and 你好 as individual characters, so the text nodes see them as single tokens. Even under RuneLexer the round-trip would still work (every rune gets captured), just with multi-rune graphemes showing up as multiple child nodes.
+Parse `Hello 🎸 **world** 你好 ` + "`code`" + ` done` and you get a tree where the guitar emoji lives in the first text node, the CJK in another, and `ToString()` reassembles each node losslessly. The default GraphemeLexer treats 🎸 and each of 你 and 好 as individual graphemes, so the text nodes see them as single tokens. Even under RuneLexer the round-trip would still work (every rune gets captured), just with multi-rune graphemes showing up as multiple child nodes.
 
 ### Stopping at a Multi-Character Terminator
 
-The `RuneNotIn` form above works when the stop is a small set of single characters. When the stop is a sequence, like `*/` closing a block comment or `-->` closing an XML comment, a character class can't express it. The idiom there is `ZeroOrMore(And(Not(stopRule), AnyChar()))`:
+The `RuneNotIn` form above works when the stop is a small set of single characters. When the stop is a sequence, like `*/` closing a block comment or `-->` closing an XML comment, a character class can't express it. The idiom there is `ZeroOrMore(And(Not(stopRule), AnyToken()))`:
 
 ```csharp
-var closeMarker = And(Char('*'), Char('/'));
+var closeMarker = And(Token('*'), Token('/'));
 var blockComment = And(
-    Char('/'), Char('*'),
-    ZeroOrMore(And(Not(closeMarker), AnyChar())),
+    Token('/'), Token('*'),
+    ZeroOrMore(And(Not(closeMarker), AnyToken())),
     closeMarker);
 ```
 
-Each iteration first checks that `closeMarker` does not match at the current cursor (`Not` is negative lookahead, zero-width), and only then consumes one character with `AnyChar()`. When `closeMarker` would fire, `Not` fails, the `And` fails, and the `ZeroOrMore` stops with the cursor sitting just before `*/`. The outer `And` then matches the terminator for real. `AnyChar()` handles multi-rune graphemes naturally under GraphemeLexer, same as `RuneNotIn`, so emoji and CJK in the comment body pass through unchanged.
+Each iteration first checks that `closeMarker` does not match at the current cursor (`Not` is negative lookahead, zero-width), and only then consumes one token with `AnyToken()`. When `closeMarker` would fire, `Not` fails, the `And` fails, and the `ZeroOrMore` stops with the cursor sitting just before `*/`. The outer `And` then matches the terminator for real. `AnyToken()` handles multi-rune graphemes naturally under GraphemeLexer, same as `RuneNotIn`, so emoji and CJK in the comment body pass through unchanged.
 
 ## Organizing a Large Grammar as a Class
 
@@ -65,18 +65,19 @@ public static class NameValueGrammar
             Float().Flatten(FlattenType.Flatten),
             Integer().Flatten(FlattenType.Flatten),
             OneOrMore(RuneIn(RuneSet.Letters))
-        ).As(nameof(SettingValue));
+        ).As(nameof(SettingValue))
+         .Flatten(FlattenType.None);
 
     public static readonly Rule Document =
         And(
             OptionalWhitespace(),
             SettingName,
             OptionalWhitespace(),
-            Char('='),
+            Token('='),
             OptionalWhitespace(),
             SettingValue,
             OptionalWhitespace(),
-            Char(';'),
+            Token(';'),
             OptionalWhitespace(),
             Eof()
         ).As(nameof(Document)).Compile();
@@ -90,9 +91,11 @@ var result = NameValueGrammar.Document.Parse(input);
 var name   = result.Tree.Find(NameValueGrammar.SettingName).ToString();
 ```
 
-The pattern has three pieces worth naming explicitly:
+The pattern has four pieces worth naming explicitly:
 
 **`.As(nameof(X))` on every public field**, including the root. The field name and the rule name stay in sync because `nameof` is compile-checked. IDE renames propagate. Trace output and error messages read naturally.
+
+**`.Flatten(FlattenType.None)` on any rule you want to `Find`.** `Parse` applies the flatten pass before returning, so rules with the default `FlattenType.Flatten` have their children lifted up and their own wrapper removed from the tree, so `Tree.Find(rule)` cannot locate them. `.Flatten(FlattenType.None)` preserves the wrapper. Rules that only show up for their text content (repetitions, `And` compositions whose children are individually findable) can stay at the default and skip this call.
 
 **`.Compile()` on the root field.** This forces the full finalization pass (id stamping, `LateBoundRule` resolution, freeze, validation) to run at type-init time rather than at first parse. Any grammar-construction error surfaces immediately when the class is first touched, which is a much better debugging experience than waiting for the first parse to reveal a broken grammar.
 
@@ -100,7 +103,7 @@ The pattern has three pieces worth naming explicitly:
 
 ## A Reusable Compiler Base Class
 
-The walkthrough in [ProgrammingAGrammar.md](ProgrammingAGrammar.md) shows a "compiler" as a plain function: take a rule and an input, return a typed result plus an optional error message. That form is simplest for one-off cases. When you have several compilers that share the same scaffolding, or you want a consistent `TryCompile` contract on a public API, it is worth writing a small base class once and inheriting from it. The library does not ship this as a built-in because the right shape is opinionated and every codebase tends to want it slightly different; here is the pattern to copy and adapt.
+The walkthrough in [ProgrammingAGrammar.md](ProgrammingAGrammar.md) shows a "compiler" as a plain function: take a rule and an input, return a typed result plus an optional error message. That form is simplest for one-off cases. When you have several compilers that share the same scaffolding, or you want a consistent `TryCompile` contract on a public API, it is worth writing a small base class once and inheriting from it. The library does not ship this as a built-in because the right shape is opinionated and every codebase tends to want it slightly different. Here is the pattern to copy and adapt.
 
 ```csharp
 // User-space base class. Put this somewhere reusable in your codebase.
@@ -120,12 +123,12 @@ public abstract class Compiler<TResult>
             return false;
         }
 
-        result = ProcessAst(parsed.Tree!.FlattenInto());
+        result = ProcessTree(parsed.Tree!);
         error  = "";
         return true;
     }
 
-    protected abstract TResult ProcessAst(IReadOnlyList<Symbol> ast);
+    protected abstract TResult ProcessTree(Symbol tree);
 }
 ```
 
@@ -138,10 +141,10 @@ public sealed class NameValueCompiler : Compiler<Setting>
 {
     public NameValueCompiler() : base(NameValueGrammar.Document) { }
 
-    protected override Setting ProcessAst(IReadOnlyList<Symbol> ast)
+    protected override Setting ProcessTree(Symbol tree)
     {
-        var nameNode  = ast.Find(NameValueGrammar.SettingName);
-        var valueNode = ast.Find(NameValueGrammar.SettingValue);
+        var nameNode  = tree.Find(NameValueGrammar.SettingName);
+        var valueNode = tree.Find(NameValueGrammar.SettingValue);
         return new Setting(nameNode.ToString(), valueNode.ToString());
     }
 }
@@ -154,6 +157,6 @@ else
     Console.WriteLine($"Parse failed: {error}");
 ```
 
-The base class bundles up three small things: running the root rule, branching on success/failure, and flattening the parse tree before handing the syntax tree to the user. Each of those is one or two lines, so skipping the base class for a one-off compiler is fine. The scaffolding pays for itself when you have multiple compilers sharing the pattern, or when the `TryCompile(out TResult, out string error)` shape is what your public API needs to speak.
+The base class bundles up two small things: running the root rule and branching on success/failure before handing the tree to the user. Each of those is one or two lines, so skipping the base class for a one-off compiler is fine. The scaffolding pays for itself when you have multiple compilers sharing the pattern, or when the `TryCompile(out TResult, out string error)` shape is what your public API needs to speak.
 
 Obvious variations if the shape above does not fit your codebase: return `TResult?` with a nullable result instead of an out-parameter, throw a `CompileException` on failure instead of returning a bool, add a `CompileOrThrow` overload, add `ParseOptions` forwarding, etc. The base class is small enough that adapting it is usually easier than shoehorning a library-supplied version into your conventions.

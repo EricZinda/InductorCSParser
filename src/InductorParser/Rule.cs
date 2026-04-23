@@ -9,46 +9,57 @@ using InductorParser.Tracing;
 namespace InductorParser;
 
 // Rule is the base of everything in a grammar. A grammar is a tree of Rule
-// objects: combinators like And/Or/OneOrMore wrap other Rules, primitives
-// like Char/RuneIn sit at the leaves, and the root is whatever Rule you
+// objects: composites like And/Or/OneOrMore wrap other Rules, leaves like
+// Token/RuneIn sit at the bottom, and the root is whatever Rule you
 // hand to Parse(). Calling Parse on the root walks the tree and tries to
 // match the input.
 //
 // Rules are instances, not types. 
-// In C# you build a Rule by calling factory functions (And, Or, Char, etc.)
+// In C# you build a Rule by calling factory functions (And, Or, Token, etc.)
 // that return Rule instances. The tree is built at runtime, compiled once,
 // and reused for every parse after that. A grammar can live anywhere a
 // reference can live: a local variable, a static field, an entry in a
 // dictionary, an argument passed around. The library doesn't care.
 //
 // Rule construction is fluent: Modifier methods like .As(name) and
-// .Flatten(type) return the same Rule so the configuration reads as a
-// chain:
+// .Flatten(type) return the same Rule so it can read as a chain:
 //
 //     var settingName = OneOrMore(RuneIn(RuneClass.Letters))
 //         .As(nameof(settingName))
-//         .Flatten(FlattenType.None);
+//         .Flatten(FlattenType.Preserve);
 //
-// Rules are effectively immutable. Before Compile runs you can call the
+// Rules are effectively immutable. Before Compile runs, you can call the
 // modifier methods. After Compile runs (either explicitly via .Compile()
 // or automatically on the first .Parse() call) the Rule is sealed and any
 // further modification throws InvalidOperationException. This makes the
 // "build once, parse many times" model safe even when the same Rule is
 // shared across threads.
 //
-// Rule is abstract. The library's combinator and primitive rules
-// (AndRule, OrRule, CharRule, etc.) subclass it and implement the matching
-// method. User code can subclass Rule too if it needs matching logic the
-// built-in combinators can't express. The contract a subclass has to
-// satisfy: implement TryParse to either return a Symbol subtree on success
-// or return null on failure (and never consume input on failure), use the
-// lexer's transactional API for backtracking, and expose its child rules
-// via ChildRules so Compile can walk the graph.
+// Rule is abstract. The library's composite and leaf rules
+// (AndRule, OrRule, TokenRule, etc.) subclass it. User code can subclass
+// Rule too if it needs matching logic the built-in rules can't express.
+// See TryParseRule below for the full subclass contract.
 public abstract class Rule
 {
+    // See below for description
     private bool _sealed;
     private bool _idAssigned;
     private string? _errorMessage;
+
+    // FirstConsumedRunes and Advance drive the "can I skip this rule?"
+    // shortcut. See RuleStartRequirements for the full story. The type
+    // returned by ComputeRuleStart encapsulates these two. Populated at
+    // Compile time. The pessimistic defaults
+    // below (Universe, Sometimes) mean any user-defined Rule subclass that
+    // doesn't override ComputeRuleStart is safe and never gets shortcutted.
+    internal RuneSet FirstConsumedRunes { get; private set; } = RuneSet.Universe;
+    internal Advance Advance { get; private set; } = Advance.Sometimes;
+
+    // The "can I skip this rule?" shortcut's consumer-facing API.
+    // See RuleStartRequirements for the full story.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool CannotMatchLookahead(int peekRune) =>
+        Advance == Advance.Always && !FirstConsumedRunes.Contains(peekRune);
 
     // Lazily-built reverse index from SymbolId to human-readable name
     // for every rule reachable from this root. Populated on the first
@@ -64,10 +75,17 @@ public abstract class Rule
     // the "deepest failure wins" heuristic can surface it.
     protected internal string? ErrorMessage => _errorMessage;
 
+    protected Rule(FlattenType defaultFlatten, params Rule[] children)
+    {
+        FlattenType = defaultFlatten;
+        Children = children.Length > 0 ? children : NoChildren;
+        _ruleTraceName = DeriveRuleTraceName(GetType());
+    }
+
     // Cached rule class name for trace output, derived from GetType().Name
     // in the constructor. The "Rule" suffix is stripped so "AndRule"
-    // becomes "And", "CharRule" becomes "Char", matching the trace
-    // naming convention. Reading this is a field load — cheaper than
+    // becomes "And", "TokenRule" becomes "Token", matching the trace
+    // naming convention. Reading this is a field load which is cheaper than
     // calling GetType().Name on every trace emission. Works under
     // IL2CPP because it's baked in at construction time, not looked
     // up via name-based reflection.
@@ -80,7 +98,7 @@ public abstract class Rule
 
     // Compose the full trace label: "{Name}:{ruleName}" when the rule
     // has a .As(name) set, else just "{ruleName}". Only .As() is used
-    // here — .WithError() sets the user-facing error message, not a
+    // here. .WithError() sets the user-facing error message, not a
     // rule identity, so it belongs in the trace line's body (see
     // AppendErrorMessage) rather than as a label prefix.
     private string BuildTraceLabel() =>
@@ -90,17 +108,17 @@ public abstract class Rule
     // the trace body so a reader sees both what the rule actually
     // tried ("found 'x', wanted 'a'") and the friendly message that
     // would have surfaced to the user on a real parse failure
-    // ("expected an A"). Only used on failure lines; on success
+    // ("expected an A"). Only used on failure lines. On success
     // there is no error to report so the WithError message is
     // omitted.
     private string AppendErrorMessage(string body) =>
         _errorMessage != null ? $"{body} \"{_errorMessage}\"" : body;
 
     // Short-form trace helpers called from a rule's TryParse on the
-    // success or failure path. 
-    //
-    // [AggressiveInlining] lets the JIT fold the body into the caller
-    // so the off-path is a handler-construct + early return.
+    // success or failure path. [AggressiveInlining] + the
+    // TraceInterpolatedStringHandler parameter together make trace
+    // calls cost nothing when tracing is off. See
+    // TraceInterpolatedStringHandler for the full story.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected void TraceSuccess(
         Lexer lexer,
@@ -124,9 +142,10 @@ public abstract class Rule
     }
 
     // Explicit-level overloads. Use when a trace should fire at a
-    // level other than Diagnostic (e.g. a summary line at Normal).
-    // The handler attribute threads nameof(level) through so the
-    // compiler picks the 5-arg TraceInterpolatedStringHandler ctor.
+    // level other than Diagnostic (e.g. a summary line at Normal). The
+    // InterpolatedStringHandlerArgument on the message parameter is
+    // what routes `level` to the handler when the compiler rewrites
+    // the call (see TraceInterpolatedStringHandler for how that works).
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected void TraceSuccess(
         Lexer lexer,
@@ -151,18 +170,18 @@ public abstract class Rule
         lexer.WriteTraceLine(BuildTraceLabel(), TraceOutcome.Failure, AppendErrorMessage(formatted));
     }
 
-    // Shared sentinel for leaf rules that have no children. Array.Empty<T>()
-    // already returns a singleton, so this isn't saving an allocation, just
-    // naming the case and sparing leaf-rule constructions a new zero-length
-    // Rule[] allocation from the params machinery.
+    // Shared empty array used by leaf rules for their Children list. Without
+    // it, every leaf-rule constructor call would allocate a brand-new
+    // zero-length Rule[] to satisfy the `params Rule[] children` parameter.
+    // Reusing this single pre-built instance skips that allocation.
     private static readonly IReadOnlyList<Rule> NoChildren = Array.Empty<Rule>();
 
     // The child rules this rule is built from. Composites (And, Or, OneOrMore,
     // etc.) pass their children to the base constructor and access them via
-    // this property; leaf rules (Char, RuneIn, Eof) pass nothing and get the
-    // shared empty list. Compile walks this list to assign ids and seal every
-    // reachable rule. Subclasses never override storage; there is one place
-    // children live, so there is nowhere to forget to wire them up.
+    // this property. Leaf rules (Token, RuneIn, Eof) don't pass any children,
+    // and the constructor below swaps in the shared empty list (NoChildren)
+    // when that happens. Compile walks this list to assign ids and seal every
+    // reachable rule.
     //
     // The private setter is what lets SetChildren (below) mutate children
     // for the LateBoundRule case. Every other rule fixes its children in
@@ -170,11 +189,14 @@ public abstract class Rule
     // the rule, SetChildren throws and Children becomes truly immutable.
     protected internal IReadOnlyList<Rule> Children { get; private set; }
 
-    protected Rule(FlattenType defaultFlatten, params Rule[] children)
+    // Replace this rule's children. The only production use is LateBoundRule,
+    // which needs to install its target after construction. Throws if the
+    // rule has already been compiled, so late-binding is a grammar-build-time
+    // operation and no rule can sprout new children mid-parse.
+    protected void SetChildren(params Rule[] children)
     {
-        FlattenType = defaultFlatten;
+        ThrowIfSealed();
         Children = children.Length > 0 ? children : NoChildren;
-        _ruleTraceName = DeriveRuleTraceName(GetType());
     }
 
     // Replace this rule's trace label. Intended for use only from subclass
@@ -189,8 +211,8 @@ public abstract class Rule
     // Strip the "Rule" suffix so the trace label reads "And" instead
     // of "AndRule". GetType() in a base constructor returns the
     // derived runtime type (C# guarantee), so this resolves correctly
-    // for every subclass. Called once per rule instance in the ctor;
-    // the result is cached in _ruleTraceName so trace emission just
+    // for every subclass. Called once per rule instance in the ctor.
+    // The result is cached in _ruleTraceName so trace emission just
     // reads a field.
     private static string DeriveRuleTraceName(Type t)
     {
@@ -200,25 +222,15 @@ public abstract class Rule
             : name;
     }
 
-    // Replace this rule's children. The only production use is LateBoundRule,
-    // which needs to install its target after construction. Throws if the
-    // rule has already been compiled, so late-binding is a grammar-build-time
-    // operation and no rule can sprout new children mid-parse.
-    protected void SetChildren(params Rule[] children)
-    {
-        ThrowIfSealed();
-        Children = children.Length > 0 ? children : NoChildren;
-    }
-
     // Hook for subclass-specific grammar-validity checks. Called once per
     // rule during Compile. Default is no-op. LateBoundRule uses it to fail
-    // fast when a forward-reference was never bound.
+    // when a forward-reference was never bound.
     protected virtual void ValidateCompiled() { }
 
     // Attach a debug/trace name. Returns the same Rule for fluent chaining.
     // Throws InvalidOperationException if the Rule has already been compiled.
     // Virtual so subclasses (LateBoundRule) can forbid it where naming would
-    // be a footgun.
+    // be a bug.
     public virtual Rule As(string name)
     {
         ThrowIfSealed();
@@ -238,11 +250,12 @@ public abstract class Rule
         return this;
     }
 
-    // Set the flatten policy (None / Delete / Flatten) that will apply when
-    // FlattenInto walks the parse tree. Returns the same Rule for fluent
-    // chaining. Throws if already compiled. Virtual so LateBoundRule can
-    // forbid it (a FlattenType set on a transparent forwarding rule is
-    // never consulted and would silently do nothing).
+    // Set the flatten policy (Preserve / Delete / Flatten) that controls
+    // how this rule contributes to the parse tree on a successful match.
+    // See the FlattenType enum for what each value means. Returns the same
+    // Rule for fluent chaining. Throws if already compiled. Virtual so
+    // LateBoundRule can forbid it (a FlattenType set on a transparent
+    // forwarding rule is never consulted and would silently do nothing).
     public virtual Rule Flatten(FlattenType type)
     {
         ThrowIfSealed();
@@ -270,12 +283,11 @@ public abstract class Rule
     // every Rule against further modification. Idempotent: calling Compile
     // twice does nothing the second time. Returns the same Rule for chaining.
     //
-    // Auto-invoked on the first call to Parse(); call it explicitly when
+    // Auto-invoked on the first call to Parse(). Call it explicitly when
     // you want grammar-construction errors to surface at program startup
     // rather than at first parse.
     //
-    // Id assignment runs in three passes so the priority order matches what
-    // the docs promise:
+    // Id assignment runs in three passes:
     //   1. Pinned ids first. Rules that called .As(SymbolId) keep the id
     //      they were given, and that id is reserved against later passes.
     //   2. Named rules get a hash-of-name id in the custom range. If the
@@ -308,6 +320,14 @@ public abstract class Rule
         visited.Clear();
         ValidateAll(this, visited);
 
+        // Compute FirstConsumedRunes / Advance for every reachable rule (see
+        // RuleStartRequirements for the shortcut docs). Done after Validate so
+        // LateBoundRule's _target is guaranteed non-null by the time we walk
+        // its child.
+        var computing = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
+        visited.Clear();
+        ComputeRuleStartAll(this, visited, computing);
+
         visited.Clear();
         SealAll(this, visited);
         return this;
@@ -316,24 +336,24 @@ public abstract class Rule
     // Return the human-readable name for a SymbolId in this grammar, or
     // null if the id isn't known. Two sources, tried in order:
     //
-    //   1. Character range (0..0x10FFFF): render the code point as a
-    //      single-char string. A tree leaf with id 0x41 comes back as "A",
+    //   1. Rune range (0..0x10FFFF): render the code point as a
+    //      single-rune string. A tree leaf with id 0x41 comes back as "A",
     //      0x1F3B8 comes back as "🎸". Surrogate halves (0xD800..0xDFFF)
-    //      aren't valid scalar values and return null; no lexer produces
+    //      aren't valid scalar values and return null. No lexer produces
     //      them as ids, so this only matters if a caller hand-built a bad
     //      SymbolId.
     //
     //   2. Per-grammar rule index: a lazily-built Dictionary<SymbolId, Rule>
     //      keyed on every rule reachable from this root. For a rule created
     //      with .As("foo"), returns "foo". For an unnamed rule, returns the
-    //      class-derived trace name ("And", "OneOrMore", "Char",
+    //      class-derived trace name ("And", "OneOrMore", "Token",
     //      "BetweenInclusive[1..3]"). Returns null if the id isn't in the
     //      grammar.
     //
-    // Intended for parse-tree walkers (which only carry SymbolIds, not Rule
-    // references) and for error-message rendering that wants to quote a
-    // rule's name. Tracing already has direct Rule access and doesn't
-    // need this path.
+    // Intended for parse-tree walkers (which see Symbols carrying SymbolIds,
+    // not Rule references) and for error-message rendering that wants to
+    // quote a rule's name. Tracing already has direct Rule access and
+    // doesn't need this path.
     //
     // Auto-compiles if the grammar hasn't been compiled yet, since ids
     // aren't stable until Compile runs.
@@ -371,8 +391,10 @@ public abstract class Rule
             CollectNames(child, visited, map);
     }
 
+    // Parse: the main entry point for running a grammar
+    //
     // Run the grammar against an input string. Auto-compiles on first call.
-    // Default ParseOptions uses the GraphemeLexer; pass options explicitly
+    // Default ParseOptions uses the GraphemeLexer. Pass options explicitly
     // to switch to the RuneLexer or change other parse-time settings.
     public ParseResult Parse(string input) => Parse(input, new ParseOptions());
 
@@ -396,27 +418,56 @@ public abstract class Rule
             ? (Lexer)new RuneLexer(parseInput, options.TraceSink, options.TraceLevel)
             : (Lexer)new GraphemeLexer(parseInput, options.TraceSink, options.TraceLevel);
         lexer.ConfigureBudgets(options);
-        Symbol? tree;
+        Symbol? result;
+        // Pre-allocate a root list so a root with FlattenType.Flatten
+        // has somewhere to merge into. If root is FlattenType.Preserve,
+        // TryParse nulls this out and rootList stays empty. If root is
+        // FlattenType.Delete, same. Only a FlattenType.Flatten root
+        // populates it.
+        var rootList = new List<Symbol>();
         try
         {
-            tree = TryParse(lexer);
+            result = TryParse(lexer, rootList);
         }
         catch (ParseBudgetExceeded budget)
         {
             // The throw rode up through every active rule's `using var
             // transaction = lexer.BeginTransaction()`, which rolled the
-            // lexer back frame by frame. lexer.Position now reflects
-            // wherever the unwind settled. We carry that as the
-            // ErrorCharIndex so callers get a coarse "how far did the
-            // parser get" hint for diagnostics.
-            int abortPos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, lexer.Position, options.NormalizeInput);
+            // lexer position back frame by frame, so lexer.Position is now
+            // back at 0. lexer.DeepestFailure isn't rolled back (it's a
+            // high-water mark of failure positions), so it's the best
+            // "how far did the parser get" hint we can give. Use the
+            // same Math.Max idiom as the normal failure path below for
+            // consistency.
+            int abortRaw = Math.Max(lexer.DeepestFailure, lexer.Position);
+            int abortPos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, abortRaw, options.NormalizeInput);
             return ParseResult.Aborted(budget.Outcome, abortPos, BuildBudgetMessage(budget.Outcome), input, this);
         }
-        if (tree != null && lexer.IsEof)
-            return ParseResult.Succeeded(tree, input, this);
-        var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
-        int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, options.NormalizeInput);
-        return ParseResult.Failed(failurePos, BuildErrorMessage(lexer, pos), input, this);
+        if (result == null && rootList.Count == 0)
+        {
+            var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
+            int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, options.NormalizeInput);
+            return ParseResult.Failed(failurePos, BuildErrorMessage(lexer, pos), input, this);
+        }
+        if (!lexer.IsEof)
+        {
+            var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
+            int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, options.NormalizeInput);
+            return ParseResult.Failed(failurePos, BuildErrorMessage(lexer, pos), input, this);
+        }
+        // Three success shapes:
+        //   * Preserve root: result is its wrapper Symbol, rootList is empty.
+        //     Symbols = [result].
+        //   * Flatten root: result is Discarded, rootList has content.
+        //     Symbols = rootList.
+        //   * Delete root: result is Discarded, rootList is empty.
+        //     Symbols = [] (unusual but consistent).
+        IReadOnlyList<Symbol> symbols;
+        if (!ReferenceEquals(result, Symbol.Discarded) && result != null)
+            symbols = new[] { result };
+        else
+            symbols = rootList;
+        return ParseResult.Succeeded(symbols, input, this);
     }
 
     private static string BuildBudgetMessage(ParseOutcome outcome)
@@ -425,8 +476,8 @@ public abstract class Rule
         {
             case ParseOutcome.Timeout:
                 return "Parse aborted: timeout exceeded.";
-            case ParseOutcome.WorkLimitExceeded:
-                return "Parse aborted: maximum rule invocations exceeded.";
+            case ParseOutcome.RuleCountLimitExceeded:
+                return "Parse aborted: rule-count limit exceeded.";
             case ParseOutcome.DepthLimitExceeded:
                 return "Parse aborted: maximum recursion depth exceeded.";
             case ParseOutcome.Canceled:
@@ -468,17 +519,56 @@ public abstract class Rule
     // TryParseRule inherit catastrophic-backtracking protection with no
     // extra work.
     //
-    // The try/finally is what keeps depth balanced when a budget trips:
-    // ParseBudgetExceeded unwinds the stack, every frame's transaction
-    // `using` rolls back the lexer, and ExitRule decrements the depth
-    // counter on the way up. Rule.Parse catches the exception at the
-    // boundary and produces a ParseResult.Aborted.
-    internal Symbol? TryParse(Lexer lexer)
+    // TryParse also normalizes the subclass's view: it computes
+    // effectiveFlattenType (collapsing PreserveFlattenWrappers), and makes
+    // outputSymbols non-null only in Flatten mode. Subclasses don't have
+    // to re-check FlattenType or PreserveFlattenWrappers, they implement
+    // the three modes per the TryParseRule rules below.
+    internal Symbol? TryParse(Lexer lexer, List<Symbol>? outputSymbols)
     {
         lexer.EnterRule();
         try
         {
-            return TryParseRule(lexer);
+            // effectiveFlattenType collapses FlattenType +
+            // PreserveFlattenWrappers. Debug mode treats every rule
+            // as Preserve.
+            FlattenType effectiveFlattenType =
+                lexer.PreserveFlattenWrappers ? FlattenType.Preserve : FlattenType;
+            if (effectiveFlattenType != FlattenType.Flatten)
+            {
+                outputSymbols = null;
+            }
+            else if (outputSymbols == null)
+            {
+                // A rule with FlattenType.Flatten expects its caller to pass a list
+                // for it to write children into. When the caller passed
+                // null (Not/Peek throwing away inner's output, a Flatten
+                // root that didn't get a rootList, etc.), we allocate a
+                // throwaway list here. Inner writes into it but nobody
+                // reads it, and the list goes out of scope when this call
+                // returns. Keeps subclasses simple: they always get a
+                // list to write into.
+                outputSymbols = new List<Symbol>();
+            }
+            int savedCount = outputSymbols?.Count ?? 0;
+            var result = TryParseRule(lexer, effectiveFlattenType, outputSymbols);
+            if (result == null)
+            {
+                // Roll back any partial writes to outputSymbols. The
+                // transaction's `using` rolled back the lexer. This
+                // rolls back the caller's list.
+                if (outputSymbols != null && outputSymbols.Count > savedCount)
+                    outputSymbols.RemoveRange(savedCount, outputSymbols.Count - savedCount);
+                return null;
+            }
+
+            // Safety net: subclasses that ignored effectiveFlattenType
+            // and handed back a real Symbol in Delete / Flatten mode
+            // get normalized to Discarded so callers can rely on the
+            // contract (only FlattenType.Preserve returns a wrapper Symbol).
+            if (effectiveFlattenType != FlattenType.Preserve)
+                return Symbol.Discarded;
+            return result;
         }
         finally
         {
@@ -488,15 +578,70 @@ public abstract class Rule
 
     // The matching method every subclass implements. Contract:
     //   * Open a transaction with lexer.BeginTransaction() at the top.
-    //   * On success: call transaction.Commit() and return a Symbol subtree
-    //     describing what matched.
     //   * On failure: return null without committing. The `using` on the
-    //     transaction will roll the lexer back automatically.
-    //   * Never consume input on failure (the contract above guarantees
-    //     this if you follow the transaction pattern).
-    //   * Call lexer.RecordFailure() on the failure path so the
-    //     "deepest failure wins" error-reporting heuristic works.
-    internal abstract Symbol? TryParseRule(Lexer lexer);
+    //     transaction rolls the lexer back automatically. Never consume
+    //     input on failure (following the transaction pattern guarantees
+    //     this). Call lexer.RecordFailure() so the "deepest failure wins"
+    //     error-reporting heuristic can surface your rule's error message.
+    //     Rule.TryParse rolls back any partial writes to outputSymbols
+    //     for you, so subclasses don't need to truncate on the failure
+    //     path.
+    //   * On success: call transaction.Commit() and return a non-null
+    //     Symbol. What exactly you return depends on `effectiveFlattenType`:
+    //       - Delete: emit nothing, return Symbol.Discarded.
+    //       - Flatten: append each Symbol you would have collected to
+    //         `outputSymbols` (the caller's list, guaranteed non-null)
+    //         and return Symbol.Discarded. For a composite, that's each
+    //         matched child's Symbol. For a leaf, that's the leaf Symbol
+    //         itself.
+    //       - Preserve: build a wrapper Symbol around your matched
+    //         children (or leaf content) and return it.
+    //   * `outputSymbols` is the caller's list in Flatten mode. It is
+    //     non-null by contract (callers of Flatten rules are required to
+    //     provide one), and null otherwise.
+    //   * Subclass construction: pass child rules to the base constructor
+    //     via `base(flattenType, children)`. The `Children` property is
+    //     populated automatically and Compile walks it to assign ids and
+    //     seal the graph.
+    //   * Optionally override ComputeRuleStart to publish this rule's
+    //     FirstConsumedRunes and Advance (see RuleStartRequirements for
+    //     the docs). Without an override the pessimistic defaults apply
+    //     and enclosing rules never shortcut this rule (correct but
+    //     slower).
+    internal abstract Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols);
+
+    // Helper for composite rules to call a child rule with the right
+    // "write-here" list.
+    //
+    // `outputSymbols` is the list the caller is currently
+    // collecting its own matched children into: either the caller's
+    // caller's list (when the caller is writing into it), the caller's
+    // own wrap-mode list, or null when the caller has no list yet.
+    //
+    // ParseChild forwards that list only when the child would actually
+    // write into it (FlattenType.Flatten, normal mode). Otherwise it
+    // passes null so a FlattenType.Preserve or FlattenType.Delete
+    // child wraps or discards normally. Rule.TryParse performs the same check as a safety net,
+    // so a custom composite that forgets this helper still gets correct
+    // behavior. This just makes the intent visible at the caller.
+    protected Symbol? ParseChild(Rule child, Lexer lexer, List<Symbol>? outputSymbols)
+    {
+        var listForChild = child.FlattenType == FlattenType.Flatten && !lexer.PreserveFlattenWrappers
+            ? outputSymbols
+            : null;
+        return child.TryParse(lexer, listForChild);
+    }
+
+    // Subclass hook that publishes this rule's FirstConsumedRunes and
+    // Advance. Called once per rule during Compile, in depth-first post-
+    // order so children's values are already populated when a composite's
+    // ComputeRuleStart runs. See RuleStartRequirements for what to produce
+    // and why. The pessimistic default below (Universe, Sometimes) is the
+    // fully-safe "I don't know" answer that never gets shortcutted.
+    internal virtual RuleStartRequirements ComputeRuleStart()
+    {
+        return new RuleStartRequirements(RuneSet.Universe, Advance.Sometimes);
+    }
 
     internal void SetIdInternal(SymbolId id)
     {
@@ -584,13 +729,54 @@ public abstract class Rule
 
     // Ask every reachable rule whether it's valid (all forward-refs bound,
     // etc.). Each subclass's ValidateCompiled throws with a helpful
-    // message if it finds a problem; default implementation is no-op.
+    // message if it finds a problem. Default implementation is no-op.
     private static void ValidateAll(Rule r, HashSet<Rule> visited)
     {
         if (!visited.Add(r)) return;
         r.ValidateCompiled();
         foreach (var child in r.Children)
             ValidateAll(child, visited);
+    }
+
+    // Depth-first, post-order walk with cycle detection. A rule's
+    // ComputeRuleStart reads its children's FirstConsumedRunes/Advance, so
+    // children have to be computed first. When a cycle is found
+    // (LateBoundRule pointing back into an Or that contains it, for
+    // instance), the in-progress rule is left at its pessimistic default
+    // (Universe, Advance.Sometimes) so the loop terminates.
+    // That's safe: OrRule will always try
+    // it, which is exactly the behavior before required-runes dispatch
+    // existed.
+    //
+    // A smarter algorithm could repeat the walk until no
+    // FirstConsumedRunes changes (each pass can only grow a FirstConsumedRunes, so this
+    // terminates), which would tighten the result for self-referential
+    // grammars and let OrRule skip more branches inside them. But the
+    // common case (LateBoundRule target is reachable via a non-cyclic
+    // path) converges correctly on the first visit, so the pessimistic
+    // fallback is enough for now.
+    private static void ComputeRuleStartAll(Rule r, HashSet<Rule> visited, HashSet<Rule> computing)
+    {
+        if (visited.Contains(r)) return;
+        if (!computing.Add(r)) return; // cycle: leave at pessimistic default
+        foreach (var child in r.Children)
+            ComputeRuleStartAll(child, visited, computing);
+        var start = r.ComputeRuleStart();
+        // Advance.Never means the rule never consumes on success, so
+        // FirstConsumedRunes must be Empty. Anything else is dead data
+        // that would mislead a reader. Fail at Compile time so subclass
+        // authors find out immediately instead of debugging a wrong
+        // AndRule union somewhere else.
+        if (start.Advance == Advance.Never && !start.FirstConsumedRunes.IsEmpty)
+            throw new InvalidOperationException(
+                $"Rule '{r.GetType().Name}' returned Advance.Never with non-empty " +
+                $"FirstConsumedRunes. A rule that never advances can't have a set " +
+                $"of possible first-consumed runes. Use RuneSet.Empty for " +
+                $"FirstConsumedRunes when Advance is Never.");
+        r.FirstConsumedRunes = start.FirstConsumedRunes;
+        r.Advance = start.Advance;
+        computing.Remove(r);
+        visited.Add(r);
     }
 
     private static void SealAll(Rule r, HashSet<Rule> visited)

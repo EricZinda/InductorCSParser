@@ -3,7 +3,7 @@ using System.Text;
 
 namespace InductorParser.Lexing;
 
-// Maps a char index into a normalized string back to a char index into
+// Maps a char index for a normalized string back to a char index for
 // the caller's original (un-normalized) string, so ParseResult can report
 // failure positions in the coordinate system the caller passed in rather
 // than the internal normalized one. See ParseOptions.NormalizeInput for
@@ -17,19 +17,25 @@ namespace InductorParser.Lexing;
 //
 // Two walker shapes, one picked by the form:
 //
-//   * Canonical forms (FormC, FormD) preserve grapheme boundaries 1:1. A
-//     canonical decomposition or composition only splits or joins base +
-//     combining-mark sequences within a single grapheme cluster. Lockstep
-//     walk: one grapheme on each side per step. Cheapest.
+//   * Canonical forms (FormC, FormD) don't change how many visible
+//     characters a string has. They may swap one representation of "é"
+//     (two UTF-16 chars: "e" plus a combining accent) for another (one
+//     UTF-16 char: precomposed "é"), but either way it still counts as
+//     one visible character. Walking both strings in lockstep, one
+//     visible character per step on each side, stays in sync.
+//     Cheapest path.
 //
-//   * Compatibility forms (FormKC, FormKD) fold across boundaries:
-//     ligature "ﬁ" (one grapheme) maps to "fi" (two graphemes), circled
-//     "①" (one grapheme) maps to "1", fullwidth "Ａ" maps to "A". The
-//     lockstep walker would drift by the expansion count. Instead we walk
-//     the ORIGINAL grapheme-by-grapheme and normalize each one on the fly
-//     to measure how much of the normalized string it covers. More
-//     expensive per step (a String.Normalize allocation per original
-//     grapheme) but correct across ligature-style expansions.
+//   * Compatibility forms (FormKC, FormKD) CAN change the visible-
+//     character count: the "fi" ligature is one visible character
+//     that becomes two ("f" + "i") after normalization. Similarly
+//     "①" → "1", fullwidth "Ａ" → "A". The lockstep walk would drift
+//     out of sync every time that happens, because one step on the
+//     original corresponds to a different number of steps on the
+//     normalized side. Instead we walk the original one visible
+//     character at a time, and for each one we call String.Normalize
+//     to see how many characters it covers on the normalized side,
+//     summing as we go. More expensive (one allocation per step)
+//     but correct when rewrites change character counts.
 //
 // Semantics: when the failure lands inside a character sequence that got
 // rewritten (a combining sequence composed, or a ligature folded), the
@@ -37,12 +43,12 @@ namespace InductorParser.Lexing;
 // Editors want to highlight the whole bad grapheme or ligature anyway, so
 // this matches what a diagnostic consumer expects to see.
 //
-// Inherits the pre-.NET 5 StringInfo caveat described on GraphemeLexer:
-// a handful of real grapheme clusters segment incorrectly on legacy
-// runtimes. The translation uses the same primitive the grapheme lexer
-// does, so whatever the lexer saw, the translator sees too. Upgrades
-// automatically when the vendored UAX #29 implementation lands
-// (backlog/xlll).
+// Grapheme segmentation tracks whatever the .NET runtime the parser is
+// compiled on provides: UAX #29 compliant on .NET 5 and later,
+// slightly-off on legacy runtimes (a handful of real grapheme clusters
+// segment incorrectly). The translator uses the same primitive the
+// grapheme lexer does, so whatever the lexer saw, the translator sees
+// too.
 internal static class NormalizedPositionMap
 {
     public static int TranslateToOriginal(string original, string normalized, int normalizedIndex, NormalizationForm? form)
@@ -101,7 +107,7 @@ internal static class NormalizedPositionMap
     // we move a hit anywhere inside that range back to the start of the
     // original grapheme.
     //
-    // Why this isn't spec-perfect, and why it still works:
+    // Why this isn't perfect and why it still works:
     //
     // Normalization does two things. Step one is a fixed lookup: each
     // rune gets swapped for its decomposed form from UnicodeData.txt.
@@ -135,7 +141,7 @@ internal static class NormalizedPositionMap
     // its own "defective" grapheme, and per-grapheme normalization can
     // differ from whole-string normalization by one grapheme's worth of
     // char offset. ErrorCharIndex stays a valid index into the original
-    // input; it just lands at an adjacent grapheme boundary instead of
+    // input. It just lands at an adjacent grapheme boundary instead of
     // the exact one. No editor highlight will notice the difference.
     private static int TranslateViaPerGraphemeNormalize(string original, int normalizedIndex, NormalizationForm form)
     {

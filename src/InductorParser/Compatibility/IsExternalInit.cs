@@ -6,7 +6,7 @@
 // this polyfill, any file that uses `init` or a record struct fails to
 // compile on the netstandard2.1 target with CS0518.
 //
-// The type has no members; the compiler only checks that it exists.
+// The type has no members. The compiler only checks that it exists.
 // Marking it `internal` keeps it out of the public surface so callers
 // don't see two IsExternalInit types (ours plus the BCL's on net5+).
 //

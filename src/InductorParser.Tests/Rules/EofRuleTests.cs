@@ -21,9 +21,9 @@ public class EofRuleTests
     [Test]
     public void Eof_fails_at_current_position_when_input_has_content()
     {
-        // Char('a') matches. Eof() runs at offset 1 and finds 'b' there,
+        // Token('a') matches. Eof() runs at offset 1 and finds 'b' there,
         // records its WithError at the current position.
-        var rule = And(Char('a').WithError("need an 'a'"),
+        var rule = And(Token('a').WithError("need an 'a'"),
                        Eof().WithError("expected end of input"));
 
         var result = rule.Parse("ab");
@@ -38,7 +38,7 @@ public class EofRuleTests
     {
         // No WithError anywhere. Eof records a null message at offset 1 and
         // BuildErrorMessage's positional fallback renders the message.
-        var rule = And(Char('a'), Eof());
+        var rule = And(Token('a'), Eof());
 
         var result = rule.Parse("ab");
 
@@ -53,7 +53,7 @@ public class EofRuleTests
         // EofRule doesn't open a transaction and top-level Parse doesn't
         // either, so the success line sits at depth 0 with no leading
         // indentation. The message is empty, so there's no ": {detail}"
-        // tail either — the line reads simply "SUCC | Eof".
+        // tail either. The line reads simply "SUCC | Eof".
         var sink = NewSink();
         Eof().Parse("", new ParseOptions { TraceSink = sink });
 
@@ -65,7 +65,7 @@ public class EofRuleTests
     public void Eof_trace_failure_produces_expected_output()
     {
         // Wrapped in And so there's a transaction open when Eof fails,
-        // giving us a non-trivial indentation to pin.
+        // giving us a non-trivial indentation to verify.
         var sink = NewSink();
         And(Eof()).Parse("x", new ParseOptions { TraceSink = sink });
 

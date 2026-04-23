@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
@@ -13,20 +14,20 @@ namespace InductorParser;
 // sweep up arbitrary user-typed text while still stopping at the stop
 // characters.
 //
-// EOF never matches. The rule reads one token; at EOF the token has
+// EOF never matches. The rule reads one token. At EOF the token has
 // IsEof == true and the rule fails without advancing, same as RuneInRule.
 internal sealed class RuneNotInRule : Rule
 {
     private readonly RuneSet _set;
     private readonly string _setRendered;
 
-    public RuneNotInRule(RuneSet runeSet) : base(FlattenType.None)
+    public RuneNotInRule(RuneSet runeSet) : base(FlattenType.Preserve)
     {
         _set = runeSet;
         _setRendered = runeSet.ToString();
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         using var transaction = lexer.BeginTransaction();
         var token = lexer.Read();
@@ -49,11 +50,24 @@ internal sealed class RuneNotInRule : Rule
         }
         TraceSuccess(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted one not in '{_setRendered}'");
         transaction.Commit();
-        // When the token is one rune the Symbol's id is that rune's code
-        // point, matching RuneInRule's leaf shape. For multi-rune tokens
-        // (grapheme clusters) there is no single code point to pin, so the
-        // rule's Compile-assigned id is used instead.
+        if (effectiveFlattenType == FlattenType.Delete)
+            return Symbol.Discarded;
         SymbolId leafId = runeValue >= 0 ? new SymbolId(runeValue) : Id;
-        return new Symbol(leafId, FlattenType, token.Memory);
+        var leafSymbol = new Symbol(leafId, FlattenType, token.Memory);
+        if (effectiveFlattenType == FlattenType.Flatten)
+        {
+            outputSymbols!.Add(leafSymbol);
+            return Symbol.Discarded;
+        }
+        return leafSymbol;
+    }
+
+    // Return the set of runes this rule might consume first (can be a superset)
+    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
+    // Then say whether the rule Always / Sometimes / Never consumes at least
+    // that first rune on success.
+    internal override RuleStartRequirements ComputeRuleStart()
+    {
+        return new RuleStartRequirements(~_set, Advance.Always);
     }
 }

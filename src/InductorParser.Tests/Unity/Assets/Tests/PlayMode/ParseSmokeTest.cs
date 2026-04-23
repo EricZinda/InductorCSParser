@@ -1,3 +1,4 @@
+using System.Text;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
@@ -27,15 +28,15 @@ namespace InductorParser.PlayModeTests
                 Float().Flatten(FlattenType.Flatten),
                 Integer().Flatten(FlattenType.Flatten),
                 OneOrMore(RuneIn(RuneSet.Letters))
-            );
+            ).Flatten(FlattenType.Preserve);
             var document = And(
                 settingName,
                 OptionalWhitespace(),
-                Char('='),
+                Token('='),
                 OptionalWhitespace(),
                 settingValue,
                 OptionalWhitespace(),
-                Char(';')
+                Token(';')
             );
 
             var result = document.Parse("setting = 5;");
@@ -46,11 +47,29 @@ namespace InductorParser.PlayModeTests
         }
 
         [Test]
+        public void StringChars_parses_under_il2cpp()
+        {
+            // Tripwire for the StringChars primitive under IL2CPP.
+            // Exercises the inline rune-decode helper
+            // (Lexer.TryPeekRune), the RuneSet-stopper fast path,
+            // and the single-rune escape start plus escape-end
+            // dispatch. Grammar mirrors a minimal JSON string body.
+            var escapeEnd = RuneIn(RuneSet.Runes("\"\\/bfnrt"));
+            var body = StringChars(RuneSet.Runes("\""), new Rune('\\'), escapeEnd);
+            var rule = And(Token('"'), body, Token('"'));
+
+            var result = rule.Parse("\"hello\\n\"");
+
+            Assert.That(result.Success, Is.True, result.ErrorMessage);
+            Assert.That(result.Tree!.ToString(), Is.EqualTo("hello\\n"));
+        }
+
+        [Test]
         public void Reports_failure_position_under_il2cpp()
         {
             var rule = And(
                 OneOrMore(RuneIn(RuneSet.Letters)),
-                Char(';').WithError("expected ';'")
+                Token(';').WithError("expected ';'")
             );
 
             var result = rule.Parse("abc1");

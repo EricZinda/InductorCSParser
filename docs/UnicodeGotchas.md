@@ -2,29 +2,19 @@
 
 Some Unicode surprises cannot be fixed by the parser's lexer choice. Both `RuneLexer` and `GraphemeLexer` hit these identically, because they live outside the "what is a token?" question the lexers answer. The fix is always either caller-side preprocessing (clean the input before parsing) or grammar-design (pick the right `RuneSet`, add explicit tolerance rules).
 
-This doc lists the common gotchas, why they bite, and the idiomatic workaround for each. If you are choosing between `RuneLexer` and `GraphemeLexer`, see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md); that is a different decision.
+This doc lists the common gotchas, why they bite, and the idiomatic workaround for each. If you are choosing between `RuneLexer` and `GraphemeLexer`, see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). That is a different decision.
 
-## Case Folding Beyond ASCII
+## Case-Insensitive Matching Beyond ASCII
 
-The `LiteralIgnoreCase` helper does ASCII case-insensitive matching (A ↔ a) and is all most grammars need. Full Unicode case folding has script-specific surprises that neither lexer handles: German `ß` uppercases to `SS` (one character becomes two), Turkish has dotted-i and dotless-i as distinct letters, Greek final sigma (ς) folds to regular sigma only at word boundaries. The helper is labeled ASCII-only on purpose; extending it to full Unicode silently produces wrong results on Turkish, Greek, and German text.
+The `LiteralIgnoreAsciiCase` leaf does ASCII case-insensitive matching (A ↔ a) and is all most grammars need. Full Unicode case-insensitive matching has script-specific surprises that neither lexer handles: German `ß` uppercases to `SS` (one character becomes two), Turkish has dotted-i and dotless-i as distinct letters, Greek final sigma (ς) pairs with regular sigma only at word boundaries. The leaf is ASCII-only on purpose. Extending it to full Unicode silently produces wrong results on Turkish, Greek, and German text.
 
-**Fix.** Use the ASCII-only helper and accept that case-insensitive matching of non-ASCII text is not supported:
+**Fix.** Use the built-in leaf and accept that case-insensitive matching of non-ASCII text is not supported:
 
 ```csharp
-// One character that matches either case (ASCII only)
-static Rule AnyCase(char c) =>
-    char.IsLetter(c)
-        ? RuneIn(RuneSet.Single(char.ToLower(c)) | RuneSet.Single(char.ToUpper(c)))
-        : Char(c);
-
-// A literal string where each letter matches either case
-static Rule LiteralIgnoreCase(string s) =>
-    And(s.Select(AnyCase).ToArray());
-
-public static readonly Rule SelectKeyword = LiteralIgnoreCase("select");
+public static readonly Rule SelectKeyword = LiteralIgnoreAsciiCase("select");
 ```
 
-Do not try to extend this to full Unicode case folding. It will get subtly wrong for Turkish, Greek, and German.
+Do not try to extend this to full Unicode case-insensitive matching. It will get subtly wrong for Turkish, Greek, and German.
 
 ## BOM At File Start
 
@@ -50,7 +40,7 @@ static readonly HashSet<int> InvisibleFormat = new()
 {
     0x200B,  // zero-width space
     0x200C,  // zero-width non-joiner
-    0x200D,  // zero-width joiner — keep if you care about emoji ZWJ sequences!
+    0x200D,  // zero-width joiner (keep if you care about emoji ZWJ sequences!)
     0x00AD,  // soft hyphen
     0xFEFF,  // BOM / zero-width no-break space
 };
@@ -61,7 +51,7 @@ var cleaned = string.Concat(input.EnumerateRunes()
 var result = grammar.Parse(cleaned);
 ```
 
-If your grammar uses `GraphemeLexer` and processes emoji sequences, do not strip ZWJ (U+200D) indiscriminately; you will break 👨‍👩‍👧‍👦 and similar sequences.
+If your grammar uses `GraphemeLexer` and processes emoji sequences, do not strip ZWJ (U+200D) indiscriminately. You will break 👨‍👩‍👧‍👦 and similar sequences.
 
 ## Homoglyph Confusables
 
@@ -86,7 +76,7 @@ public static readonly Rule LatinIdentifier =
     OneOrMore(RuneIn(LatinLetters | RuneSet.Ascii.Digits | RuneSet.Runes("_")));
 ```
 
-For full UAX #31 Script_Extensions-based detection (the standard algorithm for "is this identifier mixing scripts in a suspicious way"), use a dedicated library; the parser's `RuneSet` is the coarse-grained control.
+For full UAX #31 Script_Extensions-based detection (the standard algorithm for "is this identifier mixing scripts in a suspicious way"), use a dedicated library. The parser's `RuneSet` is the coarse-grained control.
 
 ## Variation Selectors
 
@@ -103,6 +93,52 @@ var result = grammar.Parse(cleaned);
 ```
 
 If you are doing emoji-sensitive parsing, be careful: variation selectors are part of the encoded form of some emoji (the emoji-style heart, some keycap sequences), and stripping them can change which emoji the user sees.
+
+## CRLF Under GraphemeLexer
+
+Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 rule GB3), so `GraphemeLexer` hands the parser one two-char token whenever it sees a Windows line ending. This bites any line-based grammar that tries to match or stop on a bare `\n`:
+
+- `Token('\n')` matches a one-grapheme token whose content is exactly `'\n'`. The CRLF grapheme has content `"\r\n"`, so `Token('\n')` does *not* match it.
+- `RuneIn(RuneSet.Runes("\n"))` or `RuneIn(RuneSet.Runes("\r\n"))` matches a single-rune token whose rune is in the set. A CRLF grapheme is two runes, so it matches no single-rune set. It fails `RuneIn` regardless of what runes you put in the set.
+- `RuneNotIn(RuneSet.Runes("\n"))` does the opposite: multi-rune tokens pass `RuneNotIn` unconditionally. `ZeroOrMore(RuneNotIn(stopSet))` used to scan "everything up to a newline" will greedily swallow the terminating CRLF as body content instead of stopping at it, then the terminator fails because there is nothing left.
+
+`RuneLexer` doesn't have this problem. It emits `'\r'` and `'\n'` as separate tokens. The bite is `GraphemeLexer`-specific, which is the default.
+
+**Fix.** Add an explicit `Literal("\r\n")` alternative anywhere the grammar cares about line breaks. One helper covers the three idiomatic uses:
+
+```csharp
+// Match any of LF, CR, or the CRLF grapheme.
+private static readonly Rule LineBreak = Or(
+    Literal("\r\n"),
+    RuneIn(RuneSet.Runes("\r\n"))
+);
+
+// Whitespace that includes newlines: put the Literal first so the
+// longer alternative commits before the single-rune fallback.
+public static readonly Rule OptionalWhitespace = ZeroOrMore(Or(
+    Literal("\r\n"),
+    RuneIn(RuneSet.Ascii.Whitespace)
+));
+
+// Scanning "up to end of line": use a rule-based stop with Not(LineBreak),
+// not RuneNotIn. RuneNotIn would silently eat the CRLF grapheme.
+public static readonly Rule LineComment = And(
+    Token('%'),
+    ZeroOrMore(And(Not(LineBreak), AnyToken())),
+    Or(OneOrMore(LineBreak), Eof())
+);
+```
+
+The three anti-patterns to avoid in any line-based grammar:
+
+```csharp
+// BROKEN on Windows line endings under GraphemeLexer.
+And(..., Token('\n'))                             // fails on CRLF input
+ZeroOrMore(RuneIn(RuneSet.Runes("\r\n")))        // skips zero CRLF graphemes
+ZeroOrMore(RuneNotIn(RuneSet.Single('\n')))      // swallows the CRLF terminator
+```
+
+If a grammar is a port of regex semantics that explicitly targets LF-only (some Markdown-style formats, for instance), the failure on CRLF is faithful to the source and you can leave `Token('\n')` as-is. Mark the grammar with a comment so the next reader knows the LF-only behavior is intentional, not an oversight.
 
 ## The Common Thread
 
@@ -131,7 +167,7 @@ What breaks:
 - Thai SARA AM. "kam" (ก + ํา) splits.
 - Other extended-grapheme-cluster rules added after about 2003 (Prepend characters, Extended_Pictographic sequences).
 
-The common thread is timing. Combining marks have been in Unicode since the start, so the legacy walker handles them. Everything UAX #29 added later, especially the emoji rules from 2014 onward, the legacy walker doesn't know about. Microsoft updated `StringInfo` to ICU in .NET 5; Unity's Mono didn't follow, and IL2CPP compiles from that Mono.
+The common thread is timing. Combining marks have been in Unicode since the start, so the legacy walker handles them. Everything UAX #29 added later, especially the emoji rules from 2014 onward, the legacy walker doesn't know about. Microsoft updated `StringInfo` to ICU in .NET 5. Unity's Mono didn't follow, and IL2CPP compiles from that Mono.
 
 **Fix.** Three options, in order of effort:
 
@@ -139,4 +175,4 @@ The common thread is timing. Combining marks have been in Unicode since the star
 2. If a specific input causes trouble, switch that grammar to `RuneLexer` and handle the multi-rune sequence explicitly with a small rule. This trades grapheme convenience for one extra rule and works on every runtime.
 3. Vendor a UAX #29 implementation into the parser. Tracked in [backlog/r000](../backlog/r000-vendor-a-uax-#29-grapheme-cluster-implementation.md). Half a day of work, gives full conformance everywhere.
 
-The repo's test suite documents the broken cases explicitly. Look for tests gated behind `#if !UNITY_INCLUDE_TESTS` in [CharRuleTests.cs](../src/InductorParser.Tests/Rules/CharRuleTests.cs); each one is a category that the legacy walker mishandles.
+The repo's test suite documents the broken cases explicitly. Look for tests gated behind `#if !UNITY_INCLUDE_TESTS` in [TokenRuleTests.cs](../src/InductorParser.Tests/Rules/TokenRuleTests.cs). Each one is a category that the legacy walker mishandles.

@@ -12,10 +12,11 @@ namespace InductorParser.Lexing;
 // On those older runtimes some real grapheme clusters split incorrectly
 // (Thai "kam", multi-codepoint emoji like the woman-shrugging sequence).
 //
-// Replacing this with a vendored UAX #29 implementation is tracked in
-// backlog/i001-vendor-uax29.md. Until then this is the best the runtime
-// will give us, and grammars that operate on ASCII-only or simple BMP
-// content (the Setting example, most config-file grammars) are unaffected.
+// Replacing this class with a UAX #29 implementation that behaves better
+// will fix the issue.  Until then, this class will use the implementation
+// provided by the .NetFramework version it is complied with.
+// Grammars that operate on ASCII-only or single-UTF-16-char content
+// (the Setting example, most config-file grammars) are unaffected.
 public sealed class GraphemeLexer : Lexer
 {
     public GraphemeLexer(string input) : base(input) { }

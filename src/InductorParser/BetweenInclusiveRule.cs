@@ -5,21 +5,18 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
-// BetweenInclusive(inner, atLeast, atMost) is the bounded-repetition
-// primitive every other count rule reduces to. It greedily matches
+// BetweenInclusive(atLeast, atMost, inner) is the
+// composite every other count rule reduces to. It greedily matches
 // `inner` between `atLeast` and `atMost` times (both inclusive), fails
 // if it can't reach `atLeast`, and stops once it reaches `atMost`.
 //
-// The three legacy factories OneOrMore, ZeroOrMore, Optional are now
-// thin wrappers:
-//   OneOrMore(inner)  == BetweenInclusive(inner, 1, int.MaxValue)
-//   ZeroOrMore(inner) == BetweenInclusive(inner, 0, int.MaxValue)
-//   Optional(inner)   == BetweenInclusive(inner, 0, 1)
-//
-// The C++ original spells the same idea as
-// AtLeastAndAtMostExpression<T, AtLeast, AtMost>; renamed here because
-// "Between" is ambiguous about endpoint inclusivity and the inclusive
-// reading is what grammar authors actually want.
+// The named factories are thin wrappers:
+//   OneOrMore(inner)      == BetweenInclusive(1, int.MaxValue, inner)
+//   ZeroOrMore(inner)     == BetweenInclusive(0, int.MaxValue, inner)
+//   Optional(inner)       == BetweenInclusive(0, 1, inner)
+//   AtLeast(n, inner)     == BetweenInclusive(n, int.MaxValue, inner)
+//   AtMost(n, inner)      == BetweenInclusive(0, n, inner)
+//   Exactly(n, inner)     == BetweenInclusive(n, n, inner)
 internal sealed class BetweenInclusiveRule : Rule
 {
     internal int AtLeast { get; }
@@ -54,32 +51,88 @@ internal sealed class BetweenInclusiveRule : Rule
         return $"BetweenInclusive[{atLeast}..{upper}]";
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer)
+    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         using var transaction = lexer.BeginTransaction();
-        var matched = new List<Symbol>();
-        while (matched.Count < AtMost)
+
+        // First try to shortcut and exit fast using the "Rule Skip" shortcut described
+        // on RuleStartRequirements
+        if (!lexer.PreserveFlattenWrappers && Inner.ErrorMessage == null)
+        {
+            string input = lexer.Input;
+            int pos = lexer.Position;
+            if (pos < input.Length
+                && Lexer.TryPeekRune(input, pos, out int peekValue, out _)
+                && Inner.CannotMatchLookahead(peekValue))
+            {
+                if (AtLeast == 0)
+                {
+                    TraceSuccess(lexer, $"count= 0");
+                    transaction.Commit();
+                    return effectiveFlattenType == FlattenType.Preserve
+                        ? new Symbol(Id, FlattenType, Array.Empty<Symbol>())
+                        : Symbol.Discarded;
+                }
+                TraceFailure(lexer, $"count= 0");
+                lexer.RecordFailure(lexer.Position, ErrorMessage);
+                return null;
+            }
+        }
+
+        // If we are preserving this node, create a new list to capture its outputSymbols
+        if (effectiveFlattenType == FlattenType.Preserve)
+            outputSymbols = new List<Symbol>();
+        int count = 0;
+        while (count < AtMost)
         {
             int positionBefore = lexer.Position;
-            var nextSymbol = Inner.TryParse(lexer);
+            var nextSymbol = ParseChild(Inner, lexer, outputSymbols);
             if (nextSymbol == null) break;
-            // Guard against zero-width matches looping forever.
+            // Zero-width-match guard. Inner succeeded but didn't advance the
+            // lexer (e.g. Optional, Peek, Not, or any composite of zero-width
+            // children). Without this break the loop would spin forever on
+            // ZeroOrMore(Optional(X)) and friends, incrementing count without
+            // making progress. Exit with whatever count we have. The AtLeast
+            // check below decides if that's enough to call the rule a success.
             if (lexer.Position == positionBefore) break;
-            matched.Add(nextSymbol);
+            // Don't add child symbols if they are discarded
+            if (outputSymbols != null && !ReferenceEquals(nextSymbol, Symbol.Discarded))
+                outputSymbols.Add(nextSymbol);
+            count++;
         }
-        if (matched.Count < AtLeast)
+        if (count < AtLeast)
         {
-            TraceFailure(lexer, $"count= {matched.Count}");
-            // Error Positioning: where this rule started. The transaction's
-            // rollback (on the `using` exit below) restores lexer.Position
-            // to that point. Recording at lexer.Position lets this rule's
-            // own WithError claim the slot via the equal-depth rule, even
-            // if the failing inner already recorded a null-message there.
+            TraceFailure(lexer, $"count= {count}");
             lexer.RecordFailure(lexer.Position, ErrorMessage);
             return null;
         }
-        TraceSuccess(lexer, $"count= {matched.Count}");
+        TraceSuccess(lexer, $"count= {count}");
         transaction.Commit();
-        return new Symbol(Id, FlattenType, matched);
+        return effectiveFlattenType == FlattenType.Preserve
+            ? new Symbol(Id, FlattenType, outputSymbols)
+            : Symbol.Discarded;
+    }
+
+    // Return the set of runes this rule might consume first (can be a superset)
+    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
+    // Then say whether the rule Always / Sometimes / Never consumes at least
+    // that first rune on success.
+    internal override RuleStartRequirements ComputeRuleStart()
+    {
+        // We need to return *all* runes that *might* be consumed as the first rune.
+        // Then, we need to say if the first rune will Always/Sometimes/Never be consumed.
+        //
+        // For BetweenInclusive:
+        // The set of runes is defined by Inner, so we just return those.
+        // Inner defines whether the initial token is Always/Sometimes/Never consumed so we use that
+        // *except* if atLeast is zero, because then we can
+        // succeed and not advance. In that case, we are *at best* sometimes, but it depends on what inner
+        // does. If they are Never, we will never advance. If they are Sometimes, we are sometimes.
+        Advance advance;
+        if (AtLeast == 0)
+            advance = Inner.Advance == Advance.Never ? Advance.Never : Advance.Sometimes;
+        else
+            advance = Inner.Advance;
+        return new RuleStartRequirements(Inner.FirstConsumedRunes, advance);
     }
 }

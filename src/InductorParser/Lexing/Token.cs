@@ -14,13 +14,13 @@ namespace InductorParser.Lexing;
 // text, most of those strings would be thrown away within microseconds,
 // when the matching rule fails and the parser tries the next alternative.
 //
-// Token is a `readonly ref struct`. All three modifiers are important:
+// Token is a `readonly ref struct`:
 //
 //   * `struct` (value type) is what keeps Token off the heap. A Token
 //     lives on the stack or inline in whatever holds it, and returning
 //     one from a method copies its fields into the caller's storage
 //     rather than allocating. The input string is the only heap object
-//     in the picture; every Token just carries an 8-byte pointer to it
+//     in the picture. Every Token just carries an 8-byte pointer to it
 //     plus a few ints.
 //
 //   * `readonly` means the Token's fields never change after
@@ -41,10 +41,10 @@ public readonly ref struct Token
     public int Length { get; }
     public bool IsEof { get; }
 
-    // Chars is a ReadOnlySpan<char> over the same slice. Spans don't
+    // Chars is a ReadOnlySpan<char> over the source input. Spans don't
     // allocate. They are (pointer, length) structs that live on the
     // stack, pointing into the original string. Comparison rules like
-    // Literal("function") or Char('=') precompute their expected sequence
+    // Literal("function") or Token('=') precompute their expected sequence
     // at construction time and at match time call SequenceEqual on the
     // spans. No string allocation anywhere in the matching loop.
     //
@@ -78,10 +78,10 @@ public readonly ref struct Token
     // RuneValue returns the rune value when the token is exactly one rune,
     // or -1 otherwise. EOF returns -1. Multi-rune grapheme tokens (the
     // family emoji 👨‍👩‍👧‍👦 under GraphemeLexer, for example) also return
-    // -1, so single-rune tests like CharRule and RuneInRule fail correctly
-    // without each callsite having to special-case the multi-rune path.
+    // -1, so single-rune tests like TokenRule and RuneInRule fail correctly
+    // without each caller having to special-case the multi-rune path.
     // Returned as int rather than System.Text.Rune because -1 is the "no
-    // single rune here" sentinel, and Rune has no invalid state.
+    // single rune here" marker, and Rune has no invalid state.
     public int RuneValue
     {
         get

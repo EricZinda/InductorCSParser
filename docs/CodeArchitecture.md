@@ -74,7 +74,7 @@ This is a judgment call we will revisit once the first real rule is ported. The 
 
 Either way, the grammar surface area is the biggest design question in the port, and nothing else makes sense until it is answered.
 
-Preserve the parse tree shape and the flattening semantics. Whatever the grammar-authoring surface looks like, the resulting parse tree has to behave like the C++ one: custom IDs, `FlattenType::Flatten` / `Delete` / `None`, `FlattenInto` walking, and `ToString()` recovering the original text. Downstream compilers that were written against the C++ version can then be translated mechanically.
+Preserve the tree shape and the flattening semantics. Whatever the grammar-authoring surface looks like, the resulting tree has to behave like the C++ one: custom IDs, `FlattenType::Flatten` / `Delete` / `None`, and `ToString()` recovering the original text. The one deliberate deviation is that `Parse` applies the flatten pass before returning, so the default `Tree` is the syntax tree. C++ callers did this explicitly via `FlattenInto`. Pass `ParseOptions.PreserveFlattenWrappers` for the C++-shaped raw tree when you need it. Downstream compilers written against the C++ version translate mechanically, just against the already-flattened tree.
 
 Preserve the tracing story. The C++ version has very verbose parser tracing you can turn on with `SetTraceFilter(SystemTraceType::Parsing, TraceDetail::Diagnostic)`, and it is the main debugging tool for grammars. The C# port needs an equivalent, routed through whatever `ITraceSink` the host provides. This should not use `System.Diagnostics.Trace` because that has IL2CPP baggage and is noisy on Unity.
 

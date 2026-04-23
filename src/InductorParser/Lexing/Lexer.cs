@@ -8,16 +8,17 @@ namespace InductorParser.Lexing;
 
 public abstract class Lexer
 {
-    // This is the one reference kept to the input string, which is immutable and shared by all Tokens and
-    // Spans. The GC sees this one string object and tracks it; everything else is stack-resident
-    // structs that point back into this string. The GC never sees the Tokens or Spans,
-    // so they never have to be tracked or reclaimed.
+    // _input is the one reference kept to the input string, which is immutable and shared by
+    // every Token and ReadOnlySpan<char> the parser hands out. The GC sees this one string
+    // object and tracks it. Everything else is stack-resident structs that point back into
+    // this string. The GC never sees the Tokens or ReadOnlySpan<char>s, so they never have
+    // to be tracked or reclaimed.
     private readonly string _input;
     private int _position;
     private int _deepestFailure;
     private string? _deepestFailureMessage;
 
-    // Trace destination and verbosity. Null sink means tracing is off.
+    // Trace destination and verbosity. Null _traceSink means tracing is off.
     // When set, every rule, Lexer.Read, and deepest-failure update writes
     // one line per event.
     private readonly TextWriter? _traceSink;
@@ -26,14 +27,24 @@ public abstract class Lexer
     private int _transactionDepth;
 
     // Budget tracking. Set by ConfigureBudgets right after construction.
-    // Zero on either limit means "disabled" so the check can skip it.
-    private long _ruleInvocations;
-    private int _ruleDepth;
-    private long _maxRuleInvocations;
+    // The three limit fields (_ruleCountLimit, _maxDepth, _timeout)
+    // are zero-disabled: a zero value means "no limit".
+    // The counter fields (_ruleInvocations, _ruleDepth) accumulate as the parse runs.
+    private long _ruleCountLimit;
     private int _maxDepth;
     private TimeSpan _timeout;
+
+    private long _ruleInvocations;
+    private int _ruleDepth;
     private Stopwatch? _stopwatch;
     private ParseCancellation? _cancellation;
+
+    // Debug knob wired in from ParseOptions. Rules that would normally
+    // apply parse-time tree-shape optimizations (e.g.
+    // Delete-node filtering) consult this flag and skip the optimization
+    // when it's set, producing a tree whose shape matches the grammar
+    // one-to-one. See ParseOptions.PreserveFlattenWrappers.
+    internal bool PreserveFlattenWrappers { get; private set; }
 
     // Periodic budget check fires every BudgetCheckInterval rule
     // invocations rather than every one. Power of two so the check is a
@@ -74,15 +85,14 @@ public abstract class Lexer
     // The `message` parameter is a TraceInterpolatedStringHandler, 
     // which means callers can write `lexer.Trace(level, label, outcome, $"...")` 
     // and the C# compiler will skip building the string when the sink is off or the level
-    // is gated out. No guard needed at the call site. See
+    // is gated out. No "if" needed at the caller. See
     // TraceInterpolatedStringHandler for how the compiler rewrite
     // actually works.
     //
-    // ----------------------------------------------------------------
+
     // Cost when tracing is off (canonical reference for trace perf):
-    // ----------------------------------------------------------------
     // Note that lexer.Trace(...) still gets called even when tracing
-    // is off — the TraceInterpolatedStringHandler argument only gates the
+    // is off. The TraceInterpolatedStringHandler argument only gates the
     // expensive string-building work, not the method invocation
     // itself. Trace stays cheap because:
     //
@@ -102,9 +112,7 @@ public abstract class Lexer
     //         lexer.WriteTraceLine(label, outcome, $"...");
     //
     // In Debug builds where AggressiveInlining
-    // is sometimes ignored, you do pay one real call frame per trace
-    // site.
-    // ----------------------------------------------------------------
+    // is sometimes ignored, you do pay one real call frame per trace site.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void Trace(
         TraceLevel level,
@@ -118,22 +126,7 @@ public abstract class Lexer
         WriteTraceLine(label, outcome, formatted);
     }
 
-    // Write one trace line. Format:
-    //
-    //     {indent}{outcome}{label}{: message if non-empty}
-    //
-    //   * {indent}   3 spaces per open transaction, so nested rules
-    //                visually nest in the output.
-    //   * {outcome}  "SUCC | " or "FAIL | " for rule lines; empty for
-    //                Info lines (Lexer.Read / Lexer.RecordFailure).
-    //                Leading-column placement lets a reader scan down
-    //                a trace log and spot failures at a glance.
-    //   * {label}    identifier of who is emitting (e.g. "Char",
-    //                "settingName:OneOrMore", "Lexer.Read").
-    //   * {message}  per-line detail; ": " separator and message are
-    //                both omitted when message is empty, so
-    //                outcome-only lines like "SUCC | Eof" read cleanly.
-    //
+    // Write one trace line
     // Fields are written incrementally rather than pre-concatenated to
     // avoid allocating an intermediate string for every line.
     internal void WriteTraceLine(string label, TraceOutcome outcome, string message)
@@ -158,20 +151,67 @@ public abstract class Lexer
     // etc. Called only when there is at least one char left in input.
     protected abstract int NextTokenLength(int startOffset);
 
-    // Token is a `readonly ref struct`. Returning
-    // it copies the fields (a string reference, two ints, a bool, a
-    // span) into the caller's storage rather than allocating on the
-    // heap. For a struct this small the JIT usually returns it in
-    // registers and skips even the stack copy. 
+    // Peek the rune at `pos` in `input` without advancing any lexer
+    // state. Writes the rune value and its UTF-16 length. Returns
+    // false if the char at `pos` is a stray surrogate without its
+    // paired half (malformed UTF-16 that doesn't represent any real
+    // Unicode character).
     //
-    //   * `struct` keeps it off the heap. Value type semantics,
-    //     returned by copying fields.
-    //   * `readonly` means the fields never change after construction,
-    //     so the compiler can skip defensive copies at call sites.
-    //   * `ref` is the language-enforced lifetime guarantee: a ref
-    //     struct is stack-only by rule, which is what makes it safe
-    //     for Token to carry a Span as a field without risking the
-    //     span outliving its source string.
+    // Always one rune at a time, regardless of which Lexer subclass
+    // is in use. Rules that scan rune-by-rune need consistent
+    // semantics even when the outer parse was configured with
+    // GraphemeLexer. Callers that want to inspect one token at a
+    // time in the lexer's natural unit (one grapheme under
+    // GraphemeLexer, one rune under RuneLexer) should call
+    // lexer.Read(). Note that Read() advances
+    // the lexer, so for peek semantics wrap it in an uncommitted
+    // transaction:
+    //
+    //     using var transaction = lexer.BeginTransaction();
+    //     var token = lexer.Read();
+    //     // inspect token.Memory, token.Chars, etc.
+    //     // do NOT call transaction.Commit(). When the `using`
+    //     // block exits, Transaction.Dispose sees Commit wasn't
+    //     // called and restores the lexer's position to where
+    //     // BeginTransaction was called.
+    //
+    // That's the idiomatic "peek a token" pattern. Rules like Peek
+    // and Not use exactly this shape.
+    //
+    // Aggressive-inlined so the caller sees the same machine
+    // code the fully inline decoder would. Pulled out so the
+    // surrogate-pair logic lives in exactly one place instead of
+    // being re-implemented in every rule that peeks.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool TryPeekRune(string input, int pos, out int runeValue, out int runeLen)
+    {
+        char c0 = input[pos];
+        if (char.IsHighSurrogate(c0)
+            && pos + 1 < input.Length
+            && char.IsLowSurrogate(input[pos + 1]))
+        {
+            runeValue = char.ConvertToUtf32(c0, input[pos + 1]);
+            runeLen = 2;
+            return true;
+        }
+        if (char.IsSurrogate(c0))
+        {
+            // Stray surrogate without its paired half. Not a valid
+            // Unicode character.
+            runeValue = -1;
+            runeLen = 0;
+            return false;
+        }
+        runeValue = c0;
+        runeLen = 1;
+        return true;
+    }
+
+    // Advance one token and return it. The "one token" shape is decided
+    // by the subclass (see NextTokenLength). Cheap: Token is a stack-only
+    // ref struct carrying offset+length into the input string, no
+    // allocation, no substring copying. See Token for why it's safe to
+    // return one by value.
     public Token Read()
     {
         if (IsEof)
@@ -189,14 +229,9 @@ public abstract class Lexer
 
     // Record that a rule just failed at the given input position. The
     // callers' responsibility is to pass the position of the offending
-    // input — the start of the specific read that couldn't match — not the
+    // input: the *start* of the specific read that couldn't match, not the
     // post-read lexer position. That way `input[ErrorCharIndex]` gives the
     // actual wrong character on user-facing error reports.
-    //
-    // Rules save pre-read via transaction.StartPosition (single-
-    // read case) or a per-iteration local (multi-read lockstep). Composite
-    // rules pass lexer.Position, which after a child's rollback equals
-    // where that child started trying.
     //
     // "Deepest failure wins" across competing records:
     //   1. If the caller's position is strictly past the current deepest,
@@ -206,8 +241,8 @@ public abstract class Lexer
     //      non-null message AND nobody has claimed the message slot yet,
     //      they claim it.
     //
-    // Rule (2) is what lets a composite like OneOrMore(...).WithError(...)
-    // contribute its message even though its inner primitive already
+    // Rule 2 is what lets a composite like OneOrMore(...).WithError(...)
+    // contribute its message even though its inner leaf already
     // recorded the same depth with a null message. The restriction to
     // equal-depth avoids shallow rules stealing the message slot from
     // unrelated deeper failures.
@@ -244,7 +279,7 @@ public abstract class Lexer
     // inner rule commits and then an outer rule fails, the outer's
     // Dispose rolls the position back to the outer's saved point,
     // which is earlier than the inner's saved point. The inner's
-    // commit doesn't "promote" its reads to permanent; it only says
+    // commit doesn't "promote" its reads to permanent. It only says
     // "I personally wouldn't roll back here." Any ancestor is free
     // to roll further back. That is the PEG semantic: only the
     // outermost successful match is final, and a failure anywhere
@@ -253,7 +288,7 @@ public abstract class Lexer
     // Transaction is a struct (not a class) because every rule
     // invocation opens one, and allocating a new GC object each time
     // would dominate parse time. As a struct it lives inline in the
-    // caller's stack frame; constructing one is two field writes,
+    // caller's stack frame. Constructing one is two field writes,
     // disposing one is a flag read plus possibly one field write.
     //
     // Transaction is nested inside Lexer on purpose: the rollback logic
@@ -268,15 +303,16 @@ public abstract class Lexer
     // Wire the per-parse runtime budgets onto the lexer. Called by
     // Rule.Parse right after constructing the lexer and before the first
     // rule fires. The Stopwatch is only allocated when a positive Timeout
-    // is set; TimeSpan.Zero means "disabled" and skips both the
+    // is set. TimeSpan.Zero means "disabled" and skips both the
     // allocation and the per-check comparison.
     internal void ConfigureBudgets(ParseOptions options)
     {
-        _maxRuleInvocations = options.MaxRuleInvocations;
+        _ruleCountLimit = options.RuleCountLimit;
         _maxDepth = options.MaxDepth;
         _timeout = options.Timeout;
         _cancellation = options.Cancellation;
         _stopwatch = options.Timeout > TimeSpan.Zero ? Stopwatch.StartNew() : null;
+        PreserveFlattenWrappers = options.PreserveFlattenWrappers;
     }
 
     // Called by Rule.TryParse on entry to every rule invocation. Two
@@ -287,12 +323,17 @@ public abstract class Lexer
     // crashed the host process, which is exactly what MaxDepth is here
     // to prevent.
     //
-    // The work limit, timeout, and cancellation flag are checked every
-    // BudgetCheckInterval invocations. The check is amortized so the
-    // overhead is invisible on well-formed input. The deterministic-work
-    // contract is preserved (off by at most one interval, but the trip
-    // point is fully determined by the rule-invocation count, which is
-    // grammar+input deterministic).
+    // The rule-count limit, timeout, and cancellation flag are checked
+    // every BudgetCheckInterval invocations (1024). Per-call cost is a
+    // single bitwise-AND, so the amortized overhead is invisible on
+    // well-formed input. Tripping at interval boundaries instead of
+    // exactly when the limit is reached means the parse may run up to
+    // 1023 invocations past RuleCountLimit before the abort fires,
+    // but that overshoot is predictable: the trip always happens at
+    // the first interval boundary past the limit, and the invocation
+    // count is a pure function of grammar + input. Run the same parse
+    // twice on the same input and both runs abort at the exact same
+    // invocation count, so budget tests won't be flaky.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void EnterRule()
     {
@@ -317,8 +358,8 @@ public abstract class Lexer
     // inline cleanly.
     private void CheckPeriodicBudgets()
     {
-        if (_maxRuleInvocations > 0 && _ruleInvocations > _maxRuleInvocations)
-            throw new ParseBudgetExceeded(ParseOutcome.WorkLimitExceeded);
+        if (_ruleCountLimit > 0 && _ruleInvocations > _ruleCountLimit)
+            throw new ParseBudgetExceeded(ParseOutcome.RuleCountLimitExceeded);
         if (_stopwatch != null && _stopwatch.Elapsed >= _timeout)
             throw new ParseBudgetExceeded(ParseOutcome.Timeout);
         if (_cancellation != null && _cancellation.IsCanceled)

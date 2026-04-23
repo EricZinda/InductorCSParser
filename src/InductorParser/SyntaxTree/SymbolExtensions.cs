@@ -2,8 +2,8 @@ using System.Text;
 
 namespace InductorParser.SyntaxTree;
 
-// Name-aware debug helpers over raw Symbol trees. Most callers will
-// reach for ParseResult.PrintTree() rather than this extension, since
+// Name-aware debug helpers for raw Symbol trees. Most callers will
+// use ParseResult.PrintTree() rather than this extension, since
 // ParseResult already carries the grammar reference implicitly. This
 // extension exists for the occasional case where someone has a bare
 // Symbol and the Rule it came from but not the ParseResult (e.g.

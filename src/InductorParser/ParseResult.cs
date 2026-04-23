@@ -1,70 +1,74 @@
+using System.Collections.Generic;
 using System.Globalization;
 using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
+// The value returned by Rule.Parse. Wraps either a successful parse
+// (Tree / Symbols) or a failure (Outcome, ErrorMessage, and the
+// error-position family). Outcome distinguishes "the grammar rejected
+// the input" (GrammarMismatch) from "a budget tripped" (Timeout,
+// RuleCountLimitExceeded, DepthLimitExceeded, Canceled) so callers
+// can show different messages to the user in each case.
+//
+// The error-position family reports the same point (where the parse
+// got furthest before failing) in different units: ErrorCharIndex
+// (chars / UTF-16 code units), ErrorRuneIndex (Unicode code points),
+// ErrorGraphemeIndex (user-perceived characters), and the
+// ErrorLine / ErrorColumn pair (LSP-style zero-based line and
+// column). Pick whichever matches the unit the caller will use the
+// number in.
+//
+// readonly struct so returning one is a handful of field copies, not
+// a heap allocation.
 public readonly struct ParseResult
 {
-    // Reference to the original input string, kept so the derived error-
-    // position properties (ErrorLine, ErrorColumn, ErrorRuneIndex,
-    // ErrorGraphemeIndex) can scan it on demand. The input is already
-    // rooted by the caller so this adds no GC pressure; the cost is one
-    // extra reference field on the struct.
     private readonly string? _input;
-
-    // Reference to the root Rule the parse came from, kept so callers
-    // can resolve SymbolIds back to names/rules without threading the
-    // Rule through every call site. Lives on ParseResult (not on
-    // Symbol) because every matched rule allocates a Symbol and the
-    // design keeps per-node state minimal; one reference on ParseResult
-    // pays the cost once per parse. Null for default-constructed
-    // ParseResult values.
     private readonly Rule? _grammar;
+    private readonly IReadOnlyList<Symbol>? _symbols;
 
+    // Discriminates the shape of this result: success, grammar
+    // mismatch, or which budget tripped. See ParseOutcome for the full
+    // list. Always check this (or Success) before reading Tree /
+    // Symbols.
     public ParseOutcome Outcome { get; }
-    public Symbol? Tree { get; }
+
+    // Human-readable description of what went wrong. Empty string on
+    // success. On GrammarMismatch, either the innermost WithError
+    // message set by the grammar or a generated "Parse failed at
+    // offset N" fallback. On a budget abort, the matching
+    // "Parse aborted: ..." string.
     public string ErrorMessage { get; }
 
-    // UTF-16 char index into the caller's ORIGINAL input string where the
-    // deepest failure was recorded. Valid range is [0, input.Length]
-    // inclusive:
-    //   * 0 points at the very first character of the input.
-    //   * input.Length points one past the last character (at end-of-input).
-    //   * Intermediate values point at specific characters.
-    // Always 0 on a successful parse. Use with input[ErrorCharIndex] to
-    // recover the offending character, after checking that the value is
-    // less than input.Length (values equal to input.Length indicate EOF).
-    //
-    // When ParseOptions.NormalizeInput rewrote the input internally, the
-    // parser translates the raw lexer position back to the caller's
-    // coordinate system before constructing this struct, so callers always
-    // index into the string they passed to Parse, never into the normalized
-    // form. On decomposed input whose failure lands inside a combining
-    // character sequence that got composed, the reported index is the start
-    // of that sequence in the original (matches what an editor wants for
-    // highlight-the-bad-grapheme diagnostics).
-    //
-    // For budget aborts (Timeout / WorkLimitExceeded / DepthLimitExceeded /
-    // Canceled) this carries the lexer position at the moment the budget
-    // tripped, which gives callers a coarse "how far did the parser get"
-    // hint useful for diagnostics.
+    // The top-level Symbols produced by the parse. For a root with
+    // FlattenType.Preserve this has exactly one element (the root's
+    // wrapper). For a root with FlattenType.Flatten whose children
+    // bubbled up, this is the flat list of those children. For a
+    // failed or aborted parse, it is empty.
+    public IReadOnlyList<Symbol> Symbols =>
+        _symbols ?? System.Array.Empty<Symbol>();
+
+    // Convenience accessor for the common "root is a single Symbol"
+    // case. Returns Symbols[0] if there is exactly one top-level
+    // Symbol, null otherwise. Callers that know their root has
+    // FlattenType.Preserve (the common case for named grammars) can
+    // keep using this. For grammars whose root produces multiple
+    // top-level Symbols, use Symbols directly.
+    public Symbol? Tree =>
+        _symbols != null && _symbols.Count == 1 ? _symbols[0] : null;
+
+    // Error position in chars (UTF-16 code units), zero-based. The
+    // unit string.Substring / Range / Span use, and the unit the
+    // Language Server Protocol uses for editor diagnostics. On
+    // success this is 0. On failure it is the position of the deepest
+    // recorded failure (where the parser got furthest before giving
+    // up), capped to the input length so callers can index into the
+    // original input string without bounds-checking.
     public int ErrorCharIndex { get; }
 
-    // 0-based line number containing ErrorCharIndex, matching LSP
-    // semantics end-to-end so callers forwarding parser errors into an
-    // LSP diagnostic don't need to shift the value. Always 0 on a
-    // successful parse. See docs/ProgrammingModel.md "LSP Position
-    // Semantics" for why 0-based.
-    //
-    // Line terminators recognized are "\n", "\r", and "\r\n" (the last
-    // treated atomically, matching LSP). An index that lands on the "\n"
-    // half of a "\r\n" pair is reported on the prior line, since LSP
-    // positions cannot fall inside a line terminator.
-    //
-    // Computed on each read by scanning _input[0..ErrorCharIndex] once.
-    // No caching: readonly struct plus "you only pay if you read" means a
-    // caller that reads this twice pays for two scans; single digit
-    // microseconds on a megabyte of input, so cheap in absolute terms.
+    // Error position's zero-based line number, counting \n, \r\n, and
+    // lone \r as line breaks. LSP convention. Computed lazily from
+    // ErrorCharIndex and the original input.
     public int ErrorLine
     {
         get
@@ -74,8 +78,9 @@ public readonly struct ParseResult
         }
     }
 
-    // 0-based column in UTF-16 chars on ErrorLine, matching LSP. Always
-    // 0 on a successful parse.
+    // Error position's zero-based column within the line, measured in
+    // chars. Computed lazily from ErrorCharIndex and the original
+    // input.
     public int ErrorColumn
     {
         get
@@ -85,13 +90,11 @@ public readonly struct ParseResult
         }
     }
 
-    // Count of Unicode scalar values (runes) before ErrorCharIndex. A
-    // surrogate pair counts as one rune; a lone surrogate half counts as
-    // one rune (the same count produced by Rune.DecodeFromUtf16, which
-    // surfaces lone surrogates as U+FFFD but still advances one char).
-    //
-    // Always 0 on a successful parse. For callers that track positions in
-    // runes rather than UTF-16 chars (Go-style iteration, some REST APIs).
+    // Error position in runes (Unicode scalar values, a.k.a. code
+    // points). A surrogate pair counts as one rune, so this index is
+    // smaller than or equal to ErrorCharIndex on any input that
+    // contains supplementary-plane characters. Computed lazily from
+    // ErrorCharIndex.
     public int ErrorRuneIndex
     {
         get
@@ -119,13 +122,11 @@ public readonly struct ParseResult
         }
     }
 
-    // Count of grapheme clusters before ErrorCharIndex, computed with the
-    // same StringInfo.GetNextTextElement primitive GraphemeLexer uses so
-    // the count agrees with what the lexer saw. Always 0 on a successful
-    // parse. Inherits the legacy-runtime UAX#29 caveat documented on
-    // GraphemeLexer: on pre-.NET 5 runtimes a few real grapheme clusters
-    // split incorrectly. Upgrades automatically when the vendored UAX#29
-    // implementation lands.
+    // Error position in graphemes (user-perceived characters, per
+    // UAX #29). An emoji ZWJ sequence or a letter-plus-combining-mark
+    // counts as one grapheme, so this index is smaller than or equal
+    // to ErrorRuneIndex on any input that contains multi-rune
+    // graphemes. Computed lazily from ErrorCharIndex.
     public int ErrorGraphemeIndex
     {
         get
@@ -147,57 +148,67 @@ public readonly struct ParseResult
         }
     }
 
+    // Convenience: true when Outcome is Success, false otherwise.
+    // Most callers check this first and only inspect Tree / Symbols
+    // when it is true.
     public bool Success => Outcome == ParseOutcome.Success;
 
-    // Resolve a SymbolId encountered in the parse tree back to its
-    // human-readable name, using the grammar this result came from.
-    // Delegates to Rule.NameOf; see that method's comment for the
-    // character-range fallback and rule-name logic. Returns null if
-    // the id isn't in the grammar or this ParseResult has no grammar
-    // reference (default-constructed).
+    // Looks up the human-readable name of a SymbolId in the grammar
+    // that produced this result. Returns null if the id isn't known
+    // or this is an empty default ParseResult.
     public string? NameOf(SymbolId id) => _grammar?.NameOf(id);
 
-    // Resolve a Symbol to its human-readable name. Convenience wrapper
-    // around NameOf(symbol.Id) that swallows the null-check on symbol.
+    // Convenience form of NameOf that takes a Symbol directly.
+    // Returns null if the symbol is null.
     public string? Name(Symbol symbol) => symbol == null ? null : NameOf(symbol.Id);
 
-    // Render the parse tree to a string for debug output, using the
-    // grammar this result came from to resolve names. Returns the
-    // empty string if there is no tree (failure or abort). See
-    // SymbolExtensions.PrintTree for the output format.
-    public string PrintTree() =>
-        Tree == null || _grammar == null ? string.Empty : Tree.PrintTree(_grammar);
+    // Render the tree to a string for debug output. If Symbols has
+    // one element, prints that. Otherwise prints each top-level
+    // Symbol in order.
+    public string PrintTree()
+    {
+        if (_symbols == null || _grammar == null) return string.Empty;
+        if (_symbols.Count == 0) return string.Empty;
+        if (_symbols.Count == 1) return _symbols[0].PrintTree(_grammar);
+        var builder = new System.Text.StringBuilder();
+        foreach (var s in _symbols)
+            builder.Append(s.PrintTree(_grammar));
+        return builder.ToString();
+    }
 
-    private ParseResult(ParseOutcome outcome, Symbol? tree, string errorMessage, int errorCharIndex, string? input, Rule? grammar)
+    private ParseResult(ParseOutcome outcome, IReadOnlyList<Symbol>? symbols, string errorMessage, int errorCharIndex, string? input, Rule? grammar)
     {
         Outcome = outcome;
-        Tree = tree;
+        _symbols = symbols;
         ErrorMessage = errorMessage;
         ErrorCharIndex = errorCharIndex;
         _input = input;
         _grammar = grammar;
     }
 
-    public static ParseResult Succeeded(Symbol tree, string input, Rule grammar) =>
-        new ParseResult(ParseOutcome.Success, tree, string.Empty, 0, input, grammar);
+    // Factory methods called by Rule.Parse to build the three shapes
+    // of result. Exposed as public so custom parse drivers can build
+    // a ParseResult with the same structure the built-in Parse
+    // produces. Normal callers don't construct ParseResults directly.
 
+    // Build a successful result. Outcome is Success, error fields
+    // are empty.
+    public static ParseResult Succeeded(IReadOnlyList<Symbol> symbols, string input, Rule grammar) =>
+        new ParseResult(ParseOutcome.Success, symbols, string.Empty, 0, input, grammar);
+
+    // Build a grammar-mismatch result. Outcome is GrammarMismatch,
+    // the error fields carry the deepest-failure message and position.
     public static ParseResult Failed(int errorCharIndex, string message, string input, Rule grammar) =>
         new ParseResult(ParseOutcome.GrammarMismatch, null, message, errorCharIndex, input, grammar);
 
-    // Parse aborted because a runtime budget tripped. The outcome
-    // identifies which one (Timeout, WorkLimitExceeded, DepthLimitExceeded,
-    // Canceled).
+    // Build a budget-abort result. Outcome is one of Timeout,
+    // RuleCountLimitExceeded, DepthLimitExceeded, or Canceled. The
+    // error fields carry the matching "Parse aborted: ..." message
+    // and the deepest-failure position so callers still get a
+    // "how far did we get" hint.
     public static ParseResult Aborted(ParseOutcome outcome, int errorCharIndex, string message, string input, Rule grammar) =>
         new ParseResult(outcome, null, message, errorCharIndex, input, grammar);
 
-    // Shared forward scan for ErrorLine and ErrorColumn. Counts line
-    // terminators strictly before ErrorCharIndex:
-    //   * "\n" is a break.
-    //   * "\r" is a break iff not immediately followed by "\n".
-    //   * "\r\n" is one break, attributed to the "\n" so that an index
-    //     landing on the "\n" reports on the prior line (column = run
-    //     length so far), and an index landing on the character after
-    //     reports line N+1, column 1.
     private void ComputeLineAndColumn(out int line, out int column)
     {
         string input = _input ?? string.Empty;

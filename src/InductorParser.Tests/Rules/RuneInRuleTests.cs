@@ -34,7 +34,7 @@ public class RuneInRuleTests
     [Test]
     public void RuneIn_EOF_on_empty_input_points_at_zero()
     {
-        // OneOrMore requires at least one letter; empty input can't satisfy
+        // OneOrMore requires at least one letter. Empty input can't satisfy
         // that. RuneIn sees EOF on its first read and records at its pre-
         // read position 0 with its WithError message.
         var rule = OneOrMore(RuneIn(RuneSet.Letters).WithError("need a letter"));
@@ -49,7 +49,7 @@ public class RuneInRuleTests
     [Test]
     public void RuneIn_mismatch_at_start_points_at_offender()
     {
-        // '1' is at offset 0; not a letter. RuneIn records its WithError
+        // '1' is at offset 0. Not a letter. RuneIn records its WithError
         // message at pre-read position 0.
         var rule = OneOrMore(RuneIn(RuneSet.Letters).WithError("need a letter"));
 
@@ -63,16 +63,16 @@ public class RuneInRuleTests
     [Test]
     public void RuneIn_mismatch_after_successful_matches_points_at_first_bad_char()
     {
-        // OneOrMore(Letters) commits "abc" up to offset 3. Then Char(';')
+        // OneOrMore(Letters) commits "abc" up to offset 3. Then Token(';')
         // runs at offset 3, reads '1', and records its own WithError at
         // pre-read offset 3. That's deeper than the letter's WithError
         // (which is at offset 3 too, from the OneOrMore's terminating
         // attempt, but recorded first). First-writer at equal depth wins.
         //
-        // To make the test unambiguous we only put a WithError on Char(';')
+        // To make the test unambiguous we only put a WithError on Token(';')
         // so there's no contention.
         var rule = And(OneOrMore(RuneIn(RuneSet.Letters)),
-                       Char(';').WithError("expected ';'"));
+                       Token(';').WithError("expected ';'"));
 
         var result = rule.Parse("abc1");
 

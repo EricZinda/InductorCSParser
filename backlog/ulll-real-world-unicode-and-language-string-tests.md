@@ -1,0 +1,11 @@
+- Real-world unicode and language string tests
+    - Current state: tests mostly use ASCII and a handful of hand-picked unicode samples. We don't have systematic coverage for what the parser does on real-world text from other scripts, emoji sequences, RTL, combining marks, or the awkward stuff (ZWJ sequences, flag sequences, skin-tone modifiers, variation selectors, zero-width spaces in identifiers, NFC vs NFD differences).
+    - Why it matters: GraphemeLexer and the string-scanning rules (StringCharsRule, RuneIn/RuneNotIn) all claim to handle unicode correctly, but we're validating that claim against toy inputs. The UAX #29 backlog item (xlll) calls out known grapheme-splitting bugs on older runtimes; we need tests that would actually catch those if the vendored implementation regresses.
+    - What to gather:
+        - Representative text samples per script: Latin with diacritics, Greek, Cyrillic, Arabic (RTL), Hebrew (RTL), Devanagari, Thai, Chinese (simplified + traditional), Japanese (hiragana/katakana/kanji mix), Korean (Hangul syllables + jamo), Tamil, Tibetan.
+        - Emoji edge cases: ZWJ sequences (family, profession), skin-tone modifiers, flag sequences, keycap sequences, variation selectors, the classic "woman shrugging" case from the xlll note.
+        - Normalization pairs: same string in NFC and NFD, confirm the parser treats them the way we claim to.
+        - Whitespace/control oddities: NBSP, zero-width space, zero-width joiner in isolation, bidi marks, BOM at start of input.
+        - Language-specific string literal samples: JSON strings containing each of the above, roundtripped through the InductorJsonParser.
+    - Sources worth borrowing from: the Unicode CLDR test data, the GraphemeBreakTest.txt conformance suite (already planned for xlll), the JSONTestSuite repo for JSON-specific unicode cases.
+    - Done when: new test fixtures cover the categories above, the existing grammars (JSON, identifiers, string literal grammars) pass on all of them, and failures from the older-runtime StringInfo bug would be caught by CI rather than shipping.

@@ -15,7 +15,7 @@ namespace InductorParser;
 //     ~   complement      ~a              runes not in a
 //
 // Set difference is the idiom a & ~b ("a minus b"). The operators return a
-// new RuneSet; the struct is immutable.
+// new RuneSet. The struct is immutable.
 //
 //     var unicodeIdentifier = RuneSet.Letters | RuneSet.Digits | RuneSet.Runes("_");
 //     var asciiConsonants   = RuneSet.Ascii.Letters & ~RuneSet.Runes("aeiouAEIOU");
@@ -93,19 +93,33 @@ public readonly struct RuneSet : IEquatable<RuneSet>
     public static bool operator ==(RuneSet a, RuneSet b) => a.Equals(b);
     public static bool operator !=(RuneSet a, RuneSet b) => !a.Equals(b);
 
+    // Maximum number of ranges ToString renders before truncating.
+    // Large RuneSets (Unicode-category-wide classes like Letters) can
+    // hold hundreds of ranges, which would produce an unreadable trace
+    // line. Capping at 8 keeps trace output legible while preserving
+    // the useful information for small, hand-built classes. The
+    // truncated tail shows "+N more" so a reader can tell output was
+    // dropped.
+    private const int MaxRenderedRanges = 8;
+
     // Human-readable rendering of the range list, for trace output and
     // debugger display. Produces "[a-z,A-Z,0-9]" style output with
     // single-codepoint ranges collapsed to one char and long ranges
     // rendered as low-high. Printable ASCII code points render as the
-    // literal character; everything else renders as U+XXXX. Keeps trace
-    // lines legible without dragging in the entire Unicode database.
+    // literal character, everything else renders as U+XXXX. Classes
+    // with more than MaxRenderedRanges ranges are truncated with a
+    // "+N more" tail. Keeps trace lines legible without dragging in
+    // the entire Unicode database.
     public override string ToString()
     {
         var ranges = _ranges;
         if (ranges == null || ranges.Length == 0) return "[]";
         var sb = new StringBuilder();
         sb.Append('[');
-        for (int index = 0; index < ranges.Length; index++)
+        int rendered = ranges.Length <= MaxRenderedRanges
+            ? ranges.Length
+            : MaxRenderedRanges;
+        for (int index = 0; index < rendered; index++)
         {
             if (index > 0) sb.Append(',');
             var interval = ranges[index];
@@ -115,6 +129,12 @@ public readonly struct RuneSet : IEquatable<RuneSet>
                 sb.Append('-');
                 sb.Append(RenderCodepoint(interval.High));
             }
+        }
+        if (ranges.Length > MaxRenderedRanges)
+        {
+            sb.Append(",...+");
+            sb.Append(ranges.Length - MaxRenderedRanges);
+            sb.Append(" more");
         }
         sb.Append(']');
         return sb.ToString();
@@ -126,6 +146,18 @@ public readonly struct RuneSet : IEquatable<RuneSet>
             return ((char)codepoint).ToString();
         return $"U+{codepoint:X4}";
     }
+
+    // The empty set, containing no runes. Equivalent to default(RuneSet),
+    // exposed as a named constant so callers can write RuneSet.Empty
+    // instead of relying on "default happens to mean empty."
+    public static readonly RuneSet Empty = default;
+
+    // The universal set, containing every valid Unicode scalar value
+    // (0..0x10FFFF minus the surrogate block). The complement of Empty.
+    // Used as the "unknown / anything goes" default for FirstConsumedRunes
+    // (see RuleStartRequirements) so rules with no tighter information
+    // never get filtered out.
+    public static readonly RuneSet Universe = ~default(RuneSet);
 
     public static RuneSet Single(char c) => Single((int)c);
     public static RuneSet Single(Rune r) => Single(r.Value);
@@ -206,7 +238,7 @@ public readonly struct RuneSet : IEquatable<RuneSet>
     // whenever the current intervals overlap, and advancing whichever interval
     // ends first. Linear in the sum of the two interval counts. Both inputs are
     // already normalized (sorted, non-overlapping, non-adjacent), and so is the
-    // result — adjacent overlap fragments can't appear because that would imply
+    // result. Adjacent overlap fragments can't appear because that would imply
     // the inputs themselves had adjacent intervals, contradicting normalization.
     public static RuneSet operator &(RuneSet a, RuneSet b)
     {
@@ -303,7 +335,7 @@ public readonly struct RuneSet : IEquatable<RuneSet>
     // Per-category cache. Each UnicodeCategory's set of scalar values is
     // expensive to compute (a full 0..0x10FFFF scan), so we cache the result
     // the first time anyone asks. Subsequent lookups are hash-table reads.
-    // Concurrent because nothing else in RuneSet holds a lock; multiple
+    // Concurrent because nothing else in RuneSet holds a lock. Multiple
     // threads resolving Letters on startup are fine.
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<UnicodeCategory, RuneSet> _categoryCache
         = new System.Collections.Concurrent.ConcurrentDictionary<UnicodeCategory, RuneSet>();
@@ -317,8 +349,8 @@ public readonly struct RuneSet : IEquatable<RuneSet>
     }
 
     // Composite built-ins. Letters is the union of the five "Letter"
-    // UnicodeCategory values; Digits is one category. Wrapped in Lazy so
-    // the union work happens once and is cached — without it, every access
+    // UnicodeCategory values. Digits is one category. Wrapped in Lazy so
+    // the union work happens once and is cached. Without it, every access
     // to RuneSet.Letters would redo the four | merges.
     //
     // The Lazy factory calls BuildCategories with the full batch first, so
@@ -365,7 +397,7 @@ public readonly struct RuneSet : IEquatable<RuneSet>
     // grapheme like emoji. A grammar that wants "match everything up to the
     // next delimiter" or "match anything the other rules didn't claim"
     // should use the pass-through-text recipe (see docs/Recipes.md): either
-    // RuneNotIn(stopSet) for delimiter-based stops, or Not(stopRule) + AnyChar()
+    // RuneNotIn(stopSet) for delimiter-based stops, or Not(stopRule) + AnyToken()
     // for rule-based stops.
     public static RuneSet Letters => _letters.Value;
     public static RuneSet Digits => _digits.Value;
@@ -378,8 +410,9 @@ public readonly struct RuneSet : IEquatable<RuneSet>
         public static readonly RuneSet Whitespace = Runes(" \t\r\n");
     }
 
-    // Build from predicate over BMP code points only. Non-BMP whitespace
-    // is rare in real input and not needed for the smallest core.
+    // Build from predicate over code points that fit in one UTF-16 char
+    // (U+0000..U+FFFF). Supplementary-plane whitespace is rare in real
+    // input and not needed for the smallest core.
     private static RuneSet BuildWhitespace()
     {
         var list = new List<Interval>();
@@ -409,7 +442,7 @@ public readonly struct RuneSet : IEquatable<RuneSet>
     // requested category that isn't already cached. Each code point's
     // UnicodeCategory is looked up exactly once and compared against every
     // target in the missing list. So asking for one category costs one
-    // full scan with one compare per codepoint; asking for five (the
+    // full scan with one compare per codepoint. Asking for five (the
     // Letters case) costs one full scan with five compares per codepoint,
     // not five full scans.
     //
@@ -441,13 +474,14 @@ public readonly struct RuneSet : IEquatable<RuneSet>
         for (int codepoint = 0; codepoint <= 0x10FFFF; codepoint++)
         {
             // Skip the surrogate block. These code units exist to encode
-            // supplementary-plane code points as UTF-16 pairs; they aren't
+            // supplementary-plane code points as UTF-16 pairs. They aren't
             // valid Unicode scalar values (runes) on their own.
             if (codepoint >= 0xD800 && codepoint <= 0xDFFF) continue;
 
-            // CharUnicodeInfo.GetUnicodeCategory has a (char) overload for BMP and
-            // a (string, int) overload for supplementary-plane code points. We
-            // pick the cheaper path for the BMP half.
+            // CharUnicodeInfo.GetUnicodeCategory has a (char) overload for
+            // code points that fit in one UTF-16 char (U+0000..U+FFFF) and
+            // a (string, int) overload for supplementary-plane code points.
+            // We pick the cheaper path for the single-char half.
             UnicodeCategory category;
             if (codepoint <= 0xFFFF)
                 category = CharUnicodeInfo.GetUnicodeCategory((char)codepoint);

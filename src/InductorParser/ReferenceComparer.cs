@@ -20,7 +20,7 @@ namespace InductorParser;
 // The static Instance is the stateless-singleton idiom. The comparer
 // holds no state (both methods just delegate to runtime helpers), so
 // one instance per generic instantiation does all the work. Allocating
-// a fresh comparer at each call site would be pure waste.
+// a fresh comparer at each caller would be pure waste.
 //
 // This is a polyfill for System.Collections.Generic.ReferenceEqualityComparer,
 // which the BCL ships in .NET 5.0+ but not in netstandard2.1. When the

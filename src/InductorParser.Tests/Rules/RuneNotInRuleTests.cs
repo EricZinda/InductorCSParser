@@ -35,7 +35,7 @@ public class RuneNotInRuleTests
     [Test]
     public void RuneNotIn_fails_at_EOF()
     {
-        // EOF is not "a rune not in the set" — it is no rune at all. Fail.
+        // EOF is not "a rune not in the set". It is no rune at all. Fail.
         var rule = RuneNotIn(RuneSet.Digits).WithError("wanted a non-digit");
         var result = rule.Parse("");
 
@@ -53,7 +53,7 @@ public class RuneNotInRuleTests
         // isn't any single rune at all. This is the property that lets
         // ZeroOrMore(RuneNotIn(...)) sweep up arbitrary Unicode text.
         // NormalizeInput = null so the decomposed "e\u0301" arrives at the
-        // lexer verbatim; the default NFC would compose it to "\u00E9" and
+        // lexer verbatim. The default NFC would compose it to "\u00E9" and
         // collapse this test's "multi-rune grapheme" premise.
         var rule = RuneNotIn(RuneSet.Ascii.Letters);
         var result = rule.Parse(LatinEAcuteGrapheme,
@@ -83,11 +83,22 @@ public class RuneNotInRuleTests
         // The pass-through-text idiom: ZeroOrMore(RuneNotIn(stopSet)) matches
         // everything that isn't in the stop set, then the surrounding rule
         // handles the stop character. Here the stop is a single '\n'.
+        //
+        // WARNING: this idiom is LF-only under the default GraphemeLexer.
+        // A CRLF grapheme passes RuneNotIn unconditionally (it isn't a
+        // single rune, so it can't be in any single-rune set), which
+        // means the sweep silently consumes the CRLF and the trailing
+        // Token('\n') terminator then fails. For real line-based grammars,
+        // add Literal("\r\n") to both the stop set and the terminator.
+        // See docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer".
         var rule = And(
             ZeroOrMore(RuneNotIn(RuneSet.Single('\n'))),
-            Char('\n'));
+            Token('\n'));
 
-        var result = rule.Parse("hello world\n");
+        // PreserveFlattenWrappers keeps the trailing Token('\n') in the
+        // tree so Tree.ToString reproduces the full matched line.
+        var result = rule.Parse("hello world\n",
+            new ParseOptions { PreserveFlattenWrappers = true });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("hello world\n"));

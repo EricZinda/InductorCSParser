@@ -3,6 +3,20 @@ using System.Text;
 
 namespace InductorParser.SyntaxTree;
 
+// Identifies a rule (or a rune leaf) in a parse tree. Every Symbol
+// carries one. The integer value's range tells you what kind of id it is:
+//
+//   * 0..0x10FFFF        a rune leaf. The id IS the Unicode code
+//                          point. `new SymbolId('a').Value == 0x61`. Use
+//                          ForRune to construct one with validation.
+//   * 0x110000..0x1FFFFF built-in rule ids (see SymbolRanges).
+//   * 0x200000+          user-defined or anonymous rule ids, assigned
+//                          during Compile.
+//
+// Stored inline on every Symbol and compared by value, so lookups like
+// Tree.Find(rule) are cheap integer compares rather than reference
+// checks. Implementing IEquatable<SymbolId> + overriding GetHashCode
+// lets SymbolIds be Dictionary / HashSet keys with no boxing.
 public readonly struct SymbolId : IEquatable<SymbolId>
 {
     public int Value { get; }
@@ -17,8 +31,8 @@ public readonly struct SymbolId : IEquatable<SymbolId>
     public static bool operator ==(SymbolId a, SymbolId b) => a.Value == b.Value;
     public static bool operator !=(SymbolId a, SymbolId b) => a.Value != b.Value;
 
-    // Build a SymbolId that represents a character leaf in the parse tree.
-    // The id range 0..0x10FFFF is reserved for character symbols (see
+    // Build a SymbolId that represents a rune leaf in the parse tree.
+    // The id range 0..0x10FFFF is reserved for rune symbols (see
     // SymbolRanges), and every id in that range has to be a valid Unicode
     // scalar value. Rune.IsValid enforces both constraints: in range and
     // not a surrogate half.
