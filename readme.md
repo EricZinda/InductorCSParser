@@ -165,6 +165,9 @@ Inductor Parser is designed to be able to be used in Unity, targeting WebGL and 
 ## Fast Enough to be Used in Production
 To evaluate performance I used open source benchmarks built by others so that I wasn't unfairly building tests that IP was good at. You can run them yourself in the src/Benchmarks folder.
 
-The [Parlot](https://github.com/sebastienros/parlot) project had a great benchmark of C# parser libraries that I forked into the src/Benchmarks folder. I added both InductorParser and Pegasus (another PEG-style parser) to the suite
+The [Parlot](https://github.com/sebastienros/parlot) project had a great benchmark of C# parser libraries that I forked into the src/Benchmarks folder. I added both InductorParser and Pegasus (another PEG-style parser) to the suite. You can read the details of the test, what I changed, etc [here](src/Benchmarks/README.md). It asks each parser library to build a Json parser and read 4 different documents that are different shapes. Real world and a nice benchmark. In addition to performance, it is illustrative to look a the grammars for each parser library and compare for readability and reviewability, they are [here](src/Benchmarks/Json).
 
-System.Text.Json
+Results are:
+
+
+
