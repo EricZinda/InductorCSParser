@@ -447,7 +447,7 @@ Walk through the smallest case to see why this matters. `Token('a').Parse("x")`:
 4. Transaction rolls back, lexer returns to position 0.
 5. `result.ErrorCharIndex` is 0. `result.ErrorMessage` is `"Parse failed at offset 0: unexpected 'x'."`.
 
-A naive post-read implementation would record at 1 instead of 0, which equals `input.Length` for this one-char input, which makes `BuildErrorMessage` take the "Unexpected end of input" branch even though the input isn't empty. That's the kind of off-by-one that accumulates over a library's lifetime until every error message is slightly off and nobody remembers why. Picking a principle early and applying it uniformly keeps the thing honest.
+A naive post-read implementation would record at 1 instead of 0, which equals `input.Length` for this one-char input, which makes `BuildErrorMessage` take the "Unexpected end of input" branch even though the input isn't empty. That's the kind of off-by-one that accumulates over a library's lifetime until every error message is slightly off and nobody remembers why. Picking a principle early and applying it uniformly keeps the error messages accurate.
 
 ### Three Cases
 

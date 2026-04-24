@@ -230,7 +230,7 @@ A parser that silently stops at the opening bracket and returns "success" would 
 | Parlot | **no**, `TryParse` happily matches a prefix |
 | Sprache | **no**, must check `Remainder.AtEnd` manually |
 
-For Parlot and Sprache, `--spot-check` confirms they happen to consume the whole input on these specific benchmark shapes, so the numbers are honest even though the libraries wouldn't catch trailing garbage. On the existing inputs it's not a correctness issue, but it's an asymmetry worth knowing about if the input generator ever changes.
+For Parlot and Sprache, `--spot-check` confirms they happen to consume the whole input on these specific benchmark shapes, so the numbers are apples-to-apples even though the libraries wouldn't catch trailing garbage. On the existing inputs it's not a correctness issue, but it's an asymmetry worth knowing about if the input generator ever changes.
 
 ### What gets returned
 
