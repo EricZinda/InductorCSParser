@@ -1,0 +1,78 @@
+@namespace InductorParser.Benchmarks.Json.PegasusParsers
+@classname PegasusJsonOptimizedParserGenerated
+@using System.Linq
+@using System.Globalization
+@using InductorParser.Benchmarks.Json
+@accessibility internal
+
+// Optimized Pegasus JSON grammar.
+//
+// Uses three idiomatic performance patterns visible in Pegasus's own
+// self-hosted PegParser.peg:
+//
+// 1. Bulk character-class runs for string literal content. Instead of
+//    `stringChar = escape / literal; literal = [^"\\]` (one rule dispatch
+//    per character), a single `[^"\\]+` matches a maximal literal run in a
+//    tight char-class loop. This is the direct Pegasus analogue of
+//    InductorParser's `StringBody` leaf and Parlot's `Terms.String`.
+//
+// 2. Delimited repetition with `<min,max,sep>` for object members and array
+//    elements. Pegasus emits a `List<T>` directly from this form, so the
+//    action avoids the `new[] { first }.Concat(rest).ToList()` LINQ pattern
+//    the naive grammar needs. The same idiom appears in Pegasus's self-hosted
+//    grammar (`setting<0,,_>`, `sequence<1,,_ slash _>`).
+//
+// 3. A single Dictionary constructor call from the member list, skipping the
+//    `new[] { first }.Concat(rest)` enumerable allocation.
+//
+// Pegasus does not have a cut/commit operator, possessive repetition, or a
+// "capture as substring" form for char-class runs, so each char in a literal
+// run still gets boxed into a one-char string. That allocation is inherent
+// to the library and not addressable in the grammar.
+//
+// For the original "user copies the wiki example" version, see JsonWiki.peg.
+
+start <IJson> = _ v:value _ EOF { v }
+
+value <IJson>
+    = jsonString
+    / jsonObject
+    / jsonArray
+
+jsonString <IJson> = s:rawString { (IJson)new JsonString(s) }
+
+rawString <string> = "\"" parts:stringPart* "\"" { string.Concat(parts) }
+
+stringPart <string>
+    = literals:[^"\\]+ { string.Concat(literals) }
+    / escape
+
+escape <string>
+    = "\\" c:escapeSuffix { c }
+
+escapeSuffix <string>
+    = "\"" { "\"" }
+    / "\\" { "\\" }
+    / "/" { "/" }
+    / "b" { "\b" }
+    / "f" { "\f" }
+    / "n" { "\n" }
+    / "r" { "\r" }
+    / "t" { "\t" }
+    / "u" h1:hexDigit h2:hexDigit h3:hexDigit h4:hexDigit { char.ConvertFromUtf32(int.Parse(string.Concat(h1, h2, h3, h4), NumberStyles.HexNumber, CultureInfo.InvariantCulture)) }
+
+hexDigit <string> = c:[0-9a-fA-F] { c }
+
+jsonObject <IJson>
+    = "{" _ members:jsonMember<0,,_ "," _> _ "}"
+        { (IJson)new JsonObject(new Dictionary<string, IJson>(members)) }
+
+jsonMember <KeyValuePair<string, IJson>> = name:rawString _ ":" _ v:value { new KeyValuePair<string, IJson>(name, v) }
+
+jsonArray <IJson>
+    = "[" _ elements:value<0,,_ "," _> _ "]"
+        { (IJson)new JsonArray(elements.ToList()) }
+
+_ = [ \t\r\n]*
+
+EOF = !.

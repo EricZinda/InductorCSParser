@@ -50,12 +50,21 @@ public static class PidginJsonParser
     private static readonly Parser<char, char> EscapedChar =
         Char('\\').Then(EscapeSuffix.Or(UnicodeEscape));
 
-    private static readonly Parser<char, char> StringChar =
-        EscapedChar.Or(Token(c => c != '"' && c != '\\'));
+    // Bulk run of literal string-body chars. AtLeastOnceString so the outer
+    // LiteralRun.Or(EscapeAsString).Many() can't loop forever on an empty
+    // match. 3% of chars are escapes, so most iterations of the outer loop
+    // consume a LiteralRun of ~30 chars in a single tight Token-predicate
+    // loop instead of dispatching the outer .Or per character.
+    private static readonly Parser<char, string> LiteralRun =
+        Token(c => c != '"' && c != '\\').AtLeastOnceString();
+
+    private static readonly Parser<char, string> EscapeAsString =
+        EscapedChar.Select(c => c.ToString());
 
     private static readonly Parser<char, string> String =
-        StringChar
-            .ManyString()
+        LiteralRun.Or(EscapeAsString)
+            .Many()
+            .Select(chunks => string.Concat(chunks))
             .Between(Quote);
     private static readonly Parser<char, IJson> JsonString =
         String.Select<IJson>(s => new JsonString(s));

@@ -53,6 +53,13 @@ public static class SpracheJsonParser
         from c in SimpleEscape.Or(UnicodeEscape)
         select c;
 
+    // Per-character ordered choice is the fastest idiomatic Sprache pattern
+    // here. The bulk-run pattern (`Char(pred).AtLeastOnce().Text()` inside an
+    // outer `.Or().Many()`) measured slower across all shapes because
+    // Sprache's `.AtLeastOnce().Text()` materializes a char[] plus a string
+    // per run, and the outer `.Many()` pays state-snapshot overhead per
+    // chunk. The extra allocations outweigh the per-char `.Or()` dispatch
+    // savings. See README "Bulk-run pattern" discussion.
     private static readonly Sprache.Parser<char> StringChar =
         EscapedChar.Or(Char(c => c != '"' && c != '\\', "char except quote or backslash"));
 

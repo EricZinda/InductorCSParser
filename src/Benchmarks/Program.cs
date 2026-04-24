@@ -156,9 +156,17 @@ public class Program
                 return matched == input ? null : Diff(input, matched);
             });
 
-            failures += Verify("Pegasus", input, () =>
+            failures += Verify("PegasusOptimized", input, () =>
             {
-                var r = PegasusJsonParser.Parse(input);
+                var r = PegasusJsonOptimizedParser.Parse(input);
+                if (r == null) return "parse returned null";
+                var s = r.ToString();
+                return s == input ? null : Diff(input, s);
+            });
+
+            failures += Verify("PegasusWiki", input, () =>
+            {
+                var r = PegasusJsonWikiParser.Parse(input);
                 if (r == null) return "parse returned null";
                 var s = r.ToString();
                 return s == input ? null : Diff(input, s);
