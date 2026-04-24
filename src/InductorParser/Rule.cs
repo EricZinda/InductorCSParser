@@ -263,6 +263,16 @@ public abstract class Rule
         return this;
     }
 
+    // Convenience shortcuts for the three FlattenType values. These read
+    // better than .Flatten(FlattenType.X) at call sites that otherwise
+    // chain several modifiers, e.g. .As("number").Preserve() vs
+    // .As("number").Flatten(FlattenType.Preserve). All three forward to
+    // Flatten(FlattenType), so LateBoundRule's override that forbids
+    // setting a flatten policy still fires here.
+    public Rule Preserve() => Flatten(FlattenType.Preserve);
+    public Rule Delete() => Flatten(FlattenType.Delete);
+    public Rule Flatten() => Flatten(FlattenType.Flatten);
+
     // Attach a static error message. If this rule is the "deepest failure"
     // when a parse fails, ParseResult.ErrorMessage will be this string
     // instead of the generic "unexpected 'x'" fallback. Useful for giving

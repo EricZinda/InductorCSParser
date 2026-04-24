@@ -45,8 +45,7 @@ public static class CssGrammar
         RuneSet.Ascii.Letters | RuneSet.Ascii.Digits;
 
     // C++ HexNumbers = 0-9 and A-F and a-f.
-    private static readonly RuneSet HexDigitChars =
-        RuneSet.Ascii.Digits | RuneSet.Runes("ABCDEFabcdef");
+    private static readonly RuneSet HexDigitChars = RuneSet.Ascii.HexDigits;
 
     // /* comment */, with the body as a single StringBody scan on a
     // rule-based stopper. StringBody peeks the stopper on each rune

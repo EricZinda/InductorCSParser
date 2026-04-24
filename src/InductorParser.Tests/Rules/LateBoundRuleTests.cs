@@ -111,4 +111,59 @@ public class LateBoundRuleTests
 
         Assert.Throws<InvalidOperationException>(() => expression.Bind(Integer()));
     }
+
+    [Test]
+    public void LateBoundRule_keeps_Preserve_target_symbol_in_parent_children()
+    {
+        // Regression: LateBoundRule's own FlattenType is Flatten, but when
+        // it forwards to a target that is FlattenType.Preserve the target's
+        // wrapper Symbol has to reach the enclosing composite's children
+        // list. If the proxy drops it, a grammar like
+        //   And(X, lateBound, Y)
+        // silently loses the Preserve wrapper between X and Y. Every
+        // in-tree grammar happens to bind LateBoundRule to a Flatten
+        // target (Or/And defaults), so this case was uncovered until
+        // ArithmeticGrammar hit it.
+        var named = And(Token('1'), Token('2')).As("named").Flatten(FlattenType.Preserve);
+        var late = new LateBoundRule("late");
+        late.Bind(named);
+        var outer = And(Token('a'), late, Token('b'));
+
+        var result = outer.Parse("a12b");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Symbols.Count, Is.EqualTo(1));
+        Assert.That(result.Symbols[0].Id, Is.EqualTo(named.Id));
+    }
+
+    [Test]
+    public void LateBoundRule_forwards_Preserve_target_through_recursive_grammar()
+    {
+        // Regression: an arithmetic-style grammar where `factor` references
+        // `expression` via a LateBoundRule and `expression` is Preserve.
+        // Without the LateBoundRule fix, the nested expression wrapper
+        // disappears from `factor`'s children, so a parenthesized
+        // sub-expression leaves no Symbol behind and an evaluator that
+        // dispatches on expression.Id can't see the inner expression at
+        // all.
+        var expression = new LateBoundRule("expression");
+        var factor = Or(Integer(), And(Token('('), expression, Token(')')));
+        var expressionDef = And(factor, ZeroOrMore(And(Token('+'), factor)))
+            .As("expression").Flatten(FlattenType.Preserve);
+        expression.Bind(expressionDef);
+
+        var result = expressionDef.Parse("(1+2)+3");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree, Is.Not.Null);
+
+        // Expect two expression-id Symbols: the outer root wrapper and
+        // the nested wrapper for "1+2" inside the parens.
+        int expressionSymbols = 0;
+        foreach (var symbol in result.Tree!.Walk())
+            if (symbol.Id == expressionDef.Id) expressionSymbols++;
+
+        Assert.That(expressionSymbols, Is.EqualTo(2),
+            "Expected outer and inner expression wrappers to both survive flattening.");
+    }
 }

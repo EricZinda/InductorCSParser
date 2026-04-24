@@ -106,6 +106,13 @@ public sealed class Symbol
         foreach (var child in Children) child.AppendTo(builder);
     }
 
+    // Does this specific Symbol correspond to the given rule? The common
+    // tree-walker dispatch pattern ("is this a Number node? a String
+    // node?") reads more naturally as symbol.Is(Rule) than as
+    // symbol.Id == rule.Id, and hides the Id plumbing from consumer
+    // code. Unlike Find, this is a single-node check, no tree walk.
+    public bool Is(Rule rule) => Id == rule.Id;
+
     // Depth-first search for the first Symbol whose Id matches. Returns
     // null if nothing matches. Use when you expect exactly one match
     // (e.g. a named rule that appears once at a known position in the

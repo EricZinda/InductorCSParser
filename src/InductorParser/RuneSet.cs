@@ -502,6 +502,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
         public static readonly RuneSet Letters = Range('A', 'Z') | Range('a', 'z');
         public static readonly RuneSet Digits = Range('0', '9');
         public static readonly RuneSet Whitespace = Runes(" \t\r\n");
+        public static readonly RuneSet HexDigits = Digits | Range('a', 'f') | Range('A', 'F');
     }
 
     // Build from predicate over code points that fit in one UTF-16 char

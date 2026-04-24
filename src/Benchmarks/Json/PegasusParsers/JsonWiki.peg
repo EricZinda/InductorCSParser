@@ -14,7 +14,7 @@
 // glued back together with LINQ `new[] { first }.Concat(rest)`.
 //
 // Preserved verbatim so the benchmark can measure what happens when a user
-// picks up Pegasus and writes a grammar the way the "look how easy this is"
+// picks up Pegasus and writes a grammar the way the
 // example shows. JsonOptimized.peg shows the idiomatic Pegasus fast-path
 // patterns (`[^"\\]+` bulk runs, `<min,max,sep>` delimited repetition) for
 // comparison.

@@ -6,23 +6,39 @@ using InductorParser;
 
 namespace InductorParser.Benchmarks;
 
-// Counts how many times each Rule subclass is invoked on a single Parse by
-// hooking Rule.TryParse via an AsyncLocal/static slot. This deliberately
-// ships as benchmark-project-local instrumentation. It opens a back door
-// into the library via a reflection call to a gated internal hook, not
-// via a public API, so library users don't see any of this.
+// Diagnostic tool: counts how many times each Rule subclass (And, Or,
+// BetweenInclusive, etc.) gets invoked during a single parse, split by
+// SUCC and FAIL outcome. Exposed via the --rule-counts CLI flag in
+// the bench program, which prints a table sorted by frequency:
 //
-// There is no hook on Rule.TryParse, so we cheat slightly by wrapping each
-// Rule's subclass invocation through a counter via the grammar graph. We
-// walk the rule tree before parsing, and re-enter the normal Parse path.
-// The counting itself goes through a StopPosition-less probe: Parse leaves
-// lexer.Position changes as the only visible effect, so we can't attach to
-// that. Instead, we do CPU-sample-correlated call counts by running a
-// second parse under a high-frequency rule-trace sink that we filter to
-// just entry events. This is ~10-15x slower than raw parse but that's
-// fine for a one-shot profile.
+//   Rule                           Count       % total
+//   Or                             12345        23.5%
+//   And                             9876        18.8%
+//   ...
 //
-// Output: counts[type] -> invocation count, inclusively for the full Parse.
+// The point is optimization targeting. If Or accounts for 23% of all
+// interpreter invocations, that's where to spend time. Both p500 (Or's
+// required-runes dispatch) and p750 (first-rune skip on ZeroOrMore /
+// Optional / OneOrMore) came out of this kind of analysis: find the
+// hottest Rule subclass, find work inside it to skip.
+//
+// How it works:
+//   1. Set ParseOptions.TraceSink to a custom TextWriter and
+//      TraceLevel to Diagnostic.
+//   2. Run one parse. The library emits a line per rule attempt,
+//      formatted as "{indent}SUCC | {label}: ..." or "FAIL | ...".
+//   3. The TextWriter parses each line, pulls the Rule subclass name
+//      out of the label, and bumps a counter in the counts dict.
+//
+// Counts are per Rule *subclass* (the interpreter type), not per
+// grammar-rule-name. That's what you want for library-level
+// optimization: "how much work does the And machinery do" rather than
+// "how much work does the JsonObject rule do."
+//
+// Runs ~10-15x slower than an untraced parse because of the per-rule
+// tracing overhead, but that's fine for a one-shot profile.
+//
+// Benchmark-project-local on purpose. Library users don't need it.
 public static class RuleProfiler
 {
     public static Dictionary<string, long> CountByType(string input, int iterations = 1)
@@ -38,7 +54,7 @@ public static class RuleProfiler
         };
         for (int i = 0; i < iterations; i++)
         {
-            Json.InductorJsonParser.Json.Parse(input, options);
+            Json.InductorParsers.InductorJsonParser.JsonRule.Parse(input, options);
         }
         return counts;
     }
