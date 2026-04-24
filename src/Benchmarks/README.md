@@ -79,6 +79,8 @@ Each category is sorted fastest-to-slowest. `Ratio` is relative to `SystemTextJs
 
 Every number in this table was produced by a parse that consumed the full input and round-tripped its tree back to the exact input bytes. The `--spot-check` mode in [Program.cs](Program.cs) runs that verification across all four shapes; the benchmark itself would otherwise happily time a parser that silently stopped at the opening bracket.
 
+A visual view of the same data is in [performance-chart.html](performance-chart.html) (open in a browser): four lines, one per shape, showing Mean μs per parser. The chart is regenerated on every benchmark run via [PerformanceChart.cs](PerformanceChart.cs), so it always reflects the latest numbers even when the table below drifts from them.
+
 ```
 BenchmarkDotNet v0.14.0, Windows 11 (10.0.26200.8246)
 Arm64 RyuJIT AdvSIMD, .NET 8.0.25

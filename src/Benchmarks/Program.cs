@@ -35,7 +35,11 @@ public class Program
             return RuleCounts(args);
         }
 
-        BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
+        var summaries = BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
+        foreach (var summary in summaries)
+        {
+            PerformanceChart.TryUpdate(summary);
+        }
         return 0;
     }
 
