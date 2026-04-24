@@ -17,7 +17,7 @@ public class WithinGraphemeRuleTests
     [Test]
     public void Single_rune_grapheme_matches_inner_rune_rule()
     {
-        var rule = WithinGrapheme(RuneIn(RuneSet.Ascii.Letters));
+        var rule = WithinGrapheme(OneOf(RuneSet.Ascii.Letters));
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -27,7 +27,7 @@ public class WithinGraphemeRuleTests
     [Test]
     public void Single_rune_grapheme_fails_when_inner_rejects()
     {
-        var rule = WithinGrapheme(RuneIn(RuneSet.Ascii.Letters));
+        var rule = WithinGrapheme(OneOf(RuneSet.Ascii.Letters));
         var result = rule.Parse("3");
 
         Assert.That(result.Success, Is.False);
@@ -42,8 +42,8 @@ public class WithinGraphemeRuleTests
         // mark. Uses NormalizeInput=null so the decomposed form survives
         // to the lexer.
         var rule = WithinGrapheme(And(
-            RuneIn(RuneSet.Ascii.Letters),
-            RuneIn(RuneSet.Category(System.Globalization.UnicodeCategory.NonSpacingMark))
+            OneOf(RuneSet.Ascii.Letters),
+            OneOf(RuneSet.Category(System.Globalization.UnicodeCategory.NonSpacingMark))
         ));
         var result = rule.Parse(LatinEAcuteGrapheme, new ParseOptions { NormalizeInput = null });
 
@@ -57,7 +57,7 @@ public class WithinGraphemeRuleTests
         // A grapheme is atomic. If the inner rule matches just the first
         // rune and leaves the combining mark unconsumed, the whole
         // WithinGrapheme fails rather than accepting a partial match.
-        var rule = WithinGrapheme(RuneIn(RuneSet.Ascii.Letters));
+        var rule = WithinGrapheme(OneOf(RuneSet.Ascii.Letters));
         var result = rule.Parse(LatinEAcuteGrapheme, new ParseOptions { NormalizeInput = null });
 
         Assert.That(result.Success, Is.False);
@@ -81,7 +81,7 @@ public class WithinGraphemeRuleTests
         // sees a one-rune stream. Inner rule that needs exactly one rune
         // matches and consumes it, just like under GraphemeLexer for
         // single-rune graphemes.
-        var rule = WithinGrapheme(RuneIn(RuneSet.Ascii.Letters));
+        var rule = WithinGrapheme(OneOf(RuneSet.Ascii.Letters));
         var result = rule.Parse("a", new ParseOptions { InputUnit = InputUnit.Rune });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -94,7 +94,7 @@ public class WithinGraphemeRuleTests
         // ZeroOrMore(WithinGrapheme(letter)) walks a sequence of single-
         // rune graphemes. Proves the combinator composes into the normal
         // repeat combinators without special handling.
-        var rule = ZeroOrMore(WithinGrapheme(RuneIn(RuneSet.Ascii.Letters)))
+        var rule = ZeroOrMore(WithinGrapheme(OneOf(RuneSet.Ascii.Letters)))
             .Flatten(FlattenType.Preserve)
             .As("letters");
         var result = rule.Parse("abc");
@@ -111,25 +111,25 @@ public class WithinGraphemeRuleTests
         // Grammar authors can rely on WithinGrapheme looking like a leaf
         // from the outside.
         var rule = WithinGrapheme(And(
-            RuneIn(RuneSet.Ascii.Letters),
-            RuneIn(RuneSet.Category(System.Globalization.UnicodeCategory.NonSpacingMark))
+            OneOf(RuneSet.Ascii.Letters),
+            OneOf(RuneSet.Category(System.Globalization.UnicodeCategory.NonSpacingMark))
         ));
         var result = rule.Parse(LatinEAcuteGrapheme, new ParseOptions { NormalizeInput = null });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         // One Symbol in the tree representing the whole grapheme. No
-        // children from the inner And / RuneIn pair.
+        // children from the inner And / OneOf pair.
         Assert.That(result.Tree!.Children.Count, Is.EqualTo(0));
     }
 
     [Test]
     public void Reject_multi_rune_graphemes_idiom_works()
     {
-        // WithinGrapheme(RuneIn(singleRuneSet)) is the idiomatic "reject
+        // WithinGrapheme(OneOf(singleRuneSet)) is the idiomatic "reject
         // any multi-rune grapheme" rule. Passes on ASCII, fails on
         // precomposed "é" (single rune but not ASCII), fails on
         // decomposed "é" (two runes).
-        var asciiOnly = WithinGrapheme(RuneIn(RuneSet.Ascii.Letters));
+        var asciiOnly = WithinGrapheme(OneOf(RuneSet.Ascii.Letters));
 
         Assert.That(asciiOnly.Parse("a").Success, Is.True);
         Assert.That(asciiOnly.Parse("é").Success, Is.False);  // é is not ASCII
@@ -151,8 +151,8 @@ public class WithinGraphemeRuleTests
         // U+0939 DEVANAGARI LETTER HA (Lo) + U+093F DEVANAGARI VOWEL SIGN I (Mc).
         // The inner rule walks both runes.
         var rule = WithinGrapheme(And(
-            RuneIn(RuneSet.XidStart),
-            RuneIn(RuneSet.XidContinue)));
+            OneOf(RuneSet.XidStart),
+            OneOf(RuneSet.XidContinue)));
         var result = rule.Parse("हि");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -167,8 +167,8 @@ public class WithinGraphemeRuleTests
         // XID_Continue, excluded from XID_Start via the NFKC-unstable
         // table since its NFKC decomposition is NIKHAHIT + SARA AA).
         var rule = WithinGrapheme(And(
-            RuneIn(RuneSet.XidStart),
-            RuneIn(RuneSet.XidContinue)));
+            OneOf(RuneSet.XidStart),
+            OneOf(RuneSet.XidContinue)));
         var result = rule.Parse("กำ");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -183,8 +183,8 @@ public class WithinGraphemeRuleTests
         // text written with the optional vowel diacritics, which bundle
         // with their preceding consonant under grapheme clustering.
         var rule = WithinGrapheme(And(
-            RuneIn(RuneSet.XidStart),
-            RuneIn(RuneSet.XidContinue)));
+            OneOf(RuneSet.XidStart),
+            OneOf(RuneSet.XidContinue)));
         var result = rule.Parse("كَ");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);

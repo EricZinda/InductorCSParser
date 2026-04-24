@@ -41,9 +41,9 @@ public class DiscardedAtParseTimeTests
         // The realistic JSON-style shape: OptionalWhitespace sits between
         // two tokens inside an And. The top-level Symbols list should hold
         // the two token leaves only, with the whitespace contributing
-        // nothing. RuneIn has FlattenType.Preserve so the token leaves
+        // nothing. OneOf has FlattenType.Preserve so the token leaves
         // survive. Their Id is the code point, so we assert on that.
-        var letter = RuneIn(RuneSet.Ascii.Letters);
+        var letter = OneOf(RuneSet.Ascii.Letters);
         var rule = And(letter, OptionalWhitespace(), letter);
         var result = rule.Parse("a   b");
 

@@ -55,16 +55,16 @@ public class ZeroOrMoreRuleTests
     public void ZeroOrMore_trace_with_matches_produces_expected_output()
     {
         var sink = NewSink();
-        And(ZeroOrMore(RuneIn(RuneSet.Ascii.Letters)), Eof())
+        And(ZeroOrMore(OneOf(RuneSet.Ascii.Letters)), Eof())
             .Parse("ab", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "         Lexer.Read: 'a', Consumed: 1",
-            "         SUCC | RuneIn: found 'a', wanted one of '[A-Z,a-z]'",
+            "         SUCC | OneOf: found 'a', wanted one of '[A-Z,a-z]'",
             "         Lexer.Read: 'b', Consumed: 2",
-            "         SUCC | RuneIn: found 'b', wanted one of '[A-Z,a-z]'",
+            "         SUCC | OneOf: found 'b', wanted one of '[A-Z,a-z]'",
             "         Lexer.Read: '<EOF>', Consumed: 2",
-            "         FAIL | RuneIn: found '<EOF>', wanted one of '[A-Z,a-z]'",
+            "         FAIL | OneOf: found '<EOF>', wanted one of '[A-Z,a-z]'",
             "         Lexer.RecordFailure: new deepest failure at char 2",
             "      SUCC | ZeroOrMore: count= 2",
             "   SUCC | Eof",

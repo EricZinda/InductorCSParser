@@ -17,7 +17,7 @@ public class NameOfTests
     [Test]
     public void Ascii_character_id_renders_as_single_char_string()
     {
-        var rule = OneOrMore(RuneIn(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Letters));
         rule.Compile();
 
         Assert.That(rule.NameOf(new SymbolId('A')), Is.EqualTo("A"));
@@ -26,7 +26,7 @@ public class NameOfTests
     [Test]
     public void Bmp_character_id_renders_as_single_char_string()
     {
-        var rule = OneOrMore(RuneIn(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Letters));
         rule.Compile();
 
         Assert.That(rule.NameOf(new SymbolId(0x6F22)), Is.EqualTo("漢"));
@@ -35,7 +35,7 @@ public class NameOfTests
     [Test]
     public void Supplementary_plane_character_id_renders_as_surrogate_pair_string()
     {
-        var rule = OneOrMore(RuneIn(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Letters));
         rule.Compile();
 
         string expected = new Rune(0x1F3B8).ToString();
@@ -49,7 +49,7 @@ public class NameOfTests
         // isn't a valid Unicode scalar value. The lexer never emits one,
         // but if a caller hand-builds a bad SymbolId we return null
         // rather than crashing on new Rune(...).
-        var rule = OneOrMore(RuneIn(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Letters));
         rule.Compile();
 
         Assert.That(rule.NameOf(new SymbolId(0xD800)), Is.Null);
@@ -58,7 +58,7 @@ public class NameOfTests
     [Test]
     public void Named_rule_returns_the_user_supplied_name()
     {
-        var settingName = OneOrMore(RuneIn(RuneSet.Letters)).As("settingName");
+        var settingName = OneOrMore(OneOf(RuneSet.Letters)).As("settingName");
         settingName.Compile();
 
         Assert.That(settingName.NameOf(settingName.Id), Is.EqualTo("settingName"));
@@ -67,7 +67,7 @@ public class NameOfTests
     [Test]
     public void Unnamed_And_rule_returns_class_derived_name()
     {
-        var andRule = And(RuneIn(RuneSet.Letters), RuneIn(RuneSet.Digits));
+        var andRule = And(OneOf(RuneSet.Letters), OneOf(RuneSet.Digits));
         andRule.Compile();
 
         Assert.That(andRule.NameOf(andRule.Id), Is.EqualTo("And"));
@@ -79,7 +79,7 @@ public class NameOfTests
         // OneOrMore / ZeroOrMore / Optional are BetweenInclusiveRule under
         // the hood, but they stamp a friendly trace name at construction
         // time. NameOf should surface that friendly name.
-        var rule = OneOrMore(RuneIn(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Letters));
         rule.Compile();
 
         Assert.That(rule.NameOf(rule.Id), Is.EqualTo("OneOrMore"));
@@ -88,7 +88,7 @@ public class NameOfTests
     [Test]
     public void BetweenInclusive_rule_returns_name_with_bounds()
     {
-        var rule = BetweenInclusive(1, 3, RuneIn(RuneSet.Letters));
+        var rule = BetweenInclusive(1, 3, OneOf(RuneSet.Letters));
         rule.Compile();
 
         Assert.That(rule.NameOf(rule.Id), Is.EqualTo("BetweenInclusive[1..3]"));
@@ -97,7 +97,7 @@ public class NameOfTests
     [Test]
     public void Nested_rules_are_all_indexed_from_the_root()
     {
-        var inner = RuneIn(RuneSet.Letters).As("letter");
+        var inner = OneOf(RuneSet.Letters).As("letter");
         var outer = OneOrMore(inner).As("word");
         outer.Compile();
 
@@ -108,7 +108,7 @@ public class NameOfTests
     [Test]
     public void Unknown_custom_id_returns_null()
     {
-        var rule = OneOrMore(RuneIn(RuneSet.Letters)).As("word");
+        var rule = OneOrMore(OneOf(RuneSet.Letters)).As("word");
         rule.Compile();
 
         var stranger = new SymbolId(SymbolRanges.CustomRangeStart + 0x7FFFFF);
@@ -128,7 +128,7 @@ public class NameOfTests
         // fallback path. Here we predict what id the "word" rule will
         // hash to, call NameOf before Compile, and verify auto-compile
         // happens and the id resolves.
-        var rule = OneOrMore(RuneIn(RuneSet.Letters)).As("word");
+        var rule = OneOrMore(OneOf(RuneSet.Letters)).As("word");
         var predictedId = new SymbolId(Rule.HashNameToCustomRange("word"));
 
         string? name = rule.NameOf(predictedId);
@@ -141,7 +141,7 @@ public class NameOfTests
     {
         // Second call hits the cached _nameIndex path. First call builds it.
         // Both should return the same answer.
-        var rule = OneOrMore(RuneIn(RuneSet.Letters)).As("word");
+        var rule = OneOrMore(OneOf(RuneSet.Letters)).As("word");
         rule.Compile();
 
         string? first = rule.NameOf(rule.Id);

@@ -128,7 +128,7 @@ Reading the table: InductorParser lands between 1.3x and 9.4x STJ depending on s
 
 **Parlot and Newtonsoft are actually *faster* than STJ on Deep** (0.51x-0.69x STJ). Deep has far fewer total characters than the other shapes (~2,600 vs 5,000-8,000), so parsers that are efficient per-token but have recursion overhead end up ahead. STJ pays a depth-validation cost at every level that dominates when the character-scanning work is light.
 
-The escape-handling story is instructive even at 3% escape density. Pidgin's LINQ-combinator approach routes every matched char through an `.Or(...)` between an escape parser and a regular-char parser. Even a 3% actual escape rate is enough to keep that branch warm and expose its overhead (24-31x STJ). Parlot's `Terms.String` handled escapes all along via a specialized hot-path scanner, so it doesn't pay an incremental cost. InductorParser now has the same class of specialized scanner (`StringChars`, which collapses `ZeroOrMore(Or(literal, escape))` into one rule with a tight inline loop) and lands in the same 1-10x STJ band as the libraries that have always had one, not the 24-78x band occupied by libraries that still dispatch per character.
+The escape-handling story is instructive even at 3% escape density. Pidgin's LINQ-combinator approach routes every matched char through an `.Or(...)` between an escape parser and a regular-char parser. Even a 3% actual escape rate is enough to keep that branch warm and expose its overhead (24-31x STJ). Parlot's `Terms.String` handled escapes all along via a specialized hot-path scanner, so it doesn't pay an incremental cost. InductorParser now has the same class of specialized scanner (`StringBody`, which collapses `ZeroOrMore(Or(literal, escape))` into one rule with a tight inline loop) and lands in the same 1-10x STJ band as the libraries that have always had one, not the 24-78x band occupied by libraries that still dispatch per character.
 
 Allocations tell a striking story. InductorParser now allocates about 1-3x what STJ does, within noise of the hand-written BCL parser that doesn't build a tree at all. The recent parse-time routing (`SuccessMode.DiscardAndMergeWithParent`) means every `Flatten`-typed composite writes its matches directly into its caller's list instead of building a wrapper `Symbol` + backing `List<Symbol>` and letting the caller splice them. That alone collapsed per-parse allocations 75-90% (Big: 363 KB → 67 KB, Deep: 209 KB → 24 KB, Long: 299 KB → 41 KB, Wide: 180 KB → 41 KB). Pegasus is worst for allocations (up to 140x STJ on Big) because every grammar action produces a boxed intermediate. Sprache is nearly as bad at 170-290x. STJ is the floor at 1x because it doesn't produce a tree at all. It stores offset pointers into the input.
 
@@ -142,7 +142,7 @@ Every grammar handles the same JSON escape set: `\"`, `\\`, `\/`, `\b`, `\f`, `\
 
 | Parser | Literal-char rule | Escape handling |
 |---|---|---|
-| InductorParser | `StringChars(RuneSet.Runes("\""), '\\', escapeEnd)` (one rule, inline scan loop; stop at ") | escape start + sub-rule end, handled inside the same scan |
+| InductorParser | `StringBody(RuneSet.Runes("\""), '\\', escapeEnd)` (one rule, inline scan loop; stop at ") | escape start + sub-rule end, handled inside the same scan |
 | Pegasus | `[^"\\]` | `escape / literal` ordered choice, `\` followed by an escape suffix |
 | Pidgin | `Token(c => c != '"' && c != '\\')` | `EscapedChar.Or(...)` with LINQ-style decoder |
 | Sprache | `Token(c => c != '"' && c != '\\', ...)` | same pattern as Pidgin |
@@ -150,7 +150,7 @@ Every grammar handles the same JSON escape set: `\"`, `\\`, `\/`, `\b`, `\f`, `\
 | Parlot | built into `Terms.String(Double)` | same |
 | Newtonsoft / STJ | full JSON spec | full JSON spec |
 
-The grammars that use LINQ-style combinators (Pidgin, Sprache, Superpower) pay a visible cost for the escape branch. Every character goes through an `.Or` between "try escape" and "try literal," and the escape-decoding lambda is allocated per match. The libraries that bake the string-parsing logic into a specialized combinator (Parlot's `Terms.String`, InductorParser's `StringChars`) handle escapes more efficiently. You can see the gap clearly in the Big row: Parlot at 2.5x STJ and InductorParser at 8.4x, vs Pidgin at 25x and Pegasus at 29x. Same input, same work on paper, very different throughput once the per-character rule dispatch is eliminated.
+The grammars that use LINQ-style combinators (Pidgin, Sprache, Superpower) pay a visible cost for the escape branch. Every character goes through an `.Or` between "try escape" and "try literal," and the escape-decoding lambda is allocated per match. The libraries that bake the string-parsing logic into a specialized combinator (Parlot's `Terms.String`, InductorParser's `StringBody`) handle escapes more efficiently. You can see the gap clearly in the Big row: Parlot at 2.5x STJ and InductorParser at 8.4x, vs Pidgin at 25x and Pegasus at 29x. Same input, same work on paper, very different throughput once the per-character rule dispatch is eliminated.
 
 ### Whitespace handling
 
@@ -193,9 +193,9 @@ This is the biggest remaining source of timing asymmetry.
 | Newtonsoft | `JToken` tree | done |
 | STJ | offset pointers into input (no nodes) | point into the input via indices |
 
-InductorParser is still building a bigger data structure than the IJson-producing parsers (every structural rule in the grammar produces a Symbol), but the parse-time optimizations layer up: the Delete filter removes `OptionalWhitespace()` / delimiter nodes, the Or-wrapper removal collapses every `Or(...)` whose FlattenType is Flatten, the `StringChars` leaf produces one leaf Symbol for each string body instead of one per character, and the per-invocation `SuccessMode` routes each composite into either "merge my children into the caller's list" (no wrapper needed) or "wrap into a new Symbol" depending on what the FlattenType implies. Net effect: allocations came down from ~40-60x STJ to ~1-3x STJ. The remaining gap is the structural `None`-typed wrappers callers explicitly asked to preserve (`.Flatten(FlattenType.None)` and the root rule) plus the leaf Symbols that carry position and rule-id metadata.
+InductorParser is still building a bigger data structure than the IJson-producing parsers (every structural rule in the grammar produces a Symbol), but the parse-time optimizations layer up: the Delete filter removes `OptionalWhitespace()` / delimiter nodes, the Or-wrapper removal collapses every `Or(...)` whose FlattenType is Flatten, the `StringBody` leaf produces one leaf Symbol for each string body instead of one per character, and the per-invocation `SuccessMode` routes each composite into either "merge my children into the caller's list" (no wrapper needed) or "wrap into a new Symbol" depending on what the FlattenType implies. Net effect: allocations came down from ~40-60x STJ to ~1-3x STJ. The remaining gap is the structural `None`-typed wrappers callers explicitly asked to preserve (`.Flatten(FlattenType.None)` and the root rule) plus the leaf Symbols that carry position and rule-id metadata.
 
-This is inherent to what InductorParser is for. The library trades some speed for a parse tree that carries position and rule-id metadata you need for things like syntax highlighting, error recovery, and LSP integrations, the same kind of output a compiler frontend wants, not just a semantic JSON value. The benchmark numbers reflect that trade honestly. The parse-time optimizations (Delete filtering, Or-wrapper removal, `StringChars`) show how far you can close the gap without giving up the richer tree.
+This is inherent to what InductorParser is for. The library trades some speed for a parse tree that carries position and rule-id metadata you need for things like syntax highlighting, error recovery, and LSP integrations, the same kind of output a compiler frontend wants, not just a semantic JSON value. The benchmark numbers reflect that trade honestly. The parse-time optimizations (Delete filtering, Or-wrapper removal, `StringBody`) show how far you can close the gap without giving up the richer tree.
 
 STJ is at the other extreme: it allocates nothing per JSON value, just stores byte offsets into the input. Every other parser has to justify itself against that.
 
@@ -204,7 +204,7 @@ STJ is at the other extreme: it allocates nothing per JSON value, just stores by
 - Every grammar is recursive-descent with the same five productions (value / string / object / array / member).
 - Every parser consumes the full input and produces a tree that round-trips to the exact input bytes (`--spot-check` verifies this across all four shapes).
 - Whitespace is handled by all parsers, explicitly or implicitly, for the same cost.
-- The string-char inner loop does one comparison per byte for Pidgin, Sprache, and Superpower. Parlot (`Terms.String`) and InductorParser (`StringChars`) both collapse the whole string body into one specialized scanner instead.
+- The string-char inner loop does one comparison per byte for Pidgin, Sprache, and Superpower. Parlot (`Terms.String`) and InductorParser (`StringBody`) both collapse the whole string body into one specialized scanner instead.
 
 ### What's unfair but unfixable
 

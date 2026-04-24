@@ -35,13 +35,13 @@ public static class ChordGrammar
 
     private static Rule Build()
     {
-        var root = RuneIn("ABCDEFGabcdefg");
+        var root = OneOf("ABCDEFGabcdefg");
 
         // Accidentals include b and x (and their uppercase pair under
         // IgnoreCase: B is legal after the root via the case-insensitive
         // match, same for X). Rare in real input but we have to mirror
         // regex behavior.
-        var accidental = RuneIn("#bB♯♭xX");
+        var accidental = OneOf("#bB♯♭xX");
 
         // (maj|min|m|dim|°|o|aug|+|sus[24]?|5)?
         // Longest first so "maj" wins over "m", "min" wins over "m".
@@ -50,7 +50,7 @@ public static class ChordGrammar
             LiteralIgnoreAsciiCase("min"),
             LiteralIgnoreAsciiCase("dim"),
             LiteralIgnoreAsciiCase("aug"),
-            And(LiteralIgnoreAsciiCase("sus"), Optional(RuneIn("24"))),
+            And(LiteralIgnoreAsciiCase("sus"), Optional(OneOf("24"))),
             LiteralIgnoreAsciiCase("m"),
             LiteralIgnoreAsciiCase("o"),
             Token('°'),
@@ -92,16 +92,16 @@ public static class ChordGrammar
         // before "#5"/"#9" (again, longer first). "b13" before "b5"/"b9".
         // "sus[24]?" matches "sus", "sus2", or "sus4".
         var addMod = Or(
-            And(LiteralIgnoreAsciiCase("add1"), RuneIn("13")),
-            And(LiteralIgnoreAsciiCase("add"), RuneIn("2469")),
+            And(LiteralIgnoreAsciiCase("add1"), OneOf("13")),
+            And(LiteralIgnoreAsciiCase("add"), OneOf("2469")),
             LiteralIgnoreAsciiCase("b13"),
             LiteralIgnoreAsciiCase("#11"),
             LiteralIgnoreAsciiCase("b5"),
             LiteralIgnoreAsciiCase("b9"),
             LiteralIgnoreAsciiCase("#5"),
             LiteralIgnoreAsciiCase("#9"),
-            And(LiteralIgnoreAsciiCase("no"), RuneIn("357")),
-            And(LiteralIgnoreAsciiCase("sus"), Optional(RuneIn("24"))),
+            And(LiteralIgnoreAsciiCase("no"), OneOf("357")),
+            And(LiteralIgnoreAsciiCase("sus"), Optional(OneOf("24"))),
             LiteralIgnoreAsciiCase("alt")
         );
 

@@ -39,7 +39,7 @@ namespace InductorParser;
 // The order of checks is: stopper first, then escape start.
 //
 // The resulting Symbol carries a ReadOnlyMemory<char> over the
-// original input, same shape as RuneInRule's Symbol. ToString() returns
+// original input, same shape as OneOfRule's Symbol. ToString() returns
 // the raw source text, including escape-start runes and their ends as written originally.
 // Callers who want to actually decode the escapes need to walk that text themselves.
 // Lazy decoding means a syntax highlighter or a code-formatter, which WANTS the raw
@@ -60,7 +60,7 @@ namespace InductorParser;
 // rule built dynamically from whatever `delim` the opening
 // captured. That is context-sensitive and not directly expressible
 // as a fixed Rule at grammar-build time.
-internal sealed class StringCharsRule : Rule
+internal sealed class StringBodyRule : Rule
 {
     // Stopper discrimination. _stopperRule != null selects the general
     // path, otherwise _stopperSet is used. The general path is one
@@ -100,13 +100,13 @@ internal sealed class StringCharsRule : Rule
     // where that allocation registers, give the end
     // .Flatten(FlattenType.Delete) and the parse-time Delete filter
     // removes the Symbol construction entirely. On an end failure,
-    // StringChars fails as a whole (a started escape that can't
+    // StringBody fails as a whole (a started escape that can't
     // complete isn't a well-formed body) and the outer transaction
-    // rolls the lexer back to where StringChars opened.
+    // rolls the lexer back to where StringBody opened.
     private readonly Rule? _escapeEnd;
 
     // FAST PATH, no escape. Per rune: one RuneSet.Contains.
-    public StringCharsRule(RuneSet stopAt)
+    public StringBodyRule(RuneSet stopAt)
         : base(FlattenType.Preserve)
     {
         _stopperSet = stopAt;
@@ -121,7 +121,7 @@ internal sealed class StringCharsRule : Rule
     // FAST PATH, single-rune escape start. Per rune: one
     // RuneSet.Contains plus one int equality on non-stopper runes.
     // Covers JSON, C, C++ regular, Python single-line.
-    public StringCharsRule(RuneSet stopAt, Rune escapeStart, Rule escapeEnd)
+    public StringBodyRule(RuneSet stopAt, Rune escapeStart, Rule escapeEnd)
         : base(FlattenType.Preserve, escapeEnd)
     {
         if (escapeEnd == null)
@@ -138,7 +138,7 @@ internal sealed class StringCharsRule : Rule
     // General escape start. Adds one Rule.TryParse on non-stopper
     // runes only. Use for multi-rune starts like $$ or a choice
     // across several starts.
-    public StringCharsRule(RuneSet stopAt, Rule escapeStart, Rule escapeEnd)
+    public StringBodyRule(RuneSet stopAt, Rule escapeStart, Rule escapeEnd)
         : base(FlattenType.Preserve, escapeStart, escapeEnd)
     {
         if (escapeStart == null)
@@ -157,7 +157,7 @@ internal sealed class StringCharsRule : Rule
     // General stopper, no escape. Per rune: one Rule.TryParse for
     // the stopper (peek transaction, never consumed). Use for
     // multi-rune boundaries like C++ raw strings.
-    public StringCharsRule(Rule stopAt)
+    public StringBodyRule(Rule stopAt)
         : base(FlattenType.Preserve, stopAt)
     {
         if (stopAt == null)
@@ -173,7 +173,7 @@ internal sealed class StringCharsRule : Rule
 
     // General stopper with single-rune escape start. Canonical use:
     // Python triple-quote """...""" with backslash escapes.
-    public StringCharsRule(Rule stopAt, Rune escapeStart, Rule escapeEnd)
+    public StringBodyRule(Rule stopAt, Rune escapeStart, Rule escapeEnd)
         : base(FlattenType.Preserve, stopAt, escapeEnd)
     {
         if (stopAt == null)
@@ -317,7 +317,7 @@ internal sealed class StringCharsRule : Rule
     // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
     {
-        // StringChars always succeeds (a zero-length body is legal),
+        // StringBody always succeeds (a zero-length body is legal),
         // but it also consumes runes when the input has matchable ones.
         // That's Advance.Sometimes.
         //

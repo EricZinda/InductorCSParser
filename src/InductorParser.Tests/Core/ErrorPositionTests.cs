@@ -58,11 +58,11 @@ public class ErrorPositionTests
     // newlines and the outer Eof fails at the offset of the first 'X',
     // which is where the tests below want the deepest failure recorded.
     //
-    // Library doesn't yet ship RuneNotIn / AnyToken, so the set is spelled
+    // Library doesn't yet ship NoneOf / AnyToken, so the set is spelled
     // out explicitly. Tests that need a non-'a' prefix char inline their
     // own grammar.
     private static Rule AtFailureRule() =>
-        And(ZeroOrMore(RuneIn(RuneSet.Runes("a\r\n"))), Eof());
+        And(ZeroOrMore(OneOf(RuneSet.Runes("a\r\n"))), Eof());
 
     private static ParseResult ParseAtFailure(string input)
     {
@@ -138,12 +138,12 @@ public class ErrorPositionTests
     public void CRLF_is_one_break_next_line_starts_after_LF()
     {
         // Under the default GraphemeLexer "\r\n" is one token, so the
-        // helper grammar's RuneIn (which fails on multi-rune tokens)
+        // helper grammar's OneOf (which fails on multi-rune tokens)
         // won't consume it. Use RuneLexer so \r and \n are separate
         // tokens: grammar consumes a,a,\r,\n then fails on 'X' at
         // offset 4. The \r\n pair is one logical break so 'X' is on
         // line 1 column 0.
-        var rule = And(ZeroOrMore(RuneIn(RuneSet.Runes("a\r\n"))), Eof());
+        var rule = And(ZeroOrMore(OneOf(RuneSet.Runes("a\r\n"))), Eof());
         var result = rule.Parse("aa\r\nX", new ParseOptions { InputUnit = InputUnit.Rune });
 
         Assert.That(result.Success, Is.False);

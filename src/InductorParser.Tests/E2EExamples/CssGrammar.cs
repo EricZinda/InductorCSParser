@@ -20,7 +20,7 @@ namespace InductorParser.Tests;
 //   * AtLeastAndAtMostExpression<X, N, M>      -> BetweenInclusive(N, M, X)
 //   * LiteralExpression<"str">                 -> Literal("str")
 //   * CharacterSymbol<"c">                     -> Token(c)
-//   * CharacterSetExceptSymbol<"chars">        -> RuneNotIn("chars")
+//   * CharacterSetExceptSymbol<"chars">        -> NoneOf("chars")
 //   * NotLiteralExpression<"str">              -> ZeroOrMore(And(Not(Literal("str")), AnyToken()))
 //   * WhitespaceSymbol / OptionalWhitespaceSymbol -> one-or-more / zero-or-more over WhitespaceChars
 //
@@ -48,26 +48,26 @@ public static class CssGrammar
     private static readonly RuneSet HexDigitChars =
         RuneSet.Ascii.Digits | RuneSet.Runes("ABCDEFabcdef");
 
-    // /* comment */, with the body as a single StringChars scan on a
-    // rule-based stopper. StringChars peeks the stopper on each rune
+    // /* comment */, with the body as a single StringBody scan on a
+    // rule-based stopper. StringBody peeks the stopper on each rune
     // and rolls back, so the closing "*/" is left for the outer And.
     public static readonly Rule BlockComment = And(
         Literal("/*"),
-        StringChars(Literal("*/")),
+        StringBody(Literal("*/")),
         Literal("*/")
     );
 
     // CSS whitespace: any mix of whitespace characters and block comments,
     // zero or more. Matches C++ CssWhitespaceRule.
     public static readonly Rule CssWhitespace = ZeroOrMore(Or(
-        RuneIn(WhitespaceChars),
+        OneOf(WhitespaceChars),
         BlockComment
     ));
 
     // Identifier = (letter | _) (letter | digit | _ | -)*
     public static readonly Rule Identifier = And(
-        Or(RuneIn(LetterChars), Token('_')),
-        ZeroOrMore(Or(RuneIn(LetterOrDigitChars), Token('_'), Token('-')))
+        Or(OneOf(LetterChars), Token('_')),
+        ZeroOrMore(Or(OneOf(LetterOrDigitChars), Token('_'), Token('-')))
     );
 
     // Strings can escape the quote character, include a line continuation
@@ -80,7 +80,7 @@ public static class CssGrammar
         ZeroOrMore(Or(
             Literal("\\\""),
             Literal("\\\r\n"),
-            RuneNotIn("\"")
+            NoneOf("\"")
         )),
         Token('"')
     );
@@ -90,7 +90,7 @@ public static class CssGrammar
         ZeroOrMore(Or(
             Literal("\\'"),
             Literal("\\\r\n"),
-            RuneNotIn("'")
+            NoneOf("'")
         )),
         Token('\'')
     );
@@ -120,7 +120,7 @@ public static class CssGrammar
 
     // Descendant combinator is literally whitespace. One-or-more to
     // disambiguate from an empty join.
-    public static readonly Rule Combinator = OneOrMore(RuneIn(WhitespaceChars));
+    public static readonly Rule Combinator = OneOrMore(OneOf(WhitespaceChars));
 
     public static readonly Rule Selector = And(
         SimpleSelectorSequence,
@@ -139,14 +139,14 @@ public static class CssGrammar
             Literal("url"),
             Token('('),
             Token('"'),
-            ZeroOrMore(RuneNotIn("\"")),
+            ZeroOrMore(NoneOf("\"")),
             Token('"'),
             Token(')')
         ),
         And(
             Literal("url"),
             Token('('),
-            ZeroOrMore(RuneNotIn(")")),
+            ZeroOrMore(NoneOf(")")),
             Token(')')
         )
     );
@@ -166,10 +166,10 @@ public static class CssGrammar
     public static readonly Rule ValueColorHex = And(
         Token('#'),
         Or(
-            BetweenInclusive(6, 6, RuneIn(HexDigitChars)),
-            BetweenInclusive(3, 3, RuneIn(HexDigitChars))
+            BetweenInclusive(6, 6, OneOf(HexDigitChars)),
+            BetweenInclusive(3, 3, OneOf(HexDigitChars))
         ),
-        Peek(Not(RuneIn(HexDigitChars)))
+        Peek(Not(OneOf(HexDigitChars)))
     );
 
     // rgba(int, int, int, float) with whitespace anywhere between pieces.

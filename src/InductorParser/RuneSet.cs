@@ -6,7 +6,7 @@ using System.Text;
 namespace InductorParser;
 
 // A set of Unicode scalar values (runes), used to describe character classes
-// for RuneIn and RuneNotIn. Build one with the factory methods (Single, Range,
+// for OneOf and NoneOf. Build one with the factory methods (Single, Range,
 // Runes, Category) or one of the built-ins (Letters, Digits, Whitespace, and
 // their Ascii.* variants), then compose larger classes with the set operators:
 //
@@ -212,8 +212,19 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     {
         if (characters == null) throw new ArgumentNullException(nameof(characters));
         var list = new List<Interval>();
+        // Walk the string one grapheme at a time. A RuneSet holds single
+        // Unicode scalar values, so a multi-rune grapheme (skin-toned emoji,
+        // ZWJ family, decomposed accent) can't be one element of the set
+        // the caller is asking to build. Catching it here turns what used
+        // to be a silent "I built a two-rune set that matches neither
+        // rune the way the caller expected" into a loud exception at
+        // construction time. GetNextTextElement is the same API the
+        // GraphemeLexer uses, so validation and tokenization agree on
+        // what a grapheme is.
         for (int index = 0; index < characters.Length;)
         {
+            string grapheme = StringInfo.GetNextTextElement(characters, index);
+            int graphemeStart = index;
             int codepoint;
             if (char.IsHighSurrogate(characters[index]) && index + 1 < characters.Length && char.IsLowSurrogate(characters[index + 1]))
             {
@@ -233,6 +244,45 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
                     $"Runes(string) encountered an invalid Unicode scalar value (0x{codepoint:X4}) at UTF-16 offset {index - 1}. " +
                     "Lone surrogate halves aren't valid runes.",
                     nameof(characters));
+            // If the grapheme extends past the first rune we just
+            // consumed, it's a multi-rune grapheme. Refuse it. Token
+            // and Literal are the grapheme-matching primitives.
+            //
+            // Exception: CRLF (\r\n) is one grapheme per UAX #29, but
+            // nobody calling Runes("\r\n") means "the CRLF grapheme as
+            // a unit." They mean "the set {CR, LF}," two separate
+            // scalars. CRLF is the only ASCII multi-rune grapheme, so
+            // letting it through without complaint keeps the common
+            // "line-terminator runes" idiom working while still
+            // catching the real silent-misuse cases (emoji with skin
+            // tone, decomposed accents, ZWJ sequences, etc.).
+            bool isCrlf = grapheme.Length == 2 && grapheme[0] == '\r' && grapheme[1] == '\n';
+            if (graphemeStart + grapheme.Length != index && !isCrlf)
+            {
+                // Enumerate the grapheme's runes by hand since
+                // string.EnumerateRunes is .NET 5+ and this project targets
+                // netstandard2.1. Same surrogate-pair logic the outer loop uses.
+                var runeList = new List<string>();
+                for (int runeIndex = 0; runeIndex < grapheme.Length;)
+                {
+                    int runeCodepoint;
+                    if (char.IsHighSurrogate(grapheme[runeIndex]) && runeIndex + 1 < grapheme.Length && char.IsLowSurrogate(grapheme[runeIndex + 1]))
+                    {
+                        runeCodepoint = char.ConvertToUtf32(grapheme[runeIndex], grapheme[runeIndex + 1]);
+                        runeIndex += 2;
+                    }
+                    else
+                    {
+                        runeCodepoint = grapheme[runeIndex];
+                        runeIndex++;
+                    }
+                    runeList.Add($"U+{runeCodepoint:X4}");
+                }
+                throw new ArgumentException(
+                    $"Runes(string) cannot accept the multi-rune grapheme \"{grapheme}\" ({string.Join(", ", runeList)}) at UTF-16 offset {graphemeStart}. " +
+                    "A RuneSet holds single Unicode scalar values. To match this grapheme as a unit, use Token(\"" + grapheme + "\") or Literal(\"" + grapheme + "\").",
+                    nameof(characters));
+            }
             list.Add(new Interval(codepoint, codepoint));
         }
         return new RuneSet(Normalize(list));
@@ -419,7 +469,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     // grapheme like emoji. A grammar that wants "match everything up to the
     // next delimiter" or "match anything the other rules didn't claim"
     // should use the pass-through-text recipe (see docs/Recipes.md): either
-    // RuneNotIn(stopSet) for delimiter-based stops, or Not(stopRule) + AnyToken()
+    // NoneOf(stopSet) for delimiter-based stops, or Not(stopRule) + AnyToken()
     // for rule-based stops.
     public static RuneSet Letters => _letters.Value;
     public static RuneSet Digits => _digits.Value;

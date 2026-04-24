@@ -12,7 +12,7 @@ namespace InductorParser.SyntaxTree;
 //
 // Leaf: carries a ReadOnlyMemory<char> pointing into a section of
 //     the original input string. Used by rules that match content
-//     (Token, Literal, RuneIn, StringChars). ToString() returns the
+//     (Token, Literal, OneOf, StringBody). ToString() returns the
 //     text it points at. The parse never copies input into a new
 //     string.
 public sealed class Symbol

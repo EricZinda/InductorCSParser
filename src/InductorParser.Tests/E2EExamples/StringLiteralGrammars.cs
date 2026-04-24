@@ -4,10 +4,10 @@ using static InductorParser.Rules;
 
 namespace InductorParser.Tests;
 
-// End-to-end string-literal grammars that exercise every StringChars
+// End-to-end string-literal grammars that exercise every StringBody
 // shape: RuneSet stopAt, Rule stopAt, single-rune escape starts,
 // no-escape forms. These mirror the sketches in
-// StringCharsRule.cs's header comment, built out as runnable grammars
+// StringBodyRule.cs's header comment, built out as runnable grammars
 // so the tests can feed real inputs through them.
 //
 // Each grammar parses ONE complete string literal (opening delimiter,
@@ -66,10 +66,10 @@ public static class StringLiteralGrammars
 
     private static Rule BuildJson()
     {
-        var hexDigit = RuneIn(RuneSet.Ascii.Digits
+        var hexDigit = OneOf(RuneSet.Ascii.Digits
                               | RuneSet.Range('a', 'f')
                               | RuneSet.Range('A', 'F'));
-        var simpleEscape = RuneIn(RuneSet.Runes("\"\\/bfnrt"));
+        var simpleEscape = OneOf(RuneSet.Runes("\"\\/bfnrt"));
         var unicodeEscape = And(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
         var escapeEnd = Or(simpleEscape, unicodeEscape);
 
@@ -78,14 +78,14 @@ public static class StringLiteralGrammars
         // include TAB (0x09), LF (0x0A), and CR (0x0D), all of
         // which JSON requires be escaped rather than embedded raw.
         var stopAt = RuneSet.Runes("\"") | RuneSet.Range(0x00, 0x1F);
-        var body = StringChars(stopAt, new Rune('\\'), escapeEnd);
+        var body = StringBody(stopAt, new Rune('\\'), escapeEnd);
 
         return And(Token('"'), body, Token('"')).As("jsonString");
     }
 
     private static Rule BuildPythonSingleLine()
     {
-        var body = StringChars(
+        var body = StringBody(
             RuneSet.Runes("\"") | RuneSet.Single(0x0A),
             new Rune('\\'),
             BuildPythonEscapeEnd());
@@ -100,7 +100,7 @@ public static class StringLiteralGrammars
         // always rolls back, so the closing """ is NOT consumed by
         // the body scan. The outer And's trailing Literal matches
         // it.
-        var body = StringChars(
+        var body = StringBody(
             Literal("\"\"\""),
             new Rune('\\'),
             BuildPythonEscapeEnd());
@@ -110,9 +110,9 @@ public static class StringLiteralGrammars
 
     private static Rule BuildPythonRawSingleLine()
     {
-        // No escape start. The literal-only StringChars overload.
+        // No escape start. The literal-only StringBody overload.
         // Backslashes inside the body are just body content.
-        var body = StringChars(RuneSet.Runes("\""));
+        var body = StringBody(RuneSet.Runes("\""));
         return And(Token('r'), Token('"'), body, Token('"')).As("pyRawString");
     }
 
@@ -129,10 +129,10 @@ public static class StringLiteralGrammars
     //     \0 isn't in simple because octal already handles it.
     private static Rule BuildPythonEscapeEnd()
     {
-        var hexDigit = RuneIn(RuneSet.Ascii.Digits
+        var hexDigit = OneOf(RuneSet.Ascii.Digits
                               | RuneSet.Range('a', 'f')
                               | RuneSet.Range('A', 'F'));
-        var octalDigit = RuneIn(RuneSet.Range('0', '7'));
+        var octalDigit = OneOf(RuneSet.Range('0', '7'));
 
         // \NNN  one to three octal digits
         var octalEscape = BetweenInclusive(1, 3, octalDigit);
@@ -152,12 +152,12 @@ public static class StringLiteralGrammars
         // name content to a printable-ASCII subset. We accept any
         // non-} rune as a simplifying sketch. Matches the shape,
         // not the validation.
-        var nameChar = RuneIn(~RuneSet.Runes("}"));
+        var nameChar = OneOf(~RuneSet.Runes("}"));
         var namedEscape = And(Token('N'), Token('{'), OneOrMore(nameChar), Token('}'));
 
         // Simple single-char escapes. \0 is covered by octalEscape
         // so it isn't listed here.
-        var simpleEscape = RuneIn(RuneSet.Runes("\\'\"abfnrtv"));
+        var simpleEscape = OneOf(RuneSet.Runes("\\'\"abfnrtv"));
 
         return Or(octalEscape, hexEscape, unicode4, unicode8, namedEscape, simpleEscape);
     }

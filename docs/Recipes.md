@@ -6,24 +6,24 @@ The programming model lives in [ProgrammingAGrammar.md](ProgrammingAGrammar.md).
 
 ## Pass-Through Text: Matching "All Text"
 
-A very common grammar shape: you care about specific formatting markers, and everything else is body text that should flow through unchanged. Markdown, XML/HTML text nodes, configuration comments, JSON string bodies, chat message parsers. For these grammars the idiom is `OneOrMore(RuneNotIn(formattingChars))`:
+A very common grammar shape: you care about specific formatting markers, and everything else is body text that should flow through unchanged. Markdown, XML/HTML text nodes, configuration comments, JSON string bodies, chat message parsers. For these grammars the idiom is `OneOrMore(NoneOf(formattingChars))`:
 
 ```csharp
 using static InductorParser.Rules;
 
 var formatting = RuneSet.Runes("*_#`[]()\\");
-var textChar   = RuneNotIn(formatting);
+var textChar   = NoneOf(formatting);
 var text       = OneOrMore(textChar).As(nameof(text));
 
 var bold = And(
     Literal("**"),
-    OneOrMore(RuneNotIn(RuneSet.Runes("*"))),
+    OneOrMore(NoneOf(RuneSet.Runes("*"))),
     Literal("**")
 ).As(nameof(bold));
 
 var code = And(
     Token('`'),
-    OneOrMore(RuneNotIn(RuneSet.Runes("`"))),
+    OneOrMore(NoneOf(RuneSet.Runes("`"))),
     Token('`')
 ).As(nameof(code));
 
@@ -35,7 +35,7 @@ Parse `Hello 🎸 **world** 你好 ` + "`code`" + ` done` and you get a tree whe
 
 ### Stopping at a Multi-Character Terminator
 
-The `RuneNotIn` form above works when the stop is a small set of single characters. When the stop is a sequence, like `*/` closing a block comment or `-->` closing an XML comment, a character class can't express it. The idiom there is `ZeroOrMore(And(Not(stopRule), AnyToken()))`:
+The `NoneOf` form above works when the stop is a small set of single characters. When the stop is a sequence, like `*/` closing a block comment or `-->` closing an XML comment, a character class can't express it. The idiom there is `ZeroOrMore(And(Not(stopRule), AnyToken()))`:
 
 ```csharp
 var closeMarker = And(Token('*'), Token('/'));
@@ -45,7 +45,7 @@ var blockComment = And(
     closeMarker);
 ```
 
-Each iteration first checks that `closeMarker` does not match at the current cursor (`Not` is negative lookahead, zero-width), and only then consumes one token with `AnyToken()`. When `closeMarker` would fire, `Not` fails, the `And` fails, and the `ZeroOrMore` stops with the cursor sitting just before `*/`. The outer `And` then matches the terminator for real. `AnyToken()` handles multi-rune graphemes naturally under GraphemeLexer, same as `RuneNotIn`, so emoji and CJK in the comment body pass through unchanged.
+Each iteration first checks that `closeMarker` does not match at the current cursor (`Not` is negative lookahead, zero-width), and only then consumes one token with `AnyToken()`. When `closeMarker` would fire, `Not` fails, the `And` fails, and the `ZeroOrMore` stops with the cursor sitting just before `*/`. The outer `And` then matches the terminator for real. `AnyToken()` handles multi-rune graphemes naturally under GraphemeLexer, same as `NoneOf`, so emoji and CJK in the comment body pass through unchanged.
 
 ## Matching an Identifier
 

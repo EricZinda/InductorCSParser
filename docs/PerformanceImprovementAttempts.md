@@ -14,9 +14,9 @@ Engineering record of an attempt at backlog item p700 ("Reduce per-iteration all
 
 From [backlog/p700-reduce-per-iteration-allocations-on-the-matching-p.md](../backlog/p700-reduce-per-iteration-allocations-on-the-matching-p.md): three sub-levers were proposed.
 
-1. Leaf Symbol interning on TokenRule / RuneInRule.
+1. Leaf Symbol interning on TokenRule / OneOfRule.
 2. A `SymbolChildren` struct to avoid the `List<Symbol>` / `Symbol[]` dichotomy.
-3. Compile-time rewrite of `Or(TokenRule, TokenRule, ...)` → `RuneInRule`.
+3. Compile-time rewrite of `Or(TokenRule, TokenRule, ...)` → `OneOfRule`.
 
 None of those three were implemented. The attempt below is a fourth approach that emerged from reading the hot path.
 
@@ -98,13 +98,13 @@ ChordGrammar's hot path has seven `Optional(keyword)` and `ZeroOrMore(keyword)` 
 
 JSON's wins are concentrated on Deep and Long because those shapes have more empty-optional wrappers per parse (256 levels of empty `OptionalWhitespace()` and empty-body Optionals for the innermost object). Big and Wide have proportionally more real content, so the savings don't register above noise.
 
-The p700 backlog item predicted that leaf Symbol interning (sub-lever a) or the `Or(Token, Token) → RuneIn` rewrite (sub-lever c) would be bigger wins. This attempt targeted a fourth surface (wrapper allocations on composite rules) and the ceiling looks lower than the leaf-allocation ceiling those sub-levers target.
+The p700 backlog item predicted that leaf Symbol interning (sub-lever a) or the `Or(Token, Token) → OneOf` rewrite (sub-lever c) would be bigger wins. This attempt targeted a fourth surface (wrapper allocations on composite rules) and the ceiling looks lower than the leaf-allocation ceiling those sub-levers target.
 
 ### Why the attempt was reverted
 
 The net gain was under the threshold the user wanted to carry as permanent code complexity. The new `TryParseDiscarded` entry point doubles the Rule-to-Rule dispatch surface (two methods where there was one), and the anonymous-wrapper removal needs a load-bearing gate on `Name == null && ErrorMessage == null` that a future contributor could easily miss when adding a new modifier method or a new wrapper rule.
 
-For ~3% on Chord and ~5% allocation on JSON Deep/Long, the complexity didn't carry its weight. The p700 backlog item is still open. A future attempt should pick one of the three originally-proposed sub-levers (leaf Symbol interning, SymbolChildren struct, or compile-time `Or(Token, ...)` → `RuneIn` rewrite) where the allocation ceiling is higher.
+For ~3% on Chord and ~5% allocation on JSON Deep/Long, the complexity didn't carry its weight. The p700 backlog item is still open. A future attempt should pick one of the three originally-proposed sub-levers (leaf Symbol interning, SymbolChildren struct, or compile-time `Or(Token, ...)` → `OneOf` rewrite) where the allocation ceiling is higher.
 
 ### What a future attempt should reuse
 
@@ -125,14 +125,14 @@ Engineering record of the two p700 sub-levers the earlier attempt (logged above)
 
 From the retired p700 backlog item, three sub-levers were proposed originally. The earlier attempt logged above targeted a fourth surface (discard propagation + empty-wrapper removal) and didn't move the needle. This attempt returns to the first two originals:
 
-1. (a) Leaf Symbol interning on `RuneInRule` / `RuneNotInRule` / `AnyTokenRule`. Cache by (FlattenType, rune) so repeated matches of the same rune reuse one Symbol instance instead of allocating a fresh one per match.
+1. (a) Leaf Symbol interning on `OneOfRule` / `NoneOfRule` / `AnyTokenRule`. Cache by (FlattenType, rune) so repeated matches of the same rune reuse one Symbol instance instead of allocating a fresh one per match.
 2. (b) A replacement for the `List<Symbol>` that `AndRule` and `BetweenInclusiveRule` use to accumulate matched children. The backlog item sketched this as an inline-buffer struct. This attempt tried the lighter-weight version first: a plain `Symbol[]` with doubling growth.
 
-Sub-lever (c) (compile-time `Or(Token, Token, ...)` → `RuneIn` rewrite) is still unimplemented. The JSON grammar already uses `RuneIn` directly everywhere so there was no hot path to target in the current benchmark.
+Sub-lever (c) (compile-time `Or(Token, Token, ...)` → `OneOf` rewrite) is still unimplemented. The JSON grammar already uses `OneOf` directly everywhere so there was no hot path to target in the current benchmark.
 
 ### What was actually tried
 
-**Sub-lever (a): leaf Symbol interning.** Added a per-Lexer cache on `Lexer` with a direct-indexed `Symbol?[128]` fast path for ASCII and a `Dictionary<long, Symbol>` fallback keyed on `(FlattenType << 32) | rune`. `RuneInRule`, `RuneNotInRule`, and `AnyTokenRule` route single-rune success symbols through the cache instead of allocating per match. Cached Symbols carry a fresh 1- or 2-char string as their backing memory, not a reference into the current input, so the cache does not keep the input string alive past the parse.
+**Sub-lever (a): leaf Symbol interning.** Added a per-Lexer cache on `Lexer` with a direct-indexed `Symbol?[128]` fast path for ASCII and a `Dictionary<long, Symbol>` fallback keyed on `(FlattenType << 32) | rune`. `OneOfRule`, `NoneOfRule`, and `AnyTokenRule` route single-rune success symbols through the cache instead of allocating per match. Cached Symbols carry a fresh 1- or 2-char string as their backing memory, not a reference into the current input, so the cache does not keep the input string alive past the parse.
 
 Scope choice: cache lives on the Lexer, not on the Rule. Rules are shared across threads and parses. A per-Rule cache would need a lock and would hold Memory references across parses. Per-Lexer keeps it single-threaded by contract (one Lexer per parse) and disposable with the parse.
 
@@ -143,7 +143,7 @@ Did not implement the full "SymbolChildren struct with 4 inline slots + overflow
 ### Files touched (in the attempt)
 
 - [src/InductorParser/Lexing/Lexer.cs](../src/InductorParser/Lexing/Lexer.cs): added per-Lexer leaf Symbol cache and `GetOrCreateRuneLeaf`.
-- [src/InductorParser/RuneInRule.cs](../src/InductorParser/RuneInRule.cs), [RuneNotInRule.cs](../src/InductorParser/RuneNotInRule.cs), [AnyTokenRule.cs](../src/InductorParser/AnyTokenRule.cs): route single-rune success through the cache.
+- [src/InductorParser/OneOfRule.cs](../src/InductorParser/OneOfRule.cs), [NoneOfRule.cs](../src/InductorParser/NoneOfRule.cs), [AnyTokenRule.cs](../src/InductorParser/AnyTokenRule.cs): route single-rune success through the cache.
 - [src/InductorParser/AndRule.cs](../src/InductorParser/AndRule.cs): `List<Symbol>?` to `Symbol[]?` with trim-on-short.
 - [src/InductorParser/BetweenInclusiveRule.cs](../src/InductorParser/BetweenInclusiveRule.cs): `List<Symbol>?` to `Symbol[]?` with doubling growth and trim-on-short.
 
@@ -175,7 +175,7 @@ StdDev on the mean numbers typically 0.3-1.8 us (around 1% of mean), so most del
 
 ### Why the wins are small
 
-Sub-lever (a): the JSON grammar's hot leaf allocators aren't where this cache applies. `simpleEscape = RuneIn(...)` fires at roughly 3% of in-string characters (the escape-density the harness generates), `hexDigit` never fires because the generator excludes `\uXXXX`, and the RuneIn inside `OptionalWhitespace` hits the discard path because the wrapper has `FlattenType.Delete`. `StringChars` produces one leaf per string body, not per character, and doesn't go through the RuneIn allocation path at all. That leaves simpleEscape as essentially the only non-trivial RuneIn allocation in the hot loop, and at 3% density there just isn't much to cache. The ~1% allocation drop we actually got is consistent with that scope.
+Sub-lever (a): the JSON grammar's hot leaf allocators aren't where this cache applies. `simpleEscape = OneOf(...)` fires at roughly 3% of in-string characters (the escape-density the harness generates), `hexDigit` never fires because the generator excludes `\uXXXX`, and the OneOf inside `OptionalWhitespace` hits the discard path because the wrapper has `FlattenType.Delete`. `StringBody` produces one leaf per string body, not per character, and doesn't go through the OneOf allocation path at all. That leaves simpleEscape as essentially the only non-trivial OneOf allocation in the hot loop, and at 3% density there just isn't much to cache. The ~1% allocation drop we actually got is consistent with that scope.
 
 Sub-lever (b): trading `new List<Symbol>(capacity)` for `new Symbol[capacity]` saves roughly the `List<T>` header (~24 B) per populated wrapper. But for AndRule wrappers where most children are filtered via `FlattenType.Delete` (JsonMember has 5 children, 2 kept), the new code allocates `Symbol[5]` upfront and then a trimmed `Symbol[2]`, which is two allocations for around 88 B total. The old code allocated the List header plus a `Symbol[5]` internal array, also two allocations for about the same total. Same count, same size. The win lands only on BetweenInclusiveRule paths where the List used to grow its internal array (Deep and Long shapes see the biggest allocation drops, 2-3%), and even that win is modest because `List<T>` was already doing doubling growth too.
 
@@ -192,7 +192,7 @@ The README paragraph this experiment set out to fact-check was updated at [src/B
 ### What a future attempt should know
 
 - The "just swap `List<T>` for `Symbol[]`" refactor is a wash. If anyone returns to sub-lever (b), the version worth trying is the full inline-buffer struct (4 `Symbol` fields inline in a struct, plus optional overflow, with `Symbol.Children` accepting the struct). That's the only flavor of (b) with a meaningful allocation ceiling to hit, because it removes the intermediate buffer entirely for the common ≤4 case. It's also invasive to `Symbol`'s public surface.
-- Sub-lever (a) is structurally fine. It just has nothing to do at 3% escape density. A grammar with a hot `RuneIn` loop outside a `FlattenType.Delete` wrapper (a tokenizer for keyword-heavy text, or ChordGrammar's `accidental` at larger corpus scale) would exercise it. The cache scaffolding is easy to reinstate from this attempt's git history if that need comes up.
+- Sub-lever (a) is structurally fine. It just has nothing to do at 3% escape density. A grammar with a hot `OneOf` loop outside a `FlattenType.Delete` wrapper (a tokenizer for keyword-heavy text, or ChordGrammar's `accidental` at larger corpus scale) would exercise it. The cache scaffolding is easy to reinstate from this attempt's git history if that need comes up.
 - Measurement harness from the earlier P700 and P600 entries still applies: JSON with `--filter "*_InductorParser" "*_SystemTextJson"` and `--spot-check` after any change that touches Symbol construction or composite-rule plumbing.
 
 ---
@@ -206,7 +206,7 @@ Engineering record of an attempt at the (since-deleted) p600 backlog item. The c
 Every non-trivial rule opens a `Transaction` on entry via `Lexer.BeginTransaction()`. The Transaction is a struct (two int writes, two bool writes) plus a `_transactionDepth++` on the lexer for trace indentation plus a `Dispose` on every exit path. Two categories of rule don't need that full machinery:
 
 - Rules that always roll back (`PeekRule`, `NotRule`): they never commit, so the only job of the Transaction is to restore position. A saved `int` does the same work with less bookkeeping.
-- Primitive rules that read at most one token before deciding (`TokenRule`, `RuneInRule`, `RuneNotInRule`, `AnyTokenRule`): on failure the rule hasn't advanced past one rune, so rollback is trivially "restore saved position."
+- Primitive rules that read at most one token before deciding (`TokenRule`, `OneOfRule`, `NoneOfRule`, `AnyTokenRule`): on failure the rule hasn't advanced past one rune, so rollback is trivially "restore saved position."
 - `BetweenInclusiveRule` with `AtLeast==0` (Optional, ZeroOrMore): the rule can't fail in that configuration, so the outer rollback has nothing to roll back.
 
 Three tiers proposed, smallest to biggest, with the expectation that ChordGrammar's ~10x-compiled-regex ratio would drop to ~5-7x.
@@ -236,7 +236,7 @@ Updated the Rule.TryParseRule contract comment to describe the saved-position pa
 - [src/InductorParser/Lexing/Lexer.cs](../src/InductorParser/Lexing/Lexer.cs): added `SetPosition`.
 - [src/InductorParser/BetweenInclusiveRule.cs](../src/InductorParser/BetweenInclusiveRule.cs): AtLeast==0 path without outer Transaction.
 - [src/InductorParser/PeekRule.cs](../src/InductorParser/PeekRule.cs), [NotRule.cs](../src/InductorParser/NotRule.cs): saved-position int (always restore).
-- [src/InductorParser/TokenRule.cs](../src/InductorParser/TokenRule.cs), [RuneInRule.cs](../src/InductorParser/RuneInRule.cs), [RuneNotInRule.cs](../src/InductorParser/RuneNotInRule.cs), [AnyTokenRule.cs](../src/InductorParser/AnyTokenRule.cs): saved-position int (restore on failure).
+- [src/InductorParser/TokenRule.cs](../src/InductorParser/TokenRule.cs), [OneOfRule.cs](../src/InductorParser/OneOfRule.cs), [NoneOfRule.cs](../src/InductorParser/NoneOfRule.cs), [AnyTokenRule.cs](../src/InductorParser/AnyTokenRule.cs): saved-position int (restore on failure).
 - [src/InductorParser/Rule.cs](../src/InductorParser/Rule.cs): updated subclass contract comment.
 - ~15 test files: trace-output expected indentation shifted shallower because the leaves no longer bump `_transactionDepth`.
 
@@ -288,8 +288,8 @@ STJ baseline drifted 11% on Big between the two BenchmarkDotNet sessions (24.66 
 
 The hot paths on the grammars measured aren't leaf-bound:
 
-- **ChordGrammar** spends its time in `Literal` / `Or` dispatch (already helped by p500's required-runes filter). The Token / RuneIn leaves aren't the bottleneck.
-- **JSON** spends its time in `StringChars` (already a specialized scanner that doesn't dispatch per character) and in the structural `And` / `ZeroOrMore` wrappers that build the output tree. Those still open Transactions and still allocate `List<Symbol>` wrappers. p600 didn't touch either.
+- **ChordGrammar** spends its time in `Literal` / `Or` dispatch (already helped by p500's required-runes filter). The Token / OneOf leaves aren't the bottleneck.
+- **JSON** spends its time in `StringBody` (already a specialized scanner that doesn't dispatch per character) and in the structural `And` / `ZeroOrMore` wrappers that build the output tree. Those still open Transactions and still allocate `List<Symbol>` wrappers. p600 didn't touch either.
 
 The backlog item's "ChordGrammar probably drops to ~5-7x" estimate was optimistic because it assumed leaf-rule overhead was a bigger portion of the hot path than it actually is.
 
@@ -315,7 +315,7 @@ Engineering record of backlog item p750 ("First-rune lookahead skip on BetweenIn
 
 ### What p750 asked for
 
-From [backlog/p750-first-rune-lookahead-skip-on-betweeninclusiverule.md](../backlog/p750-first-rune-lookahead-skip-on-betweeninclusiverule.md): `OrRule` has a first-rune lookahead (the p500 required-runes filter) that skips any child whose `Advance` is `Always` and whose `RequiredInitialRuneSet` rules the peek out. `BetweenInclusiveRule` (the composite that `ZeroOrMore` / `Optional` / `OneOrMore` wrap) had no equivalent, so every invocation ran at least one full `Inner.TryParse` even when the lookahead could have proved Inner can't match. On the JSON benchmark's Big shape, that amounted to 2089 `RuneIn FAIL` outcomes (19% of all rule invocations), almost entirely from `OptionalWhitespace()` scanning for whitespace that isn't there. Deep was similarly lopsided at 1283 out of 6482 invocations (also ~20%).
+From [backlog/p750-first-rune-lookahead-skip-on-betweeninclusiverule.md](../backlog/p750-first-rune-lookahead-skip-on-betweeninclusiverule.md): `OrRule` has a first-rune lookahead (the p500 required-runes filter) that skips any child whose `Advance` is `Always` and whose `RequiredInitialRuneSet` rules the peek out. `BetweenInclusiveRule` (the composite that `ZeroOrMore` / `Optional` / `OneOrMore` wrap) had no equivalent, so every invocation ran at least one full `Inner.TryParse` even when the lookahead could have proved Inner can't match. On the JSON benchmark's Big shape, that amounted to 2089 `OneOf FAIL` outcomes (19% of all rule invocations), almost entirely from `OptionalWhitespace()` scanning for whitespace that isn't there. Deep was similarly lopsided at 1283 out of 6482 invocations (also ~20%).
 
 ### What was actually tried
 
@@ -346,19 +346,19 @@ Test surface: all 458 non-timing tests pass. Only two trace expectations shifted
 Big shape (7193 chars):
 Rule               Baseline    After       Δ
 Total outcomes     11005        8916    -2089
-RuneIn FAIL         2089           0    -2089
+OneOf FAIL         2089           0    -2089
 (all other rows unchanged)
 
 Deep shape (2601 chars):
 Rule               Baseline    After       Δ
 Total outcomes      6482        4428    -2054
-RuneIn FAIL         1283           0    -1283
+OneOf FAIL         1283           0    -1283
 Token FAIL            257           0     -257
 And FAIL             257           0     -257
 ZeroOrMore SUCC     1540        1283     -257
 ```
 
-On Big, every eliminated invocation is a `RuneIn FAIL` from `OptionalWhitespace()`. The grammar's trailing-comma branches don't fail on Big because the benchmark's JSON always has at least one member. On Deep, the same skip also short-circuits the `And` rule inside the outer `ZeroOrMore(And(OptionalWhitespace, Token(','), ...))`, so the `Token FAIL` and `And FAIL` rows drop to zero too. The ZeroOrMore SUCC drop is bookkeeping: the trailing-ZeroOrMore still emits one SUCC trace per call, but it no longer runs nested OptionalWhitespace ZeroOrMores inside the And that got skipped.
+On Big, every eliminated invocation is a `OneOf FAIL` from `OptionalWhitespace()`. The grammar's trailing-comma branches don't fail on Big because the benchmark's JSON always has at least one member. On Deep, the same skip also short-circuits the `And` rule inside the outer `ZeroOrMore(And(OptionalWhitespace, Token(','), ...))`, so the `Token FAIL` and `And FAIL` rows drop to zero too. The ZeroOrMore SUCC drop is bookkeeping: the trailing-ZeroOrMore still emits one SUCC trace per call, but it no longer runs nested OptionalWhitespace ZeroOrMores inside the And that got skipped.
 
 ### Measurements
 

@@ -15,7 +15,7 @@ Related docs:
 
 A few terms used throughout these docs mean specific things in this library:
 
-**Leaf rule.** A rule with no child rules. The matching logic consumes input directly (or doesn't consume at all, for zero-width predicates) rather than delegating to other rules. Token, Literal, LiteralIgnoreAsciiCase, RuneIn, RuneNotIn, AnyToken, StringChars, Eof, Not, Peek are all leaves. Use "leaf" rather than "primitive" or "terminal" when talking about this category.
+**Leaf rule.** A rule with no child rules. The matching logic consumes input directly (or doesn't consume at all, for zero-width predicates) rather than delegating to other rules. Token, Literal, LiteralIgnoreAsciiCase, OneOf, NoneOf, AnyToken, StringBody, Eof, Not, Peek are all leaves. Use "leaf" rather than "primitive" or "terminal" when talking about this category.
 
 **Composite rule.** A rule built out of other rules. And, Or, BetweenInclusive (plus its wrappers OneOrMore, ZeroOrMore, Optional, AtLeast, AtMost, Exactly), and LateBoundRule are the composites. Use "composite" rather than "combinator."
 
@@ -54,8 +54,8 @@ Every concept from the original `GettingStarted.md` has a direct C# counterpart:
 | `OptionalExpression<T>`            | `Optional(rule)`                                |
 | `AtLeastAndAtMostExpression<T,N,M>`| `BetweenInclusive(n, m, rule)`                  |
 | `CharacterSymbol<EqualString>`     | `Token('=')`                                     |
-| `CharacterSetSymbol<Chars>`        | `RuneIn(RuneSet.Letters)`                     |
-| `CharacterSetExceptSymbol<...>`    | `RuneNotIn(charClass)`                          |
+| `CharacterSetSymbol<Chars>`        | `OneOf(RuneSet.Letters)`                     |
+| `CharacterSetExceptSymbol<...>`    | `NoneOf(charClass)`                          |
 | `LiteralExpression<WordString>`    | `Literal("word")`                               |
 | `OptionalWhitespaceSymbol<>`       | `OptionalWhitespace()`                          |
 | `WhitespaceSymbol<>`               | `Whitespace()`                                  |
@@ -179,7 +179,7 @@ The parser ships two lexers: `GraphemeLexer` (default) and `RuneLexer`. Both pro
 
 `GraphemeLexer` is the default because "one character" in the user's mental model is one grapheme (the guitar emoji 🎸 is one character, the family emoji 👨‍👩‍👧‍👦 is one character), and grammars that operate on user-typed text want that to be the unit they match. `RuneLexer` exists because some grammars specifically need rune-level access: parsing Unicode-category boundaries, walking combining-mark sequences individually, or implementing a Unicode library on top of the parser.
 
-The implementation details (how graphemes are detected, how position tracking works across the two, where the two produce different streams) live in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). The design rationale worth keeping here is: swapping the lexer is a `ParseOptions` field, not a grammar change, and grammars written against the `Rule` API work against either lexer. The rules whose behavior can observably differ between lexers are the ones that compare against a token directly (`Token`, `RuneIn`, `RuneNotIn`, `Literal`, `Peek`, `Not`). Composite rules inherit any difference from a leaf inside them.
+The implementation details (how graphemes are detected, how position tracking works across the two, where the two produce different streams) live in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). The design rationale worth keeping here is: swapping the lexer is a `ParseOptions` field, not a grammar change, and grammars written against the `Rule` API work against either lexer. The rules whose behavior can observably differ between lexers are the ones that compare against a token directly (`Token`, `OneOf`, `NoneOf`, `Literal`, `Peek`, `Not`). Composite rules inherit any difference from a leaf inside them.
 
 Where the two diverge on real input, the `RuneLexer` behavior is usually the buggy one: it was matching part of a grapheme as if it were a standalone character. `GraphemeLexer` fixes this by treating the whole sequence as one token. The reframing is "`GraphemeLexer` revealed that my grammar was silently wrong on multi-rune input," not "`GraphemeLexer` broke my grammar."
 
@@ -213,12 +213,12 @@ Every built-in rule that looks at token content reduces to one of four operation
 
 **`Token('=')`, `Token(Rune r)`, `Token(string grapheme)`.** Matches one grapheme, specified at rule-construction time. The `string` overload requires exactly one grapheme and is validated at construction by walking the argument with `StringInfo.GetTextElementEnumerator` and asserting a single element. The `char` and `Rune` overloads are convenience wrappers that build a one-grapheme string. At match time the rule pre-tokenizes its expected grapheme the same way the lexer will tokenize input and walks the expected sequence against `lexer.Read()` in lockstep, comparing `Chars` spans with `SequenceEqual`. Under `GraphemeLexer` that is a single-token compare. Under `RuneLexer` it is a one-to-N token compare (`Token("👋🏽")` expects two rune tokens, waving hand plus medium skin tone, so it reads two tokens and compares each).
 
-**`RuneIn(RuneSet cc)` and `RuneNotIn(RuneSet cc)`.** These are the rune-set tests. Both are defined in terms of the predicate "the token is exactly one rune *r*, and `cc.Contains(r)`." `RuneIn` matches when the predicate is true. `RuneNotIn` matches when it is false. The asymmetry that falls out of this is important: a multi-rune token never matches `RuneIn` (the predicate is false because the token is not one rune) but it *does* match `RuneNotIn` (the predicate is false, so the negation is true). This is what makes `OneOrMore(RuneNotIn(formattingChars))` sweep up emoji correctly in the pass-through-text recipe.
+**`OneOf(RuneSet cc)` and `NoneOf(RuneSet cc)`.** These are the rune-set tests. Both are defined in terms of the predicate "the token is exactly one rune *r*, and `cc.Contains(r)`." `OneOf` matches when the predicate is true. `NoneOf` matches when it is false. The asymmetry that falls out of this is important: a multi-rune token never matches `OneOf` (the predicate is false because the token is not one rune) but it *does* match `NoneOf` (the predicate is false, so the negation is true). This is what makes `OneOrMore(NoneOf(formattingChars))` sweep up emoji correctly in the pass-through-text recipe.
 
 The two semantics in prose:
 
-- `RuneIn(class)` is existential: "is this token one of the runes in the class?" A multi-rune token is not any single rune, so no.
-- `RuneNotIn(class)` is universal: "does this token avoid all runes in the class?" A multi-rune token avoids every single-rune value, so yes.
+- `OneOf(class)` is existential: "is this token one of the runes in the class?" A multi-rune token is not any single rune, so no.
+- `NoneOf(class)` is universal: "does this token avoid all runes in the class?" A multi-rune token avoids every single-rune value, so yes.
 
 **`Literal(string s)`.** Tokenizes `s` the same way the lexer will tokenize input (grapheme-walk via `StringInfo.GetTextElementEnumerator` under `GraphemeLexer`, rune-walk via `string.EnumerateRunes()` under `RuneLexer`), caches the tokenized sequence at rule construction time, and matches by walking both sequences in lockstep comparing `Chars` spans with `SequenceEqual`. This is the only one of these types that can consume more than one token in a single match. The other three each look at exactly one token.
 
@@ -228,7 +228,7 @@ Because `Literal` tokenizes the same way the lexer does, a literal like `Literal
 
 ### RuneSet: The Set Primitive
 
-`RuneIn` and `RuneNotIn` take a `RuneSet`, a set of Unicode code points with the standard set operations lifted onto operators. Keeping the set type separate from the rule types means character-class expressions compose the way set expressions do in ordinary code instead of having to wrap every union inside an `Or(...)`.
+`OneOf` and `NoneOf` take a `RuneSet`, a set of Unicode code points with the standard set operations lifted onto operators. Keeping the set type separate from the rule types means character-class expressions compose the way set expressions do in ordinary code instead of having to wrap every union inside an `Or(...)`.
 
 ```csharp
 public readonly struct RuneSet
@@ -295,15 +295,15 @@ RuneSet.Ascii.Identifier & ~RuneSet.Runes("_")
 ~(RuneSet.Whitespace | RuneSet.Category(UnicodeCategory.Control))
 ```
 
-`RuneIn(~X)` and `RuneNotIn(X)` match the same single-rune tokens, so at the outermost level the complement operator is redundant with `RuneNotIn`. The reason complement exists on the class is that `RuneNotIn` is a rule and cannot be fed back into another set expression. `~X` is a class and can be intersected, unioned, or handed to another `RuneIn` / `RuneNotIn`.
+`OneOf(~X)` and `NoneOf(X)` match the same single-rune tokens, so at the outermost level the complement operator is redundant with `NoneOf`. The reason complement exists on the class is that `NoneOf` is a rule and cannot be fed back into another set expression. `~X` is a class and can be intersected, unioned, or handed to another `OneOf` / `NoneOf`.
 
 Intersection and complement are niche compared to union. Most grammars use `|` dozens of times and never touch the other two. They earn their spot because they are cheap (sorted-range intersection and complement are single passes), and because when an author does need set difference, hand-enumerating the ranges goes stale the moment Unicode adds a new letter to the base class.
 
 `RuneSet.Letters` and its siblings cover the full Unicode character set: `Letters` matches `é`, `漢`, `Ω`, `ж`, and every other letter in every script Unicode knows about. Grammars that specifically want ASCII-only reach for `RuneSet.Ascii.Letters` to say so explicitly. The split is deliberate because the two are different defaults. A programming-language keyword parser wants ASCII identifiers so a stray `café` does not parse as a variable name. A text-processing grammar wants the full Unicode set so combining-mark scripts work at all.
 
-`Contains(Rune)` is the predicate every `RuneIn` / `RuneNotIn` match resolves to, exposed as public so user-defined rules can reuse the same predicate without going through the rule wrapper.
+`Contains(Rune)` is the predicate every `OneOf` / `NoneOf` match resolves to, exposed as public so user-defined rules can reuse the same predicate without going through the rule wrapper.
 
-Internally a `RuneSet` is a sorted list of rune ranges. Union, intersection, and complement are all linear in the number of ranges, which is small for typical grammars (letters and digits are a handful of ranges each). Construction-time evaluation folds compound expressions into a single range list, so `Letters | Digits | Runes("_")` is one flat structure by the time a `RuneIn` rule sees it.
+Internally a `RuneSet` is a sorted list of rune ranges. Union, intersection, and complement are all linear in the number of ranges, which is small for typical grammars (letters and digits are a handful of ranges each). Construction-time evaluation folds compound expressions into a single range list, so `Letters | Digits | Runes("_")` is one flat structure by the time a `OneOf` rule sees it.
 
 ### The Non-Content Leaves
 
@@ -331,7 +331,7 @@ foreach (var expected in _tokenizedExpected)
 tx.Commit();
 return makeSymbolFrom(...);
 
-// RuneIn(RuneSet cc)
+// OneOf(RuneSet cc)
 using var tx = lexer.BeginTransaction();
 var token = lexer.Read();
 var it = token.Chars.EnumerateRunes();
@@ -369,14 +369,14 @@ Under `GraphemeLexer`, a multi-rune grapheme like 👨‍👩‍👧‍👦 arri
 - **`Token("👨‍👩‍👧‍👦")`** matches one grapheme by exact content. Construction-time validation rejects arguments that are not exactly one grapheme, so `Token("ab")` throws at grammar-build time instead of failing silently at parse time.
 - **`Literal("👨‍👩‍👧‍👦 and friends")`** matches a sequence of graphemes by exact content. Same pre-tokenize-then-lockstep logic as `Token`. The difference is that `Literal` accepts any length.
 - **`AnyToken()`** matches any token including multi-rune ones. Useful when the grammar is streaming text through as opaque content ("an identifier is any non-delimiter character").
-- **`RuneNotIn(someClass)`** matches multi-rune tokens because they are not in any single-rune class. This is the mechanism behind the pass-through-text recipe.
+- **`NoneOf(someClass)`** matches multi-rune tokens because they are not in any single-rune class. This is the mechanism behind the pass-through-text recipe.
 
 What you *cannot* do:
 
 - **Define a `RuneSet` that includes specific multi-rune sequences.** A `RuneSet` is a set of code points, not a set of sequences. If you want to match "any of these specific multi-rune sequences," express it as `Or(Token(a), Token(b), Token(c))`, not as a character class.
-- **Test "is this grapheme a letter?" with `RuneIn(RuneSet.Letters)`** when the grapheme is multi-rune. The class is defined over single runes, so any multi-rune grapheme is outside it. If you want "any identifier character, including combining marks as part of a letter sequence," either switch to `RuneLexer` and consume each rune individually, or include Mark categories in a broader character class and accept that the grammar will capture combining marks as separate tokens under `RuneLexer`.
+- **Test "is this grapheme a letter?" with `OneOf(RuneSet.Letters)`** when the grapheme is multi-rune. The class is defined over single runes, so any multi-rune grapheme is outside it. If you want "any identifier character, including combining marks as part of a letter sequence," either switch to `RuneLexer` and consume each rune individually, or include Mark categories in a broader character class and accept that the grammar will capture combining marks as separate tokens under `RuneLexer`.
 
-The split that remains is between rune-set tests (`RuneIn`, `RuneNotIn`) and content-match leaves (`Token`, `Literal`). The set tests are defined over single runes by construction (a `RuneSet` is a set of code points), and the content-match leaves compare raw `Chars` spans, so they handle multi-rune graphemes naturally. A glance at a rule tells you which half of the API it lives in.
+The split that remains is between rune-set tests (`OneOf`, `NoneOf`) and content-match leaves (`Token`, `Literal`). The set tests are defined over single runes by construction (a `RuneSet` is a set of code points), and the content-match leaves compare raw `Chars` spans, so they handle multi-rune graphemes naturally. A glance at a rule tells you which half of the API it lives in.
 
 ## Greedy Repetition, No Repetition Backtracking
 
@@ -385,7 +385,7 @@ PEG parsers backtrack on alternatives (`Or` tries each branch in order until one
 The practical consequence is the most common trip-up when moving from regex to PEG. Consider:
 
 ```csharp
-var rule = And(OneOrMore(RuneIn(RuneSet.Letters)), Token('a'));
+var rule = And(OneOrMore(OneOf(RuneSet.Letters)), Token('a'));
 var result = rule.Parse("aaa");
 ```
 
@@ -451,7 +451,7 @@ A naive post-read implementation would record at 1 instead of 0, which equals `i
 
 ### Three Cases
 
-**Single-token leaves** (`TokenRule` single-rune, `RuneInRule`, `EofRule`) open a transaction, read one token, and fail if the token doesn't match. The pre-read position is exactly `transaction.StartPosition`, which the `Lexer.Transaction` struct exposes for this purpose. No extra locals, no separate state: the transaction already knows.
+**Single-token leaves** (`TokenRule` single-rune, `OneOfRule`, `EofRule`) open a transaction, read one token, and fail if the token doesn't match. The pre-read position is exactly `transaction.StartPosition`, which the `Lexer.Transaction` struct exposes for this purpose. No extra locals, no separate state: the transaction already knows.
 
 **Multi-token leaves** (`TokenRule`'s lockstep loop for multi-rune graphemes under `RuneLexer`, `LiteralRule`) read a sequence of tokens and fail when any one of them mismatches. The position is the start of the *specific* failing token, not the start of the whole attempt. A `Literal("abc")` that matches "ab" and fails on the third token reports offset 2, not offset 0. These rules track a per-iteration `tokenStart` local inside the loop.
 

@@ -12,12 +12,12 @@ public class SettingExampleTests
         var settingName = Identifier();
 
         // A double-quoted string: opening ", a body that stops at the
-        // next ", then the closing ". The StringChars leaf scans the
+        // next ", then the closing ". The StringBody leaf scans the
         // body in one tight loop. The Tokens default to FlattenType.Delete
         // so the quotes themselves don't appear in the flattened match.
         var quotedString = And(
             Token('"'),
-            StringChars(RuneSet.Runes("\"")),
+            StringBody(RuneSet.Runes("\"")),
             Token('"'));
 
         var settingValue = Or(

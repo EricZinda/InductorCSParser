@@ -5,7 +5,7 @@ using static InductorParser.Rules;
 namespace InductorParser.Tests;
 
 // End-to-end checks that the pass-through-text primitives
-// (RuneNotIn, AnyToken, Not, Peek) compose into the two idioms the
+// (NoneOf, AnyToken, Not, Peek) compose into the two idioms the
 // backlog called out: delimiter-based stops and rule-based stops.
 // If one of the primitives regresses, a unit test will fail first.
 // This fixture catches the interaction failures that only show up
@@ -16,13 +16,13 @@ public class PassThroughTextTests
     [Test]
     public void Line_comment_grammar_parses_everything_up_to_newline()
     {
-        // Delimiter-based stop: RuneNotIn(RuneSet.Single('\n')) sweeps up
+        // Delimiter-based stop: NoneOf(RuneSet.Single('\n')) sweeps up
         // every character that isn't a newline. Stopping at '\n' falls out
         // naturally from ZeroOrMore stopping when the inner fails.
         //
         // WARNING: this example is LF-only on purpose. Under the default
         // GraphemeLexer, "\r\n" is one grapheme cluster, so Token('\n')
-        // does NOT match a CRLF line ending and RuneNotIn silently
+        // does NOT match a CRLF line ending and NoneOf silently
         // swallows the CRLF grapheme as body content. If you are copying
         // this idiom for a line-based grammar that must accept Windows
         // line endings, add Literal("\r\n") as an explicit alternative
@@ -32,7 +32,7 @@ public class PassThroughTextTests
         var lineComment = And(
             Token('/'),
             Token('/'),
-            ZeroOrMore(RuneNotIn(RuneSet.Single('\n'))),
+            ZeroOrMore(NoneOf(RuneSet.Single('\n'))),
             Token('\n'));
 
         // PreserveFlattenWrappers keeps the Token('/') leaves and the
@@ -49,14 +49,14 @@ public class PassThroughTextTests
     [Test]
     public void Line_comment_grammar_handles_emoji_in_the_body_under_grapheme_lexer()
     {
-        // The whole point of preferring RuneNotIn over a hand-rolled
+        // The whole point of preferring NoneOf over a hand-rolled
         // "any character except these" character class: a multi-rune
-        // grapheme like 🎸 passes RuneNotIn because it isn't any single
+        // grapheme like 🎸 passes NoneOf because it isn't any single
         // rune in the stop set. The comment body scoops it up cleanly.
         var lineComment = And(
             Token('/'),
             Token('/'),
-            ZeroOrMore(RuneNotIn(RuneSet.Single('\n'))),
+            ZeroOrMore(NoneOf(RuneSet.Single('\n'))),
             Token('\n'));
 
         var result = lineComment.Parse("// playing \uD83C\uDFB8 tonight\n");
@@ -69,7 +69,7 @@ public class PassThroughTextTests
     {
         // Rule-based stop: ZeroOrMore(And(Not(stopRule), AnyToken())) is
         // how you express "match until a multi-character terminator
-        // would fire." A simple RuneNotIn can't express this because
+        // would fire." A simple NoneOf can't express this because
         // the stop condition spans two characters.
         var closeMarker = And(Token('*'), Token('/'));
         var blockComment = And(
@@ -96,7 +96,7 @@ public class PassThroughTextTests
         var keywordIf = And(
             Token('i'),
             Token('f'),
-            Peek(Not(RuneIn(RuneSet.Letters))));
+            Peek(Not(OneOf(RuneSet.Letters))));
 
         var justIfResult = And(keywordIf, ZeroOrMore(AnyToken())).Parse("if x");
         Assert.That(justIfResult.Success, Is.True, justIfResult.ErrorMessage);

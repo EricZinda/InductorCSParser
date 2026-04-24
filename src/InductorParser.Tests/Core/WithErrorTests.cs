@@ -11,7 +11,7 @@ public class WithErrorTests
     public void WithError_message_appears_when_that_rule_is_deepest_failure()
     {
         // Name must be letters only. WithError gives the user-friendly message.
-        var settingName = OneOrMore(RuneIn(RuneSet.Letters))
+        var settingName = OneOrMore(OneOf(RuneSet.Letters))
             .WithError("Expected a setting name");
 
         var document = And(settingName, Token('='), Token(';'));
@@ -21,7 +21,7 @@ public class WithErrorTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage, Is.EqualTo("Expected a setting name"));
-        // RuneIn records at pre-read offset 0 with null message. OneOrMore
+        // OneOf records at pre-read offset 0 with null message. OneOrMore
         // then claims the slot with "Expected a setting name" via the
         // equal-depth rule.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
@@ -30,7 +30,7 @@ public class WithErrorTests
     [Test]
     public void Generic_error_when_no_rule_set_WithError()
     {
-        var document = And(OneOrMore(RuneIn(RuneSet.Letters)), Token('='), Token(';'));
+        var document = And(OneOrMore(OneOf(RuneSet.Letters)), Token('='), Token(';'));
 
         var result = document.Parse("ab");
 
@@ -47,8 +47,8 @@ public class WithErrorTests
     {
         // Two rules with different WithError messages. The one whose failure
         // is deepest in the input should be the one the user sees.
-        var name = OneOrMore(RuneIn(RuneSet.Letters)).WithError("need letters");
-        var digits = OneOrMore(RuneIn(RuneSet.Digits)).WithError("need digits");
+        var name = OneOrMore(OneOf(RuneSet.Letters)).WithError("need letters");
+        var digits = OneOrMore(OneOf(RuneSet.Digits)).WithError("need digits");
         var doc = And(name, Token('='), digits);
 
         // "ab=x" reaches the digits rule before failing (x is not a digit).
@@ -58,7 +58,7 @@ public class WithErrorTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage, Is.EqualTo("need digits"));
-        // digits RuneIn records at pre-read offset 3 (start of 'x').
+        // digits OneOf records at pre-read offset 3 (start of 'x').
         // OneOrMore claims the message slot there with "need digits".
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
     }

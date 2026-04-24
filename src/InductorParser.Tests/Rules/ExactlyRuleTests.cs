@@ -112,16 +112,16 @@ public class ExactlyRuleTests
         // trace appears, unlike OneOrMore/BetweenInclusive which probe
         // past their successful count.
         var sink = NewSink();
-        Exactly(3, RuneIn(RuneSet.Ascii.Letters)).Parse("abc",
+        Exactly(3, OneOf(RuneSet.Ascii.Letters)).Parse("abc",
             new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | RuneIn: found 'a', wanted one of '[A-Z,a-z]'",
+            "      SUCC | OneOf: found 'a', wanted one of '[A-Z,a-z]'",
             "      Lexer.Read: 'b', Consumed: 2",
-            "      SUCC | RuneIn: found 'b', wanted one of '[A-Z,a-z]'",
+            "      SUCC | OneOf: found 'b', wanted one of '[A-Z,a-z]'",
             "      Lexer.Read: 'c', Consumed: 3",
-            "      SUCC | RuneIn: found 'c', wanted one of '[A-Z,a-z]'",
+            "      SUCC | OneOf: found 'c', wanted one of '[A-Z,a-z]'",
             "   SUCC | Exactly[3]: count= 3"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));

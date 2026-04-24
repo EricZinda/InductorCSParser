@@ -240,7 +240,7 @@ public class BacklogGrammarTests
     //   HrSpaced:   7-9x
     //   Paragraph: 10-22x
     // Dispatch helps most when an Or / composite has many branches and a
-    // disjoint first-char set. These rules are simpler (one RuneIn or one
+    // disjoint first-char set. These rules are simpler (one OneOf or one
     // Token at the head), so the composite transaction overhead on the
     // inner path is what dominates, the same architectural bottleneck as
     // ChordGrammar's remaining gap. A separate backlog item will target

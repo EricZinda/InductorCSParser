@@ -154,18 +154,18 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_trace_success_produces_expected_output()
     {
         var sink = NewSink();
-        BetweenInclusive(2, 4, RuneIn(RuneSet.Ascii.Letters))
+        BetweenInclusive(2, 4, OneOf(RuneSet.Ascii.Letters))
             .Parse("abc", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | RuneIn: found 'a', wanted one of '[A-Z,a-z]'",
+            "      SUCC | OneOf: found 'a', wanted one of '[A-Z,a-z]'",
             "      Lexer.Read: 'b', Consumed: 2",
-            "      SUCC | RuneIn: found 'b', wanted one of '[A-Z,a-z]'",
+            "      SUCC | OneOf: found 'b', wanted one of '[A-Z,a-z]'",
             "      Lexer.Read: 'c', Consumed: 3",
-            "      SUCC | RuneIn: found 'c', wanted one of '[A-Z,a-z]'",
+            "      SUCC | OneOf: found 'c', wanted one of '[A-Z,a-z]'",
             "      Lexer.Read: '<EOF>', Consumed: 3",
-            "      FAIL | RuneIn: found '<EOF>', wanted one of '[A-Z,a-z]'",
+            "      FAIL | OneOf: found '<EOF>', wanted one of '[A-Z,a-z]'",
             "      Lexer.RecordFailure: new deepest failure at char 3",
             "   SUCC | BetweenInclusive[2..4]: count= 3"
         );

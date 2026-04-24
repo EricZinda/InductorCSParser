@@ -78,7 +78,7 @@ public readonly ref struct Token
     // RuneValue returns the rune value when the token is exactly one rune,
     // or -1 otherwise. EOF returns -1. Multi-rune grapheme tokens (the
     // family emoji 👨‍👩‍👧‍👦 under GraphemeLexer, for example) also return
-    // -1, so single-rune tests like TokenRule and RuneInRule fail correctly
+    // -1, so single-rune tests like TokenRule and OneOfRule fail correctly
     // without each caller having to special-case the multi-rune path.
     // Returned as int rather than System.Text.Rune because -1 is the "no
     // single rune here" marker, and Rune has no invalid state.

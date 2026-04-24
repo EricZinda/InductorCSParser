@@ -10,7 +10,7 @@ namespace InductorParser;
 
 // Rule is the base of everything in a grammar. A grammar is a tree of Rule
 // objects: composites like And/Or/OneOrMore wrap other Rules, leaves like
-// Token/RuneIn sit at the bottom, and the root is whatever Rule you
+// Token/OneOf sit at the bottom, and the root is whatever Rule you
 // hand to Parse(). Calling Parse on the root walks the tree and tries to
 // match the input.
 //
@@ -24,7 +24,7 @@ namespace InductorParser;
 // Rule construction is fluent: Modifier methods like .As(name) and
 // .Flatten(type) return the same Rule so it can read as a chain:
 //
-//     var settingName = OneOrMore(RuneIn(RuneClass.Letters))
+//     var settingName = OneOrMore(OneOf(RuneSet.Letters))
 //         .As(nameof(settingName))
 //         .Flatten(FlattenType.Preserve);
 //
@@ -178,7 +178,7 @@ public abstract class Rule
 
     // The child rules this rule is built from. Composites (And, Or, OneOrMore,
     // etc.) pass their children to the base constructor and access them via
-    // this property. Leaf rules (Token, RuneIn, Eof) don't pass any children,
+    // this property. Leaf rules (Token, OneOf, Eof) don't pass any children,
     // and the constructor below swaps in the shared empty list (NoChildren)
     // when that happens. Compile walks this list to assign ids and seal every
     // reachable rule.

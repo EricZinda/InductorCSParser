@@ -24,7 +24,7 @@ var settingName = Identifier().As("name");
 // "Rune" is the .Net term for Unicode Code Point
 var quotedString = And(
     Token('"'),
-    StringChars(stopAt=RuneSet.Runes("\"")),
+    StringBody(stopAt=RuneSet.Runes("\"")),
     Token('"'));
 
 var settingValue = Or(
@@ -102,7 +102,7 @@ Regex: ^\d+$
 Inductor Parser:
 
 var numbersOnly = And(
-    OneOrMore(RuneIn(RuneSet.Digits)),
+    OneOrMore(OneOf(RuneSet.Digits)),
     Eof()
 );
 
@@ -134,7 +134,7 @@ The Inductor Parser avoids this and is more readable as well:
 
 ```csharp
 var validator = And(
-    OneOrMore(RuneIn(RuneSet.Ascii.Letters | RuneSet.Ascii.Digits)),
+    OneOrMore(OneOf(RuneSet.Ascii.Letters | RuneSet.Ascii.Digits)),
     Literal("@example.com"),
     Eof()
 );

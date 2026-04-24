@@ -37,20 +37,20 @@ Uses beyond identifiers:
 ```csharp
 // Accept any grapheme whose runes are all ASCII letters. Rejects "é"
 // (not ASCII) and decomposed "é" (two runes) alike.
-var asciiOnlyLetter = WithinGrapheme(RuneIn(RuneSet.Ascii.Letters));
+var asciiOnlyLetter = WithinGrapheme(OneOf(RuneSet.Ascii.Letters));
 
 // Emoji-with-modifier matcher: one base emoji rune optionally followed
 // by skin-tone / ZWJ runes, all as one grapheme.
 var emojiCluster = WithinGrapheme(And(
-    RuneIn(emojiBaseSet),
-    ZeroOrMore(RuneIn(skinToneOrZwjSet))
+    OneOf(emojiBaseSet),
+    ZeroOrMore(OneOf(skinToneOrZwjSet))
 ));
 
 // Hangul syllable expressed as jamo: leading + medial + optional trailing.
 var jamoCluster = WithinGrapheme(And(
-    RuneIn(leadingJamo),
-    RuneIn(medialJamo),
-    Optional(RuneIn(trailingJamo))
+    OneOf(leadingJamo),
+    OneOf(medialJamo),
+    Optional(OneOf(trailingJamo))
 ));
 ```
 
@@ -175,7 +175,7 @@ static readonly RuneSet Greek =
     RuneSet.Range(new Rune(0x0370), new Rune(0x03FF));
 
 public static readonly Rule LatinIdentifier =
-    OneOrMore(RuneIn(LatinLetters | RuneSet.Ascii.Digits | RuneSet.Runes("_")));
+    OneOrMore(OneOf(LatinLetters | RuneSet.Ascii.Digits | RuneSet.Runes("_")));
 ```
 
 For full UAX #31 Script_Extensions-based detection (the standard algorithm for "is this identifier mixing scripts in a suspicious way"), use a dedicated library. The parser's `RuneSet` is the coarse-grained control.
@@ -201,8 +201,8 @@ If you are doing emoji-sensitive parsing, be careful: variation selectors are pa
 Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 rule GB3), so `GraphemeLexer` hands the parser one two-char token whenever it sees a Windows line ending. This bites any line-based grammar that tries to match or stop on a bare `\n`:
 
 - `Token('\n')` matches a one-grapheme token whose content is exactly `'\n'`. The CRLF grapheme has content `"\r\n"`, so `Token('\n')` does *not* match it.
-- `RuneIn(RuneSet.Runes("\n"))` or `RuneIn(RuneSet.Runes("\r\n"))` matches a single-rune token whose rune is in the set. A CRLF grapheme is two runes, so it matches no single-rune set. It fails `RuneIn` regardless of what runes you put in the set.
-- `RuneNotIn(RuneSet.Runes("\n"))` does the opposite: multi-rune tokens pass `RuneNotIn` unconditionally. `ZeroOrMore(RuneNotIn(stopSet))` used to scan "everything up to a newline" will greedily swallow the terminating CRLF as body content instead of stopping at it, then the terminator fails because there is nothing left.
+- `OneOf(RuneSet.Runes("\n"))` or `OneOf(RuneSet.Runes("\r\n"))` matches a single-rune token whose rune is in the set. A CRLF grapheme is two runes, so it matches no single-rune set. It fails `OneOf` regardless of what runes you put in the set.
+- `NoneOf(RuneSet.Runes("\n"))` does the opposite: multi-rune tokens pass `NoneOf` unconditionally. `ZeroOrMore(NoneOf(stopSet))` used to scan "everything up to a newline" will greedily swallow the terminating CRLF as body content instead of stopping at it, then the terminator fails because there is nothing left.
 
 `RuneLexer` doesn't have this problem. It emits `'\r'` and `'\n'` as separate tokens. The bite is `GraphemeLexer`-specific, which is the default.
 
@@ -212,18 +212,18 @@ Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 ru
 // Match any of LF, CR, or the CRLF grapheme.
 private static readonly Rule LineBreak = Or(
     Literal("\r\n"),
-    RuneIn(RuneSet.Runes("\r\n"))
+    OneOf(RuneSet.Runes("\r\n"))
 );
 
 // Whitespace that includes newlines: put the Literal first so the
 // longer alternative commits before the single-rune fallback.
 public static readonly Rule OptionalWhitespace = ZeroOrMore(Or(
     Literal("\r\n"),
-    RuneIn(RuneSet.Ascii.Whitespace)
+    OneOf(RuneSet.Ascii.Whitespace)
 ));
 
 // Scanning "up to end of line": use a rule-based stop with Not(LineBreak),
-// not RuneNotIn. RuneNotIn would silently eat the CRLF grapheme.
+// not NoneOf. NoneOf would silently eat the CRLF grapheme.
 public static readonly Rule LineComment = And(
     Token('%'),
     ZeroOrMore(And(Not(LineBreak), AnyToken())),
@@ -236,8 +236,8 @@ The three anti-patterns to avoid in any line-based grammar:
 ```csharp
 // BROKEN on Windows line endings under GraphemeLexer.
 And(..., Token('\n'))                             // fails on CRLF input
-ZeroOrMore(RuneIn(RuneSet.Runes("\r\n")))        // skips zero CRLF graphemes
-ZeroOrMore(RuneNotIn(RuneSet.Single('\n')))      // swallows the CRLF terminator
+ZeroOrMore(OneOf(RuneSet.Runes("\r\n")))        // skips zero CRLF graphemes
+ZeroOrMore(NoneOf(RuneSet.Single('\n')))      // swallows the CRLF terminator
 ```
 
 If a grammar is a port of regex semantics that explicitly targets LF-only (some Markdown-style formats, for instance), the failure on CRLF is faithful to the source and you can leave `Token('\n')` as-is. Mark the grammar with a comment so the next reader knows the LF-only behavior is intentional, not an oversight.

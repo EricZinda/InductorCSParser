@@ -151,16 +151,16 @@ public class AtMostRuleTests
         // that fails on 'c' happens before the third iteration gets a
         // chance to run. AtMost reports count=2 on the success line.
         var sink = NewSink();
-        AtMost(3, RuneIn(RuneSet.Ascii.Digits)).Parse("12c",
+        AtMost(3, OneOf(RuneSet.Ascii.Digits)).Parse("12c",
             new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: '1', Consumed: 1",
-            "      SUCC | RuneIn: found '1', wanted one of '[0-9]'",
+            "      SUCC | OneOf: found '1', wanted one of '[0-9]'",
             "      Lexer.Read: '2', Consumed: 2",
-            "      SUCC | RuneIn: found '2', wanted one of '[0-9]'",
+            "      SUCC | OneOf: found '2', wanted one of '[0-9]'",
             "      Lexer.Read: 'c', Consumed: 3",
-            "      FAIL | RuneIn: found 'c', wanted one of '[0-9]'",
+            "      FAIL | OneOf: found 'c', wanted one of '[0-9]'",
             "      Lexer.RecordFailure: new deepest failure at char 2",
             "   SUCC | AtMost[3]: count= 2"
         );

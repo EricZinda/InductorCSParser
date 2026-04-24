@@ -33,7 +33,7 @@ public static class HtmlGrammar
         RuneSet.Ascii.Letters | RuneSet.Ascii.Digits;
 
     private static readonly Rule OptionalWs =
-        ZeroOrMore(RuneIn(WhitespaceChars));
+        ZeroOrMore(OneOf(WhitespaceChars));
 
     // TagName. Deliberate deviation from the C++ port. HtmlParser.h
     // restricts tag names to ASCII alphanumerics, which locks out common
@@ -53,8 +53,8 @@ public static class HtmlGrammar
         RuneSet.Ascii.Letters | RuneSet.Ascii.Digits | RuneSet.Runes("_-.");
 
     public static readonly Rule TagName = And(
-        RuneIn(TagNameStartChars),
-        ZeroOrMore(RuneIn(TagNameContinueChars))
+        OneOf(TagNameStartChars),
+        ZeroOrMore(OneOf(TagNameContinueChars))
     );
 
     // Attribute name: one or more characters that aren't whitespace, ", ',
@@ -62,7 +62,7 @@ public static class HtmlGrammar
     // rules in the spec aren't enforced here (the C++ parser doesn't
     // enforce them either). The visible ASCII excludes are what matters.
     public static readonly Rule AttributeName =
-        OneOrMore(RuneNotIn("\r\n\t \"'>/="));
+        OneOrMore(NoneOf("\r\n\t \"'>/="));
 
     // Empty attribute: just the name, no "=value".
     public static readonly Rule EmptyAttribute = AttributeName;
@@ -74,7 +74,7 @@ public static class HtmlGrammar
         OptionalWs,
         Token('='),
         OptionalWs,
-        OneOrMore(RuneNotIn("\r\n\t \"'<>/=`"))
+        OneOrMore(NoneOf("\r\n\t \"'<>/=`"))
     );
 
     public static readonly Rule SingleQuotedAttributeValueAttribute = And(
@@ -83,7 +83,7 @@ public static class HtmlGrammar
         Token('='),
         OptionalWs,
         Token('\''),
-        StringChars(RuneSet.Runes("'")),
+        StringBody(RuneSet.Runes("'")),
         Token('\'')
     );
 
@@ -93,7 +93,7 @@ public static class HtmlGrammar
         Token('='),
         OptionalWs,
         Token('"'),
-        StringChars(RuneSet.Runes("\"")),
+        StringBody(RuneSet.Runes("\"")),
         Token('"')
     );
 
@@ -152,7 +152,7 @@ public static class HtmlGrammar
     // <!-- anything but "-->" -->
     public static readonly Rule Comment = And(
         Literal("<!--"),
-        StringChars(Literal("-->")),
+        StringBody(Literal("-->")),
         Literal("-->")
     );
 
@@ -192,12 +192,12 @@ public static class HtmlGrammar
     //     more work on the 99%-of-runes path where the stopper doesn't
     //     match.
     //
-    // General pattern: StringChars's stopper is the shortest unambiguous
+    // General pattern: StringBody's stopper is the shortest unambiguous
     // prefix of the terminator. The outer And re-matches the full
     // terminator to consume it.
     public static readonly Rule NonReplaceableCharacterElement = And(
         StartStyleTag,
-        StringChars(Literal("</style")),
+        StringBody(Literal("</style")),
         EndStyleTag
     );
 
@@ -213,7 +213,7 @@ public static class HtmlGrammar
         StartTag,
         ZeroOrMore(Or(
             ElementForward,
-            OneOrMore(RuneNotIn("<"))
+            OneOrMore(NoneOf("<"))
         )),
         EndTag
     );
@@ -240,7 +240,7 @@ public static class HtmlGrammar
     // either.
     public static readonly Rule Document = And(
         ZeroOrMore(Or(
-            RuneIn(WhitespaceChars),
+            OneOf(WhitespaceChars),
             Comment
         )),
         ElementForward,

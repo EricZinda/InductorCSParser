@@ -570,6 +570,77 @@ public class RuneSetTests
         Assert.Throws<ArgumentException>(() => RuneSet.Runes(malformed));
     }
 
+    [Test]
+    public void Runes_with_multi_rune_emoji_grapheme_throws()
+    {
+        // Skin-tone-modified thumbs-up: U+1F44D U+1F3FD. One grapheme under
+        // UAX #29, two runes. A RuneSet holds single scalars, so this
+        // can't be one element of the set the caller is asking to build.
+        // The validation in Runes() refuses it at construction time
+        // rather than letting the caller walk away with a broken set
+        // that silently matches neither the grapheme nor anything else
+        // useful.
+        var thumbsUpSkinTone = "\U0001F44D\U0001F3FD";
+
+        var exception = Assert.Throws<ArgumentException>(() => RuneSet.Runes(thumbsUpSkinTone));
+        Assert.That(exception!.Message, Does.Contain("multi-rune grapheme"));
+        Assert.That(exception.Message, Does.Contain("U+1F44D"));
+        Assert.That(exception.Message, Does.Contain("U+1F3FD"));
+    }
+
+    [Test]
+    public void Runes_with_decomposed_accent_throws()
+    {
+        // "e" + combining acute in decomposed form: U+0065 + U+0301.
+        // One grapheme, two runes. Built with explicit escapes so the
+        // source file's encoding or an editor's normalization can't
+        // silently rewrite it to the precomposed single-rune form
+        // U+00E9.
+        var decomposedE = "é";
+
+        var exception = Assert.Throws<ArgumentException>(() => RuneSet.Runes(decomposedE));
+        Assert.That(exception!.Message, Does.Contain("multi-rune grapheme"));
+        Assert.That(exception.Message, Does.Contain("U+0065"));
+        Assert.That(exception.Message, Does.Contain("U+0301"));
+    }
+
+    [Test]
+    public void Runes_with_single_scalar_non_bmp_works()
+    {
+        // 😀 is U+1F600, a single Unicode scalar in the supplementary
+        // plane. One rune, one grapheme. The validation should let
+        // this through and build a one-element set.
+        var grinningFace = "\U0001F600";
+        var set = RuneSet.Runes(grinningFace);
+
+        Assert.That(set.Contains(0x1F600), Is.True);
+        Assert.That(set.Contains('A'), Is.False);
+    }
+
+    [Test]
+    public void Runes_with_crlf_is_allowed_as_two_runes()
+    {
+        // CRLF is one grapheme per UAX #29 but nobody calling
+        // Runes("\r\n") means "the CRLF grapheme as a unit." The
+        // validation special-cases CR+LF and treats it as two
+        // separate scalars, matching the common "line-terminator
+        // runes" idiom and the library's own RuneSet.Ascii.Whitespace.
+        var set = RuneSet.Runes("\r\n");
+
+        Assert.That(set.Contains('\r'), Is.True);
+        Assert.That(set.Contains('\n'), Is.True);
+    }
+
+    [Test]
+    public void OneOf_with_multi_rune_grapheme_throws()
+    {
+        // OneOf(string) delegates to RuneSet.Runes, so the grapheme
+        // check fires there too.
+        var thumbsUpSkinTone = "\U0001F44D\U0001F3FD";
+
+        Assert.Throws<ArgumentException>(() => Rules.OneOf(thumbsUpSkinTone));
+    }
+
     // ToString ---------------------------------------------------------------
 
     [Test]

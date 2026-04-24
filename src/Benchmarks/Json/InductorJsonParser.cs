@@ -22,11 +22,11 @@ public static class InductorJsonParser
 
     static InductorJsonParser()
     {
-        var simpleEscape = RuneIn(RuneSet.Runes("\"\\/bfnrt"));
-        var hexDigit = RuneIn(RuneSet.Ascii.Digits | RuneSet.Range('a', 'f') | RuneSet.Range('A', 'F'));
+        var simpleEscape = OneOf(RuneSet.Runes("\"\\/bfnrt"));
+        var hexDigit = OneOf(RuneSet.Ascii.Digits | RuneSet.Range('a', 'f') | RuneSet.Range('A', 'F'));
         var unicodeEscape = And(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
         var escapeEnd = Or(simpleEscape, unicodeEscape).Flatten(FlattenType.Delete);
-        var stringBody = StringChars(stopAt: RuneSet.Runes("\""), escapeStart: new Rune('\\'), escapeEnd: escapeEnd);
+        var stringBody = StringBody(stopAt: RuneSet.Runes("\""), escapeStart: new Rune('\\'), escapeEnd: escapeEnd);
         JsonString = And(Token('"'), stringBody, Token('"')).As("string");
 
         var value = new LateBoundRule("value");

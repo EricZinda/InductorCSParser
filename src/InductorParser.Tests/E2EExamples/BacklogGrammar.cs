@@ -34,12 +34,12 @@ public static class BacklogGrammar
     // Our inputs are already split on '\n' by the caller in most cases,
     // but the corpus still feeds raw multi-line strings, so be explicit.
     private static readonly Rule RestOfLine =
-        ZeroOrMore(RuneNotIn("\n"));
+        ZeroOrMore(NoneOf("\n"));
 
     // \s? : optional whitespace grapheme. Uses RuneSet.Whitespace so we
     // pick up the same broad class .NET's Regex \s uses.
     private static readonly Rule OptionalOneWhitespace =
-        Optional(RuneIn(RuneSet.Whitespace));
+        Optional(OneOf(RuneSet.Whitespace));
 
     // ^#(?!#)\s?(.*)$
     public static readonly Rule H1Heading = And(
@@ -61,7 +61,7 @@ public static class BacklogGrammar
 
     // ^[-*+]\s?(.*)$
     public static readonly Rule Bullet = And(
-        RuneIn("-*+"),
+        OneOf("-*+"),
         OptionalOneWhitespace,
         RestOfLine,
         Eof()
@@ -69,14 +69,14 @@ public static class BacklogGrammar
 
     // ^[-*+]{3,}$
     public static readonly Rule HrRun = And(
-        AtLeast(3, RuneIn("-*+")),
+        AtLeast(3, OneOf("-*+")),
         Eof()
     );
 
     // ^[-*+]( [-*+]){2,}$
     public static readonly Rule HrSpaced = And(
-        RuneIn("-*+"),
-        AtLeast(2, And(Token(' '), RuneIn("-*+"))),
+        OneOf("-*+"),
+        AtLeast(2, And(Token(' '), OneOf("-*+"))),
         Eof()
     );
 
@@ -99,18 +99,18 @@ public static class BacklogGrammar
 
     private static readonly Rule ParagraphTarget = And(
         Token('\n'),
-        ZeroOrMore(RuneIn(NonNewlineWhitespace)),
+        ZeroOrMore(OneOf(NonNewlineWhitespace)),
         Token('\n')
     );
 
-    // StringChars with a rule-based stopper scans forward peeking
+    // StringBody with a rule-based stopper scans forward peeking
     // ParagraphTarget on each rune. When it matches, the peek rolls
-    // back and StringChars returns, leaving the target for the outer
+    // back and StringBody returns, leaving the target for the outer
     // And to consume. Semantically identical to the manual
     // ZeroOrMore(And(Not(target), AnyToken())) idiom, one rule instead
     // of three.
     public static readonly Rule ParagraphSplit = And(
-        StringChars(ParagraphTarget),
+        StringBody(ParagraphTarget),
         ParagraphTarget,
         ZeroOrMore(AnyToken())
     );

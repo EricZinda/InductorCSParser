@@ -19,7 +19,7 @@ public class BudgetTests
         // No options set: the protective defaults (10M invocations,
         // depth 1000) are in force but neither trips on a plain
         // well-formed parse.
-        var rule = OneOrMore(RuneIn(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Letters));
         var result = rule.Parse("hello");
 
         Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.Success));
@@ -29,13 +29,13 @@ public class BudgetTests
     [Test]
     public void RuleCountLimit_aborts_with_RuleCountLimitExceeded()
     {
-        // OneOrMore(RuneIn) on a long input does roughly two rule
+        // OneOrMore(OneOf) on a long input does roughly two rule
         // invocations per character (OneOrMore once at the outer level
-        // plus one RuneIn per inner iteration). The actual trip happens
+        // plus one OneOf per inner iteration). The actual trip happens
         // on a periodic budget check, so the count when we abort is
         // somewhere past the configured limit, which is fine: the test
         // is asserting the outcome, not the exact trip point.
-        var rule = OneOrMore(RuneIn(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Letters));
         var options = new ParseOptions { RuleCountLimit = 10 };
         var result = rule.Parse(new string('a', 5000), options);
 
@@ -52,7 +52,7 @@ public class BudgetTests
         // skips the rule-count comparison entirely and the parse
         // completes. Proves 0 is a real off switch, not just a value
         // small workloads happen to fit under.
-        var rule = OneOrMore(RuneIn(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Letters));
         var options = new ParseOptions { RuleCountLimit = 0 };
         var result = rule.Parse(new string('a', 5000), options);
 
@@ -100,7 +100,7 @@ public class BudgetTests
         // periodic budget check fires after the deadline. The check
         // interval is 1024, so the input has to be long enough to reach
         // the first periodic check.
-        var rule = OneOrMore(RuneIn(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Letters));
         var options = new ParseOptions
         {
             Timeout = TimeSpan.FromTicks(1),
@@ -120,7 +120,7 @@ public class BudgetTests
         // test above. Setting Timeout to Zero means "no deadline,"
         // matching RuleCountLimit = 0 and MaxDepth = 0. The Stopwatch
         // isn't even allocated.
-        var rule = OneOrMore(RuneIn(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Letters));
         var options = new ParseOptions
         {
             Timeout = TimeSpan.Zero,
@@ -140,7 +140,7 @@ public class BudgetTests
         var cancellation = new ParseCancellation();
         cancellation.Cancel();
 
-        var rule = OneOrMore(RuneIn(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Letters));
         var options = new ParseOptions
         {
             Cancellation = cancellation,
@@ -159,7 +159,7 @@ public class BudgetTests
         // The default Cancellation (null) must not look canceled to the
         // periodic check. Verified here because if we ever forget the
         // null guard, every parse would NRE on the IsCanceled poll.
-        var rule = OneOrMore(RuneIn(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Letters));
         var options = new ParseOptions { Cancellation = null };
         var result = rule.Parse(new string('a', 5000), options);
 
@@ -174,7 +174,7 @@ public class BudgetTests
         // signal" from "the caller wants to cancel."
         var cancellation = new ParseCancellation();
 
-        var rule = OneOrMore(RuneIn(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Letters));
         var options = new ParseOptions { Cancellation = cancellation };
         var result = rule.Parse(new string('a', 5000), options);
 
@@ -190,7 +190,7 @@ public class BudgetTests
         // but the broader rule holds: any grammar/input combination that
         // runs the rule machinery past the configured budget aborts
         // cleanly with RuleCountLimitExceeded instead of hanging.
-        var rule = OneOrMore(OneOrMore(RuneIn(RuneSet.Letters)));
+        var rule = OneOrMore(OneOrMore(OneOf(RuneSet.Letters)));
         var options = new ParseOptions { RuleCountLimit = 5_000 };
         var result = rule.Parse(new string('a', 100_000), options);
 
@@ -207,7 +207,7 @@ public class BudgetTests
         // comes back as 0. The real progress-was-made case is covered by
         // Aborted_result_reflects_deepest_progress_when_failures_recorded
         // below.
-        var rule = OneOrMore(RuneIn(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Letters));
         var input = new string('a', 5000);
         var options = new ParseOptions { RuleCountLimit = 10 };
         var result = rule.Parse(input, options);

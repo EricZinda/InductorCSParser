@@ -7,10 +7,10 @@ namespace InductorParser;
 // Matches one token if it's a single rune that belongs to the given
 // RuneSet. Under GraphemeLexer a multi-rune grapheme (skin-toned
 // emoji, ZWJ sequences, CJK + combining mark) fails because it isn't
-// a single code point. EOF also fails. RuneNotInRule is the mirror:
+// a single code point. EOF also fails. NoneOfRule is the mirror:
 // same rule, opposite membership test (one rune whose value is NOT
 // in the set).
-internal sealed class RuneInRule : Rule
+internal sealed class OneOfRule : Rule
 {
     private readonly RuneSet _set;
 
@@ -22,7 +22,7 @@ internal sealed class RuneInRule : Rule
     // iterating on a grammar, not just for one-off debug runs.
     private readonly string _setRendered;
 
-    public RuneInRule(RuneSet runeSet) : base(FlattenType.Preserve)
+    public OneOfRule(RuneSet runeSet) : base(FlattenType.Preserve)
     {
         _set = runeSet;
         _setRendered = runeSet.ToString();
@@ -36,7 +36,7 @@ internal sealed class RuneInRule : Rule
         {
             TraceFailure(lexer,
                 $"found '{(token.IsEof ? "<EOF>" : lexer.Input.Substring(token.Offset, token.Length))}', wanted one of '{_setRendered}'");
-            // Error Positioning: the position of the rune we tried to read. RuneInRule
+            // Error Positioning: the position of the rune we tried to read. OneOfRule
             // does exactly one Read, so the transaction's saved start
             // position is exactly where that rune sits in the input (or
             // equals input.Length on EOF).

@@ -91,15 +91,15 @@ public class NotRuleTests
             And(
                 //   variable (the thing we want to reject at this cursor):
                 //     upper letter, then any letters
-                Not(And(RuneIn(RuneSet.Range('A', 'Z')),
-                        ZeroOrMore(RuneIn(RuneSet.Ascii.Letters)))),
+                Not(And(OneOf(RuneSet.Range('A', 'Z')),
+                        ZeroOrMore(OneOf(RuneSet.Ascii.Letters)))),
                 //   atom (deliberately case-insensitive, mirroring the
                 //   real Prolog atom rule's fall-through branch):
                 //     one or more letters of either case
-                OneOrMore(RuneIn(RuneSet.Ascii.Letters)),
+                OneOrMore(OneOf(RuneSet.Ascii.Letters)),
                 //   optional parenthesised single-letter argument
                 Optional( And(Token('('),
-                              RuneIn(RuneSet.Ascii.Letters),
+                              OneOf(RuneSet.Ascii.Letters),
                               Token(')'))));
 
         // Lowercase-start parses as a functor, with or without arguments.

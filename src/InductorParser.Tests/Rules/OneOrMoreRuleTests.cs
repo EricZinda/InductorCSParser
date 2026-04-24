@@ -102,18 +102,18 @@ public class OneOrMoreRuleTests
         // RecordFailure at position 3 is strictly deeper than the
         // initial 0, so the deepest-failure trace fires.
         var sink = NewSink();
-        OneOrMore(RuneIn(RuneSet.Ascii.Letters)).Parse("abc",
+        OneOrMore(OneOf(RuneSet.Ascii.Letters)).Parse("abc",
             new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | RuneIn: found 'a', wanted one of '[A-Z,a-z]'",
+            "      SUCC | OneOf: found 'a', wanted one of '[A-Z,a-z]'",
             "      Lexer.Read: 'b', Consumed: 2",
-            "      SUCC | RuneIn: found 'b', wanted one of '[A-Z,a-z]'",
+            "      SUCC | OneOf: found 'b', wanted one of '[A-Z,a-z]'",
             "      Lexer.Read: 'c', Consumed: 3",
-            "      SUCC | RuneIn: found 'c', wanted one of '[A-Z,a-z]'",
+            "      SUCC | OneOf: found 'c', wanted one of '[A-Z,a-z]'",
             "      Lexer.Read: '<EOF>', Consumed: 3",
-            "      FAIL | RuneIn: found '<EOF>', wanted one of '[A-Z,a-z]'",
+            "      FAIL | OneOf: found '<EOF>', wanted one of '[A-Z,a-z]'",
             "      Lexer.RecordFailure: new deepest failure at char 3",
             "   SUCC | OneOrMore: count= 3"
         );

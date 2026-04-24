@@ -176,7 +176,7 @@ public class EndOfLineTests
     {
         // Spot-check the set membership directly, independent of the
         // EndOfLine factory. A grammar that wanted "stop at any line
-        // terminator rune" would read this set through RuneNotIn, so
+        // terminator rune" would read this set through NoneOf, so
         // its contents matter on their own.
         var set = RuneSet.SingleRuneLineTerminators;
         Assert.That(set.Contains(0x000A), Is.True, "LF");

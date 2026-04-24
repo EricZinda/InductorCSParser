@@ -31,7 +31,7 @@ public class LexerSwitchTests
         // ASCII input has one UTF-16 Token per rune per grapheme, so the two
         // lexers should produce identical token streams. Parse under both
         // and assert the observable tree is the same.
-        var rule = OneOrMore(RuneIn(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Letters));
 
         var graphemeResult = rule.Parse("hello");
         var runeResult = rule.Parse("hello", new ParseOptions { InputUnit = InputUnit.Rune });
@@ -59,22 +59,22 @@ public class LexerSwitchTests
     // consumes both, so ErrorCharIndex ends up at 2 rather than 0.
     // Tracked by backlog/r000.
     [Test]
-    public void RuneIn_rejects_multi_rune_grapheme_under_grapheme_lexer()
+    public void OneOf_rejects_multi_rune_grapheme_under_grapheme_lexer()
     {
         // SkinTonedWaveGrapheme = waving hand + medium skin tone modifier.
         // Under the grapheme lexer this is one token spanning two runes, so
-        // RuneIn (defined as "the token is exactly one rune in the class")
+        // OneOf (defined as "the token is exactly one rune in the class")
         // must fail even though it would match the first Rune of it.
         //
         // WavingHandRune is put in the allowed set so that the reason for
         // failure is specifically "token spans two runes", not "first rune
         // isn't in the set".
-        var rule = OneOrMore(RuneIn(RuneSet.Single(WavingHandRune)));
+        var rule = OneOrMore(OneOf(RuneSet.Single(WavingHandRune)));
 
         var result = rule.Parse(SkinTonedWaveGrapheme);
 
         Assert.That(result.Success, Is.False);
-        // RuneIn records at transaction.StartPosition (0) when the multi-
+        // OneOf records at transaction.StartPosition (0) when the multi-
         // rune grapheme token fails membership. OneOrMore's first inner
         // failed so it also records at offset 0. Deepest-wins lands on 0.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
@@ -86,9 +86,9 @@ public class LexerSwitchTests
     {
         // Same emoji sequence as above. Under the rune lexer, the waving
         // hand and the skin-tone modifier are two separate tokens, so a
-        // RuneIn that allows both code points individually now succeeds.
+        // OneOf that allows both code points individually now succeeds.
         var allowed = RuneSet.Single(WavingHandRune) | RuneSet.Single(MediumSkinToneRune);
-        var rule = OneOrMore(RuneIn(allowed));
+        var rule = OneOrMore(OneOf(allowed));
 
         var result = rule.Parse(SkinTonedWaveGrapheme,
             new ParseOptions { InputUnit = InputUnit.Rune });

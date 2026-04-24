@@ -157,12 +157,12 @@ The parser operates on Unicode characters, not raw bytes. By default the lexer r
 Grammar code reads like:
 
 ```csharp
-RuneIn(RuneSet.Ascii.Letters)                                   // ASCII letters, explicit
-RuneIn(RuneSet.Letters)                                         // Unicode letters (café, 名前, Ωmega)
-RuneIn(RuneSet.Letters | RuneSet.Digits | RuneSet.Runes("_-"))   // combined
-RuneNotIn(RuneSet.Single('"'))                                  // anything except a quote
-RuneIn(RuneSet.Single(new Rune(0x1F3B8)))                       // guitar emoji (above U+FFFF)
-RuneIn(RuneSet.Range(new Rune(0x0370), new Rune(0x03FF)))       // Greek and Coptic block
+OneOf(RuneSet.Ascii.Letters)                                   // ASCII letters, explicit
+OneOf(RuneSet.Letters)                                         // Unicode letters (café, 名前, Ωmega)
+OneOf(RuneSet.Letters | RuneSet.Digits | RuneSet.Runes("_-"))   // combined
+NoneOf(RuneSet.Single('"'))                                  // anything except a quote
+OneOf(RuneSet.Single(new Rune(0x1F3B8)))                       // guitar emoji (above U+FFFF)
+OneOf(RuneSet.Range(new Rune(0x0370), new Rune(0x03FF)))       // Greek and Coptic block
 ```
 
 The default built-ins cover the full Unicode character set. `RuneSet.Letters` includes `é`, `漢`, `Ω`, `ж`, and every other letter in every script Unicode knows about. Grammars that specifically want ASCII-only use `RuneSet.Ascii.Letters` to say so explicitly.

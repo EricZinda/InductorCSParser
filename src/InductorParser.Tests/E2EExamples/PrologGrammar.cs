@@ -31,39 +31,39 @@ public static class PrologGrammar
     private static readonly RuneSet MathSymbolChars = RuneSet.Runes("+-<>=/*\\");
 
     // A newline token. Under the default GraphemeLexer, "\r\n" is one
-    // grapheme cluster (Unicode GB3), so a plain RuneIn({'\r', '\n'})
-    // won't match it. RuneIn only matches single-rune tokens, and a
+    // grapheme cluster (Unicode GB3), so a plain OneOf({'\r', '\n'})
+    // won't match it. OneOf only matches single-rune tokens, and a
     // CRLF grapheme is two runes. Adding Literal("\r\n") as a first
     // alternative lets every whitespace rule in this grammar accept
     // both LF- and CRLF-terminated input under either lexer without
     // forcing callers to switch the lexer via ParseOptions.
     //
     // See docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer" for the
-    // full explanation of why RuneIn / RuneNotIn / Token('\n') all fail
+    // full explanation of why OneOf / NoneOf / Token('\n') all fail
     // on CRLF input and the three-anti-patterns-to-avoid list.
     private static readonly Rule LineBreak = Or(
         Literal("\r\n"),
-        RuneIn(CrlfChars)
+        OneOf(CrlfChars)
     );
 
     // Comment: "% ...\r\n" OR "% ...<EOF>" OR "/* ... */"
     //
-    // Both bodies use StringChars with a rule-based stopper. It peeks
+    // Both bodies use StringBody with a rule-based stopper. It peeks
     // the stopper on each rune and rolls back, so the terminator is
-    // left for the surrounding And to consume. StringChars replaces
+    // left for the surrounding And to consume. StringBody replaces
     // the manual ZeroOrMore(And(Not(stop), AnyToken())) idiom with a
     // tight single-rule scan that returns one leaf Symbol over the
     // matched body text.
     //
     // The line-comment body specifically needs the Rule-stopper form
-    // (not RuneIn) because under GraphemeLexer a CRLF grapheme is
-    // multi-rune and trivially passes any RuneNotIn, which would
+    // (not OneOf) because under GraphemeLexer a CRLF grapheme is
+    // multi-rune and trivially passes any NoneOf, which would
     // greedily swallow the line-ending CRLF and leave the terminator
     // nothing to match.
     public static readonly Rule Comment = Or(
         And(
             Token('%'),
-            StringChars(LineBreak),
+            StringBody(LineBreak),
             Or(
                 OneOrMore(LineBreak),
                 Eof()
@@ -71,7 +71,7 @@ public static class PrologGrammar
         ),
         And(
             Literal("/*"),
-            StringChars(Literal("*/")),
+            StringBody(Literal("*/")),
             Literal("*/")
         )
     );
@@ -80,7 +80,7 @@ public static class PrologGrammar
     // via the Literal alternative for the same reason as in Comment.
     public static readonly Rule OptionalWhitespace = ZeroOrMore(Or(
         Literal("\r\n"),
-        RuneIn(WhitespaceChars),
+        OneOf(WhitespaceChars),
         Comment
     ));
 
@@ -99,21 +99,21 @@ public static class PrologGrammar
     public static readonly Rule Atom = Or(
         Float(),
         Integer(),
-        OneOrMore(RuneIn(MathSymbolChars)),
+        OneOrMore(OneOf(MathSymbolChars)),
         Token('!'),
         And(
             Token('"'),
-            StringChars(RuneSet.Runes("\"")),
+            StringBody(RuneSet.Runes("\"")),
             Token('"')
         ),
         And(
             Token('\''),
-            StringChars(RuneSet.Runes("'")),
+            StringBody(RuneSet.Runes("'")),
             Token('\'')
         ),
         And(
-            Or(RuneIn(LetterChars), Token('-')),
-            ZeroOrMore(RuneIn(IdentifierTailChars))
+            Or(OneOf(LetterChars), Token('-')),
+            ZeroOrMore(OneOf(IdentifierTailChars))
         )
     );
 
@@ -121,14 +121,14 @@ public static class PrologGrammar
     // zero-or-more identifier-tail chars. "_foo", "_", "_X123-Y".
     private static readonly Rule UnderscoreVariable = And(
         Token('_'),
-        ZeroOrMore(RuneIn(IdentifierTailChars))
+        ZeroOrMore(OneOf(IdentifierTailChars))
     );
 
     // Standard Prolog: variable = Capital (letter|digit|_|-)*
     // "X", "Foo", "MyVar_1".
     public static readonly Rule CapitalizedVariableRule = And(
-        RuneIn(CapitalChars),
-        ZeroOrMore(RuneIn(IdentifierTailChars))
+        OneOf(CapitalChars),
+        ZeroOrMore(OneOf(IdentifierTailChars))
     );
 
     // Inductor HTN convention: variable = '?' Atom. Cheap discriminator: the '?'

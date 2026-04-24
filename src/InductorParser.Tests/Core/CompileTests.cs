@@ -16,7 +16,7 @@ public class CompileTests
     [Test]
     public void Sealed_rule_rejects_Flatten()
     {
-        var rule = OneOrMore(RuneIn(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Letters));
         rule.Compile();
 
         Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
@@ -25,7 +25,7 @@ public class CompileTests
     [Test]
     public void Sealed_rule_rejects_WithError()
     {
-        var rule = OneOrMore(RuneIn(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Letters));
         rule.Compile();
 
         Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
@@ -34,7 +34,7 @@ public class CompileTests
     [Test]
     public void Sealed_rule_rejects_As()
     {
-        var rule = OneOrMore(RuneIn(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Letters));
         rule.Compile();
 
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));

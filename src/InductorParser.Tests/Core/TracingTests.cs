@@ -7,7 +7,7 @@ using static InductorParser.Tests.TraceTestHelpers;
 
 namespace InductorParser.Tests;
 
-// Cross-cutting trace-format tests. Per-rule trace output (Token, RuneIn,
+// Cross-cutting trace-format tests. Per-rule trace output (Token, OneOf,
 // Eof, And, Or, OneOrMore, ZeroOrMore, Optional) is in
 // each rule's own test file, so the failure surfaces right next to the
 // rule being edited. This file covers the concerns that aren't any one
@@ -26,7 +26,7 @@ public class TracingTests
         // ("nothing inside an interpolation hole runs when tracing is
         // off") is proven by Off_path_does_not_evaluate_interpolated_arguments
         // below, using a side-effect counter to verify no work happens.
-        var rule = OneOrMore(RuneIn(RuneSet.Ascii.Letters));
+        var rule = OneOrMore(OneOf(RuneSet.Ascii.Letters));
         var result = rule.Parse("abc", new ParseOptions());
         Assert.That(result.Success, Is.True);
     }
@@ -46,19 +46,19 @@ public class TracingTests
         // it with the rule's class name via ":", producing
         // "settingName:OneOrMore" as the full trace label.
         var sink = NewSink();
-        var settingName = OneOrMore(RuneIn(RuneSet.Ascii.Letters))
+        var settingName = OneOrMore(OneOf(RuneSet.Ascii.Letters))
             .As("settingName");
         settingName.Parse("foo", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'f', Consumed: 1",
-            "      SUCC | RuneIn: found 'f', wanted one of '[A-Z,a-z]'",
+            "      SUCC | OneOf: found 'f', wanted one of '[A-Z,a-z]'",
             "      Lexer.Read: 'o', Consumed: 2",
-            "      SUCC | RuneIn: found 'o', wanted one of '[A-Z,a-z]'",
+            "      SUCC | OneOf: found 'o', wanted one of '[A-Z,a-z]'",
             "      Lexer.Read: 'o', Consumed: 3",
-            "      SUCC | RuneIn: found 'o', wanted one of '[A-Z,a-z]'",
+            "      SUCC | OneOf: found 'o', wanted one of '[A-Z,a-z]'",
             "      Lexer.Read: '<EOF>', Consumed: 3",
-            "      FAIL | RuneIn: found '<EOF>', wanted one of '[A-Z,a-z]'",
+            "      FAIL | OneOf: found '<EOF>', wanted one of '[A-Z,a-z]'",
             "      Lexer.RecordFailure: new deepest failure at char 3",
             "   SUCC | settingName:OneOrMore: count= 3"
         );
