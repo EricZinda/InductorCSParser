@@ -92,7 +92,22 @@ public sealed class LateBoundRule : Rule
         // this method. LateBoundRule is transparent at parse time, so
         // discard is ignored (target computes its own) and the
         // accumulator forwards straight through.
-        return ParseChild(_target!, lexer, outputSymbols);
+        var targetSymbol = ParseChild(_target!, lexer, outputSymbols);
+        // When the target is FlattenType.Preserve it returns a real
+        // wrapper Symbol. LateBoundRule is FlattenType.Flatten, so our
+        // own TryParse shim is about to normalize that wrapper to
+        // Symbol.Discarded. Push the target's wrapper into outputSymbols
+        // ourselves so the Preserve tree node reaches the parent list
+        // (AndRule / OrRule / BetweenInclusiveRule only add children they
+        // see returned, not ones lost inside a transparent proxy).
+        if (targetSymbol != null
+            && !ReferenceEquals(targetSymbol, Symbol.Discarded)
+            && outputSymbols != null
+            && effectiveFlattenType == FlattenType.Flatten)
+        {
+            outputSymbols.Add(targetSymbol);
+        }
+        return targetSymbol;
     }
 
     protected override void ValidateCompiled()

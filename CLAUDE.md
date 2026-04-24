@@ -1,0 +1,3 @@
+# Code naming
+
+Don't use abbreviations in code identifiers. Spell names out: `symbol` not `sym`, `accumulator` not `acc`, `operatorText` or `operation` not `op`, `right` or `rightHandSide` not `rhs`, `message` not `msg`, `stringNode` not `str`, `arrayNode` not `arr`, `objectNode` not `obj`, `flattened` not `flat`, `dictionary` not `dict`, `expression` not `expr` (except when the name mirrors a grammar-spec nonterminal like `Expr` / `Term`), etc. Well-known industry terms are fine (`id`, `url`, `json`, `html`, `xml`, `io`), and loop counters (`i`, `j`, `k`) are fine. This applies to local variables, parameters, and fields equally.
