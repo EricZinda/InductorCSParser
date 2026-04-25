@@ -55,7 +55,7 @@ public class DiscardedAtParseTimeTests
         // letter leaves. The OptionalWhitespace was filtered at parse time,
         // so its text doesn't appear here. Callers who want the full
         // matched input should keep their own reference to it or run with
-        // PreserveFlattenWrappers=true.
+        // PreserveAllSymbols=true.
         Assert.That(string.Concat(result.Symbols), Is.EqualTo("ab"));
     }
 
@@ -82,14 +82,14 @@ public class DiscardedAtParseTimeTests
     }
 
     [Test]
-    public void PreserveFlattenWrappers_disables_parse_time_Delete_filtering()
+    public void PreserveAllSymbols_disables_parse_time_Delete_filtering()
     {
         // Same grammar as the leaves-filter test, but with the debug
         // flag on: the Token wrappers around and between the letters
         // should survive into the tree so PrintTree and Find queries
         // see a shape that matches the grammar as written.
         var rule = And(Token('a'), OptionalWhitespace(), Token('b'));
-        var options = new ParseOptions { PreserveFlattenWrappers = true };
+        var options = new ParseOptions { PreserveAllSymbols = true };
         var result = rule.Parse("a   b", options);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);

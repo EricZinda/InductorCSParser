@@ -38,7 +38,7 @@ The two entry points keeps the !discard path at exactly the same cost as before 
 
 **Anonymous empty-Flatten wrapper removal.** When `AndRule` or `BetweenInclusiveRule` runs to completion with every child returning `Discarded` (so `matched` stays `null`), the default behavior is to allocate `new Symbol(Id, Flatten, Array.Empty<Symbol>())`. Post-hoc `Symbol.FlattenInto` would drop that zero-child wrapper to nothing anyway, so at parse time we can return `Discarded` directly and let the enclosing composite filter us out of its matched list.
 
-The removal only fires for **anonymous** wrappers: `Name == null && ErrorMessage == null && FlattenType == Flatten && !PreserveFlattenWrappers`. A user who called `.As("object")` on an AndRule wants that wrapper findable via `Tree.Find(rule)` even when the matched container is empty (think `{}` in JSON), so named wrappers are preserved. This gate is critical. An earlier, ungated version broke JSON empty-object parsing silently because `JsonObject = And(...).As("object")` collapsed to Discarded on `{}` inputs, and nothing in the benchmark's round-trip path caught it.
+The removal only fires for **anonymous** wrappers: `Name == null && ErrorMessage == null && FlattenType == Flatten && !PreserveAllSymbols`. A user who called `.As("object")` on an AndRule wants that wrapper findable via `Tree.Find(rule)` even when the matched container is empty (think `{}` in JSON), so named wrappers are preserved. This gate is critical. An earlier, ungated version broke JSON empty-object parsing silently because `JsonObject = And(...).As("object")` collapsed to Discarded on `{}` inputs, and nothing in the benchmark's round-trip path caught it.
 
 ### Files touched (in the attempt)
 
@@ -112,7 +112,7 @@ The measurement scaffolding in this doc is correct even if the implementation is
 
 - Un-ignore both `Timing_grammar_is_within_two_times_compiled_regex` tests temporarily. Run each three times per side. The Grammar absolute time is more stable than the ratio because the compiled regex baseline itself swings ~20% run-to-run.
 - For JSON, run `dotnet run --project src/Benchmarks -- --filter "*_InductorParser" "*_SystemTextJson"` to measure just the two rows that matter. The filtered run still takes ~2 minutes but is much cheaper than the full 35-row table.
-- Validate with `dotnet run --project src/Benchmarks -- --spot-check` after any change that touches Symbol construction. It catches tree-shape regressions that don't show up in the tests because `ParseForRoundTrip` uses `PreserveFlattenWrappers=true`.
+- Validate with `dotnet run --project src/Benchmarks -- --spot-check` after any change that touches Symbol construction. It catches tree-shape regressions that don't show up in the tests because `ParseForRoundTrip` uses `PreserveAllSymbols=true`.
 - Empty-Flatten wrapper removal is a semantic change that needs the anonymous-only gate. Any future change in that direction has to carry the Name / ErrorMessage / pinned-Id checks through, or it'll silently break `Tree.Find(namedRule)` on empty containers.
 
 ---
@@ -323,7 +323,7 @@ At the top of `BetweenInclusiveRule.TryParseRule`, before opening the iteration 
 
 - `Inner.Advance == Advance.Always`: Inner must consume a rune to match, so the peek is decisive.
 - `Inner.ErrorMessage == null`: if the author set `.WithError(...)` on Inner, run it anyway so that message can surface via deepest-failure-wins (mirrors `OrRule`'s same gate).
-- `!lexer.PreserveFlattenWrappers`: debug-tree mode still sees the same Inner invocations the grammar declares.
+- `!lexer.PreserveAllSymbols`: debug-tree mode still sees the same Inner invocations the grammar declares.
 
 If all three pass, `pos < input.Length`, and the next rune isn't in `Inner.RequiredInitialRuneSet`, Inner definitely can't match the first iteration:
 
@@ -338,7 +338,7 @@ The three hints consulted (`Advance`, `RequiredInitialRuneSet`, `ErrorMessage`) 
 - [src/InductorParser.Tests/Rules/OneOrMoreRuleTests.cs](../src/InductorParser.Tests/Rules/OneOrMoreRuleTests.cs): `OneOrMore_trace_failure_produces_expected_output` no longer has the inner `Token FAIL` line.
 - [src/InductorParser.Tests/Rules/OptionalRuleTests.cs](../src/InductorParser.Tests/Rules/OptionalRuleTests.cs): `Optional_trace_without_match_produces_expected_output` same story.
 
-Test surface: all 458 non-timing tests pass. Only two trace expectations shifted (much smaller than p600's ~15, because most trace tests already use `PreserveFlattenWrappers=true` for `Tree.ToString()` assertions, which gates the skip off). Spot-check (`dotnet run --project src/Benchmarks -- --spot-check`) confirms byte-exact round-trip across all four JSON shapes.
+Test surface: all 458 non-timing tests pass. Only two trace expectations shifted (much smaller than p600's ~15, because most trace tests already use `PreserveAllSymbols=true` for `Tree.ToString()` assertions, which gates the skip off). Spot-check (`dotnet run --project src/Benchmarks -- --spot-check`) confirms byte-exact round-trip across all four JSON shapes.
 
 ### Rule invocation counts (via `--rule-counts`)
 
@@ -388,7 +388,7 @@ This result reinforces the thesis in [src/Benchmarks/README.md](../src/Benchmark
 
 Small code footprint: one gated block at the top of `TryParseRule` that reads properties already computed at rule-construction time. No new API surface, no new compile-time analysis pass, no load-bearing invariant that a future contributor could miss when adding a new composite rule. Semantic transparency: when Inner would fail and cause the outer BetweenInclusive to succeed-with-zero-iterations or fail-as-unreached-lower-bound, the skip produces the same output tree and the same failure record. The `Inner.ErrorMessage == null` gate ensures user-supplied error messages still surface by running the inner path that would emit them.
 
-The only externally observable behavior change is trace output: diagnostic-level traces for calls the skip caught no longer include the inner `Lexer.Read` / FAIL lines. Two existing trace-expectation tests were updated. The rest already use `PreserveFlattenWrappers=true` (which gates the skip off) for their `Tree.ToString()` assertions.
+The only externally observable behavior change is trace output: diagnostic-level traces for calls the skip caught no longer include the inner `Lexer.Read` / FAIL lines. Two existing trace-expectation tests were updated. The rest already use `PreserveAllSymbols=true` (which gates the skip off) for their `Tree.ToString()` assertions.
 
 ### What future work should know
 

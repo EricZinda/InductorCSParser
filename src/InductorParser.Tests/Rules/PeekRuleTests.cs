@@ -8,10 +8,10 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class PeekRuleTests
 {
-    // Tree.ToString() assertions use PreserveFlattenWrappers so Peek,
+    // Tree.ToString() assertions use PreserveAllSymbols so Peek,
     // Token, and AnyToken (all default FlattenType.Delete) stay in the
     // tree and their text contributes to the concatenated view.
-    private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
+    private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
     [Test]
     public void Peek_succeeds_when_inner_matches_and_consumes_no_input()
@@ -58,7 +58,7 @@ public class PeekRuleTests
     {
         var rule = And(Peek(Token('x')), AnyToken());
         var result = rule.Parse("x",
-            new ParseOptions { InputUnit = InputUnit.Rune, PreserveFlattenWrappers = true });
+            new ParseOptions { InputUnit = InputUnit.Rune, PreserveAllSymbols = true });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("x"));

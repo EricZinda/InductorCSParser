@@ -12,11 +12,11 @@ public class AndRuleTests
     public void And_all_children_succeed_concatenates_consumed_input()
     {
         // Token defaults to FlattenType.Delete, so its text is filtered
-        // out of the tree at parse time. PreserveFlattenWrappers keeps
+        // out of the tree at parse time. PreserveAllSymbols keeps
         // every grammar node so Tree.ToString() sees the full matched
         // input.
         var rule = And(Token('a'), Token('b'), Token('c'));
-        var result = rule.Parse("abc", new ParseOptions { PreserveFlattenWrappers = true });
+        var result = rule.Parse("abc", new ParseOptions { PreserveAllSymbols = true });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("abc"));

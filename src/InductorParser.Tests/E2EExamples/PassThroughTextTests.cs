@@ -35,11 +35,11 @@ public class PassThroughTextTests
             ZeroOrMore(NoneOf(RuneSet.Single('\n'))),
             Token('\n'));
 
-        // PreserveFlattenWrappers keeps the Token('/') leaves and the
+        // PreserveAllSymbols keeps the Token('/') leaves and the
         // Token('\n') leaf in the tree so Tree.ToString reproduces the
         // full comment text.
         var result = lineComment.Parse("// anything up to the newline\n",
-            new ParseOptions { PreserveFlattenWrappers = true });
+            new ParseOptions { PreserveAllSymbols = true });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(),
@@ -79,7 +79,7 @@ public class PassThroughTextTests
             closeMarker);
 
         var result = blockComment.Parse("/* body with * inside but not-the-end */",
-            new ParseOptions { PreserveFlattenWrappers = true });
+            new ParseOptions { PreserveAllSymbols = true });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(),

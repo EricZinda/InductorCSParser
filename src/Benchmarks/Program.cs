@@ -204,7 +204,7 @@ public class Program
 
             failures += Verify("InductorParser", input, () =>
             {
-                // Use the round-trip variant: PreserveFlattenWrappers keeps
+                // Use the round-trip variant: PreserveAllSymbols keeps
                 // FlattenType.Delete nodes (JSON delimiters) in the tree
                 // so Tree.ToString() reproduces the full input. The benchmark
                 // measurement path uses the faster default options that

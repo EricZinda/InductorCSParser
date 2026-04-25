@@ -112,14 +112,14 @@ public static class InductorJsonParser
     // would drop the JSON delimiters (Token('{'), '}', ',', ':', '"') from
     // the tree, so Tree.ToString() on a normally-parsed value returns just
     // the concatenated non-delimiter content rather than the original
-    // input. PreserveFlattenWrappers keeps every grammar node in the tree
+    // input. PreserveAllSymbols keeps every grammar node in the tree
     // for verification purposes. It is not used by the benchmark runs because
     // it wouldn't be used by a real caller either, just here for verification.
     private static readonly ParseOptions _roundTripOptions = new()
     {
         InputUnit = InputUnit.Rune,
         MaxDepth = 0,
-        PreserveFlattenWrappers = true,
+        PreserveAllSymbols = true,
     };
 
     public static ParseResult ParseForRoundTrip(string input) => JsonRule.Parse(input, _roundTripOptions);

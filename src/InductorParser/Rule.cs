@@ -530,9 +530,9 @@ public abstract class Rule
     // extra work.
     //
     // TryParse also normalizes the subclass's view: it computes
-    // effectiveFlattenType (collapsing PreserveFlattenWrappers), and makes
+    // effectiveFlattenType (collapsing PreserveAllSymbols), and makes
     // outputSymbols non-null only in Flatten mode. Subclasses don't have
-    // to re-check FlattenType or PreserveFlattenWrappers, they implement
+    // to re-check FlattenType or PreserveAllSymbols, they implement
     // the three modes per the TryParseRule rules below.
     internal Symbol? TryParse(Lexer lexer, List<Symbol>? outputSymbols)
     {
@@ -540,10 +540,10 @@ public abstract class Rule
         try
         {
             // effectiveFlattenType collapses FlattenType +
-            // PreserveFlattenWrappers. Debug mode treats every rule
+            // PreserveAllSymbols. Debug mode treats every rule
             // as Preserve.
             FlattenType effectiveFlattenType =
-                lexer.PreserveFlattenWrappers ? FlattenType.Preserve : FlattenType;
+                lexer.PreserveAllSymbols ? FlattenType.Preserve : FlattenType;
             if (effectiveFlattenType != FlattenType.Flatten)
             {
                 outputSymbols = null;
@@ -636,7 +636,7 @@ public abstract class Rule
     // behavior. This just makes the intent visible at the caller.
     protected Symbol? ParseChild(Rule child, Lexer lexer, List<Symbol>? outputSymbols)
     {
-        var listForChild = child.FlattenType == FlattenType.Flatten && !lexer.PreserveFlattenWrappers
+        var listForChild = child.FlattenType == FlattenType.Flatten && !lexer.PreserveAllSymbols
             ? outputSymbols
             : null;
         return child.TryParse(lexer, listForChild);

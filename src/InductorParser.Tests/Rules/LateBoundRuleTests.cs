@@ -24,10 +24,10 @@ public class LateBoundRuleTests
         return sum;
     }
 
-    // Tree.ToString() assertions use PreserveFlattenWrappers so the
+    // Tree.ToString() assertions use PreserveAllSymbols so the
     // Token('+') / Token('(') / Token(')') leaves (default FlattenType.Delete)
     // stay in the tree and their text appears in the concatenated view.
-    private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
+    private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
     [Test]
     public void Parses_linear_sum()

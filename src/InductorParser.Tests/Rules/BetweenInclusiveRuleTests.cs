@@ -9,12 +9,12 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class BetweenInclusiveRuleTests
 {
-    // Tests that assert on Tree.ToString() use PreserveFlattenWrappers so
+    // Tests that assert on Tree.ToString() use PreserveAllSymbols so
     // Token rules (default FlattenType.Delete) stay in the tree and their
     // text is visible in the concatenated output. Without the flag the
     // tree would contain only non-Delete nodes, which is the correct
     // parse-time semantic, just not what these tests are looking at.
-    private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
+    private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
 
     [Test]

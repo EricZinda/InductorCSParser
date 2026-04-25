@@ -89,7 +89,7 @@ public sealed class Symbol
     // characters under them do, through their surviving
     // FlattenType.Preserve or leaf descendants. Callers who want to
     // rebuild the exact input verbatim should either keep the string
-    // they passed to Parse, or enable ParseOptions.PreserveFlattenWrappers
+    // they passed to Parse, or enable ParseOptions.PreserveAllSymbols
     // to keep every grammar node (including FlattenType.Delete ones)
     // in the tree.
     public override string ToString()

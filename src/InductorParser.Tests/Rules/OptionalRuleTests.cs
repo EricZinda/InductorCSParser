@@ -10,10 +10,10 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class OptionalRuleTests
 {
-    // Tree.ToString() assertions below use PreserveFlattenWrappers so
+    // Tree.ToString() assertions below use PreserveAllSymbols so
     // Token leaves (default FlattenType.Delete) survive parse-time
     // filtering and appear in the concatenated view.
-    private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
+    private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
     [Test]
     public void Optional_inner_match_is_consumed()

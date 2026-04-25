@@ -95,10 +95,10 @@ public class NoneOfRuleTests
             ZeroOrMore(NoneOf(RuneSet.Single('\n'))),
             Token('\n'));
 
-        // PreserveFlattenWrappers keeps the trailing Token('\n') in the
+        // PreserveAllSymbols keeps the trailing Token('\n') in the
         // tree so Tree.ToString reproduces the full matched line.
         var result = rule.Parse("hello world\n",
-            new ParseOptions { PreserveFlattenWrappers = true });
+            new ParseOptions { PreserveAllSymbols = true });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("hello world\n"));

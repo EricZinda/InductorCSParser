@@ -176,12 +176,31 @@ public readonly struct ParseResult
         return builder.ToString();
     }
 
-    // Debug-friendly rendering. On success, shows the parse tree
-    // (same output as PrintTree) so `Console.WriteLine(result)` in a
-    // REPL or debugger immediately shows what was parsed. On failure,
-    // a one-line summary with the outcome, character index, and the
-    // error message. Not intended as a stable format to parse against.
+    // The matched input text, as one string. Walks every top-level
+    // Symbol and concatenates the text it covers, so a grammar whose
+    // root produces a single Preserve wrapper and a grammar whose root
+    // bubbles up a flat list of leaves both yield the same string here.
+    // Mirrors Symbol.ToString(), which does the same for one Symbol.
+    // Returns the empty string on failure (Symbols is empty in that
+    // case) and on a default-constructed ParseResult. For a
+    // tree-shaped debug rendering, use PrintTree() or ToDebugString().
     public override string ToString()
+    {
+        if (_symbols == null || _symbols.Count == 0) return string.Empty;
+        if (_symbols.Count == 1) return _symbols[0].ToString();
+        var builder = new System.Text.StringBuilder();
+        foreach (var s in _symbols)
+            builder.Append(s.ToString());
+        return builder.ToString();
+    }
+
+    // Debug-friendly rendering. On success, shows the parse tree
+    // (same output as PrintTree) prefixed with "Success:" so dumping
+    // a ParseResult in a REPL or debugger immediately shows what was
+    // parsed. On failure, a one-line summary with the outcome,
+    // character index, and the error message. Not intended as a stable
+    // format to parse against.
+    public string ToDebugString()
     {
         if (Outcome == ParseOutcome.Success)
         {

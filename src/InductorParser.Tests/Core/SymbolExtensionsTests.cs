@@ -32,10 +32,10 @@ public class SymbolExtensionsTests
         // Anonymous And rule, no user name, so the root renders with
         // the class-derived "And" label. Token leaves default to
         // FlattenType.Delete and are filtered at parse time under normal
-        // parsing. PreserveFlattenWrappers keeps them so PrintTree sees
+        // parsing. PreserveAllSymbols keeps them so PrintTree sees
         // a shape matching the grammar one-to-one.
         var pair = And(Token('a'), Token('1'));
-        var result = pair.Parse("a1", new ParseOptions { PreserveFlattenWrappers = true });
+        var result = pair.Parse("a1", new ParseOptions { PreserveAllSymbols = true });
         Assert.That(result.Success, Is.True);
 
         string expected =
@@ -51,12 +51,12 @@ public class SymbolExtensionsTests
     {
         // Two levels of named And wrappers so the printed tree has real
         // depth beyond just a root plus leaves. Token leaves default to
-        // FlattenType.Delete. PreserveFlattenWrappers keeps them so the
+        // FlattenType.Delete. PreserveAllSymbols keeps them so the
         // printed tree shows both the composites and their Token children.
         var first = And(Token('a'), Token('b')).As("first");
         var second = And(Token('c'), Token('d')).As("second");
         var pair = And(first, second).As("pair");
-        var result = pair.Parse("abcd", new ParseOptions { PreserveFlattenWrappers = true });
+        var result = pair.Parse("abcd", new ParseOptions { PreserveAllSymbols = true });
         Assert.That(result.Success, Is.True);
 
         string expected =

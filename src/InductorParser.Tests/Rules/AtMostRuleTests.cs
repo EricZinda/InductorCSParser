@@ -8,10 +8,10 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class AtMostRuleTests
 {
-    // Tree.ToString() assertions use PreserveFlattenWrappers so the
+    // Tree.ToString() assertions use PreserveAllSymbols so the
     // Token leaves (default FlattenType.Delete) stay in the tree and
     // their text contributes to the concatenated view.
-    private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
+    private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
     [Test]
     public void AtMost_matches_zero_occurrences()

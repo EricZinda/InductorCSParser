@@ -12,11 +12,11 @@ public class OrRuleTests
     public void Or_returns_the_first_alternative_that_matches()
     {
         // Token defaults to FlattenType.Delete, so the matched 'b' would
-        // be filtered out of the tree at parse time. PreserveFlattenWrappers
+        // be filtered out of the tree at parse time. PreserveAllSymbols
         // keeps the Token leaf in the tree so Tree.ToString() shows the
         // text that was actually matched.
         var rule = Or(Token('a'), Token('b'), Token('c'));
-        var result = rule.Parse("b", new ParseOptions { PreserveFlattenWrappers = true });
+        var result = rule.Parse("b", new ParseOptions { PreserveAllSymbols = true });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("b"));

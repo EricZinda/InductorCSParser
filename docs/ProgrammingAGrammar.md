@@ -63,7 +63,7 @@ Two things happen automatically in this example but are worth knowing about for 
 
 Most rules do not need a name. `Find(someRule)` matches on the rule object itself, so as long as you have a reference to the rule you want to locate, you can find its nodes in the tree. The hello-world example never calls `.As(...)` and works fine.
 
-One caveat: `Find(rule)` only hits rules with `FlattenType.None`. Rules with the default `FlattenType.Flatten` (every `And`, `Or`, `OneOrMore`, `ZeroOrMore`, `Optional`, `BetweenInclusive`) have their children lifted up into the parent and their own wrapper removed from `ParseResult.Tree`, so Find cannot locate them. If you want to `Find(someRule)` and have it hit, set `FlattenType.None` on the rule to preserve its wrapper. For debugging, `ParseOptions.PreserveFlattenWrappers` turns the lift-up off globally so the tree matches the grammar one-to-one.
+One caveat: `Find(rule)` only hits rules with `FlattenType.None`. Rules with the default `FlattenType.Flatten` (every `And`, `Or`, `OneOrMore`, `ZeroOrMore`, `Optional`, `BetweenInclusive`) have their children lifted up into the parent and their own wrapper removed from `ParseResult.Tree`, so Find cannot locate them. If you want to `Find(someRule)` and have it hit, set `FlattenType.None` on the rule to preserve its wrapper. For debugging, `ParseOptions.PreserveAllSymbols` turns the lift-up off globally so the tree matches the grammar one-to-one.
 
 Sometimes names do matter though: trace output, error messages, serialization. Trace output prints rule names to show which rule was tried at each position. Error messages quote the "deepest rule" that failed. Without names, these fall back to generated labels like `<anonymous>` or `rule#47`, which are technically correct but unpleasant to read.
 
@@ -235,7 +235,7 @@ var settingName = Identifier()
 
 Rules are immutable to the user. `OneOrMore(x).Flatten(FlattenType.None)` does not mutate the underlying `OneOrMore` rule, it returns a new wrapped rule with the flatten policy set. After `Compile` returns, the rule graph is sealed: calling `.As(...)`, `.Flatten(...)`, or any other mutation method on a sealed rule throws `InvalidOperationException`.
 
-Default values for `Flatten`, error messages, and so on match the C++ defaults from the original source. `OptionalWhitespace()` defaults to `FlattenType.Delete`. `Token('=')` defaults to `FlattenType.Delete`. `And(...)` defaults to `FlattenType.Flatten`. `Integer()` defaults to `FlattenType.None`. `Parse` applies these types to the tree before returning: `Delete` nodes are dropped, `Flatten` wrappers have their children lifted into the parent, and `None` wrappers survive. `ParseOptions.PreserveFlattenWrappers` turns the whole pass off and gives you back a grammar-shaped debug tree with every wrapper in place.
+Default values for `Flatten`, error messages, and so on match the C++ defaults from the original source. `OptionalWhitespace()` defaults to `FlattenType.Delete`. `Token('=')` defaults to `FlattenType.Delete`. `And(...)` defaults to `FlattenType.Flatten`. `Integer()` defaults to `FlattenType.None`. `Parse` applies these types to the tree before returning: `Delete` nodes are dropped, `Flatten` wrappers have their children lifted into the parent, and `None` wrappers survive. `ParseOptions.PreserveAllSymbols` turns the whole pass off and gives you back a grammar-shaped debug tree with every wrapper in place.
 
 ### User-Defined Rules
 
@@ -537,7 +537,7 @@ public sealed class ParseOptions
     /// callers want the flattened syntax tree; flip it on for `PrintTree`
     /// output and for `Find`-queries against wrappers that would otherwise
     /// be lifted away.
-    public bool PreserveFlattenWrappers { get; set; } = false;
+    public bool PreserveAllSymbols { get; set; } = false;
 }
 
 public enum InputUnit { Grapheme, Rune }

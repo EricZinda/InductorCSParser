@@ -8,10 +8,10 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class NotRuleTests
 {
-    // Tree.ToString() assertions use PreserveFlattenWrappers so Not,
+    // Tree.ToString() assertions use PreserveAllSymbols so Not,
     // Token, and AnyToken (all default FlattenType.Delete) stay in the
     // tree and their text contributes to the concatenated view.
-    private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
+    private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
     [Test]
     public void Not_succeeds_when_inner_fails_and_consumes_no_input()
@@ -117,7 +117,7 @@ public class NotRuleTests
         // Same negative-lookahead semantics under RuneLexer.
         var rule = And(Not(Token('a')), AnyToken());
         var result = rule.Parse("b",
-            new ParseOptions { InputUnit = InputUnit.Rune, PreserveFlattenWrappers = true });
+            new ParseOptions { InputUnit = InputUnit.Rune, PreserveAllSymbols = true });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("b"));

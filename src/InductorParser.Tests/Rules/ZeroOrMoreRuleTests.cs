@@ -11,9 +11,9 @@ public class ZeroOrMoreRuleTests
     // ZeroOrMore has no failure path at all, so this fixture only carries
     // success tests. The TestArchitecture doc calls this out explicitly.
 
-    // Tree.ToString() assertions use PreserveFlattenWrappers so Token
+    // Tree.ToString() assertions use PreserveAllSymbols so Token
     // leaves (default FlattenType.Delete) stay in the tree.
-    private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
+    private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
     [Test]
     public void ZeroOrMore_with_zero_matches_succeeds_with_empty_consumption()

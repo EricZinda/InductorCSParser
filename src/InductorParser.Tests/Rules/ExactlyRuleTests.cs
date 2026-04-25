@@ -8,10 +8,10 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class ExactlyRuleTests
 {
-    // Tree.ToString() assertions use PreserveFlattenWrappers so the
+    // Tree.ToString() assertions use PreserveAllSymbols so the
     // Token leaves (default FlattenType.Delete) stay in the tree and
     // their text contributes to the concatenated view.
-    private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
+    private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
     [Test]
     public void Exactly_matches_when_input_has_exactly_N()

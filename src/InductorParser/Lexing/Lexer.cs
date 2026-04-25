@@ -51,8 +51,8 @@ public abstract class Lexer
     // apply parse-time tree-shape optimizations (e.g.
     // Delete-node filtering) consult this flag and skip the optimization
     // when it's set, producing a tree whose shape matches the grammar
-    // one-to-one. See ParseOptions.PreserveFlattenWrappers.
-    internal bool PreserveFlattenWrappers { get; private set; }
+    // one-to-one. See ParseOptions.PreserveAllSymbols.
+    internal bool PreserveAllSymbols { get; private set; }
 
     // Periodic budget check fires every BudgetCheckInterval rule
     // invocations rather than every one. Power of two so the check is a
@@ -338,7 +338,7 @@ public abstract class Lexer
         _timeout = options.Timeout;
         _cancellation = options.Cancellation;
         _stopwatch = options.Timeout > TimeSpan.Zero ? Stopwatch.StartNew() : null;
-        PreserveFlattenWrappers = options.PreserveFlattenWrappers;
+        PreserveAllSymbols = options.PreserveAllSymbols;
     }
 
     // Called by Rule.TryParse on entry to every rule invocation. Two

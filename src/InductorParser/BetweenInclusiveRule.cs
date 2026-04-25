@@ -57,7 +57,7 @@ internal sealed class BetweenInclusiveRule : Rule
 
         // First try to shortcut and exit fast using the "Rule Skip" shortcut described
         // on RuleStartRequirements
-        if (!lexer.PreserveFlattenWrappers && Inner.ErrorMessage == null)
+        if (!lexer.PreserveAllSymbols && Inner.ErrorMessage == null)
         {
             string input = lexer.Input;
             int pos = lexer.Position;
