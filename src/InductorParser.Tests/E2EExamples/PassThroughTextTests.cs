@@ -29,17 +29,17 @@ public class PassThroughTextTests
         // on both the body stop and the terminator. See
         // docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer" for the
         // full pattern.
-        var lineComment = And(
+        var lineComment = AllOf(
             Token('/'),
             Token('/'),
             ZeroOrMore(NoneOf(RuneSet.Single('\n'))),
             Token('\n'));
 
-        // PreserveFlattenWrappers keeps the Token('/') leaves and the
+        // PreserveAllSymbols keeps the Token('/') leaves and the
         // Token('\n') leaf in the tree so Tree.ToString reproduces the
         // full comment text.
         var result = lineComment.Parse("// anything up to the newline\n",
-            new ParseOptions { PreserveFlattenWrappers = true });
+            new ParseOptions { PreserveAllSymbols = true });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(),
@@ -53,7 +53,7 @@ public class PassThroughTextTests
         // "any character except these" character class: a multi-rune
         // grapheme like 🎸 passes NoneOf because it isn't any single
         // rune in the stop set. The comment body scoops it up cleanly.
-        var lineComment = And(
+        var lineComment = AllOf(
             Token('/'),
             Token('/'),
             ZeroOrMore(NoneOf(RuneSet.Single('\n'))),
@@ -67,19 +67,19 @@ public class PassThroughTextTests
     [Test]
     public void Block_comment_grammar_stops_at_multi_character_terminator()
     {
-        // Rule-based stop: ZeroOrMore(And(Not(stopRule), AnyToken())) is
+        // Rule-based stop: ZeroOrMore(AllOf(Not(stopRule), AnyToken())) is
         // how you express "match until a multi-character terminator
         // would fire." A simple NoneOf can't express this because
         // the stop condition spans two characters.
-        var closeMarker = And(Token('*'), Token('/'));
-        var blockComment = And(
+        var closeMarker = AllOf(Token('*'), Token('/'));
+        var blockComment = AllOf(
             Token('/'),
             Token('*'),
-            ZeroOrMore(And(Not(closeMarker), AnyToken())),
+            ZeroOrMore(AllOf(Not(closeMarker), AnyToken())),
             closeMarker);
 
         var result = blockComment.Parse("/* body with * inside but not-the-end */",
-            new ParseOptions { PreserveFlattenWrappers = true });
+            new ParseOptions { PreserveAllSymbols = true });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(),
@@ -93,12 +93,12 @@ public class PassThroughTextTests
         // committing to the disambiguated branch. Here "if" and "iffy"
         // share a prefix. Peek(Not(letter)) confirms the keyword really
         // ends after "if" before the caller commits.
-        var keywordIf = And(
+        var keywordIf = AllOf(
             Token('i'),
             Token('f'),
             Peek(Not(OneOf(RuneSet.Letters))));
 
-        var justIfResult = And(keywordIf, ZeroOrMore(AnyToken())).Parse("if x");
+        var justIfResult = AllOf(keywordIf, ZeroOrMore(AnyToken())).Parse("if x");
         Assert.That(justIfResult.Success, Is.True, justIfResult.ErrorMessage);
 
         var iffyResult = keywordIf.Parse("iffy");

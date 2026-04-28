@@ -184,7 +184,7 @@ internal static class BenchmarkRegistry
     private static BenchmarkPlan CompileScanner(PatternGrammar grammar)
     {
         grammar.Match.As("match").Flatten(FlattenType.Preserve);
-        var scanner = ZeroOrMore(Or(
+        var scanner = ZeroOrMore(FirstOf(
             grammar.Match,
             AnyToken().Flatten(FlattenType.Delete)
         )).As("scan").Flatten(FlattenType.Preserve);
@@ -196,7 +196,7 @@ internal static class BenchmarkRegistry
         new(MatchLiteral(literal, ignoreAsciiCase), Array.Empty<Rule>());
 
     private static PatternGrammar LiteralAlternates(IEnumerable<string> literals, bool ignoreAsciiCase) =>
-        new(Or(literals.Select(literal => MatchLiteral(literal, ignoreAsciiCase)).ToArray()), Array.Empty<Rule>());
+        new(FirstOf(literals.Select(literal => MatchLiteral(literal, ignoreAsciiCase)).ToArray()), Array.Empty<Rule>());
 
     private static Rule MatchLiteral(string literal, bool ignoreAsciiCase) =>
         (ignoreAsciiCase ? LiteralIgnoreAsciiCase(literal) : Literal(literal)).Flatten(FlattenType.Preserve);
@@ -210,17 +210,17 @@ internal static class BenchmarkRegistry
         // scanner's first-rune skip available because successful matches
         // always consume at least one word rune.
         Rule wordBody = P(RuneRun(AsciiWord, minimumLength));
-        var word = And(
+        var word = AllOf(
             wordBody,
-            Or(Peek(OneOf(~AsciiWord)), Eof())
+            FirstOf(Peek(OneOf(~AsciiWord)), Eof())
         );
         return new PatternGrammar(word, Array.Empty<Rule>());
     }
 
     private static PatternGrammar AwsQuick()
     {
-        var key = And(
-            Or(
+        var key = AllOf(
+            FirstOf(
                 P(Literal("ASIA")),
                 P(Literal("AKIA")),
                 P(Literal("AROA")),
@@ -234,15 +234,15 @@ internal static class BenchmarkRegistry
     private static PatternGrammar RuffNoqaReal()
     {
         var leadingWhitespace = Capture(ZeroOrMore(P(OneOf(AsciiRegexWhitespace))), "capture1");
-        var codeItem = Capture(And(
+        var codeItem = Capture(AllOf(
             OneOrMore(P(OneOf(AsciiUpper))),
             OneOrMore(P(OneOf(RuneSet.Ascii.Digits))),
             Optional(OneOrMore(P(OneOf(CodeSeparator))))
         ), "capture4");
         var codeList = Capture(OneOrMore(codeItem), "capture3");
-        var noqa = Capture(And(
+        var noqa = Capture(AllOf(
             NoqaLiteral(),
-            Optional(And(
+            Optional(AllOf(
                 P(Token(':')),
                 Optional(P(OneOf(AsciiRegexWhitespace))),
                 codeList
@@ -250,21 +250,21 @@ internal static class BenchmarkRegistry
         ), "capture2");
 
         return new PatternGrammar(
-            And(leadingWhitespace, noqa),
+            AllOf(leadingWhitespace, noqa),
             new[] { leadingWhitespace, noqa, codeList, codeItem });
     }
 
     private static PatternGrammar RuffNoqaTweaked()
     {
-        var codeItem = Capture(And(
+        var codeItem = Capture(AllOf(
             OneOrMore(P(OneOf(AsciiUpper))),
             OneOrMore(P(OneOf(RuneSet.Ascii.Digits))),
             Optional(OneOrMore(P(OneOf(CodeSeparator))))
         ), "capture2");
         var codeList = Capture(OneOrMore(codeItem), "capture1");
-        var match = And(
+        var match = AllOf(
             NoqaLiteral(),
-            Optional(And(
+            Optional(AllOf(
                 P(Token(':')),
                 Optional(P(OneOf(AsciiRegexWhitespace))),
                 codeList
@@ -274,7 +274,7 @@ internal static class BenchmarkRegistry
         return new PatternGrammar(match, new[] { codeList, codeItem });
     }
 
-    private static Rule NoqaLiteral() => And(
+    private static Rule NoqaLiteral() => AllOf(
         P(Literal("# ")),
         P(OneOf("Nn")),
         P(OneOf("Oo")),

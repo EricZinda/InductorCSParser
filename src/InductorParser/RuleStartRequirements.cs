@@ -45,24 +45,24 @@ namespace InductorParser;
 //      match) and Never rules (whose Empty set would always exclude
 //      the lookahead) would be wrongly skipped.
 //
-//   2. Composition. Parent rules (And/Or/BetweenInclusive) look at
+//   2. Composition. Parent rules (AllOf/FirstOf/BetweenInclusive) look at
 //      their children's Advance when computing their own
 //      FirstConsumedRunes. The three-way distinction tells a
 //      composite "always claims the lookahead" (Always) vs. "might let the
 //      next sibling claim it" (Sometimes) vs. "examines the lookahead without
 //      claiming it" (Never):
 //
-//        * Always child. Say X.Advance == Always in And(X, Y): X
+//        * Always child. Say X.Advance == Always in AllOf(X, Y): X
 //          definitely reads the lookahead, Y reads later. The
 //          composite stops at X since Y's FirstConsumedRunes is
-//          irrelevant to the And's own.
+//          irrelevant to the AllOf's own.
 //
-//        * Sometimes child. Say Optional in And(Optional(X), Y):
+//        * Sometimes child. Say Optional in AllOf(Optional(X), Y):
 //          Optional might match X or match zero. If it matches zero,
 //          Y reads the lookahead. The composite has to union both
 //          X's and Y's FirstConsumedRunes.
 //
-//        * Never child. Say Peek in And(Peek(X), Y): Peek never
+//        * Never child. Say Peek in AllOf(Peek(X), Y): Peek never
 //          consumes, so Y reads the lookahead. Peek's FirstConsumedRunes
 //          is Empty and contributes nothing. Never tells the
 //          composite "don't union my set into yours, move to the

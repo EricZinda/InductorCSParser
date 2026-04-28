@@ -59,7 +59,7 @@ internal sealed class BetweenInclusiveRule : Rule
 
         // First try to shortcut and exit fast using the "Rule Skip" shortcut described
         // on RuleStartRequirements
-        if (!lexer.PreserveFlattenWrappers && Inner.ErrorMessage == null)
+        if (!lexer.PreserveAllSymbols && Inner.ErrorMessage == null)
         {
             string input = lexer.Input;
             int pos = lexer.Position;
@@ -118,15 +118,15 @@ internal sealed class BetweenInclusiveRule : Rule
 
     private ScannerSkip? TryCreateScannerSkip(Lexer lexer)
     {
-        // Recognize scanner-style loops: ZeroOrMore(Or(match, AnyToken.Delete)).
+        // Recognize scanner-style loops: ZeroOrMore(FirstOf(match, AnyToken.Delete)).
         // The deleted AnyToken fallback means non-matching input would be thrown
         // away one token at a time, so we can jump directly to the next rune that
         // could start a real match without changing the emitted syntax tree.
         if (AtLeast != 0 || AtMost != int.MaxValue)
             return null;
-        if (lexer.PreserveFlattenWrappers || lexer.IsTracing(TraceLevel.Normal))
+        if (lexer.PreserveAllSymbols || lexer.IsTracing(TraceLevel.Normal))
             return null;
-        if (Inner is not OrRule || Inner.ErrorMessage != null)
+        if (Inner is not FirstOfRule || Inner.ErrorMessage != null)
             return null;
 
         var alternatives = Inner.Children;
@@ -208,12 +208,12 @@ internal sealed class BetweenInclusiveRule : Rule
                 candidates.Add(new LiteralScannerCandidate(literal.Expected, ignoreAsciiCase: true));
                 return true;
 
-            case OrRule orRule:
-                if (orRule.Children.Count == 0)
+            case FirstOfRule firstOfRule:
+                if (firstOfRule.Children.Count == 0)
                     return false;
-                for (int index = 0; index < orRule.Children.Count; index++)
+                for (int index = 0; index < firstOfRule.Children.Count; index++)
                 {
-                    if (!TryCollectLiteralScannerCandidates(orRule.Children[index], candidates))
+                    if (!TryCollectLiteralScannerCandidates(firstOfRule.Children[index], candidates))
                         return false;
                 }
                 return true;

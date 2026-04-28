@@ -91,14 +91,14 @@ public class NoneOfRuleTests
         // Token('\n') terminator then fails. For real line-based grammars,
         // add Literal("\r\n") to both the stop set and the terminator.
         // See docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer".
-        var rule = And(
+        var rule = AllOf(
             ZeroOrMore(NoneOf(RuneSet.Single('\n'))),
             Token('\n'));
 
-        // PreserveFlattenWrappers keeps the trailing Token('\n') in the
+        // PreserveAllSymbols keeps the trailing Token('\n') in the
         // tree so Tree.ToString reproduces the full matched line.
         var result = rule.Parse("hello world\n",
-            new ParseOptions { PreserveFlattenWrappers = true });
+            new ParseOptions { PreserveAllSymbols = true });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("hello world\n"));

@@ -71,7 +71,7 @@ current hand-translated InductorParser subset is text-oriented.
 
 The runner doesn't compile regex strings. It can't, because InductorParser
 isn't a regex engine. It's a grammar API where you build `Rule` objects in C#
-out of combinators (`Literal`, `Or`, `And`, `RuneRun`, and so on). For every
+out of combinators (`Literal`, `FirstOf`, `AllOf`, `RuneRun`, and so on). For every
 rebar case the runner supports, somebody sat down and wrote a C# grammar that
 matches the same things the regex would match on the same haystack. That's
 what "hand translation" means here. The dispatcher is a `switch` on the rebar
@@ -199,7 +199,7 @@ Measured on 2026-04-24 with rebar `0.1.0 (rev 8e952148cc)` on Windows
 `win-arm64`, .NET SDK `10.0.202`, .NET host `10.0.6`. Lower medians are better.
 The run used `--max-time 1s --max-warmup-time 500ms`. These numbers include
 the parser core's automatic scanner-shape skip for
-`ZeroOrMore(Or(match, AnyToken.Delete))`.
+`ZeroOrMore(FirstOf(match, AnyToken.Delete))`.
 
 A broader run against every engine that built successfully in this workspace is
 saved under `results/`: raw CSV in `all-runnable-2026-04-24.csv`, with a compact

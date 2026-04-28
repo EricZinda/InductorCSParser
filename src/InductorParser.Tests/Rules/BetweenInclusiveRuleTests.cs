@@ -9,12 +9,12 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class BetweenInclusiveRuleTests
 {
-    // Tests that assert on Tree.ToString() use PreserveFlattenWrappers so
+    // Tests that assert on Tree.ToString() use PreserveAllSymbols so
     // Token rules (default FlattenType.Delete) stay in the tree and their
     // text is visible in the concatenated output. Without the flag the
     // tree would contain only non-Delete nodes, which is the correct
     // parse-time semantic, just not what these tests are looking at.
-    private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
+    private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
 
     [Test]
@@ -50,7 +50,7 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_at_lower_bound_succeeds()
     {
         var rule = BetweenInclusive(2, 5, Token('a'));
-        var result = And(rule, OneOrMore(Token('b'))).Parse("aabbb", Debug());
+        var result = AllOf(rule, OneOrMore(Token('b'))).Parse("aabbb", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("aabbb"));
@@ -60,7 +60,7 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_at_upper_bound_succeeds()
     {
         var rule = BetweenInclusive(2, 5, Token('a'));
-        var result = And(rule, Token('b')).Parse("aaaaab", Debug());
+        var result = AllOf(rule, Token('b')).Parse("aaaaab", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("aaaaab"));
@@ -69,7 +69,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_stops_at_upper_bound_even_with_more_input()
     {
-        var rule = And(BetweenInclusive(1, 3, Token('a')), OneOrMore(Token('a')));
+        var rule = AllOf(BetweenInclusive(1, 3, Token('a')), OneOrMore(Token('a')));
         var result = rule.Parse("aaaaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -89,7 +89,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_zero_zero_succeeds_with_no_matches()
     {
-        var rule = And(BetweenInclusive(0, 0, Token('a')), Token('b'));
+        var rule = AllOf(BetweenInclusive(0, 0, Token('a')), Token('b'));
         var result = rule.Parse("b", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -99,7 +99,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_zero_zero_does_not_consume_matching_input()
     {
-        var rule = And(BetweenInclusive(0, 0, Token('a')), OneOrMore(Token('a')));
+        var rule = AllOf(BetweenInclusive(0, 0, Token('a')), OneOrMore(Token('a')));
         var result = rule.Parse("aaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);

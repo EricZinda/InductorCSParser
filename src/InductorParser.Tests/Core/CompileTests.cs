@@ -48,7 +48,7 @@ public class CompileTests
         // there can't be a set of possible first-consumed runes. A subclass
         // that returns a non-empty set alongside Never is violating the
         // contract, and the check here catches it at Compile time rather
-        // than letting the mismatch silently corrupt an enclosing AndRule's
+        // than letting the mismatch silently corrupt an enclosing AllOfRule's
         // FirstConsumedRunes union.
         var bad = new InconsistentRuleStartRule();
 

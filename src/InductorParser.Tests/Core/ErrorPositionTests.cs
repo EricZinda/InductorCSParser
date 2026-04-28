@@ -62,7 +62,7 @@ public class ErrorPositionTests
     // out explicitly. Tests that need a non-'a' prefix char inline their
     // own grammar.
     private static Rule AtFailureRule() =>
-        And(ZeroOrMore(OneOf(RuneSet.Runes("a\r\n"))), Eof());
+        AllOf(ZeroOrMore(OneOf(RuneSet.Runes("a\r\n"))), Eof());
 
     private static ParseResult ParseAtFailure(string input)
     {
@@ -74,7 +74,7 @@ public class ErrorPositionTests
     [Test]
     public void Success_has_zero_positions_and_line_zero_column_zero()
     {
-        var rule = And(Token('a'), Eof());
+        var rule = AllOf(Token('a'), Eof());
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True);
@@ -125,7 +125,7 @@ public class ErrorPositionTests
         // lands on the first non-'a' char. Input "aa\n" fails at offset 2
         // (the '\n' itself). '\n' is the line terminator. The index that
         // lands ON it reports the line that just ended.
-        var rule = And(OneOrMore(Token('a')), Eof());
+        var rule = AllOf(OneOrMore(Token('a')), Eof());
         var result = rule.Parse("aa\n");
 
         Assert.That(result.Success, Is.False);
@@ -143,7 +143,7 @@ public class ErrorPositionTests
         // tokens: grammar consumes a,a,\r,\n then fails on 'X' at
         // offset 4. The \r\n pair is one logical break so 'X' is on
         // line 1 column 0.
-        var rule = And(ZeroOrMore(OneOf(RuneSet.Runes("a\r\n"))), Eof());
+        var rule = AllOf(ZeroOrMore(OneOf(RuneSet.Runes("a\r\n"))), Eof());
         var result = rule.Parse("aa\r\nX", new ParseOptions { InputUnit = InputUnit.Rune });
 
         Assert.That(result.Success, Is.False);
@@ -164,7 +164,7 @@ public class ErrorPositionTests
         // LSP says positions can't fall inside a line terminator. We
         // attribute the '\n' to the prior line so the caller gets line 0
         // column 3 rather than some negative-column nonsense.
-        var rule = And(
+        var rule = AllOf(
             Token('a'),
             Token('a'),
             Token('\r'),
@@ -229,7 +229,7 @@ public class ErrorPositionTests
         // accepts OneOrMore(Token(guitar)) followed by Eof. Fails on 'X'
         // at char offset 2 (past the two UTF-16 halves of the guitar),
         // which is one rune in.
-        var rule = And(OneOrMore(Token(GuitarGrapheme)), Eof());
+        var rule = AllOf(OneOrMore(Token(GuitarGrapheme)), Eof());
         var result = rule.Parse(GuitarGrapheme + "X");
 
         Assert.That(result.Success, Is.False);
@@ -251,7 +251,7 @@ public class ErrorPositionTests
     public void Grapheme_index_collapses_supplementary_rune_to_one_grapheme()
     {
         // Guitar emoji is one grapheme and two UTF-16 chars.
-        var rule = And(OneOrMore(Token(GuitarGrapheme)), Eof());
+        var rule = AllOf(OneOrMore(Token(GuitarGrapheme)), Eof());
         var result = rule.Parse(GuitarGrapheme + "X");
 
         Assert.That(result.Success, Is.False);
@@ -271,7 +271,7 @@ public class ErrorPositionTests
         // lexer. The default NFC would compose to a one-char grapheme and
         // the rune/grapheme counts the test is demonstrating wouldn't
         // diverge anymore.
-        var rule = And(OneOrMore(Token(LatinEAcuteGrapheme)), Eof());
+        var rule = AllOf(OneOrMore(Token(LatinEAcuteGrapheme)), Eof());
         var result = rule.Parse(LatinEAcuteGrapheme + "X",
             new ParseOptions { NormalizeInput = null });
 
@@ -288,7 +288,7 @@ public class ErrorPositionTests
         // Input "aa\naa" is five chars, so the Token(';') at the end hits
         // EOF at position 5: on line 1 ("aa"), column 2 (one past the
         // last 'a' in 0-based terms).
-        var rule = And(
+        var rule = AllOf(
             Token('a'), Token('a'), Token('\n'),
             Token('a'), Token('a'),
             Token(';'));

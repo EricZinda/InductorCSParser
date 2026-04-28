@@ -8,19 +8,19 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class AtMostRuleTests
 {
-    // Tree.ToString() assertions use PreserveFlattenWrappers so the
+    // Tree.ToString() assertions use PreserveAllSymbols so the
     // Token leaves (default FlattenType.Delete) stay in the tree and
     // their text contributes to the concatenated view.
-    private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
+    private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
     [Test]
     public void AtMost_matches_zero_occurrences()
     {
         // AtMost always succeeds (lower bound is 0), so a grammar that
         // sees no matches still produces a successful parse. The
-        // follow-up rule in the And has to supply whatever content
+        // follow-up rule in the AllOf has to supply whatever content
         // actually shows up at this position.
-        var rule = And(AtMost(3, Token('a')), Token('b'));
+        var rule = AllOf(AtMost(3, Token('a')), Token('b'));
         var result = rule.Parse("b", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -30,7 +30,7 @@ public class AtMostRuleTests
     [Test]
     public void AtMost_matches_one_occurrence()
     {
-        var rule = And(AtMost(3, Token('a')), Token('b'));
+        var rule = AllOf(AtMost(3, Token('a')), Token('b'));
         var result = rule.Parse("ab", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -40,7 +40,7 @@ public class AtMostRuleTests
     [Test]
     public void AtMost_matches_up_to_N_occurrences()
     {
-        var rule = And(AtMost(3, Token('a')), Token('b'));
+        var rule = AllOf(AtMost(3, Token('a')), Token('b'));
         var result = rule.Parse("aaab", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -51,11 +51,11 @@ public class AtMostRuleTests
     public void AtMost_stops_at_N_and_surrounding_rule_consumes_remainder()
     {
         // AtMost commits after the Nth match even when more would
-        // match. Here the And requires the follow-up Token('a') to
+        // match. Here the AllOf requires the follow-up Token('a') to
         // pick up the fourth 'a'. Without the upper-bound stop the
         // outer OneOrMore would swallow everything and the trailing
         // 'b' would have nowhere to go.
-        var rule = And(AtMost(3, Token('a')), Token('a'), Token('b'));
+        var rule = AllOf(AtMost(3, Token('a')), Token('a'), Token('b'));
         var result = rule.Parse("aaaab", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -80,7 +80,7 @@ public class AtMostRuleTests
         // AtMost(3, a) on input "bbb" matches zero times and leaves
         // the lexer where it started. The OneOrMore(b) then runs on
         // the full "bbb".
-        var rule = And(AtMost(3, Token('a')), OneOrMore(Token('b')));
+        var rule = AllOf(AtMost(3, Token('a')), OneOrMore(Token('b')));
         var result = rule.Parse("bbb", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -93,7 +93,7 @@ public class AtMostRuleTests
         // AtMost(0, ...) is technically legal: upper and lower bound
         // are both zero, so the rule always matches zero times and
         // never consumes input. Weird but consistent.
-        var rule = And(AtMost(0, Token('a')), Token('b'));
+        var rule = AllOf(AtMost(0, Token('a')), Token('b'));
         var result = rule.Parse("b", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -103,7 +103,7 @@ public class AtMostRuleTests
     [Test]
     public void AtMost_zero_does_not_consume_matching_input()
     {
-        var rule = And(AtMost(0, Token('a')), OneOrMore(Token('a')));
+        var rule = AllOf(AtMost(0, Token('a')), OneOrMore(Token('a')));
         var result = rule.Parse("aaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -115,15 +115,15 @@ public class AtMostRuleTests
     {
         // AtMost always succeeds, so a WithError message on it never
         // reaches the deepest-failure slot. Document the behavior by
-        // verifying it. A failing parse here fails on the outer And,
+        // verifying it. A failing parse here fails on the outer AllOf,
         // not on AtMost.
-        var rule = And(
+        var rule = AllOf(
             AtMost(3, Token('a')).WithError("unreachable"),
             Token('z'));
         var result = rule.Parse("aaab");
 
         Assert.That(result.Success, Is.False);
-        // AtMost consumed three 'a's. The outer And failed on Token('z')
+        // AtMost consumed three 'a's. The outer AllOf failed on Token('z')
         // against 'b' at offset 3.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorMessage, Does.Not.Contain("unreachable"));

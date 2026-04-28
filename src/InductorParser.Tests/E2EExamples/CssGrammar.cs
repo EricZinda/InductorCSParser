@@ -14,17 +14,17 @@ namespace InductorParser.Tests;
 // A few notes on translating from the C++ expression-template form to
 // the C# factory form:
 //
-//   * AndExpression<Args<A, B, ...>>           -> And(A, B, ...)
-//   * OrExpression<Args<A, B, ...>>            -> Or(A, B, ...)
+//   * AndExpression<Args<A, B, ...>>           -> AllOf(A, B, ...)
+//   * OrExpression<Args<A, B, ...>>            -> FirstOf(A, B, ...)
 //   * OneOrMore/ZeroOrMore/Optional            -> OneOrMore/ZeroOrMore/Optional
 //   * AtLeastAndAtMostExpression<X, N, M>      -> BetweenInclusive(N, M, X)
 //   * LiteralExpression<"str">                 -> Literal("str")
 //   * CharacterSymbol<"c">                     -> Token(c)
 //   * CharacterSetExceptSymbol<"chars">        -> NoneOf("chars")
-//   * NotLiteralExpression<"str">              -> ZeroOrMore(And(Not(Literal("str")), AnyToken()))
+//   * NotLiteralExpression<"str">              -> ZeroOrMore(AllOf(Not(Literal("str")), AnyToken()))
 //   * WhitespaceSymbol / OptionalWhitespaceSymbol -> one-or-more / zero-or-more over WhitespaceChars
 //
-// PEG vs regex ordering: every Or below is written longest-first where
+// PEG vs regex ordering: every FirstOf below is written longest-first where
 // two branches share a prefix. The C++ template form has the same
 // first-match-wins semantics, so this just mirrors what the original
 // already relied on.
@@ -45,29 +45,28 @@ public static class CssGrammar
         RuneSet.Ascii.Letters | RuneSet.Ascii.Digits;
 
     // C++ HexNumbers = 0-9 and A-F and a-f.
-    private static readonly RuneSet HexDigitChars =
-        RuneSet.Ascii.Digits | RuneSet.Runes("ABCDEFabcdef");
+    private static readonly RuneSet HexDigitChars = RuneSet.Ascii.HexDigits;
 
-    // /* comment */, with the body as a single StringBody scan on a
-    // rule-based stopper. StringBody peeks the stopper on each rune
-    // and rolls back, so the closing "*/" is left for the outer And.
-    public static readonly Rule BlockComment = And(
+    // /* comment */, with the body as a single ScanUntil scan on a
+    // rule-based stopper. ScanUntil peeks the stopper on each rune
+    // and rolls back, so the closing "*/" is left for the outer AllOf.
+    public static readonly Rule BlockComment = AllOf(
         Literal("/*"),
-        StringBody(Literal("*/")),
+        ScanUntil(Literal("*/")),
         Literal("*/")
     );
 
     // CSS whitespace: any mix of whitespace characters and block comments,
     // zero or more. Matches C++ CssWhitespaceRule.
-    public static readonly Rule CssWhitespace = ZeroOrMore(Or(
+    public static readonly Rule CssWhitespace = ZeroOrMore(FirstOf(
         OneOf(WhitespaceChars),
         BlockComment
     ));
 
     // Identifier = (letter | _) (letter | digit | _ | -)*
-    public static readonly Rule Identifier = And(
-        Or(OneOf(LetterChars), Token('_')),
-        ZeroOrMore(Or(OneOf(LetterOrDigitChars), Token('_'), Token('-')))
+    public static readonly Rule Identifier = AllOf(
+        FirstOf(OneOf(LetterChars), Token('_')),
+        ZeroOrMore(FirstOf(OneOf(LetterOrDigitChars), Token('_'), Token('-')))
     );
 
     // Strings can escape the quote character, include a line continuation
@@ -75,9 +74,9 @@ public static class CssGrammar
     // outer quote. The C++ version uses ReplaceExpression to rewrite
     // the escaped form in the AST. For accept/reject purposes that
     // reduces to matching the escaped form as a two-rune literal.
-    public static readonly Rule DoubleQuotedString = And(
+    public static readonly Rule DoubleQuotedString = AllOf(
         Token('"'),
-        ZeroOrMore(Or(
+        ZeroOrMore(FirstOf(
             Literal("\\\""),
             Literal("\\\r\n"),
             NoneOf("\"")
@@ -85,9 +84,9 @@ public static class CssGrammar
         Token('"')
     );
 
-    public static readonly Rule SingleQuotedString = And(
+    public static readonly Rule SingleQuotedString = AllOf(
         Token('\''),
-        ZeroOrMore(Or(
+        ZeroOrMore(FirstOf(
             Literal("\\'"),
             Literal("\\\r\n"),
             NoneOf("'")
@@ -95,12 +94,12 @@ public static class CssGrammar
         Token('\'')
     );
 
-    public static readonly Rule ValueString = Or(SingleQuotedString, DoubleQuotedString);
+    public static readonly Rule ValueString = FirstOf(SingleQuotedString, DoubleQuotedString);
 
-    public static readonly Rule ClassSelector = And(Token('.'), Identifier);
-    public static readonly Rule IdSelector = And(Token('#'), Identifier);
+    public static readonly Rule ClassSelector = AllOf(Token('.'), Identifier);
+    public static readonly Rule IdSelector = AllOf(Token('#'), Identifier);
 
-    public static readonly Rule PseudoSelector = And(
+    public static readonly Rule PseudoSelector = AllOf(
         Token(':'),
         Optional(Token(':')),
         Identifier
@@ -110,32 +109,32 @@ public static class CssGrammar
     public static readonly Rule UniversalSelector = Token('*');
 
     // (class|id|pseudo|type|*) (class|pseudo|id)*
-    // Ordering mirrors the C++ Or: class/id/pseudo are distinguishable
+    // Ordering mirrors the C++ FirstOf: class/id/pseudo are distinguishable
     // by their leading sigil. TypeSelector only fires when none of the
     // others could, because it just matches a bare identifier.
-    public static readonly Rule SimpleSelectorSequence = And(
-        Or(ClassSelector, IdSelector, PseudoSelector, TypeSelector, UniversalSelector),
-        ZeroOrMore(Or(ClassSelector, PseudoSelector, IdSelector))
+    public static readonly Rule SimpleSelectorSequence = AllOf(
+        FirstOf(ClassSelector, IdSelector, PseudoSelector, TypeSelector, UniversalSelector),
+        ZeroOrMore(FirstOf(ClassSelector, PseudoSelector, IdSelector))
     );
 
     // Descendant combinator is literally whitespace. One-or-more to
     // disambiguate from an empty join.
     public static readonly Rule Combinator = OneOrMore(OneOf(WhitespaceChars));
 
-    public static readonly Rule Selector = And(
+    public static readonly Rule Selector = AllOf(
         SimpleSelectorSequence,
-        ZeroOrMore(And(Combinator, SimpleSelectorSequence))
+        ZeroOrMore(AllOf(Combinator, SimpleSelectorSequence))
     );
 
-    public static readonly Rule SelectorList = And(
+    public static readonly Rule SelectorList = AllOf(
         CssWhitespace,
         Selector,
-        ZeroOrMore(And(CssWhitespace, Token(','), CssWhitespace, Selector))
+        ZeroOrMore(AllOf(CssWhitespace, Token(','), CssWhitespace, Selector))
     );
 
     // url("...") or url(anything-but-close-paren)
-    public static readonly Rule ValueUrl = Or(
-        And(
+    public static readonly Rule ValueUrl = FirstOf(
+        AllOf(
             Literal("url"),
             Token('('),
             Token('"'),
@@ -143,7 +142,7 @@ public static class CssGrammar
             Token('"'),
             Token(')')
         ),
-        And(
+        AllOf(
             Literal("url"),
             Token('('),
             ZeroOrMore(NoneOf(")")),
@@ -163,9 +162,9 @@ public static class CssGrammar
     // under the value-list production but almost never what the author
     // meant. The Peek demands a hex-digit boundary right after the color
     // so a hex run that's not exactly 3 or 6 digits fails outright.
-    public static readonly Rule ValueColorHex = And(
+    public static readonly Rule ValueColorHex = AllOf(
         Token('#'),
-        Or(
+        FirstOf(
             BetweenInclusive(6, 6, OneOf(HexDigitChars)),
             BetweenInclusive(3, 3, OneOf(HexDigitChars))
         ),
@@ -173,7 +172,7 @@ public static class CssGrammar
     );
 
     // rgba(int, int, int, float) with whitespace anywhere between pieces.
-    public static readonly Rule ValueRgba = And(
+    public static readonly Rule ValueRgba = AllOf(
         Literal("rgba"),
         Token('('), CssWhitespace, Integer(), CssWhitespace,
         Token(','), CssWhitespace, Integer(), CssWhitespace,
@@ -184,14 +183,14 @@ public static class CssGrammar
 
     // Float before Integer: Integer would match the lead of a Float and
     // commit, leaving ".<digits>" behind.
-    public static readonly Rule ValueNumber = Or(Float(), Integer());
+    public static readonly Rule ValueNumber = FirstOf(Float(), Integer());
 
     // number <unit> | "0". The bare zero branch lets an unquoted unitless
     // zero ("margin: 0;") parse without a unit.
-    public static readonly Rule LengthValue = Or(
-        And(
+    public static readonly Rule LengthValue = FirstOf(
+        AllOf(
             ValueNumber,
-            Or(
+            FirstOf(
                 Literal("px"),
                 Literal("pt"),
                 Literal("%"),
@@ -204,7 +203,7 @@ public static class CssGrammar
     // colorHex | rgba | url | length | number | string | identifier.
     // Each branch starts with a distinguishing prefix (#, r, u, digit/-,
     // ", letter/_) so first-match-wins lands on the right arm.
-    public static readonly Rule DeclarationValue = Or(
+    public static readonly Rule DeclarationValue = FirstOf(
         ValueColorHex,
         ValueRgba,
         ValueUrl,
@@ -218,34 +217,34 @@ public static class CssGrammar
     // The declaration body is optional so an empty ";" still parses,
     // matching the C++ grammar's OptionalExpression wrapper around the
     // property:value part.
-    public static readonly Rule Declaration = And(
-        Optional(And(
+    public static readonly Rule Declaration = AllOf(
+        Optional(AllOf(
             Identifier,
             CssWhitespace,
             Token(':'),
             CssWhitespace,
-            OneOrMore(And(
+            OneOrMore(AllOf(
                 DeclarationValue,
                 CssWhitespace,
-                Optional(And(Token(','), CssWhitespace))
+                Optional(AllOf(Token(','), CssWhitespace))
             ))
         )),
         Token(';')
     );
 
     // selector-list { declaration; declaration; ... }
-    public static readonly Rule CssRule = And(
+    public static readonly Rule CssRule = AllOf(
         SelectorList,
         CssWhitespace,
         Token('{'),
         CssWhitespace,
-        ZeroOrMore(And(CssWhitespace, Declaration)),
+        ZeroOrMore(AllOf(CssWhitespace, Declaration)),
         CssWhitespace,
         Token('}')
     );
 
-    public static readonly Rule Document = And(
-        ZeroOrMore(And(CssWhitespace, CssRule)),
+    public static readonly Rule Document = AllOf(
+        ZeroOrMore(AllOf(CssWhitespace, CssRule)),
         CssWhitespace,
         Eof()
     );

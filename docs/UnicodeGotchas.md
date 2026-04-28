@@ -41,13 +41,13 @@ var asciiOnlyLetter = WithinGrapheme(OneOf(RuneSet.Ascii.Letters));
 
 // Emoji-with-modifier matcher: one base emoji rune optionally followed
 // by skin-tone / ZWJ runes, all as one grapheme.
-var emojiCluster = WithinGrapheme(And(
+var emojiCluster = WithinGrapheme(AllOf(
     OneOf(emojiBaseSet),
     ZeroOrMore(OneOf(skinToneOrZwjSet))
 ));
 
 // Hangul syllable expressed as jamo: leading + medial + optional trailing.
-var jamoCluster = WithinGrapheme(And(
+var jamoCluster = WithinGrapheme(AllOf(
     OneOf(leadingJamo),
     OneOf(medialJamo),
     Optional(OneOf(trailingJamo))
@@ -210,24 +210,24 @@ Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 ru
 
 ```csharp
 // Match any of LF, CR, or the CRLF grapheme.
-private static readonly Rule LineBreak = Or(
+private static readonly Rule LineBreak = FirstOf(
     Literal("\r\n"),
     OneOf(RuneSet.Runes("\r\n"))
 );
 
 // Whitespace that includes newlines: put the Literal first so the
 // longer alternative commits before the single-rune fallback.
-public static readonly Rule OptionalWhitespace = ZeroOrMore(Or(
+public static readonly Rule OptionalWhitespace = ZeroOrMore(FirstOf(
     Literal("\r\n"),
     OneOf(RuneSet.Ascii.Whitespace)
 ));
 
 // Scanning "up to end of line": use a rule-based stop with Not(LineBreak),
 // not NoneOf. NoneOf would silently eat the CRLF grapheme.
-public static readonly Rule LineComment = And(
+public static readonly Rule LineComment = AllOf(
     Token('%'),
-    ZeroOrMore(And(Not(LineBreak), AnyToken())),
-    Or(OneOrMore(LineBreak), Eof())
+    ZeroOrMore(AllOf(Not(LineBreak), AnyToken())),
+    FirstOf(OneOrMore(LineBreak), Eof())
 );
 ```
 
@@ -235,7 +235,7 @@ The three anti-patterns to avoid in any line-based grammar:
 
 ```csharp
 // BROKEN on Windows line endings under GraphemeLexer.
-And(..., Token('\n'))                             // fails on CRLF input
+AllOf(..., Token('\n'))                             // fails on CRLF input
 ZeroOrMore(OneOf(RuneSet.Runes("\r\n")))        // skips zero CRLF graphemes
 ZeroOrMore(NoneOf(RuneSet.Single('\n')))      // swallows the CRLF terminator
 ```

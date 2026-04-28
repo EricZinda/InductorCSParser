@@ -56,6 +56,14 @@ public static class SuperpowerJsonParser
         from c in SimpleEscape.Or(UnicodeEscape)
         select c;
 
+    // Per-character ordered choice is the fastest idiomatic Superpower
+    // pattern here. The bulk-run pattern (`Character.Matching(pred).AtLeastOnce()`
+    // inside an outer `.Or().Many()`) measured slower across all shapes
+    // because Superpower's `.AtLeastOnce().Select(new string(cs))`
+    // materializes a char[] plus a string per run, and the outer `.Many()`
+    // returns another T[] that then has to be Concat'd. The extra
+    // allocations outweigh the per-char `.Or()` dispatch savings. See
+    // README "Bulk-run pattern" discussion.
     private static readonly TextParser<char> StringChar =
         EscapedChar.Or(Superpower.Parsers.Character.Matching(
             c => c != '"' && c != '\\',

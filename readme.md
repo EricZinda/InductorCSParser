@@ -22,18 +22,18 @@ Here's a grammar for reading a simple setting, and examples that show how it han
 var settingName = Identifier().As("name");
 
 // "Rune" is the .Net term for Unicode Code Point
-var quotedString = And(
+var quotedString = AllOf(
     Token('"'),
-    StringBody(stopAt=RuneSet.Runes("\"")),
+    ScanUntil(stopAt=RuneSet.Runes("\"")),
     Token('"'));
 
-var settingValue = Or(
+var settingValue = FirstOf(
     Float(),
     Integer(),
     quotedString
 ).Flatten(FlattenType.Preserve).As("value");
 
-var document = And(
+var document = AllOf(
     settingName,
     OptionalWhitespace(),
     Token('='),
@@ -101,7 +101,7 @@ Regex: ^\d+$
 ```CSharp
 Inductor Parser:
 
-var numbersOnly = And(
+var numbersOnly = AllOf(
     OneOrMore(OneOf(RuneSet.Digits)),
     Eof()
 );
@@ -116,8 +116,8 @@ Regex: ^((?!hede).)*$
 ```csharp
 Inductor Parser (actually matches all end of line variants which the OP probably really wanted):
 
-var lineWithoutHede = And(
-    ZeroOrMore(And(
+var lineWithoutHede = AllOf(
+    ZeroOrMore(AllOf(
         Not(Literal("hede")),
         Not(EndOfLine()),
         AnyToken()
@@ -133,7 +133,7 @@ Regex expressions can sometimes introduce [denial-of-service attacks](https://en
 The Inductor Parser avoids this and is more readable as well:
 
 ```csharp
-var validator = And(
+var validator = AllOf(
     OneOrMore(OneOf(RuneSet.Ascii.Letters | RuneSet.Ascii.Digits)),
     Literal("@example.com"),
     Eof()
@@ -145,7 +145,7 @@ var validator = And(
 Even the textbook ReDos example `^(a+)+$` is safe in IP:
 
 ```csharp
-var pattern = And(OneOrMore(OneOrMore(Token('a'))), Eof());
+var pattern = AllOf(OneOrMore(OneOrMore(Token('a'))), Eof());
 ```
 
 Even written in this contrived shape with one composite rule wrapping another, it still runs in linear time. 
@@ -163,3 +163,12 @@ Inductor Parser is designed to be able to be used in Unity, targeting WebGL and 
 - .NET Standard 2.1, not .NET 5+ since Unity's IL2CPP surface is still netstandard2.1. (works fine on .NET 5+, though!)
 
 ## Fast Enough to be Used in Production
+To evaluate performance I used open source benchmarks built by others so that I wasn't unfairly building tests that IP was good at. You can run them yourself in the src/Benchmarks folder.
+
+The [Parlot](https://github.com/sebastienros/parlot) project had a great benchmark of C# parser libraries that I forked into the src/Benchmarks folder. I added both InductorParser and Pegasus (another PEG-style parser) to the suite. You can read the details of the test, what I changed, etc [here](src/Benchmarks/README.md). It asks each parser library to build a Json parser and read 4 different documents that are different shapes. Real world and a nice benchmark. In addition to performance, it is illustrative to look a the grammars for each parser library and compare for readability and reviewability, they are [here](src/Benchmarks/Json).
+
+### Results from 04/24/2026
+[![alt text](src/Benchmarks/Benchmark04242026.jpg)](src/Benchmarks/Benchmark04242026.jpg)
+
+
+

@@ -9,7 +9,7 @@ namespace InductorParser.Tests;
 
 // Parse-time Delete filtering. Rules whose effective FlattenType is Delete
 // return the shared Symbol.Discarded value from TryParse, and composite
-// parents (And / Or / BetweenInclusive) filter it out of their
+// parents (AllOf / FirstOf / BetweenInclusive) filter it out of their
 // Children list. The post-hoc FlattenInto Delete branch still runs for
 // trees built by hand.
 [TestFixture]
@@ -39,12 +39,12 @@ public class DiscardedAtParseTimeTests
     public void OptionalWhitespace_inside_composite_leaves_no_whitespace_children()
     {
         // The realistic JSON-style shape: OptionalWhitespace sits between
-        // two tokens inside an And. The top-level Symbols list should hold
+        // two tokens inside an AllOf. The top-level Symbols list should hold
         // the two token leaves only, with the whitespace contributing
         // nothing. OneOf has FlattenType.Preserve so the token leaves
         // survive. Their Id is the code point, so we assert on that.
         var letter = OneOf(RuneSet.Ascii.Letters);
-        var rule = And(letter, OptionalWhitespace(), letter);
+        var rule = AllOf(letter, OptionalWhitespace(), letter);
         var result = rule.Parse("a   b");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -55,7 +55,7 @@ public class DiscardedAtParseTimeTests
         // letter leaves. The OptionalWhitespace was filtered at parse time,
         // so its text doesn't appear here. Callers who want the full
         // matched input should keep their own reference to it or run with
-        // PreserveFlattenWrappers=true.
+        // PreserveAllSymbols=true.
         Assert.That(string.Concat(result.Symbols), Is.EqualTo("ab"));
     }
 
@@ -69,27 +69,27 @@ public class DiscardedAtParseTimeTests
         Assert.That(charResult.Success, Is.True);
         Assert.That(charResult.Symbols, Is.Empty);
 
-        var notResult = And(Not(Token('y')), Token('x')).Parse("x");
-        // Top-level And holds no children because both its children were
-        // Discarded. And is Flatten, so its children bubble up to the
+        var notResult = AllOf(Not(Token('y')), Token('x')).Parse("x");
+        // Top-level AllOf holds no children because both its children were
+        // Discarded. AllOf is Flatten, so its children bubble up to the
         // root list, which is empty since the children were Discarded.
         Assert.That(notResult.Success, Is.True);
         Assert.That(notResult.Symbols, Is.Empty);
 
-        var peekResult = And(Peek(Token('x')), Token('x')).Parse("x");
+        var peekResult = AllOf(Peek(Token('x')), Token('x')).Parse("x");
         Assert.That(peekResult.Success, Is.True);
         Assert.That(peekResult.Symbols, Is.Empty);
     }
 
     [Test]
-    public void PreserveFlattenWrappers_disables_parse_time_Delete_filtering()
+    public void PreserveAllSymbols_disables_parse_time_Delete_filtering()
     {
         // Same grammar as the leaves-filter test, but with the debug
         // flag on: the Token wrappers around and between the letters
         // should survive into the tree so PrintTree and Find queries
         // see a shape that matches the grammar as written.
-        var rule = And(Token('a'), OptionalWhitespace(), Token('b'));
-        var options = new ParseOptions { PreserveFlattenWrappers = true };
+        var rule = AllOf(Token('a'), OptionalWhitespace(), Token('b'));
+        var options = new ParseOptions { PreserveAllSymbols = true };
         var result = rule.Parse("a   b", options);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -99,7 +99,7 @@ public class DiscardedAtParseTimeTests
         Assert.That(result.Tree.Children[0].FlattenType, Is.EqualTo(FlattenType.Delete));
         Assert.That(result.Tree.Children[0].ToString(), Is.EqualTo("a"));
         Assert.That(result.Tree.Children[2].ToString(), Is.EqualTo("b"));
-        // And the whitespace wrapper preserves its inner rune leaves too.
+        // AllOf the whitespace wrapper preserves its inner rune leaves too.
         Assert.That(result.Tree.Children[1].Children.Count, Is.EqualTo(3));
     }
 

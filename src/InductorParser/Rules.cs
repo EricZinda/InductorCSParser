@@ -16,7 +16,7 @@ namespace InductorParser;
 /// lets a grammar read close to the shape you'd write on a
 /// whiteboard:
 /// <code>
-/// var expression = And(
+/// var expression = AllOf(
 ///     Identifier(),
 ///     OptionalWhitespace(),
 ///     Token('='),
@@ -291,17 +291,17 @@ public static class Rules
     /// <c>ZeroOrMore(NoneOf(stopAt))</c> for long strings.
     /// <code>
     /// // CSV field body: scan until the next comma or newline
-    /// var field = StringBody(RuneSet.Runes(",\n"));
+    /// var field = ScanUntil(RuneSet.Runes(",\n"));
     ///
     /// // Line comment body: scan until end-of-line
-    /// var lineCommentBody = StringBody(RuneSet.Runes("\r\n"));
+    /// var lineCommentBody = ScanUntil(RuneSet.Runes("\r\n"));
     /// </code>
     /// </remarks>
-    public static Rule StringBody(RuneSet stopAt) =>
-        new StringBodyRule(stopAt);
+    public static Rule ScanUntil(RuneSet stopAt) =>
+        new ScanUntilRule(stopAt);
 
     /// <summary>
-    /// <see cref="StringBody(RuneSet)"/> with escape sequences.
+    /// <see cref="ScanUntil(RuneSet)"/> with escape sequences.
     /// Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
@@ -313,14 +313,14 @@ public static class Rules
     /// <code>
     /// // JSON-style string body: anything up to " or \, with
     /// // \n, \t, \r, \", \\ as the allowed single-rune escapes
-    /// var body = StringBody(
+    /// var body = ScanUntil(
     ///     RuneSet.Runes("\"\\"),
     ///     new Rune('\\'),
     ///     OneOf("ntr\"\\"));
     /// </code>
     /// </remarks>
-    public static Rule StringBody(RuneSet stopAt, Rune escapeStart, Rule escapeEnd) =>
-        new StringBodyRule(stopAt, escapeStart, escapeEnd);
+    public static Rule ScanUntil(RuneSet stopAt, Rune escapeStart, Rule escapeEnd) =>
+        new ScanUntilRule(stopAt, escapeStart, escapeEnd);
 
     /// <summary>
     /// Same as the Rune-valued escape-start overload, with a
@@ -334,17 +334,17 @@ public static class Rules
     /// // "${name}" is an interpolation escape. A bare $ (not
     /// // followed by {) falls through to the normal stopper
     /// // path so the outer grammar can handle it separately.
-    /// var body = StringBody(
+    /// var body = ScanUntil(
     ///     RuneSet.Runes("\"$"),
     ///     Literal("${"),
-    ///     And(OneOrMore(NoneOf("}")), Token('}')));
+    ///     AllOf(OneOrMore(NoneOf("}")), Token('}')));
     /// </code>
     /// </remarks>
-    public static Rule StringBody(RuneSet stopAt, Rule escapeStart, Rule escapeEnd) =>
-        new StringBodyRule(stopAt, escapeStart, escapeEnd);
+    public static Rule ScanUntil(RuneSet stopAt, Rule escapeStart, Rule escapeEnd) =>
+        new ScanUntilRule(stopAt, escapeStart, escapeEnd);
 
     /// <summary>
-    /// <see cref="StringBody(RuneSet)"/> with a rule-valued stop
+    /// <see cref="ScanUntil(RuneSet)"/> with a rule-valued stop
     /// condition. Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
@@ -354,17 +354,17 @@ public static class Rules
     /// sequence like <c>]]&gt;</c>).
     /// <code>
     /// // XML CDATA body: scan until the closing "]]&gt;"
-    /// var cdataBody = StringBody(Literal("]]&gt;"));
+    /// var cdataBody = ScanUntil(Literal("]]&gt;"));
     ///
     /// // C-style block comment body: scan until "*/"
-    /// var blockCommentBody = StringBody(Literal("*/"));
+    /// var blockCommentBody = ScanUntil(Literal("*/"));
     /// </code>
     /// </remarks>
-    public static Rule StringBody(Rule stopAt) =>
-        new StringBodyRule(stopAt);
+    public static Rule ScanUntil(Rule stopAt) =>
+        new ScanUntilRule(stopAt);
 
     /// <summary>
-    /// Rule-stopper StringBody with escape sequences. Default
+    /// Rule-stopper ScanUntil with escape sequences. Default
     /// <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
@@ -372,14 +372,14 @@ public static class Rules
     /// <code>
     /// // Python-style triple-quoted string body: scan until
     /// // """, with \" and \\ as single-rune escapes
-    /// var body = StringBody(
+    /// var body = ScanUntil(
     ///     Literal("\"\"\""),
     ///     new Rune('\\'),
     ///     OneOf("\"\\"));
     /// </code>
     /// </remarks>
-    public static Rule StringBody(Rule stopAt, Rune escapeStart, Rule escapeEnd) =>
-        new StringBodyRule(stopAt, escapeStart, escapeEnd);
+    public static Rule ScanUntil(Rule stopAt, Rune escapeStart, Rule escapeEnd) =>
+        new ScanUntilRule(stopAt, escapeStart, escapeEnd);
 
     /// <summary>
     /// Match any one token (one grapheme under GraphemeLexer, one
@@ -428,11 +428,11 @@ public static class Rules
     /// <exception cref="ArgumentException">
     /// <paramref name="children"/> is null or empty.
     /// </exception>
-    public static Rule And(params Rule[] children)
+    public static Rule AllOf(params Rule[] children)
     {
         if (children == null || children.Length == 0)
-            throw new ArgumentException("And requires at least one child rule.", nameof(children));
-        return new AndRule(children);
+            throw new ArgumentException("AllOf requires at least one child rule.", nameof(children));
+        return new AllOfRule(children);
     }
 
     /// <summary>
@@ -448,11 +448,11 @@ public static class Rules
     /// <exception cref="ArgumentException">
     /// <paramref name="children"/> is null or empty.
     /// </exception>
-    public static Rule Or(params Rule[] children)
+    public static Rule FirstOf(params Rule[] children)
     {
         if (children == null || children.Length == 0)
-            throw new ArgumentException("Or requires at least one child rule.", nameof(children));
-        return new OrRule(children);
+            throw new ArgumentException("FirstOf requires at least one child rule.", nameof(children));
+        return new FirstOfRule(children);
     }
 
     /// <summary>
@@ -575,14 +575,14 @@ public static class Rules
     /// Match a signed integer: an optional leading + or -,
     /// followed by one or more decimal digits. Default
     /// <see cref="FlattenType"/>: <see cref="FlattenType.Flatten"/>
-    /// (from the composed outer <see cref="And"/>).
+    /// (from the composed outer <see cref="AllOf"/>).
     /// </summary>
     /// <remarks>
     /// Pre-built because every grammar ends up wanting it.
     /// </remarks>
     public static Rule Integer() =>
-        And(
-            Optional(Or(Token('+'), Token('-'))),
+        AllOf(
+            Optional(FirstOf(Token('+'), Token('-'))),
             OneOrMore(OneOf(RuneSet.Digits))
         );
 
@@ -590,14 +590,14 @@ public static class Rules
     /// Match a simple decimal: an optional leading -, one or more
     /// digits, a literal '.', and one or more digits. Default
     /// <see cref="FlattenType"/>: <see cref="FlattenType.Flatten"/>
-    /// (from the composed outer <see cref="And"/>).
+    /// (from the composed outer <see cref="AllOf"/>).
     /// </summary>
     /// <remarks>
     /// Doesn't handle exponents, scientific notation, or leading
     /// '+'. Grammars that need those compose their own.
     /// </remarks>
     public static Rule Float() =>
-        And(
+        AllOf(
             Optional(Token('-').Flatten(FlattenType.Flatten)),
             Integer(),
             Token('.').Flatten(FlattenType.Preserve),
@@ -647,7 +647,7 @@ public static class Rules
     /// CRLF is tried first so a CR immediately followed by an LF is
     /// consumed as one terminator rather than split into two. 
     /// </remarks>
-    public static Rule EndOfLine() => Or(
+    public static Rule EndOfLine() => FirstOf(
         Literal("\r\n"),
         OneOf(RuneSet.SingleRuneLineTerminators)
     ).Flatten(FlattenType.Delete);
@@ -675,7 +675,7 @@ public static class Rules
     /// the end of every line has to accept EOF as equivalent. Writing
     /// this inline every time gets tedious.
     /// </remarks>
-    public static Rule EndOfLineOrEof() => Or(EndOfLine(), Eof()).Flatten(FlattenType.Delete);
+    public static Rule EndOfLineOrEof() => FirstOf(EndOfLine(), Eof()).Flatten(FlattenType.Delete);
 
     /// <summary>
     /// Encodes the Unicode definition of a "programming language
@@ -731,12 +731,12 @@ public static class Rules
     {
         var start = RuneSet.XidStart | extraStartRunes;
         var body = RuneSet.XidContinue | extraBodyRunes;
-        return And(
+        return AllOf(
             // First grapheme: starts with a Start rune, rest of its runes
             // (if any) are Body runes. Under GraphemeLexer this handles
             // precomposed "é", "ñ", etc. as single-rune graphemes and
             // "हि"-style consonant+vowel-sign graphemes as multi-rune.
-            WithinGrapheme(And(OneOf(start), ZeroOrMore(OneOf(body)))),
+            WithinGrapheme(AllOf(OneOf(start), ZeroOrMore(OneOf(body)))),
             // Subsequent graphemes: every rune must be a Body rune.
             ZeroOrMore(WithinGrapheme(OneOrMore(OneOf(body))))
         ).Flatten(FlattenType.Preserve);
@@ -756,7 +756,7 @@ public static class Rules
     /// The rule to run against the grapheme's runes. Must consume every
     /// rune of the grapheme on success; a rule that matches only a
     /// prefix causes the whole <c>WithinGrapheme</c> to fail. Any rule
-    /// composition is allowed inside (<see cref="And"/>, <see cref="Or"/>,
+    /// composition is allowed inside (<see cref="AllOf"/>, <see cref="FirstOf"/>,
     /// <c>OneOf</c>, etc.).
     /// </param>
     /// <remarks>
@@ -764,7 +764,7 @@ public static class Rules
     /// structure. Used by <see cref="Identifier"/> to make identifier
     /// matching work on Devanagari, Thai, Arabic-with-vowels, and other
     /// scripts whose "letters" are multi-rune graphemes. Other uses:
-    /// emoji-with-modifier matchers (<c>WithinGrapheme(And(OneOf(EmojiBase),
+    /// emoji-with-modifier matchers (<c>WithinGrapheme(AllOf(OneOf(EmojiBase),
     /// ZeroOrMore(OneOf(SkinToneOrZWJ))))</c>), ASCII-only strictness
     /// (<c>WithinGrapheme(OneOf(RuneSet.Ascii.Letters))</c> rejects any
     /// multi-rune grapheme), Hangul jamo clusters, etc.

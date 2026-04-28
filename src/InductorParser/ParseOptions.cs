@@ -90,5 +90,5 @@ public sealed class ParseOptions
     // way. The consequence is that Tree.Find(rule) only hits rules
     // whose FlattenType is Preserve. Set .Flatten(FlattenType.Preserve)
     // on any rule whose wrapper you need to locate after parsing.
-    public bool PreserveFlattenWrappers { get; set; } = false;
+    public bool PreserveAllSymbols { get; set; } = false;
 }

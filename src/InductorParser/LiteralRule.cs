@@ -9,8 +9,8 @@ namespace InductorParser;
 // the N-character generalization of TokenRule. Where TokenRule's expected is
 // one grapheme, LiteralRule's expected is any non-empty string.
 //
-// This is better than using And(Token('m'), Token('a'), Token('j')) since each
-// Token opens its own transaction. A three-character And(Token, Token, Token)
+// This is better than using AllOf(Token('m'), Token('a'), Token('j')) since each
+// Token opens its own transaction. A three-character AllOf(Token, Token, Token)
 // does three BeginTransaction/Commit cycles and three RecordFailure slots.
 // Literal("maj") does one. For keyword-heavy grammars (chord notation, SQL
 // keywords, HTTP methods) this is the difference between per-keyword O(N)

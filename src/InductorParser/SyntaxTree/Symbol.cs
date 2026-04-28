@@ -8,11 +8,11 @@ namespace InductorParser.SyntaxTree;
 // A node in the parse tree produced by Rule.Parse. It has wwo shapes:
 //
 // Composite: carries a list of child Symbols. Used by rules that
-//     build structure (And, Or, OneOrMore wrapping content).
+//     build structure (AllOf, FirstOf, OneOrMore wrapping content).
 //
 // Leaf: carries a ReadOnlyMemory<char> pointing into a section of
 //     the original input string. Used by rules that match content
-//     (Token, Literal, OneOf, StringBody). ToString() returns the
+//     (Token, Literal, OneOf, ScanUntil). ToString() returns the
 //     text it points at. The parse never copies input into a new
 //     string.
 public sealed class Symbol
@@ -23,7 +23,7 @@ public sealed class Symbol
     private static readonly IReadOnlyList<Symbol> EmptyChildren = Array.Empty<Symbol>();
 
     // Shared Symbol a Rule.TryParse returns in place of a real one when
-    // the rule's effective FlattenType is Delete. Consumers like AndRule
+    // the rule's effective FlattenType is Delete. Consumers like AllOfRule
     // filter it out before it reaches the
     // parent's Children list, so rules with FlattenType.Delete never
     // contribute a Discarded Symbol to the final tree.
@@ -89,7 +89,7 @@ public sealed class Symbol
     // characters under them do, through their surviving
     // FlattenType.Preserve or leaf descendants. Callers who want to
     // rebuild the exact input verbatim should either keep the string
-    // they passed to Parse, or enable ParseOptions.PreserveFlattenWrappers
+    // they passed to Parse, or enable ParseOptions.PreserveAllSymbols
     // to keep every grammar node (including FlattenType.Delete ones)
     // in the tree.
     public override string ToString()
@@ -119,6 +119,13 @@ public sealed class Symbol
             total += child.GetUtf8ByteCount();
         return total;
     }
+
+    // Does this specific Symbol correspond to the given rule? The common
+    // tree-walker dispatch pattern ("is this a Number node? a String
+    // node?") reads more naturally as symbol.Is(Rule) than as
+    // symbol.Id == rule.Id, and hides the Id plumbing from consumer
+    // code. Unlike Find, this is a single-node check, no tree walk.
+    public bool Is(Rule rule) => Id == rule.Id;
 
     // Depth-first search for the first Symbol whose Id matches. Returns
     // null if nothing matches. Use when you expect exactly one match

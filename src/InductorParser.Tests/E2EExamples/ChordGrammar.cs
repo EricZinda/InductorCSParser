@@ -18,7 +18,7 @@ namespace InductorParser.Tests;
 // with RegexOptions.IgnoreCase.
 //
 // PEG vs regex: regex's (a|b) alternation is "eager but can backtrack out,"
-// while PEG Or(a, b) commits to the first match that succeeds. In every
+// while PEG FirstOf(a, b) commits to the first match that succeeds. In every
 // alternation below, the branches either have disjoint first characters
 // (a/b/c/...) or are ordered longest-first (maj before m, 11/13 before 1)
 // so the commit happens on the right branch.
@@ -45,12 +45,12 @@ public static class ChordGrammar
 
         // (maj|min|m|dim|°|o|aug|+|sus[24]?|5)?
         // Longest first so "maj" wins over "m", "min" wins over "m".
-        var quality1 = Or(
+        var quality1 = FirstOf(
             LiteralIgnoreAsciiCase("maj"),
             LiteralIgnoreAsciiCase("min"),
             LiteralIgnoreAsciiCase("dim"),
             LiteralIgnoreAsciiCase("aug"),
-            And(LiteralIgnoreAsciiCase("sus"), Optional(OneOf("24"))),
+            AllOf(LiteralIgnoreAsciiCase("sus"), Optional(OneOf("24"))),
             LiteralIgnoreAsciiCase("m"),
             LiteralIgnoreAsciiCase("o"),
             Token('°'),
@@ -61,7 +61,7 @@ public static class ChordGrammar
         // (6|7|9|11|13)?
         // Try two-digit numbers first so "11" and "13" don't get partial-matched
         // as "1" with nothing to follow.
-        var ext1 = Or(
+        var ext1 = FirstOf(
             LiteralIgnoreAsciiCase("11"),
             LiteralIgnoreAsciiCase("13"),
             Token('6'),
@@ -71,7 +71,7 @@ public static class ChordGrammar
 
         // (maj|M|Δ|m|ø|°)?
         // IgnoreCase makes M and m equivalent, so LiteralIgnoreAsciiCase("m") covers both.
-        var quality2 = Or(
+        var quality2 = FirstOf(
             LiteralIgnoreAsciiCase("maj"),
             LiteralIgnoreAsciiCase("m"),
             Token('Δ'),
@@ -80,7 +80,7 @@ public static class ChordGrammar
         );
 
         // (7|9|11|13)?
-        var ext2 = Or(
+        var ext2 = FirstOf(
             LiteralIgnoreAsciiCase("11"),
             LiteralIgnoreAsciiCase("13"),
             Token('7'),
@@ -91,24 +91,24 @@ public static class ChordGrammar
         // Ordering: "add1" before "add" (longer prefix match for PEG). "#11"
         // before "#5"/"#9" (again, longer first). "b13" before "b5"/"b9".
         // "sus[24]?" matches "sus", "sus2", or "sus4".
-        var addMod = Or(
-            And(LiteralIgnoreAsciiCase("add1"), OneOf("13")),
-            And(LiteralIgnoreAsciiCase("add"), OneOf("2469")),
+        var addMod = FirstOf(
+            AllOf(LiteralIgnoreAsciiCase("add1"), OneOf("13")),
+            AllOf(LiteralIgnoreAsciiCase("add"), OneOf("2469")),
             LiteralIgnoreAsciiCase("b13"),
             LiteralIgnoreAsciiCase("#11"),
             LiteralIgnoreAsciiCase("b5"),
             LiteralIgnoreAsciiCase("b9"),
             LiteralIgnoreAsciiCase("#5"),
             LiteralIgnoreAsciiCase("#9"),
-            And(LiteralIgnoreAsciiCase("no"), OneOf("357")),
-            And(LiteralIgnoreAsciiCase("sus"), Optional(OneOf("24"))),
+            AllOf(LiteralIgnoreAsciiCase("no"), OneOf("357")),
+            AllOf(LiteralIgnoreAsciiCase("sus"), Optional(OneOf("24"))),
             LiteralIgnoreAsciiCase("alt")
         );
 
         // (\/[A-Ga-g][#b♯♭x]*)?
-        var slashBass = And(Token('/'), root, ZeroOrMore(accidental));
+        var slashBass = AllOf(Token('/'), root, ZeroOrMore(accidental));
 
-        return And(
+        return AllOf(
             root,
             ZeroOrMore(accidental),
             Optional(quality1),

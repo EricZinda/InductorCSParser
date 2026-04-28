@@ -7,6 +7,7 @@ using System.Text;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Order;
+using InductorParser.Benchmarks.Json.InductorParsers;
 using InductorParser.Benchmarks.Json.ParlotParsers;
 using InductorParser.Benchmarks.Json.PegasusParsers;
 using InductorParser.Benchmarks.Json.PidginParsers;
@@ -55,10 +56,19 @@ public class JsonBench
     public object BigJson_Parlot() => ParlotJsonParser.Parse(_bigJson)!;
 
     [Benchmark, BenchmarkCategory("Big")]
-    public object BigJson_InductorParser() => InductorJsonParser.Parse(_bigJson);
+    public object BigJson_InductorParserRune() => InductorJsonParser.Parse(_bigJson);
 
     [Benchmark, BenchmarkCategory("Big")]
-    public object BigJson_Pegasus() => PegasusJsonParser.Parse(_bigJson);
+    public object BigJson_InductorParserGrapheme() => InductorJsonParser.ParseGrapheme(_bigJson);
+
+    [Benchmark, BenchmarkCategory("Big")]
+    public object BigJson_InductorParserTyped() => InductorJsonParser.ParseTyped(_bigJson);
+
+    [Benchmark, BenchmarkCategory("Big")]
+    public object BigJson_PegasusOptimized() => PegasusJsonOptimizedParser.Parse(_bigJson);
+
+    [Benchmark, BenchmarkCategory("Big")]
+    public object BigJson_PegasusWiki() => PegasusJsonWikiParser.Parse(_bigJson);
 
     [Benchmark, BenchmarkCategory("Big")]
     public object BigJson_Pidgin() => PidginJsonParser.Parse(_bigJson).Value!;
@@ -84,10 +94,19 @@ public class JsonBench
     public object LongJson_Parlot() => ParlotJsonParser.Parse(_longJson)!;
 
     [Benchmark, BenchmarkCategory("Long")]
-    public object LongJson_InductorParser() => InductorJsonParser.Parse(_longJson);
+    public object LongJson_InductorParserRune() => InductorJsonParser.Parse(_longJson);
 
     [Benchmark, BenchmarkCategory("Long")]
-    public object LongJson_Pegasus() => PegasusJsonParser.Parse(_longJson);
+    public object LongJson_InductorParserGrapheme() => InductorJsonParser.ParseGrapheme(_longJson);
+
+    [Benchmark, BenchmarkCategory("Long")]
+    public object LongJson_InductorParserTyped() => InductorJsonParser.ParseTyped(_longJson);
+
+    [Benchmark, BenchmarkCategory("Long")]
+    public object LongJson_PegasusOptimized() => PegasusJsonOptimizedParser.Parse(_longJson);
+
+    [Benchmark, BenchmarkCategory("Long")]
+    public object LongJson_PegasusWiki() => PegasusJsonWikiParser.Parse(_longJson);
 
     [Benchmark, BenchmarkCategory("Long")]
     public object LongJson_Pidgin() => PidginJsonParser.Parse(_longJson).Value!;
@@ -114,10 +133,19 @@ public class JsonBench
     public object DeepJson_Parlot() => ParlotJsonParser.Parse(_deepJson)!;
 
     [Benchmark, BenchmarkCategory("Deep")]
-    public object DeepJson_InductorParser() => InductorJsonParser.Parse(_deepJson);
+    public object DeepJson_InductorParserRune() => InductorJsonParser.Parse(_deepJson);
 
     [Benchmark, BenchmarkCategory("Deep")]
-    public object DeepJson_Pegasus() => PegasusJsonParser.Parse(_deepJson);
+    public object DeepJson_InductorParserGrapheme() => InductorJsonParser.ParseGrapheme(_deepJson);
+
+    [Benchmark, BenchmarkCategory("Deep")]
+    public object DeepJson_InductorParserTyped() => InductorJsonParser.ParseTyped(_deepJson);
+
+    [Benchmark, BenchmarkCategory("Deep")]
+    public object DeepJson_PegasusOptimized() => PegasusJsonOptimizedParser.Parse(_deepJson);
+
+    [Benchmark, BenchmarkCategory("Deep")]
+    public object DeepJson_PegasusWiki() => PegasusJsonWikiParser.Parse(_deepJson);
 
     [Benchmark, BenchmarkCategory("Deep")]
     public object DeepJson_Pidgin() => PidginJsonParser.Parse(_deepJson).Value!;
@@ -140,10 +168,19 @@ public class JsonBench
     public object WideJson_Parlot() => ParlotJsonParser.Parse(_wideJson)!;
 
     [Benchmark, BenchmarkCategory("Wide")]
-    public object WideJson_InductorParser() => InductorJsonParser.Parse(_wideJson);
+    public object WideJson_InductorParserRune() => InductorJsonParser.Parse(_wideJson);
 
     [Benchmark, BenchmarkCategory("Wide")]
-    public object WideJson_Pegasus() => PegasusJsonParser.Parse(_wideJson);
+    public object WideJson_InductorParserGrapheme() => InductorJsonParser.ParseGrapheme(_wideJson);
+
+    [Benchmark, BenchmarkCategory("Wide")]
+    public object WideJson_InductorParserTyped() => InductorJsonParser.ParseTyped(_wideJson);
+
+    [Benchmark, BenchmarkCategory("Wide")]
+    public object WideJson_PegasusOptimized() => PegasusJsonOptimizedParser.Parse(_wideJson);
+
+    [Benchmark, BenchmarkCategory("Wide")]
+    public object WideJson_PegasusWiki() => PegasusJsonWikiParser.Parse(_wideJson);
 
     [Benchmark, BenchmarkCategory("Wide")]
     public object WideJson_Pidgin() => PidginJsonParser.Parse(_wideJson).Value!;

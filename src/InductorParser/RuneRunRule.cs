@@ -7,7 +7,7 @@ namespace InductorParser;
 
 // Matches a contiguous run of single-rune tokens from one RuneSet and
 // returns the whole run as one leaf Symbol. This is the character-class
-// analogue of LiteralRule/StringBodyRule: use it when the grammar wants a
+// analogue of LiteralRule/ScanUntilRule: use it when the grammar wants a
 // maximal run such as [A-Za-z0-9_]+, not when it needs one Symbol per rune.
 internal sealed class RuneRunRule : Rule
 {

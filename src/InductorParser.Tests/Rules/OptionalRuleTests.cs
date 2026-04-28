@@ -10,17 +10,17 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class OptionalRuleTests
 {
-    // Tree.ToString() assertions below use PreserveFlattenWrappers so
+    // Tree.ToString() assertions below use PreserveAllSymbols so
     // Token leaves (default FlattenType.Delete) survive parse-time
     // filtering and appear in the concatenated view.
-    private static ParseOptions Debug() => new() { PreserveFlattenWrappers = true };
+    private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
     [Test]
     public void Optional_inner_match_is_consumed()
     {
         // Optional wraps a rule. When inner matches, that input is consumed
         // and the surrounding grammar sees the post-match position.
-        var rule = And(Optional(Token('-')), Token('a'));
+        var rule = AllOf(Optional(Token('-')), Token('a'));
         var result = rule.Parse("-a", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -32,7 +32,7 @@ public class OptionalRuleTests
     {
         // Inner doesn't match. Optional still succeeds with empty and the
         // surrounding grammar runs from the same position Optional started at.
-        var rule = And(Optional(Token('-')), Token('a'));
+        var rule = AllOf(Optional(Token('-')), Token('a'));
         var result = rule.Parse("a", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -46,7 +46,7 @@ public class OptionalRuleTests
         // than the required path can still win the error message via
         // deepest-failure-wins.
         //
-        // Grammar: And(Optional(And(a, b, c-with-message)), x-with-message)
+        // Grammar: AllOf(Optional(AllOf(a, b, c-with-message)), x-with-message)
         // Input:   "abdy"
         //
         // Optional's inner reads "ab" then 'c' fails at offset 2,
@@ -57,7 +57,7 @@ public class OptionalRuleTests
         // override with a WithError at the outer required rule, but
         // that won't help here because the outer Token('x') already has
         // one and it's still shallower.
-        var rule = And(Optional(And(Token('a'),
+        var rule = AllOf(Optional(AllOf(Token('a'),
                                     Token('b'),
                                     Token('c').WithError("need 'c'"))),
                        Token('x').WithError("need 'x'"));
@@ -86,11 +86,11 @@ public class OptionalRuleTests
     [Test]
     public void Optional_trace_with_match_produces_expected_output()
     {
-        // Optional opens its own transaction. And(Optional(Token('a')),
-        // Token('b')) on "ab": And at depth 1, Optional adds depth 2,
+        // Optional opens its own transaction. AllOf(Optional(Token('a')),
+        // Token('b')) on "ab": AllOf at depth 1, Optional adds depth 2,
         // the inner Token adds depth 3 (nine spaces).
         var sink = NewSink();
-        And(Optional(Token('a')), Token('b'))
+        AllOf(Optional(Token('a')), Token('b'))
             .Parse("ab", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
@@ -99,7 +99,7 @@ public class OptionalRuleTests
             "      SUCC | Optional: count= 1",
             "      Lexer.Read: 'b', Consumed: 2",
             "      SUCC | Token: found 'b'",
-            "   SUCC | And: found 2"
+            "   SUCC | AllOf: found 2"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
@@ -113,14 +113,14 @@ public class OptionalRuleTests
         // appears. Token('b') then runs against the original position since
         // Optional's commit didn't advance the lexer.
         var sink = NewSink();
-        And(Optional(Token('a')), Token('b'))
+        AllOf(Optional(Token('a')), Token('b'))
             .Parse("b", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      SUCC | Optional: count= 0",
             "      Lexer.Read: 'b', Consumed: 1",
             "      SUCC | Token: found 'b'",
-            "   SUCC | And: found 2"
+            "   SUCC | AllOf: found 2"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }

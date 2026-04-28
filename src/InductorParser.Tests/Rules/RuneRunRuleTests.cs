@@ -22,7 +22,7 @@ public class RuneRunRuleTests
     [Test]
     public void RuneRun_stops_before_first_rune_outside_the_set()
     {
-        var rule = And(RuneRun(RuneSet.Ascii.Letters), Token('!'));
+        var rule = AllOf(RuneRun(RuneSet.Ascii.Letters), Token('!'));
 
         var result = rule.Parse("abc!");
 
