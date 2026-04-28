@@ -145,12 +145,12 @@ public class StateMachineGrammarCompareTests
         var root = OneOf("ABCDEFGabcdefg").Delete();
         var accidental = OneOf("#bB♯♭xX").Delete();
 
-        var quality1 = Or(
+        var quality1 = FirstOf(
             LiteralIgnoreAsciiCase("maj"),
             LiteralIgnoreAsciiCase("min"),
             LiteralIgnoreAsciiCase("dim"),
             LiteralIgnoreAsciiCase("aug"),
-            And(LiteralIgnoreAsciiCase("sus"), Optional(OneOf("24").Delete())),
+            AllOf(LiteralIgnoreAsciiCase("sus"), Optional(OneOf("24").Delete())),
             LiteralIgnoreAsciiCase("m"),
             LiteralIgnoreAsciiCase("o"),
             Token('°'),
@@ -158,7 +158,7 @@ public class StateMachineGrammarCompareTests
             Token('5')
         );
 
-        var ext1 = Or(
+        var ext1 = FirstOf(
             LiteralIgnoreAsciiCase("11"),
             LiteralIgnoreAsciiCase("13"),
             Token('6'),
@@ -166,7 +166,7 @@ public class StateMachineGrammarCompareTests
             Token('9')
         );
 
-        var quality2 = Or(
+        var quality2 = FirstOf(
             LiteralIgnoreAsciiCase("maj"),
             LiteralIgnoreAsciiCase("m"),
             Token('Δ'),
@@ -174,30 +174,30 @@ public class StateMachineGrammarCompareTests
             Token('°')
         );
 
-        var ext2 = Or(
+        var ext2 = FirstOf(
             LiteralIgnoreAsciiCase("11"),
             LiteralIgnoreAsciiCase("13"),
             Token('7'),
             Token('9')
         );
 
-        var addMod = Or(
-            And(LiteralIgnoreAsciiCase("add1"), OneOf("13").Delete()),
-            And(LiteralIgnoreAsciiCase("add"), OneOf("2469").Delete()),
+        var addMod = FirstOf(
+            AllOf(LiteralIgnoreAsciiCase("add1"), OneOf("13").Delete()),
+            AllOf(LiteralIgnoreAsciiCase("add"), OneOf("2469").Delete()),
             LiteralIgnoreAsciiCase("b13"),
             LiteralIgnoreAsciiCase("#11"),
             LiteralIgnoreAsciiCase("b5"),
             LiteralIgnoreAsciiCase("b9"),
             LiteralIgnoreAsciiCase("#5"),
             LiteralIgnoreAsciiCase("#9"),
-            And(LiteralIgnoreAsciiCase("no"), OneOf("357").Delete()),
-            And(LiteralIgnoreAsciiCase("sus"), Optional(OneOf("24").Delete())),
+            AllOf(LiteralIgnoreAsciiCase("no"), OneOf("357").Delete()),
+            AllOf(LiteralIgnoreAsciiCase("sus"), Optional(OneOf("24").Delete())),
             LiteralIgnoreAsciiCase("alt")
         );
 
-        var slashBass = And(Token('/'), root, ZeroOrMore(accidental));
+        var slashBass = AllOf(Token('/'), root, ZeroOrMore(accidental));
 
-        return And(
+        return AllOf(
             root,
             ZeroOrMore(accidental),
             Optional(quality1),
@@ -221,26 +221,26 @@ public class StateMachineGrammarCompareTests
         private static readonly Rule OptionalOneWhitespace =
             Optional(OneOf(RuneSet.Whitespace).Delete());
 
-        public static readonly Rule H1Heading = And(
+        public static readonly Rule H1Heading = AllOf(
             Token('#'),
             Not(Token('#')),
             OptionalOneWhitespace,
             RestOfLine,
             Eof());
 
-        public static readonly Rule Bullet = And(
+        public static readonly Rule Bullet = AllOf(
             OneOf("-*+").Delete(),
             OptionalOneWhitespace,
             RestOfLine,
             Eof());
 
-        public static readonly Rule HrRun = And(
+        public static readonly Rule HrRun = AllOf(
             AtLeast(3, OneOf("-*+").Delete()),
             Eof());
 
-        public static readonly Rule HrSpaced = And(
+        public static readonly Rule HrSpaced = AllOf(
             OneOf("-*+").Delete(),
-            AtLeast(2, And(Token(' '), OneOf("-*+").Delete())),
+            AtLeast(2, AllOf(Token(' '), OneOf("-*+").Delete())),
             Eof());
     }
 

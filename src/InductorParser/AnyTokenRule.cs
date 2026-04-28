@@ -10,7 +10,7 @@ namespace InductorParser;
 // multi-rune), so AnyToken() matches any grapheme including 👨‍👩‍👧‍👦.
 //
 // This is the "match one token, whatever it is" leaf. Its
-// companion idiom is ZeroOrMore(And(Not(stopRule), AnyToken())), which
+// companion idiom is ZeroOrMore(AllOf(Not(stopRule), AnyToken())), which
 // sweeps up content until wherever stopRule would fire. See the
 // "Stopping at a Multi-Character Terminator" section of Recipes.md.
 internal sealed class AnyTokenRule : Rule

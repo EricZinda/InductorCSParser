@@ -9,7 +9,7 @@ namespace InductorParser;
 // This is the leaf for a JSON / C++ / Python string body.
 // It is a specialized scanner for the "string body" grammar shape: scan runes
 // forward until a stopper character or characters is seen, handling escape sequences inline.
-// Collapses ZeroOrMore(Or(bodyRune, And(escapeStart, escapeEnd))) into one rule that
+// Collapses ZeroOrMore(FirstOf(bodyRune, AllOf(escapeStart, escapeEnd))) into one rule that
 // does the scan in a tight loop and returns one leaf Symbol
 // covering the matched section of input. One dispatch for the outer rule
 // and one Symbol allocation per matched run, however many runes the run
@@ -60,7 +60,7 @@ namespace InductorParser;
 // rule built dynamically from whatever `delim` the opening
 // captured. That is context-sensitive and not directly expressible
 // as a fixed Rule at grammar-build time.
-internal sealed class StringBodyRule : Rule
+internal sealed class ScanUntilRule : Rule
 {
     // Stopper discrimination. _stopperRule != null selects the general
     // path, otherwise _stopperSet is used. The general path is one
@@ -100,13 +100,13 @@ internal sealed class StringBodyRule : Rule
     // where that allocation registers, give the end
     // .Flatten(FlattenType.Delete) and the parse-time Delete filter
     // removes the Symbol construction entirely. On an end failure,
-    // StringBody fails as a whole (a started escape that can't
+    // ScanUntil fails as a whole (a started escape that can't
     // complete isn't a well-formed body) and the outer transaction
-    // rolls the lexer back to where StringBody opened.
+    // rolls the lexer back to where ScanUntil opened.
     private readonly Rule? _escapeEnd;
 
     // FAST PATH, no escape. Per rune: one RuneSet.Contains.
-    public StringBodyRule(RuneSet stopAt)
+    public ScanUntilRule(RuneSet stopAt)
         : base(FlattenType.Preserve)
     {
         _stopperSet = stopAt;
@@ -132,7 +132,7 @@ internal sealed class StringBodyRule : Rule
     // FAST PATH, single-rune escape start. Per rune: one
     // RuneSet.Contains plus one int equality on non-stopper runes.
     // Covers JSON, C, C++ regular, Python single-line.
-    public StringBodyRule(RuneSet stopAt, Rune escapeStart, Rule escapeEnd)
+    public ScanUntilRule(RuneSet stopAt, Rune escapeStart, Rule escapeEnd)
         : base(FlattenType.Preserve, escapeEnd)
     {
         if (escapeEnd == null)
@@ -149,7 +149,7 @@ internal sealed class StringBodyRule : Rule
     // General escape start. Adds one Rule.TryParse on non-stopper
     // runes only. Use for multi-rune starts like $$ or a choice
     // across several starts.
-    public StringBodyRule(RuneSet stopAt, Rule escapeStart, Rule escapeEnd)
+    public ScanUntilRule(RuneSet stopAt, Rule escapeStart, Rule escapeEnd)
         : base(FlattenType.Preserve, escapeStart, escapeEnd)
     {
         if (escapeStart == null)
@@ -168,7 +168,7 @@ internal sealed class StringBodyRule : Rule
     // General stopper, no escape. Per rune: one Rule.TryParse for
     // the stopper (peek transaction, never consumed). Use for
     // multi-rune boundaries like C++ raw strings.
-    public StringBodyRule(Rule stopAt)
+    public ScanUntilRule(Rule stopAt)
         : base(FlattenType.Preserve, stopAt)
     {
         if (stopAt == null)
@@ -184,7 +184,7 @@ internal sealed class StringBodyRule : Rule
 
     // General stopper with single-rune escape start. Canonical use:
     // Python triple-quote """...""" with backslash escapes.
-    public StringBodyRule(Rule stopAt, Rune escapeStart, Rule escapeEnd)
+    public ScanUntilRule(Rule stopAt, Rune escapeStart, Rule escapeEnd)
         : base(FlattenType.Preserve, stopAt, escapeEnd)
     {
         if (stopAt == null)
@@ -328,7 +328,7 @@ internal sealed class StringBodyRule : Rule
     // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
     {
-        // StringBody always succeeds (a zero-length body is legal),
+        // ScanUntil always succeeds (a zero-length body is legal),
         // but it also consumes runes when the input has matchable ones.
         // That's Advance.Sometimes.
         //

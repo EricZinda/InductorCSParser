@@ -62,7 +62,7 @@ the C# version will likely use a builder or fluent API that produces the same ru
 
 ```csharp
 public static readonly Rule NameValueRule =
-    And(
+    AllOf(
         OneOrMore(CharacterSet(Chars)).As(MySymbolID.SettingName),
         OptionalWhitespace(),
         Character('='),

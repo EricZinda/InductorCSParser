@@ -53,7 +53,7 @@ public class AnyTokenRuleTests
         // Under RuneLexer each token is one rune. LatinEAcuteGrapheme is
         // two runes, so a single AnyToken() only covers the first one and
         // the grammar has to ask for more to consume the rest.
-        var rule = And(AnyToken(), AnyToken());
+        var rule = AllOf(AnyToken(), AnyToken());
         var result = rule.Parse(LatinEAcuteGrapheme,
             new ParseOptions { InputUnit = InputUnit.Rune, NormalizeInput = null });
 

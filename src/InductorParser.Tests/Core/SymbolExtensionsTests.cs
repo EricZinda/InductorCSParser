@@ -29,17 +29,17 @@ public class SymbolExtensionsTests
     [Test]
     public void PrintTree_renders_unnamed_composite_with_class_name()
     {
-        // Anonymous And rule, no user name, so the root renders with
-        // the class-derived "And" label. Token leaves default to
+        // Anonymous AllOf rule, no user name, so the root renders with
+        // the class-derived "AllOf" label. Token leaves default to
         // FlattenType.Delete and are filtered at parse time under normal
         // parsing. PreserveAllSymbols keeps them so PrintTree sees
         // a shape matching the grammar one-to-one.
-        var pair = And(Token('a'), Token('1'));
+        var pair = AllOf(Token('a'), Token('1'));
         var result = pair.Parse("a1", new ParseOptions { PreserveAllSymbols = true });
         Assert.That(result.Success, Is.True);
 
         string expected =
-            "And: \"a1\"\n" +
+            "AllOf: \"a1\"\n" +
             "  'a'\n" +
             "  '1'\n";
 
@@ -49,13 +49,13 @@ public class SymbolExtensionsTests
     [Test]
     public void PrintTree_indents_nested_subtrees()
     {
-        // Two levels of named And wrappers so the printed tree has real
+        // Two levels of named AllOf wrappers so the printed tree has real
         // depth beyond just a root plus leaves. Token leaves default to
         // FlattenType.Delete. PreserveAllSymbols keeps them so the
         // printed tree shows both the composites and their Token children.
-        var first = And(Token('a'), Token('b')).As("first");
-        var second = And(Token('c'), Token('d')).As("second");
-        var pair = And(first, second).As("pair");
+        var first = AllOf(Token('a'), Token('b')).As("first");
+        var second = AllOf(Token('c'), Token('d')).As("second");
+        var pair = AllOf(first, second).As("pair");
         var result = pair.Parse("abcd", new ParseOptions { PreserveAllSymbols = true });
         Assert.That(result.Success, Is.True);
 

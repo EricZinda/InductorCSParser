@@ -81,13 +81,13 @@ public static class JsonParserTyped
     }
 
     // Extract a JsonString's body as a decoded C# string. The grammar's
-    // StringBody is a single leaf over the raw source slice, so escape
+    // ScanUntil is a single leaf over the raw source slice, so escape
     // sequences appear in the tree as their literal characters (e.g.
     // "\n" as the two chars '\' and 'n'); the PEG-based decoder below
     // turns them into the real code points.
     private static string DecodeString(Symbol stringNode)
     {
-        // JsonString = And('"', stringBody, '"'). Quotes are
+        // JsonString = AllOf('"', stringBody, '"'). Quotes are
         // FlattenType.Delete, body is FlattenType.Preserve, so the only
         // surviving child is the body leaf.
         var rawString = stringNode.Children[0].ToString();
@@ -97,12 +97,12 @@ public static class JsonParserTyped
 
     // Why string decoding lives here instead of in JsonGrammar.
     //
-    // The main JSON grammar uses StringBody for the string body, which
+    // The main JSON grammar uses ScanUntil for the string body, which
     // is a single rule that scans the whole body in one tight loop and
     // returns one leaf Symbol over the raw source slice, including
     // escape characters written literally.
     //
-    // From StringBodyRule.cs: "ToString() returns the raw source slice,
+    // From ScanUntilRule.cs: "ToString() returns the raw source slice,
     // including escape-start runes and their ends as written originally.
     // Callers who want to actually decode the escapes need to walk the
     // slice themselves. Lazy decoding means a syntax highlighter or a
@@ -129,13 +129,13 @@ public static class JsonParserTyped
     // OneOf leaves, so escapeUnicode.ToString() returns just those
     // digits and int.Parse can consume them directly.
     private static readonly Rule HexDigit = OneOf(RuneSet.Ascii.HexDigits);
-    private static readonly Rule EscapeUnicode = And(Literal("\\u"), HexDigit, HexDigit, HexDigit, HexDigit)
+    private static readonly Rule EscapeUnicode = AllOf(Literal("\\u"), HexDigit, HexDigit, HexDigit, HexDigit)
         .As("escapeUnicode").Preserve();
 
-    private static readonly Rule StringParser = And(
-        ZeroOrMore(Or(
+    private static readonly Rule StringParser = AllOf(
+        ZeroOrMore(FirstOf(
             LiteralChunk,
-            Or(EscapeQuote, EscapeBackslash, EscapeSlash,
+            FirstOf(EscapeQuote, EscapeBackslash, EscapeSlash,
                EscapeBackspace, EscapeFormfeed, EscapeNewline,
                EscapeReturn, EscapeTab, EscapeUnicode))),
         Eof()
@@ -152,7 +152,7 @@ public static class JsonParserTyped
             throw new InvalidOperationException(
                 "String body re-parse failed: " + result.ErrorMessage);
 
-        // StringParser root is an And with default FlattenType.Flatten,
+        // StringParser root is an AllOf with default FlattenType.Flatten,
         // so its children (LiteralChunk and the Escape* rules) end up as
         // the top-level entries of result.Symbols. Tree is null here
         // because Symbols.Count != 1.

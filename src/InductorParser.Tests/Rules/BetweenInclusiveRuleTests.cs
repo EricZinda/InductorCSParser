@@ -50,7 +50,7 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_at_lower_bound_succeeds()
     {
         var rule = BetweenInclusive(2, 5, Token('a'));
-        var result = And(rule, OneOrMore(Token('b'))).Parse("aabbb", Debug());
+        var result = AllOf(rule, OneOrMore(Token('b'))).Parse("aabbb", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("aabbb"));
@@ -60,7 +60,7 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_at_upper_bound_succeeds()
     {
         var rule = BetweenInclusive(2, 5, Token('a'));
-        var result = And(rule, Token('b')).Parse("aaaaab", Debug());
+        var result = AllOf(rule, Token('b')).Parse("aaaaab", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("aaaaab"));
@@ -69,7 +69,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_stops_at_upper_bound_even_with_more_input()
     {
-        var rule = And(BetweenInclusive(1, 3, Token('a')), OneOrMore(Token('a')));
+        var rule = AllOf(BetweenInclusive(1, 3, Token('a')), OneOrMore(Token('a')));
         var result = rule.Parse("aaaaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -89,7 +89,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_zero_zero_succeeds_with_no_matches()
     {
-        var rule = And(BetweenInclusive(0, 0, Token('a')), Token('b'));
+        var rule = AllOf(BetweenInclusive(0, 0, Token('a')), Token('b'));
         var result = rule.Parse("b", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -99,7 +99,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_zero_zero_does_not_consume_matching_input()
     {
-        var rule = And(BetweenInclusive(0, 0, Token('a')), OneOrMore(Token('a')));
+        var rule = AllOf(BetweenInclusive(0, 0, Token('a')), OneOrMore(Token('a')));
         var result = rule.Parse("aaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);

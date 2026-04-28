@@ -91,7 +91,7 @@ public class NoneOfRuleTests
         // Token('\n') terminator then fails. For real line-based grammars,
         // add Literal("\r\n") to both the stop set and the terminator.
         // See docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer".
-        var rule = And(
+        var rule = AllOf(
             ZeroOrMore(NoneOf(RuneSet.Single('\n'))),
             Token('\n'));
 

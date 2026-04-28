@@ -8,7 +8,7 @@ using static InductorParser.Tests.TraceTestHelpers;
 namespace InductorParser.Tests;
 
 // Cross-cutting trace-format tests. Per-rule trace output (Token, OneOf,
-// Eof, And, Or, OneOrMore, ZeroOrMore, Optional) is in
+// Eof, AllOf, FirstOf, OneOrMore, ZeroOrMore, Optional) is in
 // each rule's own test file, so the failure surfaces right next to the
 // rule being edited. This file covers the concerns that aren't any one
 // rule's property
@@ -91,7 +91,7 @@ public class TracingTests
     public void Lexer_Read_emits_one_line_per_token()
     {
         var sink = NewSink();
-        var rule = And(Token('a'), Token('b'), Token('c'));
+        var rule = AllOf(Token('a'), Token('b'), Token('c'));
         rule.Parse("abc", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
@@ -101,7 +101,7 @@ public class TracingTests
             "      SUCC | Token: found 'b'",
             "      Lexer.Read: 'c', Consumed: 3",
             "      SUCC | Token: found 'c'",
-            "   SUCC | And: found 3"
+            "   SUCC | AllOf: found 3"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
@@ -110,11 +110,11 @@ public class TracingTests
     public void Deepest_failure_update_is_announced_in_trace()
     {
         // The deepest-failure trace fires only when the new position is
-        // strictly greater than the previous deepest. And(a, b) on "ax"
+        // strictly greater than the previous deepest. AllOf(a, b) on "ax"
         // advances past 'a' then fails at position 1, which is > 0, so
         // the announcement appears.
         var sink = NewSink();
-        var rule = And(Token('a'), Token('b'));
+        var rule = AllOf(Token('a'), Token('b'));
         rule.Parse("ax", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
@@ -123,7 +123,7 @@ public class TracingTests
             "      Lexer.Read: 'x', Consumed: 2",
             "      FAIL | Token: found 'x', wanted 'b'",
             "      Lexer.RecordFailure: new deepest failure at char 1",
-            "   FAIL | And: symbol #1"
+            "   FAIL | AllOf: symbol #1"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
@@ -143,7 +143,7 @@ public class TracingTests
         // that changed the second run would slip through.
         var sink1 = NewSink();
         var sink2 = NewSink();
-        var rule = And(Token('a'), Token('b'));
+        var rule = AllOf(Token('a'), Token('b'));
         rule.Parse("ab", new ParseOptions { TraceSink = sink1 });
         rule.Parse("ab", new ParseOptions { TraceSink = sink2 });
 
@@ -152,7 +152,7 @@ public class TracingTests
             "      SUCC | Token: found 'a'",
             "      Lexer.Read: 'b', Consumed: 2",
             "      SUCC | Token: found 'b'",
-            "   SUCC | And: found 2"
+            "   SUCC | AllOf: found 2"
         );
         Assert.That(sink1.ToString(), Is.EqualTo(expected),
             "First parse's trace should match the expected output exactly.");
@@ -168,7 +168,7 @@ public class TracingTests
         // Diagnostic. With TraceLevel.Normal the sink stays empty even
         // though TraceSink is wired up.
         var sink = NewSink();
-        var rule = And(Token('a'), Token('b'));
+        var rule = AllOf(Token('a'), Token('b'));
         rule.Parse("ab", new ParseOptions { TraceSink = sink, TraceLevel = TraceLevel.Normal });
 
         Assert.That(sink.ToString(), Is.Empty);

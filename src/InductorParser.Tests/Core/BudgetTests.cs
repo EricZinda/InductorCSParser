@@ -63,12 +63,12 @@ public class BudgetTests
     public void MaxDepth_aborts_with_DepthLimitExceeded_on_recursive_grammar()
     {
         // Recursive grammar via LateBoundRule. Each recursion pushes
-        // several rule frames (LateBound forward + Or + And + Token), so
+        // several rule frames (LateBound forward + FirstOf + AllOf + Token), so
         // a moderate input quickly outgrows a small MaxDepth. Intent
         // mirrors a real "((((...))))" deeply-nested input that would
         // blow the .NET call stack without protection.
         var aRule = new LateBoundRule("aRule");
-        aRule.Bind(Or(And(Token('a'), aRule), Token('a')));
+        aRule.Bind(FirstOf(AllOf(Token('a'), aRule), Token('a')));
 
         var options = new ParseOptions { MaxDepth = 10 };
         var result = aRule.Parse(new string('a', 100), options);
@@ -85,7 +85,7 @@ public class BudgetTests
         // completes (the input is short enough not to overflow the real
         // call stack).
         var aRule = new LateBoundRule("aRule");
-        aRule.Bind(Or(And(Token('a'), aRule), Token('a')));
+        aRule.Bind(FirstOf(AllOf(Token('a'), aRule), Token('a')));
 
         var options = new ParseOptions { MaxDepth = 0, RuleCountLimit = 0 };
         var result = aRule.Parse(new string('a', 50), options);
@@ -231,7 +231,7 @@ public class BudgetTests
         // iteration, so by the time the budget trips it's well above 0.
         // If Parse used lexer.Position here (pre-fix behavior), the
         // rolled-back value of 0 would make this assertion fail.
-        var rule = OneOrMore(Or(Literal("ab"), Token('a')));
+        var rule = OneOrMore(FirstOf(Literal("ab"), Token('a')));
         var input = new string('a', 5000);
         var options = new ParseOptions { RuleCountLimit = 100 };
         var result = rule.Parse(input, options);

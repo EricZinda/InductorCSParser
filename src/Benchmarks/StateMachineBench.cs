@@ -123,7 +123,7 @@ internal static class StateMachineBench
         //    hot-loop shape. No backtracking, no recursion.
         var identifier = new GrammarCase(
             "Identifier",
-            And(
+            AllOf(
                 OneOf(RuneSet.Letters | RuneSet.Runes("_")),
                 ZeroOrMore(OneOf(RuneSet.Letters | RuneSet.Digits | RuneSet.Runes("_"))),
                 Eof()),
@@ -132,10 +132,10 @@ internal static class StateMachineBench
         // 2. Balanced parens, recursive via LateBound. Pure structural
         //    recursion, no Or alternatives, no token-level fanout.
         var parens = new LateBoundRule("parens");
-        parens.Bind(ZeroOrMore(And(Token('('), parens, Token(')'))));
+        parens.Bind(ZeroOrMore(AllOf(Token('('), parens, Token(')'))));
         var balancedParens = new GrammarCase(
             "BalancedParens",
-            And(parens, Eof()),
+            AllOf(parens, Eof()),
             "parens");
 
         // 3. Many-alternative keyword match. Stresses Or's per-alternative
@@ -143,23 +143,23 @@ internal static class StateMachineBench
         //    grammar accepts a sequence of one of N keywords separated
         //    by commas. Mirrors the keyword-fanout of the chord grammar
         //    minus the LiteralIgnoreAsciiCase.
-        var keyword = Or(
+        var keyword = FirstOf(
             Literal("alpha"), Literal("beta"), Literal("gamma"), Literal("delta"),
             Literal("epsilon"), Literal("zeta"), Literal("eta"), Literal("theta"));
         var keywordList = new GrammarCase(
             "KeywordList",
-            And(keyword, ZeroOrMore(And(Token(','), keyword)), Eof()),
+            AllOf(keyword, ZeroOrMore(AllOf(Token(','), keyword)), Eof()),
             "keywords");
 
         // 4. Recursive arithmetic with backtracking-heavy shape. expr =
         //    term (('+' / '-') term)*; term = digit / '(' expr ')'.
         var expr = new LateBoundRule("expr");
         var digit = OneOf(RuneSet.Ascii.Digits);
-        var term = Or(digit, And(Token('('), expr, Token(')')));
-        expr.Bind(And(term, ZeroOrMore(And(OneOf("+-"), term))));
+        var term = FirstOf(digit, AllOf(Token('('), expr, Token(')')));
+        expr.Bind(AllOf(term, ZeroOrMore(AllOf(OneOf("+-"), term))));
         var arithmetic = new GrammarCase(
             "Arithmetic",
-            And(expr, Eof()),
+            AllOf(expr, Eof()),
             "arithmetic");
 
         // 5. Real-world JSON. The full InductorJsonParser grammar that

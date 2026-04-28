@@ -41,17 +41,17 @@ public static class PrologGrammar
     // See docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer" for the
     // full explanation of why OneOf / NoneOf / Token('\n') all fail
     // on CRLF input and the three-anti-patterns-to-avoid list.
-    private static readonly Rule LineBreak = Or(
+    private static readonly Rule LineBreak = FirstOf(
         Literal("\r\n"),
         OneOf(CrlfChars)
     );
 
     // Comment: "% ...\r\n" OR "% ...<EOF>" OR "/* ... */"
     //
-    // Both bodies use StringBody with a rule-based stopper. It peeks
+    // Both bodies use ScanUntil with a rule-based stopper. It peeks
     // the stopper on each rune and rolls back, so the terminator is
-    // left for the surrounding And to consume. StringBody replaces
-    // the manual ZeroOrMore(And(Not(stop), AnyToken())) idiom with a
+    // left for the surrounding AllOf to consume. ScanUntil replaces
+    // the manual ZeroOrMore(AllOf(Not(stop), AnyToken())) idiom with a
     // tight single-rule scan that returns one leaf Symbol over the
     // matched body text.
     //
@@ -60,25 +60,25 @@ public static class PrologGrammar
     // multi-rune and trivially passes any NoneOf, which would
     // greedily swallow the line-ending CRLF and leave the terminator
     // nothing to match.
-    public static readonly Rule Comment = Or(
-        And(
+    public static readonly Rule Comment = FirstOf(
+        AllOf(
             Token('%'),
-            StringBody(LineBreak),
-            Or(
+            ScanUntil(LineBreak),
+            FirstOf(
                 OneOrMore(LineBreak),
                 Eof()
             )
         ),
-        And(
+        AllOf(
             Literal("/*"),
-            StringBody(Literal("*/")),
+            ScanUntil(Literal("*/")),
             Literal("*/")
         )
     );
 
     // Whitespace or comment, zero or more. CRLF-as-grapheme is handled
     // via the Literal alternative for the same reason as in Comment.
-    public static readonly Rule OptionalWhitespace = ZeroOrMore(Or(
+    public static readonly Rule OptionalWhitespace = ZeroOrMore(FirstOf(
         Literal("\r\n"),
         OneOf(WhitespaceChars),
         Comment
@@ -96,37 +96,37 @@ public static class PrologGrammar
     // doesn't either. "\\'" inside a single-quoted atom would end the
     // atom at the first apostrophe regardless of the preceding
     // backslash. Keeping the same behavior for fidelity.
-    public static readonly Rule Atom = Or(
+    public static readonly Rule Atom = FirstOf(
         Float(),
         Integer(),
         OneOrMore(OneOf(MathSymbolChars)),
         Token('!'),
-        And(
+        AllOf(
             Token('"'),
-            StringBody(RuneSet.Runes("\"")),
+            ScanUntil(RuneSet.Runes("\"")),
             Token('"')
         ),
-        And(
+        AllOf(
             Token('\''),
-            StringBody(RuneSet.Runes("'")),
+            ScanUntil(RuneSet.Runes("'")),
             Token('\'')
         ),
-        And(
-            Or(OneOf(LetterChars), Token('-')),
+        AllOf(
+            FirstOf(OneOf(LetterChars), Token('-')),
             ZeroOrMore(OneOf(IdentifierTailChars))
         )
     );
 
     // Variable body shared between both flavors: starts with '_', then
     // zero-or-more identifier-tail chars. "_foo", "_", "_X123-Y".
-    private static readonly Rule UnderscoreVariable = And(
+    private static readonly Rule UnderscoreVariable = AllOf(
         Token('_'),
         ZeroOrMore(OneOf(IdentifierTailChars))
     );
 
     // Standard Prolog: variable = Capital (letter|digit|_|-)*
     // "X", "Foo", "MyVar_1".
-    public static readonly Rule CapitalizedVariableRule = And(
+    public static readonly Rule CapitalizedVariableRule = AllOf(
         OneOf(CapitalChars),
         ZeroOrMore(OneOf(IdentifierTailChars))
     );
@@ -135,7 +135,7 @@ public static class PrologGrammar
     // prefix tells the parser it's looking at a variable before the
     // name itself is scanned, which sidesteps the "is this capitalized?"
     // lookahead that standard Prolog needs.
-    public static readonly Rule HtnVariableRule = And(
+    public static readonly Rule HtnVariableRule = AllOf(
         Token('?'),
         Atom
     );
@@ -165,22 +165,22 @@ public static class PrologGrammar
         var termForward = new LateBoundRule("term");
 
         // Variable = flavor | '_' Tail
-        var variable = Or(variableFlavorRule, UnderscoreVariable);
+        var variable = FirstOf(variableFlavorRule, UnderscoreVariable);
 
         // TermList = Term ws (, ws Term ws)* (| ws Term ws)?
         // Prolog list tail syntax [H | T] rides on the final optional
         // clause. Trailing OptionalWhitespace after each term means the
         // close bracket in List doesn't need its own leading ws.
-        var termList = And(
+        var termList = AllOf(
             termForward,
             OptionalWhitespace,
-            ZeroOrMore(And(
+            ZeroOrMore(AllOf(
                 Token(','),
                 OptionalWhitespace,
                 termForward,
                 OptionalWhitespace
             )),
-            Optional(And(
+            Optional(AllOf(
                 Token('|'),
                 OptionalWhitespace,
                 termForward,
@@ -192,9 +192,9 @@ public static class PrologGrammar
         // The empty-list literal goes first because the "[" prefix is
         // shared and we want first-match-wins to commit to the empty
         // branch for input "[]".
-        var list = Or(
+        var list = FirstOf(
             Literal("[]"),
-            And(
+            AllOf(
                 Token('['),
                 OptionalWhitespace,
                 termList,
@@ -213,10 +213,10 @@ public static class PrologGrammar
         // HtnVariableRule), not the underscore form. "_foo" parses
         // as a variable regardless, since Atom's bare branch doesn't
         // accept a leading underscore anyway.
-        var functor = And(
+        var functor = AllOf(
             Not(variableFlavorRule),
             Atom,
-            Optional(And(
+            Optional(AllOf(
                 Token('('),
                 OptionalWhitespace,
                 Optional(termList),
@@ -230,15 +230,15 @@ public static class PrologGrammar
         // because every functor-atom shape is also reached here. List
         // last because its "[" prefix doesn't collide with the other
         // two.
-        var termDef = Or(variable, functor, list);
+        var termDef = FirstOf(variable, functor, list);
         var _termBinding = termForward.Bind(termDef);
 
         // FunctorList = Functor (, ws Functor ws)*
         // Used by Query, which is a list of goals separated by commas.
-        var functorList = And(
+        var functorList = AllOf(
             functor,
             OptionalWhitespace,
-            ZeroOrMore(And(
+            ZeroOrMore(AllOf(
                 Token(','),
                 OptionalWhitespace,
                 functor,
@@ -251,7 +251,7 @@ public static class PrologGrammar
         // (CharacterSymbol<Colon> + CharacterSymbol<Dash>). Either form
         // is equivalent for matching. Using Literal(":-") here for
         // readability.
-        var rule = And(
+        var rule = AllOf(
             functor,
             OptionalWhitespace,
             Literal(":-"),
@@ -262,7 +262,7 @@ public static class PrologGrammar
         // Query = ws FunctorList ws "." ws Eof
         // Queries are a single statement terminated by '.', no
         // OneOrMore wrapper, unlike Document.
-        var query = And(
+        var query = AllOf(
             OptionalWhitespace,
             functorList,
             OptionalWhitespace,
@@ -277,10 +277,10 @@ public static class PrologGrammar
         // empty file is a parse error. Inside each item, Rule is tried
         // first so "foo :- bar." doesn't get mis-identified as a fact
         // "foo" followed by garbage ":- bar." that can't find its '.'.
-        var document = And(
-            OneOrMore(And(
+        var document = AllOf(
+            OneOrMore(AllOf(
                 OptionalWhitespace,
-                Or(rule, functor, list),
+                FirstOf(rule, functor, list),
                 OptionalWhitespace,
                 Token('.'),
                 OptionalWhitespace

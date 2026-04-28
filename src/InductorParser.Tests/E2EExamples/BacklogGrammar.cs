@@ -13,10 +13,10 @@ namespace InductorParser.Tests;
 //   HrSpaced:   /^[-*+]( [-*+]){2,}$/    bulletDetector.ts line 88
 //   Paragraph:  /\n\s*\n/                paragraphDetector.ts line 90
 //
-// The first five are anchored (^...$) so they map to an And(...) ending
+// The first five are anchored (^...$) so they map to an AllOf(...) ending
 // in Eof(). Paragraph is unanchored. JS .test() returns true if the
 // pattern occurs anywhere. The PEG equivalent scans forward with
-// And(ZeroOrMore(And(Not(target), AnyToken())), target, ZeroOrMore(AnyToken()))
+// AllOf(ZeroOrMore(AllOf(Not(target), AnyToken())), target, ZeroOrMore(AnyToken()))
 // and relies on lexer.IsEof for Parse success, so the trailing
 // ZeroOrMore(AnyToken()) isn't decorative. It's what lets success happen
 // after the target fires mid-string.
@@ -42,7 +42,7 @@ public static class BacklogGrammar
         Optional(OneOf(RuneSet.Whitespace));
 
     // ^#(?!#)\s?(.*)$
-    public static readonly Rule H1Heading = And(
+    public static readonly Rule H1Heading = AllOf(
         Token('#'),
         Not(Token('#')),
         OptionalOneWhitespace,
@@ -51,7 +51,7 @@ public static class BacklogGrammar
     );
 
     // ^##(?!#)\s?(.*)$
-    public static readonly Rule H2Heading = And(
+    public static readonly Rule H2Heading = AllOf(
         Literal("##"),
         Not(Token('#')),
         OptionalOneWhitespace,
@@ -60,7 +60,7 @@ public static class BacklogGrammar
     );
 
     // ^[-*+]\s?(.*)$
-    public static readonly Rule Bullet = And(
+    public static readonly Rule Bullet = AllOf(
         OneOf("-*+"),
         OptionalOneWhitespace,
         RestOfLine,
@@ -68,15 +68,15 @@ public static class BacklogGrammar
     );
 
     // ^[-*+]{3,}$
-    public static readonly Rule HrRun = And(
+    public static readonly Rule HrRun = AllOf(
         AtLeast(3, OneOf("-*+")),
         Eof()
     );
 
     // ^[-*+]( [-*+]){2,}$
-    public static readonly Rule HrSpaced = And(
+    public static readonly Rule HrSpaced = AllOf(
         OneOf("-*+"),
-        AtLeast(2, And(Token(' '), OneOf("-*+"))),
+        AtLeast(2, AllOf(Token(' '), OneOf("-*+"))),
         Eof()
     );
 
@@ -97,20 +97,20 @@ public static class BacklogGrammar
     private static readonly RuneSet NonNewlineWhitespace =
         RuneSet.Whitespace & ~RuneSet.Runes("\n\r");
 
-    private static readonly Rule ParagraphTarget = And(
+    private static readonly Rule ParagraphTarget = AllOf(
         Token('\n'),
         ZeroOrMore(OneOf(NonNewlineWhitespace)),
         Token('\n')
     );
 
-    // StringBody with a rule-based stopper scans forward peeking
+    // ScanUntil with a rule-based stopper scans forward peeking
     // ParagraphTarget on each rune. When it matches, the peek rolls
-    // back and StringBody returns, leaving the target for the outer
-    // And to consume. Semantically identical to the manual
-    // ZeroOrMore(And(Not(target), AnyToken())) idiom, one rule instead
+    // back and ScanUntil returns, leaving the target for the outer
+    // AllOf to consume. Semantically identical to the manual
+    // ZeroOrMore(AllOf(Not(target), AnyToken())) idiom, one rule instead
     // of three.
-    public static readonly Rule ParagraphSplit = And(
-        StringBody(ParagraphTarget),
+    public static readonly Rule ParagraphSplit = AllOf(
+        ScanUntil(ParagraphTarget),
         ParagraphTarget,
         ZeroOrMore(AnyToken())
     );

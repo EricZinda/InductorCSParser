@@ -22,7 +22,7 @@ namespace InductorParser.Benchmarks.Json.InductorParsers;
 // string-parsing hot path is apples-to-apples.
 //
 // Entry point is the bare value rule (no surrounding
-// And(OptionalWhitespace, value, OptionalWhitespace, Eof)). The harness
+// AllOf(OptionalWhitespace, value, OptionalWhitespace, Eof)). The harness
 // feeds clean input that starts and ends at the value, competitors
 // likewise skip a trailing-Eof wrapper, and adding one would spend
 // time on every parse that the bench isn't trying to measure.
@@ -38,14 +38,14 @@ public static class InductorJsonParser
     {
         var simpleEscapeEnd = OneOf(RuneSet.Runes("\"\\/bfnrt"));
         var hexDigit = OneOf(RuneSet.Ascii.HexDigits);
-        var unicodeEscapeEnd = And(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
-        var escapeEnd = Or(simpleEscapeEnd, unicodeEscapeEnd).Flatten(FlattenType.Delete);
-        var stringBody = StringBody(stopAt: RuneSet.Runes("\""), escapeStart: new Rune('\\'), escapeEnd: escapeEnd);
-        JsonStringRule = And(Token('"'), stringBody, Token('"')).As("string").Preserve();
+        var unicodeEscapeEnd = AllOf(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
+        var escapeEnd = FirstOf(simpleEscapeEnd, unicodeEscapeEnd).Flatten(FlattenType.Delete);
+        var stringBody = ScanUntil(stopAt: RuneSet.Runes("\""), escapeStart: new Rune('\\'), escapeEnd: escapeEnd);
+        JsonStringRule = AllOf(Token('"'), stringBody, Token('"')).As("string").Preserve();
 
         var value = new LateBoundRule("value");
 
-        JsonMemberRule = And(
+        JsonMemberRule = AllOf(
             JsonStringRule,
             OptionalWhitespace(),
             Token(':'),
@@ -53,29 +53,29 @@ public static class InductorJsonParser
             value
         ).As("member");
 
-        JsonObjectRule = And(
+        JsonObjectRule = AllOf(
             Token('{'),
             OptionalWhitespace(),
-            Optional(And(
+            Optional(AllOf(
                 JsonMemberRule,
-                ZeroOrMore(And(OptionalWhitespace(), Token(','), OptionalWhitespace(), JsonMemberRule))
+                ZeroOrMore(AllOf(OptionalWhitespace(), Token(','), OptionalWhitespace(), JsonMemberRule))
             )),
             OptionalWhitespace(),
             Token('}')
         ).As("object").Preserve();
 
-        JsonArrayRule = And(
+        JsonArrayRule = AllOf(
             Token('['),
             OptionalWhitespace(),
-            Optional(And(
+            Optional(AllOf(
                 value,
-                ZeroOrMore(And(OptionalWhitespace(), Token(','), OptionalWhitespace(), value))
+                ZeroOrMore(AllOf(OptionalWhitespace(), Token(','), OptionalWhitespace(), value))
             )),
             OptionalWhitespace(),
             Token(']')
         ).As("array").Preserve();
 
-        var valueBody = Or(JsonStringRule, JsonObjectRule, JsonArrayRule);
+        var valueBody = FirstOf(JsonStringRule, JsonObjectRule, JsonArrayRule);
         value.Bind(valueBody);
 
         JsonRule = value;
@@ -177,7 +177,7 @@ public static class InductorJsonParser
     }
 
     // JsonStringRule's single surviving child is the raw body leaf produced
-    // by StringBody. StringBody keeps escape sequences literal ("\\n" is
+    // by ScanUntil. ScanUntil keeps escape sequences literal ("\\n" is
     // two characters), so decode here to match what competitors' typed
     // output looks like.
     private static string DecodeStringBody(Symbol stringNode)

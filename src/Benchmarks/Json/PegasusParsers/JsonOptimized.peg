@@ -14,7 +14,7 @@
 //    `stringChar = escape / literal; literal = [^"\\]` (one rule dispatch
 //    per character), a single `[^"\\]+` matches a maximal literal run in a
 //    tight char-class loop. This is the direct Pegasus analogue of
-//    InductorParser's `StringBody` leaf and Parlot's `Terms.String`.
+//    InductorParser's `ScanUntil` leaf and Parlot's `Terms.String`.
 //
 // 2. Delimited repetition with `<min,max,sep>` for object members and array
 //    elements. Pegasus emits a `List<T>` directly from this form, so the

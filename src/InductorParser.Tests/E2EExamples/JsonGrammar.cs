@@ -27,7 +27,7 @@ public static class JsonGrammar
 {
     public static readonly Rule Json;
     public static readonly Rule JsonString;
-    public static readonly Rule JsonStringBody;
+    public static readonly Rule JsonScanUntil;
     public static readonly Rule JsonNumber;
     public static readonly Rule JsonObject;
     public static readonly Rule JsonArray;
@@ -40,27 +40,27 @@ public static class JsonGrammar
     {
         var simpleEscapeEnd = OneOf(RuneSet.Runes("\"\\/bfnrt"));
         var hexDigit = OneOf(RuneSet.Ascii.HexDigits);
-        var unicodeEscapeEnd = And(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
-        // .Delete() on the escapeEnd Or triggers the StringBody
+        var unicodeEscapeEnd = AllOf(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
+        // .Delete() on the escapeEnd FirstOf triggers the ScanUntil
         // "don't allocate child Symbols for the escape-end match" fast
-        // path. The StringBody primitive always produces a single leaf
+        // path. The ScanUntil primitive always produces a single leaf
         // over the raw body slice, so the escape-end sub-rules' output
         // is discarded either way. Marking them Delete skips the
         // allocation.
-        JsonStringBody = StringBody(
+        JsonScanUntil = ScanUntil(
                 stopAt: RuneSet.Runes("\""),
                 escapeStart: new Rune('\\'),
-                escapeEnd: Or(simpleEscapeEnd, unicodeEscapeEnd).Delete())
+                escapeEnd: FirstOf(simpleEscapeEnd, unicodeEscapeEnd).Delete())
             .As("stringBody");
-        JsonString = And(Token('"'), JsonStringBody, Token('"'))
+        JsonString = AllOf(Token('"'), JsonScanUntil, Token('"'))
             .As("string").Preserve();
 
         var digits = OneOrMore(OneOf(RuneSet.Ascii.Digits));
         var decimalPoint = Token('.').Preserve(); // default FlattenType is Delete, but we want this in final string
         var sign = Token('-').Preserve(); // default FlattenType is Delete, but we want this in final string
-        var fraction = And(decimalPoint, digits);
-        var exponent = And(OneOf("eE"), Optional(OneOf("+-")), digits);
-        JsonNumber = And(
+        var fraction = AllOf(decimalPoint, digits);
+        var exponent = AllOf(OneOf("eE"), Optional(OneOf("+-")), digits);
+        JsonNumber = AllOf(
             Optional(sign),
             digits,
             Optional(fraction),
@@ -75,7 +75,7 @@ public static class JsonGrammar
 
         var value = new LateBoundRule("value");
 
-        JsonMember = And(
+        JsonMember = AllOf(
             JsonString,
             OptionalWhitespace(),
             Token(':'),
@@ -83,31 +83,31 @@ public static class JsonGrammar
             value
         ).As("member").Preserve();
 
-        JsonObject = And(
+        JsonObject = AllOf(
             Token('{'),
             OptionalWhitespace(),
-            Optional(And(
+            Optional(AllOf(
                 JsonMember,
-                ZeroOrMore(And(OptionalWhitespace(), Token(','), OptionalWhitespace(), JsonMember))
+                ZeroOrMore(AllOf(OptionalWhitespace(), Token(','), OptionalWhitespace(), JsonMember))
             )),
             OptionalWhitespace(),
             Token('}')
         ).As("object").Preserve();
 
-        JsonArray = And(
+        JsonArray = AllOf(
             Token('['),
             OptionalWhitespace(),
-            Optional(And(
+            Optional(AllOf(
                 value,
-                ZeroOrMore(And(OptionalWhitespace(), Token(','), OptionalWhitespace(), value))
+                ZeroOrMore(AllOf(OptionalWhitespace(), Token(','), OptionalWhitespace(), value))
             )),
             OptionalWhitespace(),
             Token(']')
         ).As("array").Preserve();
 
-        value.Bind(Or(JsonString, JsonNumber, JsonObject, JsonArray, JsonTrue, JsonFalse, JsonNull));
+        value.Bind(FirstOf(JsonString, JsonNumber, JsonObject, JsonArray, JsonTrue, JsonFalse, JsonNull));
 
-        Json = And(OptionalWhitespace(), value, OptionalWhitespace(), Eof());
+        Json = AllOf(OptionalWhitespace(), value, OptionalWhitespace(), Eof());
         Json.Compile();
     }
 }

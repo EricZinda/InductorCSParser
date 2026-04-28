@@ -37,9 +37,9 @@ public class ExactlyRuleTests
     public void Exactly_stops_at_N_and_surrounding_rule_consumes_remainder()
     {
         // Exactly commits after the Nth match even when more would match.
-        // Here the And requires the follow-up Token('a') to pick up the
-        // fourth 'a'. If Exactly greedily consumed it, the And would fail.
-        var rule = And(Exactly(3, Token('a')), Token('a'));
+        // Here the AllOf requires the follow-up Token('a') to pick up the
+        // fourth 'a'. If Exactly greedily consumed it, the AllOf would fail.
+        var rule = AllOf(Exactly(3, Token('a')), Token('a'));
         var result = rule.Parse("aaaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -61,7 +61,7 @@ public class ExactlyRuleTests
     [Test]
     public void Exactly_zero_succeeds_with_no_matches()
     {
-        var rule = And(Exactly(0, Token('a')), Token('b'));
+        var rule = AllOf(Exactly(0, Token('a')), Token('b'));
         var result = rule.Parse("b", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -71,7 +71,7 @@ public class ExactlyRuleTests
     [Test]
     public void Exactly_zero_does_not_consume_matching_input()
     {
-        var rule = And(Exactly(0, Token('a')), OneOrMore(Token('a')));
+        var rule = AllOf(Exactly(0, Token('a')), OneOrMore(Token('a')));
         var result = rule.Parse("aaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);

@@ -180,12 +180,12 @@ internal sealed class LoweringContext
             NoneOfRule noneOf => LowerNoneOf(noneOf, onSuccess, onFailure),
             AnyTokenRule anyToken => LowerAnyToken(anyToken, onSuccess, onFailure),
             EofRule eof => LowerEof(eof, onSuccess, onFailure),
-            AndRule and => LowerAnd(and, onSuccess, onFailure),
-            OrRule or => LowerOr(or, onSuccess, onFailure),
+            AllOfRule and => LowerAnd(and, onSuccess, onFailure),
+            FirstOfRule or => LowerOr(or, onSuccess, onFailure),
             BetweenInclusiveRule between => LowerBetween(between, onSuccess, onFailure),
             NotRule not => LowerNot(not, onSuccess, onFailure),
             PeekRule peek => LowerPeek(peek, onSuccess, onFailure),
-            StringBodyRule stringBody => LowerStringBody(stringBody, onSuccess, onFailure),
+            ScanUntilRule stringBody => LowerStringBody(stringBody, onSuccess, onFailure),
             _ => LowerViaBridge(rule, onSuccess, onFailure)
         };
     }
@@ -215,12 +215,12 @@ internal sealed class LoweringContext
             NoneOfRule noneOf => LowerNoneOf(noneOf, onSuccess, onFailure),
             AnyTokenRule anyToken => LowerAnyToken(anyToken, onSuccess, onFailure),
             EofRule eof => LowerEof(eof, onSuccess, onFailure),
-            AndRule and => LowerAnd(and, onSuccess, onFailure),
-            OrRule or => LowerOr(or, onSuccess, onFailure),
+            AllOfRule and => LowerAnd(and, onSuccess, onFailure),
+            FirstOfRule or => LowerOr(or, onSuccess, onFailure),
             BetweenInclusiveRule between => LowerBetween(between, onSuccess, onFailure),
             NotRule not => LowerNot(not, onSuccess, onFailure),
             PeekRule peek => LowerPeek(peek, onSuccess, onFailure),
-            StringBodyRule stringBody => LowerStringBody(stringBody, onSuccess, onFailure),
+            ScanUntilRule stringBody => LowerStringBody(stringBody, onSuccess, onFailure),
             _ => LowerViaBridge(rule, onSuccess, onFailure)
         };
     }
@@ -370,7 +370,7 @@ internal sealed class LoweringContext
         return AddState(LoweredOpCode.MatchEof, matchPacked, afterMatch, onFailure);
     }
 
-    private int LowerAnd(AndRule rule, int onSuccess, int onFailure)
+    private int LowerAnd(AllOfRule rule, int onSuccess, int onFailure)
     {
         // Skip Open/Close for Flatten composites: children flow into
         // the enclosing Preserve naturally without a wrapper, and
@@ -396,7 +396,7 @@ internal sealed class LoweringContext
         return next;
     }
 
-    private int LowerOr(OrRule rule, int onSuccess, int onFailure)
+    private int LowerOr(FirstOfRule rule, int onSuccess, int onFailure)
     {
         var effective = ResolveEffective(rule.FlattenType);
         int compositeAfter = onSuccess;
@@ -510,7 +510,7 @@ internal sealed class LoweringContext
     }
 
     // Whether this alternative could be safely skipped on a peeked-rune
-    // mismatch. Mirrors OrRule's runtime guard: only skip when the
+    // mismatch. Mirrors FirstOfRule's runtime guard: only skip when the
     // child Always advances (so its first rune is guaranteed to be
     // consumed) AND has a strictly tighter FirstConsumedRunes than the
     // universe. Custom WithError alternatives are NOT skipped because
@@ -796,7 +796,7 @@ internal sealed class LoweringContext
     {
         entryState = -1;
         if (rule.ErrorMessage != null) return false;
-        if (inner is not AndRule andInner) return false;
+        if (inner is not AllOfRule andInner) return false;
         if (andInner.Children.Count != 2) return false;
         if (andInner.ErrorMessage != null) return false;
 
@@ -1012,7 +1012,7 @@ internal sealed class LoweringContext
         return pushIdx;
     }
 
-    private int LowerStringBody(StringBodyRule rule, int onSuccess, int onFailure)
+    private int LowerStringBody(ScanUntilRule rule, int onSuccess, int onFailure)
     {
         // Rule-stopper, no escape: native scan with peeked stopper
         // calls. Eligibility check: stopper rule has Advance.Always
@@ -1028,7 +1028,7 @@ internal sealed class LoweringContext
             && rule.LoweringStopperRule.Advance == Advance.Always
             && !rule.LoweringStopperRule.FirstConsumedRunes.Equals(RuneSet.Universe))
         {
-            return LowerStringBodyRuleStopper(rule, onSuccess, onFailure);
+            return LowerScanUntilRuleStopper(rule, onSuccess, onFailure);
         }
 
         // Other rule-stopper / rule-escape-start forms still bridge to
@@ -1123,7 +1123,7 @@ internal sealed class LoweringContext
     // does this via a Transaction that never commits). When the
     // stopper succeeds in peek mode, the outer And's next rule
     // consumes it; StringBody itself never advances past the stopper.
-    private int LowerStringBodyRuleStopper(StringBodyRule rule, int onSuccess, int onFailure)
+    private int LowerScanUntilRuleStopper(ScanUntilRule rule, int onSuccess, int onFailure)
     {
         Rule stopper = rule.LoweringStopperRule!;
         int stopperFirstRunesIdx = InternRuneSet(stopper.FirstConsumedRunes);

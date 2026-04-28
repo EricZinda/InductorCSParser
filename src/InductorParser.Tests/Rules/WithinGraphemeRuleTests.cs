@@ -41,7 +41,7 @@ public class WithinGraphemeRuleTests
         // The inner rule accepts both in order: a letter then a combining
         // mark. Uses NormalizeInput=null so the decomposed form survives
         // to the lexer.
-        var rule = WithinGrapheme(And(
+        var rule = WithinGrapheme(AllOf(
             OneOf(RuneSet.Ascii.Letters),
             OneOf(RuneSet.Category(System.Globalization.UnicodeCategory.NonSpacingMark))
         ));
@@ -106,11 +106,11 @@ public class WithinGraphemeRuleTests
     [Test]
     public void Emits_exactly_one_leaf_per_grapheme_regardless_of_inner_structure()
     {
-        // The inner rule is a two-piece And, but WithinGrapheme hides
+        // The inner rule is a two-piece AllOf, but WithinGrapheme hides
         // that and emits a single leaf Symbol for the whole grapheme.
         // Grammar authors can rely on WithinGrapheme looking like a leaf
         // from the outside.
-        var rule = WithinGrapheme(And(
+        var rule = WithinGrapheme(AllOf(
             OneOf(RuneSet.Ascii.Letters),
             OneOf(RuneSet.Category(System.Globalization.UnicodeCategory.NonSpacingMark))
         ));
@@ -118,7 +118,7 @@ public class WithinGraphemeRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         // One Symbol in the tree representing the whole grapheme. No
-        // children from the inner And / OneOf pair.
+        // children from the inner AllOf / OneOf pair.
         Assert.That(result.Tree!.Children.Count, Is.EqualTo(0));
     }
 
@@ -150,7 +150,7 @@ public class WithinGraphemeRuleTests
         // "हि" is one grapheme under the grapheme lexer, two runes:
         // U+0939 DEVANAGARI LETTER HA (Lo) + U+093F DEVANAGARI VOWEL SIGN I (Mc).
         // The inner rule walks both runes.
-        var rule = WithinGrapheme(And(
+        var rule = WithinGrapheme(AllOf(
             OneOf(RuneSet.XidStart),
             OneOf(RuneSet.XidContinue)));
         var result = rule.Parse("हि");
@@ -166,7 +166,7 @@ public class WithinGraphemeRuleTests
         // (Lo, in XID_Start) + U+0E33 THAI CHARACTER SARA AM (in
         // XID_Continue, excluded from XID_Start via the NFKC-unstable
         // table since its NFKC decomposition is NIKHAHIT + SARA AA).
-        var rule = WithinGrapheme(And(
+        var rule = WithinGrapheme(AllOf(
             OneOf(RuneSet.XidStart),
             OneOf(RuneSet.XidContinue)));
         var result = rule.Parse("กำ");
@@ -182,7 +182,7 @@ public class WithinGraphemeRuleTests
         // U+064E ARABIC FATHA (Mn). Represents the common case of Arabic
         // text written with the optional vowel diacritics, which bundle
         // with their preceding consonant under grapheme clustering.
-        var rule = WithinGrapheme(And(
+        var rule = WithinGrapheme(AllOf(
             OneOf(RuneSet.XidStart),
             OneOf(RuneSet.XidContinue)));
         var result = rule.Parse("كَ");
