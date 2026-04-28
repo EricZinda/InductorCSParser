@@ -1,22 +1,6 @@
 
- 
-
-
-, here are the most common ones. 
-
-|                        |                |                    |
-| ---------------------- | -------------- | ------------------ |
-| AllOf            | Float      | OptionalEndOfLine  |
-| AnyToken         | Identifier | OptionalWhitespace |
-| AtLeast          | Integer    | FirstOf            |
-| AtMost           | Literal    | Peek               |
-| BetweenInclusive | NoneOf     | ScanUntil         |
-| EndOfLine        | Not        | Token              |
-| EndOfLineOrEof   | OneOf      | Whitespace         |
-| Eof              | OneOrMore  | ZeroOrMore         |
-| Exactly          | Optional   |                    |
-
-build something that confirms a password conforms to a set of rules (from [StackOverflow](https://stackoverflow.com/questions/19605150) ):
+# Inductor Parser Primer: Peek
+Let's build something that confirms a password conforms to a set of rules (from [StackOverflow](https://stackoverflow.com/questions/19605150) ):
 
 - contains at least eight characters
 - including at least one number and
@@ -25,4 +9,162 @@ build something that confirms a password conforms to a set of rules (from [Stack
 - cannot be your old password
 - cannot contain your username, "password", or "websitename"
 
-The Inductor Parser pattern matches against the characters in a .Net string value using a set of rules. It can "capture"
+The best marked answer at the time of this writing is:
+
+```Regex
+"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,10}$"
+```
+
+But in order to actually meet the OP's requirements it was missing the "webiste, previous password, and password" check, limited the password to 10 which the OP didn't, and limited the valid characters in the password to be *only* those which were in the required set, here's the fixed version:
+```
+var originalPassword = ... get password ...;
+var username = ... get username ...;
+var websitename = ... get websitename ...;
+
+string pattern = $@"^(?!{Regex.Escape(originalPassword)}$)" +
+                 $@"(?!.*{Regex.Escape(username)})" +
+                 $@"(?!.*password)" +
+                 $@"(?!.*{Regex.Escape(websitename)})" +
+                 $@"(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[#?!])" +
+                 $@".{{8,}}$";
+
+bool isValid = Regex.IsMatch(input, pattern);
+```
+
+To do this in Inductor Parser, we can start by thinking about how to scan a string until we hit something specific. Inductor Parser has a rule for this: `ScanUntil`. To scan a string until you hit a number you'd say:
+```CSharp
+ScanUntil(RuneSet.Digits)
+```
+But `ScanUntil` will succeed if it doesn't hit any of those digits too! So we also need to make sure it stopped because it *did* hit one of them. We can just check if the next token is one of those digits:
+
+```CSharp
+AllOf(ScanUntil(RuneSet.Digits), OneOf(RuneSet.Digits))
+```
+`AllOf` requires all of its rules to succeed, so this will only succeed if we found a string that has a digit in it. Since we'll be doing this a few times, we can make our own rule for it:
+
+```CSharp
+Rule Contains(RuneSet options) =>
+    AllOf(ScanUntil(options), OneOf(options));
+
+// Scan for one number
+Contains(RuneSet.Digits)
+
+// Scan for one upper case ASCII
+Contains(RuneSet.Range('A', 'Z'))
+
+// Scan for one lower case ASCII
+Contains(RuneSet.Range('a', 'z'))
+
+// Scan for one special character
+Contains(RuneSet.Runes("#?!"))
+```
+Those rules succeed if they find at least one of the characters we specify, but they also *consume* them as they go. So running them one after the other wouldn't check the whole password each time, only what is left after the previous rule succeeded.
+
+The `Peek` rule is designed for just this case.  Like `Not` it checks if something is upcoming, but doesn't *consume* it. So, we can simply `Peek` at each rule so they they each get to look at the entire password:
+
+```CSharp
+Rule Contains(RuneSet options) =>
+    Peek(AllOf(ScanUntil(options), OneOf(options)));
+```
+And then we have to make this real C# by combining them into a single rule:
+```CSharp
+Rule Contains(RuneSet options) =>
+    Peek(AllOf(ScanUntil(options), OneOf(options)));
+
+var rule = AllOf(Contains(RuneSet.Digits)
+                 Contains(RuneSet.Range('A', 'Z'))
+                 Contains(RuneSet.Range('a', 'z'))
+                 Contains(RuneSet.Runes("#?!")))
+```
+The next two aren't character based checks, they look for whole strings:
+- cannot contain your username, "password", or "websitename"
+- cannot be your old password
+
+`ScanUntil` supports the first one too, using a `Rule` overload. We can make another rule for that and use it:
+
+```CSharp
+Rule Contains(Rule rule) =>
+    Peek(AllOf(ScanUntil(rule), rule));
+
+var username = ... get username ...
+var websitename = ... get website name ...
+AllOf(
+    Not(Contains(Literal(username))),
+    Not(Contains(Literal("password"))),
+    Not(Contains(Literal(websitename)))
+);
+```
+The original spec said it also can't *be* the original password, which is less strong than "contains" but we'll go with it:
+
+```CSharp
+var originalPassword = ... get original password ...
+Not(AllOf(Literal(originalPassword), Eof()))
+```
+Note that we have to consume the original password *and* `Eof` otherwise it would mean "starts with".  `Eof` guarantees we hit the end of the string.
+
+So now we have:
+```CSharp
+Rule Contains(Rule rule) =>
+    Peek(AllOf(ScanUntil(rule), rule));
+
+Rule Contains(RuneSet options) =>
+    Peek(AllOf(ScanUntil(options), OneOf(options)));
+
+AllOf(
+    Contains(RuneSet.Digits),
+    Contains(RuneSet.Range('A', 'Z')),
+    Contains(RuneSet.Range('a', 'z')),
+    Contains(RuneSet.Runes("#?!")),
+    Not(Contains(Literal(username))),
+    Not(Contains(Literal("password"))),
+    Not(Contains(Literal(websitename))),
+    Not(AllOf(Literal(originalPassword), Eof()))
+);
+
+```
+But none of these actually *consume* anything so the parse will fail. We can make the last rule do the consuming:
+- contains at least eight characters
+
+```CSharp
+var originalPassword = ... get password ...;
+var username = ... get username ...;
+var websitename = ... get websitename ...;
+
+Rule Contains(Rule rule) =>
+    Peek(AllOf(ScanUntil(rule), rule));
+
+Rule Contains(RuneSet options) =>
+    Peek(AllOf(ScanUntil(options), OneOf(options)));
+
+var pattern = 
+    AllOf(
+        Contains(RuneSet.Digits),
+        Contains(RuneSet.Range('A', 'Z')),
+        Contains(RuneSet.Range('a', 'z')),
+        Contains(RuneSet.Runes("#?!")),
+        Not(Contains(Literal(username))),
+        Not(Contains(Literal("password"))),
+        Not(Contains(Literal(websitename))),
+        Not(AllOf(Literal(originalPassword), Eof())),
+        AtLeast(8, AnyToken())
+    );
+
+var result = example.Parse(input);
+```
+Compare that to the top suggested Regex solution from the StackOverflow post:
+
+```
+var originalPassword = ... get password ...;
+var username = ... get username ...;
+var websitename = ... get websitename ...;
+
+string pattern = $@"^(?!{Regex.Escape(originalPassword)}$)" +
+                 $@"(?!.*{Regex.Escape(username)})" +
+                 $@"(?!.*password)" +
+                 $@"(?!.*{Regex.Escape(websitename)})" +
+                 $@"(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[#?!])" +
+                 $@".{{8,}}$";
+
+bool isValid = Regex.IsMatch(input, pattern);
+```
+
