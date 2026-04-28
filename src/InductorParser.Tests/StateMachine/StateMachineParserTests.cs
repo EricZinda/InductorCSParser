@@ -77,7 +77,7 @@ public class StateMachineParserTests
         AssertSameOutcome(rule, "ab", expectSuccess: false);
     }
 
-    // ---- And ----
+    // ---- AllOf ----
 
     [Test]
     public void And_all_children_succeed()
@@ -106,7 +106,7 @@ public class StateMachineParserTests
         AssertSameOutcome(rooted, "axx", expectSuccess: false);
     }
 
-    // ---- Or ----
+    // ---- FirstOf ----
 
     [Test]
     public void Or_first_alternative_matches()
@@ -222,7 +222,7 @@ public class StateMachineParserTests
     public void Peek_failure_propagates()
     {
         var rule = AllOf(Peek(Token('a')), Eof());
-        // Peek('a') fails at empty input. So the And fails.
+        // Peek('a') fails at empty input. So the AllOf fails.
         AssertSameOutcome(rule, "", expectSuccess: false);
     }
 
@@ -312,7 +312,7 @@ public class StateMachineParserTests
     [Test]
     public void Error_position_in_alternative_picks_furthest_attempt()
     {
-        // "abc" matches the first three of "abcde". Or's first
+        // "abc" matches the first three of "abcde". FirstOf's first
         // alternative reads past "abc" and fails at offset 4. The
         // second alternative also fails earlier. Deepest wins.
         var rule = AllOf(
@@ -320,16 +320,16 @@ public class StateMachineParserTests
             Eof());
         var stateMachine = StateMachineParser.Parse(rule, "abcde");
         Assert.That(stateMachine.Success, Is.False);
-        // The deepest read inside the failed Or alternative was at
+        // The deepest read inside the failed FirstOf alternative was at
         // position 3 (matched abc, then failed at X). That's where
         // we should be.
         Assert.That(stateMachine.ErrorCharIndex, Is.GreaterThanOrEqualTo(2));
     }
 
-    // ---- StringBody ----
+    // ---- ScanUntil ----
 
     [Test]
-    public void StringBody_no_escape_scans_until_stopper()
+    public void ScanUntil_no_escape_scans_until_stopper()
     {
         var rule = AllOf(
             Token('"'),
@@ -341,7 +341,7 @@ public class StateMachineParserTests
     }
 
     [Test]
-    public void StringBody_with_simple_escape_handles_backslash_pairs()
+    public void ScanUntil_with_simple_escape_handles_backslash_pairs()
     {
         var simpleEscape = OneOf(RuneSet.Runes("\"\\nrtbf/"));
         var rule = AllOf(
@@ -356,7 +356,7 @@ public class StateMachineParserTests
     }
 
     [Test]
-    public void StringBody_recursive_escape_uses_subprogram_correctly()
+    public void ScanUntil_recursive_escape_uses_subprogram_correctly()
     {
         var simpleEscape = OneOf(RuneSet.Runes("\"\\/bfnrt"));
         var hexDigit = OneOf(RuneSet.Ascii.HexDigits);
@@ -373,7 +373,7 @@ public class StateMachineParserTests
     }
 
     [Test]
-    public void StringBody_preserves_leaf_text()
+    public void ScanUntil_preserves_leaf_text()
     {
         var rule = AllOf(Token('"'), ScanUntil(RuneSet.Runes("\"")), Token('"'), Eof());
         var stateMachine = StateMachineParser.Parse(rule, "\"hello\"");

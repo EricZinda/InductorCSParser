@@ -12,7 +12,7 @@ namespace InductorParser.StateMachine;
 // path. The first call for a given rule lowers and caches the
 // program. Subsequent calls reuse it.
 //
-// Iteration 1 scope: Literal, Token, OneOf, Eof, And, Or,
+// Iteration 1 scope: Literal, Token, OneOf, Eof, AllOf, FirstOf,
 // BetweenInclusive (covers Optional / OneOrMore / ZeroOrMore /
 // AtLeast / AtMost / Exactly), Not, Peek, LateBound. Both lexers.
 // Error position. FlattenType handling. PreserveAllSymbols. No

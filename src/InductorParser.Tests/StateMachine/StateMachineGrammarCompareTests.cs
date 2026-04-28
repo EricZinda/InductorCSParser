@@ -14,14 +14,14 @@ namespace InductorParser.Tests.StateMachine;
 // corpora of representative inputs, so this is a more realistic
 // comparison than the synthetic StateMachineBench grammars.
 //
-// ChordGrammar: heavy LiteralIgnoreAsciiCase + Or-of-keywords use.
+// ChordGrammar: heavy LiteralIgnoreAsciiCase + FirstOf-of-keywords use.
 // Stress-tests the new MatchLiteralIgnoreAsciiCase opcode plus the
-// existing Or first-rune-skip and atomic-inner BetweenInclusive paths.
+// existing FirstOf first-rune-skip and atomic-inner BetweenInclusive paths.
 //
 // BacklogGrammar: mostly natively lowered (Token, OneOf, NoneOf,
 // AnyToken, ZeroOrMore, AtLeast, Not, Optional, Eof). One rule
 // (ParagraphSplit) routes through the bridge for its rule-stoppered
-// StringBody; the others run native.
+// ScanUntil; the others run native.
 //
 // The test is [Explicit] so it doesn't run on the regular suite. To
 // see the comparison, run with --filter:
@@ -97,7 +97,7 @@ public class StateMachineGrammarCompareTests
     [Test]
     public void Backlog_paragraph_state_machine_vs_recursive_vs_regex()
     {
-        // ParagraphSplit uses StringBody with a Rule-based stopper,
+        // ParagraphSplit uses ScanUntil with a Rule-based stopper,
         // which routes through the BridgeToRecursive opcode in the
         // state-machine evaluator. So this row measures the bridge
         // overhead vs the pure recursive path.

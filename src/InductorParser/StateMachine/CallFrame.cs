@@ -13,10 +13,10 @@ internal struct CallFrame
     // and ReturnFailure leave EmissionOps as the subprogram left them.
     // Non-negative means "discard everything the subprogram emitted":
     // ReturnSuccess / ReturnFailure truncate EmissionOps back to this
-    // cursor before jumping. StringBodyScan's escape-end Call uses
-    // this so an escape-end rule that has its own emit states (e.g.
-    // a Preserve-default OneOf) doesn't leak those emissions into the
-    // enclosing StringBody's parent. The recursive evaluator gets the
+    // cursor before jumping. ScanUntil's escape-end Call uses this so
+    // an escape-end rule that has its own emit states (e.g. a
+    // Preserve-default OneOf) doesn't leak those emissions into the
+    // enclosing ScanUntil's parent. The recursive evaluator gets the
     // same effect by passing outputSymbols=null to escape-end's TryParse.
     public int SuppressEmissionsCursor;
 }

@@ -45,7 +45,7 @@ internal static class Lowerer
             context.Literals.ToArray(),
             context.RuneSets.ToArray(),
             context.SymbolMetadata.ToArray(),
-            context.StringBodySpecs.ToArray(),
+            context.ScanUntilSpecs.ToArray(),
             context.ScanSpecs.ToArray(),
             context.ScanAndPairSpecs.ToArray(),
             context.RuleStopperSpecs.ToArray(),
@@ -67,7 +67,7 @@ internal static class Lowerer
                 case LoweredOpCode.CloseComposite:
                 case LoweredOpCode.EmitLeafLiteral:
                 case LoweredOpCode.EmitLeafOneOf:
-                case LoweredOpCode.EmitStringBodyLeaf:
+                case LoweredOpCode.EmitScanUntilLeaf:
                 case LoweredOpCode.BridgeToRecursive:
                     return true;
                 case LoweredOpCode.ScanOneOfRune:
@@ -123,7 +123,7 @@ internal sealed class LoweringContext
     public readonly List<string> Literals = new();
     public readonly List<RuneSet> RuneSets = new();
     public readonly List<SymbolMetadata> SymbolMetadata = new();
-    public readonly List<StringBodySpec> StringBodySpecs = new();
+    public readonly List<ScanUntilSpec> ScanUntilSpecs = new();
     public readonly List<ScanSpec> ScanSpecs = new();
     public readonly List<ScanAndPairSpec> ScanAndPairSpecs = new();
     public readonly List<RuleStopperSpec> RuleStopperSpecs = new();
@@ -180,12 +180,12 @@ internal sealed class LoweringContext
             NoneOfRule noneOf => LowerNoneOf(noneOf, onSuccess, onFailure),
             AnyTokenRule anyToken => LowerAnyToken(anyToken, onSuccess, onFailure),
             EofRule eof => LowerEof(eof, onSuccess, onFailure),
-            AllOfRule and => LowerAnd(and, onSuccess, onFailure),
-            FirstOfRule or => LowerOr(or, onSuccess, onFailure),
+            AllOfRule allOf => LowerAllOf(allOf, onSuccess, onFailure),
+            FirstOfRule firstOf => LowerFirstOf(firstOf, onSuccess, onFailure),
             BetweenInclusiveRule between => LowerBetween(between, onSuccess, onFailure),
             NotRule not => LowerNot(not, onSuccess, onFailure),
             PeekRule peek => LowerPeek(peek, onSuccess, onFailure),
-            ScanUntilRule stringBody => LowerStringBody(stringBody, onSuccess, onFailure),
+            ScanUntilRule scanUntil => LowerScanUntil(scanUntil, onSuccess, onFailure),
             _ => LowerViaBridge(rule, onSuccess, onFailure)
         };
     }
@@ -215,12 +215,12 @@ internal sealed class LoweringContext
             NoneOfRule noneOf => LowerNoneOf(noneOf, onSuccess, onFailure),
             AnyTokenRule anyToken => LowerAnyToken(anyToken, onSuccess, onFailure),
             EofRule eof => LowerEof(eof, onSuccess, onFailure),
-            AllOfRule and => LowerAnd(and, onSuccess, onFailure),
-            FirstOfRule or => LowerOr(or, onSuccess, onFailure),
+            AllOfRule allOf => LowerAllOf(allOf, onSuccess, onFailure),
+            FirstOfRule firstOf => LowerFirstOf(firstOf, onSuccess, onFailure),
             BetweenInclusiveRule between => LowerBetween(between, onSuccess, onFailure),
             NotRule not => LowerNot(not, onSuccess, onFailure),
             PeekRule peek => LowerPeek(peek, onSuccess, onFailure),
-            ScanUntilRule stringBody => LowerStringBody(stringBody, onSuccess, onFailure),
+            ScanUntilRule scanUntil => LowerScanUntil(scanUntil, onSuccess, onFailure),
             _ => LowerViaBridge(rule, onSuccess, onFailure)
         };
     }
@@ -370,7 +370,7 @@ internal sealed class LoweringContext
         return AddState(LoweredOpCode.MatchEof, matchPacked, afterMatch, onFailure);
     }
 
-    private int LowerAnd(AllOfRule rule, int onSuccess, int onFailure)
+    private int LowerAllOf(AllOfRule rule, int onSuccess, int onFailure)
     {
         // Skip Open/Close for Flatten composites: children flow into
         // the enclosing Preserve naturally without a wrapper, and
@@ -396,7 +396,7 @@ internal sealed class LoweringContext
         return next;
     }
 
-    private int LowerOr(FirstOfRule rule, int onSuccess, int onFailure)
+    private int LowerFirstOf(FirstOfRule rule, int onSuccess, int onFailure)
     {
         var effective = ResolveEffective(rule.FlattenType);
         int compositeAfter = onSuccess;
@@ -413,7 +413,7 @@ internal sealed class LoweringContext
         // route to handlers that continue trying.
         int outerFailRestore = AddState(LoweredOpCode.FailRestore, 0, onFailure, onFailure);
 
-        // Decide whether this Or benefits from the first-rune-skip
+        // Decide whether this FirstOf benefits from the first-rune-skip
         // optimization. We need at least one alternative whose
         // FirstConsumedRunes is non-trivial (Advance.Always and
         // strictly smaller than Universe), and skipping has to be
@@ -527,7 +527,7 @@ internal sealed class LoweringContext
         return true;
     }
 
-    // Build the 128-entry ASCII jump table for an Or that uses
+    // Build the 128-entry ASCII jump table for a FirstOf that uses
     // first-rune-skip. altRecords is filled in reverse-priority order
     // by the reverse-lowering loop, so we walk it tail-to-head to
     // restore priority order. For each ASCII rune r:
@@ -614,10 +614,10 @@ internal sealed class LoweringContext
                 return LowerBetweenScanAnyToken(rule, anyTokenInner, onSuccess, onFailure);
         }
 
-        // And-pair fast path: BetweenInclusive(min, max, And(Literal, OneOf))
-        // where both And children are effectively Delete. Common in
+        // AllOf-pair fast path: BetweenInclusive(min, max, AllOf(Literal, OneOf))
+        // where both AllOf children are effectively Delete. Common in
         // separator-and-content scans like HrSpaced's
-        // AtLeast(2, And(Token(' '), OneOf("-*+"))).
+        // AtLeast(2, AllOf(Token(' '), OneOf("-*+"))).
         if (InputUnit == InputUnit.Rune
             && TryLowerBetweenScanLiteralOneOfRune(rule, inner, onSuccess, onFailure, out int fusedEntry))
         {
@@ -628,7 +628,7 @@ internal sealed class LoweringContext
         // PushBetween/PopIterationCheck/BetweenExitCheckMin trio and
         // lowers to the minimal Push/Pop pair plus a FailRestore. The
         // generic loop path runs five wrapper opcodes per attempt; the
-        // Optional shape runs two. Big win on Optional(Or(...)) and
+        // Optional shape runs two. Big win on Optional(FirstOf(...)) and
         // Optional(LiteralIgnoreAsciiCase(...)) shapes that don't qualify
         // for the scan paths or the atomic-inner shape.
         if (rule.AtLeast == 0 && rule.AtMost == 1 && rule.ErrorMessage == null)
@@ -777,7 +777,7 @@ internal sealed class LoweringContext
         return false;
     }
 
-    // Detects BetweenInclusive(min, max, And(L, R)) where L is a
+    // Detects BetweenInclusive(min, max, AllOf(L, R)) where L is a
     // Literal/Token, R is a OneOf, and both are effectively Delete
     // (no leaves emitted per iteration). Lowers to ScanLiteralOneOfRune
     // and writes the entry-state index to entryState. Returns false
@@ -786,7 +786,7 @@ internal sealed class LoweringContext
     // opcode's straight-line body stays correct: no WithError on
     // either side (the fused failure path records at entry only),
     // no per-iteration leaves to emit, and no Preserve wrapper above
-    // the inner And (we don't have a place to thread that through).
+    // the inner AllOf (we don't have a place to thread that through).
     private bool TryLowerBetweenScanLiteralOneOfRune(
         BetweenInclusiveRule rule,
         Rule inner,
@@ -796,12 +796,12 @@ internal sealed class LoweringContext
     {
         entryState = -1;
         if (rule.ErrorMessage != null) return false;
-        if (inner is not AllOfRule andInner) return false;
-        if (andInner.Children.Count != 2) return false;
-        if (andInner.ErrorMessage != null) return false;
+        if (inner is not AllOfRule allOfInner) return false;
+        if (allOfInner.Children.Count != 2) return false;
+        if (allOfInner.ErrorMessage != null) return false;
 
-        Rule left = andInner.Children[0];
-        Rule right = andInner.Children[1];
+        Rule left = allOfInner.Children[0];
+        Rule right = allOfInner.Children[1];
         if (left.ErrorMessage != null || right.ErrorMessage != null) return false;
         if (right is not OneOfRule rightOneOf) return false;
 
@@ -1012,7 +1012,7 @@ internal sealed class LoweringContext
         return pushIdx;
     }
 
-    private int LowerStringBody(ScanUntilRule rule, int onSuccess, int onFailure)
+    private int LowerScanUntil(ScanUntilRule rule, int onSuccess, int onFailure)
     {
         // Rule-stopper, no escape: native scan with peeked stopper
         // calls. Eligibility check: stopper rule has Advance.Always
@@ -1053,11 +1053,11 @@ internal sealed class LoweringContext
         if (rule.LoweringHasEscape)
             escapeEndEntry = GetOrCreateSubprogram(rule.LoweringEscapeEnd!);
 
-        int specIdx = AddStringBodySpec(stopperSetIdx, escapeStartRune, rule.LoweringHasEscape, escapeEndEntry);
+        int specIdx = AddScanUntilSpec(stopperSetIdx, escapeStartRune, rule.LoweringHasEscape, escapeEndEntry);
 
         // The leaf-emit / no-emit decision lives inline in the lowering
-        // path. Delete-effective StringBody bypasses both the metadata
-        // entry and the EmitStringBodyLeaf state.
+        // path. Delete-effective ScanUntil bypasses both the metadata
+        // entry and the EmitScanUntilLeaf state.
         var effective = ResolveEffective(rule.FlattenType);
         bool emitLeaf = effective != FlattenType.Delete;
 
@@ -1066,7 +1066,7 @@ internal sealed class LoweringContext
         {
             int metadataIndex = AddSymbolMetadata(rule);
             int popOk = AddState(LoweredOpCode.PopBacktrack, 0, onSuccess, onSuccess);
-            afterScan = AddState(LoweredOpCode.EmitStringBodyLeaf, metadataIndex, popOk, popOk);
+            afterScan = AddState(LoweredOpCode.EmitScanUntilLeaf, metadataIndex, popOk, popOk);
         }
         else
         {
@@ -1092,16 +1092,16 @@ internal sealed class LoweringContext
         if (rule.LoweringHasEscape)
             escapeCall = AddState(LoweredOpCode.CallSuppressEmissions, escapeEndEntry, scanState, outerFail);
 
-        FillState(scanState, LoweredOpCode.StringBodyScanFast, specIdx, afterScan,
+        FillState(scanState, LoweredOpCode.ScanUntilFast, specIdx, afterScan,
             rule.LoweringHasEscape ? escapeCall : outerFail);
 
         // Outer push: snapshots entry-time lexer position so
-        // EmitStringBodyLeaf can read the start, and so outerFail can
+        // EmitScanUntilLeaf can read the start, and so outerFail can
         // restore on escape-end failure.
         return AddState(LoweredOpCode.PushBacktrack, 0, scanState, scanState);
     }
 
-    // Native rule-stoppered StringBody scan, no escape. Lowered shape:
+    // Native rule-stoppered ScanUntil scan, no escape. Lowered shape:
     //
     //   entry: PushBacktrack(failTarget=outerFail)
     //   loopStart: ScanUntilStopperEligibleRune(specIdx)
@@ -1112,17 +1112,17 @@ internal sealed class LoweringContext
     //   stopperSucceededRestore: FailRestore -> exitLeaf
     //   stopperFailedRestore: FailRestore -> advanceRune
     //   advanceRune: AdvanceOneRune -> loopStart
-    //   exitLeaf: [EmitStringBodyLeaf if applicable] -> popEntry -> onSuccess
+    //   exitLeaf: [EmitScanUntilLeaf if applicable] -> popEntry -> onSuccess
     //   popEntry: PopBacktrack -> onSuccess
     //   outerFail: FailRestore -> onFailure
     //
     // The outer entry frame saves the body's start position so
-    // EmitStringBodyLeaf can compute the leaf span. The inner peek
+    // EmitScanUntilLeaf can compute the leaf span. The inner peek
     // frame around each stopper Call lets us roll the lexer back to
     // before the call regardless of outcome (the recursive evaluator
     // does this via a Transaction that never commits). When the
-    // stopper succeeds in peek mode, the outer And's next rule
-    // consumes it; StringBody itself never advances past the stopper.
+    // stopper succeeds in peek mode, the outer AllOf's next rule
+    // consumes it; ScanUntil itself never advances past the stopper.
     private int LowerScanUntilRuleStopper(ScanUntilRule rule, int onSuccess, int onFailure)
     {
         Rule stopper = rule.LoweringStopperRule!;
@@ -1147,7 +1147,7 @@ internal sealed class LoweringContext
         if (emitLeaf)
         {
             int leafMetaIdx = AddSymbolMetadata(rule);
-            exitLeaf = AddState(LoweredOpCode.EmitStringBodyLeaf, leafMetaIdx, popEntry, popEntry);
+            exitLeaf = AddState(LoweredOpCode.EmitScanUntilLeaf, leafMetaIdx, popEntry, popEntry);
         }
         else
         {
@@ -1177,7 +1177,7 @@ internal sealed class LoweringContext
         FillState(advanceRune, LoweredOpCode.AdvanceOneRune, 0, loopStart, loopStart);
 
         // Outer entry push saves the body's start position so
-        // EmitStringBodyLeaf can compute the leaf span.
+        // EmitScanUntilLeaf can compute the leaf span.
         return AddState(LoweredOpCode.PushBacktrack, 0, loopStart, outerFail);
     }
 
@@ -1185,7 +1185,7 @@ internal sealed class LoweringContext
     // TryParse and forwards its Symbol output into our emission stream.
     // Used for rule types the lowerer doesn't have a native opcode for:
     // WithinGrapheme, the rule-stoppered / rule-escape-start variants
-    // of StringBody, and any user-defined Rule subclass. Slower than
+    // of ScanUntil, and any user-defined Rule subclass. Slower than
     // a native lowering by the cost of one virtual TryParseRule call
     // per invocation, but correctness-preserving for everything the
     // recursive evaluator handles.
@@ -1205,8 +1205,8 @@ internal sealed class LoweringContext
 
     // Lower `rule` as a Call/Return-shaped subprogram, returning the
     // entry state index. Used both by the cyclic-rule path and by
-    // StringBody for its escape-end. Caches per-rule so two callers
-    // referencing the same rule (e.g. a shared Or used as the escape
+    // ScanUntil for its escape-end. Caches per-rule so two callers
+    // referencing the same rule (e.g. a shared FirstOf used as the escape
     // end of two StringBodies) share one subprogram body.
     private int GetOrCreateSubprogram(Rule rule)
     {
@@ -1224,10 +1224,10 @@ internal sealed class LoweringContext
         return subprogramEntry;
     }
 
-    private int AddStringBodySpec(int stopperSetIndex, int escapeStartRune, bool hasEscape, int escapeEndEntry)
+    private int AddScanUntilSpec(int stopperSetIndex, int escapeStartRune, bool hasEscape, int escapeEndEntry)
     {
-        int newIndex = StringBodySpecs.Count;
-        StringBodySpecs.Add(new StringBodySpec(stopperSetIndex, escapeStartRune, hasEscape, escapeEndEntry));
+        int newIndex = ScanUntilSpecs.Count;
+        ScanUntilSpecs.Add(new ScanUntilSpec(stopperSetIndex, escapeStartRune, hasEscape, escapeEndEntry));
         return newIndex;
     }
 

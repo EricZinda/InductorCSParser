@@ -45,11 +45,11 @@ internal struct Machine
     public string? DeepestFailureMessage;
 
     // Single-slot scratch space for the LoadPeekedRune /
-    // CheckPeekedRuneInSet pair the Or first-rune-skip uses. Updated
-    // by LoadPeekedRune at each Or entry, read by per-alternative
-    // CheckPeekedRuneInSet states. -1 means "no rune available"
-    // (EOF or stray surrogate), which fails membership in any
-    // non-Universe set.
+    // CheckPeekedRuneInSet pair the FirstOf first-rune-skip uses.
+    // Updated by LoadPeekedRune at each FirstOf entry, read by
+    // per-alternative CheckPeekedRuneInSet states. -1 means "no rune
+    // available" (EOF or stray surrogate), which fails membership in
+    // any non-Universe set.
     public int PeekedRune;
 
     // Start position of the most recent successful token read by a

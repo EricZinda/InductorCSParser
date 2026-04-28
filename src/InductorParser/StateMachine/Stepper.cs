@@ -93,10 +93,10 @@ internal static class Stepper
                 return Step_CheckPeekedRuneInSet(in state, ref machine);
             case LoweredOpCode.LoadPeekedRuneAndJumpAlt:
                 return Step_LoadPeekedRuneAndJumpAlt(in state, ref machine);
-            case LoweredOpCode.StringBodyScanFast:
-                return Step_StringBodyScanFast(in state, ref machine);
-            case LoweredOpCode.EmitStringBodyLeaf:
-                return Step_EmitStringBodyLeaf(in state, ref machine);
+            case LoweredOpCode.ScanUntilFast:
+                return Step_ScanUntilFast(in state, ref machine);
+            case LoweredOpCode.EmitScanUntilLeaf:
+                return Step_EmitScanUntilLeaf(in state, ref machine);
             case LoweredOpCode.BridgeToRecursive:
                 return Step_BridgeToRecursive(in state, ref machine);
             case LoweredOpCode.ScanOneOfRune:
@@ -544,10 +544,10 @@ internal static class Stepper
         return state.OnSuccess;
     }
 
-    // Fused-scan opcode for BetweenInclusive(min, max, And(Literal, OneOf))
-    // when both And children are effectively Delete. Matches the
+    // Fused-scan opcode for BetweenInclusive(min, max, AllOf(Literal, OneOf))
+    // when both AllOf children are effectively Delete. Matches the
     // common "separator-and-content" pattern (HrSpaced's
-    // AtLeast(2, And(Token(' '), OneOf("-*+"))) being the canonical
+    // AtLeast(2, AllOf(Token(' '), OneOf("-*+"))) being the canonical
     // example). Per iteration: span-equal compare for the left
     // literal, then inline rune decode + RuneSet membership for the
     // right OneOf. No per-iteration backtrack frame, no per-iteration
@@ -655,7 +655,7 @@ internal static class Stepper
 
     // AdvanceOneRune moves the lexer forward by one rune (1 char for
     // BMP, 2 for a surrogate pair). Used by the rule-stoppered
-    // StringBody scan after a peeked stopper attempt failed: we know
+    // ScanUntil scan after a peeked stopper attempt failed: we know
     // the rune at the current position couldn't actually start a
     // stopper match, so we consume it as a body rune and resume the
     // scan. Always succeeds.
@@ -706,7 +706,7 @@ internal static class Stepper
     }
 
     // Push a backtrack frame snapshotting lexer position, emit cursor,
-    // and call-stack height. Used as the per-alternative frame for Or,
+    // and call-stack height. Used as the per-alternative frame for FirstOf,
     // the per-iteration frame inside BetweenInclusive's loop, and the
     // wrapper frame for Not / Peek.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1177,7 +1177,7 @@ internal static class Stepper
     }
 
     // CheckPeekedRuneInSet returns success iff the stashed PeekedRune
-    // is in the named RuneSet. Used by the Or first-rune-skip lowering
+    // is in the named RuneSet. Used by the FirstOf first-rune-skip lowering
     // to drop alternatives whose FirstConsumedRunes can't possibly
     // match the next input rune.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1190,7 +1190,7 @@ internal static class Stepper
     }
 
     // LoadPeekedRuneAndJumpAlt fuses the LoadPeekedRune + leading
-    // CheckPeekedRuneInSet chain for an Or. Decodes one rune at the
+    // CheckPeekedRuneInSet chain for a FirstOf. Decodes one rune at the
     // current lexer position; for an ASCII rune jumps directly to the
     // table-determined alternative's PushBacktrack (or to the
     // all-alts-failed target). For non-ASCII or EOF stashes -1 / the
@@ -1227,7 +1227,7 @@ internal static class Stepper
         return state.OnSuccess;
     }
 
-    // StringBodyScanFast walks runes from the current lexer position
+    // ScanUntilFast walks runes from the current lexer position
     // until one of three exits:
     //   * Stopper rune found: returns OnSuccess (loop done, ready to
     //     emit the leaf).
@@ -1240,11 +1240,11 @@ internal static class Stepper
     //
     // Operates rune-by-rune even under the GraphemeLexer because the
     // stopper-set / escape-start checks are rune-scoped. Same as the
-    // recursive StringBodyRule.
+    // recursive ScanUntilRule.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int Step_StringBodyScanFast(in State state, ref Machine machine)
+    private static int Step_ScanUntilFast(in State state, ref Machine machine)
     {
-        StringBodySpec spec = machine.Program.StringBodySpecs[state.Data];
+        ScanUntilSpec spec = machine.Program.ScanUntilSpecs[state.Data];
         RuneSet stopperSet = machine.Program.RuneSets[spec.StopperSetIndex];
         Lexer lexer = machine.Lexer;
         string input = lexer.Input;
@@ -1293,12 +1293,12 @@ internal static class Stepper
         }
     }
 
-    // EmitStringBodyLeaf builds the leaf Symbol that covers the entire
+    // EmitScanUntilLeaf builds the leaf Symbol that covers the entire
     // scanned range. The start position lives on the topmost backtrack
-    // frame's LexerPosition (pushed by the lowerer at StringBody
+    // frame's LexerPosition (pushed by the lowerer at ScanUntil
     // entry); the end position is the lexer's current position.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int Step_EmitStringBodyLeaf(in State state, ref Machine machine)
+    private static int Step_EmitScanUntilLeaf(in State state, ref Machine machine)
     {
         ref var frame = ref machine.BacktrackStack[machine.BacktrackTop - 1];
         int startPosition = frame.LexerPosition;

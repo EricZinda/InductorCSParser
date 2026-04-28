@@ -16,15 +16,16 @@ internal sealed class CompiledProgram
     public string[] Literals { get; }
     public RuneSet[] RuneSets { get; }
     public SymbolMetadata[] SymbolMetadata { get; }
-    public StringBodySpec[] StringBodySpecs { get; }
+    public ScanUntilSpec[] ScanUntilSpecs { get; }
     public ScanSpec[] ScanSpecs { get; }
     public ScanAndPairSpec[] ScanAndPairSpecs { get; }
     public RuleStopperSpec[] RuleStopperSpecs { get; }
     public Rule[] BridgeRules { get; }
-    // One 128-entry int[] per Or that uses the LoadPeekedRuneAndJumpAlt
-    // opcode. Entry r holds the state index to dispatch to when the
-    // peeked rune equals r (0..127). Built once at lowering time and
-    // read on the hot path with one indexed load.
+    // One 128-entry int[] per FirstOf that uses the
+    // LoadPeekedRuneAndJumpAlt opcode. Entry r holds the state index
+    // to dispatch to when the peeked rune equals r (0..127). Built
+    // once at lowering time and read on the hot path with one
+    // indexed load.
     public int[][] OrJumpTables { get; }
     public int EntryState { get; }
     public Rule RootRule { get; }
@@ -43,7 +44,7 @@ internal sealed class CompiledProgram
         string[] literals,
         RuneSet[] runeSets,
         SymbolMetadata[] symbolMetadata,
-        StringBodySpec[] stringBodySpecs,
+        ScanUntilSpec[] stringBodySpecs,
         ScanSpec[] scanSpecs,
         ScanAndPairSpec[] scanAndPairSpecs,
         RuleStopperSpec[] ruleStopperSpecs,
@@ -57,7 +58,7 @@ internal sealed class CompiledProgram
         Literals = literals;
         RuneSets = runeSets;
         SymbolMetadata = symbolMetadata;
-        StringBodySpecs = stringBodySpecs;
+        ScanUntilSpecs = stringBodySpecs;
         ScanSpecs = scanSpecs;
         ScanAndPairSpecs = scanAndPairSpecs;
         RuleStopperSpecs = ruleStopperSpecs;
@@ -84,7 +85,7 @@ internal readonly struct RuleStopperSpec
 }
 
 // Spec for ScanLiteralOneOfRune. Carries the literal index for the
-// And's left child (Token / Literal), the runeset index for the right
+// AllOf's left child (Token / Literal), the runeset index for the right
 // child (OneOf), the loop bounds, and an optional error-metadata
 // index. The fused opcode requires both children to be effectively
 // Delete (no leaves emitted per iteration), which is the common case
@@ -131,19 +132,20 @@ internal readonly struct ScanSpec
     }
 }
 
-// Per-StringBodyRule data referenced by the StringBodyScanFast opcode.
+// Per-ScanUntilRule data referenced by the ScanUntilFast opcode.
 // Captures the stopper set, the optional single-rune escape start, and
 // the entry state of the escape-end subprogram. The general-form
-// stopper-as-rule and escape-start-as-rule paths are not yet supported
-// in the state-machine evaluator (a TODO for a later iteration).
-internal readonly struct StringBodySpec
+// stopper-as-rule path is handled by the rule-stoppered scan opcode
+// (ScanUntilStopperEligibleRune) and the escape-start-as-rule path
+// still bridges to the recursive evaluator.
+internal readonly struct ScanUntilSpec
 {
     public readonly int StopperSetIndex;
     public readonly int EscapeStartRune;
     public readonly bool HasEscape;
     public readonly int EscapeEndEntry;
 
-    public StringBodySpec(int stopperSetIndex, int escapeStartRune, bool hasEscape, int escapeEndEntry)
+    public ScanUntilSpec(int stopperSetIndex, int escapeStartRune, bool hasEscape, int escapeEndEntry)
     {
         StopperSetIndex = stopperSetIndex;
         EscapeStartRune = escapeStartRune;

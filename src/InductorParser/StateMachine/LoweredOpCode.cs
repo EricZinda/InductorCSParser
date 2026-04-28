@@ -58,7 +58,7 @@ internal enum LoweredOpCode : byte
     //
     // CallSuppressEmissions is a Call variant that records the current
     // emission cursor on the frame; ReturnSuccess/ReturnFailure truncate
-    // EmissionOps back to that cursor on pop. Used by StringBody's
+    // EmissionOps back to that cursor on pop. Used by ScanUntil's
     // escape-end Call so the escape rule's emissions never reach the
     // enclosing tree (mirrors the recursive evaluator's
     // outputSymbols=null escape-end call).
@@ -75,15 +75,16 @@ internal enum LoweredOpCode : byte
     EmitLeafLiteral,
     EmitLeafOneOf,
 
-    // Or first-rune skip. LoadPeekedRune peeks the next rune in the
-    // input and stashes it on Machine.PeekedRune. CheckPeekedRuneInSet
-    // tests that stashed rune against a RuneSet without re-peeking, so
-    // an N-alternative Or pays one peek + N membership checks instead
-    // of N peeks + N checks. Mirrors what the recursive OrRule does.
+    // FirstOf first-rune skip. LoadPeekedRune peeks the next rune in
+    // the input and stashes it on Machine.PeekedRune.
+    // CheckPeekedRuneInSet tests that stashed rune against a RuneSet
+    // without re-peeking, so an N-alternative FirstOf pays one peek +
+    // N membership checks instead of N peeks + N checks. Mirrors what
+    // the recursive FirstOfRule does.
     LoadPeekedRune,
     CheckPeekedRuneInSet,
 
-    // ASCII jump-table dispatch for Or first-rune-skip. Replaces the
+    // ASCII jump-table dispatch for FirstOf first-rune-skip. Replaces the
     // LoadPeekedRune + leading CheckPeekedRuneInSet chain when at least
     // one alternative can be peek-skipped. Decodes one rune at the
     // lexer position; for an ASCII rune (0..127) jumps directly to the
@@ -95,21 +96,21 @@ internal enum LoweredOpCode : byte
     // index into CompiledProgram.OrJumpTables.
     LoadPeekedRuneAndJumpAlt,
 
-    // StringBody scan loop (RuneSet stopper + optional Rune escape
-    // start). StringBodyScanFast walks runes until it hits a stopper
+    // ScanUntil scan loop (RuneSet stopper + optional Rune escape
+    // start). ScanUntilFast walks runes until it hits a stopper
     // (success exit), EOF / malformed surrogate (success exit, empty
     // tail), or an escape-start rune (consumes the start rune, then
     // routes to OnFailure where the lowerer wired in a Call to the
     // escape-end subprogram). After the escape returns, the dispatcher
-    // jumps back to the same scan state and resumes. EmitStringBodyLeaf
+    // jumps back to the same scan state and resumes. EmitScanUntilLeaf
     // builds the leaf Symbol covering the matched range; the start
     // position lives on the topmost backtrack frame's LexerPosition.
-    StringBodyScanFast,
-    EmitStringBodyLeaf,
+    ScanUntilFast,
+    EmitScanUntilLeaf,
 
     // Bridge to the recursive evaluator. Used for rule types the
     // state machine doesn't have a native lowering for: WithinGrapheme,
-    // StringBody general-form variants (Rule stopper, Rule escape
+    // ScanUntil general-form variants (Rule stopper, Rule escape
     // start), and any user-defined Rule subclass. The bridge invokes
     // the rule's TryParse against the current lexer, captures whatever
     // Symbol(s) it produces, and emits them as Prebuilt emission ops
@@ -174,7 +175,7 @@ internal enum LoweredOpCode : byte
     PeekRejectOneOfRune,
     PeekRejectLiteralRune,
 
-    // Fused-scan opcode for BetweenInclusive(min, max, And(L, R)) where
+    // Fused-scan opcode for BetweenInclusive(min, max, AllOf(L, R)) where
     // L is a Literal/Token and R is a OneOf, both effectively Delete.
     // Matches the common shape "repeated-token-followed-by-rune-class"
     // (HrSpaced, separator-then-content patterns, etc.). Per iteration:
@@ -183,14 +184,14 @@ internal enum LoweredOpCode : byte
     // dispatch and no per-iteration backtrack frame. Rune-only.
     ScanLiteralOneOfRune,
 
-    // Rule-stoppered StringBody scan loop. Walks runes inline; on each
+    // Rule-stoppered ScanUntil scan loop. Walks runes inline; on each
     // rune, checks whether it's in the stopper rule's
     // FirstConsumedRunes set. When the rune isn't in the set, advance
     // and continue (it can't possibly be the start of a stopper
     // match). When the rune IS in the set, exit OnSuccess so the
     // surrounding lowering can Call the stopper rule (in peek mode)
     // and decide whether to break the scan or continue. Replaces the
-    // BridgeToRecursive entry/exit cost on rule-stoppered StringBody
+    // BridgeToRecursive entry/exit cost on rule-stoppered ScanUntil
     // forms (CDATA's ]]>, Python triple-quote, paragraph terminators).
     // AdvanceOneRune is the helper that consumes one rune when the
     // peeked stopper failed.
