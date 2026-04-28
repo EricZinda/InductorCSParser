@@ -14,7 +14,7 @@ namespace InductorParser.Tests;
 // Recursion. ElementRule references NormalCharacterElementRule which
 // references ElementRule, a cycle C# static initialization can't resolve
 // by itself. LateBoundRule stands in for Element during construction,
-// then gets bound to the finished Or(...) at the bottom of the file via
+// then gets bound to the finished FirstOf(...) at the bottom of the file via
 // a static initializer field.
 //
 // Illegal-character sets mirror HtmlParser.cpp line-for-line:
@@ -52,7 +52,7 @@ public static class HtmlGrammar
     private static readonly RuneSet TagNameContinueChars =
         RuneSet.Ascii.Letters | RuneSet.Ascii.Digits | RuneSet.Runes("_-.");
 
-    public static readonly Rule TagName = And(
+    public static readonly Rule TagName = AllOf(
         OneOf(TagNameStartChars),
         ZeroOrMore(OneOf(TagNameContinueChars))
     );
@@ -69,7 +69,7 @@ public static class HtmlGrammar
 
     // Unquoted value: one or more chars that aren't whitespace, ", ', <, >,
     // /, =, or `.
-    public static readonly Rule UnquotedAttributeValueAttribute = And(
+    public static readonly Rule UnquotedAttributeValueAttribute = AllOf(
         AttributeName,
         OptionalWs,
         Token('='),
@@ -77,7 +77,7 @@ public static class HtmlGrammar
         OneOrMore(NoneOf("\r\n\t \"'<>/=`"))
     );
 
-    public static readonly Rule SingleQuotedAttributeValueAttribute = And(
+    public static readonly Rule SingleQuotedAttributeValueAttribute = AllOf(
         AttributeName,
         OptionalWs,
         Token('='),
@@ -87,7 +87,7 @@ public static class HtmlGrammar
         Token('\'')
     );
 
-    public static readonly Rule DoubleQuotedAttributeValueAttribute = And(
+    public static readonly Rule DoubleQuotedAttributeValueAttribute = AllOf(
         AttributeName,
         OptionalWs,
         Token('='),
@@ -101,7 +101,7 @@ public static class HtmlGrammar
     // an unquoted run would read past the quote), then unquoted, then empty.
     // The empty-attribute branch is a bare AttributeName, so it must be last
     // because every other attribute form also starts with an AttributeName.
-    public static readonly Rule Attribute = Or(
+    public static readonly Rule Attribute = FirstOf(
         DoubleQuotedAttributeValueAttribute,
         SingleQuotedAttributeValueAttribute,
         UnquotedAttributeValueAttribute,
@@ -109,37 +109,37 @@ public static class HtmlGrammar
     );
 
     // "<" TagName (ws Attribute)* ws ">"
-    public static readonly Rule StartTag = And(
+    public static readonly Rule StartTag = AllOf(
         Token('<'),
         TagName,
-        ZeroOrMore(And(OptionalWs, Attribute)),
+        ZeroOrMore(AllOf(OptionalWs, Attribute)),
         OptionalWs,
         Token('>')
     );
 
     // "<" TagName (ws Attribute)* ws "/>"
-    public static readonly Rule VoidStartTag = And(
+    public static readonly Rule VoidStartTag = AllOf(
         Token('<'),
         TagName,
-        ZeroOrMore(And(OptionalWs, Attribute)),
+        ZeroOrMore(AllOf(OptionalWs, Attribute)),
         OptionalWs,
         Token('/'),
         Token('>')
     );
 
     // XML processing instruction: <?tagname attrs?>
-    public static readonly Rule ProcessingInstruction = And(
+    public static readonly Rule ProcessingInstruction = AllOf(
         Token('<'),
         Token('?'),
         TagName,
-        ZeroOrMore(And(OptionalWs, Attribute)),
+        ZeroOrMore(AllOf(OptionalWs, Attribute)),
         OptionalWs,
         Token('?'),
         Token('>')
     );
 
     // "</" TagName ws ">"
-    public static readonly Rule EndTag = And(
+    public static readonly Rule EndTag = AllOf(
         Token('<'),
         Token('/'),
         TagName,
@@ -150,7 +150,7 @@ public static class HtmlGrammar
     public static readonly Rule VoidElement = VoidStartTag;
 
     // <!-- anything but "-->" -->
-    public static readonly Rule Comment = And(
+    public static readonly Rule Comment = AllOf(
         Literal("<!--"),
         StringBody(Literal("-->")),
         Literal("-->")
@@ -160,15 +160,15 @@ public static class HtmlGrammar
     // element recursion, just "anything until </style>". Start tag is
     // a specific literal, end tag is the same. The body scans forward
     // on a rule-based stop.
-    private static readonly Rule StartStyleTag = And(
+    private static readonly Rule StartStyleTag = AllOf(
         Token('<'),
         Literal("style"),
-        ZeroOrMore(And(OptionalWs, Attribute)),
+        ZeroOrMore(AllOf(OptionalWs, Attribute)),
         OptionalWs,
         Token('>')
     );
 
-    private static readonly Rule EndStyleTag = And(
+    private static readonly Rule EndStyleTag = AllOf(
         Literal("</style"),
         OptionalWs,
         Token('>')
@@ -193,9 +193,9 @@ public static class HtmlGrammar
     //     match.
     //
     // General pattern: StringBody's stopper is the shortest unambiguous
-    // prefix of the terminator. The outer And re-matches the full
+    // prefix of the terminator. The outer AllOf re-matches the full
     // terminator to consume it.
-    public static readonly Rule NonReplaceableCharacterElement = And(
+    public static readonly Rule NonReplaceableCharacterElement = AllOf(
         StartStyleTag,
         StringBody(Literal("</style")),
         EndStyleTag
@@ -207,11 +207,11 @@ public static class HtmlGrammar
     public static readonly Rule Element = ElementForward;
 
     // Normal character element: StartTag (Element | (not-"<")+)* EndTag.
-    // The inner Or tries element recursion first. If we're not sitting
+    // The inner FirstOf tries element recursion first. If we're not sitting
     // on a "<", the OneOrMore(not-"<") sweeps up a run of text instead.
-    public static readonly Rule NormalCharacterElement = And(
+    public static readonly Rule NormalCharacterElement = AllOf(
         StartTag,
-        ZeroOrMore(Or(
+        ZeroOrMore(FirstOf(
             ElementForward,
             OneOrMore(NoneOf("<"))
         )),
@@ -224,7 +224,7 @@ public static class HtmlGrammar
     // commit in source order. Void must come before normal because the
     // two share the same left prefix and only diverge at the closing
     // "/" vs ">".
-    private static readonly Rule ElementDef = Or(
+    private static readonly Rule ElementDef = FirstOf(
         Comment,
         NonReplaceableCharacterElement,
         VoidElement,
@@ -238,8 +238,8 @@ public static class HtmlGrammar
     // root element, optional trailing whitespace, EOF. DOCTYPE and BOM
     // aren't implemented here. The C++ version doesn't handle them
     // either.
-    public static readonly Rule Document = And(
-        ZeroOrMore(Or(
+    public static readonly Rule Document = AllOf(
+        ZeroOrMore(FirstOf(
             OneOf(WhitespaceChars),
             Comment
         )),

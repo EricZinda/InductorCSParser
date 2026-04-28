@@ -26,22 +26,22 @@ We need it to say "anything but *not* the stopping text", to leave that text for
 
 ```CSharp
 var target = Literal("this sequence of characters");
-ZeroOrMore(And(Not(target), AnyToken()))
+ZeroOrMore(AllOf(Not(target), AnyToken()))
 target
 ```
-This won't actually compile, yet. To fix it, we need to join our rules together, using logical rules like `And`, `Or`, `Not`. Inductor Parser uses the rules in order, so `And` will match the first rule and then the second rule. Both must work to succeed (i.e. `and`):
+This won't actually compile, yet. To fix it, we need to join our rules together, using logical rules like `AllOf`, `FirstOf`, `Not`. Inductor Parser uses the rules in order, so `AllOf` will match the first rule and then the second rule. Both must work to succeed (i.e. `and`):
 ```
 var target = Literal("this sequence of characters");
-var example = And(ZeroOrMore(And(Not(target), AnyToken())),
+var example = AllOf(ZeroOrMore(AllOf(Not(target), AnyToken())),
                   target);
 ```
-This will now compile. We had to put `not` first in `And(Not(target), AnyToken())` for the same greedy reason. If `AnyToken()` was first it would consume all the characters before we ever got to `not` and all rules need to succeed for the parse to succeed.
+This will now compile. We had to put `not` first in `AllOf(Not(target), AnyToken())` for the same greedy reason. If `AnyToken()` was first it would consume all the characters before we ever got to `not` and all rules need to succeed for the parse to succeed.
 
 This is a simple "grammar", which is just a set of rules that go together. To use it, we just call `.Parse()` on it:
 
 ```CSharp
 var target = Literal("this sequence of characters");
-var example = And(ZeroOrMore(And(Not(target), AnyToken())),
+var example = AllOf(ZeroOrMore(AllOf(Not(target), AnyToken())),
                   target);
 
 var result = example.Parse("How can I match anything up until this sequence of characters");
@@ -66,7 +66,7 @@ So, when you call `ToString()` on the result of a parse, all the symbols left in
 
 ```CSharp
 var target = Literal("this sequence of characters");
-var example = And(ZeroOrMore(And(Not(target), AnyToken())),
+var example = AllOf(ZeroOrMore(AllOf(Not(target), AnyToken())),
                   target);
 
 ```
@@ -76,7 +76,7 @@ To help with debugging, you can flip them all to `Preserve` with options on the 
 
 ```CSharp
 var target = Literal("this sequence of characters");
-var example = And(ZeroOrMore(And(Not(target), AnyToken())),
+var example = AllOf(ZeroOrMore(AllOf(Not(target), AnyToken())),
                   target);
 
 var options = new ParseOptions { PreserveAllSymbols = true };
@@ -88,16 +88,16 @@ Console.WriteLine(result.ToString())
 Then the output will show you all of the Symbols. How to decode this is described right after it:
 
 ```CSharp
-And: "How can I match anything up until this sequence of characters"
+AllOf: "How can I match anything up until this sequence of characters"
   ZeroOrMore: "How can I match anything up until "
-    And: "H"
+    AllOf: "H"
       Not: ""
       'H'
-    And: "o"
+    AllOf: "o"
       Not: ""
       'o'
-    [... 32 more And/Not/char triples, one per consumed token ...]
-    And: " "
+    [... 32 more AllOf/Not/char triples, one per consumed token ...]
+    AllOf: " "
       Not: ""
       ' '
   Literal: "this sequence of characters"
@@ -116,9 +116,9 @@ Note that `Not` doesn't actually consume anything so it has nothing to print out
 
 |                        |                |                    |
 | ---------------------- | -------------- | ------------------ |
-| And              | Float      | OptionalEndOfLine  |
+| AllOf            | Float      | OptionalEndOfLine  |
 | AnyToken         | Identifier | OptionalWhitespace |
-| AtLeast          | Integer    | Or                 |
+| AtLeast          | Integer    | FirstOf            |
 | AtMost           | Literal    | Peek               |
 | BetweenInclusive | NoneOf     | StringBody         |
 | EndOfLine        | Not        | Token              |

@@ -12,11 +12,11 @@ namespace InductorParser;
 // Idiom: Not(stopRule) combined with AnyToken() is the rule-based "match
 // everything up to the stop condition" pattern:
 //
-//     ZeroOrMore(And(Not(stopRule), AnyToken()))
+//     ZeroOrMore(AllOf(Not(stopRule), AnyToken()))
 //
 // Each iteration checks that stopRule doesn't match here, then consumes
 // one token and advances. When stopRule would match, Not fails, the
-// And fails, and the ZeroOrMore stops leaving the cursor at the stop.
+// AllOf fails, and the ZeroOrMore stops leaving the cursor at the stop.
 internal sealed class NotRule : Rule
 {
     // FlattenType.Delete because Not is a zero-width lookahead: it

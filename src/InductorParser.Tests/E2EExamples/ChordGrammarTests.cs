@@ -202,7 +202,7 @@ public class ChordGrammarTests
     //   - After shipping Literal / LiteralIgnoreAsciiCase (earlier p500
     //     work): ~17-18x. Word matches took one transaction each instead
     //     of N, but transaction overhead still dominated.
-    //   - After Or required-runes dispatch (this p500): ~10-11x. OrRule now
+    //   - After FirstOf required-runes dispatch (this p500): ~10-11x. FirstOfRule now
     //     peeks the lookahead at Compile-computed FirstConsumedRunes and skips
     //     children whose first rune can't match, collapsing the N-way
     //     alternations to whichever branch the lookahead allows.
@@ -217,7 +217,7 @@ public class ChordGrammarTests
     //     a full interpreter frame (EnterRule / BeginTransaction / Read /
     //     set-contains / RecordFailure / Dispose) into three comparisons.
     //   - Remaining gap to 2x: transaction / allocation overhead on
-    //     the inner path where rules DO match. The outer And(...) still
+    //     the inner path where rules DO match. The outer AllOf(...) still
     //     opens a transaction for every Optional / ZeroOrMore wrapper
     //     even when those happen to consume zero runes. Closing this
     //     needs a different tier: lazier transaction opening (skip when

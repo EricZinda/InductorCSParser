@@ -9,7 +9,7 @@ namespace InductorParser;
 // This is the leaf for a JSON / C++ / Python string body.
 // It is a specialized scanner for the "string body" grammar shape: scan runes
 // forward until a stopper character or characters is seen, handling escape sequences inline.
-// Collapses ZeroOrMore(Or(bodyRune, And(escapeStart, escapeEnd))) into one rule that
+// Collapses ZeroOrMore(FirstOf(bodyRune, AllOf(escapeStart, escapeEnd))) into one rule that
 // does the scan in a tight loop and returns one leaf Symbol
 // covering the matched section of input. One dispatch for the outer rule
 // and one Symbol allocation per matched run, however many runes the run

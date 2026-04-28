@@ -65,12 +65,12 @@ public class NameOfTests
     }
 
     [Test]
-    public void Unnamed_And_rule_returns_class_derived_name()
+    public void Unnamed_AllOf_rule_returns_class_derived_name()
     {
-        var andRule = And(OneOf(RuneSet.Letters), OneOf(RuneSet.Digits));
-        andRule.Compile();
+        var allOfRule = AllOf(OneOf(RuneSet.Letters), OneOf(RuneSet.Digits));
+        allOfRule.Compile();
 
-        Assert.That(andRule.NameOf(andRule.Id), Is.EqualTo("And"));
+        Assert.That(allOfRule.NameOf(allOfRule.Id), Is.EqualTo("AllOf"));
     }
 
     [Test]

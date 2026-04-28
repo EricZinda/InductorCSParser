@@ -9,7 +9,7 @@ namespace InductorParser.SyntaxTree;
 //                        letter 's' has id 0x73, for the guitar emoji 🎸
 //                        it has id 0x1F3B8.
 //
-//   0x110000..0x1FFFFF   Built-in expression symbols: And, Or, OneOrMore,
+//   0x110000..0x1FFFFF   Built-in expression symbols: AllOf, FirstOf, OneOrMore,
 //                        Integer, Float, Whitespace, Eof. These live just
 //                        above the Unicode range so they can't collide
 //                        with a rune id.

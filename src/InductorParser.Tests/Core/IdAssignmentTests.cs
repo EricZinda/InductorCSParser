@@ -45,7 +45,7 @@ public class IdAssignmentTests
         var pinned = new SymbolId(SymbolRanges.CustomRangeStart);
         var pinnedRule = OneOrMore(OneOf(RuneSet.Letters)).As(pinned);
         var anonRule = OneOrMore(OneOf(RuneSet.Digits));
-        var doc = And(pinnedRule, anonRule);
+        var doc = AllOf(pinnedRule, anonRule);
         doc.Compile();
 
         Assert.That(pinnedRule.Id, Is.EqualTo(pinned));
@@ -77,7 +77,7 @@ public class IdAssignmentTests
 
         var pinnedRule = OneOrMore(OneOf(RuneSet.Letters)).As(pinned);
         var namedRule = OneOrMore(OneOf(RuneSet.Digits)).As(name);
-        var doc = And(pinnedRule, namedRule);
+        var doc = AllOf(pinnedRule, namedRule);
         doc.Compile();
 
         Assert.That(pinnedRule.Id, Is.EqualTo(pinned));

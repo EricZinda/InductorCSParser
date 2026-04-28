@@ -23,7 +23,7 @@ public class EofRuleTests
     {
         // Token('a') matches. Eof() runs at offset 1 and finds 'b' there,
         // records its WithError at the current position.
-        var rule = And(Token('a').WithError("need an 'a'"),
+        var rule = AllOf(Token('a').WithError("need an 'a'"),
                        Eof().WithError("expected end of input"));
 
         var result = rule.Parse("ab");
@@ -38,7 +38,7 @@ public class EofRuleTests
     {
         // No WithError anywhere. Eof records a null message at offset 1 and
         // BuildErrorMessage's positional fallback renders the message.
-        var rule = And(Token('a'), Eof());
+        var rule = AllOf(Token('a'), Eof());
 
         var result = rule.Parse("ab");
 
@@ -64,14 +64,14 @@ public class EofRuleTests
     [Test]
     public void Eof_trace_failure_produces_expected_output()
     {
-        // Wrapped in And so there's a transaction open when Eof fails,
+        // Wrapped in AllOf so there's a transaction open when Eof fails,
         // giving us a non-trivial indentation to verify.
         var sink = NewSink();
-        And(Eof()).Parse("x", new ParseOptions { TraceSink = sink });
+        AllOf(Eof()).Parse("x", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "   FAIL | Eof: found x",
-            "   FAIL | And: symbol #0"
+            "   FAIL | AllOf: symbol #0"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }

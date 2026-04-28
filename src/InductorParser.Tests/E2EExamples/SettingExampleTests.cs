@@ -15,18 +15,18 @@ public class SettingExampleTests
         // next ", then the closing ". The StringBody leaf scans the
         // body in one tight loop. The Tokens default to FlattenType.Delete
         // so the quotes themselves don't appear in the flattened match.
-        var quotedString = And(
+        var quotedString = AllOf(
             Token('"'),
             StringBody(RuneSet.Runes("\"")),
             Token('"'));
 
-        var settingValue = Or(
+        var settingValue = FirstOf(
             Float(),
             Integer(),
             quotedString
         ).Flatten(FlattenType.Preserve);
 
-        var document = And(
+        var document = AllOf(
             settingName,
             OptionalWhitespace(),
             Token('='),

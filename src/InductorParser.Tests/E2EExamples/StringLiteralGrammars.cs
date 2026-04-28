@@ -68,8 +68,8 @@ public static class StringLiteralGrammars
     {
         var hexDigit = OneOf(RuneSet.Ascii.HexDigits);
         var simpleEscapeEnd = OneOf(RuneSet.Runes("\"\\/bfnrt"));
-        var unicodeEscapeEnd = And(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
-        var escapeEnd = Or(simpleEscapeEnd, unicodeEscapeEnd);
+        var unicodeEscapeEnd = AllOf(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
+        var escapeEnd = FirstOf(simpleEscapeEnd, unicodeEscapeEnd);
 
         // Stop-at set: the closing quote plus every C0 control char.
         // Range(0x00, 0x1F) covers U+0000..U+001F inclusive. Those
@@ -78,7 +78,7 @@ public static class StringLiteralGrammars
         var stopAt = RuneSet.Runes("\"") | RuneSet.Range(0x00, 0x1F);
         var body = StringBody(stopAt: stopAt, escapeStart: new Rune('\\'), escapeEnd: escapeEnd);
 
-        return And(Token('"'), body, Token('"')).As("jsonString");
+        return AllOf(Token('"'), body, Token('"')).As("jsonString");
     }
 
     private static Rule BuildPythonSingleLine()
@@ -88,7 +88,7 @@ public static class StringLiteralGrammars
             escapeStart: new Rune('\\'),
             escapeEnd: BuildPythonEscapeEnd());
 
-        return And(Token('"'), body, Token('"')).As("pyLineString");
+        return AllOf(Token('"'), body, Token('"')).As("pyLineString");
     }
 
     private static Rule BuildPythonTripleQuote()
@@ -96,14 +96,14 @@ public static class StringLiteralGrammars
         // Stopper is a multi-rune sequence, so use the Rule-stopper
         // overload. The stopper rule runs in a peek transaction that
         // always rolls back, so the closing """ is NOT consumed by
-        // the body scan. The outer And's trailing Literal matches
+        // the body scan. The outer AllOf's trailing Literal matches
         // it.
         var body = StringBody(
             stopAt: Literal("\"\"\""),
             escapeStart: new Rune('\\'),
             escapeEnd: BuildPythonEscapeEnd());
 
-        return And(Literal("\"\"\""), body, Literal("\"\"\"")).As("pyTripleString");
+        return AllOf(Literal("\"\"\""), body, Literal("\"\"\"")).As("pyTripleString");
     }
 
     private static Rule BuildPythonRawSingleLine()
@@ -111,7 +111,7 @@ public static class StringLiteralGrammars
         // No escape start. The literal-only StringBody overload.
         // Backslashes inside the body are just body content.
         var body = StringBody(RuneSet.Runes("\""));
-        return And(Token('r'), Token('"'), body, Token('"')).As("pyRawString");
+        return AllOf(Token('r'), Token('"'), body, Token('"')).As("pyRawString");
     }
 
     // Python's escape end: try more-specific shapes before
@@ -134,13 +134,13 @@ public static class StringLiteralGrammars
         var octalEscapeEnd = BetweenInclusive(1, 3, octalDigit);
 
         // \xNN  exactly two hex digits
-        var hexEscapeEnd = And(Token('x'), hexDigit, hexDigit);
+        var hexEscapeEnd = AllOf(Token('x'), hexDigit, hexDigit);
 
         // \uNNNN  exactly four hex digits
-        var unicode4EscapeEnd = And(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
+        var unicode4EscapeEnd = AllOf(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
 
         // \UNNNNNNNN  exactly eight hex digits
-        var unicode8EscapeEnd = And(Token('U'),
+        var unicode8EscapeEnd = AllOf(Token('U'),
                            hexDigit, hexDigit, hexDigit, hexDigit,
                            hexDigit, hexDigit, hexDigit, hexDigit);
 
@@ -149,12 +149,12 @@ public static class StringLiteralGrammars
         // non-} rune as a simplifying sketch. Matches the shape,
         // not the validation.
         var nameChar = OneOf(~RuneSet.Runes("}"));
-        var namedEscapeEnd = And(Token('N'), Token('{'), OneOrMore(nameChar), Token('}'));
+        var namedEscapeEnd = AllOf(Token('N'), Token('{'), OneOrMore(nameChar), Token('}'));
 
         // Simple single-char escapes. \0 is covered by octalEscapeEnd
         // so it isn't listed here.
         var simpleEscapeEnd = OneOf(RuneSet.Runes("\\'\"abfnrtv"));
 
-        return Or(octalEscapeEnd, hexEscapeEnd, unicode4EscapeEnd, unicode8EscapeEnd, namedEscapeEnd, simpleEscapeEnd);
+        return FirstOf(octalEscapeEnd, hexEscapeEnd, unicode4EscapeEnd, unicode8EscapeEnd, namedEscapeEnd, simpleEscapeEnd);
     }
 }

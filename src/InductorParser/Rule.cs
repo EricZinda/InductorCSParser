@@ -9,13 +9,13 @@ using InductorParser.Tracing;
 namespace InductorParser;
 
 // Rule is the base of everything in a grammar. A grammar is a tree of Rule
-// objects: composites like And/Or/OneOrMore wrap other Rules, leaves like
+// objects: composites like AllOf/FirstOf/OneOrMore wrap other Rules, leaves like
 // Token/OneOf sit at the bottom, and the root is whatever Rule you
 // hand to Parse(). Calling Parse on the root walks the tree and tries to
 // match the input.
 //
-// Rules are instances, not types. 
-// In C# you build a Rule by calling factory functions (And, Or, Token, etc.)
+// Rules are instances, not types.
+// In C# you build a Rule by calling factory functions (AllOf, FirstOf, Token, etc.)
 // that return Rule instances. The tree is built at runtime, compiled once,
 // and reused for every parse after that. A grammar can live anywhere a
 // reference can live: a local variable, a static field, an entry in a
@@ -36,7 +36,7 @@ namespace InductorParser;
 // shared across threads.
 //
 // Rule is abstract. The library's composite and leaf rules
-// (AndRule, OrRule, TokenRule, etc.) subclass it. User code can subclass
+// (AllOfRule, FirstOfRule, TokenRule, etc.) subclass it. User code can subclass
 // Rule too if it needs matching logic the built-in rules can't express.
 // See TryParseRule below for the full subclass contract.
 public abstract class Rule
@@ -83,8 +83,8 @@ public abstract class Rule
     }
 
     // Cached rule class name for trace output, derived from GetType().Name
-    // in the constructor. The "Rule" suffix is stripped so "AndRule"
-    // becomes "And", "TokenRule" becomes "Token", matching the trace
+    // in the constructor. The "Rule" suffix is stripped so "AllOfRule"
+    // becomes "AllOf", "TokenRule" becomes "Token", matching the trace
     // naming convention. Reading this is a field load which is cheaper than
     // calling GetType().Name on every trace emission. Works under
     // IL2CPP because it's baked in at construction time, not looked
@@ -176,7 +176,7 @@ public abstract class Rule
     // Reusing this single pre-built instance skips that allocation.
     private static readonly IReadOnlyList<Rule> NoChildren = Array.Empty<Rule>();
 
-    // The child rules this rule is built from. Composites (And, Or, OneOrMore,
+    // The child rules this rule is built from. Composites (AllOf, FirstOf, OneOrMore,
     // etc.) pass their children to the base constructor and access them via
     // this property. Leaf rules (Token, OneOf, Eof) don't pass any children,
     // and the constructor below swaps in the shared empty list (NoChildren)
@@ -208,8 +208,8 @@ public abstract class Rule
     // here stays a one-time cost.
     protected void SetTraceName(string name) => _ruleTraceName = name;
 
-    // Strip the "Rule" suffix so the trace label reads "And" instead
-    // of "AndRule". GetType() in a base constructor returns the
+    // Strip the "Rule" suffix so the trace label reads "AllOf" instead
+    // of "AllOfRule". GetType() in a base constructor returns the
     // derived runtime type (C# guarantee), so this resolves correctly
     // for every subclass. Called once per rule instance in the ctor.
     // The result is cached in _ruleTraceName so trace emission just
@@ -356,7 +356,7 @@ public abstract class Rule
     //   2. Per-grammar rule index: a lazily-built Dictionary<SymbolId, Rule>
     //      keyed on every rule reachable from this root. For a rule created
     //      with .As("foo"), returns "foo". For an unnamed rule, returns the
-    //      class-derived trace name ("And", "OneOrMore", "Token",
+    //      class-derived trace name ("AllOf", "OneOrMore", "Token",
     //      "BetweenInclusive[1..3]"). Returns null if the id isn't in the
     //      grammar.
     //
@@ -392,7 +392,7 @@ public abstract class Rule
     // For each rule, prefer the user-supplied Name (from .As("foo")) and
     // fall back to the class-derived trace name, which is what tracing
     // shows for unnamed rules and what a tree-walker expects to see for
-    // things like And / OneOrMore / BetweenInclusive[1..3].
+    // things like AllOf / OneOrMore / BetweenInclusive[1..3].
     private static void CollectNames(Rule r, HashSet<Rule> visited, Dictionary<SymbolId, string> map)
     {
         if (!visited.Add(r)) return;
@@ -751,17 +751,17 @@ public abstract class Rule
     // Depth-first, post-order walk with cycle detection. A rule's
     // ComputeRuleStart reads its children's FirstConsumedRunes/Advance, so
     // children have to be computed first. When a cycle is found
-    // (LateBoundRule pointing back into an Or that contains it, for
+    // (LateBoundRule pointing back into a FirstOf that contains it, for
     // instance), the in-progress rule is left at its pessimistic default
     // (Universe, Advance.Sometimes) so the loop terminates.
-    // That's safe: OrRule will always try
+    // That's safe: FirstOfRule will always try
     // it, which is exactly the behavior before required-runes dispatch
     // existed.
     //
     // A smarter algorithm could repeat the walk until no
     // FirstConsumedRunes changes (each pass can only grow a FirstConsumedRunes, so this
     // terminates), which would tighten the result for self-referential
-    // grammars and let OrRule skip more branches inside them. But the
+    // grammars and let FirstOfRule skip more branches inside them. But the
     // common case (LateBoundRule target is reachable via a non-cyclic
     // path) converges correctly on the first visit, so the pessimistic
     // fallback is enough for now.
@@ -776,7 +776,7 @@ public abstract class Rule
         // FirstConsumedRunes must be Empty. Anything else is dead data
         // that would mislead a reader. Fail at Compile time so subclass
         // authors find out immediately instead of debugging a wrong
-        // AndRule union somewhere else.
+        // AllOfRule union somewhere else.
         if (start.Advance == Advance.Never && !start.FirstConsumedRunes.IsEmpty)
             throw new InvalidOperationException(
                 $"Rule '{r.GetType().Name}' returned Advance.Never with non-empty " +

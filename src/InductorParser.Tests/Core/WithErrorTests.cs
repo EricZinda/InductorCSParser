@@ -14,7 +14,7 @@ public class WithErrorTests
         var settingName = OneOrMore(OneOf(RuneSet.Letters))
             .WithError("Expected a setting name");
 
-        var document = And(settingName, Token('='), Token(';'));
+        var document = AllOf(settingName, Token('='), Token(';'));
 
         // "1 = ;" fails at offset 0 because a digit is not a letter.
         var result = document.Parse("1 = ;");
@@ -30,7 +30,7 @@ public class WithErrorTests
     [Test]
     public void Generic_error_when_no_rule_set_WithError()
     {
-        var document = And(OneOrMore(OneOf(RuneSet.Letters)), Token('='), Token(';'));
+        var document = AllOf(OneOrMore(OneOf(RuneSet.Letters)), Token('='), Token(';'));
 
         var result = document.Parse("ab");
 
@@ -49,7 +49,7 @@ public class WithErrorTests
         // is deepest in the input should be the one the user sees.
         var name = OneOrMore(OneOf(RuneSet.Letters)).WithError("need letters");
         var digits = OneOrMore(OneOf(RuneSet.Digits)).WithError("need digits");
-        var doc = And(name, Token('='), digits);
+        var doc = AllOf(name, Token('='), digits);
 
         // "ab=x" reaches the digits rule before failing (x is not a digit).
         // "need digits" should win over "need letters" because the digit

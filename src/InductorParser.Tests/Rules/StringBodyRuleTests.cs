@@ -45,7 +45,7 @@ public class StringBodyRuleTests
         // matches is still a successful parse. Wrap it with Token('|')
         // so the outer rule consumes the full input and the EOF check
         // passes.
-        var rule = InductorParser.Rules.And(StopOnPipe(), Token('|'));
+        var rule = InductorParser.Rules.AllOf(StopOnPipe(), Token('|'));
         var result = rule.Parse("|");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -62,7 +62,7 @@ public class StringBodyRuleTests
         // consuming it. The surrounding Token('|') then consumes the
         // '|' itself. Tree text is "abc" (the body) plus "" (the
         // FlattenType.Delete delimiter) = "abc".
-        var rule = InductorParser.Rules.And(StopOnPipe(), Token('|'));
+        var rule = InductorParser.Rules.AllOf(StopOnPipe(), Token('|'));
         var result = rule.Parse("abc|");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -181,7 +181,7 @@ public class StringBodyRuleTests
         var start = Literal("$$");
         var end = OneOf(RuneSet.Ascii.Letters);
         var body = StringBody(RuneSet.Runes("|"), start, end);
-        var rule = InductorParser.Rules.And(body, Token('|'));
+        var rule = InductorParser.Rules.AllOf(body, Token('|'));
 
         var result = rule.Parse("abc$xyz|");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -237,7 +237,7 @@ public class StringBodyRuleTests
     {
         // Starts are '$' OR '?'. Stopper is '|'. Demonstrates that
         // escapeStart can be a sub-rule, not just a fixed literal.
-        var start = Or(Token('$'), Token('?'));
+        var start = FirstOf(Token('$'), Token('?'));
         var end = OneOf(RuneSet.Ascii.Letters);
         var rule = StringBody(RuneSet.Runes("|"), start, end);
 
@@ -259,7 +259,7 @@ public class StringBodyRuleTests
         // StringBody. The surrounding grammar matches it after.
         var stopper = Literal("\"\"\"");
         var body = StringBody(stopper);
-        var rule = InductorParser.Rules.And(body, Literal("\"\"\""));
+        var rule = InductorParser.Rules.AllOf(body, Literal("\"\"\""));
 
         var result = rule.Parse("hello \"world\" yes\"\"\"");
 
@@ -277,7 +277,7 @@ public class StringBodyRuleTests
         // the surrounding grammar can match it.
         var stopper = Literal("END");
         var body = StringBody(stopper);
-        var rule = InductorParser.Rules.And(body, Literal("END"));
+        var rule = InductorParser.Rules.AllOf(body, Literal("END"));
 
         // If the stopper had been consumed by StringBody, the
         // outer Literal("END") would fail (EOF or leftover garbage).
@@ -296,7 +296,7 @@ public class StringBodyRuleTests
         var stopper = Literal("\"\"\"");
         var escapeEnd = OneOf(RuneSet.Runes("\"\\nt"));
         var body = StringBody(stopper, new Rune('\\'), escapeEnd);
-        var rule = InductorParser.Rules.And(body, Literal("\"\"\""));
+        var rule = InductorParser.Rules.AllOf(body, Literal("\"\"\""));
 
         var result = rule.Parse("a\\nb\"c\"\"\"");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -328,7 +328,7 @@ public class StringBodyRuleTests
         // tries to match at position 3, can't match a surrogate, so
         // the whole parse fails with ErrorCharIndex pointing at 3.
         string input = "abc" + new string(loneSurrogate, 1) + "xyz|";
-        var rule = InductorParser.Rules.And(StopOnPipe(), Token('|'));
+        var rule = InductorParser.Rules.AllOf(StopOnPipe(), Token('|'));
 
         var result = rule.Parse(input, NoNormalize);
 

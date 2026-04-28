@@ -6,18 +6,18 @@ using InductorParser;
 
 namespace InductorParser.Benchmarks;
 
-// Diagnostic tool: counts how many times each Rule subclass (And, Or,
+// Diagnostic tool: counts how many times each Rule subclass (AllOf, FirstOf,
 // BetweenInclusive, etc.) gets invoked during a single parse, split by
 // SUCC and FAIL outcome. Exposed via the --rule-counts CLI flag in
 // the bench program, which prints a table sorted by frequency:
 //
 //   Rule                           Count       % total
-//   Or                             12345        23.5%
-//   And                             9876        18.8%
+//   FirstOf                        12345        23.5%
+//   AllOf                           9876        18.8%
 //   ...
 //
-// The point is optimization targeting. If Or accounts for 23% of all
-// interpreter invocations, that's where to spend time. Both p500 (Or's
+// The point is optimization targeting. If FirstOf accounts for 23% of all
+// interpreter invocations, that's where to spend time. Both p500 (FirstOf's
 // required-runes dispatch) and p750 (first-rune skip on ZeroOrMore /
 // Optional / OneOrMore) came out of this kind of analysis: find the
 // hottest Rule subclass, find work inside it to skip.
@@ -32,7 +32,7 @@ namespace InductorParser.Benchmarks;
 //
 // Counts are per Rule *subclass* (the interpreter type), not per
 // grammar-rule-name. That's what you want for library-level
-// optimization: "how much work does the And machinery do" rather than
+// optimization: "how much work does the AllOf machinery do" rather than
 // "how much work does the JsonObject rule do."
 //
 // Runs ~10-15x slower than an untraced parse because of the per-rule
@@ -116,7 +116,7 @@ public static class RuleProfiler
             int colon = body.IndexOf(':');
             string label = colon < 0 ? body : body.Substring(0, colon);
             // Strip any "name:" qualifier that the grammar author set via As()
-            // e.g. "member:And" should key as "And". WriteTraceLine prepends
+            // e.g. "member:AllOf" should key as "AllOf". WriteTraceLine prepends
             // name with a `:` when set, so take everything after the final colon.
             int lastColon = label.LastIndexOf(':');
             string key = lastColon < 0 ? label : label.Substring(lastColon + 1);

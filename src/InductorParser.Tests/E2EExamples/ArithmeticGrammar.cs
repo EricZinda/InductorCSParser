@@ -15,7 +15,7 @@ namespace InductorParser.Tests;
 //
 // Every spine rule (expr, term, number) is .As(name) + FlattenType.Preserve
 // so it survives flattening as a named node the evaluator can dispatch
-// on. The And/Or/ZeroOrMore compositors around them keep their default
+// on. The AllOf/FirstOf/ZeroOrMore compositors around them keep their default
 // FlattenType.Flatten and dissolve at flatten time, so a term's
 // flattened children are a clean alternation of factor-payloads and
 // mulOp leaves with no anonymous wrapper layers in between.
@@ -44,9 +44,9 @@ public static class ArithmeticGrammar
 
         var exprForward = new LateBoundRule("expr");
 
-        var factor = Or(
+        var factor = FirstOf(
             Number,
-            And(
+            AllOf(
                 Token('('),
                 OptionalWhitespace(),
                 exprForward,
@@ -55,14 +55,14 @@ public static class ArithmeticGrammar
             )
         );
 
-        Term = And(
+        Term = AllOf(
             factor,
-            ZeroOrMore(And(OptionalWhitespace(), MulOp, OptionalWhitespace(), factor))
+            ZeroOrMore(AllOf(OptionalWhitespace(), MulOp, OptionalWhitespace(), factor))
         ).As("term").Preserve();
 
-        Expr = And(
+        Expr = AllOf(
             Term,
-            ZeroOrMore(And(OptionalWhitespace(), AddOp, OptionalWhitespace(), Term))
+            ZeroOrMore(AllOf(OptionalWhitespace(), AddOp, OptionalWhitespace(), Term))
         ).As("expr").Preserve();
 
         exprForward.Bind(Expr);
@@ -71,7 +71,7 @@ public static class ArithmeticGrammar
         // strict Eof so "1+2 garbage" fails instead of silently parsing
         // the "1+2" prefix. Expr itself has no Eof so the parenthesized
         // factor can reuse it recursively.
-        Document = And(OptionalWhitespace(), Expr, OptionalWhitespace(), Eof());
+        Document = AllOf(OptionalWhitespace(), Expr, OptionalWhitespace(), Eof());
         Document.Compile();
     }
 }

@@ -15,19 +15,19 @@ var formatting = RuneSet.Runes("*_#`[]()\\");
 var textChar   = NoneOf(formatting);
 var text       = OneOrMore(textChar).As(nameof(text));
 
-var bold = And(
+var bold = AllOf(
     Literal("**"),
     OneOrMore(NoneOf(RuneSet.Runes("*"))),
     Literal("**")
 ).As(nameof(bold));
 
-var code = And(
+var code = AllOf(
     Token('`'),
     OneOrMore(NoneOf(RuneSet.Runes("`"))),
     Token('`')
 ).As(nameof(code));
 
-var inline    = Or(bold, code, text);
+var inline    = FirstOf(bold, code, text);
 var paragraph = OneOrMore(inline).As(nameof(paragraph));
 ```
 
@@ -35,17 +35,17 @@ Parse `Hello 🎸 **world** 你好 ` + "`code`" + ` done` and you get a tree whe
 
 ### Stopping at a Multi-Character Terminator
 
-The `NoneOf` form above works when the stop is a small set of single characters. When the stop is a sequence, like `*/` closing a block comment or `-->` closing an XML comment, a character class can't express it. The idiom there is `ZeroOrMore(And(Not(stopRule), AnyToken()))`:
+The `NoneOf` form above works when the stop is a small set of single characters. When the stop is a sequence, like `*/` closing a block comment or `-->` closing an XML comment, a character class can't express it. The idiom there is `ZeroOrMore(AllOf(Not(stopRule), AnyToken()))`:
 
 ```csharp
-var closeMarker = And(Token('*'), Token('/'));
-var blockComment = And(
+var closeMarker = AllOf(Token('*'), Token('/'));
+var blockComment = AllOf(
     Token('/'), Token('*'),
-    ZeroOrMore(And(Not(closeMarker), AnyToken())),
+    ZeroOrMore(AllOf(Not(closeMarker), AnyToken())),
     closeMarker);
 ```
 
-Each iteration first checks that `closeMarker` does not match at the current cursor (`Not` is negative lookahead, zero-width), and only then consumes one token with `AnyToken()`. When `closeMarker` would fire, `Not` fails, the `And` fails, and the `ZeroOrMore` stops with the cursor sitting just before `*/`. The outer `And` then matches the terminator for real. `AnyToken()` handles multi-rune graphemes naturally under GraphemeLexer, same as `NoneOf`, so emoji and CJK in the comment body pass through unchanged.
+Each iteration first checks that `closeMarker` does not match at the current cursor (`Not` is negative lookahead, zero-width), and only then consumes one token with `AnyToken()`. When `closeMarker` would fire, `Not` fails, the `AllOf` fails, and the `ZeroOrMore` stops with the cursor sitting just before `*/`. The outer `AllOf` then matches the terminator for real. `AnyToken()` handles multi-rune graphemes naturally under GraphemeLexer, same as `NoneOf`, so emoji and CJK in the comment body pass through unchanged.
 
 ## Matching an Identifier
 
@@ -93,7 +93,7 @@ public static class NameValueGrammar
         Identifier().As(nameof(SettingName));
 
     public static readonly Rule SettingValue =
-        Or(
+        FirstOf(
             Float().Flatten(FlattenType.Flatten),
             Integer().Flatten(FlattenType.Flatten),
             Identifier()
@@ -101,7 +101,7 @@ public static class NameValueGrammar
          .Flatten(FlattenType.None);
 
     public static readonly Rule Document =
-        And(
+        AllOf(
             OptionalWhitespace(),
             SettingName,
             OptionalWhitespace(),
@@ -127,7 +127,7 @@ The pattern has four pieces worth naming explicitly:
 
 **`.As(nameof(X))` on every public field**, including the root. The field name and the rule name stay in sync because `nameof` is compile-checked. IDE renames propagate. Trace output and error messages read naturally.
 
-**`.Flatten(FlattenType.None)` on any rule you want to `Find`.** `Parse` applies the flatten pass before returning, so rules with the default `FlattenType.Flatten` have their children lifted up and their own wrapper removed from the tree, so `Tree.Find(rule)` cannot locate them. `.Flatten(FlattenType.None)` preserves the wrapper. Rules that only show up for their text content (repetitions, `And` compositions whose children are individually findable) can stay at the default and skip this call.
+**`.Flatten(FlattenType.None)` on any rule you want to `Find`.** `Parse` applies the flatten pass before returning, so rules with the default `FlattenType.Flatten` have their children lifted up and their own wrapper removed from the tree, so `Tree.Find(rule)` cannot locate them. `.Flatten(FlattenType.None)` preserves the wrapper. Rules that only show up for their text content (repetitions, `AllOf` compositions whose children are individually findable) can stay at the default and skip this call.
 
 **`.Compile()` on the root field.** This forces the full finalization pass (id stamping, `LateBoundRule` resolution, freeze, validation) to run at type-init time rather than at first parse. Any grammar-construction error surfaces immediately when the class is first touched, which is a much better debugging experience than waiting for the first parse to reveal a broken grammar.
 

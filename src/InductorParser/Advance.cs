@@ -11,7 +11,7 @@ namespace InductorParser;
 // override Rule.ComputeRuleStart inherits the pessimistic defaults
 // (Universe, Sometimes) and never gets shortcutted, which is always
 // correct, just slower. Subclasses only need to report a real
-// Advance value when they want an enclosing Or or repetition rule to
+// Advance value when they want an enclosing FirstOf or repetition rule to
 // be able to skip them based on the next lookahead rune.
 internal enum Advance
 {

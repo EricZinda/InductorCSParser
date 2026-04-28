@@ -39,10 +39,10 @@ public class OneOrMoreRuleTests
         // OneOrMore is greedy but stops as soon as its inner fails. Here it
         // matches "aa", then the inner Token('a') sees 'b' on the third try
         // and fails. OneOrMore commits the two successful iterations and
-        // hands control to the next rule in the And, which consumes "bb".
+        // hands control to the next rule in the AllOf, which consumes "bb".
         // (The top-level Parse requires consuming all input, so a follow-up
         // rule is needed to pick up the remainder.)
-        var rule = And(OneOrMore(Token('a')), OneOrMore(Token('b')));
+        var rule = AllOf(OneOrMore(Token('a')), OneOrMore(Token('b')));
         var result = rule.Parse("aabb", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);

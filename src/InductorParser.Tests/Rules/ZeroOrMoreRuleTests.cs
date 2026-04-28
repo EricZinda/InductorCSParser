@@ -21,7 +21,7 @@ public class ZeroOrMoreRuleTests
         // Input doesn't start with 'a', so the inner rule fails on its very
         // first attempt. ZeroOrMore catches that and succeeds with zero
         // children, leaving the lexer position unchanged.
-        var rule = And(ZeroOrMore(Token('a')), Token('b'));
+        var rule = AllOf(ZeroOrMore(Token('a')), Token('b'));
         var result = rule.Parse("b", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -31,7 +31,7 @@ public class ZeroOrMoreRuleTests
     [Test]
     public void ZeroOrMore_matches_multiple_occurrences_greedily()
     {
-        var rule = And(ZeroOrMore(Token('a')), Token('b'));
+        var rule = AllOf(ZeroOrMore(Token('a')), Token('b'));
         var result = rule.Parse("aaab", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -43,8 +43,8 @@ public class ZeroOrMoreRuleTests
     {
         // Inner matches 'a' twice, then on the third try sees 'b' and the
         // inner rule fails. ZeroOrMore commits the two successful iterations
-        // and hands 'b' off to the next rule in the And.
-        var rule = And(ZeroOrMore(Token('a')), Token('b'), Token('c'));
+        // and hands 'b' off to the next rule in the AllOf.
+        var rule = AllOf(ZeroOrMore(Token('a')), Token('b'), Token('c'));
         var result = rule.Parse("aabc", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -55,7 +55,7 @@ public class ZeroOrMoreRuleTests
     public void ZeroOrMore_trace_with_matches_produces_expected_output()
     {
         var sink = NewSink();
-        And(ZeroOrMore(OneOf(RuneSet.Ascii.Letters)), Eof())
+        AllOf(ZeroOrMore(OneOf(RuneSet.Ascii.Letters)), Eof())
             .Parse("ab", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
@@ -68,7 +68,7 @@ public class ZeroOrMoreRuleTests
             "         Lexer.RecordFailure: new deepest failure at char 2",
             "      SUCC | ZeroOrMore: count= 2",
             "   SUCC | Eof",
-            "   SUCC | And: found 2"
+            "   SUCC | AllOf: found 2"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
@@ -77,10 +77,10 @@ public class ZeroOrMoreRuleTests
     public void ZeroOrMore_trace_with_zero_matches_produces_expected_output()
     {
         // ZeroOrMore has no failure path, so even "no matches" is a
-        // success, with count= 0. Wrapped in And so the indentation
+        // success, with count= 0. Wrapped in AllOf so the indentation
         // shows the full transaction nesting.
         var sink = NewSink();
-        And(ZeroOrMore(Token('a')), Eof())
+        AllOf(ZeroOrMore(Token('a')), Eof())
             .Parse("", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
@@ -88,7 +88,7 @@ public class ZeroOrMoreRuleTests
             "         FAIL | Token: found '<EOF>', wanted 'a'",
             "      SUCC | ZeroOrMore: count= 0",
             "   SUCC | Eof",
-            "   SUCC | And: found 2"
+            "   SUCC | AllOf: found 2"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }

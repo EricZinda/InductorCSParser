@@ -87,7 +87,7 @@ public static class JsonParserTyped
     // turns them into the real code points.
     private static string DecodeString(Symbol stringNode)
     {
-        // JsonString = And('"', stringBody, '"'). Quotes are
+        // JsonString = AllOf('"', stringBody, '"'). Quotes are
         // FlattenType.Delete, body is FlattenType.Preserve, so the only
         // surviving child is the body leaf.
         var rawString = stringNode.Children[0].ToString();
@@ -129,13 +129,13 @@ public static class JsonParserTyped
     // OneOf leaves, so escapeUnicode.ToString() returns just those
     // digits and int.Parse can consume them directly.
     private static readonly Rule HexDigit = OneOf(RuneSet.Ascii.HexDigits);
-    private static readonly Rule EscapeUnicode = And(Literal("\\u"), HexDigit, HexDigit, HexDigit, HexDigit)
+    private static readonly Rule EscapeUnicode = AllOf(Literal("\\u"), HexDigit, HexDigit, HexDigit, HexDigit)
         .As("escapeUnicode").Preserve();
 
-    private static readonly Rule StringParser = And(
-        ZeroOrMore(Or(
+    private static readonly Rule StringParser = AllOf(
+        ZeroOrMore(FirstOf(
             LiteralChunk,
-            Or(EscapeQuote, EscapeBackslash, EscapeSlash,
+            FirstOf(EscapeQuote, EscapeBackslash, EscapeSlash,
                EscapeBackspace, EscapeFormfeed, EscapeNewline,
                EscapeReturn, EscapeTab, EscapeUnicode))),
         Eof()
@@ -152,7 +152,7 @@ public static class JsonParserTyped
             throw new InvalidOperationException(
                 "String body re-parse failed: " + result.ErrorMessage);
 
-        // StringParser root is an And with default FlattenType.Flatten,
+        // StringParser root is an AllOf with default FlattenType.Flatten,
         // so its children (LiteralChunk and the Escape* rules) end up as
         // the top-level entries of result.Symbols. Tree is null here
         // because Symbols.Count != 1.
