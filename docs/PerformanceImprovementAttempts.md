@@ -175,7 +175,7 @@ StdDev on the mean numbers typically 0.3-1.8 us (around 1% of mean), so most del
 
 ### Why the wins are small
 
-Sub-lever (a): the JSON grammar's hot leaf allocators aren't where this cache applies. `simpleEscape = OneOf(...)` fires at roughly 3% of in-string characters (the escape-density the harness generates), `hexDigit` never fires because the generator excludes `\uXXXX`, and the OneOf inside `OptionalWhitespace` hits the discard path because the wrapper has `FlattenType.Delete`. `StringBody` produces one leaf per string body, not per character, and doesn't go through the OneOf allocation path at all. That leaves simpleEscape as essentially the only non-trivial OneOf allocation in the hot loop, and at 3% density there just isn't much to cache. The ~1% allocation drop we actually got is consistent with that scope.
+Sub-lever (a): the JSON grammar's hot leaf allocators aren't where this cache applies. `simpleEscape = OneOf(...)` fires at roughly 3% of in-string characters (the escape-density the harness generates), `hexDigit` never fires because the generator excludes `\uXXXX`, and the OneOf inside `OptionalWhitespace` hits the discard path because the wrapper has `FlattenType.Delete`. `ScanUntil` produces one leaf per string body, not per character, and doesn't go through the OneOf allocation path at all. That leaves simpleEscape as essentially the only non-trivial OneOf allocation in the hot loop, and at 3% density there just isn't much to cache. The ~1% allocation drop we actually got is consistent with that scope.
 
 Sub-lever (b): trading `new List<Symbol>(capacity)` for `new Symbol[capacity]` saves roughly the `List<T>` header (~24 B) per populated wrapper. But for AllOfRule wrappers where most children are filtered via `FlattenType.Delete` (JsonMember has 5 children, 2 kept), the new code allocates `Symbol[5]` upfront and then a trimmed `Symbol[2]`, which is two allocations for around 88 B total. The old code allocated the List header plus a `Symbol[5]` internal array, also two allocations for about the same total. Same count, same size. The win lands only on BetweenInclusiveRule paths where the List used to grow its internal array (Deep and Long shapes see the biggest allocation drops, 2-3%), and even that win is modest because `List<T>` was already doing doubling growth too.
 
@@ -289,7 +289,7 @@ STJ baseline drifted 11% on Big between the two BenchmarkDotNet sessions (24.66 
 The hot paths on the grammars measured aren't leaf-bound:
 
 - **ChordGrammar** spends its time in `Literal` / `FirstOf` dispatch (already helped by p500's required-runes filter). The Token / OneOf leaves aren't the bottleneck.
-- **JSON** spends its time in `StringBody` (already a specialized scanner that doesn't dispatch per character) and in the structural `AllOf` / `ZeroOrMore` wrappers that build the output tree. Those still open Transactions and still allocate `List<Symbol>` wrappers. p600 didn't touch either.
+- **JSON** spends its time in `ScanUntil` (already a specialized scanner that doesn't dispatch per character) and in the structural `AllOf` / `ZeroOrMore` wrappers that build the output tree. Those still open Transactions and still allocate `List<Symbol>` wrappers. p600 didn't touch either.
 
 The backlog item's "ChordGrammar probably drops to ~5-7x" estimate was optimistic because it assumed leaf-rule overhead was a bigger portion of the hot path than it actually is.
 

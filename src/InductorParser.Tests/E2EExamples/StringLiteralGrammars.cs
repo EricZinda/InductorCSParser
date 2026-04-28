@@ -4,10 +4,10 @@ using static InductorParser.Rules;
 
 namespace InductorParser.Tests;
 
-// End-to-end string-literal grammars that exercise every StringBody
+// End-to-end string-literal grammars that exercise every ScanUntil
 // shape: RuneSet stopAt, Rule stopAt, single-rune escape starts,
 // no-escape forms. These mirror the sketches in
-// StringBodyRule.cs's header comment, built out as runnable grammars
+// ScanUntilRule.cs's header comment, built out as runnable grammars
 // so the tests can feed real inputs through them.
 //
 // Each grammar parses ONE complete string literal (opening delimiter,
@@ -76,14 +76,14 @@ public static class StringLiteralGrammars
         // include TAB (0x09), LF (0x0A), and CR (0x0D), all of
         // which JSON requires be escaped rather than embedded raw.
         var stopAt = RuneSet.Runes("\"") | RuneSet.Range(0x00, 0x1F);
-        var body = StringBody(stopAt: stopAt, escapeStart: new Rune('\\'), escapeEnd: escapeEnd);
+        var body = ScanUntil(stopAt: stopAt, escapeStart: new Rune('\\'), escapeEnd: escapeEnd);
 
         return AllOf(Token('"'), body, Token('"')).As("jsonString");
     }
 
     private static Rule BuildPythonSingleLine()
     {
-        var body = StringBody(
+        var body = ScanUntil(
             stopAt: RuneSet.Runes("\"") | RuneSet.Single(0x0A),
             escapeStart: new Rune('\\'),
             escapeEnd: BuildPythonEscapeEnd());
@@ -98,7 +98,7 @@ public static class StringLiteralGrammars
         // always rolls back, so the closing """ is NOT consumed by
         // the body scan. The outer AllOf's trailing Literal matches
         // it.
-        var body = StringBody(
+        var body = ScanUntil(
             stopAt: Literal("\"\"\""),
             escapeStart: new Rune('\\'),
             escapeEnd: BuildPythonEscapeEnd());
@@ -108,9 +108,9 @@ public static class StringLiteralGrammars
 
     private static Rule BuildPythonRawSingleLine()
     {
-        // No escape start. The literal-only StringBody overload.
+        // No escape start. The literal-only ScanUntil overload.
         // Backslashes inside the body are just body content.
-        var body = StringBody(RuneSet.Runes("\""));
+        var body = ScanUntil(RuneSet.Runes("\""));
         return AllOf(Token('r'), Token('"'), body, Token('"')).As("pyRawString");
     }
 

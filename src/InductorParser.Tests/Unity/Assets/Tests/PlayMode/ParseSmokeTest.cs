@@ -49,13 +49,13 @@ namespace InductorParser.PlayModeTests
         [Test]
         public void StringChars_parses_under_il2cpp()
         {
-            // Tripwire for the StringBody primitive under IL2CPP.
+            // Tripwire for the ScanUntil primitive under IL2CPP.
             // Exercises the inline rune-decode helper
             // (Lexer.TryPeekRune), the RuneSet-stopper fast path,
             // and the single-rune escape start plus escape-end
             // dispatch. Grammar mirrors a minimal JSON string body.
             var escapeEnd = OneOf(RuneSet.Runes("\"\\/bfnrt"));
-            var body = StringBody(RuneSet.Runes("\""), new Rune('\\'), escapeEnd);
+            var body = ScanUntil(RuneSet.Runes("\""), new Rune('\\'), escapeEnd);
             var rule = AllOf(Token('"'), body, Token('"'));
 
             var result = rule.Parse("\"hello\\n\"");

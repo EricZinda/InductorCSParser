@@ -268,17 +268,17 @@ public static class Rules
     /// <c>ZeroOrMore(NoneOf(stopAt))</c> for long strings.
     /// <code>
     /// // CSV field body: scan until the next comma or newline
-    /// var field = StringBody(RuneSet.Runes(",\n"));
+    /// var field = ScanUntil(RuneSet.Runes(",\n"));
     ///
     /// // Line comment body: scan until end-of-line
-    /// var lineCommentBody = StringBody(RuneSet.Runes("\r\n"));
+    /// var lineCommentBody = ScanUntil(RuneSet.Runes("\r\n"));
     /// </code>
     /// </remarks>
-    public static Rule StringBody(RuneSet stopAt) =>
-        new StringBodyRule(stopAt);
+    public static Rule ScanUntil(RuneSet stopAt) =>
+        new ScanUntilRule(stopAt);
 
     /// <summary>
-    /// <see cref="StringBody(RuneSet)"/> with escape sequences.
+    /// <see cref="ScanUntil(RuneSet)"/> with escape sequences.
     /// Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
@@ -290,14 +290,14 @@ public static class Rules
     /// <code>
     /// // JSON-style string body: anything up to " or \, with
     /// // \n, \t, \r, \", \\ as the allowed single-rune escapes
-    /// var body = StringBody(
+    /// var body = ScanUntil(
     ///     RuneSet.Runes("\"\\"),
     ///     new Rune('\\'),
     ///     OneOf("ntr\"\\"));
     /// </code>
     /// </remarks>
-    public static Rule StringBody(RuneSet stopAt, Rune escapeStart, Rule escapeEnd) =>
-        new StringBodyRule(stopAt, escapeStart, escapeEnd);
+    public static Rule ScanUntil(RuneSet stopAt, Rune escapeStart, Rule escapeEnd) =>
+        new ScanUntilRule(stopAt, escapeStart, escapeEnd);
 
     /// <summary>
     /// Same as the Rune-valued escape-start overload, with a
@@ -311,17 +311,17 @@ public static class Rules
     /// // "${name}" is an interpolation escape. A bare $ (not
     /// // followed by {) falls through to the normal stopper
     /// // path so the outer grammar can handle it separately.
-    /// var body = StringBody(
+    /// var body = ScanUntil(
     ///     RuneSet.Runes("\"$"),
     ///     Literal("${"),
     ///     AllOf(OneOrMore(NoneOf("}")), Token('}')));
     /// </code>
     /// </remarks>
-    public static Rule StringBody(RuneSet stopAt, Rule escapeStart, Rule escapeEnd) =>
-        new StringBodyRule(stopAt, escapeStart, escapeEnd);
+    public static Rule ScanUntil(RuneSet stopAt, Rule escapeStart, Rule escapeEnd) =>
+        new ScanUntilRule(stopAt, escapeStart, escapeEnd);
 
     /// <summary>
-    /// <see cref="StringBody(RuneSet)"/> with a rule-valued stop
+    /// <see cref="ScanUntil(RuneSet)"/> with a rule-valued stop
     /// condition. Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
@@ -331,17 +331,17 @@ public static class Rules
     /// sequence like <c>]]&gt;</c>).
     /// <code>
     /// // XML CDATA body: scan until the closing "]]&gt;"
-    /// var cdataBody = StringBody(Literal("]]&gt;"));
+    /// var cdataBody = ScanUntil(Literal("]]&gt;"));
     ///
     /// // C-style block comment body: scan until "*/"
-    /// var blockCommentBody = StringBody(Literal("*/"));
+    /// var blockCommentBody = ScanUntil(Literal("*/"));
     /// </code>
     /// </remarks>
-    public static Rule StringBody(Rule stopAt) =>
-        new StringBodyRule(stopAt);
+    public static Rule ScanUntil(Rule stopAt) =>
+        new ScanUntilRule(stopAt);
 
     /// <summary>
-    /// Rule-stopper StringBody with escape sequences. Default
+    /// Rule-stopper ScanUntil with escape sequences. Default
     /// <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
@@ -349,14 +349,14 @@ public static class Rules
     /// <code>
     /// // Python-style triple-quoted string body: scan until
     /// // """, with \" and \\ as single-rune escapes
-    /// var body = StringBody(
+    /// var body = ScanUntil(
     ///     Literal("\"\"\""),
     ///     new Rune('\\'),
     ///     OneOf("\"\\"));
     /// </code>
     /// </remarks>
-    public static Rule StringBody(Rule stopAt, Rune escapeStart, Rule escapeEnd) =>
-        new StringBodyRule(stopAt, escapeStart, escapeEnd);
+    public static Rule ScanUntil(Rule stopAt, Rune escapeStart, Rule escapeEnd) =>
+        new ScanUntilRule(stopAt, escapeStart, escapeEnd);
 
     /// <summary>
     /// Match any one token (one grapheme under GraphemeLexer, one

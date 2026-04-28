@@ -81,7 +81,7 @@ public static class JsonParserTyped
     }
 
     // Extract a JsonString's body as a decoded C# string. The grammar's
-    // StringBody is a single leaf over the raw source slice, so escape
+    // ScanUntil is a single leaf over the raw source slice, so escape
     // sequences appear in the tree as their literal characters (e.g.
     // "\n" as the two chars '\' and 'n'); the PEG-based decoder below
     // turns them into the real code points.
@@ -97,12 +97,12 @@ public static class JsonParserTyped
 
     // Why string decoding lives here instead of in JsonGrammar.
     //
-    // The main JSON grammar uses StringBody for the string body, which
+    // The main JSON grammar uses ScanUntil for the string body, which
     // is a single rule that scans the whole body in one tight loop and
     // returns one leaf Symbol over the raw source slice, including
     // escape characters written literally.
     //
-    // From StringBodyRule.cs: "ToString() returns the raw source slice,
+    // From ScanUntilRule.cs: "ToString() returns the raw source slice,
     // including escape-start runes and their ends as written originally.
     // Callers who want to actually decode the escapes need to walk the
     // slice themselves. Lazy decoding means a syntax highlighter or a

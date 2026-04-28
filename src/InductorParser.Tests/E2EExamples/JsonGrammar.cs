@@ -27,7 +27,7 @@ public static class JsonGrammar
 {
     public static readonly Rule Json;
     public static readonly Rule JsonString;
-    public static readonly Rule JsonStringBody;
+    public static readonly Rule JsonScanUntil;
     public static readonly Rule JsonNumber;
     public static readonly Rule JsonObject;
     public static readonly Rule JsonArray;
@@ -41,18 +41,18 @@ public static class JsonGrammar
         var simpleEscapeEnd = OneOf(RuneSet.Runes("\"\\/bfnrt"));
         var hexDigit = OneOf(RuneSet.Ascii.HexDigits);
         var unicodeEscapeEnd = AllOf(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
-        // .Delete() on the escapeEnd FirstOf triggers the StringBody
+        // .Delete() on the escapeEnd FirstOf triggers the ScanUntil
         // "don't allocate child Symbols for the escape-end match" fast
-        // path. The StringBody primitive always produces a single leaf
+        // path. The ScanUntil primitive always produces a single leaf
         // over the raw body slice, so the escape-end sub-rules' output
         // is discarded either way. Marking them Delete skips the
         // allocation.
-        JsonStringBody = StringBody(
+        JsonScanUntil = ScanUntil(
                 stopAt: RuneSet.Runes("\""),
                 escapeStart: new Rune('\\'),
                 escapeEnd: FirstOf(simpleEscapeEnd, unicodeEscapeEnd).Delete())
             .As("stringBody");
-        JsonString = AllOf(Token('"'), JsonStringBody, Token('"'))
+        JsonString = AllOf(Token('"'), JsonScanUntil, Token('"'))
             .As("string").Preserve();
 
         var digits = OneOrMore(OneOf(RuneSet.Ascii.Digits));

@@ -24,7 +24,7 @@ var settingName = Identifier().As("name");
 // "Rune" is the .Net term for Unicode Code Point
 var quotedString = AllOf(
     Token('"'),
-    StringBody(stopAt=RuneSet.Runes("\"")),
+    ScanUntil(stopAt=RuneSet.Runes("\"")),
     Token('"'));
 
 var settingValue = FirstOf(

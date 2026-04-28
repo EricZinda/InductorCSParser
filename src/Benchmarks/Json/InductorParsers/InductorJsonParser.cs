@@ -39,7 +39,7 @@ public static class InductorJsonParser
         var hexDigit = OneOf(RuneSet.Ascii.HexDigits);
         var unicodeEscapeEnd = AllOf(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
         var escapeEnd = FirstOf(simpleEscapeEnd, unicodeEscapeEnd).Flatten(FlattenType.Delete);
-        var stringBody = StringBody(stopAt: RuneSet.Runes("\""), escapeStart: new Rune('\\'), escapeEnd: escapeEnd);
+        var stringBody = ScanUntil(stopAt: RuneSet.Runes("\""), escapeStart: new Rune('\\'), escapeEnd: escapeEnd);
         JsonStringRule = AllOf(Token('"'), stringBody, Token('"')).As("string").Preserve();
 
         var value = new LateBoundRule("value");
@@ -167,7 +167,7 @@ public static class InductorJsonParser
     }
 
     // JsonStringRule's single surviving child is the raw body leaf produced
-    // by StringBody. StringBody keeps escape sequences literal ("\\n" is
+    // by ScanUntil. ScanUntil keeps escape sequences literal ("\\n" is
     // two characters), so decode here to match what competitors' typed
     // output looks like.
     private static string DecodeStringBody(Symbol stringNode)

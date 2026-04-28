@@ -83,7 +83,7 @@ public static class HtmlGrammar
         Token('='),
         OptionalWs,
         Token('\''),
-        StringBody(RuneSet.Runes("'")),
+        ScanUntil(RuneSet.Runes("'")),
         Token('\'')
     );
 
@@ -93,7 +93,7 @@ public static class HtmlGrammar
         Token('='),
         OptionalWs,
         Token('"'),
-        StringBody(RuneSet.Runes("\"")),
+        ScanUntil(RuneSet.Runes("\"")),
         Token('"')
     );
 
@@ -152,7 +152,7 @@ public static class HtmlGrammar
     // <!-- anything but "-->" -->
     public static readonly Rule Comment = AllOf(
         Literal("<!--"),
-        StringBody(Literal("-->")),
+        ScanUntil(Literal("-->")),
         Literal("-->")
     );
 
@@ -192,12 +192,12 @@ public static class HtmlGrammar
     //     more work on the 99%-of-runes path where the stopper doesn't
     //     match.
     //
-    // General pattern: StringBody's stopper is the shortest unambiguous
+    // General pattern: ScanUntil's stopper is the shortest unambiguous
     // prefix of the terminator. The outer AllOf re-matches the full
     // terminator to consume it.
     public static readonly Rule NonReplaceableCharacterElement = AllOf(
         StartStyleTag,
-        StringBody(Literal("</style")),
+        ScanUntil(Literal("</style")),
         EndStyleTag
     );
 

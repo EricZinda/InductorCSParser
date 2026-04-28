@@ -47,12 +47,12 @@ public static class CssGrammar
     // C++ HexNumbers = 0-9 and A-F and a-f.
     private static readonly RuneSet HexDigitChars = RuneSet.Ascii.HexDigits;
 
-    // /* comment */, with the body as a single StringBody scan on a
-    // rule-based stopper. StringBody peeks the stopper on each rune
+    // /* comment */, with the body as a single ScanUntil scan on a
+    // rule-based stopper. ScanUntil peeks the stopper on each rune
     // and rolls back, so the closing "*/" is left for the outer AllOf.
     public static readonly Rule BlockComment = AllOf(
         Literal("/*"),
-        StringBody(Literal("*/")),
+        ScanUntil(Literal("*/")),
         Literal("*/")
     );
 

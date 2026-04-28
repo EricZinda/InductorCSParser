@@ -120,7 +120,7 @@ Note that `Not` doesn't actually consume anything so it has nothing to print out
 | AnyToken         | Identifier | OptionalWhitespace |
 | AtLeast          | Integer    | FirstOf            |
 | AtMost           | Literal    | Peek               |
-| BetweenInclusive | NoneOf     | StringBody         |
+| BetweenInclusive | NoneOf     | ScanUntil         |
 | EndOfLine        | Not        | Token              |
 | EndOfLineOrEof   | OneOf      | Whitespace         |
 | Eof              | OneOrMore  | ZeroOrMore         |

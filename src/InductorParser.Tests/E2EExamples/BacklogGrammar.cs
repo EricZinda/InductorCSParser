@@ -103,14 +103,14 @@ public static class BacklogGrammar
         Token('\n')
     );
 
-    // StringBody with a rule-based stopper scans forward peeking
+    // ScanUntil with a rule-based stopper scans forward peeking
     // ParagraphTarget on each rune. When it matches, the peek rolls
-    // back and StringBody returns, leaving the target for the outer
+    // back and ScanUntil returns, leaving the target for the outer
     // AllOf to consume. Semantically identical to the manual
     // ZeroOrMore(AllOf(Not(target), AnyToken())) idiom, one rule instead
     // of three.
     public static readonly Rule ParagraphSplit = AllOf(
-        StringBody(ParagraphTarget),
+        ScanUntil(ParagraphTarget),
         ParagraphTarget,
         ZeroOrMore(AnyToken())
     );

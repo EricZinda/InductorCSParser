@@ -48,9 +48,9 @@ public static class PrologGrammar
 
     // Comment: "% ...\r\n" OR "% ...<EOF>" OR "/* ... */"
     //
-    // Both bodies use StringBody with a rule-based stopper. It peeks
+    // Both bodies use ScanUntil with a rule-based stopper. It peeks
     // the stopper on each rune and rolls back, so the terminator is
-    // left for the surrounding AllOf to consume. StringBody replaces
+    // left for the surrounding AllOf to consume. ScanUntil replaces
     // the manual ZeroOrMore(AllOf(Not(stop), AnyToken())) idiom with a
     // tight single-rule scan that returns one leaf Symbol over the
     // matched body text.
@@ -63,7 +63,7 @@ public static class PrologGrammar
     public static readonly Rule Comment = FirstOf(
         AllOf(
             Token('%'),
-            StringBody(LineBreak),
+            ScanUntil(LineBreak),
             FirstOf(
                 OneOrMore(LineBreak),
                 Eof()
@@ -71,7 +71,7 @@ public static class PrologGrammar
         ),
         AllOf(
             Literal("/*"),
-            StringBody(Literal("*/")),
+            ScanUntil(Literal("*/")),
             Literal("*/")
         )
     );
@@ -103,12 +103,12 @@ public static class PrologGrammar
         Token('!'),
         AllOf(
             Token('"'),
-            StringBody(RuneSet.Runes("\"")),
+            ScanUntil(RuneSet.Runes("\"")),
             Token('"')
         ),
         AllOf(
             Token('\''),
-            StringBody(RuneSet.Runes("'")),
+            ScanUntil(RuneSet.Runes("'")),
             Token('\'')
         ),
         AllOf(
