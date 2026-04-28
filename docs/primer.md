@@ -21,20 +21,20 @@ In this case, "Anything" can be represented as "zero or more of any token" (reme
 ZeroOrMore(AnyToken())
 Literal("this sequence of characters")
 ```
-This is close, but it won't work yet. Inductor Rules are always *greedy*, meaning they always consume as much as they can. So, `ZeroOrMore(AnyToken())` will consume literally any string, including thing thing we want to stop on. For a parse to succeed, the parser must get through *all* the rules and this version never will. The `Literal` rule will never have anything left to consume.
+This is close, but it won't work yet. Inductor Rules are always *greedy*, meaning they always consume as much as they can. So, `ZeroOrMore(AnyToken())` will consume literally any string, including the thing we want to stop on. For a parse to succeed, the parser must get through *all* the rules and this version never will. The `Literal` rule will never have anything left to consume.
 
-We need the first part to consume all text *except* what the second part consumes. For that, we'll use `not()`. Since rules are reusable, we can make this more readable by declaring the stop text up front and reusing it:
+We need the first part to consume all text *except* what the second part consumes. For that, we'll use `Not()`. Since rules are reusable, we can make this more readable by declaring the stop text up front and reusing it:
 
 ```CSharp
 var target = Literal("this sequence of characters");
 ZeroOrMore(AllOf(Not(target), AnyToken()))
 target
 ```
-Instead of just consuming `AnyToken`, we now start by checking to see if it is `not` what we want to end with. We glue those together with `AllOf` which requires that all of the rules you pass it succeed, in the order they are given.  We have to put `not` first for the same greedy reason: If `AnyToken()` was first it would consume all the characters before we ever get to `not`.
+Instead of just consuming `AnyToken`, we now start by checking to see if it is `Not` what we want to end with. We glue those together with `AllOf` which requires that all of the rules you pass it succeed, in the order they are given.  We have to put `Not` first for the same greedy reason: If `AnyToken()` was first it would consume all the characters before we ever get to `Not`.
 
 But this won't actually compile, yet. The second and third lines aren't valid C#, we need to combine them and assign them to a variable. 
 
-So, we'll 'join our rules together, using composite rules like `AllOf` or `FirstOf`. `AllOf` requires *all* the rules you give it succeed, in order:
+So, we'll join our rules together, using composite rules like `AllOf` or `FirstOf`. `AllOf` requires *all* the rules you give it succeed, in order:
 ```
 var target = Literal("this sequence of characters");
 var example = AllOf(ZeroOrMore(AllOf(Not(target), AnyToken())),
@@ -47,12 +47,12 @@ This is a simple "grammar", which is just a set of rules that go together to par
 ```CSharp
 var target = Literal("this sequence of characters");
 var example = AllOf(ZeroOrMore(AllOf(Not(target), AnyToken())),
-                  target);
+                    target);
 
 var result = example.Parse("How can I match anything up until this sequence of characters");
 if (!result.Success)
     throw new FormatException(result.ErrorMessage);
-Console.WriteLine(result.ToString())
+Console.WriteLine(result.ToString());
 ```
 The output is (with one space at the end):
 
@@ -72,7 +72,7 @@ So, when you call `ToString()` on the result of a parse, all the symbols left in
 ```CSharp
 var target = Literal("this sequence of characters");
 var example = AllOf(ZeroOrMore(AllOf(Not(target), AnyToken())),
-                  target);
+                    target);
 
 ```
 ... were the `AnyToken()` Symbols, one for each token that was consumed.
@@ -82,13 +82,13 @@ To help with debugging, you can flip them all to `Preserve` with options on the 
 ```CSharp
 var target = Literal("this sequence of characters");
 var example = AllOf(ZeroOrMore(AllOf(Not(target), AnyToken())),
-                  target);
+                    target);
 
 var options = new ParseOptions { PreserveAllSymbols = true };
 var result = example.Parse("How can I match anything up until this sequence of characters", options);
 if (!result.Success)
     throw new FormatException(result.ErrorMessage);
-Console.WriteLine(result.ToString())
+Console.WriteLine(result.ToString());
 ```
 Then, the output will show you all of the Symbols, like this (how to decode this is described right after it): 
 
@@ -111,5 +111,5 @@ First, each symbol is shown indented based on where in the tree it was, followed
 
 Next, `Token` just prints out its value without `Token` in front of it. This is why you see bare `'H'` and `'o'` in the output.
 
-Note that `Not` doesn't actually consume anything so it has nothing to print out. It just ensure that whatever inside it is not coming up.
+Note that `Not` doesn't actually consume anything so it has nothing to print out. It just ensures that whatever is inside it is not coming up.
 
