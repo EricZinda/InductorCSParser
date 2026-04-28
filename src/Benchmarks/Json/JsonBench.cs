@@ -13,8 +13,6 @@ using InductorParser.Benchmarks.Json.PegasusParsers;
 using InductorParser.Benchmarks.Json.PidginParsers;
 using InductorParser.Benchmarks.Json.SpracheParsers;
 using InductorParser.Benchmarks.Json.SuperpowerParsers;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Parlot.Fluent;
 
 namespace InductorParser.Benchmarks.Json;
@@ -31,7 +29,6 @@ public class JsonBench
     private Parser<IJson> _parlotCompiled;
 #nullable restore
 
-    private static readonly JsonSerializerSettings _jsonSerializerSettings = new() { MaxDepth = 1024 };
     private static readonly System.Text.Json.JsonDocumentOptions _jsonDocumentOptions = new() { MaxDepth = 1024 };
     private static readonly Random _random = new(42);
 
@@ -59,6 +56,9 @@ public class JsonBench
     public object BigJson_InductorParserRune() => InductorJsonParser.Parse(_bigJson);
 
     [Benchmark, BenchmarkCategory("Big")]
+    public object BigJson_InductorParserStateMachine() => InductorJsonParser.ParseStateMachine(_bigJson);
+
+    [Benchmark, BenchmarkCategory("Big")]
     public object BigJson_InductorParserGrapheme() => InductorJsonParser.ParseGrapheme(_bigJson);
 
     [Benchmark, BenchmarkCategory("Big")]
@@ -79,9 +79,6 @@ public class JsonBench
     [Benchmark, BenchmarkCategory("Big")]
     public object BigJson_Superpower() => SuperpowerJsonParser.Parse(_bigJson);
 
-    [Benchmark, BenchmarkCategory("Big")]
-    public object BigJson_Newtonsoft() => JToken.Parse(_bigJson);
-
     [Benchmark(Baseline = true), BenchmarkCategory("Big")]
     public object BigJson_SystemTextJson() => System.Text.Json.JsonDocument.Parse(_bigJson);
 
@@ -95,6 +92,9 @@ public class JsonBench
 
     [Benchmark, BenchmarkCategory("Long")]
     public object LongJson_InductorParserRune() => InductorJsonParser.Parse(_longJson);
+
+    [Benchmark, BenchmarkCategory("Long")]
+    public object LongJson_InductorParserStateMachine() => InductorJsonParser.ParseStateMachine(_longJson);
 
     [Benchmark, BenchmarkCategory("Long")]
     public object LongJson_InductorParserGrapheme() => InductorJsonParser.ParseGrapheme(_longJson);
@@ -117,9 +117,6 @@ public class JsonBench
     [Benchmark, BenchmarkCategory("Long")]
     public object LongJson_Superpower() => SuperpowerJsonParser.Parse(_longJson);
 
-    [Benchmark, BenchmarkCategory("Long")]
-    public object LongJson_Newtonsoft() => JToken.Parse(_longJson);
-
     [Benchmark(Baseline = true), BenchmarkCategory("Long")]
     public object LongJson_SystemTextJson() => System.Text.Json.JsonDocument.Parse(_longJson);
 
@@ -134,6 +131,9 @@ public class JsonBench
 
     [Benchmark, BenchmarkCategory("Deep")]
     public object DeepJson_InductorParserRune() => InductorJsonParser.Parse(_deepJson);
+
+    [Benchmark, BenchmarkCategory("Deep")]
+    public object DeepJson_InductorParserStateMachine() => InductorJsonParser.ParseStateMachine(_deepJson);
 
     [Benchmark, BenchmarkCategory("Deep")]
     public object DeepJson_InductorParserGrapheme() => InductorJsonParser.ParseGrapheme(_deepJson);
@@ -153,9 +153,6 @@ public class JsonBench
     [Benchmark, BenchmarkCategory("Deep")]
     public object DeepJson_Sprache() => SpracheJsonParser.Parse(_deepJson).Value!;
 
-    [Benchmark, BenchmarkCategory("Deep")]
-    public object DeepJson_Newtonsoft() => JsonConvert.DeserializeObject<JToken>(_deepJson, _jsonSerializerSettings)!;
-
     [Benchmark(Baseline = true), BenchmarkCategory("Deep")]
     public object DeepJson_SystemTextJson() => System.Text.Json.JsonDocument.Parse(_deepJson, _jsonDocumentOptions);
 
@@ -169,6 +166,9 @@ public class JsonBench
 
     [Benchmark, BenchmarkCategory("Wide")]
     public object WideJson_InductorParserRune() => InductorJsonParser.Parse(_wideJson);
+
+    [Benchmark, BenchmarkCategory("Wide")]
+    public object WideJson_InductorParserStateMachine() => InductorJsonParser.ParseStateMachine(_wideJson);
 
     [Benchmark, BenchmarkCategory("Wide")]
     public object WideJson_InductorParserGrapheme() => InductorJsonParser.ParseGrapheme(_wideJson);
@@ -190,9 +190,6 @@ public class JsonBench
 
     [Benchmark, BenchmarkCategory("Wide")]
     public object WideJson_Superpower() => SuperpowerJsonParser.Parse(_wideJson);
-
-    [Benchmark, BenchmarkCategory("Wide")]
-    public object WideJson_Newtonsoft() => JToken.Parse(_wideJson);
 
     [Benchmark(Baseline = true), BenchmarkCategory("Wide")]
     public object WideJson_SystemTextJson() => System.Text.Json.JsonDocument.Parse(_wideJson);

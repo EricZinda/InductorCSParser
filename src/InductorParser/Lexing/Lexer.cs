@@ -13,7 +13,12 @@ public abstract class Lexer
     // object and tracks it. Everything else is stack-resident structs that point back into
     // this string. The GC never sees the Tokens or ReadOnlySpan<char>s, so they never have
     // to be tracked or reclaimed.
-    private readonly string _input;
+    // _input, _endPosition, _traceSink, _traceLevel are conceptually
+    // readonly but lose the C# `readonly` keyword so the state-machine
+    // evaluator's per-thread Lexer pool can call ResetForReuse() to
+    // re-bind a previously-used Lexer instance to a new input string.
+    // Constructors still treat them as set-once.
+    private string _input;
     // Exclusive upper bound on _position. Defaults to _input.Length (a
     // lexer reads to end of input). Sub-lexer constructors bound this to
     // a sub-range of the shared input string so rules like WithinGrapheme
@@ -21,7 +26,7 @@ public abstract class Lexer
     // allocating a Substring copy. Tokens and positions still use
     // absolute offsets into _input, so outer error-position reporting
     // works without translation.
-    private readonly int _endPosition;
+    private int _endPosition;
     private int _position;
     private int _deepestFailure;
     private string? _deepestFailureMessage;
@@ -29,8 +34,8 @@ public abstract class Lexer
     // Trace destination and verbosity. Null _traceSink means tracing is off.
     // When set, every rule, Lexer.Read, and deepest-failure update writes
     // one line per event.
-    private readonly TextWriter? _traceSink;
-    private readonly TraceLevel _traceLevel;
+    private TextWriter? _traceSink;
+    private TraceLevel _traceLevel;
 
     private int _transactionDepth;
 
@@ -96,6 +101,47 @@ public abstract class Lexer
     public string Input => _input;
     public int Position => _position;
     public int DeepestFailure => _deepestFailure;
+
+    // Direct write-access to the read cursor for the state-machine
+    // evaluator's backtrack-rollback path. Outside that path,
+    // BeginTransaction is the right mechanism. The state machine
+    // already tracks its own backtrack frames and restores positions
+    // explicitly on failure, so it doesn't need the Transaction
+    // wrapper's commit / rollback machinery.
+    internal void SetPositionUnchecked(int position) => _position = position;
+
+    // Re-bind a previously-used Lexer to a new input string and reset
+    // all per-parse state. Lets the state-machine evaluator pool
+    // RuneLexer / GraphemeLexer instances per thread instead of
+    // allocating a fresh class per Parse call. Validates the same
+    // input bounds the constructor does so a misuse fails loud
+    // rather than producing a corrupt parse.
+    //
+    // After ResetForReuse, the caller is expected to invoke
+    // ConfigureBudgets to set the budget limits and PreserveAllSymbols
+    // for the new parse. The reset clears the budget counters so a
+    // pooled lexer can't leak rule-invocation count from the previous
+    // parse.
+    internal void ResetForReuse(string input, TextWriter? traceSink, TraceLevel traceLevel)
+    {
+        if (input == null) throw new ArgumentNullException(nameof(input));
+        _input = input;
+        _position = 0;
+        _endPosition = input.Length;
+        _traceSink = traceSink;
+        _traceLevel = traceLevel;
+        _deepestFailure = 0;
+        _deepestFailureMessage = null;
+        _transactionDepth = 0;
+        _ruleInvocations = 0;
+        _ruleDepth = 0;
+        _ruleCountLimit = 0;
+        _maxDepth = 0;
+        _timeout = TimeSpan.Zero;
+        _stopwatch = null;
+        _cancellation = null;
+        PreserveAllSymbols = false;
+    }
 
     // The error message associated with the deepest failure seen so far
     // if one was set.

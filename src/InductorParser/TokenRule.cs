@@ -61,6 +61,9 @@ internal sealed class TokenRule : Rule
             SetIdInternal(new SymbolId(runeValue));
     }
 
+    // Accessor for the state-machine evaluator's lowering pass.
+    internal string LoweringExpected => _expected;
+
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         using var transaction = lexer.BeginTransaction();

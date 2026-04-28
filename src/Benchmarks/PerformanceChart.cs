@@ -139,7 +139,7 @@ public static class PerformanceChart
     <li>Superpower crashes with an uncatchable <code>StackOverflowException</code> on Deep (256 levels overflow its combinator pipeline). Shown as a gap in the Deep line.</li>
     <li>Pegasus appears twice: <strong>PegasusOptimized</strong> uses idiomatic patterns (<code>[^"\\]+</code> bulk runs, <code>&lt;min,max,sep&gt;</code> delimited repetition); <strong>PegasusWiki</strong> is the per-character style shown in the Pegasus wiki JSON example.</li>
     <li>Pidgin uses the bulk-run fast path via <code>Token(pred).AtLeastOnceString()</code>. Sprache and Superpower use per-character ordered choice (bulk-run measured slower on those libraries, see README).</li>
-    <li><strong>Deep is the odd shape out:</strong> Parlot, Newtonsoft, and ParlotCompiled are all <em>faster</em> than STJ there. Deep has far fewer characters than the other shapes (~2,600 vs 5,000-8,000), so per-level overhead dominates and STJ's depth-validation cost tips it into last place among the fast parsers.</li>
+    <li><strong>Deep is the odd shape out:</strong> Parlot and ParlotCompiled are both <em>faster</em> than STJ there. Deep has far fewer characters than the other shapes (~2,600 vs 5,000-8,000), so per-level overhead dominates and STJ's depth-validation cost tips it into last place among the fast parsers.</li>
   </ul>
 </div>
 

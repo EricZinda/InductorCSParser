@@ -44,6 +44,12 @@ internal sealed class LiteralRule : Rule
         _expected = expected;
     }
 
+    // Accessor for the state-machine evaluator's lowering pass
+    // (StateMachine/Lowerer.cs). The original TryParseRule reads
+    // _expected directly; the lowerer needs the same data without
+    // running the rule.
+    internal string LoweringExpected => _expected;
+
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         using var transaction = lexer.BeginTransaction();

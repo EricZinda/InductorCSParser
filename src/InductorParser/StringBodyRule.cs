@@ -118,6 +118,17 @@ internal sealed class StringBodyRule : Rule
         _escapeStartRule = null;
     }
 
+    // Accessors for the state-machine lowering pass (StateMachine/Lowerer.cs).
+    // The recursive evaluator reads these private fields directly inside
+    // TryParseRule; the lowering pass needs the same data without
+    // running the rule.
+    internal RuneSet LoweringStopperSet => _stopperSet;
+    internal Rule? LoweringStopperRule => _stopperRule;
+    internal bool LoweringHasEscape => _hasEscape;
+    internal int LoweringEscapeStartRune => _escapeStartRune;
+    internal Rule? LoweringEscapeStartRule => _escapeStartRule;
+    internal Rule? LoweringEscapeEnd => _escapeEnd;
+
     // FAST PATH, single-rune escape start. Per rune: one
     // RuneSet.Contains plus one int equality on non-stopper runes.
     // Covers JSON, C, C++ regular, Python single-line.

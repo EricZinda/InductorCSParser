@@ -28,6 +28,9 @@ internal sealed class OneOfRule : Rule
         _setRendered = runeSet.ToString();
     }
 
+    // Accessor for the state-machine evaluator's lowering pass.
+    internal RuneSet LoweringSet => _set;
+
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         using var transaction = lexer.BeginTransaction();
