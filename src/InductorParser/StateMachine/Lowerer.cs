@@ -34,11 +34,11 @@ internal static class Lowerer
         int rootEntry = context.LowerRule(rootRule, State.HaltSuccess, State.HaltFailure);
 
         // Walk the lowered states once to decide whether any opcode
-        // can append to the emission list. A grammar with all-Delete
+        // can append to the output list. A grammar with all-Delete
         // leaves and Flatten-or-Delete composites lowers to a program
         // with no emit-style opcodes, so the runtime can skip
-        // allocating an emission-list slot on the Machine struct.
-        bool hasEmissions = ProgramHasEmissions(context.States, context.ScanSpecs);
+        // allocating an output-list slot on the Machine struct.
+        bool hasOutputs = ProgramHasOutputs(context.States, context.ScanSpecs);
 
         return new CompiledProgram(
             context.States.ToArray(),
@@ -53,10 +53,10 @@ internal static class Lowerer
             context.OrJumpTables.ToArray(),
             rootEntry,
             rootRule,
-            hasEmissions);
+            hasOutputs);
     }
 
-    private static bool ProgramHasEmissions(IReadOnlyList<State> states, IReadOnlyList<ScanSpec> scanSpecs)
+    private static bool ProgramHasOutputs(IReadOnlyList<State> states, IReadOnlyList<ScanSpec> scanSpecs)
     {
         for (int i = 0; i < states.Count; i++)
         {
@@ -152,11 +152,11 @@ internal sealed class LoweringContext
         InputUnit = inputUnit;
     }
 
-    // Resolve the FlattenType the rule's emissions actually contribute
+    // Resolve the FlattenType the rule's outputs actually contribute
     // under. PreserveAllSymbols promotes everything to Preserve. The
-    // emission-skip optimizations below check this rather than
+    // output-skip optimizations below check this rather than
     // rule.FlattenType directly so they don't accidentally drop
-    // emissions a debug parse needs.
+    // outputs a debug parse needs.
     private FlattenType ResolveEffective(FlattenType declared) =>
         PreserveAllSymbols ? FlattenType.Preserve : declared;
 
@@ -245,7 +245,7 @@ internal sealed class LoweringContext
     {
         int literalIndex = InternLiteral(expected);
 
-        // Allocate metadata if either an emission or a WithError
+        // Allocate metadata if either an output or a WithError
         // message needs it. Match opcode's state.Data packs both:
         // low 16 = literalIndex, high 16 = metadataIndex (or 0xFFFF
         // for "no message"). Same packing on the matching EmitLeaf.
@@ -1084,13 +1084,13 @@ internal sealed class LoweringContext
         int scanState = ReserveState();
 
         // Escape-call state, lowered only when escape is supported. Use
-        // the suppressing variant so any emissions inside escape-end
+        // the suppressing variant so any outputs inside escape-end
         // (e.g. a Preserve-default OneOf) get truncated on Return.
         // Mirrors the recursive evaluator passing outputSymbols=null
         // when invoking escape-end.
         int escapeCall = -1;
         if (rule.LoweringHasEscape)
-            escapeCall = AddState(LoweredOpCode.CallSuppressEmissions, escapeEndEntry, scanState, outerFail);
+            escapeCall = AddState(LoweredOpCode.CallSuppressOutputs, escapeEndEntry, scanState, outerFail);
 
         FillState(scanState, LoweredOpCode.ScanUntilFast, specIdx, afterScan,
             rule.LoweringHasEscape ? escapeCall : outerFail);
@@ -1182,7 +1182,7 @@ internal sealed class LoweringContext
     }
 
     // Catch-all lowering: runs the rule via the recursive evaluator's
-    // TryParse and forwards its Symbol output into our emission stream.
+    // TryParse and forwards its Symbol output into our output stream.
     // Used for rule types the lowerer doesn't have a native opcode for:
     // WithinGrapheme, the rule-stoppered / rule-escape-start variants
     // of ScanUntil, and any user-defined Rule subclass. Slower than
@@ -1267,13 +1267,13 @@ internal sealed class LoweringContext
 
     private int AddSymbolMetadata(Rule rule)
     {
-        // Store the EFFECTIVE FlattenType so the runtime emission ops
+        // Store the EFFECTIVE FlattenType so the runtime output ops
         // carry the value TreeBuilder needs without re-applying the
         // PreserveAllSymbols override at tree-build time. Lowering
         // already collapsed the override into the program's structure
         // (skipping Open/Close where effective is Flatten and EmitLeaf
         // where effective is Delete), so the leftover metadata-bound
-        // emissions only ever carry Preserve in the fast path and
+        // outputs only ever carry Preserve in the fast path and
         // either Preserve or Delete (for Delete-composite root drops)
         // on the debug path.
         int newIndex = SymbolMetadata.Count;

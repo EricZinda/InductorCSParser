@@ -4,7 +4,7 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser.StateMachine;
 
-// Walks the EmissionOps stream produced by a successful state-machine
+// Walks the OutputOps stream produced by a successful state-machine
 // run and produces the IReadOnlyList<Symbol> ParseResult expects.
 //
 // FlattenType handling mirrors the existing Rule.TryParse path:
@@ -18,7 +18,7 @@ namespace InductorParser.StateMachine;
 internal static class TreeBuilder
 {
     public static IReadOnlyList<Symbol> Build(
-        List<EmissionOp> ops,
+        List<OutputOp> ops,
         string input,
         bool preserveAllSymbols)
     {
@@ -34,7 +34,7 @@ internal static class TreeBuilder
     // delegated to us). The cursor is advanced past the matching
     // Close.
     private static void BuildRange(
-        List<EmissionOp> ops,
+        List<OutputOp> ops,
         ref int cursor,
         int end,
         string input,
@@ -46,18 +46,18 @@ internal static class TreeBuilder
             var operation = ops[cursor];
             switch (operation.Kind)
             {
-                case EmissionKind.OpenComposite:
+                case OutputKind.OpenComposite:
                 {
                     cursor++;
                     BuildComposite(ops, ref cursor, end, input, preserveAllSymbols, operation, sink);
                     break;
                 }
-                case EmissionKind.CloseComposite:
+                case OutputKind.CloseComposite:
                 {
                     // Caller's responsibility to consume. Stop here.
                     return;
                 }
-                case EmissionKind.EmitLeaf:
+                case OutputKind.EmitLeaf:
                 {
                     cursor++;
                     var effectiveFlatten = preserveAllSymbols ? FlattenType.Preserve : operation.FlattenType;
@@ -69,7 +69,7 @@ internal static class TreeBuilder
                     sink.Add(new Symbol(operation.SymbolId, effectiveFlatten, leafChars));
                     break;
                 }
-                case EmissionKind.Prebuilt:
+                case OutputKind.Prebuilt:
                 {
                     cursor++;
                     // Symbol came from the recursive evaluator via the
@@ -86,12 +86,12 @@ internal static class TreeBuilder
     }
 
     private static void BuildComposite(
-        List<EmissionOp> ops,
+        List<OutputOp> ops,
         ref int cursor,
         int end,
         string input,
         bool preserveAllSymbols,
-        EmissionOp open,
+        OutputOp open,
         List<Symbol> parentSink)
     {
         var effectiveFlatten = preserveAllSymbols ? FlattenType.Preserve : open.FlattenType;
@@ -105,8 +105,8 @@ internal static class TreeBuilder
             while (cursor < end && depth > 0)
             {
                 var operation = ops[cursor++];
-                if (operation.Kind == EmissionKind.OpenComposite) depth++;
-                else if (operation.Kind == EmissionKind.CloseComposite) depth--;
+                if (operation.Kind == OutputKind.OpenComposite) depth++;
+                else if (operation.Kind == OutputKind.CloseComposite) depth--;
             }
             return;
         }
@@ -117,14 +117,14 @@ internal static class TreeBuilder
             // with parentSink as the destination.
             BuildRange(ops, ref cursor, end, input, preserveAllSymbols, parentSink);
             // Consume the matching CloseComposite.
-            if (cursor < end && ops[cursor].Kind == EmissionKind.CloseComposite) cursor++;
+            if (cursor < end && ops[cursor].Kind == OutputKind.CloseComposite) cursor++;
             return;
         }
 
         // Preserve: build a wrapper Symbol with the inner children.
         var children = new List<Symbol>();
         BuildRange(ops, ref cursor, end, input, preserveAllSymbols, children);
-        if (cursor < end && ops[cursor].Kind == EmissionKind.CloseComposite) cursor++;
+        if (cursor < end && ops[cursor].Kind == OutputKind.CloseComposite) cursor++;
         parentSink.Add(new Symbol(open.SymbolId, FlattenType.Preserve, children));
     }
 }

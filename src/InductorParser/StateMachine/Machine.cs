@@ -12,14 +12,14 @@ namespace InductorParser.StateMachine;
 // The state machine reads / writes Lexer through field calls, the
 // emit list through index/Add, and the two stacks via top-of-stack
 // indices (BacktrackTop / CallTop). The lexer is the only object
-// shared with the rest of the parser. Emission is built up as a
-// flat List<EmissionOp> that the TreeBuilder consumes after
+// shared with the rest of the parser. Output is built up as a
+// flat List<OutputOp> that the TreeBuilder consumes after
 // HaltSuccess.
 internal struct Machine
 {
     // Per-thread pools so back-to-back parses on the same thread reuse
     // the same arrays and list instead of allocating fresh ones every
-    // time. Initial sizes (32 frames, 64 emission ops) were enough for
+    // time. Initial sizes (32 frames, 64 output ops) were enough for
     // every grammar in the bench's largest inputs without growing, so
     // the pool reuses without shrinking. ThreadStatic over a real pool
     // because there's only ever one parse in flight per thread and we
@@ -29,11 +29,11 @@ internal struct Machine
     [ThreadStatic]
     private static CallFrame[]? _pooledCallStack;
     [ThreadStatic]
-    private static List<EmissionOp>? _pooledEmissionOps;
+    private static List<OutputOp>? _pooledOutputOps;
 
     public readonly Lexer Lexer;
     public readonly CompiledProgram Program;
-    public List<EmissionOp> EmissionOps;
+    public List<OutputOp> OutputOps;
 
     public BacktrackFrame[] BacktrackStack;
     public int BacktrackTop;
@@ -62,37 +62,37 @@ internal struct Machine
     // and the next EmitLeaf reads it.
     public int LastConsumedTokenStart;
 
-    // Shared empty list used when CompiledProgram.HasEmissions is
+    // Shared empty list used when CompiledProgram.HasOutputs is
     // false. The state machine is guaranteed not to call any opcode
-    // that writes to the emission list in that case, so a singleton
+    // that writes to the output list in that case, so a singleton
     // empty list is safe and avoids the pool-fetch + Clear cost.
     // The list is never modified at runtime.
-    private static readonly List<EmissionOp> _sharedEmptyEmissions = new(0);
+    private static readonly List<OutputOp> _sharedEmptyOutputs = new(0);
 
     public Machine(Lexer lexer, CompiledProgram program)
     {
         Lexer = lexer;
         Program = program;
 
-        if (!program.HasEmissions)
+        if (!program.HasOutputs)
         {
             // Matcher-mode parse: no opcode in the program will touch
-            // the emission list. Use the shared empty list so we
+            // the output list. Use the shared empty list so we
             // don't pay the pool fetch.
-            EmissionOps = _sharedEmptyEmissions;
+            OutputOps = _sharedEmptyOutputs;
         }
         else
         {
-            var pooledEmit = _pooledEmissionOps;
+            var pooledEmit = _pooledOutputOps;
             if (pooledEmit == null)
             {
-                EmissionOps = new List<EmissionOp>(64);
+                OutputOps = new List<OutputOp>(64);
             }
             else
             {
-                _pooledEmissionOps = null;
+                _pooledOutputOps = null;
                 pooledEmit.Clear();
-                EmissionOps = pooledEmit;
+                OutputOps = pooledEmit;
             }
         }
 
@@ -128,7 +128,7 @@ internal struct Machine
 
     // Return the heap-allocated buffers to the per-thread pool so the
     // next Parse on this thread can reuse them. Call after the parse
-    // result has been built (TreeBuilder is done reading EmissionOps).
+    // result has been built (TreeBuilder is done reading OutputOps).
     // Safe to call multiple times, though only the first call returns
     // anything to the pool.
     public void Release()
@@ -137,8 +137,8 @@ internal struct Machine
         _pooledCallStack = CallStack;
         // Skip returning the shared empty list to the pool. It's a
         // process-wide singleton, not a parse-specific allocation.
-        if (!ReferenceEquals(EmissionOps, _sharedEmptyEmissions))
-            _pooledEmissionOps = EmissionOps;
+        if (!ReferenceEquals(OutputOps, _sharedEmptyOutputs))
+            _pooledOutputOps = OutputOps;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -199,7 +199,7 @@ internal struct Machine
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void PushCall(int onSuccess, int onFailure, int suppressEmissionsCursor)
+    public void PushCall(int onSuccess, int onFailure, int suppressOutputsCursor)
     {
         if (CallTop == CallStack.Length)
         {
@@ -210,17 +210,17 @@ internal struct Machine
         ref var frame = ref CallStack[CallTop++];
         frame.OnSuccess = onSuccess;
         frame.OnFailure = onFailure;
-        frame.SuppressEmissionsCursor = suppressEmissionsCursor;
+        frame.SuppressOutputsCursor = suppressOutputsCursor;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void TruncateEmissions(int cursor)
+    public void TruncateOutputs(int cursor)
     {
-        // Truncate the EmissionOps list back to `cursor` entries. List<T>
+        // Truncate the OutputOps list back to `cursor` entries. List<T>
         // doesn't expose a "set Count to N" API, so we use RemoveRange.
         // Cheap: just drops the count, no per-element work.
-        int currentCount = EmissionOps.Count;
+        int currentCount = OutputOps.Count;
         if (currentCount > cursor)
-            EmissionOps.RemoveRange(cursor, currentCount - cursor);
+            OutputOps.RemoveRange(cursor, currentCount - cursor);
     }
 }

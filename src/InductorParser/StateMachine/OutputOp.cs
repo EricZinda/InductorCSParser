@@ -3,16 +3,16 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser.StateMachine;
 
-// One entry in the parse-time emission script. Lowering wires opcode
-// states to push EmissionOp values into Machine.EmissionOps as the
+// One entry in the parse-time output script. Lowering wires opcode
+// states to push OutputOp values into Machine.OutputOps as the
 // state machine runs. After the state machine reaches HaltSuccess the
-// TreeBuilder walks the emission list and produces the Symbol[]
+// TreeBuilder walks the output list and produces the Symbol[]
 // ParseResult expects.
 //
-// On a backtrack, the FailRestore opcode truncates the emission list
-// back to the cursor saved in the BacktrackFrame, so partial emissions
+// On a backtrack, the FailRestore opcode truncates the output list
+// back to the cursor saved in the BacktrackFrame, so partial outputs
 // from a failed alternative never reach the TreeBuilder.
-internal enum EmissionKind : byte
+internal enum OutputKind : byte
 {
     // OpenComposite / CloseComposite frame a composite rule's
     // children. SymbolId is on the matching Open. Close has no extra
@@ -29,21 +29,21 @@ internal enum EmissionKind : byte
     // its own children, leaf chars, id, and FlattenType already, so
     // the TreeBuilder just appends it to the surrounding sink without
     // synthesizing a new wrapper. Lets the bridge inject native
-    // recursive-parser output into the state-machine emission stream
+    // recursive-parser output into the state-machine output stream
     // without round-tripping through Open/Close/Leaf ops.
     Prebuilt,
 }
 
-internal readonly struct EmissionOp
+internal readonly struct OutputOp
 {
-    public readonly EmissionKind Kind;
+    public readonly OutputKind Kind;
     public readonly SymbolId SymbolId;
     public readonly FlattenType FlattenType;
     public readonly int Offset;
     public readonly int Length;
     public readonly Symbol? PrebuiltSymbol;
 
-    public EmissionOp(EmissionKind kind, SymbolId symbolId, FlattenType flattenType, int offset, int length, Symbol? prebuiltSymbol)
+    public OutputOp(OutputKind kind, SymbolId symbolId, FlattenType flattenType, int offset, int length, Symbol? prebuiltSymbol)
     {
         Kind = kind;
         SymbolId = symbolId;
@@ -53,15 +53,15 @@ internal readonly struct EmissionOp
         PrebuiltSymbol = prebuiltSymbol;
     }
 
-    public static EmissionOp Open(SymbolId id, FlattenType flattenType) =>
-        new EmissionOp(EmissionKind.OpenComposite, id, flattenType, 0, 0, null);
+    public static OutputOp Open(SymbolId id, FlattenType flattenType) =>
+        new OutputOp(OutputKind.OpenComposite, id, flattenType, 0, 0, null);
 
-    public static EmissionOp Close() =>
-        new EmissionOp(EmissionKind.CloseComposite, default, default, 0, 0, null);
+    public static OutputOp Close() =>
+        new OutputOp(OutputKind.CloseComposite, default, default, 0, 0, null);
 
-    public static EmissionOp Leaf(SymbolId id, FlattenType flattenType, int offset, int length) =>
-        new EmissionOp(EmissionKind.EmitLeaf, id, flattenType, offset, length, null);
+    public static OutputOp Leaf(SymbolId id, FlattenType flattenType, int offset, int length) =>
+        new OutputOp(OutputKind.EmitLeaf, id, flattenType, offset, length, null);
 
-    public static EmissionOp Prebuilt(Symbol symbol) =>
-        new EmissionOp(EmissionKind.Prebuilt, default, default, 0, 0, symbol);
+    public static OutputOp Prebuilt(Symbol symbol) =>
+        new OutputOp(OutputKind.Prebuilt, default, default, 0, 0, symbol);
 }

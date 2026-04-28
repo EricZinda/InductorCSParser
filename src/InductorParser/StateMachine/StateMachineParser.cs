@@ -21,7 +21,7 @@ public static class StateMachineParser
 {
     // Four caches, one per (PreserveAllSymbols, InputUnit) combo.
     // Fast / debug splits because PreserveAllSymbols changes which
-    // emission states the lowerer skips. Rune / grapheme splits
+    // output states the lowerer skips. Rune / grapheme splits
     // because the rune-only fused-scan opcodes (ScanOneOfRune /
     // ScanNoneOfRune) inline rune decode, which would split multi-
     // rune graphemes under InputUnit.Grapheme. Most users only ever
@@ -34,7 +34,7 @@ public static class StateMachineParser
     // Per-thread Lexer pool. Each Parse call would otherwise heap-
     // allocate a fresh RuneLexer or GraphemeLexer; pooling reuses one
     // instance per thread per lexer type. Combined with the existing
-    // backtrack/call/emission buffer pools, a steady-state Parse on
+    // backtrack/call/output buffer pools, a steady-state Parse on
     // a pooled grammar allocates nothing for the parse infrastructure
     // (only the result Symbols themselves).
     [ThreadStatic]
@@ -54,10 +54,10 @@ public static class StateMachineParser
     // the parse tree isn't needed — the equivalent of Regex.IsMatch
     // for grammars.
     //
-    // When the grammar's effective shape produces no emissions
+    // When the grammar's effective shape produces no outputs
     // (everything Delete-flattened, no Preserve composites), the
-    // CompiledProgram.HasEmissions flag is false and the Machine
-    // skips the emission-list pool fetch entirely.
+    // CompiledProgram.HasOutputs flag is false and the Machine
+    // skips the output-list pool fetch entirely.
     public static bool TryMatch(Rule rootRule, string input) =>
         TryMatch(rootRule, input, new ParseOptions());
 
@@ -111,10 +111,10 @@ public static class StateMachineParser
             }
 
             // The lowered program already baked the effective FlattenType
-            // into its emission states (Delete leaves and Flatten composites
+            // into its output states (Delete leaves and Flatten composites
             // were skipped on the fast path). TreeBuilder no longer needs
             // to apply any per-node override, so pass false here regardless.
-            IReadOnlyList<Symbol> symbols = TreeBuilder.Build(machine.EmissionOps, input, preserveAllSymbols: false);
+            IReadOnlyList<Symbol> symbols = TreeBuilder.Build(machine.OutputOps, input, preserveAllSymbols: false);
             return ParseResult.Succeeded(symbols, input, rootRule);
         }
         finally
@@ -122,7 +122,7 @@ public static class StateMachineParser
             // Return the machine's heap-allocated buffers and the
             // lexer to the per-thread pool so the next Parse on this
             // thread can reuse them. TreeBuilder copied data out of
-            // EmissionOps into the Symbols above, so clearing the
+            // OutputOps into the Symbols above, so clearing the
             // list here is safe.
             machine.Release();
             ReturnLexerToPool(lexer);

@@ -30,19 +30,19 @@ Second, on the first call to `StateMachineParser.Parse(rule, input)` for a given
 
 Third, the stepper runs the compiled program against a `Lexer`. The mutable run state lives in a `Machine` struct on the stack of `Stepper.Run`. The interpreter loop reads the current state index, looks up the state, switches on its opcode, runs the body, and updates the state index. It exits when the index goes negative (HaltSuccess or HaltFailure).
 
-Fourth, while the program runs, opcodes append `EmissionOp` records to `Machine.EmissionOps`. These record what would have become a Symbol in the recursive path: opens, closes, and leaves. Backtracks truncate the emission list back to the cursor saved on the backtrack frame, so emissions from a failed alternative never reach the tree builder.
+Fourth, while the program runs, opcodes append `OutputOp` records to `Machine.OutputOps`. These record what would have become a Symbol in the recursive path: opens, closes, and leaves. Backtracks truncate the output list back to the cursor saved on the backtrack frame, so outputs from a failed alternative never reach the tree builder.
 
-Fifth, after a successful run, `TreeBuilder` walks the emission list and produces the `IReadOnlyList<Symbol>` that `ParseResult` exposes. This is where FlattenType actually shapes the tree (Preserve becomes a wrapper Symbol, Flatten lets children flow up, Delete drops the subtree).
+Fifth, after a successful run, `TreeBuilder` walks the output list and produces the `IReadOnlyList<Symbol>` that `ParseResult` exposes. This is where FlattenType actually shapes the tree (Preserve becomes a wrapper Symbol, Flatten lets children flow up, Delete drops the subtree).
 
-After the parse, the Machine returns its heap buffers (the two stacks and the emission list) to per-thread pools, and the lexer goes back to its per-thread slot. The next parse on the same thread reuses them.
+After the parse, the Machine returns its heap buffers (the two stacks and the output list) to per-thread pools, and the lexer goes back to its per-thread slot. The next parse on the same thread reuses them.
 
 ## What a Compiled Program Looks Like
 
 The compiled program is, mostly, a `State[]`. Each `State` is sixteen bytes: a one-byte opcode, a four-byte data field, and two four-byte jump targets (`OnSuccess` and `OnFailure`). The dispatcher's job is "given the current state index, run the opcode, and pick OnSuccess or OnFailure as the next index."
 
-The opcodes break into a few groups. Match opcodes (`MatchLiteral`, `MatchOneOf`, `MatchAnyToken`, `MatchEof`) consume input and either succeed or fail without changing any state on failure. They are atomic, so the interpreter does not need a backtrack frame around them. Control-flow opcodes (`Jump`, `Call`, `ReturnSuccess`, `ReturnFailure`) move the state index without touching input. Backtrack opcodes (`PushBacktrack`, `PopBacktrack`, `FailRestore`, `PushBetween`, `BetweenIncrementCheckMax`, etc.) manage the explicit backtrack stack. Emission opcodes (`OpenComposite`, `CloseComposite`, `EmitLeafLiteral`, `EmitLeafOneOf`) append to the emission list and never fail.
+The opcodes break into a few groups. Match opcodes (`MatchLiteral`, `MatchOneOf`, `MatchAnyToken`, `MatchEof`) consume input and either succeed or fail without changing any state on failure. They are atomic, so the interpreter does not need a backtrack frame around them. Control-flow opcodes (`Jump`, `Call`, `ReturnSuccess`, `ReturnFailure`) move the state index without touching input. Backtrack opcodes (`PushBacktrack`, `PopBacktrack`, `FailRestore`, `PushBetween`, `BetweenIncrementCheckMax`, etc.) manage the explicit backtrack stack. Output opcodes (`OpenComposite`, `CloseComposite`, `EmitLeafLiteral`, `EmitLeafOneOf`) append to the output list and never fail.
 
-Side tables hang off the program for anything bigger than a four-byte data field can hold: `Literals` for literal strings, `RuneSets` for rune-class membership, `SymbolMetadata` for the (SymbolId, FlattenType, error message) triples that emissions point to, `ScanSpecs` for fused scan loops, and so on. Opcodes index into these tables through their data field, which keeps the State struct small and the side tables in cache when the inner loop hits them repeatedly.
+Side tables hang off the program for anything bigger than a four-byte data field can hold: `Literals` for literal strings, `RuneSets` for rune-class membership, `SymbolMetadata` for the (SymbolId, FlattenType, error message) triples that outputs point to, `ScanSpecs` for fused scan loops, and so on. Opcodes index into these tables through their data field, which keeps the State struct small and the side tables in cache when the inner loop hits them repeatedly.
 
 The compiler deduplicates aggressively. Two rules that both want the literal `"true"` share one slot in the Literals table. Two rules with the same RuneSet share one entry in the RuneSets table. The compiled program tends to be small even for grammars with hundreds of rules.
 
@@ -50,7 +50,7 @@ The compiler deduplicates aggressively. Two rules that both want the literal `"t
 
 The recursive evaluator backtracks the natural way: a `TryParseRule` that fails returns false, and its parent gets to try the next alternative. The state machine has to do the same thing without a C# call stack to unwind, so it has its own.
 
-`PushBacktrack` snapshots the lexer position, the emission cursor, and the current call-stack height into a `BacktrackFrame`. `PopBacktrack` discards the topmost frame on the success path (no restore). `FailRestore` is the failure handler at a backtrack boundary: it pops the frame, restores the lexer, truncates the emission list, and continues at the OnSuccess index, which the compiler wired to the next alternative or the parent's failure path.
+`PushBacktrack` snapshots the lexer position, the output cursor, and the current call-stack height into a `BacktrackFrame`. `PopBacktrack` discards the topmost frame on the success path (no restore). `FailRestore` is the failure handler at a backtrack boundary: it pops the frame, restores the lexer, truncates the output list, and continues at the OnSuccess index, which the compiler wired to the next alternative or the parent's failure path.
 
 The same stack carries the `BetweenInclusive` loop bookkeeping. A Between frame holds the iteration counter and the per-iteration position alongside the same restore data, so the loop can detect zero-width inner matches, decide whether the loop's exit is a success or failure, and unwind partial iterations on failure. This is why `BacktrackFrame` has a few extra fields that most frame uses leave at zero. One stack is cheaper than two.
 
@@ -68,7 +68,7 @@ Recursion is different. A grammar where `Value` references `Array`, and `Array` 
 
 The state machine does not natively compile every rule type. `WithinGraphemeRule`, the rule-stoppered shape of `ScanUntil`, and any user-defined `Rule` subclass all bridge back to the recursive evaluator at parse time.
 
-Bridging is one opcode: `BridgeToRecursive`. Its body invokes `Rule.TryParse` against the current lexer, captures whatever `Symbol(s)` the recursive evaluator produces, and emits them as `Prebuilt` emission ops. The `TreeBuilder` then appends those Symbols directly into the surrounding tree as if a native opcode had produced them. Slower per call than a native compilation, but correctness-preserving for everything the recursive evaluator can handle.
+Bridging is one opcode: `BridgeToRecursive`. Its body invokes `Rule.TryParse` against the current lexer, captures whatever `Symbol(s)` the recursive evaluator produces, and emits them as `Prebuilt` output ops. The `TreeBuilder` then appends those Symbols directly into the surrounding tree as if a native opcode had produced them. Slower per call than a native compilation, but correctness-preserving for everything the recursive evaluator can handle.
 
 This is why the state machine and the recursive evaluator share the same `Lexer`, the same `Symbol` type, and the same `RecordFailure` semantics. The bridge has to compose with the rest of the parse, not run a parallel one. The opcode that is missing today is a future optimization, not a correctness gap.
 
@@ -94,15 +94,15 @@ A rough map of `src/InductorParser/StateMachine/`:
 
 `Lowerer.cs` is the compiler. `Lower(rule)` does the cycle pre-pass and the main compilation pass and returns a `CompiledProgram`. `LoweringContext` is the per-compile scratch space (state list, dedup tables, cyclic-rule registry).
 
-`CompiledProgram.cs` is the immutable result of compilation. States, side tables, entry-state index, and the `HasEmissions` flag the runtime checks to decide whether to allocate the emission list at all.
+`CompiledProgram.cs` is the immutable result of compilation. States, side tables, entry-state index, and the `HasOutputs` flag the runtime checks to decide whether to allocate the output list at all.
 
-`State.cs`, `LoweredOpCode.cs`, `EmissionOp.cs`, `BacktrackFrame.cs`, and `CallFrame.cs` define the small structs the runtime uses. They are read-mostly and intentionally small (sixteen-byte states, four-frame-per-cache-line stacks).
+`State.cs`, `LoweredOpCode.cs`, `OutputOp.cs`, `BacktrackFrame.cs`, and `CallFrame.cs` define the small structs the runtime uses. They are read-mostly and intentionally small (sixteen-byte states, four-frame-per-cache-line stacks).
 
-`Machine.cs` is the mutable run state. It owns the two stacks, the emission list, the deepest-failure record, and the per-thread pool plumbing. Lives on the stack of `Stepper.Run` as a `ref Machine` so the inner loop reads and writes fields without going through a class indirection.
+`Machine.cs` is the mutable run state. It owns the two stacks, the output list, the deepest-failure record, and the per-thread pool plumbing. Lives on the stack of `Stepper.Run` as a `ref Machine` so the inner loop reads and writes fields without going through a class indirection.
 
 `Stepper.cs` is the interpreter. `Run` is the outer loop. `Step` is the dispatcher. The per-opcode `Step_*` helpers are aggressively inlined so the JIT folds them into the switch case bodies.
 
-`TreeBuilder.cs` consumes the emission list and produces Symbols. This is where FlattenType actually shapes the tree.
+`TreeBuilder.cs` consumes the output list and produces Symbols. This is where FlattenType actually shapes the tree.
 
 ## What This Document Is Not
 

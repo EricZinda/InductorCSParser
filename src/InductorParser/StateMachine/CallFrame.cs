@@ -9,14 +9,14 @@ internal struct CallFrame
     public int OnSuccess;
     public int OnFailure;
 
-    // Emission-suppression cursor. -1 means "no suppression": ReturnSuccess
-    // and ReturnFailure leave EmissionOps as the subprogram left them.
+    // Output-suppression cursor. -1 means "no suppression": ReturnSuccess
+    // and ReturnFailure leave OutputOps as the subprogram left them.
     // Non-negative means "discard everything the subprogram emitted":
-    // ReturnSuccess / ReturnFailure truncate EmissionOps back to this
+    // ReturnSuccess / ReturnFailure truncate OutputOps back to this
     // cursor before jumping. ScanUntil's escape-end Call uses this so
     // an escape-end rule that has its own emit states (e.g. a
-    // Preserve-default OneOf) doesn't leak those emissions into the
+    // Preserve-default OneOf) doesn't leak those outputs into the
     // enclosing ScanUntil's parent. The recursive evaluator gets the
     // same effect by passing outputSymbols=null to escape-end's TryParse.
-    public int SuppressEmissionsCursor;
+    public int SuppressOutputsCursor;
 }

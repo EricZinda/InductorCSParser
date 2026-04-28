@@ -86,7 +86,7 @@ public abstract class Rule
     // in the constructor. The "Rule" suffix is stripped so "AllOfRule"
     // becomes "AllOf", "TokenRule" becomes "Token", matching the trace
     // naming convention. Reading this is a field load which is cheaper than
-    // calling GetType().Name on every trace emission. Works under
+    // calling GetType().Name on every trace output. Works under
     // IL2CPP because it's baked in at construction time, not looked
     // up via name-based reflection.
     //
@@ -204,7 +204,7 @@ public abstract class Rule
     // BetweenInclusiveRule's bounds) into the label. No ThrowIfSealed check
     // here because at constructor time the rule isn't reachable from
     // grammar code yet, so it can't have been compiled and sealed.
-    // Trace emission reads _ruleTraceName as a field load, so renaming
+    // Trace output reads _ruleTraceName as a field load, so renaming
     // here stays a one-time cost.
     protected void SetTraceName(string name) => _ruleTraceName = name;
 
@@ -212,7 +212,7 @@ public abstract class Rule
     // of "AllOfRule". GetType() in a base constructor returns the
     // derived runtime type (C# guarantee), so this resolves correctly
     // for every subclass. Called once per rule instance in the ctor.
-    // The result is cached in _ruleTraceName so trace emission just
+    // The result is cached in _ruleTraceName so trace output just
     // reads a field.
     private static string DeriveRuleTraceName(Type t)
     {

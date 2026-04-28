@@ -56,19 +56,19 @@ internal enum LoweredOpCode : byte
     // subprogram entry. ReturnSuccess and ReturnFailure pop the
     // topmost CallFrame and jump to its OnSuccess / OnFailure.
     //
-    // CallSuppressEmissions is a Call variant that records the current
-    // emission cursor on the frame; ReturnSuccess/ReturnFailure truncate
-    // EmissionOps back to that cursor on pop. Used by ScanUntil's
-    // escape-end Call so the escape rule's emissions never reach the
+    // CallSuppressOutputs is a Call variant that records the current
+    // output cursor on the frame; ReturnSuccess/ReturnFailure truncate
+    // OutputOps back to that cursor on pop. Used by ScanUntil's
+    // escape-end Call so the escape rule's outputs never reach the
     // enclosing tree (mirrors the recursive evaluator's
     // outputSymbols=null escape-end call).
     Call,
-    CallSuppressEmissions,
+    CallSuppressOutputs,
     ReturnSuccess,
     ReturnFailure,
 
-    // Emission ops. These never fail. Their action just appends to the
-    // emission list. Lowering wraps each composite rule in
+    // Output ops. These never fail. Their action just appends to the
+    // output list. Lowering wraps each composite rule in
     // OpenComposite / CloseComposite, and each preserved leaf in EmitLeaf.
     OpenComposite,
     CloseComposite,
@@ -113,7 +113,7 @@ internal enum LoweredOpCode : byte
     // ScanUntil general-form variants (Rule stopper, Rule escape
     // start), and any user-defined Rule subclass. The bridge invokes
     // the rule's TryParse against the current lexer, captures whatever
-    // Symbol(s) it produces, and emits them as Prebuilt emission ops
+    // Symbol(s) it produces, and emits them as Prebuilt output ops
     // that flow into the surrounding tree as if a native opcode had
     // produced them. Slower per call than a native lowering but
     // correctness-preserving for everything the recursive evaluator

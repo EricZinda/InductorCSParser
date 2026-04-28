@@ -16,9 +16,9 @@ namespace InductorParser.StateMachine;
 // plus straight-line code per opcode body.
 internal static class Stepper
 {
-    // Run the compiled program against the lexer, building emission
+    // Run the compiled program against the lexer, building output
     // ops as it goes. Returns true on HaltSuccess, false on HaltFailure.
-    // The caller hands EmissionOps to the TreeBuilder on success and
+    // The caller hands OutputOps to the TreeBuilder on success and
     // reads DeepestFailure / DeepestFailureMessage on failure.
     public static bool Run(CompiledProgram program, Lexer lexer, out Machine machineOut)
     {
@@ -73,8 +73,8 @@ internal static class Stepper
                 return Step_BetweenIncrementCheckMax(in state, ref machine);
             case LoweredOpCode.Call:
                 return Step_Call(in state, ref machine);
-            case LoweredOpCode.CallSuppressEmissions:
-                return Step_CallSuppressEmissions(in state, ref machine);
+            case LoweredOpCode.CallSuppressOutputs:
+                return Step_CallSuppressOutputs(in state, ref machine);
             case LoweredOpCode.ReturnSuccess:
                 return Step_ReturnSuccess(in state, ref machine);
             case LoweredOpCode.ReturnFailure:
@@ -712,7 +712,7 @@ internal static class Stepper
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Step_PushBacktrack(in State state, ref Machine machine)
     {
-        machine.PushBacktrack(machine.Lexer.Position, machine.EmissionOps.Count, machine.CallTop);
+        machine.PushBacktrack(machine.Lexer.Position, machine.OutputOps.Count, machine.CallTop);
         return state.OnSuccess;
     }
 
@@ -735,7 +735,7 @@ internal static class Stepper
     {
         ref var frame = ref machine.BacktrackStack[--machine.BacktrackTop];
         machine.Lexer.SetPositionUnchecked(frame.LexerPosition);
-        machine.TruncateEmissions(frame.EmitCursor);
+        machine.TruncateOutputs(frame.EmitCursor);
         machine.CallTop = frame.CallStackHeight;
         return state.OnSuccess;
     }
@@ -752,7 +752,7 @@ internal static class Stepper
         int atLeast = dataPacked & 0xFFFF;
         int atMost = (dataPacked >> 16) & 0xFFFF;
         if (atMost == 0xFFFF) atMost = int.MaxValue;
-        machine.PushBetween(machine.Lexer.Position, machine.EmissionOps.Count, machine.CallTop, atLeast, atMost);
+        machine.PushBetween(machine.Lexer.Position, machine.OutputOps.Count, machine.CallTop, atLeast, atMost);
         return state.OnSuccess;
     }
 
@@ -805,7 +805,7 @@ internal static class Stepper
         if (between.Counter >= between.AtLeast)
             return state.OnSuccess;
         machine.Lexer.SetPositionUnchecked(between.LexerPosition);
-        machine.TruncateEmissions(between.EmitCursor);
+        machine.TruncateOutputs(between.EmitCursor);
         machine.CallTop = between.CallStackHeight;
         machine.RecordFailure(machine.Lexer.Position, null);
         return state.OnFailure;
@@ -814,14 +814,14 @@ internal static class Stepper
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Step_Call(in State state, ref Machine machine)
     {
-        machine.PushCall(state.OnSuccess, state.OnFailure, suppressEmissionsCursor: -1);
+        machine.PushCall(state.OnSuccess, state.OnFailure, suppressOutputsCursor: -1);
         return state.Data;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int Step_CallSuppressEmissions(in State state, ref Machine machine)
+    private static int Step_CallSuppressOutputs(in State state, ref Machine machine)
     {
-        machine.PushCall(state.OnSuccess, state.OnFailure, machine.EmissionOps.Count);
+        machine.PushCall(state.OnSuccess, state.OnFailure, machine.OutputOps.Count);
         return state.Data;
     }
 
@@ -829,8 +829,8 @@ internal static class Stepper
     private static int Step_ReturnSuccess(in State state, ref Machine machine)
     {
         ref var frame = ref machine.CallStack[--machine.CallTop];
-        if (frame.SuppressEmissionsCursor >= 0)
-            machine.TruncateEmissions(frame.SuppressEmissionsCursor);
+        if (frame.SuppressOutputsCursor >= 0)
+            machine.TruncateOutputs(frame.SuppressOutputsCursor);
         return frame.OnSuccess;
     }
 
@@ -838,14 +838,14 @@ internal static class Stepper
     private static int Step_ReturnFailure(in State state, ref Machine machine)
     {
         ref var frame = ref machine.CallStack[--machine.CallTop];
-        if (frame.SuppressEmissionsCursor >= 0)
-            machine.TruncateEmissions(frame.SuppressEmissionsCursor);
+        if (frame.SuppressOutputsCursor >= 0)
+            machine.TruncateOutputs(frame.SuppressOutputsCursor);
         return frame.OnFailure;
     }
 
     // Step_BridgeToRecursive delegates to the rule's recursive
     // TryParse, then translates whatever Symbols it produced into
-    // Prebuilt emission ops so the surrounding state-machine tree
+    // Prebuilt output ops so the surrounding state-machine tree
     // sees them as if a native opcode emitted them. Used for rule
     // types the lowerer doesn't have a native opcode for.
     //
@@ -860,7 +860,7 @@ internal static class Stepper
         // The recursive evaluator's TryParse may write into a caller-
         // supplied list when the rule's effective FlattenType is
         // Flatten. Pass a fresh list so any flattened children land
-        // here for us to forward into our emission stream.
+        // here for us to forward into our output stream.
         var collected = new System.Collections.Generic.List<SyntaxTree.Symbol>();
         SyntaxTree.Symbol? result = rule.TryParse(machine.Lexer, collected);
 
@@ -881,7 +881,7 @@ internal static class Stepper
         }
 
         // Translate the recursive evaluator's output into Prebuilt
-        // emission ops:
+        // output ops:
         //   * Preserve effective: result is the wrapper Symbol; emit it.
         //   * Flatten effective: result == Discarded, collected has
         //     children; emit each as a Prebuilt op.
@@ -889,11 +889,11 @@ internal static class Stepper
         //     emit nothing.
         if (result != null && !ReferenceEquals(result, SyntaxTree.Symbol.Discarded))
         {
-            machine.EmissionOps.Add(EmissionOp.Prebuilt(result));
+            machine.OutputOps.Add(OutputOp.Prebuilt(result));
         }
         for (int i = 0; i < collected.Count; i++)
         {
-            machine.EmissionOps.Add(EmissionOp.Prebuilt(collected[i]));
+            machine.OutputOps.Add(OutputOp.Prebuilt(collected[i]));
         }
         return state.OnSuccess;
     }
@@ -920,7 +920,7 @@ internal static class Stepper
             : FlattenType.Delete;
 
         int entryPos = lexer.Position;
-        int entryEmit = machine.EmissionOps.Count;
+        int entryEmit = machine.OutputOps.Count;
         int pos = entryPos;
         int count = 0;
 
@@ -957,7 +957,7 @@ internal static class Stepper
             if (!set.Contains(runeValue)) break;
 
             if (leafMetaIdx >= 0)
-                machine.EmissionOps.Add(EmissionOp.Leaf(new SymbolId(runeValue), leafFlatten, pos, runeLen));
+                machine.OutputOps.Add(OutputOp.Leaf(new SymbolId(runeValue), leafFlatten, pos, runeLen));
 
             pos += runeLen;
             count++;
@@ -965,11 +965,11 @@ internal static class Stepper
 
         if (count < atLeast)
         {
-            // Roll back any emissions and report failure at entry.
+            // Roll back any outputs and report failure at entry.
             // Lexer position hasn't been advanced yet (we worked in a
             // local), so no lexer rollback needed.
-            if (machine.EmissionOps.Count > entryEmit)
-                machine.TruncateEmissions(entryEmit);
+            if (machine.OutputOps.Count > entryEmit)
+                machine.TruncateOutputs(entryEmit);
             string? errorMessage = spec.ErrorMetadataIndex >= 0
                 ? machine.Program.SymbolMetadata[spec.ErrorMetadataIndex].ErrorMessage
                 : null;
@@ -1003,7 +1003,7 @@ internal static class Stepper
             : FlattenType.Delete;
 
         int entryPos = lexer.Position;
-        int entryEmit = machine.EmissionOps.Count;
+        int entryEmit = machine.OutputOps.Count;
         int pos = entryPos;
         int count = 0;
 
@@ -1034,7 +1034,7 @@ internal static class Stepper
             if (stopSet.Contains(runeValue)) break;
 
             if (leafMetaIdx >= 0)
-                machine.EmissionOps.Add(EmissionOp.Leaf(new SymbolId(runeValue), leafFlatten, pos, runeLen));
+                machine.OutputOps.Add(OutputOp.Leaf(new SymbolId(runeValue), leafFlatten, pos, runeLen));
 
             pos += runeLen;
             count++;
@@ -1042,8 +1042,8 @@ internal static class Stepper
 
         if (count < atLeast)
         {
-            if (machine.EmissionOps.Count > entryEmit)
-                machine.TruncateEmissions(entryEmit);
+            if (machine.OutputOps.Count > entryEmit)
+                machine.TruncateOutputs(entryEmit);
             string? errorMessage = spec.ErrorMetadataIndex >= 0
                 ? machine.Program.SymbolMetadata[spec.ErrorMetadataIndex].ErrorMessage
                 : null;
@@ -1074,7 +1074,7 @@ internal static class Stepper
             : FlattenType.Delete;
 
         int entryPos = lexer.Position;
-        int entryEmit = machine.EmissionOps.Count;
+        int entryEmit = machine.OutputOps.Count;
         int pos = entryPos;
         int count = 0;
 
@@ -1103,7 +1103,7 @@ internal static class Stepper
             }
 
             if (leafMetaIdx >= 0)
-                machine.EmissionOps.Add(EmissionOp.Leaf(new SymbolId(runeValue), leafFlatten, pos, runeLen));
+                machine.OutputOps.Add(OutputOp.Leaf(new SymbolId(runeValue), leafFlatten, pos, runeLen));
 
             pos += runeLen;
             count++;
@@ -1111,8 +1111,8 @@ internal static class Stepper
 
         if (count < atLeast)
         {
-            if (machine.EmissionOps.Count > entryEmit)
-                machine.TruncateEmissions(entryEmit);
+            if (machine.OutputOps.Count > entryEmit)
+                machine.TruncateOutputs(entryEmit);
             string? errorMessage = spec.ErrorMetadataIndex >= 0
                 ? machine.Program.SymbolMetadata[spec.ErrorMetadataIndex].ErrorMessage
                 : null;
@@ -1128,14 +1128,14 @@ internal static class Stepper
     private static int Step_OpenComposite(in State state, ref Machine machine)
     {
         SymbolMetadata metadata = machine.Program.SymbolMetadata[state.Data];
-        machine.EmissionOps.Add(EmissionOp.Open(metadata.Id, metadata.FlattenType));
+        machine.OutputOps.Add(OutputOp.Open(metadata.Id, metadata.FlattenType));
         return state.OnSuccess;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Step_CloseComposite(in State state, ref Machine machine)
     {
-        machine.EmissionOps.Add(EmissionOp.Close());
+        machine.OutputOps.Add(OutputOp.Close());
         return state.OnSuccess;
     }
 
@@ -1155,7 +1155,7 @@ internal static class Stepper
         string literal = machine.Program.Literals[literalIndex];
         int endPosition = machine.Lexer.Position;
         int startPosition = endPosition - literal.Length;
-        machine.EmissionOps.Add(EmissionOp.Leaf(metadata.Id, metadata.FlattenType, startPosition, literal.Length));
+        machine.OutputOps.Add(OutputOp.Leaf(metadata.Id, metadata.FlattenType, startPosition, literal.Length));
         return state.OnSuccess;
     }
 
@@ -1305,7 +1305,7 @@ internal static class Stepper
         int endPosition = machine.Lexer.Position;
         int length = endPosition - startPosition;
         SymbolMetadata metadata = machine.Program.SymbolMetadata[state.Data];
-        machine.EmissionOps.Add(EmissionOp.Leaf(metadata.Id, metadata.FlattenType, startPosition, length));
+        machine.OutputOps.Add(OutputOp.Leaf(metadata.Id, metadata.FlattenType, startPosition, length));
         return state.OnSuccess;
     }
 
@@ -1345,7 +1345,7 @@ internal static class Stepper
             // a code-point id, matching the recursive rules' behavior.
             leafId = template.Id;
         }
-        machine.EmissionOps.Add(EmissionOp.Leaf(leafId, template.FlattenType, startPosition, length));
+        machine.OutputOps.Add(OutputOp.Leaf(leafId, template.FlattenType, startPosition, length));
         return state.OnSuccess;
     }
 }

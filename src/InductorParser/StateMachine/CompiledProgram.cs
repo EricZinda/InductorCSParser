@@ -31,13 +31,13 @@ internal sealed class CompiledProgram
     public Rule RootRule { get; }
 
     // True when at least one state in this program can append to the
-    // emission list (any OpenComposite / CloseComposite / EmitLeaf*
+    // output list (any OpenComposite / CloseComposite / EmitLeaf*
     // opcode, any fused-scan opcode whose ScanSpec emits leaves, any
     // BridgeToRecursive). False when the entire grammar reduces to
     // matching with no tree output. The Machine constructor uses
-    // this to skip allocating an emission-list slot when emissions
+    // this to skip allocating an output-list slot when outputs
     // aren't possible.
-    public bool HasEmissions { get; }
+    public bool HasOutputs { get; }
 
     public CompiledProgram(
         State[] states,
@@ -52,7 +52,7 @@ internal sealed class CompiledProgram
         int[][] orJumpTables,
         int entryState,
         Rule rootRule,
-        bool hasEmissions)
+        bool hasOutputs)
     {
         States = states;
         Literals = literals;
@@ -66,7 +66,7 @@ internal sealed class CompiledProgram
         OrJumpTables = orJumpTables;
         EntryState = entryState;
         RootRule = rootRule;
-        HasEmissions = hasEmissions;
+        HasOutputs = hasOutputs;
     }
 }
 
