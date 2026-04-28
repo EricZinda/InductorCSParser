@@ -15,6 +15,22 @@ From the repo root:
 dotnet run -c Release --project src/Benchmarks/Benchmarks.csproj -- --filter *Json* --exporters GitHub
 ```
 
+## Rebar regex-engine benchmarks
+
+The optional rebar runner lives in [Rebar/](Rebar/). It is a small `net8.0`
+console program that implements rebar's KLV runner protocol for a curated set
+of hand-translated regex benchmarks.
+
+Build and local contract-check it with:
+
+```
+dotnet build -c Release src/Benchmarks/Rebar/RebarRunner.csproj -m:1 -p:BuildInParallel=false
+dotnet run -c Release --project src/Benchmarks/Rebar/RebarRunner.csproj -- --self-test
+```
+
+See [Rebar/README.md](Rebar/README.md) for the supported rebar cases and the
+engine TOML snippet to copy into a local rebar checkout.
+
 Spot-check (round-trips every parser's output back to the exact input bytes across all four shapes, runs in milliseconds, not a bench):
 
 ```

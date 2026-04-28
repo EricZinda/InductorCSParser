@@ -299,6 +299,217 @@ public abstract class Lexer
         return t;
     }
 
+    internal void AdvanceUntilRuneIn(RuneSet candidates, char[]? bmpCandidates)
+    {
+        if (IsEof) return;
+
+        if (bmpCandidates is { Length: > 0 } && this is RuneLexer)
+        {
+            int found = _input.IndexOfAny(bmpCandidates, _position, _endPosition - _position);
+            _position = found >= 0 ? found : _endPosition;
+            return;
+        }
+
+        while (_position < _endPosition)
+        {
+            if (TryPeekRune(_input, _position, out int runeValue, out _) && candidates.Contains(runeValue))
+                return;
+
+            int len = NextTokenLength(_position);
+            if (len <= 0) len = 1;
+            _position = Math.Min(_position + len, _endPosition);
+        }
+    }
+
+    internal int AdvanceWhileSingleRuneIn(RuneSet set)
+    {
+        int count = 0;
+
+        // RuneLexer is the hot path for regex-like scans: each token is a
+        // Unicode scalar, so once the RuneSet says "yes" we can advance by
+        // the decoded rune length directly. Malformed surrogate halves stop
+        // the run, which is the same observable result OneOfRule gets from
+        // Token.RuneValue == -1.
+        if (this is RuneLexer)
+        {
+            while (_position < _endPosition)
+            {
+                int pos = _position;
+                if (!TryPeekRune(_input, pos, out int runeValue, out int runeLen)
+                    || pos + runeLen > _endPosition
+                    || !set.Contains(runeValue))
+                {
+                    break;
+                }
+
+                _position = pos + runeLen;
+                count++;
+                Trace(TraceLevel.Diagnostic, "Lexer.AdvanceWhileSingleRuneIn", TraceOutcome.Info,
+                    $"'{_input.Substring(pos, runeLen)}', Consumed: {_position}");
+            }
+            return count;
+        }
+
+        // GraphemeLexer must preserve OneOf semantics: a character-class
+        // rule matches only when the whole grapheme token is exactly one
+        // rune in the set. A multi-rune grapheme whose first rune happens
+        // to be in the set is not part of the run.
+        while (_position < _endPosition)
+        {
+            int pos = _position;
+            int tokenLength = NextTokenLength(pos);
+            if (tokenLength <= 0)
+                break;
+            if (!TryPeekRune(_input, pos, out int runeValue, out int runeLen)
+                || pos + tokenLength > _endPosition
+                || tokenLength != runeLen
+                || !set.Contains(runeValue))
+            {
+                break;
+            }
+
+            _position = pos + tokenLength;
+            count++;
+            Trace(TraceLevel.Diagnostic, "Lexer.AdvanceWhileSingleRuneIn", TraceOutcome.Info,
+                $"'{_input.Substring(pos, tokenLength)}', Consumed: {_position}");
+        }
+        return count;
+    }
+
+    internal void AdvanceUntilLiteralCandidateIn(
+        RuneSet firstRunes,
+        char[]? bmpFirstRunes,
+        LiteralScannerCandidate[] literals,
+        int[]? literalPositions)
+    {
+        if (IsEof) return;
+
+        // This is the stronger scanner fast path for
+        // ZeroOrMore(Or(literal-choice, AnyToken.Delete)). A plain
+        // first-rune skip still stops at every "s" for a case-insensitive
+        // "Sherlock" search and then invokes the full parser to reject it.
+        // Here we keep consuming the deleted fallback ourselves until the
+        // whole literal could match at the current lexer position. The
+        // outer loop will then call the real rule, preserving the same tree
+        // and capture behavior as the unoptimized parse.
+        if (this is RuneLexer && literalPositions != null && literals.Length == 1)
+        {
+            // For a single literal, the best prefilter is the runtime's
+            // optimized substring search. It jumps straight to the next
+            // full-literal candidate instead of visiting every matching
+            // first character. Literal alternates use the IndexOfAny path
+            // below; repeatedly running one substring search per alternate
+            // after every match is slower on the Rebar Sherlock haystack.
+            while (_position < _endPosition)
+            {
+                int found = FindNextLiteralCandidate(literals, literalPositions, _input, _position, _endPosition);
+                if (found < 0)
+                {
+                    _position = _endPosition;
+                    return;
+                }
+
+                _position = found;
+                if (AnyLiteralMatchesAt(literals, _input, _position, _endPosition))
+                    return;
+
+                int len = NextTokenLength(_position);
+                if (len <= 0) len = 1;
+                _position = Math.Min(_position + len, _endPosition);
+            }
+            return;
+        }
+
+        if (bmpFirstRunes is { Length: > 0 } && this is RuneLexer)
+        {
+            // Literal alternates still benefit from staying inside the
+            // scanner: the real parser is only invoked when a complete
+            // literal candidate matches. Use IndexOfAny for the shared
+            // first-rune set, then check only plausible literals at the
+            // candidate position.
+            while (_position < _endPosition)
+            {
+                int found = _input.IndexOfAny(bmpFirstRunes, _position, _endPosition - _position);
+                if (found < 0)
+                {
+                    _position = _endPosition;
+                    return;
+                }
+
+                _position = found;
+                if (AnyLiteralMatchesAt(literals, _input, _position, _endPosition))
+                    return;
+
+                int len = NextTokenLength(_position);
+                if (len <= 0) len = 1;
+                _position = Math.Min(_position + len, _endPosition);
+            }
+            return;
+        }
+
+        while (_position < _endPosition)
+        {
+            if (TryPeekRune(_input, _position, out int runeValue, out _)
+                && firstRunes.Contains(runeValue)
+                && AnyLiteralMatchesAt(literals, _input, _position, _endPosition))
+            {
+                return;
+            }
+
+            // GraphemeLexer comes through this path. Advance in the lexer's
+            // natural token units so we never manufacture a start position
+            // inside a grapheme cluster. A full literal match is only useful
+            // at positions where the outer parser could legally start.
+            int len = NextTokenLength(_position);
+            if (len <= 0) len = 1;
+            _position = Math.Min(_position + len, _endPosition);
+        }
+    }
+
+    private static int FindNextLiteralCandidate(
+        LiteralScannerCandidate[] literals,
+        int[] literalPositions,
+        string input,
+        int position,
+        int endPosition)
+    {
+        int best = -1;
+        for (int index = 0; index < literals.Length; index++)
+        {
+            int found = literalPositions[index];
+            if (found < position)
+            {
+                // Cache each literal's next substring hit. Literal-alternate
+                // scanners call Advance once per real match; without this,
+                // five alternatives would rescan the whole remaining input
+                // five times after every match. Cached future hits survive
+                // until the lexer moves past them.
+                found = literals[index].IndexIn(input, position, endPosition);
+                literalPositions[index] = found;
+            }
+            if (found >= 0 && (best < 0 || found < best))
+                best = found;
+        }
+        return best;
+    }
+
+    private static bool AnyLiteralMatchesAt(
+        LiteralScannerCandidate[] literals,
+        string input,
+        int position,
+        int endPosition)
+    {
+        int firstRune = -1;
+        TryPeekRune(input, position, out firstRune, out _);
+        for (int index = 0; index < literals.Length; index++)
+            if (literals[index].CanStartWith(firstRune)
+                && literals[index].MatchesAt(input, position, endPosition))
+            {
+                return true;
+            }
+        return false;
+    }
+
     // Record that a rule just failed at the given input position. The
     // callers' responsibility is to pass the position of the offending
     // input: the *start* of the specific read that couldn't match, not the
@@ -491,4 +702,82 @@ public abstract class Lexer
             }
         }
     }
+}
+
+internal readonly struct LiteralScannerCandidate
+{
+    private readonly int _firstRune;
+
+    public LiteralScannerCandidate(string text, bool ignoreAsciiCase)
+    {
+        Text = text ?? throw new ArgumentNullException(nameof(text));
+        IgnoreAsciiCase = ignoreAsciiCase;
+        Lexer.TryPeekRune(text, 0, out _firstRune, out _);
+    }
+
+    public string Text { get; }
+    public bool IgnoreAsciiCase { get; }
+
+    public int IndexIn(string input, int position, int endPosition)
+    {
+        int count = endPosition - position;
+        if (count < Text.Length)
+            return -1;
+
+        // Use the BCL's optimized substring search to hop across whole
+        // spans of non-candidates. OrdinalIgnoreCase is broader than this
+        // parser's ASCII-only ignore-case rule for some Unicode text, so
+        // callers still confirm with MatchesAt before stopping. Broader
+        // prefilter candidates are safe: they may cause extra parser work,
+        // but they never skip a real ASCII-ignore-case match.
+        return input.IndexOf(
+            Text,
+            position,
+            count,
+            IgnoreAsciiCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    }
+
+    public bool CanStartWith(int runeValue)
+    {
+        if (runeValue == _firstRune)
+            return true;
+
+        // LiteralIgnoreAsciiCase is intentionally ASCII-only. Keep the
+        // scanner prefilter under the exact same rule: only A-Z/a-z fold
+        // together, and every other rune has to match bit-for-bit. This
+        // prevents the optimization from accepting Unicode case-folding
+        // candidates that the real rule would reject.
+        return IgnoreAsciiCase
+            && _firstRune >= 0
+            && _firstRune <= char.MaxValue
+            && runeValue >= 0
+            && runeValue <= char.MaxValue
+            && IsAsciiLetter((char)_firstRune)
+            && IsAsciiLetter((char)runeValue)
+            && (_firstRune | 0x20) == (runeValue | 0x20);
+    }
+
+    public bool MatchesAt(string input, int position, int endPosition)
+    {
+        if (position + Text.Length > endPosition)
+            return false;
+
+        ReadOnlySpan<char> actual = input.AsSpan(position, Text.Length);
+        ReadOnlySpan<char> expected = Text.AsSpan();
+        if (!IgnoreAsciiCase)
+            return actual.SequenceEqual(expected);
+
+        for (int index = 0; index < expected.Length; index++)
+        {
+            char ca = actual[index];
+            char cb = expected[index];
+            if (ca == cb) continue;
+            if (IsAsciiLetter(ca) && IsAsciiLetter(cb) && (ca | 0x20) == (cb | 0x20)) continue;
+            return false;
+        }
+        return true;
+    }
+
+    private static bool IsAsciiLetter(char c) =>
+        (uint)((c | 0x20) - 'a') <= ('z' - 'a');
 }

@@ -62,6 +62,48 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
 
     public bool IsEmpty => _ranges == null || _ranges.Length == 0;
 
+    internal bool TryGetBmpChars(int maxChars, out char[] chars)
+    {
+        var ranges = _ranges;
+        if (ranges == null || ranges.Length == 0)
+        {
+            chars = Array.Empty<char>();
+            return false;
+        }
+
+        int count = 0;
+        for (int index = 0; index < ranges.Length; index++)
+        {
+            int low = ranges[index].Low;
+            int high = ranges[index].High;
+            if (high > char.MaxValue)
+            {
+                chars = Array.Empty<char>();
+                return false;
+            }
+            if (low <= 0xDFFF && high >= 0xD800)
+            {
+                chars = Array.Empty<char>();
+                return false;
+            }
+            count += high - low + 1;
+            if (count > maxChars)
+            {
+                chars = Array.Empty<char>();
+                return false;
+            }
+        }
+
+        chars = new char[count];
+        int output = 0;
+        for (int rangeIndex = 0; rangeIndex < ranges.Length; rangeIndex++)
+        {
+            for (int codepoint = ranges[rangeIndex].Low; codepoint <= ranges[rangeIndex].High; codepoint++)
+                chars[output++] = (char)codepoint;
+        }
+        return true;
+    }
+
     // Value equality: two RuneSets are equal iff they contain the same runes.
     // Normalize guarantees a canonical interval list (sorted, non-overlapping,
     // non-adjacent), so equal sets necessarily have identical _ranges arrays.
