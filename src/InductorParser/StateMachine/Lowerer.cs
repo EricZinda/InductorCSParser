@@ -913,11 +913,13 @@ internal sealed class LoweringContext
                 ? literalCandidates.ToArray()
                 : null;
 
-        // Mirror the recursive evaluator's choice: cache substring-search
-        // hits only when there's exactly one literal alternative. Multi-
-        // literal alternates use the per-position IndexOfAny path which
-        // doesn't benefit from caching across iterations.
-        bool useLiteralPositionsCache = literals is { Length: 1 };
+        // The substring-search cache helps for any literal count: one
+        // literal jumps via BCL substring search, multiple literals take
+        // the minimum across cached next-positions and only re-search
+        // literals whose previous hit is now stale. The per-position
+        // IndexOfAny path stays as a fallback for non-literal scanner
+        // shapes where the cache doesn't apply.
+        bool useLiteralPositionsCache = literals is { Length: > 0 };
 
         int candidatesRuneSetIndex = InternRuneSet(candidates);
         int specIndex = ScannerSkipSpecs.Count;

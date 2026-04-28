@@ -171,11 +171,20 @@ internal sealed class BetweenInclusiveRule : Rule
             allCandidatesAreLiterals && literalCandidates.Count > 0
                 ? literalCandidates.ToArray()
                 : null;
+        // The substring-search cache pays off whenever there is at least
+        // one literal alternative. For one literal, IndexOf jumps straight
+        // to the next hit. For multiple literals, the cache lets each
+        // iteration take the minimum across cached next-positions plus
+        // re-search only the literals whose previous hit is now stale,
+        // which beats per-position IndexOfAny + MatchesAt on broad first-
+        // rune sets (especially the case-insensitive sherlock-casei-en
+        // shape where the first-rune set folds 'S','s','J','j','I','i',
+        // 'P','p' together and stops at every common letter).
         return new ScannerSkip(
             candidates,
             bmpCandidates.Length == 0 ? null : bmpCandidates,
             literals,
-            literals is { Length: 1 } ? CreateUnknownPositions(literals.Length) : null);
+            literals is { Length: > 0 } ? CreateUnknownPositions(literals.Length) : null);
     }
 
     private static int[] CreateUnknownPositions(int length)

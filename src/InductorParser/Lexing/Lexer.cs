@@ -392,14 +392,16 @@ public abstract class Lexer
         // whole literal could match at the current lexer position. The
         // outer loop will then call the real rule, preserving the same tree
         // and capture behavior as the unoptimized parse.
-        if (this is RuneLexer && literalPositions != null && literals.Length == 1)
+        //
+        // Caller controls whether to use this cached path by passing or
+        // omitting literalPositions. The runtime's optimized substring
+        // search jumps straight to the next full-literal candidate instead
+        // of stopping at every matching first character. After the first
+        // iteration the cache amortizes: subsequent iterations only redo
+        // the per-literal IndexOf for literals whose cached position is
+        // now stale (the lexer moved past it).
+        if (this is RuneLexer && literalPositions != null)
         {
-            // For a single literal, the best prefilter is the runtime's
-            // optimized substring search. It jumps straight to the next
-            // full-literal candidate instead of visiting every matching
-            // first character. Literal alternates use the IndexOfAny path
-            // below; repeatedly running one substring search per alternate
-            // after every match is slower on the Rebar Sherlock haystack.
             while (_position < _endPosition)
             {
                 int found = FindNextLiteralCandidate(literals, literalPositions, _input, _position, _endPosition);
