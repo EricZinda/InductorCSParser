@@ -84,6 +84,8 @@ The fused `Not(SimpleMatch)` opcodes (`PeekRejectOneOfRune`, `PeekRejectLiteralR
 
 The rule-stoppered `ScanUntilStopperEligibleRune` walks runes inline and only enters the stopper's full subprogram when the next rune is in the stopper's `FirstConsumedRunes` set. This is what makes paragraph terminators, CDATA's `]]>`, and Python triple-quotes fast even though their stopper is itself a rule.
 
+The `ScannerSkipAdvance` opcode handles the `ZeroOrMore(FirstOf(match..., AnyToken.Delete))` shape that any "scan a haystack for sparse matches" grammar reduces to. At the top of each iteration, instead of invoking the inner `FirstOf` at every rune (and falling through to the deleted `AnyToken` for non-matches), the opcode jumps the lexer straight to the next position where one of the candidate matches could plausibly start. For literal-only alternatives the prefilter is stronger still: the scanner walks straight to the next full-literal candidate via the BCL's optimized substring search. This is the same skip the recursive evaluator does in `BetweenInclusiveRule.TryCreateScannerSkip`, ported as one opcode plus a side table on the program.
+
 These fused opcodes are not magic. They are pattern matches in the compiler that recognize a shape we measured and decided was worth a dedicated opcode. Adding more is an open-ended project.
 
 ## What Lives Where

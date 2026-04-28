@@ -78,6 +78,12 @@ what "hand translation" means here. The dispatcher is a `switch` on the rebar
 benchmark name in [BenchmarkPlan.cs](./BenchmarkPlan.cs). Ask the runner for a
 name that isn't in that switch and it throws.
 
+The runner ships two engines that share one DLL: `inductorparser` runs the
+grammar through the recursive evaluator (`Rule.Parse`) and
+`inductorparser-statemachine` runs the same grammar through the state-machine
+evaluator (`StateMachineParser.Parse`). Same hand-translated rules, same
+correctness path, different evaluator. Run both side by side to compare.
+
 A hand translation only counts as correct once rebar agrees with it. Rebar
 runs each engine in correctness mode (`rebar measure -t`) and compares the
 engine's reported count against the expected count baked into the benchmark's
@@ -162,33 +168,35 @@ git clone https://github.com/BurntSushi/rebar.git .external/rebar
 cargo build --release --manifest-path .external/rebar/Cargo.toml
 ```
 
-### 3. Register the InductorParser engine in rebar
+### 3. Register the InductorParser engines in rebar
 
 Rebar only runs engines that are listed in `benchmarks/engines.toml` and
-opted into in each curated benchmark's `engines = [...]` list. Add both:
+opted into in each curated benchmark's `engines = [...]` list. Add both
+engine entries (recursive and state-machine):
 
-- Append the `[[engine]]` block from
+- Append both `[[engine]]` blocks from
   [`rebar-engine.inductorparser.toml`](./rebar-engine.inductorparser.toml)
   to `.external/rebar/benchmarks/engines.toml`.
-- Add `'inductorparser'` to the `engines = [...]` list inside each curated
-  definition file you want to run, in
-  `.external/rebar/benchmarks/definitions/curated/`. The supported set today
-  lives in `01-literal.toml`, `02-literal-alternate.toml`, `04-ruff-noqa.toml`,
-  `08-words.toml`, and `09-aws-keys.toml`.
+- Add `'inductorparser'` and `'inductorparser-statemachine'` to the
+  `engines = [...]` list inside each curated definition file you want
+  to run, in `.external/rebar/benchmarks/definitions/curated/`. The
+  supported set today lives in `01-literal.toml`, `02-literal-alternate.toml`,
+  `04-ruff-noqa.toml`, `08-words.toml`, and `09-aws-keys.toml`.
 
 ### 4. Run a measurement
 
 From the repo root:
 
 ```powershell
-.external/rebar/target/release/rebar measure -t -e '^inductorparser$'
+.external/rebar/target/release/rebar measure -t -e '^(inductorparser|inductorparser-statemachine)$'
 ```
 
-That runs rebar in correctness-check mode. Every supported case should print
-`OK`. For a timed comparison against .NET's regex engines:
+That runs rebar in correctness-check mode against both evaluators.
+Every supported case should print `OK`. For a timed comparison against
+.NET's regex engines:
 
 ```powershell
-.external/rebar/target/release/rebar measure -e '^(inductorparser|dotnet/(compiled|nobacktrack))$' --max-time 1s --max-warmup-time 500ms
+.external/rebar/target/release/rebar measure -e '^(inductorparser|inductorparser-statemachine|dotnet/(compiled|nobacktrack))$' --max-time 1s --max-warmup-time 500ms
 ```
 
 Pipe to a file for a CSV (rebar prints the CSV on stdout).
@@ -206,7 +214,15 @@ saved under `results/`: raw CSV in `all-runnable-2026-04-24.csv`, with a compact
 Markdown matrix in `all-runnable-summary-2026-04-24.md`.
 A later focused rerun for the ASCII case-insensitive literal prefilter is saved
 as `literal-prefilter-summary-2026-04-24.md`. A focused rerun for the word-run
-optimization is saved as `rune-run-summary-2026-04-24.md`.
+optimization is saved as `rune-run-summary-2026-04-24.md`. The first side-by-
+side comparison of the recursive and state-machine evaluators on this
+supported subset is saved as `statemachine-vs-recursive-summary-2026-04-28.md`
+(CSV in `statemachine-vs-recursive-2026-04-28.csv`); that run was before
+the scanner-shape skip was ported into the state-machine evaluator. A
+rerun after that port is saved as `statemachine-with-skip-summary-2026-04-28.md`
+(CSV in `statemachine-with-skip-2026-04-28.csv`). After the port the
+state-machine path matches or beats the recursive evaluator on every
+search row, and pulls 2.6x ahead on the captures-heavy `ruff-noqa/real`.
 
 Correctness check:
 

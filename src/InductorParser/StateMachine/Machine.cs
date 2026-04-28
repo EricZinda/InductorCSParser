@@ -62,6 +62,17 @@ internal struct Machine
     // and the next EmitLeaf reads it.
     public int LastConsumedTokenStart;
 
+    // Per-spec literal-position cache used by ScannerSkipAdvance when
+    // the spec carries exactly one literal alternative. Each entry is
+    // an int[] of "next candidate position" values that lets the
+    // single-literal substring search hop forward across the haystack
+    // without rescanning what it has already searched. Allocated lazily
+    // on first use; null when the program has no scanner-skip specs or
+    // when no spec qualifies for the cache. Indexed by spec index.
+    // Mirrors what the recursive evaluator's ScannerSkip does for the
+    // single-literal case.
+    public int[]?[]? ScannerSkipPositions;
+
     // Shared empty list used when CompiledProgram.HasOutputs is
     // false. The state machine is guaranteed not to call any opcode
     // that writes to the output list in that case, so a singleton
@@ -124,6 +135,7 @@ internal struct Machine
         DeepestFailureMessage = null;
         PeekedRune = -1;
         LastConsumedTokenStart = 0;
+        ScannerSkipPositions = null;
     }
 
     // Return the heap-allocated buffers to the per-thread pool so the

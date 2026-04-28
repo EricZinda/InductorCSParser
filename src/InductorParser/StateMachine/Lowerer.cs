@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
 namespace InductorParser.StateMachine;
@@ -49,6 +50,7 @@ internal static class Lowerer
             context.ScanSpecs.ToArray(),
             context.ScanAndPairSpecs.ToArray(),
             context.RuleStopperSpecs.ToArray(),
+            context.ScannerSkipSpecs.ToArray(),
             context.BridgeRules.ToArray(),
             context.OrJumpTables.ToArray(),
             rootEntry,
@@ -127,6 +129,7 @@ internal sealed class LoweringContext
     public readonly List<ScanSpec> ScanSpecs = new();
     public readonly List<ScanAndPairSpec> ScanAndPairSpecs = new();
     public readonly List<RuleStopperSpec> RuleStopperSpecs = new();
+    public readonly List<ScannerSkipSpec> ScannerSkipSpecs = new();
     public readonly List<Rule> BridgeRules = new();
     public readonly List<int[]> OrJumpTables = new();
     public readonly HashSet<Rule> CyclicRules = new(ReferenceComparer<Rule>.Instance);
@@ -596,6 +599,17 @@ internal sealed class LoweringContext
             return onSuccess;
         }
 
+        // Scanner-shape skip: ZeroOrMore(FirstOf(match..., AnyToken.Delete)).
+        // When the inner is a FirstOf whose last alternative is a deleted
+        // AnyToken, non-matching input would just be consumed one rune at
+        // a time. The scanner-skip opcode jumps straight to the next
+        // candidate first-rune (or, for literal-only alternatives, to the
+        // next position where the literal text could match) so the inner
+        // FirstOf isn't attempted at every non-candidate position. Mirrors
+        // the recursive evaluator's ScannerSkip in BetweenInclusiveRule.
+        if (TryLowerBetweenScanner(rule, onSuccess, onFailure, out int scannerEntry))
+            return scannerEntry;
+
         // Even faster path when the inner is OneOf or NoneOf and the
         // input unit is Rune: emit a single fused-scan opcode that
         // walks runes in one tight inline loop instead of a multi-state
@@ -838,6 +852,143 @@ internal sealed class LoweringContext
 
         entryState = scanState;
         return true;
+    }
+
+    // Detects ZeroOrMore(FirstOf(match..., AnyToken.Delete)). When the
+    // shape matches, lowers to the generic Between loop with a
+    // ScannerSkipAdvance opcode injected at the top of each iteration so
+    // the loop jumps past non-candidate runes in bulk instead of
+    // attempting the inner FirstOf at every position. Mirrors the
+    // recursive evaluator's TryCreateScannerSkip in BetweenInclusiveRule.
+    private bool TryLowerBetweenScanner(
+        BetweenInclusiveRule rule,
+        int onSuccess,
+        int onFailure,
+        out int entryState)
+    {
+        entryState = -1;
+
+        if (rule.AtLeast != 0 || rule.AtMost != int.MaxValue) return false;
+        // PreserveAllSymbols changes which states the lowerer skips, so
+        // the cache split on (PreserveAllSymbols, InputUnit) keeps
+        // grammar-author behavior unchanged when debug parsing. The
+        // recursive ScannerSkip is also disabled under PreserveAllSymbols.
+        if (PreserveAllSymbols) return false;
+
+        if (rule.Children.Count == 0) return false;
+        Rule inner = rule.Children[0];
+        if (inner is not FirstOfRule firstOf) return false;
+        if (inner.ErrorMessage != null) return false;
+        if (firstOf.Children.Count < 2) return false;
+
+        Rule fallback = firstOf.Children[firstOf.Children.Count - 1];
+        if (fallback is not AnyTokenRule
+            || fallback.FlattenType != FlattenType.Delete
+            || fallback.ErrorMessage != null)
+            return false;
+
+        RuneSet candidates = RuneSet.Empty;
+        var literalCandidates = new List<LiteralScannerCandidate>();
+        bool allCandidatesAreLiterals = true;
+        for (int index = 0; index < firstOf.Children.Count - 1; index++)
+        {
+            Rule alternative = firstOf.Children[index];
+            if (alternative.ErrorMessage != null || alternative.Advance != Advance.Always)
+                return false;
+            candidates |= alternative.FirstConsumedRunes;
+
+            if (allCandidatesAreLiterals
+                && !TryCollectScannerLiteralCandidates(alternative, literalCandidates))
+            {
+                allCandidatesAreLiterals = false;
+                literalCandidates.Clear();
+            }
+        }
+
+        if (candidates.IsEmpty || candidates == RuneSet.Universe) return false;
+
+        candidates.TryGetBmpChars(maxChars: 256, out var bmpCandidates);
+        LiteralScannerCandidate[]? literals =
+            allCandidatesAreLiterals && literalCandidates.Count > 0
+                ? literalCandidates.ToArray()
+                : null;
+
+        // Mirror the recursive evaluator's choice: cache substring-search
+        // hits only when there's exactly one literal alternative. Multi-
+        // literal alternates use the per-position IndexOfAny path which
+        // doesn't benefit from caching across iterations.
+        bool useLiteralPositionsCache = literals is { Length: 1 };
+
+        int candidatesRuneSetIndex = InternRuneSet(candidates);
+        int specIndex = ScannerSkipSpecs.Count;
+        ScannerSkipSpecs.Add(new ScannerSkipSpec(
+            candidatesRuneSetIndex,
+            bmpCandidates.Length == 0 ? null : bmpCandidates,
+            literals,
+            useLiteralPositionsCache));
+
+        // Now lay out the same generic loop the non-scanner path uses,
+        // but route loopStart through a ScannerSkipAdvance opcode that
+        // bulk-skips before each per-iteration PushBacktrack.
+        var effective = ResolveEffective(rule.FlattenType);
+        int compositeAfter = onSuccess;
+        int metadataIndex = -1;
+        if (effective != FlattenType.Flatten)
+        {
+            metadataIndex = AddSymbolMetadata(rule);
+            compositeAfter = AddState(LoweredOpCode.CloseComposite, metadataIndex, onSuccess, onSuccess);
+        }
+
+        int exitCheckMin = AddState(LoweredOpCode.BetweenExitCheckMin, 0, compositeAfter, onFailure);
+        int exitViaFailRestore = AddState(LoweredOpCode.FailRestore, 0, exitCheckMin, exitCheckMin);
+        int popIterCheck = ReserveState();
+        int innerEntry = LowerRule(inner, popIterCheck, exitViaFailRestore);
+        int pushBacktrack = AddState(LoweredOpCode.PushBacktrack, 0, innerEntry, innerEntry);
+        int loopStart = AddState(LoweredOpCode.ScannerSkipAdvance, specIndex, pushBacktrack, pushBacktrack);
+        FillState(popIterCheck, LoweredOpCode.PopIterationCheck, 0, loopStart, exitCheckMin);
+
+        int packedBounds = PackBetweenBounds(rule.AtLeast, rule.AtMost);
+        int pushBetween = AddState(LoweredOpCode.PushBetween, packedBounds, loopStart, onFailure);
+
+        if (effective != FlattenType.Flatten)
+            entryState = AddState(LoweredOpCode.OpenComposite, metadataIndex, pushBetween, onFailure);
+        else
+            entryState = pushBetween;
+        return true;
+    }
+
+    // Walk an alternative looking for a flat list of literal candidates.
+    // Returns false on the first non-literal-shaped alternative, leaving
+    // the caller to drop the literal payload and fall back to the
+    // generic first-rune skip. Mirrors the recursive evaluator's
+    // TryCollectLiteralScannerCandidates.
+    private static bool TryCollectScannerLiteralCandidates(
+        Rule rule,
+        List<LiteralScannerCandidate> candidates)
+    {
+        if (rule.ErrorMessage != null || rule.Advance != Advance.Always)
+            return false;
+
+        switch (rule)
+        {
+            case LiteralRule literal:
+                candidates.Add(new LiteralScannerCandidate(literal.LoweringExpected, ignoreAsciiCase: false));
+                return true;
+            case LiteralIgnoreAsciiCaseRule literalIc:
+                candidates.Add(new LiteralScannerCandidate(literalIc.LoweringExpected, ignoreAsciiCase: true));
+                return true;
+            case TokenRule token:
+                candidates.Add(new LiteralScannerCandidate(token.LoweringExpected, ignoreAsciiCase: false));
+                return true;
+            case FirstOfRule firstOf:
+                if (firstOf.Children.Count == 0) return false;
+                for (int i = 0; i < firstOf.Children.Count; i++)
+                    if (!TryCollectScannerLiteralCandidates(firstOf.Children[i], candidates))
+                        return false;
+                return true;
+            default:
+                return false;
+        }
     }
 
     private int LowerBetweenScan(

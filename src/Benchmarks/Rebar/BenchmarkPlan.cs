@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using InductorParser.StateMachine;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 
@@ -19,12 +20,14 @@ internal sealed class BenchmarkPlan
     private readonly Rule _scanner;
     private readonly Rule _match;
     private readonly IReadOnlyList<Rule> _captures;
+    private readonly bool _useStateMachine;
 
-    public BenchmarkPlan(Rule scanner, Rule match, IReadOnlyList<Rule> captures)
+    public BenchmarkPlan(Rule scanner, Rule match, IReadOnlyList<Rule> captures, bool useStateMachine)
     {
         _scanner = scanner;
         _match = match;
         _captures = captures;
+        _useStateMachine = useStateMachine;
     }
 
     public long Count(string haystack, string model)
@@ -89,7 +92,9 @@ internal sealed class BenchmarkPlan
 
     private ParseResult Parse(string input)
     {
-        var result = _scanner.Parse(input, SearchOptions);
+        var result = _useStateMachine
+            ? StateMachineParser.Parse(_scanner, input, SearchOptions)
+            : _scanner.Parse(input, SearchOptions);
         if (!result.Success)
             throw new InvalidOperationException($"InductorParser rejected supported benchmark input at {result.ErrorCharIndex}: {result.ErrorMessage}");
         return result;
@@ -123,7 +128,7 @@ internal static class BenchmarkRegistry
     private static readonly RuneSet AsciiRegexWhitespace = RuneSet.Runes(" \t\r\n\f\v");
     private static readonly RuneSet CodeSeparator = RuneSet.Runes(",") | AsciiRegexWhitespace;
 
-    public static BenchmarkPlan Build(RebarConfig config)
+    public static BenchmarkPlan Build(RebarConfig config, bool useStateMachine = false)
     {
         if (config.Patterns.Count != 1)
             throw new NotSupportedException("The InductorParser rebar runner currently supports exactly one regex pattern per benchmark.");
@@ -156,7 +161,7 @@ internal static class BenchmarkRegistry
 
         ValidateSupportedModel(config);
         ValidateCaseMode(config);
-        return CompileScanner(grammar);
+        return CompileScanner(grammar, useStateMachine);
     }
 
     private static void ValidateSupportedModel(RebarConfig config)
@@ -181,7 +186,7 @@ internal static class BenchmarkRegistry
             throw new NotSupportedException("Unicode-aware case-insensitive matching is intentionally unsupported until full case folding lands.");
     }
 
-    private static BenchmarkPlan CompileScanner(PatternGrammar grammar)
+    private static BenchmarkPlan CompileScanner(PatternGrammar grammar, bool useStateMachine)
     {
         grammar.Match.As("match").Flatten(FlattenType.Preserve);
         var scanner = ZeroOrMore(FirstOf(
@@ -189,7 +194,7 @@ internal static class BenchmarkRegistry
             AnyToken().Flatten(FlattenType.Delete)
         )).As("scan").Flatten(FlattenType.Preserve);
         scanner.Compile();
-        return new BenchmarkPlan(scanner, grammar.Match, grammar.Captures);
+        return new BenchmarkPlan(scanner, grammar.Match, grammar.Captures, useStateMachine);
     }
 
     private static PatternGrammar LiteralPattern(string literal, bool ignoreAsciiCase) =>

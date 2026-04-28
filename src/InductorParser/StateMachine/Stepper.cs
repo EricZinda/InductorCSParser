@@ -125,8 +125,47 @@ internal static class Stepper
                 return Step_ScanUntilStopperEligibleRune(in state, ref machine);
             case LoweredOpCode.AdvanceOneRune:
                 return Step_AdvanceOneRune(in state, ref machine);
+            case LoweredOpCode.ScannerSkipAdvance:
+                return Step_ScannerSkipAdvance(in state, ref machine);
         }
         return State.HaltFailure;
+    }
+
+    // Bulk-skip at the top of a ZeroOrMore(FirstOf(match..., AnyToken.Delete))
+    // scanner loop. Advances the lexer to the next position where one of
+    // the candidate matches could plausibly start, so the inner FirstOf
+    // doesn't waste an attempt + fail-over to AnyToken.Delete on every
+    // non-candidate rune. Always succeeds (it just advances; never fails).
+    // The actual scan logic lives in Lexer.AdvanceUntil*; we just feed it
+    // the precomputed spec from CompiledProgram.ScannerSkipSpecs.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int Step_ScannerSkipAdvance(in State state, ref Machine machine)
+    {
+        ScannerSkipSpec spec = machine.Program.ScannerSkipSpecs[state.Data];
+        Lexer lexer = machine.Lexer;
+        RuneSet candidates = machine.Program.RuneSets[spec.CandidatesRuneSetIndex];
+
+        if (spec.Literals is { Length: > 0 })
+        {
+            int[]? positions = null;
+            if (spec.UseLiteralPositionsCache)
+            {
+                machine.ScannerSkipPositions ??= new int[machine.Program.ScannerSkipSpecs.Length][];
+                positions = machine.ScannerSkipPositions[state.Data];
+                if (positions == null)
+                {
+                    positions = new int[spec.Literals.Length];
+                    for (int i = 0; i < positions.Length; i++) positions[i] = -2;
+                    machine.ScannerSkipPositions[state.Data] = positions;
+                }
+            }
+            lexer.AdvanceUntilLiteralCandidateIn(candidates, spec.BmpCandidates, spec.Literals, positions);
+        }
+        else
+        {
+            lexer.AdvanceUntilRuneIn(candidates, spec.BmpCandidates);
+        }
+        return state.OnSuccess;
     }
 
     // Match opcodes pack their data field as:

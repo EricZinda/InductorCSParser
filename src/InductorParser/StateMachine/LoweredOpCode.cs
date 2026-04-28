@@ -197,4 +197,15 @@ internal enum LoweredOpCode : byte
     // peeked stopper failed.
     ScanUntilStopperEligibleRune,
     AdvanceOneRune,
+
+    // Bulk skip at the top of a ZeroOrMore(FirstOf(match..., AnyToken.Delete))
+    // scanner loop. Advances the lexer to the next position where one of
+    // the candidate matches could plausibly start, so the inner FirstOf
+    // doesn't waste a per-rune attempt + fail-over to the deleted
+    // AnyToken on every non-candidate rune. state.Data indexes into
+    // CompiledProgram.ScannerSkipSpecs. Always succeeds (advances the
+    // lexer; never fails). Mirrors the recursive evaluator's ScannerSkip
+    // in BetweenInclusiveRule. Inert by construction when the lowerer
+    // doesn't recognize the shape (the opcode is just never emitted).
+    ScannerSkipAdvance,
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
 namespace InductorParser.StateMachine;
@@ -20,6 +21,7 @@ internal sealed class CompiledProgram
     public ScanSpec[] ScanSpecs { get; }
     public ScanAndPairSpec[] ScanAndPairSpecs { get; }
     public RuleStopperSpec[] RuleStopperSpecs { get; }
+    public ScannerSkipSpec[] ScannerSkipSpecs { get; }
     public Rule[] BridgeRules { get; }
     // One 128-entry int[] per FirstOf that uses the
     // LoadPeekedRuneAndJumpAlt opcode. Entry r holds the state index
@@ -48,6 +50,7 @@ internal sealed class CompiledProgram
         ScanSpec[] scanSpecs,
         ScanAndPairSpec[] scanAndPairSpecs,
         RuleStopperSpec[] ruleStopperSpecs,
+        ScannerSkipSpec[] scannerSkipSpecs,
         Rule[] bridgeRules,
         int[][] orJumpTables,
         int entryState,
@@ -62,11 +65,48 @@ internal sealed class CompiledProgram
         ScanSpecs = scanSpecs;
         ScanAndPairSpecs = scanAndPairSpecs;
         RuleStopperSpecs = ruleStopperSpecs;
+        ScannerSkipSpecs = scannerSkipSpecs;
         BridgeRules = bridgeRules;
         OrJumpTables = orJumpTables;
         EntryState = entryState;
         RootRule = rootRule;
         HasOutputs = hasOutputs;
+    }
+}
+
+// Spec for ScannerSkipAdvance, the per-iteration bulk skip used at the
+// top of a ZeroOrMore(FirstOf(match..., AnyToken.Delete)) scanner loop.
+// At each iteration the opcode advances the lexer to the next position
+// where one of the candidate matches could plausibly start, so the
+// inner FirstOf doesn't waste an attempt + fail-over to the deleted
+// AnyToken on every non-candidate rune. Mirrors the recursive
+// evaluator's ScannerSkip in BetweenInclusiveRule. Inert by
+// construction when the lowerer doesn't recognize the shape (the
+// opcode just isn't emitted), so the syntax tree never changes.
+//
+// The rune-set + BMP-char prefilter is universally safe for any inner
+// shape that matches via FirstConsumedRunes. The literal payload is
+// the stronger prefilter that fires when every alternative is a
+// (possibly nested) literal: the scanner walks straight to the next
+// full-literal candidate via BCL string search instead of stopping at
+// every matching first rune.
+internal readonly struct ScannerSkipSpec
+{
+    public readonly int CandidatesRuneSetIndex;
+    public readonly char[]? BmpCandidates;
+    public readonly LiteralScannerCandidate[]? Literals;
+    public readonly bool UseLiteralPositionsCache;
+
+    public ScannerSkipSpec(
+        int candidatesRuneSetIndex,
+        char[]? bmpCandidates,
+        LiteralScannerCandidate[]? literals,
+        bool useLiteralPositionsCache)
+    {
+        CandidatesRuneSetIndex = candidatesRuneSetIndex;
+        BmpCandidates = bmpCandidates;
+        Literals = literals;
+        UseLiteralPositionsCache = useLiteralPositionsCache;
     }
 }
 
