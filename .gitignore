@@ -7,3 +7,8 @@ obj/
 test-results/
 TestResults*.xml
 BenchmarkDotNet.Artifacts/
+.cargo-home/
+.dotnet-home/
+.external/
+.rustup-home/
+.tools/

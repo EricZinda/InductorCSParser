@@ -1,0 +1,22 @@
+# Copy this [[engine]] entry into a local rebar benchmarks/engines.toml file.
+# Adjust cwd so it points at this repository from the rebar checkout.
+
+[[engine]]
+name = "inductorparser"
+cwd = "../RegexPerf"
+
+[engine.version]
+bin = "dotnet"
+args = ["./src/Benchmarks/Rebar/bin/Release/net8.0/InductorParser.RebarRunner.dll", "--version"]
+
+[engine.run]
+bin = "dotnet"
+args = ["./src/Benchmarks/Rebar/bin/Release/net8.0/InductorParser.RebarRunner.dll", "inductorparser"]
+
+[[engine.build]]
+bin = "dotnet"
+args = ["build", "-c", "Release", "src/Benchmarks/Rebar/RebarRunner.csproj", "-m:1", "-p:BuildInParallel=false"]
+
+[[engine.clean]]
+bin = "dotnet"
+args = ["clean", "-c", "Release", "src/Benchmarks/Rebar/RebarRunner.csproj"]

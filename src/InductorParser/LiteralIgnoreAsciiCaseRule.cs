@@ -18,6 +18,8 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
 {
     private readonly string _expected;
 
+    internal string Expected => _expected;
+
     public LiteralIgnoreAsciiCaseRule(string expected) : base(FlattenType.Delete)
     {
         if (expected == null)

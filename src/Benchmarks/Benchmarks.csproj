@@ -25,6 +25,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="Rebar\**\*.cs" />
+    <EmbeddedResource Remove="Rebar\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Remove="Json\PegasusParsers\Json.peg" />
     <PegGrammar Include="Json\PegasusParsers\Json.peg" />
   </ItemGroup>

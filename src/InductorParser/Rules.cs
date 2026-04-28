@@ -258,6 +258,29 @@ public static class Rules
     public static Rule NoneOf(string runes) => new NoneOfRule(RuneSet.Runes(runes));
 
     /// <summary>
+    /// Match a maximal run of one or more single-rune tokens in the
+    /// given <see cref="RuneSet"/>. Default
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>.
+    /// </summary>
+    /// <remarks>
+    /// This is the run-oriented form of <see cref="OneOf(RuneSet)"/>.
+    /// It is equivalent to a greedy <c>AtLeast(minimumCount,
+    /// OneOf(set))</c> for the text it consumes, but returns one leaf
+    /// over the whole run instead of one leaf per rune. That is useful
+    /// for identifiers, words, numbers, and other character-class runs
+    /// where callers care about the span as a whole.
+    ///
+    /// Under GraphemeLexer, "single-rune token" is literal: a
+    /// multi-rune grapheme whose first rune is in the set does not
+    /// match. That keeps this rule aligned with <see cref="OneOf(RuneSet)"/>.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="minimumCount"/> is less than 1.
+    /// </exception>
+    public static Rule RuneRun(RuneSet set, int minimumCount = 1) =>
+        new RuneRunRule(set, minimumCount);
+
+    /// <summary>
     /// Match a run of runes up to (but not including) a rune in
     /// the stopAt set. Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.

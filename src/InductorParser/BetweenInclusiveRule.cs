@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
+using InductorParser.Tracing;
 
 namespace InductorParser;
 
@@ -54,6 +55,7 @@ internal sealed class BetweenInclusiveRule : Rule
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         using var transaction = lexer.BeginTransaction();
+        var scannerSkip = TryCreateScannerSkip(lexer);
 
         // First try to shortcut and exit fast using the "Rule Skip" shortcut described
         // on RuleStartRequirements
@@ -85,6 +87,7 @@ internal sealed class BetweenInclusiveRule : Rule
         int count = 0;
         while (count < AtMost)
         {
+            scannerSkip?.Advance(lexer);
             int positionBefore = lexer.Position;
             var nextSymbol = ParseChild(Inner, lexer, outputSymbols);
             if (nextSymbol == null) break;
@@ -111,6 +114,130 @@ internal sealed class BetweenInclusiveRule : Rule
         return effectiveFlattenType == FlattenType.Preserve
             ? new Symbol(Id, FlattenType, outputSymbols)
             : Symbol.Discarded;
+    }
+
+    private ScannerSkip? TryCreateScannerSkip(Lexer lexer)
+    {
+        // Recognize scanner-style loops: ZeroOrMore(Or(match, AnyToken.Delete)).
+        // The deleted AnyToken fallback means non-matching input would be thrown
+        // away one token at a time, so we can jump directly to the next rune that
+        // could start a real match without changing the emitted syntax tree.
+        if (AtLeast != 0 || AtMost != int.MaxValue)
+            return null;
+        if (lexer.PreserveFlattenWrappers || lexer.IsTracing(TraceLevel.Normal))
+            return null;
+        if (Inner is not OrRule || Inner.ErrorMessage != null)
+            return null;
+
+        var alternatives = Inner.Children;
+        if (alternatives.Count < 2)
+            return null;
+
+        Rule fallback = alternatives[alternatives.Count - 1];
+        if (fallback is not AnyTokenRule
+            || fallback.FlattenType != FlattenType.Delete
+            || fallback.ErrorMessage != null)
+            return null;
+
+        RuneSet candidates = RuneSet.Empty;
+        var literalCandidates = new List<LiteralScannerCandidate>();
+        bool allCandidatesAreLiterals = true;
+        for (int index = 0; index < alternatives.Count - 1; index++)
+        {
+            Rule alternative = alternatives[index];
+            if (alternative.ErrorMessage != null || alternative.Advance != Advance.Always)
+                return null;
+            candidates |= alternative.FirstConsumedRunes;
+
+            // Optional stronger prefilter: if the real alternatives are all
+            // literals, the scanner can skip false first-rune hits too. This
+            // matters for ASCII ignore-case searches where the first-rune set
+            // is broad (`S` or `s`) and common in normal text. If any branch
+            // is not a literal, keep the generic first-rune skip; it is less
+            // aggressive but still safe for arbitrary grammar shapes.
+            if (allCandidatesAreLiterals
+                && !TryCollectLiteralScannerCandidates(alternative, literalCandidates))
+            {
+                allCandidatesAreLiterals = false;
+                literalCandidates.Clear();
+            }
+        }
+
+        if (candidates.IsEmpty || candidates == RuneSet.Universe)
+            return null;
+
+        candidates.TryGetBmpChars(maxChars: 256, out var bmpCandidates);
+        LiteralScannerCandidate[]? literals =
+            allCandidatesAreLiterals && literalCandidates.Count > 0
+                ? literalCandidates.ToArray()
+                : null;
+        return new ScannerSkip(
+            candidates,
+            bmpCandidates.Length == 0 ? null : bmpCandidates,
+            literals,
+            literals is { Length: 1 } ? CreateUnknownPositions(literals.Length) : null);
+    }
+
+    private static int[] CreateUnknownPositions(int length)
+    {
+        // Per-parse cache for the literal prefilter. -2 means "not searched
+        // from the current lexer position yet"; -1 means "not found at or
+        // after the searched position"; any non-negative value is the next
+        // candidate position for that literal. The cache lives on the scanner
+        // instance created for this parse, so it never leaks across inputs.
+        var positions = new int[length];
+        for (int index = 0; index < positions.Length; index++)
+            positions[index] = -2;
+        return positions;
+    }
+
+    private static bool TryCollectLiteralScannerCandidates(
+        Rule rule,
+        List<LiteralScannerCandidate> candidates)
+    {
+        if (rule.ErrorMessage != null || rule.Advance != Advance.Always)
+            return false;
+
+        switch (rule)
+        {
+            case LiteralRule literal:
+                candidates.Add(new LiteralScannerCandidate(literal.Expected, ignoreAsciiCase: false));
+                return true;
+
+            case LiteralIgnoreAsciiCaseRule literal:
+                candidates.Add(new LiteralScannerCandidate(literal.Expected, ignoreAsciiCase: true));
+                return true;
+
+            case OrRule orRule:
+                if (orRule.Children.Count == 0)
+                    return false;
+                for (int index = 0; index < orRule.Children.Count; index++)
+                {
+                    if (!TryCollectLiteralScannerCandidates(orRule.Children[index], candidates))
+                        return false;
+                }
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    private readonly record struct ScannerSkip(
+        RuneSet Candidates,
+        char[]? BmpCandidates,
+        LiteralScannerCandidate[]? Literals,
+        int[]? LiteralPositions)
+    {
+        public void Advance(Lexer lexer)
+        {
+            if (Literals is { Length: > 0 })
+            {
+                lexer.AdvanceUntilLiteralCandidateIn(Candidates, BmpCandidates, Literals, LiteralPositions);
+                return;
+            }
+            lexer.AdvanceUntilRuneIn(Candidates, BmpCandidates);
+        }
     }
 
     // Return the set of runes this rule might consume first (can be a superset)

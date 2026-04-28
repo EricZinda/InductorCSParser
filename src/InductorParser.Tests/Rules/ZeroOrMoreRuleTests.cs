@@ -52,6 +52,111 @@ public class ZeroOrMoreRuleTests
     }
 
     [Test]
+    public void ZeroOrMore_scanner_shape_skips_deleted_fallback_runs()
+    {
+        var match = Literal("Sherlock").As("match").Flatten(SyntaxTree.FlattenType.Preserve);
+        var scanner = ZeroOrMore(Or(
+            match,
+            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
+        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
+
+        string input = new string('x', 5000) + "Sherlock";
+        var result = scanner.Parse(input, new ParseOptions
+        {
+            InputUnit = InputUnit.Rune,
+            NormalizeInput = null,
+            RuleCountLimit = 100,
+            MaxDepth = 0
+        });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("Sherlock"));
+        Assert.That(result.Tree.Find(match)!.ToString(), Is.EqualTo("Sherlock"));
+    }
+
+    [Test]
+    public void ZeroOrMore_scanner_shape_prefilters_ascii_case_insensitive_literal()
+    {
+        var match = LiteralIgnoreAsciiCase("Sherlock Holmes")
+            .As("match")
+            .Flatten(SyntaxTree.FlattenType.Preserve);
+        var scanner = ZeroOrMore(Or(
+            match,
+            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
+        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
+
+        string input = new string('s', 5000) + "sHeRlOcK hOlMeS";
+        var result = scanner.Parse(input, new ParseOptions
+        {
+            InputUnit = InputUnit.Rune,
+            NormalizeInput = null,
+            RuleCountLimit = 100,
+            MaxDepth = 0
+        });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("sHeRlOcK hOlMeS"));
+        Assert.That(result.Tree.Find(match)!.ToString(), Is.EqualTo("sHeRlOcK hOlMeS"));
+    }
+
+    [Test]
+    public void ZeroOrMore_scanner_shape_prefilters_nested_literal_alternates()
+    {
+        var match = Or(
+            LiteralIgnoreAsciiCase("Sherlock Holmes").Flatten(SyntaxTree.FlattenType.Preserve),
+            LiteralIgnoreAsciiCase("John Watson").Flatten(SyntaxTree.FlattenType.Preserve),
+            LiteralIgnoreAsciiCase("Irene Adler").Flatten(SyntaxTree.FlattenType.Preserve)
+        ).As("match").Flatten(SyntaxTree.FlattenType.Preserve);
+        var scanner = ZeroOrMore(Or(
+            match,
+            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
+        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
+
+        string input = new string('j', 5000) + "jOhN wAtSoN";
+        var result = scanner.Parse(input, new ParseOptions
+        {
+            InputUnit = InputUnit.Rune,
+            NormalizeInput = null,
+            RuleCountLimit = 100,
+            MaxDepth = 0
+        });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("jOhN wAtSoN"));
+        Assert.That(result.Tree.Find(match)!.ToString(), Is.EqualTo("jOhN wAtSoN"));
+    }
+
+    [Test]
+    public void ZeroOrMore_scanner_shape_preserves_debug_tree_when_requested()
+    {
+        var match = Literal("S").As("match").Flatten(SyntaxTree.FlattenType.Preserve);
+        var scanner = ZeroOrMore(Or(
+            match,
+            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
+        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
+
+        var result = scanner.Parse("xxS", Debug());
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("xxS"));
+    }
+
+    [Test]
+    public void ZeroOrMore_scanner_shape_does_not_skip_preserved_fallback()
+    {
+        var match = Literal("S").As("match").Flatten(SyntaxTree.FlattenType.Preserve);
+        var scanner = ZeroOrMore(Or(
+            match,
+            AnyToken()
+        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
+
+        var result = scanner.Parse("xxS");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("xxS"));
+    }
+
+    [Test]
     public void ZeroOrMore_trace_with_matches_produces_expected_output()
     {
         var sink = NewSink();
