@@ -23,7 +23,7 @@ public class BudgetTests
         var result = rule.Parse("hello");
 
         Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.Success));
-        Assert.That(string.Concat(result.Symbols), Is.EqualTo("hello"));
+        Assert.That(result.ToString(), Is.EqualTo("hello"));
     }
 
     [Test]
@@ -62,16 +62,20 @@ public class BudgetTests
     [Test]
     public void MaxDepth_aborts_with_DepthLimitExceeded_on_recursive_grammar()
     {
-        // Recursive grammar via LateBoundRule. Each recursion pushes
-        // several rule frames (LateBound forward + FirstOf + AllOf + Token), so
-        // a moderate input quickly outgrows a small MaxDepth. Intent
-        // mirrors a real "((((...))))" deeply-nested input that would
-        // blow the .NET call stack without protection.
-        var aRule = new LateBoundRule("aRule");
-        aRule.Bind(FirstOf(AllOf(Token('a'), aRule), Token('a')));
+        // Classic balanced-parens grammar:  nested := '(' nested ')' | 'x'
+        // Each extra layer of parens recurses one more level into the
+        // grammar, so input like "(((x)))" pushes the parser stack as
+        // deep as the input is nested. Without a depth budget, a long
+        // enough input would blow the .NET call stack.
+        var nested = new LateBoundRule("nested");
+        nested.Bind(FirstOf(
+            AllOf(Token('('), nested, Token(')')),
+            Token('x')));
 
+        // 100 levels of nesting, far past the MaxDepth = 10 budget.
+        string input = new string('(', 100) + "x" + new string(')', 100);
         var options = new ParseOptions { MaxDepth = 10 };
-        var result = aRule.Parse(new string('a', 100), options);
+        var result = nested.Parse(input, options);
 
         Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.DepthLimitExceeded));
         Assert.That(result.ErrorMessage,
@@ -81,14 +85,17 @@ public class BudgetTests
     [Test]
     public void MaxDepth_zero_disables_the_depth_budget()
     {
-        // Same recursive grammar. With MaxDepth disabled the parse
+        // Same balanced-parens grammar. With MaxDepth disabled the parse
         // completes (the input is short enough not to overflow the real
         // call stack).
-        var aRule = new LateBoundRule("aRule");
-        aRule.Bind(FirstOf(AllOf(Token('a'), aRule), Token('a')));
+        var nested = new LateBoundRule("nested");
+        nested.Bind(FirstOf(
+            AllOf(Token('('), nested, Token(')')),
+            Token('x')));
 
+        string input = new string('(', 50) + "x" + new string(')', 50);
         var options = new ParseOptions { MaxDepth = 0, RuleCountLimit = 0 };
-        var result = aRule.Parse(new string('a', 50), options);
+        var result = nested.Parse(input, options);
 
         Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.Success));
     }

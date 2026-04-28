@@ -1,0 +1,266 @@
+# Inductor Parser Primer: Walking the Tree
+
+The first two primers built grammars that succeed or fail and that's it. But most of the time, parsing isn't the goal. You parse so you can do something with what you parsed: look settings up by name, check that the right things are there, point at the spot where it went wrong. Once the parser hands you back a tree, all of that is just walking the tree.
+
+Let's parse a tiny INI-style config file. Something like this:
+
+```ini
+[server]
+host = "localhost"
+port = 8080
+
+[client]
+timeout = 30
+```
+
+Two sections, each with a couple of `key = value` lines. We'll parse it, walk the tree to look up `[server] port`, and report errors for the cases where things go wrong.
+
+A quick spec, so the rules below don't surprise you:
+
+- A line is one of a section header, a key/value pair, or blank.
+- A section header is `[name]` on its own line. Names are non-whitespace runes, no `]`. So `[a=b]` is legal (`=` only has special meaning between a key and a value), but `[my server]` and `[ server ]` are not.
+- A key/value pair is `key = value`. Keys are non-whitespace runes, no `=`. Whitespace around `=` is optional.
+- Values are typed: an integer, a float, a double-quoted string, or a bare word (a single run of non-whitespace, non-quote runes). Multi-word strings need quotes, so `name = "my favorite thing"` works but `name = my favorite thing` doesn't.
+- Line terminators are the full Unicode set (LF, CR, CRLF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR, VT, FF), not just `\n`.
+
+The grammar:
+
+```CSharp
+// All the runes that end a line in Unicode (LF, CR, VT, FF, NEL,
+// LINE SEPARATOR, PARAGRAPH SEPARATOR), so we can exclude them from
+// the body of a name, key, or value. EndOfLine() then consumes the
+// terminator itself, including CRLF as a single unit.
+var lineEndRunes = RuneSet.SingleRuneLineTerminators;
+
+// Horizontal-only whitespace: every whitespace rune except the line
+// terminators. The built-in OptionalWhitespace() uses
+// RuneSet.Whitespace whole, which includes newlines, so it would
+// happily eat past the end of a line. We want the same set minus the
+// line terminators, which is exactly the intersection with their
+// complement.
+var horizontalSpaceRunes = RuneSet.Whitespace & ~lineEndRunes;
+Rule HorizontalSpace() => ZeroOrMore(OneOf(horizontalSpaceRunes)).Flatten(FlattenType.Delete);
+
+// Section names and keys: one or more non-whitespace runes, stopping
+// at the relevant terminator (']' for a name, '=' for a key).
+var name = OneOrMore(NoneOf(RuneSet.Runes("]") | RuneSet.Whitespace))
+    .As("name").Preserve();
+var key = OneOrMore(NoneOf(RuneSet.Runes("=") | RuneSet.Whitespace))
+    .As("key").Preserve();
+
+var section = AllOf(Token('['), name, Token(']'), HorizontalSpace(), EndOfLine())
+    .As("section").Preserve();
+
+// Typed values. Each alternative is .As(name).Preserve() so the
+// matching one survives flattening as a discoverable child of value.
+// Order matters in FirstOf: Float before Integer because "3.14" would
+// otherwise commit to Integer on the leading "3" and stall.
+var quotedString = AllOf(
+    Token('"'),
+    ZeroOrMore(NoneOf(RuneSet.Runes("\"") | lineEndRunes)),
+    Token('"')).As("quotedString").Preserve();
+
+var bareWord = OneOrMore(NoneOf(RuneSet.Whitespace | RuneSet.Runes("\"")))
+    .As("bareWord").Preserve();
+
+var floatValue = Float().As("float").Preserve();
+var integerValue = Integer().As("integer").Preserve();
+
+var value = FirstOf(floatValue, integerValue, quotedString, bareWord)
+    .As("value").Preserve();
+
+var keyValue = AllOf(key, HorizontalSpace(), Token('='), HorizontalSpace(), value, HorizontalSpace(), EndOfLine())
+    .As("keyValue").Preserve();
+
+var blankLine = AllOf(HorizontalSpace(), EndOfLine());
+
+var line = FirstOf(section, keyValue, blankLine);
+var config = AllOf(ZeroOrMore(line), Eof()).As("config").Preserve();
+```
+
+`name` and `key` are the same shape: one or more runes that aren't whitespace and aren't the stop character (`]` for names, `=` for keys). `NoneOf(set)` matches one rune outside the set, and `|` is set union.
+
+`value` is where typing happens. Each alternative is `.As(name).Preserve()` so the matching one lands in the tree as a typed child. `Float()` and `Integer()` are built-in rules, `quotedString` is the standard open-quote/body/close-quote shape and `bareWord` catches everything else. Order in `FirstOf` matters because it stops at the first match: `Float` is before `Integer` so `3.14` doesn't commit to `3` and leave `.14` for the next rule to choke on.
+
+`EndOfLine()` accepts CRLF as a unit plus any of the seven Unicode single-rune line terminators. `Token('\n')` only handles LF and would silently cause a bug on a CRLF Windows file or anything using NEL, LINE SEPARATOR, or PARAGRAPH SEPARATOR.
+
+`.As(name).Preserve()` is the same pattern as primer1: name the rule so you can find it later, keep its wrapper in the tree so there's something to find.
+
+# What the tree looks like
+
+If we run `config.Parse("[server]\nhost = \"localhost\"\nport = 8080\n")`, the tree looks like this:
+
+```
+config
+├── section
+│   └── name ── "server"
+├── keyValue
+│   ├── key ── "host"
+│   └── value
+│       └── quotedString ── "localhost"
+└── keyValue
+    ├── key ── "port"
+    └── value
+        └── integer ── "8080"
+```
+
+The `'['`, `']'`, `'='`, the surrounding quote tokens of a quotedString, and the line terminator are all gone after flattening (their default flatten policy is Delete). The `HorizontalSpace()` around `=` are gone too. What's left is the structure we care about: each `value` carries one named child indicating which alternative matched, and the consumer can use it without re-parsing the text.
+
+INI doesn't nest sections. The `[server]` header and the keys that belong to it sit as siblings under the root rather than as children. To find "the keys belonging to section X" we just look for siblings of the section that are keyValues.
+
+# Walking the tree
+
+Walk the children of config, remembering each `section` name you pass. When you hit a `keyValue`, it lives in the last section you passed:
+
+```CSharp
+public static Symbol? FindSetting(Symbol config, string sectionName, string keyName)
+{
+    string? currentSection = null;
+    foreach (var child in config.Children)
+    {
+        if (child.Is(section))
+        {
+            currentSection = child.Children[0].ToString();
+        }
+        else if (child.Is(keyValue) && currentSection == sectionName)
+        {
+            string thisKey = child.Children[0].ToString();
+            if (thisKey == keyName)
+                return child.Children[1];  // the value node, with its typed child
+        }
+    }
+    return null;
+}
+```
+
+`symbol.Is(rule)` checks whether the symbol was produced by the rule. 
+
+`symbol.Children` is the list of children that survived flattening. For a section, that's a single `name` leaf, so `child.Children[0].ToString()` gives the section's name as a string. For a keyValue, the children are `[key, value]`, so index 0 is the key and index 1 is the value's container.
+
+We return the value `Symbol` so the caller can still read the type of the child. To read `[server]/port` as an integer:
+
+```CSharp
+var portValue = FindSetting(result.Tree!, "server", "port");
+if (portValue == null)
+    throw new InvalidOperationException("Missing required setting: [server] port");
+
+var typed = portValue.Children[0];
+if (!typed.Is(integerValue))
+    throw new FormatException($"[server] port: expected an integer");
+
+int port = int.Parse(typed.ToString(), CultureInfo.InvariantCulture);
+```
+
+The grammar already verified the value's shape. If the input was `port = abc`, the typed child would be a `bareWord` (not an `integerValue`). If the input was `port = "8080"`, the typed child would be a `quotedString` and we can either coerce or reject it. 
+
+`symbol.ToString()` returns the matched text. For a leaf, that's the consumed string. For a composite like `AllOf`, it's the concatenation of every leaf underneath. Either way, you get back what the rule consumed.
+
+If you want every section regardless of context, two helpers besides `.Is()` come up enough to be worth knowing:
+
+- `symbol.Find(rule)` does a depth-first search and returns the first matching descendant (or null). Use it when you expect one match in a known position.
+- `symbol.FindAll(rule)` does the same but yields every match. Use it for "give me every section" or "every keyValue."
+
+```CSharp
+foreach (var sectionSymbol in result.Tree!.FindAll(section))
+{
+    Console.WriteLine($"Found section: {sectionSymbol.Children[0]}");
+}
+```
+
+For our setting-lookup problem we aren't using FindAll, because we care about where in the file each section header appears (it groups the keys that follow it). Find and FindAll are for "go grab the title node" or "give me every link" cases where order isn't meaningful.
+
+# When the parse fails
+
+`Parse()` returns a `ParseResult`, and on failure it carries enough to point at the problem:
+
+```CSharp
+var result = config.Parse("[server]\nport oops\n");
+if (!result.Success)
+{
+    Console.WriteLine($"Parse failed at line {result.ErrorLine}, column {result.ErrorColumn}");
+    Console.WriteLine($"  {result.ErrorMessage}");
+}
+```
+
+That input tries to use `port oops` as a key/value pair without an `=` sign. The output looks like:
+
+```
+Parse failed at line 1, column 5
+  Parse failed at offset 14: unexpected 'o'.
+```
+
+The default error message is generic. To upgrade it, attach `.WithError(...)` to the rule that's most likely to be where the user went wrong:
+
+```CSharp
+var keyValue = AllOf(
+    key,
+    HorizontalSpace(),
+    Token('=').WithError("Expected '=' after the setting name"),
+    HorizontalSpace(),
+    value,
+    HorizontalSpace(),
+    EndOfLine())
+    .As("keyValue").Preserve();
+```
+
+If `Token('=')` is the deepest failure when a parse fails (the rule that got furthest before giving up), `result.ErrorMessage` will be your custom string instead of the default. Sprinkle `.WithError(...)` on the spots most likely to confuse readers and the error reporting starts looking like a hand-written diagnostic instead of a generic parser errors.
+
+`ErrorLine` and `ErrorColumn` follow the Language Server Protocol (LSP) convention used by text editors and developer tools: zero-based, with line breaks at `\n`, `\r\n`, or lone `\r`.
+
+Semantic errors happen after the parse: a duplicate section, a missing required key, a number out of range. The parse already succeeded so now you need to walk the tree and check things.
+
+For example, you might want to disallow duplicate section names. Here's how you'd catch a duplicate section using `FindAll` to grab every section header in the tree, then a `HashSet` to spot the repeat:
+
+```CSharp
+var seen = new HashSet<string>();
+foreach (var sectionSymbol in result.Tree!.FindAll(section))
+{
+    string sectionName = sectionSymbol.Children[0].ToString();
+    if (!seen.Add(sectionName))
+        throw new FormatException($"Duplicate section: [{sectionName}]");
+}
+```
+
+Required-key checks and range checks fall out of the same pattern: get the symbols you care about with `Find`, `FindAll`, or a walk-with-state like `FindSetting`, pull the value with `.ToString()` or a typed-child dispatch, and apply the check. The grammar shapes the input. The walk gives it meaning.
+
+# Unicode and where the error actually is
+
+Here's where it gets interesting. `ErrorColumn` and a sibling field `ErrorCharIndex` both count chars (UTF-16 code units), which is what `string.Substring`, `Span<char>`, and the Language Server Protocol all use. That works fine for ASCII. But suppose this is a config for a family-shared device and the user types a section header in emoji:
+
+```ini
+[👨‍👩‍👧]
+port oops
+```
+
+That's a section name made of a single family emoji, then a malformed key/value line. The section header itself parses fine: `name` rejects single-rune whitespace and `]`, but a multi-rune grapheme cluster like the family emoji isn't any single rune in any set, so `NoneOf` accepts it as one token. The parser gets past the header and fails on line 2 at the same spot it would for an ASCII version: where the `=` should be.
+
+But the position numbers diverge. To a human, the family is one character and the failure happens 5 characters into the second line. In memory, the family is five Unicode code points (man, ZWJ, woman, ZWJ, girl) and eight UTF-16 code units (each emoji is a surrogate pair, plus three more code units for the two ZWJs). So which "position" should the parser report?
+
+Inductor Parser reports it four ways, because the right unit depends on what the caller is going to do with the number:
+
+```CSharp
+result.ErrorCharIndex     // 16 - UTF-16 code units, what string.Substring uses
+result.ErrorRuneIndex     // 13 - Unicode scalar values (code points)
+result.ErrorGraphemeIndex // 9  - user-perceived characters (UAX #29)
+result.ErrorLine          // 1
+result.ErrorColumn        // 5  - same unit as ErrorCharIndex, used by LSP
+```
+
+All four point at the same place in the input. They just count it in different units.
+
+Use `ErrorCharIndex` (or `ErrorColumn`) when you're going to feed the number into something that thinks in chars: `string.Substring`, `ReadOnlySpan<char>.Slice`, an LSP diagnostic, a regex offset. That's most production code, because chars are the unit .NET strings index in.
+
+Use `ErrorRuneIndex` when you're working with code points directly. Less common, but it shows up if you're stepping through `Rune.GetRunes(input)` and want to know which scalar value tripped the parser.
+
+Use `ErrorGraphemeIndex` for anything that faces a human. "Error at character 9" is what a person sees on screen. "Error at character 16" would seem to point past the end of what they typed, because they don't think of an emoji as taking up 8 of anything.
+
+Most of the time you won't care, because most input is ASCII and all four numbers are equal. But the moment a user pastes in an emoji, a flag, or a letter with a combining accent, the indices diverge, and "which one do I show in the error message" stops being a question you can ignore. The parser hands you all four and lets you pick.
+
+# What this gets you
+
+Two patterns make up almost all parser-driven programs:
+
+- Walk the tree by dispatching on `.Is(rule)` and recursing through `Children` (or jumping to a named node with `.Find(rule)` / `.FindAll(rule)`).
+- Report parse errors using the deepest-failure position the parser already tracks, in whatever unit the consumer needs. Report semantic errors by name, after lookup.
+
+Both fall out of the rules you set up at grammar-construction time. `.As("name").Preserve()` makes a node findable. `.WithError("...")` upgrades the diagnostic at the spots most likely to be wrong. The grammar describes the shape, the tree shows you what's there, and the four index fields tell you exactly where a problem was, in whatever counting unit fits what you're doing next.

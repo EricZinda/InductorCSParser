@@ -58,7 +58,7 @@ public class AnyTokenRuleTests
             new ParseOptions { InputUnit = InputUnit.Rune, NormalizeInput = null });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(string.Concat(result.Symbols), Is.EqualTo(LatinEAcuteGrapheme));
+        Assert.That(result.ToString(), Is.EqualTo(LatinEAcuteGrapheme));
     }
 
     [Test]
@@ -68,7 +68,7 @@ public class AnyTokenRuleTests
         var result = rule.Parse("anything at all 123 " + GuitarGrapheme);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(string.Concat(result.Symbols),
+        Assert.That(result.ToString(),
             Is.EqualTo("anything at all 123 " + GuitarGrapheme));
     }
 

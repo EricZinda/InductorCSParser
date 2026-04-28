@@ -38,8 +38,8 @@ public class LexerSwitchTests
 
         Assert.That(graphemeResult.Success, Is.True, graphemeResult.ErrorMessage);
         Assert.That(runeResult.Success, Is.True, runeResult.ErrorMessage);
-        Assert.That(string.Concat(graphemeResult.Symbols), Is.EqualTo("hello"));
-        Assert.That(string.Concat(runeResult.Symbols), Is.EqualTo("hello"));
+        Assert.That(graphemeResult.ToString(), Is.EqualTo("hello"));
+        Assert.That(runeResult.ToString(), Is.EqualTo("hello"));
     }
 
     [Test]

@@ -56,7 +56,7 @@ public class DiscardedAtParseTimeTests
         // so its text doesn't appear here. Callers who want the full
         // matched input should keep their own reference to it or run with
         // PreserveAllSymbols=true.
-        Assert.That(string.Concat(result.Symbols), Is.EqualTo("ab"));
+        Assert.That(result.ToString(), Is.EqualTo("ab"));
     }
 
     [Test]
