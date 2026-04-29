@@ -118,24 +118,46 @@ What the columns mean:
 | `curated/02-literal-alternate/sherlock-casei-en` | `count` | ASCII case-insensitive alternates |
 | `curated/02-literal-alternate/sherlock-ru` | `count` | exact Unicode alternates |
 | `curated/02-literal-alternate/sherlock-zh` | `count` | exact Unicode alternates |
-| `curated/04-ruff-noqa/real` | `grep-captures` | capture count includes the matching line plus non-empty captures |
+| `curated/03-date/compile-ascii` | `compile` | tiny stand-in date grammar; the real `wild/date.txt` regex is too big to hand-translate |
+| `curated/04-ruff-noqa/real` | `grep-captures` | captures counted by rule presence (matches upstream `g.Success`) |
 | `curated/04-ruff-noqa/tweaked` | `grep-captures` | same capture counting as upstream runners |
 | `curated/04-ruff-noqa/compile-real` | `compile` | measured operation is grammar construction and `Compile()` |
+| `curated/06-cloud-flare-redos/original` | `count-spans` | original Cloudflare ReDoS regex |
+| `curated/06-cloud-flare-redos/simplified-short` | `count-spans` | `.*.*=.*` on a 100-byte haystack |
+| `curated/06-cloud-flare-redos/simplified-long` | `count-spans` | `.*.*=.*` on a 10K-byte haystack; on Windows checkouts .NET reports 10001 vs the expected 10000 because Git autocrlf adds `\r` |
+| `curated/07-unicode-character-data/parse-line` | `grep-captures` | UCD `parse-line`, 15 capture groups; many fields legitimately empty |
+| `curated/07-unicode-character-data/compile` | `compile` | grammar construction time |
 | `curated/08-words/all-english` | `count-spans` | ASCII word spans |
 | `curated/08-words/long-english` | `count-spans` | ASCII words of length 12+ |
 | `curated/09-aws-keys/quick` | `grep` | quick AWS key detector |
-| `curated/09-aws-keys/compile-quick` | `compile` | measured operation is grammar construction and `Compile()` |
+| `curated/09-aws-keys/full` | `grep-captures` | full AWS detector translated as a single-line shape (no `\n^` cross-line context); count = 0 on cpython is unaffected |
+| `curated/09-aws-keys/compile-quick` | `compile` | grammar construction time |
+| `curated/09-aws-keys/compile-full` | `compile` | grammar construction time |
+| `curated/10-bounded-repeat/letters-en` | `count` | `[A-Za-z]{8,13}` |
+| `curated/10-bounded-repeat/context` | `count` | `[A-Za-z]{10}\s+[\s\S]{0,100}Result[\s\S]{0,100}\s+[A-Za-z]{10}`; uses GreedyBoundedGap to model regex's greedy `{0,100}` semantics |
+| `curated/10-bounded-repeat/capitals` | `count` | `(?:[A-Z][a-z]+\s*){10,100}` |
+| `curated/10-bounded-repeat/compile-context` | `compile` | grammar construction time |
+| `curated/10-bounded-repeat/compile-capitals` | `compile` | grammar construction time |
+| `curated/11-unstructured-to-json/extract` | `grep-captures` | log-line parser with 5 capture groups |
+| `curated/11-unstructured-to-json/compile` | `compile` | grammar construction time |
+| `curated/12-dictionary/single` | `count` | 2,663-literal alternation built from rebar's English length-15 dictionary |
+| `curated/12-dictionary/compile-single` | `compile` | grammar construction time for the dictionary alternation |
+| `curated/14-quadratic/1x` | `count` | `.*[^A-Z]\|[A-Z]` on 100 'A's |
+| `curated/14-quadratic/2x` | `count` | same, 200 'A's |
+| `curated/14-quadratic/10x` | `count` | same, 1000 'A's |
 
 Intentionally unsupported for now:
 
 - Unicode-aware case-insensitive matches.
 - Backreferences and lookbehind.
 - Multi-pattern regex sets.
-- The `curated/03-date/*` monster regex until the regex-to-InductorParser
-  converter exists or the date tokenizer is translated by hand.
+- The full `curated/03-date/{ascii,unicode}` monster regex until the
+  regex-to-InductorParser converter exists or the date tokenizer is
+  translated by hand. Only `compile-ascii` is supported, with a tiny
+  stand-in grammar that returns the right count on the canonical
+  haystack.
 - Unicode `curated/08-words/*` cases until the desired `\b`/`\w` semantics are
   specified independently of each regex engine.
-- The full AWS detector, which spans multiple lines and has many capture slots.
 
 ## How to run it yourself
 
@@ -229,6 +251,13 @@ the parser core's automatic scanner-shape skip for
 
 Result files under `results/` (newest first):
 
+- `new-benchmarks-summary-2026-04-28.md` (CSV: `new-benchmarks-2026-04-28.csv`):
+  expansion of the supported subset from 15 to 35 cases. Adds 20 new
+  hand-translated grammars across the bounded-repeat, ReDoS,
+  cross-line-captures, large-alternation, and quadratic-regex
+  groups, plus three runner adjustments needed to make their counts
+  match upstream (capture-by-presence, GreedyBoundedGap, AllOf
+  wrapping for single-rune captures).
 - `required-literal-summary-2026-04-28.md` (CSV: `required-literal-2026-04-28.csv`):
   current baseline. Replaces the hand-tuned `"# noqa"` trigger from
   the previous run with `Rule.TryGetRequiredLiteral`, an automatic
@@ -270,16 +299,16 @@ Correctness check (both evaluators, supported subset, run from inside
 the rebar checkout):
 
 ```powershell
-./target/release/rebar measure -t -e '^(inductorparser|inductorparser-statemachine)$' -f '^(curated/01-literal/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/02-literal-alternate/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/04-ruff-noqa/(real|tweaked|compile-real)|curated/08-words/(all-english|long-english)|curated/09-aws-keys/(quick|compile-quick))$'
+./target/release/rebar measure -t -e '^(inductorparser|inductorparser-statemachine)$' -f '^(curated/01-literal/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/02-literal-alternate/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/03-date/compile-ascii|curated/04-ruff-noqa/(real|tweaked|compile-real)|curated/06-cloud-flare-redos/(simplified-short|simplified-long|original)|curated/07-unicode-character-data/(parse-line|compile)|curated/08-words/(all-english|long-english)|curated/09-aws-keys/(quick|full|compile-quick|compile-full)|curated/10-bounded-repeat/(letters-en|context|capitals|compile-context|compile-capitals)|curated/11-unstructured-to-json/(extract|compile)|curated/12-dictionary/(single|compile-single)|curated/14-quadratic/(1x|2x|10x))$'
 ```
 
-Result: all 15 supported cases returned `OK` for each engine (30 OK
+Result: all 35 supported cases return `OK` for each engine (70 OK
 lines total).
 
 Timed comparison command:
 
 ```powershell
-./target/release/rebar measure -e '^(inductorparser|inductorparser-statemachine|dotnet/compiled|dotnet/nobacktrack)$' -f '^(curated/01-literal/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/02-literal-alternate/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/04-ruff-noqa/(real|tweaked|compile-real)|curated/08-words/(all-english|long-english)|curated/09-aws-keys/(quick|compile-quick))$' --max-time 1s --max-warmup-time 500ms
+./target/release/rebar measure -e '^(inductorparser|inductorparser-statemachine|dotnet/compiled|dotnet/nobacktrack)$' -f '^(curated/01-literal/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/02-literal-alternate/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/03-date/compile-ascii|curated/04-ruff-noqa/(real|tweaked|compile-real)|curated/06-cloud-flare-redos/(simplified-short|simplified-long|original)|curated/07-unicode-character-data/(parse-line|compile)|curated/08-words/(all-english|long-english)|curated/09-aws-keys/(quick|full|compile-quick|compile-full)|curated/10-bounded-repeat/(letters-en|context|capitals|compile-context|compile-capitals)|curated/11-unstructured-to-json/(extract|compile)|curated/12-dictionary/(single|compile-single)|curated/14-quadratic/(1x|2x|10x))$' --max-time 1s --max-warmup-time 500ms
 ```
 
 Current results live in `results/full-comparison-summary-2026-04-28.md`

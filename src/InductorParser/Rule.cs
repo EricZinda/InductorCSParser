@@ -93,10 +93,47 @@ public abstract class Rule
         return literal.Length > 0;
     }
 
+    // Returns true when every successful match of this rule is guaranteed
+    // to contain at least one of the returned literals as a substring. Use
+    // when no single shared literal can be derived (TryGetRequiredLiteral
+    // returns false) but the rule has a small fixed set of literal-prefix
+    // alternatives. The AWS-keys grammar's FirstOf("ASIA"|"AKIA"|"AROA"|"AIDA")
+    // is the motivating shape: every match contains exactly one of those
+    // four literals, so a multi-substring pre-scan still skips lines that
+    // can't possibly match.
+    //
+    // <paramref name="maxAlternatives"/> caps the returned set size. The
+    // caller picks a cap that makes a multi-substring scan worth it
+    // (8-16 is reasonable for the rebar grep runner; a 2000-literal
+    // dictionary would have selectivity at most 1 in 26 from the
+    // first-rune set and isn't worth pre-filtering with this analysis).
+    // Returns false when no analyzable set exists or when it exceeds the
+    // cap.
+    public bool TryGetRequiredLiteralAlternatives(
+        int maxAlternatives,
+        out IReadOnlyList<(string Text, bool IgnoreCase)> alternatives)
+    {
+        var result = ComputeRequiredLiteralAlternatives();
+        if (result == null || result.Count == 0 || result.Count > maxAlternatives)
+        {
+            alternatives = Array.Empty<(string Text, bool IgnoreCase)>();
+            return false;
+        }
+        alternatives = result;
+        return true;
+    }
+
     // Subclasses override to declare what fixed text every successful
     // match consumes. Default is "no required literal." See the
     // matching override on each composite / leaf rule for specifics.
     internal virtual (string Text, bool IgnoreCase)? ComputeRequiredLiteral() => null;
+
+    // Like ComputeRequiredLiteral, but returns a set of literals when the
+    // rule's structure guarantees every match contains at least one. The
+    // canonical shape this captures is FirstOf(literal-branches): every
+    // branch must succeed via its own literal, so the union across branches
+    // is required. AllOf surfaces a multi-literal child if it has one.
+    internal virtual IReadOnlyList<(string Text, bool IgnoreCase)>? ComputeRequiredLiteralAlternatives() => null;
 
     // Subclasses override when they always consume a fixed-length run
     // of text. AllOf uses this to concatenate consecutive fixed-text

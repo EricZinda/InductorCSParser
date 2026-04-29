@@ -111,6 +111,26 @@ internal sealed class AllOfRule : Rule
         return best;
     }
 
+    // Surface a multi-literal alternative if any single child has one.
+    // The motivating shape is AllOf(FirstOf(L1, L2, L3, L4), other-stuff)
+    // where the FirstOf has all-literal branches: any successful match
+    // of the AllOf still passes through the FirstOf and so contains one
+    // of {L1, L2, L3, L4}. If the AllOf has a long single shared literal
+    // already (the AllOf's ComputeRequiredLiteral picks it up), callers
+    // typically prefer that and never reach this method; this is for
+    // the cases where no single literal is derivable but a child's set
+    // is.
+    internal override IReadOnlyList<(string Text, bool IgnoreCase)>? ComputeRequiredLiteralAlternatives()
+    {
+        foreach (var child in Children)
+        {
+            var childSet = child.ComputeRequiredLiteralAlternatives();
+            if (childSet != null && childSet.Count > 0)
+                return childSet;
+        }
+        return null;
+    }
+
     internal override (string Text, bool IgnoreCase)? ComputeConcatenableText()
     {
         // Only concatenable when every child is concatenable; otherwise

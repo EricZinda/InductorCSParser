@@ -157,7 +157,12 @@ internal static class Program
                     model: "grep-captures",
                     pattern: @"(\s*)((?:# [Nn][Oo][Qq][Aa])(?::\s?(([A-Z]+[0-9]+(?:[,\s]+)?)+))?)",
                     haystack: "# noqa\nx # noqa: F401, E501\npass\n",
-                    expected: 7),
+                    // Line 1 ("# noqa") contributes 3 (match + leadingWS Success
+                    // with 0 chars + noqa); line 2 contributes 5 (match + all
+                    // four captures Success). Mirrors how rebar's other
+                    // grep-captures runners count g.Success regardless of span
+                    // length.
+                    expected: 8),
                 Case("ruff tweaked grep captures",
                     name: "curated/04-ruff-noqa/tweaked",
                     model: "grep-captures",
