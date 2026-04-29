@@ -1,5 +1,7 @@
+using System;
 using NUnit.Framework;
 using InductorParser;
+using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 
@@ -152,5 +154,29 @@ public class NotRuleTests
             "   FAIL | Not: inner matched"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void Sealed_Not_rejects_Flatten()
+    {
+        var rule = Not(Token('a'));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
+    }
+
+    [Test]
+    public void Sealed_Not_rejects_WithError()
+    {
+        var rule = Not(Token('a'));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
+    }
+
+    [Test]
+    public void Sealed_Not_rejects_As()
+    {
+        var rule = Not(Token('a'));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
 }

@@ -1,5 +1,7 @@
+using System;
 using NUnit.Framework;
 using InductorParser;
+using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
@@ -130,5 +132,29 @@ public class NoneOfRuleTests
             "   FAIL | NoneOf: found '5', wanted one not in '[0-9]'"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void Sealed_NoneOf_rejects_Flatten()
+    {
+        var rule = NoneOf("abc");
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
+    }
+
+    [Test]
+    public void Sealed_NoneOf_rejects_WithError()
+    {
+        var rule = NoneOf("abc");
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
+    }
+
+    [Test]
+    public void Sealed_NoneOf_rejects_As()
+    {
+        var rule = NoneOf("abc");
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
 }

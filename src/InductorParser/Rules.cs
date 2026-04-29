@@ -48,7 +48,7 @@ public static class Rules
     /// </summary>
     /// <remarks>
     /// What counts as "one token" depends on the configured lexer.
-    /// Under GraphemeLexer (the default) a token is one grapheme, so
+    /// Under GraphemeLexer (the default) a token is one StringInfo text element, so
     /// <c>Token('a')</c> matches when the grapheme is the single
     /// char 'a' but fails when 'a' is combined with a following
     /// accent (because the grapheme is then two runes). Under
@@ -88,7 +88,7 @@ public static class Rules
     /// <see cref="FlattenType.Delete"/>.
     /// </summary>
     /// <remarks>
-    /// Under GraphemeLexer (the default) a token is one grapheme,
+    /// Under GraphemeLexer (the default) a token is one StringInfo text element,
     /// so this matches when the grapheme at the current position
     /// is exactly the rune <c>r</c> standing alone. It fails when
     /// <c>r</c> is followed by a combining mark or is part of a ZWJ
@@ -113,7 +113,7 @@ public static class Rules
     /// <see cref="FlattenType.Delete"/>.
     /// </summary>
     /// <remarks>
-    /// Under GraphemeLexer (the default) a token is one grapheme,
+    /// Under GraphemeLexer (the default) a token is one StringInfo text element,
     /// so this matches when the grapheme at the current position
     /// is exactly the given rune standing alone. It fails when the
     /// rune is followed by a combining mark or is part of a ZWJ
@@ -144,7 +144,7 @@ public static class Rules
     }
 
     /// <summary>
-    /// Match one grapheme whose content equals the given string.
+    /// Match one Grapheme (StringInfo text element) whose content equals the given string.
     /// Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Delete"/>.
     /// </summary>
@@ -152,12 +152,12 @@ public static class Rules
     /// The string may itself be multi-rune (ZWJ sequences, skin
     /// tone modifiers, etc.). The <see cref="TokenRule"/>
     /// constructor validates at grammar-build time that the string
-    /// is exactly one grapheme.
+    /// is exactly one Grapheme (StringInfo text element).
     ///
-    /// Under GraphemeLexer the input grapheme arrives as a single
+    /// Under GraphemeLexer the input text element arrives as a single
     /// token and this rule matches it in one compare. Under
-    /// RuneLexer the input grapheme arrives as N rune tokens (one
-    /// per rune in the grapheme) and this rule matches them in
+    /// RuneLexer the same text arrives as N rune tokens (one
+    /// per rune) and this rule matches them in
     /// lockstep.
     /// </remarks>
     public static Rule Token(string grapheme) => new TokenRule(grapheme);
@@ -281,13 +281,14 @@ public static class Rules
         new RuneRunRule(set, minimumCount);
 
     /// <summary>
-    /// Match a run of runes up to (but not including) a rune in
-    /// the stopAt set. Default <see cref="FlattenType"/>:
+    /// Match text up to (but not including) a token that starts with a
+    /// rune in the stopAt set. Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
-    /// Consumes at least one rune on success. One leaf that scans
-    /// chars directly, which is a meaningful speedup over
+    /// Succeeds with a possibly empty body: if the stopper is already
+    /// next, the matched text is empty. One leaf scans chars directly,
+    /// which is a meaningful speedup over
     /// <c>ZeroOrMore(NoneOf(stopAt))</c> for long strings.
     /// <code>
     /// // CSV field body: scan until the next comma or newline
@@ -382,8 +383,8 @@ public static class Rules
         new ScanUntilRule(stopAt, escapeStart, escapeEnd);
 
     /// <summary>
-    /// Match any one token (one grapheme under GraphemeLexer, one
-    /// rune under RuneLexer). Default <see cref="FlattenType"/>:
+    /// Match any one token (one StringInfo text element under GraphemeLexer,
+    /// one scalar-value token under RuneLexer). Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
@@ -605,7 +606,7 @@ public static class Rules
         );
 
     /// <summary>
-    /// Match one or more whitespace runes as defined by
+    /// Match one or more single-rune whitespace tokens as defined by
     /// <c>RuneSet.Whitespace</c>. Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Delete"/> (applied by the factory).
     /// </summary>
@@ -616,11 +617,14 @@ public static class Rules
     /// nothing to the tree. Without the override the underlying
     /// <see cref="OneOrMore"/> would default to
     /// <see cref="FlattenType.Flatten"/>.
+    /// Under <see cref="InputUnit.Grapheme"/>, CRLF is one two-rune
+    /// token and therefore is not consumed by this rule; use
+    /// <see cref="EndOfLine"/> for line terminators.
     /// </remarks>
     public static Rule Whitespace() => OneOrMore(OneOf(RuneSet.Whitespace)).Flatten(FlattenType.Delete);
 
     /// <summary>
-    /// Match zero or more whitespace runes. Always succeeds.
+    /// Match zero or more single-rune whitespace tokens. Always succeeds.
     /// Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Delete"/> (applied by the factory).
     /// </summary>
@@ -630,6 +634,9 @@ public static class Rules
     /// the match contributes nothing to the tree. Without the
     /// override the underlying <see cref="ZeroOrMore"/> would
     /// default to <see cref="FlattenType.Flatten"/>.
+    /// Under <see cref="InputUnit.Grapheme"/>, CRLF is one two-rune
+    /// token and therefore is not consumed by this rule; use
+    /// <see cref="EndOfLine"/> for line terminators.
     /// </remarks>
     public static Rule OptionalWhitespace() => ZeroOrMore(OneOf(RuneSet.Whitespace)).Flatten(FlattenType.Delete);
 
@@ -678,8 +685,9 @@ public static class Rules
     public static Rule EndOfLineOrEof() => FirstOf(EndOfLine(), Eof()).Flatten(FlattenType.Delete);
 
     /// <summary>
-    /// Encodes the Unicode definition of a "programming language
-    /// identifier" that would be appropriate worldwide (UAX #31 R1). Default
+    /// Encodes a UAX #31-style "programming language identifier" using
+    /// runtime-backed XID tables plus the pinned exception tables in
+    /// <see cref="RuneSet"/>. Default
     /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>,
     /// so the match appears in the tree as one named node whose
     /// children are the per-rune leaves.
@@ -689,9 +697,10 @@ public static class Rules
     /// first character. UAX #31 calls this a "profile extension":
     /// the base Start property plus language-specific additions.
     /// Typical value for a programming-language grammar is
-    /// <c>RuneSet.Runes("_")</c>, which is what C#, Python, Rust,
-    /// and friends do on top of XID_Start. Defaults to
-    /// <see cref="RuneSet.Empty"/> (strict UAX #31).
+    /// <c>RuneSet.Runes("_")</c>. Python and Rust use this shape; C#
+    /// also permits leading underscores, though its full identifier
+    /// specification differs. Defaults to
+    /// <see cref="RuneSet.Empty"/> (the base UAX #31-style profile).
     /// </param>
     /// <param name="extraBodyRunes">
     /// Runes to union into <see cref="RuneSet.XidContinue"/> for
@@ -704,12 +713,13 @@ public static class Rules
     /// The same word can be typed more than one way. "café" might be
     /// stored with a single precomposed "é", or with a plain "e"
     /// followed by a combining accent mark drawn on top. Both look
-    /// identical in an editor but differ byte-for-byte. By default
+    /// identical in an editor but use different Unicode scalar sequences. By default
     /// the parser treats them as the same identifier, so a grammar
     /// doesn't have to care which form it gets.
     /// <para>
     /// Pass <c>NormalizeInput = null</c> on
-    /// <see cref="ParseOptions"/> to match bytes as-written. Pass
+    /// <see cref="ParseOptions"/> to match the input string as written,
+    /// without canonical or compatibility normalization. Pass
     /// <c>NormalizationForm.FormKC</c> for a stronger rule that also
     /// treats fullwidth <c>ｆｏｏ</c> and plain <c>foo</c>, or the
     /// ligature <c>ﬀ</c> and <c>ff</c>, as the same identifier.
@@ -746,7 +756,7 @@ public static class Rules
     /// Reads one token from the lexer and runs <paramref name="innerRule"/>
     /// against the runes inside that token. Under
     /// <see cref="InputUnit.Grapheme"/> (the default) the token is a
-    /// grapheme cluster that may span several runes, and the inner rule
+    /// StringInfo text element that may span several runes, and the inner rule
     /// walks them one at a time. Under <see cref="InputUnit.Rune"/> the
     /// token is already one rune, so the inner rule sees a single-rune
     /// stream and behaves as it would outside the wrapper. Default
@@ -772,7 +782,8 @@ public static class Rules
     /// One leaf Symbol is emitted per successful match, representing the
     /// whole grapheme. Inner-rule symbols are discarded. Inner-rule
     /// tracing is not propagated to the outer trace. The inner parse is
-    /// bounded by the grapheme's rune count, so runaway is impossible.
+    /// bounded to the grapheme's rune span, but the sub-lexer does not
+    /// share the outer parse's trace or budget counters.
     /// </para>
     /// </remarks>
     public static Rule WithinGrapheme(Rule innerRule) => new WithinGraphemeRule(innerRule);

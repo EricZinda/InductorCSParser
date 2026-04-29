@@ -1,6 +1,7 @@
 using System;
 using NUnit.Framework;
 using InductorParser;
+using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 
@@ -188,5 +189,29 @@ public class BetweenInclusiveRuleTests
             "   FAIL | BetweenInclusive[2..4]: count= 1"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void Sealed_BetweenInclusive_rejects_Flatten()
+    {
+        var rule = BetweenInclusive(1, 5, Token('a'));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
+    }
+
+    [Test]
+    public void Sealed_BetweenInclusive_rejects_WithError()
+    {
+        var rule = BetweenInclusive(1, 5, Token('a'));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
+    }
+
+    [Test]
+    public void Sealed_BetweenInclusive_rejects_As()
+    {
+        var rule = BetweenInclusive(1, 5, Token('a'));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
 }

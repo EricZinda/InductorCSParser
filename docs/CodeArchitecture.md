@@ -34,9 +34,9 @@ Test projects are different. `InductorParser.Tests` can target `net8.0` because 
 
 These are capabilities the C++ version has that the C# port will deliberately drop or push out to the host.
 
-No file loading inside the core library. The C++ `Compiler::CompileDocument` takes a file path and opens it. The C# version cannot do this on WebGL, so file loading becomes the host's job. The `Compiler` class will take a string or a `Stream` or a `TextReader`, and the host is responsible for getting bytes off disk (or out of IndexedDB, or off the network) and handing them in.
+No file loading inside the core library. The C++ `Compiler::CompileDocument` takes a file path and opens it. The C# version cannot do this on WebGL, so file loading becomes the host's job. The current core API takes a decoded `string` through `Rule.Parse`; the host is responsible for getting bytes off disk (or out of IndexedDB, or off the network), decoding them, and handing the resulting text in.
 
-No native debug logging hooks. The C++ version has `iOS/` and `Win/` platform directories for debug output. In C# that is replaced by a single `ITraceSink` interface (or just an `Action<string>` callback) that the host wires up to whatever logging it has. Unity has `Debug.Log`, `dotnet test` has `Console.Out`, and the library does not need to know the difference.
+No native debug logging hooks. The C++ version has `iOS/` and `Win/` platform directories for debug output. In C# that is replaced by a `TextWriter?` on `ParseOptions` that the host wires up to whatever logging it has. Unity can adapt this to `Debug.Log`, `dotnet test` can use `Console.Out` or a `StringWriter`, and the library does not need to know the difference.
 
 No `FailFastAssert` that aborts the process. Aborting the process is fine in a game binary that owns its main function, but a library embedded in the Unity Editor cannot take down the host. Assertions become exceptions. The library throws on contract violations and lets the host decide what to do.
 
@@ -44,48 +44,20 @@ No threads spawned by the parser. The C++ version is already single-threaded for
 
 ## What the Port Has To Do
 
-Translate C++ templates to something Unity-friendly. This is the part that actually hurts. The C++ library uses templates extensively, and templates in C++ are a compile-time code generation mechanism. C# generics are a runtime mechanism with a different model, different capabilities, and different failure modes. Some patterns translate directly (a simple `AndExpression<T1, T2>` becomes `AndExpression<T1, T2>` with similar meaning). Other patterns do not. In particular, the C++ version uses a variadic-ish `Args` wrapper to work around the lack of variadic templates in the C++ version it was written for, and passes non-type template parameters like `FlattenType::Flatten` and numeric symbol IDs. C# generics do not support non-type generic parameters the way C++ templates do, and C# does not have variadic generics at all.
+Translate C++ templates to something Unity-friendly: The C++ library uses templates extensively, and templates in C++ are a compile-time code generation mechanism. C# generics are a runtime mechanism with a different model, different capabilities, and different failure modes. Some patterns translate directly (a simple `AndExpression<T1, T2>` becomes `AndExpression<T1, T2>` with similar meaning). Other patterns do not. In particular, the C++ version uses a variadic-ish `Args` wrapper to work around the lack of variadic templates in the C++ version it was written for, and passes non-type template parameters like `FlattenType::Flatten` and numeric symbol IDs. C# generics do not support non-type generic parameters the way C++ templates do, and C# does not have variadic generics at all.
 
-The port will almost certainly have to change the grammar-authoring style. Instead of:
+We need to preserve the tree shape and the flattening semantics. Whatever the grammar-authoring surface looks like, the resulting tree has to behave like the C++ one: custom IDs, `FlattenType::Flatten` / `Delete` / `None`, and `ToString()` recovering the original text. The one deliberate deviation is that `Parse` applies the flatten pass before returning, so the default `Tree` is the syntax tree. C++ callers did this explicitly via `FlattenInto`. Pass `ParseOptions.PreserveAllSymbols` for the C++-shaped raw tree when you need it. Downstream compilers written against the C++ version translate mechanically, just against the already-flattened tree.
 
-```cpp
-class NameValueRule : public
-    AndExpression<Args<
-        OneOrMoreExpression<CharacterSetSymbol<Chars>, FlattenType::None, MySymbolID::SettingName>,
-        OptionalWhitespaceSymbol<>,
-        CharacterSymbol<EqualString>,
-        ...
-    >> {};
-```
+Preserve the tracing story. The C++ version has very verbose parser tracing you can turn on with `SetTraceFilter(SystemTraceType::Parsing, TraceDetail::Diagnostic)`, and it is the main debugging tool for grammars. The C# port routes equivalent trace output through `ParseOptions.TraceSink`. This should not use `System.Diagnostics.Trace` because that has IL2CPP baggage and is noisy on Unity.
 
-the C# version will likely use a builder or fluent API that produces the same rule tree at runtime:
-
-```csharp
-public static readonly Rule NameValueRule =
-    AllOf(
-        OneOrMore(CharacterSet(Chars)).As(MySymbolID.SettingName),
-        OptionalWhitespace(),
-        Character('='),
-        ...
-    );
-```
-
-This is a judgment call we will revisit once the first real rule is ported. The alternative is to write a source generator that produces the rule tree from declarative attributes, but source generators run at Roslyn compile time, not inside Unity's IL2CPP pipeline, so they would have to be wired in on the upstream `.csproj` side. That is workable, but adds a second code path that can disagree with the runtime one. The builder approach is simpler and directly maps to the existing tree the parser already builds.
-
-Either way, the grammar surface area is the biggest design question in the port, and nothing else makes sense until it is answered.
-
-Preserve the tree shape and the flattening semantics. Whatever the grammar-authoring surface looks like, the resulting tree has to behave like the C++ one: custom IDs, `FlattenType::Flatten` / `Delete` / `None`, and `ToString()` recovering the original text. The one deliberate deviation is that `Parse` applies the flatten pass before returning, so the default `Tree` is the syntax tree. C++ callers did this explicitly via `FlattenInto`. Pass `ParseOptions.PreserveAllSymbols` for the C++-shaped raw tree when you need it. Downstream compilers written against the C++ version translate mechanically, just against the already-flattened tree.
-
-Preserve the tracing story. The C++ version has very verbose parser tracing you can turn on with `SetTraceFilter(SystemTraceType::Parsing, TraceDetail::Diagnostic)`, and it is the main debugging tool for grammars. The C# port needs an equivalent, routed through whatever `ITraceSink` the host provides. This should not use `System.Diagnostics.Trace` because that has IL2CPP baggage and is noisy on Unity.
-
-Preserve the error reporting heuristic. The "deepest failure wins" heuristic is small but load-bearing. It has to come over intact.
+Preserve the error reporting heuristic. The "deepest failure wins" heuristic is very useful. It has to come over intact.
 
 ## Assembly Layout
 
 ```
 src/
   InductorParser/                      # netstandard2.1 class library (no Unity)
-    InductorParser.csproj              #   lexer, parser rules, compiler, tracing
+    InductorParser.csproj              #   lexer, parser rules, syntax tree, tracing
   InductorParser.Tests/                # net8.0, dotnet test only
     InductorParser.Tests.csproj
 ```
@@ -105,7 +77,7 @@ The library never references `UnityEngine` or `UnityEditor`. This is what makes 
 
 ## Async and Threading
 
-The parser itself is synchronous. You hand it a string, it returns a tree. There is no `Task` in the public surface because there is nothing to await: parsing is CPU-bound. The compiler layer, which in the C++ version reads files from disk, also stays synchronous in its core API. If a host wants to load a file asynchronously, it does so before calling into the library and hands in the string.
+The parser itself is synchronous. You hand it a string, it returns a tree. There is no `Task` in the public surface because there is nothing to await: parsing is CPU-bound. If a host wants to load a file asynchronously, it does so before calling into the library and hands in the string.
 
 This is deliberate. Introducing `async Task<Symbol> ParseAsync(...)` in the core would force every caller to drag the `async` state machine through their code for no benefit. It also avoids any accidental use of `Task.Run` or `ConfigureAwait(false)` on WebGL, where the scheduler cannot support them.
 
@@ -113,21 +85,26 @@ If future work needs async I/O (streaming a very large document, say), the shape
 
 ## Dependency Injection
 
-The library exposes interfaces for anything the host has to provide:
+The library uses BCL types instead of bespoke interfaces for anything the host has to provide:
 
 ```csharp
-public interface ITraceSink { void Write(string category, string message); }
-public interface IReadableSource { string ReadToEnd(); }   // if needed
+public sealed class ParseOptions
+{
+    public TextWriter? TraceSink { get; set; }
+    // ... other options
+}
 ```
 
-These are constructor-injected into the `Compiler` and `Lexer`. The library does not depend on VContainer or any other DI framework. Tests wire them up by hand. Unity hosts wire them up through VContainer (matching how UnityTabs does it) or through a simple static registration, whichever the host prefers. The library does not care.
+`TextWriter?` (set to `Console.Out`, a `StringWriter`, a file writer, or null for off) is the trace sink. There is no `ITraceSink` abstraction because every plausible sink is already a `TextWriter`, and the BCL type means callers can pipe trace output through anything that accepts text. File loading is similarly the host's job and not part of the library's surface: the host calls `File.ReadAllText(...)` (or whatever its environment supports) and hands the string to `Rule.Parse`.
+
+The library does not depend on VContainer or any other DI framework. The current public surface is a static `Rules` class plus the `Rule`, `ParseOptions`, and `ParseResult` types, so there is no constructor to inject into. If a future revision adds a `Compiler<T>` base class, it would take its dependencies as plain constructor parameters, no container required.
 
 ## Performance
 
-The C++ version's `readme.md` already warns that debug builds are dramatically slower than retail builds because of extra error checking. The C# port will have a similar story: debug-mode tracing and the Roslyn debug build both make parsing noticeably slower. Measure on a release build before declaring the C# port "slow."
+The C++ version's `readme.md` already warns that debug builds are dramatically slower than retail builds because of extra error checking. The C# port will have a similar story: debug-mode tracing and the Roslyn debug build both make parsing noticeably slower. 
 
 One known risk: the C++ version leans on value types and stack allocation for a lot of its inner-loop state. C# will put more of that on the GC heap by default. The port should prefer `struct` for small, short-lived state objects (lexer transactions, position markers) and avoid allocating per-character. `Symbol` nodes are reference types and always will be, but the bookkeeping around them should not allocate if it does not have to. Whether this matters in practice is a measurement question, not a design question. Start simple, profile, and tighten the hot paths that actually show up.
 
 ## What This Document Is Not
 
-This is not a line-by-line port plan. It does not decide which test framework to use (NUnit to match UnityTabs, probably), it does not decide on the final grammar-authoring syntax, and it does not enumerate every C++ file and its C# counterpart. Those decisions happen during the port itself, once we have one real grammar working end to end. The point of this document is to make the constraints explicit so none of those decisions accidentally paint us into a corner where the library runs on desktop and dies on WebGL.
+This is not a line-by-line port plan. It does not decide which test framework to use, it does not decide on the final grammar-authoring syntax, and it does not enumerate every C++ file and its C# counterpart. Those decisions happen during the port itself, once we have one real grammar working end to end. The point of this document is to make the constraints explicit so none of those decisions accidentally paint us into a corner where the library runs on desktop and dies on WebGL.

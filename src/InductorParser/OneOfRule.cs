@@ -10,6 +10,11 @@ namespace InductorParser;
 // a single code point. EOF also fails. NoneOfRule is the mirror:
 // same rule, opposite membership test (one rune whose value is NOT
 // in the set).
+//
+// Tests live in src/InductorParser.Tests/Rules/OneOfRuleTests.cs.
+// See docs/TestArchitecture.md for the per-rule test conventions
+// (success, failure position, WithError propagation, positional fallback,
+// sealed-rule rejection).
 internal sealed class OneOfRule : Rule
 {
     private readonly RuneSet _set;

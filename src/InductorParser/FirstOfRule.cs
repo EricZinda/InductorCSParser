@@ -9,6 +9,11 @@ namespace InductorParser;
 // If none match, the FirstOf fails. Each child attempt runs in its own
 // transaction so a failed alternative leaves the lexer where it was
 // before FirstOf was called.
+//
+// Tests live in src/InductorParser.Tests/Rules/FirstOfRuleTests.cs.
+// See docs/TestArchitecture.md for the per-rule test conventions
+// (success, failure position, WithError propagation, positional fallback,
+// sealed-rule rejection).
 internal sealed class FirstOfRule : Rule
 {
     public FirstOfRule(Rule[] children) : base(FlattenType.Flatten, children) { }

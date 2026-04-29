@@ -1,7 +1,7 @@
 namespace InductorParser;
 
 // Classifies a rule by what a successful match does to the lexer.
-// Always:    every success path advances the lexer by at least one rune.
+// Always:    every success path advances the lexer past the lookahead token.
 // Sometimes: success paths split (some advance, some don't).
 // Never:     no success path advances the lexer. i.e. Zero-width predicates
 //            (Peek, Not) and Eof.

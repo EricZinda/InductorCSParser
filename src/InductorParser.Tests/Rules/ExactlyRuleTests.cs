@@ -1,5 +1,7 @@
+using System;
 using NUnit.Framework;
 using InductorParser;
+using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 
@@ -139,5 +141,29 @@ public class ExactlyRuleTests
             "   FAIL | Exactly[3]: count= 0"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void Sealed_Exactly_rejects_Flatten()
+    {
+        var rule = Exactly(3, Token('a'));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
+    }
+
+    [Test]
+    public void Sealed_Exactly_rejects_WithError()
+    {
+        var rule = Exactly(3, Token('a'));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
+    }
+
+    [Test]
+    public void Sealed_Exactly_rejects_As()
+    {
+        var rule = Exactly(3, Token('a'));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
 }

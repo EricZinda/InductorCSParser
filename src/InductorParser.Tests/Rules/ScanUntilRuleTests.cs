@@ -1,3 +1,4 @@
+using System;
 using System.Text;
 using NUnit.Framework;
 using InductorParser;
@@ -368,5 +369,29 @@ public class ScanUntilRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo(input));
+    }
+
+    [Test]
+    public void Sealed_ScanUntil_rejects_Flatten()
+    {
+        var rule = ScanUntil(RuneSet.Runes("|"));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
+    }
+
+    [Test]
+    public void Sealed_ScanUntil_rejects_WithError()
+    {
+        var rule = ScanUntil(RuneSet.Runes("|"));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
+    }
+
+    [Test]
+    public void Sealed_ScanUntil_rejects_As()
+    {
+        var rule = ScanUntil(RuneSet.Runes("|"));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
 }

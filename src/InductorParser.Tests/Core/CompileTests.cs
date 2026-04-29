@@ -3,43 +3,20 @@ using NUnit.Framework;
 using InductorParser;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
-using static InductorParser.Rules;
 
 namespace InductorParser.Tests;
 
 // Tests for the Rule.Compile lifecycle: once a rule has been compiled, the
-// graph is sealed and structural modifiers are rejected. Id assignment is a
-// separate aspect of Compile and lives in IdAssignmentTests.
+// graph is sealed and structural modifiers are rejected. The seal applies
+// to every concrete rule type; the per-rule tests in
+// src/InductorParser.Tests/Rules/<RuleName>Tests.cs verify the sealing
+// works for each one in turn (universal requirement #5 in
+// docs/TestArchitecture.md). This file covers what's left over: the
+// internal Compile-time RuleStartRequirements consistency check, plus
+// id assignment lives in IdAssignmentTests.
 [TestFixture]
 public class CompileTests
 {
-    [Test]
-    public void Sealed_rule_rejects_Flatten()
-    {
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
-        rule.Compile();
-
-        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
-    }
-
-    [Test]
-    public void Sealed_rule_rejects_WithError()
-    {
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
-        rule.Compile();
-
-        Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
-    }
-
-    [Test]
-    public void Sealed_rule_rejects_As()
-    {
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
-        rule.Compile();
-
-        Assert.Throws<InvalidOperationException>(() => rule.As("late"));
-    }
-
     [Test]
     public void Compile_throws_when_a_rule_reports_Advance_Never_with_non_empty_FirstConsumedRunes()
     {

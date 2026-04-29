@@ -5,12 +5,13 @@ namespace InductorParser;
 // content (emoji ZWJ sequences, combining-mark accents, CRLF, regional-
 // indicator flags) shows up to the grammar.
 //
-//   Grapheme - GraphemeLexer. One Token = one user-perceived character
-//       (UAX #29 grapheme cluster). 👨‍👩‍👧‍👦 arrives as a single Token
+//   Grapheme - GraphemeLexer. One Token = one user perceived character
+//          = one StringInfo text element
+//       (UAX #29-style grapheme cluster on modern .NET). 👨‍👩‍👧‍👦 arrives as a single Token
 //       whose Chars span is all seven runes of the family-emoji ZWJ
 //       sequence, "é" arrives as one Token containing both runes,
 //       and "\r\n" arrives as one Token. This is the default because
-//       it matches the unit users actually type and read.
+//       it usually matches the unit users actually type and read.
 //
 //   Rune - RuneLexer. One Token = one Unicode scalar value. The same
 //       family emoji arrives as seven separate Tokens, "é" as

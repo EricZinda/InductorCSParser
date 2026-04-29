@@ -1,16 +1,22 @@
 The Inductor Parser (IP) is a loose port of the [Inductor C++ Parser](https://github.com/EricZinda/InductorParser), designed for C#. I ported this as part of a Unity editor project, and during a period where I've been subjected to way too many Claude generated Regex's I had to review. My goal is to design a parser library that is:
 
-- **Designed for World Languages:** From the Lexer, to the built-in rules, to the defaults it is designed around Unicode to make grammars parse world languages well by default.
+- **Designed for World Languages:** From the default lexer, to the built-in rules, to normalization, it is designed around Unicode so grammars have a good starting point for world-language text.
 - **More Readable than Regex:** The grammars are self-describing and human readable so they can be reasoned about, code reviewed and understood without looking up obscure letters and symbols. 
 - **Safer Against Pathological Input:** It is designed to avoid "catastrophic backtracking" and pitfalls like it that can hang your app, blow your stack, etc.
-- **Able to run on WebGL and .NET Standard 2.1 (and later) using IL2CPP ** and doesn't use Reflection.Emit or threads so that it can run in Unity targeting WebGL or IL2CPP on iPhone
+- **Able to run on WebGL and .NET Standard 2.1 (and later) using IL2CPP** and doesn't use Reflection.Emit or threads so that it can run in Unity targeting WebGL or IL2CPP on iPhone
 - **Fast enough to be used in production**
+
+If you just want to learn how to use it, follow the primers:
+
+- [Primer 1: Getting Started](docs/primer1.md)
+- [Primer 2: Walking the Tree](docs/primer2.md)
+- [Tutorial: Peek](docs/tutorial-peek.md)
 
 ## Designed for World Languages
 If you write grammars in Inductor Parser, you get a foundation that helps you support Unicode from the start:
 
-- Each token presented to a rule is a Unicode *Grapheme Cluster* which represents characters [*as the user perceives them*](https://www.unicode.org/reports/tr29/#Grapheme_Cluster_Boundaries). This means you don't have to wonder if your grammar will break or improperly slice apart characters in a file with non-ASCII or (gasp) *emojis* in it.  
-- Built-in rules use Unicode definitions for things like "whitespace" and "identifiers" so you don't miss corner cases.
+- By default, each token presented to a rule is a .NET `StringInfo` text element, which follows Unicode grapheme-cluster behavior on modern .NET and keeps ordinary grammars from slicing apart non-ASCII text or emoji sequences accidentally.
+- Built-in rules use Unicode-aware definitions for things like "whitespace" and "identifiers" so you don't miss common corner cases.
 - The parser defaults to normalizing input so that characters that can be written as multiple things in Unicode get normalized to one (and the error indexes reverse this so errors point to the right place in the original text)
 
 You can also pretend you never heard the word "Grapheme Cluster" and write rules naturally: it will still give you the right base to start from!
@@ -21,7 +27,7 @@ Here's a grammar for reading a simple setting, and examples that show how it han
 // Parse: Key = Value (e.g. Foo=5, Bar = 1.05, Goo = "some string")
 var settingName = Identifier().As("name");
 
-// "Rune" is the .Net term for Unicode Code Point
+// "Rune" is the .NET term for Unicode code point
 var quotedString = AllOf(
     Token('"'),
     ScanUntil(stopAt=RuneSet.Runes("\"")),
@@ -44,7 +50,7 @@ var document = AllOf(
 // Easy default case
 var result = document.Parse("setting = 5"); // name: "setting", value: "5"
 
-// Identifier() follows UAX #31, so anything Unicode calls a letter works
+// Identifier() follows UAX #31 identifier rules, so names from many scripts work
 document.Parse("Γειά = 5");    // name: "Γειά",    value: "5"
 document.Parse("привет = 1");  // name: "привет",  value: "1"
 document.Parse("你好 = 1");    // name: "你好",     value: "1"
@@ -169,6 +175,4 @@ The [Parlot](https://github.com/sebastienros/parlot) project had a great benchma
 
 ### Results from 04/24/2026
 [![alt text](src/Benchmarks/Benchmark04242026.jpg)](src/Benchmarks/Benchmark04242026.jpg)
-
-
 

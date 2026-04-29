@@ -124,4 +124,28 @@ public class OptionalRuleTests
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
+
+    [Test]
+    public void Sealed_Optional_rejects_Flatten()
+    {
+        var rule = Optional(Token('a'));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
+    }
+
+    [Test]
+    public void Sealed_Optional_rejects_WithError()
+    {
+        var rule = Optional(Token('a'));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
+    }
+
+    [Test]
+    public void Sealed_Optional_rejects_As()
+    {
+        var rule = Optional(Token('a'));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.As("late"));
+    }
 }

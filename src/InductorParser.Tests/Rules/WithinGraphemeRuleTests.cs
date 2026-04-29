@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
@@ -189,5 +190,29 @@ public class WithinGraphemeRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("كَ"));
+    }
+
+    [Test]
+    public void Sealed_WithinGrapheme_rejects_Flatten()
+    {
+        var rule = WithinGrapheme(Token('a'));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
+    }
+
+    [Test]
+    public void Sealed_WithinGrapheme_rejects_WithError()
+    {
+        var rule = WithinGrapheme(Token('a'));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
+    }
+
+    [Test]
+    public void Sealed_WithinGrapheme_rejects_As()
+    {
+        var rule = WithinGrapheme(Token('a'));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
 }

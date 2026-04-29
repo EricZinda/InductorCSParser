@@ -125,8 +125,7 @@ public class BudgetTests
     {
         // Same 5000-Token workload that trips Timeout = 1 tick in the
         // test above. Setting Timeout to Zero means "no deadline,"
-        // matching RuleCountLimit = 0 and MaxDepth = 0. The Stopwatch
-        // isn't even allocated.
+        // matching RuleCountLimit = 0 and MaxDepth = 0.
         var rule = OneOrMore(OneOf(RuneSet.Letters));
         var options = new ParseOptions
         {

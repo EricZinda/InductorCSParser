@@ -39,6 +39,11 @@ namespace InductorParser;
 // (AllOfRule, FirstOfRule, TokenRule, etc.) subclass it. User code can subclass
 // Rule too if it needs matching logic the built-in rules can't express.
 // See TryParseRule below for the full subclass contract.
+//
+// Per-rule tests live in src/InductorParser.Tests/Rules/<RuleName>Tests.cs.
+// See docs/TestArchitecture.md for the per-rule test conventions
+// (success, failure position, WithError propagation, positional fallback,
+// sealed-rule rejection) every concrete subclass must cover.
 public abstract class Rule
 {
     // See below for description
@@ -300,6 +305,8 @@ public abstract class Rule
     // Id assignment runs in three passes:
     //   1. Pinned ids first. Rules that called .As(SymbolId) keep the id
     //      they were given, and that id is reserved against later passes.
+    //      Compile trusts explicit pins: if two rules pin the same
+    //      SymbolId, both keep it.
     //   2. Named rules get a hash-of-name id in the custom range. If the
     //      hash slot is already taken (by a pinned id or an earlier named
     //      rule), the id linear-probes upward until it finds an empty
@@ -415,11 +422,10 @@ public abstract class Rule
         // Normalize before the lexer sees the input so grammars written
         // against one composition form also match the other. The common
         // case (input already in the target form, essentially all typed
-        // and web-sourced text) costs a single IsNormalized short-circuit
-        // inside String.Normalize and returns the same reference, so no
-        // allocation and no downstream translation. Null means "skip
-        // normalization entirely," which trades the safety net for
-        // byte-exact round-trippability.
+        // and web-sourced text) is usually just a normalization scan. If
+        // normalization returns the original string reference, downstream position
+        // translation is skipped. Null means "skip normalization entirely,"
+        // which trades the safety net for character-exact round-trippability.
         string parseInput = options.NormalizeInput.HasValue
             ? input.Normalize(options.NormalizeInput.Value)
             : input;
@@ -459,7 +465,7 @@ public abstract class Rule
             int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, options.NormalizeInput);
             return ParseResult.Failed(failurePos, BuildErrorMessage(lexer, pos), input, this);
         }
-        if (!lexer.IsEof)
+        if (!options.AllowTrailingInput && !lexer.IsEof)
         {
             var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
             int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, options.NormalizeInput);
