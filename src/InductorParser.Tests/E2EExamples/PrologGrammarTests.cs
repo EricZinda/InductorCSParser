@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using InductorParser;
 using NUnit.Framework;
+using static InductorParser.Tests.TestHelpers;
 
 namespace InductorParser.Tests;
 
@@ -564,41 +565,4 @@ public class PrologGrammarTests
             result.Success ? "" : $"col {result.ErrorCharIndex}: {result.ErrorMessage}");
     }
 
-    private static void AssertAllParse(Rule rule, string[] corpus, string label)
-    {
-        var rejected = new List<string>();
-        foreach (var input in corpus)
-        {
-            var result = rule.Parse(input);
-            if (!result.Success)
-                rejected.Add($"  {Display(input)} (col {result.ErrorCharIndex}: {result.ErrorMessage})");
-        }
-        if (rejected.Count > 0)
-            Assert.Fail(
-                $"{label} grammar rejected {rejected.Count} valid input(s):\n"
-                + string.Join("\n", rejected));
-    }
-
-    private static void AssertAllReject(Rule rule, string[] corpus, string label)
-    {
-        var accepted = new List<string>();
-        foreach (var input in corpus)
-        {
-            if (rule.Parse(input).Success)
-                accepted.Add(Display(input));
-        }
-        if (accepted.Count > 0)
-            Assert.Fail(
-                $"{label} grammar accepted {accepted.Count} invalid input(s):\n  "
-                + string.Join("\n  ", accepted));
-    }
-
-    private static string Display(string input)
-    {
-        return "\"" + input
-            .Replace("\\", "\\\\")
-            .Replace("\n", "\\n")
-            .Replace("\r", "\\r")
-            .Replace("\t", "\\t") + "\"";
-    }
 }

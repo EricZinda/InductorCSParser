@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using InductorParser;
 using NUnit.Framework;
+using static InductorParser.Tests.TestHelpers;
 
 namespace InductorParser.Tests;
 
@@ -252,29 +253,4 @@ public class PrologGrammarHtnCorpusTests
         AssertAllParse(PrologGrammar.Htn.Query, HtnQueries, "Htn.Query");
     }
 
-    private static void AssertAllParse(Rule rule, string[] corpus, string label)
-    {
-        var rejected = new List<string>();
-        foreach (var input in corpus)
-        {
-            var result = rule.Parse(input);
-            if (!result.Success)
-                rejected.Add($"  {Display(input)} (col {result.ErrorCharIndex}: {result.ErrorMessage})");
-        }
-        if (rejected.Count > 0)
-            Assert.Fail(
-                $"{label} grammar rejected {rejected.Count} of {corpus.Length} valid input(s):\n"
-                + string.Join("\n", rejected));
-    }
-
-    private static string Display(string input)
-    {
-        var maxLen = 200;
-        var displayed = input.Length > maxLen ? input.Substring(0, maxLen) + "..." : input;
-        return "\"" + displayed
-            .Replace("\\", "\\\\")
-            .Replace("\n", "\\n")
-            .Replace("\r", "\\r")
-            .Replace("\t", "\\t") + "\"";
-    }
 }
