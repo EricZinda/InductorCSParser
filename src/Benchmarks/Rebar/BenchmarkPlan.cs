@@ -21,13 +21,23 @@ internal sealed class BenchmarkPlan
     private readonly Rule _match;
     private readonly IReadOnlyList<Rule> _captures;
     private readonly bool _useStateMachine;
+    private readonly string? _grepTrigger;
+    private readonly StringComparison _grepTriggerComparison;
 
-    public BenchmarkPlan(Rule scanner, Rule match, IReadOnlyList<Rule> captures, bool useStateMachine)
+    public BenchmarkPlan(
+        Rule scanner,
+        Rule match,
+        IReadOnlyList<Rule> captures,
+        bool useStateMachine,
+        string? grepTrigger = null,
+        StringComparison grepTriggerComparison = StringComparison.Ordinal)
     {
         _scanner = scanner;
         _match = match;
         _captures = captures;
         _useStateMachine = useStateMachine;
+        _grepTrigger = grepTrigger;
+        _grepTriggerComparison = grepTriggerComparison;
     }
 
     public long Count(string haystack, string model)
@@ -61,7 +71,7 @@ internal sealed class BenchmarkPlan
     private long CountMatchingLines(string haystack)
     {
         long total = 0;
-        foreach (var line in Lines(haystack))
+        foreach (var line in CandidateLines(haystack))
         {
             var result = Parse(line);
             if (result.Tree!.Find(_match) != null)
@@ -73,7 +83,7 @@ internal sealed class BenchmarkPlan
     private long CountGrepCaptures(string haystack)
     {
         long total = 0;
-        foreach (var line in Lines(haystack))
+        foreach (var line in CandidateLines(haystack))
         {
             var result = Parse(line);
             foreach (var match in result.Tree!.FindAll(_match))
@@ -88,6 +98,45 @@ internal sealed class BenchmarkPlan
             }
         }
         return total;
+    }
+
+    // When the grammar provides a trigger literal that must appear in any
+    // matching line (e.g. "# noqa" for the ruff-noqa benchmarks), skip
+    // straight to lines that contain the trigger via a single BCL
+    // substring search per match position. On a 32MB haystack with
+    // matches on ~0.01% of lines this turns 400K parses into a few dozen.
+    // Without a trigger, fall back to walking every line, which is what
+    // the runner did originally and is the only correct path when the
+    // grammar's match shape doesn't have a guaranteed literal prefix.
+    private IEnumerable<string> CandidateLines(string haystack)
+    {
+        if (_grepTrigger == null || _grepTrigger.Length == 0)
+        {
+            foreach (var line in Lines(haystack))
+                yield return line;
+            yield break;
+        }
+
+        int position = 0;
+        while (position < haystack.Length)
+        {
+            int hit = haystack.IndexOf(_grepTrigger, position, _grepTriggerComparison);
+            if (hit < 0) yield break;
+
+            // Find the line bounds enclosing the trigger hit.
+            int lineStart = haystack.LastIndexOf('\n', hit);
+            lineStart = lineStart < 0 ? 0 : lineStart + 1;
+
+            int lineEnd = hit;
+            while (lineEnd < haystack.Length && haystack[lineEnd] != '\n' && haystack[lineEnd] != '\r')
+                lineEnd++;
+
+            yield return haystack.Substring(lineStart, lineEnd - lineStart);
+
+            // Skip past this entire line so a second trigger hit on the
+            // same line doesn't cause us to parse and emit captures twice.
+            position = lineEnd + 1;
+        }
     }
 
     private ParseResult Parse(string input)
@@ -194,7 +243,34 @@ internal static class BenchmarkRegistry
             AnyToken().Flatten(FlattenType.Delete)
         )).As("scan").Flatten(FlattenType.Preserve);
         scanner.Compile();
-        return new BenchmarkPlan(scanner, grammar.Match, grammar.Captures, useStateMachine);
+
+        // Ask the match rule for a required literal that any successful
+        // match must contain. When the analysis finds one (e.g. "# noqa"
+        // for the ruff-noqa grammars, derived automatically from the
+        // AllOf(Literal("# "), OneOf("Nn"), OneOf("Oo"), ...) shape),
+        // the grep / grep-captures path uses one BCL substring search
+        // across the haystack to skip lines that can't possibly match
+        // before invoking the parser line by line. When no literal can
+        // be derived (e.g. the AWS-keys grammar's four-prefix
+        // alternation has no shared substring), the runner falls back
+        // to walking every line.
+        string? grepTrigger = null;
+        StringComparison grepTriggerComparison = StringComparison.Ordinal;
+        if (grammar.Match.TryGetRequiredLiteral(out string literal, out bool ignoreCase))
+        {
+            grepTrigger = literal;
+            grepTriggerComparison = ignoreCase
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+        }
+
+        return new BenchmarkPlan(
+            scanner,
+            grammar.Match,
+            grammar.Captures,
+            useStateMachine,
+            grepTrigger,
+            grepTriggerComparison);
     }
 
     private static PatternGrammar LiteralPattern(string literal, bool ignoreAsciiCase) =>

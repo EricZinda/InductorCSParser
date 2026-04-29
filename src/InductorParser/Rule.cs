@@ -61,6 +61,51 @@ public abstract class Rule
     internal bool CannotMatchLookahead(int peekRune) =>
         Advance == Advance.Always && !FirstConsumedRunes.Contains(peekRune);
 
+    // Returns true when every successful match of this rule is guaranteed
+    // to consume text that contains the returned literal as a substring
+    // (case-folded if ignoreAsciiCase is true). Useful for callers that
+    // want to pre-filter input before invoking the parser: the rebar
+    // grep runner uses this to skip past lines that can't possibly match
+    // via one BCL substring search across the whole haystack, before
+    // line-by-line parsing kicks in. Mirrors the literal-prefilter
+    // analysis every serious regex engine does internally (rust/regex's
+    // 'literal' module, .NET's compiled regex, PCRE2's "studied"
+    // patterns).
+    //
+    // The derived literal is the longest contiguous run of fixed-text
+    // children at any position in the rule tree (LiteralRule,
+    // LiteralIgnoreAsciiCaseRule, TokenRule, OneOfRule with a single
+    // BMP char or a single ASCII letter pair like 'Nn'). Concatenated
+    // through AllOf and propagated through BetweenInclusive[atLeast>=1]
+    // and FlattenType wrappers. Returns false (literal == "") when no
+    // such required substring can be derived from the rule.
+    public bool TryGetRequiredLiteral(out string literal, out bool ignoreAsciiCase)
+    {
+        var result = ComputeRequiredLiteral();
+        if (result == null)
+        {
+            literal = "";
+            ignoreAsciiCase = false;
+            return false;
+        }
+        literal = result.Value.Text;
+        ignoreAsciiCase = result.Value.IgnoreCase;
+        return literal.Length > 0;
+    }
+
+    // Subclasses override to declare what fixed text every successful
+    // match consumes. Default is "no required literal." See the
+    // matching override on each composite / leaf rule for specifics.
+    internal virtual (string Text, bool IgnoreCase)? ComputeRequiredLiteral() => null;
+
+    // Subclasses override when they always consume a fixed-length run
+    // of text. AllOf uses this to concatenate consecutive fixed-text
+    // children into one required literal. A null return means "this
+    // rule's match length isn't fixed at compile time" — the AllOf
+    // walker breaks the concatenation run there and recurses for a
+    // standalone candidate instead.
+    internal virtual (string Text, bool IgnoreCase)? ComputeConcatenableText() => null;
+
     // Lazily-built reverse index from SymbolId to human-readable name
     // for every rule reachable from this root. Populated on the first
     // NameOf call. Grammars that never ask never pay the allocation.

@@ -229,11 +229,21 @@ the parser core's automatic scanner-shape skip for
 
 Result files under `results/` (newest first):
 
+- `required-literal-summary-2026-04-28.md` (CSV: `required-literal-2026-04-28.csv`):
+  current baseline. Replaces the hand-tuned `"# noqa"` trigger from
+  the previous run with `Rule.TryGetRequiredLiteral`, an automatic
+  literal-extraction analysis on the parser core. The runner asks the
+  match rule for its required literal at build time and uses the
+  result to drive the same grep pre-scan. Same numbers as the hand-
+  tuned version; same speedup; no grammar-specific code in the runner.
+- `grep-prescan-summary-2026-04-28.md` (CSV: `grep-prescan-2026-04-28.csv`):
+  the prior version where the trigger was hard-coded. Kept for the
+  before/after pair documenting the move from hand-tuned to
+  parser-derived prefilter.
 - `full-comparison-summary-2026-04-28.md` (CSV: `full-comparison-2026-04-28.csv`):
-  the current baseline. Recursive + state-machine + .NET compiled +
-  .NET NonBacktracking on the supported subset, all four columns on
-  the same run. State-machine matches or beats recursive on every
-  search row; pulls 2.8x ahead on captures-heavy `ruff-noqa/real`.
+  the previous baseline before the grep pre-scan. Recursive +
+  state-machine + .NET compiled + .NET NonBacktracking on the
+  supported subset, all four columns on the same run.
 - `multi-literal-cache-rebar-2026-04-28.csv`: regression evidence
   from an attempt to enable the scanner-skip's substring-search
   cache for multi-literal alternates. Measured 23x slower than the

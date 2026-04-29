@@ -254,6 +254,34 @@ internal sealed class BetweenInclusiveRule : Rule
     // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
     // that first rune on success.
+    internal override (string Text, bool IgnoreCase)? ComputeRequiredLiteral()
+    {
+        // When the lower bound forces at least one inner match, inner's
+        // required literal flows through. AtLeast == 0 means the rule
+        // can succeed without inner ever firing, so we can't promise
+        // the literal will appear and have to return null.
+        return AtLeast >= 1 ? Inner.ComputeRequiredLiteral() : null;
+    }
+
+    internal override (string Text, bool IgnoreCase)? ComputeConcatenableText()
+    {
+        // Only Exactly(n, fixedTextChild) gives a fixed-length
+        // contribution (n copies of the inner's concatenable text).
+        // Loose lower or upper bounds vary in length and break
+        // concatenation.
+        if (AtLeast != AtMost || AtLeast == 0) return null;
+        var inner = Inner.ComputeConcatenableText();
+        if (inner == null || inner.Value.Text.Length == 0) return null;
+        // Cap the repetition at a small budget to avoid blowing up
+        // memory on Exactly(huge, ...) edge cases. Twenty is plenty
+        // for realistic prefilter literals.
+        if (AtLeast > 20) return null;
+        var builder = new System.Text.StringBuilder(inner.Value.Text.Length * AtLeast);
+        for (int i = 0; i < AtLeast; i++)
+            builder.Append(inner.Value.Text);
+        return (builder.ToString(), inner.Value.IgnoreCase);
+    }
+
     internal override RuleStartRequirements ComputeRuleStart()
     {
         // We need to return *all* runes that *might* be consumed as the first rune.
