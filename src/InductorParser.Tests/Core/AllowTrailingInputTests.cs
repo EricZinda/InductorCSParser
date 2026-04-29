@@ -29,11 +29,16 @@ public class AllowTrailingInputTests
     {
         // Same input shape as the default-rejects test above. With the flag
         // on, the OneOrMore claims "aa" and the parse returns success
-        // instead of failing at offset 2 on the unconsumed "bb".
-        var rule = OneOrMore(Token('a'));
+        // instead of failing at offset 2 on the unconsumed "bb". Token
+        // defaults to FlattenType.Delete, so .Preserve() the inner token
+        // to keep its leaf in the tree; that's what makes the consumed
+        // text observable below.
+        var rule = OneOrMore(Token('a').Preserve());
         var result = rule.Parse("aabb", new ParseOptions { AllowTrailingInput = true });
 
         Assert.That(result.Success, Is.True);
+        Assert.That(result.ToString(), Is.EqualTo("aa"),
+            "OneOrMore should have consumed only the leading 'aa' run, leaving 'bb' as the unclaimed tail");
     }
 
     [Test]
@@ -55,10 +60,12 @@ public class AllowTrailingInputTests
         // No tail to swallow: the grammar consumes everything. The flag
         // shouldn't change the outcome on inputs that the strict default
         // would already accept.
-        var rule = OneOrMore(Token('a'));
+        var rule = OneOrMore(Token('a').Preserve());
         var result = rule.Parse("aaa", new ParseOptions { AllowTrailingInput = true });
 
         Assert.That(result.Success, Is.True);
+        Assert.That(result.ToString(), Is.EqualTo("aaa"),
+            "with no tail to leave behind, the rule should still consume the full input");
     }
 
     [Test]
@@ -71,6 +78,8 @@ public class AllowTrailingInputTests
         var result = rule.Parse("", new ParseOptions { AllowTrailingInput = true });
 
         Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(string.Empty),
+            "zero matches on empty input should consume nothing");
     }
 
     [Test]

@@ -188,17 +188,38 @@ public class BudgetTests
     }
 
     [Test]
-    public void Pathological_nested_repetition_aborts_under_default_rule_count_limit()
+    public void Default_rule_count_limit_aborts_oversized_workload()
     {
-        // The doc-cited shape: OneOrMore(OneOrMore(A)) with A able to
-        // match in multiple ways. Greedy PEG semantics mean this doesn't
-        // produce true catastrophic backtracking the way a regex would,
-        // but the broader rule holds: any grammar/input combination that
-        // runs the rule machinery past the configured budget aborts
-        // cleanly with RuleCountLimitExceeded instead of hanging.
-        var rule = OneOrMore(OneOrMore(OneOf(RuneSet.Letters)));
-        var options = new ParseOptions { RuleCountLimit = 5_000 };
-        var result = rule.Parse(new string('a', 100_000), options);
+        // The other RuleCountLimit tests in this fixture lower the budget
+        // to a tiny number to verify the abort plumbing fires. This one
+        // exercises the actual default (10_000_000) so the doc claim
+        // "well-formed parses through, runaway parses caught" has a real
+        // test behind it.
+        //
+        // Greedy PEG semantics keep most pattern shapes linear, so the
+        // textbook "OneOrMore(OneOrMore(A)) on letters" example doesn't
+        // actually backtrack catastrophically in this engine. To push
+        // past 10M invocations cheaply, lean on the BetweenInclusive
+        // lookahead early-out: an Optional whose inner Token can't match
+        // the next rune returns immediately without invoking the inner
+        // rule at all, so each Optional costs roughly one peek-and-return
+        // worth of work per outer iteration. Stack 40 of those plus a
+        // single AnyToken to advance the cursor and each input character
+        // burns 42 rule invocations, all but one of them very cheap.
+        // 350K characters of input then drives the parser past 10M
+        // invocations with a healthy margin past the periodic check
+        // interval (1024 invocations).
+        //
+        // Cost of this test: a 700KB string and ~10M rule invocations,
+        // most of them cheap early-outs. About 250ms in Release, under
+        // a second in Debug.
+        var optionalsAndAnyToken = new Rule[41];
+        for (int index = 0; index < 40; index++)
+            optionalsAndAnyToken[index] = Optional(Token((char)('0' + index % 10)));
+        optionalsAndAnyToken[40] = AnyToken();
+
+        var rule = OneOrMore(AllOf(optionalsAndAnyToken));
+        var result = rule.Parse(new string('a', 350_000));
 
         Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.RuleCountLimitExceeded));
     }
@@ -243,8 +264,20 @@ public class BudgetTests
         var result = rule.Parse(input, options);
 
         Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.RuleCountLimitExceeded));
-        Assert.That(result.ErrorCharIndex, Is.GreaterThan(0),
+        // Bookkeeping at trip time:
+        //   - Outer OneOrMore.TryParse is invocation 1.
+        //   - Each successful iter does 3 invocations: FirstOf, Literal
+        //     (fails on the second token, records a failure at iter-start
+        //     + 1), Token (succeeds, cursor advances by one).
+        //   - The periodic budget check fires on multiples of 1024 (the
+        //     check interval). With RuleCountLimit = 100 the first check
+        //     is at invocation 1024, which trips immediately.
+        //   - 1 + 3N = 1024 puts the trip mid-iteration 341, on the
+        //     EnterRule of Token('a') for iter 341. By that point Literal
+        //     has just recorded a failure at position 341. That's the
+        //     value DeepestFailure has when Parse converts the abort into
+        //     a ParseResult, so ErrorCharIndex is exactly 341.
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(341),
             "ErrorCharIndex should reflect DeepestFailure, not the rolled-back lexer.Position.");
-        Assert.That(result.ErrorCharIndex, Is.LessThanOrEqualTo(input.Length));
     }
 }
