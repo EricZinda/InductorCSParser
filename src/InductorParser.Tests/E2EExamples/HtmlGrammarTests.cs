@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using InductorParser;
 using NUnit.Framework;
+using static InductorParser.Tests.TestHelpers;
 
 namespace InductorParser.Tests;
 
@@ -163,12 +164,4 @@ public class HtmlGrammarTests
         Assert.That(HtmlGrammar.Document.Parse(doc).Success, Is.True);
     }
 
-    private static string Display(string input)
-    {
-        return "\"" + input
-            .Replace("\\", "\\\\")
-            .Replace("\n", "\\n")
-            .Replace("\r", "\\r")
-            .Replace("\t", "\\t") + "\"";
-    }
 }

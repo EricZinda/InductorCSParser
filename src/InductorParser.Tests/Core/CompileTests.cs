@@ -1,11 +1,10 @@
 using System;
-using System.Collections.Generic;
-using System.Text;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
+using static InductorParser.Tests.TestHelpers;
 
 namespace InductorParser.Tests;
 
@@ -80,33 +79,6 @@ public class CompileTests
         string secondSnapshot = SnapshotGrammar(root);
 
         Assert.That(secondSnapshot, Is.EqualTo(firstSnapshot));
-    }
-
-    // Walk the rule graph in deterministic DFS pre-order and dump the
-    // post-Compile state of every reachable rule as one line per rule.
-    // Comparing two snapshots as strings means an NUnit assertion
-    // failure shows the exact rule and field that drifted, instead of
-    // just "the grammars differ."
-    private static string SnapshotGrammar(Rule root)
-    {
-        var builder = new StringBuilder();
-        var visited = new HashSet<Rule>();
-        Walk(root, builder, visited);
-        return builder.ToString();
-    }
-
-    private static void Walk(Rule rule, StringBuilder builder, HashSet<Rule> visited)
-    {
-        if (!visited.Add(rule)) return;
-        builder.Append(rule.GetType().Name)
-            .Append("|Id=").Append(rule.Id.Value)
-            .Append("|Name=").Append(rule.Name ?? "<null>")
-            .Append("|Flatten=").Append(rule.FlattenType)
-            .Append("|FirstRunes=").Append(rule.FirstConsumedRunes)
-            .Append("|Advance=").Append(rule.Advance)
-            .Append('\n');
-        foreach (var child in rule.Children)
-            Walk(child, builder, visited);
     }
 
     [Test]

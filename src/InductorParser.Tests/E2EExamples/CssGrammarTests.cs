@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using InductorParser;
 using NUnit.Framework;
+using static InductorParser.Tests.TestHelpers;
 
 namespace InductorParser.Tests;
 
@@ -215,12 +216,4 @@ public class CssGrammarTests
 
     private static Rule AllOf(Rule a, Rule b) => Rules.AllOf(a, b);
 
-    private static string Display(string input)
-    {
-        return "\"" + input
-            .Replace("\\", "\\\\")
-            .Replace("\n", "\\n")
-            .Replace("\r", "\\r")
-            .Replace("\t", "\\t") + "\"";
-    }
 }
