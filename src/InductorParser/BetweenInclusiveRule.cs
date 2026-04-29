@@ -171,20 +171,21 @@ internal sealed class BetweenInclusiveRule : Rule
             allCandidatesAreLiterals && literalCandidates.Count > 0
                 ? literalCandidates.ToArray()
                 : null;
-        // The substring-search cache pays off whenever there is at least
-        // one literal alternative. For one literal, IndexOf jumps straight
-        // to the next hit. For multiple literals, the cache lets each
-        // iteration take the minimum across cached next-positions plus
-        // re-search only the literals whose previous hit is now stale,
-        // which beats per-position IndexOfAny + MatchesAt on broad first-
-        // rune sets (especially the case-insensitive sherlock-casei-en
-        // shape where the first-rune set folds 'S','s','J','j','I','i',
-        // 'P','p' together and stops at every common letter).
+        // For a single literal, the substring-search cache jumps straight
+        // to the next hit and amortizes across iterations. Multi-literal
+        // alternates use the IndexOfAny path below: an attempt to enable
+        // the cache for them measured 23x slower on the rebar Sherlock
+        // haystack than IndexOfAny + per-position MatchesAt, because each
+        // match consumed forces a re-search for every literal whose cached
+        // position is now stale, and the BCL's IndexOfAny is SIMD-tuned
+        // for "any of these chars" while N separate IndexOf calls don't
+        // benefit from that vectorization. See
+        // src/Benchmarks/Rebar/results/multi-literal-cache-rebar-2026-04-28.csv.
         return new ScannerSkip(
             candidates,
             bmpCandidates.Length == 0 ? null : bmpCandidates,
             literals,
-            literals is { Length: > 0 } ? CreateUnknownPositions(literals.Length) : null);
+            literals is { Length: 1 } ? CreateUnknownPositions(literals.Length) : null);
     }
 
     private static int[] CreateUnknownPositions(int length)

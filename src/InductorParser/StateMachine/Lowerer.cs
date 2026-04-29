@@ -913,13 +913,13 @@ internal sealed class LoweringContext
                 ? literalCandidates.ToArray()
                 : null;
 
-        // The substring-search cache helps for any literal count: one
-        // literal jumps via BCL substring search, multiple literals take
-        // the minimum across cached next-positions and only re-search
-        // literals whose previous hit is now stale. The per-position
-        // IndexOfAny path stays as a fallback for non-literal scanner
-        // shapes where the cache doesn't apply.
-        bool useLiteralPositionsCache = literals is { Length: > 0 };
+        // Cache only for single-literal. Multi-literal alternates take
+        // the per-position IndexOfAny path inside Lexer; an attempt to
+        // enable the cache for them measured 23x slower on the rebar
+        // Sherlock haystack than the IndexOfAny path. See the matching
+        // gate in BetweenInclusiveRule.TryCreateScannerSkip and the rebar
+        // CSV at src/Benchmarks/Rebar/results/multi-literal-cache-rebar-2026-04-28.csv.
+        bool useLiteralPositionsCache = literals is { Length: 1 };
 
         int candidatesRuneSetIndex = InternRuneSet(candidates);
         int specIndex = ScannerSkipSpecs.Count;

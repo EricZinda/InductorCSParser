@@ -393,14 +393,15 @@ public abstract class Lexer
         // outer loop will then call the real rule, preserving the same tree
         // and capture behavior as the unoptimized parse.
         //
-        // Caller controls whether to use this cached path by passing or
-        // omitting literalPositions. The runtime's optimized substring
-        // search jumps straight to the next full-literal candidate instead
-        // of stopping at every matching first character. After the first
-        // iteration the cache amortizes: subsequent iterations only redo
-        // the per-literal IndexOf for literals whose cached position is
-        // now stale (the lexer moved past it).
-        if (this is RuneLexer && literalPositions != null)
+        // Single-literal only. The runtime's optimized substring search
+        // jumps straight to the next full-literal candidate instead of
+        // stopping at every matching first character. Multi-literal
+        // alternates use the IndexOfAny path below: an experiment that
+        // enabled the cached path for them measured 23x slower on the
+        // rebar Sherlock haystack because the BCL's IndexOfAny is SIMD-
+        // tuned for "any of these chars" while N separate IndexOf calls
+        // are not. See src/Benchmarks/Rebar/results/multi-literal-cache-rebar-2026-04-28.csv.
+        if (this is RuneLexer && literalPositions != null && literals.Length == 1)
         {
             while (_position < _endPosition)
             {

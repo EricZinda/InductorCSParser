@@ -161,7 +161,15 @@ dotnet run -c Release --project src/Benchmarks/Rebar/RebarRunner.csproj -- --sel
 
 ### 2. Clone and build rebar
 
-You need rust and `cargo` installed.
+You need rust and `cargo` installed. On Windows:
+
+```powershell
+winget install Rustlang.Rustup --accept-package-agreements --accept-source-agreements
+```
+
+`rustup` lands `cargo.exe` in `%USERPROFILE%\.cargo\bin\`. New shells will
+have it on PATH; in an existing shell either restart or call cargo with
+its absolute path.
 
 ```powershell
 git clone https://github.com/BurntSushi/rebar.git .external/rebar
@@ -185,18 +193,28 @@ engine entries (recursive and state-machine):
 
 ### 4. Run a measurement
 
-From the repo root:
+Rebar resolves `benchmarks/definitions/` and `benchmarks/engines.toml`
+relative to the directory it was invoked from, so you have to run it
+from inside the rebar checkout, not from the repo root.
 
 ```powershell
-.external/rebar/target/release/rebar measure -t -e '^(inductorparser|inductorparser-statemachine)$'
+cd .external/rebar
+./target/release/rebar measure -t -e '^(inductorparser|inductorparser-statemachine)$'
 ```
 
 That runs rebar in correctness-check mode against both evaluators.
-Every supported case should print `OK`. For a timed comparison against
-.NET's regex engines:
+Every supported case should print `OK`. Before the timed comparison,
+build the engines you want to compare against (the dotnet ones aren't
+prebuilt by `cargo build`):
 
 ```powershell
-.external/rebar/target/release/rebar measure -e '^(inductorparser|inductorparser-statemachine|dotnet/(compiled|nobacktrack))$' --max-time 1s --max-warmup-time 500ms
+./target/release/rebar build -e '^dotnet/(compiled|nobacktrack)$'
+```
+
+For the timed comparison against .NET's regex engines:
+
+```powershell
+./target/release/rebar measure -e '^(inductorparser|inductorparser-statemachine|dotnet/(compiled|nobacktrack))$' --max-time 1s --max-warmup-time 500ms
 ```
 
 Pipe to a file for a CSV (rebar prints the CSV on stdout).
@@ -209,34 +227,54 @@ The run used `--max-time 1s --max-warmup-time 500ms`. These numbers include
 the parser core's automatic scanner-shape skip for
 `ZeroOrMore(FirstOf(match, AnyToken.Delete))`.
 
-A broader run against every engine that built successfully in this workspace is
-saved under `results/`: raw CSV in `all-runnable-2026-04-24.csv`, with a compact
-Markdown matrix in `all-runnable-summary-2026-04-24.md`.
-A later focused rerun for the ASCII case-insensitive literal prefilter is saved
-as `literal-prefilter-summary-2026-04-24.md`. A focused rerun for the word-run
-optimization is saved as `rune-run-summary-2026-04-24.md`. The first side-by-
-side comparison of the recursive and state-machine evaluators on this
-supported subset is saved as `statemachine-vs-recursive-summary-2026-04-28.md`
-(CSV in `statemachine-vs-recursive-2026-04-28.csv`); that run was before
-the scanner-shape skip was ported into the state-machine evaluator. A
-rerun after that port is saved as `statemachine-with-skip-summary-2026-04-28.md`
-(CSV in `statemachine-with-skip-2026-04-28.csv`). After the port the
-state-machine path matches or beats the recursive evaluator on every
-search row, and pulls 2.6x ahead on the captures-heavy `ruff-noqa/real`.
+Result files under `results/` (newest first):
 
-Correctness check:
+- `full-comparison-summary-2026-04-28.md` (CSV: `full-comparison-2026-04-28.csv`):
+  the current baseline. Recursive + state-machine + .NET compiled +
+  .NET NonBacktracking on the supported subset, all four columns on
+  the same run. State-machine matches or beats recursive on every
+  search row; pulls 2.8x ahead on captures-heavy `ruff-noqa/real`.
+- `multi-literal-cache-rebar-2026-04-28.csv`: regression evidence
+  from an attempt to enable the scanner-skip's substring-search
+  cache for multi-literal alternates. Measured 23x slower than the
+  IndexOfAny path on the rebar Sherlock haystack, so the cache
+  stays single-literal-only. See the gating comments in
+  `Lexer.AdvanceUntilLiteralCandidateIn` and
+  `BetweenInclusiveRule.TryCreateScannerSkip`.
+- `statemachine-with-skip-summary-2026-04-28.md` (CSV alongside):
+  the run after the scanner-shape skip was ported into the state
+  machine. Older than the `full-comparison` file but kept for
+  reference because it directly contrasts with...
+- `statemachine-vs-recursive-summary-2026-04-28.md` (CSV alongside):
+  the run before the scanner-shape skip was ported. Documents the
+  pre-port 50-300x gap on the literal-scan rows.
+- `all-runnable-2026-04-24.csv` and `all-runnable-summary-2026-04-24.md`:
+  a broader sweep against every engine that built successfully in
+  the workspace at the time, on rebar's curated set.
+- `literal-prefilter-summary-2026-04-24.md`: focused rerun on the
+  ASCII case-insensitive literal prefilter.
+- `rune-run-summary-2026-04-24.md`: focused rerun for the word-run
+  optimization.
+
+Correctness check (both evaluators, supported subset, run from inside
+the rebar checkout):
 
 ```powershell
-rebar measure -t -e '^inductorparser$' -f '^(curated/01-literal/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/02-literal-alternate/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/04-ruff-noqa/(real|tweaked|compile-real)|curated/08-words/(all-english|long-english)|curated/09-aws-keys/(quick|compile-quick))$'
+./target/release/rebar measure -t -e '^(inductorparser|inductorparser-statemachine)$' -f '^(curated/01-literal/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/02-literal-alternate/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/04-ruff-noqa/(real|tweaked|compile-real)|curated/08-words/(all-english|long-english)|curated/09-aws-keys/(quick|compile-quick))$'
 ```
 
-Result: all 15 supported `inductorparser` cases returned `OK`.
+Result: all 15 supported cases returned `OK` for each engine (30 OK
+lines total).
 
 Timed comparison command:
 
 ```powershell
-rebar measure -e '^(inductorparser|dotnet/compiled|dotnet/nobacktrack)$' -f '^(curated/01-literal/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/02-literal-alternate/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/04-ruff-noqa/(real|tweaked|compile-real)|curated/08-words/(all-english|long-english)|curated/09-aws-keys/(quick|compile-quick))$' --max-time 1s --max-warmup-time 500ms
+./target/release/rebar measure -e '^(inductorparser|inductorparser-statemachine|dotnet/compiled|dotnet/nobacktrack)$' -f '^(curated/01-literal/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/02-literal-alternate/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/04-ruff-noqa/(real|tweaked|compile-real)|curated/08-words/(all-english|long-english)|curated/09-aws-keys/(quick|compile-quick))$' --max-time 1s --max-warmup-time 500ms
 ```
+
+Current results live in `results/full-comparison-summary-2026-04-28.md`
+(CSV alongside). The 2026-04-24 table below is the original baseline
+when the runner first landed.
 
 The ratio is `engine median / .NET compiled median` within the same benchmark.
 `.NET compiled` is therefore always `1.00x`; lower is faster, higher is slower.
