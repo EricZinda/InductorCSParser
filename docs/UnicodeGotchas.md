@@ -1,26 +1,26 @@
 # Unicode Gotchas
 
-Some Unicode surprises cannot be fixed by the parser's lexer choice. Both `RuneLexer` and `GraphemeLexer` hit these identically, because they live outside the "what is a token?" question the lexers answer. The fix is always either caller-side preprocessing (clean the input before parsing) or grammar-design (pick the right `RuneSet`, add explicit tolerance rules).
+Most Unicode surprises cannot be fixed by the parser's lexer choice. They live outside the "what is a token?" question the lexers answer, so the fix is usually caller-side preprocessing (clean the input before parsing) or grammar-design (pick the right `RuneSet`, add explicit tolerance rules). A few gotchas below are lexer-specific, and those sections call that out directly.
 
 This doc lists the common gotchas, why they bite, and the idiomatic workaround for each. If you are choosing between `RuneLexer` and `GraphemeLexer`, see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). That is a different decision.
 
 ## Identifier Matching
 
-Matching "an identifier" the way a programming language does is a solved Unicode problem. UAX #31 defines two properties, `XID_Start` and `XID_Continue`, and the default identifier is `XID_Start XID_Continue*`. Python, Rust, and C# all use this rule. The parser exposes it as `Rules.Identifier()`:
+Matching "an identifier" the way a programming language does is a solved Unicode problem, but each language still gets to define its own profile. UAX #31 defines two useful properties, `XID_Start` and `XID_Continue`, and the default identifier shape is `XID_Start XID_Continue*`. Python and Rust build on this shape; C#, ECMAScript, Java, and Swift have similar but not identical rules. The parser exposes the UAX #31-shaped rule as `Rules.Identifier()`:
 
 ```csharp
 var name = Identifier().As("name");
 ```
 
-That accepts `foo`, `café`, `καλημέρα`, `ℼ`, and rejects `2foo`, `_foo` (underscore is not in XID_Start under strict UAX #31), and the Arabic ligature `ﷺ` (U+FDFA, which is a letter by General_Category but excluded because its NFKC decomposition is a full multi-word phrase).
+That accepts `foo`, `café`, `καλημέρα`, `ℼ`, and rejects `2foo`, `_foo` (underscore is not in XID_Start in the base UAX #31 profile), and the Arabic ligature `ﷺ` (U+FDFA, which is a letter by General_Category but excluded because its NFKC decomposition is a full multi-word phrase).
 
 Two quiet wins you get for free:
 
 - **NFC equivalence (UAX #31 R4).** `ParseOptions.NormalizeInput` defaults to `NormalizationForm.FormC`, so `café` precomposed (U+00E9) and `café` as `e` + combining acute (U+0301) normalize to the same string before the lexer sees them, and both parse to the same identifier. You do not write any code for this.
 
-- **Spec-exact `XID_Start` and `XID_Continue` tables.** `RuneSet.XidStart` and `RuneSet.XidContinue` are available directly for grammars that compose their own identifier-shaped rules (keywords, sigiled names, qualified paths). They match UAX #31 exactly, including the Other_ID_Start additions (`U+2118` SCRIPT CAPITAL P, Mongolian letters) and the NFKC-unstable exclusions (the Arabic ligature set, Greek ypogegrammeni).
+- **Runtime-backed `XID_Start` and `XID_Continue` tables.** Yes: `RuneSet.XidStart` and `RuneSet.XidContinue` are the Unicode XID properties used by UAX #31's default identifier shape, not custom Inductor-specific character classes. The version caveat is where the Unicode data comes from. Most of each set comes from Unicode General_Category data exposed by the .NET runtime: letters and letter numbers for start characters, plus combining marks, decimal digits, and connector punctuation for continuation characters. `RuneSet.Xid.cs` stores only the small UAX #31 add/remove lists needed on top of those categories, such as `U+2118` SCRIPT CAPITAL P and the Arabic ligatures excluded for NFKC stability. Exact code point coverage follows the Unicode version exposed by the runtime's category tables plus those stored exception tables.
 
-Identifier matching works on every script under either lexer, including the scripts where a "letter" is a base character plus a vowel mark (Devanagari, Thai, Arabic-with-vowels). The grapheme lexer bundles those clusters into single tokens, but `Identifier()` uses [`WithinGrapheme`](#withingrapheme-general-purpose-sub-grapheme-matching) internally to walk each grapheme's runes and check them individually against the identifier rules. No `InputUnit.Rune` switch required:
+Identifier matching works across the scripts covered by the runtime's Unicode data under either lexer, including scripts where a "letter" is a base character plus a vowel mark (Devanagari, Thai, Arabic-with-vowels). When `StringInfo` bundles those clusters into single tokens, `Identifier()` uses [`WithinGrapheme`](#withingrapheme-general-purpose-sub-grapheme-matching) internally to walk each token's runes and check them individually against the identifier rules. No `InputUnit.Rune` switch required:
 
 ```csharp
 Identifier().Parse("हिन्दी");   // matches under the default grapheme lexer
@@ -54,7 +54,7 @@ var jamoCluster = WithinGrapheme(AllOf(
 ));
 ```
 
-Caveats: the inner rule runs against a fresh sub-lexer that does not share trace or budget state with the outer lexer. The inner parse is bounded by the grapheme's rune count (a few dozen at most), so runaway is impossible. Inner-rule symbols are discarded; `WithinGrapheme` emits one leaf per grapheme to the outer tree.
+Caveats: the inner rule runs against a fresh sub-lexer that does not share trace or budget state with the outer lexer. It is bounded to the current token's span, so ordinary character-consuming rules stay tiny, but avoid arbitrary long-running user code inside it. Inner-rule symbols are discarded; `WithinGrapheme` emits one leaf per grapheme to the outer tree.
 
 ### Matching specific languages
 
@@ -63,7 +63,7 @@ Caveats: the inner rule runs against a fresh sub-lexer that does not share trace
 Strict UAX #31 (the reference spec, no language-specific additions). Raku is the closest mainstream match.
 
 ```csharp
-Identifier();  // defaults are the strict form
+Identifier();  // base UAX #31-style form
 ```
 
 Python 3 identifiers, per [PEP 3131](https://peps.python.org/pep-3131/) and the [Language Reference](https://docs.python.org/3/reference/lexical_analysis.html#identifiers). Python adds `_` to Start and uses NFKC (not NFC) for equivalence.
@@ -98,7 +98,7 @@ var result = ecmascript.Parse(input, new ParseOptions
 });
 ```
 
-C# identifiers, per [ECMA-334 §7.4.3](https://www.ecma-international.org/publications-and-standards/standards/ecma-334/). C# allows `_` in Start and uses `L + Nl` as the start base. For grammars, `Identifier(extraStartRunes: RuneSet.Runes("_"))` with default NFC is a close match, accepting all the same code points in practice. The spec technically uses `ID_Start`-adjacent rules rather than XID, so this recipe is an approximation in the same sense as the ECMAScript one.
+C# identifiers, per [ECMA-334 §7.4.3](https://www.ecma-international.org/publications-and-standards/standards/ecma-334/). C# allows `_` in Start and uses category-based rules rather than XID directly. For grammars, `Identifier(extraStartRunes: RuneSet.Runes("_"))` with default NFC is a close approximation for ordinary source. It is not a spec-exact C# lexer.
 
 Java identifiers use `Character.isJavaIdentifierStart` and `Character.isJavaIdentifierPart`, which are their own rule. Not reproducible via `Identifier` parameters alone; a Java-conforming grammar would compose against a custom `RuneSet` built from those predicates.
 
@@ -133,7 +133,7 @@ var result = grammar.Parse(cleaned);
 
 U+200B (zero-width space), U+200C (zero-width non-joiner), U+200D (zero-width joiner), U+00AD (soft hyphen), and similar runes appear as characters in the input but render as nothing or render conditionally. A string like `"ap\u00ADple"` looks like `"apple"` in an editor but does not match `Literal("apple")` because the soft hyphen is a real character in the token stream.
 
-`GraphemeLexer` handles ZWJ correctly inside emoji sequences (it groups them into one grapheme per UAX #29), but bare ZWJs and other format characters outside emoji contexts still come through as their own tokens under both lexers.
+On modern .NET, `GraphemeLexer` handles ZWJ correctly inside emoji sequences (it groups them into one grapheme per UAX #29). Bare ZWJs and other format characters outside emoji contexts still come through as their own tokens under both lexers. Legacy `StringInfo` runtimes have broader ZWJ gaps covered in [Pre-.NET 5 Grapheme Segmentation](#pre-net-5-grapheme-segmentation).
 
 **Fix.** The caller strips them before parsing, or the grammar's character classes tolerate them explicitly. For stripping:
 
@@ -182,7 +182,7 @@ For full UAX #31 Script_Extensions-based detection (the standard algorithm for "
 
 ## Variation Selectors
 
-U+FE00..U+FE0F and U+E0100..U+E01EF are invisible runes that select alternate glyph forms for the preceding character. U+FE0F is the one you are most likely to encounter: it flips emoji between text-style (`❤`) and emoji-style (`❤️`) rendering. Two strings that visually look identical can contain or omit a variation selector, which makes byte-equality matching fail. Neither lexer strips them.
+U+FE00..U+FE0F and U+E0100..U+E01EF are invisible runes that select alternate glyph forms for the preceding character. U+FE0F is the one you are most likely to encounter: it flips emoji between text-style (`❤`) and emoji-style (`❤️`) rendering. Two strings that visually look identical can contain or omit a variation selector, which makes exact string matching fail. Neither lexer strips them.
 
 **Fix.** The caller strips them if the grammar does not care about glyph selection:
 
@@ -272,6 +272,6 @@ The common thread is timing. Combining marks have been in Unicode since the star
 
 1. If the grammar doesn't actually need to tokenize emoji or complex-script text at the grapheme level, do nothing. ASCII, source code, config files, and most DSLs are unaffected.
 2. If a specific input causes trouble, switch that grammar to `RuneLexer` and handle the multi-rune sequence explicitly with a small rule. This trades grapheme convenience for one extra rule and works on every runtime.
-3. Vendor a UAX #29 implementation into the parser. Tracked in [backlog/r000](../backlog/r000-vendor-a-uax-#29-grapheme-cluster-implementation.md). Half a day of work, gives full conformance everywhere.
+3. Add a custom UAX #29 implementation into the parser. Tracked in [xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md](../backlog/xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md). Gives full conformance everywhere, at the cost of maintaining Unicode data in the repository.
 
 The repo's test suite documents the broken cases explicitly. Look for tests gated behind `#if !UNITY_INCLUDE_TESTS` in [TokenRuleTests.cs](../src/InductorParser.Tests/Rules/TokenRuleTests.cs). Each one is a category that the legacy walker mishandles.

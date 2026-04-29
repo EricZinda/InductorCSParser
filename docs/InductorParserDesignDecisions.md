@@ -80,7 +80,7 @@ The four jobs are bundled together because they share the graph walk and because
 
 **Freeze the rule graph.** After `Compile` returns, every rule in the graph is sealed. Calling `.As(...)`, `.Flatten(...)`, `.WithError(...)`, or any other modification method on a sealed rule throws `InvalidOperationException`. This makes the "effectively immutable" claim enforced rather than implicit, and it closes a bug where user code could accidentally mutate a shared rule after parsing has started. One boolean flag per rule, one check per mutation method, negligible cost.
 
-**Validate against obvious mistakes.** A handful of cheap sanity checks worth running once rather than discovering at parse time: two rules pinned to the same explicit `SymbolId` number, `LateBoundRule` bound to itself or a trivial cycle, rules whose id somehow ended up unset. Unreachable rules are *not* flagged because a user might legitimately be building standalone rules to use elsewhere.
+**Validate against obvious mistakes.** A handful of cheap sanity checks worth running once rather than discovering at parse time: `LateBoundRule` bound to itself or a trivial cycle, rules whose id somehow ended up unset, and rule-specific invariants. Unreachable rules are *not* flagged because a user might legitimately be building standalone rules to use elsewhere. Explicit `SymbolId` pins are trusted; the implementation reserves pinned slots so later named and anonymous rules do not steal them, but it does not reject two user-pinned rules that choose the same id.
 
 Bundling them is a design choice. The alternative was to split each into its own pass (a naming pass, a binding pass, a freeze pass, a validation pass), but they all want the same graph walk and there is no observable ordering dependency between them. One walk is cheaper, simpler, and easier to document.
 
@@ -110,7 +110,7 @@ The id namespace is split into three non-overlapping ranges so different kinds o
 0x200000..           Custom symbols from user-named rules
 ```
 
-Rune symbols live at the bottom because `LexerSymbol` uses the code point as its id, and a rune can be anywhere from 0 to 0x10FFFF. Built-in expression ids live just above the Unicode range so they cannot collide with a rune. Custom ids live above both. This is a deviation from the C++ numbering (which starts built-ins at 256 and customs at 16000), chosen because both of those ranges fall inside Unicode and would collide with rune ids once the parser started seeing non-ASCII code points. Trace output prints the symbol name rather than the number, so the C++ reference traces still match textually.
+Rune symbols live at the bottom because single-rune leaf symbols use the code point as their id, and a rune can be anywhere from 0 to 0x10FFFF. Built-in expression ids live just above the Unicode range so they cannot collide with a rune. Custom ids live above both. This is a deviation from the C++ numbering (which starts built-ins at 256 and customs at 16000), chosen because both of those ranges fall inside Unicode and would collide with rune ids once the parser started seeing non-ASCII code points. Trace output prints the symbol name rather than the number, so the C++ reference traces still match textually.
 
 ## Why Symbol Is a Class, Not a Struct
 
@@ -145,23 +145,23 @@ The deeper question is framing: are parse-tree nodes "data without identity" (st
 `Rule` is an abstract class, and user code can derive from it to add matching logic the built-in composites do not cover. The contract a subclass has to satisfy:
 
 - Implement the matching method to either consume input and return a `Symbol` subtree (success) or return null and roll back its lexer transaction (failure). Never consume input on failure.
-- Use the lexer's transactional API (`Begin`, `Commit`, `Rollback`) so backtracking by outer rules works correctly.
+- Use the lexer's transactional API (`BeginTransaction`, `Commit`, `Rollback` or `Dispose`) so backtracking by outer rules works correctly.
 - Emit trace output in the same format as built-in rules when `ParseOptions.TraceSink` is set, so grammar-wide traces remain readable.
 - Participate in `Compile`: declare yourself named via `.As(...)` if you want an id, declare flatten policy if it matters for tree shape, seal against modification after `Compile` returns.
 
 The full contract including method signatures and the lexer API is covered below in "Tokens and Leaves" and "How a Rule's Match Method Looks".
 
-For grammars that compose existing leaves (which is most grammars) you never need to derive. The built-in composites cover the PEG operators and the built-in leaves cover the character-class cases. User-defined rules matter when you are adding behavior the composites cannot express, for example a rule that consumes until a specific byte-level offset, a grammar-context-aware matcher that queries external state, or a custom character-boundary detector.
+For grammars that compose existing leaves (which is most grammars) you never need to derive. The built-in composites cover the usual ways rules are combined: run these rules in order, try these alternatives, repeat this rule, or check ahead without consuming input. The built-in leaves cover the character-class cases. User-defined rules matter when you are adding behavior the composites cannot express, for example a rule that consumes until a specific UTF-16 offset, a grammar-context-aware matcher that queries external state, or a custom character-boundary detector.
 
 ## Why Two Lexers
 
-The parser ships two lexers: `GraphemeLexer` (default) and `RuneLexer`. Both produce one "token" per `Read()` call. They differ in what counts as a token. `GraphemeLexer` walks by Unicode grapheme cluster (UAX #29), `RuneLexer` walks by Unicode code point.
+The parser ships two lexers: `GraphemeLexer` (default) and `RuneLexer`. Both produce one "token" per `Read()` call. They differ in what counts as a token. `GraphemeLexer` walks by .NET `StringInfo` text elements, which are UAX #29-style grapheme clusters on modern .NET and more limited on legacy runtimes. `RuneLexer` walks by Unicode scalar value.
 
 `GraphemeLexer` is the default because "one character" in the user's mental model is one grapheme (the guitar emoji 🎸 is one character, the family emoji 👨‍👩‍👧‍👦 is one character), and grammars that operate on user-typed text want that to be the unit they match. `RuneLexer` exists because some grammars specifically need rune-level access: parsing Unicode-category boundaries, walking combining-mark sequences individually, or implementing a Unicode library on top of the parser.
 
 The implementation details (how graphemes are detected, how position tracking works across the two, where the two produce different streams) live in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). The design rationale worth keeping here is: swapping the lexer is a `ParseOptions` field, not a grammar change, and grammars written against the `Rule` API work against either lexer. The rules whose behavior can observably differ between lexers are the ones that compare against a token directly (`Token`, `OneOf`, `NoneOf`, `Literal`, `Peek`, `Not`). Composite rules inherit any difference from a leaf inside them.
 
-Where the two diverge on real input, the `RuneLexer` behavior is usually the buggy one: it was matching part of a grapheme as if it were a standalone character. `GraphemeLexer` fixes this by treating the whole sequence as one token. The reframing is "`GraphemeLexer` revealed that my grammar was silently wrong on multi-rune input," not "`GraphemeLexer` broke my grammar."
+Where the two diverge on real input, the `RuneLexer` behavior is usually the buggy one: it was matching part of a grapheme as if it were a standalone character. `GraphemeLexer` avoids that when the runtime's `StringInfo` groups the sequence as one text element. The reframing is "`GraphemeLexer` revealed that my grammar was silently wrong on multi-rune input," not "`GraphemeLexer` broke my grammar."
 
 ## Tokens and Leaves
 
@@ -172,26 +172,27 @@ The rule-vs-lexer interface is narrow: a rule calls `Read()` on the lexer, gets 
 ```csharp
 public readonly ref struct Token
 {
-    public ReadOnlySpan<char> Chars       { get; }   // section of the input string
-    public int                CharOffset  { get; }   // UTF-16 offset where the token starts
-    public int                RuneOffset  { get; }
-    public int                GraphemeIndex { get; }
+    public string             Source      { get; }   // original input string
+    public int                Offset      { get; }   // UTF-16 offset where the token starts
+    public int                Length      { get; }   // UTF-16 code-unit length
+    public bool               IsEof       { get; }
+    public ReadOnlySpan<char> Chars       { get; }   // Source.AsSpan(Offset, Length)
+    public ReadOnlyMemory<char> Memory    { get; }   // heap-safe view for Symbols
+    public int                RuneValue   { get; }   // one-rune token value, or -1
 }
 ```
 
-`Token` is a `ref struct` so it can carry a `Span<char>` into the original input without allocating. Each token is the section of input that the lexer consumed to produce it. Everything else is derived.
+`Token` is a `ref struct` so it can carry a `Span<char>` into the original input without allocating. Each token is the section of input that the lexer consumed to produce it. Leaf `Symbol`s store `Memory`, the heap-safe view over that same source text, so parsing still avoids substring copies.
 
-Under `RuneLexer` every token is one rune wide by construction (the lexer emits one rune per read). Under `GraphemeLexer` most tokens are still one rune (ASCII, composed-form Latin, CJK, most punctuation are all one grapheme = one rune), but emoji sequences, regional-indicator flags, skin-tone modified emoji, Devanagari conjuncts, and decomposed-form combinations produce multi-rune tokens whose `Chars` span covers the whole grapheme.
+Under `RuneLexer` every well-formed token is one rune wide by construction (the lexer emits one scalar value per read; stray surrogate halves surface as one-code-unit tokens with no `RuneValue`). Under `GraphemeLexer` most tokens are still one rune (ASCII, composed-form Latin, CJK, most punctuation are all one grapheme = one rune), but emoji sequences, regional-indicator flags, skin-tone modified emoji, Devanagari conjuncts, and decomposed-form combinations produce multi-rune tokens when the runtime's `StringInfo` groups them as one text element.
 
-The three position offsets let any caller (editors, IDE integrations, error messages) pick the unit they speak in without the parser having to compute the other two lazily later. All three are constant-time reads on the token.
-
-Rules that need to ask "is this token exactly one rune?" walk `Chars` with `EnumerateRunes()`. The enumerator is a `SpanRuneEnumerator` (a ref struct that allocates nothing), so the cost is two `MoveNext` calls in the common single-rune case, which is small enough that caching the answer as a bool on the token is not worth the extra field or the derived-state hazard.
+The token stores only the UTF-16 offset and length. Rune and grapheme positions are not carried on every token; `ParseResult` and `Symbol.SourceRange` derive those from the char index only when a caller asks. Rules that need to ask "is this token exactly one rune?" read `Token.RuneValue`, which returns the code point for a one-rune token and `-1` for EOF or multi-rune grapheme tokens.
 
 ### Comparing Tokens: The Four Leaves
 
 Every built-in rule that looks at token content reduces to one of four operations.
 
-**`Token('=')`, `Token(Rune r)`, `Token(string grapheme)`.** Matches one grapheme, specified at rule-construction time. The `string` overload requires exactly one grapheme and is validated at construction by walking the argument with `StringInfo.GetTextElementEnumerator` and asserting a single element. The `char` and `Rune` overloads are convenience wrappers that build a one-grapheme string. At match time the rule pre-tokenizes its expected grapheme the same way the lexer will tokenize input and walks the expected sequence against `lexer.Read()` in lockstep, comparing `Chars` spans with `SequenceEqual`. Under `GraphemeLexer` that is a single-token compare. Under `RuneLexer` it is a one-to-N token compare (`Token("👋🏽")` expects two rune tokens, waving hand plus medium skin tone, so it reads two tokens and compares each).
+**`Token('=')`, `Token(Rune r)`, `Token(string grapheme)`.** Matches one `StringInfo` text element (a Grapheme), specified at rule-construction time. The `string` overload requires exactly one text element and is validated at construction with `StringInfo.GetNextTextElement`. The `char`, `Rune`, and `int` overloads are convenience wrappers that build a one-element string. At match time the rule reads lexer tokens until it has consumed the expected string length, comparing each token's `Chars` span with the corresponding part of the expected string. Under `GraphemeLexer` that is a single-token compare. Under `RuneLexer` it is a one-to-N token compare (`Token("👋🏽")` expects two rune tokens, waving hand plus medium skin tone, so it reads two tokens and compares each).
 
 **`OneOf(RuneSet cc)` and `NoneOf(RuneSet cc)`.** These are the rune-set tests. Both are defined in terms of the predicate "the token is exactly one rune *r*, and `cc.Contains(r)`." `OneOf` matches when the predicate is true. `NoneOf` matches when it is false. The asymmetry that falls out of this is important: a multi-rune token never matches `OneOf` (the predicate is false because the token is not one rune) but it *does* match `NoneOf` (the predicate is false, so the negation is true). This is what makes `OneOrMore(NoneOf(formattingChars))` sweep up emoji correctly in the pass-through-text recipe.
 
@@ -200,27 +201,27 @@ The two semantics in prose:
 - `OneOf(class)` is existential: "is this token one of the runes in the class?" A multi-rune token is not any single rune, so no.
 - `NoneOf(class)` is universal: "does this token avoid all runes in the class?" A multi-rune token avoids every single-rune value, so yes.
 
-**`Literal(string s)`.** Tokenizes `s` the same way the lexer will tokenize input (grapheme-walk via `StringInfo.GetTextElementEnumerator` under `GraphemeLexer`, rune-walk via `string.EnumerateRunes()` under `RuneLexer`), caches the tokenized sequence at rule construction time, and matches by walking both sequences in lockstep comparing `Chars` spans with `SequenceEqual`. This is the only one of these types that can consume more than one token in a single match. The other three each look at exactly one token.
+**`Literal(string s)`.** Generalizes `Token` to any non-empty string. It keeps the expected string and uses the same lockstep loop: read a lexer token, compare it with the corresponding slice of the expected text, and advance by `token.Length`. Under `GraphemeLexer` a literal containing a multi-rune grapheme compares that grapheme as one token; under `RuneLexer` the same text compares rune by rune. This is the only one of these types that routinely consumes more than one token in a single match. `Token(string)` can also consume multiple tokens under `RuneLexer` when its single expected grapheme contains multiple runes.
 
-Because `Literal` tokenizes the same way the lexer does, a literal like `Literal("👨‍👩‍👧‍👦")` becomes one expected token under `GraphemeLexer` (the whole family-emoji grapheme) and seven expected tokens under `RuneLexer` (four people emoji plus three ZWJs). Either way, the literal matches input that contains the same sequence of characters.
+Because `Literal` compares in the lexer's token units, a literal like `Literal("👨‍👩‍👧‍👦")` is checked as one token under `GraphemeLexer` (the whole family-emoji grapheme) and seven tokens under `RuneLexer` (four people emoji plus three ZWJs). Either way, the literal matches input that contains the same sequence of characters.
 
-**`AnyToken()`.** Matches any single token regardless of content, as long as the lexer is not at EOF. Under `RuneLexer` it matches any rune. Under `GraphemeLexer` it matches any grapheme, including multi-rune ones. This is the "match one token, whatever it is" leaf.
+**`AnyToken()`.** Matches any single token regardless of content, as long as the lexer is not at EOF. Under `RuneLexer` it matches any lexer token, including a stray surrogate token if malformed UTF-16 is present. Under `GraphemeLexer` it matches any `StringInfo` text element, including multi-rune ones. This is the "match one token, whatever it is" leaf.
 
 ### RuneSet: The Set Primitive
 
-`OneOf` and `NoneOf` take a `RuneSet`, a set of Unicode code points with the standard set operations lifted onto operators. Keeping the set type separate from the rule types means character-class expressions compose the way set expressions do in ordinary code instead of having to wrap every union inside an `FirstOf(...)`.
+`OneOf` and `NoneOf` take a `RuneSet`, a set of Unicode scalar values with the standard set operations via operators. Keeping the set type separate from the rule types means character-class expressions compose the way set expressions do in ordinary code instead of having to wrap every union inside an `FirstOf(...)`.
 
 ```csharp
 public readonly struct RuneSet
 {
-    // Full-Unicode built-ins (correct for every script)
+    // Unicode-category built-ins, backed by the runtime's Unicode data
     public static readonly RuneSet Letters;
     public static readonly RuneSet Digits;
     public static readonly RuneSet HexDigits;
     public static readonly RuneSet Whitespace;
     public static readonly RuneSet Identifier;
 
-    // ASCII-only variants faster that RuneSet.Letters
+    // ASCII-only variants faster than RuneSet.Letters
     public static class Ascii
     {
         public static readonly RuneSet Letters    = Range('A','Z') | Range('a','z');
@@ -279,7 +280,7 @@ RuneSet.Ascii.Identifier & ~RuneSet.Runes("_")
 
 Intersection and complement are niche compared to union. Most grammars use `|` dozens of times and never touch the other two. They earn their spot because they are cheap (sorted-range intersection and complement are single passes), and because when an author does need set difference, hand-enumerating the ranges goes stale the moment Unicode adds a new letter to the base class.
 
-`RuneSet.Letters` and its siblings cover the full Unicode character set: `Letters` matches `é`, `漢`, `Ω`, `ж`, and every other letter in every script Unicode knows about. Grammars that specifically want ASCII-only reach for `RuneSet.Ascii.Letters` to say so explicitly. The split is deliberate because the two are different defaults. A programming-language keyword parser wants ASCII identifiers so a stray `café` does not parse as a variable name. A text-processing grammar wants the full Unicode set so combining-mark scripts work at all.
+`RuneSet.Letters` and its siblings cover Unicode scalar values by category: `Letters` matches single-rune letters like `é`, `漢`, `Ω`, and `ж`. Grammars that specifically want ASCII-only can use `RuneSet.Ascii.Letters` to say so explicitly. A programming-language keyword parser wants ASCII keywords so a stray `café` does not parse as a keyword. A text-processing grammar often wants the full Unicode set, and for scripts whose visible letters are multi-rune graphemes it should combine those sets with `WithinGrapheme(...)` or use `Identifier()`.
 
 `Contains(Rune)` is the predicate every `OneOf` / `NoneOf` match resolves to, exposed as public so user-defined rules can reuse the same predicate without going through the rule wrapper.
 
@@ -300,13 +301,17 @@ Everything else (flatten policies, error messages, named symbols) is metadata on
 Concretely, the four comparison leaves are all short:
 
 ```csharp
-// Token(string grapheme): _tokenizedExpected is precomputed, length 1 under
-// GraphemeLexer and 1..N runes under RuneLexer
+// Token(string grapheme): _expected stores exactly one StringInfo text element.
+// The loop reads one token under GraphemeLexer, or 1..N rune tokens under RuneLexer.
 using var tx = lexer.BeginTransaction();
-foreach (var expected in _tokenizedExpected)
+int consumed = 0;
+while (consumed < _expected.Length)
 {
     var actual = lexer.Read();
-    if (!actual.Chars.SequenceEqual(expected)) return null;
+    if (actual.IsEof) return null;
+    if (consumed + actual.Length > _expected.Length) return null;
+    if (!actual.Chars.SequenceEqual(_expected.AsSpan(consumed, actual.Length))) return null;
+    consumed += actual.Length;
 }
 tx.Commit();
 return makeSymbolFrom(...);
@@ -314,20 +319,21 @@ return makeSymbolFrom(...);
 // OneOf(RuneSet cc)
 using var tx = lexer.BeginTransaction();
 var token = lexer.Read();
-var it = token.Chars.EnumerateRunes();
-if (!it.MoveNext()) return null;
-var rune = it.Current;
-if (it.MoveNext()) return null;              // multi-rune token, fails set membership
-if (!cc.Contains(rune)) return null;
+if (token.IsEof) return null;
+if (!cc.Contains(token.RuneValue)) return null; // -1 for multi-rune tokens
 tx.Commit();
 return makeSymbolFrom(token);
 
-// Literal(string s): _tokenizedLiteral is precomputed
+// Literal(string s): _expected is any non-empty string
 using var tx = lexer.BeginTransaction();
-foreach (var expected in _tokenizedLiteral)
+int literalConsumed = 0;
+while (literalConsumed < _expected.Length)
 {
     var actual = lexer.Read();
-    if (!actual.Chars.SequenceEqual(expected)) return null;
+    if (actual.IsEof) return null;
+    if (literalConsumed + actual.Length > _expected.Length) return null;
+    if (!actual.Chars.SequenceEqual(_expected.AsSpan(literalConsumed, actual.Length))) return null;
+    literalConsumed += actual.Length;
 }
 tx.Commit();
 return makeSymbolFrom(...);
@@ -347,14 +353,14 @@ Each is a handful of lines. The common shape (start a transaction, read a token,
 Under `GraphemeLexer`, a multi-rune grapheme like 👨‍👩‍👧‍👦 arrives as a single token whose `Chars` span covers the whole sequence (eleven UTF-16 chars, seven runes). The ways a grammar can match it:
 
 - **`Token("👨‍👩‍👧‍👦")`** matches one grapheme by exact content. Construction-time validation rejects arguments that are not exactly one grapheme, so `Token("ab")` throws at grammar-build time instead of failing silently at parse time.
-- **`Literal("👨‍👩‍👧‍👦 and friends")`** matches a sequence of graphemes by exact content. Same pre-tokenize-then-lockstep logic as `Token`. The difference is that `Literal` accepts any length.
+- **`Literal("👨‍👩‍👧‍👦 and friends")`** matches a sequence of graphemes by exact content. Same slice-and-lockstep comparison as `Token`. The difference is that `Literal` accepts any length.
 - **`AnyToken()`** matches any token including multi-rune ones. Useful when the grammar is streaming text through as opaque content ("an identifier is any non-delimiter character").
 - **`NoneOf(someClass)`** matches multi-rune tokens because they are not in any single-rune class. This is the mechanism behind the pass-through-text recipe.
 
 What you *cannot* do:
 
 - **Define a `RuneSet` that includes specific multi-rune sequences.** A `RuneSet` is a set of code points, not a set of sequences. If you want to match "any of these specific multi-rune sequences," express it as `FirstOf(Token(a), Token(b), Token(c))`, not as a character class.
-- **Test "is this grapheme a letter?" with `OneOf(RuneSet.Letters)`** when the grapheme is multi-rune. The class is defined over single runes, so any multi-rune grapheme is outside it. If you want "any identifier character, including combining marks as part of a letter sequence," either switch to `RuneLexer` and consume each rune individually, or include Mark categories in a broader character class and accept that the grammar will capture combining marks as separate tokens under `RuneLexer`.
+- **Test "is this grapheme a letter?" with `OneOf(RuneSet.Letters)`** when the grapheme is multi-rune. The class is defined over single runes, so any multi-rune grapheme is outside it. If you want "any identifier character, including combining marks as part of a letter sequence," use `Identifier()`. For custom shapes, `WithinGrapheme(...)` is the escape hatch: it first reads exactly one outer grapheme token, then runs your child rule over the runes inside that grapheme. The child must consume the whole grapheme. On success, the outer parse advances by one grapheme and, when preserved, exposes one leaf for the whole grapheme rather than separate leaves for the base letter and marks.
 
 The split that remains is between rune-set tests (`OneOf`, `NoneOf`) and content-match leaves (`Token`, `Literal`). The set tests are defined over single runes by construction (a `RuneSet` is a set of code points), and the content-match leaves compare raw `Chars` spans, so they handle multi-rune graphemes naturally. A glance at a rule tells you which half of the API it lives in.
 
@@ -496,19 +502,19 @@ The C# port builds in runtime defenses from the start.
 
 ### Why Three Budgets, Not One
 
-`ParseOptions` exposes three orthogonal budgets plus the cancellation token: `Timeout`, `RuleCountLimit`, `MaxDepth`. They answer different questions and a caller that sets all three gets whichever trips first.
+`ParseOptions` exposes three orthogonal budgets plus an optional external cancellation signal: `Timeout`, `RuleCountLimit`, `MaxDepth`, and `ParseCancellation`. They answer different questions and a caller that sets all of them gets whichever trips first.
 
 `Timeout` is what interactive callers want: "don't make the user wait more than a second." `RuleCountLimit` is what tests and security gates want: "this parse should not exceed 10 million rule invocations, and I want the same answer on every machine." A test that only sets `Timeout` will be flaky on slow CI agents and will let pathological input through on fast ones. A production service that only sets `RuleCountLimit` will not protect interactive users from a parser that took the full budget but took it slowly.
 
 `MaxDepth` is a separate concern. It does not help with exponential backtracking, it helps with stack overflow on deeply nested but well-formed input. A JSON document nested 10,000 levels deep will not time out and will not exhaust the rule-count limit, but it will blow the call stack before any of those triggers. `MaxDepth` catches it before the stack overflow crashes the whole process.
 
-The default settings are `RuleCountLimit = 10_000_000`, `MaxDepth = 1000`, `Timeout = null`. The two hardware-independent limits are on by default because they protect naive callers from catastrophic-backtracking and stack-overflow attacks without being flaky or hardware-dependent. `Timeout` stays opt-in because it is inherently flaky (same input takes different time on different hardware) and would cause unpredictable test failures as a default. `.NET`'s `Regex` shipped for over a decade without any of these defaults and produced a long parade of ReDoS vulnerabilities in real-world applications. A PEG engine is in the same failure class and should not repeat that history.
+The default settings are `RuleCountLimit = 10_000_000`, `MaxDepth = 1000`, and `Timeout = TimeSpan.Zero` (disabled). The two hardware-independent limits are on by default because they protect naive callers from catastrophic-backtracking and stack-overflow attacks without being flaky or hardware-dependent. `Timeout` stays opt-in because it is inherently flaky (same input takes different time on different hardware) and would cause unpredictable test failures as a default. `.NET`'s `Regex` shipped for over a decade without any of these defaults and produced a long parade of ReDoS vulnerabilities in real-world applications. A PEG engine is in the same failure class and should not repeat that history.
 
 ### Why CancellationTokenSource.CancelAfter Is Not Enough
 
 The obvious .NET answer to "abort after N seconds" is `new CancellationTokenSource(TimeSpan.FromSeconds(N))` plus a `token.ThrowIfCancellationRequested()` check in the parse loop. That works on desktop. It does not work on WebGL, and that is the constraint that shapes this design.
 
-`CancellationTokenSource.CancelAfter` schedules the cancellation through `System.Threading.Timer`, which needs a timer thread to fire the callback. WebGL has no timer thread. The callback can only run when control returns to the browser event loop, and a tight synchronous parse loop never yields. You can pass a cancellation token with a ten-second deadline, the parser can run for an hour, and the token will never fire because the scheduler it depends on is suspended. `CancellationToken` is useful for desktop and test callers, and the parser supports it, but it cannot be the *only* defense against runaway parses.
+`CancellationTokenSource.CancelAfter` schedules the cancellation through `System.Threading.Timer`, which needs a timer thread to fire the callback. WebGL has no timer thread. The callback can only run when control returns to the browser event loop, and a tight synchronous parse loop never yields. You can pass a cancellation token with a ten-second deadline, the parser can run for an hour, and the token will never fire because the scheduler it depends on is suspended. The parser therefore exposes `ParseCancellation`, a tiny manually-canceled signal that callers can bridge to an existing `CancellationToken` when they have one, but it does not rely on `CancelAfter` for timeouts.
 
 The parser polls deadlines from inside its own loop, using a clock it reads synchronously. Portable to every platform including WebGL.
 
@@ -564,9 +570,9 @@ Six places where the C# version is strictly nicer, not just different.
 
 No required class scaffolding. The C++ version makes a grammar a type: every rule is a class, grammar composition is template instantiation. The C# port makes a grammar a set of values, which means you can build one inline as local variables, pass rules around, compose rules across files, and write tests that construct ad-hoc grammars without any class boilerplate.
 
-Unicode correctness by default. The GraphemeLexer reads one grapheme per step, the RuneSet stores full-Unicode ranges, and composition normalization runs by default. Grammars handle emoji, combining marks, CJK, and non-Latin scripts correctly without the author having to think about encoding. The C++ version is ASCII-only in practice.
+Unicode-aware defaults. The GraphemeLexer calls `StringInfo.GetNextTextElement` at the current UTF-16 offset and emits that returned span as one token; on modern .NET this tracks extended grapheme clusters, while older `StringInfo` implementations have the caveats covered in the Unicode docs. `RuneSet` stores Unicode scalar ranges, and composition normalization runs by default. Grammars start from a much better place for emoji, combining marks, CJK, and non-Latin scripts. The C++ version is ASCII-only in practice.
 
-Runtime defenses against catastrophic backtracking. The C++ version has no protection: a pathological input and a grammar with ambiguous alternatives can combine to spin for minutes. The C# port has three orthogonal budgets plus cancellation-token support, with protective defaults on the two deterministic ones, and `ParseResult.Outcome` tells the caller which one tripped.
+Runtime defenses against catastrophic backtracking. The C++ version has no protection: a pathological input and a grammar with ambiguous alternatives can combine to spin for minutes. The C# port has three orthogonal budgets plus a `ParseCancellation` signal that can bridge from `CancellationToken`, with protective defaults on the two deterministic ones, and `ParseResult.Outcome` tells the caller which one tripped.
 
 Variadic rules without the `Args` wrapper. `AllOf(r1, r2, r3, r4)` beats `AndExpression<Args<r1, r2, r3, r4>>`.
 

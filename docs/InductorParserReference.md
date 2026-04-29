@@ -1,6 +1,6 @@
 # Inductor Parser Reference
 
-This document is user reference and is more technical and detailed than the primers (see below). It goes into detail about every aspect of the parser and discusses how to write grammars with the library. It shows what the API looks like, gives working examples end to end, and points at the other docs when you want depth on a specific topic.
+This document is a reference document and is more technical and detailed than the primers (see below). It goes into detail about every aspect of the parser and discusses how to write grammars with the library. It shows what the API looks like, gives working examples end to end, and points at the other docs when you want depth on a specific topic.
 
 In this library a *rule* is a C# object. You build rules by calling factory functions like `AllOf(...)`, `FirstOf(...)`, `Token('=')`, you compose them into a grammar, and you call `.Parse(input)` on the root rule to get a tree back.
 
@@ -128,7 +128,7 @@ That is a much better failure mode than a runtime exception.
 
 **Freeze the rule graph.** After `Compile` returns, every rule in the graph is sealed. Calling `.As(...)`, `.Flatten(...)`, `.WithError(...)`, or any other modification method on a sealed rule throws `InvalidOperationException`. This makes the "effectively immutable" claim enforced rather than implicit, and it closes a bug where user code could accidentally mutate a shared rule after parsing has started. One boolean flag per rule, one check per mutation method, negligible cost.
 
-**Validate against obvious mistakes.** A handful of cheap sanity checks worth running once rather than discovering at parse time: two rules pinned to the same explicit `SymbolId` number (that is a real bug, unlike hash collisions which just get probed), `LateBoundRule` bound to itself or a trivial cycle, and rules whose id somehow ended up unset. Unreachable rules are *not* flagged because a user might legitimately be building standalone rules to use elsewhere.
+**Validate against obvious mistakes.** A handful of cheap sanity checks worth running once rather than discovering at parse time: `LateBoundRule` bound to itself or a trivial cycle, rules whose id somehow ended up unset, and rule-specific construction invariants. Unreachable rules are *not* flagged because a user might legitimately be building standalone rules to use elsewhere. Explicit `SymbolId` pins are trusted; the current implementation reserves pinned slots so anonymous and named rules do not steal them, but it does not reject two user-pinned rules that choose the same id.
 
 ### SymbolId
 
@@ -168,7 +168,7 @@ Built-in symbol ids live in a static class and use a numbering space chosen so t
 
 ## Characters and RuneSet
 
-The parser operates on Unicode characters, not raw bytes. By default the lexer reads one grapheme cluster per step (so `👨‍👩‍👧‍👦` is one token, not seven), which is what you want for grammars that handle user-typed text. The full lexer story, including how to opt into rune-level lexing instead, lives in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). For grammar-authoring purposes, you can ignore the distinction until you hit emoji or combining-mark input, at which point the Unicode doc has the answer.
+The parser operates on Unicode text, not raw bytes. By default the lexer reads one .NET `StringInfo` text element per step. On modern .NET that means extended grapheme clusters, so `👨‍👩‍👧‍👦` is one token rather than seven scalar values. The full lexer story, including legacy-runtime caveats and how to opt into rune-level lexing instead, lives in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). For grammar-authoring purposes, you can ignore the distinction until you hit emoji or combining-mark input, at which point the Unicode doc has the answer.
 
 `RuneSet` is a composable value type for character sets. The full API surface (built-ins, factory methods, and the `|`, `&`, `~` operators) lives in [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md). The grammar-authoring shorthand is that you build a class out of built-ins and factory calls and combine them with `|` for union, `&` for intersection, and `~` for complement.
 
@@ -183,7 +183,7 @@ OneOf(RuneSet.Single(new Rune(0x1F3B8)))                       // guitar emoji (
 OneOf(RuneSet.Range(new Rune(0x0370), new Rune(0x03FF)))       // Greek and Coptic block
 ```
 
-The default built-ins cover the full Unicode character set. `RuneSet.Letters` includes `é`, `漢`, `Ω`, `ж`, and every other letter in every script Unicode knows about. Grammars that specifically want ASCII-only use `RuneSet.Ascii.Letters` to say so explicitly.
+The default built-ins cover Unicode scalar values by category. `RuneSet.Letters` includes single-rune letters like `é`, `漢`, `Ω`, and `ж` according to the runtime's Unicode category tables. Grammars that specifically want ASCII-only use `RuneSet.Ascii.Letters` to say so explicitly.
 
 `Token(...)` takes a `char` for any character that fits in a C# char literal (code points U+0000..U+FFFF) and a `Rune` for characters above U+FFFF:
 
@@ -197,16 +197,16 @@ Token(0x1F3B8)                   // same via int overload
 
 ### How Rules React to the Lexer
 
-The parser's token is a grapheme cluster by default (`GraphemeLexer`). Setting `ParseOptions.InputUnit = InputUnit.Rune` switches to rune-level lexing (`RuneLexer`). See [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md) for the mechanics. The two modes change how specific rules behave:
+The parser's token is a `StringInfo` text element by default (`GraphemeLexer`). Setting `ParseOptions.InputUnit = InputUnit.Rune` switches to rune-level lexing (`RuneLexer`). See [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md) for the mechanics. The two modes change how specific rules behave:
 
 **Under `GraphemeLexer` (default):**
 
 - `Token('=')` matches the `[=]` grapheme. Single-rune graphemes compare to a single rune by identity, so ASCII and other characters that fit in a C# char literal work as you would expect.
-- `RuneSet.Letters` matches single-rune letter graphemes. For composed-form text (the default after normalization), almost all letters are single-rune graphemes, so this works as expected. Multi-rune letter graphemes (Devanagari conjuncts, decomposed-form sequences with no precomposed equivalent) do not match `RuneSet.Letters` because the grapheme contains more than one rune. Use a more permissive rule if you want those, or include Mark categories in your character class.
+- `RuneSet.Letters` matches single-rune letter graphemes. For composed-form text (the default after normalization), almost all Latin-style letters are single-rune graphemes, so this works as expected. Multi-rune letter graphemes (Devanagari conjuncts, decomposed-form sequences with no precomposed equivalent) do not match `RuneSet.Letters` because the grapheme contains more than one rune. Use `Identifier()` or `WithinGrapheme(...)` when you want to validate the runes inside a grapheme.
 - `Literal("café")` matches four graphemes, one per character in the literal.
-- Emoji sequences (👋🏽, 🇺🇸, 👨‍👩‍👧‍👦) match as single graphemes, which is almost always what you want.
+- Emoji sequences (👋🏽, 🇺🇸, 👨‍👩‍👧‍👦) match as single tokens on runtimes whose `StringInfo` recognizes those extended grapheme clusters, which is almost always what you want.
 
-The default is right for almost every grammar that handles user-supplied text, because "one character" in the user's mental model is one grapheme. An emoji programming language works naturally. Identifiers that include combining marks work naturally. Keywords like `function` parse the same way they always did (all ASCII, all single-rune graphemes).
+The default is right for almost every grammar that handles user-supplied text, because "one character" in the user's mental model is usually one grapheme. An emoji programming language works naturally on runtimes with modern `StringInfo` segmentation. Identifiers that include combining marks work naturally. Keywords like `function` parse the same way they always did (all ASCII, all single-rune text elements).
 
 **Under `RuneLexer` (opt-in):**
 
@@ -253,18 +253,18 @@ var settingName = Identifier()
 
 Rules are mutable up until `Compile` runs and then sealed. `.As(...)`, `.Flatten(...)`, `.WithError(...)` mutate the rule in place and return the same rule for chaining, so `var rule = Identifier(); rule.Flatten(FlattenType.Preserve);` and `var rule = Identifier().Flatten(FlattenType.Preserve);` produce the same end state on the same object. The practical consequence: if you keep a reference to a rule and reuse it in multiple places, calling `.Flatten(...)` on one of those references changes the policy at every other use site too. To get two flatten policies for the same shape, build two separate rule instances. After `Compile` returns the rule graph is sealed: calling `.As(...)`, `.Flatten(...)`, or any other mutation method on a sealed rule throws `InvalidOperationException`.
 
-Default values for `Flatten`, error messages, and so on match the C++ defaults from the original source. `OptionalWhitespace()` defaults to `FlattenType.Delete`. `Token('=')` defaults to `FlattenType.Delete`. `AllOf(...)` defaults to `FlattenType.Flatten`. `Integer()` defaults to `FlattenType.Preserve`. `Parse` applies these types to the tree before returning: `Delete` nodes are dropped, `Flatten` wrappers have their children lifted into the parent, and `Preserve` wrappers survive. `ParseOptions.PreserveAllSymbols` turns the whole pass off and gives you back a grammar-shaped debug tree with every wrapper in place.
+Default values for `Flatten`, error messages, and so on mostly match the C++ defaults from the original source. `OptionalWhitespace()` defaults to `FlattenType.Delete`. `Token('=')` defaults to `FlattenType.Delete`. `AllOf(...)` defaults to `FlattenType.Flatten`. `Integer()` and `Float()` are compositions whose outer rule also defaults to `FlattenType.Flatten`; call `.Preserve()` when you want to find them as wrapper nodes. `Parse` applies these types to the tree before returning: `Delete` nodes are dropped, `Flatten` wrappers have their children lifted into the parent, and `Preserve` wrappers survive. `ParseOptions.PreserveAllSymbols` turns the whole pass off and gives you back a grammar-shaped debug tree with every wrapper in place.
 
 ### User-Defined Rules
 
 `Rule` is an abstract class and users can derive from it to add matching logic the built-in composites do not cover. The contract a subclass has to satisfy:
 
 - Implement the matching method to either consume input and return a `Symbol` subtree (success) or return null and roll back its lexer transaction (failure). Never consume input on failure.
-- Use the lexer's transactional API (`Begin`, `Commit`, `Rollback`) so backtracking by outer rules works correctly.
+- Use the lexer's transactional API (`BeginTransaction`, `Commit`, `Rollback` or `Dispose`) so backtracking by outer rules works correctly.
 - Emit trace output in the same format as built-in rules when `ParseOptions.TraceSink` is set, so grammar-wide traces remain readable.
 - Participate in `Compile`: declare yourself named via `.As(...)` if you want an id, declare flatten policy if it matters for tree shape, seal against modification after `Compile` returns.
 
-The full contract including method signatures and the lexer API is documented in [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md) under "Tokens and Leaves" and "How a Rule's Match Method Looks". For grammars that compose existing leaves (which is most grammars) you never need to derive. The built-in composites cover the PEG operators and the built-in leaves cover the character-class cases. User-defined rules matter when you are adding behavior the composites cannot express, for example a rule that consumes until a specific byte-level offset, a grammar-context-aware matcher that queries external state, or a custom character-boundary detector.
+The full contract including method signatures and the lexer API is documented in [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md) under "Tokens and Leaves" and "How a Rule's Match Method Looks". For grammars that compose existing leaves (which is most grammars) you never need to derive. The built-in composites cover the usual ways rules are combined: run these rules in order, try these alternatives, repeat this rule, or check ahead without consuming input. The built-in leaves cover the character-class cases. User-defined rules matter when you are adding behavior the composites cannot express, for example a rule that consumes until a specific UTF-16 offset, a grammar-context-aware matcher that queries external state, or a custom character-boundary detector.
 
 ## The Parse Result
 
@@ -304,7 +304,7 @@ public enum ParseOutcome
     Timeout,               // ParseOptions.Timeout elapsed
     RuleCountLimitExceeded,  // ParseOptions.RuleCountLimit exceeded
     DepthLimitExceeded,    // ParseOptions.MaxDepth exceeded
-    Canceled               // ParseOptions.CancellationToken fired
+    Canceled               // ParseOptions.Cancellation was canceled
 }
 ```
 
@@ -420,7 +420,7 @@ else
     Console.WriteLine($"Parse failed: {error}");
 ```
 
-If you have several compilers that share the same scaffolding, or you want a consistent `TryCompile(out TResult, out string error)` contract on a public API, it is worth writing a small reusable base class once and inheriting from it. The library does not ship one because the right shape is opinionated (return nullable vs out-parameter vs throw, whether to forward `ParseOptions`, and so on). See [Recipes.md](Recipes.md) for the pattern and an example. For one-off compilers, the plain function shown above is simpler.
+If you have several compilers that share the same scaffolding, or you want a consistent `TryCompile(out TResult, out string error)` contract on a public API, it is worth writing a small reusable base class once and inheriting from it. The library does not ship one because the right shape depends on use (return nullable vs out-parameter vs throw, whether to forward `ParseOptions`, and so on). For one-off compilers, the plain function shown above is simpler.
 
 ## A Bigger Example: Nested Rules
 
@@ -474,7 +474,7 @@ var document = AllOf(
 ).As("document").Preserve().Compile();
 ```
 
-The names here are string literals because these are local variables. For grammars organized as a class with rule fields, swap each `.As("key")` for `.As(nameof(Key))` so an IDE rename keeps the names in sync. See the class-based recipe in [Recipes.md](Recipes.md) for that pattern. The `.Preserve()` on the root keeps the whole document under one wrapper so `result.Tree.FindAll(pair)` works against it.
+The names here are string literals because these are local variables. For grammars organized as a class with rule fields, swap each `.As("key")` for `.As(nameof(Key))` so an IDE rename keeps the names in sync. The `.Preserve()` on the root keeps the whole document under one wrapper so `result.Tree.FindAll(pair)` works against it.
 
 Parses input like:
 
@@ -517,7 +517,7 @@ var options = new ParseOptions
 var result = grammar.Parse(input, options);
 ```
 
-`TraceSink` is `TextWriter?`. Set it to `Console.Out` for the C++ behavior, set it to a file writer to capture a trace, set it to a custom writer to filter or tag lines. Leave it null and tracing is off, with the trace statements compiled out via a cheap null check that IL2CPP devirtualizes.
+`TraceSink` is `TextWriter?`. Set it to `Console.Out` for the C++ behavior, set it to a file writer to capture a trace, set it to a custom writer to filter or tag lines. Leave it null and tracing is off, with trace-message construction short-circuited by a cheap null check that IL2CPP devirtualizes.
 
 The trace format matches the C++ version exactly, including the indentation-by-transaction-depth trick. We do this on purpose: the C++ test corpus has traced output captured in comments and docs, and matching the format lets us reuse those examples as reference material.
 
@@ -542,25 +542,27 @@ public sealed class ParseOptions
     /// grammar trip at exactly the same point on every run regardless of
     /// machine speed. Default catches catastrophic backtracking without
     /// clipping legitimate multi-MB parses. Raise it for genuinely huge
-    /// inputs. Lower it for tighter control. Set to null to disable (not
+    /// inputs. Lower it for tighter control. Set to 0 to disable (not
     /// recommended for untrusted input).
-    public long? RuleCountLimit { get; set; } = 10_000_000;
+    public long RuleCountLimit { get; set; } = 10_000_000;
 
     /// Recursion depth limit. Protects against stack overflow on
     /// pathologically nested input like ((((((...)))))). Default is
     /// ~10x deeper than any legitimate grammar produces; real data
-    /// almost never nests past ~100 levels.
-    public int? MaxDepth { get; set; } = 1000;
+    /// almost never nests past ~100 levels. Set to 0 to disable.
+    public int MaxDepth { get; set; } = 1000;
 
     /// Wall-clock limit. Polled from inside the parse loop with Stopwatch.
-    /// Portable to every platform including WebGL. No default. Interactive
-    /// callers set this for user-experience reasons. The rule-count limit
-    /// above handles the security case with a count that doesn't vary
-    /// across machines.
-    public TimeSpan? Timeout { get; set; }
+    /// Portable to every platform including WebGL. TimeSpan.Zero disables
+    /// it, which is the default. Interactive callers set this for user-
+    /// experience reasons. The rule-count limit above handles the security
+    /// case with a count that doesn't vary across machines.
+    public TimeSpan Timeout { get; set; } = TimeSpan.Zero;
 
-    /// Standard .NET cancellation. Polled alongside Timeout.
-    public CancellationToken CancellationToken { get; set; }
+    /// Optional external cancellation signal. Use ParseCancellation
+    /// directly, or bridge from an existing CancellationToken by registering
+    /// a callback that calls ParseCancellation.Cancel().
+    public ParseCancellation? Cancellation { get; set; }
 
     /// Tracing sink. Null means tracing off.
     public TextWriter? TraceSink { get; set; }
@@ -601,4 +603,4 @@ public enum InputUnit { Grapheme, Rune }
 
 When a budget trips, the parse returns a `ParseResult` with `Outcome` set to `Timeout`, `RuleCountLimitExceeded`, `DepthLimitExceeded`, or `Canceled` (not `GrammarMismatch`). Callers who need to distinguish "input was invalid" from "we ran out of budget" switch on `Outcome`.
 
-For the design rationale behind these choices (why three budgets and not one, why `Timeout` is opt-in but the others default on, why `CancellationTokenSource.CancelAfter` alone is insufficient on WebGL, and future ideas like the cut operator and packrat memoization), see [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md).
+For the design rationale behind these choices (why three budgets and not one, why `Timeout` is opt-in but the others default on, why cancellation uses `ParseCancellation` instead of relying on `CancellationTokenSource.CancelAfter`, and future ideas like the cut operator and packrat memoization), see [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md).

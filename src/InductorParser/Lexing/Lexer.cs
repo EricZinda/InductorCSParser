@@ -187,8 +187,8 @@ public abstract class Lexer
     // is in use. Rules that scan rune-by-rune need consistent
     // semantics even when the outer parse was configured with
     // GraphemeLexer. Callers that want to inspect one token at a
-    // time in the lexer's natural unit (one grapheme under
-    // GraphemeLexer, one rune under RuneLexer) should call
+    // time in the lexer's natural unit (one StringInfo text element under
+    // GraphemeLexer, one scalar-value token under RuneLexer) should call
     // lexer.Read(). Note that Read() advances
     // the lexer, so for peek semantics wrap it in an uncommitted
     // transaction:
@@ -698,7 +698,7 @@ internal readonly struct LiteralScannerCandidate
 
         // LiteralIgnoreAsciiCase is intentionally ASCII-only. Keep the
         // scanner prefilter under the exact same rule: only A-Z/a-z fold
-        // together, and every other rune has to match bit-for-bit. This
+        // together, and every other rune has to match by exact code point. This
         // prevents the optimization from accepting Unicode case-folding
         // candidates that the real rule would reject.
         return IgnoreAsciiCase

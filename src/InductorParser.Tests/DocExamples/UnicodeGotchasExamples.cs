@@ -162,7 +162,7 @@ public class UnicodeGotchasExamples
 
     // "Variation Selectors": stripping U+FE00..U+FE0F before parsing
     // removes the emoji-style variation selector that would otherwise
-    // make byte-equality fail.
+    // make exact string matching fail.
     [Test]
     public void Variation_selector_strip_recipe()
     {

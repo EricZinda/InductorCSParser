@@ -57,7 +57,7 @@ public class LexerSwitchTests
     // CoreCLR-only: under netstandard2.1 / IL2CPP the grapheme lexer
     // segments SkinTonedWaveGrapheme as two graphemes instead of one and
     // consumes both, so ErrorCharIndex ends up at 2 rather than 0.
-    // Tracked by backlog/r000.
+    // Tracked by backlog/xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md.
     [Test]
     public void OneOf_rejects_multi_rune_grapheme_under_grapheme_lexer()
     {

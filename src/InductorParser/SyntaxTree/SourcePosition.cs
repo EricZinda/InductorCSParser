@@ -13,13 +13,15 @@ public readonly struct SourcePosition
     // UTF-16 code units, what string.Substring / Span<char>.Slice / LSP use.
     public int CharIndex { get; }
 
-    // Unicode scalar values (code points or .Net Runes). A surrogate pair counts as
+    // Unicode scalar values (code points, i.e. .NET Runes). A surrogate pair counts as
     // one rune, so this index is smaller than or equal to CharIndex on
     // any input containing supplementary-plane characters.
     public int RuneIndex { get; }
 
-    // User-perceived characters (graphemes) per UAX #29. An emoji ZWJ sequence or a
-    // letter-plus-combining-mark counts as one grapheme, so this index
+    // User-perceived characters, using the same StringInfo text-element
+    // segmentation as GraphemeLexer. On modern .NET that follows UAX #29
+    // extended grapheme clusters. An emoji ZWJ sequence or a
+    // letter-plus-combining-mark may count as one grapheme, so this index
     // is smaller than or equal to RuneIndex on any input containing
     // multi-rune graphemes.
     public int GraphemeIndex { get; }

@@ -9,11 +9,10 @@ namespace InductorParser.Lexing;
 // than the internal normalized one. See ParseOptions.NormalizeInput for
 // the wider picture.
 //
-// Cost: zero in the common case (input already in the target normalization
-// form, so String.Normalize returned the same reference and translation is
-// a no-op reference check). When normalization actually rewrote the input,
-// one O(normalizedIndex) walk per parse failure. Not paid on the success
-// path.
+// Cost: a no-op reference check when normalization returned the original
+// string reference. When normalization rewrote the input, or when the
+// runtime returned a distinct but equivalent string, one O(normalizedIndex)
+// walk per parse failure. Not paid on the success path.
 //
 // Two walker shapes, one picked by the form:
 //
@@ -44,7 +43,7 @@ namespace InductorParser.Lexing;
 // this matches what a diagnostic consumer expects to see.
 //
 // Grapheme segmentation tracks whatever the .NET runtime the parser is
-// compiled on provides: UAX #29 compliant on .NET 5 and later,
+// running on provides: UAX #29 compliant on .NET 5 and later,
 // slightly-off on legacy runtimes (a handful of real grapheme clusters
 // segment incorrectly). The translator uses the same primitive the
 // grapheme lexer does, so whatever the lexer saw, the translator sees
@@ -53,10 +52,8 @@ internal static class NormalizedPositionMap
 {
     public static int TranslateToOriginal(string original, string normalized, int normalizedIndex, NormalizationForm? form)
     {
-        // Fast path: normalization was a no-op, so positions already match.
-        // String.Normalize returns the same instance when the input is
-        // already in the target form, which is essentially all typed and
-        // web-sourced text.
+        // Fast path: normalization was a no-op and the runtime gave us the
+        // same string instance, so positions already match.
         if (ReferenceEquals(original, normalized))
             return normalizedIndex;
 

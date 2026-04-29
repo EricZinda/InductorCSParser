@@ -5,8 +5,8 @@ using static InductorParser.Rules;
 
 namespace InductorParser.Tests.DocExamples;
 
-// Verifies the runnable code examples in docs/Recipes.md against their
-// documented behavior.
+// Runnable recipe-style examples kept under test so they can be copied into
+// documentation without drifting from library behavior.
 [TestFixture]
 public class RecipesExamples
 {

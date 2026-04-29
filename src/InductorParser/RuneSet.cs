@@ -262,7 +262,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
         // rune the way the caller expected" into a loud exception at
         // construction time. GetNextTextElement is the same API the
         // GraphemeLexer uses, so validation and tokenization agree on
-        // what a grapheme is.
+        // what a text element is.
         for (int index = 0; index < characters.Length;)
         {
             string grapheme = StringInfo.GetNextTextElement(characters, index);
@@ -510,9 +510,8 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     // rejects digits, whitespace, punctuation, symbols, and any multi-rune
     // grapheme like emoji. A grammar that wants "match everything up to the
     // next delimiter" or "match anything the other rules didn't claim"
-    // should use the pass-through-text recipe (see docs/Recipes.md): either
-    // NoneOf(stopSet) for delimiter-based stops, or Not(stopRule) + AnyToken()
-    // for rule-based stops.
+    // should use NoneOf(stopSet) for delimiter-based stops, or
+    // Not(stopRule) + AnyToken() for rule-based stops.
     public static RuneSet Letters => _letters.Value;
     public static RuneSet Digits => _digits.Value;
     public static RuneSet Whitespace => _whitespace.Value;

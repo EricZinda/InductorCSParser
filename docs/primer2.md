@@ -18,9 +18,9 @@ Two sections, each with a couple of `key = value` lines. We'll parse it, walk th
 A quick spec, so the rules below don't surprise you:
 
 - A line is one of a section header, a key/value pair, or blank.
-- A section header is `[name]` on its own line. Names are non-whitespace runes, no `]`. So `[a=b]` is legal (`=` only has special meaning between a key and a value), but `[my server]` and `[ server ]` are not.
-- A key/value pair is `key = value`. Keys are non-whitespace runes, no `=`. Whitespace around `=` is optional.
-- Values are typed: an integer, a float, a double-quoted string, or a bare word (a single run of non-whitespace, non-quote runes). Multi-word strings need quotes, so `name = "my favorite thing"` works but `name = my favorite thing` doesn't.
+- A section header is `[name]` on its own line. Names are tokens that are not single-rune whitespace and not `]`. So `[a=b]` is legal (`=` only has special meaning between a key and a value), but `[my server]` and `[ server ]` are not.
+- A key/value pair is `key = value`. Keys are tokens that are not single-rune whitespace and not `=`. Whitespace around `=` is optional.
+- Values are typed: an integer, a float, a double-quoted string, or a bare word (a single run of tokens that are not single-rune whitespace or quotes). Multi-word strings need quotes, so `name = "my favorite thing"` works but `name = my favorite thing` doesn't.
 - Line terminators are the full Unicode set (LF, CR, CRLF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR, VT, FF), not just `\n`.
 
 The grammar:
@@ -78,7 +78,7 @@ var line = FirstOf(section, keyValue, blankLine);
 var config = AllOf(ZeroOrMore(line), Eof()).As("config").Preserve();
 ```
 
-`name` and `key` are the same shape: one or more runes that aren't whitespace and aren't the stop character (`]` for names, `=` for keys). `NoneOf(set)` matches one rune outside the set, and `|` is set union.
+`name` and `key` are the same shape: one or more tokens that are not single-rune whitespace and not the stop character (`]` for names, `=` for keys). `NoneOf(set)` matches a token when it is not exactly one rune from the set, and `|` is set union.
 
 `value` is where typing happens. Each alternative is `.As(name).Preserve()` so the matching one lands in the tree as a typed child. `Float()` and `Integer()` are built-in rules, `quotedString` is the standard open-quote/body/close-quote shape and `bareWord` catches everything else. Order in `FirstOf` matters because it stops at the first match: `Float` is before `Integer` so `3.14` doesn't commit to `3` and leave `.14` for the next rule to choke on.
 
@@ -265,7 +265,7 @@ That's a section name made of a single family emoji, then a malformed key/value 
 
 The section header itself parses fine: `name` rejects single-rune whitespace and `]`, but a multi-rune grapheme cluster like the family emoji isn't any single rune in any set, so `NoneOf` accepts it as one token. The parser gets past the header and fails on line 2 at the same spot it would for an ASCII version: where the `=` should be.
 
-But the position numbers diverge. To a human, the family is one character and the failure happens 5 characters into the second line. In memory, the family is five runes (man, ZWJ, woman, ZWJ, girl) and eight UTF-16 code units (each emoji is a surrogate pair, plus three more code units for the two ZWJs). So which "position" should the parser report?
+But the position numbers diverge. To a human, the family is one character and the failure happens 5 characters into the second line. In memory, the family is five runes (man, ZWJ, woman, ZWJ, girl) and eight UTF-16 code units (each emoji is a surrogate pair, plus two code units for the two ZWJs). So which "position" should the parser report?
 
 Inductor Parser reports it four ways, because the right unit depends on what the caller is going to do with the number:
 
@@ -286,4 +286,3 @@ Use `ErrorRuneIndex` when you're working with runes directly. Less common, but i
 Use `ErrorGraphemeIndex` for anything that faces a human. "Error at character 9" is what a person sees on screen. "Error at character 16" would seem to point past the end of what they typed, because they don't think of an emoji as taking up 8 of anything.
 
 Most of the time you won't care, because most input is ASCII and all four numbers are equal. But the moment a user pastes in an emoji, a flag, or a letter with a combining accent, the indices diverge, and "which one do I show in the error message" stops being a question you can ignore.
-

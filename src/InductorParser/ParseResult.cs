@@ -13,7 +13,7 @@ namespace InductorParser;
 // The error-position family reports the same point (where the parse
 // got furthest before failing) in different units: ErrorCharIndex
 // (chars / UTF-16 code units), ErrorRuneIndex (Unicode code points),
-// ErrorGraphemeIndex (user-perceived characters), and the
+// ErrorGraphemeIndex (StringInfo text elements), and the
 // ErrorLine / ErrorColumn pair (LSP-style zero-based line and
 // column). Pick whichever matches the unit the caller will use the
 // number in. ErrorPosition returns all five bundled into one
@@ -100,11 +100,10 @@ public readonly struct ParseResult
     public int ErrorRuneIndex =>
         SourcePositionConverter.ToRuneIndex(_input ?? string.Empty, ErrorCharIndex);
 
-    // Error position in graphemes (user-perceived characters, per
-    // UAX #29). An emoji ZWJ sequence or a letter-plus-combining-mark
-    // counts as one grapheme, so this index is smaller than or equal
-    // to ErrorRuneIndex on any input that contains multi-rune
-    // graphemes. Computed lazily from ErrorCharIndex.
+    // Error position in graphemes, using the same StringInfo
+    // text-element segmentation as GraphemeLexer. On modern .NET this
+    // follows UAX #29 extended grapheme clusters. Computed lazily from
+    // ErrorCharIndex.
     public int ErrorGraphemeIndex =>
         SourcePositionConverter.ToGraphemeIndex(_input ?? string.Empty, ErrorCharIndex);
 

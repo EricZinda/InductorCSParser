@@ -271,7 +271,8 @@ public class TokenRuleTests
     // implement. Gated to net8.0 / CoreCLR because Token(...) rejects these
     // at construction on the legacy walker (it sees more than one grapheme
     // and throws). See docs/UnicodeGotchas.md "Pre-.NET 5 Grapheme
-    // Segmentation" and backlog/r000.
+    // Segmentation" and
+    // backlog/xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md.
 
     [Test]
     public void Token_with_skin_tone_modifier_sequence_matches_one_grapheme_on_uax29_runtime()

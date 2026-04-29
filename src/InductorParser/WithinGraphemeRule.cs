@@ -30,9 +30,10 @@ namespace InductorParser;
 //   outer lexer's input string (no Substring copy). That sub-lexer
 //   does not share trace or budget state with the outer lexer. Trace
 //   output from the inner rule doesn't appear in the outer trace.
-//   Budget-wise this is safe: the inner parse is bounded by the
-//   grapheme's rune count (a few dozen at most), so runaway is
-//   impossible in practice.
+//   It can only consume inside the outer token's span, so normal
+//   character-consuming rules are tiny. Avoid using arbitrary
+//   long-running user code here, because the sub-lexer has no shared
+//   budget counters.
 //
 // - Inner-rule Symbols are discarded. WithinGrapheme emits one leaf
 //   Symbol representing the whole grapheme on success. Callers that

@@ -7,8 +7,9 @@ namespace InductorParser;
 
 public sealed class ParseOptions
 {
-    // Atomic unit the lexer reads. Default is grapheme so user-typed text
-    // behaves the way users expect: one character for a user is one token.
+    // Atomic unit the lexer reads. Default is Grapheme so user-typed text
+    // usually behaves the way users expect: one visible character is one token
+    // grouped by StringInfo .
     public InputUnit InputUnit { get; set; } = InputUnit.Grapheme;
 
     // Normalization form applied to the input before parsing. Default is the
@@ -22,12 +23,11 @@ public sealed class ParseOptions
     // Positions reported in ParseResult (ErrorCharIndex and its derived
     // line/column/rune/grapheme properties) are ALWAYS into the caller's
     // original input string, regardless of this setting. When normalization
-    // actually rewrites the input, the parser translates failure offsets
-    // back to original-string coordinates at the boundary, so callers never
-    // have to think about which coordinate system a position lives in. The
-    // common case where the input is already in the target form pays zero
-    // extra cost: String.Normalize returns the same string reference and
-    // the translation step is skipped.
+    // rewrites the input, the parser translates failure offsets back to
+    // original-string coordinates at the boundary, so callers never have to
+    // think about which coordinate system a position lives in. If
+    // normalization returns the original string reference, translation is
+    // skipped; otherwise the mapping is paid only on failure / abort paths.
     public NormalizationForm? NormalizeInput { get; set; } = NormalizationForm.FormC;
 
     // Where trace output goes when the parser is tracing. Null means

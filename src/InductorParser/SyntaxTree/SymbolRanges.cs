@@ -22,8 +22,8 @@ namespace InductorParser.SyntaxTree;
 // Putting the rune range at the bottom is what makes this work cheaply:
 // a lexer that matches one rune can build its Symbol by treating the
 // rune itself AS the id, no translation needed. Built-in and custom ids
-// live past the Unicode ceiling (0x10FFFF is the last assigned Unicode
-// code point), so they're guaranteed not to overlap.
+// live past the Unicode ceiling (0x10FFFF is the highest Unicode code
+// point), so they're guaranteed not to overlap.
 public static class SymbolRanges
 {
     public const int CharacterRangeEnd = 0x110000;   // one past the last Unicode code point

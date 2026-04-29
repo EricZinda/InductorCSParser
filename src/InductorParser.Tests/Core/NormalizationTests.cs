@@ -113,9 +113,10 @@ public class NormalizationTests
     [Test]
     public void Already_normalized_input_reports_positions_identical_to_null_option()
     {
-        // The common case: input is already in FormC, so String.Normalize
-        // returns the same reference and translation is a no-op. Failure
-        // positions must come out identical to the no-normalization path.
+        // The common case: input is already in FormC, so normalization
+        // should not change the text. Failure positions must come out
+        // identical to the no-normalization path whether the runtime
+        // returns the same string reference or an equivalent one.
         string input = CafePrecomposed + "X";
         var rule = AllOf(CafeRule(), Token('1'), Eof());
 
@@ -133,7 +134,7 @@ public class NormalizationTests
     [Test]
     public void NormalizeInput_null_reports_positions_exactly_into_decomposed_input()
     {
-        // With normalization off, the lexer sees the original bytes and
+        // With normalization off, the lexer sees the original input string and
         // positions are trivially into the original. This test locks in
         // that baseline so a future refactor can't silently regress it.
         string input = CafeDecomposed + "X";
