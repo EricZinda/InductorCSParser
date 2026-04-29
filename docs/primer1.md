@@ -112,3 +112,34 @@ First, each symbol is shown indented based on where in the tree it was, followed
 Next, `Token` just prints out its value without `Token` in front of it. This is why you see bare `'H'` and `'o'` in the output.
 
 Note that `Not` doesn't actually consume anything so it has nothing to print out. It just ensures that whatever is inside it is not coming up.
+
+# What about Unicode?
+
+Notice we never said anything about characters versus bytes versus runes. We just wrote `AnyToken()` and the parser figured out what counted as "one token." That wasn't an accident. The default lexer treats one user-perceived character as one token, even when that character is built out of several Unicode code points underneath.
+
+Try the same grammar with emoji in both the input *and* the text we're matching on:
+
+```CSharp
+var target = Literal("this 👨‍👩‍👧 sequence of characters");
+var example = AllOf(ZeroOrMore(AllOf(Not(target), AnyToken())),
+                    target);
+
+var result = example.Parse("How can I match 👋🏽 anything up until this 👨‍👩‍👧 sequence of characters");
+Console.WriteLine(result.ToString());
+```
+
+The output (with one space at the end):
+
+```
+How can I match 👋🏽 anything up until 
+```
+
+Two different multi-rune graphemes are at work here. The waving hand 👋🏽 is a base emoji plus a skin-tone modifier (two runes, one grapheme). The family 👨‍👩‍👧 is built from five runes joined by zero-width joiners (man, ZWJ, woman, ZWJ, girl) and takes eight UTF-16 code units to encode. The grammar didn't need to know any of that.
+
+`AnyToken()` asked for "one token" in the middle and got the waving hand as a single unit, the same way a person reading the string would count it. And `Literal("this 👨‍👩‍👧 sequence of characters")` matched the family emoji in the target text as one token too, because the Literal walks the input the same way the rest of the grammar does. There is no special "Unicode mode" you have to opt into. The exact-match string and the input string are both read as a stream of user-perceived characters, and they line up.
+
+The same thing works with accented letters typed as a base letter plus a combining mark, with regional-indicator flag pairs like 🇺🇸, and with combining-mark scripts like Devanagari or Thai. They all come through as one token each, both inside `AnyToken()` and inside `Literal(...)`.
+
+This matters because the most common Unicode bug in parsers is silently splitting a multi-rune grapheme into pieces. A grammar that consumes one rune from 👨‍👩‍👧 and stops would leave six dangling runes for the next rule to trip over. The default lexer (called `GraphemeLexer`) avoids this by walking the input one user-perceived character at a time. If you want to look *inside* a grapheme (to inspect combining marks individually, say) there's an opt-in `RuneLexer` and a `WithinGrapheme(...)` helper. But for normal text processing, you don't have to think about any of this. The grammar above already does the right thing on emoji, accented letters, CJK text, and complex scripts.
+
+For the bigger picture (normalization, line terminators beyond `\n`, position tracking in chars vs. runes vs. graphemes) see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). For the surprises that *do* come up and how to handle them, see [UnicodeGotchas.md](UnicodeGotchas.md).
