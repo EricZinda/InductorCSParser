@@ -8,7 +8,7 @@
 // fails to compile on the netstandard2.1 target with CS0246.
 //
 // The attribute is a pure compile-time marker: the CLR never inspects
-// it, so polyfilling is byte-for-byte equivalent to the BCL's type as
+// it, so polyfilling behaves the same as the BCL's type as
 // far as the C# compiler is concerned. Marking it `internal` keeps it
 // out of the public surface so callers don't see two
 // InterpolatedStringHandlerAttribute types (ours plus the BCL's on

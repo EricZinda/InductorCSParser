@@ -1,5 +1,7 @@
+using System;
 using NUnit.Framework;
 using InductorParser;
+using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
@@ -100,5 +102,29 @@ public class RuneRunRuleTests
             "   SUCC | RuneRun: count= 3, 3 chars, wanted one or more of '[A-Z,a-z]'"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void Sealed_RuneRun_rejects_Flatten()
+    {
+        var rule = RuneRun(RuneSet.Ascii.Letters);
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
+    }
+
+    [Test]
+    public void Sealed_RuneRun_rejects_WithError()
+    {
+        var rule = RuneRun(RuneSet.Ascii.Letters);
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
+    }
+
+    [Test]
+    public void Sealed_RuneRun_rejects_As()
+    {
+        var rule = RuneRun(RuneSet.Ascii.Letters);
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
 }

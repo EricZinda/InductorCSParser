@@ -39,6 +39,11 @@ namespace InductorParser;
 // (AllOfRule, FirstOfRule, TokenRule, etc.) subclass it. User code can subclass
 // Rule too if it needs matching logic the built-in rules can't express.
 // See TryParseRule below for the full subclass contract.
+//
+// Per-rule tests live in src/InductorParser.Tests/Rules/<RuleName>Tests.cs.
+// See docs/TestArchitecture.md for the per-rule test conventions
+// (success, failure position, WithError propagation, positional fallback,
+// sealed-rule rejection) every concrete subclass must cover.
 public abstract class Rule
 {
     // See below for description
@@ -382,6 +387,10 @@ public abstract class Rule
     // Id assignment runs in three passes:
     //   1. Pinned ids first. Rules that called .As(SymbolId) keep the id
     //      they were given, and that id is reserved against later passes.
+    //      Two reachable rules pinned to the same SymbolId are rejected
+    //      here with a clear error, since downstream lookups by raw
+    //      SymbolId (parse-tree walking, NameOf) can't disambiguate
+    //      duplicate ids.
     //   2. Named rules get a hash-of-name id in the custom range. If the
     //      hash slot is already taken (by a pinned id or an earlier named
     //      rule), the id linear-probes upward until it finds an empty
@@ -398,9 +407,10 @@ public abstract class Rule
         if (_sealed) return this;
 
         var usedIds = new HashSet<int>();
+        var pinnedRules = new Dictionary<int, Rule>();
 
         var visited = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
-        CollectPinnedIds(this, visited, usedIds);
+        CollectPinnedIds(this, visited, usedIds, pinnedRules);
 
         visited.Clear();
         AssignNamedIds(this, visited, usedIds);
@@ -497,11 +507,10 @@ public abstract class Rule
         // Normalize before the lexer sees the input so grammars written
         // against one composition form also match the other. The common
         // case (input already in the target form, essentially all typed
-        // and web-sourced text) costs a single IsNormalized short-circuit
-        // inside String.Normalize and returns the same reference, so no
-        // allocation and no downstream translation. Null means "skip
-        // normalization entirely," which trades the safety net for
-        // byte-exact round-trippability.
+        // and web-sourced text) is usually just a normalization scan. If
+        // normalization returns the original string reference, downstream position
+        // translation is skipped. Null means "skip normalization entirely,"
+        // which trades the safety net for character-exact round-trippability.
         string parseInput = options.NormalizeInput.HasValue
             ? input.Normalize(options.NormalizeInput.Value)
             : input;
@@ -541,7 +550,7 @@ public abstract class Rule
             int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, options.NormalizeInput);
             return ParseResult.Failed(failurePos, BuildErrorMessage(lexer, pos), input, this);
         }
-        if (!lexer.IsEof)
+        if (!options.AllowTrailingInput && !lexer.IsEof)
         {
             var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
             int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, options.NormalizeInput);
@@ -742,14 +751,51 @@ public abstract class Rule
     }
 
     // Pass 1. Walk the graph and stash any explicitly-pinned ids so the
-    // later passes know which slots are off limits.
-    private static void CollectPinnedIds(Rule r, HashSet<Rule> visited, HashSet<int> usedIds)
+    // later passes know which slots are off limits. Reject two reachable
+    // rules whose user-supplied .As(SymbolId) pins land on the same
+    // custom-range id with a compile-time error that names both rules.
+    // Allowing custom-range duplicate user pins would break parse-tree
+    // lookups by raw SymbolId and let NameOf return whichever rule the
+    // graph walk happened to visit second.
+    //
+    // Two ids are out of scope for this check:
+    //
+    //   * Pre-pinned ids in the rune range (every single-rune Token has
+    //     its code point pinned at construction time). A grammar that
+    //     mentions Token('a') twice has two rules sharing id 97 by design,
+    //     NameOf short-circuits the rune range to the rune string, and
+    //     there is no rule-name ambiguity to resolve.
+    //
+    //   * Ids stamped by a prior Compile on a sub-rule. If the caller
+    //     compiled a sub-grammar and is now compiling a larger grammar
+    //     that reaches it, those ids look pinned but were not chosen by
+    //     the user. A user pin via .As(SymbolId) always happens before
+    //     Compile (As throws on a sealed rule), so a rule whose id is
+    //     assigned but is not yet sealed is the user-pinned shape we
+    //     care about here.
+    private static void CollectPinnedIds(Rule r, HashSet<Rule> visited, HashSet<int> usedIds, Dictionary<int, Rule> pinnedRules)
     {
         if (!visited.Add(r)) return;
-        if (r._idAssigned) usedIds.Add(r.Id.Value);
+        if (r._idAssigned)
+        {
+            int idValue = r.Id.Value;
+            bool isUserPinnedCustom = !r._sealed && idValue >= SymbolRanges.CustomRangeStart;
+            if (isUserPinnedCustom && pinnedRules.TryGetValue(idValue, out var existing))
+            {
+                throw new InvalidOperationException(
+                    $"Two reachable rules pin SymbolId({idValue}): " +
+                    $"'{DescribePinnedRule(existing)}' and '{DescribePinnedRule(r)}'. " +
+                    $"Each .As(new SymbolId(...)) pin must be unique within a grammar.");
+            }
+            if (isUserPinnedCustom)
+                pinnedRules[idValue] = r;
+            usedIds.Add(idValue);
+        }
         foreach (var child in r.Children)
-            CollectPinnedIds(child, visited, usedIds);
+            CollectPinnedIds(child, visited, usedIds, pinnedRules);
     }
+
+    private static string DescribePinnedRule(Rule r) => r.Name ?? r._ruleTraceName;
 
     // Pass 2. For every Rule that has a Name but no id yet, hash the name
     // into the custom range and probe upward from the hash slot to find

@@ -46,7 +46,7 @@ namespace InductorParser.Tests;
 //     if it ever does happen (e.g. RuneLexer), we attribute the '\n'
 //     to the prior line so the column stays non-negative.
 //
-// See docs/ProgrammingModel.md "LSP Position Semantics" for the full
+// See docs/InductorParserDesignDecisions.md "LSP Position Semantics" for the full
 // rationale.
 // ------------------------------------------------------------------
 [TestFixture]

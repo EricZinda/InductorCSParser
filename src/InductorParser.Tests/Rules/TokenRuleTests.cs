@@ -1,6 +1,7 @@
 using System;
 using NUnit.Framework;
 using InductorParser;
+using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
@@ -270,7 +271,8 @@ public class TokenRuleTests
     // implement. Gated to net8.0 / CoreCLR because Token(...) rejects these
     // at construction on the legacy walker (it sees more than one grapheme
     // and throws). See docs/UnicodeGotchas.md "Pre-.NET 5 Grapheme
-    // Segmentation" and backlog/r000.
+    // Segmentation" and
+    // backlog/xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md.
 
     [Test]
     public void Token_with_skin_tone_modifier_sequence_matches_one_grapheme_on_uax29_runtime()
@@ -318,4 +320,28 @@ public class TokenRuleTests
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 #endif
+
+    [Test]
+    public void Sealed_Token_rejects_Flatten()
+    {
+        var rule = Token('a');
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
+    }
+
+    [Test]
+    public void Sealed_Token_rejects_WithError()
+    {
+        var rule = Token('a');
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
+    }
+
+    [Test]
+    public void Sealed_Token_rejects_As()
+    {
+        var rule = Token('a');
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.As("late"));
+    }
 }

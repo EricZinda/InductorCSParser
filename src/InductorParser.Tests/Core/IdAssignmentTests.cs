@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
@@ -64,6 +65,33 @@ public class IdAssignmentTests
 
         int expected = Rule.HashNameToCustomRange("settingName");
         Assert.That(rule.Id.Value, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void Two_reachable_rules_pinned_to_the_same_SymbolId_fail_to_compile()
+    {
+        var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 1234);
+        var firstRule = OneOrMore(OneOf(RuneSet.Letters)).As(pinned).As("first");
+        var secondRule = OneOrMore(OneOf(RuneSet.Digits)).As(pinned).As("second");
+        var doc = AllOf(firstRule, secondRule);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => doc.Compile());
+        Assert.That(exception!.Message, Does.Contain(pinned.Value.ToString()));
+        Assert.That(exception.Message, Does.Contain("first"));
+        Assert.That(exception.Message, Does.Contain("second"));
+    }
+
+    [Test]
+    public void Same_pinned_rule_referenced_twice_in_a_grammar_compiles()
+    {
+        // Reachability is per-rule, not per-edge. A single rule reached via
+        // two parents is still one rule, so its pin should not be flagged.
+        var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 4321);
+        var sharedRule = OneOrMore(OneOf(RuneSet.Letters)).As(pinned);
+        var doc = AllOf(sharedRule, sharedRule);
+
+        Assert.DoesNotThrow(() => doc.Compile());
+        Assert.That(sharedRule.Id, Is.EqualTo(pinned));
     }
 
     [Test]

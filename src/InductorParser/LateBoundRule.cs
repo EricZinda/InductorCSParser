@@ -34,6 +34,12 @@ namespace InductorParser;
 // target. The produced Symbol carries the target rule's Id, not the
 // LateBoundRule's, because LateBoundRule is a structural placeholder,
 // not a meaningful grammar node.
+//
+// Tests live in src/InductorParser.Tests/Rules/LateBoundRuleTests.cs.
+// See docs/TestArchitecture.md for the per-rule test conventions.
+// LateBoundRule is the exception to universal requirement #5: it
+// rejects .As / .Flatten / .WithError always, not just after Compile,
+// so its tests verify the always-rejecting form.
 public sealed class LateBoundRule : Rule
 {
     private readonly string? _debugName;

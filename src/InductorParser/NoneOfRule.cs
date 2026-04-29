@@ -16,6 +16,11 @@ namespace InductorParser;
 //
 // EOF never matches. The rule reads one token. At EOF the token has
 // IsEof == true and the rule fails without advancing, same as OneOfRule.
+//
+// Tests live in src/InductorParser.Tests/Rules/NoneOfRuleTests.cs.
+// See docs/TestArchitecture.md for the per-rule test conventions
+// (success, failure position, WithError propagation, positional fallback,
+// sealed-rule rejection).
 internal sealed class NoneOfRule : Rule
 {
     private readonly RuneSet _set;

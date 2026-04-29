@@ -2,9 +2,11 @@ using System;
 
 namespace InductorParser.Lexing;
 
-// A Token is one chunk of input the lexer just consumed: one rune under
-// RuneLexer, one grapheme cluster under GraphemeLexer, or a flag-only
-// token at end-of-input. Instead of copying the matched text into a new
+// A Token is one chunk of input the lexer just consumed: one scalar-value
+// token (Rune) under RuneLexer for well-formed UTF-16 input, one .NET text element (Grapheme)
+// under GraphemeLexer, or a flag-only token at end-of-input. Stray surrogate
+// halves under RuneLexer surface as one-code-unit tokens with no RuneValue.
+// Instead of copying the matched text into a new
 // string, a Token keeps a reference to the original input plus an offset
 // and a length.
 //

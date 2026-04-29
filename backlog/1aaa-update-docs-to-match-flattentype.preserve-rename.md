@@ -4,9 +4,8 @@ The enum value `FlattenType.None` was renamed to `FlattenType.Preserve`
 and the `TryParseRule` parameter `successfulChildSymbols` was renamed to
 `outputSymbols`. The source code and tests are updated, but these
 documents still reference the old names and need a pass:
-	- docs/Recipes.md
-	- docs/ProgrammingAGrammar.md
-	- docs/ProgrammingModel.md
+	- docs/InductorParserReference.md
+	- docs/InductorParserDesignDecisions.md
 	- src/Benchmarks/README.md
 
 	- backlog/9lll-fixes.md (the existing "Should FlattenType.None be

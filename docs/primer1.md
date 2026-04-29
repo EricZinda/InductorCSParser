@@ -1,4 +1,4 @@
-# Inductor Parser Primer: Getting Started
+# Inductor Parser Primer 1: Getting Started
 Let's answer a top stackoverflow question, but use the Inductor Parser instead of Regex: [How can I match "anything up until this sequence of characters"?](https://stackoverflow.com/questions/7124778/)
 
 To parse text using the Inductor Parser, you build up a set of rules that "consume" the text, in the order they are written. The set of rules is called a "grammar". More often than not it will read very close to the way you'd describe it in words. In this case:
@@ -6,7 +6,7 @@ To parse text using the Inductor Parser, you build up a set of rules that "consu
 "Anything"
 "Until I hit this sequence of characters"
 ```
-There are rules that consume characters, like `Token` (meaning a single human perceived character), `Literal` (a sequence of tokens) and `Integer`. These are your basic building blocks. In this example, let's replace the second part with:
+There are rules that consume text units, like `Token` (a single token: a grapheme by default, or a rune if you opt into `RuneLexer`), `Literal` (an exact string) and `Integer`. These are your basic building blocks. In this example, let's replace the second part with:
 
 ```
 "Anything"
@@ -16,7 +16,7 @@ The `Literal("this sequence of characters")` will consume what we are looking fo
 
 The parser has rules that consume a specific number of "something" you want, such as: `ZeroOrMore(rule)`, `AtLeast(n, rule)`, `BetweenInclusive(n, m, rule)`. These rules need to know what "something" you are counting, so you add a rule as an argument to tell it what to count. 
 
-In this case, "Anything" can be represented as "zero or more of any token" (remember that a `Token` is just a character), so lets start by using the `ZeroOrMore` and `AnyToken` rules:
+In this case, "Anything" can be represented as "zero or more of any token" (under the default lexer, roughly one user-perceived character at a time), so lets start by using the `ZeroOrMore` and `AnyToken` rules:
 ```
 ZeroOrMore(AnyToken())
 Literal("this sequence of characters")
@@ -88,9 +88,9 @@ var options = new ParseOptions { PreserveAllSymbols = true };
 var result = example.Parse("How can I match anything up until this sequence of characters", options);
 if (!result.Success)
     throw new FormatException(result.ErrorMessage);
-Console.WriteLine(result.ToString());
+Console.WriteLine(result.PrintTree());
 ```
-Then, the output will show you all of the Symbols, like this (how to decode this is described right after it): 
+`result.PrintTree()` walks the parse tree and prints each Symbol on its own line, indented by its depth. (`result.ToString()` is the other handy view: it returns the matched input text without the indentation.) The output looks like this (how to decode it is described right after): 
 
 ```CSharp
 AllOf: "How can I match anything up until this sequence of characters"
@@ -112,4 +112,3 @@ First, each symbol is shown indented based on where in the tree it was, followed
 Next, `Token` just prints out its value without `Token` in front of it. This is why you see bare `'H'` and `'o'` in the output.
 
 Note that `Not` doesn't actually consume anything so it has nothing to print out. It just ensures that whatever is inside it is not coming up.
-

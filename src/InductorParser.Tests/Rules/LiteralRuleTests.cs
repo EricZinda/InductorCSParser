@@ -1,6 +1,7 @@
 using System;
 using NUnit.Framework;
 using InductorParser;
+using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
@@ -233,5 +234,29 @@ public class LiteralRuleTests
         var sink = NewSink();
         LiteralIgnoreAsciiCase("hi").Parse("HI", new ParseOptions { TraceSink = sink });
         Assert.That(sink.ToString(), Does.Contain("LiteralIgnoreAsciiCase"));
+    }
+
+    [Test]
+    public void Sealed_Literal_rejects_Flatten()
+    {
+        var rule = Literal("abc");
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
+    }
+
+    [Test]
+    public void Sealed_Literal_rejects_WithError()
+    {
+        var rule = Literal("abc");
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
+    }
+
+    [Test]
+    public void Sealed_Literal_rejects_As()
+    {
+        var rule = Literal("abc");
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
 }

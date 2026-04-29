@@ -10,12 +10,12 @@ namespace InductorParser;
 // may begin an identifier (XID_Start) and which may continue one
 // (XID_Continue). Spec: https://www.unicode.org/reports/tr31/ .
 //
-// UAX #31 R1 defines the default identifier syntax as the pattern
-// XID_Start XID_Continue*. Python, Rust, C#, Swift, and most modern
-// programming languages use exactly this rule (with slight variations). 
-// Grammars built on this
-// parser get it via Rules.Identifier(), which wires these two sets into
-// the combinator (see Rules.cs).
+// UAX #31 R1 defines a default identifier syntax as the pattern
+// XID_Start XID_Continue*. Python and Rust build on this shape; C#,
+// ECMAScript, Java, Swift, and other languages have nearby but not
+// identical profiles. Grammars built on this parser get the UAX #31-shaped
+// rule via Rules.Identifier(), which wires these two sets into the
+// combinator (see Rules.cs).
 //
 // UAX #31 R4 (NFC equivalence) says two identifiers are equal if their
 // NFC normalizations are equal. That's handled elsewhere: ParseOptions
@@ -51,14 +51,14 @@ namespace InductorParser;
 //   XidContinue = ((L+Nl+Mn+Mc+Nd+Pc) | XidContinueAdds) & ~XidContinueExclusions
 //
 // where the General_Category parts come from the BCL and the add/remove
-// arrays are verbatim from DerivedCoreProperties.txt and PropList.txt
-// at the Unicode version listed below. The reconstruction has been
-// verified to match the spec's XID_Start and XID_Continue exactly.
+// arrays are from DerivedCoreProperties.txt and PropList.txt at the Unicode
+// version listed below. Exact coverage follows the Unicode version in the
+// runtime's General_Category tables plus these exception tables.
 //
 // Version drift
 //
 // The General_Category parts track whatever Unicode version the .NET
-// BCL ships. The hand-coded exception tables here are pinned to Unicode
+// BCL ships. The hand-coded exception tables here are from Unicode
 // 17.0. When a new Unicode release adds a new Other_ID_Start code point
 // or changes the NFKC-exclusion set, the BCL catches up automatically
 // but these arrays don't. On each Unicode release, re-run the diff
@@ -162,7 +162,8 @@ public readonly partial struct RuneSet
     // UAX #31 R1 (XID_Start). Use together with XidContinue and
     // Rules.Identifier for spec-compliant identifier matching. Does not
     // include "_"; for the programming-language profile that allows
-    // leading underscore, use Rules.Identifier(allowLeadingUnderscore: true).
+    // leading underscore, use
+    // Rules.Identifier(extraStartRunes: RuneSet.Runes("_")).
     public static RuneSet XidStart => _xidStart.Value;
 
     // The set of Unicode scalar values that may continue an identifier

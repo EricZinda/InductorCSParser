@@ -29,13 +29,18 @@ namespace InductorParser;
 // grammar-build time instead of silently failing at parse time. (Note:
 // on pre-.NET 5 runtimes StringInfo is not UAX #29 compliant, so the
 // grapheme count for exotic Unicode inputs can be wrong. See
-// backlog/r000.)
+// backlog/xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md.)
 //
 // If the expected grapheme is exactly one rune (the common case for
 // ASCII, emoji that fit in a single code point, CJK, etc.), the Id is
 // pinned to that code point so Symbol leaves produced by this rule
 // carry the "id == rune" shape. For multi-rune graphemes
 // the Id comes from Compile's custom-range assignment.
+//
+// Tests live in src/InductorParser.Tests/Rules/TokenRuleTests.cs.
+// See docs/TestArchitecture.md for the per-rule test conventions
+// (success, failure position, WithError propagation, positional fallback,
+// sealed-rule rejection).
 internal sealed class TokenRule : Rule
 {
     private readonly string _expected;

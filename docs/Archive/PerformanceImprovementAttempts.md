@@ -147,7 +147,7 @@ Did not implement the full "SymbolChildren struct with 4 inline slots + overflow
 - [src/InductorParser/AllOfRule.cs](../src/InductorParser/AllOfRule.cs): `List<Symbol>?` to `Symbol[]?` with trim-on-short.
 - [src/InductorParser/BetweenInclusiveRule.cs](../src/InductorParser/BetweenInclusiveRule.cs): `List<Symbol>?` to `Symbol[]?` with doubling growth and trim-on-short.
 
-Test surface: all 458 non-timing tests continued to pass. The round-trip spot-check (`dotnet run --project src/Benchmarks -- --spot-check`) confirmed byte-exact round-trip on all four JSON shapes.
+Test surface: all 458 non-timing tests continued to pass. The round-trip spot-check (`dotnet run --project src/Benchmarks -- --spot-check`) confirmed exact text round-trip on all four JSON shapes.
 
 ### Measurements
 
@@ -206,7 +206,7 @@ Engineering record of an attempt at the (since-deleted) p600 backlog item. The c
 Every non-trivial rule opens a `Transaction` on entry via `Lexer.BeginTransaction()`. The Transaction is a struct (two int writes, two bool writes) plus a `_transactionDepth++` on the lexer for trace indentation plus a `Dispose` on every exit path. Two categories of rule don't need that full machinery:
 
 - Rules that always roll back (`PeekRule`, `NotRule`): they never commit, so the only job of the Transaction is to restore position. A saved `int` does the same work with less bookkeeping.
-- Primitive rules that read at most one token before deciding (`TokenRule`, `OneOfRule`, `NoneOfRule`, `AnyTokenRule`): on failure the rule hasn't advanced past one rune, so rollback is trivially "restore saved position."
+- Primitive rules that read at most one token before deciding (`TokenRule`, `OneOfRule`, `NoneOfRule`, `AnyTokenRule`): on failure the rule hasn't advanced past one lexer token, so rollback is trivially "restore saved position."
 - `BetweenInclusiveRule` with `AtLeast==0` (Optional, ZeroOrMore): the rule can't fail in that configuration, so the outer rollback has nothing to roll back.
 
 Three tiers proposed, smallest to biggest, with the expectation that ChordGrammar's ~10x-compiled-regex ratio would drop to ~5-7x.
@@ -321,7 +321,7 @@ From [backlog/p750-first-rune-lookahead-skip-on-betweeninclusiverule.md](../back
 
 At the top of `BetweenInclusiveRule.TryParseRule`, before opening the iteration loop, three gates are checked:
 
-- `Inner.Advance == Advance.Always`: Inner must consume a rune to match, so the peek is decisive.
+- `Inner.Advance == Advance.Always`: Inner must move past the lookahead to match, so the peek is decisive.
 - `Inner.ErrorMessage == null`: if the author set `.WithError(...)` on Inner, run it anyway so that message can surface via deepest-failure-wins (mirrors `FirstOfRule`'s same gate).
 - `!lexer.PreserveAllSymbols`: debug-tree mode still sees the same Inner invocations the grammar declares.
 
@@ -338,7 +338,7 @@ The three hints consulted (`Advance`, `RequiredInitialRuneSet`, `ErrorMessage`) 
 - [src/InductorParser.Tests/Rules/OneOrMoreRuleTests.cs](../src/InductorParser.Tests/Rules/OneOrMoreRuleTests.cs): `OneOrMore_trace_failure_produces_expected_output` no longer has the inner `Token FAIL` line.
 - [src/InductorParser.Tests/Rules/OptionalRuleTests.cs](../src/InductorParser.Tests/Rules/OptionalRuleTests.cs): `Optional_trace_without_match_produces_expected_output` same story.
 
-Test surface: all 458 non-timing tests pass. Only two trace expectations shifted (much smaller than p600's ~15, because most trace tests already use `PreserveAllSymbols=true` for `Tree.ToString()` assertions, which gates the skip off). Spot-check (`dotnet run --project src/Benchmarks -- --spot-check`) confirms byte-exact round-trip across all four JSON shapes.
+Test surface: all 458 non-timing tests pass. Only two trace expectations shifted (much smaller than p600's ~15, because most trace tests already use `PreserveAllSymbols=true` for `Tree.ToString()` assertions, which gates the skip off). Spot-check (`dotnet run --project src/Benchmarks -- --spot-check`) confirms exact text round-trip across all four JSON shapes.
 
 ### Rule invocation counts (via `--rule-counts`)
 

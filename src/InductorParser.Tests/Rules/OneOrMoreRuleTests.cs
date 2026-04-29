@@ -1,5 +1,7 @@
+using System;
 using NUnit.Framework;
 using InductorParser;
+using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 
@@ -134,5 +136,29 @@ public class OneOrMoreRuleTests
             "   FAIL | OneOrMore: count= 0"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void Sealed_OneOrMore_rejects_Flatten()
+    {
+        var rule = OneOrMore(Token('a'));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
+    }
+
+    [Test]
+    public void Sealed_OneOrMore_rejects_WithError()
+    {
+        var rule = OneOrMore(Token('a'));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
+    }
+
+    [Test]
+    public void Sealed_OneOrMore_rejects_As()
+    {
+        var rule = OneOrMore(Token('a'));
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
 }

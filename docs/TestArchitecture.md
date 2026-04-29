@@ -12,8 +12,8 @@ Test files in all three folders share the same `namespace InductorParser.Tests;`
 
 Related docs:
 
-- [ProgrammingModel.md](ProgrammingModel.md): the error-position principle and deepest-failure-wins semantics the tests lock in.
-- [ProgrammingAGrammar.md](ProgrammingAGrammar.md): the public API tests exercise.
+- [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md): the error-position principle and deepest-failure-wins semantics the tests lock in.
+- [InductorParserReference.md](InductorParserReference.md): the public API tests exercise.
 
 ## Universal Requirements
 
@@ -26,6 +26,21 @@ Every rule's test file, regardless of rule type, should cover these four categor
 **3. Failure message propagation.** At least one test where the rule has a `.WithError("...")` set and the parse failure surfaces that exact message via `result.ErrorMessage`. This verifies the equal-depth message-claim path in `RecordFailure` that lets rule authors attach user-friendly messages. Assert with `Is.EqualTo(...)`, not `Does.Contain(...)`. Contain-based assertions pass accidentally when the wrong message happens to share a substring.
 
 **4. At least one test without WithError.** To verify the positional-fallback path in `BuildErrorMessage`. Without this, the fallback code could break silently. One `Does.StartWith("Unexpected end of input")` or `Does.StartWith("Parse failed at offset")` test per rule file is enough.
+
+**5. Sealed-rule rejection.** Three tests, one each verifying that `Flatten(...)`, `WithError(...)`, and `As(...)` throw `InvalidOperationException` when called on the rule after `Compile()` has run. The pattern:
+
+```csharp
+[Test]
+public void Sealed_<RuleName>_rejects_Flatten()
+{
+    var rule = <construct the rule>;
+    rule.Compile();
+    Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
+}
+// plus the same shape for WithError and As
+```
+
+The base `Rule.ThrowIfSealed` enforces the seal, but subclasses that ever override `Flatten` / `WithError` / `As` (or factory paths that produce wrapper rules) can silently skip the check. Per-rule tests catch that drift in the rule's own file rather than letting one shared test in `Core/CompileTests.cs` cover everything. `LateBoundRule` is the exception: it rejects these modifiers *always*, not just post-compile, so its test file verifies the always-rejecting form instead.
 
 ## Per-Rule-Type Requirements
 
@@ -130,7 +145,7 @@ Some tests don't belong to any one rule's file. These live in `Core/`:
 - **WithError deepest-failure across multiple rules**: `Core/WithErrorTests.cs`. Tests that build grammars spanning several rules and assert the right message wins across them.
 - **Id assignment (Compile)**: `Core/IdAssignmentTests.cs`. Tests that verify the three-pass id assignment (pinned, named-hash, anonymous) behaves correctly.
 - **RuneSet behavior**: `Core/RuneSetTests.cs`. Tests for the `RuneSet` data type itself (not its consumers like `OneOfRule`).
-- **Tracing (cross-cutting concerns only)**: `Core/TracingTests.cs`. Covers behaviors that aren't any one rule's property: null TraceSink is a no-op, ParseOptions defaults (null sink, Diagnostic level), the trace-label fallback chain (Name > ErrorMessage > rule class name), `TraceLevel.Normal` suppresses output, `Lexer.Read` and `Lexer.RecordFailure` emit their own diagnostic lines, transaction depth returns to zero after a parse (regression guard, since running the same parse twice must produce identical trace output), and two side-effect proof tests (`Off_path_does_not_evaluate_interpolated_arguments`, `On_path_evaluates_interpolated_arguments_exactly_once`, plus `Rule_TraceSuccess_off_path_does_not_evaluate_interpolated_arguments`) that verify the C# interpolated-string-handler rewrite. They're the critical tests for "tracing is free when off."
+- **Tracing (cross-cutting concerns only)**: `Core/TracingTests.cs`. Covers behaviors that aren't any one rule's property: null TraceSink is a no-op, ParseOptions defaults (null sink, Diagnostic level), the trace-label fallback chain (Name > ErrorMessage > rule class name), `TraceLevel.Normal` suppresses output, `Lexer.Read` and `Lexer.RecordFailure` emit their own diagnostic lines, transaction depth returns to zero after a parse (regression guard, since running the same parse twice must produce identical trace output), and two side-effect proof tests (`Off_path_does_not_evaluate_interpolated_arguments`, `On_path_evaluates_interpolated_arguments_exactly_once`, plus `Rule_TraceSuccess_off_path_does_not_evaluate_interpolated_arguments`) that verify the C# interpolated-string-handler rewrite. They're the critical tests for "tracing is cheap when disabled and does not evaluate interpolated arguments."
 
 Rules emit their traces via two base-class helpers, `TraceSuccess(lexer, $"...")` and `TraceFailure(lexer, $"...")`, defined on `Rule`. The rule's class name (`"AllOf"`, `"Token"`, etc.) is derived automatically from `GetType().Name` with the `"Rule"` suffix stripped and cached in the base constructor, so new rules get correct trace names without touching trace plumbing. Both helpers have explicit-level overloads (`TraceSuccess(lexer, level, $"...")`) for the rare case a rule wants to emit at something other than Diagnostic.
 
