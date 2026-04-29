@@ -1,49 +1,29 @@
-# Programming Model
+# Inductor Parser Design Decisions
 
 This document is the design and architecture of the InductorParser C# port. It explains *why* the library is shaped the way it is, what tradeoffs were made, and what we considered but did not do.
 
-If you want to write grammars, read [ProgrammingAGrammar.md](ProgrammingAGrammar.md) first. This doc is for readers who want to understand or evaluate the design itself, or who plan to extend the library.
+If you want to write grammars, start with the primers below or read [InductorParserReference.md](InductorParserReference.md). This doc is for readers who want to understand or evaluate the design itself, or who plan to extend the library.
+
+Primers:
+
+- [Primer 1: Getting Started](primer1.md): build a grammar that consumes everything up to a stop sequence, parse some input, look at the tree.
+- [Primer 2: Walking the Tree](primer2.md): a tiny INI-style config grammar with typed values, a tree walker, and Unicode-aware error positions.
+- [Tutorial: Peek](tutorial-peek.md): a password-validation regex translated into the parser, using `Peek` for non-consuming lookahead.
 
 Related docs:
 
-- [ProgrammingAGrammar.md](ProgrammingAGrammar.md): user reference for how to write grammars with the library.
+- [InductorParserReference.md](InductorParserReference.md): user reference for how to write grammars with the library.
+- [Terminology.md](Terminology.md): library-specific meaning of terms used throughout these docs (leaf, composite, syntax tree, debug tree, AST, FlattenType writing conventions).
 - [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md): lexer internals (code units, runes, graphemes, the two lexers, normalization).
 - [UnicodeGotchas.md](UnicodeGotchas.md): caller-side Unicode concerns the lexer cannot fix.
-- [Recipes.md](Recipes.md): common grammar patterns.
-
-## Terminology
-
-A few terms used throughout these docs mean specific things in this library:
-
-**Leaf rule.** A rule with no child rules. The matching logic consumes input directly (or doesn't consume at all, for zero-width predicates) rather than delegating to other rules. Token, Literal, LiteralIgnoreAsciiCase, OneOf, NoneOf, AnyToken, ScanUntil, Eof, Not, Peek are all leaves. Use "leaf" rather than "primitive" or "terminal" when talking about this category.
-
-**Composite rule.** A rule built out of other rules. AllOf, FirstOf, BetweenInclusive (plus its wrappers OneOrMore, ZeroOrMore, Optional, AtLeast, AtMost, Exactly), and LateBoundRule are the composites. Use "composite" rather than "combinator."
-
-**Syntax tree.** The default output of `rule.Parse(input)`. Each rule's `FlattenType` has already been applied: `FlattenType.Delete` nodes are gone, `FlattenType.Flatten` wrappers have had their children lifted into the parent, and `FlattenType.Preserve` wrappers stay with their own `Id`. `Tree.Find(rule)` works for `FlattenType.Preserve` rules. `FlattenType.Flatten` or `FlattenType.Delete` rules intentionally do not appear, so Find returns null for them. Set `FlattenType.Preserve` on a rule if you need its wrapper to appear in the tree. `Symbol.FlattenInto(...)` (or the no-arg `Flatten()` overload) still exists for trees built by hand outside the parse path, and is idempotent on a tree Parse already returned.
-
-**Debug tree.** What you get back when `ParseOptions.PreserveAllSymbols` is on. Contains every matched token: delimiters, whitespace, individual leaf symbols, and every `FlattenType.Flatten` / `FlattenType.Delete` wrapper the grammar declares. Mirrors the grammar one-to-one. Useful for `PrintTree` output and for `Find`-queries against wrappers that would otherwise be removed. Not the default because most callers want the syntax tree.
-
-**AST.** Not used in this library's vocabulary. The C++ original has `Compiler<T>::ProcessAst` and calls the post-flatten artifact an AST, but the C# port deliberately avoids the term. A true AST in compiler tradition is the user's domain types (something like `Setting(name, value)`) produced by a hand-written compile pass over the syntax tree, not anything the library itself produces. Keeping "syntax tree" as the library's own term means a reader can later talk about "the AST" without overloading the word.
-
-The namespace `InductorParser.SyntaxTree` contains the primitives (`Symbol`, `SymbolId`, `FlattenType`, `SymbolRanges`) that participate in both trees. The namespace name points at the default output shape.
-
-### Writing About FlattenType
-
-When prose refers to a rule's `FlattenType`, use the full enum value ("`FlattenType.Preserve`", "`FlattenType.Flatten`", "`FlattenType.Delete`") rather than the shorthand "Preserve-typed" / "Flatten-typed" / "Delete-typed". The hyphenated form reads as writer jargon and leaves the reader guessing which type is meant. The full name is unambiguous, grep-able, and navigable in an IDE. Examples:
-
-- "a rule with `FlattenType.Preserve`" (not "a Preserve-typed rule")
-- "`FlattenType.Delete` children" (not "Delete-typed children")
-- "the parent is `FlattenType.Flatten`, so its children bubble up" (not "the parent is Flatten-typed, so ...")
-
-Bare `Preserve`, `Flatten`, `Delete` unqualified are fine only when the surrounding context has already said "FlattenType" in the same sentence or paragraph (e.g., "Its `FlattenType` defaults to `Delete`.").
 
 ## What We Are Keeping From C++
 
-The parser semantics are exactly the same as the C++ version.
+The parser semantics are exactly the same as the [C++ version](https://github.com/EricZinda/InductorParser).
 
 It is still a PEG parser. Ordered choice, greedy matching, backtracking, transactional lexer reads. Rules still form a tree. Parsing still walks the tree and tries to match the input. On failure the parser still backtracks and tries the next alternative. On success you still get a `Symbol` tree you can walk and flatten.
 
-Every concept from the original `GettingStarted.md` has a direct C# counterpart:
+Every concept from the original [GettingStarted.md](https://github.com/EricZinda/InductorParser/blob/master/GettingStarted.md) in the C++ parser repository has a direct C# counterpart:
 
 | C++ concept                        | C# counterpart                                  |
 |------------------------------------|-------------------------------------------------|
@@ -63,7 +43,7 @@ Every concept from the original `GettingStarted.md` has a direct C# counterpart:
 | `PeekExpression<T>`                | `Peek(rule)`                                    |
 | `NotPeekExpression<T>`             | `Not(rule)`                                     |
 | `EofSymbol`                        | `Eof()`                                         |
-| `FlattenType::None/Delete/Flatten` | same enum, set via `.Flatten(FlattenType.None)` |
+| `FlattenType::None/Delete/Flatten` | `FlattenType.Preserve/Delete/Flatten`, set via `.Flatten(FlattenType.Preserve)` |
 | `MySymbolID::SettingName`          | `.As(nameof(SettingName))`, optional            |
 | `tree->FlattenInto(vector)`        | `tree.FlattenInto(list)` (same semantics)       |
 | `Compiler<T>::ProcessAst`          | plain function, or your own base class (Recipes)|
@@ -94,13 +74,13 @@ The cost is that grammar typos become runtime errors instead of compile errors. 
 
 The four jobs are bundled together because they share the graph walk and because each of them catches a class of bug that would otherwise explode at parse time:
 
-**Assign symbol ids.** Rules with an explicit pin (via `.As(SymbolId.Custom(42, ...))`) get their pinned id first, so pinned ids never shift. Rules named with a string (via `.As("name")` or `.As(nameof(X))`) get an id by hashing the name into the custom range. If the hash lands on a slot that is already in use, the id linear-probes from the hash slot upward until it finds an empty slot. Anonymous rules get ids based on their position in the graph and probe the same way. Because the rule graph is frozen after `Compile` returns, every probe resolution is deterministic and stable for the life of the program.
+**Assign symbol ids.** Rules with an explicit pin (via `.As(new SymbolId(SymbolRanges.CustomRangeStart + 42))`) get their pinned id first, so pinned ids never shift. Rules named with a string (via `.As("name")` or `.As(nameof(X))`) get an id by hashing the name into the custom range. If the hash lands on a slot that is already in use, the id linear-probes from the hash slot upward until it finds an empty slot. Anonymous rules get ids based on their position in the graph and probe the same way. Because the rule graph is frozen after `Compile` returns, every probe resolution is deterministic and stable for the life of the program.
 
 **Resolve every `LateBoundRule`.** Mutually recursive grammars use a `LateBoundRule` placeholder that gets a target attached via a separate `.Bind(...)` call. If a grammar forgets to bind one, the bug would normally surface as a `NullReferenceException` deep inside a parse. `Compile` fails fast with a message naming the unbound rule. That is a much better failure mode than a runtime null deref far from the original mistake.
 
 **Freeze the rule graph.** After `Compile` returns, every rule in the graph is sealed. Calling `.As(...)`, `.Flatten(...)`, `.WithError(...)`, or any other modification method on a sealed rule throws `InvalidOperationException`. This makes the "effectively immutable" claim enforced rather than implicit, and it closes a bug where user code could accidentally mutate a shared rule after parsing has started. One boolean flag per rule, one check per mutation method, negligible cost.
 
-**Validate against obvious mistakes.** A handful of cheap sanity checks worth running once rather than discovering at parse time: two rules pinned to the same explicit `SymbolId.Custom(...)` number, `LateBoundRule` bound to itself or a trivial cycle, rules whose id somehow ended up unset. Unreachable rules are *not* flagged because a user might legitimately be building standalone rules to use elsewhere.
+**Validate against obvious mistakes.** A handful of cheap sanity checks worth running once rather than discovering at parse time: two rules pinned to the same explicit `SymbolId` number, `LateBoundRule` bound to itself or a trivial cycle, rules whose id somehow ended up unset. Unreachable rules are *not* flagged because a user might legitimately be building standalone rules to use elsewhere.
 
 Bundling them is a design choice. The alternative was to split each into its own pass (a naming pass, a binding pass, a freeze pass, a validation pass), but they all want the same graph walk and there is no observable ordering dependency between them. One walk is cheaper, simpler, and easier to document.
 
@@ -169,7 +149,7 @@ The deeper question is framing: are parse-tree nodes "data without identity" (st
 - Emit trace output in the same format as built-in rules when `ParseOptions.TraceSink` is set, so grammar-wide traces remain readable.
 - Participate in `Compile`: declare yourself named via `.As(...)` if you want an id, declare flatten policy if it matters for tree shape, seal against modification after `Compile` returns.
 
-The full contract including method signatures and the lexer API will be documented alongside the implementation.
+The full contract including method signatures and the lexer API is covered below in "Tokens and Leaves" and "How a Rule's Match Method Looks".
 
 For grammars that compose existing leaves (which is most grammars) you never need to derive. The built-in composites cover the PEG operators and the built-in leaves cover the character-class cases. User-defined rules matter when you are adding behavior the composites cannot express, for example a rule that consumes until a specific byte-level offset, a grammar-context-aware matcher that queries external state, or a custom character-boundary detector.
 
@@ -427,7 +407,9 @@ Why this default. Most grammars represent "what a valid input looks like end-to-
 
 The flip side is that grammars built piecewise can't be unit-tested in isolation by calling `Parse` on a prefix. If you have a `settingName` sub-rule and want to test it against `"setting"`, that works because `"setting"` is fully consumed. But testing it against `"setting = 5"` needs the whole grammar, not just `settingName.Parse(...)`. This shows up in the test suite: rules used in composition are tested standalone with inputs sized to match the rule, not inputs sized to match a real document.
 
-If you genuinely want prefix parsing in some future grammar, the workaround today is to wrap the grammar in something that swallows trailing content explicitly, `AllOf(yourGrammar, ZeroOrMore(AnyToken))` once the `AnyToken` leaf lands (backlog i028). The library could grow a `ParseOptions.AllowTrailingInput` flag if a real use case shows up. For now the default catches more bugs than it causes.
+If you genuinely want prefix parsing, set `ParseOptions.AllowTrailingInput = true`. With the flag on, `Parse` succeeds as soon as the root rule matches and leaves whatever the rule didn't consume in the input. That covers the cases where strict end-to-end matching is the wrong contract: matching one record at the front of a longer stream, testing a sub-rule against an input longer than the rule was meant to consume, or recognising a command at the start of a line and handing the rest off to another parser. A failure inside the rule still reports its own position the same way; the flag only relaxes the post-rule "must have reached EOF" check.
+
+The flag is opt-in for the same reason described above: silently accepting trailing input is the kind of "your grammar accepted something it shouldn't have" mistake the default is there to catch, so the library makes you ask for it explicitly.
 
 ## Where Errors Get Positioned
 
@@ -490,7 +472,7 @@ The equivalent C++ library returns a character offset and nothing else, leaving 
 
 ## Tracing Design
 
-The parser emits trace output that shows every rule attempt, its outcome (success/failure), and indentation that mirrors the transaction depth. Enable by setting `ParseOptions.TraceSink` to a `TextWriter`. Leave it null and tracing is off. See [ProgrammingAGrammar.md](ProgrammingAGrammar.md#tracing) for usage examples.
+The parser emits trace output that shows every rule attempt, its outcome (success/failure), and indentation that mirrors the transaction depth. Enable by setting `ParseOptions.TraceSink` to a `TextWriter`. Leave it null and tracing is off. See [InductorParserReference.md](InductorParserReference.md#tracing) for usage examples.
 
 ### Why a Custom Tracer, Not System.Diagnostics.Trace or ILogger
 
@@ -617,13 +599,3 @@ static readonly Rule _init = Expression.Bind(Sum);   // wire up the late binding
 ```
 
 `LateBoundRule` is a rule that forwards to a target set later. It is the C# answer to C++'s ability to reference a class name before it is fully defined. The `_init` field is a static initializer trick to run the `.Bind(...)` call at type init time.
-
-## Open Questions
-
-Three things this document does not decide yet, because they need the first real grammar to shake out.
-
-**Whether `Rule.Parse(...)` should have an async variant.** The design above is sync, which matches the architecture doc. If a consumer wants async file loading they can load the file first and then call the sync parser. Nothing inside a parse is async-worthy (parsing is CPU-bound), so this question is really about convenience for callers whose compose-with-file-loading wrapper wants to be async end to end.
-
-**Whether `Compile` should warn about unnamed rules that look like they should be named.** The current rule is "anonymous rules are fine, named rules are opt-in," which is easy to reason about but makes it possible to end up with a grammar whose trace output is full of `rule#47` labels because the author forgot the `.As(...)` calls. A cheap heuristic warning might catch this, but it also might be noise.
-
-**Whether to ship a `Regex` helper built on top of the parser.** The grapheme-level PEG engine can implement regex-style find-and-replace cleanly (the core idiom is a `ZeroOrMore(FirstOf(pattern, AnyToken()))` scanner plus a tree walk that emits replacements). A small helper class (`new Regex(findRule).Replace(input, replacer)`, `Regex.IsMatch`, `Regex.Matches`) would wrap this with a friendlier API and let grammars reuse the parser's Unicode correctness, catastrophic-backtracking protection, and timeout budgets. Three missing leaves would be needed (`AnyToken()`, position-aware anchors like `StartOfLine` / `EndOfLine` / `WordBoundary`, and a lazy-quantifier helper). The first version should almost certainly be rule-based only (no classic `/pattern/flags` string parsing), since users who want compact regex syntax can still use `System.Text.RegularExpressions`.

@@ -169,6 +169,26 @@ foreach (var sectionSymbol in result.Tree!.FindAll(section))
 
 For our setting-lookup problem we aren't using FindAll, because we care about where in the file each section header appears (it groups the keys that follow it). Find and FindAll are for "go grab the title node" or "give me every link" cases where order isn't meaningful.
 
+# Walking the tree with LINQ
+
+Find and FindAll are convenience helpers. Underneath, every traversal on `Symbol` is a direct LINQ target because each one is typed as `IReadOnlyList<Symbol>` or `IEnumerable<Symbol>`. Four entry points cover the four things you usually want to do with a Symbol tree:
+
+```CSharp
+// Direct children only (no recursion)
+result.Tree!.Children.Where(c => c.Is(section))
+
+// Entire subtree, pre-order walk
+result.Tree!.Walk().Where(s => s.Is(integerValue))
+
+// All descendants matching a specific rule
+result.Tree!.FindAll(keyValue).Select(kv => kv.Children[0].ToString())
+
+// Flattened tree as a list of every Symbol
+result.Tree!.FlattenInto().OfType<Symbol>()
+```
+
+`Symbol` itself does not implement `IEnumerable<Symbol>` on purpose, because iterating a tree node would have to silently pick one of children, descendants pre-order, descendants post-order, siblings, or tokens, and the four other choices then become second-class. Naming the traversal you want keeps the code unambiguous.
+
 # When the parse fails
 
 `Parse()` returns a `ParseResult`, and on failure it carries enough to point at the problem:

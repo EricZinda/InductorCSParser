@@ -1,10 +1,12 @@
-# Programming A Grammar
+# Inductor Parser Reference
 
-This document is user reference: how to write grammars with the library. It shows what the API looks like, gives working examples end to end, and points at the other docs when you want depth on a specific topic.
+This document is user reference and is more technical and detailed than the primers (see below). It goes into detail about every aspect of the parser and discusses how to write grammars with the library. It shows what the API looks like, gives working examples end to end, and points at the other docs when you want depth on a specific topic.
 
 In this library a *rule* is a C# object. You build rules by calling factory functions like `AllOf(...)`, `FirstOf(...)`, `Token('=')`, you compose them into a grammar, and you call `.Parse(input)` on the root rule to get a tree back.
 
-Primers (worked examples):
+The library implements a [Parsing Expression Grammar (PEG)](https://en.wikipedia.org/wiki/Parsing_expression_grammar) parser. In PEG terms, `AllOf` is sequence (match a, then b, then c), `FirstOf` is ordered choice (try each alternative in order, the first match wins, so grammars are unambiguous by construction), `OneOrMore` and `ZeroOrMore` are greedy repetition, and `Peek` and `Not` are the lookahead predicates. Matching is recursive-descent with backtracking on failure, but greedy repetition never gives input back once it has matched, so grammars are written with that in mind.
+
+Primers:
 
 - [Primer 1: Getting Started](primer1.md): build a grammar that consumes everything up to a stop sequence, parse some input, look at the tree.
 - [Primer 2: Walking the Tree](primer2.md): a tiny INI-style config grammar with typed values, a tree walker, and Unicode-aware error positions.
@@ -12,16 +14,16 @@ Primers (worked examples):
 
 Related docs:
 
-- [ProgrammingModel.md](ProgrammingModel.md): design and architecture of the library. Why it is shaped the way it is, what tradeoffs were made.
+- [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md): design and architecture of the library. Why it is shaped the way it is, what tradeoffs were made.
+- [Terminology.md](Terminology.md): library-specific meaning of terms used throughout these docs (leaf, composite, syntax tree, debug tree, AST, FlattenType writing conventions).
 - [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md): lexer internals (code units, runes, graphemes, normalization, the two lexers).
 - [UnicodeGotchas.md](UnicodeGotchas.md): caller-side Unicode concerns the lexer cannot fix (case-insensitive matching, BOMs, homoglyphs, etc.).
-- [Recipes.md](Recipes.md): common grammar patterns (pass-through text, class-based grammar organization, a reusable compiler base class).
 
 ## Hello World Example
 
-This is the same example as `GettingStarted.md`: parse `setting = 5;` into a name and a value.
+This is the same example as [GettingStarted.md](https://github.com/EricZinda/InductorParser/blob/master/GettingStarted.md) from the C++ parser: parse `setting = 5;` into a name and a value.
 
-A rule is an instance. You build one by calling factory functions and you call `.Parse(...)` on it. No class, no inheritance, no initialization ceremony.
+A rule is an instance. You build one by calling factory functions and you call `.Parse(...)` on it. 
 
 ```csharp
 using static InductorParser.Rules;
@@ -32,7 +34,7 @@ var settingValue = FirstOf(
     Float().Flatten(FlattenType.Flatten),
     Integer().Flatten(FlattenType.Flatten),
     Identifier()
-);
+).Preserve();
 
 var document = AllOf(
     settingName,
@@ -42,7 +44,7 @@ var document = AllOf(
     settingValue,
     OptionalWhitespace(),
     Token(';')
-);
+).Preserve();
 
 var result = document.Parse("setting = 5;");
 if (result.Success)
@@ -57,28 +59,38 @@ else
 }
 ```
 
+The `.Preserve()` on the root keeps the whole document under a single wrapper Symbol, which is what `result.Tree` returns. Without it, `AllOf`'s default `FlattenType.Flatten` lifts every child up to the top level and `result.Tree` is null because there's more than one top-level Symbol; in that case use `result.Symbols` to walk the bubbled-up children directly.
+
 Four variables hold rules, one call to `.Parse(...)` returns a tree, and `result.Tree.Find(someRule)` locates the node that rule produced. Renaming any of the local variables via an IDE refactor updates every reference including the lookups, because `Find` matches on the rule reference itself, not on any separate name or id.
 
 Compare that side by side with the C++ version from `GettingStarted.md` and you can see they line up rule by rule. Every C++ template instantiation becomes a C# factory call, and the trailing template parameters (flatten policy, symbol id, error message) become fluent method calls on the returned `Rule`. The `MySymbolID` class and the stack of `.As(MySymbolIds.X)` calls from the C++ tutorial are gone: lookups use the rule reference you already have in scope.
 
 The `using static InductorParser.Rules;` at the top is what lets us write `AllOf(...)` and `FirstOf(...)` and `Token('=')` without a class qualifier. It is the C# moral equivalent of `using namespace FXPlat;` in the C++ version. Grammars that want a cleaner look use this import. Grammars that want to be explicit can write `Rules.AllOf(...)`.
 
-Two things happen automatically in this example but are worth knowing about for when you want more control. First, the rule graph is finalized (validated, frozen, ids stamped on whatever named rules exist) on the first call to `.Parse(...)`. You can force this earlier by calling `.Compile()` on the root rule explicitly, which is useful when you want grammar-construction errors to surface at program startup rather than on first use. Second, nothing in this example has a symbol name: the rules are anonymous. Parsing works fine, `Find(someRule)` works fine (it matches on rule identity), but trace output and error messages will use generated placeholder names instead of human-readable ones. Adding explicit `.As(nameof(...))` calls for better names is covered in the next section for grammars that want them.
+Two things happen automatically in this example but are worth knowing about for when you want more control. First, the rule graph is finalized (validated, frozen, ids stamped on whatever named rules exist) on the first call to `.Parse(...)`. You can force this earlier by calling `.Compile()` on the root rule explicitly, which is useful when you want grammar-construction errors to surface at program startup rather than on first use. Second, nothing in this example has a user-supplied name: the rules are anonymous. Parsing works fine, `Find(someRule)` works fine (it matches on rule identity), but trace output and error messages will fall back to class-derived labels like `AllOf` or `OneOrMore`, which tell you the rule's shape but not what it represents in your grammar. Adding explicit `.As(nameof(...))` calls for better names is covered in the next section for grammars that want them.
 
 ## Naming Rules
 
-Most rules do not need a name. `Find(someRule)` matches on the rule object itself, so as long as you have a reference to the rule you want to locate, you can find its nodes in the tree. The hello-world example never calls `.As(...)` and works fine.
+Most rules do not need a name. `Find(someRule)` matches on the rule object itself, so as long as you have a reference to the rule you want to locate, you can find its nodes in the tree.
 
-One caveat: `Find(rule)` only hits rules with `FlattenType.None`. Rules with the default `FlattenType.Flatten` (every `AllOf`, `FirstOf`, `OneOrMore`, `ZeroOrMore`, `Optional`, `BetweenInclusive`) have their children lifted up into the parent and their own wrapper removed from `ParseResult.Tree`, so Find cannot locate them. If you want to `Find(someRule)` and have it hit, set `FlattenType.None` on the rule to preserve its wrapper. For debugging, `ParseOptions.PreserveAllSymbols` turns the lift-up off globally so the tree matches the grammar one-to-one.
+One caveat: `Find(rule)` only hits rules with `FlattenType.Preserve`. Rules with the default `FlattenType.Flatten` (every `AllOf`, `FirstOf`, `OneOrMore`, `ZeroOrMore`, `Optional`, `BetweenInclusive`) have their children lifted up into the parent and their own wrapper removed from `ParseResult.Tree`, so Find cannot locate them. If you want to `Find(someRule)` and have it hit, set `FlattenType.Preserve` on the rule to keep its wrapper (or use the `.Preserve()` shortcut). For debugging, `ParseOptions.PreserveAllSymbols` turns the lift-up off globally so the tree matches the grammar one-to-one.
 
-Sometimes names do matter though: trace output, error messages, serialization. Trace output prints rule names to show which rule was tried at each position. Error messages quote the "deepest rule" that failed. Without names, these fall back to generated labels like `<anonymous>` or `rule#47`, which are technically correct but unpleasant to read.
+Sometimes names do matter though: trace output, error messages, serialization. Trace output prints rule names to show which rule was tried at each position. Error messages quote the "deepest rule" that failed. Without an explicit name, these fall back to a class-derived label like `AllOf`, `OneOrMore`, or `BetweenInclusive[1..3]`, which tells you the rule's shape but not what it represents in your grammar.
 
 Here are different ways you can name rules:
 
-**`.As(nameof(X))` on a rule you have assigned to a variable or field.** This is the standard form. The C# compiler checks the `nameof` against the symbol in scope, so a rename via IDE refactor updates the string automatically:
+**`.As(nameof(X))` on a rule held in a field.** This is the standard form for grammars organized as a class. The C# compiler checks the `nameof` against the field name, so a rename via IDE refactor updates the string automatically:
 
 ```csharp
-var settingName = Identifier().As(nameof(settingName));
+public static readonly Rule SettingName =
+    Identifier().As(nameof(SettingName));
+```
+
+This works for fields because a field name is in scope inside its own initializer. For local variables it is not (`var x = ....As(nameof(x))` is a compile error: "cannot use local variable before it is declared"), so for locals either use a string literal or split the assignment:
+
+```csharp
+var settingName = Identifier();
+settingName = settingName.As(nameof(settingName));
 ```
 
 The rule's id is derived deterministically from the string, and the name carries through into trace output. 
@@ -96,16 +108,16 @@ AllOf(
 
 This is just the first form with a literal string instead of a `nameof`. The tradeoff is that a string literal does not update when you rename anything nearby, but there is usually nothing *to* rename for an inline rule.
 
-**`.As(SymbolId.Custom(42, "Thing"))` for pinned numeric ids.** If a grammar needs stable numeric ids across versions for serialization or cross-version debugging, pass a `SymbolId` directly instead of a string. The name still carries for debug output. The number stays fixed no matter how you refactor the code.
+**`.As(new SymbolId(SymbolRanges.CustomRangeStart + 42))` for pinned numeric ids.** If a grammar needs stable numeric ids across versions for serialization or cross-version debugging, pass a `SymbolId` directly instead of a string. The number stays fixed no matter how you refactor the code. The name lives on the rule, not on the id, so chain a separate `.As("Thing")` call to attach a debug name (the two `.As` overloads compose).
 
 
 ### What `Compile` Actually Does
 
 Calling `.Compile()` on a rule walks the rule graph using that rule as the root and does four things. The pass is idempotent, returns the same rule for chaining, and is invoked automatically on the first call to `.Parse(...)` if it has not already run. Explicit `.Compile()` exists for callers who want grammar-construction errors to surface at program startup rather than on first parse.
 
-**Assign symbol ids.** Rules with an explicit pin (via `.As(SymbolId.Custom(42, ...))`) get their pinned id first, so pinned ids never shift. Rules named with a string (via `.As("name")` or `.As(nameof(X))`) get an id by hashing the name into the custom range. If the hash lands on a slot that is already in use, the id linear-probes from the hash slot upward until it finds an empty slot. Anonymous rules get ids based on their position in the graph and probe the same way. Because the rule graph is frozen after `Compile` returns, every probe resolution is deterministic and stable for the life of the program.
+**Assign symbol ids.** Rules with an explicit pin (via `.As(new SymbolId(SymbolRanges.CustomRangeStart + 42))`) get their pinned id first, so pinned ids never shift. Rules named with a string (via `.As("name")` or `.As(nameof(X))`) get an id by hashing the name into the custom range. If the hash lands on a slot that is already in use, the id linear-probes from the hash slot upward until it finds an empty slot. Anonymous rules get ids based on their position in the graph and probe the same way. Because the rule graph is frozen after `Compile` returns, every probe resolution is deterministic and stable for the life of the program.
 
-**Resolve every `LateBoundRule`.** Mutually recursive grammars use a `LateBoundRule` placeholder that gets a target attached via a separate `.Bind(...)` call (see the "Things That Got Worse" section for the pattern). If a grammar forgets to bind one, the bug would normally surface as a `NullReferenceException` deep inside a parse. `Compile` fails fast with a message naming the unbound rule:
+**Resolve every `LateBoundRule`.** Mutually recursive grammars use a `LateBoundRule` placeholder that gets a target attached via a separate `.Bind(...)` call. If a grammar forgets to bind one, the bug would normally surface as a `NullReferenceException` deep inside a parse. `Compile` fails fast with a message naming the unbound rule:
 
 ```
 Rule 'Expression' is a LateBoundRule that was never bound. Call
@@ -116,7 +128,7 @@ That is a much better failure mode than a runtime exception.
 
 **Freeze the rule graph.** After `Compile` returns, every rule in the graph is sealed. Calling `.As(...)`, `.Flatten(...)`, `.WithError(...)`, or any other modification method on a sealed rule throws `InvalidOperationException`. This makes the "effectively immutable" claim enforced rather than implicit, and it closes a bug where user code could accidentally mutate a shared rule after parsing has started. One boolean flag per rule, one check per mutation method, negligible cost.
 
-**Validate against obvious mistakes.** A handful of cheap sanity checks worth running once rather than discovering at parse time: two rules pinned to the same explicit `SymbolId.Custom(...)` number (that is a real bug, unlike hash collisions which just get probed), `LateBoundRule` bound to itself or a trivial cycle, and rules whose id somehow ended up unset. Unreachable rules are *not* flagged because a user might legitimately be building standalone rules to use elsewhere.
+**Validate against obvious mistakes.** A handful of cheap sanity checks worth running once rather than discovering at parse time: two rules pinned to the same explicit `SymbolId` number (that is a real bug, unlike hash collisions which just get probed), `LateBoundRule` bound to itself or a trivial cycle, and rules whose id somehow ended up unset. Unreachable rules are *not* flagged because a user might legitimately be building standalone rules to use elsewhere.
 
 ### SymbolId
 
@@ -158,7 +170,7 @@ Built-in symbol ids live in a static class and use a numbering space chosen so t
 
 The parser operates on Unicode characters, not raw bytes. By default the lexer reads one grapheme cluster per step (so `👨‍👩‍👧‍👦` is one token, not seven), which is what you want for grammars that handle user-typed text. The full lexer story, including how to opt into rune-level lexing instead, lives in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). For grammar-authoring purposes, you can ignore the distinction until you hit emoji or combining-mark input, at which point the Unicode doc has the answer.
 
-`RuneSet` is a composable value type for character sets. The full API surface (built-ins, factory methods, and the `|`, `&`, `~` operators) lives in [ProgrammingModel.md](ProgrammingModel.md). The grammar-authoring shorthand is that you build a class out of built-ins and factory calls and combine them with `|` for union, `&` for intersection, and `~` for complement.
+`RuneSet` is a composable value type for character sets. The full API surface (built-ins, factory methods, and the `|`, `&`, `~` operators) lives in [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md). The grammar-authoring shorthand is that you build a class out of built-ins and factory calls and combine them with `|` for union, `&` for intersection, and `~` for complement.
 
 Grammar code reads like:
 
@@ -207,7 +219,7 @@ Reach for `RuneLexer` when the grammar specifically needs rune-level access: par
 
 ## Rule Construction Is Fluent
 
-Every rule factory returns an effectively-immutable `Rule` object. Modifier methods return a new rule with one property changed:
+Every rule factory (the `Token`, `Literal`, `AllOf`, `FirstOf`, etc. functions used above) is a static method on the `Rules` class in [src/InductorParser/Rules.cs](../src/InductorParser/Rules.cs), which is what `using static InductorParser.Rules;` brings into scope. Each one returns a `Rule` object. Modifier methods mutate one property in place and return the same rule for chaining:
 
 ```csharp
 public abstract class Rule
@@ -233,15 +245,15 @@ Chaining is how you get the equivalent of the C++ trailing template args:
 ```csharp
 var settingName = Identifier()
     .As(nameof(settingName))
-    .Flatten(FlattenType.None)
+    .Flatten(FlattenType.Preserve)
     .WithError("Expected a setting name");
 ```
 
-`.Compile()` walks the rule graph, stamps ids, resolves `LateBoundRule`s, freezes the graph, and returns the same rule for chaining. `.Parse(...)` auto-compiles on first call, so you do not need to call `.Compile()` yourself unless you want grammar-construction errors to surface at startup rather than at first parse. `.Compile()` does not auto-name anything on its own: names come from explicit `.As(nameof(X))` calls.
+`.Compile()` walks the rule graph, stamps ids, resolves `LateBoundRule`s, freezes the graph, and returns the same rule for chaining. `.Parse(...)` auto-compiles on first call, so you do not need to call `.Compile()` yourself unless you want grammar-construction errors to surface at startup rather than at first parse. `.Compile()` does not assign names: a rule's user-supplied name comes from an explicit `.As(...)` call, and unnamed rules already carry a class-derived trace label like `AllOf` or `OneOrMore` from their constructor that trace output and error messages fall back to.
 
-Rules are immutable to the user. `OneOrMore(x).Flatten(FlattenType.None)` does not mutate the underlying `OneOrMore` rule, it returns a new wrapped rule with the flatten policy set. After `Compile` returns, the rule graph is sealed: calling `.As(...)`, `.Flatten(...)`, or any other mutation method on a sealed rule throws `InvalidOperationException`.
+Rules are mutable up until `Compile` runs and then sealed. `.As(...)`, `.Flatten(...)`, `.WithError(...)` mutate the rule in place and return the same rule for chaining, so `var rule = Identifier(); rule.Flatten(FlattenType.Preserve);` and `var rule = Identifier().Flatten(FlattenType.Preserve);` produce the same end state on the same object. The practical consequence: if you keep a reference to a rule and reuse it in multiple places, calling `.Flatten(...)` on one of those references changes the policy at every other use site too. To get two flatten policies for the same shape, build two separate rule instances. After `Compile` returns the rule graph is sealed: calling `.As(...)`, `.Flatten(...)`, or any other mutation method on a sealed rule throws `InvalidOperationException`.
 
-Default values for `Flatten`, error messages, and so on match the C++ defaults from the original source. `OptionalWhitespace()` defaults to `FlattenType.Delete`. `Token('=')` defaults to `FlattenType.Delete`. `AllOf(...)` defaults to `FlattenType.Flatten`. `Integer()` defaults to `FlattenType.None`. `Parse` applies these types to the tree before returning: `Delete` nodes are dropped, `Flatten` wrappers have their children lifted into the parent, and `None` wrappers survive. `ParseOptions.PreserveAllSymbols` turns the whole pass off and gives you back a grammar-shaped debug tree with every wrapper in place.
+Default values for `Flatten`, error messages, and so on match the C++ defaults from the original source. `OptionalWhitespace()` defaults to `FlattenType.Delete`. `Token('=')` defaults to `FlattenType.Delete`. `AllOf(...)` defaults to `FlattenType.Flatten`. `Integer()` defaults to `FlattenType.Preserve`. `Parse` applies these types to the tree before returning: `Delete` nodes are dropped, `Flatten` wrappers have their children lifted into the parent, and `Preserve` wrappers survive. `ParseOptions.PreserveAllSymbols` turns the whole pass off and gives you back a grammar-shaped debug tree with every wrapper in place.
 
 ### User-Defined Rules
 
@@ -252,7 +264,7 @@ Default values for `Flatten`, error messages, and so on match the C++ defaults f
 - Emit trace output in the same format as built-in rules when `ParseOptions.TraceSink` is set, so grammar-wide traces remain readable.
 - Participate in `Compile`: declare yourself named via `.As(...)` if you want an id, declare flatten policy if it matters for tree shape, seal against modification after `Compile` returns.
 
-The full contract including method signatures and the lexer API will be documented alongside the implementation. For grammars that compose existing leaves (which is most grammars) you never need to derive. The built-in composites cover the PEG operators and the built-in leaves cover the character-class cases. User-defined rules matter when you are adding behavior the composites cannot express, for example a rule that consumes until a specific byte-level offset, a grammar-context-aware matcher that queries external state, or a custom character-boundary detector.
+The full contract including method signatures and the lexer API is documented in [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md) under "Tokens and Leaves" and "How a Rule's Match Method Looks". For grammars that compose existing leaves (which is most grammars) you never need to derive. The built-in composites cover the PEG operators and the built-in leaves cover the character-class cases. User-defined rules matter when you are adding behavior the composites cannot express, for example a rule that consumes until a specific byte-level offset, a grammar-context-aware matcher that queries external state, or a custom character-boundary detector.
 
 ## The Parse Result
 
@@ -268,7 +280,7 @@ public readonly struct ParseResult
 
     // Position of the error. Line/column follow LSP conventions end-to-end:
     // 0-based line, 0-based column in UTF-16 code units, \r\n as one
-    // atomic break. See ProgrammingModel.md "LSP Position Semantics" for
+    // atomic break. See InductorParserDesignDecisions.md "LSP Position Semantics" for
     // why 0-based and why UTF-16. Add 1 at the edge if you want 1-based
     // for a human-facing error message.
     public int  ErrorCharIndex         { get; }   // UTF-16 char index; use for input[...]
@@ -296,7 +308,7 @@ public enum ParseOutcome
 }
 ```
 
-Putting the error position into the result directly removes an entire class of C++ pitfall where you forgot to ask the lexer for the error before it went out of scope. `ErrorLine` and `ErrorColumn` are computed lazily from `ErrorCharIndex` and the original input string. The char-based trio (`ErrorCharIndex`, `ErrorLine`, `ErrorColumn`) uses the same conventions the Language Server Protocol uses, so a caller forwarding a parse error into an editor through LSP does no arithmetic in between. See [ProgrammingModel.md](ProgrammingModel.md) for the full rationale. The two extra index properties (`ErrorRuneIndex`, `ErrorGraphemeIndex`) are there for callers that measure in other units. They are computed lazily from the char index and cost nothing unless used.
+Putting the error position into the result directly removes an entire class of C++ pitfall where you forgot to ask the lexer for the error before it went out of scope. `ErrorLine` and `ErrorColumn` are computed lazily from `ErrorCharIndex` and the original input string. The char-based trio (`ErrorCharIndex`, `ErrorLine`, `ErrorColumn`) uses the same conventions the Language Server Protocol uses, so a caller forwarding a parse error into an editor through LSP does no arithmetic in between. See [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md) for the full rationale. The two extra index properties (`ErrorRuneIndex`, `ErrorGraphemeIndex`) are there for callers that measure in other units. They are computed lazily from the char index and cost nothing unless used.
 
 `Symbol.SourceRange` uses the same machinery for any node in the parse tree, not just the error point. Each `SourcePosition` (the type returned by `Start` and `End`) carries the same five fields, so a tool reporting "duplicate section on line 7" or "value out of range at char 42" reads from the symbol with the same semantics LSP and `string.Substring` already use.
 
@@ -362,13 +374,13 @@ Parsing turns text into a tree. Most callers want to go one step further and tur
 ```csharp
 using static InductorParser.Rules;
 
-var settingName  = Identifier().As(nameof(settingName));
+var settingName  = Identifier().As("settingName");
 
 var settingValue = FirstOf(
     Float().Flatten(FlattenType.Flatten),
     Integer().Flatten(FlattenType.Flatten),
     Identifier()
-).As(nameof(settingValue));
+).As("settingValue").Preserve();
 
 var document = AllOf(
     OptionalWhitespace(),
@@ -381,7 +393,7 @@ var document = AllOf(
     Token(';'),
     OptionalWhitespace(),
     Eof()
-).As(nameof(document)).Compile();
+).As("document").Preserve().Compile();
 
 static (Setting? result, string? error) CompileSetting(Rule root, Rule name, Rule value, string input)
 {
@@ -417,15 +429,18 @@ To show how this scales, here is a mini settings file grammar where a document c
 ```csharp
 using static InductorParser.Rules;
 
-var key = Identifier(extraStartRunes: RuneSet.Runes("_"))
-    .As(nameof(key));
+var key = Identifier(extraStartRunes: RuneSet.Runes("_")).As("key");
 
 // Private helper, not named because it never appears in the final tree
-// (its children are flattened directly under `values`).
+// (its children are flattened directly under `values`). The
+// identifier-shaped alternative is built fresh here rather than reusing
+// `key` because `.Flatten(...)` mutates the rule it is called on, and
+// reusing `key` would also flatten its tree position inside `pair`.
 var valueAtom = FirstOf(
     Float().Flatten(FlattenType.Flatten),
     Integer().Flatten(FlattenType.Flatten),
-    key.Flatten(FlattenType.Flatten)
+    Identifier(extraStartRunes: RuneSet.Runes("_"))
+        .Flatten(FlattenType.Flatten)
 );
 
 var values = AllOf(
@@ -438,7 +453,7 @@ var values = AllOf(
             valueAtom
         )
     )
-).As(nameof(values));
+).As("values").Preserve();
 
 var pair = AllOf(
     key,
@@ -448,7 +463,7 @@ var pair = AllOf(
     values,
     OptionalWhitespace(),
     Token(';')
-).As(nameof(pair));
+).As("pair").Preserve();
 
 var document = AllOf(
     OptionalWhitespace(),
@@ -456,8 +471,10 @@ var document = AllOf(
         AllOf(pair, OptionalWhitespace())
     ),
     Eof()
-).As(nameof(document)).Compile();
+).As("document").Preserve().Compile();
 ```
+
+The names here are string literals because these are local variables. For grammars organized as a class with rule fields, swap each `.As("key")` for `.As(nameof(Key))` so an IDE rename keeps the names in sync. See the class-based recipe in [Recipes.md](Recipes.md) for that pattern. The `.Preserve()` on the root keeps the whole document under one wrapper so `result.Tree.FindAll(pair)` works against it.
 
 Parses input like:
 
@@ -557,6 +574,19 @@ public sealed class ParseOptions
     /// output and for `Find`-queries against wrappers that would otherwise
     /// be lifted away.
     public bool PreserveAllSymbols { get; set; } = false;
+
+    /// When true, `Parse` succeeds as soon as the root rule matches and
+    /// leaves whatever it didn't consume in the input. The default
+    /// (false) requires every token of the input to be consumed by the
+    /// grammar. Turn this on for prefix parsing: matching one record at
+    /// the front of a longer stream, testing a sub-rule against an
+    /// input the rule was never meant to fully consume, or peeling a
+    /// command off the start and handing the rest to another parser. A
+    /// rule failing inside the grammar still reports its own position
+    /// the same way; the flag only relaxes the post-rule "must have
+    /// reached EOF" check. See InductorParserDesignDecisions.md "Parse Requires
+    /// Consuming All Input" for the rationale.
+    public bool AllowTrailingInput { get; set; } = false;
 }
 
 public enum InputUnit { Grapheme, Rune }
@@ -571,4 +601,4 @@ public enum InputUnit { Grapheme, Rune }
 
 When a budget trips, the parse returns a `ParseResult` with `Outcome` set to `Timeout`, `RuleCountLimitExceeded`, `DepthLimitExceeded`, or `Canceled` (not `GrammarMismatch`). Callers who need to distinguish "input was invalid" from "we ran out of budget" switch on `Outcome`.
 
-For the design rationale behind these choices (why three budgets and not one, why `Timeout` is opt-in but the others default on, why `CancellationTokenSource.CancelAfter` alone is insufficient on WebGL, and future ideas like the cut operator and packrat memoization), see [ProgrammingModel.md](ProgrammingModel.md).
+For the design rationale behind these choices (why three budgets and not one, why `Timeout` is opt-in but the others default on, why `CancellationTokenSource.CancelAfter` alone is insufficient on WebGL, and future ideas like the cut operator and packrat memoization), see [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md).

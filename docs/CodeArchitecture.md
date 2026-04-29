@@ -85,14 +85,19 @@ If future work needs async I/O (streaming a very large document, say), the shape
 
 ## Dependency Injection
 
-The library exposes interfaces for anything the host has to provide:
+The library uses BCL types instead of bespoke interfaces for anything the host has to provide:
 
 ```csharp
-public interface ITraceSink { void Write(string category, string message); }
-public interface IReadableSource { string ReadToEnd(); }   // if needed
+public sealed class ParseOptions
+{
+    public TextWriter? TraceSink { get; set; }
+    // ... other options
+}
 ```
 
-These are constructor-injected into the `Compiler` and `Lexer`. The library does not depend on VContainer or any other DI framework. Tests wire them up by hand. Unity hosts wire them up through VContainer or through a simple static registration, whichever the host prefers. The library doesn't care.
+`TextWriter?` (set to `Console.Out`, a `StringWriter`, a file writer, or null for off) is the trace sink. There is no `ITraceSink` abstraction because every plausible sink is already a `TextWriter`, and the BCL type means callers can pipe trace output through anything that accepts text. File loading is similarly the host's job and not part of the library's surface: the host calls `File.ReadAllText(...)` (or whatever its environment supports) and hands the string to `Rule.Parse`.
+
+The library does not depend on VContainer or any other DI framework. The current public surface is a static `Rules` class plus the `Rule`, `ParseOptions`, and `ParseResult` types, so there is no constructor to inject into. If a future revision adds a `Compiler<T>` base class (per [Recipes.md](Recipes.md)), it would take its dependencies as plain constructor parameters, no container required.
 
 ## Performance
 

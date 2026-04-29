@@ -91,4 +91,22 @@ public sealed class ParseOptions
     // whose FlattenType is Preserve. Set .Flatten(FlattenType.Preserve)
     // on any rule whose wrapper you need to locate after parsing.
     public bool PreserveAllSymbols { get; set; } = false;
+
+    // When true, Parse succeeds as soon as the root rule matches, even
+    // if the lexer hasn't reached end of input. The default (false)
+    // requires every token of the input to be consumed by the grammar
+    // before Parse returns success: a trailing tail the grammar didn't
+    // claim turns the parse into a failure positioned at the first
+    // unconsumed token. See docs/InductorParserDesignDecisions.md "Parse Requires
+    // Consuming All Input" for why the default is strict.
+    //
+    // Turn this on for prefix parsing: matching one record at the
+    // front of a longer stream, testing a sub-rule against an input
+    // longer than the rule was meant to consume, or recognising a
+    // command at the start of a line and handing the rest off to
+    // another parser. The deepest-failure / error-position machinery
+    // is unaffected: a failure inside the rule still reports its own
+    // position. The only behavior that changes is whether trailing
+    // unconsumed input is treated as a parse failure.
+    public bool AllowTrailingInput { get; set; } = false;
 }

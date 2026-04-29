@@ -12,8 +12,8 @@ Test files in all three folders share the same `namespace InductorParser.Tests;`
 
 Related docs:
 
-- [ProgrammingModel.md](ProgrammingModel.md): the error-position principle and deepest-failure-wins semantics the tests lock in.
-- [ProgrammingAGrammar.md](ProgrammingAGrammar.md): the public API tests exercise.
+- [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md): the error-position principle and deepest-failure-wins semantics the tests lock in.
+- [InductorParserReference.md](InductorParserReference.md): the public API tests exercise.
 
 ## Universal Requirements
 

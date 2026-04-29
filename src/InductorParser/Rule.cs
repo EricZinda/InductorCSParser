@@ -464,7 +464,7 @@ public abstract class Rule
             int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, options.NormalizeInput);
             return ParseResult.Failed(failurePos, BuildErrorMessage(lexer, pos), input, this);
         }
-        if (!lexer.IsEof)
+        if (!options.AllowTrailingInput && !lexer.IsEof)
         {
             var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
             int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, options.NormalizeInput);

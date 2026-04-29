@@ -336,7 +336,7 @@ public class RuneSetTests
     public void Intersection_narrows_Letters_to_a_script_block()
     {
         // Cyrillic block 0x0400..0x04FF intersected with Unicode Letters. The
-        // motivating use case from docs/ProgrammingModel.md: narrow a semantic
+        // motivating use case from docs/InductorParserDesignDecisions.md: narrow a semantic
         // class (Letters) by a script-range restriction.
         var cyrillicLetters = RuneSet.Letters & RuneSet.Range(0x0400, 0x04FF);
 

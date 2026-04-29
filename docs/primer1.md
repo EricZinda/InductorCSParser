@@ -88,9 +88,9 @@ var options = new ParseOptions { PreserveAllSymbols = true };
 var result = example.Parse("How can I match anything up until this sequence of characters", options);
 if (!result.Success)
     throw new FormatException(result.ErrorMessage);
-Console.WriteLine(result.ToString());
+Console.WriteLine(result.PrintTree());
 ```
-Then, the output will show you all of the Symbols, like this (how to decode this is described right after it): 
+`result.PrintTree()` walks the parse tree and prints each Symbol on its own line, indented by its depth. (`result.ToString()` is the other handy view: it returns the matched input text without the indentation.) The output looks like this (how to decode it is described right after): 
 
 ```CSharp
 AllOf: "How can I match anything up until this sequence of characters"

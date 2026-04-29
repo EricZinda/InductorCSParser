@@ -30,7 +30,7 @@ namespace InductorParser;
 //
 // RuneSet is a set of code points, not graphemes. Multi-rune graphemes
 // (emoji sequences, combining-mark clusters) aren't a single element of any
-// RuneSet. See docs/ProgrammingModel.md for how that interacts with the
+// RuneSet. See docs/InductorParserDesignDecisions.md for how that interacts with the
 // grapheme lexer.
 public readonly partial struct RuneSet : IEquatable<RuneSet>
 {

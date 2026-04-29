@@ -1,6 +1,6 @@
 # Unicode Internals Architecture
 
-This doc is about how the parser handles Unicode text at its lowest levels. Read this if you need to pick between `GraphemeLexer` and `RuneLexer`, understand what the parser sees when you feed it a string, or debug a Unicode-related issue. If you just want to write grammars, the programming model lives in [ProgrammingAGrammar.md](ProgrammingAGrammar.md).
+This doc is about how the parser handles Unicode text at its lowest levels. Read this if you need to pick between `GraphemeLexer` and `RuneLexer`, understand what the parser sees when you feed it a string, or debug a Unicode-related issue. If you just want to write grammars, the programming model lives in [InductorParserReference.md](InductorParserReference.md).
 
 ## Unicode In One Page
 
@@ -52,7 +52,7 @@ Input:  "🎸 = 👋🏽;"
 Stream: [🎸] [ ] [=] [ ] [👋🏽] [;]    (6 graphemes)
 ```
 
-How individual rules react to this stream (and when to switch to `RuneLexer`) lives in [ProgrammingAGrammar.md](ProgrammingAGrammar.md).
+How individual rules react to this stream (and when to switch to `RuneLexer`) lives in [InductorParserReference.md](InductorParserReference.md).
 
 ### RuneLexer (opt-in)
 
@@ -114,7 +114,7 @@ public readonly struct ParseResult
 }
 ```
 
-Three fields cover the common cases: `ErrorCharIndex` indexes into the input string directly, `ErrorLine` + `ErrorColumn` give the editor-ready position (in UTF-16 chars, 0-based, following the Language Server Protocol end-to-end. See [ProgrammingModel.md](ProgrammingModel.md) "LSP Position Semantics" for the full rationale). The two extra index properties are there for callers that count in runes or graphemes instead. They are computed lazily from the char index the one time they are asked for, so they cost nothing unless used. Column in rune or grapheme units is deliberately not exposed as a field because callers who need it can derive it from the corresponding index cheaply and the combinatorial expansion was not worth it.
+Three fields cover the common cases: `ErrorCharIndex` indexes into the input string directly, `ErrorLine` + `ErrorColumn` give the editor-ready position (in UTF-16 chars, 0-based, following the Language Server Protocol end-to-end. See [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md) "LSP Position Semantics" for the full rationale). The two extra index properties are there for callers that count in runes or graphemes instead. They are computed lazily from the char index the one time they are asked for, so they cost nothing unless used. Column in rune or grapheme units is deliberately not exposed as a field because callers who need it can derive it from the corresponding index cheaply and the combinatorial expansion was not worth it.
 
 `Symbol.SourceRange` reuses the same conversion routines for any node in the parse tree. The leaf's `ReadOnlyMemory<char>` carries an offset back into the input string (recovered via `MemoryMarshal.TryGetString`); a composite walks to its leftmost and rightmost leaves and stitches their ends. The result is a `SourceRange` with `Start` and `End` `SourcePosition`s, each carrying the same five units the error position does. So "where in the source is this symbol?" and "where in the source did the parse fail?" answer in the same vocabulary.
 
