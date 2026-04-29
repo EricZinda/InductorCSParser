@@ -206,28 +206,25 @@ Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 ru
 
 `RuneLexer` doesn't have this problem. It emits `'\r'` and `'\n'` as separate tokens. The bite is `GraphemeLexer`-specific, which is the default.
 
-**Fix.** Add an explicit `Literal("\r\n")` alternative anywhere the grammar cares about line breaks. One helper covers the three idiomatic uses:
+**Fix.** Use the built-in `EndOfLine()` rule. It is `FirstOf(Literal("\r\n"), OneOf(RuneSet.SingleRuneLineTerminators))` under the hood, so the CRLF grapheme is tried as a unit before the single-rune terminators (LF, CR, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR per UAX #18 Annex C). The companions `OptionalEndOfLine()` and `EndOfLineOrEof()` cover the optional and "line terminator here, or end of input" cases. Anywhere a grammar cares about line breaks, reach for these instead of building one with `Token('\n')` or a `OneOf` over a rune set:
 
 ```csharp
-// Match any of LF, CR, or the CRLF grapheme.
-private static readonly Rule LineBreak = FirstOf(
-    Literal("\r\n"),
-    OneOf(RuneSet.Runes("\r\n"))
-);
+// Match a Unicode line terminator (CRLF, LF, CR, NEL, LS, PS, VT, FF).
+AllOf(..., EndOfLine())
 
-// Whitespace that includes newlines: put the Literal first so the
-// longer alternative commits before the single-rune fallback.
-public static readonly Rule OptionalWhitespace = ZeroOrMore(FirstOf(
-    Literal("\r\n"),
+// Whitespace that includes newlines: EndOfLine first so the CRLF pair
+// commits before the single-rune fallbacks pick up the '\r' alone.
+public static readonly Rule WhitespaceOrNewline = ZeroOrMore(FirstOf(
+    EndOfLine(),
     OneOf(RuneSet.Ascii.Whitespace)
 ));
 
-// Scanning "up to end of line": use a rule-based stop with Not(LineBreak),
-// not NoneOf. NoneOf would silently eat the CRLF grapheme.
+// Scanning "up to end of line": use a rule-based stop with Not(EndOfLine()).
+// NoneOf over a single-rune set would silently eat the CRLF grapheme.
 public static readonly Rule LineComment = AllOf(
     Token('%'),
-    ZeroOrMore(AllOf(Not(LineBreak), AnyToken())),
-    FirstOf(OneOrMore(LineBreak), Eof())
+    ZeroOrMore(AllOf(Not(EndOfLine()), AnyToken())),
+    EndOfLineOrEof()
 );
 ```
 
