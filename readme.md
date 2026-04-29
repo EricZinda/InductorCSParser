@@ -3,8 +3,14 @@ The Inductor Parser (IP) is a loose port of the [Inductor C++ Parser](https://gi
 - **Designed for World Languages:** From the Lexer, to the built-in rules, to the defaults it is designed around Unicode to make grammars parse world languages well by default.
 - **More Readable than Regex:** The grammars are self-describing and human readable so they can be reasoned about, code reviewed and understood without looking up obscure letters and symbols. 
 - **Safer Against Pathological Input:** It is designed to avoid "catastrophic backtracking" and pitfalls like it that can hang your app, blow your stack, etc.
-- **Able to run on WebGL and .NET Standard 2.1 (and later) using IL2CPP ** and doesn't use Reflection.Emit or threads so that it can run in Unity targeting WebGL or IL2CPP on iPhone
+- **Able to run on WebGL and .NET Standard 2.1 (and later) using IL2CPP** and doesn't use Reflection.Emit or threads so that it can run in Unity targeting WebGL or IL2CPP on iPhone
 - **Fast enough to be used in production**
+
+If you just want to learn how to use it, follow the primers:
+
+- [Primer 1: Getting Started](docs/primer1.md)
+- [Primer 2: Walking the Tree](docs/primer2.md)
+- [Tutorial: Peek](docs/tutorial-peek.md)
 
 ## Designed for World Languages
 If you write grammars in Inductor Parser, you get a foundation that helps you support Unicode from the start:

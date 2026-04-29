@@ -27,6 +27,21 @@ Every rule's test file, regardless of rule type, should cover these four categor
 
 **4. At least one test without WithError.** To verify the positional-fallback path in `BuildErrorMessage`. Without this, the fallback code could break silently. One `Does.StartWith("Unexpected end of input")` or `Does.StartWith("Parse failed at offset")` test per rule file is enough.
 
+**5. Sealed-rule rejection.** Three tests, one each verifying that `Flatten(...)`, `WithError(...)`, and `As(...)` throw `InvalidOperationException` when called on the rule after `Compile()` has run. The pattern:
+
+```csharp
+[Test]
+public void Sealed_<RuleName>_rejects_Flatten()
+{
+    var rule = <construct the rule>;
+    rule.Compile();
+    Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
+}
+// plus the same shape for WithError and As
+```
+
+The base `Rule.ThrowIfSealed` enforces the seal, but subclasses that ever override `Flatten` / `WithError` / `As` (or factory paths that produce wrapper rules) can silently skip the check. Per-rule tests catch that drift in the rule's own file rather than letting one shared test in `Core/CompileTests.cs` cover everything. `LateBoundRule` is the exception: it rejects these modifiers *always*, not just post-compile, so its test file verifies the always-rejecting form instead.
+
 ## Per-Rule-Type Requirements
 
 ### Single-Token Primitive Rules

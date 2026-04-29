@@ -9,6 +9,11 @@ namespace InductorParser;
 // returns the whole run as one leaf Symbol. This is the character-class
 // analogue of LiteralRule/ScanUntilRule: use it when the grammar wants a
 // maximal run such as [A-Za-z0-9_]+, not when it needs one Symbol per rune.
+//
+// Tests live in src/InductorParser.Tests/Rules/RuneRunRuleTests.cs.
+// See docs/TestArchitecture.md for the per-rule test conventions
+// (success, failure position, WithError propagation, positional fallback,
+// sealed-rule rejection).
 internal sealed class RuneRunRule : Rule
 {
     private readonly RuneSet _set;

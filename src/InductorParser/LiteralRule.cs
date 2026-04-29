@@ -31,6 +31,11 @@ namespace InductorParser;
 // Default FlattenType is Delete, matching TokenRule. The common case for a
 // literal is a keyword or delimiter the grammar wants to assert is present
 // but doesn't need to materialize in the output tree.
+//
+// Tests live in src/InductorParser.Tests/Rules/LiteralRuleTests.cs.
+// See docs/TestArchitecture.md for the per-rule test conventions
+// (success, failure position, WithError propagation, positional fallback,
+// sealed-rule rejection).
 internal sealed class LiteralRule : Rule
 {
     private readonly string _expected;

@@ -13,6 +13,11 @@ namespace InductorParser;
 // companion idiom is ZeroOrMore(AllOf(Not(stopRule), AnyToken())), which
 // sweeps up content until wherever stopRule would fire. See the
 // "Stopping at a Multi-Character Terminator" section of Recipes.md.
+//
+// Tests live in src/InductorParser.Tests/Rules/AnyTokenRuleTests.cs.
+// See docs/TestArchitecture.md for the per-rule test conventions
+// (success, failure position, WithError propagation, positional fallback,
+// sealed-rule rejection).
 internal sealed class AnyTokenRule : Rule
 {
     public AnyTokenRule() : base(FlattenType.Preserve) { }

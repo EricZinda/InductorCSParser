@@ -4,6 +4,12 @@ This document is user reference: how to write grammars with the library. It show
 
 In this library a *rule* is a C# object. You build rules by calling factory functions like `AllOf(...)`, `FirstOf(...)`, `Token('=')`, you compose them into a grammar, and you call `.Parse(input)` on the root rule to get a tree back.
 
+Primers (worked examples):
+
+- [Primer 1: Getting Started](primer1.md): build a grammar that consumes everything up to a stop sequence, parse some input, look at the tree.
+- [Primer 2: Walking the Tree](primer2.md): a tiny INI-style config grammar with typed values, a tree walker, and Unicode-aware error positions.
+- [Tutorial: Peek](tutorial-peek.md): a password-validation regex translated into the parser, using `Peek` for non-consuming lookahead.
+
 Related docs:
 
 - [ProgrammingModel.md](ProgrammingModel.md): design and architecture of the library. Why it is shaped the way it is, what tradeoffs were made.

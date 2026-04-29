@@ -37,6 +37,11 @@ namespace InductorParser;
 // - Inner-rule Symbols are discarded. WithinGrapheme emits one leaf
 //   Symbol representing the whole grapheme on success. Callers that
 //   want structure inside the grapheme would need a different rule.
+//
+// Tests live in src/InductorParser.Tests/Rules/WithinGraphemeRuleTests.cs.
+// See docs/TestArchitecture.md for the per-rule test conventions
+// (success, failure position, WithError propagation, positional fallback,
+// sealed-rule rejection).
 internal sealed class WithinGraphemeRule : Rule
 {
     private readonly Rule _innerRule;

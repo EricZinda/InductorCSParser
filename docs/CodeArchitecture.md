@@ -44,41 +44,13 @@ No threads spawned by the parser. The C++ version is already single-threaded for
 
 ## What the Port Has To Do
 
-Translate C++ templates to something Unity-friendly. This is the part that actually hurts. The C++ library uses templates extensively, and templates in C++ are a compile-time code generation mechanism. C# generics are a runtime mechanism with a different model, different capabilities, and different failure modes. Some patterns translate directly (a simple `AndExpression<T1, T2>` becomes `AndExpression<T1, T2>` with similar meaning). Other patterns do not. In particular, the C++ version uses a variadic-ish `Args` wrapper to work around the lack of variadic templates in the C++ version it was written for, and passes non-type template parameters like `FlattenType::Flatten` and numeric symbol IDs. C# generics do not support non-type generic parameters the way C++ templates do, and C# does not have variadic generics at all.
+Translate C++ templates to something Unity-friendly: The C++ library uses templates extensively, and templates in C++ are a compile-time code generation mechanism. C# generics are a runtime mechanism with a different model, different capabilities, and different failure modes. Some patterns translate directly (a simple `AndExpression<T1, T2>` becomes `AndExpression<T1, T2>` with similar meaning). Other patterns do not. In particular, the C++ version uses a variadic-ish `Args` wrapper to work around the lack of variadic templates in the C++ version it was written for, and passes non-type template parameters like `FlattenType::Flatten` and numeric symbol IDs. C# generics do not support non-type generic parameters the way C++ templates do, and C# does not have variadic generics at all.
 
-The port will almost certainly have to change the grammar-authoring style. Instead of:
-
-```cpp
-class NameValueRule : public
-    AndExpression<Args<
-        OneOrMoreExpression<CharacterSetSymbol<Chars>, FlattenType::None, MySymbolID::SettingName>,
-        OptionalWhitespaceSymbol<>,
-        CharacterSymbol<EqualString>,
-        ...
-    >> {};
-```
-
-the C# version will likely use a builder or fluent API that produces the same rule tree at runtime:
-
-```csharp
-public static readonly Rule NameValueRule =
-    AllOf(
-        OneOrMore(CharacterSet(Chars)).As(MySymbolID.SettingName),
-        OptionalWhitespace(),
-        Character('='),
-        ...
-    );
-```
-
-This is a judgment call we will revisit once the first real rule is ported. The alternative is to write a source generator that produces the rule tree from declarative attributes, but source generators run at Roslyn compile time, not inside Unity's IL2CPP pipeline, so they would have to be wired in on the upstream `.csproj` side. That is workable, but adds a second code path that can disagree with the runtime one. The builder approach is simpler and directly maps to the existing tree the parser already builds.
-
-Either way, the grammar surface area is the biggest design question in the port, and nothing else makes sense until it is answered.
-
-Preserve the tree shape and the flattening semantics. Whatever the grammar-authoring surface looks like, the resulting tree has to behave like the C++ one: custom IDs, `FlattenType::Flatten` / `Delete` / `None`, and `ToString()` recovering the original text. The one deliberate deviation is that `Parse` applies the flatten pass before returning, so the default `Tree` is the syntax tree. C++ callers did this explicitly via `FlattenInto`. Pass `ParseOptions.PreserveAllSymbols` for the C++-shaped raw tree when you need it. Downstream compilers written against the C++ version translate mechanically, just against the already-flattened tree.
+We need to preserve the tree shape and the flattening semantics. Whatever the grammar-authoring surface looks like, the resulting tree has to behave like the C++ one: custom IDs, `FlattenType::Flatten` / `Delete` / `None`, and `ToString()` recovering the original text. The one deliberate deviation is that `Parse` applies the flatten pass before returning, so the default `Tree` is the syntax tree. C++ callers did this explicitly via `FlattenInto`. Pass `ParseOptions.PreserveAllSymbols` for the C++-shaped raw tree when you need it. Downstream compilers written against the C++ version translate mechanically, just against the already-flattened tree.
 
 Preserve the tracing story. The C++ version has very verbose parser tracing you can turn on with `SetTraceFilter(SystemTraceType::Parsing, TraceDetail::Diagnostic)`, and it is the main debugging tool for grammars. The C# port needs an equivalent, routed through whatever `ITraceSink` the host provides. This should not use `System.Diagnostics.Trace` because that has IL2CPP baggage and is noisy on Unity.
 
-Preserve the error reporting heuristic. The "deepest failure wins" heuristic is small but load-bearing. It has to come over intact.
+Preserve the error reporting heuristic. The "deepest failure wins" heuristic is very useful. It has to come over intact.
 
 ## Assembly Layout
 
@@ -120,14 +92,14 @@ public interface ITraceSink { void Write(string category, string message); }
 public interface IReadableSource { string ReadToEnd(); }   // if needed
 ```
 
-These are constructor-injected into the `Compiler` and `Lexer`. The library does not depend on VContainer or any other DI framework. Tests wire them up by hand. Unity hosts wire them up through VContainer (matching how UnityTabs does it) or through a simple static registration, whichever the host prefers. The library does not care.
+These are constructor-injected into the `Compiler` and `Lexer`. The library does not depend on VContainer or any other DI framework. Tests wire them up by hand. Unity hosts wire them up through VContainer or through a simple static registration, whichever the host prefers. The library doesn't care.
 
 ## Performance
 
-The C++ version's `readme.md` already warns that debug builds are dramatically slower than retail builds because of extra error checking. The C# port will have a similar story: debug-mode tracing and the Roslyn debug build both make parsing noticeably slower. Measure on a release build before declaring the C# port "slow."
+The C++ version's `readme.md` already warns that debug builds are dramatically slower than retail builds because of extra error checking. The C# port will have a similar story: debug-mode tracing and the Roslyn debug build both make parsing noticeably slower. 
 
 One known risk: the C++ version leans on value types and stack allocation for a lot of its inner-loop state. C# will put more of that on the GC heap by default. The port should prefer `struct` for small, short-lived state objects (lexer transactions, position markers) and avoid allocating per-character. `Symbol` nodes are reference types and always will be, but the bookkeeping around them should not allocate if it does not have to. Whether this matters in practice is a measurement question, not a design question. Start simple, profile, and tighten the hot paths that actually show up.
 
 ## What This Document Is Not
 
-This is not a line-by-line port plan. It does not decide which test framework to use (NUnit to match UnityTabs, probably), it does not decide on the final grammar-authoring syntax, and it does not enumerate every C++ file and its C# counterpart. Those decisions happen during the port itself, once we have one real grammar working end to end. The point of this document is to make the constraints explicit so none of those decisions accidentally paint us into a corner where the library runs on desktop and dies on WebGL.
+This is not a line-by-line port plan. It does not decide which test framework to use, it does not decide on the final grammar-authoring syntax, and it does not enumerate every C++ file and its C# counterpart. Those decisions happen during the port itself, once we have one real grammar working end to end. The point of this document is to make the constraints explicit so none of those decisions accidentally paint us into a corner where the library runs on desktop and dies on WebGL.

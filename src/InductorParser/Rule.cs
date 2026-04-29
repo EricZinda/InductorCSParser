@@ -39,6 +39,11 @@ namespace InductorParser;
 // (AllOfRule, FirstOfRule, TokenRule, etc.) subclass it. User code can subclass
 // Rule too if it needs matching logic the built-in rules can't express.
 // See TryParseRule below for the full subclass contract.
+//
+// Per-rule tests live in src/InductorParser.Tests/Rules/<RuleName>Tests.cs.
+// See docs/TestArchitecture.md for the per-rule test conventions
+// (success, failure position, WithError propagation, positional fallback,
+// sealed-rule rejection) every concrete subclass must cover.
 public abstract class Rule
 {
     // See below for description

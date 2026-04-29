@@ -60,6 +60,11 @@ namespace InductorParser;
 // rule built dynamically from whatever `delim` the opening
 // captured. That is context-sensitive and not directly expressible
 // as a fixed Rule at grammar-build time.
+//
+// Tests live in src/InductorParser.Tests/Rules/ScanUntilRuleTests.cs.
+// See docs/TestArchitecture.md for the per-rule test conventions
+// (success, failure position, WithError propagation, positional fallback,
+// sealed-rule rejection).
 internal sealed class ScanUntilRule : Rule
 {
     // Stopper discrimination. _stopperRule != null selects the general

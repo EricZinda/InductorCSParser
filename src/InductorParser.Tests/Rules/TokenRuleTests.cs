@@ -1,6 +1,7 @@
 using System;
 using NUnit.Framework;
 using InductorParser;
+using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
@@ -318,4 +319,28 @@ public class TokenRuleTests
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 #endif
+
+    [Test]
+    public void Sealed_Token_rejects_Flatten()
+    {
+        var rule = Token('a');
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
+    }
+
+    [Test]
+    public void Sealed_Token_rejects_WithError()
+    {
+        var rule = Token('a');
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
+    }
+
+    [Test]
+    public void Sealed_Token_rejects_As()
+    {
+        var rule = Token('a');
+        rule.Compile();
+        Assert.Throws<InvalidOperationException>(() => rule.As("late"));
+    }
 }
