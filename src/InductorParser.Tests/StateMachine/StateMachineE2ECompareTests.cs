@@ -54,10 +54,11 @@ public class StateMachineE2ECompareTests
 
     private static void AssertEvaluatorsAgree(Rule rule, string input, bool expectSuccess)
     {
-        // Disable normalization on both paths so failure positions
-        // stay directly comparable. The state machine doesn't run
-        // normalization either way.
-        var options = new ParseOptions { NormalizeInput = null };
+        // Default ParseOptions runs both engines through FormC
+        // normalization. Failure positions stay comparable because both
+        // engines translate the lexer's normalized-space position back
+        // to caller-original coordinates the same way.
+        var options = new ParseOptions();
         var legacy = rule.Parse(input, options);
         var stateMachine = StateMachineParser.Parse(rule, input, options);
 

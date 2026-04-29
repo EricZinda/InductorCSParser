@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Text;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
@@ -64,7 +65,8 @@ public static class StateMachineParser
     public static bool TryMatch(Rule rootRule, string input, ParseOptions options)
     {
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols, options.InputUnit);
-        Lexer lexer = RentLexer(input, options);
+        string parseInput = NormalizeIfRequested(input, options.NormalizeInput);
+        Lexer lexer = RentLexer(parseInput, options);
         lexer.ConfigureBudgets(options);
         bool succeeded = Stepper.Run(program, lexer, out Machine machine);
         try
@@ -82,7 +84,16 @@ public static class StateMachineParser
     {
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols, options.InputUnit);
 
-        Lexer lexer = RentLexer(input, options);
+        // Normalize before the lexer sees the input so grammars written
+        // against one composition form also match the other. Mirrors the
+        // recursive evaluator at Rule.Parse. When the input is already in
+        // the target form (the common case for typed and web-sourced
+        // text), String.Normalize short-circuits and returns the same
+        // reference, which makes the downstream position translation a
+        // pass-through. NormalizeInput = null skips the step entirely.
+        string parseInput = NormalizeIfRequested(input, options.NormalizeInput);
+
+        Lexer lexer = RentLexer(parseInput, options);
 
         // Configure budgets / debug flags on the lexer so the
         // BridgeToRecursive opcode (which delegates back to
@@ -99,22 +110,22 @@ public static class StateMachineParser
 
         try
         {
-            if (!succeeded)
+            if (!succeeded || !lexer.IsEof)
             {
                 int failurePosition = System.Math.Max(machine.DeepestFailure, lexer.Position);
-                return ParseResult.Failed(failurePosition, BuildErrorMessage(machine, failurePosition, input), input, rootRule);
-            }
-            if (!lexer.IsEof)
-            {
-                int failurePosition = System.Math.Max(machine.DeepestFailure, lexer.Position);
-                return ParseResult.Failed(failurePosition, BuildErrorMessage(machine, failurePosition, input), input, rootRule);
+                string message = BuildErrorMessage(machine, failurePosition, parseInput);
+                int reportedPosition = NormalizedPositionMap.TranslateToOriginal(input, parseInput, failurePosition, options.NormalizeInput);
+                return ParseResult.Failed(reportedPosition, message, input, rootRule);
             }
 
             // The lowered program already baked the effective FlattenType
             // into its output states (Delete leaves and Flatten composites
             // were skipped on the fast path). TreeBuilder no longer needs
             // to apply any per-node override, so pass false here regardless.
-            IReadOnlyList<Symbol> symbols = TreeBuilder.Build(machine.OutputOps, input, preserveAllSymbols: false);
+            // Leaf memory slices into parseInput, the same string the
+            // lexer was reading, mirroring how the recursive engine
+            // builds Symbols against the normalized text.
+            IReadOnlyList<Symbol> symbols = TreeBuilder.Build(machine.OutputOps, parseInput, preserveAllSymbols: false);
             return ParseResult.Succeeded(symbols, input, rootRule);
         }
         finally
@@ -210,14 +221,15 @@ public static class StateMachineParser
         T failureValue)
     {
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols, options.InputUnit);
-        Lexer lexer = RentLexer(input, options);
+        string parseInput = NormalizeIfRequested(input, options.NormalizeInput);
+        Lexer lexer = RentLexer(parseInput, options);
         lexer.ConfigureBudgets(options);
         bool succeeded = Stepper.Run(program, lexer, out Machine machine);
         try
         {
             if (!succeeded || !lexer.IsEof)
                 return failureValue;
-            return reducer(machine.OutputOps, input, matchId, default!);
+            return reducer(machine.OutputOps, parseInput, matchId, default!);
         }
         finally
         {
@@ -234,7 +246,8 @@ public static class StateMachineParser
         SymbolId[] captureIds)
     {
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols, options.InputUnit);
-        Lexer lexer = RentLexer(input, options);
+        string parseInput = NormalizeIfRequested(input, options.NormalizeInput);
+        Lexer lexer = RentLexer(parseInput, options);
         lexer.ConfigureBudgets(options);
         bool succeeded = Stepper.Run(program, lexer, out Machine machine);
         try
@@ -248,6 +261,15 @@ public static class StateMachineParser
             ReturnLexerToPool(lexer);
         }
     }
+
+    // Normalize the caller's input string into the form the lexer should
+    // see. When the input is already in the target form, String.Normalize
+    // returns the same reference and the downstream position-translation
+    // step is a pointer-equality pass-through. NormalizeInput = null
+    // skips normalization entirely (the opt-out documented on
+    // ParseOptions.NormalizeInput).
+    private static string NormalizeIfRequested(string input, NormalizationForm? form) =>
+        form.HasValue ? input.Normalize(form.Value) : input;
 
     private static long ReduceCountMatches(List<OutputOp> ops, string input, SymbolId matchId, long _)
     {
