@@ -272,6 +272,11 @@ public readonly struct ParseResult
     // For callers that measure in other units. Derived lazily.
     public int  ErrorRuneIndex         { get; }
     public int  ErrorGraphemeIndex     { get; }
+
+    // The error position bundled into a SourcePosition. Null on success.
+    // Use this when you want all five units in one shot (one walk of the
+    // input instead of several lazy ones).
+    public SourcePosition? ErrorPosition { get; }
 }
 
 public enum ParseOutcome
@@ -286,6 +291,8 @@ public enum ParseOutcome
 ```
 
 Putting the error position into the result directly removes an entire class of C++ pitfall where you forgot to ask the lexer for the error before it went out of scope. `ErrorLine` and `ErrorColumn` are computed lazily from `ErrorCharIndex` and the original input string. The char-based trio (`ErrorCharIndex`, `ErrorLine`, `ErrorColumn`) uses the same conventions the Language Server Protocol uses, so a caller forwarding a parse error into an editor through LSP does no arithmetic in between. See [ProgrammingModel.md](ProgrammingModel.md) for the full rationale. The two extra index properties (`ErrorRuneIndex`, `ErrorGraphemeIndex`) are there for callers that measure in other units. They are computed lazily from the char index and cost nothing unless used.
+
+`Symbol.SourceRange` uses the same machinery for any node in the parse tree, not just the error point. Each `SourcePosition` (the type returned by `Start` and `End`) carries the same five fields, so a tool reporting "duplicate section on line 7" or "value out of range at char 42" reads from the symbol with the same semantics LSP and `string.Substring` already use.
 
 The `Outcome` field distinguishes "the grammar did not match" from "we ran out of budget." A grammar mismatch means the input is invalid and you should show the user where. A timeout or rule-count-limit exhaustion means the input might be valid but we could not decide in the budget we were given, and the caller might want to reject it as suspicious, retry with a looser budget, or show a different error to the user. See the "Catastrophic Backtracking and Timeouts" section below for the mechanics.
 
@@ -309,6 +316,12 @@ public class Symbol
     public IEnumerable<Symbol> FindAll(Rule rule);
     public IEnumerable<Symbol> FindAll(SymbolId id);
     public IEnumerable<Symbol> Walk();             // pre-order traversal
+
+    // Span this Symbol covers in the original input. Null when the
+    // Symbol has no surviving leaves (an empty composite, or one whose
+    // leaves were Delete-flattened away). Same five units as
+    // ParseResult's error position (char, rune, grapheme, line, column).
+    public SourceRange? SourceRange { get; }
 }
 ```
 

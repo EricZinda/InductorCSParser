@@ -590,7 +590,7 @@ Variadic rules without the `Args` wrapper. `AllOf(r1, r2, r3, r4)` beats `AndExp
 
 Composable character classes. `RuneSet.Letters | RuneSet.Digits | RuneSet.Runes("_-")` is worth the whole port by itself.
 
-Proper error objects. `ParseResult.ErrorLine` and `ErrorColumn` are computed on demand from the position. In the C++ version you get a message and a character offset and you have to compute line/column yourself.
+Proper error objects. `ParseResult.ErrorLine` and `ErrorColumn` are computed on demand from the position. In the C++ version you get a message and a character offset and you have to compute line/column yourself. The same conversion is also available on every parse-tree node via `Symbol.SourceRange`, so semantic errors ("duplicate section on line 7", "value out of range at char 42") report positions in the same units the parse error does.
 
 ## Things That Got Worse
 

@@ -203,13 +203,18 @@ var keyValue = AllOf(
     .As("keyValue").Preserve();
 ```
 
-If `Token('=')` is the deepest failure when a parse fails (the rule that got furthest before giving up), `result.ErrorMessage` will be your custom string instead of the default. Sprinkle `.WithError(...)` on the spots most likely to confuse readers and the error reporting starts looking like a hand-written diagnostic instead of a generic parser errors.
+If `Token('=')` is the deepest failure when a parse fails (the rule that got furthest before giving up), `result.ErrorMessage` will be your custom string instead of the default. Re-running the same `[server]\nport oops\n` input now reports:
 
-`ErrorLine` and `ErrorColumn` follow the Language Server Protocol (LSP) convention used by text editors and developer tools: zero-based, with line breaks at `\n`, `\r\n`, or lone `\r`.
+```
+Parse failed at line 1, column 5
+  Expected '=' after the setting name
+```
+
+`ErrorLine` and `ErrorColumn` follow the Language Server Protocol convention used by text editors and developer tools: zero-based, with line breaks at `\n`, `\r\n`, or lone `\r`.
 
 Semantic errors happen after the parse: a duplicate section, a missing required key, a number out of range. The parse already succeeded so now you need to walk the tree and check things.
 
-For example, you might want to disallow duplicate section names. Here's how you'd catch a duplicate section using `FindAll` to grab every section header in the tree, then a `HashSet` to spot the repeat:
+For example, you might want to disallow duplicate section names. Here's how you'd catch a duplicate using `FindAll` to grab every section header in the tree, then a `HashSet` to spot the repeat. Every Symbol exposes its position back into the input through `SourceRange`, so we can include the line number in the error to point the user at the offending header:
 
 ```CSharp
 var seen = new HashSet<string>();
@@ -217,11 +222,15 @@ foreach (var sectionSymbol in result.Tree!.FindAll(section))
 {
     string sectionName = sectionSymbol.Children[0].ToString();
     if (!seen.Add(sectionName))
-        throw new FormatException($"Duplicate section: [{sectionName}]");
+    {
+        int line = sectionSymbol.SourceRange!.Value.Start.Line + 1;
+        throw new FormatException($"Duplicate section [{sectionName}] on line {line}");
+    }
 }
 ```
 
-Required-key checks and range checks fall out of the same pattern: get the symbols you care about with `Find`, `FindAll`, or a walk-with-state like `FindSetting`, pull the value with `.ToString()` or a typed-child dispatch, and apply the check. The grammar shapes the input. The walk gives it meaning.
+`SourceRange` returns a `Start` and `End` pair, each a `SourcePosition` carrying the same five units as `ParseResult`'s error position: `CharIndex`, `RuneIndex`, `GraphemeIndex`, `Line`, `Column`. The `+ 1` here is because Language Server Protocol lines are zero-based but humans count from 1.
+
 
 # Unicode and where the error actually is
 
@@ -232,35 +241,29 @@ Here's where it gets interesting. `ErrorColumn` and a sibling field `ErrorCharIn
 port oops
 ```
 
-That's a section name made of a single family emoji, then a malformed key/value line. The section header itself parses fine: `name` rejects single-rune whitespace and `]`, but a multi-rune grapheme cluster like the family emoji isn't any single rune in any set, so `NoneOf` accepts it as one token. The parser gets past the header and fails on line 2 at the same spot it would for an ASCII version: where the `=` should be.
+That's a section name made of a single family emoji, then a malformed key/value line. The family emoji is the demo's whole point: it's one of the few characters that pulls the three counting units apart in opposite directions. A bare guitar emoji 🎸 is 2 chars but 1 rune and 1 grapheme (chars and runes diverge, runes and graphemes don't). A letter with a combining accent like `é` in NFD is 1 char per rune but 2 runes per grapheme (the other way around). The family emoji is 8 chars, 5 runes (man, ZWJ, woman, ZWJ, girl), and 1 grapheme. So char, rune, and grapheme all give different numbers, which is what makes "which one do I report?" a real question instead of a hypothetical one.
 
-But the position numbers diverge. To a human, the family is one character and the failure happens 5 characters into the second line. In memory, the family is five Unicode code points (man, ZWJ, woman, ZWJ, girl) and eight UTF-16 code units (each emoji is a surrogate pair, plus three more code units for the two ZWJs). So which "position" should the parser report?
+The section header itself parses fine: `name` rejects single-rune whitespace and `]`, but a multi-rune grapheme cluster like the family emoji isn't any single rune in any set, so `NoneOf` accepts it as one token. The parser gets past the header and fails on line 2 at the same spot it would for an ASCII version: where the `=` should be.
+
+But the position numbers diverge. To a human, the family is one character and the failure happens 5 characters into the second line. In memory, the family is five runes (man, ZWJ, woman, ZWJ, girl) and eight UTF-16 code units (each emoji is a surrogate pair, plus three more code units for the two ZWJs). So which "position" should the parser report?
 
 Inductor Parser reports it four ways, because the right unit depends on what the caller is going to do with the number:
 
 ```CSharp
 result.ErrorCharIndex     // 16 - UTF-16 code units, what string.Substring uses
-result.ErrorRuneIndex     // 13 - Unicode scalar values (code points)
-result.ErrorGraphemeIndex // 9  - user-perceived characters (UAX #29)
+result.ErrorRuneIndex     // 13 - runes
+result.ErrorGraphemeIndex // 9  - graphemes
 result.ErrorLine          // 1
-result.ErrorColumn        // 5  - same unit as ErrorCharIndex, used by LSP
+result.ErrorColumn        // 5  - same unit as ErrorCharIndex, used by the Language Server Protocol
 ```
 
 All four point at the same place in the input. They just count it in different units.
 
-Use `ErrorCharIndex` (or `ErrorColumn`) when you're going to feed the number into something that thinks in chars: `string.Substring`, `ReadOnlySpan<char>.Slice`, an LSP diagnostic, a regex offset. That's most production code, because chars are the unit .NET strings index in.
+Use `ErrorCharIndex` (or `ErrorColumn`) when you're going to feed the number into something that thinks in chars: `string.Substring`, `ReadOnlySpan<char>.Slice`, a Language Server Protocol diagnostic, a regex offset. That's most production code, because chars are the unit .NET strings index in.
 
-Use `ErrorRuneIndex` when you're working with code points directly. Less common, but it shows up if you're stepping through `Rune.GetRunes(input)` and want to know which scalar value tripped the parser.
+Use `ErrorRuneIndex` when you're working with runes directly. Less common, but it shows up if you're stepping through `Rune.GetRunes(input)` and want to know which rune tripped the parser.
 
 Use `ErrorGraphemeIndex` for anything that faces a human. "Error at character 9" is what a person sees on screen. "Error at character 16" would seem to point past the end of what they typed, because they don't think of an emoji as taking up 8 of anything.
 
-Most of the time you won't care, because most input is ASCII and all four numbers are equal. But the moment a user pastes in an emoji, a flag, or a letter with a combining accent, the indices diverge, and "which one do I show in the error message" stops being a question you can ignore. The parser hands you all four and lets you pick.
+Most of the time you won't care, because most input is ASCII and all four numbers are equal. But the moment a user pastes in an emoji, a flag, or a letter with a combining accent, the indices diverge, and "which one do I show in the error message" stops being a question you can ignore.
 
-# What this gets you
-
-Two patterns make up almost all parser-driven programs:
-
-- Walk the tree by dispatching on `.Is(rule)` and recursing through `Children` (or jumping to a named node with `.Find(rule)` / `.FindAll(rule)`).
-- Report parse errors using the deepest-failure position the parser already tracks, in whatever unit the consumer needs. Report semantic errors by name, after lookup.
-
-Both fall out of the rules you set up at grammar-construction time. `.As("name").Preserve()` makes a node findable. `.WithError("...")` upgrades the diagnostic at the spots most likely to be wrong. The grammar describes the shape, the tree shows you what's there, and the four index fields tell you exactly where a problem was, in whatever counting unit fits what you're doing next.

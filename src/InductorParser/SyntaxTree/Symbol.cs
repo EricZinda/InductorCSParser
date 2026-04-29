@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Text;
 using InductorParser;
 
@@ -15,6 +16,11 @@ namespace InductorParser.SyntaxTree;
 //     (Token, Literal, OneOf, ScanUntil). ToString() returns the
 //     text it points at. The parse never copies input into a new
 //     string.
+//
+// Because the leaf memory points back into the input, a Symbol can
+// also report where in the source it came from: SourceRange returns
+// a Start/End pair of SourcePositions covering the same char / rune /
+// grapheme / line / column units ParseResult uses for error positions.
 public sealed class Symbol
 {
     // Shared empty array for the Children field on leaf symbols. Array.Empty<T>()
@@ -166,6 +172,64 @@ public sealed class Symbol
         foreach (var child in Children)
             foreach (var descendant in child.Walk())
                 yield return descendant;
+    }
+
+    // The span in the original input string that this Symbol consumed,
+    // expressed as a SourceRange. Returns null when the Symbol has no
+    // associated text (an empty composite, or a composite whose leaves
+    // have all been Delete-flattened away). Both Start and End come
+    // back as full SourcePositions, so the caller can read line/column,
+    // grapheme index, etc. without a separate conversion call.
+    //
+    // Implementation: leaves carry a ReadOnlyMemory<char> that points
+    // into the original input string. MemoryMarshal.TryGetString
+    // recovers the underlying string and the leaf's offset. For a
+    // composite, walk to the leftmost and rightmost leaves and stitch
+    // the start of one to the end of the other.
+    public SourceRange? SourceRange
+    {
+        get
+        {
+            Symbol? firstLeaf = FindFirstLeafWithText(this);
+            Symbol? lastLeaf = FindLastLeafWithText(this);
+            if (firstLeaf == null || lastLeaf == null) return null;
+
+            if (!MemoryMarshal.TryGetString(firstLeaf._leafChars, out string? firstInput, out int firstStart, out _))
+                return null;
+            if (!MemoryMarshal.TryGetString(lastLeaf._leafChars, out string? lastInput, out int lastStart, out int lastLength))
+                return null;
+            // Both leaves should reference the same input string. If not,
+            // we have no meaningful range to report.
+            if (!ReferenceEquals(firstInput, lastInput)) return null;
+
+            return new SourceRange(
+                SourcePosition.From(firstInput, firstStart),
+                SourcePosition.From(firstInput, lastStart + lastLength));
+        }
+    }
+
+    private static Symbol? FindFirstLeafWithText(Symbol symbol)
+    {
+        if (symbol._isLeaf)
+            return symbol._leafChars.IsEmpty ? null : symbol;
+        foreach (var child in symbol.Children)
+        {
+            var leaf = FindFirstLeafWithText(child);
+            if (leaf != null) return leaf;
+        }
+        return null;
+    }
+
+    private static Symbol? FindLastLeafWithText(Symbol symbol)
+    {
+        if (symbol._isLeaf)
+            return symbol._leafChars.IsEmpty ? null : symbol;
+        for (int i = symbol.Children.Count - 1; i >= 0; i--)
+        {
+            var leaf = FindLastLeafWithText(symbol.Children[i]);
+            if (leaf != null) return leaf;
+        }
+        return null;
     }
 
     public void FlattenInto(List<Symbol> result)

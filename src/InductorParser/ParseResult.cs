@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Globalization;
 using InductorParser.SyntaxTree;
 
 namespace InductorParser;
@@ -17,7 +16,10 @@ namespace InductorParser;
 // ErrorGraphemeIndex (user-perceived characters), and the
 // ErrorLine / ErrorColumn pair (LSP-style zero-based line and
 // column). Pick whichever matches the unit the caller will use the
-// number in.
+// number in. ErrorPosition returns all five bundled into one
+// SourcePosition struct, so callers that want more than one unit only
+// pay for one walk of the input. The same conversion is available on
+// Symbol.SourceRange for any node in the parse tree.
 //
 // readonly struct so returning one is a handful of field copies, not
 // a heap allocation.
@@ -73,7 +75,7 @@ public readonly struct ParseResult
     {
         get
         {
-            ComputeLineAndColumn(out int line, out _);
+            SourcePositionConverter.ToLineColumn(_input ?? string.Empty, ErrorCharIndex, out int line, out _);
             return line;
         }
     }
@@ -85,7 +87,7 @@ public readonly struct ParseResult
     {
         get
         {
-            ComputeLineAndColumn(out _, out int column);
+            SourcePositionConverter.ToLineColumn(_input ?? string.Empty, ErrorCharIndex, out _, out int column);
             return column;
         }
     }
@@ -95,58 +97,25 @@ public readonly struct ParseResult
     // smaller than or equal to ErrorCharIndex on any input that
     // contains supplementary-plane characters. Computed lazily from
     // ErrorCharIndex.
-    public int ErrorRuneIndex
-    {
-        get
-        {
-            string input = _input ?? string.Empty;
-            int limit = ErrorCharIndex;
-            int count = 0;
-            int i = 0;
-            while (i < limit)
-            {
-                if (char.IsHighSurrogate(input[i])
-                    && i + 1 < input.Length
-                    && i + 1 < limit
-                    && char.IsLowSurrogate(input[i + 1]))
-                {
-                    i += 2;
-                }
-                else
-                {
-                    i++;
-                }
-                count++;
-            }
-            return count;
-        }
-    }
+    public int ErrorRuneIndex =>
+        SourcePositionConverter.ToRuneIndex(_input ?? string.Empty, ErrorCharIndex);
 
     // Error position in graphemes (user-perceived characters, per
     // UAX #29). An emoji ZWJ sequence or a letter-plus-combining-mark
     // counts as one grapheme, so this index is smaller than or equal
     // to ErrorRuneIndex on any input that contains multi-rune
     // graphemes. Computed lazily from ErrorCharIndex.
-    public int ErrorGraphemeIndex
-    {
-        get
-        {
-            string input = _input ?? string.Empty;
-            int limit = ErrorCharIndex;
-            if (limit <= 0) return 0;
-            int count = 0;
-            int i = 0;
-            while (i < limit)
-            {
-                string element = StringInfo.GetNextTextElement(input, i);
-                int step = element.Length;
-                if (step <= 0) step = 1;
-                i += step;
-                count++;
-            }
-            return count;
-        }
-    }
+    public int ErrorGraphemeIndex =>
+        SourcePositionConverter.ToGraphemeIndex(_input ?? string.Empty, ErrorCharIndex);
+
+    // The error position bundled into a SourcePosition struct. Returns
+    // null on a successful parse. Use this when you need more than one
+    // position unit (line + column for a diagnostic, char index for a
+    // span, etc.) so you don't pay for multiple walks of the input.
+    public SourcePosition? ErrorPosition =>
+        Outcome == ParseOutcome.Success
+            ? null
+            : SourcePosition.From(_input ?? string.Empty, ErrorCharIndex);
 
     // Convenience: true when Outcome is Success, false otherwise.
     // Most callers check this first and only inspect Tree / Symbols
@@ -244,29 +213,4 @@ public readonly struct ParseResult
     // "how far did we get" hint.
     public static ParseResult Aborted(ParseOutcome outcome, int errorCharIndex, string message, string input, Rule grammar) =>
         new ParseResult(outcome, null, message, errorCharIndex, input, grammar);
-
-    private void ComputeLineAndColumn(out int line, out int column)
-    {
-        string input = _input ?? string.Empty;
-        int limit = ErrorCharIndex;
-        if (limit > input.Length) limit = input.Length;
-
-        line = 0;
-        int lineStart = 0;
-        for (int i = 0; i < limit; i++)
-        {
-            char c = input[i];
-            if (c == '\n')
-            {
-                line++;
-                lineStart = i + 1;
-            }
-            else if (c == '\r' && (i + 1 >= input.Length || input[i + 1] != '\n'))
-            {
-                line++;
-                lineStart = i + 1;
-            }
-        }
-        column = limit - lineStart;
-    }
 }

@@ -108,10 +108,15 @@ public readonly struct ParseResult
     // For callers that measure in other units. Derived from the char index.
     public int  ErrorRuneIndex         { get; }
     public int  ErrorGraphemeIndex     { get; }
+
+    // The error position bundled into one SourcePosition. Null on success.
+    public SourcePosition? ErrorPosition { get; }
 }
 ```
 
 Three fields cover the common cases: `ErrorCharIndex` indexes into the input string directly, `ErrorLine` + `ErrorColumn` give the editor-ready position (in UTF-16 chars, 0-based, following the Language Server Protocol end-to-end. See [ProgrammingModel.md](ProgrammingModel.md) "LSP Position Semantics" for the full rationale). The two extra index properties are there for callers that count in runes or graphemes instead. They are computed lazily from the char index the one time they are asked for, so they cost nothing unless used. Column in rune or grapheme units is deliberately not exposed as a field because callers who need it can derive it from the corresponding index cheaply and the combinatorial expansion was not worth it.
+
+`Symbol.SourceRange` reuses the same conversion routines for any node in the parse tree. The leaf's `ReadOnlyMemory<char>` carries an offset back into the input string (recovered via `MemoryMarshal.TryGetString`); a composite walks to its leftmost and rightmost leaves and stitches their ends. The result is a `SourceRange` with `Start` and `End` `SourcePosition`s, each carrying the same five units the error position does. So "where in the source is this symbol?" and "where in the source did the parse fail?" answer in the same vocabulary.
 
 ## Encoding Happens First
 
