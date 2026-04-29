@@ -1,19 +1,34 @@
 using System;
+using System.Collections.Generic;
+using System.Text;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
+using static InductorParser.Rules;
 
 namespace InductorParser.Tests;
 
-// Tests for the Rule.Compile lifecycle: once a rule has been compiled, the
-// graph is sealed and structural modifiers are rejected. The seal applies
-// to every concrete rule type; the per-rule tests in
-// src/InductorParser.Tests/Rules/<RuleName>Tests.cs verify the sealing
-// works for each one in turn (universal requirement #5 in
-// docs/TestArchitecture.md). This file covers what's left over: the
-// internal Compile-time RuleStartRequirements consistency check, plus
-// id assignment lives in IdAssignmentTests.
+// Tests for the Rule.Compile lifecycle. Coverage of Compile is split
+// across several files by design (docs/TestArchitecture.md):
+//
+//   - Sealing per concrete rule type: the per-rule tests in
+//     src/InductorParser.Tests/Rules/<RuleName>Tests.cs verify that
+//     Flatten / WithError / As all throw on each rule after Compile
+//     (universal requirement #5).
+//   - Id assignment (pinned / named-hash / anonymous): IdAssignmentTests.
+//   - NameOf auto-compile: NameOfTests.NameOf_auto_compiles_when_called_before_compile.
+//   - LateBoundRule auto-compile through Parse, plus a regression that
+//     ValidateAll walks nested rules: LateBoundRuleTests
+//     (the never-bound rule is two levels deep inside FirstOf+AllOf).
+//   - Cycle handling in ComputeRuleStartAll: exercised indirectly by
+//     every recursive grammar test (would hang otherwise).
+//
+// What's left for this file: the cross-cutting Compile behaviors that
+// don't belong to any one rule. The internal RuleStartRequirements
+// consistency check, idempotency of Compile itself, and Parse's
+// auto-compile on the success path (the LateBoundRule tests cover the
+// failure path).
 [TestFixture]
 public class CompileTests
 {
@@ -32,6 +47,92 @@ public class CompileTests
         var ex = Assert.Throws<InvalidOperationException>(() => bad.Compile());
         Assert.That(ex!.Message, Does.Contain("InconsistentRuleStartRule"));
         Assert.That(ex.Message, Does.Contain("Advance.Never"));
+    }
+
+    [Test]
+    public void Compile_is_idempotent()
+    {
+        // Compile is documented to do nothing on the second call. The
+        // seal flag is the implementation, but several pieces of state
+        // would become wrong if it ever re-ran: named-hash ids depend on
+        // linear-probe order and could shift if pinned ids were
+        // re-collected against a clean usedIds set, FirstConsumedRunes
+        // and Advance are computed bottom-up and could drift, and
+        // ValidateAll could throw on a graph that's already settled.
+        //
+        // Snapshot every reachable rule's post-Compile state (type, id,
+        // name, flatten policy, FirstConsumedRunes, Advance) and verify
+        // the second Compile is a true no-op against the full grammar
+        // shape, not just the few ids the test happened to remember.
+        // A grammar with a pinned id, a named rule, and anonymous rules
+        // exercises all three id-assignment passes plus the bottom-up
+        // RuleStartRequirements walk.
+        var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 9999);
+        var named = OneOrMore(OneOf(RuneSet.Letters)).As("settingName");
+        var pinnedRule = OneOrMore(OneOf(RuneSet.Digits)).As(pinned);
+        var anonymous = ZeroOrMore(Token('!'));
+        var root = AllOf(named, pinnedRule, anonymous);
+
+        root.Compile();
+        string firstSnapshot = SnapshotGrammar(root);
+
+        Assert.DoesNotThrow(() => root.Compile());
+        string secondSnapshot = SnapshotGrammar(root);
+
+        Assert.That(secondSnapshot, Is.EqualTo(firstSnapshot));
+    }
+
+    // Walk the rule graph in deterministic DFS pre-order and dump the
+    // post-Compile state of every reachable rule as one line per rule.
+    // Comparing two snapshots as strings means an NUnit assertion
+    // failure shows the exact rule and field that drifted, instead of
+    // just "the grammars differ."
+    private static string SnapshotGrammar(Rule root)
+    {
+        var builder = new StringBuilder();
+        var visited = new HashSet<Rule>();
+        Walk(root, builder, visited);
+        return builder.ToString();
+    }
+
+    private static void Walk(Rule rule, StringBuilder builder, HashSet<Rule> visited)
+    {
+        if (!visited.Add(rule)) return;
+        builder.Append(rule.GetType().Name)
+            .Append("|Id=").Append(rule.Id.Value)
+            .Append("|Name=").Append(rule.Name ?? "<null>")
+            .Append("|Flatten=").Append(rule.FlattenType)
+            .Append("|FirstRunes=").Append(rule.FirstConsumedRunes)
+            .Append("|Advance=").Append(rule.Advance)
+            .Append('\n');
+        foreach (var child in rule.Children)
+            Walk(child, builder, visited);
+    }
+
+    [Test]
+    public void Parse_auto_compiles_a_grammar_that_was_not_compiled_explicitly()
+    {
+        // Parse() auto-compiles on first call. The failure-path version
+        // (Parse on an unbound LateBoundRule throws because Validate
+        // runs during the auto-compile) lives in LateBoundRuleTests.
+        // This is the success-path counterpart: pin the before-state to
+        // an unassigned id, call Parse, and verify the id moved into
+        // the custom range. Only Compile's named-id assignment pass can
+        // produce that transition, so the after-value alone wouldn't
+        // prove anything if some other code path had already assigned
+        // the id; the before-check rules that out.
+        //
+        // .As(string) only sets Name, not Id, so an as-yet-uncompiled
+        // named rule has the default SymbolId (Value 0).
+        var rule = OneOrMore(OneOf(RuneSet.Letters)).As("word");
+        Assert.That(rule.Id.Value, Is.EqualTo(0),
+            "named rule should not have an id assigned before Compile / Parse runs");
+
+        var result = rule.Parse("hello");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(rule.Id.Value, Is.GreaterThanOrEqualTo(SymbolRanges.CustomRangeStart),
+            "named rule should have a custom-range id after Parse, proving auto-compile ran");
     }
 
     // Subclass that deliberately violates the RuleStartRequirements invariant. Lives
