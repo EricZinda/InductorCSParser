@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text;
 using InductorParser.Lexing;
+using InductorParser.StateMachine;
 using InductorParser.SyntaxTree;
 using InductorParser.Tracing;
 
@@ -509,7 +510,24 @@ public abstract class Rule
     // to switch to the RuneLexer or change other parse-time settings.
     public ParseResult Parse(string input) => Parse(input, new ParseOptions());
 
-    public ParseResult Parse(string input, ParseOptions options)
+    // Dispatcher. Routes to the recursive evaluator by default. The
+    // test suite can flip the routing process-wide via
+    // ParseOptions.DefaultUseStateMachine, or per-call via
+    // ParseOptions.UseStateMachine, so the same fixtures can run
+    // through either engine without per-test rewrites. Outside callers
+    // who explicitly want the state machine should call
+    // StateMachineParser.Parse directly; the routing knob is internal
+    // test plumbing, not a documented user feature.
+    public ParseResult Parse(string input, ParseOptions options) =>
+        options.ResolveUseStateMachine()
+            ? StateMachineParser.Parse(this, input, options)
+            : ParseRecursive(input, options);
+
+    // The recursive evaluator's body. Compare fixtures that need a
+    // guaranteed recursive-engine baseline (so the SM run can compare
+    // its own output against a stable control) call this directly
+    // instead of going through Parse.
+    internal ParseResult ParseRecursive(string input, ParseOptions options)
     {
         Compile();
 

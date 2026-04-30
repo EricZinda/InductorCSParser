@@ -265,7 +265,7 @@ public class StateMachineGrammarCompareTests
             foreach (var input in corpus)
             {
                 _ = regex.IsMatch(input);
-                rule.Parse(input, options);
+                rule.ParseRecursive(input, options);
                 StateMachineParser.Parse(rule, input, options);
             }
         }
@@ -296,7 +296,7 @@ public class StateMachineGrammarCompareTests
             stopwatch.Restart();
             for (int i = 0; i < iterations; i++)
                 foreach (var input in corpus)
-                    _ = rule.Parse(input, options);
+                    _ = rule.ParseRecursive(input, options);
             stopwatch.Stop();
             double recursiveMs = stopwatch.Elapsed.TotalMilliseconds;
             if (recursiveMs < bestRecursive) bestRecursive = recursiveMs;
@@ -340,7 +340,7 @@ public class StateMachineGrammarCompareTests
             foreach (var input in corpus)
             {
                 _ = regex.IsMatch(input);
-                rule.Parse(input, options);
+                rule.ParseRecursive(input, options);
                 StateMachineParser.TryMatch(rule, input, options);
             }
         }
@@ -371,7 +371,7 @@ public class StateMachineGrammarCompareTests
             stopwatch.Restart();
             for (int i = 0; i < iterations; i++)
                 foreach (var input in corpus)
-                    _ = rule.Parse(input, options);
+                    _ = rule.ParseRecursive(input, options);
             stopwatch.Stop();
             double recursiveMs = stopwatch.Elapsed.TotalMilliseconds;
             if (recursiveMs < bestRecursive) bestRecursive = recursiveMs;

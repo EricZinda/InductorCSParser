@@ -185,6 +185,18 @@ dotnet test src/InductorParser.Tests/InductorParser.Tests.csproj
 
 The test project targets net8.0 and consumes the net8.0 build of the library. A clean suite run on net8.0 is the gate for landing a change.
 
+### Routing the Whole Suite Through the State Machine
+
+Every `Rule.Parse(...)` call in the test suite normally goes through the recursive evaluator. Setting `INDUCTOR_DEFAULT_ENGINE=statemachine` before `dotnet test` flips a process-wide default so the same fixtures run against the state-machine evaluator instead, without rewriting individual tests.
+
+```
+INDUCTOR_DEFAULT_ENGINE=statemachine dotnet test src/InductorParser.Tests/InductorParser.Tests.csproj
+```
+
+The mechanics. `EngineSelectionFixture` (a `[SetUpFixture]` at the test-project root) reads the env var once before any fixture runs and writes `true` into `ParseOptions.DefaultUseStateMachine` when the value is `statemachine` (case-insensitive). From there the dispatcher in `Rule.Parse` resolves to `StateMachineParser.Parse` instead of `Rule.ParseRecursive`. Cross-engine compare fixtures (`StateMachineE2ECompareTests`, `StateMachineParserTests`, `StateMachineNormalizationCompareTests`, `StateMachineBudgetCompareTests`, `StateMachineGrammarCompareTests`) call `rule.ParseRecursive(...)` directly for the recursive baseline, so the comparison stays apples-to-apples even when the global default is flipped on. A `TestContext.WriteLine` at the start of the run says which engine the suite picked up.
+
+The selector lives on `ParseOptions` as the internal `UseStateMachine` (per-call, nullable bool) and `DefaultUseStateMachine` (process-wide static). Both are internal on purpose: this is test plumbing, not a documented user feature. Outside callers who explicitly want the state machine should keep calling `StateMachineParser.Parse` directly.
+
 ## IL2CPP Test Pass
 
 `dotnet test` runs against CoreCLR and only exercises the net8.0 build of the library. The netstandard2.1 build (the one Unity's IL2CPP scripting backend actually loads on iOS, WebGL, and Switch) is compile-checked on every build but never executed by the net8.0 test pass. CoreCLR is a JIT runtime and IL2CPP is AOT-only, so a library that passes every `dotnet test` can still fail on first load in a Unity IL2CPP player.

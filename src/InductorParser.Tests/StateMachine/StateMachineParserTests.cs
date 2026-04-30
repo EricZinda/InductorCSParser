@@ -548,7 +548,7 @@ public class StateMachineParserTests
     // For both, we don't normalize so positions stay comparable.
     private static void AssertSameOutcome(Rule rule, string input, bool expectSuccess)
     {
-        var legacy = rule.Parse(input, new ParseOptions { NormalizeInput = null });
+        var legacy = rule.ParseRecursive(input, new ParseOptions { NormalizeInput = null });
         var stateMachine = StateMachineParser.Parse(rule, input, new ParseOptions { NormalizeInput = null });
 
         Assert.That(legacy.Success, Is.EqualTo(expectSuccess), $"legacy outcome for '{input}': {legacy.ErrorMessage}");

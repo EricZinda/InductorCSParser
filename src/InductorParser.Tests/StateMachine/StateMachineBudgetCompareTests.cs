@@ -69,7 +69,7 @@ public class StateMachineBudgetCompareTests
         string input = new string('(', 100) + "x" + new string(')', 100);
         var options = new ParseOptions { MaxDepth = 10, RuleCountLimit = 0 };
 
-        var recursive = rule.Parse(input, options);
+        var recursive = rule.ParseRecursive(input, options);
         var stateMachine = StateMachineParser.Parse(rule, input, options);
 
         Assert.That(recursive.Outcome, Is.EqualTo(ParseOutcome.DepthLimitExceeded),
@@ -104,7 +104,7 @@ public class StateMachineBudgetCompareTests
         string input = new string('a', 5000);
         var options = new ParseOptions { RuleCountLimit = 100, MaxDepth = 0 };
 
-        var recursive = rule.Parse(input, options);
+        var recursive = rule.ParseRecursive(input, options);
         var stateMachine = StateMachineParser.Parse(rule, input, options);
 
         Assert.That(recursive.Outcome, Is.EqualTo(ParseOutcome.RuleCountLimitExceeded),
@@ -138,7 +138,7 @@ public class StateMachineBudgetCompareTests
             MaxDepth = 0,
         };
 
-        var recursive = rule.Parse(input, options);
+        var recursive = rule.ParseRecursive(input, options);
         var stateMachine = StateMachineParser.Parse(rule, input, options);
 
         Assert.That(recursive.Outcome, Is.EqualTo(ParseOutcome.Timeout),
@@ -169,7 +169,7 @@ public class StateMachineBudgetCompareTests
             MaxDepth = 0,
         };
 
-        var recursive = rule.Parse(input, options);
+        var recursive = rule.ParseRecursive(input, options);
         var stateMachine = StateMachineParser.Parse(rule, input, options);
 
         Assert.That(recursive.Outcome, Is.EqualTo(ParseOutcome.Canceled),
@@ -191,7 +191,7 @@ public class StateMachineBudgetCompareTests
         var rule = BuildNestedParens();
         string input = "((x))";
 
-        var recursive = rule.Parse(input);
+        var recursive = rule.ParseRecursive(input, new ParseOptions());
         var stateMachine = StateMachineParser.Parse(rule, input);
 
         Assert.That(recursive.Outcome, Is.EqualTo(ParseOutcome.Success));

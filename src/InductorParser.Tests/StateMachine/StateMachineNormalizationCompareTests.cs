@@ -67,7 +67,7 @@ public class StateMachineNormalizationCompareTests
     private static void AssertEvaluatorsAgree(Rule rule, string input, NormalizationForm? normalizationForm, bool expectSuccess)
     {
         var options = new ParseOptions { NormalizeInput = normalizationForm };
-        var legacy = rule.Parse(input, options);
+        var legacy = rule.ParseRecursive(input, options);
         var stateMachine = StateMachineParser.Parse(rule, input, options);
 
         Assert.That(legacy.Success, Is.EqualTo(expectSuccess), $"recursive outcome: {legacy.ErrorMessage}");

@@ -59,7 +59,7 @@ public class StateMachineE2ECompareTests
         // engines translate the lexer's normalized-space position back
         // to caller-original coordinates the same way.
         var options = new ParseOptions();
-        var legacy = rule.Parse(input, options);
+        var legacy = rule.ParseRecursive(input, options);
         var stateMachine = StateMachineParser.Parse(rule, input, options);
 
         Assert.That(legacy.Success, Is.EqualTo(expectSuccess), $"recursive outcome: {legacy.ErrorMessage}");
