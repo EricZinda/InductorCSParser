@@ -186,7 +186,7 @@ internal sealed class LoweringContext
         {
             LiteralRule literal => LowerLiteral(literal, onSuccess, onFailure),
             LiteralIgnoreAsciiCaseRule literalIc => LowerLiteralIgnoreAsciiCase(literalIc, onSuccess, onFailure),
-            TokenRule token => LowerToken(token, onSuccess, onFailure),
+            GraphemeRule grapheme => LowerGrapheme(grapheme, onSuccess, onFailure),
             OneOfRule oneOf => LowerOneOf(oneOf, onSuccess, onFailure),
             NoneOfRule noneOf => LowerNoneOf(noneOf, onSuccess, onFailure),
             AnyTokenRule anyToken => LowerAnyToken(anyToken, onSuccess, onFailure),
@@ -221,7 +221,7 @@ internal sealed class LoweringContext
         {
             LiteralRule literal => LowerLiteral(literal, onSuccess, onFailure),
             LiteralIgnoreAsciiCaseRule literalIc => LowerLiteralIgnoreAsciiCase(literalIc, onSuccess, onFailure),
-            TokenRule token => LowerToken(token, onSuccess, onFailure),
+            GraphemeRule grapheme => LowerGrapheme(grapheme, onSuccess, onFailure),
             OneOfRule oneOf => LowerOneOf(oneOf, onSuccess, onFailure),
             NoneOfRule noneOf => LowerNoneOf(noneOf, onSuccess, onFailure),
             AnyTokenRule anyToken => LowerAnyToken(anyToken, onSuccess, onFailure),
@@ -236,10 +236,10 @@ internal sealed class LoweringContext
         };
     }
 
-    // Both Token and Literal funnel into the same MatchLiteral opcode.
+    // Both Grapheme and Literal funnel into the same MatchLiteral opcode.
     // Their match logic in the existing code is identical: read tokens
     // until the expected string is consumed, fail on first mismatch.
-    // The construction-time validation differs (Token requires one
+    // The construction-time validation differs (Grapheme requires one
     // grapheme; Literal accepts any non-empty string) but the runtime
     // semantics line up.
     private int LowerLiteral(LiteralRule rule, int onSuccess, int onFailure)
@@ -247,9 +247,9 @@ internal sealed class LoweringContext
         return LowerLiteralLike(rule, GetLiteralExpected(rule), onSuccess, onFailure);
     }
 
-    private int LowerToken(TokenRule rule, int onSuccess, int onFailure)
+    private int LowerGrapheme(GraphemeRule rule, int onSuccess, int onFailure)
     {
-        return LowerLiteralLike(rule, GetTokenExpected(rule), onSuccess, onFailure);
+        return LowerLiteralLike(rule, GetGraphemeExpected(rule), onSuccess, onFailure);
     }
 
     private int LowerLiteralLike(Rule rule, string expected, int onSuccess, int onFailure)
@@ -639,7 +639,7 @@ internal sealed class LoweringContext
         // AllOf-pair fast path: BetweenInclusive(min, max, AllOf(Literal, OneOf))
         // where both AllOf children are effectively Delete. Common in
         // separator-and-content scans like HrSpaced's
-        // AtLeast(2, AllOf(Token(' '), OneOf("-*+"))).
+        // AtLeast(2, AllOf(Grapheme(' '), OneOf("-*+"))).
         if (InputUnit == InputUnit.Rune
             && TryLowerBetweenScanLiteralOneOfRune(rule, inner, onSuccess, onFailure, out int fusedEntry))
         {
@@ -705,7 +705,7 @@ internal sealed class LoweringContext
         return pushBetween;
     }
 
-    // Atomic-inner fast path. Inner is one of LiteralRule / TokenRule /
+    // Atomic-inner fast path. Inner is one of LiteralRule / GraphemeRule /
     // OneOfRule, all of which (a) are atomic on failure (the match
     // restores its own lexer state) and (b) always advance on success.
     // Both properties together let the loop drop its per-iteration
@@ -746,7 +746,7 @@ internal sealed class LoweringContext
     // (the subprogram terminates with Return, not a direct exit).
     private static bool IsAtomicAdvancingInner(Rule inner)
     {
-        return inner is LiteralRule || inner is TokenRule || inner is OneOfRule;
+        return inner is LiteralRule || inner is GraphemeRule || inner is OneOfRule;
     }
 
     // Optional fast path: BetweenInclusive(0, 1, inner). The Between
@@ -800,7 +800,7 @@ internal sealed class LoweringContext
     }
 
     // Detects BetweenInclusive(min, max, AllOf(L, R)) where L is a
-    // Literal/Token, R is a OneOf, and both are effectively Delete
+    // Literal/Grapheme, R is a OneOf, and both are effectively Delete
     // (no leaves emitted per iteration). Lowers to ScanLiteralOneOfRune
     // and writes the entry-state index to entryState. Returns false
     // when the pattern doesn't match, leaving the caller to fall
@@ -829,7 +829,7 @@ internal sealed class LoweringContext
 
         string leftExpected;
         if (left is LiteralRule leftLiteral) leftExpected = leftLiteral.LoweringExpected;
-        else if (left is TokenRule leftToken) leftExpected = leftToken.LoweringExpected;
+        else if (left is GraphemeRule leftGrapheme) leftExpected = leftGrapheme.LoweringExpected;
         else return false;
 
         // Children must be effectively Delete so the fused loop
@@ -987,8 +987,8 @@ internal sealed class LoweringContext
             case LiteralIgnoreAsciiCaseRule literalIc:
                 candidates.Add(new LiteralScannerCandidate(literalIc.LoweringExpected, ignoreAsciiCase: true));
                 return true;
-            case TokenRule token:
-                candidates.Add(new LiteralScannerCandidate(token.LoweringExpected, ignoreAsciiCase: false));
+            case GraphemeRule grapheme:
+                candidates.Add(new LiteralScannerCandidate(grapheme.LoweringExpected, ignoreAsciiCase: false));
                 return true;
             case FirstOfRule firstOf:
                 if (firstOf.Children.Count == 0) return false;
@@ -1078,7 +1078,7 @@ internal sealed class LoweringContext
     private int LowerNot(NotRule rule, int onSuccess, int onFailure)
     {
         // Fast path: under InputUnit.Rune, Not(OneOf) / Not(Literal) /
-        // Not(Token) lowers to a single peek-and-reject opcode. No
+        // Not(Grapheme) lowers to a single peek-and-reject opcode. No
         // backtrack frame, no inner-rule dispatch. Constraints:
         //   * effective FlattenType isn't Preserve (which needs a
         //     wrapper Symbol; the fused opcode can't emit one)
@@ -1105,9 +1105,9 @@ internal sealed class LoweringContext
                     litIdx | (NoErrorMetadataSentinel << 16),
                     onSuccess, onFailure);
             }
-            if (inner is TokenRule tokenInner)
+            if (inner is GraphemeRule graphemeInner)
             {
-                int litIdx = InternLiteral(tokenInner.LoweringExpected);
+                int litIdx = InternLiteral(graphemeInner.LoweringExpected);
                 return AddState(LoweredOpCode.PeekRejectLiteralRune,
                     litIdx | (NoErrorMetadataSentinel << 16),
                     onSuccess, onFailure);
@@ -1402,7 +1402,7 @@ internal sealed class LoweringContext
     // (added on the rule classes in companion edits).
 
     private static string GetLiteralExpected(LiteralRule rule) => rule.LoweringExpected;
-    private static string GetTokenExpected(TokenRule rule) => rule.LoweringExpected;
+    private static string GetGraphemeExpected(GraphemeRule rule) => rule.LoweringExpected;
     private static RuneSet GetOneOfSet(OneOfRule rule) => rule.LoweringSet;
 
     private int InternLiteral(string text)
@@ -1436,7 +1436,7 @@ internal sealed class LoweringContext
         // TreeBuilder reapplies the override at tree-build time so the
         // resulting Symbol carries the rule's declared FlattenType,
         // matching what the recursive engine produces (e.g. a
-        // Token('a') wrapper under PreserveAllSymbols still has
+        // Grapheme('a') wrapper under PreserveAllSymbols still has
         // FlattenType.Delete on it).
         int newIndex = SymbolMetadata.Count;
         if (newIndex >= 0xFFFF)

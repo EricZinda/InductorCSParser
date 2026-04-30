@@ -4,16 +4,16 @@ This doc is about how the parser handles Unicode text at its lowest levels. Read
 
 ## Unicode In One Page
 
-[If you are already well-versed in Unicode, skip this section]
+[If you're already well-versed in Unicode, skip this section]
 
-Unicode has a bunch of concepts a parser could engage with. They fall into three categories, and it helps to separate them because they are not a single stack: they are a stack (representation levels), a set of orthogonal operations (text transformations), and a set of downstream algorithms (text analysis).
+Unicode has a bunch of concepts a parser could engage with. They fall into three categories, and it helps to separate them because they aren't a single stack: they're a stack (representation levels), a set of orthogonal operations (text transformations), and a set of downstream algorithms (text analysis).
 
 ### Unicode Representation Hierarchy
 
 You need to pick one as the parser's token. Here is the stack, from the lowest physical layer up, with each layer built from one or more of the layer below:
 
 - **Code units** (physical encoding): the fixed-width pieces a string is stored as. UTF-16 uses 16-bit code units. UTF-8 uses 8-bit code units (bytes). In .NET, `string` is a sequence of UTF-16 code units and `char` holds one code unit. One Unicode code point (see next layer) can span multiple code units (surrogate pairs in UTF-16, multi-byte sequences in UTF-8). In UTF-16 one code point is one or two code units. In UTF-8 one code point is one to four code units.
-- **Code points** (the atoms of Unicode): A code point is a number in the Unicode code space: 0 to 0x10FFFF. The code points that are valid standalone characters are called *scalar values*; they exclude UTF-16 surrogate halves (U+D800..U+DFFF). Scalar values are what .NET's `System.Text.Rune` holds. `RuneLexer` emits one token per scalar value for well-formed UTF-16 input, decoding surrogate pairs as one token. If the input contains a stray surrogate half, there is no scalar value to emit, so `RuneLexer` surfaces that code unit as a one-char token with no `RuneValue`.
+- **Code points** (the atoms of Unicode): A code point is a number in the Unicode code space: 0 to 0x10FFFF. The code points that are valid standalone characters are called *scalar values*; they exclude UTF-16 surrogate halves (U+D800..U+DFFF). Scalar values are what .NET's `System.Text.Rune` holds. `RuneLexer` emits one token per scalar value for well-formed UTF-16 input, decoding surrogate pairs as one token. If the input contains a stray surrogate half, there's no scalar value to emit, so `RuneLexer` surfaces that code unit as a one-char token with no `RuneValue`.
 - **Grapheme clusters** (Human perceived characters): Built from one or more code points via UAX #29 rules. A grapheme is what a human perceives as one character. It can be a single code point, like `p`. Also valid: `é` as `e` + "combining acute" is one grapheme built from two code points. 👨‍👩‍👧‍👦 is one grapheme built from seven code points. 👋🏽 is one grapheme built from two code points. `GraphemeLexer` uses .NET `StringInfo.GetNextTextElement`; on modern .NET those text elements track UAX #29, while legacy runtimes have known gaps.
 
 Each layer is a composition over the one below, so any string has a code-unit count, a code-point count, and a grapheme count, and the counts only diverge when the composition is non-trivial. Some examples:
@@ -24,10 +24,10 @@ Each layer is a composition over the one below, so any string has a code-unit co
 
 ### Text transformations (orthogonal)
 
-Rewrites that produce a different rune sequence. These apply to runes, they are not a higher layer.
+Rewrites that produce a different rune sequence. These apply to runes, they aren't a higher layer.
 
 - **Normalization**: canonical rewrites so that visually-identical text compares equal regardless of spelling. "café" as one rune and "café" as two Runes (`e` + "combining accent") are different rune sequences but the same normalized text. There are four normalization forms defined by Unicode. The parser uses the *composed* form by default (the one that produces U+00E9 `é` as a single code point rather than `e` + combining acute). See the Normalization section below.
-- **Case-insensitive matching (Unicode)**: treating upper and lower case as equivalent across the full Unicode range. Not the same as `ToLower`: German `ß` pairs with `ss`, Turkish dotless-i behaves differently from dotted i, Greek final sigma pairs with regular sigma. The parser does not apply this by default. See the Workarounds section.
+- **Case-insensitive matching (Unicode)**: treating upper and lower case as equivalent across the full Unicode range. Not the same as `ToLower`: German `ß` pairs with `ss`, Turkish dotless-i behaves differently from dotted i, Greek final sigma pairs with regular sigma. The parser doesn't apply this by default. See the Workarounds section.
 
 ### Downstream algorithms (not parser concerns)
 
@@ -35,7 +35,7 @@ These operate on text that has already been parsed or on raw text as standalone 
 
 - **Collation**: locale-aware sort order.
 - **Bidi**: visual ordering for mixed right-to-left and left-to-right text.
-- **Line breaking** (UAX #14) and **word segmentation** (UAX #29): where you are allowed to break a paragraph into lines or split it into words.
+- **Line breaking** (UAX #14) and **word segmentation** (UAX #29): where you're allowed to break a paragraph into lines or split it into words.
 
 Nothing in this doc engages with these. They run outside the parser, on the parsed output or on raw text through a dedicated Unicode library.
 
@@ -80,21 +80,21 @@ After composition normalization (default), most combining-mark cases collapse to
 
 ### Swapping the lexer is a config change, not a grammar change
 
-Grammars are written against the `Rule` API and do not know which lexer is driving them. Changing `ParseOptions.InputUnit` swaps the lexer for the whole parse, and the same grammar works either way.
+Grammars are written against the `Rule` API and don't know which lexer is driving them. Changing `ParseOptions.InputUnit` swaps the lexer for the whole parse, and the same grammar works either way.
 
-For typical input where each user-visible character is already a single Unicode scalar value (ASCII, precomposed Latin, ordinary CJK, most punctuation), the two lexers produce identical token streams and every rule behaves identically. The rules whose behavior *can* diverge directly are the leaves that inspect token contents: `Token`, `OneOf`, `NoneOf`, and `Literal`. Composite rules, including lookahead wrappers like `Peek` and `Not`, only differ when a leaf inside them sees a different token stream.
+For typical input where each user-visible character is already a single Unicode scalar value (ASCII, precomposed Latin, ordinary CJK, most punctuation), the two lexers produce identical token streams and every rule behaves identically. The rules whose behavior *can* diverge directly are the leaves that inspect token contents: `Grapheme`, `OneOf`, `NoneOf`, and `Literal`. Composite rules, including lookahead wrappers like `Peek` and `Not`, only differ when a leaf inside them sees a different token stream.
 
 Where the two lexers actually diverge, the `RuneLexer` behavior is usually the buggy one: it was matching part of a grapheme as if it were a standalone character. A grammar rule that consumes one rune from `👨‍👩‍👧‍👦` matches just the first 👨 under `RuneLexer` and leaves the other six runes (three ZWJs and three people emoji) dangling for subsequent rules to trip over, which is rarely what the grammar author intended. `GraphemeLexer` avoids this by using `StringInfo` to group the sequence as one text element. The framing is less "`GraphemeLexer` broke my grammar" and more "`GraphemeLexer` revealed that my grammar was silently wrong on multi-rune input." `RuneLexer` is the right tool when you specifically want to see inside a grapheme (walking combining marks individually, rune-level Unicode category analysis, implementing a Unicode library on top of the parser), not for normal text processing.
 
 ## Position Tracking
 
-Switching the lexer's token type does not force callers to give up the other position units. The lexer itself advances by UTF-16 char offset because that is the unit a .NET string uses. `ParseResult` and `Symbol.SourceRange` derive the other units from that char index when a caller asks for them:
+Switching the lexer's token type doesn't force callers to give up the other position units. The lexer itself advances by UTF-16 char offset because that's the unit a .NET string uses. `ParseResult` and `Symbol.SourceRange` derive the other units from that char index when a caller asks for them:
 
 - **Char index**: UTF-16 code unit offset into the original input (matches `string[i]`, `Substring`, and LSP).
 - **Rune index**: code-point offset into the input.
 - **Grapheme index**: text-element offset into the input, using the same `StringInfo` logic as `GraphemeLexer`.
 
-The char index is stored on the parse result. Rune and grapheme indexes are computed lazily from the original input, so the common char/line/column path does not pay for counters it never reads.
+The char index is stored on the parse result. Rune and grapheme indexes are computed lazily from the original input, so the common char/line/column path doesn't pay for counters it never reads.
 
 `ParseResult` exposes the minimum useful set:
 
@@ -114,7 +114,7 @@ public readonly struct ParseResult
 }
 ```
 
-Three fields cover the common cases: `ErrorCharIndex` indexes into the input string directly, `ErrorLine` + `ErrorColumn` give the editor-ready position (in UTF-16 chars, 0-based, following the Language Server Protocol end-to-end. See [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md) "LSP Position Semantics" for the full rationale). The two extra index properties are there for callers that count in runes or graphemes instead. They are computed lazily from the char index the one time they are asked for, so they cost nothing unless used. Column in rune or grapheme units is deliberately not exposed as a field because callers who need it can derive it from the corresponding index cheaply and the combinatorial expansion was not worth it.
+Three fields cover the common cases: `ErrorCharIndex` indexes into the input string directly, `ErrorLine` + `ErrorColumn` give the editor-ready position (in UTF-16 chars, 0-based, following the Language Server Protocol end-to-end. See [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md) "LSP Position Semantics" for the full rationale). The two extra index properties are there for callers that count in runes or graphemes instead. They are computed lazily from the char index the one time they're asked for, so they cost nothing unless used. Column in rune or grapheme units is deliberately not exposed as a field because callers who need it can derive it from the corresponding index cheaply and the combinatorial expansion was not worth it.
 
 `Symbol.SourceRange` reuses the same conversion routines for any node in the parse tree. The leaf's `ReadOnlyMemory<char>` carries an offset back into the input string (recovered via `MemoryMarshal.TryGetString`); a composite walks to its leftmost and rightmost leaves and stitches their ends. The result is a `SourceRange` with `Start` and `End` `SourcePosition`s, each carrying the same five units the error position does. So "where in the source is this symbol?" and "where in the source did the parse fail?" answer in the same vocabulary.
 
@@ -132,7 +132,7 @@ Win-1252 bytes ─→ Encoding.GetEncoding("Windows-1252") ─→ string        
 
 Unicode is the character set, a numbered list of characters. UTF-8, UTF-16, and UTF-32 are different ways to represent those numbers as bytes. A document stored as UTF-8 and a document stored as UTF-16 can carry the same Unicode content. They differ only in how the text is laid out on disk. By the time the parser sees a `string` the original on-disk encoding is gone and irrelevant. .NET's `string` type holds Unicode content internally as UTF-16 code units.
 
-If the caller does not know the encoding of a file, they figure it out upstream (BOM sniffing, content-type headers, ask the user) and feed the parser a properly-decoded `string`.
+If the caller doesn't know the encoding of a file, they figure it out upstream (BOM sniffing, content-type headers, ask the user) and feed the parser a properly-decoded `string`.
 
 ## Normalization
 
@@ -155,20 +155,20 @@ Positions reported in `ParseResult` (`ErrorCharIndex` and its derived line/colum
 
 One consequence to know about: when the failure lands inside a combining character sequence that got composed (or vice-versa), the reported position is the start of that sequence in the original string, not a phantom position mid-sequence. That matches what an editor wants for highlight-the-bad-grapheme diagnostics anyway. You can't put a caret between an 'e' and its combining acute in any reasonable UI. This inherits the pre-.NET 5 `StringInfo` caveat noted on `GraphemeLexer`: a handful of real grapheme clusters segment incorrectly on legacy runtimes, and the translator uses the same primitive, so whatever the lexer saw, the translator sees.
 
-## Problems The Lexer Does Not Solve
+## Problems The Lexer Doesn't Solve
 
-Some Unicode surprises cannot be fixed by choosing a different tokenization. Both lexers hit them identically: case-insensitive matching beyond ASCII, BOMs, zero-width and invisible format characters, homoglyph confusables, variation selectors. They are caller-side preprocessing concerns or grammar-design concerns, not lexer concerns. See [UnicodeGotchas.md](UnicodeGotchas.md) for the list and the idiomatic workaround for each.
+Some Unicode surprises can't be fixed by choosing a different tokenization. Both lexers hit them identically: case-insensitive matching beyond ASCII, BOMs, zero-width and invisible format characters, homoglyph confusables, variation selectors. They are caller-side preprocessing concerns or grammar-design concerns, not lexer concerns. See [UnicodeGotchas.md](UnicodeGotchas.md) for the list and the idiomatic workaround for each.
 
 ## RuneLexer-Specific: No Grapheme Atom
 
-If you are running under `RuneLexer`, the lexer has deliberately stopped preserving grapheme boundaries. There is no `Grapheme()` leaf that can recover "the next UAX #29 cluster" from the rune stream today. Use `GraphemeLexer` for grammars that need graphemes as the parse unit, or write an explicit rule for the multi-rune sequence you care about.
+If you're running under `RuneLexer`, the lexer has deliberately stopped preserving grapheme boundaries. There is no `Grapheme()` leaf that can recover "the next UAX #29 cluster" from the rune stream today. Use `GraphemeLexer` for grammars that need graphemes as the parse unit, or write an explicit rule for the multi-rune sequence you care about.
 
 ```csharp
 // Match this specific two-rune emoji cluster while running in RuneLexer mode.
-var wavedHandWithSkinTone = Token("👋🏽");
+var wavedHandWithSkinTone = Grapheme("👋🏽");
 ```
 
-`WithinGrapheme(innerRule)` solves the opposite problem: while running under `GraphemeLexer`, it reads one outer text-element token and lets the inner rule inspect that token's runes. It does not collect several `RuneLexer` tokens back into a grapheme.
+`WithinGrapheme(innerRule)` solves the opposite problem: while running under `GraphemeLexer`, it reads one outer text-element token and lets the inner rule inspect that token's runes. It doesn't collect several `RuneLexer` tokens back into a grapheme.
 
 ## Open Questions
 

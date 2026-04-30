@@ -8,7 +8,7 @@ namespace InductorParser;
 // RuneSet. Under GraphemeLexer a multi-rune grapheme (skin-toned
 // emoji, ZWJ sequences, CJK + combining mark) fails because it isn't
 // a single code point. EOF also fails. NoneOfRule is the mirror:
-// same rule, opposite membership test (one rune whose value is NOT
+// same rule, opposite membership test (one rune whose value ISN'T
 // in the set).
 //
 // Tests live in src/InductorParser.Tests/Rules/OneOfRuleTests.cs.

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using InductorParser;
 using NUnit.Framework;
+using static InductorParser.Tests.TestHelpers;
 
 namespace InductorParser.Tests;
 
@@ -110,7 +111,7 @@ public class PrologGrammarHtnCorpusTests
     };
 
     // HTN-style Prolog programs: built-ins (atom_chars, atomic, count, etc.), cut as
-    // an argument, anonymous _, comments threaded through, escaped-quote atoms.
+    // an argument, anonymous _, comments interleaved through the body, escaped-quote atoms.
     private static readonly string[] HtnPrologDocuments =
     {
         // Rule with empty body after `:-`.
@@ -120,7 +121,7 @@ public class PrologGrammarHtnCorpusTests
         // Head/tail destructuring.
         "split([?Head | ?Tail], ?Head, ?Tail). goals(split([a, b, c, d], ?Head, ?Tail)).\r\n",
 
-        // Document with `%` line comments threaded through the body.
+        // Document with `%` line comments interleaved through the body.
         "member(?X, [?X|_]).        % member(X, [Head|Tail]) is true if X = Head \r\n                         % that is, if X is the head of the list\r\nmember(?X, [_|?Tail]) :-   % or if X is a member of Tail,\r\n  member(?X, ?Tail).       % ie. if member(X, Tail) is true.\r\ngoals( member(a, [b, c, a, [d, e, f]]), not(member(d, [b, c, a, [d, e, f]])) ).\r\n",
 
         // append + reverse over lists of compound terms.
@@ -252,29 +253,4 @@ public class PrologGrammarHtnCorpusTests
         AssertAllParse(PrologGrammar.Htn.Query, HtnQueries, "Htn.Query");
     }
 
-    private static void AssertAllParse(Rule rule, string[] corpus, string label)
-    {
-        var rejected = new List<string>();
-        foreach (var input in corpus)
-        {
-            var result = rule.Parse(input);
-            if (!result.Success)
-                rejected.Add($"  {Display(input)} (col {result.ErrorCharIndex}: {result.ErrorMessage})");
-        }
-        if (rejected.Count > 0)
-            Assert.Fail(
-                $"{label} grammar rejected {rejected.Count} of {corpus.Length} valid input(s):\n"
-                + string.Join("\n", rejected));
-    }
-
-    private static string Display(string input)
-    {
-        var maxLen = 200;
-        var displayed = input.Length > maxLen ? input.Substring(0, maxLen) + "..." : input;
-        return "\"" + displayed
-            .Replace("\\", "\\\\")
-            .Replace("\n", "\\n")
-            .Replace("\r", "\\r")
-            .Replace("\t", "\\t") + "\"";
-    }
 }

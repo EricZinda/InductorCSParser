@@ -11,16 +11,16 @@ namespace InductorParser.Tests;
 public class NotRuleTests
 {
     // Tree.ToString() assertions use PreserveAllSymbols so Not,
-    // Token, and AnyToken (all default FlattenType.Delete) stay in the
+    // Grapheme, and AnyToken (all default FlattenType.Delete) stay in the
     // tree and their text contributes to the concatenated view.
     private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
     [Test]
     public void Not_succeeds_when_inner_fails_and_consumes_no_input()
     {
-        // Not(Token('a')) on "b": Token('a') fails, Not succeeds and leaves
-        // the cursor at 0. The trailing Token('b') then consumes 'b'.
-        var rule = AllOf(Not(Token('a')), Token('b'));
+        // Not(Grapheme('a')) on "b": Grapheme('a') fails, Not succeeds and leaves
+        // the cursor at 0. The trailing Grapheme('b') then consumes 'b'.
+        var rule = AllOf(Not(Grapheme('a')), Grapheme('b'));
         var result = rule.Parse("b", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -30,32 +30,32 @@ public class NotRuleTests
     [Test]
     public void Not_fails_when_inner_matches()
     {
-        var rule = Not(Token('a')).WithError("did not want an 'a'");
+        var rule = Not(Grapheme('a')).WithError("didn't want an 'a'");
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("did not want an 'a'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("didn't want an 'a'"));
     }
 
     [Test]
     public void Not_does_not_advance_the_cursor_even_when_inner_consumes_before_failing()
     {
-        // AllOf(Token('a'), Token('b')) would consume two chars before failing
+        // AllOf(Grapheme('a'), Grapheme('b')) would consume two chars before failing
         // on "ax" (reads 'a', then fails on 'x'). Wrapping it in Not, the
         // outer cursor must still be 0 after Not succeeds. The trailing
-        // Token('a') proves it: if Not had failed to roll back, Token('a')
+        // Grapheme('a') proves it: if Not had failed to roll back, Grapheme('a')
         // would look at offset 2 ('<EOF>') or later.
         var rule = AllOf(
-            Not(AllOf(Token('a'), Token('b'))),
-            Token('a'));
+            Not(AllOf(Grapheme('a'), Grapheme('b'))),
+            Grapheme('a'));
 
         var result = rule.Parse("ax");
 
         Assert.That(result.Success, Is.False);
-        // Token('a') at offset 0 succeeds. The overall parse fails because
+        // Grapheme('a') at offset 0 succeeds. The overall parse fails because
         // input isn't fully consumed. What matters is that Not didn't
-        // leave the cursor advanced. If it had, the trailing Token('a')
+        // leave the cursor advanced. If it had, the trailing Grapheme('a')
         // would have reported somewhere past offset 0.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     }
@@ -67,8 +67,8 @@ public class NotRuleTests
         // isn't the start of the stop rule. Here the stop is '!'. The
         // body is arbitrary text up to (but not including) it.
         var rule = AllOf(
-            ZeroOrMore(AllOf(Not(Token('!')), AnyToken())),
-            Token('!'));
+            ZeroOrMore(AllOf(Not(Grapheme('!')), AnyToken())),
+            Grapheme('!'));
 
         var result = rule.Parse("hello world!", Debug());
 
@@ -100,9 +100,9 @@ public class NotRuleTests
                 //     one or more letters of either case
                 OneOrMore(OneOf(RuneSet.Ascii.Letters)),
                 //   optional parenthesised single-letter argument
-                Optional( AllOf(Token('('),
+                Optional( AllOf(Grapheme('('),
                               OneOf(RuneSet.Ascii.Letters),
-                              Token(')'))));
+                              Grapheme(')'))));
 
         // Lowercase-start parses as a functor, with or without arguments.
         Assert.That(functor.Parse("foo").Success, Is.True);
@@ -117,7 +117,7 @@ public class NotRuleTests
     public void Not_works_under_rune_lexer()
     {
         // Same negative-lookahead semantics under RuneLexer.
-        var rule = AllOf(Not(Token('a')), AnyToken());
+        var rule = AllOf(Not(Grapheme('a')), AnyToken());
         var result = rule.Parse("b",
             new ParseOptions { InputUnit = InputUnit.Rune, PreserveAllSymbols = true });
 
@@ -128,16 +128,16 @@ public class NotRuleTests
     [Test]
     public void Not_trace_success_produces_expected_output()
     {
-        // Not opens a transaction (depth=1). Token inside opens its own
+        // Not opens a transaction (depth=1). Grapheme inside opens its own
         // (depth=2) and fails on the Read. Not then emits its success
         // line at depth=1 and rolls back.
         var sink = NewSink();
-        Not(Token('a')).Parse("b", new ParseOptions { TraceSink = sink });
+        Not(Grapheme('a')).Parse("b", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'b', Consumed: 1",
-            "      FAIL | Token: found 'b', wanted 'a'",
-            "   SUCC | Not: inner did not match"
+            "      FAIL | Grapheme: found 'b', wanted 'a'",
+            "   SUCC | Not: inner didn't match"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
@@ -146,11 +146,11 @@ public class NotRuleTests
     public void Not_trace_failure_produces_expected_output()
     {
         var sink = NewSink();
-        Not(Token('a')).Parse("a", new ParseOptions { TraceSink = sink });
+        Not(Grapheme('a')).Parse("a", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | Token: found 'a'",
+            "      SUCC | Grapheme: found 'a'",
             "   FAIL | Not: inner matched"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
@@ -159,7 +159,7 @@ public class NotRuleTests
     [Test]
     public void Sealed_Not_rejects_Flatten()
     {
-        var rule = Not(Token('a'));
+        var rule = Not(Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
     }
@@ -167,7 +167,7 @@ public class NotRuleTests
     [Test]
     public void Sealed_Not_rejects_WithError()
     {
-        var rule = Not(Token('a'));
+        var rule = Not(Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
     }
@@ -175,7 +175,7 @@ public class NotRuleTests
     [Test]
     public void Sealed_Not_rejects_As()
     {
-        var rule = Not(Token('a'));
+        var rule = Not(Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }

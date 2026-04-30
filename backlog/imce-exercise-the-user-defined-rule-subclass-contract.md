@@ -5,6 +5,6 @@
         - Make sure the test subclass compiles from outside the InductorParser assembly (i.e., as if a real user wrote it). This surfaces access-modifier problems: if `TryParse` is `internal` rather than `protected internal`, user subclasses can't override it.
         - Verify Compile walks user subclasses correctly (ChildRules is reachable, id assignment works, sealing fires).
         - Verify the transaction contract (failing without consuming input) is actually enforceable from user code. The `using var tx = lexer.Begin()` pattern should work, and Commit/Rollback should be accessible.
-    - Likely bugs this will find: access modifiers too restrictive (internal where protected internal is needed), methods like RecordFailure that should be public but are currently... actually, they are public. Good. But still worth verifying.
+    - Likely bugs this will find: access modifiers too restrictive (internal where protected internal is needed), methods like RecordFailure that should be public but are currently... actually, they're public. Good. But still worth verifying.
     - Priority: After the high-impact features (late-bound, tracing, budgets). Extensibility is a long-tail feature that matters when someone actually wants to extend; until then, the built-in composites are the surface area.
     - Done when: there's a working user-defined Rule subclass in the test assembly that does something the built-ins can't, and the smallest-core access modifiers are verified to permit it.

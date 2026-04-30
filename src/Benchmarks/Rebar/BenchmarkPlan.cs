@@ -395,7 +395,7 @@ internal static class BenchmarkRegistry
             "curated/14-quadratic/10x" => Quadratic(),
 
             _ => throw new NotSupportedException(
-                $"Benchmark '{config.Name}' is not in the hand-translated InductorParser rebar subset.")
+                $"Benchmark '{config.Name}' isn't in the hand-translated InductorParser rebar subset.")
         };
 
         ValidateSupportedModel(config);
@@ -437,13 +437,13 @@ internal static class BenchmarkRegistry
             _ => false
         };
         if (!ok)
-            throw new NotSupportedException($"Benchmark '{config.Name}' is not supported for rebar model '{config.Model}'.");
+            throw new NotSupportedException($"Benchmark '{config.Name}' isn't supported for rebar model '{config.Model}'.");
     }
 
     private static void ValidateCaseMode(RebarConfig config)
     {
         if (config.CaseInsensitive && config.Unicode)
-            throw new NotSupportedException("Unicode-aware case-insensitive matching is intentionally unsupported until full case folding lands.");
+            throw new NotSupportedException("Unicode-aware case-insensitive matching is intentionally unsupported until full Unicode case-insensitive matching lands.");
     }
 
     private static BenchmarkPlan CompileScanner(PatternGrammar grammar, bool useStateMachine)
@@ -559,7 +559,7 @@ internal static class BenchmarkRegistry
         var noqa = Capture(AllOf(
             NoqaLiteral(),
             Optional(AllOf(
-                P(Token(':')),
+                P(Grapheme(':')),
                 Optional(P(OneOf(AsciiRegexWhitespace))),
                 codeList
             ))
@@ -581,7 +581,7 @@ internal static class BenchmarkRegistry
         var match = AllOf(
             NoqaLiteral(),
             Optional(AllOf(
-                P(Token(':')),
+                P(Grapheme(':')),
                 Optional(P(OneOf(AsciiRegexWhitespace))),
                 codeList
             ))

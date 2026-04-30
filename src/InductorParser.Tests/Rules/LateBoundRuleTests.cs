@@ -17,15 +17,15 @@ public class LateBoundRuleTests
     {
         var expression = new LateBoundRule("expression");
 
-        var term = FirstOf(Integer(), AllOf(Token('('), expression, Token(')')));
-        var sum = AllOf(term, ZeroOrMore(AllOf(Token('+'), term)));
+        var term = FirstOf(Integer(), AllOf(Grapheme('('), expression, Grapheme(')')));
+        var sum = AllOf(term, ZeroOrMore(AllOf(Grapheme('+'), term)));
 
         expression.Bind(sum);
         return sum;
     }
 
     // Tree.ToString() assertions use PreserveAllSymbols so the
-    // Token('+') / Token('(') / Token(')') leaves (default FlattenType.Delete)
+    // Grapheme('+') / Grapheme('(') / Grapheme(')') leaves (default FlattenType.Delete)
     // stay in the tree and their text appears in the concatenated view.
     private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
@@ -67,7 +67,7 @@ public class LateBoundRuleTests
     {
         var expression = new LateBoundRule("expression");
 
-        var term = FirstOf(Integer(), AllOf(Token('('), expression, Token(')')));
+        var term = FirstOf(Integer(), AllOf(Grapheme('('), expression, Grapheme(')')));
         // Forgot the .Bind(...) call.
 
         var ex = Assert.Throws<InvalidOperationException>(() => term.Compile());
@@ -82,7 +82,7 @@ public class LateBoundRuleTests
         // is supposed to auto-compile on first call, which should surface
         // the unbound-rule error before any parsing starts.
         var expression = new LateBoundRule("expression");
-        var term = FirstOf(Integer(), AllOf(Token('('), expression, Token(')')));
+        var term = FirstOf(Integer(), AllOf(Grapheme('('), expression, Grapheme(')')));
 
         Assert.Throws<InvalidOperationException>(() => term.Parse("1"));
     }
@@ -116,7 +116,7 @@ public class LateBoundRuleTests
     public void LateBoundRule_keeps_Preserve_target_symbol_in_parent_children()
     {
         // Regression: LateBoundRule's own FlattenType is Flatten, but when
-        // it forwards to a target that is FlattenType.Preserve the target's
+        // it forwards to a target that's FlattenType.Preserve the target's
         // wrapper Symbol has to reach the enclosing composite's children
         // list. If the proxy drops it, a grammar like
         //   AllOf(X, lateBound, Y)
@@ -124,10 +124,10 @@ public class LateBoundRuleTests
         // in-tree grammar happens to bind LateBoundRule to a Flatten
         // target (FirstOf/AllOf defaults), so this case was uncovered until
         // ArithmeticGrammar hit it.
-        var named = AllOf(Token('1'), Token('2')).As("named").Flatten(FlattenType.Preserve);
+        var named = AllOf(Grapheme('1'), Grapheme('2')).As("named").Flatten(FlattenType.Preserve);
         var late = new LateBoundRule("late");
         late.Bind(named);
-        var outer = AllOf(Token('a'), late, Token('b'));
+        var outer = AllOf(Grapheme('a'), late, Grapheme('b'));
 
         var result = outer.Parse("a12b");
 
@@ -147,8 +147,8 @@ public class LateBoundRuleTests
         // dispatches on expression.Id can't see the inner expression at
         // all.
         var expression = new LateBoundRule("expression");
-        var factor = FirstOf(Integer(), AllOf(Token('('), expression, Token(')')));
-        var expressionDef = AllOf(factor, ZeroOrMore(AllOf(Token('+'), factor)))
+        var factor = FirstOf(Integer(), AllOf(Grapheme('('), expression, Grapheme(')')));
+        var expressionDef = AllOf(factor, ZeroOrMore(AllOf(Grapheme('+'), factor)))
             .As("expression").Flatten(FlattenType.Preserve);
         expression.Bind(expressionDef);
 

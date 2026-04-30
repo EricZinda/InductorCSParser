@@ -10,7 +10,7 @@ namespace InductorParser.Tests.DocExamples;
 [TestFixture]
 public class RecipesExamples
 {
-    // "Pass-Through Text: Matching 'All Text'" — the markdown-ish
+    // "Pass-Through Text: Matching 'All Text'", the markdown-ish
     // grammar. Doc claim: parsing "Hello 🎸 **world** 你好 `code` done"
     // produces a tree where the guitar emoji is in the first text node,
     // the CJK in another, and ToString() reassembles each node losslessly.
@@ -28,9 +28,9 @@ public class RecipesExamples
         ).As("bold").Preserve();
 
         var code = AllOf(
-            Token('`'),
+            Grapheme('`'),
             OneOrMore(NoneOf(RuneSet.Runes("`"))),
-            Token('`')
+            Grapheme('`')
         ).As("code").Preserve();
 
         var inline = FirstOf(bold, code, text);
@@ -60,29 +60,29 @@ public class RecipesExamples
         Assert.That(result.Tree!.FindAll(code).Single().ToString(), Is.EqualTo("code"));
     }
 
-    // "Stopping at a Multi-Character Terminator" — block comment grammar.
+    // "Stopping at a Multi-Character Terminator", block comment grammar.
     // Doc claim: ZeroOrMore(AllOf(Not(stop), AnyToken())) followed by stop
     // matches a block comment without prematurely consuming the close marker.
     [Test]
     public void Block_comment_grammar_stops_at_close_marker()
     {
-        var closeMarker = AllOf(Token('*'), Token('/'));
+        var closeMarker = AllOf(Grapheme('*'), Grapheme('/'));
         var blockComment = AllOf(
-            Token('/'), Token('*'),
+            Grapheme('/'), Grapheme('*'),
             ZeroOrMore(AllOf(Not(closeMarker), AnyToken())).Preserve(),
             closeMarker).Preserve();
 
         var result = blockComment.Parse("/* hello world */");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
 
-        // The comment delimiters Token('/'), Token('*') default to
+        // The comment delimiters Grapheme('/'), Grapheme('*') default to
         // FlattenType.Delete, so result.Tree.ToString() carries only
         // the body text. The success of the parse plus consumption of
         // the trailing close marker is the doc's claim.
         Assert.That(result.Tree!.ToString(), Is.EqualTo(" hello world "));
     }
 
-    // "Matching an Identifier" — Identifier accepts foo, café,
+    // "Matching an Identifier": Identifier accepts foo, café,
     // καλημέρα, Devanagari, Thai under the default lexer.
     [Test]
     public void Identifier_matches_unicode_scripts()
@@ -139,7 +139,7 @@ public class RecipesExamples
         Assert.That(identifier.Parse("ｆｏｏ").Success, Is.True);
 
         // With FormKC, fullwidth normalizes to ASCII, so the matched
-        // text after the parser sees it is "foo" (we test the result's
+        // text after the parser sees it's "foo" (we test the result's
         // round-trip via ToString uses the normalized form, but the
         // critical claim is that it parses successfully under FormKC).
         var result = identifier.Parse("ｆｏｏ", new ParseOptions
@@ -149,7 +149,7 @@ public class RecipesExamples
         Assert.That(result.Success, Is.True);
     }
 
-    // "Organizing a Large Grammar as a Class" — the NameValueGrammar
+    // "Organizing a Large Grammar as a Class", the NameValueGrammar
     // example. Class fields with .As(nameof(...)) and .Compile() at type
     // init time. Doc claim: callers get the value via
     //   var name = result.Tree.Find(NameValueGrammar.SettingName).ToString();
@@ -171,11 +171,11 @@ public class RecipesExamples
                 OptionalWhitespace(),
                 SettingName,
                 OptionalWhitespace(),
-                Token('='),
+                Grapheme('='),
                 OptionalWhitespace(),
                 SettingValue,
                 OptionalWhitespace(),
-                Token(';'),
+                Grapheme(';'),
                 OptionalWhitespace(),
                 Eof()
             ).As(nameof(Document)).Preserve().Compile();
@@ -194,7 +194,7 @@ public class RecipesExamples
         Assert.That(value, Is.EqualTo("hard"));
     }
 
-    // "A Reusable Compiler Base Class" — the Compiler<TResult> abstract
+    // "A Reusable Compiler Base Class", the Compiler<TResult> abstract
     // base class and the NameValueCompiler subclass that uses it.
     public abstract class Compiler<TResult>
     {

@@ -43,8 +43,8 @@ public static class BacklogGrammar
 
     // ^#(?!#)\s?(.*)$
     public static readonly Rule H1Heading = AllOf(
-        Token('#'),
-        Not(Token('#')),
+        Grapheme('#'),
+        Not(Grapheme('#')),
         OptionalOneWhitespace,
         RestOfLine,
         Eof()
@@ -53,7 +53,7 @@ public static class BacklogGrammar
     // ^##(?!#)\s?(.*)$
     public static readonly Rule H2Heading = AllOf(
         Literal("##"),
-        Not(Token('#')),
+        Not(Grapheme('#')),
         OptionalOneWhitespace,
         RestOfLine,
         Eof()
@@ -76,7 +76,7 @@ public static class BacklogGrammar
     // ^[-*+]( [-*+]){2,}$
     public static readonly Rule HrSpaced = AllOf(
         OneOf("-*+"),
-        AtLeast(2, AllOf(Token(' '), OneOf("-*+"))),
+        AtLeast(2, AllOf(Grapheme(' '), OneOf("-*+"))),
         Eof()
     );
 
@@ -86,21 +86,21 @@ public static class BacklogGrammar
     //
     // WARNING: LF-only on purpose. The source regex in MergeableBacklog
     // is "\n\s*\n", which in JS regex IS CRLF-agnostic (\s matches \r
-    // and \n both), but under the default GraphemeLexer the two Token('\n')
+    // and \n both), but under the default GraphemeLexer the two Grapheme('\n')
     // anchors below reject CRLF line endings. "\r\n" is one grapheme
     // cluster whose content is "\r\n", not "\n". The fixtures in
     // MergeableBacklog's corpus are all LF-terminated, so the port stays
     // faithful by matching only LF. If this rule ever parses real
     // Windows-authored Markdown, it will need to add Literal("\r\n")
-    // anchors alongside the Token('\n') ones. See
+    // anchors alongside the Grapheme('\n') ones. See
     // docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer".
     private static readonly RuneSet NonNewlineWhitespace =
         RuneSet.Whitespace & ~RuneSet.Runes("\n\r");
 
     private static readonly Rule ParagraphTarget = AllOf(
-        Token('\n'),
+        Grapheme('\n'),
         ZeroOrMore(OneOf(NonNewlineWhitespace)),
-        Token('\n')
+        Grapheme('\n')
     );
 
     // ScanUntil with a rule-based stopper scans forward peeking

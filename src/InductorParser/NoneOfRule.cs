@@ -5,7 +5,7 @@ using InductorParser.SyntaxTree;
 namespace InductorParser;
 
 // Mirror of OneOfRule with the predicate flipped: matches one token iff
-// the token is not a single rune in the set. A RuneSet is a set of
+// the token isn't a single rune in the set. A RuneSet is a set of
 // Unicode code points, so under GraphemeLexer a multi-rune grapheme
 // (skin-toned emoji, ZWJ family, CJK + combining mark) is trivially not
 // in any set, since it isn't a single code point at all.

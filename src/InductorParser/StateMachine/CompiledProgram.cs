@@ -138,7 +138,7 @@ internal readonly struct RuleStopperSpec
 }
 
 // Spec for ScanLiteralOneOfRune. Carries the literal index for the
-// AllOf's left child (Token / Literal), the runeset index for the right
+// AllOf's left child (Grapheme / Literal), the runeset index for the right
 // child (OneOf), the loop bounds, and an optional error-metadata
 // index. The fused opcode requires both children to be effectively
 // Delete (no leaves emitted per iteration), which is the common case

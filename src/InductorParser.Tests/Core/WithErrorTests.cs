@@ -14,9 +14,9 @@ public class WithErrorTests
         var settingName = OneOrMore(OneOf(RuneSet.Letters))
             .WithError("Expected a setting name");
 
-        var document = AllOf(settingName, Token('='), Token(';'));
+        var document = AllOf(settingName, Grapheme('='), Grapheme(';'));
 
-        // "1 = ;" fails at offset 0 because a digit is not a letter.
+        // "1 = ;" fails at offset 0 because a digit isn't a letter.
         var result = document.Parse("1 = ;");
 
         Assert.That(result.Success, Is.False);
@@ -30,12 +30,12 @@ public class WithErrorTests
     [Test]
     public void Generic_error_when_no_rule_set_WithError()
     {
-        var document = AllOf(OneOrMore(OneOf(RuneSet.Letters)), Token('='), Token(';'));
+        var document = AllOf(OneOrMore(OneOf(RuneSet.Letters)), Grapheme('='), Grapheme(';'));
 
         var result = document.Parse("ab");
 
         Assert.That(result.Success, Is.False);
-        // OneOrMore consumes "ab", advancing to offset 2. Token('=') tries
+        // OneOrMore consumes "ab", advancing to offset 2. Grapheme('=') tries
         // at offset 2 and finds EOF. It records at offset 2. Since no rule
         // set WithError, the message falls back to the positional version.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
@@ -49,9 +49,9 @@ public class WithErrorTests
         // is deepest in the input should be the one the user sees.
         var name = OneOrMore(OneOf(RuneSet.Letters)).WithError("need letters");
         var digits = OneOrMore(OneOf(RuneSet.Digits)).WithError("need digits");
-        var doc = AllOf(name, Token('='), digits);
+        var doc = AllOf(name, Grapheme('='), digits);
 
-        // "ab=x" reaches the digits rule before failing (x is not a digit).
+        // "ab=x" reaches the digits rule before failing (x isn't a digit).
         // "need digits" should win over "need letters" because the digit
         // failure is at a deeper position.
         var result = doc.Parse("ab=x");

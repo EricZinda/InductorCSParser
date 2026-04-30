@@ -1,11 +1,10 @@
 using System;
-using System.Collections.Generic;
-using System.Text;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
+using static InductorParser.Tests.TestHelpers;
 
 namespace InductorParser.Tests;
 
@@ -70,7 +69,7 @@ public class CompileTests
         var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 9999);
         var named = OneOrMore(OneOf(RuneSet.Letters)).As("settingName");
         var pinnedRule = OneOrMore(OneOf(RuneSet.Digits)).As(pinned);
-        var anonymous = ZeroOrMore(Token('!'));
+        var anonymous = ZeroOrMore(Grapheme('!'));
         var root = AllOf(named, pinnedRule, anonymous);
 
         root.Compile();
@@ -82,51 +81,24 @@ public class CompileTests
         Assert.That(secondSnapshot, Is.EqualTo(firstSnapshot));
     }
 
-    // Walk the rule graph in deterministic DFS pre-order and dump the
-    // post-Compile state of every reachable rule as one line per rule.
-    // Comparing two snapshots as strings means an NUnit assertion
-    // failure shows the exact rule and field that drifted, instead of
-    // just "the grammars differ."
-    private static string SnapshotGrammar(Rule root)
-    {
-        var builder = new StringBuilder();
-        var visited = new HashSet<Rule>();
-        Walk(root, builder, visited);
-        return builder.ToString();
-    }
-
-    private static void Walk(Rule rule, StringBuilder builder, HashSet<Rule> visited)
-    {
-        if (!visited.Add(rule)) return;
-        builder.Append(rule.GetType().Name)
-            .Append("|Id=").Append(rule.Id.Value)
-            .Append("|Name=").Append(rule.Name ?? "<null>")
-            .Append("|Flatten=").Append(rule.FlattenType)
-            .Append("|FirstRunes=").Append(rule.FirstConsumedRunes)
-            .Append("|Advance=").Append(rule.Advance)
-            .Append('\n');
-        foreach (var child in rule.Children)
-            Walk(child, builder, visited);
-    }
-
     [Test]
     public void Parse_auto_compiles_a_grammar_that_was_not_compiled_explicitly()
     {
         // Parse() auto-compiles on first call. The failure-path version
         // (Parse on an unbound LateBoundRule throws because Validate
         // runs during the auto-compile) lives in LateBoundRuleTests.
-        // This is the success-path counterpart: pin the before-state to
-        // an unassigned id, call Parse, and verify the id moved into
+        // This is the success-path counterpart: lock in the before-state
+        // as an unassigned id, call Parse, and verify the id moved into
         // the custom range. Only Compile's named-id assignment pass can
         // produce that transition, so the after-value alone wouldn't
         // prove anything if some other code path had already assigned
-        // the id; the before-check rules that out.
+        // the id. The before-check rules that out.
         //
         // .As(string) only sets Name, not Id, so an as-yet-uncompiled
         // named rule has the default SymbolId (Value 0).
         var rule = OneOrMore(OneOf(RuneSet.Letters)).As("word");
         Assert.That(rule.Id.Value, Is.EqualTo(0),
-            "named rule should not have an id assigned before Compile / Parse runs");
+            "named rule shouldn't have an id assigned before Compile / Parse runs");
 
         var result = rule.Parse("hello");
 

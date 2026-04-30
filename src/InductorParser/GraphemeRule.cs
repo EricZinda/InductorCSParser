@@ -25,9 +25,9 @@ namespace InductorParser;
 // No lexer-specific branching.
 //
 // Construction validates that the expected string is exactly one
-// grapheme via StringInfo.GetNextTextElement. Token("ab") throws at
+// grapheme via StringInfo.GetNextTextElement. Grapheme("ab") throws at
 // grammar-build time instead of silently failing at parse time. (Note:
-// on pre-.NET 5 runtimes StringInfo is not UAX #29 compliant, so the
+// on pre-.NET 5 runtimes StringInfo isn't UAX #29 compliant, so the
 // grapheme count for exotic Unicode inputs can be wrong. See
 // backlog/xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md.)
 //
@@ -37,24 +37,24 @@ namespace InductorParser;
 // carry the "id == rune" shape. For multi-rune graphemes
 // the Id comes from Compile's custom-range assignment.
 //
-// Tests live in src/InductorParser.Tests/Rules/TokenRuleTests.cs.
+// Tests live in src/InductorParser.Tests/Rules/GraphemeRuleTests.cs.
 // See docs/TestArchitecture.md for the per-rule test conventions
 // (success, failure position, WithError propagation, positional fallback,
 // sealed-rule rejection).
-internal sealed class TokenRule : Rule
+internal sealed class GraphemeRule : Rule
 {
     private readonly string _expected;
 
-    public TokenRule(string expectedGrapheme) : base(FlattenType.Delete)
+    public GraphemeRule(string expectedGrapheme) : base(FlattenType.Delete)
     {
         if (expectedGrapheme == null)
             throw new ArgumentNullException(nameof(expectedGrapheme));
         if (expectedGrapheme.Length == 0)
-            throw new ArgumentException("Token requires a non-empty grapheme.", nameof(expectedGrapheme));
+            throw new ArgumentException("Grapheme requires a non-empty grapheme.", nameof(expectedGrapheme));
         string firstElement = StringInfo.GetNextTextElement(expectedGrapheme, 0);
         if (firstElement.Length != expectedGrapheme.Length)
             throw new ArgumentException(
-                $"Token requires exactly one grapheme. Use Literal(string) for multi-grapheme matches.",
+                $"Grapheme requires exactly one grapheme. Use Literal(string) for multi-grapheme matches.",
                 nameof(expectedGrapheme));
 
         _expected = expectedGrapheme;
@@ -118,11 +118,11 @@ internal sealed class TokenRule : Rule
 
         TraceSuccess(lexer, $"found '{_expected}'");
         transaction.Commit();
-        // Default FlattenType is Delete, so most Token matches end up
+        // Default FlattenType is Delete, so most Grapheme matches end up
         // in the discard branch and return the shared Discarded value
         // (no per-match Symbol allocation). Grammar authors who want
         // the character in the tree opt in with .Flatten(FlattenType.Preserve)
-        // on the Token rule.
+        // on the Grapheme rule.
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
         var leafSymbol = new Symbol(Id, FlattenType, lexer.Input.AsMemory(transaction.StartPosition, consumed));

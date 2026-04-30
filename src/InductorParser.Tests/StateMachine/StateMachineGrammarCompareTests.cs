@@ -153,32 +153,32 @@ public class StateMachineGrammarCompareTests
             AllOf(LiteralIgnoreAsciiCase("sus"), Optional(OneOf("24").Delete())),
             LiteralIgnoreAsciiCase("m"),
             LiteralIgnoreAsciiCase("o"),
-            Token('°'),
-            Token('+'),
-            Token('5')
+            Grapheme('°'),
+            Grapheme('+'),
+            Grapheme('5')
         );
 
         var ext1 = FirstOf(
             LiteralIgnoreAsciiCase("11"),
             LiteralIgnoreAsciiCase("13"),
-            Token('6'),
-            Token('7'),
-            Token('9')
+            Grapheme('6'),
+            Grapheme('7'),
+            Grapheme('9')
         );
 
         var quality2 = FirstOf(
             LiteralIgnoreAsciiCase("maj"),
             LiteralIgnoreAsciiCase("m"),
-            Token('Δ'),
-            Token('ø'),
-            Token('°')
+            Grapheme('Δ'),
+            Grapheme('ø'),
+            Grapheme('°')
         );
 
         var ext2 = FirstOf(
             LiteralIgnoreAsciiCase("11"),
             LiteralIgnoreAsciiCase("13"),
-            Token('7'),
-            Token('9')
+            Grapheme('7'),
+            Grapheme('9')
         );
 
         var addMod = FirstOf(
@@ -195,7 +195,7 @@ public class StateMachineGrammarCompareTests
             LiteralIgnoreAsciiCase("alt")
         );
 
-        var slashBass = AllOf(Token('/'), root, ZeroOrMore(accidental));
+        var slashBass = AllOf(Grapheme('/'), root, ZeroOrMore(accidental));
 
         return AllOf(
             root,
@@ -222,8 +222,8 @@ public class StateMachineGrammarCompareTests
             Optional(OneOf(RuneSet.Whitespace).Delete());
 
         public static readonly Rule H1Heading = AllOf(
-            Token('#'),
-            Not(Token('#')),
+            Grapheme('#'),
+            Not(Grapheme('#')),
             OptionalOneWhitespace,
             RestOfLine,
             Eof());
@@ -240,7 +240,7 @@ public class StateMachineGrammarCompareTests
 
         public static readonly Rule HrSpaced = AllOf(
             OneOf("-*+").Delete(),
-            AtLeast(2, AllOf(Token(' '), OneOf("-*+").Delete())),
+            AtLeast(2, AllOf(Grapheme(' '), OneOf("-*+").Delete())),
             Eof());
     }
 

@@ -287,7 +287,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
                     "Lone surrogate halves aren't valid runes.",
                     nameof(characters));
             // If the grapheme extends past the first rune we just
-            // consumed, it's a multi-rune grapheme. Refuse it. Token
+            // consumed, it's a multi-rune grapheme. Refuse it. Grapheme
             // and Literal are the grapheme-matching primitives.
             //
             // Exception: CRLF (\r\n) is one grapheme per UAX #29, but
@@ -322,7 +322,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
                 }
                 throw new ArgumentException(
                     $"Runes(string) cannot accept the multi-rune grapheme \"{grapheme}\" ({string.Join(", ", runeList)}) at UTF-16 offset {graphemeStart}. " +
-                    "A RuneSet holds single Unicode scalar values. To match this grapheme as a unit, use Token(\"" + grapheme + "\") or Literal(\"" + grapheme + "\").",
+                    "A RuneSet holds single Unicode scalar values. To match this grapheme as a unit, use Grapheme(\"" + grapheme + "\") or Literal(\"" + grapheme + "\").",
                     nameof(characters));
             }
             list.Add(new Interval(codepoint, codepoint));
@@ -454,7 +454,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<UnicodeCategory, RuneSet> _categoryCache
         = new System.Collections.Concurrent.ConcurrentDictionary<UnicodeCategory, RuneSet>();
 
-    // One UnicodeCategory is one RuneSet and it is cached (if used).
+    // One UnicodeCategory is one RuneSet and it's cached (if used).
     public static RuneSet Category(UnicodeCategory category)
     {
         if (_categoryCache.TryGetValue(category, out var cached)) return cached;
@@ -506,7 +506,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     // in a name, keyword text inside an alphabetic token, a rule that
     // accepts 'a' through 'z' plus 'é' and '漢' and 'ж'.
     //
-    // Do NOT use this as a way to match "any character" or "any content." It
+    // DON'T use this as a way to match "any character" or "any content." It
     // rejects digits, whitespace, punctuation, symbols, and any multi-rune
     // grapheme like emoji. A grammar that wants "match everything up to the
     // next delimiter" or "match anything the other rules didn't claim"

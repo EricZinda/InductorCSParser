@@ -82,7 +82,7 @@ namespace InductorParser;
 // derivation from it) and a nullable flag (can it derive the empty
 // string?). A predictive parser uses FIRST to dispatch. Nullability
 // tells FIRST-composition "keep unioning past me" when computing
-// FIRST of a sequence. FIRST(XY) = FIRST(X) if X is not nullable,
+// FIRST of a sequence. FIRST(XY) = FIRST(X) if X isn't nullable,
 // else FIRST(X) ∪ FIRST(Y).
 //
 // We map directly:

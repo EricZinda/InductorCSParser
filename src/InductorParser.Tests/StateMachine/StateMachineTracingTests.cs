@@ -36,7 +36,7 @@ public class StateMachineTracingTests
     private static (LateBoundRule LateBound, Rule InnerCyclic) BuildParensGrammar()
     {
         var parens = new LateBoundRule("parens");
-        var inner = ZeroOrMore(AllOf(Token('('), parens, Token(')'))).As("parensInner");
+        var inner = ZeroOrMore(AllOf(Grapheme('('), parens, Grapheme(')'))).As("parensInner");
         parens.Bind(inner);
         return (parens, inner);
     }
@@ -73,7 +73,7 @@ public class StateMachineTracingTests
         // first attempt and the SM should emit a FAIL trace line
         // labeled with the rule's TraceLabel.
         var nested = new LateBoundRule("nested");
-        var inner = AllOf(Token('['), Optional(nested), Token(']')).As("nestedInner");
+        var inner = AllOf(Grapheme('['), Optional(nested), Grapheme(']')).As("nestedInner");
         nested.Bind(inner);
         var rooted = AllOf(nested, Eof());
 

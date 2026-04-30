@@ -7,7 +7,7 @@ or this project directly when you want the external regex-engine barometer.
 
 ## License and provenance
 
-This directory is not a fork of rebar. The runner is an independent .NET
+This directory isn't a fork of rebar. The runner is an independent .NET
 implementation of rebar's runner protocol (KLV stdin, `duration,count` stdout
 samples) as described in
 [KLV.md](https://github.com/BurntSushi/rebar/blob/master/KLV.md),
@@ -23,7 +23,7 @@ to its own made-up names we'd just be running a separate benchmark that
 nobody could line up against .NET regex, RE2, PCRE2, and friends. Reusing
 rebar's names is what makes the comparison apples to apples.
 
-The benchmark *haystacks* are not committed to this repo. They live in the
+The benchmark *haystacks* aren't committed to this repo. They live in the
 rebar checkout at `.external/rebar/benchmarks/haystacks/` (Sherlock Holmes
 text in English, Russian, and Chinese, the Ruff `# noqa` corpus,
 OpenSubtitles English samples for `08-words`, the AWS-key haystack, and so
@@ -366,7 +366,7 @@ The ratio is `engine median / .NET compiled median` within the same benchmark.
 | `curated/09-aws-keys/compile-quick` | `compile` | .NET NonBacktracking | 257.90us | 3.01x |
 | `curated/09-aws-keys/compile-quick` | `compile` | InductorParser | 2.80us | 0.03x |
 
-The `compile` rows are not measuring a regex parser for InductorParser. They
+The `compile` rows aren't measuring a regex parser for InductorParser. They
 measure construction of the hand-translated grammar plus `Rule.Compile()`.
 
 The search rows show the current tradeoff: the runner is correct and the parser

@@ -59,7 +59,7 @@ public sealed class ParseOptions
 
     // Wall-clock limit. The parse loop polls Stopwatch.Elapsed
     // synchronously from inside its own loop, so the deadline trips
-    // even on WebGL where there is no background timer thread. Set to
+    // even on WebGL where there's no background timer thread. Set to
     // TimeSpan.Zero to disable, matching the RuleCountLimit / MaxDepth
     // convention. Off by default because timeouts are inherently flaky
     // (same input takes different time on different hardware) and would
@@ -84,7 +84,7 @@ public sealed class ParseOptions
     // returning so that FlattenType.Delete nodes are gone,
     // FlattenType.Flatten wrappers have their children lifted into
     // the parent, and FlattenType.Preserve wrappers remain as
-    // findable nodes. That is the shape most
+    // findable nodes. That's the shape most
     // callers actually want to walk: the syntactic noise (delimiters,
     // whitespace, anonymous grouping wrappers) is already out of the
     // way. The consequence is that Tree.Find(rule) only hits rules

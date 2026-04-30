@@ -7,7 +7,7 @@ using static InductorParser.Tests.TraceTestHelpers;
 
 namespace InductorParser.Tests;
 
-// Cross-cutting trace-format tests. Per-rule trace output (Token, OneOf,
+// Cross-cutting trace-format tests. Per-rule trace output (Grapheme, OneOf,
 // Eof, AllOf, FirstOf, OneOrMore, ZeroOrMore, Optional) is in
 // each rule's own test file, so the failure surfaces right next to the
 // rule being edited. This file covers the concerns that aren't any one
@@ -74,15 +74,15 @@ public class TracingTests
         // appended after the trace body in quotes, so a reader sees
         // both what the rule actually tried ("found 'x', wanted 'a'")
         // and the friendly message that would surface on a real parse
-        // failure ("expected an A"). It does NOT appear as part of the
+        // failure ("expected an A"). It DOESN'T appear as part of the
         // trace label. That position is reserved for .As() names.
         var sink = NewSink();
-        var rule = Token('a').WithError("expected an A");
+        var rule = Grapheme('a').WithError("expected an A");
         rule.Parse("x", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "   Lexer.Read: 'x', Consumed: 1",
-            "   FAIL | Token: found 'x', wanted 'a' \"expected an A\""
+            "   FAIL | Grapheme: found 'x', wanted 'a' \"expected an A\""
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
@@ -91,16 +91,16 @@ public class TracingTests
     public void Lexer_Read_emits_one_line_per_token()
     {
         var sink = NewSink();
-        var rule = AllOf(Token('a'), Token('b'), Token('c'));
+        var rule = AllOf(Grapheme('a'), Grapheme('b'), Grapheme('c'));
         rule.Parse("abc", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | Token: found 'a'",
+            "      SUCC | Grapheme: found 'a'",
             "      Lexer.Read: 'b', Consumed: 2",
-            "      SUCC | Token: found 'b'",
+            "      SUCC | Grapheme: found 'b'",
             "      Lexer.Read: 'c', Consumed: 3",
-            "      SUCC | Token: found 'c'",
+            "      SUCC | Grapheme: found 'c'",
             "   SUCC | AllOf: found 3"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
@@ -114,14 +114,14 @@ public class TracingTests
         // advances past 'a' then fails at position 1, which is > 0, so
         // the announcement appears.
         var sink = NewSink();
-        var rule = AllOf(Token('a'), Token('b'));
+        var rule = AllOf(Grapheme('a'), Grapheme('b'));
         rule.Parse("ax", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | Token: found 'a'",
+            "      SUCC | Grapheme: found 'a'",
             "      Lexer.Read: 'x', Consumed: 2",
-            "      FAIL | Token: found 'x', wanted 'b'",
+            "      FAIL | Grapheme: found 'x', wanted 'b'",
             "      Lexer.RecordFailure: new deepest failure at char 1",
             "   FAIL | AllOf: symbol #1"
         );
@@ -143,15 +143,15 @@ public class TracingTests
         // that changed the second run would slip through.
         var sink1 = NewSink();
         var sink2 = NewSink();
-        var rule = AllOf(Token('a'), Token('b'));
+        var rule = AllOf(Grapheme('a'), Grapheme('b'));
         rule.Parse("ab", new ParseOptions { TraceSink = sink1 });
         rule.Parse("ab", new ParseOptions { TraceSink = sink2 });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | Token: found 'a'",
+            "      SUCC | Grapheme: found 'a'",
             "      Lexer.Read: 'b', Consumed: 2",
-            "      SUCC | Token: found 'b'",
+            "      SUCC | Grapheme: found 'b'",
             "   SUCC | AllOf: found 2"
         );
         Assert.That(sink1.ToString(), Is.EqualTo(expected),
@@ -168,7 +168,7 @@ public class TracingTests
         // Diagnostic. With TraceLevel.Normal the sink stays empty even
         // though TraceSink is wired up.
         var sink = NewSink();
-        var rule = AllOf(Token('a'), Token('b'));
+        var rule = AllOf(Grapheme('a'), Grapheme('b'));
         rule.Parse("ab", new ParseOptions { TraceSink = sink, TraceLevel = TraceLevel.Normal });
 
         Assert.That(sink.ToString(), Is.Empty);
@@ -187,7 +187,7 @@ public class TracingTests
         // silently fell back to eager interpolation. That would mean
         // the attributes aren't being recognized (polyfill broken on
         // this target framework? LangVersion regression?) and every
-        // trace call site is allocating per parse even when the sink
+        // trace call is allocating per parse even when the sink
         // is null.
         var lexer = new GraphemeLexer("x"); // no TraceSink = tracing off
         int sideEffectCount = 0;

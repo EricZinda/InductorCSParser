@@ -7,8 +7,9 @@ using InductorParser.SyntaxTree;
 namespace InductorParser;
 
 // This is the leaf for a JSON / C++ / Python string body.
-// It is a specialized scanner for the "string body" grammar shape: scan runes
-// forward until a stopper character or characters is seen, handling escape sequences inline.
+// It's a specialized scanner for the "string body" grammar shape: scan
+// forward until a stopper is seen at the current lexer position, handling
+// escape sequences inline.
 // Collapses ZeroOrMore(FirstOf(bodyRune, AllOf(escapeStart, escapeEnd))) into one rule that
 // does the scan in a tight loop and returns one leaf Symbol
 // covering the matched section of input. One dispatch for the outer rule
@@ -58,7 +59,7 @@ namespace InductorParser;
 //
 // Out of scope: C++ raw strings R"delim(...)delim" need a stopper
 // rule built dynamically from whatever `delim` the opening
-// captured. That is context-sensitive and not directly expressible
+// captured. That's context-sensitive and not directly expressible
 // as a fixed Rule at grammar-build time.
 internal sealed class ScanUntilRule : Rule
 {

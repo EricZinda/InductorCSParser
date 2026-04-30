@@ -41,7 +41,7 @@ public class StateMachineParserTests
     [Test]
     public void Token_matches_one_grapheme()
     {
-        var rule = AllOf(Token('a'), Token('b'), Token('c'), Eof());
+        var rule = AllOf(Grapheme('a'), Grapheme('b'), Grapheme('c'), Eof());
         AssertSameOutcome(rule, "abc", expectSuccess: true);
         AssertSameOutcome(rule, "abd", expectSuccess: false);
     }
@@ -72,7 +72,7 @@ public class StateMachineParserTests
     [Test]
     public void Eof_succeeds_at_end_only()
     {
-        var rule = AllOf(Token('a'), Eof());
+        var rule = AllOf(Grapheme('a'), Eof());
         AssertSameOutcome(rule, "a", expectSuccess: true);
         AssertSameOutcome(rule, "ab", expectSuccess: false);
     }
@@ -82,14 +82,14 @@ public class StateMachineParserTests
     [Test]
     public void And_all_children_succeed()
     {
-        var rule = AllOf(Token('a'), Token('b'), Token('c'), Eof());
+        var rule = AllOf(Grapheme('a'), Grapheme('b'), Grapheme('c'), Eof());
         AssertSameOutcome(rule, "abc", expectSuccess: true);
     }
 
     [Test]
     public void And_first_child_fails()
     {
-        var rule = AllOf(Token('a'), Token('b'), Eof());
+        var rule = AllOf(Grapheme('a'), Grapheme('b'), Eof());
         AssertSameOutcome(rule, "xb", expectSuccess: false);
     }
 
@@ -99,8 +99,8 @@ public class StateMachineParserTests
         // After failure, position rolls back to start so the parent
         // alternative can try again.
         var rule = FirstOf(
-            AllOf(Token('a'), Token('b'), Token('c')),
-            AllOf(Token('a'), Token('x'), Token('y')));
+            AllOf(Grapheme('a'), Grapheme('b'), Grapheme('c')),
+            AllOf(Grapheme('a'), Grapheme('x'), Grapheme('y')));
         var rooted = AllOf(rule, Eof());
         AssertSameOutcome(rooted, "axy", expectSuccess: true);
         AssertSameOutcome(rooted, "axx", expectSuccess: false);
@@ -132,7 +132,7 @@ public class StateMachineParserTests
     [Test]
     public void Optional_present_or_absent_both_succeed()
     {
-        var rule = AllOf(Optional(Token('!')), Eof());
+        var rule = AllOf(Optional(Grapheme('!')), Eof());
         AssertSameOutcome(rule, "!", expectSuccess: true);
         AssertSameOutcome(rule, "", expectSuccess: true);
         AssertSameOutcome(rule, "a", expectSuccess: false);
@@ -189,7 +189,7 @@ public class StateMachineParserTests
     {
         // Match "a" only when not followed by "b". The Not is
         // zero-width so the lexer still has the next char available.
-        var rule = AllOf(Token('a'), Not(Token('b')), Eof());
+        var rule = AllOf(Grapheme('a'), Not(Grapheme('b')), Eof());
         AssertSameOutcome(rule, "a", expectSuccess: true);
         AssertSameOutcome(rule, "ab", expectSuccess: false);
     }
@@ -197,12 +197,12 @@ public class StateMachineParserTests
     [Test]
     public void Not_chained_with_OneOrMore_for_until_pattern()
     {
-        // Read digits until "x" appears. Not(Token('x')) succeeds as long
+        // Read digits until "x" appears. Not(Grapheme('x')) succeeds as long
         // as the next token isn't 'x'. Combined with OneOf(digits) we
         // consume one digit per iteration.
         var rule = AllOf(
-            OneOrMore(AllOf(Not(Token('x')), OneOf(RuneSet.Ascii.Digits))),
-            Token('x'),
+            OneOrMore(AllOf(Not(Grapheme('x')), OneOf(RuneSet.Ascii.Digits))),
+            Grapheme('x'),
             Eof());
         AssertSameOutcome(rule, "123x", expectSuccess: true);
         AssertSameOutcome(rule, "x", expectSuccess: false); // OneOrMore needs at least one
@@ -213,7 +213,7 @@ public class StateMachineParserTests
     [Test]
     public void Peek_succeeds_without_consuming()
     {
-        var rule = AllOf(Peek(Token('a')), Token('a'), Eof());
+        var rule = AllOf(Peek(Grapheme('a')), Grapheme('a'), Eof());
         AssertSameOutcome(rule, "a", expectSuccess: true);
         AssertSameOutcome(rule, "b", expectSuccess: false);
     }
@@ -221,7 +221,7 @@ public class StateMachineParserTests
     [Test]
     public void Peek_failure_propagates()
     {
-        var rule = AllOf(Peek(Token('a')), Eof());
+        var rule = AllOf(Peek(Grapheme('a')), Eof());
         // Peek('a') fails at empty input. So the AllOf fails.
         AssertSameOutcome(rule, "", expectSuccess: false);
     }
@@ -234,7 +234,7 @@ public class StateMachineParserTests
         // parens = ( "(" parens ")" )*
         // Matches any balanced-parens string, including the empty one.
         var parens = new LateBoundRule("parens");
-        parens.Bind(ZeroOrMore(AllOf(Token('('), parens, Token(')'))));
+        parens.Bind(ZeroOrMore(AllOf(Grapheme('('), parens, Grapheme(')'))));
         var rooted = AllOf(parens, Eof());
 
         AssertSameOutcome(rooted, "", expectSuccess: true);
@@ -254,7 +254,7 @@ public class StateMachineParserTests
         // Tests both LateBound and BetweenInclusive over a recursive sub-rule.
         var expression = new LateBoundRule("expression");
         var digit = OneOf(RuneSet.Ascii.Digits);
-        var term = FirstOf(digit, AllOf(Token('('), expression, Token(')')));
+        var term = FirstOf(digit, AllOf(Grapheme('('), expression, Grapheme(')')));
         expression.Bind(AllOf(term, ZeroOrMore(AllOf(OneOf("+-"), term))));
         var rooted = AllOf(expression, Eof());
 
@@ -274,7 +274,7 @@ public class StateMachineParserTests
     {
         // Token defaults to Delete: keywords and punctuation don't
         // appear in the tree under the default path.
-        var named = AllOf(Token('('), OneOrMore(OneOf(RuneSet.Ascii.Letters)), Token(')')).As("group").Preserve();
+        var named = AllOf(Grapheme('('), OneOrMore(OneOf(RuneSet.Ascii.Letters)), Grapheme(')')).As("group").Preserve();
         var rooted = AllOf(named, Eof());
 
         var stateMachine = StateMachineParser.Parse(rooted, "(abc)");
@@ -289,7 +289,7 @@ public class StateMachineParserTests
     [Test]
     public void PreserveAllSymbols_keeps_every_grammar_node()
     {
-        var rule = AllOf(Token('a'), Token('b'), Token('c'));
+        var rule = AllOf(Grapheme('a'), Grapheme('b'), Grapheme('c'));
         var stateMachine = StateMachineParser.Parse(rule, "abc", new ParseOptions { PreserveAllSymbols = true });
         Assert.That(stateMachine.Success, Is.True);
         // Tree.ToString() walks the whole structure. Under
@@ -332,9 +332,9 @@ public class StateMachineParserTests
     public void ScanUntil_no_escape_scans_until_stopper()
     {
         var rule = AllOf(
-            Token('"'),
+            Grapheme('"'),
             ScanUntil(RuneSet.Runes("\"")),
-            Token('"'),
+            Grapheme('"'),
             Eof());
         AssertSameOutcome(rule, "\"hello\"", expectSuccess: true);
         AssertSameOutcome(rule, "\"\"", expectSuccess: true);
@@ -345,9 +345,9 @@ public class StateMachineParserTests
     {
         var simpleEscape = OneOf(RuneSet.Runes("\"\\nrtbf/"));
         var rule = AllOf(
-            Token('"'),
+            Grapheme('"'),
             ScanUntil(stopAt: RuneSet.Runes("\""), escapeStart: new System.Text.Rune('\\'), escapeEnd: simpleEscape),
-            Token('"'),
+            Grapheme('"'),
             Eof());
         AssertSameOutcome(rule, "\"hello\"", expectSuccess: true);
         AssertSameOutcome(rule, "\"a\\nb\"", expectSuccess: true);
@@ -360,12 +360,12 @@ public class StateMachineParserTests
     {
         var simpleEscape = OneOf(RuneSet.Runes("\"\\/bfnrt"));
         var hexDigit = OneOf(RuneSet.Ascii.HexDigits);
-        var unicodeEscape = AllOf(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
+        var unicodeEscape = AllOf(Grapheme('u'), hexDigit, hexDigit, hexDigit, hexDigit);
         var escape = FirstOf(simpleEscape, unicodeEscape).Flatten(FlattenType.Delete);
         var rule = AllOf(
-            Token('"'),
+            Grapheme('"'),
             ScanUntil(stopAt: RuneSet.Runes("\""), escapeStart: new System.Text.Rune('\\'), escapeEnd: escape),
-            Token('"'),
+            Grapheme('"'),
             Eof());
         AssertSameOutcome(rule, "\"\\u0041\"", expectSuccess: true);
         AssertSameOutcome(rule, "\"hello \\\"world\\\" \\u00E9\"", expectSuccess: true);
@@ -375,7 +375,7 @@ public class StateMachineParserTests
     [Test]
     public void ScanUntil_preserves_leaf_text()
     {
-        var rule = AllOf(Token('"'), ScanUntil(RuneSet.Runes("\"")), Token('"'), Eof());
+        var rule = AllOf(Grapheme('"'), ScanUntil(RuneSet.Runes("\"")), Grapheme('"'), Eof());
         var stateMachine = StateMachineParser.Parse(rule, "\"hello\"");
         Assert.That(stateMachine.Success, Is.True);
         Assert.That(stateMachine.ToString(), Is.EqualTo("hello"));
@@ -398,8 +398,8 @@ public class StateMachineParserTests
     {
         // Read everything up to 'x'.
         var rule = AllOf(
-            ZeroOrMore(AllOf(Not(Token('x')), AnyToken())),
-            Token('x'),
+            ZeroOrMore(AllOf(Not(Grapheme('x')), AnyToken())),
+            Grapheme('x'),
             Eof());
         AssertSameOutcome(rule, "x", expectSuccess: true);
         AssertSameOutcome(rule, "abcx", expectSuccess: true);
@@ -412,7 +412,7 @@ public class StateMachineParserTests
     [Test]
     public void NoneOf_matches_runes_outside_set()
     {
-        var rule = AllOf(OneOrMore(NoneOf(RuneSet.Runes("\""))), Token('"'), Eof());
+        var rule = AllOf(OneOrMore(NoneOf(RuneSet.Runes("\""))), Grapheme('"'), Eof());
         AssertSameOutcome(rule, "hello\"", expectSuccess: true);
         AssertSameOutcome(rule, "\"", expectSuccess: false); // empty body, OneOrMore needs >= 1
     }

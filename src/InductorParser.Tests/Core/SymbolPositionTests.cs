@@ -16,7 +16,7 @@ public class SymbolPositionTests
     [Test]
     public void Leaf_token_has_range_pointing_at_its_char_in_input()
     {
-        var rule = Token('a').Preserve();
+        var rule = Grapheme('a').Preserve();
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True);
@@ -40,12 +40,12 @@ public class SymbolPositionTests
     [Test]
     public void Composite_range_spans_leftmost_leaf_to_rightmost_leaf()
     {
-        // AllOf(Token, Token, Token) wrapped as a named composite. Its
+        // AllOf(Grapheme, Grapheme, Grapheme) wrapped as a named composite. Its
         // range should run from the first 'a' to one past the last 'c'.
-        // Preserve each Token explicitly: Token defaults to Delete, and
+        // Preserve each Grapheme explicitly: Grapheme defaults to Delete, and
         // a composite whose leaves are all Delete-flattened has no
         // surviving text to report a range over.
-        var rule = AllOf(Token('a').Preserve(), Token('b').Preserve(), Token('c').Preserve())
+        var rule = AllOf(Grapheme('a').Preserve(), Grapheme('b').Preserve(), Grapheme('c').Preserve())
             .As("triple").Preserve();
         var result = rule.Parse("abc");
 
@@ -139,7 +139,7 @@ public class SymbolPositionTests
     [Test]
     public void ErrorPosition_returns_null_on_success()
     {
-        var rule = Token('a').Preserve();
+        var rule = Grapheme('a').Preserve();
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True);
@@ -151,7 +151,7 @@ public class SymbolPositionTests
     {
         // "ab" with grammar expecting just 'a' followed by Eof fails at
         // offset 1.
-        var rule = AllOf(Token('a'), Eof());
+        var rule = AllOf(Grapheme('a'), Eof());
         var result = rule.Parse("ab");
 
         Assert.That(result.Success, Is.False);

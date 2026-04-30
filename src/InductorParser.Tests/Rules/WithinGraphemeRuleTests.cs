@@ -133,7 +133,7 @@ public class WithinGraphemeRuleTests
         var asciiOnly = WithinGrapheme(OneOf(RuneSet.Ascii.Letters));
 
         Assert.That(asciiOnly.Parse("a").Success, Is.True);
-        Assert.That(asciiOnly.Parse("é").Success, Is.False);  // é is not ASCII
+        Assert.That(asciiOnly.Parse("é").Success, Is.False);  // é isn't ASCII
         Assert.That(asciiOnly.Parse(LatinEAcuteGrapheme,
             new ParseOptions { NormalizeInput = null }).Success, Is.False);  // two runes
     }
@@ -195,7 +195,7 @@ public class WithinGraphemeRuleTests
     [Test]
     public void Sealed_WithinGrapheme_rejects_Flatten()
     {
-        var rule = WithinGrapheme(Token('a'));
+        var rule = WithinGrapheme(Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
     }
@@ -203,7 +203,7 @@ public class WithinGraphemeRuleTests
     [Test]
     public void Sealed_WithinGrapheme_rejects_WithError()
     {
-        var rule = WithinGrapheme(Token('a'));
+        var rule = WithinGrapheme(Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
     }
@@ -211,7 +211,7 @@ public class WithinGraphemeRuleTests
     [Test]
     public void Sealed_WithinGrapheme_rejects_As()
     {
-        var rule = WithinGrapheme(Token('a'));
+        var rule = WithinGrapheme(Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }

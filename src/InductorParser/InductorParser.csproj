@@ -32,7 +32,7 @@
        scripting backend loads), drop it into the Unity IL2CPP smoke
        test project under src/InductorParser.Tests/Unity/Assets/Plugins/
        so the PlayMode smoke test assembly can reference it. The net8.0
-       build is only consumed by dotnet test and is not copied. -->
+       build is only consumed by dotnet test and isn't copied. -->
   <Target Name="CopyToUnity" AfterTargets="Build"
           Condition="'$(TargetFramework)' == 'netstandard2.1'">
     <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll"

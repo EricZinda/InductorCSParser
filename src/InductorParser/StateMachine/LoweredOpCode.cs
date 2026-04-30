@@ -41,7 +41,7 @@ internal enum LoweredOpCode : byte
     //
     // BetweenIncrementCheckMax is the atomic-inner fast path: when
     // the inner rule is one of the always-advancing single-state
-    // matches (Literal / Token / OneOf), the loop doesn't need a
+    // matches (Literal / Grapheme / OneOf), the loop doesn't need a
     // per-iteration backtrack frame (the match is already atomic and
     // the zero-width guard is unnecessary). The bookkeeping reduces
     // to "increment counter, exit if >= atMost" inline against the
@@ -176,7 +176,7 @@ internal enum LoweredOpCode : byte
     PeekRejectLiteralRune,
 
     // Fused-scan opcode for BetweenInclusive(min, max, AllOf(L, R)) where
-    // L is a Literal/Token and R is a OneOf, both effectively Delete.
+    // L is a Literal/Grapheme and R is a OneOf, both effectively Delete.
     // Matches the common shape "repeated-token-followed-by-rune-class"
     // (HrSpaced, separator-then-content patterns, etc.). Per iteration:
     // span-equal compare for L plus inline rune decode + set membership

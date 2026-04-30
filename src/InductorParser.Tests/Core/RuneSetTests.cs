@@ -299,7 +299,7 @@ public class RuneSetTests
     public void Intersection_with_default_RuneSet_is_empty()
     {
         // default(RuneSet) has a null _ranges and represents the empty set.
-        // Anything intersected with it is empty.
+        // Intersecting anything with it returns empty.
         var set = default(RuneSet) & RuneSet.Single('x');
 
         Assert.That(set.IsEmpty, Is.True);
@@ -329,7 +329,7 @@ public class RuneSetTests
             Assert.That(intersection.Contains(codepoint), Is.True, $"{codepoint} should be in A & B");
         // Outside: in A but not B, in B but not A, or in neither.
         foreach (int codepoint in new[] { 1, 2, 6, 9, 13, 14, 15, 20, 21, 26, 30 })
-            Assert.That(intersection.Contains(codepoint), Is.False, $"{codepoint} should NOT be in A & B");
+            Assert.That(intersection.Contains(codepoint), Is.False, $"{codepoint} SHOULDN'T be in A & B");
     }
 
     [Test]

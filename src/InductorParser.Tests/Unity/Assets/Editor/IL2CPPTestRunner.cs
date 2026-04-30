@@ -15,7 +15,7 @@ namespace InductorParser.Editor
     // Running PlayMode tests via the built-in `-runTests -testPlatform
     // StandaloneWindows64` flag would also work, but it assumes the
     // scripting backend is already set to IL2CPP in ProjectSettings.asset.
-    // The scaffold in this repo deliberately does not ship a committed
+    // The scaffold in this repo deliberately doesn't ship a committed
     // ProjectSettings.asset so Unity generates a default on first open,
     // which means the scripting backend starts as Mono. We set it here at
     // run time so the committed state is "whatever Unity chose by
@@ -26,7 +26,7 @@ namespace InductorParser.Editor
     //   Unity -batchmode -projectPath src/InductorParser.Tests/Unity/
     //         -executeMethod InductorParser.Editor.IL2CPPTestRunner.Run
     //         -logFile ...
-    // Do NOT pass -quit. The method schedules an async test run. Unity
+    // DON'T pass -quit. The method schedules an async test run. Unity
     // must stay alive until the RunFinished callback fires and calls
     // EditorApplication.Exit with the result code.
     public static class IL2CPPTestRunner

@@ -40,8 +40,8 @@ internal sealed class RuneRunRule : Rule
 
         // This is intentionally a lexer primitive rather than a loop of
         // OneOfRule.TryParse calls. The old spelling of [class]+ built and
-        // later flattened one leaf per rune; this consumes the same maximal
-        // token run but leaves one Symbol over the original input slice.
+        // later flattened one leaf per rune. This consumes the same maximal
+        // token run but leaves one Symbol over the original input range.
         int count = lexer.AdvanceWhileSingleRuneIn(_set);
         if (count < _minimumCount)
         {

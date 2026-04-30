@@ -8,7 +8,7 @@ namespace InductorParser;
 // Case-insensitive literal match, ASCII letters only. Same single-transaction
 // shape as LiteralRule. The only difference is the compare treats ASCII
 // letters case-insensitively. Non-ASCII code units compare bit-exact, so
-// Turkish dotless-I, German sharp-s, Greek sigma variants, etc. do NOT
+// Turkish dotless-I, German sharp-s, Greek sigma variants, etc. DON'T
 // match their upper/lower counterparts. That tradeoff is on purpose: full
 // Unicode case-insensitive matching is locale-dependent and grammar-breaking,
 // and the keyword-heavy grammars that want this leaf (SQL, HTTP methods,

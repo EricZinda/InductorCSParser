@@ -4,7 +4,7 @@ using System.Text;
 namespace InductorParser.SyntaxTree;
 
 // Identifies a rule (or a rune leaf) in a parse tree. Every Symbol
-// carries one. The integer value's range tells you what kind of id it is:
+// carries one. The integer value's range tells you what kind of id you've got:
 //
 //   * 0..0x10FFFF        a rune leaf. The id IS the Unicode code
 //                          point. `new SymbolId('a').Value == 0x61`. Use

@@ -32,7 +32,7 @@ public class LiteralRuleTests
     {
         // Under GraphemeLexer the e+combining-acute is one token whose
         // Chars span covers both chars. The lockstep compares the full
-        // token span against the two-char expected slice in a single
+        // token span against the two-char expected portion in a single
         // iteration.
         var rule = Literal(LatinEAcuteGrapheme);
         var result = rule.Parse(LatinEAcuteGrapheme,
@@ -118,7 +118,7 @@ public class LiteralRuleTests
     [Test]
     public void Literal_symbol_text_round_trips_via_ToString()
     {
-        // Leaf symbol carries a Memory slice over the matched input. The
+        // Leaf symbol carries a Memory range over the matched input. The
         // ToString round-trip should produce the original literal.
         var rule = Literal("select").Flatten(SyntaxTree.FlattenType.Preserve);
         var result = rule.Parse("select");
@@ -159,7 +159,7 @@ public class LiteralRuleTests
     public void Literal_trace_failure_produces_expected_output()
     {
         // Failure on the first token of the literal: deepest-failure stays
-        // at 0, so RecordFailure doesn't trace, matching Token's fail-at-0
+        // at 0, so RecordFailure doesn't trace, matching Grapheme's fail-at-0
         // shape. The mid-literal-fail case is covered by the RecordFailure
         // trace line that appears when position advances past 0.
         var sink = NewSink();
@@ -203,7 +203,7 @@ public class LiteralRuleTests
     [Test]
     public void LiteralIgnoreAsciiCase_rejects_non_ascii_case_variant()
     {
-        // German sharp s does NOT match SS under this primitive (that
+        // German sharp s DOESN'T match SS under this primitive (that
         // would require full Unicode case-insensitive matching, which
         // we deliberately don't do). Document the behavior by verifying it.
         var rule = LiteralIgnoreAsciiCase("straße");

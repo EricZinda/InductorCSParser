@@ -86,7 +86,7 @@ internal sealed class BetweenInclusiveRule : Rule
             }
         }
 
-        // If we are preserving this node, create a new list to capture its outputSymbols
+        // If we're preserving this node, create a new list to capture its outputSymbols
         if (effectiveFlattenType == FlattenType.Preserve)
             outputSymbols = new List<Symbol>();
         int count = 0;
@@ -103,7 +103,7 @@ internal sealed class BetweenInclusiveRule : Rule
             // making progress. Exit with whatever count we have. The AtLeast
             // check below decides if that's enough to call the rule a success.
             if (lexer.Position == positionBefore) break;
-            // Don't add child symbols if they are discarded
+            // Don't add child symbols if they're discarded
             if (outputSymbols != null && !ReferenceEquals(nextSymbol, Symbol.Discarded))
                 outputSymbols.Add(nextSymbol);
             count++;
@@ -158,7 +158,7 @@ internal sealed class BetweenInclusiveRule : Rule
             // literals, the scanner can skip false first-rune hits too. This
             // matters for ASCII ignore-case searches where the first-rune set
             // is broad (`S` or `s`) and common in normal text. If any branch
-            // is not a literal, keep the generic first-rune skip; it is less
+            // isn't a literal, keep the generic first-rune skip. It's less
             // aggressive but still safe for arbitrary grammar shapes.
             if (allCandidatesAreLiterals
                 && !TryCollectLiteralScannerCandidates(alternative, literalCandidates))
@@ -296,8 +296,8 @@ internal sealed class BetweenInclusiveRule : Rule
         // The set of runes is defined by Inner, so we just return those.
         // Inner defines whether the initial token is Always/Sometimes/Never consumed so we use that
         // *except* if atLeast is zero, because then we can
-        // succeed and not advance. In that case, we are *at best* sometimes, but it depends on what inner
-        // does. If they are Never, we will never advance. If they are Sometimes, we are sometimes.
+        // succeed and not advance. In that case, we're *at best* sometimes, but it depends on what inner
+        // does. If they're Never, we'll never advance. If they're Sometimes, we're sometimes.
         Advance advance;
         if (AtLeast == 0)
             advance = Inner.Advance == Advance.Never ? Advance.Never : Advance.Sometimes;

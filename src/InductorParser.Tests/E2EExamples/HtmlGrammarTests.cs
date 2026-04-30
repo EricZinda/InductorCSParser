@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using InductorParser;
 using NUnit.Framework;
+using static InductorParser.Tests.TestHelpers;
 
 namespace InductorParser.Tests;
 
@@ -84,7 +85,7 @@ public class HtmlGrammarTests
         "<!-- never closed",
 
         // Void element with extra junk.
-        "<br / >",     // space between / and > is not allowed in void
+        "<br / >",     // space between / and > isn't allowed in void
         "<br>",         // normal start needs a matching end; no </br>
 
         // Attribute quote mismatch.
@@ -163,12 +164,4 @@ public class HtmlGrammarTests
         Assert.That(HtmlGrammar.Document.Parse(doc).Success, Is.True);
     }
 
-    private static string Display(string input)
-    {
-        return "\"" + input
-            .Replace("\\", "\\\\")
-            .Replace("\n", "\\n")
-            .Replace("\r", "\\r")
-            .Replace("\t", "\\t") + "\"";
-    }
 }

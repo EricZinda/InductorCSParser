@@ -29,13 +29,13 @@ public class Primer2Examples
         var key = OneOrMore(NoneOf(RuneSet.Runes("=") | RuneSet.Whitespace))
             .As("key").Preserve();
 
-        var section = AllOf(Token('['), name, Token(']'), HorizontalSpace(), EndOfLine())
+        var section = AllOf(Grapheme('['), name, Grapheme(']'), HorizontalSpace(), EndOfLine())
             .As("section").Preserve();
 
         var quotedString = AllOf(
-            Token('"'),
+            Grapheme('"'),
             ZeroOrMore(NoneOf(RuneSet.Runes("\"") | lineEndRunes)),
-            Token('"')).As("quotedString").Preserve();
+            Grapheme('"')).As("quotedString").Preserve();
 
         var bareWord = OneOrMore(NoneOf(RuneSet.Whitespace | RuneSet.Runes("\"")))
             .As("bareWord").Preserve();
@@ -46,7 +46,7 @@ public class Primer2Examples
         var value = FirstOf(floatValue, integerValue, quotedString, bareWord)
             .As("value").Preserve();
 
-        var keyValue = AllOf(key, HorizontalSpace(), Token('='), HorizontalSpace(),
+        var keyValue = AllOf(key, HorizontalSpace(), Grapheme('='), HorizontalSpace(),
                              value, HorizontalSpace(), EndOfLine())
             .As("keyValue").Preserve();
 
@@ -189,13 +189,13 @@ public class Primer2Examples
         var key = OneOrMore(NoneOf(RuneSet.Runes("=") | RuneSet.Whitespace))
             .As("key").Preserve();
 
-        var section = AllOf(Token('['), name, Token(']'), HorizontalSpace(), EndOfLine())
+        var section = AllOf(Grapheme('['), name, Grapheme(']'), HorizontalSpace(), EndOfLine())
             .As("section").Preserve();
 
         var quotedString = AllOf(
-            Token('"'),
+            Grapheme('"'),
             ZeroOrMore(NoneOf(RuneSet.Runes("\"") | lineEndRunes)),
-            Token('"')).As("quotedString").Preserve();
+            Grapheme('"')).As("quotedString").Preserve();
 
         var bareWord = OneOrMore(NoneOf(RuneSet.Whitespace | RuneSet.Runes("\"")))
             .As("bareWord").Preserve();
@@ -209,7 +209,7 @@ public class Primer2Examples
         var keyValue = AllOf(
             key,
             HorizontalSpace(),
-            Token('=').WithError("Expected '=' after the setting name"),
+            Grapheme('=').WithError("Expected '=' after the setting name"),
             HorizontalSpace(),
             value,
             HorizontalSpace(),

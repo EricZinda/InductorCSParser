@@ -10,7 +10,7 @@ namespace InductorParser;
 // Under GraphemeLexer each token is one StringInfo text element (i.e. a Grapheme, possibly
 // multi-rune), so AnyToken() matches that whole text element.
 //
-// This is the "match one token, whatever it is" leaf. Its
+// This is the "match one token, regardless of what it is" leaf. Its
 // companion idiom is ZeroOrMore(AllOf(Not(stopRule), AnyToken())), which
 // consumes content until wherever stopRule would fire.
 //

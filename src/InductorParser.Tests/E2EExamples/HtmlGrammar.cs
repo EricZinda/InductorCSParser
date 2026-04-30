@@ -72,7 +72,7 @@ public static class HtmlGrammar
     public static readonly Rule UnquotedAttributeValueAttribute = AllOf(
         AttributeName,
         OptionalWs,
-        Token('='),
+        Grapheme('='),
         OptionalWs,
         OneOrMore(NoneOf("\r\n\t \"'<>/=`"))
     );
@@ -80,21 +80,21 @@ public static class HtmlGrammar
     public static readonly Rule SingleQuotedAttributeValueAttribute = AllOf(
         AttributeName,
         OptionalWs,
-        Token('='),
+        Grapheme('='),
         OptionalWs,
-        Token('\''),
+        Grapheme('\''),
         ScanUntil(RuneSet.Runes("'")),
-        Token('\'')
+        Grapheme('\'')
     );
 
     public static readonly Rule DoubleQuotedAttributeValueAttribute = AllOf(
         AttributeName,
         OptionalWs,
-        Token('='),
+        Grapheme('='),
         OptionalWs,
-        Token('"'),
+        Grapheme('"'),
         ScanUntil(RuneSet.Runes("\"")),
-        Token('"')
+        Grapheme('"')
     );
 
     // Attribute. Try quoted first (they're the more specific prefix, since
@@ -110,41 +110,41 @@ public static class HtmlGrammar
 
     // "<" TagName (ws Attribute)* ws ">"
     public static readonly Rule StartTag = AllOf(
-        Token('<'),
+        Grapheme('<'),
         TagName,
         ZeroOrMore(AllOf(OptionalWs, Attribute)),
         OptionalWs,
-        Token('>')
+        Grapheme('>')
     );
 
     // "<" TagName (ws Attribute)* ws "/>"
     public static readonly Rule VoidStartTag = AllOf(
-        Token('<'),
+        Grapheme('<'),
         TagName,
         ZeroOrMore(AllOf(OptionalWs, Attribute)),
         OptionalWs,
-        Token('/'),
-        Token('>')
+        Grapheme('/'),
+        Grapheme('>')
     );
 
     // XML processing instruction: <?tagname attrs?>
     public static readonly Rule ProcessingInstruction = AllOf(
-        Token('<'),
-        Token('?'),
+        Grapheme('<'),
+        Grapheme('?'),
         TagName,
         ZeroOrMore(AllOf(OptionalWs, Attribute)),
         OptionalWs,
-        Token('?'),
-        Token('>')
+        Grapheme('?'),
+        Grapheme('>')
     );
 
     // "</" TagName ws ">"
     public static readonly Rule EndTag = AllOf(
-        Token('<'),
-        Token('/'),
+        Grapheme('<'),
+        Grapheme('/'),
         TagName,
         OptionalWs,
-        Token('>')
+        Grapheme('>')
     );
 
     public static readonly Rule VoidElement = VoidStartTag;
@@ -161,17 +161,17 @@ public static class HtmlGrammar
     // a specific literal, end tag is the same. The body scans forward
     // on a rule-based stop.
     private static readonly Rule StartStyleTag = AllOf(
-        Token('<'),
+        Grapheme('<'),
         Literal("style"),
         ZeroOrMore(AllOf(OptionalWs, Attribute)),
         OptionalWs,
-        Token('>')
+        Grapheme('>')
     );
 
     private static readonly Rule EndStyleTag = AllOf(
         Literal("</style"),
         OptionalWs,
-        Token('>')
+        Grapheme('>')
     );
 
     // Stopper is the minimal "</style" prefix, not the full EndStyleTag
@@ -188,7 +188,7 @@ public static class HtmlGrammar
     //
     //   * Cost. A Literal stopper is one string-compare per rune in a
     //     peek transaction. EndStyleTag as a stopper would invoke a
-    //     compound rule (literal + OptionalWs + Token) per rune, noticeably
+    //     compound rule (literal + OptionalWs + Grapheme) per rune, noticeably
     //     more work on the 99%-of-runes path where the stopper doesn't
     //     match.
     //

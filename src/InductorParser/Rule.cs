@@ -11,12 +11,12 @@ namespace InductorParser;
 
 // Rule is the base of everything in a grammar. A grammar is a tree of Rule
 // objects: composites like AllOf/FirstOf/OneOrMore wrap other Rules, leaves like
-// Token/OneOf sit at the bottom, and the root is whatever Rule you
+// Grapheme/OneOf sit at the bottom, and the root is whatever Rule you
 // hand to Parse(). Calling Parse on the root walks the tree and tries to
 // match the input.
 //
 // Rules are instances, not types.
-// In C# you build a Rule by calling factory functions (AllOf, FirstOf, Token, etc.)
+// In C# you build a Rule by calling factory functions (AllOf, FirstOf, Grapheme, etc.)
 // that return Rule instances. The tree is built at runtime, compiled once,
 // and reused for every parse after that. A grammar can live anywhere a
 // reference can live: a local variable, a static field, an entry in a
@@ -37,7 +37,7 @@ namespace InductorParser;
 // shared across threads.
 //
 // Rule is abstract. The library's composite and leaf rules
-// (AllOfRule, FirstOfRule, TokenRule, etc.) subclass it. User code can subclass
+// (AllOfRule, FirstOfRule, GraphemeRule, etc.) subclass it. User code can subclass
 // Rule too if it needs matching logic the built-in rules can't express.
 // See TryParseRule below for the full subclass contract.
 //
@@ -172,7 +172,7 @@ public abstract class Rule
 
     // Cached rule class name for trace output, derived from GetType().Name
     // in the constructor. The "Rule" suffix is stripped so "AllOfRule"
-    // becomes "AllOf", "TokenRule" becomes "Token", matching the trace
+    // becomes "AllOf", "GraphemeRule" becomes "Grapheme", matching the trace
     // naming convention. Reading this is a field load which is cheaper than
     // calling GetType().Name on every trace output. Works under
     // IL2CPP because it's baked in at construction time, not looked
@@ -206,7 +206,7 @@ public abstract class Rule
     // tried ("found 'x', wanted 'a'") and the friendly message that
     // would have surfaced to the user on a real parse failure
     // ("expected an A"). Only used on failure lines. On success
-    // there is no error to report so the WithError message is
+    // there's no error to report so the WithError message is
     // omitted.
     private string AppendErrorMessage(string body) =>
         _errorMessage != null ? $"{body} \"{_errorMessage}\"" : body;
@@ -275,7 +275,7 @@ public abstract class Rule
 
     // The child rules this rule is built from. Composites (AllOf, FirstOf, OneOrMore,
     // etc.) pass their children to the base constructor and access them via
-    // this property. Leaf rules (Token, OneOf, Eof) don't pass any children,
+    // this property. Leaf rules (Grapheme, OneOf, Eof) don't pass any children,
     // and the constructor below swaps in the shared empty list (NoChildren)
     // when that happens. Compile walks this list to assign ids and seal every
     // reachable rule.
@@ -361,7 +361,7 @@ public abstract class Rule
     }
 
     // Convenience shortcuts for the three FlattenType values. These read
-    // better than .Flatten(FlattenType.X) at call sites that otherwise
+    // better than .Flatten(FlattenType.X) at calls that otherwise
     // chain several modifiers, e.g. .As("number").Preserve() vs
     // .As("number").Flatten(FlattenType.Preserve). All three forward to
     // Flatten(FlattenType), so LateBoundRule's override that forbids
@@ -418,9 +418,13 @@ public abstract class Rule
 
         var usedIds = new HashSet<int>();
         var pinnedRules = new Dictionary<int, Rule>();
+        var namedRules = new Dictionary<string, Rule>();
 
         var visited = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
         CollectPinnedIds(this, visited, usedIds, pinnedRules);
+
+        visited.Clear();
+        CheckNameUniqueness(this, visited, namedRules);
 
         visited.Clear();
         AssignNamedIds(this, visited, usedIds);
@@ -458,7 +462,7 @@ public abstract class Rule
     //   2. Per-grammar rule index: a lazily-built Dictionary<SymbolId, Rule>
     //      keyed on every rule reachable from this root. For a rule created
     //      with .As("foo"), returns "foo". For an unnamed rule, returns the
-    //      class-derived trace name ("AllOf", "OneOrMore", "Token",
+    //      class-derived trace name ("AllOf", "OneOrMore", "Grapheme",
     //      "BetweenInclusive[1..3]"). Returns null if the id isn't in the
     //      grammar.
     //
@@ -618,7 +622,7 @@ public abstract class Rule
     private static string BuildErrorMessage(Lexer lexer, int pos)
     {
         // Prefer the error message the user attached to the rule that failed
-        // at the deepest position (via .WithError("...")). That is the
+        // at the deepest position (via .WithError("...")). That's the
         // "expected a setting name"-style message grammar authors write for
         // the spots most likely to be where a user goes wrong. Fall back to
         // the generic position-based message only when no rule at the
@@ -724,7 +728,7 @@ public abstract class Rule
     //         itself.
     //       - Preserve: build a wrapper Symbol around your matched
     //         children (or leaf content) and return it.
-    //   * `outputSymbols` is the caller's list in Flatten mode. It is
+    //   * `outputSymbols` is the caller's list in Flatten mode. It's
     //     non-null by contract (callers of Flatten rules are required to
     //     provide one), and null otherwise.
     //   * Subclass construction: pass child rules to the base constructor
@@ -787,18 +791,18 @@ public abstract class Rule
     //
     // Two ids are out of scope for this check:
     //
-    //   * Pre-pinned ids in the rune range (every single-rune Token has
+    //   * Pre-pinned ids in the rune range (every single-rune Grapheme has
     //     its code point pinned at construction time). A grammar that
-    //     mentions Token('a') twice has two rules sharing id 97 by design,
+    //     mentions Grapheme('a') twice has two rules sharing id 97 by design,
     //     NameOf short-circuits the rune range to the rune string, and
-    //     there is no rule-name ambiguity to resolve.
+    //     there's no rule-name ambiguity to resolve.
     //
     //   * Ids stamped by a prior Compile on a sub-rule. If the caller
     //     compiled a sub-grammar and is now compiling a larger grammar
-    //     that reaches it, those ids look pinned but were not chosen by
+    //     that reaches it, those ids look pinned but weren't chosen by
     //     the user. A user pin via .As(SymbolId) always happens before
     //     Compile (As throws on a sealed rule), so a rule whose id is
-    //     assigned but is not yet sealed is the user-pinned shape we
+    //     assigned but isn't yet sealed is the user-pinned shape we
     //     care about here.
     private static void CollectPinnedIds(Rule r, HashSet<Rule> visited, HashSet<int> usedIds, Dictionary<int, Rule> pinnedRules)
     {
@@ -823,6 +827,31 @@ public abstract class Rule
     }
 
     private static string DescribePinnedRule(Rule r) => r.Name ?? r._ruleTraceName;
+
+    // Reject grammars where two distinct reachable rules share an .As(string)
+    // name. A name is meant to identify a single rule in NameOf, parse-tree
+    // lookups, and trace output, so duplicates would silently make those
+    // resolutions ambiguous. This is the parallel of the pin-collision check
+    // in CollectPinnedIds, just for names instead of SymbolIds.
+    //
+    // The visited set guarantees we walk each rule once, so the dictionary
+    // only ever sees the second instance under a given name.
+    private static void CheckNameUniqueness(Rule r, HashSet<Rule> visited, Dictionary<string, Rule> namedRules)
+    {
+        if (!visited.Add(r)) return;
+        if (r.Name != null)
+        {
+            if (namedRules.ContainsKey(r.Name))
+            {
+                throw new InvalidOperationException(
+                    $"Two reachable rules share the name '{r.Name}'. " +
+                    $"Each .As(string) name must be unique within a grammar.");
+            }
+            namedRules[r.Name] = r;
+        }
+        foreach (var child in r.Children)
+            CheckNameUniqueness(child, visited, namedRules);
+    }
 
     // Pass 2. For every Rule that has a Name but no id yet, hash the name
     // into the custom range and probe upward from the hash slot to find
@@ -871,7 +900,7 @@ public abstract class Rule
     // grammar's named-rule ids are stable run-to-run, which is what
     // callers who serialize parse trees or match traces across runs want.
     //
-    // FNV-1a is not cryptographically strong, but we don't need that
+    // FNV-1a isn't cryptographically strong, but we don't need that
     // here. We need deterministic, well-distributed, and cheap. FNV-1a
     // is all three.
     internal static int HashNameToCustomRange(string name)

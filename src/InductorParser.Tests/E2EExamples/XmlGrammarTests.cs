@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using InductorParser;
 using NUnit.Framework;
+using static InductorParser.Tests.TestHelpers;
 
 namespace InductorParser.Tests;
 
@@ -149,12 +150,4 @@ public class XmlGrammarTests
             "tag-name matching is an AST-walker check, not a grammar check.");
     }
 
-    private static string Display(string input)
-    {
-        return "\"" + input
-            .Replace("\\", "\\\\")
-            .Replace("\n", "\\n")
-            .Replace("\r", "\\r")
-            .Replace("\t", "\\t") + "\"";
-    }
 }

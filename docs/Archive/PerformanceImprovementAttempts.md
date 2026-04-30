@@ -14,9 +14,9 @@ Engineering record of an attempt at backlog item p700 ("Reduce per-iteration all
 
 From [backlog/p700-reduce-per-iteration-allocations-on-the-matching-p.md](../backlog/p700-reduce-per-iteration-allocations-on-the-matching-p.md): three sub-levers were proposed.
 
-1. Leaf Symbol interning on TokenRule / OneOfRule.
+1. Leaf Symbol interning on GraphemeRule / OneOfRule.
 2. A `SymbolChildren` struct to avoid the `List<Symbol>` / `Symbol[]` dichotomy.
-3. Compile-time rewrite of `FirstOf(TokenRule, TokenRule, ...)` → `OneOfRule`.
+3. Compile-time rewrite of `FirstOf(GraphemeRule, GraphemeRule, ...)` → `OneOfRule`.
 
 None of those three were implemented. The attempt below is a fourth approach that emerged from reading the hot path.
 
@@ -98,13 +98,13 @@ ChordGrammar's hot path has seven `Optional(keyword)` and `ZeroOrMore(keyword)` 
 
 JSON's wins are concentrated on Deep and Long because those shapes have more empty-optional wrappers per parse (256 levels of empty `OptionalWhitespace()` and empty-body Optionals for the innermost object). Big and Wide have proportionally more real content, so the savings don't register above noise.
 
-The p700 backlog item predicted that leaf Symbol interning (sub-lever a) or the `FirstOf(Token, Token) → OneOf` rewrite (sub-lever c) would be bigger wins. This attempt targeted a fourth surface (wrapper allocations on composite rules) and the ceiling looks lower than the leaf-allocation ceiling those sub-levers target.
+The p700 backlog item predicted that leaf Symbol interning (sub-lever a) or the `FirstOf(Grapheme, Grapheme) → OneOf` rewrite (sub-lever c) would be bigger wins. This attempt targeted a fourth surface (wrapper allocations on composite rules) and the ceiling looks lower than the leaf-allocation ceiling those sub-levers target.
 
 ### Why the attempt was reverted
 
-The net gain was under the threshold the user wanted to carry as permanent code complexity. The new `TryParseDiscarded` entry point doubles the Rule-to-Rule dispatch surface (two methods where there was one), and the anonymous-wrapper removal needs a load-bearing gate on `Name == null && ErrorMessage == null` that a future contributor could easily miss when adding a new modifier method or a new wrapper rule.
+The net gain was under the threshold the user wanted to carry as permanent code complexity. The new `TryParseDiscarded` entry point doubles the Rule-to-Rule dispatch surface (two methods where there was one), and the anonymous-wrapper removal needs a critical gate on `Name == null && ErrorMessage == null` that a future contributor could easily miss when adding a new modifier method or a new wrapper rule.
 
-For ~3% on Chord and ~5% allocation on JSON Deep/Long, the complexity didn't carry its weight. The p700 backlog item is still open. A future attempt should pick one of the three originally-proposed sub-levers (leaf Symbol interning, SymbolChildren struct, or compile-time `FirstOf(Token, ...)` → `OneOf` rewrite) where the allocation ceiling is higher.
+For ~3% on Chord and ~5% allocation on JSON Deep/Long, the complexity didn't carry its weight. The p700 backlog item is still open. A future attempt should pick one of the three originally-proposed sub-levers (leaf Symbol interning, SymbolChildren struct, or compile-time `FirstOf(Grapheme, ...)` → `OneOf` rewrite) where the allocation ceiling is higher.
 
 ### What a future attempt should reuse
 
@@ -128,17 +128,17 @@ From the retired p700 backlog item, three sub-levers were proposed originally. T
 1. (a) Leaf Symbol interning on `OneOfRule` / `NoneOfRule` / `AnyTokenRule`. Cache by (FlattenType, rune) so repeated matches of the same rune reuse one Symbol instance instead of allocating a fresh one per match.
 2. (b) A replacement for the `List<Symbol>` that `AllOfRule` and `BetweenInclusiveRule` use to accumulate matched children. The backlog item sketched this as an inline-buffer struct. This attempt tried the lighter-weight version first: a plain `Symbol[]` with doubling growth.
 
-Sub-lever (c) (compile-time `FirstOf(Token, Token, ...)` → `OneOf` rewrite) is still unimplemented. The JSON grammar already uses `OneOf` directly everywhere so there was no hot path to target in the current benchmark.
+Sub-lever (c) (compile-time `FirstOf(Grapheme, Grapheme, ...)` → `OneOf` rewrite) is still unimplemented. The JSON grammar already uses `OneOf` directly everywhere so there was no hot path to target in the current benchmark.
 
 ### What was actually tried
 
-**Sub-lever (a): leaf Symbol interning.** Added a per-Lexer cache on `Lexer` with a direct-indexed `Symbol?[128]` fast path for ASCII and a `Dictionary<long, Symbol>` fallback keyed on `(FlattenType << 32) | rune`. `OneOfRule`, `NoneOfRule`, and `AnyTokenRule` route single-rune success symbols through the cache instead of allocating per match. Cached Symbols carry a fresh 1- or 2-char string as their backing memory, not a reference into the current input, so the cache does not keep the input string alive past the parse.
+**Sub-lever (a): leaf Symbol interning.** Added a per-Lexer cache on `Lexer` with a direct-indexed `Symbol?[128]` fast path for ASCII and a `Dictionary<long, Symbol>` fallback keyed on `(FlattenType << 32) | rune`. `OneOfRule`, `NoneOfRule`, and `AnyTokenRule` route single-rune success symbols through the cache instead of allocating per match. Cached Symbols carry a fresh 1- or 2-char string as their backing memory, not a reference into the current input, so the cache doesn't keep the input string alive past the parse.
 
 Scope choice: cache lives on the Lexer, not on the Rule. Rules are shared across threads and parses. A per-Rule cache would need a lock and would hold Memory references across parses. Per-Lexer keeps it single-threaded by contract (one Lexer per parse) and disposable with the parse.
 
 **Sub-lever (b): array-backed match buffer.** Replaced `List<Symbol>?` with `Symbol[]?` in `AllOfRule` and `BetweenInclusiveRule`. AllOfRule sizes the buffer at `Children.Count` upfront (tight upper bound: each child produces at most one non-Discarded Symbol, so no growth is ever needed). BetweenInclusiveRule starts at 4 and doubles via `Array.Resize`. Both trim to exact size via `Array.Copy` at the end when the filled count is short of the buffer length. The saving is the `List<T>` header (~24 B per populated wrapper) that the old code paid for on top of its internal array.
 
-Did not implement the full "SymbolChildren struct with 4 inline slots + overflow" design the p700 backlog sketched. An inline-slot struct would let the common case (2-3 matched children) skip the intermediate buffer allocation entirely, but it also makes caller code uglier and needs `Symbol.Children` to accept the struct instead of `IReadOnlyList<Symbol>`. Elected to measure the plain-array version first and only go bigger if the signal said yes.
+Didn't implement the full "SymbolChildren struct with 4 inline slots + overflow" design the p700 backlog sketched. An inline-slot struct would let the common case (2-3 matched children) skip the intermediate buffer allocation entirely, but it also makes caller code uglier and needs `Symbol.Children` to accept the struct instead of `IReadOnlyList<Symbol>`. Elected to measure the plain-array version first and only go bigger if the signal said yes.
 
 ### Files touched (in the attempt)
 
@@ -179,7 +179,7 @@ Sub-lever (a): the JSON grammar's hot leaf allocators aren't where this cache ap
 
 Sub-lever (b): trading `new List<Symbol>(capacity)` for `new Symbol[capacity]` saves roughly the `List<T>` header (~24 B) per populated wrapper. But for AllOfRule wrappers where most children are filtered via `FlattenType.Delete` (JsonMember has 5 children, 2 kept), the new code allocates `Symbol[5]` upfront and then a trimmed `Symbol[2]`, which is two allocations for around 88 B total. The old code allocated the List header plus a `Symbol[5]` internal array, also two allocations for about the same total. Same count, same size. The win lands only on BetweenInclusiveRule paths where the List used to grow its internal array (Deep and Long shapes see the biggest allocation drops, 2-3%), and even that win is modest because `List<T>` was already doing doubling growth too.
 
-Both results are consistent with what the earlier P700 attempt (discard propagation + empty-wrapper removal) and the P600 attempt (lazy transactions on leaves) already found: Symbol and list allocations are not the dominant cost on the JSON benchmark. The cost is the interpreter dispatch and Transaction cycle on every composite rule invocation, which only p800 (compiled state-machine emitter) addresses.
+Both results are consistent with what the earlier P700 attempt (discard propagation + empty-wrapper removal) and the P600 attempt (lazy transactions on leaves) already found: Symbol and list allocations aren't the dominant cost on the JSON benchmark. The cost is the interpreter dispatch and Transaction cycle on every composite rule invocation, which only p800 (compiled state-machine emitter) addresses.
 
 ### Why the attempt was reverted
 
@@ -206,7 +206,7 @@ Engineering record of an attempt at the (since-deleted) p600 backlog item. The c
 Every non-trivial rule opens a `Transaction` on entry via `Lexer.BeginTransaction()`. The Transaction is a struct (two int writes, two bool writes) plus a `_transactionDepth++` on the lexer for trace indentation plus a `Dispose` on every exit path. Two categories of rule don't need that full machinery:
 
 - Rules that always roll back (`PeekRule`, `NotRule`): they never commit, so the only job of the Transaction is to restore position. A saved `int` does the same work with less bookkeeping.
-- Primitive rules that read at most one token before deciding (`TokenRule`, `OneOfRule`, `NoneOfRule`, `AnyTokenRule`): on failure the rule hasn't advanced past one lexer token, so rollback is trivially "restore saved position."
+- Primitive rules that read at most one token before deciding (`GraphemeRule`, `OneOfRule`, `NoneOfRule`, `AnyTokenRule`): on failure the rule hasn't advanced past one lexer token, so rollback is trivially "restore saved position."
 - `BetweenInclusiveRule` with `AtLeast==0` (Optional, ZeroOrMore): the rule can't fail in that configuration, so the outer rollback has nothing to roll back.
 
 Three tiers proposed, smallest to biggest, with the expectation that ChordGrammar's ~10x-compiled-regex ratio would drop to ~5-7x.
@@ -236,7 +236,7 @@ Updated the Rule.TryParseRule contract comment to describe the saved-position pa
 - [src/InductorParser/Lexing/Lexer.cs](../src/InductorParser/Lexing/Lexer.cs): added `SetPosition`.
 - [src/InductorParser/BetweenInclusiveRule.cs](../src/InductorParser/BetweenInclusiveRule.cs): AtLeast==0 path without outer Transaction.
 - [src/InductorParser/PeekRule.cs](../src/InductorParser/PeekRule.cs), [NotRule.cs](../src/InductorParser/NotRule.cs): saved-position int (always restore).
-- [src/InductorParser/TokenRule.cs](../src/InductorParser/TokenRule.cs), [OneOfRule.cs](../src/InductorParser/OneOfRule.cs), [NoneOfRule.cs](../src/InductorParser/NoneOfRule.cs), [AnyTokenRule.cs](../src/InductorParser/AnyTokenRule.cs): saved-position int (restore on failure).
+- [src/InductorParser/GraphemeRule.cs](../src/InductorParser/GraphemeRule.cs), [OneOfRule.cs](../src/InductorParser/OneOfRule.cs), [NoneOfRule.cs](../src/InductorParser/NoneOfRule.cs), [AnyTokenRule.cs](../src/InductorParser/AnyTokenRule.cs): saved-position int (restore on failure).
 - [src/InductorParser/Rule.cs](../src/InductorParser/Rule.cs): updated subclass contract comment.
 - ~15 test files: trace-output expected indentation shifted shallower because the leaves no longer bump `_transactionDepth`.
 
@@ -288,14 +288,14 @@ STJ baseline drifted 11% on Big between the two BenchmarkDotNet sessions (24.66 
 
 The hot paths on the grammars measured aren't leaf-bound:
 
-- **ChordGrammar** spends its time in `Literal` / `FirstOf` dispatch (already helped by p500's required-runes filter). The Token / OneOf leaves aren't the bottleneck.
+- **ChordGrammar** spends its time in `Literal` / `FirstOf` dispatch (already helped by p500's required-runes filter). The Grapheme / OneOf leaves aren't the bottleneck.
 - **JSON** spends its time in `ScanUntil` (already a specialized scanner that doesn't dispatch per character) and in the structural `AllOf` / `ZeroOrMore` wrappers that build the output tree. Those still open Transactions and still allocate `List<Symbol>` wrappers. p600 didn't touch either.
 
 The backlog item's "ChordGrammar probably drops to ~5-7x" estimate was optimistic because it assumed leaf-rule overhead was a bigger portion of the hot path than it actually is.
 
 ### Why the attempt was reverted
 
-Net neutral to slightly positive against the noise floor, against a permanent increase in API surface (new `Lexer.SetPosition` internal method) and a load-bearing invariant a future contributor could miss: leaves must call `SetPosition` on every failure path, while wrapper rules still use `BeginTransaction` / `Commit` / `Dispose`. Two parallel rollback patterns in the codebase, with the correctness burden on the implementer of each new rule to pick the right one.
+Net neutral to slightly positive against the noise floor, against a permanent increase in API surface (new `Lexer.SetPosition` internal method) and a critical invariant a future contributor could miss: leaves must call `SetPosition` on every failure path, while wrapper rules still use `BeginTransaction` / `Commit` / `Dispose`. Two parallel rollback patterns in the codebase, with the correctness burden on the implementer of each new rule to pick the right one.
 
 For essentially flat wall-clock and zero allocation change, the split pattern didn't carry its weight. The p600 backlog item was deleted along with the revert.
 
@@ -335,7 +335,7 @@ The three hints consulted (`Advance`, `RequiredInitialRuneSet`, `ErrorMessage`) 
 ### Files touched
 
 - [src/InductorParser/BetweenInclusiveRule.cs](../src/InductorParser/BetweenInclusiveRule.cs): the lookahead-and-skip block before the existing iteration loop.
-- [src/InductorParser.Tests/Rules/OneOrMoreRuleTests.cs](../src/InductorParser.Tests/Rules/OneOrMoreRuleTests.cs): `OneOrMore_trace_failure_produces_expected_output` no longer has the inner `Token FAIL` line.
+- [src/InductorParser.Tests/Rules/OneOrMoreRuleTests.cs](../src/InductorParser.Tests/Rules/OneOrMoreRuleTests.cs): `OneOrMore_trace_failure_produces_expected_output` no longer has the inner `Grapheme FAIL` line.
 - [src/InductorParser.Tests/Rules/OptionalRuleTests.cs](../src/InductorParser.Tests/Rules/OptionalRuleTests.cs): `Optional_trace_without_match_produces_expected_output` same story.
 
 Test surface: all 458 non-timing tests pass. Only two trace expectations shifted (much smaller than p600's ~15, because most trace tests already use `PreserveAllSymbols=true` for `Tree.ToString()` assertions, which gates the skip off). Spot-check (`dotnet run --project src/Benchmarks -- --spot-check`) confirms exact text round-trip across all four JSON shapes.
@@ -353,12 +353,12 @@ Deep shape (2601 chars):
 Rule               Baseline    After       Δ
 Total outcomes      6482        4428    -2054
 OneOf FAIL         1283           0    -1283
-Token FAIL            257           0     -257
+Grapheme FAIL         257           0     -257
 AllOf FAIL           257           0     -257
 ZeroOrMore SUCC     1540        1283     -257
 ```
 
-On Big, every eliminated invocation is a `OneOf FAIL` from `OptionalWhitespace()`. The grammar's trailing-comma branches don't fail on Big because the benchmark's JSON always has at least one member. On Deep, the same skip also short-circuits the `AllOf` rule inside the outer `ZeroOrMore(AllOf(OptionalWhitespace, Token(','), ...))`, so the `Token FAIL` and `AllOf FAIL` rows drop to zero too. The ZeroOrMore SUCC drop is bookkeeping: the trailing-ZeroOrMore still emits one SUCC trace per call, but it no longer runs nested OptionalWhitespace ZeroOrMores inside the AllOf that got skipped.
+On Big, every eliminated invocation is a `OneOf FAIL` from `OptionalWhitespace()`. The grammar's trailing-comma branches don't fail on Big because the benchmark's JSON always has at least one member. On Deep, the same skip also short-circuits the `AllOf` rule inside the outer `ZeroOrMore(AllOf(OptionalWhitespace, Grapheme(','), ...))`, so the `Grapheme FAIL` and `AllOf FAIL` rows drop to zero too. The ZeroOrMore SUCC drop is bookkeeping: the trailing-ZeroOrMore still emits one SUCC trace per call, but it no longer runs nested OptionalWhitespace ZeroOrMores inside the AllOf that got skipped.
 
 ### Measurements
 
@@ -386,12 +386,12 @@ This result reinforces the thesis in [src/Benchmarks/README.md](../src/Benchmark
 
 ### Why this ships
 
-Small code footprint: one gated block at the top of `TryParseRule` that reads properties already computed at rule-construction time. No new API surface, no new compile-time analysis pass, no load-bearing invariant that a future contributor could miss when adding a new composite rule. Semantic transparency: when Inner would fail and cause the outer BetweenInclusive to succeed-with-zero-iterations or fail-as-unreached-lower-bound, the skip produces the same output tree and the same failure record. The `Inner.ErrorMessage == null` gate ensures user-supplied error messages still surface by running the inner path that would emit them.
+Small code footprint: one gated block at the top of `TryParseRule` that reads properties already computed at rule-construction time. No new API surface, no new compile-time analysis pass, no critical invariant that a future contributor could miss when adding a new composite rule. Semantic transparency: when Inner would fail and cause the outer BetweenInclusive to succeed-with-zero-iterations or fail-as-unreached-lower-bound, the skip produces the same output tree and the same failure record. The `Inner.ErrorMessage == null` gate ensures user-supplied error messages still surface by running the inner path that would emit them.
 
 The only externally observable behavior change is trace output: diagnostic-level traces for calls the skip caught no longer include the inner `Lexer.Read` / FAIL lines. Two existing trace-expectation tests were updated. The rest already use `PreserveAllSymbols=true` (which gates the skip off) for their `Tree.ToString()` assertions.
 
 ### What future work should know
 
-- `FirstOfRule` (p500) and now `BetweenInclusiveRule` (p750) are the two composite wrappers that open transactions on entry and can tolerate their child failing with zero advance. FirstOf's "try next branch" and BetweenInclusive's "zero-iteration success for AtLeast==0" both have that shape. `AllOfRule` does not, because its child failing is propagating. There's no branch to skip to. So this pattern is applied everywhere it can be on the current interpreter.
+- `FirstOfRule` (p500) and now `BetweenInclusiveRule` (p750) are the two composite wrappers that open transactions on entry and can tolerate their child failing with zero advance. FirstOf's "try next branch" and BetweenInclusive's "zero-iteration success for AtLeast==0" both have that shape. `AllOfRule` doesn't, because its child failing is propagating. There's no branch to skip to. So this pattern is applied everywhere it can be on the current interpreter.
 - If p800 (compiled state-machine emitter) lands, this skip becomes redundant because the emitter will inline the peek-and-skip directly into the generated code. Until then, p750 makes p800's baseline ~10% faster and slightly harder to beat.
 - The verification harness from this attempt is reusable: `--rule-counts --shape=<big|deep|long|wide>` shows per-Rule trace outcome totals, which is the cleanest way to confirm a lookahead-style optimization actually fires on the intended invocations. The `RuneProfiler` plumbing lives in [src/Benchmarks/RuleProfiler.cs](../src/Benchmarks/RuleProfiler.cs) and the CLI hook in [src/Benchmarks/Program.cs](../src/Benchmarks/Program.cs).

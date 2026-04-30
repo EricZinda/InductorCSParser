@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using InductorParser;
 using NUnit.Framework;
+using static InductorParser.Tests.TestHelpers;
 
 namespace InductorParser.Tests;
 
@@ -217,16 +218,6 @@ public class BacklogGrammarTests
         }
     }
 
-    private static string Display(string input)
-    {
-        // Control chars in the corpus would make failure output unreadable.
-        // \n, \t, \r get visible escapes. Everything else shows as-is.
-        return "\"" + input
-            .Replace("\\", "\\\\")
-            .Replace("\n", "\\n")
-            .Replace("\r", "\\r")
-            .Replace("\t", "\\t") + "\"";
-    }
 
     // Ignored. Ratios on this box (net8.0, Release, 5000 iters). Three-run
     // range as of 2026-04-22, which is after FirstOf required-runes dispatch
@@ -241,7 +232,7 @@ public class BacklogGrammarTests
     //   Paragraph: 10-22x
     // Dispatch helps most when an FirstOf / composite has many branches and a
     // disjoint first-char set. These rules are simpler (one OneOf or one
-    // Token at the head), so the composite transaction overhead on the
+    // Grapheme at the head), so the composite transaction overhead on the
     // inner path is what dominates, the same architectural bottleneck as
     // ChordGrammar's remaining gap. A separate backlog item will target
     // that tier (lazy transactions, allocation-free empty matches,

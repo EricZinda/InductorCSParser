@@ -1,6 +1,6 @@
 # Inductor Parser Primer 2: Walking the Tree
 
-Primer 1 built a grammar that succeeds or fails and that's it. But most of the time, parsing isn't the goal. You parse so you can do something with what you parsed: look settings up by name, check that the right things are there, point at the spot where it went wrong. Once the parser hands you back a tree, all of that is just walking the tree.
+Primer 1 built a grammar that succeeds or fails and that's it. But most of the time, parsing isn't the goal. You parse so you can do something with what you parsed: look settings up by name, check that the right things are there, point at the spot where it went wrong. Once the parser hands you back a tree, all of that's just walking the tree.
 
 Let's parse a tiny INI-style config file. Something like this:
 
@@ -18,9 +18,9 @@ Two sections, each with a couple of `key = value` lines. We'll parse it, walk th
 A quick spec, so the rules below don't surprise you:
 
 - A line is one of a section header, a key/value pair, or blank.
-- A section header is `[name]` on its own line. Names are tokens that are not single-rune whitespace and not `]`. So `[a=b]` is legal (`=` only has special meaning between a key and a value), but `[my server]` and `[ server ]` are not.
-- A key/value pair is `key = value`. Keys are tokens that are not single-rune whitespace and not `=`. Whitespace around `=` is optional.
-- Values are typed: an integer, a float, a double-quoted string, or a bare word (a single run of tokens that are not single-rune whitespace or quotes). Multi-word strings need quotes, so `name = "my favorite thing"` works but `name = my favorite thing` doesn't.
+- A section header is `[name]` on its own line. Names are tokens that aren't single-rune whitespace and not `]`. So `[a=b]` is legal (`=` only has special meaning between a key and a value), but `[my server]` and `[ server ]` aren't.
+- A key/value pair is `key = value`. Keys are tokens that aren't single-rune whitespace and not `=`. Whitespace around `=` is optional.
+- Values are typed: an integer, a float, a double-quoted string, or a bare word (a single run of tokens that aren't single-rune whitespace or quotes). Multi-word strings need quotes, so `name = "my favorite thing"` works but `name = my favorite thing` doesn't.
 - Line terminators are the full Unicode set (LF, CR, CRLF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR, VT, FF), not just `\n`.
 
 The grammar:
@@ -48,7 +48,7 @@ var name = OneOrMore(NoneOf(RuneSet.Runes("]") | RuneSet.Whitespace))
 var key = OneOrMore(NoneOf(RuneSet.Runes("=") | RuneSet.Whitespace))
     .As("key").Preserve();
 
-var section = AllOf(Token('['), name, Token(']'), HorizontalSpace(), EndOfLine())
+var section = AllOf(Grapheme('['), name, Grapheme(']'), HorizontalSpace(), EndOfLine())
     .As("section").Preserve();
 
 // Typed values. Each alternative is .As(name).Preserve() so the
@@ -56,9 +56,9 @@ var section = AllOf(Token('['), name, Token(']'), HorizontalSpace(), EndOfLine()
 // Order matters in FirstOf: Float before Integer because "3.14" would
 // otherwise commit to Integer on the leading "3" and stall.
 var quotedString = AllOf(
-    Token('"'),
+    Grapheme('"'),
     ZeroOrMore(NoneOf(RuneSet.Runes("\"") | lineEndRunes)),
-    Token('"')).As("quotedString").Preserve();
+    Grapheme('"')).As("quotedString").Preserve();
 
 var bareWord = OneOrMore(NoneOf(RuneSet.Whitespace | RuneSet.Runes("\"")))
     .As("bareWord").Preserve();
@@ -69,7 +69,7 @@ var integerValue = Integer().As("integer").Preserve();
 var value = FirstOf(floatValue, integerValue, quotedString, bareWord)
     .As("value").Preserve();
 
-var keyValue = AllOf(key, HorizontalSpace(), Token('='), HorizontalSpace(), value, HorizontalSpace(), EndOfLine())
+var keyValue = AllOf(key, HorizontalSpace(), Grapheme('='), HorizontalSpace(), value, HorizontalSpace(), EndOfLine())
     .As("keyValue").Preserve();
 
 var blankLine = AllOf(HorizontalSpace(), EndOfLine());
@@ -78,11 +78,11 @@ var line = FirstOf(section, keyValue, blankLine);
 var config = AllOf(ZeroOrMore(line), Eof()).As("config").Preserve();
 ```
 
-`name` and `key` are the same shape: one or more tokens that are not single-rune whitespace and not the stop character (`]` for names, `=` for keys). `NoneOf(set)` matches a token when it is not exactly one rune from the set, and `|` is set union.
+`name` and `key` are the same shape: one or more tokens that aren't single-rune whitespace and not the stop character (`]` for names, `=` for keys). `NoneOf(set)` matches a token when it isn't exactly one rune from the set, and `|` is set union.
 
 `value` is where typing happens. Each alternative is `.As(name).Preserve()` so the matching one lands in the tree as a typed child. `Float()` and `Integer()` are built-in rules, `quotedString` is the standard open-quote/body/close-quote shape and `bareWord` catches everything else. Order in `FirstOf` matters because it stops at the first match: `Float` is before `Integer` so `3.14` doesn't commit to `3` and leave `.14` for the next rule to choke on.
 
-`EndOfLine()` accepts CRLF as a unit plus any of the seven Unicode single-rune line terminators. `Token('\n')` only handles LF and would silently cause a bug on a CRLF Windows file or anything using NEL, LINE SEPARATOR, or PARAGRAPH SEPARATOR.
+`EndOfLine()` accepts CRLF as a unit plus any of the seven Unicode single-rune line terminators. `Grapheme('\n')` only handles LF and would silently cause a bug on a CRLF Windows file or anything using NEL, LINE SEPARATOR, or PARAGRAPH SEPARATOR.
 
 `.As(name).Preserve()` is the same pattern as primer1: name the rule so you can find it later, keep its wrapper in the tree so there's something to find.
 
@@ -187,7 +187,7 @@ result.Tree!.FindAll(keyValue).Select(kv => kv.Children[0].ToString())
 result.Tree!.FlattenInto().OfType<Symbol>()
 ```
 
-`Symbol` itself does not implement `IEnumerable<Symbol>` on purpose, because iterating a tree node would have to silently pick one of children, descendants pre-order, descendants post-order, siblings, or tokens, and the four other choices then become second-class. Naming the traversal you want keeps the code unambiguous.
+`Symbol` itself doesn't implement `IEnumerable<Symbol>` on purpose, because iterating a tree node would have to silently pick one of children, descendants pre-order, descendants post-order, siblings, or tokens, and the four other choices then become second-class. Naming the traversal you want keeps the code unambiguous.
 
 # When the parse fails
 
@@ -215,7 +215,7 @@ The default error message is generic. To upgrade it, attach `.WithError(...)` to
 var keyValue = AllOf(
     key,
     HorizontalSpace(),
-    Token('=').WithError("Expected '=' after the setting name"),
+    Grapheme('=').WithError("Expected '=' after the setting name"),
     HorizontalSpace(),
     value,
     HorizontalSpace(),
@@ -223,7 +223,7 @@ var keyValue = AllOf(
     .As("keyValue").Preserve();
 ```
 
-If `Token('=')` is the deepest failure when a parse fails (the rule that got furthest before giving up), `result.ErrorMessage` will be your custom string instead of the default. Re-running the same `[server]\nport oops\n` input now reports:
+If `Grapheme('=')` is the deepest failure when a parse fails (the rule that got furthest before giving up), `result.ErrorMessage` will be your custom string instead of the default. Re-running the same `[server]\nport oops\n` input now reports:
 
 ```
 Parse failed at line 1, column 5

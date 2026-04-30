@@ -476,10 +476,10 @@ internal static class Stepper
     // half-surrogate guard catches it cheaply on the success path.
     //
     // On failure, the recorded position is the start of the rune that
-    // diverged, not the entry position. A multi-rune Token like
+    // diverged, not the entry position. A multi-rune Grapheme like
     // "é" against input "ex" matches the first rune ('e') and
     // diverges on the second; the failure has to attribute to offset 1
-    // (start of 'x') the same way the recursive Token rule's per-token
+    // (start of 'x') the same way the recursive Grapheme rule's per-token
     // loop reports. Mirror that here by finding the first diverging
     // rune boundary on the slow path.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -521,7 +521,7 @@ internal static class Stepper
     // start position of the first input rune that doesn't agree with
     // the corresponding range of expected. Used by MatchLiteralRune's
     // failure path so multi-rune mismatches report at the offending
-    // rune's start, the same position the recursive Token / Literal
+    // rune's start, the same position the recursive Grapheme / Literal
     // rules' per-token loop records via tokenStart.
     private static int FindFirstDivergingRuneStart(string input, string expected, int entryPos)
     {
@@ -612,7 +612,7 @@ internal static class Stepper
         return state.OnSuccess;
     }
 
-    // PeekRejectLiteralRune fuses Not(Literal) and Not(Token) into a
+    // PeekRejectLiteralRune fuses Not(Literal) and Not(Grapheme) into a
     // single peek-and-check. Zero-width. Failure when the literal
     // would have matched the next chars; success otherwise (including
     // when the input has fewer chars left than the literal needs).
@@ -639,7 +639,7 @@ internal static class Stepper
     // Fused-scan opcode for BetweenInclusive(min, max, AllOf(Literal, OneOf))
     // when both AllOf children are effectively Delete. Matches the
     // common "separator-and-content" pattern (HrSpaced's
-    // AtLeast(2, AllOf(Token(' '), OneOf("-*+"))) being the canonical
+    // AtLeast(2, AllOf(Grapheme(' '), OneOf("-*+"))) being the canonical
     // example). Per iteration: span-equal compare for the left
     // literal, then inline rune decode + RuneSet membership for the
     // right OneOf. No per-iteration backtrack frame, no per-iteration
@@ -888,7 +888,7 @@ internal static class Stepper
     // entry-time snapshot the Between frame stored and reports
     // failure.
     // Fast-path increment used by BetweenInclusive when the inner rule
-    // is atomic and always advances (Literal, Token, OneOf). The
+    // is atomic and always advances (Literal, Grapheme, OneOf). The
     // generic loop's per-iteration backtrack frame and zero-width
     // guard aren't needed here, so this drops them and only
     // bumps the counter and checks the upper bound.

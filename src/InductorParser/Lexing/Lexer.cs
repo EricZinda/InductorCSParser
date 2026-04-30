@@ -220,7 +220,7 @@ public abstract class Lexer
     }
 
     // Subclasses decide what one token means: one rune, one grapheme cluster,
-    // etc. Called only when there is at least one char left in input.
+    // etc. Called only when there's at least one char left in input.
     protected abstract int NextTokenLength(int startOffset);
 
     // Peek the rune at `pos` in `input` without advancing any lexer
@@ -242,7 +242,7 @@ public abstract class Lexer
     //     using var transaction = lexer.BeginTransaction();
     //     var token = lexer.Read();
     //     // inspect token.Memory, token.Chars, etc.
-    //     // do NOT call transaction.Commit(). When the `using`
+    //     // DON'T call transaction.Commit(). When the `using`
     //     // block exits, Transaction.Dispose sees Commit wasn't
     //     // called and restores the lexer's position to where
     //     // BeginTransaction was called.
@@ -353,7 +353,7 @@ public abstract class Lexer
         // GraphemeLexer must preserve OneOf semantics: a character-class
         // rule matches only when the whole grapheme token is exactly one
         // rune in the set. A multi-rune grapheme whose first rune happens
-        // to be in the set is not part of the run.
+        // to be in the set isn't part of the run.
         while (_position < _endPosition)
         {
             int pos = _position;
@@ -567,7 +567,7 @@ public abstract class Lexer
     // which is earlier than the inner's saved point. The inner's
     // commit doesn't "promote" its reads to permanent. It only says
     // "I personally wouldn't roll back here." Any ancestor is free
-    // to roll further back. That is the PEG semantic: only the
+    // to roll further back. That's the PEG semantic: only the
     // outermost successful match is final, and a failure anywhere
     // above it undoes everything below.
     //
@@ -788,10 +788,10 @@ internal readonly struct LiteralScannerCandidate
             return true;
 
         // LiteralIgnoreAsciiCase is intentionally ASCII-only. Keep the
-        // scanner prefilter under the exact same rule: only A-Z/a-z fold
-        // together, and every other rune has to match by exact code point. This
-        // prevents the optimization from accepting Unicode case-folding
-        // candidates that the real rule would reject.
+        // scanner prefilter under the exact same rule: only A-Z/a-z match
+        // case-insensitively, and every other rune has to match by exact code
+        // point. This prevents the optimization from accepting full-Unicode
+        // case-insensitive candidates that the real rule would reject.
         return IgnoreAsciiCase
             && _firstRune >= 0
             && _firstRune <= char.MaxValue
