@@ -5,8 +5,8 @@ using static InductorParser.Rules;
 
 namespace InductorParser.Tests;
 
-// Tests for Rules.EndOfLine(), Rules.OptionalEndOfLine(),
-// Rules.EndOfLineOrEof(), and the backing
+// Tests for Rules.EndOfLine() in both forms (strict and
+// eofIsEol: true), plus the backing
 // RuneSet.SingleRuneLineTerminators set.
 //
 // Two things under test:
@@ -14,9 +14,9 @@ namespace InductorParser.Tests;
 //   1. UAX #18 Annex C coverage: every single-rune terminator (LF, VT,
 //      FF, CR, NEL, LS, PS) is accepted, and the two-rune CRLF is
 //      consumed as a single terminator rather than split.
-//   2. The variant factories compose as advertised: OptionalEndOfLine
-//      always succeeds, EndOfLineOrEof accepts EOF, and plain EndOfLine
-//      rejects EOF.
+//   2. The eofIsEol flag and Optional wrapping compose as advertised:
+//      EndOfLine(eofIsEol: true) accepts EOF, plain EndOfLine() rejects
+//      EOF, and Optional(EndOfLine(eofIsEol: true)) always succeeds.
 //
 // Test inputs are built from char casts (e.g. ((char)0x000A).ToString())
 // rather than inline escapes so this source file doesn't have to
@@ -125,48 +125,48 @@ public class EndOfLineRuleTests
     }
 
     [Test]
-    public void OptionalEndOfLine_succeeds_on_empty_input()
+    public void Optional_with_eofIsEol_succeeds_on_empty_input()
     {
-        var result = OptionalEndOfLine().Parse("");
+        var result = Optional(EndOfLine(eofIsEol: true)).Parse("");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 
     [Test]
-    public void OptionalEndOfLine_succeeds_on_terminator()
+    public void Optional_with_eofIsEol_succeeds_on_terminator()
     {
-        var result = AllOf(OptionalEndOfLine(), Eof()).Parse(LF);
+        var result = AllOf(Optional(EndOfLine(eofIsEol: true)), Eof()).Parse(LF);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 
     [Test]
-    public void OptionalEndOfLine_consumes_crlf_as_pair()
+    public void Optional_with_eofIsEol_consumes_crlf_as_pair()
     {
         // If the inner ordering leaked CR alone, Eof would find the LF
         // still sitting there and fail.
-        var result = AllOf(OptionalEndOfLine(), Eof()).Parse(CRLF);
+        var result = AllOf(Optional(EndOfLine(eofIsEol: true)), Eof()).Parse(CRLF);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 
     [Test]
-    public void EndOfLineOrEof_matches_eof()
+    public void EndOfLine_with_eofIsEol_matches_eof()
     {
-        var result = EndOfLineOrEof().Parse("");
+        var result = EndOfLine(eofIsEol: true).Parse("");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 
     [Test]
-    public void EndOfLineOrEof_matches_terminator_then_reaches_eof()
+    public void EndOfLine_with_eofIsEol_matches_terminator_then_reaches_eof()
     {
-        var result = AllOf(EndOfLineOrEof(), Eof()).Parse(LF);
+        var result = AllOf(EndOfLine(eofIsEol: true), Eof()).Parse(LF);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 
     [Test]
-    public void EndOfLineOrEof_rejects_content_that_isnt_terminator_or_eof()
+    public void EndOfLine_with_eofIsEol_rejects_content_that_isnt_terminator_or_eof()
     {
         // A character that isn't a terminator and isn't end-of-input
         // has to fail both alternatives.
-        var result = EndOfLineOrEof().Parse("x");
+        var result = EndOfLine(eofIsEol: true).Parse("x");
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
     }
@@ -197,15 +197,16 @@ public class EndOfLineRuleTests
     {
         // Documents the recipe shape the readme uses: Not(Literal("hede"))
         // plus Not(EndOfLine()) plus AnyToken() in a ZeroOrMore, bounded
-        // by EndOfLineOrEof. This shape handles multi-rune graphemes
-        // like ZWJ emoji because AnyToken consumes whole graphemes.
+        // by EndOfLine(eofIsEol: true). This shape handles multi-rune
+        // graphemes like ZWJ emoji because AnyToken consumes whole
+        // graphemes.
         var lineWithoutHede = AllOf(
             ZeroOrMore(AllOf(
                 Not(Literal("hede")),
                 Not(EndOfLine()),
                 AnyToken()
             )),
-            EndOfLineOrEof());
+            EndOfLine(eofIsEol: true));
 
         var input = "hello" + Ch(0x1F468) + Ch(0x200D) + Ch(0x1F469) + Ch(0x200D) + Ch(0x1F467) + "world";
         var result = lineWithoutHede.Parse(input);
@@ -221,7 +222,7 @@ public class EndOfLineRuleTests
                 Not(EndOfLine()),
                 AnyToken()
             )),
-            EndOfLineOrEof());
+            EndOfLine(eofIsEol: true));
 
         var result = lineWithoutHede.Parse("hellohedeworld");
         Assert.That(result.Success, Is.False);

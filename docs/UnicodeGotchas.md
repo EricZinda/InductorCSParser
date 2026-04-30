@@ -206,7 +206,7 @@ Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 ru
 
 `RuneLexer` doesn't have this problem. It emits `'\r'` and `'\n'` as separate tokens. The bite is `GraphemeLexer`-specific, which is the default.
 
-**Fix.** Use the built-in `EndOfLine()` rule. It is `FirstOf(Literal("\r\n"), OneOf(RuneSet.SingleRuneLineTerminators))` under the hood, so the CRLF grapheme is tried as a unit before the single-rune terminators (LF, CR, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR per UAX #18 Annex C). The companions `OptionalEndOfLine()` and `EndOfLineOrEof()` cover the optional and "line terminator here, or end of input" cases. Anywhere a grammar cares about line breaks, reach for these instead of building one with `Grapheme('\n')` or a `OneOf` over a rune set:
+**Fix.** Use the built-in `EndOfLine()` rule. It is `FirstOf(Literal("\r\n"), OneOf(RuneSet.SingleRuneLineTerminators))` under the hood, so the CRLF grapheme is tried as a unit before the single-rune terminators (LF, CR, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR per UAX #18 Annex C). Pass `eofIsEol: true` for the "line terminator here, or end of input" case, and wrap with `Optional` for "line terminator here, or none at all". Anywhere a grammar cares about line breaks, reach for these instead of building one with `Grapheme('\n')` or a `OneOf` over a rune set:
 
 ```csharp
 // Match a Unicode line terminator (CRLF, LF, CR, NEL, LS, PS, VT, FF).
@@ -224,7 +224,7 @@ public static readonly Rule WhitespaceOrNewline = ZeroOrMore(FirstOf(
 public static readonly Rule LineComment = AllOf(
     Grapheme('%'),
     ZeroOrMore(AllOf(Not(EndOfLine()), AnyToken())),
-    EndOfLineOrEof()
+    EndOfLine(eofIsEol: true)
 );
 ```
 

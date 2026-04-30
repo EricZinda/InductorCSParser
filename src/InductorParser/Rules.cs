@@ -641,48 +641,43 @@ public static class Rules
     public static Rule OptionalWhitespace() => ZeroOrMore(OneOf(RuneSet.Whitespace)).Flatten(FlattenType.Delete);
 
     /// <summary>
-    /// Match one Unicode line terminator per UAX #18 Annex C. Default is
-    /// <see cref="FlattenType"/>: <see cref="FlattenType.Delete"/>.
+    /// Match one Unicode line terminator per UAX #18 Annex C. When
+    /// <paramref name="eofIsEol"/> is <c>true</c>, also matches at
+    /// end-of-input. Default <see cref="FlattenType"/>:
+    /// <see cref="FlattenType.Delete"/>.
     /// </summary>
+    /// <param name="eofIsEol">
+    /// When <c>true</c>, end-of-input counts as an end-of-line. The
+    /// last line of a document typically isn't followed by a terminator,
+    /// so a grammar that wants one at the end of every line has to
+    /// accept EOF as equivalent. Default is <c>false</c>: a real
+    /// terminator is required.
+    /// </param>
     /// <remarks>
     /// Consumes one of:
     /// <list type="bullet">
     /// <item><description>CRLF (the two-rune sequence <c>\r\n</c>)</description></item>
     /// <item><description>LF, VT, FF, CR, NEL, LINE SEPARATOR, or PARAGRAPH SEPARATOR
     /// (the single-rune terminators in <see cref="RuneSet.SingleRuneLineTerminators"/>)</description></item>
+    /// <item><description>End-of-input, but only when <paramref name="eofIsEol"/> is <c>true</c></description></item>
     /// </list>
     /// CRLF is tried first so a CR immediately followed by an LF is
-    /// consumed as one terminator rather than split into two. 
+    /// consumed as one terminator rather than split into two.
+    /// <para>
+    /// For "an end-of-line here, or none at all" (a terminator that
+    /// may or may not be present at the very end of a file), wrap with
+    /// <see cref="Optional"/> and pass <c>eofIsEol: true</c> so the
+    /// intent reads at the call:
+    /// <c>Optional(EndOfLine(eofIsEol: true))</c>.
+    /// </para>
     /// </remarks>
-    public static Rule EndOfLine() => FirstOf(
-        Literal("\r\n"),
-        OneOf(RuneSet.SingleRuneLineTerminators)
-    ).Flatten(FlattenType.Delete);
-
-    /// <summary>
-    /// Match zero or one Unicode line terminator per UAX #18 Annex C.
-    /// Always succeeds. Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Delete"/> (applied by the factory).
-    /// </summary>
-    /// <remarks>
-    /// The "line terminator here, or none" shape. Same terminator set
-    /// and CRLF-first ordering as <see cref="EndOfLine"/>.
-    /// </remarks>
-    public static Rule OptionalEndOfLine() => Optional(EndOfLine()).Flatten(FlattenType.Delete);
-
-    /// <summary>
-    /// Match one Unicode line terminator or end-of-input. Default
-    /// <see cref="FlattenType"/>: <see cref="FlattenType.Delete"/>
-    /// (applied by the factory).
-    /// </summary>
-    /// <remarks>
-    /// The common "end of this line, whatever that means" shape for
-    /// line-based grammars. The last line of a document typically
-    /// isn't followed by a terminator, so a grammar that wants one at
-    /// the end of every line has to accept EOF as equivalent. Writing
-    /// this inline every time gets tedious.
-    /// </remarks>
-    public static Rule EndOfLineOrEof() => FirstOf(EndOfLine(), Eof()).Flatten(FlattenType.Delete);
+    public static Rule EndOfLine(bool eofIsEol = false)
+    {
+        var alternatives = eofIsEol
+            ? new Rule[] { Literal("\r\n"), OneOf(RuneSet.SingleRuneLineTerminators), Eof() }
+            : new Rule[] { Literal("\r\n"), OneOf(RuneSet.SingleRuneLineTerminators) };
+        return FirstOf(alternatives).Flatten(FlattenType.Delete);
+    }
 
     /// <summary>
     /// Encodes a UAX #31-style "programming language identifier" using
