@@ -3,7 +3,7 @@ using static InductorParser.Rules;
 
 namespace InductorParser.Tests;
 
-// Prolog grammar: PEG port of InductorProlog's PrologParser.h
+// Prolog grammar: Inductor Parser port of InductorProlog's PrologParser.h
 // (https://github.com/EricZinda/InductorProlog/blob/master/src/FXPlatform/Prolog/PrologParser.h).
 //
 // Covers: line comments (% ... CRLF), block comments (/* ... */), atoms

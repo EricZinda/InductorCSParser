@@ -83,8 +83,8 @@ public static class JsonParserTyped
     // Extract a JsonString's body as a decoded C# string. The grammar's
     // ScanUntil is a single leaf over the raw source text, so escape
     // sequences appear in the tree as their literal characters (for
-    // example "\n" as the two chars '\' and 'n'). The PEG-based decoder
-    // below turns them into the real code points.
+    // example "\n" as the two chars '\' and 'n'). The Inductor Parser-based
+    // decoder below turns them into the real code points.
     private static string DecodeString(Symbol stringNode)
     {
         // JsonString = AllOf('"', stringBody, '"'). Quotes are

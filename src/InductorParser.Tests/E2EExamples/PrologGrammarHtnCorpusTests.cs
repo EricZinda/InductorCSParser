@@ -6,17 +6,19 @@ using static InductorParser.Tests.TestHelpers;
 
 namespace InductorParser.Tests;
 
-// Corpus tests ported from InductorHtn's HTN-flavored test files. The C# basic
-// parser tests already cover everything in InductorProlog's PrologCompilerTests.cpp;
-// this file pulls in the parser inputs that the C++ HTN tests rely on but that the
-// existing corpus doesn't reach.
+// Corpus tests ported from InductorHtn's HTN-flavored test files
+// (https://github.com/EricZinda/InductorHtn). The C# basic parser tests
+// already cover everything in InductorProlog's PrologCompilerTests.cpp
+// (https://github.com/EricZinda/InductorProlog); this file pulls in the
+// parser inputs that the C++ HTN tests rely on but that the existing
+// corpus doesn't reach.
 //
-// Sources:
-//   InductorHtn/src/Tests/Htn/HtnCompilerTests.cpp
-//   InductorHtn/src/Tests/Htn/HtnPlannerTests.cpp
-//   InductorHtn/src/Tests/Prolog/HtnGoalResolverTests.cpp
-//   InductorHtn/src/Tests/Prolog/HtnRuleSetTests.cpp
-//   InductorHtn/src/Tests/Prolog/HtnTermTests.cpp
+// Sources (all under https://github.com/EricZinda/InductorHtn/blob/master/):
+//   src/Tests/Htn/HtnCompilerTests.cpp
+//   src/Tests/Htn/HtnPlannerTests.cpp
+//   src/Tests/Prolog/HtnGoalResolverTests.cpp
+//   src/Tests/Prolog/HtnRuleSetTests.cpp
+//   src/Tests/Prolog/HtnTermTests.cpp
 //
 // Every input here is something a C++ HtnCompiler / HtnGoalResolver / PrologQueryCompiler
 // successfully accepts. If the C# parser rejects any of these, the failing input is a bug

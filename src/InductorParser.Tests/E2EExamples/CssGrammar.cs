@@ -3,8 +3,9 @@ using static InductorParser.Rules;
 
 namespace InductorParser.Tests;
 
-// CSS grammar: PEG port of the C++ InductorParser CSS parser in
-// src/FXPlatform/Languages/CssParser.h. Covers a pragmatic subset of
+// CSS grammar: Inductor Parser port of the C++ InductorParser CSS parser
+// (https://github.com/EricZinda/InductorParser/blob/master/src/FXPlatform/Languages/CssParser.h).
+// Covers a pragmatic subset of
 // CSS 2.1: block comments, whitespace, identifiers, single/double quoted
 // strings with \\" and \<CR><LF> escapes, all four simple selector kinds
 // plus the universal selector, descendant combinator, selector lists,
@@ -24,10 +25,10 @@ namespace InductorParser.Tests;
 //   * NotLiteralExpression<"str">              -> ZeroOrMore(AllOf(Not(Literal("str")), AnyToken()))
 //   * WhitespaceSymbol / OptionalWhitespaceSymbol -> one-or-more / zero-or-more over WhitespaceChars
 //
-// PEG vs regex ordering: every FirstOf below is written longest-first where
-// two branches share a prefix. The C++ template form has the same
-// first-match-wins semantics, so this just mirrors what the original
-// already relied on.
+// Inductor Parser vs regex ordering: every FirstOf below is written
+// longest-first where two branches share a prefix. The C++ template form
+// has the same first-match-wins semantics, so this just mirrors what the
+// original already relied on.
 public static class CssGrammar
 {
     // C++ WhitespaceChars = "\r\n\t ". The library's Whitespace() factory
@@ -150,7 +151,7 @@ public static class CssGrammar
         )
     );
 
-    // #rgb or #rrggbb. Must try 6 before 3: under PEG, a 3-digit branch
+    // #rgb or #rrggbb. Must try 6 before 3: under Inductor Parser, a 3-digit branch
     // that matches a prefix of 6 digits would leave three digits unparsed
     // and break the surrounding declaration.
     //
