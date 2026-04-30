@@ -81,9 +81,9 @@ public class PeekRuleTests
         // would point somewhere inside the abandoned attempt. The Peek
         // turns "is there an else?" into a zero-width, zero-consequence
         // check upfront.
-        var keywordIf = AllOf(Grapheme('i'), Grapheme('f'));
-        var keywordThen = AllOf(Grapheme('t'), Grapheme('h'), Grapheme('e'), Grapheme('n'));
-        var keywordElse = AllOf(Grapheme('e'), Grapheme('l'), Grapheme('s'), Grapheme('e'));
+        var keywordIf = Literal("if");
+        var keywordThen = Literal("then");
+        var keywordElse = Literal("else");
 
         var ifStatement = AllOf(
             keywordIf, Grapheme(' '), AnyToken(), Grapheme(' '),

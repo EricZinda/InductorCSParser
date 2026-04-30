@@ -90,8 +90,11 @@ public class NoneOfRuleTests
         // A CRLF grapheme passes NoneOf unconditionally (it isn't a
         // single rune, so it can't be in any single-rune set), which
         // means the sweep silently consumes the CRLF and the trailing
-        // Grapheme('\n') terminator then fails. For real line-based grammars,
-        // add Literal("\r\n") to both the stop set and the terminator.
+        // Grapheme('\n') terminator then fails. For real line-based
+        // grammars under GraphemeLexer, don't use NoneOf as the line
+        // sweep at all. Use Not(EndOfLine()) + AnyToken() for the
+        // sweep and EndOfLine() for the terminator, which together
+        // handle CRLF, LF, CR, NEL, LS, and PS as one terminator each.
         // See docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer".
         var rule = AllOf(
             ZeroOrMore(NoneOf(RuneSet.Single('\n'))),
