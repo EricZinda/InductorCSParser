@@ -1428,21 +1428,21 @@ internal sealed class LoweringContext
 
     private int AddSymbolMetadata(Rule rule)
     {
-        // Store the EFFECTIVE FlattenType so the runtime output ops
-        // carry the value TreeBuilder needs without re-applying the
-        // PreserveAllSymbols override at tree-build time. Lowering
-        // already collapsed the override into the program's structure
-        // (skipping Open/Close where effective is Flatten and EmitLeaf
-        // where effective is Delete), so the leftover metadata-bound
-        // outputs only ever carry Preserve in the fast path and
-        // either Preserve or Delete (for Delete-composite root drops)
-        // on the debug path.
+        // Store the rule's DECLARED FlattenType. Lowering already
+        // collapsed the PreserveAllSymbols override into the program's
+        // structure (skipping Open/Close where effective is Flatten and
+        // EmitLeaf where effective is Delete), so any metadata that
+        // survives is attached to outputs that need to reach the tree.
+        // TreeBuilder reapplies the override at tree-build time so the
+        // resulting Symbol carries the rule's declared FlattenType,
+        // matching what the recursive engine produces (e.g. a
+        // Token('a') wrapper under PreserveAllSymbols still has
+        // FlattenType.Delete on it).
         int newIndex = SymbolMetadata.Count;
         if (newIndex >= 0xFFFF)
             throw new NotSupportedException(
                 "State-machine evaluator symbol-metadata overflow: more than 65535 entries.");
-        var effective = ResolveEffective(rule.FlattenType);
-        SymbolMetadata.Add(new SymbolMetadata(rule.Id, effective, rule.ErrorMessage));
+        SymbolMetadata.Add(new SymbolMetadata(rule.Id, rule.FlattenType, rule.ErrorMessage));
         return newIndex;
     }
 

@@ -141,7 +141,13 @@ public static class StateMachineParser
                 return ParseResult.Aborted(budget.Outcome, abortPos, Rule.BuildBudgetMessage(budget.Outcome), input, rootRule);
             }
 
-            if (!succeeded || !lexer.IsEof)
+            // AllowTrailingInput relaxes the post-rule EOF check: the
+            // grammar's own success condition still has to be met
+            // (succeeded == true), but unconsumed input past where the
+            // rule stopped is fine. Mirrors the recursive engine's
+            // post-success check at Rule.Parse.
+            bool trailingInputForbidden = !options.AllowTrailingInput && !lexer.IsEof;
+            if (!succeeded || trailingInputForbidden)
             {
                 int failurePosition = System.Math.Max(machine.DeepestFailure, lexer.Position);
                 string message = BuildErrorMessage(machine, failurePosition, parseInput);
@@ -149,14 +155,18 @@ public static class StateMachineParser
                 return ParseResult.Failed(reportedPosition, message, input, rootRule);
             }
 
-            // The lowered program already baked the effective FlattenType
-            // into its output states (Delete leaves and Flatten composites
-            // were skipped on the fast path). TreeBuilder no longer needs
-            // to apply any per-node override, so pass false here regardless.
-            // Leaf memory slices into parseInput, the same string the
-            // lexer was reading, mirroring how the recursive engine
-            // builds Symbols against the normalized text.
-            IReadOnlyList<Symbol> symbols = TreeBuilder.Build(machine.OutputOps, parseInput, preserveAllSymbols: false);
+            // Lowering bakes the effective shape into the program's
+            // structure (Delete leaves and Flatten composites are
+            // skipped on the fast path). Output ops still carry each
+            // rule's DECLARED FlattenType so TreeBuilder can put the
+            // declared value on Symbols, matching the recursive engine.
+            // Pass the PreserveAllSymbols flag through so the builder
+            // promotes Delete-declared composites and leaves into the
+            // tree under debug mode rather than dropping them. Leaf
+            // memory slices into parseInput, the same string the lexer
+            // was reading, mirroring how the recursive engine builds
+            // Symbols against the normalized text.
+            IReadOnlyList<Symbol> symbols = TreeBuilder.Build(machine.OutputOps, parseInput, options.PreserveAllSymbols);
             return ParseResult.Succeeded(symbols, input, rootRule);
         }
         finally

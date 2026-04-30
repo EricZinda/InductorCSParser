@@ -60,13 +60,18 @@ internal static class TreeBuilder
                 case OutputKind.EmitLeaf:
                 {
                     cursor++;
-                    var effectiveFlatten = preserveAllSymbols ? FlattenType.Preserve : operation.FlattenType;
-                    if (effectiveFlatten == FlattenType.Delete) break;
+                    var declared = operation.FlattenType;
+                    // Effective Delete drops the leaf entirely. In fast
+                    // mode the lowerer already declined to emit Delete
+                    // leaves, so this guard is mostly defensive there.
+                    // In debug mode (preserveAllSymbols) the effective
+                    // type is Preserve regardless of declared, so a
+                    // Delete-declared leaf still survives into the tree
+                    // carrying its declared FlattenType, mirroring what
+                    // the recursive engine produces under the same flag.
+                    if (!preserveAllSymbols && declared == FlattenType.Delete) break;
                     var leafChars = input.AsMemory(operation.Offset, operation.Length);
-                    // Both Preserve and Flatten on a leaf look the same
-                    // in the existing code: the leaf becomes a child of
-                    // the enclosing parent. Same here.
-                    sink.Add(new Symbol(operation.SymbolId, effectiveFlatten, leafChars));
+                    sink.Add(new Symbol(operation.SymbolId, declared, leafChars));
                     break;
                 }
                 case OutputKind.Prebuilt:
@@ -94,13 +99,13 @@ internal static class TreeBuilder
         OutputOp open,
         List<Symbol> parentSink)
     {
-        var effectiveFlatten = preserveAllSymbols ? FlattenType.Preserve : open.FlattenType;
+        var declared = open.FlattenType;
 
-        if (effectiveFlatten == FlattenType.Delete)
+        // Fast mode honors the declared type as the effective one. Drop
+        // Delete subtrees entirely; let Flatten subtrees flow children
+        // into the parent without a wrapper.
+        if (!preserveAllSymbols && declared == FlattenType.Delete)
         {
-            // Skip the entire subtree without producing any symbols.
-            // Walk to the matching CloseComposite by tracking nesting
-            // depth.
             int depth = 1;
             while (cursor < end && depth > 0)
             {
@@ -111,20 +116,21 @@ internal static class TreeBuilder
             return;
         }
 
-        if (effectiveFlatten == FlattenType.Flatten)
+        if (!preserveAllSymbols && declared == FlattenType.Flatten)
         {
-            // Children flow into the parent's sink directly. Recurse
-            // with parentSink as the destination.
             BuildRange(ops, ref cursor, end, input, preserveAllSymbols, parentSink);
-            // Consume the matching CloseComposite.
             if (cursor < end && ops[cursor].Kind == OutputKind.CloseComposite) cursor++;
             return;
         }
 
-        // Preserve: build a wrapper Symbol with the inner children.
+        // Preserve (or PreserveAllSymbols flipping every composite to a
+        // wrapper): build a wrapper Symbol carrying the rule's declared
+        // FlattenType, even when that declared type is Delete or
+        // Flatten. The recursive engine puts the declared FlattenType
+        // on the wrapper too under the same flag.
         var children = new List<Symbol>();
         BuildRange(ops, ref cursor, end, input, preserveAllSymbols, children);
         if (cursor < end && ops[cursor].Kind == OutputKind.CloseComposite) cursor++;
-        parentSink.Add(new Symbol(open.SymbolId, FlattenType.Preserve, children));
+        parentSink.Add(new Symbol(open.SymbolId, declared, children));
     }
 }

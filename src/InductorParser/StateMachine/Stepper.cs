@@ -474,6 +474,14 @@ internal static class Stepper
     // because the rune-token at the end exceeds the literal's length).
     // For real grammars this edge case never appears. The trailing
     // half-surrogate guard catches it cheaply on the success path.
+    //
+    // On failure, the recorded position is the start of the rune that
+    // diverged, not the entry position. A multi-rune Token like
+    // "é" against input "ex" matches the first rune ('e') and
+    // diverges on the second; the failure has to attribute to offset 1
+    // (start of 'x') the same way the recursive Token rule's per-token
+    // loop reports. Mirror that here by finding the first diverging
+    // rune boundary on the slow path.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Step_MatchLiteralRune(in State state, ref Machine machine)
     {
@@ -488,7 +496,8 @@ internal static class Stepper
         if (entryPos + expectedLen > inputLen
             || !input.AsSpan(entryPos, expectedLen).SequenceEqual(expected.AsSpan()))
         {
-            machine.RecordFailure(entryPos, ResolveMatchErrorMessage(in machine, state.Data));
+            int failPos = FindFirstDivergingRuneStart(input, expected, entryPos);
+            machine.RecordFailure(failPos, ResolveMatchErrorMessage(in machine, state.Data));
             return state.OnFailure;
         }
 
@@ -506,6 +515,40 @@ internal static class Stepper
 
         lexer.SetPositionUnchecked(entryPos + expectedLen);
         return state.OnSuccess;
+    }
+
+    // Walk input and expected together at rune granularity to find the
+    // start position of the first input rune that doesn't agree with
+    // the corresponding range of expected. Used by MatchLiteralRune's
+    // failure path so multi-rune mismatches report at the offending
+    // rune's start, the same position the recursive Token / Literal
+    // rules' per-token loop records via tokenStart.
+    private static int FindFirstDivergingRuneStart(string input, string expected, int entryPos)
+    {
+        int inputCursor = entryPos;
+        int expectedCursor = 0;
+        int inputLen = input.Length;
+        int expectedLen = expected.Length;
+        while (expectedCursor < expectedLen && inputCursor < inputLen)
+        {
+            char inputChar = input[inputCursor];
+            int inputRuneLen =
+                char.IsHighSurrogate(inputChar)
+                && inputCursor + 1 < inputLen
+                && char.IsLowSurrogate(input[inputCursor + 1])
+                    ? 2 : 1;
+            if (expectedCursor + inputRuneLen > expectedLen
+                || !input.AsSpan(inputCursor, inputRuneLen).SequenceEqual(expected.AsSpan(expectedCursor, inputRuneLen)))
+            {
+                return inputCursor;
+            }
+            inputCursor += inputRuneLen;
+            expectedCursor += inputRuneLen;
+        }
+        // Ran out of input before exhausting expected: the EOF appears
+        // at the rune that would have matched next. The recursive
+        // engine reports tokenStart (== inputCursor) here too.
+        return inputCursor;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
