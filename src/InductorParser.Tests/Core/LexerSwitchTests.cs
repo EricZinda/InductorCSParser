@@ -12,10 +12,10 @@ public class LexerSwitchTests
     public void Default_lexer_is_grapheme()
     {
         // SkinTonedWaveGrapheme is one grapheme made of two runes (4 UTF-16
-        // chars). Token(WavingHandRune) expects exactly the 2-Token waving-hand
+        // chars). Token(WavingHandRune) expects exactly the 2-char waving-hand
         // rune. Under the grapheme lexer the single token is 4 chars, which
         // TokenRule's length check rejects. Under the rune lexer the first
-        // token would be just the 2-Token waving hand and the parse would
+        // token would be just the 2-char waving hand and the parse would
         // succeed. Asserting failure here verifies that no-options parsing
         // uses the grapheme lexer.
         var rule = Token(WavingHandRune);
@@ -28,7 +28,7 @@ public class LexerSwitchTests
     [Test]
     public void Rune_lexer_via_options_parses_ascii_the_same_way_as_grapheme()
     {
-        // ASCII input has one UTF-16 Token per rune per grapheme, so the two
+        // ASCII input has one UTF-16 char per rune per grapheme, so the two
         // lexers should produce identical token streams. Parse under both
         // and assert the observable tree is the same.
         var rule = OneOrMore(OneOf(RuneSet.Letters));

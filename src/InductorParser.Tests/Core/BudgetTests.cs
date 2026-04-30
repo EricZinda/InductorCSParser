@@ -47,7 +47,7 @@ public class BudgetTests
     [Test]
     public void RuleCountLimit_zero_disables_the_rule_count_limit()
     {
-        // Same 5000-Token workload that trips RuleCountLimit = 10 in
+        // Same 5000-char workload that trips RuleCountLimit = 10 in
         // the test above. With the limit set to 0, the periodic check
         // skips the rule-count comparison entirely and the parse
         // completes. Proves 0 is a real off switch, not just a value
@@ -123,7 +123,7 @@ public class BudgetTests
     [Test]
     public void Zero_Timeout_disables_the_timeout()
     {
-        // Same 5000-Token workload that trips Timeout = 1 tick in the
+        // Same 5000-char workload that trips Timeout = 1 tick in the
         // test above. Setting Timeout to Zero means "no deadline,"
         // matching RuleCountLimit = 0 and MaxDepth = 0.
         var rule = OneOrMore(OneOf(RuneSet.Letters));
