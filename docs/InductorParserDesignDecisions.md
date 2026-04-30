@@ -37,7 +37,7 @@ Every concept from the original [GettingStarted.md](https://github.com/EricZinda
 | `CharacterSetSymbol<Chars>`        | `OneOf(RuneSet.Letters)`                     |
 | `CharacterSetExceptSymbol<...>`    | `NoneOf(charClass)`                          |
 | `LiteralExpression<WordString>`    | `Literal("word")`                               |
-| `OptionalWhitespaceSymbol<>`       | `OptionalWhitespace()`                          |
+| `OptionalWhitespaceSymbol<>`       | `Optional(Whitespace())`                        |
 | `WhitespaceSymbol<>`               | `Whitespace()`                                  |
 | `Integer<>`, `Float<>`             | `Integer()`, `Float()`                          |
 | `PeekExpression<T>`                | `Peek(rule)`                                    |

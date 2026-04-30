@@ -18,9 +18,9 @@ namespace InductorParser;
 /// <code>
 /// var expression = AllOf(
 ///     Identifier(),
-///     OptionalWhitespace(),
+///     Optional(Whitespace()),
 ///     Grapheme('='),
-///     OptionalWhitespace(),
+///     Optional(Whitespace()),
 ///     Integer()
 /// );
 /// </code>
@@ -631,28 +631,14 @@ public static class Rules
     /// nothing to the tree. Without the override the underlying
     /// <see cref="OneOrMore"/> would default to
     /// <see cref="FlattenType.Flatten"/>.
+    /// For the "skip any whitespace here, including none" shape
+    /// (between tokens that don't require a separator), wrap it as
+    /// <c>Optional(Whitespace())</c>.
     /// Under <see cref="InputUnit.Grapheme"/>, CRLF is one two-rune
     /// token and therefore isn't consumed by this rule. Use
     /// <see cref="EndOfLine"/> for line terminators.
     /// </remarks>
     public static Rule Whitespace() => OneOrMore(OneOf(RuneSet.Whitespace)).Flatten(FlattenType.Delete);
-
-    /// <summary>
-    /// Match zero or more single-rune whitespace tokens. Always succeeds.
-    /// Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Delete"/> (applied by the factory).
-    /// </summary>
-    /// <remarks>
-    /// The "skip any whitespace here, including none" shape. The
-    /// factory pre-applies <c>.Flatten(FlattenType.Delete)</c> so
-    /// the match contributes nothing to the tree. Without the
-    /// override the underlying <see cref="ZeroOrMore"/> would
-    /// default to <see cref="FlattenType.Flatten"/>.
-    /// Under <see cref="InputUnit.Grapheme"/>, CRLF is one two-rune
-    /// token and therefore isn't consumed by this rule. Use
-    /// <see cref="EndOfLine"/> for line terminators.
-    /// </remarks>
-    public static Rule OptionalWhitespace() => ZeroOrMore(OneOf(RuneSet.Whitespace)).Flatten(FlattenType.Delete);
 
     /// <summary>
     /// Match one Unicode line terminator per UAX #18 Annex C. When

@@ -22,7 +22,7 @@ namespace InductorParser.Benchmarks.Json.InductorParsers;
 // string-parsing hot path is apples-to-apples.
 //
 // Entry point is the bare value rule (no surrounding
-// AllOf(OptionalWhitespace, value, OptionalWhitespace, Eof)). The harness
+// AllOf(Optional(Whitespace()), value, Optional(Whitespace()), Eof)). The harness
 // feeds clean input that starts and ends at the value, competitors
 // likewise skip a trailing-Eof wrapper, and adding one would spend
 // time on every parse that the bench isn't trying to measure.
@@ -47,31 +47,31 @@ public static class InductorJsonParser
 
         JsonMemberRule = AllOf(
             JsonStringRule,
-            OptionalWhitespace(),
+            Optional(Whitespace()),
             Grapheme(':'),
-            OptionalWhitespace(),
+            Optional(Whitespace()),
             value
         ).As("member");
 
         JsonObjectRule = AllOf(
             Grapheme('{'),
-            OptionalWhitespace(),
+            Optional(Whitespace()),
             Optional(AllOf(
                 JsonMemberRule,
-                ZeroOrMore(AllOf(OptionalWhitespace(), Grapheme(','), OptionalWhitespace(), JsonMemberRule))
+                ZeroOrMore(AllOf(Optional(Whitespace()), Grapheme(','), Optional(Whitespace()), JsonMemberRule))
             )),
-            OptionalWhitespace(),
+            Optional(Whitespace()),
             Grapheme('}')
         ).As("object").Preserve();
 
         JsonArrayRule = AllOf(
             Grapheme('['),
-            OptionalWhitespace(),
+            Optional(Whitespace()),
             Optional(AllOf(
                 value,
-                ZeroOrMore(AllOf(OptionalWhitespace(), Grapheme(','), OptionalWhitespace(), value))
+                ZeroOrMore(AllOf(Optional(Whitespace()), Grapheme(','), Optional(Whitespace()), value))
             )),
-            OptionalWhitespace(),
+            Optional(Whitespace()),
             Grapheme(']')
         ).As("array").Preserve();
 

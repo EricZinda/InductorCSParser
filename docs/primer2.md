@@ -33,8 +33,8 @@ The grammar:
 var lineEndRunes = RuneSet.SingleRuneLineTerminators;
 
 // Horizontal-only whitespace: every whitespace rune except the line
-// terminators. The built-in OptionalWhitespace() uses
-// RuneSet.Whitespace whole, which includes newlines, so it would
+// terminators. The built-in Whitespace() uses RuneSet.Whitespace
+// whole, which includes newlines, so Optional(Whitespace()) would
 // happily eat past the end of a line. We want the same set minus the
 // line terminators, which is exactly the intersection with their
 // complement.
