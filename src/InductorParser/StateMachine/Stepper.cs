@@ -148,6 +148,11 @@ internal static class Stepper
     {
         ScannerSkipSpec spec = machine.Program.ScannerSkipSpecs[state.Data];
         Lexer lexer = machine.Lexer;
+        // One tick per scanner-skip dispatch. The underlying AdvanceUntil
+        // inside the lexer is a single pass that can cross the whole
+        // input, so without a tick here the surrounding ZeroOrMore frame
+        // pushes alone wouldn't drive the periodic budget check.
+        lexer.TickPeriodicBudget();
         RuneSet candidates = machine.Program.RuneSets[spec.CandidatesRuneSetIndex];
 
         if (spec.Literals is { Length: > 0 })
@@ -614,6 +619,7 @@ internal static class Stepper
 
         while (count < atMost)
         {
+            lexer.TickPeriodicBudget();
             int afterLeft = pos + leftLen;
             if (afterLeft > inputLen) break;
             if (!input.AsSpan(pos, leftLen).SequenceEqual(leftLit.AsSpan())) break;
@@ -658,6 +664,7 @@ internal static class Stepper
         int pos = lexer.Position;
         while (pos < inputLen)
         {
+            lexer.TickPeriodicBudget();
             char c = input[pos];
             int runeValue;
             int runeLen;
@@ -753,9 +760,18 @@ internal static class Stepper
     // and call-stack height. Used as the per-alternative frame for FirstOf,
     // the per-iteration frame inside BetweenInclusive's loop, and the
     // wrapper frame for Not / Peek.
+    //
+    // PushBacktrack is the SM's "doing real branching work" signal on the
+    // inlined path. Non-cyclic grammars never hit Step_Call, so without
+    // this tick the periodic budget check (RuleCountLimit / Timeout /
+    // Cancellation) would never fire and a pathological grammar could
+    // run forever. Counting frame pushes mirrors the recursive engine's
+    // "every TryParseRule invocation counts" rate well enough on
+    // catastrophic-backtracking shapes (the thing the budget is for).
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Step_PushBacktrack(in State state, ref Machine machine)
     {
+        machine.Lexer.TickPeriodicBudget();
         machine.PushBacktrack(machine.Lexer.Position, machine.OutputOps.Count, machine.CallTop);
         return state.OnSuccess;
     }
@@ -792,6 +808,7 @@ internal static class Stepper
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Step_PushBetween(in State state, ref Machine machine)
     {
+        machine.Lexer.TickPeriodicBudget();
         int dataPacked = state.Data;
         int atLeast = dataPacked & 0xFFFF;
         int atMost = (dataPacked >> 16) & 0xFFFF;
@@ -835,6 +852,13 @@ internal static class Stepper
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Step_BetweenIncrementCheckMax(in State state, ref Machine machine)
     {
+        // The atomic-inner BetweenInclusive loop runs without any
+        // per-iteration PushBacktrack, so this is the only opcode that
+        // fires on every iteration. Tick the budget here so a tight
+        // loop like OneOrMore(OneOf(letters)) on a long input still
+        // drives the periodic RuleCountLimit / Timeout / Cancellation
+        // check.
+        machine.Lexer.TickPeriodicBudget();
         ref var between = ref machine.BacktrackStack[machine.BacktrackTop - 1];
         between.Counter++;
         if (between.Counter < between.AtMost)
@@ -1008,6 +1032,13 @@ internal static class Stepper
 
         while (count < atMost && pos < inputLen)
         {
+            // Per-iteration tick so a fused scan over a long input still
+            // drives the periodic budget check. Without this, a grammar
+            // like OneOrMore(OneOf(letters)) lowered to a single fused
+            // ScanOneOfRune state would never trip RuleCountLimit /
+            // Timeout / Cancellation no matter how long the input.
+            lexer.TickPeriodicBudget();
+
             char c = input[pos];
             int runeLen;
             int runeValue;
@@ -1091,6 +1122,7 @@ internal static class Stepper
 
         while (count < atMost && pos < inputLen)
         {
+            lexer.TickPeriodicBudget();
             char c = input[pos];
             int runeLen;
             int runeValue;
@@ -1162,6 +1194,7 @@ internal static class Stepper
 
         while (count < atMost && pos < inputLen)
         {
+            lexer.TickPeriodicBudget();
             char c = input[pos];
             int runeLen;
             int runeValue;
@@ -1334,6 +1367,7 @@ internal static class Stepper
 
         while (true)
         {
+            lexer.TickPeriodicBudget();
             int pos = lexer.Position;
             if (pos >= inputLen) return state.OnSuccess;
 

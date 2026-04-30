@@ -664,6 +664,22 @@ public abstract class Lexer
             CheckPeriodicBudgets();
     }
 
+    // Counter-only tick used by the state machine on opcodes that do real
+    // work but don't enter a cyclic rule (so they don't go through Call /
+    // EnterRuleAtDepth). Skips the depth check; the SM already enforces
+    // MaxDepth at Step_Call time and fused-scan / backtrack-push opcodes
+    // don't grow call depth. The periodic RuleCountLimit / Timeout /
+    // Cancellation check fires at the same 1024 boundary the recursive
+    // engine uses, so budget aborts on the inlined SM path share the
+    // same trip mechanism.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void TickPeriodicBudget()
+    {
+        _ruleInvocations++;
+        if ((_ruleInvocations & BudgetCheckMask) == 0)
+            CheckPeriodicBudgets();
+    }
+
     // Off the hot path on purpose: only invoked once every
     // BudgetCheckInterval rule invocations, so making it a separate
     // non-inlined method keeps EnterRule small enough for the JIT to
