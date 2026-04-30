@@ -464,19 +464,19 @@ public abstract class Rule
             // consistency.
             int abortRaw = Math.Max(lexer.DeepestFailure, lexer.Position);
             int abortPos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, abortRaw, options.NormalizeInput);
-            return ParseResult.Aborted(budget.Outcome, abortPos, BuildBudgetMessage(budget.Outcome), input, this);
+            return ParseResult.Aborted(budget.Outcome, abortPos, BuildBudgetMessage(budget.Outcome, abortPos, input, options), input, this);
         }
         if (result == null && rootList.Count == 0)
         {
             var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
             int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, options.NormalizeInput);
-            return ParseResult.Failed(failurePos, BuildErrorMessage(lexer, pos), input, this);
+            return ParseResult.Failed(failurePos, BuildErrorMessage(lexer, pos, failurePos, input, options), input, this);
         }
         if (!options.AllowTrailingInput && !lexer.IsEof)
         {
             var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
             int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, options.NormalizeInput);
-            return ParseResult.Failed(failurePos, BuildErrorMessage(lexer, pos), input, this);
+            return ParseResult.Failed(failurePos, BuildErrorMessage(lexer, pos, failurePos, input, options), input, this);
         }
         // Three success shapes:
         //   * Preserve root: result is its wrapper Symbol, rootList is empty.
@@ -493,24 +493,35 @@ public abstract class Rule
         return ParseResult.Succeeded(symbols, input, this);
     }
 
-    private static string BuildBudgetMessage(ParseOutcome outcome)
+    private static string BuildBudgetMessage(ParseOutcome outcome, int abortPos, string input, ParseOptions options)
     {
         switch (outcome)
         {
             case ParseOutcome.Timeout:
-                return "Parse aborted: timeout exceeded.";
+                return FormatTemplate(options.TimeoutAbortTemplate,
+                    PositionPlaceholders(abortPos, input),
+                    ("timeout", () => options.Timeout.ToString()));
             case ParseOutcome.RuleCountLimitExceeded:
-                return "Parse aborted: rule-count limit exceeded.";
+                return FormatTemplate(options.RuleCountLimitAbortTemplate,
+                    PositionPlaceholders(abortPos, input),
+                    ("limit", () => options.RuleCountLimit.ToString()));
             case ParseOutcome.DepthLimitExceeded:
-                return "Parse aborted: maximum recursion depth exceeded.";
+                return FormatTemplate(options.DepthLimitAbortTemplate,
+                    PositionPlaceholders(abortPos, input),
+                    ("limit", () => options.MaxDepth.ToString()));
             case ParseOutcome.Canceled:
-                return "Parse aborted: cancellation requested.";
+                return FormatTemplate(options.CancellationAbortTemplate,
+                    PositionPlaceholders(abortPos, input));
             default:
+                // ParseOutcome values outside the four budget kinds shouldn't
+                // reach the abort path. The "Parse aborted." fallback stays
+                // hardcoded because there's no template to consult and no
+                // placeholders that would matter.
                 return "Parse aborted.";
         }
     }
 
-    private static string BuildErrorMessage(Lexer lexer, int pos)
+    private static string BuildErrorMessage(Lexer lexer, int pos, int failurePos, string input, ParseOptions options)
     {
         // Prefer the error message the user attached to the rule that failed
         // at the deepest position (via .WithError("...")). That's the
@@ -530,8 +541,72 @@ public abstract class Rule
         // there) and to avoid the Input[pos] indexing on the next line
         // throwing IndexOutOfRangeException.
         if (pos >= lexer.Input.Length)
-            return "Unexpected end of input.";
-        return $"Parse failed at offset {pos}: unexpected '{lexer.Input[pos]}'.";
+            return FormatTemplate(options.EndOfInputErrorTemplate,
+                PositionPlaceholders(failurePos, input));
+        return FormatTemplate(options.PositionalErrorTemplate,
+            PositionPlaceholders(failurePos, input),
+            ("character", () => lexer.Input[pos].ToString()));
+    }
+
+    // The five position placeholders shared by every default template.
+    // {charIndex} is the failure position in chars (UTF-16 code units),
+    // matching ParseResult.ErrorCharIndex. {runeIndex} and {graphemeIndex}
+    // mirror ErrorRuneIndex and ErrorGraphemeIndex. {line} and {column} are
+    // zero-based, matching ErrorLine and ErrorColumn (LSP convention).
+    //
+    // The Func<string> wrappers are deliberate: each rune / grapheme /
+    // line-column conversion walks the input once, so we only want to pay
+    // for the ones whose placeholder actually appears in the template the
+    // caller chose. The default templates only use {charIndex}, so by
+    // default we never run the O(n) scans.
+    private static (string Key, Func<string> ValueProvider)[] PositionPlaceholders(int charIndex, string input)
+    {
+        return new (string, Func<string>)[]
+        {
+            ("charIndex", () => charIndex.ToString()),
+            ("runeIndex", () => SourcePositionConverter.ToRuneIndex(input, charIndex).ToString()),
+            ("graphemeIndex", () => SourcePositionConverter.ToGraphemeIndex(input, charIndex).ToString()),
+            ("line", () =>
+            {
+                SourcePositionConverter.ToLineColumn(input, charIndex, out int line, out _);
+                return line.ToString();
+            }),
+            ("column", () =>
+            {
+                SourcePositionConverter.ToLineColumn(input, charIndex, out _, out int column);
+                return column.ToString();
+            }),
+        };
+    }
+
+    // Substitute {name}-style placeholders in a user-supplied template
+    // string. Each placeholder's value is computed lazily via its
+    // Func<string> only when the placeholder actually appears in the
+    // template, so callers don't pay for an O(n) rune-index walk if their
+    // template only mentions {charIndex}. Unknown placeholder names pass
+    // through verbatim, so a typo in a custom template is visible in the
+    // resulting message rather than throwing on every parse failure.
+    private static string FormatTemplate(
+        string template,
+        (string Key, Func<string> ValueProvider)[] positionPlaceholders,
+        params (string Key, Func<string> ValueProvider)[] extraPlaceholders)
+    {
+        string formatted = template;
+        formatted = ApplyPlaceholders(formatted, positionPlaceholders);
+        formatted = ApplyPlaceholders(formatted, extraPlaceholders);
+        return formatted;
+    }
+
+    private static string ApplyPlaceholders(string template, (string Key, Func<string> ValueProvider)[] placeholders)
+    {
+        string formatted = template;
+        foreach (var (key, valueProvider) in placeholders)
+        {
+            string token = "{" + key + "}";
+            if (formatted.IndexOf(token, StringComparison.Ordinal) >= 0)
+                formatted = formatted.Replace(token, valueProvider());
+        }
+        return formatted;
     }
 
     // The entry point every Rule call (top-level Parse and child
