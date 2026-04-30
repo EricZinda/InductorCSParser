@@ -1,164 +1,51 @@
-using System;
 using NUnit.Framework;
 using InductorParser;
-using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 
 namespace InductorParser.Tests;
 
+// OneOrMore(inner) is a thin factory over BetweenInclusiveRule with
+// atLeast=1, atMost=int.MaxValue, traceName="OneOrMore". The shared
+// functional behavior (greedy match, deepest-failure-wins, WithError
+// surfacing, sealed-rule rejection, trace format) is covered by
+// BetweenInclusiveRuleTests. This fixture only verifies that the
+// OneOrMore factory wires those three values into the base correctly.
 [TestFixture]
 public class OneOrMoreRuleTests
 {
-    // Tree.ToString() assertions use PreserveAllSymbols so the
-    // Grapheme leaves (default FlattenType.Delete) stay in the tree and
-    // their text contributes to the concatenated view.
-    private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
-
     [Test]
-    public void OneOrMore_matches_a_single_occurrence()
+    public void OneOrMore_factory_wires_atLeast_1_and_atMost_int_max_with_OneOrMore_trace_name()
     {
-        var rule = OneOrMore(Grapheme('a'));
-        var result = rule.Parse("a", Debug());
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("a"));
-    }
-
-    [Test]
-    public void OneOrMore_matches_multiple_occurrences_greedily()
-    {
-        var rule = OneOrMore(Grapheme('a'));
-        var result = rule.Parse("aaaa", Debug());
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("aaaa"));
-    }
-
-    [Test]
-    public void OneOrMore_stops_at_first_inner_mismatch_and_surrounding_rule_continues()
-    {
-        // OneOrMore is greedy but stops as soon as its inner fails. Here it
-        // matches "aa", then the inner Grapheme('a') sees 'b' on the third try
-        // and fails. OneOrMore commits the two successful iterations and
-        // hands control to the next rule in the AllOf, which consumes "bb".
-        // (The top-level Parse requires consuming all input, so a follow-up
-        // rule is needed to pick up the remainder.)
-        var rule = AllOf(OneOrMore(Grapheme('a')), OneOrMore(Grapheme('b')));
-        var result = rule.Parse("aabb", Debug());
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("aabb"));
-    }
-
-    [Test]
-    public void OneOrMore_failure_without_WithError_falls_back_to_positional_message()
-    {
-        var rule = OneOrMore(Grapheme('a'));
-        var result = rule.Parse("bbb");
-
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Does.StartWith("Parse failed at offset 0"));
-    }
-
-    [Test]
-    public void OneOrMore_no_matches_reports_inner_rules_message()
-    {
-        // OneOrMore requires at least one match. The inner Grapheme('a') tries
-        // at offset 0, reads 'b', fails and records its WithError message.
-        // OneOrMore then records at the same offset with its own WithError,
-        // but the slot is already filled by the inner's more-specific
-        // message, so the inner wins (first-writer at equal depth).
-        var rule = OneOrMore(Grapheme('a').WithError("want 'a'"))
-                       .WithError("want at least one 'a'");
-
-        var result = rule.Parse("bbb");
-
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a'"));
-    }
-
-    [Test]
-    public void OneOrMore_outer_message_wins_when_inner_has_none()
-    {
-        // Without a WithError on the inner, Grapheme('a') records at offset 0
-        // with a null message. OneOrMore then records at offset 0 with its
-        // own WithError, which claims the empty slot via the equal-depth
-        // rule.
-        var rule = OneOrMore(Grapheme('a')).WithError("want at least one 'a'");
-
-        var result = rule.Parse("bbb");
-
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("want at least one 'a'"));
-    }
-
-    [Test]
-    public void OneOrMore_trace_success_produces_expected_output()
-    {
-        // Loop runs four inner attempts: three succeed on 'a','b','c',
-        // the fourth hits EOF and fails. The failing iteration's
-        // RecordFailure at position 3 is strictly deeper than the
-        // initial 0, so the deepest-failure trace fires.
+        // Trace label "OneOrMore" (instead of "BetweenInclusive[1..]")
+        // proves the named factory was used. Two SUCC iterations followed
+        // by a probe that fails on EOF and a final SUCC at count= 2 prove
+        // atMost = int.MaxValue, since the loop ran past the lower bound
+        // and only stopped when the inner rule failed.
         var sink = NewSink();
-        OneOrMore(OneOf(RuneSet.Ascii.Letters)).Parse("abc",
-            new ParseOptions { TraceSink = sink });
+        OneOrMore(Grapheme('a')).Parse("aa", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | OneOf: found 'a', wanted one of '[A-Z,a-z]'",
-            "      Lexer.Read: 'b', Consumed: 2",
-            "      SUCC | OneOf: found 'b', wanted one of '[A-Z,a-z]'",
-            "      Lexer.Read: 'c', Consumed: 3",
-            "      SUCC | OneOf: found 'c', wanted one of '[A-Z,a-z]'",
-            "      Lexer.Read: '<EOF>', Consumed: 3",
-            "      FAIL | OneOf: found '<EOF>', wanted one of '[A-Z,a-z]'",
-            "      Lexer.RecordFailure: new deepest failure at char 3",
-            "   SUCC | OneOrMore: count= 3"
+            "      SUCC | Grapheme: found 'a'",
+            "      Lexer.Read: 'a', Consumed: 2",
+            "      SUCC | Grapheme: found 'a'",
+            "      Lexer.Read: '<EOF>', Consumed: 2",
+            "      FAIL | Grapheme: found '<EOF>', wanted 'a'",
+            "      Lexer.RecordFailure: new deepest failure at char 2",
+            "   SUCC | OneOrMore: count= 2"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
 
     [Test]
-    public void OneOrMore_trace_failure_produces_expected_output()
+    public void OneOrMore_fails_with_zero_matches_proving_atLeast_is_1()
     {
-        // OneOrMore's first-rune lookahead skip proves Grapheme('a') can't match
-        // on input "z" without reading (peek 'z' not in {'a'}), so OneOrMore
-        // emits its own FAIL line with count= 0 and no inner Read/FAIL
-        // trace appears. See BetweenInclusiveRule's skip branch.
-        var sink = NewSink();
-        OneOrMore(Grapheme('a')).Parse("z", new ParseOptions { TraceSink = sink });
+        // The "OneOrMore"-specific bound is atLeast=1: zero matches must
+        // fail. This is what distinguishes OneOrMore from ZeroOrMore.
+        var result = OneOrMore(Grapheme('a')).Parse("z");
 
-        string expected = Lines(
-            "   FAIL | OneOrMore: count= 0"
-        );
-        Assert.That(sink.ToString(), Is.EqualTo(expected));
-    }
-
-    [Test]
-    public void Sealed_OneOrMore_rejects_Flatten()
-    {
-        var rule = OneOrMore(Grapheme('a'));
-        rule.Compile();
-        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
-    }
-
-    [Test]
-    public void Sealed_OneOrMore_rejects_WithError()
-    {
-        var rule = OneOrMore(Grapheme('a'));
-        rule.Compile();
-        Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
-    }
-
-    [Test]
-    public void Sealed_OneOrMore_rejects_As()
-    {
-        var rule = OneOrMore(Grapheme('a'));
-        rule.Compile();
-        Assert.Throws<InvalidOperationException>(() => rule.As("late"));
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
     }
 }

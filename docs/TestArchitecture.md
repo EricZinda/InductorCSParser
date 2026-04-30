@@ -42,6 +42,17 @@ public void Sealed_<RuleName>_rejects_Flatten()
 
 The base `Rule.ThrowIfSealed` enforces the seal, but subclasses that ever override `Flatten` / `WithError` / `As` (or factory paths that produce wrapper rules) can silently skip the check. Per-rule tests catch that drift in the rule's own file rather than letting one shared test in `Core/CompileTests.cs` cover everything. `LateBoundRule` is the exception: it rejects these modifiers *always*, not just post-compile, so its test file verifies the always-rejecting form instead.
 
+### Shared-Body Composites and Their Factory Derivatives
+
+Some rules share a single underlying class behind several public factories. Today this means `BetweenInclusiveRule`, which is the body behind `OneOrMore`, `ZeroOrMore`, `Optional`, `AtLeast`, `AtMost`, and `Exactly`. Each named factory just constructs a `BetweenInclusiveRule` with different `(atLeast, atMost)` bounds and a different trace name and returns it unchanged. None of the derivatives override anything.
+
+When a rule is shaped this way, the universal tests above all live in the shared body's fixture (`BetweenInclusiveRuleTests.cs`), and each derivative's fixture shrinks to a small set of tests that prove the factory wires the right bounds and trace name into the base. The pattern per derivative:
+
+- A trace test that parses input exercising the factory's specific bounds, asserting on the verbatim trace output. The named trace label (`OneOrMore`, `Exactly[3]`, etc.) proves the factory was used. The trace's `count= N` line and any probe-past-the-bound `Lexer.Read` lines prove the bounds were wired correctly.
+- One behavior test for the bound that's hardest to read off the trace alone (typically the lower-bound failure case for the rules that have one: `OneOrMore`, `AtLeast`, `Exactly`).
+
+Each derivative's fixture opens with a comment pointing at the shared body's fixture so the reader knows where to find the full coverage. Sealed-rule rejection, WithError surfacing, deepest-failure-wins, and the scanner-skip optimization all live in `BetweenInclusiveRuleTests` and are not duplicated per derivative.
+
 ## Per-Rule-Type Requirements
 
 ### Single-Token Primitive Rules
@@ -101,7 +112,7 @@ Required tests beyond universal coverage:
 - **First-child failure.** Pass input the first child rejects. Assert the failure position comes from the first child's pre-read offset (usually 0 for a top-level test). Use different `WithError` messages on each child and assert the *correct* child's message appears, not just "something failed."
 - **Later-child failure.** Pass input the first child (or first several) accept, then the next child rejects. Assert the position is the later child's pre-read offset. Again with per-child `WithError` to verify which child's message surfaces.
 - **Children that consume different amounts before failing.** Specifically for FirstOf, construct alternatives where different branches advance different distances before failing. Assert the deepest-advancing branch's message wins (deepest-failure-wins) and position.
-- **Edge cases specific to the composite.** `OneOrMore` needs a "no matches" test. `Optional` needs a "inner fails, Optional succeeds with empty" test plus the known-PEG-quirk test where an Optional's inner depth beats the required rule's shallower depth. `ZeroOrMore` has no failure path at all (it always succeeds) so it needs zero-match and N-match success tests but no error-position tests.
+- **Edge cases specific to the composite.** Cover the shapes a count rule can land in: zero matches with a 0-lower-bound (`Optional` / `ZeroOrMore` / `AtMost` shape), one-below-lower-bound failure (`OneOrMore` / `AtLeast` / `Exactly` shape), the always-succeeds case where `WithError` cannot surface, and the known-PEG-quirk case where a 0-lower-bound rule's inner failure depth beats a required outer rule's shallower depth. These tests live on `BetweenInclusiveRuleTests`, which is the shared body for all six count rules. See "Shared-Body Composites and Their Factory Derivatives" above.
 
 Example (from `AllOfRuleTests.cs`):
 

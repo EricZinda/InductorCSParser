@@ -1,169 +1,51 @@
-using System;
 using NUnit.Framework;
 using InductorParser;
-using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 
 namespace InductorParser.Tests;
 
+// Exactly(N, inner) is a thin factory over BetweenInclusiveRule with
+// atLeast=N, atMost=N, traceName="Exactly[N]". The shared functional
+// behavior (greedy match capped at the upper bound, failure when below
+// the lower bound, WithError surfacing, sealed-rule rejection, trace
+// format) is covered by BetweenInclusiveRuleTests. This fixture only
+// verifies that the Exactly factory wires those three values into the
+// base correctly.
 [TestFixture]
 public class ExactlyRuleTests
 {
-    // Tree.ToString() assertions use PreserveAllSymbols so the
-    // Grapheme leaves (default FlattenType.Delete) stay in the tree and
-    // their text contributes to the concatenated view.
-    private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
-
     [Test]
-    public void Exactly_matches_when_input_has_exactly_N()
+    public void Exactly_factory_wires_both_bounds_to_N_with_Exactly_trace_name()
     {
-        var rule = Exactly(3, Grapheme('a'));
-        var result = rule.Parse("aaa", Debug());
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("aaa"));
-    }
-
-    [Test]
-    public void Exactly_fails_when_input_has_fewer_than_N()
-    {
-        var rule = Exactly(3, Grapheme('a'));
-        var result = rule.Parse("aa");
-
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
-    }
-
-    [Test]
-    public void Exactly_stops_at_N_and_surrounding_rule_consumes_remainder()
-    {
-        // Exactly commits after the Nth match even when more would match.
-        // Here the AllOf requires the follow-up Grapheme('a') to pick up the
-        // fourth 'a'. If Exactly greedily consumed it, the AllOf would fail.
-        var rule = AllOf(Exactly(3, Grapheme('a')), Grapheme('a'));
-        var result = rule.Parse("aaaa", Debug());
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("aaaa"));
-    }
-
-    [Test]
-    public void Exactly_top_level_fails_when_input_has_more_than_N()
-    {
-        // Top-level Parse requires consuming all input, so the trailing
-        // 'a' past the exact count causes the parse to fail even though
-        // the Exactly rule itself matched three times.
-        var rule = Exactly(3, Grapheme('a'));
-        var result = rule.Parse("aaaa");
-
-        Assert.That(result.Success, Is.False);
-    }
-
-    [Test]
-    public void Exactly_zero_succeeds_with_no_matches()
-    {
-        var rule = AllOf(Exactly(0, Grapheme('a')), Grapheme('b'));
-        var result = rule.Parse("b", Debug());
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("b"));
-    }
-
-    [Test]
-    public void Exactly_zero_does_not_consume_matching_input()
-    {
-        var rule = AllOf(Exactly(0, Grapheme('a')), OneOrMore(Grapheme('a')));
-        var result = rule.Parse("aaa", Debug());
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("aaa"));
-    }
-
-    [Test]
-    public void Exactly_WithError_message_surfaces_on_failure()
-    {
-        var rule = Exactly(3, Grapheme('a'))
-            .WithError("need exactly 3 a's");
-        var result = rule.Parse("ab");
-
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need exactly 3 a's"));
-    }
-
-    [Test]
-    public void Exactly_factory_rejects_negative_count()
-    {
-        Assert.Throws<System.ArgumentOutOfRangeException>(
-            () => Exactly(-1, Grapheme('a')));
-    }
-
-    [Test]
-    public void Exactly_factory_rejects_null_inner()
-    {
-        Assert.Throws<System.ArgumentNullException>(
-            () => Exactly(3, null!));
-    }
-
-    [Test]
-    public void Exactly_trace_success_produces_expected_output()
-    {
-        // Three iterations succeed, the fourth inner attempt never runs
-        // because the loop's upper bound is also 3. So no EOF Read/FAIL
-        // trace appears, unlike OneOrMore/BetweenInclusive which probe
-        // past their successful count.
+        // Trace label "Exactly[3]" proves the named factory was used and
+        // the count was carried into the trace label. SUCC at count= 3
+        // with no fourth probe proves atMost = 3 (the loop stopped
+        // because count == atMost). The sibling test below verifies
+        // atLeast = 3 by failing when the count is below 3.
         var sink = NewSink();
-        Exactly(3, OneOf(RuneSet.Ascii.Letters)).Parse("abc",
-            new ParseOptions { TraceSink = sink });
+        Exactly(3, Grapheme('a')).Parse("aaa", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | OneOf: found 'a', wanted one of '[A-Z,a-z]'",
-            "      Lexer.Read: 'b', Consumed: 2",
-            "      SUCC | OneOf: found 'b', wanted one of '[A-Z,a-z]'",
-            "      Lexer.Read: 'c', Consumed: 3",
-            "      SUCC | OneOf: found 'c', wanted one of '[A-Z,a-z]'",
+            "      SUCC | Grapheme: found 'a'",
+            "      Lexer.Read: 'a', Consumed: 2",
+            "      SUCC | Grapheme: found 'a'",
+            "      Lexer.Read: 'a', Consumed: 3",
+            "      SUCC | Grapheme: found 'a'",
             "   SUCC | Exactly[3]: count= 3"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
 
     [Test]
-    public void Exactly_trace_failure_produces_expected_output()
+    public void Exactly_fails_when_count_is_below_required_count()
     {
-        // Lookahead skip proves Grapheme('a') can't match on 'z', so Exactly
-        // emits its FAIL line with count= 0 and no inner Read/FAIL appears.
-        var sink = NewSink();
-        Exactly(3, Grapheme('a')).Parse("z", new ParseOptions { TraceSink = sink });
+        // atLeast = 3: matching only twice is not enough. This is what
+        // distinguishes Exactly from AtMost.
+        var result = Exactly(3, Grapheme('a')).Parse("aa");
 
-        string expected = Lines(
-            "   FAIL | Exactly[3]: count= 0"
-        );
-        Assert.That(sink.ToString(), Is.EqualTo(expected));
-    }
-
-    [Test]
-    public void Sealed_Exactly_rejects_Flatten()
-    {
-        var rule = Exactly(3, Grapheme('a'));
-        rule.Compile();
-        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
-    }
-
-    [Test]
-    public void Sealed_Exactly_rejects_WithError()
-    {
-        var rule = Exactly(3, Grapheme('a'));
-        rule.Compile();
-        Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
-    }
-
-    [Test]
-    public void Sealed_Exactly_rejects_As()
-    {
-        var rule = Exactly(3, Grapheme('a'));
-        rule.Compile();
-        Assert.Throws<InvalidOperationException>(() => rule.As("late"));
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
     }
 }

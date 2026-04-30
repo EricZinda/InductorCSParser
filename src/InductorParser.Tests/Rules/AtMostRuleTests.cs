@@ -1,210 +1,56 @@
-using System;
 using NUnit.Framework;
 using InductorParser;
-using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 
 namespace InductorParser.Tests;
 
+// AtMost(N, inner) is a thin factory over BetweenInclusiveRule with
+// atLeast=0, atMost=N, traceName="AtMost[N]". The shared functional
+// behavior (greedy match up to the upper bound, always-succeeds
+// suppression of WithError, sealed-rule rejection, trace format) is
+// covered by BetweenInclusiveRuleTests. This fixture only verifies that
+// the AtMost factory wires those three values into the base correctly.
 [TestFixture]
 public class AtMostRuleTests
 {
-    // Tree.ToString() assertions use PreserveAllSymbols so the
-    // Grapheme leaves (default FlattenType.Delete) stay in the tree and
-    // their text contributes to the concatenated view.
-    private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
-
     [Test]
-    public void AtMost_matches_zero_occurrences()
+    public void AtMost_factory_wires_atLeast_0_and_atMost_N_with_AtMost_trace_name()
     {
-        // AtMost always succeeds (lower bound is 0), so a grammar that
-        // sees no matches still produces a successful parse. The
-        // follow-up rule in the AllOf has to supply whatever content
-        // actually shows up at this position.
-        var rule = AllOf(AtMost(3, Grapheme('a')), Grapheme('b'));
-        var result = rule.Parse("b", Debug());
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("b"));
-    }
-
-    [Test]
-    public void AtMost_matches_one_occurrence()
-    {
-        var rule = AllOf(AtMost(3, Grapheme('a')), Grapheme('b'));
-        var result = rule.Parse("ab", Debug());
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("ab"));
-    }
-
-    [Test]
-    public void AtMost_matches_up_to_N_occurrences()
-    {
-        var rule = AllOf(AtMost(3, Grapheme('a')), Grapheme('b'));
-        var result = rule.Parse("aaab", Debug());
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("aaab"));
-    }
-
-    [Test]
-    public void AtMost_stops_at_N_and_surrounding_rule_consumes_remainder()
-    {
-        // AtMost commits after the Nth match even when more would
-        // match. Here the AllOf requires the follow-up Grapheme('a') to
-        // pick up the fourth 'a'. Without the upper-bound stop the
-        // outer OneOrMore would swallow everything and the trailing
-        // 'b' would have nowhere to go.
-        var rule = AllOf(AtMost(3, Grapheme('a')), Grapheme('a'), Grapheme('b'));
-        var result = rule.Parse("aaaab", Debug());
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("aaaab"));
-    }
-
-    [Test]
-    public void AtMost_top_level_fails_when_more_than_N_and_input_not_fully_consumed()
-    {
-        // Top-level Parse requires the whole input be consumed. AtMost
-        // caps at N matches, so the tail ("aa") has no rule to match
-        // it and the overall parse fails.
-        var rule = AtMost(3, Grapheme('a'));
-        var result = rule.Parse("aaaaa");
-
-        Assert.That(result.Success, Is.False);
-    }
-
-    [Test]
-    public void AtMost_does_not_consume_non_matching_input()
-    {
-        // AtMost(3, a) on input "bbb" matches zero times and leaves
-        // the lexer where it started. The OneOrMore(b) then runs on
-        // the full "bbb".
-        var rule = AllOf(AtMost(3, Grapheme('a')), OneOrMore(Grapheme('b')));
-        var result = rule.Parse("bbb", Debug());
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("bbb"));
-    }
-
-    [Test]
-    public void AtMost_zero_succeeds_with_no_matches()
-    {
-        // AtMost(0, ...) is technically legal: upper and lower bound
-        // are both zero, so the rule always matches zero times and
-        // never consumes input. Weird but consistent.
-        var rule = AllOf(AtMost(0, Grapheme('a')), Grapheme('b'));
-        var result = rule.Parse("b", Debug());
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("b"));
-    }
-
-    [Test]
-    public void AtMost_zero_does_not_consume_matching_input()
-    {
-        var rule = AllOf(AtMost(0, Grapheme('a')), OneOrMore(Grapheme('a')));
-        var result = rule.Parse("aaa", Debug());
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("aaa"));
-    }
-
-    [Test]
-    public void AtMost_WithError_does_not_surface_because_rule_always_succeeds()
-    {
-        // AtMost always succeeds, so a WithError message on it never
-        // reaches the deepest-failure slot. Document the behavior by
-        // verifying it. A failing parse here fails on the outer AllOf,
-        // not on AtMost.
-        var rule = AllOf(
-            AtMost(3, Grapheme('a')).WithError("unreachable"),
-            Grapheme('z'));
-        var result = rule.Parse("aaab");
-
-        Assert.That(result.Success, Is.False);
-        // AtMost consumed three 'a's. The outer AllOf failed on Grapheme('z')
-        // against 'b' at offset 3.
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorMessage, Does.Not.Contain("unreachable"));
-    }
-
-    [Test]
-    public void AtMost_factory_rejects_negative_count()
-    {
-        Assert.Throws<System.ArgumentOutOfRangeException>(
-            () => AtMost(-1, Grapheme('a')));
-    }
-
-    [Test]
-    public void AtMost_factory_rejects_null_inner()
-    {
-        Assert.Throws<System.ArgumentNullException>(
-            () => AtMost(3, null!));
-    }
-
-    [Test]
-    public void AtMost_trace_success_produces_expected_output()
-    {
-        // Two matches, then the inner fails on 'c' (not a digit) and
-        // the AtMost loop stops. Loop upper bound is 3, so the probe
-        // that fails on 'c' happens before the third iteration gets a
-        // chance to run. AtMost reports count=2 on the success line.
+        // Trace label "AtMost[3]" proves the named factory was used and
+        // the upper bound was carried into the trace label. count= 3
+        // with no fourth probe inside the AtMost segment proves
+        // atMost = 3 (the loop stopped because count == atMost, not
+        // because the inner rule failed). The follow-up Grapheme('a')
+        // consuming the fourth 'a' confirms AtMost released control
+        // rather than greedily eating all four.
         var sink = NewSink();
-        AtMost(3, OneOf(RuneSet.Ascii.Digits)).Parse("12c",
-            new ParseOptions { TraceSink = sink });
+        AllOf(AtMost(3, Grapheme('a')), Grapheme('a'))
+            .Parse("aaaa", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
-            "      Lexer.Read: '1', Consumed: 1",
-            "      SUCC | OneOf: found '1', wanted one of '[0-9]'",
-            "      Lexer.Read: '2', Consumed: 2",
-            "      SUCC | OneOf: found '2', wanted one of '[0-9]'",
-            "      Lexer.Read: 'c', Consumed: 3",
-            "      FAIL | OneOf: found 'c', wanted one of '[0-9]'",
-            "      Lexer.RecordFailure: new deepest failure at char 2",
-            "   SUCC | AtMost[3]: count= 2"
+            "         Lexer.Read: 'a', Consumed: 1",
+            "         SUCC | Grapheme: found 'a'",
+            "         Lexer.Read: 'a', Consumed: 2",
+            "         SUCC | Grapheme: found 'a'",
+            "         Lexer.Read: 'a', Consumed: 3",
+            "         SUCC | Grapheme: found 'a'",
+            "      SUCC | AtMost[3]: count= 3",
+            "      Lexer.Read: 'a', Consumed: 4",
+            "      SUCC | Grapheme: found 'a'",
+            "   SUCC | AllOf: found 2"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
 
     [Test]
-    public void AtMost_trace_zero_match_still_succeeds()
+    public void AtMost_succeeds_with_zero_matches_proving_atLeast_is_0()
     {
-        // First-rune lookahead skip proves Grapheme('a') can't match on
-        // 'z', so the AtMost loop exits at count= 0. Since the lower
-        // bound is 0, AtMost still succeeds.
-        var sink = NewSink();
-        AtMost(3, Grapheme('a')).Parse("z", new ParseOptions { TraceSink = sink });
+        // atLeast = 0: when the inner rule can't match, AtMost still
+        // succeeds with no consumption. The follow-up Grapheme('b')
+        // picks up the input from the same position AtMost started at.
+        var result = AllOf(AtMost(3, Grapheme('a')), Grapheme('b')).Parse("b");
 
-        string expected = Lines(
-            "   SUCC | AtMost[3]: count= 0"
-        );
-        Assert.That(sink.ToString(), Is.EqualTo(expected));
-    }
-
-    [Test]
-    public void Sealed_AtMost_rejects_Flatten()
-    {
-        var rule = AtMost(3, Grapheme('a'));
-        rule.Compile();
-        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
-    }
-
-    [Test]
-    public void Sealed_AtMost_rejects_WithError()
-    {
-        var rule = AtMost(3, Grapheme('a'));
-        rule.Compile();
-        Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
-    }
-
-    [Test]
-    public void Sealed_AtMost_rejects_As()
-    {
-        var rule = AtMost(3, Grapheme('a'));
-        rule.Compile();
-        Assert.Throws<InvalidOperationException>(() => rule.As("late"));
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 }
