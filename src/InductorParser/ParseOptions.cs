@@ -109,4 +109,80 @@ public sealed class ParseOptions
     // position. The only behavior that changes is whether trailing
     // unconsumed input is treated as a parse failure.
     public bool AllowTrailingInput { get; set; } = false;
+
+    // Templates for the default error messages the parser produces when no
+    // .WithError("...") was attached at the deepest failure position, or
+    // when a budget abort (timeout, rule count, recursion depth,
+    // cancellation) ends the parse. Each template can include named
+    // placeholders that the parser substitutes when it builds the message.
+    // Placeholders are written as {name}. Unknown placeholders pass through
+    // verbatim, so a typo shows up in the output rather than throwing.
+    //
+    // Every template supports the same five position placeholders, named
+    // and numbered to match the ParseResult.ErrorXxx properties so a
+    // template author can mirror whatever unit the rest of their code
+    // already uses:
+    //   {charIndex}      ParseResult.ErrorCharIndex     (UTF-16 code units)
+    //   {runeIndex}      ParseResult.ErrorRuneIndex     (Unicode code points)
+    //   {graphemeIndex}  ParseResult.ErrorGraphemeIndex (StringInfo text elements)
+    //   {line}           ParseResult.ErrorLine          (zero-based, LSP convention)
+    //   {column}         ParseResult.ErrorColumn        (zero-based, in chars)
+    //
+    // Templates that mention an additional unit-specific placeholder:
+    //   PositionalErrorTemplate      {character}  (the unexpected input character)
+    //   TimeoutAbortTemplate         {timeout}    (options.Timeout as a TimeSpan string)
+    //   RuleCountLimitAbortTemplate  {limit}      (options.RuleCountLimit)
+    //   DepthLimitAbortTemplate      {limit}      (options.MaxDepth)
+    //
+    // The rune-index, grapheme-index, and line/column conversions each
+    // walk the input once, so they're computed lazily and only paid for
+    // when the corresponding placeholder appears in the template. The
+    // default templates only mention {charIndex}, so by default the
+    // O(n) scans never run.
+    //
+    // Defaults match the pre-template hardcoded strings exactly, so
+    // grammars and tests that didn't customize anything see the same
+    // output as before. Setting a template to null throws.
+    private string _positionalErrorTemplate =
+        "Parse failed at offset {charIndex}: unexpected '{character}'.";
+    public string PositionalErrorTemplate
+    {
+        get => _positionalErrorTemplate;
+        set => _positionalErrorTemplate = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    private string _endOfInputErrorTemplate = "Unexpected end of input.";
+    public string EndOfInputErrorTemplate
+    {
+        get => _endOfInputErrorTemplate;
+        set => _endOfInputErrorTemplate = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    private string _timeoutAbortTemplate = "Parse aborted: timeout exceeded.";
+    public string TimeoutAbortTemplate
+    {
+        get => _timeoutAbortTemplate;
+        set => _timeoutAbortTemplate = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    private string _ruleCountLimitAbortTemplate = "Parse aborted: rule-count limit exceeded.";
+    public string RuleCountLimitAbortTemplate
+    {
+        get => _ruleCountLimitAbortTemplate;
+        set => _ruleCountLimitAbortTemplate = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    private string _depthLimitAbortTemplate = "Parse aborted: maximum recursion depth exceeded.";
+    public string DepthLimitAbortTemplate
+    {
+        get => _depthLimitAbortTemplate;
+        set => _depthLimitAbortTemplate = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    private string _cancellationAbortTemplate = "Parse aborted: cancellation requested.";
+    public string CancellationAbortTemplate
+    {
+        get => _cancellationAbortTemplate;
+        set => _cancellationAbortTemplate = value ?? throw new ArgumentNullException(nameof(value));
+    }
 }
