@@ -84,6 +84,7 @@ public class OneOfRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void OneOf_trace_success_produces_expected_output()
     {
         var sink = NewSink();
@@ -97,6 +98,7 @@ public class OneOfRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void OneOf_trace_failure_produces_expected_output()
     {
         var sink = NewSink();

@@ -74,6 +74,7 @@ public class FirstOfRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void FirstOf_trace_success_produces_expected_output()
     {
         // Third alternative wins. Required-runes dispatch skips Grapheme('a') and
@@ -93,6 +94,7 @@ public class FirstOfRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void FirstOf_trace_failure_produces_expected_output()
     {
         // Required-runes dispatch rules out both Grapheme('a') and Grapheme('b') on

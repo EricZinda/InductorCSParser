@@ -142,6 +142,7 @@ public class LiteralRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void Literal_trace_success_produces_expected_output()
     {
         var sink = NewSink();
@@ -156,6 +157,7 @@ public class LiteralRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void Literal_trace_failure_produces_expected_output()
     {
         // Failure on the first token of the literal: deepest-failure stays
@@ -227,6 +229,7 @@ public class LiteralRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void LiteralIgnoreAsciiCase_trace_uses_LiteralIgnoreAsciiCase_label()
     {
         // The trace label must read "LiteralIgnoreAsciiCase", not "Literal",

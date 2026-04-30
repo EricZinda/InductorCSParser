@@ -89,6 +89,7 @@ public class RuneRunRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void RuneRun_trace_success_produces_expected_output()
     {
         var sink = NewSink();

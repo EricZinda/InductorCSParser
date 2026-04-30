@@ -126,6 +126,7 @@ public class NotRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void Not_trace_success_produces_expected_output()
     {
         // Not opens a transaction (depth=1). Grapheme inside opens its own
@@ -143,6 +144,7 @@ public class NotRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void Not_trace_failure_produces_expected_output()
     {
         var sink = NewSink();

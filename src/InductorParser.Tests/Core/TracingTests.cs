@@ -40,6 +40,7 @@ public class TracingTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void Rule_name_appears_in_trace_label()
     {
         // .As("settingName") sets the user label. Rule.TraceLabel joins
@@ -66,6 +67,7 @@ public class TracingTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void WithError_message_appears_in_quotes_after_trace_body_on_failure()
     {
         // .WithError() is the user-facing error message, not a rule
@@ -88,6 +90,7 @@ public class TracingTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void Lexer_Read_emits_one_line_per_token()
     {
         var sink = NewSink();
@@ -107,6 +110,7 @@ public class TracingTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void Deepest_failure_update_is_announced_in_trace()
     {
         // The deepest-failure trace fires only when the new position is
@@ -129,6 +133,7 @@ public class TracingTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void Transaction_depth_returns_to_zero_after_parse()
     {
         // Regression guard: Dispose must decrement the depth on every

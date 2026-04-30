@@ -50,6 +50,7 @@ public class EofRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void Eof_trace_success_produces_expected_output()
     {
         // EofRule doesn't open a transaction and top-level Parse doesn't
@@ -64,6 +65,7 @@ public class EofRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void Eof_trace_failure_produces_expected_output()
     {
         // Wrapped in AllOf so there's a transaction open when Eof fails,

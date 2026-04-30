@@ -75,6 +75,7 @@ public class AnyTokenRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void AnyToken_trace_success_produces_expected_output()
     {
         var sink = NewSink();
@@ -88,6 +89,7 @@ public class AnyTokenRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void AnyToken_trace_failure_produces_expected_output()
     {
         var sink = NewSink();
