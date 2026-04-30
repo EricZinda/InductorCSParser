@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text;
 using InductorParser.Lexing;
+using InductorParser.StateMachine;
 using InductorParser.SyntaxTree;
 using InductorParser.Tracing;
 
@@ -66,6 +67,88 @@ public abstract class Rule
     internal bool CannotMatchLookahead(int peekRune) =>
         Advance == Advance.Always && !FirstConsumedRunes.Contains(peekRune);
 
+    // Returns true when every successful match of this rule is guaranteed
+    // to consume text that contains the returned literal as a substring
+    // (case-folded if ignoreAsciiCase is true). Useful for callers that
+    // want to pre-filter input before invoking the parser: the rebar
+    // grep runner uses this to skip past lines that can't possibly match
+    // via one BCL substring search across the whole haystack, before
+    // line-by-line parsing kicks in. Mirrors the literal-prefilter
+    // analysis every serious regex engine does internally (rust/regex's
+    // 'literal' module, .NET's compiled regex, PCRE2's "studied"
+    // patterns).
+    //
+    // The derived literal is the longest contiguous run of fixed-text
+    // children at any position in the rule tree (LiteralRule,
+    // LiteralIgnoreAsciiCaseRule, TokenRule, OneOfRule with a single
+    // BMP char or a single ASCII letter pair like 'Nn'). Concatenated
+    // through AllOf and propagated through BetweenInclusive[atLeast>=1]
+    // and FlattenType wrappers. Returns false (literal == "") when no
+    // such required substring can be derived from the rule.
+    public bool TryGetRequiredLiteral(out string literal, out bool ignoreAsciiCase)
+    {
+        var result = ComputeRequiredLiteral();
+        if (result == null)
+        {
+            literal = "";
+            ignoreAsciiCase = false;
+            return false;
+        }
+        literal = result.Value.Text;
+        ignoreAsciiCase = result.Value.IgnoreCase;
+        return literal.Length > 0;
+    }
+
+    // Returns true when every successful match of this rule is guaranteed
+    // to contain at least one of the returned literals as a substring. Use
+    // when no single shared literal can be derived (TryGetRequiredLiteral
+    // returns false) but the rule has a small fixed set of literal-prefix
+    // alternatives. The AWS-keys grammar's FirstOf("ASIA"|"AKIA"|"AROA"|"AIDA")
+    // is the motivating shape: every match contains exactly one of those
+    // four literals, so a multi-substring pre-scan still skips lines that
+    // can't possibly match.
+    //
+    // <paramref name="maxAlternatives"/> caps the returned set size. The
+    // caller picks a cap that makes a multi-substring scan worth it
+    // (8-16 is reasonable for the rebar grep runner; a 2000-literal
+    // dictionary would have selectivity at most 1 in 26 from the
+    // first-rune set and isn't worth pre-filtering with this analysis).
+    // Returns false when no analyzable set exists or when it exceeds the
+    // cap.
+    public bool TryGetRequiredLiteralAlternatives(
+        int maxAlternatives,
+        out IReadOnlyList<(string Text, bool IgnoreCase)> alternatives)
+    {
+        var result = ComputeRequiredLiteralAlternatives();
+        if (result == null || result.Count == 0 || result.Count > maxAlternatives)
+        {
+            alternatives = Array.Empty<(string Text, bool IgnoreCase)>();
+            return false;
+        }
+        alternatives = result;
+        return true;
+    }
+
+    // Subclasses override to declare what fixed text every successful
+    // match consumes. Default is "no required literal." See the
+    // matching override on each composite / leaf rule for specifics.
+    internal virtual (string Text, bool IgnoreCase)? ComputeRequiredLiteral() => null;
+
+    // Like ComputeRequiredLiteral, but returns a set of literals when the
+    // rule's structure guarantees every match contains at least one. The
+    // canonical shape this captures is FirstOf(literal-branches): every
+    // branch must succeed via its own literal, so the union across branches
+    // is required. AllOf surfaces a multi-literal child if it has one.
+    internal virtual IReadOnlyList<(string Text, bool IgnoreCase)>? ComputeRequiredLiteralAlternatives() => null;
+
+    // Subclasses override when they always consume a fixed-length run
+    // of text. AllOf uses this to concatenate consecutive fixed-text
+    // children into one required literal. A null return means "this
+    // rule's match length isn't fixed at compile time" — the AllOf
+    // walker breaks the concatenation run there and recurses for a
+    // standalone candidate instead.
+    internal virtual (string Text, bool IgnoreCase)? ComputeConcatenableText() => null;
+
     // Lazily-built reverse index from SymbolId to human-readable name
     // for every rule reachable from this root. Populated on the first
     // NameOf call. Grammars that never ask never pay the allocation.
@@ -91,7 +174,7 @@ public abstract class Rule
     // in the constructor. The "Rule" suffix is stripped so "AllOfRule"
     // becomes "AllOf", "GraphemeRule" becomes "Grapheme", matching the trace
     // naming convention. Reading this is a field load which is cheaper than
-    // calling GetType().Name on every trace emission. Works under
+    // calling GetType().Name on every trace output. Works under
     // IL2CPP because it's baked in at construction time, not looked
     // up via name-based reflection.
     //
@@ -108,6 +191,15 @@ public abstract class Rule
     // AppendErrorMessage) rather than as a label prefix.
     private string BuildTraceLabel() =>
         Name != null ? $"{Name}:{_ruleTraceName}" : _ruleTraceName;
+
+    // Internal accessor so the state-machine evaluator can label its
+    // Call / Return trace lines with the same "{Name}:{ruleClassName}"
+    // string the recursive engine uses. The SM emits its own trace
+    // lines from Stepper.Step_Call / Step_ReturnSuccess /
+    // Step_ReturnFailure rather than going through TryParseRule, so it
+    // needs the label without going through the protected TraceSuccess
+    // / TraceFailure helpers.
+    internal string TraceLabel => BuildTraceLabel();
 
     // If the rule has .WithError(msg) set, append it in quotes after
     // the trace body so a reader sees both what the rule actually
@@ -209,7 +301,7 @@ public abstract class Rule
     // BetweenInclusiveRule's bounds) into the label. No ThrowIfSealed check
     // here because at constructor time the rule isn't reachable from
     // grammar code yet, so it can't have been compiled and sealed.
-    // Trace emission reads _ruleTraceName as a field load, so renaming
+    // Trace output reads _ruleTraceName as a field load, so renaming
     // here stays a one-time cost.
     protected void SetTraceName(string name) => _ruleTraceName = name;
 
@@ -217,7 +309,7 @@ public abstract class Rule
     // of "AllOfRule". GetType() in a base constructor returns the
     // derived runtime type (C# guarantee), so this resolves correctly
     // for every subclass. Called once per rule instance in the ctor.
-    // The result is cached in _ruleTraceName so trace emission just
+    // The result is cached in _ruleTraceName so trace output just
     // reads a field.
     private static string DeriveRuleTraceName(Type t)
     {
@@ -422,7 +514,24 @@ public abstract class Rule
     // to switch to the RuneLexer or change other parse-time settings.
     public ParseResult Parse(string input) => Parse(input, new ParseOptions());
 
-    public ParseResult Parse(string input, ParseOptions options)
+    // Dispatcher. Routes to the recursive evaluator by default. The
+    // test suite can flip the routing process-wide via
+    // ParseOptions.DefaultUseStateMachine, or per-call via
+    // ParseOptions.UseStateMachine, so the same fixtures can run
+    // through either engine without per-test rewrites. Outside callers
+    // who explicitly want the state machine should call
+    // StateMachineParser.Parse directly; the routing knob is internal
+    // test plumbing, not a documented user feature.
+    public ParseResult Parse(string input, ParseOptions options) =>
+        options.ResolveUseStateMachine()
+            ? StateMachineParser.Parse(this, input, options)
+            : ParseRecursive(input, options);
+
+    // The recursive evaluator's body. Compare fixtures that need a
+    // guaranteed recursive-engine baseline (so the SM run can compare
+    // its own output against a stable control) call this directly
+    // instead of going through Parse.
+    internal ParseResult ParseRecursive(string input, ParseOptions options)
     {
         Compile();
 
@@ -470,13 +579,13 @@ public abstract class Rule
         {
             var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
             int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, options.NormalizeInput);
-            return ParseResult.Failed(failurePos, BuildErrorMessage(lexer, pos, failurePos, input, options), input, this);
+            return ParseResult.Failed(failurePos, BuildErrorMessage(lexer.DeepestFailureMessage, pos, parseInput, failurePos, input, options), input, this);
         }
         if (!options.AllowTrailingInput && !lexer.IsEof)
         {
             var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
             int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, options.NormalizeInput);
-            return ParseResult.Failed(failurePos, BuildErrorMessage(lexer, pos, failurePos, input, options), input, this);
+            return ParseResult.Failed(failurePos, BuildErrorMessage(lexer.DeepestFailureMessage, pos, parseInput, failurePos, input, options), input, this);
         }
         // Three success shapes:
         //   * Preserve root: result is its wrapper Symbol, rootList is empty.
@@ -493,7 +602,7 @@ public abstract class Rule
         return ParseResult.Succeeded(symbols, input, this);
     }
 
-    private static string BuildBudgetMessage(ParseOutcome outcome, int abortPos, string input, ParseOptions options)
+    internal static string BuildBudgetMessage(ParseOutcome outcome, int abortPos, string input, ParseOptions options)
     {
         switch (outcome)
         {
@@ -521,7 +630,16 @@ public abstract class Rule
         }
     }
 
-    private static string BuildErrorMessage(Lexer lexer, int pos, int failurePos, string input, ParseOptions options)
+    // Both engines (recursive and state-machine) end up here for the
+    // generic-failure path so default error messages stay consistent
+    // and ParseOptions templates apply uniformly. customMessage is the
+    // deepest-failure message recorded by the engine (lexer.DeepestFailureMessage
+    // for the recursive engine, machine.DeepestFailureMessage for the SM);
+    // posInParseInput indexes into parseInput (the post-normalization input)
+    // for the EOF check and the {character} substitution; failurePos is
+    // the same position translated back to the original input for the
+    // user-facing placeholders.
+    internal static string BuildErrorMessage(string? customMessage, int posInParseInput, string parseInput, int failurePos, string input, ParseOptions options)
     {
         // Prefer the error message the user attached to the rule that failed
         // at the deepest position (via .WithError("...")). That's the
@@ -529,23 +647,24 @@ public abstract class Rule
         // the spots most likely to be where a user goes wrong. Fall back to
         // the generic position-based message only when no rule at the
         // deepest failure had a WithError set.
-        if (lexer.DeepestFailureMessage is { } custom)
-            return custom;
+        if (customMessage != null)
+            return customMessage;
 
-        // pos == input.Length happens when the grammar wanted more characters
-        // than the input had. Example: parsing "setting = 5" against a grammar
-        // that requires a trailing ';'. The lexer reaches EOF, the rule for
-        // ';' fails and records the failure at the end position. We have to
-        // handle this both to give a useful error message ("end of input"
-        // rather than "unexpected ';'" pointing at a character that isn't
-        // there) and to avoid the Input[pos] indexing on the next line
-        // throwing IndexOutOfRangeException.
-        if (pos >= lexer.Input.Length)
+        // posInParseInput == parseInput.Length happens when the grammar
+        // wanted more characters than the input had. Example: parsing
+        // "setting = 5" against a grammar that requires a trailing ';'.
+        // The lexer reaches EOF, the rule for ';' fails and records the
+        // failure at the end position. We have to handle this both to
+        // give a useful error message ("end of input" rather than
+        // "unexpected ';'" pointing at a character that isn't there) and
+        // to avoid the parseInput[pos] indexing on the next line throwing
+        // IndexOutOfRangeException.
+        if (posInParseInput >= parseInput.Length)
             return FormatTemplate(options.EndOfInputErrorTemplate,
                 PositionPlaceholders(failurePos, input));
         return FormatTemplate(options.PositionalErrorTemplate,
             PositionPlaceholders(failurePos, input),
-            ("character", () => lexer.Input[pos].ToString()));
+            ("character", () => parseInput[posInParseInput].ToString()));
     }
 
     // The five position placeholders shared by every default template.

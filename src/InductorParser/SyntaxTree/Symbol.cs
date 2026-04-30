@@ -60,6 +60,14 @@ public sealed class Symbol
     private readonly ReadOnlyMemory<char> _leafChars;
     private readonly bool _isLeaf;
 
+    // Engine-internal accessor used by StateMachineParser's OutputOps
+    // walkers when a Prebuilt op (BridgeToRecursive output) lands inside
+    // a match span. Combined with MemoryMarshal.TryGetString, callers
+    // can recover the leaf's offset into the original input string and
+    // contribute its bounds to the enclosing match's (offset, length).
+    // Empty for composite symbols.
+    internal ReadOnlyMemory<char> LeafMemory => _leafChars;
+
     public SymbolId Id { get; }
     public FlattenType FlattenType { get; }
     public IReadOnlyList<Symbol> Children { get; }

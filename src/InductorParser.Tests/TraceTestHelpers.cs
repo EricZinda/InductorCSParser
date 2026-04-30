@@ -19,7 +19,7 @@ internal static class TraceTestHelpers
 
     // Concatenate lines with "\n" separators plus a trailing "\n",
     // matching what TextWriter.WriteLine produces when NewLine is "\n".
-    // The trailing "\n" matters: the last trace emission ends with a
+    // The trailing "\n" matters: the last trace output ends with a
     // newline, so the sink's final character is always "\n".
     public static string Lines(params string[] lines)
     {

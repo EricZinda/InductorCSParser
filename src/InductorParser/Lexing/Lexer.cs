@@ -13,7 +13,12 @@ public abstract class Lexer
     // object and tracks it. Everything else is stack-resident structs that point back into
     // this string. The GC never sees the Tokens or ReadOnlySpan<char>s, so they never have
     // to be tracked or reclaimed.
-    private readonly string _input;
+    // _input, _endPosition, _traceSink, _traceLevel are conceptually
+    // readonly but lose the C# `readonly` keyword so the state-machine
+    // evaluator's per-thread Lexer pool can call ResetForReuse() to
+    // re-bind a previously-used Lexer instance to a new input string.
+    // Constructors still treat them as set-once.
+    private string _input;
     // Exclusive upper bound on _position. Defaults to _input.Length (a
     // lexer reads to end of input). Sub-lexer constructors bound this to
     // a sub-range of the shared input string so rules like WithinGrapheme
@@ -21,7 +26,7 @@ public abstract class Lexer
     // allocating a Substring copy. Tokens and positions still use
     // absolute offsets into _input, so outer error-position reporting
     // works without translation.
-    private readonly int _endPosition;
+    private int _endPosition;
     private int _position;
     private int _deepestFailure;
     private string? _deepestFailureMessage;
@@ -29,8 +34,8 @@ public abstract class Lexer
     // Trace destination and verbosity. Null _traceSink means tracing is off.
     // When set, every rule, Lexer.Read, and deepest-failure update writes
     // one line per event.
-    private readonly TextWriter? _traceSink;
-    private readonly TraceLevel _traceLevel;
+    private TextWriter? _traceSink;
+    private TraceLevel _traceLevel;
 
     private int _transactionDepth;
 
@@ -96,6 +101,47 @@ public abstract class Lexer
     public string Input => _input;
     public int Position => _position;
     public int DeepestFailure => _deepestFailure;
+
+    // Direct write-access to the read cursor for the state-machine
+    // evaluator's backtrack-rollback path. Outside that path,
+    // BeginTransaction is the right mechanism. The state machine
+    // already tracks its own backtrack frames and restores positions
+    // explicitly on failure, so it doesn't need the Transaction
+    // wrapper's commit / rollback machinery.
+    internal void SetPositionUnchecked(int position) => _position = position;
+
+    // Re-bind a previously-used Lexer to a new input string and reset
+    // all per-parse state. Lets the state-machine evaluator pool
+    // RuneLexer / GraphemeLexer instances per thread instead of
+    // allocating a fresh class per Parse call. Validates the same
+    // input bounds the constructor does so a misuse fails loud
+    // rather than producing a corrupt parse.
+    //
+    // After ResetForReuse, the caller is expected to invoke
+    // ConfigureBudgets to set the budget limits and PreserveAllSymbols
+    // for the new parse. The reset clears the budget counters so a
+    // pooled lexer can't leak rule-invocation count from the previous
+    // parse.
+    internal void ResetForReuse(string input, TextWriter? traceSink, TraceLevel traceLevel)
+    {
+        if (input == null) throw new ArgumentNullException(nameof(input));
+        _input = input;
+        _position = 0;
+        _endPosition = input.Length;
+        _traceSink = traceSink;
+        _traceLevel = traceLevel;
+        _deepestFailure = 0;
+        _deepestFailureMessage = null;
+        _transactionDepth = 0;
+        _ruleInvocations = 0;
+        _ruleDepth = 0;
+        _ruleCountLimit = 0;
+        _maxDepth = 0;
+        _timeout = TimeSpan.Zero;
+        _stopwatch = null;
+        _cancellation = null;
+        PreserveAllSymbols = false;
+    }
 
     // The error message associated with the deepest failure seen so far
     // if one was set.
@@ -346,14 +392,17 @@ public abstract class Lexer
         // whole literal could match at the current lexer position. The
         // outer loop will then call the real rule, preserving the same tree
         // and capture behavior as the unoptimized parse.
+        //
+        // Single-literal only. The runtime's optimized substring search
+        // jumps straight to the next full-literal candidate instead of
+        // stopping at every matching first character. Multi-literal
+        // alternates use the IndexOfAny path below: an experiment that
+        // enabled the cached path for them measured 23x slower on the
+        // rebar Sherlock haystack because the BCL's IndexOfAny is SIMD-
+        // tuned for "any of these chars" while N separate IndexOf calls
+        // are not. See src/Benchmarks/Rebar/results/multi-literal-cache-rebar-2026-04-28.csv.
         if (this is RuneLexer && literalPositions != null && literals.Length == 1)
         {
-            // For a single literal, the best prefilter is the runtime's
-            // optimized substring search. It jumps straight to the next
-            // full-literal candidate instead of visiting every matching
-            // first character. Literal alternates use the IndexOfAny path
-            // below; repeatedly running one substring search per alternate
-            // after every match is slower on the Rebar Sherlock haystack.
             while (_position < _endPosition)
             {
                 int found = FindNextLiteralCandidate(literals, literalPositions, _input, _position, _endPosition);
@@ -587,6 +636,48 @@ public abstract class Lexer
     internal void ExitRule()
     {
         _ruleDepth--;
+    }
+
+    // State-machine equivalent of EnterRule. The recursive engine maintains
+    // depth in _ruleDepth via paired EnterRule / ExitRule. The state
+    // machine already tracks call depth in Machine.CallTop and that
+    // counter is naturally restored when a backtrack frame truncates the
+    // call stack, so the SM has no place to call ExitRule. Instead the SM
+    // hands its current call depth in directly. This skips the _ruleDepth
+    // bookkeeping (which the SM doesn't use) and runs the same
+    // RuleCountLimit / Timeout / Cancellation periodic checks the
+    // recursive path runs.
+    //
+    // On a BridgeToRecursive frame the bridged Rule.TryParse calls the
+    // standard EnterRule on the way in, so depth there is tracked by the
+    // recursive engine relative to the bridge entry. The SM-side Call
+    // dispatch never fires for the bridge opcode so there's no double
+    // count.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void EnterRuleAtDepth(int depth)
+    {
+        if (_maxDepth > 0 && depth > _maxDepth)
+            throw new ParseBudgetExceeded(ParseOutcome.DepthLimitExceeded);
+
+        _ruleInvocations++;
+        if ((_ruleInvocations & BudgetCheckMask) == 0)
+            CheckPeriodicBudgets();
+    }
+
+    // Counter-only tick used by the state machine on opcodes that do real
+    // work but don't enter a cyclic rule (so they don't go through Call /
+    // EnterRuleAtDepth). Skips the depth check; the SM already enforces
+    // MaxDepth at Step_Call time and fused-scan / backtrack-push opcodes
+    // don't grow call depth. The periodic RuleCountLimit / Timeout /
+    // Cancellation check fires at the same 1024 boundary the recursive
+    // engine uses, so budget aborts on the inlined SM path share the
+    // same trip mechanism.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void TickPeriodicBudget()
+    {
+        _ruleInvocations++;
+        if ((_ruleInvocations & BudgetCheckMask) == 0)
+            CheckPeriodicBudgets();
     }
 
     // Off the hot path on purpose: only invoked once every

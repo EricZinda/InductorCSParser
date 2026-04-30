@@ -46,10 +46,10 @@ public class JsonString : IJson
     // of whatever decoding the grammars do, otherwise round-trip verification
     // in the spot-check fails. Scope: the escapes the input generator can
     // emit (quote, backslash, and the five C-style control escapes). No \/
-    // and no \uXXXX, because Newtonsoft's canonical output of a decoded
-    // value won't re-emit those forms even if the input had them, so
-    // including them would make the round-trip non-deterministic for
-    // Newtonsoft specifically.
+    // and no \uXXXX. The constraint is preserved here even though it was
+    // originally added because Newtonsoft canonicalized those forms; the
+    // input generator hasn't been re-evaluated since Newtonsoft was
+    // removed, and tightening it now would change what the bench measures.
     public static string Escape(string value)
     {
         var sb = new StringBuilder(value.Length);
