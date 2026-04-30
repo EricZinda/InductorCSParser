@@ -3,31 +3,44 @@ using static InductorParser.Rules;
 
 namespace InductorParser.Tests;
 
-// Backlog grammars: PEG replacements for the six format-detector regexes
-// in MergeableBacklog/src/formats/*.ts. Mirrors these sources:
+// Background: MergeableBacklog is a VSCode extension that splits a single
+// backlog.md into one file per item, so multiple people can edit the
+// backlog without git merge conflicts. To migrate an existing backlog.md,
+// the extension first has to figure out what format the file is in (H1
+// sections, H2 sections, bullet list, etc.). Today that detection lives
+// in a handful of regexes in TypeScript.
 //
-//   H1:         /^#(?!#)\s?(.*)$/        h1HeadingDetector.ts line 89
-//   H2:         /^##(?!#)\s?(.*)$/       h2HeadingDetector.ts line 87
-//   Bullet:     /^[-*+]\s?(.*)$/         bulletDetector.ts line 96
-//   HrRun:      /^[-*+]{3,}$/            bulletDetector.ts line 88
-//   HrSpaced:   /^[-*+]( [-*+]){2,}$/    bulletDetector.ts line 88
-//   Paragraph:  /\n\s*\n/                paragraphDetector.ts line 90
+// This file ports those six format-detector regexes to InductorParser
+// rules. It's a real-world workload that's small enough to read in
+// one sitting but still exercises what you actually hit when replacing
+// regex with a parser combinator: anchoring, negative lookahead,
+// greediness, and end-of-input handling. The six regexes are:
+//
+//   H1:         /^#(?!#)\s?(.*)$/        a single # heading line
+//   H2:         /^##(?!#)\s?(.*)$/       a ## heading line
+//   Bullet:     /^[-*+]\s?(.*)$/         a bullet line ("- foo", "* foo", "+ foo")
+//   HrRun:      /^[-*+]{3,}$/            a horizontal rule made of repeated chars ("---", "***")
+//   HrSpaced:   /^[-*+]( [-*+]){2,}$/    a horizontal rule with spaces ("- - -", "* * *")
+//   Paragraph:  /\n\s*\n/                a blank-line paragraph break, anywhere in the input
 //
 // The first five are anchored (^...$) so they map to an AllOf(...) ending
-// in Eof(). Paragraph is unanchored. JS .test() returns true if the
-// pattern occurs anywhere. The PEG equivalent scans forward with
+// in Eof(). Paragraph is unanchored, meaning it should match anywhere in
+// the input. To express that, the rule scans forward with
 // AllOf(ZeroOrMore(AllOf(Not(target), AnyToken())), target, ZeroOrMore(AnyToken()))
-// and relies on lexer.IsEof for Parse success, so the trailing
-// ZeroOrMore(AnyToken()) isn't decorative. It's what lets success happen
+// and relies on lexer.IsEof for Parse to report success, so the trailing
+// ZeroOrMore(AnyToken()) gets used. It's what lets success happen
 // after the target fires mid-string.
 //
-// One subtle point on the paragraph split. JS regex \n\s*\n is greedy
-// with full backtracking, which lets \s* briefly swallow the terminating
-// \n and then give it back. A PEG ZeroOrMore can't give back, so we
-// restrict the middle to non-newline whitespace. The two are equivalent
-// for IsMatch because any input where \n\s*\n matches contains some
-// adjacent pair \n ...nonNL ws... \n somewhere, which the restricted
-// PEG form finds.
+// One subtle point on the paragraph split. The regex \n\s*\n looks like
+// it should map straight to a literal \n, ZeroOrMore(whitespace), and
+// another literal \n. But \s includes \n itself, and regex backtracking
+// lets \s* briefly swallow the terminating \n and then give it back so
+// the trailing literal \n can still match. A ZeroOrMore in an
+// InductorParser rule can't give back. Once it consumes a \n, it's gone.
+// So we restrict the middle to non-newline whitespace instead. The two
+// are equivalent for IsMatch because any input where \n\s*\n matches
+// contains some adjacent pair \n ...nonNL ws... \n somewhere, which the
+// restricted rule form finds.
 public static class BacklogGrammar
 {
     // .* in the JS regexes matches any char except line terminators.
@@ -81,7 +94,7 @@ public static class BacklogGrammar
     );
 
     // \n\s*\n, unanchored. Middle restricted to non-newline whitespace
-    // so the greedy PEG ZeroOrMore can't run past the terminating \n.
+    // so the greedy ZeroOrMore can't run past the terminating \n.
     // See the class comment above for why this preserves equivalence.
     //
     // WARNING: LF-only on purpose. The source regex in MergeableBacklog

@@ -120,7 +120,7 @@ public static class StringLiteralGrammars
     //
     // Ordering notes:
     //   * octal first among numeric forms: greedily consumes 1-3
-    //     octal digits after the backslash. PEG is first-match-
+    //     octal digits after the backslash. Inductor Parser is first-match-
     //     wins, but BetweenInclusive is greedy inside the branch,
     //     which matches Python's "up to 3 digits" rule.
     //   * simple last: catches everything else in the allowed set.

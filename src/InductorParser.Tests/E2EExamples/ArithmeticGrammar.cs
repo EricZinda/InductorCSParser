@@ -20,11 +20,8 @@ namespace InductorParser.Tests;
 // flattened children are a clean alternation of factor-payloads and
 // mulOp leaves with no anonymous wrapper layers in between.
 //
-// The addOp / mulOp rules are OneOf (not Grapheme) so the matched operator
-// rune survives as a FlattenType.Preserve leaf and ToString() gives back
-// "+", "-", "*", or "/". Swap OneOf for Grapheme and the leaf vanishes
-// under default FlattenType.Delete, and the evaluator has nothing to
-// pattern-match on.
+// AddOp and MulOp use OneOf so the matched rune survives as a leaf and
+// ToString() returns "+", "-", "*", or "/" for the evaluator to dispatch on.
 public static class ArithmeticGrammar
 {
     public static readonly Rule Number;
@@ -48,21 +45,21 @@ public static class ArithmeticGrammar
             Number,
             AllOf(
                 Grapheme('('),
-                OptionalWhitespace(),
+                Optional(Whitespace()),
                 exprForward,
-                OptionalWhitespace(),
+                Optional(Whitespace()),
                 Grapheme(')')
             )
         );
 
         Term = AllOf(
             factor,
-            ZeroOrMore(AllOf(OptionalWhitespace(), MulOp, OptionalWhitespace(), factor))
+            ZeroOrMore(AllOf(Optional(Whitespace()), MulOp, Optional(Whitespace()), factor))
         ).As("term").Preserve();
 
         Expr = AllOf(
             Term,
-            ZeroOrMore(AllOf(OptionalWhitespace(), AddOp, OptionalWhitespace(), Term))
+            ZeroOrMore(AllOf(Optional(Whitespace()), AddOp, Optional(Whitespace()), Term))
         ).As("expr").Preserve();
 
         exprForward.Bind(Expr);
@@ -71,7 +68,7 @@ public static class ArithmeticGrammar
         // strict Eof so "1+2 garbage" fails instead of silently parsing
         // the "1+2" prefix. Expr itself has no Eof so the parenthesized
         // factor can reuse it recursively.
-        Document = AllOf(OptionalWhitespace(), Expr, OptionalWhitespace(), Eof());
+        Document = AllOf(Optional(Whitespace()), Expr, Optional(Whitespace()), Eof());
         Document.Compile();
     }
 }

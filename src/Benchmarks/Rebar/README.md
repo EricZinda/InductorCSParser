@@ -71,7 +71,7 @@ current hand-translated InductorParser subset is text-oriented.
 
 The runner doesn't compile regex strings. It can't, because InductorParser
 isn't a regex engine. It's a grammar API where you build `Rule` objects in C#
-out of combinators (`Literal`, `FirstOf`, `AllOf`, `RuneRun`, and so on). For every
+out of combinators (`Literal`, `FirstOf`, `AllOf`, `ScanWhile`, and so on). For every
 rebar case the runner supports, somebody sat down and wrote a C# grammar that
 matches the same things the regex would match on the same haystack. That's
 what "hand translation" means here. The dispatcher is a `switch` on the rebar

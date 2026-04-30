@@ -24,35 +24,36 @@ namespace InductorParser.Tests;
 public class DiscardedAtParseTimeTests
 {
     [Test]
-    public void OptionalWhitespace_compile_then_parse_whitespace_produces_no_whitespace_nodes()
+    public void Optional_Whitespace_compile_then_parse_whitespace_produces_no_whitespace_nodes()
     {
         // A specific guarantee the performance story depends on: every
-        // OptionalWhitespace match, with or without actual whitespace in
-        // the input, costs zero wrapper and zero leaf Symbol allocations
+        // Optional(Whitespace()) match, with or without actual whitespace
+        // in the input, costs zero wrapper and zero leaf Symbol allocations
         // that survive into the tree.
-        var rule = OptionalWhitespace();
+        var rule = Optional(Whitespace());
         rule.Compile();
 
         var result = rule.Parse("   ");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
 
-        // Nothing survives into the tree. OptionalWhitespace is a
-        // FlattenType.Flatten wrapper around FlattenType.Delete
-        // children, so the parse-time filter drops every whitespace
-        // rune and the root's Symbols list comes back empty.
+        // Nothing survives into the tree. Optional defaults to
+        // FlattenType.Flatten and Whitespace() is FlattenType.Delete,
+        // so the parse-time filter drops the inner Delete-typed
+        // Whitespace match and the surrounding Optional has nothing
+        // to lift, leaving the root's Symbols list empty.
         Assert.That(result.Symbols, Is.Empty);
     }
 
     [Test]
-    public void OptionalWhitespace_inside_composite_leaves_no_whitespace_children()
+    public void Optional_Whitespace_inside_composite_leaves_no_whitespace_children()
     {
-        // The realistic JSON-style shape: OptionalWhitespace sits between
+        // The realistic JSON-style shape: Optional(Whitespace()) sits between
         // two tokens inside an AllOf. The top-level Symbols list should hold
         // the two token leaves only, with the whitespace contributing
         // nothing. OneOf has FlattenType.Preserve so the token leaves
         // survive. Their Id is the code point, so we assert on that.
         var letter = OneOf(RuneSet.Ascii.Letters);
-        var rule = AllOf(letter, OptionalWhitespace(), letter);
+        var rule = AllOf(letter, Optional(Whitespace()), letter);
         var result = rule.Parse("a   b");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -60,8 +61,8 @@ public class DiscardedAtParseTimeTests
         Assert.That(result.Symbols[0].Id.Value, Is.EqualTo('a'));
         Assert.That(result.Symbols[1].Id.Value, Is.EqualTo('b'));
         // Concatenated text reflects what's actually in the tree: the two
-        // letter leaves. The OptionalWhitespace was filtered at parse time,
-        // so its text doesn't appear here. Callers who want the full
+        // letter leaves. The Optional(Whitespace()) was filtered at parse
+        // time, so its text doesn't appear here. Callers who want the full
         // matched input should keep their own reference to it or run with
         // PreserveAllSymbols=true.
         Assert.That(result.ToString(), Is.EqualTo("ab"));
@@ -99,7 +100,7 @@ public class DiscardedAtParseTimeTests
         // the full PrintTree rendering in one shot is easier to read
         // than per-child assertions, and any drift shows up as a
         // string diff naming the exact node that moved.
-        var rule = AllOf(Grapheme('a'), OptionalWhitespace(), Grapheme('b'));
+        var rule = AllOf(Grapheme('a'), Optional(Whitespace()), Grapheme('b'));
         var options = new ParseOptions { PreserveAllSymbols = true };
         var result = rule.Parse("a   b", options);
 
@@ -107,10 +108,11 @@ public class DiscardedAtParseTimeTests
         Assert.That(result.PrintTree(), Is.EqualTo(
             "AllOf: \"a   b\"\n" +
             "  'a'\n" +
-            "  ZeroOrMore: \"   \"\n" +
-            "    ' '\n" +
-            "    ' '\n" +
-            "    ' '\n" +
+            "  Optional: \"   \"\n" +
+            "    OneOrMore: \"   \"\n" +
+            "      ' '\n" +
+            "      ' '\n" +
+            "      ' '\n" +
             "  'b'\n"));
     }
 
@@ -129,11 +131,12 @@ public class DiscardedAtParseTimeTests
         // collapsed tree for downstream processing without re-parsing.
         //
         // Grammar choice: OneOf(Letters) defaults to Preserve so its
-        // leaves survive both ways, OptionalWhitespace is the canonical
-        // FlattenType.Delete wrapper, AllOf is FlattenType.Flatten. All
-        // three flatten policies are exercised in one tree.
+        // leaves survive both ways, Optional(Whitespace()) gives a
+        // Flatten wrapper (Optional) around a Delete wrapper (Whitespace),
+        // and AllOf is Flatten. All three flatten policies are exercised
+        // in one tree.
         var letter = OneOf(RuneSet.Ascii.Letters);
-        var rule = AllOf(letter, OptionalWhitespace(), letter);
+        var rule = AllOf(letter, Optional(Whitespace()), letter);
 
         var normal = rule.Parse("a   b");
         var preserved = rule.Parse("a   b", new ParseOptions { PreserveAllSymbols = true });

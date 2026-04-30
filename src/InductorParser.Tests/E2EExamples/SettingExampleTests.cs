@@ -28,11 +28,11 @@ public class SettingExampleTests
 
         var document = AllOf(
             settingName,
-            OptionalWhitespace(),
+            Optional(Whitespace()),
             Grapheme('='),
-            OptionalWhitespace(),
+            Optional(Whitespace()),
             settingValue,
-            OptionalWhitespace(),
+            Optional(Whitespace()),
             Grapheme(';')
         ).Flatten(FlattenType.Preserve);
 

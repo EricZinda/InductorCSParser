@@ -278,7 +278,9 @@ public class PrologGrammarTests
 
     // ---------------------------------------------------------------
     // Corpora ported verbatim from InductorProlog's
-    // src/Tests/Prolog/PrologCompilerTests.cpp. Each section mirrors a
+    // src/Tests/Prolog/PrologCompilerTests.cpp
+    // (https://github.com/EricZinda/InductorProlog/blob/master/src/Tests/Prolog/PrologCompilerTests.cpp).
+    // Each section mirrors a
     // TestTryParse<Rule>("input", ...) call from the C++ file. Tests
     // that the C++ put in the "same for both VariableRule alternates"
     // block go in the *_BothFlavors fields. Tests that the C++ gated
@@ -524,9 +526,10 @@ public class PrologGrammarTests
     }
 
     // ---------------------------------------------------------------
-    // Real-world fixture files from InductorHtn/Examples. End-to-end
-    // sanity: the grammar must parse actual documents the HTN project
-    // ships and uses, not just hand-crafted one-liners. Files are
+    // Real-world fixture files from InductorHtn/Examples
+    // (https://github.com/EricZinda/InductorHtn/tree/master/Examples).
+    // End-to-end sanity: the grammar must parse actual documents the HTN
+    // project ships and uses, not just hand-crafted one-liners. Files are
     // copied to the test output directory by the csproj.
     // ---------------------------------------------------------------
 

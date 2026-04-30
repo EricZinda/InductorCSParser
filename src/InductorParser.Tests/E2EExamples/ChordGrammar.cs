@@ -3,9 +3,12 @@ using static InductorParser.Rules;
 
 namespace InductorParser.Tests;
 
-// Chord grammar: the PEG replacement for UnityTabs' ChordRegex.
+// Chord grammar: the Inductor Parser replacement for the chord-detection
+// regex used by UnityTabs, a private real-world side project that parses
+// guitar tablature files. The regex below is reproduced verbatim from the
+// UnityTabs source so the grammar can be checked for behavioral parity.
 //
-// Mirrors UnityTabs Parser.cs line 18-20:
+// The original (UnityTabs Parser.cs line 18-20):
 //
 //   @"^[A-Ga-g][#b♯♭x]*
 //     (maj|min|m|dim|°|o|aug|\+|sus[24]?|5)?
@@ -17,11 +20,12 @@ namespace InductorParser.Tests;
 //
 // with RegexOptions.IgnoreCase.
 //
-// PEG vs regex: regex's (a|b) alternation is "eager but can backtrack out,"
-// while PEG FirstOf(a, b) commits to the first match that succeeds. In every
-// alternation below, the branches either have disjoint first characters
-// (a/b/c/...) or are ordered longest-first (maj before m, 11/13 before 1)
-// so the commit happens on the right branch.
+// Inductor Parser vs regex: regex's (a|b) alternation is "eager but can
+// backtrack out," while Inductor Parser's FirstOf(a, b) commits to the
+// first match that succeeds. In every alternation below, the branches
+// either have disjoint first characters (a/b/c/...) or are ordered
+// longest-first (maj before m, 11/13 before 1) so the commit happens on
+// the right branch.
 //
 // Case-insensitivity: the regex's IgnoreCase flag matches ASCII letters
 // in either case, and in practice that's all the matching we need here
@@ -88,7 +92,7 @@ public static class ChordGrammar
         );
 
         // (add[2469]|add1[13]|b5|#5|b9|#9|#11|b13|no[357]|sus[24]?|alt)*
-        // Ordering: "add1" before "add" (longer prefix match for PEG). "#11"
+        // Ordering: "add1" before "add" (longer prefix match for Inductor Parser). "#11"
         // before "#5"/"#9" (again, longer first). "b13" before "b5"/"b9".
         // "sus[24]?" matches "sus", "sus2", or "sus4".
         var addMod = FirstOf(

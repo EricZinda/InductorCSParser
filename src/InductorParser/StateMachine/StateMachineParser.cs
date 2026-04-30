@@ -204,7 +204,7 @@ public static class StateMachineParser
 
     // Returns the (offset, length) span of every <paramref name="matchRule"/>
     // firing in source order. For a leaf-shaped match rule (Literal,
-    // LiteralIgnoreAsciiCase, RuneRun, ScanUntil), the span is the
+    // LiteralIgnoreAsciiCase, ScanWhile, ScanUntil), the span is the
     // leaf's own offset/length. For a composite match rule, the span
     // covers the leftmost leaf's offset through the rightmost leaf's
     // offset+length within the match's Open/Close pair. Returns an
@@ -340,7 +340,7 @@ public static class StateMachineParser
     {
         // The match rule may be either a composite (AllOf, FirstOf,
         // BetweenInclusive, ...) emitted as Open/Close framing or a
-        // leaf (Literal, LiteralIgnoreAsciiCase, RuneRun) emitted as
+        // leaf (Literal, LiteralIgnoreAsciiCase, ScanWhile) emitted as
         // a single EmitLeaf. Both shapes count toward "this rule
         // fired"; mirror the recursive Symbol.FindAll behavior which
         // matches by Id regardless of leaf/composite. Prebuilt entries
@@ -435,7 +435,7 @@ public static class StateMachineParser
                         // The Prebuilt symbol's leaves carry their own
                         // (input, offset, length) via ReadOnlyMemory<char>;
                         // contribute every leaf's bounds to the
-                        // enclosing match span. RuneRun is the common
+                        // enclosing match span. ScanWhile is the common
                         // shape that lands here today: it bridges to
                         // the recursive evaluator and emits one leaf
                         // Symbol over the matched run.

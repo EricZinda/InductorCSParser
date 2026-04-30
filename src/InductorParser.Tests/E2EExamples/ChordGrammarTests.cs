@@ -7,8 +7,11 @@ using NUnit.Framework;
 
 namespace InductorParser.Tests;
 
-// Phase 0 gate for the UnityTabs-regex-to-InductorParser migration. See
-// C:\Users\ericz\.claude\plans\do-an-analysis-of-compiled-moth.md.
+// Phase 0 gate for migrating UnityTabs from a single chord-detection regex
+// to an Inductor Parser grammar. UnityTabs is a private real-world side
+// project that parses guitar tablature files; readers of this repo won't
+// have access to its source, so the regex being gated against is reproduced
+// verbatim below as the reference implementation.
 //
 // Two checks:
 //
@@ -22,8 +25,9 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class ChordGrammarTests
 {
-    // Verbatim copy of UnityTabs src/TabParser/Parsing/Parser.cs line 18-20.
-    // This is the reference implementation we're gating against.
+    // Verbatim copy of the chord regex from the (private) UnityTabs project,
+    // src/TabParser/Parsing/Parser.cs line 18-20. This is the reference
+    // implementation we're gating against.
     private static readonly Regex ChordRegex = new Regex(
         @"^[A-Ga-g][#b♯♭x]*(maj|min|m|dim|°|o|aug|\+|sus[24]?|5)?(6|7|9|11|13)?(maj|M|Δ|m|ø|°)?(7|9|11|13)?(add[2469]|add1[13]|b5|#5|b9|#9|#11|b13|no[357]|sus[24]?|alt)*(\/[A-Ga-g][#b♯♭x]*)?$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
