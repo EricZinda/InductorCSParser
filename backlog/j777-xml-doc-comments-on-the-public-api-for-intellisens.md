@@ -7,9 +7,9 @@
         - `SymbolId`, `FlattenType`, `SymbolRanges`.
         - `RuneSet` and all its factories (Single, Range, Runes, Category, Letters, Digits, Whitespace, Ascii.*, operator |, Contains).
         - `Lexer`, `Token`, `RuneLexer`, `GraphemeLexer`. Most of these are likely to stay internal-facing but still deserve tooltips for maintainers.
-        - The `Rules` static factory class — every factory method (Token, OneOf, And, Or, OneOrMore, ZeroOrMore, Optional, Eof, Integer, Float, Whitespace, OptionalWhitespace).
+        - The `Rules` static factory class, every factory method (Token, OneOf, And, Or, OneOrMore, ZeroOrMore, Optional, Eof, Integer, Float, Whitespace, OptionalWhitespace).
         - `LateBoundRule` and its Bind method.
-        - `Interval` (private inside RuneSet) — not externally visible, skip.
+        - `Interval` (private inside RuneSet), not externally visible, skip.
     - What stays as `//` rather than `///`:
         - Long design-rationale paragraphs (the Token design block, the Symbol GC-rooting note, the pass-through-text discussion on Letters, the transaction-semantics block in Lexer). These are too discursive for IntelliSense tooltips and aren't what users want when hovering over a symbol name. They stay as `//` prose aimed at contributors.
         - Implementation-detail comments inside method bodies.

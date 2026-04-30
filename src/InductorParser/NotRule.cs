@@ -50,7 +50,7 @@ internal sealed class NotRule : Rule
             lexer.RecordFailure(transaction.StartPosition, ErrorMessage);
             return null;
         }
-        TraceSuccess(lexer, $"inner did not match");
+        TraceSuccess(lexer, $"inner didn't match");
         return effectiveFlattenType == FlattenType.Preserve
             ? new Symbol(Id, FlattenType, Array.Empty<Symbol>())
             : Symbol.Discarded;

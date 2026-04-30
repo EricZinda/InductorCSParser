@@ -10,7 +10,7 @@ namespace InductorParser;
 // This is a custom type instead of the standard System.Threading.CancellationToken because
 // CancellationToken supports a .CancelAfter(timespan) shortcut on its
 // source that schedules the cancel through System.Threading.Timer, which
-// silently does nothing on WebGL because there is no background thread to
+// silently does nothing on WebGL because there's no background thread to
 // fire the timer callback. Code that compiles, passes desktop tests, and
 // looks correct in review then ships and never times out in production.
 // This type has no time-based API at all (only manual Cancel()), so it

@@ -8,7 +8,7 @@ namespace InductorParser.Tests;
 // the grammar to consume every token of the input, so trailing tokens
 // the rule didn't claim turn the parse into a failure. With
 // AllowTrailingInput = true, Parse succeeds as soon as the root rule
-// matches, even if the lexer hasn't reached EOF. The flag does not
+// matches, even if the lexer hasn't reached EOF. The flag doesn't
 // affect failures inside the rule.
 [TestFixture]
 public class AllowTrailingInputTests

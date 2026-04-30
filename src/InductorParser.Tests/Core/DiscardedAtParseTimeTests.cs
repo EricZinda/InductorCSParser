@@ -117,7 +117,7 @@ public class DiscardedAtParseTimeTests
     [Test]
     public void PreserveAllSymbols_then_post_hoc_Flatten_recovers_normal_parse_shape()
     {
-        // The load-bearing FlattenInto scenario: parse twice with the
+        // The critical FlattenInto scenario: parse twice with the
         // same grammar and input, once with PreserveAllSymbols off (the
         // parse-time filter drops Delete and lifts Flatten on the way)
         // and once with it on (every wrapper survives, each carrying its

@@ -85,7 +85,7 @@ public class HtmlGrammarTests
         "<!-- never closed",
 
         // Void element with extra junk.
-        "<br / >",     // space between / and > is not allowed in void
+        "<br / >",     // space between / and > isn't allowed in void
         "<br>",         // normal start needs a matching end; no </br>
 
         // Attribute quote mismatch.

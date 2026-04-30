@@ -7,7 +7,7 @@ namespace InductorParser.Lexing;
 // Runes above U+FFFF encode as two UTF-16 chars in .NET (a surrogate
 // pair), and the lexer reads both as one 2-char token. Scalar values
 // below U+10000 fit in a single char. If the input contains a stray
-// surrogate half, it is surfaced as a one-char token whose RuneValue is -1.
+// surrogate half, it's surfaced as a one-char token whose RuneValue is -1.
 public sealed class RuneLexer : Lexer
 {
     public RuneLexer(string input) : base(input) { }

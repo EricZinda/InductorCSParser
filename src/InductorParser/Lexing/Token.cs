@@ -34,7 +34,7 @@ namespace InductorParser.Lexing;
 //     is stack-only. The compiler forbids storing it in a
 //     class field, a List, a Dictionary, a lambda capture, etc, 
 //     anywhere the span inside it could outlive the
-//     input string. That is why Chars can be a direct field (below)
+//     input string. That's why Chars can be a direct field (below)
 //     rather than a property that reconstructs the span on each access.
 public readonly ref struct Token
 {
@@ -44,7 +44,7 @@ public readonly ref struct Token
     public bool IsEof { get; }
 
     // Chars is a ReadOnlySpan<char> over the source input. Spans don't
-    // allocate. They are (pointer, length) structs that live on the
+    // allocate. They're (pointer, length) structs that live on the
     // stack, pointing into the original string. Comparison rules like
     // Literal("function") or Token('=') precompute their expected sequence
     // at construction time and at match time call SequenceEqual on the
@@ -66,11 +66,11 @@ public readonly ref struct Token
     }
 
     // Memory returns a ReadOnlyMemory<char> which is the heap-safe version
-    // of Span: it is a regular struct (not a ref struct), so it can be
+    // of Span: it's a regular struct (not a ref struct), so it can be
     // stored on classes, dictionaries, async state machines, places where
     // Span can't go. Internally it has three things we need:
     // source string reference, offset, length.
-    // Constructing it is a handful of field writes, and it doesn't
+    // Constructing one is a handful of field writes, and it doesn't
     // allocate. Leaf Symbols use Memory to hold onto the matched
     // text without copying it until
     // someone actually calls ToString() on them.

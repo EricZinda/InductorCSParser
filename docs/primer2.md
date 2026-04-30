@@ -1,6 +1,6 @@
 # Inductor Parser Primer 2: Walking the Tree
 
-Primer 1 built a grammar that succeeds or fails and that's it. But most of the time, parsing isn't the goal. You parse so you can do something with what you parsed: look settings up by name, check that the right things are there, point at the spot where it went wrong. Once the parser hands you back a tree, all of that is just walking the tree.
+Primer 1 built a grammar that succeeds or fails and that's it. But most of the time, parsing isn't the goal. You parse so you can do something with what you parsed: look settings up by name, check that the right things are there, point at the spot where it went wrong. Once the parser hands you back a tree, all of that's just walking the tree.
 
 Let's parse a tiny INI-style config file. Something like this:
 
@@ -18,9 +18,9 @@ Two sections, each with a couple of `key = value` lines. We'll parse it, walk th
 A quick spec, so the rules below don't surprise you:
 
 - A line is one of a section header, a key/value pair, or blank.
-- A section header is `[name]` on its own line. Names are tokens that are not single-rune whitespace and not `]`. So `[a=b]` is legal (`=` only has special meaning between a key and a value), but `[my server]` and `[ server ]` are not.
-- A key/value pair is `key = value`. Keys are tokens that are not single-rune whitespace and not `=`. Whitespace around `=` is optional.
-- Values are typed: an integer, a float, a double-quoted string, or a bare word (a single run of tokens that are not single-rune whitespace or quotes). Multi-word strings need quotes, so `name = "my favorite thing"` works but `name = my favorite thing` doesn't.
+- A section header is `[name]` on its own line. Names are tokens that aren't single-rune whitespace and not `]`. So `[a=b]` is legal (`=` only has special meaning between a key and a value), but `[my server]` and `[ server ]` aren't.
+- A key/value pair is `key = value`. Keys are tokens that aren't single-rune whitespace and not `=`. Whitespace around `=` is optional.
+- Values are typed: an integer, a float, a double-quoted string, or a bare word (a single run of tokens that aren't single-rune whitespace or quotes). Multi-word strings need quotes, so `name = "my favorite thing"` works but `name = my favorite thing` doesn't.
 - Line terminators are the full Unicode set (LF, CR, CRLF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR, VT, FF), not just `\n`.
 
 The grammar:
@@ -78,7 +78,7 @@ var line = FirstOf(section, keyValue, blankLine);
 var config = AllOf(ZeroOrMore(line), Eof()).As("config").Preserve();
 ```
 
-`name` and `key` are the same shape: one or more tokens that are not single-rune whitespace and not the stop character (`]` for names, `=` for keys). `NoneOf(set)` matches a token when it is not exactly one rune from the set, and `|` is set union.
+`name` and `key` are the same shape: one or more tokens that aren't single-rune whitespace and not the stop character (`]` for names, `=` for keys). `NoneOf(set)` matches a token when it isn't exactly one rune from the set, and `|` is set union.
 
 `value` is where typing happens. Each alternative is `.As(name).Preserve()` so the matching one lands in the tree as a typed child. `Float()` and `Integer()` are built-in rules, `quotedString` is the standard open-quote/body/close-quote shape and `bareWord` catches everything else. Order in `FirstOf` matters because it stops at the first match: `Float` is before `Integer` so `3.14` doesn't commit to `3` and leave `.14` for the next rule to choke on.
 
@@ -187,7 +187,7 @@ result.Tree!.FindAll(keyValue).Select(kv => kv.Children[0].ToString())
 result.Tree!.FlattenInto().OfType<Symbol>()
 ```
 
-`Symbol` itself does not implement `IEnumerable<Symbol>` on purpose, because iterating a tree node would have to silently pick one of children, descendants pre-order, descendants post-order, siblings, or tokens, and the four other choices then become second-class. Naming the traversal you want keeps the code unambiguous.
+`Symbol` itself doesn't implement `IEnumerable<Symbol>` on purpose, because iterating a tree node would have to silently pick one of children, descendants pre-order, descendants post-order, siblings, or tokens, and the four other choices then become second-class. Naming the traversal you want keeps the code unambiguous.
 
 # When the parse fails
 

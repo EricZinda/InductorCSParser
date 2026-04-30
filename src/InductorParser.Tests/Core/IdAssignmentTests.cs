@@ -85,7 +85,7 @@ public class IdAssignmentTests
     public void Same_pinned_rule_referenced_twice_in_a_grammar_compiles()
     {
         // Reachability is per-rule, not per-edge. A single rule reached via
-        // two parents is still one rule, so its pin should not be flagged.
+        // two parents is still one rule, so its pin shouldn't be flagged.
         var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 4321);
         var sharedRule = OneOrMore(OneOf(RuneSet.Letters)).As(pinned);
         var doc = AllOf(sharedRule, sharedRule);

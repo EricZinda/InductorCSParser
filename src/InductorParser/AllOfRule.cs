@@ -20,7 +20,7 @@ internal sealed class AllOfRule : Rule
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         using var transaction = lexer.BeginTransaction();
-        // If we are preserving this node, create a new list to capture its outputSymbols
+        // If we're preserving this node, create a new list to capture its outputSymbols
         if (effectiveFlattenType == FlattenType.Preserve)
             outputSymbols = new List<Symbol>(Children.Count);
 
@@ -34,7 +34,7 @@ internal sealed class AllOfRule : Rule
                 lexer.RecordFailure(lexer.Position, ErrorMessage);
                 return null;
             }
-            // Don't add child symbols if they are discarded
+            // Don't add child symbols if they're discarded
             if (outputSymbols != null && !ReferenceEquals(symbol, Symbol.Discarded))
                 outputSymbols.Add(symbol);
         }
@@ -55,7 +55,7 @@ internal sealed class AllOfRule : Rule
         // The initial runes from any child that Always or sometimes consumes Runes must 
         // therefore be included, never can be ignored.
         // Furthermore, once we hit the first Always consumes a Rune, we can stop because at that
-        // point the first rune in the parse is gone and that's all we are talking about.
+        // point the first rune in the parse is gone and that's all we're talking about.
         // 
         // Then we can calculate AllOf's own Advance:
         //   Always:    at least one child had Advance.Always so AllOf is guaranteed to consume too on success.

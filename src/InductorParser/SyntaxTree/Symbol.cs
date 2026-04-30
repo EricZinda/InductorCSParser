@@ -49,7 +49,7 @@ public sealed class Symbol
     // keeps its backing string alive for as long as the Memory itself is
     // reachable. So any tree of Symbols that holds leaves pointing into a
     // parsed input string will keep that whole input string alive, even
-    // if the caller only keeps a reference to a small subtree. That is
+    // if the caller only keeps a reference to a small subtree. That's
     // almost always what you want for parser output (the tree conceptually
     // represents the input, and the input usually stays around anyway),
     // but if you parse a 100 MB document and then keep a 10-character
@@ -91,7 +91,7 @@ public sealed class Symbol
     // children. On the default parse path, FlattenType.Delete rules
     // are gone (filtered during parse) and FlattenType.Flatten
     // wrappers have had their children lifted into the parent, so
-    // their own wrapper does not appear in the tree shape. The
+    // their own wrapper doesn't appear in the tree shape. The
     // characters under them do, through their surviving
     // FlattenType.Preserve or leaf descendants. Callers who want to
     // rebuild the exact input verbatim should either keep the string

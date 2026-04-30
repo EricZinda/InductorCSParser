@@ -1,8 +1,8 @@
 The Inductor Parser (IP) is a loose port of the [Inductor C++ Parser](https://github.com/EricZinda/InductorParser), designed for C#. I ported this as part of a Unity editor project, and during a period where I've been subjected to way too many Claude generated Regex's I had to review. My goal is to design a parser library that is:
 
-- **Designed for World Languages:** From the default lexer, to the built-in rules, to normalization, it is designed around Unicode so grammars have a good starting point for world-language text.
+- **Designed for World Languages:** From the default lexer, to the built-in rules, to normalization, it's designed around Unicode so grammars have a good starting point for world-language text.
 - **More Readable than Regex:** The grammars are self-describing and human readable so they can be reasoned about, code reviewed and understood without looking up obscure letters and symbols. 
-- **Safer Against Pathological Input:** It is designed to avoid "catastrophic backtracking" and pitfalls like it that can hang your app, blow your stack, etc.
+- **Safer Against Pathological Input:** It's designed to avoid "catastrophic backtracking" and pitfalls like it that can hang your app, blow your stack, etc.
 - **Able to run on WebGL and .NET Standard 2.1 (and later) using IL2CPP** and doesn't use Reflection.Emit or threads so that it can run in Unity targeting WebGL or IL2CPP on iPhone
 - **Fast enough to be used in production**
 
@@ -15,7 +15,7 @@ If you just want to learn how to use it, follow the primers:
 ## Designed for World Languages
 If you write grammars in Inductor Parser, you get a foundation that helps you support Unicode from the start:
 
-- By default, each token presented to a rule is a .NET `StringInfo` text element, which follows Unicode grapheme-cluster behavior on modern .NET and keeps ordinary grammars from slicing apart non-ASCII text or emoji sequences accidentally.
+- By default, each token presented to a rule is a .NET `StringInfo` text element, which follows Unicode grapheme-cluster behavior on modern .NET and keeps ordinary grammars from breaking apart non-ASCII text or emoji sequences accidentally.
 - Built-in rules use Unicode-aware definitions for things like "whitespace" and "identifiers" so you don't miss common corner cases.
 - The parser defaults to normalizing input so that characters that can be written as multiple things in Unicode get normalized to one (and the error indexes reverse this so errors point to the right place in the original text)
 
@@ -171,7 +171,7 @@ Inductor Parser is designed to be able to be used in Unity, targeting WebGL and 
 ## Fast Enough to be Used in Production
 To evaluate performance I used open source benchmarks built by others so that I wasn't unfairly building tests that IP was good at. You can run them yourself in the src/Benchmarks folder.
 
-The [Parlot](https://github.com/sebastienros/parlot) project had a great benchmark of C# parser libraries that I forked into the src/Benchmarks folder. I added both InductorParser and Pegasus (another PEG-style parser) to the suite. You can read the details of the test, what I changed, etc [here](src/Benchmarks/README.md). It asks each parser library to build a Json parser and read 4 different documents that are different shapes. Real world and a nice benchmark. In addition to performance, it is illustrative to look a the grammars for each parser library and compare for readability and reviewability, they are [here](src/Benchmarks/Json).
+The [Parlot](https://github.com/sebastienros/parlot) project had a great benchmark of C# parser libraries that I forked into the src/Benchmarks folder. I added both InductorParser and Pegasus (another PEG-style parser) to the suite. You can read the details of the test, what I changed, etc [here](src/Benchmarks/README.md). It asks each parser library to build a Json parser and read 4 different documents that are different shapes. Real world and a nice benchmark. In addition to performance, it's illustrative to look a the grammars for each parser library and compare for readability and reviewability, they're [here](src/Benchmarks/Json).
 
 ### Results from 04/24/2026
 [![alt text](src/Benchmarks/Benchmark04242026.jpg)](src/Benchmarks/Benchmark04242026.jpg)

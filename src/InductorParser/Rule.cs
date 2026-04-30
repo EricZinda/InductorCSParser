@@ -114,7 +114,7 @@ public abstract class Rule
     // tried ("found 'x', wanted 'a'") and the friendly message that
     // would have surfaced to the user on a real parse failure
     // ("expected an A"). Only used on failure lines. On success
-    // there is no error to report so the WithError message is
+    // there's no error to report so the WithError message is
     // omitted.
     private string AppendErrorMessage(string body) =>
         _errorMessage != null ? $"{body} \"{_errorMessage}\"" : body;
@@ -269,7 +269,7 @@ public abstract class Rule
     }
 
     // Convenience shortcuts for the three FlattenType values. These read
-    // better than .Flatten(FlattenType.X) at call sites that otherwise
+    // better than .Flatten(FlattenType.X) at calls that otherwise
     // chain several modifiers, e.g. .As("number").Preserve() vs
     // .As("number").Flatten(FlattenType.Preserve). All three forward to
     // Flatten(FlattenType), so LateBoundRule's override that forbids
@@ -509,7 +509,7 @@ public abstract class Rule
     private static string BuildErrorMessage(Lexer lexer, int pos)
     {
         // Prefer the error message the user attached to the rule that failed
-        // at the deepest position (via .WithError("...")). That is the
+        // at the deepest position (via .WithError("...")). That's the
         // "expected a setting name"-style message grammar authors write for
         // the spots most likely to be where a user goes wrong. Fall back to
         // the generic position-based message only when no rule at the
@@ -615,7 +615,7 @@ public abstract class Rule
     //         itself.
     //       - Preserve: build a wrapper Symbol around your matched
     //         children (or leaf content) and return it.
-    //   * `outputSymbols` is the caller's list in Flatten mode. It is
+    //   * `outputSymbols` is the caller's list in Flatten mode. It's
     //     non-null by contract (callers of Flatten rules are required to
     //     provide one), and null otherwise.
     //   * Subclass construction: pass child rules to the base constructor
@@ -682,14 +682,14 @@ public abstract class Rule
     //     its code point pinned at construction time). A grammar that
     //     mentions Token('a') twice has two rules sharing id 97 by design,
     //     NameOf short-circuits the rune range to the rune string, and
-    //     there is no rule-name ambiguity to resolve.
+    //     there's no rule-name ambiguity to resolve.
     //
     //   * Ids stamped by a prior Compile on a sub-rule. If the caller
     //     compiled a sub-grammar and is now compiling a larger grammar
-    //     that reaches it, those ids look pinned but were not chosen by
+    //     that reaches it, those ids look pinned but weren't chosen by
     //     the user. A user pin via .As(SymbolId) always happens before
     //     Compile (As throws on a sealed rule), so a rule whose id is
-    //     assigned but is not yet sealed is the user-pinned shape we
+    //     assigned but isn't yet sealed is the user-pinned shape we
     //     care about here.
     private static void CollectPinnedIds(Rule r, HashSet<Rule> visited, HashSet<int> usedIds, Dictionary<int, Rule> pinnedRules)
     {
@@ -762,7 +762,7 @@ public abstract class Rule
     // grammar's named-rule ids are stable run-to-run, which is what
     // callers who serialize parse trees or match traces across runs want.
     //
-    // FNV-1a is not cryptographically strong, but we don't need that
+    // FNV-1a isn't cryptographically strong, but we don't need that
     // here. We need deterministic, well-distributed, and cheap. FNV-1a
     // is all three.
     internal static int HashNameToCustomRange(string name)

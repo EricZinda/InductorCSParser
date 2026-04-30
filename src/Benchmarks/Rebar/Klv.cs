@@ -61,9 +61,9 @@ internal sealed class RebarConfig
         }
 
         if (string.IsNullOrEmpty(config.Name))
-            throw new InvalidDataException("KLV input did not include a benchmark name.");
+            throw new InvalidDataException("KLV input didn't include a benchmark name.");
         if (string.IsNullOrEmpty(config.Model))
-            throw new InvalidDataException("KLV input did not include a benchmark model.");
+            throw new InvalidDataException("KLV input didn't include a benchmark model.");
 
         return config;
     }
@@ -117,7 +117,7 @@ internal sealed class RebarConfig
     {
         string text = DecodeUtf8(raw, start, length, $"{key} length");
         if (!int.TryParse(text, out int value) || value < 0)
-            throw new InvalidDataException($"Invalid KLV item '{key}': length '{text}' is not a non-negative integer.");
+            throw new InvalidDataException($"Invalid KLV item '{key}': length '{text}' isn't a non-negative integer.");
         return value;
     }
 
@@ -126,13 +126,13 @@ internal sealed class RebarConfig
         {
             "true" => true,
             "false" => false,
-            _ => throw new InvalidDataException($"Invalid KLV item '{key}': '{text}' is not a boolean.")
+            _ => throw new InvalidDataException($"Invalid KLV item '{key}': '{text}' isn't a boolean.")
         };
 
     private static long ParseInt64(string text, string key)
     {
         if (!long.TryParse(text, out long value) || value < 0)
-            throw new InvalidDataException($"Invalid KLV item '{key}': '{text}' is not a non-negative integer.");
+            throw new InvalidDataException($"Invalid KLV item '{key}': '{text}' isn't a non-negative integer.");
         return value;
     }
 
@@ -144,7 +144,7 @@ internal sealed class RebarConfig
         }
         catch (DecoderFallbackException ex)
         {
-            throw new InvalidDataException($"KLV value for '{key}' is not valid UTF-8.", ex);
+            throw new InvalidDataException($"KLV value for '{key}' isn't valid UTF-8.", ex);
         }
     }
 }

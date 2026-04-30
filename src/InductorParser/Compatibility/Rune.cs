@@ -2,7 +2,7 @@
 //
 // Background: System.Text.Rune ships with .NET Core 3.0 and .NET 5+, but is
 // NOT in the netstandard2.1 reference assemblies. The library targets
-// netstandard2.1 because that is what Unity's IL2CPP scripting backend
+// netstandard2.1 because that's what Unity's IL2CPP scripting backend
 // supports (see docs/CodeArchitecture.md). Without this polyfill, callers
 // on netstandard2.1 hosts (Unity, including WebGL and iOS) can't use the
 // Rune-typed overloads of Token(), RuneSet.Single(), etc.

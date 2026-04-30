@@ -74,7 +74,7 @@ public class TracingTests
         // appended after the trace body in quotes, so a reader sees
         // both what the rule actually tried ("found 'x', wanted 'a'")
         // and the friendly message that would surface on a real parse
-        // failure ("expected an A"). It does NOT appear as part of the
+        // failure ("expected an A"). It DOESN'T appear as part of the
         // trace label. That position is reserved for .As() names.
         var sink = NewSink();
         var rule = Token('a').WithError("expected an A");
@@ -187,7 +187,7 @@ public class TracingTests
         // silently fell back to eager interpolation. That would mean
         // the attributes aren't being recognized (polyfill broken on
         // this target framework? LangVersion regression?) and every
-        // trace call site is allocating per parse even when the sink
+        // trace call is allocating per parse even when the sink
         // is null.
         var lexer = new GraphemeLexer("x"); // no TraceSink = tracing off
         int sideEffectCount = 0;

@@ -30,12 +30,12 @@ public class NotRuleTests
     [Test]
     public void Not_fails_when_inner_matches()
     {
-        var rule = Not(Token('a')).WithError("did not want an 'a'");
+        var rule = Not(Token('a')).WithError("didn't want an 'a'");
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("did not want an 'a'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("didn't want an 'a'"));
     }
 
     [Test]
@@ -137,7 +137,7 @@ public class NotRuleTests
         string expected = Lines(
             "      Lexer.Read: 'b', Consumed: 1",
             "      FAIL | Token: found 'b', wanted 'a'",
-            "   SUCC | Not: inner did not match"
+            "   SUCC | Not: inner didn't match"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }

@@ -30,7 +30,7 @@ internal sealed class FirstOfRule : Rule
         if (pos < input.Length)
             Lexer.TryPeekRune(input, pos, out peekValue, out _);
 
-        // If we are preserving this node, create a new list to capture its outputSymbols
+        // If we're preserving this node, create a new list to capture its outputSymbols
         if (effectiveFlattenType == FlattenType.Preserve)
             outputSymbols = new List<Symbol>();
 
@@ -52,7 +52,7 @@ internal sealed class FirstOfRule : Rule
             {
                 TraceSuccess(lexer, $"symbol #{symbolIndex}");
                 transaction.Commit();
-                // Don't add child symbols if they are discarded
+                // Don't add child symbols if they're discarded
                 if (outputSymbols != null && !ReferenceEquals(symbol, Symbol.Discarded))
                     outputSymbols.Add(symbol);
                 return effectiveFlattenType == FlattenType.Preserve

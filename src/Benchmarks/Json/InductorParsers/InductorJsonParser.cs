@@ -113,7 +113,7 @@ public static class InductorJsonParser
     // the tree, so Tree.ToString() on a normally-parsed value returns just
     // the concatenated non-delimiter content rather than the original
     // input. PreserveAllSymbols keeps every grammar node in the tree
-    // for verification purposes. It is not used by the benchmark runs because
+    // for verification purposes. It isn't used by the benchmark runs because
     // it wouldn't be used by a real caller either, just here for verification.
     private static readonly ParseOptions _roundTripOptions = new()
     {

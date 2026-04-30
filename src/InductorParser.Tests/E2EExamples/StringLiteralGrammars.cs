@@ -95,7 +95,7 @@ public static class StringLiteralGrammars
     {
         // Stopper is a multi-rune sequence, so use the Rule-stopper
         // overload. The stopper rule runs in a peek transaction that
-        // always rolls back, so the closing """ is NOT consumed by
+        // always rolls back, so the closing """ ISN'T consumed by
         // the body scan. The outer AllOf's trailing Literal matches
         // it.
         var body = ScanUntil(

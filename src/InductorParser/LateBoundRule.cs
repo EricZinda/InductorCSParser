@@ -67,28 +67,28 @@ public sealed class LateBoundRule : Rule
     // Fail instead of letting users build a rule whose Find
     // silently returns null. Pass the debug name to the constructor.
     public override Rule As(string name) => throw new InvalidOperationException(
-        "LateBoundRule.As(string) is not supported: the rule is transparent at parse " +
+        "LateBoundRule.As(string) isn't supported: the rule is transparent at parse " +
         "time, so Find() would never match it. Pass a debug name to the constructor: " +
         "new LateBoundRule(\"name\").");
 
     public override Rule As(SymbolId id) => throw new InvalidOperationException(
-        "LateBoundRule.As(SymbolId) is not supported: the rule is transparent at parse " +
+        "LateBoundRule.As(SymbolId) isn't supported: the rule is transparent at parse " +
         "time, so no Symbol in the parse tree will carry this Id.");
 
-    // Flatten on LateBoundRule would set a FlattenType that is never
+    // Flatten on LateBoundRule would set a FlattenType that's never
     // consulted: TryParse returns the target's Symbol directly, which
     // carries the target's FlattenType. Set .Flatten(...) on the target
     // rule instead.
     public override Rule Flatten(FlattenType type) => throw new InvalidOperationException(
-        "LateBoundRule.Flatten(...) is not supported: the rule is transparent at parse " +
+        "LateBoundRule.Flatten(...) isn't supported: the rule is transparent at parse " +
         "time, so its FlattenType is never consulted. Set .Flatten(...) on the bound target instead.");
 
-    // WithError on LateBoundRule would set an error message that is never
+    // WithError on LateBoundRule would set an error message that's never
     // consulted: TryParse just forwards to the target, which runs its own
     // RecordFailure on failure using the target's ErrorMessage. Set
     // .WithError(...) on the target rule instead.
     public override Rule WithError(string errorMessage) => throw new InvalidOperationException(
-        "LateBoundRule.WithError(...) is not supported: the rule is transparent at parse " +
+        "LateBoundRule.WithError(...) isn't supported: the rule is transparent at parse " +
         "time, so its ErrorMessage is never consulted. Set .WithError(...) on the bound target instead.");
 
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)

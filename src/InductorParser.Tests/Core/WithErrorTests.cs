@@ -16,7 +16,7 @@ public class WithErrorTests
 
         var document = AllOf(settingName, Token('='), Token(';'));
 
-        // "1 = ;" fails at offset 0 because a digit is not a letter.
+        // "1 = ;" fails at offset 0 because a digit isn't a letter.
         var result = document.Parse("1 = ;");
 
         Assert.That(result.Success, Is.False);
@@ -51,7 +51,7 @@ public class WithErrorTests
         var digits = OneOrMore(OneOf(RuneSet.Digits)).WithError("need digits");
         var doc = AllOf(name, Token('='), digits);
 
-        // "ab=x" reaches the digits rule before failing (x is not a digit).
+        // "ab=x" reaches the digits rule before failing (x isn't a digit).
         // "need digits" should win over "need letters" because the digit
         // failure is at a deeper position.
         var result = doc.Parse("ab=x");

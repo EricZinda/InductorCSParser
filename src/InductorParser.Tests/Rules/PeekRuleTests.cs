@@ -70,14 +70,14 @@ public class PeekRuleTests
     public void Peek_gates_optional_else_branch_in_if_statement()
     {
         // The if-statement example from PeekRule's class comment. Peek
-        // confirms the "else" keyword is ahead. If it is, the real
+        // confirms the "else" keyword is ahead. If it's there, the real
         // keyword_else rule that follows consumes it for the parse tree.
         // If Peek fails the Optional short-circuits and leaves the cursor
         // wherever the then-branch ended.
         //
         // Without it the Optional's whole
         // body could start consuming whitespace and partial input before
-        // discovering there is no else, and the lexer failure position
+        // discovering there's no else, and the lexer failure position
         // would point somewhere inside the abandoned attempt. The Peek
         // turns "is there an else?" into a zero-width, zero-consequence
         // check upfront.
@@ -128,7 +128,7 @@ public class PeekRuleTests
         string expected = Lines(
             "      Lexer.Read: 'b', Consumed: 1",
             "      FAIL | Token: found 'b', wanted 'a'",
-            "   FAIL | Peek: inner did not match"
+            "   FAIL | Peek: inner didn't match"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }

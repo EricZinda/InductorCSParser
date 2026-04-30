@@ -34,13 +34,13 @@ namespace InductorParser.Tests;
 //
 //   * A terminator char COUNTS as a column on the line it ends. In
 //     "aa\nX", the '\n' is column 2 on line 0 (third character of
-//     that line). The column does not skip over it.
+//     that line). The column doesn't skip over it.
 //
 //   * After the terminator, the next line starts at column 0. So the
 //     'X' in "aa\nX" is (line 1, column 0), NOT column 3 of some
 //     flat counter. Column is line-relative, not absolute.
 //
-//   * LSP positions cannot fall between the '\r' and '\n' of a "\r\n"
+//   * LSP positions can't fall between the '\r' and '\n' of a "\r\n"
 //     pair. A natural parse under the default GraphemeLexer never
 //     leaves the cursor there (the pair is one grapheme token), but
 //     if it ever does happen (e.g. RuneLexer), we attribute the '\n'

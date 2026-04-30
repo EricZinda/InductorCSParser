@@ -81,10 +81,10 @@ public static class JsonParserTyped
     }
 
     // Extract a JsonString's body as a decoded C# string. The grammar's
-    // ScanUntil is a single leaf over the raw source slice, so escape
-    // sequences appear in the tree as their literal characters (e.g.
-    // "\n" as the two chars '\' and 'n'); the PEG-based decoder below
-    // turns them into the real code points.
+    // ScanUntil is a single leaf over the raw source text, so escape
+    // sequences appear in the tree as their literal characters (for
+    // example "\n" as the two chars '\' and 'n'). The PEG-based decoder
+    // below turns them into the real code points.
     private static string DecodeString(Symbol stringNode)
     {
         // JsonString = AllOf('"', stringBody, '"'). Quotes are
@@ -99,13 +99,13 @@ public static class JsonParserTyped
     //
     // The main JSON grammar uses ScanUntil for the string body, which
     // is a single rule that scans the whole body in one tight loop and
-    // returns one leaf Symbol over the raw source slice, including
+    // returns one leaf Symbol over the raw source text, including
     // escape characters written literally.
     //
-    // From ScanUntilRule.cs: "ToString() returns the raw source slice,
+    // From ScanUntilRule.cs: "ToString() returns the raw source text,
     // including escape-start runes and their ends as written originally.
     // Callers who want to actually decode the escapes need to walk the
-    // slice themselves. Lazy decoding means a syntax highlighter or a
+    // text themselves. Lazy decoding means a syntax highlighter or a
     // code-formatter, which WANTS the raw source preserved, doesn't
     // have to pay for it."
     //
@@ -231,10 +231,10 @@ public abstract record JsonValue
     // indexable throw; the string / int split mirrors how JObject
     // and JArray in Newtonsoft specialize the same pattern.
     public virtual JsonValue this[string key] =>
-        throw new InvalidOperationException($"{GetType().Name} is not a JSON object (can't index by string).");
+        throw new InvalidOperationException($"{GetType().Name} isn't a JSON object (can't index by string).");
 
     public virtual JsonValue this[int index] =>
-        throw new InvalidOperationException($"{GetType().Name} is not a JSON array (can't index by int).");
+        throw new InvalidOperationException($"{GetType().Name} isn't a JSON array (can't index by int).");
 }
 
 public sealed record JsonNullValue : JsonValue

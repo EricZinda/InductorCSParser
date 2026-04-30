@@ -132,7 +132,7 @@ public class TokenRuleTests
     [Test]
     public void Token_mismatch_on_single_char_input_points_at_offender()
     {
-        // The original off-by-one bug: Token('a').Parse("x") should NOT
+        // The original off-by-one bug: Token('a').Parse("x") SHOULDN'T
         // report "Unexpected end of input" at offset 1. Under the error-
         // position principle the failing read's pre-read position (0) is
         // what gets recorded, and Token's WithError message surfaces.

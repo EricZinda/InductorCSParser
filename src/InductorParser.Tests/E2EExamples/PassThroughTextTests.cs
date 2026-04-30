@@ -22,8 +22,8 @@ public class PassThroughTextTests
         //
         // WARNING: this example is LF-only on purpose. Under the default
         // GraphemeLexer, "\r\n" is one grapheme cluster, so Token('\n')
-        // does NOT match a CRLF line ending and NoneOf silently
-        // swallows the CRLF grapheme as body content. If you are copying
+        // DOESN'T match a CRLF line ending and NoneOf silently
+        // swallows the CRLF grapheme as body content. If you're copying
         // this idiom for a line-based grammar that must accept Windows
         // line endings, add Literal("\r\n") as an explicit alternative
         // on both the body stop and the terminator. See

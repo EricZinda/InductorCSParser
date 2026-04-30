@@ -31,7 +31,7 @@ namespace InductorParser;
 // XID_Continue adds Mn+Mc+Nd+Pc (combining marks, decimal digits,
 // connector punctuation).
 //
-// The parts of XID that are NOT derivable from General_Category are a
+// The parts of XID that AREN'T derivable from General_Category are a
 // small set of additions (code points that are symbols or marks by
 // category but semantically act as identifier characters, like SCRIPT
 // CAPITAL P) and a small set of exclusions (code points that are
@@ -80,7 +80,7 @@ public readonly partial struct RuneSet
 {
     // Source: Unicode 17.0 XID_Start (DerivedCoreProperties.txt) minus
     // General_Category L + Nl. Code points in XID_Start that the BCL
-    // does not report as Letter or LetterNumber.
+    // doesn't report as Letter or LetterNumber.
     //
     // To regenerate: diff XID_Start against the union of Lu+Ll+Lt+Lm+Lo+Nl
     // from DerivedCoreProperties.txt / DerivedGeneralCategory.txt.
@@ -93,7 +93,7 @@ public readonly partial struct RuneSet
     };
 
     // Source: Unicode 17.0. Code points in General_Category L + Nl that
-    // are NOT in XID_Start. These are code points the BCL reports as
+    // AREN'T in XID_Start. These are code points the BCL reports as
     // letters but UAX #31 excludes from identifier starts because their
     // NFKC decomposition would produce a sequence that isn't a valid
     // identifier start (typically because it includes a space).
@@ -118,7 +118,7 @@ public readonly partial struct RuneSet
 
     // Source: Unicode 17.0 XID_Continue minus General_Category
     // L + Nl + Mn + Mc + Nd + Pc. Code points in XID_Continue that the
-    // BCL does not report in any of those categories.
+    // BCL doesn't report in any of those categories.
     private static readonly (int Low, int High)[] XidContinueAdds =
     {
         (0x00B7, 0x00B7),   // MIDDLE DOT (Po)
@@ -126,14 +126,14 @@ public readonly partial struct RuneSet
         (0x1369, 0x1371),   // ETHIOPIC DIGIT ONE..NINE (No, 9)
         (0x19DA, 0x19DA),   // NEW TAI LUE THAM DIGIT ONE (No)
         (0x200C, 0x200D),   // ZERO WIDTH NON-JOINER, ZERO WIDTH JOINER (Cf)
-        (0x2118, 0x2118),   // SCRIPT CAPITAL P (Sm) — also in XidStartAdds
-        (0x212E, 0x212E),   // ESTIMATED SYMBOL (So) — also in XidStartAdds
+        (0x2118, 0x2118),   // SCRIPT CAPITAL P (Sm), also in XidStartAdds
+        (0x212E, 0x212E),   // ESTIMATED SYMBOL (So), also in XidStartAdds
         (0x30FB, 0x30FB),   // KATAKANA MIDDLE DOT (Po)
         (0xFF65, 0xFF65),   // HALFWIDTH KATAKANA MIDDLE DOT (Po)
     };
 
     // Source: Unicode 17.0. Code points in L + Nl + Mn + Mc + Nd + Pc
-    // that are NOT in XID_Continue. Same shape as XidStartExclusions:
+    // that AREN'T in XID_Continue. Same shape as XidStartExclusions:
     // the BCL reports them in an identifier-ish category but UAX #31
     // excludes them from identifier continuations for NFKC reasons.
     // The overlap with XidStartExclusions is large; the difference is
@@ -160,8 +160,8 @@ public readonly partial struct RuneSet
 
     // The set of Unicode scalar values that may begin an identifier per
     // UAX #31 R1 (XID_Start). Use together with XidContinue and
-    // Rules.Identifier for spec-compliant identifier matching. Does not
-    // include "_"; for the programming-language profile that allows
+    // Rules.Identifier for spec-compliant identifier matching. Doesn't
+    // include "_". For the programming-language profile that allows
     // leading underscore, use
     // Rules.Identifier(extraStartRunes: RuneSet.Runes("_")).
     public static RuneSet XidStart => _xidStart.Value;
