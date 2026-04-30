@@ -13,7 +13,7 @@ namespace InductorParser.SyntaxTree;
 //
 // Leaf: carries a ReadOnlyMemory<char> pointing into a section of
 //     the original input string. Used by rules that match content
-//     (Token, Literal, OneOf, ScanUntil). ToString() returns the
+//     (Grapheme, Literal, OneOf, ScanUntil). ToString() returns the
 //     text it points at. The parse never copies input into a new
 //     string.
 //

@@ -37,41 +37,41 @@ public static class InductorJsonParser
     {
         var simpleEscapeEnd = OneOf(RuneSet.Runes("\"\\/bfnrt"));
         var hexDigit = OneOf(RuneSet.Ascii.HexDigits);
-        var unicodeEscapeEnd = AllOf(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
+        var unicodeEscapeEnd = AllOf(Grapheme('u'), hexDigit, hexDigit, hexDigit, hexDigit);
         var escapeEnd = FirstOf(simpleEscapeEnd, unicodeEscapeEnd).Flatten(FlattenType.Delete);
         var stringBody = ScanUntil(stopAt: RuneSet.Runes("\""), escapeStart: new Rune('\\'), escapeEnd: escapeEnd);
-        JsonStringRule = AllOf(Token('"'), stringBody, Token('"')).As("string").Preserve();
+        JsonStringRule = AllOf(Grapheme('"'), stringBody, Grapheme('"')).As("string").Preserve();
 
         var value = new LateBoundRule("value");
 
         JsonMemberRule = AllOf(
             JsonStringRule,
             OptionalWhitespace(),
-            Token(':'),
+            Grapheme(':'),
             OptionalWhitespace(),
             value
         ).As("member");
 
         JsonObjectRule = AllOf(
-            Token('{'),
+            Grapheme('{'),
             OptionalWhitespace(),
             Optional(AllOf(
                 JsonMemberRule,
-                ZeroOrMore(AllOf(OptionalWhitespace(), Token(','), OptionalWhitespace(), JsonMemberRule))
+                ZeroOrMore(AllOf(OptionalWhitespace(), Grapheme(','), OptionalWhitespace(), JsonMemberRule))
             )),
             OptionalWhitespace(),
-            Token('}')
+            Grapheme('}')
         ).As("object").Preserve();
 
         JsonArrayRule = AllOf(
-            Token('['),
+            Grapheme('['),
             OptionalWhitespace(),
             Optional(AllOf(
                 value,
-                ZeroOrMore(AllOf(OptionalWhitespace(), Token(','), OptionalWhitespace(), value))
+                ZeroOrMore(AllOf(OptionalWhitespace(), Grapheme(','), OptionalWhitespace(), value))
             )),
             OptionalWhitespace(),
-            Token(']')
+            Grapheme(']')
         ).As("array").Preserve();
 
         var valueBody = FirstOf(JsonStringRule, JsonObjectRule, JsonArrayRule);
@@ -109,7 +109,7 @@ public static class InductorJsonParser
     public static ParseResult ParseGrapheme(string input) => JsonRule.Parse(input, _graphemeOptions);
 
     // Round-trip variant used by the spot-check. Parse-time Delete filtering
-    // would drop the JSON delimiters (Token('{'), '}', ',', ':', '"') from
+    // would drop the JSON delimiters (Grapheme('{'), '}', ',', ':', '"') from
     // the tree, so Tree.ToString() on a normally-parsed value returns just
     // the concatenated non-delimiter content rather than the original
     // input. PreserveAllSymbols keeps every grammar node in the tree

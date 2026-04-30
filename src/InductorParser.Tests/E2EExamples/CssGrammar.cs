@@ -19,7 +19,7 @@ namespace InductorParser.Tests;
 //   * OneOrMore/ZeroOrMore/Optional            -> OneOrMore/ZeroOrMore/Optional
 //   * AtLeastAndAtMostExpression<X, N, M>      -> BetweenInclusive(N, M, X)
 //   * LiteralExpression<"str">                 -> Literal("str")
-//   * CharacterSymbol<"c">                     -> Token(c)
+//   * CharacterSymbol<"c">                     -> Grapheme(c)
 //   * CharacterSetExceptSymbol<"chars">        -> NoneOf("chars")
 //   * NotLiteralExpression<"str">              -> ZeroOrMore(AllOf(Not(Literal("str")), AnyToken()))
 //   * WhitespaceSymbol / OptionalWhitespaceSymbol -> one-or-more / zero-or-more over WhitespaceChars
@@ -65,8 +65,8 @@ public static class CssGrammar
 
     // Identifier = (letter | _) (letter | digit | _ | -)*
     public static readonly Rule Identifier = AllOf(
-        FirstOf(OneOf(LetterChars), Token('_')),
-        ZeroOrMore(FirstOf(OneOf(LetterOrDigitChars), Token('_'), Token('-')))
+        FirstOf(OneOf(LetterChars), Grapheme('_')),
+        ZeroOrMore(FirstOf(OneOf(LetterOrDigitChars), Grapheme('_'), Grapheme('-')))
     );
 
     // Strings can escape the quote character, include a line continuation
@@ -75,38 +75,38 @@ public static class CssGrammar
     // the escaped form in the AST. For accept/reject purposes that
     // reduces to matching the escaped form as a two-rune literal.
     public static readonly Rule DoubleQuotedString = AllOf(
-        Token('"'),
+        Grapheme('"'),
         ZeroOrMore(FirstOf(
             Literal("\\\""),
             Literal("\\\r\n"),
             NoneOf("\"")
         )),
-        Token('"')
+        Grapheme('"')
     );
 
     public static readonly Rule SingleQuotedString = AllOf(
-        Token('\''),
+        Grapheme('\''),
         ZeroOrMore(FirstOf(
             Literal("\\'"),
             Literal("\\\r\n"),
             NoneOf("'")
         )),
-        Token('\'')
+        Grapheme('\'')
     );
 
     public static readonly Rule ValueString = FirstOf(SingleQuotedString, DoubleQuotedString);
 
-    public static readonly Rule ClassSelector = AllOf(Token('.'), Identifier);
-    public static readonly Rule IdSelector = AllOf(Token('#'), Identifier);
+    public static readonly Rule ClassSelector = AllOf(Grapheme('.'), Identifier);
+    public static readonly Rule IdSelector = AllOf(Grapheme('#'), Identifier);
 
     public static readonly Rule PseudoSelector = AllOf(
-        Token(':'),
-        Optional(Token(':')),
+        Grapheme(':'),
+        Optional(Grapheme(':')),
         Identifier
     );
 
     public static readonly Rule TypeSelector = Identifier;
-    public static readonly Rule UniversalSelector = Token('*');
+    public static readonly Rule UniversalSelector = Grapheme('*');
 
     // (class|id|pseudo|type|*) (class|pseudo|id)*
     // Ordering mirrors the C++ FirstOf: class/id/pseudo are distinguishable
@@ -129,24 +129,24 @@ public static class CssGrammar
     public static readonly Rule SelectorList = AllOf(
         CssWhitespace,
         Selector,
-        ZeroOrMore(AllOf(CssWhitespace, Token(','), CssWhitespace, Selector))
+        ZeroOrMore(AllOf(CssWhitespace, Grapheme(','), CssWhitespace, Selector))
     );
 
     // url("...") or url(anything-but-close-paren)
     public static readonly Rule ValueUrl = FirstOf(
         AllOf(
             Literal("url"),
-            Token('('),
-            Token('"'),
+            Grapheme('('),
+            Grapheme('"'),
             ZeroOrMore(NoneOf("\"")),
-            Token('"'),
-            Token(')')
+            Grapheme('"'),
+            Grapheme(')')
         ),
         AllOf(
             Literal("url"),
-            Token('('),
+            Grapheme('('),
             ZeroOrMore(NoneOf(")")),
-            Token(')')
+            Grapheme(')')
         )
     );
 
@@ -163,7 +163,7 @@ public static class CssGrammar
     // meant. The Peek demands a hex-digit boundary right after the color
     // so a hex run that's not exactly 3 or 6 digits fails outright.
     public static readonly Rule ValueColorHex = AllOf(
-        Token('#'),
+        Grapheme('#'),
         FirstOf(
             BetweenInclusive(6, 6, OneOf(HexDigitChars)),
             BetweenInclusive(3, 3, OneOf(HexDigitChars))
@@ -174,11 +174,11 @@ public static class CssGrammar
     // rgba(int, int, int, float) with whitespace anywhere between pieces.
     public static readonly Rule ValueRgba = AllOf(
         Literal("rgba"),
-        Token('('), CssWhitespace, Integer(), CssWhitespace,
-        Token(','), CssWhitespace, Integer(), CssWhitespace,
-        Token(','), CssWhitespace, Integer(), CssWhitespace,
-        Token(','), CssWhitespace, Float(), CssWhitespace,
-        Token(')')
+        Grapheme('('), CssWhitespace, Integer(), CssWhitespace,
+        Grapheme(','), CssWhitespace, Integer(), CssWhitespace,
+        Grapheme(','), CssWhitespace, Integer(), CssWhitespace,
+        Grapheme(','), CssWhitespace, Float(), CssWhitespace,
+        Grapheme(')')
     );
 
     // Float before Integer: Integer would match the lead of a Float and
@@ -197,7 +197,7 @@ public static class CssGrammar
                 Literal("em")
             )
         ),
-        Token('0')
+        Grapheme('0')
     );
 
     // colorHex | rgba | url | length | number | string | identifier.
@@ -221,26 +221,26 @@ public static class CssGrammar
         Optional(AllOf(
             Identifier,
             CssWhitespace,
-            Token(':'),
+            Grapheme(':'),
             CssWhitespace,
             OneOrMore(AllOf(
                 DeclarationValue,
                 CssWhitespace,
-                Optional(AllOf(Token(','), CssWhitespace))
+                Optional(AllOf(Grapheme(','), CssWhitespace))
             ))
         )),
-        Token(';')
+        Grapheme(';')
     );
 
     // selector-list { declaration; declaration; ... }
     public static readonly Rule CssRule = AllOf(
         SelectorList,
         CssWhitespace,
-        Token('{'),
+        Grapheme('{'),
         CssWhitespace,
         ZeroOrMore(AllOf(CssWhitespace, Declaration)),
         CssWhitespace,
-        Token('}')
+        Grapheme('}')
     );
 
     public static readonly Rule Document = AllOf(

@@ -90,14 +90,14 @@ public class NoneOfRuleTests
         // A CRLF grapheme passes NoneOf unconditionally (it isn't a
         // single rune, so it can't be in any single-rune set), which
         // means the sweep silently consumes the CRLF and the trailing
-        // Token('\n') terminator then fails. For real line-based grammars,
+        // Grapheme('\n') terminator then fails. For real line-based grammars,
         // add Literal("\r\n") to both the stop set and the terminator.
         // See docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer".
         var rule = AllOf(
             ZeroOrMore(NoneOf(RuneSet.Single('\n'))),
-            Token('\n'));
+            Grapheme('\n'));
 
-        // PreserveAllSymbols keeps the trailing Token('\n') in the
+        // PreserveAllSymbols keeps the trailing Grapheme('\n') in the
         // tree so Tree.ToString reproduces the full matched line.
         var result = rule.Parse("hello world\n",
             new ParseOptions { PreserveAllSymbols = true });

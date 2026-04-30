@@ -43,14 +43,14 @@ public class ScanUntilRuleTests
     {
         // First rune is the stopper, so the scan exits immediately
         // without consuming. Same semantics as ZeroOrMore: zero
-        // matches is still a successful parse. Wrap it with Token('|')
+        // matches is still a successful parse. Wrap it with Grapheme('|')
         // so the outer rule consumes the full input and the EOF check
         // passes.
-        var rule = InductorParser.Rules.AllOf(StopOnPipe(), Token('|'));
+        var rule = InductorParser.Rules.AllOf(StopOnPipe(), Grapheme('|'));
         var result = rule.Parse("|");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        // The ScanUntil leaf contributes an empty range. Token('|')
+        // The ScanUntil leaf contributes an empty range. Grapheme('|')
         // is Delete so it drops out of the tree. Concatenated text is
         // "".
         Assert.That(result.Tree!.ToString(), Is.EqualTo(""));
@@ -60,10 +60,10 @@ public class ScanUntilRuleTests
     public void ScanUntil_stops_at_first_stopper_rune_without_consuming_it()
     {
         // "abc|rest" scans 'a', 'b', 'c' as body, stops at '|' without
-        // consuming it. The surrounding Token('|') then consumes the
+        // consuming it. The surrounding Grapheme('|') then consumes the
         // '|' itself. Tree text is "abc" (the body) plus "" (the
         // FlattenType.Delete delimiter) = "abc".
-        var rule = InductorParser.Rules.AllOf(StopOnPipe(), Token('|'));
+        var rule = InductorParser.Rules.AllOf(StopOnPipe(), Grapheme('|'));
         var result = rule.Parse("abc|");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -182,7 +182,7 @@ public class ScanUntilRuleTests
         var start = Literal("$$");
         var end = OneOf(RuneSet.Ascii.Letters);
         var body = ScanUntil(RuneSet.Runes("|"), start, end);
-        var rule = InductorParser.Rules.AllOf(body, Token('|'));
+        var rule = InductorParser.Rules.AllOf(body, Grapheme('|'));
 
         var result = rule.Parse("abc$xyz|");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -218,8 +218,8 @@ public class ScanUntilRuleTests
         // uses for the same reason. A per-case timeout would be a
         // belt-and-suspenders backstop, but the core assertion here
         // is just "Parse returns in bounded time."
-        var zeroWidthStart = Optional(Token('z'));  // matches empty if 'z' isn't next
-        var zeroWidthEnd = Optional(Token('z'));
+        var zeroWidthStart = Optional(Grapheme('z'));  // matches empty if 'z' isn't next
+        var zeroWidthEnd = Optional(Grapheme('z'));
         var rule = ScanUntil(RuneSet.Runes("|"), zeroWidthStart, zeroWidthEnd);
 
         // Input contains no 'z' and no '|'. Every iteration would see
@@ -238,7 +238,7 @@ public class ScanUntilRuleTests
     {
         // Starts are '$' OR '?'. Stopper is '|'. Demonstrates that
         // escapeStart can be a sub-rule, not just a fixed literal.
-        var start = FirstOf(Token('$'), Token('?'));
+        var start = FirstOf(Grapheme('$'), Grapheme('?'));
         var end = OneOf(RuneSet.Ascii.Letters);
         var rule = ScanUntil(RuneSet.Runes("|"), start, end);
 
@@ -325,11 +325,11 @@ public class ScanUntilRuleTests
         // "abc" + <surrogate> + "xyz|"
         // ScanUntil scans 'a', 'b', 'c' as body. At position 3 it
         // peeks the surrogate: TryPeekRune returns false, the scan
-        // breaks without throwing or looping. Outer Token('|') then
+        // breaks without throwing or looping. Outer Grapheme('|') then
         // tries to match at position 3, can't match a surrogate, so
         // the whole parse fails with ErrorCharIndex pointing at 3.
         string input = "abc" + new string(loneSurrogate, 1) + "xyz|";
-        var rule = InductorParser.Rules.AllOf(StopOnPipe(), Token('|'));
+        var rule = InductorParser.Rules.AllOf(StopOnPipe(), Grapheme('|'));
 
         var result = rule.Parse(input, NoNormalize);
 

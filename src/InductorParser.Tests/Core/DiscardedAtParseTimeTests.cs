@@ -70,21 +70,21 @@ public class DiscardedAtParseTimeTests
     [Test]
     public void Default_Delete_leaf_rules_return_the_shared_Discarded_value()
     {
-        // Token, Not, Peek, Eof all default to FlattenType.Delete. Each
+        // Grapheme, Not, Peek, Eof all default to FlattenType.Delete. Each
         // matches and contributes nothing at parse time, so a Delete rule
         // at the root produces an empty Symbols list.
-        var charResult = Token('x').Parse("x");
+        var charResult = Grapheme('x').Parse("x");
         Assert.That(charResult.Success, Is.True);
         Assert.That(charResult.Symbols, Is.Empty);
 
-        var notResult = AllOf(Not(Token('y')), Token('x')).Parse("x");
+        var notResult = AllOf(Not(Grapheme('y')), Grapheme('x')).Parse("x");
         // Top-level AllOf holds no children because both its children were
         // Discarded. AllOf is Flatten, so its children bubble up to the
         // root list, which is empty since the children were Discarded.
         Assert.That(notResult.Success, Is.True);
         Assert.That(notResult.Symbols, Is.Empty);
 
-        var peekResult = AllOf(Peek(Token('x')), Token('x')).Parse("x");
+        var peekResult = AllOf(Peek(Grapheme('x')), Grapheme('x')).Parse("x");
         Assert.That(peekResult.Success, Is.True);
         Assert.That(peekResult.Symbols, Is.Empty);
     }
@@ -99,7 +99,7 @@ public class DiscardedAtParseTimeTests
         // the full PrintTree rendering in one shot is easier to read
         // than per-child assertions, and any drift shows up as a
         // string diff naming the exact node that moved.
-        var rule = AllOf(Token('a'), OptionalWhitespace(), Token('b'));
+        var rule = AllOf(Grapheme('a'), OptionalWhitespace(), Grapheme('b'));
         var options = new ParseOptions { PreserveAllSymbols = true };
         var result = rule.Parse("a   b", options);
 

@@ -11,7 +11,7 @@ namespace InductorParser.Tests;
 public class OptionalRuleTests
 {
     // Tree.ToString() assertions below use PreserveAllSymbols so
-    // Token leaves (default FlattenType.Delete) survive parse-time
+    // Grapheme leaves (default FlattenType.Delete) survive parse-time
     // filtering and appear in the concatenated view.
     private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
@@ -20,7 +20,7 @@ public class OptionalRuleTests
     {
         // Optional wraps a rule. When inner matches, that input is consumed
         // and the surrounding grammar sees the post-match position.
-        var rule = AllOf(Optional(Token('-')), Token('a'));
+        var rule = AllOf(Optional(Grapheme('-')), Grapheme('a'));
         var result = rule.Parse("-a", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -32,7 +32,7 @@ public class OptionalRuleTests
     {
         // Inner doesn't match. Optional still succeeds with empty and the
         // surrounding grammar runs from the same position Optional started at.
-        var rule = AllOf(Optional(Token('-')), Token('a'));
+        var rule = AllOf(Optional(Grapheme('-')), Grapheme('a'));
         var result = rule.Parse("a", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -51,16 +51,16 @@ public class OptionalRuleTests
         //
         // Optional's inner reads "ab" then 'c' fails at offset 2,
         // recording "need 'c'". Optional catches, succeeds with empty.
-        // Token('x') then fails at offset 0 with its own "need 'x'".
+        // Grapheme('x') then fails at offset 0 with its own "need 'x'".
         // Deepest-wins picks offset 2: user sees "need 'c'", pointing
         // inside what was supposedly optional. Grammars that care can
         // override with a WithError at the outer required rule, but
-        // that won't help here because the outer Token('x') already has
+        // that won't help here because the outer Grapheme('x') already has
         // one and it's still shallower.
-        var rule = AllOf(Optional(AllOf(Token('a'),
-                                    Token('b'),
-                                    Token('c').WithError("need 'c'"))),
-                       Token('x').WithError("need 'x'"));
+        var rule = AllOf(Optional(AllOf(Grapheme('a'),
+                                    Grapheme('b'),
+                                    Grapheme('c').WithError("need 'c'"))),
+                       Grapheme('x').WithError("need 'x'"));
 
         var result = rule.Parse("abdy");
 
@@ -77,7 +77,7 @@ public class OptionalRuleTests
         // the empty match just leaves the root Symbols list empty. No per-rune leaves, no
         // BetweenInclusive wrapper, no children-list allocation survives
         // into the tree.
-        var result = Optional(Token('x')).Parse("");
+        var result = Optional(Grapheme('x')).Parse("");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Symbols, Is.Empty);
@@ -86,19 +86,19 @@ public class OptionalRuleTests
     [Test]
     public void Optional_trace_with_match_produces_expected_output()
     {
-        // Optional opens its own transaction. AllOf(Optional(Token('a')),
-        // Token('b')) on "ab": AllOf at depth 1, Optional adds depth 2,
-        // the inner Token adds depth 3 (nine spaces).
+        // Optional opens its own transaction. AllOf(Optional(Grapheme('a')),
+        // Grapheme('b')) on "ab": AllOf at depth 1, Optional adds depth 2,
+        // the inner Grapheme adds depth 3 (nine spaces).
         var sink = NewSink();
-        AllOf(Optional(Token('a')), Token('b'))
+        AllOf(Optional(Grapheme('a')), Grapheme('b'))
             .Parse("ab", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "         Lexer.Read: 'a', Consumed: 1",
-            "         SUCC | Token: found 'a'",
+            "         SUCC | Grapheme: found 'a'",
             "      SUCC | Optional: count= 1",
             "      Lexer.Read: 'b', Consumed: 2",
-            "      SUCC | Token: found 'b'",
+            "      SUCC | Grapheme: found 'b'",
             "   SUCC | AllOf: found 2"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
@@ -107,19 +107,19 @@ public class OptionalRuleTests
     [Test]
     public void Optional_trace_without_match_produces_expected_output()
     {
-        // Optional's first-rune lookahead skip proves Token('a') can't match
+        // Optional's first-rune lookahead skip proves Grapheme('a') can't match
         // on input "b" without reading (peek 'b' not in {'a'}), so Optional
         // succeeds with count= 0 immediately and no inner Read/FAIL trace
-        // appears. Token('b') then runs against the original position since
+        // appears. Grapheme('b') then runs against the original position since
         // Optional's commit didn't advance the lexer.
         var sink = NewSink();
-        AllOf(Optional(Token('a')), Token('b'))
+        AllOf(Optional(Grapheme('a')), Grapheme('b'))
             .Parse("b", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      SUCC | Optional: count= 0",
             "      Lexer.Read: 'b', Consumed: 1",
-            "      SUCC | Token: found 'b'",
+            "      SUCC | Grapheme: found 'b'",
             "   SUCC | AllOf: found 2"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
@@ -128,7 +128,7 @@ public class OptionalRuleTests
     [Test]
     public void Sealed_Optional_rejects_Flatten()
     {
-        var rule = Optional(Token('a'));
+        var rule = Optional(Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
     }
@@ -136,7 +136,7 @@ public class OptionalRuleTests
     [Test]
     public void Sealed_Optional_rejects_WithError()
     {
-        var rule = Optional(Token('a'));
+        var rule = Optional(Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
     }
@@ -144,7 +144,7 @@ public class OptionalRuleTests
     [Test]
     public void Sealed_Optional_rejects_As()
     {
-        var rule = Optional(Token('a'));
+        var rule = Optional(Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }

@@ -4,7 +4,7 @@ This doc describes what makes a rule's test file "comprehensive" in this codebas
 
 Tests live in `src/InductorParser.Tests/`, organized into three subfolders:
 
-- `Rules/`: one file per rule (`TokenRuleTests.cs`, `OneOfRuleTests.cs`, `AllOfRuleTests.cs`, etc.), each named after the rule type with a `Tests` suffix.
+- `Rules/`: one file per rule (`GraphemeRuleTests.cs`, `OneOfRuleTests.cs`, `AllOfRuleTests.cs`, etc.), each named after the rule type with a `Tests` suffix.
 - `Core/`: cross-cutting concerns that don't belong to any one rule (`WithErrorTests.cs`, `LexerSwitchTests.cs`, `IdAssignmentTests.cs`, `RuneSetTests.cs`). Files are named after the concern.
 - `E2EExamples/`: end-to-end grammar tests that exercise full grammars built from the public API (e.g. `SettingExampleTests.cs`).
 
@@ -46,7 +46,7 @@ The base `Rule.ThrowIfSealed` enforces the seal, but subclasses that ever overri
 
 ### Single-Token Primitive Rules
 
-Rules that call `lexer.Read()` exactly once. Today: `OneOfRule`, `EofRule` (which doesn't actually read but checks `lexer.IsEof`). The single-rune case of `TokenRule` behaves the same way.
+Rules that call `lexer.Read()` exactly once. Today: `OneOfRule`, `EofRule` (which doesn't actually read but checks `lexer.IsEof`). The single-rune case of `GraphemeRule` behaves the same way.
 
 Required tests:
 
@@ -61,7 +61,7 @@ Example (from `OneOfRuleTests.cs`):
 public void OneOf_mismatch_after_successful_matches_points_at_first_bad_char()
 {
     var rule = AllOf(OneOrMore(OneOf(RuneSet.Letters)),
-                   Token(';').WithError("expected ';'"));
+                   Grapheme(';').WithError("expected ';'"));
     var result = rule.Parse("abc1");
     Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
     Assert.That(result.ErrorMessage, Is.EqualTo("expected ';'"));
@@ -70,7 +70,7 @@ public void OneOf_mismatch_after_successful_matches_points_at_first_bad_char()
 
 ### Multi-Token Primitive Rules
 
-Rules that read multiple tokens in a lockstep loop. Today: `TokenRule` for multi-rune graphemes, `LiteralRule`, `LiteralIgnoreAsciiCaseRule`.
+Rules that read multiple tokens in a lockstep loop. Today: `GraphemeRule` for multi-rune graphemes, `LiteralRule`, `LiteralIgnoreAsciiCaseRule`.
 
 Required tests beyond single-token coverage:
 
@@ -78,13 +78,13 @@ Required tests beyond single-token coverage:
 - **Mismatch on a later token.** Construct input that matches the first N-1 tokens successfully then diverges. Assert position equals the start of the Nth token (where `tokenStart` was captured in the Nth iteration), not the start of the whole match (offset 0) and not post-read (offset of the token after the failure).
 - **Both lexer modes where applicable.** For rules whose behavior changes between `GraphemeLexer` and `RuneLexer`, include at least one test under each via `new ParseOptions { InputUnit = InputUnit.Rune }`.
 
-Example (from `TokenRuleTests.cs`):
+Example (from `GraphemeRuleTests.cs`):
 
 ```csharp
 [Test]
 public void Token_multi_rune_mismatch_on_second_token_reports_at_second_token_start()
 {
-    var rule = Token("\uD83D\uDC4B\uD83C\uDFFD").WithError("expected wave");
+    var rule = Grapheme("\uD83D\uDC4B\uD83C\uDFFD").WithError("expected wave");
     var result = rule.Parse("\uD83D\uDC4Bxy",
         new ParseOptions { InputUnit = InputUnit.Rune });
     Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
@@ -109,8 +109,8 @@ Example (from `AllOfRuleTests.cs`):
 [Test]
 public void And_later_child_failure_reports_at_deeper_position()
 {
-    var rule = AllOf(Token('a').WithError("need an 'a'"),
-                   Token('b').WithError("need a 'b'"));
+    var rule = AllOf(Grapheme('a').WithError("need an 'a'"),
+                   Grapheme('b').WithError("need a 'b'"));
     var result = rule.Parse("ax");
     Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     Assert.That(result.ErrorMessage, Is.EqualTo("need a 'b'"));
@@ -119,7 +119,7 @@ public void And_later_child_failure_reports_at_deeper_position()
 
 ### Rules with Construction-Time Validation
 
-Any rule (or factory) that validates its arguments and throws at build time. Today: `Token(char/Rune/int/string)` rejects surrogates, out-of-range values, multi-grapheme strings. `RuneSet.Single`/`Range`/`Runes` reject invalid scalar values.
+Any rule (or factory) that validates its arguments and throws at build time. Today: `Grapheme(char/Rune/int/string)` rejects surrogates, out-of-range values, multi-grapheme strings. `RuneSet.Single`/`Range`/`Runes` reject invalid scalar values.
 
 Required tests:
 
@@ -147,11 +147,11 @@ Some tests don't belong to any one rule's file. These live in `Core/`:
 - **RuneSet behavior**: `Core/RuneSetTests.cs`. Tests for the `RuneSet` data type itself (not its consumers like `OneOfRule`).
 - **Tracing (cross-cutting concerns only)**: `Core/TracingTests.cs`. Covers behaviors that aren't any one rule's property: null TraceSink is a no-op, ParseOptions defaults (null sink, Diagnostic level), the trace-label fallback chain (Name > ErrorMessage > rule class name), `TraceLevel.Normal` suppresses output, `Lexer.Read` and `Lexer.RecordFailure` emit their own diagnostic lines, transaction depth returns to zero after a parse (regression guard, since running the same parse twice must produce identical trace output), and two side-effect proof tests (`Off_path_does_not_evaluate_interpolated_arguments`, `On_path_evaluates_interpolated_arguments_exactly_once`, plus `Rule_TraceSuccess_off_path_does_not_evaluate_interpolated_arguments`) that verify the C# interpolated-string-handler rewrite. They're the critical tests for "tracing is cheap when disabled and doesn't evaluate interpolated arguments."
 
-Rules emit their traces via two base-class helpers, `TraceSuccess(lexer, $"...")` and `TraceFailure(lexer, $"...")`, defined on `Rule`. The rule's class name (`"AllOf"`, `"Token"`, etc.) is derived automatically from `GetType().Name` with the `"Rule"` suffix stripped and cached in the base constructor, so new rules get correct trace names without touching trace plumbing. Both helpers have explicit-level overloads (`TraceSuccess(lexer, level, $"...")`) for the rare case a rule wants to emit at something other than Diagnostic.
+Rules emit their traces via two base-class helpers, `TraceSuccess(lexer, $"...")` and `TraceFailure(lexer, $"...")`, defined on `Rule`. The rule's class name (`"AllOf"`, `"Grapheme"`, etc.) is derived automatically from `GetType().Name` with the `"Rule"` suffix stripped and cached in the base constructor, so new rules get correct trace names without touching trace plumbing. Both helpers have explicit-level overloads (`TraceSuccess(lexer, level, $"...")`) for the rare case a rule wants to emit at something other than Diagnostic.
 
 **Per-rule trace tests live in each rule's own test file.** Every rule in `Rules/` must include at least one success-path trace test and at least one failure-path trace test (if the rule has a failure path; `ZeroOrMoreRule` has none). The tests lock in the full trace output verbatim via `Assert.That(sink.ToString(), Is.EqualTo(...))`. This way, changing a rule's trace format produces a test failure in the rule's own file, right next to the code being edited, rather than in a central file the author might not have open. Shared helpers (`NewSink()`, `Lines(params string[])`) live in `TraceTestHelpers.cs` at the test project root and are pulled in via `using static InductorParser.Tests.TraceTestHelpers;`.
 
-Note on C++ trace mapping. The original InductorParser (C++) emits traces using template-unrolled class names like `CharacterSymbol::Parse`, `CharacterSetSymbol::Parse`, `1to2147483647Expression::Parse`, and so on. The C# port uses the rule's C# name instead (`Token`, `OneOf`, `OneOrMore`). Captured C++ traces used for reference material need a one-time mental mapping: C++ `CharacterSymbol` → C# `Token`, C++ `CharacterSetSymbol` → C# `OneOf`, C++ `EofSymbol` → C# `Eof`, C++ `AndExpression` → C# `AllOf`, C++ `OrExpression` → C# `FirstOf`, C++ `AtLeastAndAtMostExpression<T, 1, INT_MAX>` (`1to2147483647Expression`) → C# `OneOrMore`, C++ `<T, 0, INT_MAX>` → C# `ZeroOrMore`, C++ `<T, 0, 1>` → C# `Optional`. The general `BetweenInclusive(inner, n, m)` traces as `BetweenInclusive[n..m]`.
+Note on C++ trace mapping. The original InductorParser (C++) emits traces using template-unrolled class names like `CharacterSymbol::Parse`, `CharacterSetSymbol::Parse`, `1to2147483647Expression::Parse`, and so on. The C# port uses the rule's C# name instead (`Grapheme`, `OneOf`, `OneOrMore`). Captured C++ traces used for reference material need a one-time mental mapping: C++ `CharacterSymbol` → C# `Grapheme`, C++ `CharacterSetSymbol` → C# `OneOf`, C++ `EofSymbol` → C# `Eof`, C++ `AndExpression` → C# `AllOf`, C++ `OrExpression` → C# `FirstOf`, C++ `AtLeastAndAtMostExpression<T, 1, INT_MAX>` (`1to2147483647Expression`) → C# `OneOrMore`, C++ `<T, 0, INT_MAX>` → C# `ZeroOrMore`, C++ `<T, 0, 1>` → C# `Optional`. The general `BetweenInclusive(inner, n, m)` traces as `BetweenInclusive[n..m]`.
 
 When you write a test that primarily exercises one of these concerns, put it in the corresponding file, not in a rule-specific file. When a test exercises a rule but happens to touch a cross-cutting concern, put it in the rule's file and keep the cross-cutting concern under test as a secondary focus.
 
@@ -159,7 +159,7 @@ End-to-end grammars built from the public API live in `E2EExamples/`. Examples t
 
 ## File Organization
 
-One test fixture per rule, in `Rules/`. File naming follows the rule's type name plus `Tests`: `Rules/TokenRuleTests.cs` → `TokenRule.cs`. Cross-cutting files in `Core/` are named after the concern (`WithErrorTests.cs`, `LexerSwitchTests.cs`).
+One test fixture per rule, in `Rules/`. File naming follows the rule's type name plus `Tests`: `Rules/GraphemeRuleTests.cs` → `GraphemeRule.cs`. Cross-cutting files in `Core/` are named after the concern (`WithErrorTests.cs`, `LexerSwitchTests.cs`).
 
 Tests inside a fixture are ordered loosely by category: success paths first, failure-position tests next, WithError-message tests after that, then edge cases and construction-time validation. This isn't enforced by tooling, it's a readability convention.
 

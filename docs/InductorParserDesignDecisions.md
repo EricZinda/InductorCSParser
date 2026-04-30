@@ -33,7 +33,7 @@ Every concept from the original [GettingStarted.md](https://github.com/EricZinda
 | `ZeroOrMoreExpression<T>`          | `ZeroOrMore(rule)`                              |
 | `OptionalExpression<T>`            | `Optional(rule)`                                |
 | `AtLeastAndAtMostExpression<T,N,M>`| `BetweenInclusive(n, m, rule)`                  |
-| `CharacterSymbol<EqualString>`     | `Token('=')`                                     |
+| `CharacterSymbol<EqualString>`     | `Grapheme('=')`                                     |
 | `CharacterSetSymbol<Chars>`        | `OneOf(RuneSet.Letters)`                     |
 | `CharacterSetExceptSymbol<...>`    | `NoneOf(charClass)`                          |
 | `LiteralExpression<WordString>`    | `Literal("word")`                               |
@@ -159,7 +159,7 @@ The parser ships two lexers: `GraphemeLexer` (default) and `RuneLexer`. Both pro
 
 `GraphemeLexer` is the default because "one character" in the user's mental model is one grapheme (the guitar emoji 🎸 is one character, the family emoji 👨‍👩‍👧‍👦 is one character), and grammars that operate on user-typed text want that to be the unit they match. `RuneLexer` exists because some grammars specifically need rune-level access: parsing Unicode-category boundaries, walking combining-mark sequences individually, or implementing a Unicode library on top of the parser.
 
-The implementation details (how graphemes are detected, how position tracking works across the two, where the two produce different streams) live in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). The design rationale worth keeping here is: swapping the lexer is a `ParseOptions` field, not a grammar change, and grammars written against the `Rule` API work against either lexer. The rules whose behavior can observably differ between lexers are the ones that compare against a token directly (`Token`, `OneOf`, `NoneOf`, `Literal`, `Peek`, `Not`). Composite rules inherit any difference from a leaf inside them.
+The implementation details (how graphemes are detected, how position tracking works across the two, where the two produce different streams) live in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). The design rationale worth keeping here is: swapping the lexer is a `ParseOptions` field, not a grammar change, and grammars written against the `Rule` API work against either lexer. The rules whose behavior can observably differ between lexers are the ones that compare against a token directly (`Grapheme`, `OneOf`, `NoneOf`, `Literal`, `Peek`, `Not`). Composite rules inherit any difference from a leaf inside them.
 
 Where the two diverge on real input, the `RuneLexer` behavior is usually the buggy one: it was matching part of a grapheme as if it were a standalone character. `GraphemeLexer` avoids that when the runtime's `StringInfo` groups the sequence as one text element. The reframing is "`GraphemeLexer` revealed that my grammar was silently wrong on multi-rune input," not "`GraphemeLexer` broke my grammar."
 
@@ -192,7 +192,7 @@ The token stores only the UTF-16 offset and length. Rune and grapheme positions 
 
 Every built-in rule that looks at token content reduces to one of four operations.
 
-**`Token('=')`, `Token(Rune r)`, `Token(string grapheme)`.** Matches one `StringInfo` text element (a Grapheme), specified at rule-construction time. The `string` overload requires exactly one text element and is validated at construction with `StringInfo.GetNextTextElement`. The `char`, `Rune`, and `int` overloads are convenience wrappers that build a one-element string. At match time the rule reads lexer tokens until it has consumed the expected string length, comparing each token's `Chars` span with the corresponding part of the expected string. Under `GraphemeLexer` that's a single-token compare. Under `RuneLexer` it's a one-to-N token compare (`Token("👋🏽")` expects two rune tokens, waving hand plus medium skin tone, so it reads two tokens and compares each).
+**`Grapheme('=')`, `Grapheme(Rune r)`, `Grapheme(string grapheme)`.** Matches one `StringInfo` text element (a Grapheme), specified at rule-construction time. The `string` overload requires exactly one text element and is validated at construction with `StringInfo.GetNextTextElement`. The `char`, `Rune`, and `int` overloads are convenience wrappers that build a one-element string. At match time the rule reads lexer tokens until it has consumed the expected string length, comparing each token's `Chars` span with the corresponding part of the expected string. Under `GraphemeLexer` that's a single-token compare. Under `RuneLexer` it's a one-to-N token compare (`Grapheme("👋🏽")` expects two rune tokens, waving hand plus medium skin tone, so it reads two tokens and compares each).
 
 **`OneOf(RuneSet cc)` and `NoneOf(RuneSet cc)`.** These are the rune-set tests. Both are defined in terms of the predicate "the token is exactly one rune *r*, and `cc.Contains(r)`." `OneOf` matches when the predicate is true. `NoneOf` matches when it's false. The asymmetry that falls out of this is important: a multi-rune token never matches `OneOf` (the predicate is false because the token isn't one rune) but it *does* match `NoneOf` (the predicate is false, so the negation is true). This is what makes `OneOrMore(NoneOf(formattingChars))` sweep up emoji correctly in the pass-through-text recipe.
 
@@ -201,7 +201,7 @@ The two semantics in prose:
 - `OneOf(class)` is existential: "is this token one of the runes in the class?" A multi-rune token isn't any single rune, so no.
 - `NoneOf(class)` is universal: "does this token avoid all runes in the class?" A multi-rune token avoids every single-rune value, so yes.
 
-**`Literal(string s)`.** Generalizes `Token` to any non-empty string. It keeps the expected string and uses the same lockstep loop: read a lexer token, compare it with the corresponding range of the expected text, and advance by `token.Length`. Under `GraphemeLexer` a literal containing a multi-rune grapheme compares that grapheme as one token; under `RuneLexer` the same text compares rune by rune. This is the only one of these types that routinely consumes more than one token in a single match. `Token(string)` can also consume multiple tokens under `RuneLexer` when its single expected grapheme contains multiple runes.
+**`Literal(string s)`.** Generalizes `Grapheme` to any non-empty string. It keeps the expected string and uses the same lockstep loop: read a lexer token, compare it with the corresponding range of the expected text, and advance by `token.Length`. Under `GraphemeLexer` a literal containing a multi-rune grapheme compares that grapheme as one token. Under `RuneLexer` the same text compares rune by rune. This is the only one of these types that routinely consumes more than one token in a single match. `Grapheme(string)` can also consume multiple tokens under `RuneLexer` when its single expected grapheme contains multiple runes.
 
 Because `Literal` compares in the lexer's token units, a literal like `Literal("👨‍👩‍👧‍👦")` is checked as one token under `GraphemeLexer` (the whole family-emoji grapheme) and seven tokens under `RuneLexer` (four people emoji plus three ZWJs). Either way, the literal matches input that contains the same sequence of characters.
 
@@ -301,7 +301,7 @@ Everything else (flatten policies, error messages, named symbols) is metadata on
 Concretely, the four comparison leaves are all short:
 
 ```csharp
-// Token(string grapheme): _expected stores exactly one StringInfo text element.
+// Grapheme(string grapheme): _expected stores exactly one StringInfo text element.
 // The loop reads one token under GraphemeLexer, or 1..N rune tokens under RuneLexer.
 using var tx = lexer.BeginTransaction();
 int consumed = 0;
@@ -352,17 +352,17 @@ Each is a handful of lines. The common shape (start a transaction, read a token,
 
 Under `GraphemeLexer`, a multi-rune grapheme like 👨‍👩‍👧‍👦 arrives as a single token whose `Chars` span covers the whole sequence (eleven UTF-16 chars, seven runes). The ways a grammar can match it:
 
-- **`Token("👨‍👩‍👧‍👦")`** matches one grapheme by exact content. Construction-time validation rejects arguments that aren't exactly one grapheme, so `Token("ab")` throws at grammar-build time instead of failing silently at parse time.
-- **`Literal("👨‍👩‍👧‍👦 and friends")`** matches a sequence of graphemes by exact content. Same lockstep comparison as `Token`. The difference is that `Literal` accepts any length.
+- **`Grapheme("👨‍👩‍👧‍👦")`** matches one grapheme by exact content. Construction-time validation rejects arguments that aren't exactly one grapheme, so `Grapheme("ab")` throws at grammar-build time instead of failing silently at parse time.
+- **`Literal("👨‍👩‍👧‍👦 and friends")`** matches a sequence of graphemes by exact content. Same lockstep comparison as `Grapheme`. The difference is that `Literal` accepts any length.
 - **`AnyToken()`** matches any token including multi-rune ones. Useful when the grammar is streaming text through as opaque content ("an identifier is any non-delimiter character").
 - **`NoneOf(someClass)`** matches multi-rune tokens because they aren't in any single-rune class. This is the mechanism behind the pass-through-text recipe.
 
 What you *can't* do:
 
-- **Define a `RuneSet` that includes specific multi-rune sequences.** A `RuneSet` is a set of code points, not a set of sequences. If you want to match "any of these specific multi-rune sequences," express it as `FirstOf(Token(a), Token(b), Token(c))`, not as a character class.
+- **Define a `RuneSet` that includes specific multi-rune sequences.** A `RuneSet` is a set of code points, not a set of sequences. If you want to match "any of these specific multi-rune sequences," express it as `FirstOf(Grapheme(a), Grapheme(b), Grapheme(c))`, not as a character class.
 - **Test "is this grapheme a letter?" with `OneOf(RuneSet.Letters)`** when the grapheme is multi-rune. The class is defined over single runes, so any multi-rune grapheme is outside it. If you want "any identifier character, including combining marks as part of a letter sequence," use `Identifier()`. For custom shapes, `WithinGrapheme(...)` is the escape hatch: it first reads exactly one outer grapheme token, then runs your child rule over the runes inside that grapheme. The child must consume the whole grapheme. On success, the outer parse advances by one grapheme and, when preserved, exposes one leaf for the whole grapheme rather than separate leaves for the base letter and marks.
 
-The split that remains is between rune-set tests (`OneOf`, `NoneOf`) and content-match leaves (`Token`, `Literal`). The set tests are defined over single runes by construction (a `RuneSet` is a set of code points), and the content-match leaves compare raw `Chars` spans, so they handle multi-rune graphemes naturally. A glance at a rule tells you which half of the API it lives in.
+The split that remains is between rune-set tests (`OneOf`, `NoneOf`) and content-match leaves (`Grapheme`, `Literal`). The set tests are defined over single runes by construction (a `RuneSet` is a set of code points), and the content-match leaves compare raw `Chars` spans, so they handle multi-rune graphemes naturally. A glance at a rule tells you which half of the API it lives in.
 
 ## Greedy Repetition, No Repetition Backtracking
 
@@ -371,7 +371,7 @@ PEG parsers backtrack on alternatives (`FirstOf` tries each branch in order unti
 The practical consequence is the most common trip-up when moving from regex to PEG. Consider:
 
 ```csharp
-var rule = AllOf(OneOrMore(OneOf(RuneSet.Letters)), Token('a'));
+var rule = AllOf(OneOrMore(OneOf(RuneSet.Letters)), Grapheme('a'));
 var result = rule.Parse("aaa");
 ```
 
@@ -381,7 +381,7 @@ A regex engine with greedy backtracking would:
 2. Then try to match the trailing `a` against EOF, fail.
 3. Back off the repetition to `"aa"`, try again, succeed on the trailing `a`.
 
-A PEG engine DOESN'T do step 3. Once `OneOrMore` matched `"aaa"`, those matches are committed. The outer `AllOf` then tries `Token('a')` at EOF, fails, and the whole parse fails. Our `BetweenInclusiveRule` (which `OneOrMore`, `ZeroOrMore`, and `Optional` all factory through) preserves this: the loop inside its `TryParse` commits each successful inner match as it goes, and the loop just stops when the inner fails on the next attempt. No rewind.
+A PEG engine DOESN'T do step 3. Once `OneOrMore` matched `"aaa"`, those matches are committed. The outer `AllOf` then tries `Grapheme('a')` at EOF, fails, and the whole parse fails. Our `BetweenInclusiveRule` (which `OneOrMore`, `ZeroOrMore`, and `Optional` all factory through) preserves this: the loop inside its `TryParse` commits each successful inner match as it goes, and the loop just stops when the inner fails on the next attempt. No rewind.
 
 This looks like a cost, and sometimes it's. Grammars that worked in regex need to be restructured, usually with `Not(...)` lookahead to stop repetition one step short, or by splitting the repeated rule into a less-greedy form. The benefit's unambiguity: given a grammar and an input, PEG returns exactly one parse (or a fail), and the parse is whichever answer the ordered choices and greedy matches produced. Regex engines without this property have decades of scars from ambiguous patterns and catastrophic backtracking (ReDoS).
 
@@ -400,14 +400,14 @@ The top-level `Rule.Parse(input)` returns success only when the grammar both mat
 Concretely:
 
 ```csharp
-var rule = OneOrMore(Token('a'));
+var rule = OneOrMore(Grapheme('a'));
 var result = rule.Parse("aabb");
 // result.Success == false
 // result.ErrorCharIndex == 2
 // result.ErrorMessage starts with "Parse failed at offset 2"
 ```
 
-`OneOrMore(Token('a'))` greedily matches "aa" and stops because the next char isn't 'a'. The rule's own `TryParse` returned a tree happily. But the top-level `Parse` then checks `lexer.IsEof`, finds we're at offset 2 with "bb" still ahead, and turns the success into a failure.
+`OneOrMore(Grapheme('a'))` greedily matches "aa" and stops because the next char isn't 'a'. The rule's own `TryParse` returned a tree happily. But the top-level `Parse` then checks `lexer.IsEof`, finds we're at offset 2 with "bb" still ahead, and turns the success into a failure.
 
 Why this default. Most grammars represent "what a valid input looks like end-to-end" (a settings file, an expression, a query). If a user types `setting = 5` without a trailing `;`, they want to hear "missing ;", not "I happily parsed `setting = 5` and ignored what came after." Silently dropping trailing input would mask the entire class of "your grammar accepted something it shouldn't have" bugs that grammar authors care most about catching.
 
@@ -427,11 +427,11 @@ The library commits to one rule:
 
 Concretely this means `input[result.ErrorCharIndex]` gives the actual character that didn't match, not the character after it. If the index equals `input.Length`, that's a genuine end-of-input case: the grammar wanted more and there wasn't any. The index never falls outside `[0, input.Length]`.
 
-Walk through the smallest case to see why this matters. `Token('a').Parse("x")`:
+Walk through the smallest case to see why this matters. `Grapheme('a').Parse("x")`:
 
-1. TokenRule opens a transaction. `transaction.StartPosition` is 0.
+1. GraphemeRule opens a transaction. `transaction.StartPosition` is 0.
 2. Reads 'x'. Lexer position advances to 1.
-3. 'x' doesn't equal 'a'. TokenRule records its failure at `transaction.StartPosition` (0), not at the current lexer position (1).
+3. 'x' doesn't equal 'a'. GraphemeRule records its failure at `transaction.StartPosition` (0), not at the current lexer position (1).
 4. Transaction rolls back, lexer returns to position 0.
 5. `result.ErrorCharIndex` is 0. `result.ErrorMessage` is `"Parse failed at offset 0: unexpected 'x'."`.
 
@@ -439,9 +439,9 @@ A naive post-read implementation would record at 1 instead of 0, which equals `i
 
 ### Three Cases
 
-**Single-token leaves** (`TokenRule` single-rune, `OneOfRule`, `EofRule`) open a transaction, read one token, and fail if the token doesn't match. The pre-read position is exactly `transaction.StartPosition`, which the `Lexer.Transaction` struct exposes for this purpose. No extra locals, no separate state: the transaction already knows.
+**Single-token leaves** (`GraphemeRule` single-rune, `OneOfRule`, `EofRule`) open a transaction, read one token, and fail if the token doesn't match. The pre-read position is exactly `transaction.StartPosition`, which the `Lexer.Transaction` struct exposes for this purpose. No extra locals, no separate state: the transaction already knows.
 
-**Multi-token leaves** (`TokenRule`'s lockstep loop for multi-rune graphemes under `RuneLexer`, `LiteralRule`) read a sequence of tokens and fail when any one of them mismatches. The position is the start of the *specific* failing token, not the start of the whole attempt. A `Literal("abc")` that matches "ab" and fails on the third token reports offset 2, not offset 0. These rules track a per-iteration `tokenStart` local inside the loop.
+**Multi-token leaves** (`GraphemeRule`'s lockstep loop for multi-rune graphemes under `RuneLexer`, `LiteralRule`) read a sequence of tokens and fail when any one of them mismatches. The position is the start of the *specific* failing token, not the start of the whole attempt. A `Literal("abc")` that matches "ab" and fails on the third token reports offset 2, not offset 0. These rules track a per-iteration `tokenStart` local inside the loop.
 
 **Composite rules** (`AllOfRule`, `FirstOfRule`, `BetweenInclusiveRule`) don't introduce new positions of their own. They call `RecordFailure(lexer.Position, ...)` (the current lexer position after a child's transaction has rolled back), which equals where the child started trying. The child has already recorded at its own pre-read position (which is the same or deeper, depending on whether the child committed any sub-tokens before failing), so the composite's record either ties or is shallower, and deepest-failure-wins routes to the child's more-specific location. The composite still gets a chance to attach its `WithError` message via the equal-depth message-claim rule below.
 
@@ -458,7 +458,7 @@ The equal-depth restriction matters: without it, a shallow rule's `WithError` co
 
 The deepest-failure-wins model works well in practice but has one characteristic quirk: `Optional(...)` rules whose inner gets deeper than the surrounding required path can "capture" the error message into a branch that was truly optional.
 
-Concrete case: `AllOf(Optional(Literal("abc")), Token('x')).Parse("abdy")`. The Optional's inner reads "ab" and fails on 'd' vs 'c' at offset 2. Optional catches the failure and succeeds with empty children, so the overall grammar proceeds. Then Token('x') tries at offset 0, fails on 'a'. Deepest-failure-wins picks offset 2 (the abandoned Optional attempt), not offset 0 (the actually-required rule's failure). The user sees "unexpected 'd'" pointing at content inside what was supposedly optional.
+Concrete case: `AllOf(Optional(Literal("abc")), Grapheme('x')).Parse("abdy")`. The Optional's inner reads "ab" and fails on 'd' vs 'c' at offset 2. Optional catches the failure and succeeds with empty children, so the overall grammar proceeds. Then Grapheme('x') tries at offset 0, fails on 'a'. Deepest-failure-wins picks offset 2 (the abandoned Optional attempt), not offset 0 (the actually-required rule's failure). The user sees "unexpected 'd'" pointing at content inside what was supposedly optional.
 
 This isn't a bug. It's a property of the heuristic. Grammars that care about this can put `.WithError(...)` on the outer required rule, and the equal-depth message-claim rule will make that message appear even when the deepest position came from the optional branch. The full fix would require a different error model (something like tracking a separate "required-path failure" position alongside the deepest raw position), and no existing PEG library we've surveyed does that. The smallest core lives with the quirk and documents it.
 
@@ -549,7 +549,7 @@ public static readonly Rule FunctionDecl =
         Literal("function"),
         Cut(),                              // past here, no backtracking
         Identifier,
-        Token('('),
+        Grapheme('('),
         /* ... */
     );
 ```
@@ -595,11 +595,11 @@ static readonly LateBoundRule Expression = new LateBoundRule();
 static readonly Rule Term =
     FirstOf(
         Integer(),
-        AllOf(Token('('), Expression, Token(')'))    // refers to the not-yet-built expression
+        AllOf(Grapheme('('), Expression, Grapheme(')'))    // refers to the not-yet-built expression
     );
 
 static readonly Rule Sum =
-    AllOf(Term, ZeroOrMore(AllOf(Token('+'), Term)));
+    AllOf(Term, ZeroOrMore(AllOf(Grapheme('+'), Term)));
 
 static readonly Rule _init = Expression.Bind(Sum);   // wire up the late binding
 ```

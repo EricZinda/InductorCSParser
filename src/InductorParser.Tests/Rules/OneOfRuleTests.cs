@@ -65,16 +65,16 @@ public class OneOfRuleTests
     [Test]
     public void OneOf_mismatch_after_successful_matches_points_at_first_bad_char()
     {
-        // OneOrMore(Letters) commits "abc" up to offset 3. Then Token(';')
+        // OneOrMore(Letters) commits "abc" up to offset 3. Then Grapheme(';')
         // runs at offset 3, reads '1', and records its own WithError at
         // pre-read offset 3. That's deeper than the letter's WithError
         // (which is at offset 3 too, from the OneOrMore's terminating
         // attempt, but recorded first). First-writer at equal depth wins.
         //
-        // To make the test unambiguous we only put a WithError on Token(';')
+        // To make the test unambiguous we only put a WithError on Grapheme(';')
         // so there's no contention.
         var rule = AllOf(OneOrMore(OneOf(RuneSet.Letters)),
-                       Token(';').WithError("expected ';'"));
+                       Grapheme(';').WithError("expected ';'"));
 
         var result = rule.Parse("abc1");
 

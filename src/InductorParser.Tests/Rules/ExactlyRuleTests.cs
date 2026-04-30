@@ -11,14 +11,14 @@ namespace InductorParser.Tests;
 public class ExactlyRuleTests
 {
     // Tree.ToString() assertions use PreserveAllSymbols so the
-    // Token leaves (default FlattenType.Delete) stay in the tree and
+    // Grapheme leaves (default FlattenType.Delete) stay in the tree and
     // their text contributes to the concatenated view.
     private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
     [Test]
     public void Exactly_matches_when_input_has_exactly_N()
     {
-        var rule = Exactly(3, Token('a'));
+        var rule = Exactly(3, Grapheme('a'));
         var result = rule.Parse("aaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -28,7 +28,7 @@ public class ExactlyRuleTests
     [Test]
     public void Exactly_fails_when_input_has_fewer_than_N()
     {
-        var rule = Exactly(3, Token('a'));
+        var rule = Exactly(3, Grapheme('a'));
         var result = rule.Parse("aa");
 
         Assert.That(result.Success, Is.False);
@@ -39,9 +39,9 @@ public class ExactlyRuleTests
     public void Exactly_stops_at_N_and_surrounding_rule_consumes_remainder()
     {
         // Exactly commits after the Nth match even when more would match.
-        // Here the AllOf requires the follow-up Token('a') to pick up the
+        // Here the AllOf requires the follow-up Grapheme('a') to pick up the
         // fourth 'a'. If Exactly greedily consumed it, the AllOf would fail.
-        var rule = AllOf(Exactly(3, Token('a')), Token('a'));
+        var rule = AllOf(Exactly(3, Grapheme('a')), Grapheme('a'));
         var result = rule.Parse("aaaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -54,7 +54,7 @@ public class ExactlyRuleTests
         // Top-level Parse requires consuming all input, so the trailing
         // 'a' past the exact count causes the parse to fail even though
         // the Exactly rule itself matched three times.
-        var rule = Exactly(3, Token('a'));
+        var rule = Exactly(3, Grapheme('a'));
         var result = rule.Parse("aaaa");
 
         Assert.That(result.Success, Is.False);
@@ -63,7 +63,7 @@ public class ExactlyRuleTests
     [Test]
     public void Exactly_zero_succeeds_with_no_matches()
     {
-        var rule = AllOf(Exactly(0, Token('a')), Token('b'));
+        var rule = AllOf(Exactly(0, Grapheme('a')), Grapheme('b'));
         var result = rule.Parse("b", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -73,7 +73,7 @@ public class ExactlyRuleTests
     [Test]
     public void Exactly_zero_does_not_consume_matching_input()
     {
-        var rule = AllOf(Exactly(0, Token('a')), OneOrMore(Token('a')));
+        var rule = AllOf(Exactly(0, Grapheme('a')), OneOrMore(Grapheme('a')));
         var result = rule.Parse("aaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -83,7 +83,7 @@ public class ExactlyRuleTests
     [Test]
     public void Exactly_WithError_message_surfaces_on_failure()
     {
-        var rule = Exactly(3, Token('a'))
+        var rule = Exactly(3, Grapheme('a'))
             .WithError("need exactly 3 a's");
         var result = rule.Parse("ab");
 
@@ -96,7 +96,7 @@ public class ExactlyRuleTests
     public void Exactly_factory_rejects_negative_count()
     {
         Assert.Throws<System.ArgumentOutOfRangeException>(
-            () => Exactly(-1, Token('a')));
+            () => Exactly(-1, Grapheme('a')));
     }
 
     [Test]
@@ -132,10 +132,10 @@ public class ExactlyRuleTests
     [Test]
     public void Exactly_trace_failure_produces_expected_output()
     {
-        // Lookahead skip proves Token('a') can't match on 'z', so Exactly
+        // Lookahead skip proves Grapheme('a') can't match on 'z', so Exactly
         // emits its FAIL line with count= 0 and no inner Read/FAIL appears.
         var sink = NewSink();
-        Exactly(3, Token('a')).Parse("z", new ParseOptions { TraceSink = sink });
+        Exactly(3, Grapheme('a')).Parse("z", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "   FAIL | Exactly[3]: count= 0"
@@ -146,7 +146,7 @@ public class ExactlyRuleTests
     [Test]
     public void Sealed_Exactly_rejects_Flatten()
     {
-        var rule = Exactly(3, Token('a'));
+        var rule = Exactly(3, Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
     }
@@ -154,7 +154,7 @@ public class ExactlyRuleTests
     [Test]
     public void Sealed_Exactly_rejects_WithError()
     {
-        var rule = Exactly(3, Token('a'));
+        var rule = Exactly(3, Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
     }
@@ -162,7 +162,7 @@ public class ExactlyRuleTests
     [Test]
     public void Sealed_Exactly_rejects_As()
     {
-        var rule = Exactly(3, Token('a'));
+        var rule = Exactly(3, Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }

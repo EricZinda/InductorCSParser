@@ -29,9 +29,9 @@ var settingName = Identifier().As("name");
 
 // "Rune" is the .NET term for Unicode code point
 var quotedString = AllOf(
-    Token('"'),
+    Grapheme('"'),
     ScanUntil(stopAt=RuneSet.Runes("\"")),
-    Token('"'));
+    Grapheme('"'));
 
 var settingValue = FirstOf(
     Float(),
@@ -42,7 +42,7 @@ var settingValue = FirstOf(
 var document = AllOf(
     settingName,
     OptionalWhitespace(),
-    Token('='),
+    Grapheme('='),
     OptionalWhitespace(),
     settingValue
 );
@@ -151,7 +151,7 @@ var validator = AllOf(
 Even the textbook ReDos example `^(a+)+$` is safe in IP:
 
 ```csharp
-var pattern = AllOf(OneOrMore(OneOrMore(Token('a'))), Eof());
+var pattern = AllOf(OneOrMore(OneOrMore(Grapheme('a'))), Eof());
 ```
 
 Even written in this contrived shape with one composite rule wrapping another, it still runs in linear time. 

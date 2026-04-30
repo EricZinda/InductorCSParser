@@ -195,7 +195,7 @@ public class WithinGraphemeRuleTests
     [Test]
     public void Sealed_WithinGrapheme_rejects_Flatten()
     {
-        var rule = WithinGrapheme(Token('a'));
+        var rule = WithinGrapheme(Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
     }
@@ -203,7 +203,7 @@ public class WithinGraphemeRuleTests
     [Test]
     public void Sealed_WithinGrapheme_rejects_WithError()
     {
-        var rule = WithinGrapheme(Token('a'));
+        var rule = WithinGrapheme(Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
     }
@@ -211,7 +211,7 @@ public class WithinGraphemeRuleTests
     [Test]
     public void Sealed_WithinGrapheme_rejects_As()
     {
-        var rule = WithinGrapheme(Token('a'));
+        var rule = WithinGrapheme(Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
