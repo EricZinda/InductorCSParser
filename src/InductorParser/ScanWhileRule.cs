@@ -5,22 +5,30 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
-// Matches a contiguous run of single-rune tokens from one RuneSet and
-// returns the whole run as one leaf Symbol. This is the character-class
-// analogue of LiteralRule/ScanUntilRule: use it when the grammar wants a
-// maximal run such as [A-Za-z0-9_]+, not when it needs one Symbol per rune.
+// Scan forward while runes are in a RuneSet, returning the whole run
+// as one leaf Symbol. The optimization story: AtLeast(n, OneOf(set))
+// produces the same matched text but pays one transaction and one
+// per-rune leaf Symbol for every rune in the run, which the tree then
+// has to flatten away. ScanWhileRule opens one transaction at the
+// top, drops into lexer.AdvanceWhileSingleRuneIn for the inner loop,
+// and emits one leaf Symbol over the whole matched span. On the word
+// scan benchmarks that's a 2x speedup.
 //
-// Tests live in src/InductorParser.Tests/Rules/RuneRunRuleTests.cs.
+// Pairs with ScanUntilRule, which is the inverse stop condition: scan
+// while runes are NOT a stopper. Both are leaf-shaped scanners that
+// produce one Symbol per matched run.
+//
+// Tests live in src/InductorParser.Tests/Rules/ScanWhileRuleTests.cs.
 // See docs/TestArchitecture.md for the per-rule test conventions
 // (success, failure position, WithError propagation, positional fallback,
 // sealed-rule rejection).
-internal sealed class RuneRunRule : Rule
+internal sealed class ScanWhileRule : Rule
 {
     private readonly RuneSet _set;
     private readonly int _minimumCount;
     private readonly string _setRendered;
 
-    public RuneRunRule(RuneSet set, int minimumCount)
+    public ScanWhileRule(RuneSet set, int minimumCount)
         : base(FlattenType.Preserve)
     {
         if (minimumCount < 1)
@@ -30,7 +38,7 @@ internal sealed class RuneRunRule : Rule
         _set = set;
         _minimumCount = minimumCount;
         _setRendered = set.ToString();
-        SetTraceName(minimumCount == 1 ? "RuneRun" : $"RuneRun[{minimumCount}..]");
+        SetTraceName(minimumCount == 1 ? "ScanWhile" : $"ScanWhile[{minimumCount}..]");
     }
 
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
@@ -38,10 +46,9 @@ internal sealed class RuneRunRule : Rule
         using var transaction = lexer.BeginTransaction();
         int startPosition = transaction.StartPosition;
 
-        // This is intentionally a lexer primitive rather than a loop of
-        // OneOfRule.TryParse calls. The old spelling of [class]+ built and
-        // later flattened one leaf per rune. This consumes the same maximal
-        // token run but leaves one Symbol over the original input range.
+        // Lexer primitive instead of a loop of OneOfRule.TryParse calls:
+        // one transaction and one Symbol allocation regardless of the
+        // run's length, versus one of each per rune in the OneOf form.
         int count = lexer.AdvanceWhileSingleRuneIn(_set);
         if (count < _minimumCount)
         {

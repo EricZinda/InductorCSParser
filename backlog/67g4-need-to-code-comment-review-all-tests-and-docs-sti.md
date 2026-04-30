@@ -2,3 +2,4 @@
 core code is done
 docs directory is done
 Core tests are done
+Rule tests are done

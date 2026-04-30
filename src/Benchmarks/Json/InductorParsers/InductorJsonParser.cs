@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using global::InductorParser;
+using global::InductorParser.StateMachine;
 using global::InductorParser.SyntaxTree;
 using static global::InductorParser.Rules;
 
@@ -21,7 +22,7 @@ namespace InductorParser.Benchmarks.Json.InductorParsers;
 // string-parsing hot path is apples-to-apples.
 //
 // Entry point is the bare value rule (no surrounding
-// AllOf(OptionalWhitespace, value, OptionalWhitespace, Eof)). The harness
+// AllOf(Optional(Whitespace()), value, Optional(Whitespace()), Eof)). The harness
 // feeds clean input that starts and ends at the value, competitors
 // likewise skip a trailing-Eof wrapper, and adding one would spend
 // time on every parse that the bench isn't trying to measure.
@@ -46,31 +47,31 @@ public static class InductorJsonParser
 
         JsonMemberRule = AllOf(
             JsonStringRule,
-            OptionalWhitespace(),
+            Optional(Whitespace()),
             Grapheme(':'),
-            OptionalWhitespace(),
+            Optional(Whitespace()),
             value
         ).As("member");
 
         JsonObjectRule = AllOf(
             Grapheme('{'),
-            OptionalWhitespace(),
+            Optional(Whitespace()),
             Optional(AllOf(
                 JsonMemberRule,
-                ZeroOrMore(AllOf(OptionalWhitespace(), Grapheme(','), OptionalWhitespace(), JsonMemberRule))
+                ZeroOrMore(AllOf(Optional(Whitespace()), Grapheme(','), Optional(Whitespace()), JsonMemberRule))
             )),
-            OptionalWhitespace(),
+            Optional(Whitespace()),
             Grapheme('}')
         ).As("object").Preserve();
 
         JsonArrayRule = AllOf(
             Grapheme('['),
-            OptionalWhitespace(),
+            Optional(Whitespace()),
             Optional(AllOf(
                 value,
-                ZeroOrMore(AllOf(OptionalWhitespace(), Grapheme(','), OptionalWhitespace(), value))
+                ZeroOrMore(AllOf(Optional(Whitespace()), Grapheme(','), Optional(Whitespace()), value))
             )),
-            OptionalWhitespace(),
+            Optional(Whitespace()),
             Grapheme(']')
         ).As("array").Preserve();
 
@@ -83,9 +84,8 @@ public static class InductorJsonParser
 
     // MaxDepth=0 disables the recursion-depth budget. The Deep benchmark
     // input is 256 levels of nested objects, so the default MaxDepth=1000 trips.
-    // Disabling the budget matches what Newtonsoft
-    // and System.Text.Json already do in the bench via MaxDepth=1024 on
-    // their Deep-specific settings objects.
+    // Disabling the budget matches what System.Text.Json already does in
+    // the bench via MaxDepth=1024 on its Deep-specific settings object.
     private static readonly ParseOptions _options = new()
     {
         InputUnit = InputUnit.Rune,
@@ -93,6 +93,16 @@ public static class InductorJsonParser
     };
 
     public static ParseResult Parse(string input) => JsonRule.Parse(input, _options);
+
+    // State-machine evaluator variant. Same grammar (JsonRule), same
+    // Rune lexer, same ParseOptions. Only the evaluator differs:
+    // routes through StateMachineParser, which lowers JsonRule to a
+    // flat State[] program once and runs it via the switch-dispatch
+    // inner loop instead of the recursive virtual TryParseRule path.
+    // Pairs with the InductorParserRune row so the comparison is
+    // purely evaluator-vs-evaluator.
+    public static ParseResult ParseStateMachine(string input) =>
+        StateMachineParser.Parse(JsonRule, input, _options);
 
     // Grapheme-lexer variant, exposed as its own JsonBench benchmark
     // (XxxJson_InductorParserGrapheme) alongside the Rune-lexer standard

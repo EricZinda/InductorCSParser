@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
@@ -74,5 +75,100 @@ internal sealed class AllOfRule : Rule
                 return new RuleStartRequirements(union, Advance.Always);
         }
         return new RuleStartRequirements(union, anyMightConsume ? Advance.Sometimes : Advance.Never);
+    }
+
+    internal override (string Text, bool IgnoreCase)? ComputeRequiredLiteral()
+    {
+        // Every child must match in sequence, so any single child's
+        // required literal is required by the AllOf. A run of
+        // consecutive children that each have a fixed concatenable text
+        // contributes a single longer literal (Literal("# ") followed
+        // by OneOf("Nn") OneOf("Oo")... gives "# noqa" case-insensitive).
+        // Pick the longest candidate seen across all runs and any
+        // recursed sub-literals, mirroring what regex engines do when
+        // they extract a "best literal" from a pattern.
+        StringBuilder? run = null;
+        bool runIgnoreCase = false;
+        (string Text, bool IgnoreCase)? best = null;
+
+        foreach (var child in Children)
+        {
+            var concat = child.ComputeConcatenableText();
+            if (concat != null && concat.Value.Text.Length > 0)
+            {
+                run ??= new StringBuilder();
+                run.Append(concat.Value.Text);
+                runIgnoreCase |= concat.Value.IgnoreCase;
+                continue;
+            }
+
+            // Non-concatenable child breaks the run. Finalize whatever
+            // we accumulated and consider its standalone required
+            // literal as a separate candidate.
+            FinalizeRun(ref run, ref runIgnoreCase, ref best);
+
+            var childRequired = child.ComputeRequiredLiteral();
+            if (childRequired != null)
+                Maybe(ref best, childRequired.Value);
+        }
+
+        FinalizeRun(ref run, ref runIgnoreCase, ref best);
+        return best;
+    }
+
+    // Surface a multi-literal alternative if any single child has one.
+    // The motivating shape is AllOf(FirstOf(L1, L2, L3, L4), other-stuff)
+    // where the FirstOf has all-literal branches: any successful match
+    // of the AllOf still passes through the FirstOf and so contains one
+    // of {L1, L2, L3, L4}. If the AllOf has a long single shared literal
+    // already (the AllOf's ComputeRequiredLiteral picks it up), callers
+    // typically prefer that and never reach this method; this is for
+    // the cases where no single literal is derivable but a child's set
+    // is.
+    internal override IReadOnlyList<(string Text, bool IgnoreCase)>? ComputeRequiredLiteralAlternatives()
+    {
+        foreach (var child in Children)
+        {
+            var childSet = child.ComputeRequiredLiteralAlternatives();
+            if (childSet != null && childSet.Count > 0)
+                return childSet;
+        }
+        return null;
+    }
+
+    internal override (string Text, bool IgnoreCase)? ComputeConcatenableText()
+    {
+        // Only concatenable when every child is concatenable; otherwise
+        // we can't promise a fixed-length contribution.
+        var builder = new StringBuilder();
+        bool ignoreCase = false;
+        foreach (var child in Children)
+        {
+            var concat = child.ComputeConcatenableText();
+            if (concat == null) return null;
+            builder.Append(concat.Value.Text);
+            ignoreCase |= concat.Value.IgnoreCase;
+        }
+        return builder.Length == 0 ? null : (builder.ToString(), ignoreCase);
+    }
+
+    private static void FinalizeRun(ref StringBuilder? run, ref bool runIgnoreCase, ref (string Text, bool IgnoreCase)? best)
+    {
+        if (run == null || run.Length == 0)
+        {
+            run = null;
+            runIgnoreCase = false;
+            return;
+        }
+        Maybe(ref best, (run.ToString(), runIgnoreCase));
+        run = null;
+        runIgnoreCase = false;
+    }
+
+    private static void Maybe(ref (string Text, bool IgnoreCase)? best, (string Text, bool IgnoreCase) candidate)
+    {
+        if (candidate.Text.Length == 0) return;
+        if (best == null || candidate.Text.Length > best.Value.Text.Length)
+            best = candidate;
     }
 }

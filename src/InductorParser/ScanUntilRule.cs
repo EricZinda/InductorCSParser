@@ -17,10 +17,10 @@ namespace InductorParser;
 // contains.
 //
 // There are two options for the string body stop condition:
-//   * RuneSet stopAt (fast path): stop when the next token begins with a
-//     rune in the set. Only does one RuneSet.Contains per token position and
-//     handles any grammar whose closing boundary is a single-rune token:
-//     JSON ", Python ' or ", C# $"..." closing, etc.
+//   * RuneSet stopAt (fast path): stop when the next rune is in the
+//     set. Only does one RuneSet.Contains per rune and handles any grammar whose
+//     closing boundary is a single rune: JSON ", Python ' or ", C# $"..."
+//     closing, etc.
 //   * Rule stopAt (general path): stop when a user-supplied rule
 //     matches. The rule is executed in a peek
 //     transaction that always rolls back, so the stopper itself isn't
@@ -61,16 +61,11 @@ namespace InductorParser;
 // rule built dynamically from whatever `delim` the opening
 // captured. That's context-sensitive and not directly expressible
 // as a fixed Rule at grammar-build time.
-//
-// Tests live in src/InductorParser.Tests/Rules/ScanUntilRuleTests.cs.
-// See docs/TestArchitecture.md for the per-rule test conventions
-// (success, failure position, WithError propagation, positional fallback,
-// sealed-rule rejection).
 internal sealed class ScanUntilRule : Rule
 {
     // Stopper discrimination. _stopperRule != null selects the general
     // path, otherwise _stopperSet is used. The general path is one
-    // predictable branch per token position. JSON-style grammars that take the
+    // predictable branch per rune. JSON-style grammars that take the
     // RuneSet path never pay for Rule dispatch.
     private readonly RuneSet _stopperSet;
     private readonly Rule? _stopperRule;
@@ -79,9 +74,9 @@ internal sealed class ScanUntilRule : Rule
     // Escape discrimination. Three modes:
     //   _hasEscape == false: no escape support.
     //   _hasEscape == true, _escapeStartRune != -1, _escapeStartRule == null:
-    //       single-rune start fast path. One int equality check at each
-    //       non-stopper token boundary. Covers the JSON / C / Python
-    //       "backslash" case, which is essentially every real escape grammar.
+    //       single-rune start fast path. One int equality check per
+    //       non-stopper rune. Covers the JSON / C / Python "backslash"
+    //       case, which is essentially every real escape grammar.
     //   _hasEscape == true, _escapeStartRule != null, _escapeStartRune == -1:
     //       general Rule-based start. One Rule.TryParse per non-stopper
     //       rune. Covers multi-rune starts like $$ / ??, or any
@@ -111,7 +106,7 @@ internal sealed class ScanUntilRule : Rule
     // rolls the lexer back to where ScanUntil opened.
     private readonly Rule? _escapeEnd;
 
-    // FAST PATH, no escape. Per token boundary: one RuneSet.Contains.
+    // FAST PATH, no escape. Per rune: one RuneSet.Contains.
     public ScanUntilRule(RuneSet stopAt)
         : base(FlattenType.Preserve)
     {
@@ -124,8 +119,19 @@ internal sealed class ScanUntilRule : Rule
         _escapeStartRule = null;
     }
 
-    // FAST PATH, single-rune escape start. Per token boundary: one
-    // RuneSet.Contains plus one int equality on non-stopper token starts.
+    // Accessors for the state-machine lowering pass (StateMachine/Lowerer.cs).
+    // The recursive evaluator reads these private fields directly inside
+    // TryParseRule; the lowering pass needs the same data without
+    // running the rule.
+    internal RuneSet LoweringStopperSet => _stopperSet;
+    internal Rule? LoweringStopperRule => _stopperRule;
+    internal bool LoweringHasEscape => _hasEscape;
+    internal int LoweringEscapeStartRune => _escapeStartRune;
+    internal Rule? LoweringEscapeStartRule => _escapeStartRule;
+    internal Rule? LoweringEscapeEnd => _escapeEnd;
+
+    // FAST PATH, single-rune escape start. Per rune: one
+    // RuneSet.Contains plus one int equality on non-stopper runes.
     // Covers JSON, C, C++ regular, Python single-line.
     public ScanUntilRule(RuneSet stopAt, Rune escapeStart, Rule escapeEnd)
         : base(FlattenType.Preserve, escapeEnd)
@@ -160,7 +166,7 @@ internal sealed class ScanUntilRule : Rule
         _escapeStartRule = escapeStart;
     }
 
-    // General stopper, no escape. Per token boundary: one Rule.TryParse for
+    // General stopper, no escape. Per rune: one Rule.TryParse for
     // the stopper (peek transaction, never consumed). Use for
     // multi-rune boundaries like C++ raw strings.
     public ScanUntilRule(Rule stopAt)
@@ -202,10 +208,10 @@ internal sealed class ScanUntilRule : Rule
         string input = lexer.Input;
         int inputLen = input.Length;
 
-        // Scan forward one lexer token at a time. The loop has three ways out:
+        // Scan forward one rune at a time. The loop has three ways out:
         // end-of-input (the while condition), a stopper match, or a
         // malformed UTF-16 surrogate that can't form a rune. Each
-        // iteration consumes one lexer token as body, one escape sequence,
+        // iteration consumes one rune as body, one escape sequence,
         // or bails to one of those exits.
         while (lexer.Position < inputLen)
         {
@@ -297,7 +303,7 @@ internal sealed class ScanUntilRule : Rule
                 }
             }
 
-            // Not a stopper, not an escape start: consume one lexer token as
+            // Not a stopper, not an escape start: consume one rune as
             // body and keep scanning. Using Read keeps the position
             // bookkeeping (tracing, EOF handling) in one place rather
             // than duplicating the increment here.
@@ -327,16 +333,16 @@ internal sealed class ScanUntilRule : Rule
         // but it also consumes runes when the input has matchable ones.
         // That's Advance.Sometimes.
         //
-        // FirstConsumedRunes: the body can consume a token whose first rune is
-        // not in the stopper set (the stop check fires first in the scan loop,
-        // so a token starting with a stopper rune is never consumed). That's
-        // ~_stopperSet for the RuneSet stopper path. A Rule-based stopper
-        // can't be rendered as a rune set, so we stay at Universe there.
-        // Escape-start runes, if a grammar has them, are always outside the
-        // stopper set: the scan loop checks the stopper before the escape, so
-        // an escape-start that was also a stopper would be unreachable dead
-        // code. That means ~_stopperSet already covers the escape path. No
-        // separate union needed.
+        // FirstConsumedRunes: the body consumes any rune not in the stopper
+        // set (the stop check fires first in the scan loop, so a stopper
+        // rune is never consumed). That's ~_stopperSet for the RuneSet
+        // stopper path. A Rule-based stopper can't be rendered as a rune
+        // set, so we stay at Universe there. Escape-start runes, if a
+        // grammar has them, are always outside the stopper set: the
+        // scan loop checks the stopper before the escape, so an
+        // escape-start that was also a stopper would be unreachable
+        // dead code. That means ~_stopperSet already covers the
+        // escape path. No separate union needed.
         RuneSet firstConsumed = _stopperRule == null
             ? ~_stopperSet
             : RuneSet.Universe;

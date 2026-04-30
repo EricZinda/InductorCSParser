@@ -38,11 +38,11 @@ var settingValue = FirstOf(
 
 var document = AllOf(
     settingName,
-    OptionalWhitespace(),
+    Optional(Whitespace()),
     Grapheme('='),
-    OptionalWhitespace(),
+    Optional(Whitespace()),
     settingValue,
-    OptionalWhitespace(),
+    Optional(Whitespace()),
     Grapheme(';')
 ).Preserve();
 
@@ -100,7 +100,7 @@ The rule's id is derived deterministically from the string, and the name carries
 ```csharp
 AllOf(
     Identifier().As("operatorName"),
-    OptionalWhitespace(),
+    Optional(Whitespace()),
     Grapheme(':'),
     /* ... */
 )
@@ -253,7 +253,7 @@ var settingName = Identifier()
 
 Rules are mutable up until `Compile` runs and then sealed. `.As(...)`, `.Flatten(...)`, `.WithError(...)` mutate the rule in place and return the same rule for chaining, so `var rule = Identifier(); rule.Flatten(FlattenType.Preserve);` and `var rule = Identifier().Flatten(FlattenType.Preserve);` produce the same end state on the same object. The practical consequence: if you keep a reference to a rule and reuse it in multiple places, calling `.Flatten(...)` on one of those references changes the policy at every other use site too. To get two flatten policies for the same shape, build two separate rule instances. After `Compile` returns the rule graph is sealed: calling `.As(...)`, `.Flatten(...)`, or any other mutation method on a sealed rule throws `InvalidOperationException`.
 
-Default values for `Flatten`, error messages, and so on mostly match the C++ defaults from the original source. `OptionalWhitespace()` defaults to `FlattenType.Delete`. `Grapheme('=')` defaults to `FlattenType.Delete`. `AllOf(...)` defaults to `FlattenType.Flatten`. `Integer()` and `Float()` are compositions whose outer rule also defaults to `FlattenType.Flatten`; call `.Preserve()` when you want to find them as wrapper nodes. `Parse` applies these types to the tree before returning: `Delete` nodes are dropped, `Flatten` wrappers have their children lifted into the parent, and `Preserve` wrappers survive. `ParseOptions.PreserveAllSymbols` turns the whole pass off and gives you back a grammar-shaped debug tree with every wrapper in place.
+Default values for `Flatten`, error messages, and so on mostly match the C++ defaults from the original source. `Whitespace()` defaults to `FlattenType.Delete`. `Grapheme('=')` defaults to `FlattenType.Delete`. `AllOf(...)` defaults to `FlattenType.Flatten`. `Integer()` and `Float()` are compositions whose outer rule also defaults to `FlattenType.Flatten`; call `.Preserve()` when you want to find them as wrapper nodes. `Parse` applies these types to the tree before returning: `Delete` nodes are dropped, `Flatten` wrappers have their children lifted into the parent, and `Preserve` wrappers survive. `ParseOptions.PreserveAllSymbols` turns the whole pass off and gives you back a grammar-shaped debug tree with every wrapper in place.
 
 ### User-Defined Rules
 
@@ -383,15 +383,15 @@ var settingValue = FirstOf(
 ).As("settingValue").Preserve();
 
 var document = AllOf(
-    OptionalWhitespace(),
+    Optional(Whitespace()),
     settingName,
-    OptionalWhitespace(),
+    Optional(Whitespace()),
     Grapheme('='),
-    OptionalWhitespace(),
+    Optional(Whitespace()),
     settingValue,
-    OptionalWhitespace(),
+    Optional(Whitespace()),
     Grapheme(';'),
-    OptionalWhitespace(),
+    Optional(Whitespace()),
     Eof()
 ).As("document").Preserve().Compile();
 
@@ -447,9 +447,9 @@ var values = AllOf(
     valueAtom,
     ZeroOrMore(
         AllOf(
-            OptionalWhitespace(),
+            Optional(Whitespace()),
             Grapheme(','),
-            OptionalWhitespace(),
+            Optional(Whitespace()),
             valueAtom
         )
     )
@@ -457,18 +457,18 @@ var values = AllOf(
 
 var pair = AllOf(
     key,
-    OptionalWhitespace(),
+    Optional(Whitespace()),
     Grapheme('='),
-    OptionalWhitespace(),
+    Optional(Whitespace()),
     values,
-    OptionalWhitespace(),
+    Optional(Whitespace()),
     Grapheme(';')
 ).As("pair").Preserve();
 
 var document = AllOf(
-    OptionalWhitespace(),
+    Optional(Whitespace()),
     ZeroOrMore(
-        AllOf(pair, OptionalWhitespace())
+        AllOf(pair, Optional(Whitespace()))
     ),
     Eof()
 ).As("document").Preserve().Compile();
