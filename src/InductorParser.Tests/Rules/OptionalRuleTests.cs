@@ -1,151 +1,52 @@
-using System;
 using NUnit.Framework;
 using InductorParser;
-using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 
 namespace InductorParser.Tests;
 
+// Optional(inner) is a thin factory over BetweenInclusiveRule with
+// atLeast=0, atMost=1, traceName="Optional". The shared functional
+// behavior (zero-match success, deepest-failure-wins quirk, sealed-rule
+// rejection, trace format) is covered by BetweenInclusiveRuleTests. This
+// fixture only verifies that the Optional factory wires those three
+// values into the base correctly.
 [TestFixture]
 public class OptionalRuleTests
 {
-    // Tree.ToString() assertions below use PreserveAllSymbols so
-    // Grapheme leaves (default FlattenType.Delete) survive parse-time
-    // filtering and appear in the concatenated view.
-    private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
-
     [Test]
-    public void Optional_inner_match_is_consumed()
+    public void Optional_factory_wires_atLeast_0_and_atMost_1_with_Optional_trace_name()
     {
-        // Optional wraps a rule. When inner matches, that input is consumed
-        // and the surrounding grammar sees the post-match position.
-        var rule = AllOf(Optional(Grapheme('-')), Grapheme('a'));
-        var result = rule.Parse("-a", Debug());
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("-a"));
-    }
-
-    [Test]
-    public void Optional_inner_miss_succeeds_with_no_consumption()
-    {
-        // Inner doesn't match. Optional still succeeds with empty and the
-        // surrounding grammar runs from the same position Optional started at.
-        var rule = AllOf(Optional(Grapheme('-')), Grapheme('a'));
-        var result = rule.Parse("a", Debug());
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("a"));
-    }
-
-    [Test]
-    public void Optional_inner_failure_still_contributes_to_DeepestFailure()
-    {
-        // Known PEG heuristic quirk: an Optional whose inner fails deeper
-        // than the required path can still win the error message via
-        // deepest-failure-wins.
-        //
-        // Grammar: AllOf(Optional(AllOf(a, b, c-with-message)), x-with-message)
-        // Input:   "abdy"
-        //
-        // Optional's inner reads "ab" then 'c' fails at offset 2,
-        // recording "need 'c'". Optional catches, succeeds with empty.
-        // Grapheme('x') then fails at offset 0 with its own "need 'x'".
-        // Deepest-wins picks offset 2: user sees "need 'c'", pointing
-        // inside what was supposedly optional. Grammars that care can
-        // override with a WithError at the outer required rule, but
-        // that won't help here because the outer Grapheme('x') already has
-        // one and it's still shallower.
-        var rule = AllOf(Optional(AllOf(Grapheme('a'),
-                                    Grapheme('b'),
-                                    Grapheme('c').WithError("need 'c'"))),
-                       Grapheme('x').WithError("need 'x'"));
-
-        var result = rule.Parse("abdy");
-
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need 'c'"));
-    }
-
-    [Test]
-    public void Optional_with_no_match_produces_empty_symbols()
-    {
-        // Optional / ZeroOrMore that matches zero times has
-        // FlattenType.Flatten, so no wrapper Symbol is ever produced:
-        // the empty match just leaves the root Symbols list empty. No per-rune leaves, no
-        // BetweenInclusive wrapper, no children-list allocation survives
-        // into the tree.
-        var result = Optional(Grapheme('x')).Parse("");
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Symbols, Is.Empty);
-    }
-
-    [Test]
-    public void Optional_trace_with_match_produces_expected_output()
-    {
-        // Optional opens its own transaction. AllOf(Optional(Grapheme('a')),
-        // Grapheme('b')) on "ab": AllOf at depth 1, Optional adds depth 2,
-        // the inner Grapheme adds depth 3 (nine spaces).
+        // Trace label "Optional" proves the named factory was used. The
+        // SUCC at count= 1 inside the Optional segment with no probe-past
+        // proves atMost = 1: the loop stopped at one match even though
+        // the surrounding input had a second matchable 'a' available.
+        // The follow-up Grapheme('a') consuming the second 'a' proves
+        // Optional released control after one match rather than running
+        // off the end.
         var sink = NewSink();
-        AllOf(Optional(Grapheme('a')), Grapheme('b'))
-            .Parse("ab", new ParseOptions { TraceSink = sink });
+        AllOf(Optional(Grapheme('a')), Grapheme('a'))
+            .Parse("aa", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "         Lexer.Read: 'a', Consumed: 1",
             "         SUCC | Grapheme: found 'a'",
             "      SUCC | Optional: count= 1",
-            "      Lexer.Read: 'b', Consumed: 2",
-            "      SUCC | Grapheme: found 'b'",
+            "      Lexer.Read: 'a', Consumed: 2",
+            "      SUCC | Grapheme: found 'a'",
             "   SUCC | AllOf: found 2"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
 
     [Test]
-    public void Optional_trace_without_match_produces_expected_output()
+    public void Optional_succeeds_with_zero_matches_proving_atLeast_is_0()
     {
-        // Optional's first-rune lookahead skip proves Grapheme('a') can't match
-        // on input "b" without reading (peek 'b' not in {'a'}), so Optional
-        // succeeds with count= 0 immediately and no inner Read/FAIL trace
-        // appears. Grapheme('b') then runs against the original position since
-        // Optional's commit didn't advance the lexer.
-        var sink = NewSink();
-        AllOf(Optional(Grapheme('a')), Grapheme('b'))
-            .Parse("b", new ParseOptions { TraceSink = sink });
+        // atLeast = 0: when the inner rule can't match, Optional still
+        // succeeds with no consumption. This is what distinguishes
+        // Optional from a Grapheme('-') used directly.
+        var result = AllOf(Optional(Grapheme('-')), Grapheme('a')).Parse("a");
 
-        string expected = Lines(
-            "      SUCC | Optional: count= 0",
-            "      Lexer.Read: 'b', Consumed: 1",
-            "      SUCC | Grapheme: found 'b'",
-            "   SUCC | AllOf: found 2"
-        );
-        Assert.That(sink.ToString(), Is.EqualTo(expected));
-    }
-
-    [Test]
-    public void Sealed_Optional_rejects_Flatten()
-    {
-        var rule = Optional(Grapheme('a'));
-        rule.Compile();
-        Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
-    }
-
-    [Test]
-    public void Sealed_Optional_rejects_WithError()
-    {
-        var rule = Optional(Grapheme('a'));
-        rule.Compile();
-        Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
-    }
-
-    [Test]
-    public void Sealed_Optional_rejects_As()
-    {
-        var rule = Optional(Grapheme('a'));
-        rule.Compile();
-        Assert.Throws<InvalidOperationException>(() => rule.As("late"));
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 }
