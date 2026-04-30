@@ -46,12 +46,12 @@ public readonly struct ParseResult
     // FlattenType.Preserve this has exactly one element (the root's
     // wrapper). For a root with FlattenType.Flatten whose children
     // bubbled up, this is the flat list of those children. For a
-    // failed or aborted parse, it is empty.
+    // failed or aborted parse, it's empty.
     public IReadOnlyList<Symbol> Symbols =>
         _symbols ?? System.Array.Empty<Symbol>();
 
     // Convenience accessor for the common "root is a single Symbol"
-    // case. Returns Symbols[0] if there is exactly one top-level
+    // case. Returns Symbols[0] if there's exactly one top-level
     // Symbol, null otherwise. Callers that know their root has
     // FlattenType.Preserve (the common case for named grammars) can
     // keep using this. For grammars whose root produces multiple
@@ -62,7 +62,7 @@ public readonly struct ParseResult
     // Error position in chars (UTF-16 code units), zero-based. The
     // unit string.Substring / Range / Span use, and the unit the
     // Language Server Protocol uses for editor diagnostics. On
-    // success this is 0. On failure it is the position of the deepest
+    // success this is 0. On failure it's the position of the deepest
     // recorded failure (where the parser got furthest before giving
     // up), capped to the input length so callers can index into the
     // original input string without bounds-checking.
@@ -118,7 +118,7 @@ public readonly struct ParseResult
 
     // Convenience: true when Outcome is Success, false otherwise.
     // Most callers check this first and only inspect Tree / Symbols
-    // when it is true.
+    // when it's true.
     public bool Success => Outcome == ParseOutcome.Success;
 
     // Looks up the human-readable name of a SymbolId in the grammar

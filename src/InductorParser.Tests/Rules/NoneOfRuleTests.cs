@@ -14,7 +14,7 @@ public class NoneOfRuleTests
     [Test]
     public void NoneOf_matches_a_rune_outside_the_set()
     {
-        // 'x' is not a digit, so NoneOf(Digits) succeeds on it.
+        // 'x' isn't a digit, so NoneOf(Digits) succeeds on it.
         var rule = NoneOf(RuneSet.Digits);
         var result = rule.Parse("x");
 
@@ -37,7 +37,7 @@ public class NoneOfRuleTests
     [Test]
     public void NoneOf_fails_at_EOF()
     {
-        // EOF is not "a rune not in the set". It is no rune at all. Fail.
+        // EOF isn't "a rune not in the set". It's no rune at all. Fail.
         var rule = NoneOf(RuneSet.Digits).WithError("wanted a non-digit");
         var result = rule.Parse("");
 

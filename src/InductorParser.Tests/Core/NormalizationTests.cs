@@ -114,7 +114,7 @@ public class NormalizationTests
     public void Already_normalized_input_reports_positions_identical_to_null_option()
     {
         // The common case: input is already in FormC, so normalization
-        // should not change the text. Failure positions must come out
+        // shouldn't change the text. Failure positions must come out
         // identical to the no-normalization path whether the runtime
         // returns the same string reference or an equivalent one.
         string input = CafePrecomposed + "X";

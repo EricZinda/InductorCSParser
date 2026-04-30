@@ -369,7 +369,7 @@ public class PrologGrammarTests
         "a(g).  ",
         "a(g).  \r\nb(d,e(f,g)) :-.",
         "goals(findSolution(a)).",
-        // Documents threaded through with comments.
+        // Documents interleaved with comments.
         "a(a). b(b). a(b, c). % This is a comment\r\n",
         "a(%\na%\n)%\n.%\n b(%\nb%\n)%\n.%\n a(%\nb,%\n c%\n)%\n. % This is a comment\r\n",
     };

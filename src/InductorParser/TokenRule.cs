@@ -27,7 +27,7 @@ namespace InductorParser;
 // Construction validates that the expected string is exactly one
 // grapheme via StringInfo.GetNextTextElement. Token("ab") throws at
 // grammar-build time instead of silently failing at parse time. (Note:
-// on pre-.NET 5 runtimes StringInfo is not UAX #29 compliant, so the
+// on pre-.NET 5 runtimes StringInfo isn't UAX #29 compliant, so the
 // grapheme count for exotic Unicode inputs can be wrong. See
 // backlog/xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md.)
 //

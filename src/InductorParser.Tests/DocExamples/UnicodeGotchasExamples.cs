@@ -27,7 +27,7 @@ public class UnicodeGotchasExamples
 
         Assert.That(name.Parse("2foo").Success, Is.False);
         Assert.That(name.Parse("_foo").Success, Is.False,
-            "underscore is not in strict XID_Start");
+            "underscore isn't in strict XID_Start");
         Assert.That(name.Parse("ﷺ").Success, Is.False,
             "Arabic ligature U+FDFA, NFKC-unstable exclusion");
     }
@@ -72,7 +72,7 @@ public class UnicodeGotchasExamples
         Assert.That(asciiOnlyLetter.Parse("a").Success, Is.True);
         Assert.That(asciiOnlyLetter.Parse("Z").Success, Is.True);
         Assert.That(asciiOnlyLetter.Parse("é").Success, Is.False,
-            "precomposed é is not ASCII");
+            "precomposed é isn't ASCII");
     }
 
     // "Matching specific languages" / "Python 3 identifiers" recipe.
@@ -89,7 +89,7 @@ public class UnicodeGotchasExamples
         Assert.That(result.Success, Is.True);
     }
 
-    // "Case-Insensitive Matching Beyond ASCII" — the LiteralIgnoreAsciiCase
+    // "Case-Insensitive Matching Beyond ASCII", the LiteralIgnoreAsciiCase
     // leaf does ASCII case-insensitive matching (A <-> a).
     [Test]
     public void LiteralIgnoreAsciiCase_matches_ascii_case_insensitively()
@@ -181,7 +181,7 @@ public class UnicodeGotchasExamples
         Assert.That(grammar.Parse(cleaned).Success, Is.True);
     }
 
-    // "CRLF Under GraphemeLexer": doc claim: Token('\n') does NOT match
+    // "CRLF Under GraphemeLexer": doc claim: Token('\n') DOESN'T match
     // a CRLF grapheme. Use FirstOf(Literal("\r\n"), OneOf(...)) instead.
     [Test]
     public void CRLF_token_lf_does_not_match_under_graphemelexer()

@@ -44,7 +44,7 @@ public static class JsonGrammar
         // .Delete() on the escapeEnd FirstOf triggers the ScanUntil
         // "don't allocate child Symbols for the escape-end match" fast
         // path. The ScanUntil primitive always produces a single leaf
-        // over the raw body slice, so the escape-end sub-rules' output
+        // over the raw body text, so the escape-end sub-rules' output
         // is discarded either way. Marking them Delete skips the
         // allocation.
         JsonScanUntil = ScanUntil(

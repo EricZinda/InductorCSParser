@@ -236,7 +236,7 @@ public static class Rules
     public static Rule OneOf(string runes) => new OneOfRule(RuneSet.Runes(runes));
 
     /// <summary>
-    /// Match one rune whose value is NOT in the given
+    /// Match one rune whose value ISN'T in the given
     /// <see cref="RuneSet"/>. Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
@@ -264,14 +264,14 @@ public static class Rules
     /// </summary>
     /// <remarks>
     /// This is the run-oriented form of <see cref="OneOf(RuneSet)"/>.
-    /// It is equivalent to a greedy <c>AtLeast(minimumCount,
+    /// It's equivalent to a greedy <c>AtLeast(minimumCount,
     /// OneOf(set))</c> for the text it consumes, but returns one leaf
-    /// over the whole run instead of one leaf per rune. That is useful
+    /// over the whole run instead of one leaf per rune. That's useful
     /// for identifiers, words, numbers, and other character-class runs
     /// where callers care about the span as a whole.
     ///
     /// Under GraphemeLexer, "single-rune token" is literal: a
-    /// multi-rune grapheme whose first rune is in the set does not
+    /// multi-rune grapheme whose first rune is in the set doesn't
     /// match. That keeps this rule aligned with <see cref="OneOf(RuneSet)"/>.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
@@ -618,7 +618,7 @@ public static class Rules
     /// <see cref="OneOrMore"/> would default to
     /// <see cref="FlattenType.Flatten"/>.
     /// Under <see cref="InputUnit.Grapheme"/>, CRLF is one two-rune
-    /// token and therefore is not consumed by this rule; use
+    /// token and therefore isn't consumed by this rule. Use
     /// <see cref="EndOfLine"/> for line terminators.
     /// </remarks>
     public static Rule Whitespace() => OneOrMore(OneOf(RuneSet.Whitespace)).Flatten(FlattenType.Delete);
@@ -635,7 +635,7 @@ public static class Rules
     /// override the underlying <see cref="ZeroOrMore"/> would
     /// default to <see cref="FlattenType.Flatten"/>.
     /// Under <see cref="InputUnit.Grapheme"/>, CRLF is one two-rune
-    /// token and therefore is not consumed by this rule; use
+    /// token and therefore isn't consumed by this rule. Use
     /// <see cref="EndOfLine"/> for line terminators.
     /// </remarks>
     public static Rule OptionalWhitespace() => ZeroOrMore(OneOf(RuneSet.Whitespace)).Flatten(FlattenType.Delete);
@@ -781,8 +781,8 @@ public static class Rules
     /// <para>
     /// One leaf Symbol is emitted per successful match, representing the
     /// whole grapheme. Inner-rule symbols are discarded. Inner-rule
-    /// tracing is not propagated to the outer trace. The inner parse is
-    /// bounded to the grapheme's rune span, but the sub-lexer does not
+    /// tracing isn't propagated to the outer trace. The inner parse is
+    /// bounded to the grapheme's rune span, but the sub-lexer doesn't
     /// share the outer parse's trace or budget counters.
     /// </para>
     /// </remarks>

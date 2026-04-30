@@ -34,7 +34,7 @@ internal sealed class PeekRule : Rule
         var innerResult = Inner.TryParse(lexer, outputSymbols: null);
         if (innerResult == null)
         {
-            TraceFailure(lexer, $"inner did not match");
+            TraceFailure(lexer, $"inner didn't match");
             lexer.RecordFailure(transaction.StartPosition, ErrorMessage);
             return null;
         }

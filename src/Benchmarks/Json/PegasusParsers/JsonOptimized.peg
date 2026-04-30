@@ -25,7 +25,7 @@
 // 3. A single Dictionary constructor call from the member list, skipping the
 //    `new[] { first }.Concat(rest)` enumerable allocation.
 //
-// Pegasus does not have a cut/commit operator, possessive repetition, or a
+// Pegasus doesn't have a cut/commit operator, possessive repetition, or a
 // "capture as substring" form for char-class runs, so each char in a literal
 // run still gets boxed into a one-char string. That allocation is inherent
 // to the library and not addressable in the grammar.

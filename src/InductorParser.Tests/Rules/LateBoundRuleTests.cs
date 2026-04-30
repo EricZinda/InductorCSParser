@@ -116,7 +116,7 @@ public class LateBoundRuleTests
     public void LateBoundRule_keeps_Preserve_target_symbol_in_parent_children()
     {
         // Regression: LateBoundRule's own FlattenType is Flatten, but when
-        // it forwards to a target that is FlattenType.Preserve the target's
+        // it forwards to a target that's FlattenType.Preserve the target's
         // wrapper Symbol has to reach the enclosing composite's children
         // list. If the proxy drops it, a grammar like
         //   AllOf(X, lateBound, Y)

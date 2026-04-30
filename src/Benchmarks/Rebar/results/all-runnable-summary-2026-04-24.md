@@ -2,7 +2,7 @@
 
 Measured with `rebar 0.1.0 (rev 8e952148cc)` on the 15-case InductorParser-supported subset. Values are median wall-clock timings from `all-runnable-2026-04-24.csv`.
 
-Runnable engines in this workspace: `.NET compiled`, `.NET NonBacktracking`, `rust/regex`, `rust/regexold`, `rust/regex/lite`, `regress`, `go/regexp`, `javascript/v8`, and `InductorParser`. JavaScript does not appear for compile-only models. Engines requiring unavailable native/runtime dependencies were not measured.
+Runnable engines in this workspace: `.NET compiled`, `.NET NonBacktracking`, `rust/regex`, `rust/regexold`, `rust/regex/lite`, `regress`, `go/regexp`, `javascript/v8`, and `InductorParser`. JavaScript doesn't appear for compile-only models. Engines requiring unavailable native/runtime dependencies weren't measured.
 
 Note: a few rows report timer-floor medians such as `0.00ns` or `1.00ns` while their means are higher; keep the raw CSV mean/stddev columns in mind for those rows.
 

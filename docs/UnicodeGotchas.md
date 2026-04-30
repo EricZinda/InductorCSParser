@@ -1,6 +1,6 @@
 # Unicode Gotchas
 
-Most Unicode surprises cannot be fixed by the parser's lexer choice. They live outside the "what is a token?" question the lexers answer, so the fix is usually caller-side preprocessing (clean the input before parsing) or grammar-design (pick the right `RuneSet`, add explicit tolerance rules). A few gotchas below are lexer-specific, and those sections call that out directly.
+Most Unicode surprises can't be fixed by the parser's lexer choice. They live outside the "what is a token?" question the lexers answer, so the fix is usually caller-side preprocessing (clean the input before parsing) or grammar-design (pick the right `RuneSet`, add explicit tolerance rules). A few gotchas below are lexer-specific, and those sections call that out directly.
 
 This doc lists the common gotchas, why they bite, and the idiomatic workaround for each. If you are choosing between `RuneLexer` and `GraphemeLexer`, see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). That is a different decision.
 
@@ -16,7 +16,7 @@ That accepts `foo`, `café`, `καλημέρα`, `ℼ`, and rejects `2foo`, `_fo
 
 Two quiet wins you get for free:
 
-- **NFC equivalence (UAX #31 R4).** `ParseOptions.NormalizeInput` defaults to `NormalizationForm.FormC`, so `café` precomposed (U+00E9) and `café` as `e` + combining acute (U+0301) normalize to the same string before the lexer sees them, and both parse to the same identifier. You do not write any code for this.
+- **NFC equivalence (UAX #31 R4).** `ParseOptions.NormalizeInput` defaults to `NormalizationForm.FormC`, so `café` precomposed (U+00E9) and `café` as `e` + combining acute (U+0301) normalize to the same string before the lexer sees them, and both parse to the same identifier. You don't write any code for this.
 
 - **Runtime-backed `XID_Start` and `XID_Continue` tables.** Yes: `RuneSet.XidStart` and `RuneSet.XidContinue` are the Unicode XID properties used by UAX #31's default identifier shape, not custom Inductor-specific character classes. The version caveat is where the Unicode data comes from. Most of each set comes from Unicode General_Category data exposed by the .NET runtime: letters and letter numbers for start characters, plus combining marks, decimal digits, and connector punctuation for continuation characters. `RuneSet.Xid.cs` stores only the small UAX #31 add/remove lists needed on top of those categories, such as `U+2118` SCRIPT CAPITAL P and the Arabic ligatures excluded for NFKC stability. Exact code point coverage follows the Unicode version exposed by the runtime's category tables plus those stored exception tables.
 
@@ -30,7 +30,7 @@ Identifier().Parse("καλημέρα"); // Greek: matches
 
 ### WithinGrapheme: general-purpose sub-grapheme matching
 
-`WithinGrapheme(innerRule)` is the building block `Identifier()` uses, exposed on its own for other grammar patterns that need to look inside a grapheme. It reads one outer token, runs the inner rule against that token's runes (as a mini rune-lexed stream), and requires the inner rule to consume every rune of the grapheme. Partial matches fail — graphemes are atomic.
+`WithinGrapheme(innerRule)` is the building block `Identifier()` uses, exposed on its own for other grammar patterns that need to look inside a grapheme. It reads one outer token, runs the inner rule against that token's runes (as a mini rune-lexed stream), and requires the inner rule to consume every rune of the grapheme. Partial matches fail because graphemes are atomic.
 
 Uses beyond identifiers:
 
@@ -54,7 +54,7 @@ var jamoCluster = WithinGrapheme(AllOf(
 ));
 ```
 
-Caveats: the inner rule runs against a fresh sub-lexer that does not share trace or budget state with the outer lexer. It is bounded to the current token's span, so ordinary character-consuming rules stay tiny, but avoid arbitrary long-running user code inside it. Inner-rule symbols are discarded; `WithinGrapheme` emits one leaf per grapheme to the outer tree.
+Caveats: the inner rule runs against a fresh sub-lexer that doesn't share trace or budget state with the outer lexer. It's bounded to the current token's span, so ordinary character-consuming rules stay tiny, but avoid arbitrary long-running user code inside it. Inner-rule symbols are discarded. `WithinGrapheme` emits one leaf per grapheme to the outer tree.
 
 ### Matching specific languages
 
@@ -98,11 +98,11 @@ var result = ecmascript.Parse(input, new ParseOptions
 });
 ```
 
-C# identifiers, per [ECMA-334 §7.4.3](https://www.ecma-international.org/publications-and-standards/standards/ecma-334/). C# allows `_` in Start and uses category-based rules rather than XID directly. For grammars, `Identifier(extraStartRunes: RuneSet.Runes("_"))` with default NFC is a close approximation for ordinary source. It is not a spec-exact C# lexer.
+C# identifiers, per [ECMA-334 §7.4.3](https://www.ecma-international.org/publications-and-standards/standards/ecma-334/). C# allows `_` in Start and uses category-based rules rather than XID directly. For grammars, `Identifier(extraStartRunes: RuneSet.Runes("_"))` with default NFC is a close approximation for ordinary source. It isn't a spec-exact C# lexer.
 
 Java identifiers use `Character.isJavaIdentifierStart` and `Character.isJavaIdentifierPart`, which are their own rule. Not reproducible via `Identifier` parameters alone; a Java-conforming grammar would compose against a custom `RuneSet` built from those predicates.
 
-Swift has its own enumerated list of ranges that resembles XID but is not a property reference. Not reproducible via `Identifier` parameters alone.
+Swift has its own enumerated list of ranges that resembles XID but isn't a property reference. Not reproducible via `Identifier` parameters alone.
 
 If you are restricting to a specific script for security reasons (mixed-script phishing, homoglyph attacks), see the Homoglyph Confusables section below. `Identifier()` is the general-purpose match, not a script-restricted one.
 
@@ -110,13 +110,13 @@ If you are restricting to a specific script for security reasons (mixed-script p
 
 The `LiteralIgnoreAsciiCase` leaf does ASCII case-insensitive matching (A ↔ a) and is all most grammars need. Full Unicode case-insensitive matching has script-specific surprises that neither lexer handles: German `ß` uppercases to `SS` (one character becomes two), Turkish has dotted-i and dotless-i as distinct letters, Greek final sigma (ς) pairs with regular sigma only at word boundaries. The leaf is ASCII-only on purpose. Extending it to full Unicode silently produces wrong results on Turkish, Greek, and German text.
 
-**Fix.** Use the built-in leaf and accept that case-insensitive matching of non-ASCII text is not supported:
+**Fix.** Use the built-in leaf and accept that case-insensitive matching of non-ASCII text isn't supported:
 
 ```csharp
 public static readonly Rule SelectKeyword = LiteralIgnoreAsciiCase("select");
 ```
 
-Do not try to extend this to full Unicode case-insensitive matching. It will get subtly wrong for Turkish, Greek, and German.
+Don't try to extend this to full Unicode case-insensitive matching. It'll get subtly wrong for Turkish, Greek, and German.
 
 ## BOM At File Start
 
@@ -131,7 +131,7 @@ var result = grammar.Parse(cleaned);
 
 ## Zero-Width and Invisible Format Characters
 
-U+200B (zero-width space), U+200C (zero-width non-joiner), U+200D (zero-width joiner), U+00AD (soft hyphen), and similar runes appear as characters in the input but render as nothing or render conditionally. A string like `"ap\u00ADple"` looks like `"apple"` in an editor but does not match `Literal("apple")` because the soft hyphen is a real character in the token stream.
+U+200B (zero-width space), U+200C (zero-width non-joiner), U+200D (zero-width joiner), U+00AD (soft hyphen), and similar runes appear as characters in the input but render as nothing or render conditionally. A string like `"ap\u00ADple"` looks like `"apple"` in an editor but doesn't match `Literal("apple")` because the soft hyphen is a real character in the token stream.
 
 On modern .NET, `GraphemeLexer` handles ZWJ correctly inside emoji sequences (it groups them into one grapheme per UAX #29). Bare ZWJs and other format characters outside emoji contexts still come through as their own tokens under both lexers. Legacy `StringInfo` runtimes have broader ZWJ gaps covered in [Pre-.NET 5 Grapheme Segmentation](#pre-net-5-grapheme-segmentation).
 
@@ -153,13 +153,13 @@ var cleaned = string.Concat(input.EnumerateRunes()
 var result = grammar.Parse(cleaned);
 ```
 
-If your grammar uses `GraphemeLexer` and processes emoji sequences, do not strip ZWJ (U+200D) indiscriminately. You will break 👨‍👩‍👧‍👦 and similar sequences.
+If your grammar uses `GraphemeLexer` and processes emoji sequences, don't strip ZWJ (U+200D) indiscriminately. You'll break 👨‍👩‍👧‍👦 and similar sequences.
 
 ## Homoglyph Confusables
 
-Cyrillic `а` (U+0430) and Latin `a` (U+0061) render identically in most fonts but are different code points. A grammar using `RuneSet.Ascii.Letters` rejects Cyrillic `а` even though the user "sees" a Latin `a`. A grammar using `RuneSet.Letters` accepts both and does not distinguish them. Both lexers treat the code points identically because they really are different runes.
+Cyrillic `а` (U+0430) and Latin `a` (U+0061) render identically in most fonts but are different code points. A grammar using `RuneSet.Ascii.Letters` rejects Cyrillic `а` even though the user "sees" a Latin `a`. A grammar using `RuneSet.Letters` accepts both and doesn't distinguish them. Both lexers treat the code points identically because they really are different runes.
 
-This is a grammar-design decision. For security-sensitive grammars (mixed-script identifier detection, phishing-resistance) it is a *feature*: refusing homoglyphs protects against visual-spoofing attacks. For forgiving grammars it is a gotcha.
+This is a grammar-design decision. For security-sensitive grammars (mixed-script identifier detection, phishing-resistance) it's a *feature*: refusing homoglyphs protects against visual-spoofing attacks. For forgiving grammars it's a gotcha.
 
 **Fix.** Pick the character class that matches your threat model:
 
@@ -184,7 +184,7 @@ For full UAX #31 Script_Extensions-based detection (the standard algorithm for "
 
 U+FE00..U+FE0F and U+E0100..U+E01EF are invisible runes that select alternate glyph forms for the preceding character. U+FE0F is the one you are most likely to encounter: it flips emoji between text-style (`❤`) and emoji-style (`❤️`) rendering. Two strings that visually look identical can contain or omit a variation selector, which makes exact string matching fail. Neither lexer strips them.
 
-**Fix.** The caller strips them if the grammar does not care about glyph selection:
+**Fix.** The caller strips them if the grammar doesn't care about glyph selection:
 
 ```csharp
 var cleaned = string.Concat(input.EnumerateRunes()

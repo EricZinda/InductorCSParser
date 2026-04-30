@@ -133,7 +133,7 @@ public class WithinGraphemeRuleTests
         var asciiOnly = WithinGrapheme(OneOf(RuneSet.Ascii.Letters));
 
         Assert.That(asciiOnly.Parse("a").Success, Is.True);
-        Assert.That(asciiOnly.Parse("é").Success, Is.False);  // é is not ASCII
+        Assert.That(asciiOnly.Parse("é").Success, Is.False);  // é isn't ASCII
         Assert.That(asciiOnly.Parse(LatinEAcuteGrapheme,
             new ParseOptions { NormalizeInput = null }).Success, Is.False);  // two runes
     }

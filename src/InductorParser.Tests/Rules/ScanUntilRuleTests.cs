@@ -50,7 +50,7 @@ public class ScanUntilRuleTests
         var result = rule.Parse("|");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        // The ScanUntil leaf contributes an empty slice. Token('|')
+        // The ScanUntil leaf contributes an empty range. Token('|')
         // is Delete so it drops out of the tree. Concatenated text is
         // "".
         Assert.That(result.Tree!.ToString(), Is.EqualTo(""));
@@ -77,7 +77,7 @@ public class ScanUntilRuleTests
         var result = rule.Parse(@"hello\n");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        // The leaf carries the raw source slice, backslash and all.
+        // The leaf carries the raw source text, backslash and all.
         // Lazy decode is deliberate: the primitive doesn't materialize
         // the decoded form.
         Assert.That(result.Tree!.ToString(), Is.EqualTo(@"hello\n"));
@@ -291,7 +291,7 @@ public class ScanUntilRuleTests
     [Test]
     public void ScanUntil_rule_based_stopper_with_escape_start()
     {
-        // C++-raw-string would not have an escape, but Python
+        // C++-raw-string wouldn't have an escape, but Python
         // triple-quote DOES process escapes. Verify the combination
         // works: multi-rune stop boundary AND a backslash escape.
         var stopper = Literal("\"\"\"");
@@ -362,7 +362,7 @@ public class ScanUntilRuleTests
         // 'a' + '🎸' (U+1F3B8, a surrogate pair in UTF-16) + 'b'.
         // The rune-decoding path in the scan loop needs to treat
         // the pair as one rune and include both chars in the
-        // matched slice.
+        // matched range.
         var rule = ScanUntil(RuneSet.Runes("|"));
         string input = "a\U0001F3B8b";
         var result = rule.Parse(input, new ParseOptions { InputUnit = InputUnit.Rune });

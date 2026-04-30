@@ -50,7 +50,7 @@ public class InductorParserReferenceExamples
         Assert.That($"{nameSym} = {valueSym}", Is.EqualTo("setting = 5"));
     }
 
-    // "Naming Rules" — the doc example uses a class field with
+    // "Naming Rules": the doc example uses a class field with
     // `.As(nameof(SettingName))`. The compile-time check on nameof works
     // for fields because the field name is in scope inside its own
     // initializer.
@@ -187,7 +187,7 @@ public class InductorParserReferenceExamples
         var key = Identifier(extraStartRunes: RuneSet.Runes("_")).As("key");
 
         // Build a separate identifier-shaped alternative for valueAtom
-        // because .Flatten(...) mutates the rule it is called on, and
+        // because .Flatten(...) mutates the rule it's called on, and
         // reusing `key` here would flatten its position inside `pair` too.
         var valueAtom = FirstOf(
             Float().Flatten(FlattenType.Flatten),

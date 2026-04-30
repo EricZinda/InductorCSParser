@@ -10,10 +10,10 @@ namespace InductorParser.Tests;
 // RuneSet.XidContinue tables. Two things under test:
 //
 //   1. UAX #31 R1 shape: "XID_Start XID_Continue*". Start-only characters
-//      cannot appear in Continue position and vice-versa.
+//      can't appear in Continue position and vice-versa.
 //   2. The hand-curated add/exclude tables in RuneSet.Xid.cs are actually
-//      wired in. Two pin tests (U+FDFA reject, U+2118 accept) verify that.
-//      If someone swaps the implementation to a General_Category-only
+//      wired in. Two regression tests (U+FDFA reject, U+2118 accept) verify
+//      that. If someone swaps the implementation to a General_Category-only
 //      approximation, both tests fail.
 [TestFixture]
 public class XidIdentifierTests
@@ -133,7 +133,7 @@ public class XidIdentifierTests
     public void Nfkc_collapses_fullwidth_latin_to_plain_ascii()
     {
         // The XML doc on Identifier promises that FormKC makes fullwidth
-        // "ｆｏｏ" (U+FF46, U+FF4F, U+FF4F) match plain ASCII "foo". Pins
+        // "ｆｏｏ" (U+FF46, U+FF4F, U+FF4F) match plain ASCII "foo". Verifies
         // that promise: under NFKC the fullwidth letters decompose to
         // ASCII before the lexer runs, so both inputs produce the same
         // flattened match text.
@@ -185,7 +185,7 @@ public class XidIdentifierTests
         // Counter-test: under the default NFC (not NFKC), fullwidth
         // "ｆｏｏ" stays fullwidth and produces a different match text
         // than plain "foo", even though both parse successfully. This
-        // pins that the NFKC collapses above are coming from the
+        // verifies that the NFKC collapses above are coming from the
         // normalization form choice, not the rule.
         var fullwidth = Identifier().Parse("ｆｏｏ");
         var plain = Identifier().Parse("foo");
@@ -251,9 +251,9 @@ public class XidIdentifierTests
         // excludes it from XID_Start because its NFKC decomposition is a
         // full multi-word phrase with embedded spaces.
         //
-        // This is the pin test for XidStartExclusions. If someone drops
-        // the exclusion table and uses a General_Category approximation,
-        // this test flips to success.
+        // This is the regression test for XidStartExclusions. If someone
+        // drops the exclusion table and uses a General_Category
+        // approximation, this test flips to success.
         var result = Identifier().Parse("ﷺ");
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
@@ -264,7 +264,7 @@ public class XidIdentifierTests
     {
         // U+2118 (SCRIPT CAPITAL P, ℘) is Sm by General_Category, so a
         // L-only check would reject it. UAX #31 adds it to XID_Start via
-        // Other_ID_Start. This test is the pin for XidStartAdds: an
+        // Other_ID_Start. This is the regression test for XidStartAdds: an
         // approximation that dropped the adds table would fail this.
         var result = Identifier().Parse("℘");
         Assert.That(result.Success, Is.True, result.ErrorMessage);

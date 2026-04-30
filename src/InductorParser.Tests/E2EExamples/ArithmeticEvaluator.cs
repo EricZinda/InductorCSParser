@@ -11,7 +11,7 @@ namespace InductorParser.Tests;
 //
 // What the flattened tree looks like. (Expr, Term,
 // Number) is FlattenType.Preserve so they stay in the final tree.
-// Everything else disappears since it is just syntax for the user:
+// Everything else disappears since it's just syntax for the user:
 //
 //   expr
 //   ├── term
@@ -28,7 +28,7 @@ namespace InductorParser.Tests;
 //
 //   expr
 //   └── term
-//       ├── expr            (parenthesized — the '(' and ')' were deleted)
+//       ├── expr            (parenthesized, the '(' and ')' were deleted)
 //       │   ├── term
 //       │   │   └── number ── "1"
 //       │   ├── "+"

@@ -39,12 +39,12 @@ Rules.cs, not a hand-rolled JS parser.
     - Direct translations for everything else: char classes, alternation,
       sequencing, greedy/possessive/atomic quantifiers (PEG is already
       possessive), anchors ^/$/\A/\z, dot, \p{L} Unicode categories.
-    - Refuse with a specific error: backreferences (PEG is context-free,
+    - Refuse with a specific error: backreferences (PEG is context-free, so
       (\w+) \1 can't be expressed), lookbehind (Rules.cs exposes forward-only
       Peek/Not), lazy-at-end inside a capture group (no terminator to rewrite
-      against; greedy fallback would capture the wrong span), case-insensitive
-      flag on a pattern containing non-ASCII (related to 9lll; InductorCSParser
-      case folding is ASCII-only).
+      against, so the greedy fallback would capture the wrong span),
+      case-insensitive flag on a pattern containing non-ASCII (related to
+      9lll, InductorCSParser case-insensitive matching is ASCII-only).
 
 	- Examples loaded by default: the six BacklogGrammar.cs regexes on the
   Performance branch (H1, H2, Bullet, HrRun, HrSpaced, Paragraph). Each acts as
@@ -64,6 +64,6 @@ Rules.cs, not a hand-rolled JS parser.
   factoring out into a module is a natural follow-up if anyone adds a test
   suite later.
 
-	- Related: 9lll-need-to-do-proper-case-folding.md — lifting the ASCII-only
-  case folding restriction in InductorCSParser would also lift the refusal
-  in this tool for /i on Unicode patterns.
+	- Related: 9lll-need-to-do-proper-case-folding.md. Lifting the ASCII-only
+  case-insensitive matching restriction in InductorCSParser would also lift
+  the refusal in this tool for /i on Unicode patterns.

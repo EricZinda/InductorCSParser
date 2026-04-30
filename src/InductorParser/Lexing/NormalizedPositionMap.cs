@@ -114,13 +114,13 @@ internal static class NormalizedPositionMap
     // their combining classes. Because of step two, Unicode says
     // normalization is "not closed under concatenation" (UAX #15 section
     // 1.4, "accents are canonically ordered, and may rearrange around
-    // the point where the strings are joined"). You cannot just split
+    // the point where the strings are joined"). You can't just split
     // a string at an arbitrary point, normalize the pieces separately,
     // and stitch them back together and trust the result.
     //
     // The spec's "safe to split here" positions have a name: stable
     // code points (UAX #15 section 9.1). Grapheme cluster boundaries
-    // from UAX #29 are not the same thing. So splitting by grapheme is
+    // from UAX #29 aren't the same thing. So splitting by grapheme is
     // an engineering shortcut, not the spec-blessed operation.
     //
     // The shortcut is safe for real text because UAX #29 rule GB9 keeps

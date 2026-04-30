@@ -1,6 +1,6 @@
 // Polyfill for System.Runtime.CompilerServices.InterpolatedStringHandlerArgumentAttribute.
 //
-// Placed on a method parameter that is a struct marked with
+// Placed on a method parameter that's a struct marked with
 // [InterpolatedStringHandler], this attribute names other parameters
 // (or "" for the receiver) whose values get forwarded into the
 // handler's constructor when the C# compiler rewrites a $"..."

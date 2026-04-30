@@ -28,7 +28,7 @@ namespace InductorParser;
 //
 // - The inner rule runs against a bounded RuneLexer that shares the
 //   outer lexer's input string (no Substring copy). That sub-lexer
-//   does not share trace or budget state with the outer lexer. Trace
+//   doesn't share trace or budget state with the outer lexer. Trace
 //   output from the inner rule doesn't appear in the outer trace.
 //   It can only consume inside the outer token's span, so normal
 //   character-consuming rules are tiny. Avoid using arbitrary

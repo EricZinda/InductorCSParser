@@ -87,18 +87,18 @@ public class CompileTests
         // Parse() auto-compiles on first call. The failure-path version
         // (Parse on an unbound LateBoundRule throws because Validate
         // runs during the auto-compile) lives in LateBoundRuleTests.
-        // This is the success-path counterpart: pin the before-state to
-        // an unassigned id, call Parse, and verify the id moved into
+        // This is the success-path counterpart: lock in the before-state
+        // as an unassigned id, call Parse, and verify the id moved into
         // the custom range. Only Compile's named-id assignment pass can
         // produce that transition, so the after-value alone wouldn't
         // prove anything if some other code path had already assigned
-        // the id; the before-check rules that out.
+        // the id. The before-check rules that out.
         //
         // .As(string) only sets Name, not Id, so an as-yet-uncompiled
         // named rule has the default SymbolId (Value 0).
         var rule = OneOrMore(OneOf(RuneSet.Letters)).As("word");
         Assert.That(rule.Id.Value, Is.EqualTo(0),
-            "named rule should not have an id assigned before Compile / Parse runs");
+            "named rule shouldn't have an id assigned before Compile / Parse runs");
 
         var result = rule.Parse("hello");
 

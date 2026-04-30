@@ -1,7 +1,7 @@
 # Inductor Parser Primer 1: Getting Started
 Let's answer a top stackoverflow question, but use the Inductor Parser instead of Regex: [How can I match "anything up until this sequence of characters"?](https://stackoverflow.com/questions/7124778/)
 
-To parse text using the Inductor Parser, you build up a set of rules that "consume" the text, in the order they are written. The set of rules is called a "grammar". More often than not it will read very close to the way you'd describe it in words. In this case:
+To parse text using the Inductor Parser, you build up a set of rules that "consume" the text, in the order they're written. The set of rules is called a "grammar". More often than not it will read very close to the way you'd describe it in words. In this case:
 ```
 "Anything"
 "Until I hit this sequence of characters"
@@ -12,9 +12,9 @@ There are rules that consume text units, like `Token` (a single token: a graphem
 "Anything"
 Literal("this sequence of characters") 
 ```
-The `Literal("this sequence of characters")` will consume what we are looking for at the end. Now we need to describe "Anything" with rules so it consumes everything up until the end.
+The `Literal("this sequence of characters")` will consume what we're looking for at the end. Now we need to describe "Anything" with rules so it consumes everything up until the end.
 
-The parser has rules that consume a specific number of "something" you want, such as: `ZeroOrMore(rule)`, `AtLeast(n, rule)`, `BetweenInclusive(n, m, rule)`. These rules need to know what "something" you are counting, so you add a rule as an argument to tell it what to count. 
+The parser has rules that consume a specific number of "something" you want, such as: `ZeroOrMore(rule)`, `AtLeast(n, rule)`, `BetweenInclusive(n, m, rule)`. These rules need to know what "something" you're counting, so you add a rule as an argument to tell it what to count. 
 
 In this case, "Anything" can be represented as "zero or more of any token" (under the default lexer, roughly one user-perceived character at a time), so lets start by using the `ZeroOrMore` and `AnyToken` rules:
 ```
@@ -30,7 +30,7 @@ var target = Literal("this sequence of characters");
 ZeroOrMore(AllOf(Not(target), AnyToken()))
 target
 ```
-Instead of just consuming `AnyToken`, we now start by checking to see if it is `Not` what we want to end with. We glue those together with `AllOf` which requires that all of the rules you pass it succeed, in the order they are given.  We have to put `Not` first for the same greedy reason: If `AnyToken()` was first it would consume all the characters before we ever get to `Not`.
+Instead of just consuming `AnyToken`, we now start by checking to see if it's `Not` what we want to end with. We glue those together with `AllOf` which requires that all of the rules you pass it succeed, in the order they're given.  We have to put `Not` first for the same greedy reason: If `AnyToken()` was first it would consume all the characters before we ever get to `Not`.
 
 But this won't actually compile, yet. The second and third lines aren't valid C#, we need to combine them and assign them to a variable. 
 
@@ -63,7 +63,7 @@ The output works like this: Every rule is able to create a `Symbol` object to re
 
 - `FlattenType.Delete` the symbol along with its children (i.e. remove it completely)
 - `FlattenType.Flatten` the symbol by removing it, but keeping its children
-- `FlattenType.Preserve` the symbol and all of its children so it is available in the final tree
+- `FlattenType.Preserve` the symbol and all of its children so it's available in the final tree
 
 Many rules have their default set to `Flatten` or `Delete` since you usually don't want them. In our case, the only rule that was set to `Preserve` by default is `AnyToken` since that usually represents text the developer wants to capture.
 
@@ -90,7 +90,7 @@ if (!result.Success)
     throw new FormatException(result.ErrorMessage);
 Console.WriteLine(result.PrintTree());
 ```
-`result.PrintTree()` walks the parse tree and prints each Symbol on its own line, indented by its depth. (`result.ToString()` is the other handy view: it returns the matched input text without the indentation.) The output looks like this (how to decode it is described right after): 
+`result.PrintTree()` walks the parse tree and prints each Symbol on its own line, indented by its depth. (`result.ToString()` is the other handy view: it returns the matched input text without the indentation.) The output looks like this (how to decode it's described right after): 
 
 ```CSharp
 AllOf: "How can I match anything up until this sequence of characters"
@@ -111,7 +111,7 @@ First, each symbol is shown indented based on where in the tree it was, followed
 
 Next, `Token` just prints out its value without `Token` in front of it. This is why you see bare `'H'` and `'o'` in the output.
 
-Note that `Not` doesn't actually consume anything so it has nothing to print out. It just ensures that whatever is inside it is not coming up.
+Note that `Not` doesn't actually consume anything so it has nothing to print out. It just ensures that whatever is inside it isn't coming up.
 
 # What about Unicode?
 
@@ -136,7 +136,7 @@ How can I match 👋🏽 anything up until
 
 Two different multi-rune graphemes are at work here. The waving hand 👋🏽 is a base emoji plus a skin-tone modifier (two runes, one grapheme). The family 👨‍👩‍👧 is built from five runes joined by zero-width joiners (man, ZWJ, woman, ZWJ, girl) and takes eight UTF-16 code units to encode. The grammar didn't need to know any of that.
 
-`AnyToken()` asked for "one token" in the middle and got the waving hand as a single unit, the same way a person reading the string would count it. And `Literal("this 👨‍👩‍👧 sequence of characters")` matched the family emoji in the target text as one token too, because the Literal walks the input the same way the rest of the grammar does. There is no special "Unicode mode" you have to opt into. The exact-match string and the input string are both read as a stream of user-perceived characters, and they line up.
+`AnyToken()` asked for "one token" in the middle and got the waving hand as a single unit, the same way a person reading the string would count it. And `Literal("this 👨‍👩‍👧 sequence of characters")` matched the family emoji in the target text as one token too, because the Literal walks the input the same way the rest of the grammar does. There's no special "Unicode mode" you have to opt into. The exact-match string and the input string are both read as a stream of user-perceived characters, and they line up.
 
 The same thing works with accented letters typed as a base letter plus a combining mark, with regional-indicator flag pairs like 🇺🇸, and with combining-mark scripts like Devanagari or Thai. They all come through as one token each, both inside `AnyToken()` and inside `Literal(...)`.
 
