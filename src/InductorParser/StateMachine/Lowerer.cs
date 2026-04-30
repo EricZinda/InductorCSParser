@@ -495,7 +495,22 @@ internal sealed class LoweringContext
             //   * its peek-skip target is THIS alt's start directly
             if (altIndex > 0)
             {
-                nextFailHandlerWithPop = AddState(LoweredOpCode.FailRestore, 0, altStart, altStart);
+                // When the next alt's start is a CheckPeekedRuneInSet,
+                // refresh machine.PeekedRune after the failed alt's
+                // FailRestore. The failed alt's body may have run a
+                // nested FirstOf that called LoadPeekedRune /
+                // LoadPeekedRuneAndJumpAlt at a different lexer
+                // position and overwrote the stash. After FailRestore
+                // rolls the lexer back, the chain's CheckPeekedRuneInSet
+                // states need the rune at the rolled-back position, not
+                // the stale one. Skip the refresh when the next alt
+                // isn't skip-eligible — its altStart doesn't read
+                // PeekedRune (any nested FirstOf inside the alt body
+                // does its own peek on entry).
+                int handlerTarget = altStart;
+                if (skipEligible)
+                    handlerTarget = AddState(LoweredOpCode.LoadPeekedRune, 0, altStart, altStart);
+                nextFailHandlerWithPop = AddState(LoweredOpCode.FailRestore, 0, handlerTarget, handlerTarget);
                 nextAltStartWithoutPop = altStart;
             }
         }

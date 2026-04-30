@@ -1,5 +1,7 @@
 # Test Architecture
 
+Run the test suite via `./test.sh` at the repo root. By default it runs the recursive engine; pass `statemachine` to run under the state-machine engine, or `both` to run both sequentially. Extra arguments pass through to `dotnet test`, so `./test.sh statemachine --filter "FullyQualifiedName~Atom_fragment"` targets one fixture under the SM.
+
 This doc describes what makes a rule's test file "comprehensive" in this codebase. It's aimed at contributors adding a new rule or auditing coverage of an existing one. Use it as a checklist.
 
 Tests live in `src/InductorParser.Tests/`, organized into three subfolders:
