@@ -666,16 +666,25 @@ internal sealed class LoweringContext
         var effective = ResolveEffective(rule.FlattenType);
         int compositeAfter = onSuccess;
         int metadataIndex = -1;
-        if (effective != FlattenType.Flatten)
+        bool needMetadataForWrap = effective != FlattenType.Flatten;
+        bool needMetadataForError = rule.ErrorMessage != null;
+        if (needMetadataForWrap || needMetadataForError)
         {
             metadataIndex = AddSymbolMetadata(rule);
+        }
+        if (needMetadataForWrap)
+        {
             compositeAfter = AddState(LoweredOpCode.CloseComposite, metadataIndex, onSuccess, onSuccess);
         }
 
         // BetweenExitCheckMin: pops the Between frame, succeeds if
-        // counter >= atLeast, otherwise restores to entry-time state
-        // and routes to onFailure.
-        int exitCheckMin = AddState(LoweredOpCode.BetweenExitCheckMin, 0, compositeAfter, onFailure);
+        // counter >= atLeast, otherwise records the rule's WithError
+        // text at the loop's stop position, restores to entry-time
+        // state, and routes to onFailure. state.Data carries the
+        // SymbolMetadata index so the opcode can read ErrorMessage,
+        // or -1 when the rule has neither a wrapper nor a WithError.
+        int exitCheckData = needMetadataForError ? metadataIndex : -1;
+        int exitCheckMin = AddState(LoweredOpCode.BetweenExitCheckMin, exitCheckData, compositeAfter, onFailure);
 
         // Per-iteration FailRestore: when inner fails, pops the
         // per-iteration backtrack frame and continues at exitCheckMin.
@@ -700,7 +709,7 @@ internal sealed class LoweringContext
         int packedBounds = PackBetweenBounds(rule.AtLeast, rule.AtMost);
         int pushBetween = AddState(LoweredOpCode.PushBetween, packedBounds, loopStart, onFailure);
 
-        if (effective != FlattenType.Flatten)
+        if (needMetadataForWrap)
             return AddState(LoweredOpCode.OpenComposite, metadataIndex, pushBetween, onFailure);
         return pushBetween;
     }
@@ -716,13 +725,23 @@ internal sealed class LoweringContext
         var effective = ResolveEffective(rule.FlattenType);
         int compositeAfter = onSuccess;
         int metadataIndex = -1;
-        if (effective != FlattenType.Flatten)
+        bool needMetadataForWrap = effective != FlattenType.Flatten;
+        bool needMetadataForError = rule.ErrorMessage != null;
+        if (needMetadataForWrap || needMetadataForError)
         {
             metadataIndex = AddSymbolMetadata(rule);
+        }
+        if (needMetadataForWrap)
+        {
             compositeAfter = AddState(LoweredOpCode.CloseComposite, metadataIndex, onSuccess, onSuccess);
         }
 
-        int exitCheckMin = AddState(LoweredOpCode.BetweenExitCheckMin, 0, compositeAfter, onFailure);
+        // exitCheckMin records the rule's WithError text at the loop's
+        // stop position before rolling back to entry; pass the
+        // metadata index (or -1 when no WithError) so the opcode can
+        // read it.
+        int exitCheckData = needMetadataForError ? metadataIndex : -1;
+        int exitCheckMin = AddState(LoweredOpCode.BetweenExitCheckMin, exitCheckData, compositeAfter, onFailure);
 
         // BetweenIncrementCheckMax needs loopStart (= innerEntry) as its
         // OnSuccess, but we can't lower inner until incrementCheck has
@@ -734,7 +753,7 @@ internal sealed class LoweringContext
         int packedBounds = PackBetweenBounds(rule.AtLeast, rule.AtMost);
         int pushBetween = AddState(LoweredOpCode.PushBetween, packedBounds, innerEntry, onFailure);
 
-        if (effective != FlattenType.Flatten)
+        if (needMetadataForWrap)
             return AddState(LoweredOpCode.OpenComposite, metadataIndex, pushBetween, onFailure);
         return pushBetween;
     }
@@ -1120,9 +1139,14 @@ internal sealed class LoweringContext
         var effective = ResolveEffective(rule.FlattenType);
         int compositeAfter = onSuccess;
         int metadataIndex = -1;
-        if (effective != FlattenType.Flatten)
+        bool needMetadataForWrap = effective != FlattenType.Flatten;
+        bool needMetadataForError = rule.ErrorMessage != null;
+        if (needMetadataForWrap || needMetadataForError)
         {
             metadataIndex = AddSymbolMetadata(rule);
+        }
+        if (needMetadataForWrap)
+        {
             compositeAfter = AddState(LoweredOpCode.CloseComposite, metadataIndex, onSuccess, onSuccess);
         }
 
@@ -1133,13 +1157,29 @@ internal sealed class LoweringContext
 
         // notFailedExit: inner succeeded -> Not fails. We need to pop
         // the frame and restore lexer / emit ourselves (since no
-        // failure rolled it back).
-        int notFailedExit = AddState(LoweredOpCode.FailRestore, 0, onFailure, onFailure);
+        // failure rolled it back). When the rule carries a
+        // .WithError("..."), insert a RecordRuleFailure step after
+        // the FailRestore so the message can ride along. The
+        // recursive NotRule does this via lexer.RecordFailure(
+        // transaction.StartPosition, ErrorMessage) on its inner-
+        // matched path; the FailRestore here has already restored
+        // lexer.Position to the entry, so RecordRuleFailure reads
+        // the same position the recursive engine would.
+        int notFailedExit;
+        if (needMetadataForError)
+        {
+            int recordFailure = AddState(LoweredOpCode.RecordRuleFailure, metadataIndex, onFailure, onFailure);
+            notFailedExit = AddState(LoweredOpCode.FailRestore, 0, recordFailure, recordFailure);
+        }
+        else
+        {
+            notFailedExit = AddState(LoweredOpCode.FailRestore, 0, onFailure, onFailure);
+        }
 
         int innerEntry = LowerRule(rule.Children[0], notFailedExit, notSucceededExit);
         int pushIdx = AddState(LoweredOpCode.PushBacktrack, 0, innerEntry, innerEntry);
 
-        if (effective != FlattenType.Flatten)
+        if (needMetadataForWrap)
             return AddState(LoweredOpCode.OpenComposite, metadataIndex, pushIdx, onFailure);
         return pushIdx;
     }
@@ -1151,9 +1191,14 @@ internal sealed class LoweringContext
         var effective = ResolveEffective(rule.FlattenType);
         int compositeAfter = onSuccess;
         int metadataIndex = -1;
-        if (effective != FlattenType.Flatten)
+        bool needMetadataForWrap = effective != FlattenType.Flatten;
+        bool needMetadataForError = rule.ErrorMessage != null;
+        if (needMetadataForWrap || needMetadataForError)
         {
             metadataIndex = AddSymbolMetadata(rule);
+        }
+        if (needMetadataForWrap)
+        {
             compositeAfter = AddState(LoweredOpCode.CloseComposite, metadataIndex, onSuccess, onSuccess);
         }
 
@@ -1162,13 +1207,26 @@ internal sealed class LoweringContext
         int peekSucceededExit = AddState(LoweredOpCode.FailRestore, 0, compositeAfter, compositeAfter);
 
         // Inner failed -> Peek fails. Frame already popped + restored
-        // by the per-frame failure routing.
-        int peekFailedExit = AddState(LoweredOpCode.FailRestore, 0, onFailure, onFailure);
+        // by the per-frame failure routing. When the rule carries a
+        // .WithError("..."), insert a RecordRuleFailure step after
+        // the FailRestore so the message rides along, mirroring the
+        // recursive PeekRule's lexer.RecordFailure(transaction.
+        // StartPosition, ErrorMessage) on its inner-fails path.
+        int peekFailedExit;
+        if (needMetadataForError)
+        {
+            int recordFailure = AddState(LoweredOpCode.RecordRuleFailure, metadataIndex, onFailure, onFailure);
+            peekFailedExit = AddState(LoweredOpCode.FailRestore, 0, recordFailure, recordFailure);
+        }
+        else
+        {
+            peekFailedExit = AddState(LoweredOpCode.FailRestore, 0, onFailure, onFailure);
+        }
 
         int innerEntry = LowerRule(rule.Children[0], peekSucceededExit, peekFailedExit);
         int pushIdx = AddState(LoweredOpCode.PushBacktrack, 0, innerEntry, innerEntry);
 
-        if (effective != FlattenType.Flatten)
+        if (needMetadataForWrap)
             return AddState(LoweredOpCode.OpenComposite, metadataIndex, pushIdx, onFailure);
         return pushIdx;
     }

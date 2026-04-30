@@ -132,8 +132,28 @@ internal static class Stepper
                 return Step_AdvanceOneRune(in state, ref machine);
             case LoweredOpCode.ScannerSkipAdvance:
                 return Step_ScannerSkipAdvance(in state, ref machine);
+            case LoweredOpCode.RecordRuleFailure:
+                return Step_RecordRuleFailure(in state, ref machine);
         }
         return State.HaltFailure;
+    }
+
+    // Record the rule's WithError text at the current lexer position
+    // and continue to OnSuccess. state.Data is the SymbolMetadata
+    // index for the rule whose ErrorMessage should ride along. The
+    // call goes through Machine.RecordFailure so the "deepest failure
+    // wins" rules apply: the message claims an empty equal-depth slot
+    // an inner rule left, or it stamps a strictly-deeper position.
+    // Used by Not / Peek on the inner-led-to-rule-failure exits, where
+    // the recursive evaluator's lexer.RecordFailure(StartPosition,
+    // ErrorMessage) call has to be reproduced. The matching call in
+    // BetweenInclusive lives inline in Step_BetweenExitCheckMin.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int Step_RecordRuleFailure(in State state, ref Machine machine)
+    {
+        string? errorMessage = machine.Program.SymbolMetadata[state.Data].ErrorMessage;
+        machine.RecordFailure(machine.Lexer.Position, errorMessage);
+        return state.OnSuccess;
     }
 
     // Bulk-skip at the top of a ZeroOrMore(FirstOf(match..., AnyToken.Delete))
@@ -915,10 +935,24 @@ internal static class Stepper
         ref var between = ref machine.BacktrackStack[--machine.BacktrackTop];
         if (between.Counter >= between.AtLeast)
             return state.OnSuccess;
+        // Record the failure at the loop's stop position (where inner
+        // gave up) BEFORE rolling the lexer back to entry, so the
+        // rule's WithError text rides along. Mirrors the recursive
+        // BetweenInclusive: it calls lexer.RecordFailure(lexer.Position,
+        // ErrorMessage) before its `using` transaction's Dispose
+        // restores the lexer. state.Data is the SymbolMetadata index
+        // (or -1 when the rule has no WithError), encoded by Lowerer.
+        // RecordFailure with a null message at the same depth is a
+        // no-op, so a metadata entry that exists only for the
+        // composite wrapper (no WithError on the rule) doesn't leak
+        // an unwanted message into DeepestFailureMessage.
+        string? errorMessage = state.Data >= 0
+            ? machine.Program.SymbolMetadata[state.Data].ErrorMessage
+            : null;
+        machine.RecordFailure(machine.Lexer.Position, errorMessage);
         machine.Lexer.SetPositionUnchecked(between.LexerPosition);
         machine.TruncateOutputs(between.EmitCursor);
         machine.CallTop = between.CallStackHeight;
-        machine.RecordFailure(machine.Lexer.Position, null);
         return state.OnFailure;
     }
 
@@ -1017,15 +1051,18 @@ internal static class Stepper
         {
             // Rule failed. The recursive evaluator's per-rule
             // RecordFailure already updated the lexer's deepest tracker.
-            // Mirror that into our own deepest tracker so error
-            // reporting after the parse sees both.
-            int lexerDeepest = machine.Lexer.DeepestFailure;
-            string? lexerMessage = machine.Lexer.DeepestFailureMessage;
-            if (lexerDeepest > machine.DeepestFailure)
-            {
-                machine.DeepestFailure = lexerDeepest;
-                machine.DeepestFailureMessage = lexerMessage;
-            }
+            // Mirror that into our own deepest tracker via the same
+            // "deepest failure wins" rules Machine.RecordFailure
+            // applies: a strictly-deeper position takes the (possibly
+            // null) message, and a non-null message at the current
+            // deepest claims the slot when nobody filled it yet. The
+            // equal-depth claim is what lets a WithError-bearing rule
+            // (RuneRunRule, WithinGraphemeRule) surface its message
+            // when a sibling already recorded an empty slot at the
+            // same position.
+            machine.RecordFailure(
+                machine.Lexer.DeepestFailure,
+                machine.Lexer.DeepestFailureMessage);
             return state.OnFailure;
         }
 

@@ -208,4 +208,16 @@ internal enum LoweredOpCode : byte
     // in BetweenInclusiveRule. Inert by construction when the lowerer
     // doesn't recognize the shape (the opcode is just never emitted).
     ScannerSkipAdvance,
+
+    // Record a rule's WithError("...") message at the current lexer
+    // position and fall through to OnSuccess. state.Data is an index
+    // into CompiledProgram.SymbolMetadata; the opcode reads the
+    // metadata's ErrorMessage and calls Machine.RecordFailure with
+    // it. Used at composite-rule failure boundaries (Not / Peek's
+    // inner-led-to-rule-failure exits) where the rule's own
+    // user-friendly message has to ride along for the deepest-failure
+    // tracker to surface it on a parse failure. Mirrors the
+    // recursive evaluator's lexer.RecordFailure(position, ErrorMessage)
+    // call inside NotRule / PeekRule on the failure path.
+    RecordRuleFailure,
 }
