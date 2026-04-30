@@ -191,6 +191,15 @@ public abstract class Rule
     private string BuildTraceLabel() =>
         Name != null ? $"{Name}:{_ruleTraceName}" : _ruleTraceName;
 
+    // Internal accessor so the state-machine evaluator can label its
+    // Call / Return trace lines with the same "{Name}:{ruleClassName}"
+    // string the recursive engine uses. The SM emits its own trace
+    // lines from Stepper.Step_Call / Step_ReturnSuccess /
+    // Step_ReturnFailure rather than going through TryParseRule, so it
+    // needs the label without going through the protected TraceSuccess
+    // / TraceFailure helpers.
+    internal string TraceLabel => BuildTraceLabel();
+
     // If the rule has .WithError(msg) set, append it in quotes after
     // the trace body so a reader sees both what the rule actually
     // tried ("found 'x', wanted 'a'") and the friendly message that
@@ -571,7 +580,7 @@ public abstract class Rule
         return ParseResult.Succeeded(symbols, input, this);
     }
 
-    private static string BuildBudgetMessage(ParseOutcome outcome)
+    internal static string BuildBudgetMessage(ParseOutcome outcome)
     {
         switch (outcome)
         {

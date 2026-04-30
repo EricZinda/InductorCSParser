@@ -211,7 +211,7 @@ internal struct Machine
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void PushCall(int onSuccess, int onFailure, int suppressOutputsCursor)
+    public void PushCall(int onSuccess, int onFailure, int suppressOutputsCursor, Rule? callSourceRule)
     {
         if (CallTop == CallStack.Length)
         {
@@ -223,6 +223,7 @@ internal struct Machine
         frame.OnSuccess = onSuccess;
         frame.OnFailure = onFailure;
         frame.SuppressOutputsCursor = suppressOutputsCursor;
+        frame.CallSourceRule = callSourceRule;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

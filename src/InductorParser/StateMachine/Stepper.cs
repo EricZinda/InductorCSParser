@@ -2,6 +2,7 @@ using System;
 using System.Runtime.CompilerServices;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
+using InductorParser.Tracing;
 
 namespace InductorParser.StateMachine;
 
@@ -22,16 +23,20 @@ internal static class Stepper
     // reads DeepestFailure / DeepestFailureMessage on failure.
     public static bool Run(CompiledProgram program, Lexer lexer, out Machine machineOut)
     {
-        var machine = new Machine(lexer, program);
+        // Assign machineOut up front so its pooled buffers stay reachable
+        // through `ref machineOut` mutations inside the loop. If a Step
+        // throws (the budget-exceeded path under MaxDepth /
+        // RuleCountLimit / Timeout / Cancellation), the caller can still
+        // Release the machine to return its arrays / list to the pool.
+        machineOut = new Machine(lexer, program);
         State[] states = program.States;
         int current = program.EntryState;
 
         while (current >= 0)
         {
-            current = Step(in states[current], ref machine);
+            current = Step(in states[current], ref machineOut);
         }
 
-        machineOut = machine;
         return current == State.HaltSuccess;
     }
 
@@ -853,14 +858,29 @@ internal static class Stepper
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Step_Call(in State state, ref Machine machine)
     {
-        machine.PushCall(state.OnSuccess, state.OnFailure, suppressOutputsCursor: -1);
+        // Look up the source rule so the matching ReturnSuccess /
+        // ReturnFailure can label its trace line. Cyclic-rule entries
+        // and ScanUntil's escape-end / rule-stopper subprograms all
+        // register themselves during lowering, so the lookup hits for
+        // every Call the lowerer emits.
+        machine.Program.SubprogramRuleByEntry.TryGetValue(state.Data, out Rule? sourceRule);
+        machine.PushCall(state.OnSuccess, state.OnFailure, suppressOutputsCursor: -1, sourceRule);
+        // The SM emits Call only at cyclic-rule entry (Lowerer.LowerCyclicCall);
+        // non-cyclic rules are inlined. CallTop after the push is the
+        // current call depth, which the lexer's budget check compares
+        // against MaxDepth and increments the periodic-check counter. No
+        // matching ExitRule is needed because backtrack frames carry
+        // CallStackHeight and restore CallTop directly when they fire.
+        machine.Lexer.EnterRuleAtDepth(machine.CallTop);
         return state.Data;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Step_CallSuppressOutputs(in State state, ref Machine machine)
     {
-        machine.PushCall(state.OnSuccess, state.OnFailure, machine.OutputOps.Count);
+        machine.Program.SubprogramRuleByEntry.TryGetValue(state.Data, out Rule? sourceRule);
+        machine.PushCall(state.OnSuccess, state.OnFailure, machine.OutputOps.Count, sourceRule);
+        machine.Lexer.EnterRuleAtDepth(machine.CallTop);
         return state.Data;
     }
 
@@ -870,6 +890,7 @@ internal static class Stepper
         ref var frame = ref machine.CallStack[--machine.CallTop];
         if (frame.SuppressOutputsCursor >= 0)
             machine.TruncateOutputs(frame.SuppressOutputsCursor);
+        EmitCallReturnTrace(machine.Lexer, frame.CallSourceRule, TraceOutcome.Success);
         return frame.OnSuccess;
     }
 
@@ -879,7 +900,29 @@ internal static class Stepper
         ref var frame = ref machine.CallStack[--machine.CallTop];
         if (frame.SuppressOutputsCursor >= 0)
             machine.TruncateOutputs(frame.SuppressOutputsCursor);
+        EmitCallReturnTrace(machine.Lexer, frame.CallSourceRule, TraceOutcome.Failure);
         return frame.OnFailure;
+    }
+
+    // Emit a single trace line at the rule-call boundary. Mirrors the
+    // recursive engine's TraceSuccess / TraceFailure on a rule's
+    // TryParseRule exit, but without the rule-specific body text the
+    // recursive engine builds (the SM doesn't run the per-rule
+    // TryParseRule body, so it doesn't compute "count= 3" / "found 3"
+    // / etc.). The label is the same "{Name}:{ruleClassName}" string
+    // the recursive engine uses, so callers can assert on rule names
+    // visited and outcomes across both engines.
+    //
+    // Gated by IsTracing so the off-path cost is one bool check per
+    // Call / Return* opcode. The per-frame Rule reference on the call
+    // stack is paid whether tracing is on or off, but it's a single
+    // reference field on a stack frame allocated once at parse start.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void EmitCallReturnTrace(Lexer lexer, Rule? sourceRule, TraceOutcome outcome)
+    {
+        if (sourceRule == null) return;
+        if (!lexer.IsTracing(TraceLevel.Diagnostic)) return;
+        lexer.WriteTraceLine(sourceRule.TraceLabel, outcome, "");
     }
 
     // Step_BridgeToRecursive delegates to the rule's recursive

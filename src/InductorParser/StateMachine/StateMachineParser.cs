@@ -68,10 +68,21 @@ public static class StateMachineParser
         string parseInput = NormalizeIfRequested(input, options.NormalizeInput);
         Lexer lexer = RentLexer(parseInput, options);
         lexer.ConfigureBudgets(options);
-        bool succeeded = Stepper.Run(program, lexer, out Machine machine);
+        Machine machine = default;
         try
         {
-            return succeeded && lexer.IsEof;
+            try
+            {
+                bool succeeded = Stepper.Run(program, lexer, out machine);
+                return succeeded && lexer.IsEof;
+            }
+            catch (ParseBudgetExceeded)
+            {
+                // Budget abort is "did not match" for matcher-mode
+                // callers. The Aborted outcome only surfaces on the
+                // ParseResult-returning Parse path.
+                return false;
+            }
         }
         finally
         {
@@ -95,21 +106,41 @@ public static class StateMachineParser
 
         Lexer lexer = RentLexer(parseInput, options);
 
-        // Configure budgets / debug flags on the lexer so the
-        // BridgeToRecursive opcode (which delegates back to
-        // Rule.TryParse) sees the same options the recursive evaluator
-        // would. PreserveAllSymbols is the most important of these:
-        // when on, bridged rules need to know to keep their FlattenType
-        // promotions. Budget enforcement (RuleCountLimit, MaxDepth,
-        // Timeout, Cancellation) only fires inside the recursive
-        // evaluator's EnterRule, so the state-machine path doesn't
-        // currently honor them; documenting that as a known gap.
+        // Configure budgets / debug flags on the lexer so EnterRuleAtDepth
+        // (called from Step_Call / Step_CallSuppressOutputs) and
+        // BridgeToRecursive (which delegates back to Rule.TryParse and
+        // calls EnterRule itself) see the same options the recursive
+        // evaluator would. RuleCountLimit / MaxDepth / Timeout /
+        // Cancellation trip the same ParseBudgetExceeded the recursive
+        // engine throws and we translate it into ParseResult.Aborted
+        // below, mirroring Rule.Parse's catch.
         lexer.ConfigureBudgets(options);
 
-        bool succeeded = Stepper.Run(program, lexer, out Machine machine);
-
+        Machine machine = default;
         try
         {
+            bool succeeded;
+            try
+            {
+                succeeded = Stepper.Run(program, lexer, out machine);
+            }
+            catch (ParseBudgetExceeded budget)
+            {
+                // The throw rolled the SM's call stack and lexer position
+                // back through whatever frames were active at the point of
+                // the abort. Use the same Math.Max idiom Rule.Parse uses
+                // so the abort position prefers the deepest recorded
+                // failure (a high-water mark not affected by rollback)
+                // and falls back to the rolled-back lexer.Position when
+                // no failure has been recorded yet. Both engines build
+                // the same shape of ParseResult.Aborted from the same
+                // ParseOutcome, so a side-by-side compare on the
+                // recursive vs SM run agrees on outcome and position.
+                int abortRaw = System.Math.Max(System.Math.Max(machine.DeepestFailure, lexer.DeepestFailure), lexer.Position);
+                int abortPos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, abortRaw, options.NormalizeInput);
+                return ParseResult.Aborted(budget.Outcome, abortPos, Rule.BuildBudgetMessage(budget.Outcome), input, rootRule);
+            }
+
             if (!succeeded || !lexer.IsEof)
             {
                 int failurePosition = System.Math.Max(machine.DeepestFailure, lexer.Position);
@@ -134,7 +165,9 @@ public static class StateMachineParser
             // lexer to the per-thread pool so the next Parse on this
             // thread can reuse them. TreeBuilder copied data out of
             // OutputOps into the Symbols above, so clearing the
-            // list here is safe.
+            // list here is safe. Stepper.Run assigns machineOut up
+            // front, so this still reaches a valid Machine even when
+            // the budget-exceeded path took over.
             machine.Release();
             ReturnLexerToPool(lexer);
         }
@@ -224,9 +257,22 @@ public static class StateMachineParser
         string parseInput = NormalizeIfRequested(input, options.NormalizeInput);
         Lexer lexer = RentLexer(parseInput, options);
         lexer.ConfigureBudgets(options);
-        bool succeeded = Stepper.Run(program, lexer, out Machine machine);
+        Machine machine = default;
         try
         {
+            bool succeeded;
+            try
+            {
+                succeeded = Stepper.Run(program, lexer, out machine);
+            }
+            catch (ParseBudgetExceeded)
+            {
+                // Counter / matcher entry points return a single value
+                // (count, span list, bool); collapse the abort to the
+                // same "did not match anything" answer a clean failure
+                // would produce.
+                return failureValue;
+            }
             if (!succeeded || !lexer.IsEof)
                 return failureValue;
             return reducer(machine.OutputOps, parseInput, matchId, default!);
@@ -249,9 +295,18 @@ public static class StateMachineParser
         string parseInput = NormalizeIfRequested(input, options.NormalizeInput);
         Lexer lexer = RentLexer(parseInput, options);
         lexer.ConfigureBudgets(options);
-        bool succeeded = Stepper.Run(program, lexer, out Machine machine);
+        Machine machine = default;
         try
         {
+            bool succeeded;
+            try
+            {
+                succeeded = Stepper.Run(program, lexer, out machine);
+            }
+            catch (ParseBudgetExceeded)
+            {
+                return 0;
+            }
             if (!succeeded || !lexer.IsEof) return 0;
             return CountMatchesAndCapturesCore(machine.OutputOps, matchId, captureIds);
         }

@@ -23,6 +23,17 @@ internal sealed class CompiledProgram
     public RuleStopperSpec[] RuleStopperSpecs { get; }
     public ScannerSkipSpec[] ScannerSkipSpecs { get; }
     public Rule[] BridgeRules { get; }
+
+    // Per-subprogram-entry rule lookup, keyed by the state index a Call
+    // / CallSuppressOutputs opcode jumps to (state.Data on those
+    // opcodes). Populated by the lowerer for every cyclic rule and for
+    // ScanUntil's escape-end / rule-stopper subprograms. Read by the
+    // Stepper on Call to label trace output, and stashed on the
+    // CallFrame so ReturnSuccess / ReturnFailure can label the matching
+    // exit line. The cost is one dictionary lookup per Call (off the
+    // tightest hot path because Call only fires at cyclic-rule entry,
+    // not for inlined rules).
+    public Dictionary<int, Rule> SubprogramRuleByEntry { get; }
     // One 128-entry int[] per FirstOf that uses the
     // LoadPeekedRuneAndJumpAlt opcode. Entry r holds the state index
     // to dispatch to when the peeked rune equals r (0..127). Built
@@ -53,6 +64,7 @@ internal sealed class CompiledProgram
         ScannerSkipSpec[] scannerSkipSpecs,
         Rule[] bridgeRules,
         int[][] orJumpTables,
+        Dictionary<int, Rule> subprogramRuleByEntry,
         int entryState,
         Rule rootRule,
         bool hasOutputs)
@@ -68,6 +80,7 @@ internal sealed class CompiledProgram
         ScannerSkipSpecs = scannerSkipSpecs;
         BridgeRules = bridgeRules;
         OrJumpTables = orJumpTables;
+        SubprogramRuleByEntry = subprogramRuleByEntry;
         EntryState = entryState;
         RootRule = rootRule;
         HasOutputs = hasOutputs;

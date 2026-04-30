@@ -638,6 +638,32 @@ public abstract class Lexer
         _ruleDepth--;
     }
 
+    // State-machine equivalent of EnterRule. The recursive engine maintains
+    // depth in _ruleDepth via paired EnterRule / ExitRule. The state
+    // machine already tracks call depth in Machine.CallTop and that
+    // counter is naturally restored when a backtrack frame truncates the
+    // call stack, so the SM has no place to call ExitRule. Instead the SM
+    // hands its current call depth in directly. This skips the _ruleDepth
+    // bookkeeping (which the SM doesn't use) and runs the same
+    // RuleCountLimit / Timeout / Cancellation periodic checks the
+    // recursive path runs.
+    //
+    // On a BridgeToRecursive frame the bridged Rule.TryParse calls the
+    // standard EnterRule on the way in, so depth there is tracked by the
+    // recursive engine relative to the bridge entry. The SM-side Call
+    // dispatch never fires for the bridge opcode so there's no double
+    // count.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void EnterRuleAtDepth(int depth)
+    {
+        if (_maxDepth > 0 && depth > _maxDepth)
+            throw new ParseBudgetExceeded(ParseOutcome.DepthLimitExceeded);
+
+        _ruleInvocations++;
+        if ((_ruleInvocations & BudgetCheckMask) == 0)
+            CheckPeriodicBudgets();
+    }
+
     // Off the hot path on purpose: only invoked once every
     // BudgetCheckInterval rule invocations, so making it a separate
     // non-inlined method keeps EnterRule small enough for the JIT to

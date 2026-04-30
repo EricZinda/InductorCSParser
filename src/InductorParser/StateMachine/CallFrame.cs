@@ -19,4 +19,12 @@ internal struct CallFrame
     // enclosing ScanUntil's parent. The recursive evaluator gets the
     // same effect by passing outputSymbols=null to escape-end's TryParse.
     public int SuppressOutputsCursor;
+
+    // Source rule the Call jumped into, used by ReturnSuccess /
+    // ReturnFailure to label trace output with the same
+    // "{Name}:{ruleClassName}" string the recursive engine uses. Null
+    // when the program had no rule mapped to the called subprogram
+    // entry (defensive: every cyclic-rule subprogram registers itself
+    // during lowering, so this should always be non-null in practice).
+    public Rule? CallSourceRule;
 }

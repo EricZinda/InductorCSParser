@@ -41,6 +41,13 @@ internal static class Lowerer
         // allocating an output-list slot on the Machine struct.
         bool hasOutputs = ProgramHasOutputs(context.States, context.ScanSpecs);
 
+        // Invert SubprogramEntries (Rule -> entry state index) into the
+        // entry-state-index -> Rule lookup the Stepper reads on Call /
+        // CallSuppressOutputs to label trace lines.
+        var subprogramRuleByEntry = new Dictionary<int, Rule>(context.SubprogramEntries.Count);
+        foreach (var entryByRule in context.SubprogramEntries)
+            subprogramRuleByEntry[entryByRule.Value] = entryByRule.Key;
+
         return new CompiledProgram(
             context.States.ToArray(),
             context.Literals.ToArray(),
@@ -53,6 +60,7 @@ internal static class Lowerer
             context.ScannerSkipSpecs.ToArray(),
             context.BridgeRules.ToArray(),
             context.OrJumpTables.ToArray(),
+            subprogramRuleByEntry,
             rootEntry,
             rootRule,
             hasOutputs);
@@ -140,7 +148,7 @@ internal sealed class LoweringContext
     // For cyclic rules: the index of the "shared" entry that callers
     // Call into. Allocated lazily the first time a cyclic rule is
     // lowered. Subsequent encounters Call this index.
-    private readonly Dictionary<Rule, int> _subprogramEntries = new(ReferenceComparer<Rule>.Instance);
+    public readonly Dictionary<Rule, int> SubprogramEntries = new(ReferenceComparer<Rule>.Instance);
 
     // Dedup tables. Same literal text or same RuneSet appearing in
     // multiple rules shares one slot in the runtime table. Keeps the
@@ -1363,11 +1371,11 @@ internal sealed class LoweringContext
     // end of two StringBodies) share one subprogram body.
     private int GetOrCreateSubprogram(Rule rule)
     {
-        if (_subprogramEntries.TryGetValue(rule, out int existingEntry))
+        if (SubprogramEntries.TryGetValue(rule, out int existingEntry))
             return existingEntry;
 
         int subprogramEntry = ReserveState();
-        _subprogramEntries[rule] = subprogramEntry;
+        SubprogramEntries[rule] = subprogramEntry;
 
         int returnSuccess = AddState(LoweredOpCode.ReturnSuccess, 0, 0, 0);
         int returnFailure = AddState(LoweredOpCode.ReturnFailure, 0, 0, 0);
