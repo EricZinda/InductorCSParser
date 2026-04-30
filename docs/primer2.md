@@ -251,6 +251,40 @@ foreach (var sectionSymbol in result.Tree!.FindAll(section))
 
 `SourceRange` returns a `Start` and `End` pair, each a `SourcePosition` carrying the same five units as `ParseResult`'s error position: `CharIndex`, `RuneIndex`, `GraphemeIndex`, `Line`, `Column`. The `+ 1` here is because Language Server Protocol lines are zero-based but humans count from 1.
 
+A composite node's range covers every leaf underneath it. Ask `keyValue.SourceRange` and you get the whole `host = "localhost"` line. Ask `value.SourceRange` and you get just the value. Pick the node and you pick the span.
+
+A range with both ends is also exactly what you need to draw a compiler-style underline. The grammar already accepts any integer for `port`, but ports are 1..65535. Catch out-of-range values after the parse and point at the offending value:
+
+```CSharp
+string sourceText = "[server]\nhost = \"localhost\"\nport = 99999\n";
+var result = config.Parse(sourceText);
+
+var portValue = FindSetting(result.Tree!, "server", "port");
+var typed = portValue!.Children[0];
+int port = int.Parse(typed.ToString(), CultureInfo.InvariantCulture);
+
+if (port < 1 || port > 65535)
+{
+    var range = typed.SourceRange!.Value;
+    string offendingLine = sourceText.Split('\n')[range.Start.Line];
+    int startColumn = range.Start.Column;
+    int width = range.End.Column - range.Start.Column;
+    Console.WriteLine($"Line {range.Start.Line + 1}: port {port} is out of range");
+    Console.WriteLine($"  {offendingLine}");
+    Console.WriteLine($"  {new string(' ', startColumn)}{new string('^', width)}");
+}
+```
+
+For the input above, the output is:
+
+```
+Line 3: port 99999 is out of range
+  port = 99999
+         ^^^^^
+```
+
+`Start.Line` picks the right line out of the input, `Start.Column` indents the underline to the value, and `End.Column - Start.Column` sizes it. No re-scanning the input to figure out where things are, the parser already knew.
+
 
 # Unicode and where the error actually is
 
@@ -286,3 +320,16 @@ Use `ErrorRuneIndex` when you're working with runes directly. Less common, but i
 Use `ErrorGraphemeIndex` for anything that faces a human. "Error at character 9" is what a person sees on screen. "Error at character 16" would seem to point past the end of what they typed, because they don't think of an emoji as taking up 8 of anything.
 
 Most of the time you won't care, because most input is ASCII and all four numbers are equal. But the moment a user pastes in an emoji, a flag, or a letter with a combining accent, the indices diverge, and "which one do I show in the error message" stops being a question you can ignore.
+
+The same multi-unit story applies to every Symbol's SourceRange, not just to errors. If the input has the family emoji as a section name and we want to underline it, the three units give three different widths:
+
+```CSharp
+var result = config.Parse("[👨‍👩‍👧]\n");
+var sectionName = result.Tree!.Find(section)!.Children[0];  // the "name" leaf
+var range = sectionName.SourceRange!.Value;
+int charWidth     = range.End.CharIndex     - range.Start.CharIndex;     // 8
+int runeWidth     = range.End.RuneIndex     - range.Start.RuneIndex;     // 5
+int graphemeWidth = range.End.GraphemeIndex - range.Start.GraphemeIndex; // 1
+```
+
+All three are right. The right one to use is whichever your consumer counts in: chars to feed `string.Substring` or send a Language Server Protocol diagnostic, runes to step through `Rune.GetRunes(input)`, graphemes to draw a `^` under each thing the user sees on screen.
