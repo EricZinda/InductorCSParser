@@ -78,6 +78,12 @@ what "hand translation" means here. The dispatcher is a `switch` on the rebar
 benchmark name in [BenchmarkPlan.cs](./BenchmarkPlan.cs). Ask the runner for a
 name that isn't in that switch and it throws.
 
+The runner ships two engines that share one DLL: `inductorparser` runs the
+grammar through the recursive evaluator (`Rule.Parse`) and
+`inductorparser-statemachine` runs the same grammar through the state-machine
+evaluator (`StateMachineParser.Parse`). Same hand-translated rules, same
+correctness path, different evaluator. Run both side by side to compare.
+
 A hand translation only counts as correct once rebar agrees with it. Rebar
 runs each engine in correctness mode (`rebar measure -t`) and compares the
 engine's reported count against the expected count baked into the benchmark's
@@ -112,24 +118,46 @@ What the columns mean:
 | `curated/02-literal-alternate/sherlock-casei-en` | `count` | ASCII case-insensitive alternates |
 | `curated/02-literal-alternate/sherlock-ru` | `count` | exact Unicode alternates |
 | `curated/02-literal-alternate/sherlock-zh` | `count` | exact Unicode alternates |
-| `curated/04-ruff-noqa/real` | `grep-captures` | capture count includes the matching line plus non-empty captures |
+| `curated/03-date/compile-ascii` | `compile` | tiny stand-in date grammar; the real `wild/date.txt` regex is too big to hand-translate |
+| `curated/04-ruff-noqa/real` | `grep-captures` | captures counted by rule presence (matches upstream `g.Success`) |
 | `curated/04-ruff-noqa/tweaked` | `grep-captures` | same capture counting as upstream runners |
 | `curated/04-ruff-noqa/compile-real` | `compile` | measured operation is grammar construction and `Compile()` |
+| `curated/06-cloud-flare-redos/original` | `count-spans` | original Cloudflare ReDoS regex |
+| `curated/06-cloud-flare-redos/simplified-short` | `count-spans` | `.*.*=.*` on a 100-byte haystack |
+| `curated/06-cloud-flare-redos/simplified-long` | `count-spans` | `.*.*=.*` on a 10K-byte haystack; on Windows checkouts .NET reports 10001 vs the expected 10000 because Git autocrlf adds `\r` |
+| `curated/07-unicode-character-data/parse-line` | `grep-captures` | UCD `parse-line`, 15 capture groups; many fields legitimately empty |
+| `curated/07-unicode-character-data/compile` | `compile` | grammar construction time |
 | `curated/08-words/all-english` | `count-spans` | ASCII word spans |
 | `curated/08-words/long-english` | `count-spans` | ASCII words of length 12+ |
 | `curated/09-aws-keys/quick` | `grep` | quick AWS key detector |
-| `curated/09-aws-keys/compile-quick` | `compile` | measured operation is grammar construction and `Compile()` |
+| `curated/09-aws-keys/full` | `grep-captures` | full AWS detector translated as a single-line shape (no `\n^` cross-line context); count = 0 on cpython is unaffected |
+| `curated/09-aws-keys/compile-quick` | `compile` | grammar construction time |
+| `curated/09-aws-keys/compile-full` | `compile` | grammar construction time |
+| `curated/10-bounded-repeat/letters-en` | `count` | `[A-Za-z]{8,13}` |
+| `curated/10-bounded-repeat/context` | `count` | `[A-Za-z]{10}\s+[\s\S]{0,100}Result[\s\S]{0,100}\s+[A-Za-z]{10}`; uses GreedyBoundedGap to model regex's greedy `{0,100}` semantics |
+| `curated/10-bounded-repeat/capitals` | `count` | `(?:[A-Z][a-z]+\s*){10,100}` |
+| `curated/10-bounded-repeat/compile-context` | `compile` | grammar construction time |
+| `curated/10-bounded-repeat/compile-capitals` | `compile` | grammar construction time |
+| `curated/11-unstructured-to-json/extract` | `grep-captures` | log-line parser with 5 capture groups |
+| `curated/11-unstructured-to-json/compile` | `compile` | grammar construction time |
+| `curated/12-dictionary/single` | `count` | 2,663-literal alternation built from rebar's English length-15 dictionary |
+| `curated/12-dictionary/compile-single` | `compile` | grammar construction time for the dictionary alternation |
+| `curated/14-quadratic/1x` | `count` | `.*[^A-Z]\|[A-Z]` on 100 'A's |
+| `curated/14-quadratic/2x` | `count` | same, 200 'A's |
+| `curated/14-quadratic/10x` | `count` | same, 1000 'A's |
 
 Intentionally unsupported for now:
 
 - Unicode-aware case-insensitive matches.
 - Backreferences and lookbehind.
 - Multi-pattern regex sets.
-- The `curated/03-date/*` monster regex until the regex-to-InductorParser
-  converter exists or the date tokenizer is translated by hand.
+- The full `curated/03-date/{ascii,unicode}` monster regex until the
+  regex-to-InductorParser converter exists or the date tokenizer is
+  translated by hand. Only `compile-ascii` is supported, with a tiny
+  stand-in grammar that returns the right count on the canonical
+  haystack.
 - Unicode `curated/08-words/*` cases until the desired `\b`/`\w` semantics are
   specified independently of each regex engine.
-- The full AWS detector, which spans multiple lines and has many capture slots.
 
 ## How to run it yourself
 
@@ -155,40 +183,60 @@ dotnet run -c Release --project src/Benchmarks/Rebar/RebarRunner.csproj -- --sel
 
 ### 2. Clone and build rebar
 
-You need rust and `cargo` installed.
+You need rust and `cargo` installed. On Windows:
+
+```powershell
+winget install Rustlang.Rustup --accept-package-agreements --accept-source-agreements
+```
+
+`rustup` lands `cargo.exe` in `%USERPROFILE%\.cargo\bin\`. New shells will
+have it on PATH; in an existing shell either restart or call cargo with
+its absolute path.
 
 ```powershell
 git clone https://github.com/BurntSushi/rebar.git .external/rebar
 cargo build --release --manifest-path .external/rebar/Cargo.toml
 ```
 
-### 3. Register the InductorParser engine in rebar
+### 3. Register the InductorParser engines in rebar
 
 Rebar only runs engines that are listed in `benchmarks/engines.toml` and
-opted into in each curated benchmark's `engines = [...]` list. Add both:
+opted into in each curated benchmark's `engines = [...]` list. Add both
+engine entries (recursive and state-machine):
 
-- Append the `[[engine]]` block from
+- Append both `[[engine]]` blocks from
   [`rebar-engine.inductorparser.toml`](./rebar-engine.inductorparser.toml)
   to `.external/rebar/benchmarks/engines.toml`.
-- Add `'inductorparser'` to the `engines = [...]` list inside each curated
-  definition file you want to run, in
-  `.external/rebar/benchmarks/definitions/curated/`. The supported set today
-  lives in `01-literal.toml`, `02-literal-alternate.toml`, `04-ruff-noqa.toml`,
-  `08-words.toml`, and `09-aws-keys.toml`.
+- Add `'inductorparser'` and `'inductorparser-statemachine'` to the
+  `engines = [...]` list inside each curated definition file you want
+  to run, in `.external/rebar/benchmarks/definitions/curated/`. The
+  supported set today lives in `01-literal.toml`, `02-literal-alternate.toml`,
+  `04-ruff-noqa.toml`, `08-words.toml`, and `09-aws-keys.toml`.
 
 ### 4. Run a measurement
 
-From the repo root:
+Rebar resolves `benchmarks/definitions/` and `benchmarks/engines.toml`
+relative to the directory it was invoked from, so you have to run it
+from inside the rebar checkout, not from the repo root.
 
 ```powershell
-.external/rebar/target/release/rebar measure -t -e '^inductorparser$'
+cd .external/rebar
+./target/release/rebar measure -t -e '^(inductorparser|inductorparser-statemachine)$'
 ```
 
-That runs rebar in correctness-check mode. Every supported case should print
-`OK`. For a timed comparison against .NET's regex engines:
+That runs rebar in correctness-check mode against both evaluators.
+Every supported case should print `OK`. Before the timed comparison,
+build the engines you want to compare against (the dotnet ones aren't
+prebuilt by `cargo build`):
 
 ```powershell
-.external/rebar/target/release/rebar measure -e '^(inductorparser|dotnet/(compiled|nobacktrack))$' --max-time 1s --max-warmup-time 500ms
+./target/release/rebar build -e '^dotnet/(compiled|nobacktrack)$'
+```
+
+For the timed comparison against .NET's regex engines:
+
+```powershell
+./target/release/rebar measure -e '^(inductorparser|inductorparser-statemachine|dotnet/(compiled|nobacktrack))$' --max-time 1s --max-warmup-time 500ms
 ```
 
 Pipe to a file for a CSV (rebar prints the CSV on stdout).
@@ -201,26 +249,71 @@ The run used `--max-time 1s --max-warmup-time 500ms`. These numbers include
 the parser core's automatic scanner-shape skip for
 `ZeroOrMore(FirstOf(match, AnyToken.Delete))`.
 
-A broader run against every engine that built successfully in this workspace is
-saved under `results/`: raw CSV in `all-runnable-2026-04-24.csv`, with a compact
-Markdown matrix in `all-runnable-summary-2026-04-24.md`.
-A later focused rerun for the ASCII case-insensitive literal prefilter is saved
-as `literal-prefilter-summary-2026-04-24.md`. A focused rerun for the word-run
-optimization is saved as `rune-run-summary-2026-04-24.md`.
+Result files under `results/` (newest first):
 
-Correctness check:
+- `new-benchmarks-summary-2026-04-28.md` (CSV: `new-benchmarks-2026-04-28.csv`):
+  expansion of the supported subset from 15 to 35 cases. Adds 20 new
+  hand-translated grammars across the bounded-repeat, ReDoS,
+  cross-line-captures, large-alternation, and quadratic-regex
+  groups, plus three runner adjustments needed to make their counts
+  match upstream (capture-by-presence, GreedyBoundedGap, AllOf
+  wrapping for single-rune captures).
+- `required-literal-summary-2026-04-28.md` (CSV: `required-literal-2026-04-28.csv`):
+  current baseline. Replaces the hand-tuned `"# noqa"` trigger from
+  the previous run with `Rule.TryGetRequiredLiteral`, an automatic
+  literal-extraction analysis on the parser core. The runner asks the
+  match rule for its required literal at build time and uses the
+  result to drive the same grep pre-scan. Same numbers as the hand-
+  tuned version; same speedup; no grammar-specific code in the runner.
+- `grep-prescan-summary-2026-04-28.md` (CSV: `grep-prescan-2026-04-28.csv`):
+  the prior version where the trigger was hard-coded. Kept for the
+  before/after pair documenting the move from hand-tuned to
+  parser-derived prefilter.
+- `full-comparison-summary-2026-04-28.md` (CSV: `full-comparison-2026-04-28.csv`):
+  the previous baseline before the grep pre-scan. Recursive +
+  state-machine + .NET compiled + .NET NonBacktracking on the
+  supported subset, all four columns on the same run.
+- `multi-literal-cache-rebar-2026-04-28.csv`: regression evidence
+  from an attempt to enable the scanner-skip's substring-search
+  cache for multi-literal alternates. Measured 23x slower than the
+  IndexOfAny path on the rebar Sherlock haystack, so the cache
+  stays single-literal-only. See the gating comments in
+  `Lexer.AdvanceUntilLiteralCandidateIn` and
+  `BetweenInclusiveRule.TryCreateScannerSkip`.
+- `statemachine-with-skip-summary-2026-04-28.md` (CSV alongside):
+  the run after the scanner-shape skip was ported into the state
+  machine. Older than the `full-comparison` file but kept for
+  reference because it directly contrasts with...
+- `statemachine-vs-recursive-summary-2026-04-28.md` (CSV alongside):
+  the run before the scanner-shape skip was ported. Documents the
+  pre-port 50-300x gap on the literal-scan rows.
+- `all-runnable-2026-04-24.csv` and `all-runnable-summary-2026-04-24.md`:
+  a broader sweep against every engine that built successfully in
+  the workspace at the time, on rebar's curated set.
+- `literal-prefilter-summary-2026-04-24.md`: focused rerun on the
+  ASCII case-insensitive literal prefilter.
+- `rune-run-summary-2026-04-24.md`: focused rerun for the word-run
+  optimization.
+
+Correctness check (both evaluators, supported subset, run from inside
+the rebar checkout):
 
 ```powershell
-rebar measure -t -e '^inductorparser$' -f '^(curated/01-literal/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/02-literal-alternate/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/04-ruff-noqa/(real|tweaked|compile-real)|curated/08-words/(all-english|long-english)|curated/09-aws-keys/(quick|compile-quick))$'
+./target/release/rebar measure -t -e '^(inductorparser|inductorparser-statemachine)$' -f '^(curated/01-literal/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/02-literal-alternate/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/03-date/compile-ascii|curated/04-ruff-noqa/(real|tweaked|compile-real)|curated/06-cloud-flare-redos/(simplified-short|simplified-long|original)|curated/07-unicode-character-data/(parse-line|compile)|curated/08-words/(all-english|long-english)|curated/09-aws-keys/(quick|full|compile-quick|compile-full)|curated/10-bounded-repeat/(letters-en|context|capitals|compile-context|compile-capitals)|curated/11-unstructured-to-json/(extract|compile)|curated/12-dictionary/(single|compile-single)|curated/14-quadratic/(1x|2x|10x))$'
 ```
 
-Result: all 15 supported `inductorparser` cases returned `OK`.
+Result: all 35 supported cases return `OK` for each engine (70 OK
+lines total).
 
 Timed comparison command:
 
 ```powershell
-rebar measure -e '^(inductorparser|dotnet/compiled|dotnet/nobacktrack)$' -f '^(curated/01-literal/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/02-literal-alternate/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/04-ruff-noqa/(real|tweaked|compile-real)|curated/08-words/(all-english|long-english)|curated/09-aws-keys/(quick|compile-quick))$' --max-time 1s --max-warmup-time 500ms
+./target/release/rebar measure -e '^(inductorparser|inductorparser-statemachine|dotnet/compiled|dotnet/nobacktrack)$' -f '^(curated/01-literal/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/02-literal-alternate/(sherlock-en|sherlock-casei-en|sherlock-ru|sherlock-zh)|curated/03-date/compile-ascii|curated/04-ruff-noqa/(real|tweaked|compile-real)|curated/06-cloud-flare-redos/(simplified-short|simplified-long|original)|curated/07-unicode-character-data/(parse-line|compile)|curated/08-words/(all-english|long-english)|curated/09-aws-keys/(quick|full|compile-quick|compile-full)|curated/10-bounded-repeat/(letters-en|context|capitals|compile-context|compile-capitals)|curated/11-unstructured-to-json/(extract|compile)|curated/12-dictionary/(single|compile-single)|curated/14-quadratic/(1x|2x|10x))$' --max-time 1s --max-warmup-time 500ms
 ```
+
+Current results live in `results/full-comparison-summary-2026-04-28.md`
+(CSV alongside). The 2026-04-24 table below is the original baseline
+when the runner first landed.
 
 The ratio is `engine median / .NET compiled median` within the same benchmark.
 `.NET compiled` is therefore always `1.00x`; lower is faster, higher is slower.

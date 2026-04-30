@@ -1,0 +1,61 @@
+name,model,rebar_version,engine,engine_version,err,haystack_len,iters,total,median,mad,mean,stddev,min,max
+curated/01-literal/sherlock-en,count,0.1.0 (rev 8e952148cc),dotnet/compiled,10.0.6,,929232,14866,1.61s,66.00us,400.00ns,66.91us,7.95us,65.30us,428.60us
+curated/01-literal/sherlock-en,count,0.1.0 (rev 8e952148cc),dotnet/nobacktrack,10.0.6,,929232,7912,1.61s,125.30us,500.00ns,126.19us,11.88us,123.10us,619.90us
+curated/01-literal/sherlock-en,count,0.1.0 (rev 8e952148cc),inductorparser,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,929232,4548,1.56s,212.70us,400.00ns,216.15us,19.32us,211.40us,791.70us
+curated/01-literal/sherlock-en,count,0.1.0 (rev 8e952148cc),inductorparser-statemachine,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,929232,58,1.61s,16.79ms,327.90us,17.52ms,1.41ms,16.45ms,24.36ms
+curated/01-literal/sherlock-casei-en,count,0.1.0 (rev 8e952148cc),dotnet/compiled,10.0.6,,929232,11590,1.61s,82.90us,1.20us,85.83us,9.02us,81.40us,559.50us
+curated/01-literal/sherlock-casei-en,count,0.1.0 (rev 8e952148cc),dotnet/nobacktrack,10.0.6,,929232,6691,1.61s,147.90us,400.00ns,149.25us,10.76us,146.10us,523.70us
+curated/01-literal/sherlock-casei-en,count,0.1.0 (rev 8e952148cc),inductorparser,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,929232,3622,1.56s,268.20us,500.00ns,272.26us,22.14us,266.60us,1.11ms
+curated/01-literal/sherlock-casei-en,count,0.1.0 (rev 8e952148cc),inductorparser-statemachine,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,929232,54,1.56s,17.86ms,355.40us,18.54ms,1.70ms,17.38ms,24.55ms
+curated/01-literal/sherlock-ru,count,0.1.0 (rev 8e952148cc),dotnet/compiled,10.0.6,,1600556,11276,1.61s,87.00us,100.00ns,88.25us,10.33us,86.70us,710.30us
+curated/01-literal/sherlock-ru,count,0.1.0 (rev 8e952148cc),dotnet/nobacktrack,10.0.6,,1600556,7410,1.61s,133.80us,400.00ns,134.70us,17.00us,130.90us,837.40us
+curated/01-literal/sherlock-ru,count,0.1.0 (rev 8e952148cc),inductorparser,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,1600556,4082,1.56s,237.20us,400.00ns,241.23us,23.48us,236.10us,0.95ms
+curated/01-literal/sherlock-ru,count,0.1.0 (rev 8e952148cc),inductorparser-statemachine,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,1600556,50,1.61s,19.46ms,184.50us,20.17ms,1.52ms,19.27ms,25.86ms
+curated/01-literal/sherlock-zh,count,0.1.0 (rev 8e952148cc),dotnet/compiled,10.0.6,,843478,32629,1.61s,30.20us,0.00ns,30.53us,7.29us,30.00us,825.20us
+curated/01-literal/sherlock-zh,count,0.1.0 (rev 8e952148cc),dotnet/nobacktrack,10.0.6,,843478,30475,1.62s,32.40us,100.00ns,32.70us,6.05us,32.10us,658.60us
+curated/01-literal/sherlock-zh,count,0.1.0 (rev 8e952148cc),inductorparser,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,843478,23044,1.56s,39.40us,100.00ns,39.86us,5.46us,39.00us,441.60us
+curated/01-literal/sherlock-zh,count,0.1.0 (rev 8e952148cc),inductorparser-statemachine,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,843478,106,1.61s,9.75ms,32.80us,9.48ms,589.81us,8.30ms,10.28ms
+curated/02-literal-alternate/sherlock-en,count,0.1.0 (rev 8e952148cc),dotnet/compiled,10.0.6,,929232,3184,1.56s,311.40us,1.20us,313.91us,19.30us,308.90us,1.05ms
+curated/02-literal-alternate/sherlock-en,count,0.1.0 (rev 8e952148cc),dotnet/nobacktrack,10.0.6,,929232,2480,1.61s,399.55us,1.55us,403.01us,16.31us,395.00us,714.80us
+curated/02-literal-alternate/sherlock-en,count,0.1.0 (rev 8e952148cc),inductorparser,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,929232,1311,1.56s,719.20us,2.00us,741.45us,139.54us,714.40us,4.94ms
+curated/02-literal-alternate/sherlock-en,count,0.1.0 (rev 8e952148cc),inductorparser-statemachine,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,929232,55,1.61s,17.53ms,320.30us,18.39ms,2.66ms,17.12ms,35.49ms
+curated/02-literal-alternate/sherlock-casei-en,count,0.1.0 (rev 8e952148cc),dotnet/compiled,10.0.6,,929232,5983,1.56s,164.40us,800.00ns,166.89us,21.96us,162.60us,1.10ms
+curated/02-literal-alternate/sherlock-casei-en,count,0.1.0 (rev 8e952148cc),dotnet/nobacktrack,10.0.6,,929232,4106,1.61s,240.80us,400.00ns,243.29us,15.00us,239.40us,547.90us
+curated/02-literal-alternate/sherlock-casei-en,count,0.1.0 (rev 8e952148cc),inductorparser,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,929232,213,1.56s,4.56ms,42.70us,4.69ms,250.18us,4.50ms,6.21ms
+curated/02-literal-alternate/sherlock-casei-en,count,0.1.0 (rev 8e952148cc),inductorparser-statemachine,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,929232,44,1.61s,22.39ms,314.90us,22.77ms,1.08ms,22.04ms,29.02ms
+curated/02-literal-alternate/sherlock-ru,count,0.1.0 (rev 8e952148cc),dotnet/compiled,10.0.6,,1600556,430,1.56s,2.30ms,2.85us,2.33ms,60.46us,2.30ms,2.90ms
+curated/02-literal-alternate/sherlock-ru,count,0.1.0 (rev 8e952148cc),dotnet/nobacktrack,10.0.6,,1600556,262,1.61s,3.79ms,11.15us,3.83ms,106.38us,3.78ms,4.87ms
+curated/02-literal-alternate/sherlock-ru,count,0.1.0 (rev 8e952148cc),inductorparser,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,1600556,500,1.56s,1.95ms,5.40us,2.00ms,130.83us,1.94ms,3.86ms
+curated/02-literal-alternate/sherlock-ru,count,0.1.0 (rev 8e952148cc),inductorparser-statemachine,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,1600556,38,1.61s,26.75ms,269.20us,26.94ms,1.09ms,26.28ms,33.18ms
+curated/02-literal-alternate/sherlock-zh,count,0.1.0 (rev 8e952148cc),dotnet/compiled,10.0.6,,843478,18723,1.61s,52.80us,400.00ns,53.08us,6.96us,52.00us,669.60us
+curated/02-literal-alternate/sherlock-zh,count,0.1.0 (rev 8e952148cc),dotnet/nobacktrack,10.0.6,,843478,15215,1.61s,64.10us,200.00ns,65.25us,10.78us,63.60us,767.30us
+curated/02-literal-alternate/sherlock-zh,count,0.1.0 (rev 8e952148cc),inductorparser,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,843478,10499,1.56s,89.20us,300.00ns,91.53us,13.11us,88.20us,504.70us
+curated/02-literal-alternate/sherlock-zh,count,0.1.0 (rev 8e952148cc),inductorparser-statemachine,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,843478,98,1.56s,10.55ms,75.85us,10.20ms,708.57us,8.93ms,11.62ms
+curated/04-ruff-noqa/real,grep-captures,0.1.0 (rev 8e952148cc),dotnet/compiled,10.0.6,,32514634,19,1.66s,53.83ms,198.30us,53.99ms,400.86us,53.44ms,54.89ms
+curated/04-ruff-noqa/real,grep-captures,0.1.0 (rev 8e952148cc),dotnet/nobacktrack,10.0.6,,32514634,16,1.71s,65.17ms,257.70us,65.24ms,419.18us,64.63ms,66.36ms
+curated/04-ruff-noqa/real,grep-captures,0.1.0 (rev 8e952148cc),inductorparser,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,32514634,1,6.80s,3.22s,0.00ns,3.22s,0.00ns,3.22s,3.22s
+curated/04-ruff-noqa/real,grep-captures,0.1.0 (rev 8e952148cc),inductorparser-statemachine,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,32514634,1,3.52s,1.48s,0.00ns,1.48s,0.00ns,1.48s,1.48s
+curated/04-ruff-noqa/tweaked,grep-captures,0.1.0 (rev 8e952148cc),dotnet/compiled,10.0.6,,32514634,25,1.67s,40.97ms,260.10us,41.18ms,630.82us,40.65ms,43.47ms
+curated/04-ruff-noqa/tweaked,grep-captures,0.1.0 (rev 8e952148cc),dotnet/nobacktrack,10.0.6,,32514634,21,1.66s,48.53ms,212.80us,48.51ms,256.17us,48.08ms,49.03ms
+curated/04-ruff-noqa/tweaked,grep-captures,0.1.0 (rev 8e952148cc),inductorparser,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,32514634,4,1.96s,314.98ms,512.55us,321.36ms,11.55ms,314.14ms,341.36ms
+curated/04-ruff-noqa/tweaked,grep-captures,0.1.0 (rev 8e952148cc),inductorparser-statemachine,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,32514634,2,2.97s,882.54ms,570.50us,882.54ms,570.50us,881.97ms,883.11ms
+curated/04-ruff-noqa/compile-real,compile,0.1.0 (rev 8e952148cc),dotnet/compiled,10.0.6,,,359,1.56s,78.30us,8.50us,84.85us,112.20us,65.00us,2.18ms
+curated/04-ruff-noqa/compile-real,compile,0.1.0 (rev 8e952148cc),dotnet/nobacktrack,10.0.6,,,1923,1.56s,405.80us,44.20us,463.67us,248.92us,296.60us,1.93ms
+curated/04-ruff-noqa/compile-real,compile,0.1.0 (rev 8e952148cc),inductorparser,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,,75634,1.56s,7.10us,200.00ns,8.78us,6.49us,6.30us,285.10us
+curated/04-ruff-noqa/compile-real,compile,0.1.0 (rev 8e952148cc),inductorparser-statemachine,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,,44766,1.56s,7.20us,200.00ns,11.54us,43.60us,6.40us,1.20ms
+curated/08-words/all-english,count-spans,0.1.0 (rev 8e952148cc),dotnet/compiled,10.0.6,,78901,1539,1.56s,643.10us,600.00ns,649.78us,28.01us,642.10us,1.30ms
+curated/08-words/all-english,count-spans,0.1.0 (rev 8e952148cc),dotnet/nobacktrack,10.0.6,,78901,756,1.56s,1.31ms,3.10us,1.32ms,37.61us,1.31ms,2.09ms
+curated/08-words/all-english,count-spans,0.1.0 (rev 8e952148cc),inductorparser,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,78901,141,1.56s,6.99ms,908.60us,7.09ms,1.07ms,5.47ms,9.46ms
+curated/08-words/all-english,count-spans,0.1.0 (rev 8e952148cc),inductorparser-statemachine,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,78901,100,1.56s,6.86ms,837.80us,10.00ms,5.61ms,5.46ms,30.80ms
+curated/08-words/long-english,count-spans,0.1.0 (rev 8e952148cc),dotnet/compiled,10.0.6,,78901,1030,1.56s,0.96ms,1.10us,0.97ms,32.14us,0.96ms,1.40ms
+curated/08-words/long-english,count-spans,0.1.0 (rev 8e952148cc),dotnet/nobacktrack,10.0.6,,78901,1860,1.56s,531.40us,4.30us,537.27us,27.28us,521.50us,1.03ms
+curated/08-words/long-english,count-spans,0.1.0 (rev 8e952148cc),inductorparser,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,78901,144,1.56s,6.90ms,51.00us,6.98ms,302.20us,6.78ms,9.53ms
+curated/08-words/long-english,count-spans,0.1.0 (rev 8e952148cc),inductorparser-statemachine,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,78901,246,1.56s,4.02ms,24.30us,4.07ms,217.59us,3.98ms,6.26ms
+curated/09-aws-keys/quick,grep,0.1.0 (rev 8e952148cc),dotnet/compiled,10.0.6,,32514634,35,1.61s,29.38ms,199.40us,28.97ms,858.56us,27.55ms,30.45ms
+curated/09-aws-keys/quick,grep,0.1.0 (rev 8e952148cc),dotnet/nobacktrack,10.0.6,,32514634,29,1.67s,34.95ms,92.80us,34.83ms,788.84us,33.07ms,37.30ms
+curated/09-aws-keys/quick,grep,0.1.0 (rev 8e952148cc),inductorparser,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,32514634,4,2.06s,294.97ms,529.75us,294.85ms,769.02us,293.69ms,295.78ms
+curated/09-aws-keys/quick,grep,0.1.0 (rev 8e952148cc),inductorparser-statemachine,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,32514634,2,2.97s,869.43ms,1.12ms,869.43ms,1.12ms,868.32ms,870.55ms
+curated/09-aws-keys/compile-quick,compile,0.1.0 (rev 8e952148cc),dotnet/compiled,10.0.6,,,576,1.56s,89.30us,5.90us,102.35us,151.77us,74.10us,2.73ms
+curated/09-aws-keys/compile-quick,compile,0.1.0 (rev 8e952148cc),dotnet/nobacktrack,10.0.6,,,2669,1.56s,243.90us,15.10us,261.94us,360.34us,150.30us,18.13ms
+curated/09-aws-keys/compile-quick,compile,0.1.0 (rev 8e952148cc),inductorparser,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,,117161,1.57s,2.80us,100.00ns,3.44us,3.98us,2.20us,412.20us
+curated/09-aws-keys/compile-quick,compile,0.1.0 (rev 8e952148cc),inductorparser-statemachine,inductorparser-rebar 0.1.0+bea3f189f4491d5ee2971df4eeb79b08dbc9d88e,,,59367,1.56s,2.80us,100.00ns,5.21us,35.45us,2.20us,1.84ms

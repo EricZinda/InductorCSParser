@@ -22,6 +22,10 @@ internal sealed class AnyTokenRule : Rule
 {
     public AnyTokenRule() : base(FlattenType.Preserve) { }
 
+    // No accessors needed for the state-machine lowering pass: AnyTokenRule
+    // carries no per-instance data. The lowerer recognizes the type and
+    // emits the MatchAnyToken opcode directly.
+
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         using var transaction = lexer.BeginTransaction();

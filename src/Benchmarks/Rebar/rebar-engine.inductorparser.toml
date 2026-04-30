@@ -1,9 +1,19 @@
-# Copy this [[engine]] entry into a local rebar benchmarks/engines.toml file.
-# Adjust cwd so it points at this repository from the rebar checkout.
+# Copy these [[engine]] entries into a local rebar benchmarks/engines.toml file.
+#
+# cwd is resolved relative to the engines.toml file location, not relative
+# to where rebar was invoked. With rebar cloned at <repo>/.external/rebar/,
+# engines.toml lives at <repo>/.external/rebar/benchmarks/engines.toml, and
+# "../../.." gets back to the repo root where the dotnet build/run paths
+# below are anchored. Adjust if rebar is somewhere else.
+#
+# Two engines share one runner DLL: 'inductorparser' uses the recursive
+# evaluator (Rule.Parse) and 'inductorparser-statemachine' uses the
+# state-machine evaluator (StateMachineParser.Parse). Same grammar, same
+# correctness path, different evaluator. Run both to compare.
 
 [[engine]]
 name = "inductorparser"
-cwd = "../RegexPerf"
+cwd = "../../.."
 
 [engine.version]
 bin = "dotnet"
@@ -12,6 +22,26 @@ args = ["./src/Benchmarks/Rebar/bin/Release/net8.0/InductorParser.RebarRunner.dl
 [engine.run]
 bin = "dotnet"
 args = ["./src/Benchmarks/Rebar/bin/Release/net8.0/InductorParser.RebarRunner.dll", "inductorparser"]
+
+[[engine.build]]
+bin = "dotnet"
+args = ["build", "-c", "Release", "src/Benchmarks/Rebar/RebarRunner.csproj", "-m:1", "-p:BuildInParallel=false"]
+
+[[engine.clean]]
+bin = "dotnet"
+args = ["clean", "-c", "Release", "src/Benchmarks/Rebar/RebarRunner.csproj"]
+
+[[engine]]
+name = "inductorparser-statemachine"
+cwd = "../../.."
+
+[engine.version]
+bin = "dotnet"
+args = ["./src/Benchmarks/Rebar/bin/Release/net8.0/InductorParser.RebarRunner.dll", "--version"]
+
+[engine.run]
+bin = "dotnet"
+args = ["./src/Benchmarks/Rebar/bin/Release/net8.0/InductorParser.RebarRunner.dll", "inductorparser-statemachine"]
 
 [[engine.build]]
 bin = "dotnet"

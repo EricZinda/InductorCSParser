@@ -33,6 +33,35 @@ internal sealed class OneOfRule : Rule
         _setRendered = runeSet.ToString();
     }
 
+    // Accessor for the state-machine evaluator's lowering pass.
+    internal RuneSet LoweringSet => _set;
+
+    internal override (string Text, bool IgnoreCase)? ComputeRequiredLiteral() =>
+        ComputeConcatenableText();
+
+    internal override (string Text, bool IgnoreCase)? ComputeConcatenableText()
+    {
+        // OneOfRule consumes exactly one rune. Two shapes feed the
+        // required-literal prefilter cleanly: a single-rune set
+        // (OneOf("x") matches only 'x') and a two-rune set that's an
+        // ASCII letter pair (OneOf("Nn") is effectively a case-
+        // insensitive 'n'). Anything broader has too many candidate
+        // chars to act as a useful substring-search trigger, so we
+        // return null and the caller falls back to the first-rune skip.
+        if (!_set.TryGetBmpChars(maxChars: 2, out char[] chars) || chars.Length == 0)
+            return null;
+        if (chars.Length == 1)
+            return (chars[0].ToString(), false);
+        char a = chars[0];
+        char b = chars[1];
+        if (IsAsciiLetter(a) && IsAsciiLetter(b) && (a | 0x20) == (b | 0x20))
+            return (((char)(a | 0x20)).ToString(), true);
+        return null;
+    }
+
+    private static bool IsAsciiLetter(char c) =>
+        (uint)((c | 0x20) - 'a') <= ('z' - 'a');
+
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         using var transaction = lexer.BeginTransaction();

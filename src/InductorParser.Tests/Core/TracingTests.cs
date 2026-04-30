@@ -164,7 +164,7 @@ public class TracingTests
     [Test]
     public void TraceLevel_Normal_suppresses_output()
     {
-        // Diagnostic trace emissions are gated on TraceLevel >=
+        // Diagnostic trace outputs are gated on TraceLevel >=
         // Diagnostic. With TraceLevel.Normal the sink stays empty even
         // though TraceSink is wired up. The grammar below exercises
         // every rule type (Grapheme, OneOf, AllOf, FirstOf, OneOrMore,

@@ -15,14 +15,15 @@ namespace InductorParser.Benchmarks.Rebar;
 
 internal static class Program
 {
-    private const string EngineName = "inductorparser";
+    private const string RecursiveEngineName = "inductorparser";
+    private const string StateMachineEngineName = "inductorparser-statemachine";
 
     public static int Main(string[] args)
     {
         try
         {
             if (args.Length != 1)
-                throw new ArgumentException($"Usage: {Assembly.GetExecutingAssembly().GetName().Name} ({EngineName} | --version | --self-test)");
+                throw new ArgumentException($"Usage: {Assembly.GetExecutingAssembly().GetName().Name} ({RecursiveEngineName} | {StateMachineEngineName} | --version | --self-test)");
 
             if (args[0] == "--version")
             {
@@ -33,11 +34,15 @@ internal static class Program
             if (args[0] == "--self-test")
                 return SelfTest.Run();
 
-            if (args[0] != EngineName)
-                throw new ArgumentException($"Unknown engine '{args[0]}'. Expected '{EngineName}'.");
+            bool useStateMachine = args[0] switch
+            {
+                RecursiveEngineName => false,
+                StateMachineEngineName => true,
+                _ => throw new ArgumentException($"Unknown engine '{args[0]}'. Expected '{RecursiveEngineName}' or '{StateMachineEngineName}'.")
+            };
 
             var config = RebarConfig.Read(Console.OpenStandardInput());
-            foreach (var sample in Run(config))
+            foreach (var sample in Run(config, useStateMachine))
                 Console.Out.WriteLine($"{sample.DurationNanoseconds.ToString(CultureInfo.InvariantCulture)},{sample.Count.ToString(CultureInfo.InvariantCulture)}");
             return 0;
         }
@@ -48,15 +53,15 @@ internal static class Program
         }
     }
 
-    private static IEnumerable<Sample> Run(RebarConfig config)
+    private static IEnumerable<Sample> Run(RebarConfig config, bool useStateMachine)
     {
         if (config.Model == "compile")
         {
-            Warmup(() => RunCompileOnce(config).Count, config.MaxWarmupIters, config.MaxWarmupTimeNanoseconds);
-            return Measure(() => RunCompileOnce(config), config.MaxIters, config.MaxTimeNanoseconds);
+            Warmup(() => RunCompileOnce(config, useStateMachine).Count, config.MaxWarmupIters, config.MaxWarmupTimeNanoseconds);
+            return Measure(() => RunCompileOnce(config, useStateMachine), config.MaxIters, config.MaxTimeNanoseconds);
         }
 
-        var plan = BenchmarkRegistry.Build(config);
+        var plan = BenchmarkRegistry.Build(config, useStateMachine);
         Warmup(() => plan.Count(config.Haystack, config.Model), config.MaxWarmupIters, config.MaxWarmupTimeNanoseconds);
         return Measure(() => RunSearchOnce(plan, config), config.MaxIters, config.MaxTimeNanoseconds);
     }
@@ -68,10 +73,10 @@ internal static class Program
         return new Sample(ElapsedNanoseconds(start), count);
     }
 
-    private static Sample RunCompileOnce(RebarConfig config)
+    private static Sample RunCompileOnce(RebarConfig config, bool useStateMachine)
     {
         long start = Stopwatch.GetTimestamp();
-        var plan = BenchmarkRegistry.Build(config);
+        var plan = BenchmarkRegistry.Build(config, useStateMachine);
         long duration = ElapsedNanoseconds(start);
         long count = plan.Count(config.Haystack, config.Model);
         return new Sample(duration, count);
@@ -152,7 +157,12 @@ internal static class Program
                     model: "grep-captures",
                     pattern: @"(\s*)((?:# [Nn][Oo][Qq][Aa])(?::\s?(([A-Z]+[0-9]+(?:[,\s]+)?)+))?)",
                     haystack: "# noqa\nx # noqa: F401, E501\npass\n",
-                    expected: 7),
+                    // Line 1 ("# noqa") contributes 3 (match + leadingWS Success
+                    // with 0 chars + noqa); line 2 contributes 5 (match + all
+                    // four captures Success). Mirrors how rebar's other
+                    // grep-captures runners count g.Success regardless of span
+                    // length.
+                    expected: 8),
                 Case("ruff tweaked grep captures",
                     name: "curated/04-ruff-noqa/tweaked",
                     model: "grep-captures",
@@ -176,16 +186,20 @@ internal static class Program
             int failures = 0;
             foreach (var test in cases)
             {
-                var plan = BenchmarkRegistry.Build(test.Config);
-                long actual = plan.Count(test.Config.Haystack, test.Config.Model);
-                if (actual == test.Expected)
+                foreach (var engine in new[] { ("recursive", false), ("statemachine", true) })
                 {
-                    Console.Out.WriteLine($"OK   {test.Name}");
-                    continue;
-                }
+                    var plan = BenchmarkRegistry.Build(test.Config, engine.Item2);
+                    long actual = plan.Count(test.Config.Haystack, test.Config.Model);
+                    string label = $"{test.Name} [{engine.Item1}]";
+                    if (actual == test.Expected)
+                    {
+                        Console.Out.WriteLine($"OK   {label}");
+                        continue;
+                    }
 
-                failures++;
-                Console.Out.WriteLine($"FAIL {test.Name}: expected {test.Expected}, got {actual}");
+                    failures++;
+                    Console.Out.WriteLine($"FAIL {label}: expected {test.Expected}, got {actual}");
+                }
             }
 
             if (failures == 0)

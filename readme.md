@@ -142,7 +142,7 @@ var lineWithoutHede = AllOf(
         Not(EndOfLine()),
         AnyToken()
     )),
-    EndOfLineOrEof()
+    EndOfLine(eofIsEol: true)
 );
 ```
 

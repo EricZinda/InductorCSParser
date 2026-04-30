@@ -65,6 +65,32 @@ internal sealed class FirstOfRule : Rule
         return null;
     }
 
+    // FirstOf matches exactly one branch on success. If every branch
+    // has at least one required literal (single or its own multi-literal
+    // set), the union of those literals is required by FirstOf as a
+    // whole: any successful match is guaranteed to contain one of them
+    // as a substring. If even one branch has no analyzable literal, the
+    // union doesn't hold and we return null.
+    internal override IReadOnlyList<(string Text, bool IgnoreCase)>? ComputeRequiredLiteralAlternatives()
+    {
+        if (Children.Count == 0) return null;
+        var union = new List<(string Text, bool IgnoreCase)>();
+        foreach (var child in Children)
+        {
+            var childSet = child.ComputeRequiredLiteralAlternatives();
+            if (childSet != null && childSet.Count > 0)
+            {
+                union.AddRange(childSet);
+                continue;
+            }
+            var single = child.ComputeRequiredLiteral();
+            if (single == null || single.Value.Text.Length == 0)
+                return null;
+            union.Add(single.Value);
+        }
+        return union.Count == 0 ? null : union;
+    }
+
     // Return the set of runes this rule might consume first (can be a superset)
     // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least

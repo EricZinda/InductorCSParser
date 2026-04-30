@@ -8,7 +8,6 @@ using InductorParser.Benchmarks.Json.PegasusParsers;
 using InductorParser.Benchmarks.Json.PidginParsers;
 using InductorParser.Benchmarks.Json.SpracheParsers;
 using InductorParser.Benchmarks.Json.SuperpowerParsers;
-using Newtonsoft.Json.Linq;
 
 namespace InductorParser.Benchmarks;
 
@@ -39,6 +38,11 @@ public class Program
         if (args.Contains("--lexer-compare"))
         {
             return LexerCompare();
+        }
+
+        if (args.Contains("--state-machine-compare"))
+        {
+            return StateMachineBench.Run();
         }
 
         var summaries = BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
@@ -178,8 +182,9 @@ public class Program
     //
     // Strategy: feed each parser the same input, round-trip its output
     // back to a string using the JsonValue.ToString canonical form (or
-    // each library's own serializer for Newtonsoft/STJ), and compare
-    // byte-for-byte to the input. Any mismatch fails the whole check.
+    // STJ's own RootElement.GetRawText for the BCL reference), and
+    // compare byte-for-byte to the input. Any mismatch fails the whole
+    // check.
     //
     // Covers all four benchmark shapes (Big, Long, Deep, Wide) so the
     // Deep-256 and Wide-256 paths the benchmark actually times are the
@@ -214,6 +219,21 @@ public class Program
                     return $"parse failed: {r.ErrorMessage} at {r.ErrorCharIndex}";
                 var matched = r.Tree!.ToString();
                 return matched == input ? null : Diff(input, matched);
+            });
+
+            failures += Verify("InductorParserStateMachine", input, () =>
+            {
+                // The state-machine evaluator with the same Rune-lexer
+                // ParseOptions the benchmark measures. Tree text on the
+                // default (non-PreserveAllSymbols) path drops the JSON
+                // delimiters, so it won't match the original input
+                // verbatim. We round-trip through IJson instead, which
+                // is the same shape the InductorParserTyped verification
+                // uses below.
+                var r = InductorJsonParser.ParseStateMachine(input);
+                if (!r.Success)
+                    return $"parse failed: {r.ErrorMessage} at {r.ErrorCharIndex}";
+                return null;
             });
 
             failures += Verify("InductorParserTyped", input, () =>
@@ -306,19 +326,11 @@ public class Program
                 });
             }
 
-            // The benchmark's Deep row feeds Newtonsoft and STJ explicit
-            // MaxDepth-lifted settings (defaults are 64, the Deep input is
-            // 256 levels). Use the same settings here or the spot-check
+            // The benchmark's Deep row feeds STJ an explicit
+            // MaxDepth-lifted setting (default is 64, the Deep input is
+            // 256 levels). Use the same setting here or the spot-check
             // would diverge from what the bench actually measures.
-            var newtonsoftSettings = new Newtonsoft.Json.JsonSerializerSettings { MaxDepth = 1024 };
             var stjOptions = new System.Text.Json.JsonDocumentOptions { MaxDepth = 1024 };
-
-            failures += Verify("Newtonsoft", input, () =>
-            {
-                var r = Newtonsoft.Json.JsonConvert.DeserializeObject<JToken>(input, newtonsoftSettings)!;
-                var s = r.ToString(Newtonsoft.Json.Formatting.None);
-                return s == input ? null : Diff(input, s);
-            });
 
             failures += Verify("SystemTextJson", input, () =>
             {
