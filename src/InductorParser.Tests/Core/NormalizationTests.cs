@@ -3,16 +3,26 @@ using System.Text;
 using NUnit.Framework;
 using InductorParser;
 using static InductorParser.Rules;
+using static InductorParser.Tests.TestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
 
 namespace InductorParser.Tests;
 
 // Tests for ParseOptions.NormalizeInput. Two promises the feature has to keep:
 //
-//   1. A grammar written in one composition form (the grammar author's
-//      choice, NFC is the default and what most people pick) matches input
-//      in either form. "café" grammar accepts precomposed "café" (U+00E9)
-//      and decomposed "cafe\u0301" equally.
+//   1. The input is rewritten into the form NormalizeInput names (NFC by
+//      default) before the lexer sees a single character. So a grammar
+//      whose literals are already in that form matches input in either
+//      composition style. Precomposed "café" (U+00E9) and decomposed
+//      "cafe\u0301" both normalize to the same NFC string, so a grammar
+//      literal written as the precomposed "café" accepts both. The
+//      default works for almost everyone because string literals in source
+//      files saved by any modern editor are already NFC, so a literal
+//      "é" typed in code is exactly the precomposed form the normalizer
+//      produces. A grammar that hand-builds decomposed literals out of
+//      explicit escapes (Token("e\u0301")) under the default NFC
+//      normalization will not match, since the input gets composed out
+//      from under it.
 //
 //   2. Positions reported in ParseResult (ErrorCharIndex and its derived
 //      properties) index into the CALLER'S ORIGINAL input string, never
@@ -22,7 +32,7 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class NormalizationTests
 {
-    // "café" with precomposed é (U+00E9). One grapheme per char.
+    // "café" with precomposed é (U+00E9). Each char is one grapheme.
     private const string CafePrecomposed = "caf\u00E9";
     // "cafe\u0301": same rendered text, decomposed. Five chars, four graphemes
     // (the fourth is "e" + combining acute).
@@ -36,6 +46,10 @@ public class NormalizationTests
     [Test]
     public void Default_NFC_matches_precomposed_input_against_precomposed_grammar()
     {
+        // Baseline: when input and grammar literals are both already in NFC,
+        // default normalization is effectively a no-op and the parse just
+        // works. The interesting case is the next test, where the input is
+        // decomposed and only matches because the normalizer composes it.
         var result = AllOf(CafeRule(), Eof()).Parse(CafePrecomposed);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
@@ -63,7 +77,9 @@ public class NormalizationTests
     [Test]
     public void NormalizeInput_null_passes_precomposed_input_against_precomposed_grammar()
     {
-        // Sanity check: opting out doesn't break the already-matching path.
+        // Turning off normalization only matters when the input would have
+        // been rewritten. Precomposed "café" is already in NFC, so opting
+        // out changes nothing here and the parse still succeeds.
         var result = AllOf(CafeRule(), Eof()).Parse(CafePrecomposed,
             new ParseOptions { NormalizeInput = null });
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -86,8 +102,12 @@ public class NormalizationTests
         var result = rule.Parse(input);
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(5),
-            "ErrorCharIndex should index into the original decomposed input");
+        // Original chars: c(0) a(1) f(2) e(3) acute(4) x(5) y(6) z(7).
+        // Graphemes: c=0, a=1, f=2, é=3 (e+acute is one grapheme), x=4,
+        // y=5, z=6. The 'x' is char 5, rune 5, grapheme 4.
+        AssertErrorPosition(result,
+            charIndex: 5, line: 0, column: 5,
+            runeIndex: 5, graphemeIndex: 4);
         Assert.That(input[result.ErrorCharIndex], Is.EqualTo('x'),
             "the char at ErrorCharIndex should be the one the grammar rejected");
     }
@@ -95,18 +115,22 @@ public class NormalizationTests
     [Test]
     public void Failure_inside_composed_sequence_snaps_to_grapheme_start_in_original()
     {
-        // Grammar wants "caf1", i.e. fails at the slot where 'é' sits. In
-        // NORMALIZED space the failing lexer position is 3 (the precomposed
-        // 'é'). Translated back to the decomposed original, that's also
-        // position 3 (the 'e' at the start of the combining sequence) since
-        // an editor-style diagnostic wants to highlight the whole bad
-        // grapheme, not the 'e' on its own.
+        // Grammar matches "caf" then expects '1' and sees 'é'. In NORMALIZED
+        // space the failing position is 3 (the precomposed 'é'). The failing
+        // grapheme in the decomposed original is "é" at indexes 3..4,
+        // and ErrorCharIndex reports the START of that grapheme (3). That's
+        // what an editor needs to highlight the whole bad grapheme rather
+        // than landing in the middle of a combining sequence.
         string input = CafeDecomposed;
         var rule = AllOf(Token('c'), Token('a'), Token('f'), Token('1'), Eof());
         var result = rule.Parse(input);
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
+        // "café" graphemes: c=0, a=1, f=2, é=3. Char 3 is the 'e'
+        // that starts the failing 'é' grapheme.
+        AssertErrorPosition(result,
+            charIndex: 3, line: 0, column: 3,
+            runeIndex: 3, graphemeIndex: 3);
         Assert.That(input[result.ErrorCharIndex], Is.EqualTo('e'));
     }
 
@@ -126,9 +150,7 @@ public class NormalizationTests
 
         Assert.That(withNfc.Success, Is.False);
         Assert.That(withoutNormalization.Success, Is.False);
-        Assert.That(withNfc.ErrorCharIndex, Is.EqualTo(withoutNormalization.ErrorCharIndex));
-        Assert.That(withNfc.ErrorLine, Is.EqualTo(withoutNormalization.ErrorLine));
-        Assert.That(withNfc.ErrorColumn, Is.EqualTo(withoutNormalization.ErrorColumn));
+        AssertErrorPositionsEqual(expected: withoutNormalization, actual: withNfc);
     }
 
     [Test]
@@ -144,8 +166,10 @@ public class NormalizationTests
         Assert.That(result.Success, Is.False);
         // Grammar consumed "caf" then wanted 'X' but got 'e'. Under
         // GraphemeLexer, the failing grapheme is 'e' + combining acute
-        // starting at index 3 in the decomposed original.
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
+        // starting at char 3. Graphemes: c=0, a=1, f=2, é=3.
+        AssertErrorPosition(result,
+            charIndex: 3, line: 0, column: 3,
+            runeIndex: 3, graphemeIndex: 3);
         Assert.That(input[result.ErrorCharIndex], Is.EqualTo('e'));
     }
 
@@ -202,6 +226,17 @@ public class NormalizationTests
         Assert.That(result.ErrorCharIndex, Is.GreaterThanOrEqualTo(0));
         Assert.That(result.ErrorCharIndex, Is.LessThanOrEqualTo(input.Length),
             "abort position must be a valid index into the caller's original input");
+        Assert.That(result.ErrorRuneIndex, Is.GreaterThanOrEqualTo(0));
+        Assert.That(result.ErrorRuneIndex, Is.LessThanOrEqualTo(input.Length));
+        Assert.That(result.ErrorGraphemeIndex, Is.GreaterThanOrEqualTo(0));
+        Assert.That(result.ErrorGraphemeIndex, Is.LessThanOrEqualTo(input.Length));
+        Assert.That(result.ErrorLine, Is.EqualTo(0), "input has no newlines");
+        Assert.That(result.ErrorColumn, Is.EqualTo(result.ErrorCharIndex),
+            "single-line input means column equals char index");
+        var position = result.ErrorPosition;
+        Assert.That(position, Is.Not.Null);
+        Assert.That(position!.Value.CharIndex, Is.EqualTo(result.ErrorCharIndex),
+            "ErrorPosition bundle must agree with ErrorCharIndex");
     }
 
     // Compatibility-form tests. FormKC and FormKD fold ligatures, circled
@@ -244,7 +279,12 @@ public class NormalizationTests
             new ParseOptions { NormalizeInput = NormalizationForm.FormKC });
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
+        // Original chars: ﬁ(0) s(1) h(2). Each is its own grapheme
+        // and rune in the original (the ligature is one rune, one grapheme),
+        // so char/rune/grapheme indices line up at position 1.
+        AssertErrorPosition(result,
+            charIndex: 1, line: 0, column: 1,
+            runeIndex: 1, graphemeIndex: 1);
         Assert.That(input[result.ErrorCharIndex], Is.EqualTo('s'));
     }
 
@@ -263,8 +303,12 @@ public class NormalizationTests
             new ParseOptions { NormalizeInput = NormalizationForm.FormKC });
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(0),
-            "failure inside the ligature expansion must snap to the ligature start in original");
+        // Original input is just the ligature: char 0, rune 0, grapheme 0,
+        // line 0, column 0. The snap lands on the ligature start in
+        // every unit.
+        AssertErrorPosition(result,
+            charIndex: 0, line: 0, column: 0,
+            runeIndex: 0, graphemeIndex: 0);
     }
 
     [Test]
@@ -294,6 +338,8 @@ public class NormalizationTests
             new ParseOptions { NormalizeInput = NormalizationForm.FormKD });
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
+        AssertErrorPosition(result,
+            charIndex: 0, line: 0, column: 0,
+            runeIndex: 0, graphemeIndex: 0);
     }
 }

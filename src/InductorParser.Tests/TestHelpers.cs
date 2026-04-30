@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
 using NUnit.Framework;
+using InductorParser;
 using InductorParser.SyntaxTree;
 
 namespace InductorParser.Tests;
@@ -142,5 +143,54 @@ internal static class TestHelpers
             Assert.Fail(
                 $"{label} grammar accepted {accepted.Count} of {corpus.Length} invalid input(s):\n  "
                 + string.Join("\n  ", accepted));
+    }
+
+    // ---- Error position assertions ----------------------------------
+
+    // Assert that result describes a failure at the expected position in
+    // every unit ParseResult exposes: ErrorCharIndex, ErrorLine,
+    // ErrorColumn, ErrorRuneIndex, ErrorGraphemeIndex, plus the bundled
+    // ErrorPosition struct. Use this in tests where error-position
+    // behavior is the actual subject (position translation through
+    // normalization, char-index to line/column conversion, etc.) so a
+    // regression in any one unit shows up as a single named assertion
+    // failure. Per-rule fixtures that just spot-check ErrorCharIndex
+    // don't need this; ErrorPositionTests covers the conversion math
+    // on its own.
+    public static void AssertErrorPosition(
+        ParseResult result,
+        int charIndex,
+        int line,
+        int column,
+        int runeIndex,
+        int graphemeIndex)
+    {
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(charIndex), nameof(result.ErrorCharIndex));
+        Assert.That(result.ErrorLine, Is.EqualTo(line), nameof(result.ErrorLine));
+        Assert.That(result.ErrorColumn, Is.EqualTo(column), nameof(result.ErrorColumn));
+        Assert.That(result.ErrorRuneIndex, Is.EqualTo(runeIndex), nameof(result.ErrorRuneIndex));
+        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(graphemeIndex), nameof(result.ErrorGraphemeIndex));
+
+        var position = result.ErrorPosition;
+        Assert.That(position, Is.Not.Null, nameof(result.ErrorPosition));
+        Assert.That(position!.Value.CharIndex, Is.EqualTo(charIndex), "ErrorPosition.CharIndex");
+        Assert.That(position.Value.Line, Is.EqualTo(line), "ErrorPosition.Line");
+        Assert.That(position.Value.Column, Is.EqualTo(column), "ErrorPosition.Column");
+        Assert.That(position.Value.RuneIndex, Is.EqualTo(runeIndex), "ErrorPosition.RuneIndex");
+        Assert.That(position.Value.GraphemeIndex, Is.EqualTo(graphemeIndex), "ErrorPosition.GraphemeIndex");
+    }
+
+    // Assert that two ParseResults report the same error position in
+    // every unit. Used by tests that compare positions across two
+    // configurations (e.g. with normalization vs without) to verify
+    // they agree.
+    public static void AssertErrorPositionsEqual(ParseResult expected, ParseResult actual)
+    {
+        Assert.That(actual.ErrorCharIndex, Is.EqualTo(expected.ErrorCharIndex), nameof(actual.ErrorCharIndex));
+        Assert.That(actual.ErrorLine, Is.EqualTo(expected.ErrorLine), nameof(actual.ErrorLine));
+        Assert.That(actual.ErrorColumn, Is.EqualTo(expected.ErrorColumn), nameof(actual.ErrorColumn));
+        Assert.That(actual.ErrorRuneIndex, Is.EqualTo(expected.ErrorRuneIndex), nameof(actual.ErrorRuneIndex));
+        Assert.That(actual.ErrorGraphemeIndex, Is.EqualTo(expected.ErrorGraphemeIndex), nameof(actual.ErrorGraphemeIndex));
+        Assert.That(actual.ErrorPosition, Is.EqualTo(expected.ErrorPosition), nameof(actual.ErrorPosition));
     }
 }
