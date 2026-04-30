@@ -18,6 +18,7 @@ If you write grammars in Inductor Parser, you get a foundation that helps you su
 - By default, each token presented to a rule is a .NET `StringInfo` text element, which follows Unicode grapheme-cluster behavior on modern .NET and keeps ordinary grammars from breaking apart non-ASCII text or emoji sequences accidentally.
 - Built-in rules use Unicode-aware definitions for things like "whitespace" and "identifiers" so you don't miss common corner cases.
 - The parser defaults to normalizing input so that characters that can be written as multiple things in Unicode get normalized to one (and the error indexes reverse this so errors point to the right place in the original text)
+- Every Symbol in the parse tree carries a `SourceRange` that reports its span in chars, runes, and graphemes plus line and column, so error highlights and IDE tooltips can pick the unit that matches what they show
 
 You can also pretend you never heard the word "Grapheme Cluster" and write rules naturally: it will still give you the right base to start from!
 
@@ -92,6 +93,19 @@ var result = document.Parse("नमस्ते = ");
 // (Devanagari is BMP, so chars == runes, but four of the name's
 //  six graphemes span two or three runes each)
 ```
+
+The same multi-unit positioning is available for every Symbol in the parse tree on success. Every Symbol carries a `SourceRange` that exposes the same five fields (`CharIndex`, `RuneIndex`, `GraphemeIndex`, `Line`, `Column`) for both `Start` and `End`:
+
+```CSharp
+var result = document.Parse("motto = \"👨‍👩‍👧\"");
+var range = result.Tree!.Find(settingValue)!.SourceRange!.Value;
+// Width of the matched value:
+//   range.End.CharIndex     - range.Start.CharIndex     == 10  // 8 for the family + 2 quotes
+//   range.End.RuneIndex     - range.Start.RuneIndex     ==  7  // 5 for the family + 2 quotes
+//   range.End.GraphemeIndex - range.Start.GraphemeIndex ==  3  // 1 for the family + 2 quotes
+```
+
+Use whichever unit matches what your consumer counts in. Chars for `string.Substring` or an editor diagnostic. Graphemes for a `^^^` underline a human will look at and recognize as covering one thing.
 
 ## More Readable than Regex
 
