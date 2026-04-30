@@ -314,6 +314,9 @@ public class BetweenInclusiveRuleTests
             AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
         )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
 
+        // The slow path would invoke the inner FirstOf once per rune (5000+
+        // times). RuleCountLimit=100 caps invocations, so a successful parse
+        // can only mean the scanner skip jumped over the 'x' run.
         string input = new string('x', 5000) + "Sherlock";
         var result = scanner.Parse(input, new ParseOptions
         {
