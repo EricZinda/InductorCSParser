@@ -287,7 +287,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
                     "Lone surrogate halves aren't valid runes.",
                     nameof(characters));
             // If the grapheme extends past the first rune we just
-            // consumed, it's a multi-rune grapheme. Refuse it. Token
+            // consumed, it's a multi-rune grapheme. Refuse it. Grapheme
             // and Literal are the grapheme-matching primitives.
             //
             // Exception: CRLF (\r\n) is one grapheme per UAX #29, but
@@ -322,7 +322,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
                 }
                 throw new ArgumentException(
                     $"Runes(string) cannot accept the multi-rune grapheme \"{grapheme}\" ({string.Join(", ", runeList)}) at UTF-16 offset {graphemeStart}. " +
-                    "A RuneSet holds single Unicode scalar values. To match this grapheme as a unit, use Token(\"" + grapheme + "\") or Literal(\"" + grapheme + "\").",
+                    "A RuneSet holds single Unicode scalar values. To match this grapheme as a unit, use Grapheme(\"" + grapheme + "\") or Literal(\"" + grapheme + "\").",
                     nameof(characters));
             }
             list.Add(new Interval(codepoint, codepoint));

@@ -200,13 +200,13 @@ If you are doing emoji-sensitive parsing, be careful: variation selectors are pa
 
 Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 rule GB3), so `GraphemeLexer` hands the parser one two-char token whenever it sees a Windows line ending. This bites any line-based grammar that tries to match or stop on a bare `\n`:
 
-- `Token('\n')` matches a one-grapheme token whose content is exactly `'\n'`. The CRLF grapheme has content `"\r\n"`, so `Token('\n')` does *not* match it.
+- `Grapheme('\n')` matches a one-grapheme token whose content is exactly `'\n'`. The CRLF grapheme has content `"\r\n"`, so `Grapheme('\n')` does *not* match it.
 - `OneOf(RuneSet.Runes("\n"))` or `OneOf(RuneSet.Runes("\r\n"))` matches a single-rune token whose rune is in the set. A CRLF grapheme is two runes, so it matches no single-rune set. It fails `OneOf` regardless of what runes you put in the set.
 - `NoneOf(RuneSet.Runes("\n"))` does the opposite: multi-rune tokens pass `NoneOf` unconditionally. `ZeroOrMore(NoneOf(stopSet))` used to scan "everything up to a newline" will greedily swallow the terminating CRLF as body content instead of stopping at it, then the terminator fails because there is nothing left.
 
 `RuneLexer` doesn't have this problem. It emits `'\r'` and `'\n'` as separate tokens. The bite is `GraphemeLexer`-specific, which is the default.
 
-**Fix.** Use the built-in `EndOfLine()` rule. It is `FirstOf(Literal("\r\n"), OneOf(RuneSet.SingleRuneLineTerminators))` under the hood, so the CRLF grapheme is tried as a unit before the single-rune terminators (LF, CR, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR per UAX #18 Annex C). The companions `OptionalEndOfLine()` and `EndOfLineOrEof()` cover the optional and "line terminator here, or end of input" cases. Anywhere a grammar cares about line breaks, reach for these instead of building one with `Token('\n')` or a `OneOf` over a rune set:
+**Fix.** Use the built-in `EndOfLine()` rule. It is `FirstOf(Literal("\r\n"), OneOf(RuneSet.SingleRuneLineTerminators))` under the hood, so the CRLF grapheme is tried as a unit before the single-rune terminators (LF, CR, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR per UAX #18 Annex C). The companions `OptionalEndOfLine()` and `EndOfLineOrEof()` cover the optional and "line terminator here, or end of input" cases. Anywhere a grammar cares about line breaks, reach for these instead of building one with `Grapheme('\n')` or a `OneOf` over a rune set:
 
 ```csharp
 // Match a Unicode line terminator (CRLF, LF, CR, NEL, LS, PS, VT, FF).
@@ -222,7 +222,7 @@ public static readonly Rule WhitespaceOrNewline = ZeroOrMore(FirstOf(
 // Scanning "up to end of line": use a rule-based stop with Not(EndOfLine()).
 // NoneOf over a single-rune set would silently eat the CRLF grapheme.
 public static readonly Rule LineComment = AllOf(
-    Token('%'),
+    Grapheme('%'),
     ZeroOrMore(AllOf(Not(EndOfLine()), AnyToken())),
     EndOfLineOrEof()
 );
@@ -232,12 +232,12 @@ The three anti-patterns to avoid in any line-based grammar:
 
 ```csharp
 // BROKEN on Windows line endings under GraphemeLexer.
-AllOf(..., Token('\n'))                             // fails on CRLF input
+AllOf(..., Grapheme('\n'))                             // fails on CRLF input
 ZeroOrMore(OneOf(RuneSet.Runes("\r\n")))        // skips zero CRLF graphemes
 ZeroOrMore(NoneOf(RuneSet.Single('\n')))      // swallows the CRLF terminator
 ```
 
-If a grammar is a port of regex semantics that explicitly targets LF-only (some Markdown-style formats, for instance), the failure on CRLF is faithful to the source and you can leave `Token('\n')` as-is. Mark the grammar with a comment so the next reader knows the LF-only behavior is intentional, not an oversight.
+If a grammar is a port of regex semantics that explicitly targets LF-only (some Markdown-style formats, for instance), the failure on CRLF is faithful to the source and you can leave `Grapheme('\n')` as-is. Mark the grammar with a comment so the next reader knows the LF-only behavior is intentional, not an oversight.
 
 ## The Common Thread
 
@@ -274,4 +274,4 @@ The common thread is timing. Combining marks have been in Unicode since the star
 2. If a specific input causes trouble, switch that grammar to `RuneLexer` and handle the multi-rune sequence explicitly with a small rule. This trades grapheme convenience for one extra rule and works on every runtime.
 3. Add a custom UAX #29 implementation into the parser. Tracked in [xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md](../backlog/xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md). Gives full conformance everywhere, at the cost of maintaining Unicode data in the repository.
 
-The repo's test suite documents the broken cases explicitly. Look for tests gated behind `#if !UNITY_INCLUDE_TESTS` in [TokenRuleTests.cs](../src/InductorParser.Tests/Rules/TokenRuleTests.cs). Each one is a category that the legacy walker mishandles.
+The repo's test suite documents the broken cases explicitly. Look for tests gated behind `#if !UNITY_INCLUDE_TESTS` in [GraphemeRuleTests.cs](../src/InductorParser.Tests/Rules/GraphemeRuleTests.cs). Each one is a category that the legacy walker mishandles.

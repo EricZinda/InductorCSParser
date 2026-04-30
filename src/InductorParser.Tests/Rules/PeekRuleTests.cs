@@ -11,16 +11,16 @@ namespace InductorParser.Tests;
 public class PeekRuleTests
 {
     // Tree.ToString() assertions use PreserveAllSymbols so Peek,
-    // Token, and AnyToken (all default FlattenType.Delete) stay in the
+    // Grapheme, and AnyToken (all default FlattenType.Delete) stay in the
     // tree and their text contributes to the concatenated view.
     private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
     [Test]
     public void Peek_succeeds_when_inner_matches_and_consumes_no_input()
     {
-        // Peek(Token('a')) on "a": confirms 'a' is ahead without consuming
-        // it. The trailing Token('a') then consumes it for real.
-        var rule = AllOf(Peek(Token('a')), Token('a'));
+        // Peek(Grapheme('a')) on "a": confirms 'a' is ahead without consuming
+        // it. The trailing Grapheme('a') then consumes it for real.
+        var rule = AllOf(Peek(Grapheme('a')), Grapheme('a'));
         var result = rule.Parse("a", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -30,7 +30,7 @@ public class PeekRuleTests
     [Test]
     public void Peek_fails_when_inner_fails()
     {
-        var rule = Peek(Token('a')).WithError("expected an 'a' ahead");
+        var rule = Peek(Grapheme('a')).WithError("expected an 'a' ahead");
         var result = rule.Parse("b");
 
         Assert.That(result.Success, Is.False);
@@ -42,12 +42,12 @@ public class PeekRuleTests
     public void Peek_does_not_advance_the_cursor_even_when_inner_consumes_multiple_tokens()
     {
         // Inner rule would consume two chars on success. Peek has to roll
-        // those back. The trailing AllOf(Token('a'), Token('b')) consumes them
+        // those back. The trailing AllOf(Grapheme('a'), Grapheme('b')) consumes them
         // for real, proving the cursor is at 0 after Peek.
         var rule = AllOf(
-            Peek(AllOf(Token('a'), Token('b'))),
-            Token('a'),
-            Token('b'));
+            Peek(AllOf(Grapheme('a'), Grapheme('b'))),
+            Grapheme('a'),
+            Grapheme('b'));
 
         var result = rule.Parse("ab", Debug());
 
@@ -58,7 +58,7 @@ public class PeekRuleTests
     [Test]
     public void Peek_works_under_rune_lexer()
     {
-        var rule = AllOf(Peek(Token('x')), AnyToken());
+        var rule = AllOf(Peek(Grapheme('x')), AnyToken());
         var result = rule.Parse("x",
             new ParseOptions { InputUnit = InputUnit.Rune, PreserveAllSymbols = true });
 
@@ -81,17 +81,17 @@ public class PeekRuleTests
         // would point somewhere inside the abandoned attempt. The Peek
         // turns "is there an else?" into a zero-width, zero-consequence
         // check upfront.
-        var keywordIf = AllOf(Token('i'), Token('f'));
-        var keywordThen = AllOf(Token('t'), Token('h'), Token('e'), Token('n'));
-        var keywordElse = AllOf(Token('e'), Token('l'), Token('s'), Token('e'));
+        var keywordIf = AllOf(Grapheme('i'), Grapheme('f'));
+        var keywordThen = AllOf(Grapheme('t'), Grapheme('h'), Grapheme('e'), Grapheme('n'));
+        var keywordElse = AllOf(Grapheme('e'), Grapheme('l'), Grapheme('s'), Grapheme('e'));
 
         var ifStatement = AllOf(
-            keywordIf, Token(' '), AnyToken(), Token(' '),
-            keywordThen, Token(' '), AnyToken(),
+            keywordIf, Grapheme(' '), AnyToken(), Grapheme(' '),
+            keywordThen, Grapheme(' '), AnyToken(),
             Optional(AllOf(
-                Token(' '),
+                Grapheme(' '),
                 Peek(keywordElse),
-                keywordElse, Token(' '), AnyToken())));
+                keywordElse, Grapheme(' '), AnyToken())));
 
         var withElse = ifStatement.Parse("if x then 1 else 2", Debug());
         Assert.That(withElse.Success, Is.True, withElse.ErrorMessage);
@@ -105,15 +105,15 @@ public class PeekRuleTests
     [Test]
     public void Peek_trace_success_produces_expected_output()
     {
-        // Peek opens a transaction (depth=1). Token inside opens its own
+        // Peek opens a transaction (depth=1). Grapheme inside opens its own
         // (depth=2) and succeeds. Peek then emits its success line at
         // depth=1 and rolls back (doesn't commit).
         var sink = NewSink();
-        Peek(Token('a')).Parse("a", new ParseOptions { TraceSink = sink });
+        Peek(Grapheme('a')).Parse("a", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | Token: found 'a'",
+            "      SUCC | Grapheme: found 'a'",
             "   SUCC | Peek: inner matched"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
@@ -123,11 +123,11 @@ public class PeekRuleTests
     public void Peek_trace_failure_produces_expected_output()
     {
         var sink = NewSink();
-        Peek(Token('a')).Parse("b", new ParseOptions { TraceSink = sink });
+        Peek(Grapheme('a')).Parse("b", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'b', Consumed: 1",
-            "      FAIL | Token: found 'b', wanted 'a'",
+            "      FAIL | Grapheme: found 'b', wanted 'a'",
             "   FAIL | Peek: inner didn't match"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
@@ -136,7 +136,7 @@ public class PeekRuleTests
     [Test]
     public void Sealed_Peek_rejects_Flatten()
     {
-        var rule = Peek(Token('a'));
+        var rule = Peek(Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
     }
@@ -144,7 +144,7 @@ public class PeekRuleTests
     [Test]
     public void Sealed_Peek_rejects_WithError()
     {
-        var rule = Peek(Token('a'));
+        var rule = Peek(Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
     }
@@ -152,7 +152,7 @@ public class PeekRuleTests
     [Test]
     public void Sealed_Peek_rejects_As()
     {
-        var rule = Peek(Token('a'));
+        var rule = Peek(Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }

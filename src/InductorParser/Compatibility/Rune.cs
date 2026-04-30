@@ -5,7 +5,7 @@
 // netstandard2.1 because that's what Unity's IL2CPP scripting backend
 // supports (see docs/CodeArchitecture.md). Without this polyfill, callers
 // on netstandard2.1 hosts (Unity, including WebGL and iOS) can't use the
-// Rune-typed overloads of Token(), RuneSet.Single(), etc.
+// Rune-typed overloads of Grapheme(), RuneSet.Single(), etc.
 //
 // The class is defined in the BCL namespace System.Text so that caller code
 // (`using System.Text; ... new Rune(c)`) resolves to whichever Rune is

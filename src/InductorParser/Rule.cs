@@ -10,12 +10,12 @@ namespace InductorParser;
 
 // Rule is the base of everything in a grammar. A grammar is a tree of Rule
 // objects: composites like AllOf/FirstOf/OneOrMore wrap other Rules, leaves like
-// Token/OneOf sit at the bottom, and the root is whatever Rule you
+// Grapheme/OneOf sit at the bottom, and the root is whatever Rule you
 // hand to Parse(). Calling Parse on the root walks the tree and tries to
 // match the input.
 //
 // Rules are instances, not types.
-// In C# you build a Rule by calling factory functions (AllOf, FirstOf, Token, etc.)
+// In C# you build a Rule by calling factory functions (AllOf, FirstOf, Grapheme, etc.)
 // that return Rule instances. The tree is built at runtime, compiled once,
 // and reused for every parse after that. A grammar can live anywhere a
 // reference can live: a local variable, a static field, an entry in a
@@ -36,7 +36,7 @@ namespace InductorParser;
 // shared across threads.
 //
 // Rule is abstract. The library's composite and leaf rules
-// (AllOfRule, FirstOfRule, TokenRule, etc.) subclass it. User code can subclass
+// (AllOfRule, FirstOfRule, GraphemeRule, etc.) subclass it. User code can subclass
 // Rule too if it needs matching logic the built-in rules can't express.
 // See TryParseRule below for the full subclass contract.
 //
@@ -89,7 +89,7 @@ public abstract class Rule
 
     // Cached rule class name for trace output, derived from GetType().Name
     // in the constructor. The "Rule" suffix is stripped so "AllOfRule"
-    // becomes "AllOf", "TokenRule" becomes "Token", matching the trace
+    // becomes "AllOf", "GraphemeRule" becomes "Grapheme", matching the trace
     // naming convention. Reading this is a field load which is cheaper than
     // calling GetType().Name on every trace emission. Works under
     // IL2CPP because it's baked in at construction time, not looked
@@ -183,7 +183,7 @@ public abstract class Rule
 
     // The child rules this rule is built from. Composites (AllOf, FirstOf, OneOrMore,
     // etc.) pass their children to the base constructor and access them via
-    // this property. Leaf rules (Token, OneOf, Eof) don't pass any children,
+    // this property. Leaf rules (Grapheme, OneOf, Eof) don't pass any children,
     // and the constructor below swaps in the shared empty list (NoChildren)
     // when that happens. Compile walks this list to assign ids and seal every
     // reachable rule.
@@ -370,7 +370,7 @@ public abstract class Rule
     //   2. Per-grammar rule index: a lazily-built Dictionary<SymbolId, Rule>
     //      keyed on every rule reachable from this root. For a rule created
     //      with .As("foo"), returns "foo". For an unnamed rule, returns the
-    //      class-derived trace name ("AllOf", "OneOrMore", "Token",
+    //      class-derived trace name ("AllOf", "OneOrMore", "Grapheme",
     //      "BetweenInclusive[1..3]"). Returns null if the id isn't in the
     //      grammar.
     //
@@ -682,9 +682,9 @@ public abstract class Rule
     //
     // Two ids are out of scope for this check:
     //
-    //   * Pre-pinned ids in the rune range (every single-rune Token has
+    //   * Pre-pinned ids in the rune range (every single-rune Grapheme has
     //     its code point pinned at construction time). A grammar that
-    //     mentions Token('a') twice has two rules sharing id 97 by design,
+    //     mentions Grapheme('a') twice has two rules sharing id 97 by design,
     //     NameOf short-circuits the rune range to the rune string, and
     //     there's no rule-name ambiguity to resolve.
     //

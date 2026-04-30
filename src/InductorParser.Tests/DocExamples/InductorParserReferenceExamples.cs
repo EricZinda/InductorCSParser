@@ -31,11 +31,11 @@ public class InductorParserReferenceExamples
         var document = AllOf(
             settingName,
             OptionalWhitespace(),
-            Token('='),
+            Grapheme('='),
             OptionalWhitespace(),
             settingValue,
             OptionalWhitespace(),
-            Token(';')
+            Grapheme(';')
         ).Preserve();
 
         var result = document.Parse("setting = 5;");
@@ -139,11 +139,11 @@ public class InductorParserReferenceExamples
             OptionalWhitespace(),
             settingName,
             OptionalWhitespace(),
-            Token('='),
+            Grapheme('='),
             OptionalWhitespace(),
             settingValue,
             OptionalWhitespace(),
-            Token(';'),
+            Grapheme(';'),
             OptionalWhitespace(),
             Eof()
         ).As("document").Preserve().Compile();
@@ -201,7 +201,7 @@ public class InductorParserReferenceExamples
             ZeroOrMore(
                 AllOf(
                     OptionalWhitespace(),
-                    Token(','),
+                    Grapheme(','),
                     OptionalWhitespace(),
                     valueAtom
                 )
@@ -211,11 +211,11 @@ public class InductorParserReferenceExamples
         var pair = AllOf(
             key,
             OptionalWhitespace(),
-            Token('='),
+            Grapheme('='),
             OptionalWhitespace(),
             values,
             OptionalWhitespace(),
-            Token(';')
+            Grapheme(';')
         ).As("pair").Preserve();
 
         var document = AllOf(

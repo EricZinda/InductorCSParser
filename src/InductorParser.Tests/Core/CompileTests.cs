@@ -69,7 +69,7 @@ public class CompileTests
         var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 9999);
         var named = OneOrMore(OneOf(RuneSet.Letters)).As("settingName");
         var pinnedRule = OneOrMore(OneOf(RuneSet.Digits)).As(pinned);
-        var anonymous = ZeroOrMore(Token('!'));
+        var anonymous = ZeroOrMore(Grapheme('!'));
         var root = AllOf(named, pinnedRule, anonymous);
 
         root.Compile();

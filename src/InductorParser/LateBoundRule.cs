@@ -21,8 +21,8 @@ namespace InductorParser;
 // The canonical pattern:
 //
 //     static readonly LateBoundRule Expression = new LateBoundRule("expression");
-//     static readonly Rule Term = FirstOf(Integer(), AllOf(Token('('), Expression, Token(')')));
-//     static readonly Rule Sum  = AllOf(Term, ZeroOrMore(AllOf(Token('+'), Term)));
+//     static readonly Rule Term = FirstOf(Integer(), AllOf(Grapheme('('), Expression, Grapheme(')')));
+//     static readonly Rule Sum  = AllOf(Term, ZeroOrMore(AllOf(Grapheme('+'), Term)));
 //     static readonly Rule _init = Expression.Bind(Sum);
 //
 // Term sees Expression as a valid (but unbound) rule at construction

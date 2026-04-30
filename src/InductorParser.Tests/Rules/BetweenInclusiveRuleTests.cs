@@ -11,7 +11,7 @@ namespace InductorParser.Tests;
 public class BetweenInclusiveRuleTests
 {
     // Tests that assert on Tree.ToString() use PreserveAllSymbols so
-    // Token rules (default FlattenType.Delete) stay in the tree and their
+    // Grapheme rules (default FlattenType.Delete) stay in the tree and their
     // text is visible in the concatenated output. Without the flag the
     // tree would contain only non-Delete nodes, which is the correct
     // parse-time semantic, just not what these tests are looking at.
@@ -21,7 +21,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_exact_count_matches_exactly_N()
     {
-        var rule = BetweenInclusive(3, 3, Token('a'));
+        var rule = BetweenInclusive(3, 3, Grapheme('a'));
         var result = rule.Parse("aaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -31,7 +31,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_exact_count_fails_when_too_few()
     {
-        var rule = BetweenInclusive(3, 3, Token('a'));
+        var rule = BetweenInclusive(3, 3, Grapheme('a'));
         var result = rule.Parse("aa");
 
         Assert.That(result.Success, Is.False);
@@ -41,7 +41,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_exact_count_fails_when_too_many()
     {
-        var rule = BetweenInclusive(3, 3, Token('a'));
+        var rule = BetweenInclusive(3, 3, Grapheme('a'));
         var result = rule.Parse("aaaa");
 
         Assert.That(result.Success, Is.False);
@@ -50,8 +50,8 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_at_lower_bound_succeeds()
     {
-        var rule = BetweenInclusive(2, 5, Token('a'));
-        var result = AllOf(rule, OneOrMore(Token('b'))).Parse("aabbb", Debug());
+        var rule = BetweenInclusive(2, 5, Grapheme('a'));
+        var result = AllOf(rule, OneOrMore(Grapheme('b'))).Parse("aabbb", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("aabbb"));
@@ -60,8 +60,8 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_at_upper_bound_succeeds()
     {
-        var rule = BetweenInclusive(2, 5, Token('a'));
-        var result = AllOf(rule, Token('b')).Parse("aaaaab", Debug());
+        var rule = BetweenInclusive(2, 5, Grapheme('a'));
+        var result = AllOf(rule, Grapheme('b')).Parse("aaaaab", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("aaaaab"));
@@ -70,7 +70,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_stops_at_upper_bound_even_with_more_input()
     {
-        var rule = AllOf(BetweenInclusive(1, 3, Token('a')), OneOrMore(Token('a')));
+        var rule = AllOf(BetweenInclusive(1, 3, Grapheme('a')), OneOrMore(Grapheme('a')));
         var result = rule.Parse("aaaaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -80,7 +80,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_one_below_lower_bound_fails()
     {
-        var rule = BetweenInclusive(3, 5, Token('a'));
+        var rule = BetweenInclusive(3, 5, Grapheme('a'));
         var result = rule.Parse("aa");
 
         Assert.That(result.Success, Is.False);
@@ -90,7 +90,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_zero_zero_succeeds_with_no_matches()
     {
-        var rule = AllOf(BetweenInclusive(0, 0, Token('a')), Token('b'));
+        var rule = AllOf(BetweenInclusive(0, 0, Grapheme('a')), Grapheme('b'));
         var result = rule.Parse("b", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -100,7 +100,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_zero_zero_does_not_consume_matching_input()
     {
-        var rule = AllOf(BetweenInclusive(0, 0, Token('a')), OneOrMore(Token('a')));
+        var rule = AllOf(BetweenInclusive(0, 0, Grapheme('a')), OneOrMore(Grapheme('a')));
         var result = rule.Parse("aaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -110,7 +110,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_failure_without_WithError_falls_back_to_positional_message()
     {
-        var rule = BetweenInclusive(2, 4, Token('a'));
+        var rule = BetweenInclusive(2, 4, Grapheme('a'));
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.False);
@@ -121,7 +121,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_WithError_message_surfaces_on_failure()
     {
-        var rule = BetweenInclusive(2, 4, Token('a'))
+        var rule = BetweenInclusive(2, 4, Grapheme('a'))
             .WithError("need 2 to 4 a's");
         var result = rule.Parse("ab");
 
@@ -134,14 +134,14 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_factory_rejects_negative_atLeast()
     {
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => BetweenInclusive(-1, 5, Token('a')));
+            () => BetweenInclusive(-1, 5, Grapheme('a')));
     }
 
     [Test]
     public void BetweenInclusive_factory_rejects_atMost_less_than_atLeast()
     {
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => BetweenInclusive(3, 2, Token('a')));
+            () => BetweenInclusive(3, 2, Grapheme('a')));
     }
 
     [Test]
@@ -177,14 +177,14 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_trace_failure_produces_expected_output()
     {
         var sink = NewSink();
-        BetweenInclusive(2, 4, Token('a'))
+        BetweenInclusive(2, 4, Grapheme('a'))
             .Parse("a", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | Token: found 'a'",
+            "      SUCC | Grapheme: found 'a'",
             "      Lexer.Read: '<EOF>', Consumed: 1",
-            "      FAIL | Token: found '<EOF>', wanted 'a'",
+            "      FAIL | Grapheme: found '<EOF>', wanted 'a'",
             "      Lexer.RecordFailure: new deepest failure at char 1",
             "   FAIL | BetweenInclusive[2..4]: count= 1"
         );
@@ -194,7 +194,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void Sealed_BetweenInclusive_rejects_Flatten()
     {
-        var rule = BetweenInclusive(1, 5, Token('a'));
+        var rule = BetweenInclusive(1, 5, Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
     }
@@ -202,7 +202,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void Sealed_BetweenInclusive_rejects_WithError()
     {
-        var rule = BetweenInclusive(1, 5, Token('a'));
+        var rule = BetweenInclusive(1, 5, Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
     }
@@ -210,7 +210,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void Sealed_BetweenInclusive_rejects_As()
     {
-        var rule = BetweenInclusive(1, 5, Token('a'));
+        var rule = BetweenInclusive(1, 5, Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }

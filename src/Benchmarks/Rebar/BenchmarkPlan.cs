@@ -243,7 +243,7 @@ internal static class BenchmarkRegistry
         var noqa = Capture(AllOf(
             NoqaLiteral(),
             Optional(AllOf(
-                P(Token(':')),
+                P(Grapheme(':')),
                 Optional(P(OneOf(AsciiRegexWhitespace))),
                 codeList
             ))
@@ -265,7 +265,7 @@ internal static class BenchmarkRegistry
         var match = AllOf(
             NoqaLiteral(),
             Optional(AllOf(
-                P(Token(':')),
+                P(Grapheme(':')),
                 Optional(P(OneOf(AsciiRegexWhitespace))),
                 codeList
             ))

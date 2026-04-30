@@ -6,7 +6,7 @@ To parse text using the Inductor Parser, you build up a set of rules that "consu
 "Anything"
 "Until I hit this sequence of characters"
 ```
-There are rules that consume text units, like `Token` (a single token: a grapheme by default, or a rune if you opt into `RuneLexer`), `Literal` (an exact string) and `Integer`. These are your basic building blocks. In this example, let's replace the second part with:
+There are rules that consume text units, like `Grapheme` (a single token: a grapheme by default, or a rune if you opt into `RuneLexer`), `Literal` (an exact string) and `Integer`. These are your basic building blocks. In this example, let's replace the second part with:
 
 ```
 "Anything"
@@ -109,7 +109,7 @@ AllOf: "How can I match anything up until this sequence of characters"
 ```
 First, each symbol is shown indented based on where in the tree it was, followed by ":" and what `ToString()` would return for it. This means the root node should always show the full document.
 
-Next, `Token` just prints out its value without `Token` in front of it. This is why you see bare `'H'` and `'o'` in the output.
+Next, `Grapheme` just prints out its value without `Grapheme` in front of it. This is why you see bare `'H'` and `'o'` in the output.
 
 Note that `Not` doesn't actually consume anything so it has nothing to print out. It just ensures that whatever is inside it isn't coming up.
 

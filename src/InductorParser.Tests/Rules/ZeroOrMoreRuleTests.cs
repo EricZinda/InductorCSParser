@@ -13,7 +13,7 @@ public class ZeroOrMoreRuleTests
     // ZeroOrMore has no failure path at all, so this fixture only carries
     // success tests. The TestArchitecture doc calls this out explicitly.
 
-    // Tree.ToString() assertions use PreserveAllSymbols so Token
+    // Tree.ToString() assertions use PreserveAllSymbols so Grapheme
     // leaves (default FlattenType.Delete) stay in the tree.
     private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
@@ -23,7 +23,7 @@ public class ZeroOrMoreRuleTests
         // Input doesn't start with 'a', so the inner rule fails on its very
         // first attempt. ZeroOrMore catches that and succeeds with zero
         // children, leaving the lexer position unchanged.
-        var rule = AllOf(ZeroOrMore(Token('a')), Token('b'));
+        var rule = AllOf(ZeroOrMore(Grapheme('a')), Grapheme('b'));
         var result = rule.Parse("b", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -33,7 +33,7 @@ public class ZeroOrMoreRuleTests
     [Test]
     public void ZeroOrMore_matches_multiple_occurrences_greedily()
     {
-        var rule = AllOf(ZeroOrMore(Token('a')), Token('b'));
+        var rule = AllOf(ZeroOrMore(Grapheme('a')), Grapheme('b'));
         var result = rule.Parse("aaab", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -46,7 +46,7 @@ public class ZeroOrMoreRuleTests
         // Inner matches 'a' twice, then on the third try sees 'b' and the
         // inner rule fails. ZeroOrMore commits the two successful iterations
         // and hands 'b' off to the next rule in the AllOf.
-        var rule = AllOf(ZeroOrMore(Token('a')), Token('b'), Token('c'));
+        var rule = AllOf(ZeroOrMore(Grapheme('a')), Grapheme('b'), Grapheme('c'));
         var result = rule.Parse("aabc", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -187,12 +187,12 @@ public class ZeroOrMoreRuleTests
         // success, with count= 0. Wrapped in AllOf so the indentation
         // shows the full transaction nesting.
         var sink = NewSink();
-        AllOf(ZeroOrMore(Token('a')), Eof())
+        AllOf(ZeroOrMore(Grapheme('a')), Eof())
             .Parse("", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "         Lexer.Read: '<EOF>', Consumed: 0",
-            "         FAIL | Token: found '<EOF>', wanted 'a'",
+            "         FAIL | Grapheme: found '<EOF>', wanted 'a'",
             "      SUCC | ZeroOrMore: count= 0",
             "   SUCC | Eof",
             "   SUCC | AllOf: found 2"
@@ -203,7 +203,7 @@ public class ZeroOrMoreRuleTests
     [Test]
     public void Sealed_ZeroOrMore_rejects_Flatten()
     {
-        var rule = ZeroOrMore(Token('a'));
+        var rule = ZeroOrMore(Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
     }
@@ -211,7 +211,7 @@ public class ZeroOrMoreRuleTests
     [Test]
     public void Sealed_ZeroOrMore_rejects_WithError()
     {
-        var rule = ZeroOrMore(Token('a'));
+        var rule = ZeroOrMore(Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
     }
@@ -219,7 +219,7 @@ public class ZeroOrMoreRuleTests
     [Test]
     public void Sealed_ZeroOrMore_rejects_As()
     {
-        var rule = ZeroOrMore(Token('a'));
+        var rule = ZeroOrMore(Grapheme('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }

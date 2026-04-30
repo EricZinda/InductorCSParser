@@ -181,14 +181,14 @@ public class UnicodeGotchasExamples
         Assert.That(grammar.Parse(cleaned).Success, Is.True);
     }
 
-    // "CRLF Under GraphemeLexer": doc claim: Token('\n') DOESN'T match
+    // "CRLF Under GraphemeLexer": doc claim: Grapheme('\n') DOESN'T match
     // a CRLF grapheme. Use FirstOf(Literal("\r\n"), OneOf(...)) instead.
     [Test]
     public void CRLF_token_lf_does_not_match_under_graphemelexer()
     {
-        var lfOnly = AllOf(Literal("a"), Token('\n'), Literal("b"), Eof()).Compile();
+        var lfOnly = AllOf(Literal("a"), Grapheme('\n'), Literal("b"), Eof()).Compile();
         // CRLF input: under GraphemeLexer, "\r\n" is one grapheme, and
-        // Token('\n') compares to a single-rune \n, so the grapheme
+        // Grapheme('\n') compares to a single-rune \n, so the grapheme
         // doesn't match.
         Assert.That(lfOnly.Parse("a\r\nb").Success, Is.False);
         Assert.That(lfOnly.Parse("a\nb").Success, Is.True);
@@ -223,7 +223,7 @@ public class UnicodeGotchasExamples
         );
 
         var lineComment = AllOf(
-            Token('%'),
+            Grapheme('%'),
             ZeroOrMore(AllOf(Not(lineBreak), AnyToken())),
             FirstOf(OneOrMore(lineBreak), Eof())
         ).Compile();

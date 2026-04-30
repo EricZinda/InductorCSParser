@@ -2,7 +2,7 @@
 
 This document is a reference document and is more technical and detailed than the primers (see below). It goes into detail about every aspect of the parser and discusses how to write grammars with the library. It shows what the API looks like, gives working examples end to end, and points at the other docs when you want depth on a specific topic.
 
-In this library a *rule* is a C# object. You build rules by calling factory functions like `AllOf(...)`, `FirstOf(...)`, `Token('=')`, you compose them into a grammar, and you call `.Parse(input)` on the root rule to get a tree back.
+In this library a *rule* is a C# object. You build rules by calling factory functions like `AllOf(...)`, `FirstOf(...)`, `Grapheme('=')`, you compose them into a grammar, and you call `.Parse(input)` on the root rule to get a tree back.
 
 The library implements a [Parsing Expression Grammar (PEG)](https://en.wikipedia.org/wiki/Parsing_expression_grammar) parser. In PEG terms, `AllOf` is sequence (match a, then b, then c), `FirstOf` is ordered choice (try each alternative in order, the first match wins, so grammars are unambiguous by construction), `OneOrMore` and `ZeroOrMore` are greedy repetition, and `Peek` and `Not` are the lookahead predicates. Matching is recursive-descent with backtracking on failure, but greedy repetition never gives input back once it has matched, so grammars are written with that in mind.
 
@@ -39,11 +39,11 @@ var settingValue = FirstOf(
 var document = AllOf(
     settingName,
     OptionalWhitespace(),
-    Token('='),
+    Grapheme('='),
     OptionalWhitespace(),
     settingValue,
     OptionalWhitespace(),
-    Token(';')
+    Grapheme(';')
 ).Preserve();
 
 var result = document.Parse("setting = 5;");
@@ -65,7 +65,7 @@ Four variables hold rules, one call to `.Parse(...)` returns a tree, and `result
 
 Compare that side by side with the C++ version from `GettingStarted.md` and you can see they line up rule by rule. Every C++ template instantiation becomes a C# factory call, and the trailing template parameters (flatten policy, symbol id, error message) become fluent method calls on the returned `Rule`. The `MySymbolID` class and the stack of `.As(MySymbolIds.X)` calls from the C++ tutorial are gone: lookups use the rule reference you already have in scope.
 
-The `using static InductorParser.Rules;` at the top is what lets us write `AllOf(...)` and `FirstOf(...)` and `Token('=')` without a class qualifier. It is the C# moral equivalent of `using namespace FXPlat;` in the C++ version. Grammars that want a cleaner look use this import. Grammars that want to be explicit can write `Rules.AllOf(...)`.
+The `using static InductorParser.Rules;` at the top is what lets us write `AllOf(...)` and `FirstOf(...)` and `Grapheme('=')` without a class qualifier. It is the C# moral equivalent of `using namespace FXPlat;` in the C++ version. Grammars that want a cleaner look use this import. Grammars that want to be explicit can write `Rules.AllOf(...)`.
 
 Two things happen automatically in this example but are worth knowing about for when you want more control. First, the rule graph is finalized (validated, frozen, ids stamped on whatever named rules exist) on the first call to `.Parse(...)`. You can force this earlier by calling `.Compile()` on the root rule explicitly, which is useful when you want grammar-construction errors to surface at program startup rather than on first use. Second, nothing in this example has a user-supplied name: the rules are anonymous. Parsing works fine, `Find(someRule)` works fine (it matches on rule identity), but trace output and error messages will fall back to class-derived labels like `AllOf` or `OneOrMore`, which tell you the rule's shape but not what it represents in your grammar. Adding explicit `.As(nameof(...))` calls for better names is covered in the next section for grammars that want them.
 
@@ -101,7 +101,7 @@ The rule's id is derived deterministically from the string, and the name carries
 AllOf(
     Identifier().As("operatorName"),
     OptionalWhitespace(),
-    Token(':'),
+    Grapheme(':'),
     /* ... */
 )
 ```
@@ -185,14 +185,14 @@ OneOf(RuneSet.Range(new Rune(0x0370), new Rune(0x03FF)))       // Greek and Copt
 
 The default built-ins cover Unicode scalar values by category. `RuneSet.Letters` includes single-rune letters like `é`, `漢`, `Ω`, and `ж` according to the runtime's Unicode category tables. Grammars that specifically want ASCII-only use `RuneSet.Ascii.Letters` to say so explicitly.
 
-`Token(...)` takes a `char` for any character that fits in a C# char literal (code points U+0000..U+FFFF) and a `Rune` for characters above U+FFFF:
+`Grapheme(...)` takes a `char` for any character that fits in a C# char literal (code points U+0000..U+FFFF) and a `Rune` for characters above U+FFFF:
 
 ```csharp
-Token('=')                       // ASCII
-Token('♭')                       // U+266D, fits in a char literal
-Token('漢')                      // U+6F22, fits in a char literal
-Token(new Rune(0x1F3B8))         // U+1F3B8 guitar emoji, above U+FFFF
-Token(0x1F3B8)                   // same via int overload
+Grapheme('=')                       // ASCII
+Grapheme('♭')                       // U+266D, fits in a char literal
+Grapheme('漢')                      // U+6F22, fits in a char literal
+Grapheme(new Rune(0x1F3B8))         // U+1F3B8 guitar emoji, above U+FFFF
+Grapheme(0x1F3B8)                   // same via int overload
 ```
 
 ### How Rules React to the Lexer
@@ -201,7 +201,7 @@ The parser's token is a `StringInfo` text element by default (`GraphemeLexer`). 
 
 **Under `GraphemeLexer` (default):**
 
-- `Token('=')` matches the `[=]` grapheme. Single-rune graphemes compare to a single rune by identity, so ASCII and other characters that fit in a C# char literal work as you would expect.
+- `Grapheme('=')` matches the `[=]` grapheme. Single-rune graphemes compare to a single rune by identity, so ASCII and other characters that fit in a C# char literal work as you would expect.
 - `RuneSet.Letters` matches single-rune letter graphemes. For composed-form text (the default after normalization), almost all Latin-style letters are single-rune graphemes, so this works as expected. Multi-rune letter graphemes (Devanagari conjuncts, decomposed-form sequences with no precomposed equivalent) don't match `RuneSet.Letters` because the grapheme contains more than one rune. Use `Identifier()` or `WithinGrapheme(...)` when you want to validate the runes inside a grapheme.
 - `Literal("café")` matches four graphemes, one per character in the literal.
 - Emoji sequences (👋🏽, 🇺🇸, 👨‍👩‍👧‍👦) match as single tokens on runtimes whose `StringInfo` recognizes those extended grapheme clusters, which is almost always what you want.
@@ -210,7 +210,7 @@ The default is right for almost every grammar that handles user-supplied text, b
 
 **Under `RuneLexer` (opt-in):**
 
-- `Token('=')` same as `GraphemeLexer`: matches `[=]`.
+- `Grapheme('=')` same as `GraphemeLexer`: matches `[=]`.
 - `RuneSet.Letters` matches single-rune letters, and in this mode a combining mark is a separate token. A rule that consumed a letter and then encountered a combining mark would stop at the combining mark (it isn't a letter).
 - `Literal("café")` matches four runes if `café` uses the precomposed `é` (U+00E9), five runes if the `é` is stored as `e` + combining acute.
 - Emoji sequences come through as separate runes, so `👋🏽` is two units and `👨‍👩‍👧‍👦` is seven.
@@ -219,7 +219,7 @@ Reach for `RuneLexer` when the grammar specifically needs rune-level access: par
 
 ## Rule Construction Is Fluent
 
-Every rule factory (the `Token`, `Literal`, `AllOf`, `FirstOf`, etc. functions used above) is a static method on the `Rules` class in [src/InductorParser/Rules.cs](../src/InductorParser/Rules.cs), which is what `using static InductorParser.Rules;` brings into scope. Each one returns a `Rule` object. Modifier methods mutate one property in place and return the same rule for chaining:
+Every rule factory (the `Grapheme`, `Literal`, `AllOf`, `FirstOf`, etc. functions used above) is a static method on the `Rules` class in [src/InductorParser/Rules.cs](../src/InductorParser/Rules.cs), which is what `using static InductorParser.Rules;` brings into scope. Each one returns a `Rule` object. Modifier methods mutate one property in place and return the same rule for chaining:
 
 ```csharp
 public abstract class Rule
@@ -253,7 +253,7 @@ var settingName = Identifier()
 
 Rules are mutable up until `Compile` runs and then sealed. `.As(...)`, `.Flatten(...)`, `.WithError(...)` mutate the rule in place and return the same rule for chaining, so `var rule = Identifier(); rule.Flatten(FlattenType.Preserve);` and `var rule = Identifier().Flatten(FlattenType.Preserve);` produce the same end state on the same object. The practical consequence: if you keep a reference to a rule and reuse it in multiple places, calling `.Flatten(...)` on one of those references changes the policy at every other use site too. To get two flatten policies for the same shape, build two separate rule instances. After `Compile` returns the rule graph is sealed: calling `.As(...)`, `.Flatten(...)`, or any other mutation method on a sealed rule throws `InvalidOperationException`.
 
-Default values for `Flatten`, error messages, and so on mostly match the C++ defaults from the original source. `OptionalWhitespace()` defaults to `FlattenType.Delete`. `Token('=')` defaults to `FlattenType.Delete`. `AllOf(...)` defaults to `FlattenType.Flatten`. `Integer()` and `Float()` are compositions whose outer rule also defaults to `FlattenType.Flatten`; call `.Preserve()` when you want to find them as wrapper nodes. `Parse` applies these types to the tree before returning: `Delete` nodes are dropped, `Flatten` wrappers have their children lifted into the parent, and `Preserve` wrappers survive. `ParseOptions.PreserveAllSymbols` turns the whole pass off and gives you back a grammar-shaped debug tree with every wrapper in place.
+Default values for `Flatten`, error messages, and so on mostly match the C++ defaults from the original source. `OptionalWhitespace()` defaults to `FlattenType.Delete`. `Grapheme('=')` defaults to `FlattenType.Delete`. `AllOf(...)` defaults to `FlattenType.Flatten`. `Integer()` and `Float()` are compositions whose outer rule also defaults to `FlattenType.Flatten`; call `.Preserve()` when you want to find them as wrapper nodes. `Parse` applies these types to the tree before returning: `Delete` nodes are dropped, `Flatten` wrappers have their children lifted into the parent, and `Preserve` wrappers survive. `ParseOptions.PreserveAllSymbols` turns the whole pass off and gives you back a grammar-shaped debug tree with every wrapper in place.
 
 ### User-Defined Rules
 
@@ -386,11 +386,11 @@ var document = AllOf(
     OptionalWhitespace(),
     settingName,
     OptionalWhitespace(),
-    Token('='),
+    Grapheme('='),
     OptionalWhitespace(),
     settingValue,
     OptionalWhitespace(),
-    Token(';'),
+    Grapheme(';'),
     OptionalWhitespace(),
     Eof()
 ).As("document").Preserve().Compile();
@@ -448,7 +448,7 @@ var values = AllOf(
     ZeroOrMore(
         AllOf(
             OptionalWhitespace(),
-            Token(','),
+            Grapheme(','),
             OptionalWhitespace(),
             valueAtom
         )
@@ -458,11 +458,11 @@ var values = AllOf(
 var pair = AllOf(
     key,
     OptionalWhitespace(),
-    Token('='),
+    Grapheme('='),
     OptionalWhitespace(),
     values,
     OptionalWhitespace(),
-    Token(';')
+    Grapheme(';')
 ).As("pair").Preserve();
 
 var document = AllOf(

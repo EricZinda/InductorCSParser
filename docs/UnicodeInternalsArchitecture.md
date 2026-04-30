@@ -82,7 +82,7 @@ After composition normalization (default), most combining-mark cases collapse to
 
 Grammars are written against the `Rule` API and don't know which lexer is driving them. Changing `ParseOptions.InputUnit` swaps the lexer for the whole parse, and the same grammar works either way.
 
-For typical input where each user-visible character is already a single Unicode scalar value (ASCII, precomposed Latin, ordinary CJK, most punctuation), the two lexers produce identical token streams and every rule behaves identically. The rules whose behavior *can* diverge directly are the leaves that inspect token contents: `Token`, `OneOf`, `NoneOf`, and `Literal`. Composite rules, including lookahead wrappers like `Peek` and `Not`, only differ when a leaf inside them sees a different token stream.
+For typical input where each user-visible character is already a single Unicode scalar value (ASCII, precomposed Latin, ordinary CJK, most punctuation), the two lexers produce identical token streams and every rule behaves identically. The rules whose behavior *can* diverge directly are the leaves that inspect token contents: `Grapheme`, `OneOf`, `NoneOf`, and `Literal`. Composite rules, including lookahead wrappers like `Peek` and `Not`, only differ when a leaf inside them sees a different token stream.
 
 Where the two lexers actually diverge, the `RuneLexer` behavior is usually the buggy one: it was matching part of a grapheme as if it were a standalone character. A grammar rule that consumes one rune from `👨‍👩‍👧‍👦` matches just the first 👨 under `RuneLexer` and leaves the other six runes (three ZWJs and three people emoji) dangling for subsequent rules to trip over, which is rarely what the grammar author intended. `GraphemeLexer` avoids this by using `StringInfo` to group the sequence as one text element. The framing is less "`GraphemeLexer` broke my grammar" and more "`GraphemeLexer` revealed that my grammar was silently wrong on multi-rune input." `RuneLexer` is the right tool when you specifically want to see inside a grapheme (walking combining marks individually, rune-level Unicode category analysis, implementing a Unicode library on top of the parser), not for normal text processing.
 
@@ -165,7 +165,7 @@ If you're running under `RuneLexer`, the lexer has deliberately stopped preservi
 
 ```csharp
 // Match this specific two-rune emoji cluster while running in RuneLexer mode.
-var wavedHandWithSkinTone = Token("👋🏽");
+var wavedHandWithSkinTone = Grapheme("👋🏽");
 ```
 
 `WithinGrapheme(innerRule)` solves the opposite problem: while running under `GraphemeLexer`, it reads one outer text-element token and lets the inner rule inspect that token's runes. It doesn't collect several `RuneLexer` tokens back into a grapheme.

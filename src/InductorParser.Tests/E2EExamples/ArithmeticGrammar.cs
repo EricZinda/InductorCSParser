@@ -20,9 +20,9 @@ namespace InductorParser.Tests;
 // flattened children are a clean alternation of factor-payloads and
 // mulOp leaves with no anonymous wrapper layers in between.
 //
-// The addOp / mulOp rules are OneOf (not Token) so the matched operator
+// The addOp / mulOp rules are OneOf (not Grapheme) so the matched operator
 // rune survives as a FlattenType.Preserve leaf and ToString() gives back
-// "+", "-", "*", or "/". Swap OneOf for Token and the leaf vanishes
+// "+", "-", "*", or "/". Swap OneOf for Grapheme and the leaf vanishes
 // under default FlattenType.Delete, and the evaluator has nothing to
 // pattern-match on.
 public static class ArithmeticGrammar
@@ -47,11 +47,11 @@ public static class ArithmeticGrammar
         var factor = FirstOf(
             Number,
             AllOf(
-                Token('('),
+                Grapheme('('),
                 OptionalWhitespace(),
                 exprForward,
                 OptionalWhitespace(),
-                Token(')')
+                Grapheme(')')
             )
         );
 
