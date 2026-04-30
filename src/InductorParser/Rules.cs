@@ -277,10 +277,11 @@ public static class Rules
     /// the scanner-skip optimization need to recognize a run as a single
     /// match span.
     ///
-    /// Pairs with <see cref="ScanUntil(RuneSet)"/>, which is the inverse
-    /// stop condition: scan while runes are NOT in the stop set. Use
-    /// <c>ScanWhileAnyOf</c> when the run's character class is the
-    /// natural way to describe the body, and <see cref="ScanUntil(RuneSet)"/>
+    /// The exact converse of <see cref="ScanUntil(RuneSet)"/>: ScanUntil
+    /// stops when the next rune is in its stop set, ScanWhile stops when
+    /// the next rune is outside its match set. Use <c>ScanWhile</c> when
+    /// the run's character class is the natural way to describe the body
+    /// (identifiers, words, numbers), and <see cref="ScanUntil(RuneSet)"/>
     /// when only the boundary is namable (string bodies, comment bodies).
     ///
     /// Under GraphemeLexer, "single-rune token" is literal: a multi-rune
@@ -290,8 +291,8 @@ public static class Rules
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="minimumCount"/> is less than 1.
     /// </exception>
-    public static Rule ScanWhileAnyOf(RuneSet set, int minimumCount = 1) =>
-        new ScanWhileAnyOfRule(set, minimumCount);
+    public static Rule ScanWhile(RuneSet set, int minimumCount = 1) =>
+        new ScanWhileRule(set, minimumCount);
 
     /// <summary>
     /// Match text up to (but not including) a token that starts with a

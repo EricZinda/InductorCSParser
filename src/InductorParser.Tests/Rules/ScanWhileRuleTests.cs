@@ -9,12 +9,12 @@ using static InductorParser.Tests.UnicodeExamples;
 namespace InductorParser.Tests;
 
 [TestFixture]
-public class ScanWhileAnyOfRuleTests
+public class ScanWhileRuleTests
 {
     [Test]
-    public void ScanWhileAnyOf_matches_a_run_into_one_leaf()
+    public void ScanWhile_matches_a_run_into_one_leaf()
     {
-        var result = ScanWhileAnyOf(RuneSet.Ascii.Letters).Parse("abcXYZ");
+        var result = ScanWhile(RuneSet.Ascii.Letters).Parse("abcXYZ");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("abcXYZ"));
@@ -22,9 +22,9 @@ public class ScanWhileAnyOfRuleTests
     }
 
     [Test]
-    public void ScanWhileAnyOf_stops_before_first_rune_outside_the_set()
+    public void ScanWhile_stops_before_first_rune_outside_the_set()
     {
-        var rule = AllOf(ScanWhileAnyOf(RuneSet.Ascii.Letters), Grapheme('!'));
+        var rule = AllOf(ScanWhile(RuneSet.Ascii.Letters), Grapheme('!'));
 
         var result = rule.Parse("abc!");
 
@@ -33,9 +33,9 @@ public class ScanWhileAnyOfRuleTests
     }
 
     [Test]
-    public void ScanWhileAnyOf_requires_at_least_one_rune()
+    public void ScanWhile_requires_at_least_one_rune()
     {
-        var result = ScanWhileAnyOf(RuneSet.Ascii.Letters)
+        var result = ScanWhile(RuneSet.Ascii.Letters)
             .WithError("need a letter")
             .Parse("123");
 
@@ -45,9 +45,9 @@ public class ScanWhileAnyOfRuleTests
     }
 
     [Test]
-    public void ScanWhileAnyOf_honors_minimum_count()
+    public void ScanWhile_honors_minimum_count()
     {
-        var result = ScanWhileAnyOf(RuneSet.Ascii.Letters, minimumCount: 4)
+        var result = ScanWhile(RuneSet.Ascii.Letters, minimumCount: 4)
             .WithError("need four letters")
             .Parse("abc!");
 
@@ -57,17 +57,17 @@ public class ScanWhileAnyOfRuleTests
     }
 
     [Test]
-    public void ScanWhileAnyOf_rejects_zero_minimum_count()
+    public void ScanWhile_rejects_zero_minimum_count()
     {
         Assert.That(
-            () => ScanWhileAnyOf(RuneSet.Ascii.Letters, minimumCount: 0),
+            () => ScanWhile(RuneSet.Ascii.Letters, minimumCount: 0),
             Throws.TypeOf<System.ArgumentOutOfRangeException>());
     }
 
     [Test]
-    public void ScanWhileAnyOf_rejects_multi_rune_grapheme_under_grapheme_lexer()
+    public void ScanWhile_rejects_multi_rune_grapheme_under_grapheme_lexer()
     {
-        var rule = ScanWhileAnyOf(RuneSet.Single(WavingHandRune));
+        var rule = ScanWhile(RuneSet.Single(WavingHandRune));
 
         var result = rule.Parse(SkinTonedWaveGrapheme);
 
@@ -76,10 +76,10 @@ public class ScanWhileAnyOfRuleTests
     }
 
     [Test]
-    public void ScanWhileAnyOf_under_rune_lexer_consumes_supplementary_runes()
+    public void ScanWhile_under_rune_lexer_consumes_supplementary_runes()
     {
         var allowed = RuneSet.Single(WavingHandRune) | RuneSet.Single(MediumSkinToneRune);
-        var rule = ScanWhileAnyOf(allowed);
+        var rule = ScanWhile(allowed);
 
         var result = rule.Parse(SkinTonedWaveGrapheme,
             new ParseOptions { InputUnit = InputUnit.Rune });
@@ -89,41 +89,41 @@ public class ScanWhileAnyOfRuleTests
     }
 
     [Test]
-    public void ScanWhileAnyOf_trace_success_produces_expected_output()
+    public void ScanWhile_trace_success_produces_expected_output()
     {
         var sink = NewSink();
-        ScanWhileAnyOf(RuneSet.Ascii.Letters).Parse("abc",
+        ScanWhile(RuneSet.Ascii.Letters).Parse("abc",
             new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "   Lexer.AdvanceWhileSingleRuneIn: 'a', Consumed: 1",
             "   Lexer.AdvanceWhileSingleRuneIn: 'b', Consumed: 2",
             "   Lexer.AdvanceWhileSingleRuneIn: 'c', Consumed: 3",
-            "   SUCC | ScanWhileAnyOf: count= 3, 3 chars, wanted one or more of '[A-Z,a-z]'"
+            "   SUCC | ScanWhile: count= 3, 3 chars, wanted one or more of '[A-Z,a-z]'"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
 
     [Test]
-    public void Sealed_ScanWhileAnyOf_rejects_Flatten()
+    public void Sealed_ScanWhile_rejects_Flatten()
     {
-        var rule = ScanWhileAnyOf(RuneSet.Ascii.Letters);
+        var rule = ScanWhile(RuneSet.Ascii.Letters);
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
     }
 
     [Test]
-    public void Sealed_ScanWhileAnyOf_rejects_WithError()
+    public void Sealed_ScanWhile_rejects_WithError()
     {
-        var rule = ScanWhileAnyOf(RuneSet.Ascii.Letters);
+        var rule = ScanWhile(RuneSet.Ascii.Letters);
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
     }
 
     [Test]
-    public void Sealed_ScanWhileAnyOf_rejects_As()
+    public void Sealed_ScanWhile_rejects_As()
     {
-        var rule = ScanWhileAnyOf(RuneSet.Ascii.Letters);
+        var rule = ScanWhile(RuneSet.Ascii.Letters);
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }

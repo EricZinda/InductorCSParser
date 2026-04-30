@@ -9,7 +9,7 @@ namespace InductorParser;
 // as one leaf Symbol. The optimization story: AtLeast(n, OneOf(set))
 // produces the same matched text but pays one transaction and one
 // per-rune leaf Symbol for every rune in the run, which the tree then
-// has to flatten away. ScanWhileAnyOfRule opens one transaction at the
+// has to flatten away. ScanWhileRule opens one transaction at the
 // top, drops into lexer.AdvanceWhileSingleRuneIn for the inner loop,
 // and emits one leaf Symbol over the whole matched span. On the word
 // scan benchmarks that's a 2x speedup.
@@ -18,17 +18,17 @@ namespace InductorParser;
 // while runes are NOT a stopper. Both are leaf-shaped scanners that
 // produce one Symbol per matched run.
 //
-// Tests live in src/InductorParser.Tests/Rules/ScanWhileAnyOfRuleTests.cs.
+// Tests live in src/InductorParser.Tests/Rules/ScanWhileRuleTests.cs.
 // See docs/TestArchitecture.md for the per-rule test conventions
 // (success, failure position, WithError propagation, positional fallback,
 // sealed-rule rejection).
-internal sealed class ScanWhileAnyOfRule : Rule
+internal sealed class ScanWhileRule : Rule
 {
     private readonly RuneSet _set;
     private readonly int _minimumCount;
     private readonly string _setRendered;
 
-    public ScanWhileAnyOfRule(RuneSet set, int minimumCount)
+    public ScanWhileRule(RuneSet set, int minimumCount)
         : base(FlattenType.Preserve)
     {
         if (minimumCount < 1)
@@ -38,7 +38,7 @@ internal sealed class ScanWhileAnyOfRule : Rule
         _set = set;
         _minimumCount = minimumCount;
         _setRendered = set.ToString();
-        SetTraceName(minimumCount == 1 ? "ScanWhileAnyOf" : $"ScanWhileAnyOf[{minimumCount}..]");
+        SetTraceName(minimumCount == 1 ? "ScanWhile" : $"ScanWhile[{minimumCount}..]");
     }
 
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
