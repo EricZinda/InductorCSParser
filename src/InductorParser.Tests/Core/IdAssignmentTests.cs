@@ -68,6 +68,28 @@ public class IdAssignmentTests
     }
 
     [Test]
+    public void Two_reachable_rules_with_the_same_name_fail_to_compile()
+    {
+        var firstRule = OneOrMore(OneOf(RuneSet.Letters)).As("foo");
+        var secondRule = OneOrMore(OneOf(RuneSet.Digits)).As("foo");
+        var doc = AllOf(firstRule, secondRule);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => doc.Compile());
+        Assert.That(exception!.Message, Does.Contain("foo"));
+    }
+
+    [Test]
+    public void Same_named_rule_referenced_twice_in_a_grammar_compiles()
+    {
+        // Reachability is per-rule, not per-edge. A single rule reached via
+        // two parents is still one rule, so its name should not be flagged.
+        var sharedRule = OneOrMore(OneOf(RuneSet.Letters)).As("shared");
+        var doc = AllOf(sharedRule, sharedRule);
+
+        Assert.DoesNotThrow(() => doc.Compile());
+    }
+
+    [Test]
     public void Two_reachable_rules_pinned_to_the_same_SymbolId_fail_to_compile()
     {
         var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 1234);

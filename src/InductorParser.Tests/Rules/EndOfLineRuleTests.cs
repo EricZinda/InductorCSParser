@@ -22,7 +22,7 @@ namespace InductorParser.Tests;
 // rather than inline escapes so this source file doesn't have to
 // contain any literal control characters.
 [TestFixture]
-public class EndOfLineTests
+public class EndOfLineRuleTests
 {
     // char.ConvertFromUtf32 handles both BMP and supplementary-plane
     // code points (returns a surrogate pair for the latter). Plain

@@ -19,7 +19,7 @@ namespace InductorParser.Tests;
 // to language tooling for diagnostics, completion, go-to-definition,
 // etc. ErrorLine / ErrorColumn on ParseResult follow LSP's position
 // conventions end-to-end so a caller forwarding a parse error into an
-// editor diagnostic does no arithmetic at the boundary. The expected
+// editor diagnostic can just use the value. The expected
 // values in this file may look off until you remember:
 //
 //   * Both line and column are 0-BASED. The first line is 0, not 1.
@@ -94,6 +94,8 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorRuneIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(0));
     }
 
     [Test]
@@ -105,6 +107,8 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(3));
+        Assert.That(result.ErrorRuneIndex, Is.EqualTo(3));
+        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
     }
 
     [Test]
@@ -116,6 +120,8 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
         Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorRuneIndex, Is.EqualTo(3));
+        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
     }
 
     [Test]
@@ -132,6 +138,8 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(2));
+        Assert.That(result.ErrorRuneIndex, Is.EqualTo(2));
+        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(2));
     }
 
     [Test]
@@ -150,6 +158,9 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(4));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
         Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorRuneIndex, Is.EqualTo(4));
+        // \r\n is ONE grapheme cluster under UAX #29, so "aa\r\n" = 3 graphemes.
+        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
     }
 
     [Test]
@@ -175,6 +186,11 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(3));
+        Assert.That(result.ErrorRuneIndex, Is.EqualTo(3));
+        // The char index lands inside the \r\n grapheme cluster. The
+        // grapheme walker steps over the whole cluster on the iteration
+        // that crosses the limit, so the count rounds up to 3.
+        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
     }
 
     [Test]
@@ -186,6 +202,9 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
         Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorRuneIndex, Is.EqualTo(3));
+        // \r not followed by \n is its own grapheme cluster.
+        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
     }
 
     [Test]
@@ -198,6 +217,8 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(6));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
         Assert.That(result.ErrorColumn, Is.EqualTo(3));
+        Assert.That(result.ErrorRuneIndex, Is.EqualTo(6));
+        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(6));
     }
 
     [Test]
@@ -210,6 +231,8 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(4));
         Assert.That(result.ErrorLine, Is.EqualTo(3));
         Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorRuneIndex, Is.EqualTo(4));
+        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(4));
     }
 
     [Test]
@@ -219,7 +242,10 @@ public class ErrorPositionTests
         var result = ParseAtFailure("aaaX");
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
+        Assert.That(result.ErrorLine, Is.EqualTo(0));
+        Assert.That(result.ErrorColumn, Is.EqualTo(3));
         Assert.That(result.ErrorRuneIndex, Is.EqualTo(3));
+        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
     }
 
     [Test]
@@ -234,7 +260,10 @@ public class ErrorPositionTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
+        Assert.That(result.ErrorLine, Is.EqualTo(0));
+        Assert.That(result.ErrorColumn, Is.EqualTo(2));
         Assert.That(result.ErrorRuneIndex, Is.EqualTo(1));
+        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(1));
     }
 
     [Test]
@@ -244,6 +273,9 @@ public class ErrorPositionTests
         var result = ParseAtFailure("aaaX");
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
+        Assert.That(result.ErrorLine, Is.EqualTo(0));
+        Assert.That(result.ErrorColumn, Is.EqualTo(3));
+        Assert.That(result.ErrorRuneIndex, Is.EqualTo(3));
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
     }
 
@@ -256,6 +288,9 @@ public class ErrorPositionTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
+        Assert.That(result.ErrorLine, Is.EqualTo(0));
+        Assert.That(result.ErrorColumn, Is.EqualTo(2));
+        Assert.That(result.ErrorRuneIndex, Is.EqualTo(1));
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(1));
     }
 
@@ -277,6 +312,8 @@ public class ErrorPositionTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
+        Assert.That(result.ErrorLine, Is.EqualTo(0));
+        Assert.That(result.ErrorColumn, Is.EqualTo(2));
         Assert.That(result.ErrorRuneIndex, Is.EqualTo(2));
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(1));
     }
@@ -298,6 +335,8 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(5));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
         Assert.That(result.ErrorColumn, Is.EqualTo(2));
+        Assert.That(result.ErrorRuneIndex, Is.EqualTo(5));
+        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(5));
     }
 
     [Test]

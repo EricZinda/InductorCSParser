@@ -326,9 +326,13 @@ public abstract class Rule
 
         var usedIds = new HashSet<int>();
         var pinnedRules = new Dictionary<int, Rule>();
+        var namedRules = new Dictionary<string, Rule>();
 
         var visited = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
         CollectPinnedIds(this, visited, usedIds, pinnedRules);
+
+        visited.Clear();
+        CheckNameUniqueness(this, visited, namedRules);
 
         visited.Clear();
         AssignNamedIds(this, visited, usedIds);
@@ -714,6 +718,31 @@ public abstract class Rule
     }
 
     private static string DescribePinnedRule(Rule r) => r.Name ?? r._ruleTraceName;
+
+    // Reject grammars where two distinct reachable rules share an .As(string)
+    // name. A name is meant to identify a single rule in NameOf, parse-tree
+    // lookups, and trace output, so duplicates would silently make those
+    // resolutions ambiguous. This is the parallel of the pin-collision check
+    // in CollectPinnedIds, just for names instead of SymbolIds.
+    //
+    // The visited set guarantees we walk each rule once, so the dictionary
+    // only ever sees the second instance under a given name.
+    private static void CheckNameUniqueness(Rule r, HashSet<Rule> visited, Dictionary<string, Rule> namedRules)
+    {
+        if (!visited.Add(r)) return;
+        if (r.Name != null)
+        {
+            if (namedRules.ContainsKey(r.Name))
+            {
+                throw new InvalidOperationException(
+                    $"Two reachable rules share the name '{r.Name}'. " +
+                    $"Each .As(string) name must be unique within a grammar.");
+            }
+            namedRules[r.Name] = r;
+        }
+        foreach (var child in r.Children)
+            CheckNameUniqueness(child, visited, namedRules);
+    }
 
     // Pass 2. For every Rule that has a Name but no id yet, hash the name
     // into the custom range and probe upward from the hash slot to find
