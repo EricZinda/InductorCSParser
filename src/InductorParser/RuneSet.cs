@@ -125,7 +125,12 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     public override int GetHashCode()
     {
         var ranges = _ranges;
-        if (ranges == null) return 0;
+        // Equals treats null and an empty array as the same "empty" set (both
+        // length 0), so GetHashCode has to agree or the contract breaks. A
+        // factory like Runes("") returns a RuneSet with an empty _ranges
+        // array, which Equals reports as equal to default(RuneSet) but would
+        // hash differently if we only short-circuited on null.
+        if (ranges == null || ranges.Length == 0) return 0;
         var hash = new HashCode();
         for (int index = 0; index < ranges.Length; index++)
             hash.Add(ranges[index]);

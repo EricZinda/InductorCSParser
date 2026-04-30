@@ -166,12 +166,38 @@ public class TracingTests
     {
         // Diagnostic trace emissions are gated on TraceLevel >=
         // Diagnostic. With TraceLevel.Normal the sink stays empty even
-        // though TraceSink is wired up.
-        var sink = NewSink();
-        var rule = AllOf(Grapheme('a'), Grapheme('b'));
-        rule.Parse("ab", new ParseOptions { TraceSink = sink, TraceLevel = TraceLevel.Normal });
+        // though TraceSink is wired up. The grammar below exercises
+        // every rule type (Grapheme, OneOf, AllOf, FirstOf, OneOrMore,
+        // ZeroOrMore, Optional, Eof) on both success and failure paths,
+        // so an ungated trace emission added to any single rule would
+        // leak into the sink and fail this test.
+        //
+        // Walking "ab" through the grammar:
+        //   OneOrMore iter 1: FirstOf(a|b) matches 'a' on first branch
+        //   OneOrMore iter 2: FirstOf(a|b) fails first branch then
+        //                     matches 'b' on second (FirstOf backtrack)
+        //   OneOrMore iter 3: both branches fail at EOF (loop ends)
+        //   Optional('z'):    fails at EOF, Optional still succeeds
+        //   ZeroOrMore('!'):  fails at EOF, ZeroOrMore still succeeds
+        //   Eof:              succeeds at EOF
+        var rule = AllOf(
+            OneOrMore(FirstOf(Grapheme('a'), OneOf("b"))),
+            Optional(Grapheme('z')),
+            ZeroOrMore(Grapheme('!')),
+            Eof()
+        );
 
-        Assert.That(sink.ToString(), Is.Empty);
+        var normalSink = NewSink();
+        rule.Parse("ab", new ParseOptions { TraceSink = normalSink, TraceLevel = TraceLevel.Normal });
+        Assert.That(normalSink.ToString(), Is.Empty);
+
+        // Sanity check: the same grammar must produce trace output at
+        // TraceLevel.Diagnostic. Without this assertion, a regression
+        // that silently disabled all tracing would pass the empty-sink
+        // check above for the wrong reason.
+        var diagnosticSink = NewSink();
+        rule.Parse("ab", new ParseOptions { TraceSink = diagnosticSink, TraceLevel = TraceLevel.Diagnostic });
+        Assert.That(diagnosticSink.ToString(), Is.Not.Empty);
     }
 
     [Test]
