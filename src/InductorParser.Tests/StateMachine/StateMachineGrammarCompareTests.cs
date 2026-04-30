@@ -18,7 +18,7 @@ namespace InductorParser.Tests.StateMachine;
 // Stress-tests the new MatchLiteralIgnoreAsciiCase opcode plus the
 // existing FirstOf first-rune-skip and atomic-inner BetweenInclusive paths.
 //
-// BacklogGrammar: mostly natively lowered (Token, OneOf, NoneOf,
+// BacklogGrammar: mostly natively lowered (Grapheme, OneOf, NoneOf,
 // AnyToken, ZeroOrMore, AtLeast, Not, Optional, Eof). One rule
 // (ParagraphSplit) routes through the bridge for its rule-stoppered
 // ScanUntil; the others run native.

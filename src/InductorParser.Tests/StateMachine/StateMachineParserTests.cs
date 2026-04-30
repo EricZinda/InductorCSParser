@@ -36,10 +36,10 @@ public class StateMachineParserTests
         Assert.That(stateMachine.ToString(), Is.EqualTo("hello"));
     }
 
-    // ---- Token (lowered as Literal) ----
+    // ---- Grapheme (lowered as Literal) ----
 
     [Test]
-    public void Token_matches_one_grapheme()
+    public void Grapheme_matches_one_grapheme()
     {
         var rule = AllOf(Grapheme('a'), Grapheme('b'), Grapheme('c'), Eof());
         AssertSameOutcome(rule, "abc", expectSuccess: true);

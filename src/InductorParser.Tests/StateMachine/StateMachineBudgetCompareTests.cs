@@ -51,7 +51,7 @@ public class StateMachineBudgetCompareTests
     // alternative tries Literal("ab") (matches 'a', fails on the second
     // token, records a failure), then falls back to Grapheme('a') and
     // recurses. Each iteration costs three calls (cycle + Literal +
-    // Token), so a 5000-char input drives well past the periodic-check
+    // Grapheme), so a 5000-char input drives well past the periodic-check
     // boundary while exposing the deepest-failure tracking on abort.
     private static Rule BuildBacktrackingFirstOf()
     {
