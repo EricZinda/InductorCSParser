@@ -520,12 +520,12 @@ internal static class BenchmarkRegistry
     private static PatternGrammar AsciiWords(int minimumLength)
     {
         // Rebar's \w+ / \w{12,} word cases only need the matched span
-        // length, not one tree node per character. RuneRun preserves the
-        // regex behavior (a maximal ASCII-word run with a minimum length)
+        // length, not one tree node per character. ScanWhileAnyOf preserves
+        // the regex behavior (a maximal ASCII-word run with a minimum length)
         // while turning each word into one leaf Symbol. That keeps the
         // scanner's first-rune skip available because successful matches
         // always consume at least one word rune.
-        Rule wordBody = P(RuneRun(AsciiWord, minimumLength));
+        Rule wordBody = P(ScanWhileAnyOf(AsciiWord, minimumLength));
         var word = AllOf(
             wordBody,
             FirstOf(Peek(OneOf(~AsciiWord)), Eof())

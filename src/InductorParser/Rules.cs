@@ -258,27 +258,40 @@ public static class Rules
     public static Rule NoneOf(string runes) => new NoneOfRule(RuneSet.Runes(runes));
 
     /// <summary>
-    /// Match a maximal run of one or more single-rune tokens in the
-    /// given <see cref="RuneSet"/>. Default
+    /// Scan forward while the next rune is in <paramref name="set"/>,
+    /// stopping at the first rune outside the set, and return the whole
+    /// run as one leaf <see cref="SyntaxTree.Symbol"/>. Default
     /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
-    /// This is the run-oriented form of <see cref="OneOf(RuneSet)"/>.
-    /// It's equivalent to a greedy <c>AtLeast(minimumCount,
-    /// OneOf(set))</c> for the text it consumes, but returns one leaf
-    /// over the whole run instead of one leaf per rune. That's useful
-    /// for identifiers, words, numbers, and other character-class runs
-    /// where callers care about the span as a whole.
+    /// Use this for the hot scanning paths: identifiers, words, numbers,
+    /// whitespace runs, and other character-class runs where the run is
+    /// a unit, not N independent tokens. The matched text is the same as
+    /// a greedy <c>AtLeast(minimumCount, OneOf(set))</c>, but the runtime
+    /// cost is very different. The <c>OneOf</c> form opens a transaction
+    /// and allocates a Symbol per rune (which the tree then flattens
+    /// away). This rule opens one transaction at the top, runs a tight
+    /// scan loop in the lexer, and emits one Symbol over the whole run.
+    /// On the word-scan rebar benchmarks that's a 2x speedup. The
+    /// preserved-leaf shape is also what the state-machine engine and
+    /// the scanner-skip optimization need to recognize a run as a single
+    /// match span.
     ///
-    /// Under GraphemeLexer, "single-rune token" is literal: a
-    /// multi-rune grapheme whose first rune is in the set doesn't
-    /// match. That keeps this rule aligned with <see cref="OneOf(RuneSet)"/>.
+    /// Pairs with <see cref="ScanUntil(RuneSet)"/>, which is the inverse
+    /// stop condition: scan while runes are NOT in the stop set. Use
+    /// <c>ScanWhileAnyOf</c> when the run's character class is the
+    /// natural way to describe the body, and <see cref="ScanUntil(RuneSet)"/>
+    /// when only the boundary is namable (string bodies, comment bodies).
+    ///
+    /// Under GraphemeLexer, "single-rune token" is literal: a multi-rune
+    /// grapheme cluster whose first rune is in the set doesn't match.
+    /// That keeps this rule aligned with <see cref="OneOf(RuneSet)"/>.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="minimumCount"/> is less than 1.
     /// </exception>
-    public static Rule RuneRun(RuneSet set, int minimumCount = 1) =>
-        new RuneRunRule(set, minimumCount);
+    public static Rule ScanWhileAnyOf(RuneSet set, int minimumCount = 1) =>
+        new ScanWhileAnyOfRule(set, minimumCount);
 
     /// <summary>
     /// Match text up to (but not including) a token that starts with a

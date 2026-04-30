@@ -1057,7 +1057,7 @@ internal static class Stepper
             // null) message, and a non-null message at the current
             // deepest claims the slot when nobody filled it yet. The
             // equal-depth claim is what lets a WithError-bearing rule
-            // (RuneRunRule, WithinGraphemeRule) surface its message
+            // (ScanWhileAnyOfRule, WithinGraphemeRule) surface its message
             // when a sibling already recorded an empty slot at the
             // same position.
             machine.RecordFailure(
