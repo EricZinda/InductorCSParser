@@ -251,7 +251,7 @@ Output:
 Erreur à la position 14: caractère 'o' inattendu.
 ```
 
-The position placeholders work in every template: `{charIndex}`, `{runeIndex}`, `{graphemeIndex}`, `{line}`, `{column}`. The positional template gets one extra, `{character}`, for the input character that didn't match. Four matching templates exist for the budget aborts (timeout, rule-count limit, recursion-depth limit, cancellation) with their own unit-specific placeholders like `{timeout}` and `{limit}`. Unknown placeholder names pass through verbatim, so a typo lands in the output where you can see it instead of throwing on every parse failure.
+The position placeholders work in every template: `{charIndex}`, `{runeIndex}`, `{graphemeIndex}`, `{line}`, `{column}`. The positional template gets one extra, `{character}`, for the input character that didn't match. Four matching templates exist for the budget aborts (timeout, rule-count limit, recursion-depth limit, cancellation) with their own unit-specific placeholders like `{timeout}` and `{limit}`. 
 
 Semantic errors happen after the parse: a duplicate section, a missing required key, a number out of range. The parse already succeeded so now you need to walk the tree and check things.
 
