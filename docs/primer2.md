@@ -232,6 +232,27 @@ Parse failed at line 1, column 5
 
 `ErrorLine` and `ErrorColumn` follow the Language Server Protocol convention used by text editors and developer tools: zero-based, with line breaks at `\n`, `\r\n`, or lone `\r`.
 
+`.WithError` covers the rules you can predict will fail. For the catch-all the parser falls back to when nothing was decorated at the deepest failure, `ParseOptions` carries a set of templates with `{name}`-style placeholders. The placeholders match the position units `ParseResult` already names, so a template author uses the same vocabulary the rest of the API does. Going back to the basic grammar (the version before we attached `.WithError`), suppose you want the catch-all rendered in French:
+
+```CSharp
+var options = new ParseOptions
+{
+    PositionalErrorTemplate = "Erreur à la position {charIndex}: caractère '{character}' inattendu.",
+    EndOfInputErrorTemplate = "Fin d'entrée inattendue.",
+};
+
+var result = config.Parse("[server]\nport oops\n", options);
+Console.WriteLine(result.ErrorMessage);
+```
+
+Output:
+
+```
+Erreur à la position 14: caractère 'o' inattendu.
+```
+
+The position placeholders work in every template: `{charIndex}`, `{runeIndex}`, `{graphemeIndex}`, `{line}`, `{column}`. The positional template gets one extra, `{character}`, for the input character that didn't match. Four matching templates exist for the budget aborts (timeout, rule-count limit, recursion-depth limit, cancellation) with their own unit-specific placeholders like `{timeout}` and `{limit}`. Unknown placeholder names pass through verbatim, so a typo lands in the output where you can see it instead of throwing on every parse failure.
+
 Semantic errors happen after the parse: a duplicate section, a missing required key, a number out of range. The parse already succeeded so now you need to walk the tree and check things.
 
 For example, you might want to disallow duplicate section names. Here's how you'd catch a duplicate using `FindAll` to grab every section header in the tree, then a `HashSet` to spot the repeat. Every Symbol exposes its position back into the input through `SourceRange`, so we can include the line number in the error to point the user at the offending header:

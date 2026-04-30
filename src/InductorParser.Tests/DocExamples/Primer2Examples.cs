@@ -227,6 +227,28 @@ public class Primer2Examples
             Is.EqualTo("Expected '=' after the setting name"));
     }
 
+    // primer2.md "ParseOptions carries a set of templates with {name}-
+    // style placeholders". The doc swaps the catch-all default messages
+    // for French versions and shows the resulting ErrorMessage. Pins
+    // both the rendered output and the placeholder substitution.
+    [Test]
+    public void Templates_render_French_default_message()
+    {
+        var (config, _, _, _, _, _) = BuildGrammar();
+
+        var options = new ParseOptions
+        {
+            PositionalErrorTemplate = "Erreur à la position {charIndex}: caractère '{character}' inattendu.",
+            EndOfInputErrorTemplate = "Fin d'entrée inattendue.",
+        };
+
+        var result = config.Parse("[server]\nport oops\n", options);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage,
+            Is.EqualTo("Erreur à la position 14: caractère 'o' inattendu."));
+    }
+
     // primer2.md "Unicode and where the error actually is". The doc claims
     // that for input "[\u{family}]\nport oops\n", with the family ZWJ
     // emoji at the start, the error position diverges across units:
