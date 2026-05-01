@@ -15,7 +15,7 @@ namespace InductorParser.Tests;
 public static class PrologGrammar
 {
     // Character classes from Parser.cpp / PrologParser.cpp.
-    private static readonly RuneSet WhitespaceChars = RuneSet.Ascii.Whitespace;
+    private static readonly RuneSet WhitespaceChars = RuneSet.Ascii.AnyWhitespace;
     private static readonly RuneSet CrlfChars = RuneSet.Runes("\r\n");
     private static readonly RuneSet LetterChars = RuneSet.Ascii.Letters;
     private static readonly RuneSet CapitalChars = RuneSet.Range('A', 'Z');

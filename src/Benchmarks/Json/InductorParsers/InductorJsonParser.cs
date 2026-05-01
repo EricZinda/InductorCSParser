@@ -22,7 +22,7 @@ namespace InductorParser.Benchmarks.Json.InductorParsers;
 // string-parsing hot path is apples-to-apples.
 //
 // Entry point is the bare value rule (no surrounding
-// AllOf(Optional(Whitespace()), value, Optional(Whitespace()), Eof)). The harness
+// AllOf(Optional(AnyWhitespace()), value, Optional(AnyWhitespace()), Eof)). The harness
 // feeds clean input that starts and ends at the value, competitors
 // likewise skip a trailing-Eof wrapper, and adding one would spend
 // time on every parse that the bench isn't trying to measure.
@@ -47,31 +47,31 @@ public static class InductorJsonParser
 
         JsonMemberRule = AllOf(
             JsonStringRule,
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             Grapheme(':'),
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             value
         ).As("member");
 
         JsonObjectRule = AllOf(
             Grapheme('{'),
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             Optional(AllOf(
                 JsonMemberRule,
-                ZeroOrMore(AllOf(Optional(Whitespace()), Grapheme(','), Optional(Whitespace()), JsonMemberRule))
+                ZeroOrMore(AllOf(Optional(AnyWhitespace()), Grapheme(','), Optional(AnyWhitespace()), JsonMemberRule))
             )),
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             Grapheme('}')
         ).As("object").Preserve();
 
         JsonArrayRule = AllOf(
             Grapheme('['),
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             Optional(AllOf(
                 value,
-                ZeroOrMore(AllOf(Optional(Whitespace()), Grapheme(','), Optional(Whitespace()), value))
+                ZeroOrMore(AllOf(Optional(AnyWhitespace()), Grapheme(','), Optional(AnyWhitespace()), value))
             )),
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             Grapheme(']')
         ).As("array").Preserve();
 

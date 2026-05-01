@@ -45,21 +45,21 @@ public static class ArithmeticGrammar
             Number,
             AllOf(
                 Grapheme('('),
-                Optional(Whitespace()),
+                Optional(AnyWhitespace()),
                 exprForward,
-                Optional(Whitespace()),
+                Optional(AnyWhitespace()),
                 Grapheme(')')
             )
         );
 
         Term = AllOf(
             factor,
-            ZeroOrMore(AllOf(Optional(Whitespace()), MulOp, Optional(Whitespace()), factor))
+            ZeroOrMore(AllOf(Optional(AnyWhitespace()), MulOp, Optional(AnyWhitespace()), factor))
         ).As("term").Preserve();
 
         Expr = AllOf(
             Term,
-            ZeroOrMore(AllOf(Optional(Whitespace()), AddOp, Optional(Whitespace()), Term))
+            ZeroOrMore(AllOf(Optional(AnyWhitespace()), AddOp, Optional(AnyWhitespace()), Term))
         ).As("expr").Preserve();
 
         exprForward.Bind(Expr);
@@ -68,7 +68,7 @@ public static class ArithmeticGrammar
         // strict Eof so "1+2 garbage" fails instead of silently parsing
         // the "1+2" prefix. Expr itself has no Eof so the parenthesized
         // factor can reuse it recursively.
-        Document = AllOf(Optional(Whitespace()), Expr, Optional(Whitespace()), Eof());
+        Document = AllOf(Optional(AnyWhitespace()), Expr, Optional(AnyWhitespace()), Eof());
         Document.Compile();
     }
 }

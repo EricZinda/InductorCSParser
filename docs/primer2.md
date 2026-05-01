@@ -30,25 +30,24 @@ The grammar:
 // LINE SEPARATOR, PARAGRAPH SEPARATOR), so we can exclude them from
 // the body of a name, key, or value. EndOfLine() then consumes the
 // terminator itself, including CRLF as a single unit.
-var lineEndRunes = RuneSet.SingleRuneLineTerminators;
+var lineEndRunes = RuneSet.LineTerminators;
 
-// Horizontal-only whitespace: every whitespace rune except the line
-// terminators. The built-in Whitespace() uses RuneSet.Whitespace
-// whole, which includes newlines, so Optional(Whitespace()) would
-// happily eat past the end of a line. We want the same set minus the
-// line terminators, which is exactly the intersection with their
-// complement.
-var horizontalSpaceRunes = RuneSet.Whitespace & ~lineEndRunes;
-Rule HorizontalSpace() => ZeroOrMore(OneOf(horizontalSpaceRunes)).Flatten(FlattenType.Delete);
+// "Any single-rune whitespace, line terminators included." We need
+// this in the NoneOf stop sets below: a name or key should stop
+// either at horizontal whitespace OR at a line terminator. The
+// built-in RuneSet.InlineWhitespace is intra-line only by design,
+// so we union with the line terminators here to get a single set
+// that covers both cases for use inside NoneOf.
+var anySpaceRunes = RuneSet.InlineWhitespace | lineEndRunes;
 
 // Section names and keys: one or more non-whitespace runes, stopping
 // at the relevant terminator (']' for a name, '=' for a key).
-var name = OneOrMore(NoneOf(RuneSet.Runes("]") | RuneSet.Whitespace))
+var name = OneOrMore(NoneOf(RuneSet.Runes("]") | anySpaceRunes))
     .As("name").Preserve();
-var key = OneOrMore(NoneOf(RuneSet.Runes("=") | RuneSet.Whitespace))
+var key = OneOrMore(NoneOf(RuneSet.Runes("=") | anySpaceRunes))
     .As("key").Preserve();
 
-var section = AllOf(Grapheme('['), name, Grapheme(']'), HorizontalSpace(), EndOfLine())
+var section = AllOf(Grapheme('['), name, Grapheme(']'), Optional(InlineWhitespace()), EndOfLine())
     .As("section").Preserve();
 
 // Typed values. Each alternative is .As(name).Preserve() so the
@@ -60,7 +59,7 @@ var quotedString = AllOf(
     ZeroOrMore(NoneOf(RuneSet.Runes("\"") | lineEndRunes)),
     Grapheme('"')).As("quotedString").Preserve();
 
-var bareWord = OneOrMore(NoneOf(RuneSet.Whitespace | RuneSet.Runes("\"")))
+var bareWord = OneOrMore(NoneOf(anySpaceRunes | RuneSet.Runes("\"")))
     .As("bareWord").Preserve();
 
 var floatValue = Float().As("float").Preserve();
@@ -69,10 +68,10 @@ var integerValue = Integer().As("integer").Preserve();
 var value = FirstOf(floatValue, integerValue, quotedString, bareWord)
     .As("value").Preserve();
 
-var keyValue = AllOf(key, HorizontalSpace(), Grapheme('='), HorizontalSpace(), value, HorizontalSpace(), EndOfLine())
+var keyValue = AllOf(key, Optional(InlineWhitespace()), Grapheme('='), Optional(InlineWhitespace()), value, Optional(InlineWhitespace()), EndOfLine())
     .As("keyValue").Preserve();
 
-var blankLine = AllOf(HorizontalSpace(), EndOfLine());
+var blankLine = AllOf(Optional(InlineWhitespace()), EndOfLine());
 
 var line = FirstOf(section, keyValue, blankLine);
 var config = AllOf(ZeroOrMore(line), Eof()).As("config").Preserve();
@@ -104,7 +103,7 @@ config
         └── integer ── "8080"
 ```
 
-The `'['`, `']'`, `'='`, the surrounding quote tokens of a quotedString, and the line terminator are all gone after flattening (their default flatten policy is Delete). The `HorizontalSpace()` around `=` are gone too. What's left is the structure we care about: each `value` carries one named child indicating which alternative matched, and the consumer can use it without re-parsing the text.
+The `'['`, `']'`, `'='`, the surrounding quote tokens of a quotedString, and the line terminator are all gone after flattening (their default flatten policy is Delete). The `Optional(InlineWhitespace())` around `=` are gone too. What's left is the structure we care about: each `value` carries one named child indicating which alternative matched, and the consumer can use it without re-parsing the text.
 
 INI doesn't nest sections. The `[server]` header and the keys that belong to it sit as siblings under the root rather than as children. To find "the keys belonging to section X" we just look for siblings of the section that are keyValues.
 
@@ -214,11 +213,11 @@ The default error message is generic. To upgrade it, attach `.WithError(...)` to
 ```CSharp
 var keyValue = AllOf(
     key,
-    HorizontalSpace(),
+    Optional(InlineWhitespace()),
     Grapheme('=').WithError("Expected '=' after the setting name"),
-    HorizontalSpace(),
+    Optional(InlineWhitespace()),
     value,
-    HorizontalSpace(),
+    Optional(InlineWhitespace()),
     EndOfLine())
     .As("keyValue").Preserve();
 ```

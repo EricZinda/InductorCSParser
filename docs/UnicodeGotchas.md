@@ -206,18 +206,20 @@ Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 ru
 
 `RuneLexer` doesn't have this problem. It emits `'\r'` and `'\n'` as separate tokens. The bite is `GraphemeLexer`-specific, which is the default.
 
-**Fix.** Use the built-in `EndOfLine()` rule. It is `FirstOf(Literal("\r\n"), OneOf(RuneSet.SingleRuneLineTerminators))` under the hood, so the CRLF grapheme is tried as a unit before the single-rune terminators (LF, CR, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR per UAX #18 Annex C). Pass `eofIsEol: true` for the "line terminator here, or end of input" case, and wrap with `Optional` for "line terminator here, or none at all". Anywhere a grammar cares about line breaks, reach for these instead of building one with `Grapheme('\n')` or a `OneOf` over a rune set:
+**Fix.** Use the built-in `EndOfLine()` rule. It is `FirstOf(Literal("\r\n"), OneOf(RuneSet.LineTerminators))` under the hood, so the CRLF grapheme is tried as a unit before the single-rune terminators (LF, CR, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR per UAX #18 Annex C). Pass `eofIsEol: true` for the "line terminator here, or end of input" case, and wrap with `Optional` for "line terminator here, or none at all". Anywhere a grammar cares about line breaks, reach for these instead of building one with `Grapheme('\n')` or a `OneOf` over a rune set:
 
 ```csharp
 // Match a Unicode line terminator (CRLF, LF, CR, NEL, LS, PS, VT, FF).
 AllOf(..., EndOfLine())
 
-// Whitespace that includes newlines: EndOfLine first so the CRLF pair
-// commits before the single-rune fallbacks pick up the '\r' alone.
-public static readonly Rule WhitespaceOrNewline = ZeroOrMore(FirstOf(
-    EndOfLine(),
-    OneOf(RuneSet.Ascii.Whitespace)
-));
+// Whitespace that includes newlines: AnyWhitespace() is the built-in
+// for this, and it composes EndOfLine() first so the CRLF pair commits
+// before the single-rune fallbacks pick up the '\r' alone.
+public static readonly Rule WhitespaceOrNewline = Optional(AnyWhitespace());
+
+// Strict intra-line whitespace (rejects every line terminator,
+// including CRLF) is InlineWhitespace().
+public static readonly Rule HorizontalSpace = Optional(InlineWhitespace());
 
 // Scanning "up to end of line": use a rule-based stop with Not(EndOfLine()).
 // NoneOf over a single-rune set would silently eat the CRLF grapheme.

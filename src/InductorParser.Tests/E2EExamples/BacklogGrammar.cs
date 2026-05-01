@@ -49,10 +49,12 @@ public static class BacklogGrammar
     private static readonly Rule RestOfLine =
         ZeroOrMore(NoneOf("\n"));
 
-    // \s? : optional whitespace grapheme. Uses RuneSet.Whitespace so we
-    // pick up the same broad class .NET's Regex \s uses.
+    // \s? : optional whitespace grapheme. The H1/H2/Bullet rules are
+    // line-anchored (Eof() ends each one on the line boundary), so this
+    // is intra-line whitespace only. RuneSet.InlineWhitespace excludes
+    // line terminators by definition.
     private static readonly Rule OptionalOneWhitespace =
-        Optional(OneOf(RuneSet.Whitespace));
+        Optional(OneOf(RuneSet.InlineWhitespace));
 
     // ^#(?!#)\s?(.*)$
     public static readonly Rule H1Heading = AllOf(
@@ -93,26 +95,24 @@ public static class BacklogGrammar
         Eof()
     );
 
-    // \n\s*\n, unanchored. Middle restricted to non-newline whitespace
-    // so the greedy ZeroOrMore can't run past the terminating \n.
-    // See the class comment above for why this preserves equivalence.
+    // \n\s*\n, unanchored. The middle uses RuneSet.InlineWhitespace, which
+    // excludes line terminators, so the greedy ZeroOrMore can't run past
+    // the terminating \n. See the class comment above for why this
+    // preserves equivalence with the original regex.
     //
     // WARNING: LF-only on purpose. The source regex in MergeableBacklog
-    // is "\n\s*\n", which in JS regex IS CRLF-agnostic (\s matches \r
-    // and \n both), but under the default GraphemeLexer the two Grapheme('\n')
-    // anchors below reject CRLF line endings. "\r\n" is one grapheme
-    // cluster whose content is "\r\n", not "\n". The fixtures in
-    // MergeableBacklog's corpus are all LF-terminated, so the port stays
-    // faithful by matching only LF. If this rule ever parses real
-    // Windows-authored Markdown, it will need to add Literal("\r\n")
-    // anchors alongside the Grapheme('\n') ones. See
+    // is "\n\s*\n", which in standard regex is CRLF-agnostic (\s matches
+    // \r and \n both), but under the default GraphemeLexer the two
+    // Grapheme('\n') anchors below reject CRLF line endings. "\r\n" is
+    // one grapheme cluster whose content is "\r\n", not "\n". The
+    // fixtures in MergeableBacklog's corpus are all LF-terminated, so
+    // the port stays faithful by matching only LF. If this rule ever
+    // parses real Windows-authored Markdown, it will need to add
+    // Literal("\r\n") anchors alongside the Grapheme('\n') ones. See
     // docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer".
-    private static readonly RuneSet NonNewlineWhitespace =
-        RuneSet.Whitespace & ~RuneSet.Runes("\n\r");
-
     private static readonly Rule ParagraphTarget = AllOf(
         Grapheme('\n'),
-        ZeroOrMore(OneOf(NonNewlineWhitespace)),
+        ZeroOrMore(OneOf(RuneSet.InlineWhitespace)),
         Grapheme('\n')
     );
 

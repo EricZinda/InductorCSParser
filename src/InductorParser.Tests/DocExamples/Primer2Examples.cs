@@ -20,16 +20,18 @@ public class Primer2Examples
     private static (Rule config, Rule section, Rule keyValue, Rule key,
                     Rule value, Rule integerValue) BuildGrammar()
     {
-        var lineEndRunes = RuneSet.SingleRuneLineTerminators;
-        var horizontalSpaceRunes = RuneSet.Whitespace & ~lineEndRunes;
-        Rule HorizontalSpace() => ZeroOrMore(OneOf(horizontalSpaceRunes)).Flatten(FlattenType.Delete);
+        var lineEndRunes = RuneSet.LineTerminators;
+        // Every single-rune whitespace, line terminators included, for
+        // NoneOf stop sets. RuneSet.InlineWhitespace is intra-line only,
+        // so unioning with lineEndRunes restores "any whitespace rune."
+        var anySpaceRunes = RuneSet.InlineWhitespace | lineEndRunes;
 
-        var name = OneOrMore(NoneOf(RuneSet.Runes("]") | RuneSet.Whitespace))
+        var name = OneOrMore(NoneOf(RuneSet.Runes("]") | anySpaceRunes))
             .As("name").Preserve();
-        var key = OneOrMore(NoneOf(RuneSet.Runes("=") | RuneSet.Whitespace))
+        var key = OneOrMore(NoneOf(RuneSet.Runes("=") | anySpaceRunes))
             .As("key").Preserve();
 
-        var section = AllOf(Grapheme('['), name, Grapheme(']'), HorizontalSpace(), EndOfLine())
+        var section = AllOf(Grapheme('['), name, Grapheme(']'), Optional(InlineWhitespace()), EndOfLine())
             .As("section").Preserve();
 
         var quotedString = AllOf(
@@ -37,7 +39,7 @@ public class Primer2Examples
             ZeroOrMore(NoneOf(RuneSet.Runes("\"") | lineEndRunes)),
             Grapheme('"')).As("quotedString").Preserve();
 
-        var bareWord = OneOrMore(NoneOf(RuneSet.Whitespace | RuneSet.Runes("\"")))
+        var bareWord = OneOrMore(NoneOf(anySpaceRunes | RuneSet.Runes("\"")))
             .As("bareWord").Preserve();
 
         var floatValue = Float().As("float").Preserve();
@@ -46,11 +48,11 @@ public class Primer2Examples
         var value = FirstOf(floatValue, integerValue, quotedString, bareWord)
             .As("value").Preserve();
 
-        var keyValue = AllOf(key, HorizontalSpace(), Grapheme('='), HorizontalSpace(),
-                             value, HorizontalSpace(), EndOfLine())
+        var keyValue = AllOf(key, Optional(InlineWhitespace()), Grapheme('='), Optional(InlineWhitespace()),
+                             value, Optional(InlineWhitespace()), EndOfLine())
             .As("keyValue").Preserve();
 
-        var blankLine = AllOf(HorizontalSpace(), EndOfLine());
+        var blankLine = AllOf(Optional(InlineWhitespace()), EndOfLine());
 
         var line = FirstOf(section, keyValue, blankLine);
         var config = AllOf(ZeroOrMore(line), Eof()).As("config").Preserve();
@@ -180,16 +182,15 @@ public class Primer2Examples
     [Test]
     public void WithError_message_surfaces_on_missing_equals()
     {
-        var lineEndRunes = RuneSet.SingleRuneLineTerminators;
-        var horizontalSpaceRunes = RuneSet.Whitespace & ~lineEndRunes;
-        Rule HorizontalSpace() => ZeroOrMore(OneOf(horizontalSpaceRunes)).Flatten(FlattenType.Delete);
+        var lineEndRunes = RuneSet.LineTerminators;
+        var anySpaceRunes = RuneSet.InlineWhitespace | lineEndRunes;
 
-        var name = OneOrMore(NoneOf(RuneSet.Runes("]") | RuneSet.Whitespace))
+        var name = OneOrMore(NoneOf(RuneSet.Runes("]") | anySpaceRunes))
             .As("name").Preserve();
-        var key = OneOrMore(NoneOf(RuneSet.Runes("=") | RuneSet.Whitespace))
+        var key = OneOrMore(NoneOf(RuneSet.Runes("=") | anySpaceRunes))
             .As("key").Preserve();
 
-        var section = AllOf(Grapheme('['), name, Grapheme(']'), HorizontalSpace(), EndOfLine())
+        var section = AllOf(Grapheme('['), name, Grapheme(']'), Optional(InlineWhitespace()), EndOfLine())
             .As("section").Preserve();
 
         var quotedString = AllOf(
@@ -197,7 +198,7 @@ public class Primer2Examples
             ZeroOrMore(NoneOf(RuneSet.Runes("\"") | lineEndRunes)),
             Grapheme('"')).As("quotedString").Preserve();
 
-        var bareWord = OneOrMore(NoneOf(RuneSet.Whitespace | RuneSet.Runes("\"")))
+        var bareWord = OneOrMore(NoneOf(anySpaceRunes | RuneSet.Runes("\"")))
             .As("bareWord").Preserve();
 
         var value = FirstOf(
@@ -208,15 +209,15 @@ public class Primer2Examples
 
         var keyValue = AllOf(
             key,
-            HorizontalSpace(),
+            Optional(InlineWhitespace()),
             Grapheme('=').WithError("Expected '=' after the setting name"),
-            HorizontalSpace(),
+            Optional(InlineWhitespace()),
             value,
-            HorizontalSpace(),
+            Optional(InlineWhitespace()),
             EndOfLine())
             .As("keyValue").Preserve();
 
-        var blankLine = AllOf(HorizontalSpace(), EndOfLine());
+        var blankLine = AllOf(Optional(InlineWhitespace()), EndOfLine());
         var line = FirstOf(section, keyValue, blankLine);
         var config = AllOf(ZeroOrMore(line), Eof()).As("config").Preserve();
 

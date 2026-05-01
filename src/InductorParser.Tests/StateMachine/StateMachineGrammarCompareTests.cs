@@ -219,7 +219,7 @@ public class StateMachineGrammarCompareTests
             ZeroOrMore(NoneOf("\n").Delete());
 
         private static readonly Rule OptionalOneWhitespace =
-            Optional(OneOf(RuneSet.Whitespace).Delete());
+            Optional(OneOf(RuneSet.InlineWhitespace).Delete());
 
         public static readonly Rule H1Heading = AllOf(
             Grapheme('#'),

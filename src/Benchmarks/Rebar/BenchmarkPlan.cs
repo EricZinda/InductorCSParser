@@ -701,7 +701,7 @@ internal static class BenchmarkRegistry
             P(Token('+'))
         );
         var noiseToken = FirstOf(
-            P(OneOf(RuneSet.Whitespace)),
+            P(OneOf(AsciiRegexWhitespace)),
             P(Token('-')),
             P(Token('~')),
             P(Token('!')),
@@ -793,7 +793,7 @@ internal static class BenchmarkRegistry
         var capitalizedWord = AllOf(
             P(OneOf(AsciiUpper)),
             OneOrMore(P(OneOf(AsciiLower))),
-            ZeroOrMore(P(OneOf(RuneSet.Whitespace)))
+            ZeroOrMore(P(OneOf(AsciiRegexWhitespace)))
         );
         var match = BetweenInclusive(10, 100, capitalizedWord);
         return new PatternGrammar(match, Array.Empty<Rule>());
