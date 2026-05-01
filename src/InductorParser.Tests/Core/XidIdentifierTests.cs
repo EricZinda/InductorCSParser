@@ -84,22 +84,8 @@ public class XidIdentifierTests
         // Under the grapheme lexer these compose into three multi-rune
         // graphemes. Identifier uses WithinGrapheme internally, which
         // walks each grapheme's runes and checks them against the
-        // identifier rules, so the whole word matches without the
-        // caller having to switch to InputUnit.Rune.
+        // identifier rules, so the whole word matches.
         var result = Identifier().Parse("हिन्दी");
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("हिन्दी"));
-    }
-
-    [Test]
-    public void Devanagari_identifier_still_works_under_rune_lexer()
-    {
-        // Same input, opt-in rune mode. Validates that WithinGrapheme's
-        // "walk runes inside a token" loop reduces to the one-rune case
-        // correctly when the outer lexer is already emitting one token
-        // per rune.
-        var options = new ParseOptions { InputUnit = InputUnit.Rune };
-        var result = Identifier().Parse("हिन्दी", options);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("हिन्दी"));
     }

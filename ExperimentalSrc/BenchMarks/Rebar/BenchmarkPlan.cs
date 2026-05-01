@@ -11,7 +11,6 @@ internal sealed class BenchmarkPlan
 {
     private static readonly ParseOptions SearchOptions = new()
     {
-        InputUnit = InputUnit.Rune,
         NormalizeInput = null,
         RuleCountLimit = 0,
         MaxDepth = 0

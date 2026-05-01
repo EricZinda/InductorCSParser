@@ -254,7 +254,6 @@ public class Primer2Examples
     // that for input "[\u{family}]\nport oops\n", with the family ZWJ
     // emoji at the start, the error position diverges across units:
     //   ErrorCharIndex      == 16 (UTF-16 code units)
-    //   ErrorRuneIndex      == 13 (runes)
     //   ErrorGraphemeIndex  == 9  (graphemes)
     //   ErrorLine           == 1
     //   ErrorColumn         == 5  (UTF-16 chars, LSP)
@@ -273,8 +272,6 @@ public class Primer2Examples
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(16),
             "8 UTF-16 chars for family + '[' + ']' + '\\n' + 4 chars 'port' + ' ' = 16");
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(13),
-            "5 runes for family + '[' + ']' + '\\n' + 4 runes 'port' + ' ' = 13");
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(9),
             "1 grapheme for family + '[' + ']' + '\\n' + 4 graphemes 'port' + ' ' = 9");
         Assert.That(result.ErrorLine, Is.EqualTo(1));

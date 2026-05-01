@@ -107,7 +107,7 @@ public class NormalizationTests
         // y=5, z=6. The 'x' is char 5, rune 5, grapheme 4.
         AssertErrorPosition(result,
             charIndex: 5, line: 0, column: 5,
-            runeIndex: 5, graphemeIndex: 4);
+            graphemeIndex: 4);
         Assert.That(input[result.ErrorCharIndex], Is.EqualTo('x'),
             "the char at ErrorCharIndex should be the one the grammar rejected");
     }
@@ -130,7 +130,7 @@ public class NormalizationTests
         // that starts the failing 'é' grapheme.
         AssertErrorPosition(result,
             charIndex: 3, line: 0, column: 3,
-            runeIndex: 3, graphemeIndex: 3);
+            graphemeIndex: 3);
         Assert.That(input[result.ErrorCharIndex], Is.EqualTo('e'));
     }
 
@@ -164,12 +164,12 @@ public class NormalizationTests
         var result = rule.Parse(input, new ParseOptions { NormalizeInput = null });
 
         Assert.That(result.Success, Is.False);
-        // Grammar consumed "caf" then wanted 'X' but got 'e'. Under
-        // GraphemeLexer, the failing grapheme is 'e' + combining acute
-        // starting at char 3. Graphemes: c=0, a=1, f=2, é=3.
+        // Grammar consumed "caf" then wanted 'X' but got 'e'. The failing
+        // grapheme is 'e' + combining acute starting at char 3.
+        // Graphemes: c=0, a=1, f=2, é=3.
         AssertErrorPosition(result,
             charIndex: 3, line: 0, column: 3,
-            runeIndex: 3, graphemeIndex: 3);
+            graphemeIndex: 3);
         Assert.That(input[result.ErrorCharIndex], Is.EqualTo('e'));
     }
 
@@ -181,25 +181,6 @@ public class NormalizationTests
         // hundred grammars silently.
         var options = new ParseOptions();
         Assert.That(options.NormalizeInput, Is.EqualTo(NormalizationForm.FormC));
-    }
-
-    [Test]
-    public void FormD_rewrites_precomposed_input_to_decomposed_before_lexer_sees_it()
-    {
-        // The exotic-but-supported case: a grammar author who wants to
-        // match decomposed form can choose FormD. Grammar pattern and
-        // input then meet in decomposed land.
-        string input = CafePrecomposed; // single-char é
-        var rule = AllOf(Grapheme('c'), Grapheme('a'), Grapheme('f'),
-                       Grapheme('e'), Grapheme(CombiningAcuteText), Eof());
-        var result = rule.Parse(input,
-            new ParseOptions
-            {
-                InputUnit = InputUnit.Rune,
-                NormalizeInput = NormalizationForm.FormD,
-            });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 
     [Test]
@@ -226,10 +207,6 @@ public class NormalizationTests
         Assert.That(result.ErrorCharIndex, Is.GreaterThanOrEqualTo(0));
         Assert.That(result.ErrorCharIndex, Is.LessThanOrEqualTo(input.Length),
             "abort position must be a valid index into the caller's original input");
-        Assert.That(result.ErrorRuneIndex, Is.GreaterThanOrEqualTo(0));
-        Assert.That(result.ErrorRuneIndex, Is.LessThanOrEqualTo(input.Length));
-        Assert.That(result.ErrorGraphemeIndex, Is.GreaterThanOrEqualTo(0));
-        Assert.That(result.ErrorGraphemeIndex, Is.LessThanOrEqualTo(input.Length));
         Assert.That(result.ErrorLine, Is.EqualTo(0), "input has no newlines");
         Assert.That(result.ErrorColumn, Is.EqualTo(result.ErrorCharIndex),
             "single-line input means column equals char index");
@@ -284,7 +261,7 @@ public class NormalizationTests
         // so char/rune/grapheme indices line up at position 1.
         AssertErrorPosition(result,
             charIndex: 1, line: 0, column: 1,
-            runeIndex: 1, graphemeIndex: 1);
+            graphemeIndex: 1);
         Assert.That(input[result.ErrorCharIndex], Is.EqualTo('s'));
     }
 
@@ -308,7 +285,7 @@ public class NormalizationTests
         // every unit.
         AssertErrorPosition(result,
             charIndex: 0, line: 0, column: 0,
-            runeIndex: 0, graphemeIndex: 0);
+            graphemeIndex: 0);
     }
 
     [Test]
@@ -340,6 +317,6 @@ public class NormalizationTests
         Assert.That(result.Success, Is.False);
         AssertErrorPosition(result,
             charIndex: 0, line: 0, column: 0,
-            runeIndex: 0, graphemeIndex: 0);
+            graphemeIndex: 0);
     }
 }

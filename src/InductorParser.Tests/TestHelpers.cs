@@ -149,8 +149,8 @@ internal static class TestHelpers
 
     // Assert that result describes a failure at the expected position in
     // every unit ParseResult exposes: ErrorCharIndex, ErrorLine,
-    // ErrorColumn, ErrorRuneIndex, ErrorGraphemeIndex, plus the bundled
-    // ErrorPosition struct. Use this in tests where error-position
+    // ErrorColumn, ErrorGraphemeIndex, plus the bundled ErrorPosition
+    // struct. Use this in tests where error-position
     // behavior is the actual subject (position translation through
     // normalization, char-index to line/column conversion, etc.) so a
     // regression in any one unit shows up as a single named assertion
@@ -162,13 +162,11 @@ internal static class TestHelpers
         int charIndex,
         int line,
         int column,
-        int runeIndex,
         int graphemeIndex)
     {
         Assert.That(result.ErrorCharIndex, Is.EqualTo(charIndex), nameof(result.ErrorCharIndex));
         Assert.That(result.ErrorLine, Is.EqualTo(line), nameof(result.ErrorLine));
         Assert.That(result.ErrorColumn, Is.EqualTo(column), nameof(result.ErrorColumn));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(runeIndex), nameof(result.ErrorRuneIndex));
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(graphemeIndex), nameof(result.ErrorGraphemeIndex));
 
         var position = result.ErrorPosition;
@@ -176,7 +174,6 @@ internal static class TestHelpers
         Assert.That(position!.Value.CharIndex, Is.EqualTo(charIndex), "ErrorPosition.CharIndex");
         Assert.That(position.Value.Line, Is.EqualTo(line), "ErrorPosition.Line");
         Assert.That(position.Value.Column, Is.EqualTo(column), "ErrorPosition.Column");
-        Assert.That(position.Value.RuneIndex, Is.EqualTo(runeIndex), "ErrorPosition.RuneIndex");
         Assert.That(position.Value.GraphemeIndex, Is.EqualTo(graphemeIndex), "ErrorPosition.GraphemeIndex");
     }
 
@@ -189,7 +186,6 @@ internal static class TestHelpers
         Assert.That(actual.ErrorCharIndex, Is.EqualTo(expected.ErrorCharIndex), nameof(actual.ErrorCharIndex));
         Assert.That(actual.ErrorLine, Is.EqualTo(expected.ErrorLine), nameof(actual.ErrorLine));
         Assert.That(actual.ErrorColumn, Is.EqualTo(expected.ErrorColumn), nameof(actual.ErrorColumn));
-        Assert.That(actual.ErrorRuneIndex, Is.EqualTo(expected.ErrorRuneIndex), nameof(actual.ErrorRuneIndex));
         Assert.That(actual.ErrorGraphemeIndex, Is.EqualTo(expected.ErrorGraphemeIndex), nameof(actual.ErrorGraphemeIndex));
         Assert.That(actual.ErrorPosition, Is.EqualTo(expected.ErrorPosition), nameof(actual.ErrorPosition));
     }

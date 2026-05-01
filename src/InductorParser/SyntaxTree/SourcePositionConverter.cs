@@ -2,36 +2,10 @@ using System.Globalization;
 
 namespace InductorParser.SyntaxTree;
 
-// Char-index to (rune / grapheme / line / column) conversions, shared
-// between ParseResult.Error* properties and Symbol.SourceRange. 
+// Char-index to (grapheme / line / column) conversions, shared
+// between ParseResult.Error* properties and Symbol.SourceRange.
 internal static class SourcePositionConverter
 {
-    public static int ToRuneIndex(string input, int charIndex)
-    {
-        int limit = charIndex;
-        if (limit > input.Length) limit = input.Length;
-        if (limit < 0) limit = 0;
-
-        int count = 0;
-        int i = 0;
-        while (i < limit)
-        {
-            if (char.IsHighSurrogate(input[i])
-                && i + 1 < input.Length
-                && i + 1 < limit
-                && char.IsLowSurrogate(input[i + 1]))
-            {
-                i += 2;
-            }
-            else
-            {
-                i++;
-            }
-            count++;
-        }
-        return count;
-    }
-
     public static int ToGraphemeIndex(string input, int charIndex)
     {
         int limit = charIndex;

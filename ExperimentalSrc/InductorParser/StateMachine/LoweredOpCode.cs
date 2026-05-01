@@ -120,83 +120,15 @@ internal enum LoweredOpCode : byte
     // can handle.
     BridgeToRecursive,
 
-    // Fused-scan opcodes for the BetweenInclusive(min, max, inner)
-    // shape where inner is one of the always-advancing single-rune
-    // matches. Lowering detects this pattern under InputUnit.Rune and
-    // emits one of these opcodes in place of a multi-state inner loop
-    // (PushBacktrack -> MatchX -> EmitLeafX -> BetweenIncrementCheckMax).
-    // The body is one tight loop with inline rune decode, no
-    // per-iteration state-machine dispatch and no Lexer.Read call.
-    // state.Data is an index into CompiledProgram.ScanSpecs which
-    // carries bounds, runeset / payload index, and the optional leaf-
-    // emit and error-message metadata indices.
-    //
-    // Rune-only on purpose: inline rune decode would split multi-rune
-    // graphemes under the GraphemeLexer (treat "é" decomposed as 'e'
-    // followed by a combining mark, when GraphemeLexer treats both
-    // runes as one token that fails OneOf). The lowerer falls back to
-    // the un-fused atomic path under InputUnit.Grapheme.
-    ScanOneOfRune,
-    ScanNoneOfRune,
-
-    // Fused scan for BetweenInclusive(min, max, AnyTokenRule) under
-    // InputUnit.Rune. Walks runes inline up to atMost (or to EOF /
-    // stray surrogate), no membership test (any rune passes). The
-    // common idiom is ZeroOrMore(AnyToken()) at the tail of a grammar
-    // to consume the rest of the input — this opcode replaces the
-    // ~25-30ns per rune of the generic Between loop with ~4-5ns per
-    // rune of straight-line code.
-    ScanAnyTokenRune,
-
-    // Rune-inline variants of the standalone Match opcodes. Same
-    // semantics and same state.Data layout as the non-rune originals,
-    // but the opcode body bypasses Lexer.Read entirely: it indexes
-    // input directly and decodes runes inline (one BMP char or one
-    // surrogate pair per match). Saves one virtual NextTokenLength
-    // call and one Token ref-struct construction per match.
-    //
-    // Rune-only because GraphemeLexer's per-token segmentation can
-    // span more than two chars (ZWJ emoji, decomposed accents). The
-    // lowerer emits these only when InputUnit.Rune; under Grapheme
-    // the original opcodes are emitted instead.
-    MatchOneOfRune,
-    MatchNoneOfRune,
-    MatchAnyTokenRune,
-    MatchLiteralRune,
-    MatchLiteralIgnoreAsciiCaseRune,
-
-    // Fused Not(SimpleMatch) opcodes. Replace the Not's three-state
-    // PushBacktrack/inner/FailRestore shape with one peek-and-reject
-    // opcode that decodes one rune (or one literal-length-worth of
-    // chars) inline, returns failure if it matches the inner pattern,
-    // success otherwise. Zero-width: the lexer position never moves.
-    // Rune-only because they decode rune-by-rune; under Grapheme the
-    // existing Not lowering still applies.
-    PeekRejectOneOfRune,
-    PeekRejectLiteralRune,
-
-    // Fused-scan opcode for BetweenInclusive(min, max, AllOf(L, R)) where
-    // L is a Literal/Grapheme and R is a OneOf, both effectively Delete.
-    // Matches the common shape "repeated-token-followed-by-rune-class"
-    // (HrSpaced, separator-then-content patterns, etc.). Per iteration:
-    // span-equal compare for L plus inline rune decode + set membership
-    // for R, in straight-line code with no per-iteration state-machine
-    // dispatch and no per-iteration backtrack frame. Rune-only.
-    ScanLiteralOneOfRune,
-
-    // Rule-stoppered ScanUntil scan loop. Walks runes inline; on each
-    // rune, checks whether it's in the stopper rule's
-    // FirstConsumedRunes set. When the rune isn't in the set, advance
-    // and continue (it can't possibly be the start of a stopper
-    // match). When the rune IS in the set, exit OnSuccess so the
-    // surrounding lowering can Call the stopper rule (in peek mode)
-    // and decide whether to break the scan or continue. Replaces the
-    // BridgeToRecursive entry/exit cost on rule-stoppered ScanUntil
-    // forms (CDATA's ]]>, Python triple-quote, paragraph terminators).
-    // AdvanceOneRune is the helper that consumes one rune when the
-    // peeked stopper failed.
-    ScanUntilStopperEligibleRune,
-    AdvanceOneRune,
+    // (The Rune-mode-only opcodes that used to live here — ScanOneOfRune,
+    // ScanNoneOfRune, ScanAnyTokenRune, MatchOneOfRune, MatchNoneOfRune,
+    // MatchAnyTokenRune, MatchLiteralRune, MatchLiteralIgnoreAsciiCaseRune,
+    // PeekRejectOneOfRune, PeekRejectLiteralRune, ScanLiteralOneOfRune,
+    // ScanUntilStopperEligibleRune, AdvanceOneRune — were removed in
+    // Step 2. With one (grapheme) lexer their inline rune decode would
+    // split multi-rune graphemes, so the lowerer emits the non-rune
+    // opcodes instead and routes the surviving rule-stoppered
+    // ScanUntil shapes through BridgeToRecursive.)
 
     // Bulk skip at the top of a ZeroOrMore(FirstOf(match..., AnyToken.Delete))
     // scanner loop. Advances the lexer to the next position where one of

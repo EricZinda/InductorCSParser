@@ -2,38 +2,38 @@ using System;
 using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
+using InductorParser.Tracing;
 
 namespace InductorParser;
 
-// Reads one token from the outer lexer and runs an inner rule against the
-// runes inside that token. Under GraphemeLexer (the default) the outer
-// token is a grapheme cluster that may span several runes, and the inner
-// rule gets to walk and validate each of them. Under RuneLexer the outer
-// token is already one rune, so the inner rule sees a one-rune stream and
-// behaves identically to what you'd get without the wrapper.
+// Reads one grapheme cluster token from the outer lexer and runs an
+// inner rule against the runes inside that token. The outer token is
+// a grapheme cluster that may span several runes, and the inner rule
+// gets to walk and validate each of them.
 //
-// Semantics: the inner rule must consume every rune of the grapheme. If it
-// matches only a prefix, the whole WithinGrapheme match fails and the
-// outer lexer rolls back. A grapheme is atomic from the outer view: we
-// don't leave half of it on the floor for a following rule to pick up.
+// Semantics: the inner rule must consume every rune of the grapheme.
+// If it matches only a prefix, the whole WithinGrapheme match fails
+// and the outer lexer rolls back. A grapheme is atomic from the outer
+// view: we don't leave half of it on the floor for a following rule to
+// pick up.
 //
 // This is how Rules.Identifier handles Devanagari / Thai / Arabic-with-
-// vowels under the default grapheme lexer. It's also the reusable
-// building block for any rule that needs to look inside a grapheme:
-// emoji-with-modifier matchers, jamo-cluster validators, "reject any
-// multi-rune grapheme" strictness rules, etc. See Rules.WithinGrapheme
-// for the factory and docs/UnicodeGotchas.md for the broader context.
+// vowels under grapheme tokenization. It's also the reusable building
+// block for any rule that needs to look inside a grapheme: emoji-with-
+// modifier matchers, jamo-cluster validators, "reject any multi-rune
+// grapheme" strictness rules, etc. See Rules.WithinGrapheme for the
+// factory and docs/UnicodeGotchas.md for the broader context.
 //
 // Scope limits worth calling out:
 //
-// - The inner rule runs against a bounded RuneLexer that shares the
-//   outer lexer's input string (no Substring copy). That sub-lexer
-//   doesn't share trace or budget state with the outer lexer. Trace
-//   output from the inner rule doesn't appear in the outer trace.
-//   It can only consume inside the outer token's span, so normal
-//   character-consuming rules are tiny. Avoid using arbitrary
-//   long-running user code here, because the sub-lexer has no shared
-//   budget counters.
+// - The inner rule runs against a bounded sub-lexer that shares the
+//   outer lexer's input string (no Substring copy) and walks one rune
+//   per Read instead of one grapheme. The sub-lexer doesn't share
+//   trace or budget state with the outer lexer; trace output from the
+//   inner rule doesn't appear in the outer trace. It can only consume
+//   inside the outer token's span, so normal character-consuming
+//   rules are tiny. Avoid using arbitrary long-running user code
+//   here, because the sub-lexer has no shared budget counters.
 //
 // - Inner-rule Symbols are discarded. WithinGrapheme emits one leaf
 //   Symbol representing the whole grapheme on success. Callers that
@@ -60,15 +60,20 @@ internal sealed class WithinGraphemeRule : Rule
             return null;
         }
 
-        // Sub-lexer over the grapheme's runes. Same input string as the
-        // outer lexer, bounded to [token.Offset, token.Offset + token.Length).
-        // No Substring allocation: the sub-lexer shares the outer's string
-        // and uses absolute positions, so its DeepestFailure and Position
-        // are already outer-input coordinates.
-        var subLexer = new RuneLexer(
+        // Sub-lexer over the grapheme's runes. Same input string as
+        // the outer lexer, bounded to [token.Offset, token.Offset +
+        // token.Length), and switched to one-rune-per-token mode so
+        // the inner rule sees the runes inside the outer grapheme.
+        // No Substring allocation: the sub-lexer shares the outer's
+        // string and uses absolute positions, so its DeepestFailure
+        // and Position are already outer-input coordinates.
+        var subLexer = new Lexer(
             outerLexer.Input,
             token.Offset,
-            token.Offset + token.Length);
+            token.Offset + token.Length,
+            traceSink: null,
+            traceLevel: TraceLevel.Normal,
+            oneRunePerToken: true);
 
         // Throwaway output list for the inner rule. Any symbols the inner
         // rule emits are discarded: WithinGrapheme exposes one leaf per

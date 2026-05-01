@@ -47,7 +47,6 @@ public static class RuleProfiler
         var sink = new CountingWriter(counts);
         var options = new ParseOptions
         {
-            InputUnit = InputUnit.Rune,
             MaxDepth = 0,
             TraceSink = sink,
             TraceLevel = Tracing.TraceLevel.Diagnostic,

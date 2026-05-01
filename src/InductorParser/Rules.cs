@@ -655,9 +655,8 @@ public static class Rules
     /// breaks as ordinary whitespace.
     /// <para>
     /// <see cref="EndOfLine"/> is tried first inside the
-    /// <see cref="FirstOf"/>, so that under <see cref="InputUnit.Grapheme"/>
-    /// a CRLF grapheme is consumed as one terminator rather than only
-    /// matching the CR via the single-rune side.
+    /// <see cref="FirstOf"/>, so that a CRLF grapheme is consumed as one
+    /// terminator rather than only matching the CR via the single-rune side.
     /// </para>
     /// <para>
     /// For "skip whitespace here, possibly none," wrap as
@@ -776,13 +775,11 @@ public static class Rules
     }
 
     /// <summary>
-    /// Reads one token from the lexer and runs <paramref name="innerRule"/>
-    /// against the runes inside that token. Under
-    /// <see cref="InputUnit.Grapheme"/> (the default) the token is a
-    /// StringInfo text element that may span several runes, and the inner rule
-    /// walks them one at a time. Under <see cref="InputUnit.Rune"/> the
-    /// token is already one rune, so the inner rule sees a single-rune
-    /// stream and behaves as it would outside the wrapper. Default
+    /// Reads one grapheme cluster token from the lexer and runs
+    /// <paramref name="innerRule"/> against the runes inside that token.
+    /// The outer token is a StringInfo text element that may span several
+    /// runes, and the inner rule walks them one at a time over a sub-lexer
+    /// switched to one-rune-per-token mode. Default
     /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <param name="innerRule">

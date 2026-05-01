@@ -20,10 +20,10 @@ namespace InductorParser.StateMachine;
 //      rule completes one way or the other.
 internal static class Lowerer
 {
-    public static CompiledProgram Lower(Rule rootRule, bool preserveAllSymbols = false, InputUnit inputUnit = InputUnit.Grapheme)
+    public static CompiledProgram Lower(Rule rootRule, bool preserveAllSymbols = false)
     {
         rootRule.Compile();
-        var context = new LoweringContext(rootRule, preserveAllSymbols, inputUnit);
+        var context = new LoweringContext(rootRule, preserveAllSymbols);
 
         // Cycle pre-pass.
         var onStack = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
@@ -39,7 +39,7 @@ internal static class Lowerer
         // leaves and Flatten-or-Delete composites lowers to a program
         // with no emit-style opcodes, so the runtime can skip
         // allocating an output-list slot on the Machine struct.
-        bool hasOutputs = ProgramHasOutputs(context.States, context.ScanSpecs);
+        bool hasOutputs = ProgramHasOutputs(context.States);
 
         // Invert SubprogramEntries (Rule -> entry state index) into the
         // entry-state-index -> Rule lookup the Stepper reads on Call /
@@ -66,7 +66,7 @@ internal static class Lowerer
             hasOutputs);
     }
 
-    private static bool ProgramHasOutputs(IReadOnlyList<State> states, IReadOnlyList<ScanSpec> scanSpecs)
+    private static bool ProgramHasOutputs(IReadOnlyList<State> states)
     {
         for (int i = 0; i < states.Count; i++)
         {
@@ -80,15 +80,6 @@ internal static class Lowerer
                 case LoweredOpCode.EmitScanUntilLeaf:
                 case LoweredOpCode.BridgeToRecursive:
                     return true;
-                case LoweredOpCode.ScanOneOfRune:
-                case LoweredOpCode.ScanNoneOfRune:
-                case LoweredOpCode.ScanAnyTokenRune:
-                    // Fused-scan opcodes emit per-rune leaves only
-                    // when their ScanSpec carries a non-negative
-                    // metadata index. matcher-mode lowering passes -1.
-                    if (scanSpecs[states[i].Data].LeafMetadataIndex >= 0)
-                        return true;
-                    break;
             }
         }
         return false;
@@ -143,7 +134,6 @@ internal sealed class LoweringContext
     public readonly HashSet<Rule> CyclicRules = new(ReferenceComparer<Rule>.Instance);
     public readonly Rule RootRule;
     public readonly bool PreserveAllSymbols;
-    public readonly InputUnit InputUnit;
 
     // For cyclic rules: the index of the "shared" entry that callers
     // Call into. Allocated lazily the first time a cyclic rule is
@@ -156,11 +146,10 @@ internal sealed class LoweringContext
     private readonly Dictionary<string, int> _literalIndex = new();
     private readonly Dictionary<RuneSet, int> _runeSetIndex = new();
 
-    public LoweringContext(Rule rootRule, bool preserveAllSymbols, InputUnit inputUnit)
+    public LoweringContext(Rule rootRule, bool preserveAllSymbols)
     {
         RootRule = rootRule;
         PreserveAllSymbols = preserveAllSymbols;
-        InputUnit = inputUnit;
     }
 
     // Resolve the FlattenType the rule's outputs actually contribute
@@ -274,28 +263,19 @@ internal sealed class LoweringContext
             afterMatch = AddState(LoweredOpCode.EmitLeafLiteral, packed, onSuccess, onSuccess);
         }
         int matchPacked = literalIndex | (metadataIndex << 16);
-        var matchOpcode = InputUnit == InputUnit.Rune
-            ? LoweredOpCode.MatchLiteralRune
-            : LoweredOpCode.MatchLiteral;
-        return AddState(matchOpcode, matchPacked, afterMatch, onFailure);
+        return AddState(LoweredOpCode.MatchLiteral, matchPacked, afterMatch, onFailure);
     }
 
     private int LowerOneOf(OneOfRule rule, int onSuccess, int onFailure)
     {
         int runeSetIndex = InternRuneSet(GetOneOfSet(rule));
-        var opcode = InputUnit == InputUnit.Rune
-            ? LoweredOpCode.MatchOneOfRune
-            : LoweredOpCode.MatchOneOf;
-        return EmitTokenMatch(rule, opcode, runeSetIndex, onSuccess, onFailure);
+        return EmitTokenMatch(rule, LoweredOpCode.MatchOneOf, runeSetIndex, onSuccess, onFailure);
     }
 
     private int LowerNoneOf(NoneOfRule rule, int onSuccess, int onFailure)
     {
         int runeSetIndex = InternRuneSet(rule.LoweringSet);
-        var opcode = InputUnit == InputUnit.Rune
-            ? LoweredOpCode.MatchNoneOfRune
-            : LoweredOpCode.MatchNoneOf;
-        return EmitTokenMatch(rule, opcode, runeSetIndex, onSuccess, onFailure);
+        return EmitTokenMatch(rule, LoweredOpCode.MatchNoneOf, runeSetIndex, onSuccess, onFailure);
     }
 
     private int LowerAnyToken(AnyTokenRule rule, int onSuccess, int onFailure)
@@ -303,10 +283,7 @@ internal sealed class LoweringContext
         // MatchAnyToken takes no payload, so the low 16 bits are 0.
         // The high 16 bits still carry the optional error-metadata
         // index for WithError.
-        var opcode = InputUnit == InputUnit.Rune
-            ? LoweredOpCode.MatchAnyTokenRune
-            : LoweredOpCode.MatchAnyToken;
-        return EmitTokenMatch(rule, opcode, 0, onSuccess, onFailure);
+        return EmitTokenMatch(rule, LoweredOpCode.MatchAnyToken, 0, onSuccess, onFailure);
     }
 
     // Shared helper for the per-token rules (OneOf / NoneOf / AnyToken)
@@ -345,10 +322,7 @@ internal sealed class LoweringContext
             afterMatch = AddState(LoweredOpCode.EmitLeafLiteral, packed, onSuccess, onSuccess);
         }
         int matchPacked = literalIndex | (metadataIndex << 16);
-        var matchOpcode = InputUnit == InputUnit.Rune
-            ? LoweredOpCode.MatchLiteralIgnoreAsciiCaseRune
-            : LoweredOpCode.MatchLiteralIgnoreAsciiCase;
-        return AddState(matchOpcode, matchPacked, afterMatch, onFailure);
+        return AddState(LoweredOpCode.MatchLiteralIgnoreAsciiCase, matchPacked, afterMatch, onFailure);
     }
 
     // Sentinel matching Stepper.NoErrorMetadata — the high-16-bit value
@@ -633,33 +607,14 @@ internal sealed class LoweringContext
         if (TryLowerBetweenScanner(rule, onSuccess, onFailure, out int scannerEntry))
             return scannerEntry;
 
-        // Even faster path when the inner is OneOf or NoneOf and the
-        // input unit is Rune: emit a single fused-scan opcode that
-        // walks runes in one tight inline loop instead of a multi-state
-        // per-iteration loop. Saves the per-iteration PushBacktrack,
-        // the per-iteration BetweenIncrementCheckMax, and the per-rune
-        // Lexer.Read call. Rune-only because grapheme tokens can be
-        // multi-rune and the inline rune decode would split them.
+        // The fused-scan opcodes (ScanOneOfRune / ScanNoneOfRune /
+        // ScanAnyTokenRune / ScanLiteralOneOfRune) inline rune decode,
+        // which would split multi-rune graphemes under grapheme
+        // tokenization, so they were Rune-mode only. With the parser
+        // collapsed to one (grapheme) lexer, those paths are dead.
+        // The generic Between loop below handles the same shapes
+        // through Lexer.Read.
         Rule inner = rule.Children[0];
-        if (InputUnit == InputUnit.Rune && CanFuseScan(rule, inner))
-        {
-            if (inner is OneOfRule oneOfInner)
-                return LowerBetweenScan(rule, oneOfInner, oneOfInner.LoweringSet, LoweredOpCode.ScanOneOfRune, onSuccess, onFailure);
-            if (inner is NoneOfRule noneOfInner)
-                return LowerBetweenScan(rule, noneOfInner, noneOfInner.LoweringSet, LoweredOpCode.ScanNoneOfRune, onSuccess, onFailure);
-            if (inner is AnyTokenRule anyTokenInner)
-                return LowerBetweenScanAnyToken(rule, anyTokenInner, onSuccess, onFailure);
-        }
-
-        // AllOf-pair fast path: BetweenInclusive(min, max, AllOf(Literal, OneOf))
-        // where both AllOf children are effectively Delete. Common in
-        // separator-and-content scans like HrSpaced's
-        // AtLeast(2, AllOf(Grapheme(' '), OneOf("-*+"))).
-        if (InputUnit == InputUnit.Rune
-            && TryLowerBetweenScanLiteralOneOfRune(rule, inner, onSuccess, onFailure, out int fusedEntry))
-        {
-            return fusedEntry;
-        }
 
         // Optional fast path: BetweenInclusive(0, 1, inner). Drops the
         // PushBetween/PopIterationCheck/BetweenExitCheckMin trio and
@@ -816,86 +771,6 @@ internal sealed class LoweringContext
         return pushIdx;
     }
 
-    // Whether a BetweenInclusive(min, max, inner) is eligible for the
-    // fused-scan opcode. Inner has to be OneOf or NoneOf (the two
-    // rule shapes ScanOneOfRune / ScanNoneOfRune lower from), and
-    // neither inner nor the BetweenInclusive itself can carry a
-    // WithError message. Inner's WithError matters because the fused
-    // opcode collapses inner failures and only records the outer
-    // BetweenInclusive's failure at entry; we'd lose inner's
-    // attribution. The atMost-fits-in-int check is the same width
-    // limit PackBetweenBounds enforces on the non-fused path.
-    private bool CanFuseScan(BetweenInclusiveRule rule, Rule inner)
-    {
-        if (rule.ErrorMessage != null) return false;
-        if (inner.ErrorMessage != null) return false;
-        if (inner is OneOfRule || inner is NoneOfRule || inner is AnyTokenRule) return true;
-        return false;
-    }
-
-    // Detects BetweenInclusive(min, max, AllOf(L, R)) where L is a
-    // Literal/Grapheme, R is a OneOf, and both are effectively Delete
-    // (no leaves emitted per iteration). Lowers to ScanLiteralOneOfRune
-    // and writes the entry-state index to entryState. Returns false
-    // when the pattern doesn't match, leaving the caller to fall
-    // through to the generic loop. Constraints chosen so the fused
-    // opcode's straight-line body stays correct: no WithError on
-    // either side (the fused failure path records at entry only),
-    // no per-iteration leaves to emit, and no Preserve wrapper above
-    // the inner AllOf (we don't have a place to thread that through).
-    private bool TryLowerBetweenScanLiteralOneOfRune(
-        BetweenInclusiveRule rule,
-        Rule inner,
-        int onSuccess,
-        int onFailure,
-        out int entryState)
-    {
-        entryState = -1;
-        if (rule.ErrorMessage != null) return false;
-        if (inner is not AllOfRule allOfInner) return false;
-        if (allOfInner.Children.Count != 2) return false;
-        if (allOfInner.ErrorMessage != null) return false;
-
-        Rule left = allOfInner.Children[0];
-        Rule right = allOfInner.Children[1];
-        if (left.ErrorMessage != null || right.ErrorMessage != null) return false;
-        if (right is not OneOfRule rightOneOf) return false;
-
-        string leftExpected;
-        if (left is LiteralRule leftLiteral) leftExpected = leftLiteral.LoweringExpected;
-        else if (left is GraphemeRule leftGrapheme) leftExpected = leftGrapheme.LoweringExpected;
-        else return false;
-
-        // Children must be effectively Delete so the fused loop
-        // doesn't drop emit ops the recursive evaluator would have
-        // produced.
-        if (ResolveEffective(left.FlattenType) != FlattenType.Delete) return false;
-        if (ResolveEffective(rightOneOf.FlattenType) != FlattenType.Delete) return false;
-
-        // Outer wrapper if the BetweenInclusive itself is Preserve.
-        var effective = ResolveEffective(rule.FlattenType);
-        int compositeAfter = onSuccess;
-        int outerMetadataIndex = -1;
-        if (effective != FlattenType.Flatten)
-        {
-            outerMetadataIndex = AddSymbolMetadata(rule);
-            compositeAfter = AddState(LoweredOpCode.CloseComposite, outerMetadataIndex, onSuccess, onSuccess);
-        }
-
-        int leftLitIdx = InternLiteral(leftExpected);
-        int rightSetIdx = InternRuneSet(rightOneOf.LoweringSet);
-        int atMostClamped = rule.AtMost == int.MaxValue ? int.MaxValue : rule.AtMost;
-        int specIndex = ScanAndPairSpecs.Count;
-        ScanAndPairSpecs.Add(new ScanAndPairSpec(leftLitIdx, rightSetIdx, rule.AtLeast, atMostClamped, errorMetadataIndex: -1));
-
-        int scanState = AddState(LoweredOpCode.ScanLiteralOneOfRune, specIndex, compositeAfter, onFailure);
-        if (effective != FlattenType.Flatten)
-            scanState = AddState(LoweredOpCode.OpenComposite, outerMetadataIndex, scanState, onFailure);
-
-        entryState = scanState;
-        return true;
-    }
-
     // Detects ZeroOrMore(FirstOf(match..., AnyToken.Delete)). When the
     // shape matches, lowers to the generic Between loop with a
     // ScannerSkipAdvance opcode injected at the top of each iteration so
@@ -912,9 +787,9 @@ internal sealed class LoweringContext
 
         if (rule.AtLeast != 0 || rule.AtMost != int.MaxValue) return false;
         // PreserveAllSymbols changes which states the lowerer skips, so
-        // the cache split on (PreserveAllSymbols, InputUnit) keeps
-        // grammar-author behavior unchanged when debug parsing. The
-        // recursive ScannerSkip is also disabled under PreserveAllSymbols.
+        // the cache split on PreserveAllSymbols keeps grammar-author
+        // behavior unchanged when debug parsing. The recursive
+        // ScannerSkip is also disabled under PreserveAllSymbols.
         if (PreserveAllSymbols) return false;
 
         if (rule.Children.Count == 0) return false;
@@ -1035,118 +910,12 @@ internal sealed class LoweringContext
         }
     }
 
-    private int LowerBetweenScan(
-        BetweenInclusiveRule rule,
-        Rule inner,
-        RuneSet runeSet,
-        LoweredOpCode scanOpcode,
-        int onSuccess,
-        int onFailure)
-    {
-        var effective = ResolveEffective(rule.FlattenType);
-        int compositeAfter = onSuccess;
-        int outerMetadataIndex = -1;
-        if (effective != FlattenType.Flatten)
-        {
-            outerMetadataIndex = AddSymbolMetadata(rule);
-            compositeAfter = AddState(LoweredOpCode.CloseComposite, outerMetadataIndex, onSuccess, onSuccess);
-        }
-
-        // Inner-leaf metadata. The fused opcode emits one Leaf op per
-        // matched rune when inner's effective FlattenType isn't Delete.
-        var innerEffective = ResolveEffective(inner.FlattenType);
-        int leafMetadataIndex = -1;
-        if (innerEffective != FlattenType.Delete)
-            leafMetadataIndex = AddSymbolMetadata(inner);
-
-        // CanFuseScan rejects rules with WithError, so error-metadata
-        // is always the no-message sentinel; we still leave the slot
-        // wired in case a future variant wants to attach an outer
-        // error message at the Between level.
-        int errorMetadataIndex = -1;
-
-        int runeSetIndex = InternRuneSet(runeSet);
-        int atMostClamped = rule.AtMost == int.MaxValue ? int.MaxValue : rule.AtMost;
-        int scanSpecIndex = ScanSpecs.Count;
-        ScanSpecs.Add(new ScanSpec(runeSetIndex, rule.AtLeast, atMostClamped, leafMetadataIndex, errorMetadataIndex));
-
-        int scanState = AddState(scanOpcode, scanSpecIndex, compositeAfter, onFailure);
-
-        if (effective != FlattenType.Flatten)
-            return AddState(LoweredOpCode.OpenComposite, outerMetadataIndex, scanState, onFailure);
-        return scanState;
-    }
-
-    // BetweenInclusive(min, max, AnyTokenRule) under InputUnit.Rune.
-    // Same shape as LowerBetweenScan but no runeset to test — every
-    // rune matches AnyToken. Reuses ScanSpec for atLeast / atMost /
-    // leafMetadataIndex / errorMetadataIndex; the runtime opcode
-    // ignores the RuneSetIndex slot.
-    private int LowerBetweenScanAnyToken(BetweenInclusiveRule rule, AnyTokenRule inner, int onSuccess, int onFailure)
-    {
-        var effective = ResolveEffective(rule.FlattenType);
-        int compositeAfter = onSuccess;
-        int outerMetadataIndex = -1;
-        if (effective != FlattenType.Flatten)
-        {
-            outerMetadataIndex = AddSymbolMetadata(rule);
-            compositeAfter = AddState(LoweredOpCode.CloseComposite, outerMetadataIndex, onSuccess, onSuccess);
-        }
-
-        var innerEffective = ResolveEffective(inner.FlattenType);
-        int leafMetadataIndex = -1;
-        if (innerEffective != FlattenType.Delete)
-            leafMetadataIndex = AddSymbolMetadata(inner);
-
-        int atMostClamped = rule.AtMost == int.MaxValue ? int.MaxValue : rule.AtMost;
-        int scanSpecIndex = ScanSpecs.Count;
-        ScanSpecs.Add(new ScanSpec(/*runeSetIndex*/-1, rule.AtLeast, atMostClamped, leafMetadataIndex, /*errorMetadataIndex*/-1));
-
-        int scanState = AddState(LoweredOpCode.ScanAnyTokenRune, scanSpecIndex, compositeAfter, onFailure);
-
-        if (effective != FlattenType.Flatten)
-            return AddState(LoweredOpCode.OpenComposite, outerMetadataIndex, scanState, onFailure);
-        return scanState;
-    }
-
     private int LowerNot(NotRule rule, int onSuccess, int onFailure)
     {
-        // Fast path: under InputUnit.Rune, Not(OneOf) / Not(Literal) /
-        // Not(Grapheme) lowers to a single peek-and-reject opcode. No
-        // backtrack frame, no inner-rule dispatch. Constraints:
-        //   * effective FlattenType isn't Preserve (which needs a
-        //     wrapper Symbol; the fused opcode can't emit one)
-        //   * neither Not nor inner has a WithError message (the
-        //     fused opcode collapses inner's record-on-success path
-        //     into the rule's own record-on-failure)
-        Rule inner = rule.Children[0];
-        if (InputUnit == InputUnit.Rune
-            && rule.ErrorMessage == null
-            && inner.ErrorMessage == null
-            && ResolveEffective(rule.FlattenType) != FlattenType.Preserve)
-        {
-            if (inner is OneOfRule oneOfInner)
-            {
-                int setIdx = InternRuneSet(oneOfInner.LoweringSet);
-                return AddState(LoweredOpCode.PeekRejectOneOfRune,
-                    setIdx | (NoErrorMetadataSentinel << 16),
-                    onSuccess, onFailure);
-            }
-            if (inner is LiteralRule literalInner)
-            {
-                int litIdx = InternLiteral(literalInner.LoweringExpected);
-                return AddState(LoweredOpCode.PeekRejectLiteralRune,
-                    litIdx | (NoErrorMetadataSentinel << 16),
-                    onSuccess, onFailure);
-            }
-            if (inner is GraphemeRule graphemeInner)
-            {
-                int litIdx = InternLiteral(graphemeInner.LoweringExpected);
-                return AddState(LoweredOpCode.PeekRejectLiteralRune,
-                    litIdx | (NoErrorMetadataSentinel << 16),
-                    onSuccess, onFailure);
-            }
-        }
+        // The PeekReject*Rune fused-Not opcodes inlined rune decode and
+        // were Rune-mode only. With one (grapheme) lexer they would
+        // mis-handle multi-rune graphemes, so they're gone; the generic
+        // Not lowering below applies in every case.
 
         // Not's overall result is zero-width: lexer and emit cursor
         // restore to entry regardless of inner outcome. Result is
@@ -1248,29 +1017,12 @@ internal sealed class LoweringContext
 
     private int LowerScanUntil(ScanUntilRule rule, int onSuccess, int onFailure)
     {
-        // Rule-stopper, no escape: native scan with peeked stopper
-        // calls. Eligibility check: stopper rule has Advance.Always
-        // (the recursive scan only checks the stopper after seeing
-        // a rune that could possibly start it), and a non-Universe
-        // FirstConsumedRunes (otherwise every rune is "eligible" and
-        // we'd be calling the stopper subprogram on every rune,
-        // negating the win). Rune-only because the inline scan
-        // decodes runes directly.
-        if (rule.LoweringStopperRule != null
-            && !rule.LoweringHasEscape
-            && InputUnit == InputUnit.Rune
-            && rule.LoweringStopperRule.Advance == Advance.Always
-            && !rule.LoweringStopperRule.FirstConsumedRunes.Equals(RuneSet.Universe))
-        {
-            return LowerScanUntilRuleStopper(rule, onSuccess, onFailure);
-        }
-
-        // Other rule-stopper / rule-escape-start forms still bridge to
-        // the recursive evaluator. Multi-rune boundaries with
-        // Universe FirstConsumedRunes (no first-rune skip possible)
-        // would call the stopper rule on every body rune, which is
-        // basically what the recursive evaluator already does — no
-        // win from going native there.
+        // Rule-stopper / rule-escape-start forms bridge to the
+        // recursive evaluator. The Rune-mode native rule-stopper
+        // scan (LowerScanUntilRuleStopper) inlined rune decode and
+        // would split multi-rune graphemes under grapheme tokenization,
+        // so it's gone. The bridge handles every shape the rune-mode
+        // path used to handle.
         if (rule.LoweringStopperRule != null)
             return LowerViaBridge(rule, onSuccess, onFailure);
         if (rule.LoweringHasEscape && rule.LoweringEscapeStartRule != null)
@@ -1333,86 +1085,6 @@ internal sealed class LoweringContext
         // EmitScanUntilLeaf can read the start, and so outerFail can
         // restore on escape-end failure.
         return AddState(LoweredOpCode.PushBacktrack, 0, scanState, scanState);
-    }
-
-    // Native rule-stoppered ScanUntil scan, no escape. Lowered shape:
-    //
-    //   entry: PushBacktrack(failTarget=outerFail)
-    //   loopStart: ScanUntilStopperEligibleRune(specIdx)
-    //     OnSuccess (eligible rune found): -> peekStopperPush
-    //     OnFailure (EOF without stopper): -> exitLeaf
-    //   peekStopperPush: PushBacktrack(failTarget=stopperFailedRestore)
-    //   stopperCall: Call(stopperEntry, OnSuccess=stopperSucceededRestore, OnFailure=stopperFailedRestore)
-    //   stopperSucceededRestore: FailRestore -> exitLeaf
-    //   stopperFailedRestore: FailRestore -> advanceRune
-    //   advanceRune: AdvanceOneRune -> loopStart
-    //   exitLeaf: [EmitScanUntilLeaf if applicable] -> popEntry -> onSuccess
-    //   popEntry: PopBacktrack -> onSuccess
-    //   outerFail: FailRestore -> onFailure
-    //
-    // The outer entry frame saves the body's start position so
-    // EmitScanUntilLeaf can compute the leaf span. The inner peek
-    // frame around each stopper Call lets us roll the lexer back to
-    // before the call regardless of outcome (the recursive evaluator
-    // does this via a Transaction that never commits). When the
-    // stopper succeeds in peek mode, the outer AllOf's next rule
-    // consumes it; ScanUntil itself never advances past the stopper.
-    private int LowerScanUntilRuleStopper(ScanUntilRule rule, int onSuccess, int onFailure)
-    {
-        Rule stopper = rule.LoweringStopperRule!;
-        int stopperFirstRunesIdx = InternRuneSet(stopper.FirstConsumedRunes);
-        int stopperEntry = GetOrCreateSubprogram(stopper);
-
-        var effective = ResolveEffective(rule.FlattenType);
-        bool emitLeaf = effective != FlattenType.Delete;
-
-        int specIdx = RuleStopperSpecs.Count;
-        RuleStopperSpecs.Add(new RuleStopperSpec(stopperFirstRunesIdx));
-
-        // popEntry pops the outer entry frame. Outer fail uses
-        // FailRestore to propagate failure, but the rule-stopper scan
-        // never fails — the body is whatever was matched up to a
-        // stopper or EOF. outerFail is wired for completeness.
-        int popEntry = AddState(LoweredOpCode.PopBacktrack, 0, onSuccess, onSuccess);
-        int outerFail = AddState(LoweredOpCode.FailRestore, 0, onFailure, onFailure);
-
-        // exitLeaf: emit the leaf (if applicable) and pop the entry frame.
-        int exitLeaf;
-        if (emitLeaf)
-        {
-            int leafMetaIdx = AddSymbolMetadata(rule);
-            exitLeaf = AddState(LoweredOpCode.EmitScanUntilLeaf, leafMetaIdx, popEntry, popEntry);
-        }
-        else
-        {
-            exitLeaf = popEntry;
-        }
-
-        // After the stopper succeeded in peek mode, roll the lexer
-        // back to the position before the Call (saved in the inner
-        // peek frame) and exit the scan.
-        int stopperSucceededRestore = AddState(LoweredOpCode.FailRestore, 0, exitLeaf, exitLeaf);
-
-        // After the stopper failed, roll the lexer back to the
-        // position before the Call and advance one rune (consuming
-        // the body rune that didn't actually start a stopper match).
-        int advanceRune = ReserveState();
-        int stopperFailedRestore = AddState(LoweredOpCode.FailRestore, 0, advanceRune, advanceRune);
-
-        int stopperCall = AddState(LoweredOpCode.Call, stopperEntry, stopperSucceededRestore, stopperFailedRestore);
-        int peekStopperPush = AddState(LoweredOpCode.PushBacktrack, 0, stopperCall, stopperCall);
-
-        // ScanUntilStopperEligibleRune: walks runes until either EOF
-        // (OnFailure -> exitLeaf, body extends to EOF) or a rune in
-        // the stopper's first-rune set (OnSuccess -> peekStopperPush
-        // to attempt the stopper).
-        int loopStart = AddState(LoweredOpCode.ScanUntilStopperEligibleRune, specIdx, peekStopperPush, exitLeaf);
-
-        FillState(advanceRune, LoweredOpCode.AdvanceOneRune, 0, loopStart, loopStart);
-
-        // Outer entry push saves the body's start position so
-        // EmitScanUntilLeaf can compute the leaf span.
-        return AddState(LoweredOpCode.PushBacktrack, 0, loopStart, outerFail);
     }
 
     // Catch-all lowering: runs the rule via the recursive evaluator's

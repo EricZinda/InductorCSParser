@@ -35,65 +35,10 @@ public class Program
             return RuleCounts(args);
         }
 
-        if (args.Contains("--lexer-compare"))
-        {
-            return LexerCompare();
-        }
-
         var summaries = BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
         foreach (var summary in summaries)
         {
             PerformanceChart.TryUpdate(summary);
-        }
-        return 0;
-    }
-
-    // Compare InputUnit.Rune vs InputUnit.Grapheme for InductorJsonParser
-    // across the bench's four canonical input shapes. Hand-timed with a
-    // Stopwatch after a warmup round, so it's not BenchmarkDotNet-quality
-    // but it gives a same-order-of-magnitude answer in seconds instead of
-    // the 10+ minutes a full BDN run takes for four shapes.
-    private static int LexerCompare()
-    {
-        var shapes = new (string name, string input)[]
-        {
-            ("Big",  JsonBench.BuildJson(4, 4, 3).ToString()!),
-            ("Long", JsonBench.BuildJson(256, 1, 1).ToString()!),
-            ("Deep", JsonBench.BuildJson(1, 256, 1).ToString()!),
-            ("Wide", JsonBench.BuildJson(1, 1, 256).ToString()!),
-        };
-
-        const int warmup = 50;
-        const int iterations = 500;
-
-        Console.WriteLine($"{"Shape",-6} {"Len",8} {"Rune ms/op",13} {"Grapheme ms/op",16} {"Typed ms/op",14} {"Graph/Rune",11} {"Typed/Graph",12}");
-        foreach (var (name, input) in shapes)
-        {
-            for (int i = 0; i < warmup; i++)
-            {
-                InductorJsonParser.Parse(input);
-                InductorJsonParser.ParseGrapheme(input);
-                InductorJsonParser.ParseTyped(input);
-            }
-
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            for (int i = 0; i < iterations; i++) InductorJsonParser.Parse(input);
-            sw.Stop();
-            double runeMsPerOp = sw.Elapsed.TotalMilliseconds / iterations;
-
-            sw.Restart();
-            for (int i = 0; i < iterations; i++) InductorJsonParser.ParseGrapheme(input);
-            sw.Stop();
-            double graphemeMsPerOp = sw.Elapsed.TotalMilliseconds / iterations;
-
-            sw.Restart();
-            for (int i = 0; i < iterations; i++) InductorJsonParser.ParseTyped(input);
-            sw.Stop();
-            double typedMsPerOp = sw.Elapsed.TotalMilliseconds / iterations;
-
-            double graphOverRune = graphemeMsPerOp / runeMsPerOp;
-            double typedOverGraph = typedMsPerOp / graphemeMsPerOp;
-            Console.WriteLine($"{name,-6} {input.Length,8} {runeMsPerOp,13:F3} {graphemeMsPerOp,16:F3} {typedMsPerOp,14:F3} {graphOverRune,10:F2}x {typedOverGraph,11:F2}x");
         }
         return 0;
     }

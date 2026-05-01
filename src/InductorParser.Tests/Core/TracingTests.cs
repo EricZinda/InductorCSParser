@@ -220,7 +220,7 @@ public class TracingTests
         // this target framework? LangVersion regression?) and every
         // trace call is allocating per parse even when the sink
         // is null.
-        var lexer = new GraphemeLexer("x"); // no TraceSink = tracing off
+        var lexer = new Lexer("x"); // no TraceSink = tracing off
         int sideEffectCount = 0;
 
         lexer.Trace(TraceLevel.Diagnostic, "test", TraceOutcome.Info,
@@ -241,7 +241,7 @@ public class TracingTests
         // never called even when tracing is on. Two would mean the
         // compiler generated a spurious extra evaluation.
         var sink = NewSink();
-        var lexer = new GraphemeLexer("x", sink, TraceLevel.Diagnostic);
+        var lexer = new Lexer("x", sink, TraceLevel.Diagnostic);
         int sideEffectCount = 0;
 
         lexer.Trace(TraceLevel.Diagnostic, "test", TraceOutcome.Info,
@@ -261,7 +261,7 @@ public class TracingTests
         // or the handler attribute on the Rule helpers stops matching,
         // the side effect inside the interpolation hole will fire and
         // this test catches it.
-        var lexer = new GraphemeLexer("x");  // no TraceSink = tracing off
+        var lexer = new Lexer("x");  // no TraceSink = tracing off
         var rule = new TraceProbeRule();
         int sideEffectCount = 0;
 

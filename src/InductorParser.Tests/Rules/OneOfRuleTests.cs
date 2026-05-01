@@ -141,10 +141,9 @@ public class OneOfRuleTests
     [Test]
     public void OneOf_matches_a_multi_rune_grapheme_under_grapheme_lexer()
     {
-        // OneOf(set) where set has multi-rune entries: under
-        // GraphemeLexer (the default) the lexer hands back the
-        // whole grapheme as one token with RuneValue == -1, and
-        // OneOf uses the multi-rune-array path to match it.
+        // OneOf(set) where set has multi-rune entries: the lexer
+        // hands back the whole grapheme as one token with RuneValue
+        // == -1, and OneOf uses the multi-rune-array path to match it.
         // NormalizeInput stays default; the test inputs aren't
         // affected by NFC.
         var rule = OneOf(RuneSet.Runes(USFlagGrapheme + WomanShruggingGrapheme));
@@ -172,19 +171,4 @@ public class OneOfRuleTests
         Assert.That(rule.Parse("1").Success, Is.False);
     }
 
-    [Test]
-    public void OneOf_with_multi_rune_set_under_rune_lexer_never_matches_the_multi_rune_entry()
-    {
-        // Under RuneLexer each token is exactly one rune. The
-        // multi-rune entries in the set are unreachable: the lexer
-        // never hands back a multi-rune token, so the OneOf rule's
-        // multi-rune-array probe never fires. Pin this so a future
-        // change doesn't accidentally let multi-rune matching leak
-        // into the rune lexer.
-        var rule = OneOf(RuneSet.Runes(USFlagGrapheme));
-        var result = rule.Parse(USFlagGrapheme,
-            new ParseOptions { InputUnit = InputUnit.Rune });
-
-        Assert.That(result.Success, Is.False, "RuneLexer breaks the flag into two tokens; neither is the whole grapheme");
-    }
 }

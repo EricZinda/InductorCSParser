@@ -87,25 +87,14 @@ public static class InductorJsonParser
     // the bench via MaxDepth=1024 on its Deep-specific settings object.
     private static readonly ParseOptions _options = new()
     {
-        InputUnit = InputUnit.Rune,
         MaxDepth = 0,
     };
 
     public static ParseResult Parse(string input) => JsonRule.Parse(input, _options);
 
-    // Grapheme-lexer variant, exposed as its own JsonBench benchmark
-    // (XxxJson_InductorParserGrapheme) alongside the Rune-lexer standard
-    // path (XxxJson_InductorParserRune). Running both makes the cost of
-    // UAX #29 grapheme-cluster assembly visible in the headline numbers,
-    // which matters because every competitor in this bench works on
-    // char (effectively rune-equivalent) and doesn't pay that cost.
-    private static readonly ParseOptions _graphemeOptions = new()
-    {
-        InputUnit = InputUnit.Grapheme,
-        MaxDepth = 0,
-    };
-
-    public static ParseResult ParseGrapheme(string input) => JsonRule.Parse(input, _graphemeOptions);
+    // Grapheme-lexer is the only lexer now; ParseGrapheme is kept as
+    // an alias of Parse so existing benchmark rows continue to call it.
+    public static ParseResult ParseGrapheme(string input) => JsonRule.Parse(input, _options);
 
     // Round-trip variant used by the spot-check. Parse-time Delete filtering
     // would drop the JSON delimiters (Grapheme('{'), '}', ',', ':', '"') from
@@ -116,21 +105,20 @@ public static class InductorJsonParser
     // it wouldn't be used by a real caller either, just here for verification.
     private static readonly ParseOptions _roundTripOptions = new()
     {
-        InputUnit = InputUnit.Rune,
         MaxDepth = 0,
         PreserveAllSymbols = true,
     };
 
     public static ParseResult ParseForRoundTrip(string input) => JsonRule.Parse(input, _roundTripOptions);
 
-    // Typed variant: parses with the Grapheme lexer and then walks the
-    // Symbol tree to build a concrete IJson tree (JsonString / JsonArray /
-    // JsonObject). This is the row to compare directly against the
-    // IJson-building competitors (Pidgin, Sprache, Superpower, Pegasus,
-    // Parlot) because it produces the same output shape they do.
+    // Typed variant: parses and walks the Symbol tree to build a
+    // concrete IJson tree (JsonString / JsonArray / JsonObject). This
+    // is the row to compare directly against the IJson-building
+    // competitors (Pidgin, Sprache, Superpower, Pegasus, Parlot)
+    // because it produces the same output shape they do.
     public static IJson ParseTyped(string input)
     {
-        var result = JsonRule.Parse(input, _graphemeOptions);
+        var result = JsonRule.Parse(input, _options);
         if (!result.Success)
             throw new FormatException(result.ErrorMessage);
         return BuildTyped(result.Tree!);

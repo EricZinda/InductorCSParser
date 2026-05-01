@@ -15,33 +15,24 @@ namespace InductorParser.StateMachine;
 //
 // Iteration 1 scope: Literal, Grapheme, OneOf, Eof, AllOf, FirstOf,
 // BetweenInclusive (covers Optional / OneOrMore / ZeroOrMore /
-// AtLeast / AtMost / Exactly), Not, Peek, LateBound. Both lexers.
-// Error position. FlattenType handling. PreserveAllSymbols. No
-// budgets, no normalization, no trace.
+// AtLeast / AtMost / Exactly), Not, Peek, LateBound. Error position.
+// FlattenType handling. PreserveAllSymbols. No budgets, no
+// normalization, no trace.
 public static class StateMachineParser
 {
-    // Four caches, one per (PreserveAllSymbols, InputUnit) combo.
-    // Fast / debug splits because PreserveAllSymbols changes which
-    // output states the lowerer skips. Rune / grapheme splits
-    // because the rune-only fused-scan opcodes (ScanOneOfRune /
-    // ScanNoneOfRune) inline rune decode, which would split multi-
-    // rune graphemes under InputUnit.Grapheme. Most users only ever
-    // hit one or two of the four caches.
-    private static readonly ConditionalWeakTable<Rule, CompiledProgram> _cacheFastRune = new();
-    private static readonly ConditionalWeakTable<Rule, CompiledProgram> _cacheFastGrapheme = new();
-    private static readonly ConditionalWeakTable<Rule, CompiledProgram> _cacheDebugRune = new();
-    private static readonly ConditionalWeakTable<Rule, CompiledProgram> _cacheDebugGrapheme = new();
+    // Two caches, one per PreserveAllSymbols. Fast / debug splits
+    // because PreserveAllSymbols changes which output states the
+    // lowerer skips. Most users only ever hit one of the two caches.
+    private static readonly ConditionalWeakTable<Rule, CompiledProgram> _cacheFast = new();
+    private static readonly ConditionalWeakTable<Rule, CompiledProgram> _cacheDebug = new();
 
     // Per-thread Lexer pool. Each Parse call would otherwise heap-
-    // allocate a fresh RuneLexer or GraphemeLexer; pooling reuses one
-    // instance per thread per lexer type. Combined with the existing
-    // backtrack/call/output buffer pools, a steady-state Parse on
-    // a pooled grammar allocates nothing for the parse infrastructure
-    // (only the result Symbols themselves).
+    // allocate a fresh Lexer; pooling reuses one instance per thread.
+    // Combined with the existing backtrack/call/output buffer pools, a
+    // steady-state Parse on a pooled grammar allocates nothing for the
+    // parse infrastructure (only the result Symbols themselves).
     [ThreadStatic]
-    private static RuneLexer? _pooledRuneLexer;
-    [ThreadStatic]
-    private static GraphemeLexer? _pooledGraphemeLexer;
+    private static Lexer? _pooledLexer;
 
     public static ParseResult Parse(Rule rootRule, string input) =>
         Parse(rootRule, input, new ParseOptions());
@@ -64,7 +55,7 @@ public static class StateMachineParser
 
     public static bool TryMatch(Rule rootRule, string input, ParseOptions options)
     {
-        CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols, options.InputUnit);
+        CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
         string parseInput = NormalizeIfRequested(input, options.NormalizeInput);
         Lexer lexer = RentLexer(parseInput, options);
         lexer.ConfigureBudgets(options);
@@ -93,7 +84,7 @@ public static class StateMachineParser
 
     public static ParseResult Parse(Rule rootRule, string input, ParseOptions options)
     {
-        CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols, options.InputUnit);
+        CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
 
         // Normalize before the lexer sees the input so grammars written
         // against one composition form also match the other. Mirrors the
@@ -263,7 +254,7 @@ public static class StateMachineParser
         OutputReducer<T> reducer,
         T failureValue)
     {
-        CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols, options.InputUnit);
+        CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
         string parseInput = NormalizeIfRequested(input, options.NormalizeInput);
         Lexer lexer = RentLexer(parseInput, options);
         lexer.ConfigureBudgets(options);
@@ -301,7 +292,7 @@ public static class StateMachineParser
         SymbolId matchId,
         SymbolId[] captureIds)
     {
-        CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols, options.InputUnit);
+        CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
         string parseInput = NormalizeIfRequested(input, options.NormalizeInput);
         Lexer lexer = RentLexer(parseInput, options);
         lexer.ConfigureBudgets(options);
@@ -563,49 +554,26 @@ public static class StateMachineParser
     // outer parse's state.
     private static Lexer RentLexer(string input, ParseOptions options)
     {
-        if (options.InputUnit == InputUnit.Rune)
+        var pooled = _pooledLexer;
+        if (pooled != null)
         {
-            var pooled = _pooledRuneLexer;
-            if (pooled != null)
-            {
-                _pooledRuneLexer = null;
-                pooled.ResetForReuse(input, options.TraceSink, options.TraceLevel);
-                return pooled;
-            }
-            return new RuneLexer(input, options.TraceSink, options.TraceLevel);
+            _pooledLexer = null;
+            pooled.ResetForReuse(input, options.TraceSink, options.TraceLevel);
+            return pooled;
         }
-        else
-        {
-            var pooled = _pooledGraphemeLexer;
-            if (pooled != null)
-            {
-                _pooledGraphemeLexer = null;
-                pooled.ResetForReuse(input, options.TraceSink, options.TraceLevel);
-                return pooled;
-            }
-            return new GraphemeLexer(input, options.TraceSink, options.TraceLevel);
-        }
+        return new Lexer(input, options.TraceSink, options.TraceLevel);
     }
 
     private static void ReturnLexerToPool(Lexer lexer)
     {
-        if (lexer is RuneLexer rune)
-            _pooledRuneLexer = rune;
-        else if (lexer is GraphemeLexer grapheme)
-            _pooledGraphemeLexer = grapheme;
+        _pooledLexer = lexer;
     }
 
-    private static CompiledProgram GetOrLower(Rule rootRule, bool preserveAllSymbols, InputUnit inputUnit)
+    private static CompiledProgram GetOrLower(Rule rootRule, bool preserveAllSymbols)
     {
-        var cache = (preserveAllSymbols, inputUnit) switch
-        {
-            (false, InputUnit.Rune) => _cacheFastRune,
-            (false, _) => _cacheFastGrapheme,
-            (true, InputUnit.Rune) => _cacheDebugRune,
-            (true, _) => _cacheDebugGrapheme,
-        };
+        var cache = preserveAllSymbols ? _cacheDebug : _cacheFast;
         if (cache.TryGetValue(rootRule, out var existing)) return existing;
-        var lowered = Lowerer.Lower(rootRule, preserveAllSymbols, inputUnit);
+        var lowered = Lowerer.Lower(rootRule, preserveAllSymbols);
         cache.AddOrUpdate(rootRule, lowered);
         return lowered;
     }

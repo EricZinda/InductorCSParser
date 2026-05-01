@@ -59,10 +59,9 @@ public class ArithmeticEvaluatorTests
     public void Tolerates_whitespace_everywhere()
     {
         Assert.That(ArithmeticEvaluator.Evaluate(" 1 + 2 * ( 3 - 4 ) "), Is.EqualTo(-1));
-        // Note: \r\n is a single grapheme under the default GraphemeLexer,
+        // Note: \r\n is a single grapheme under grapheme tokenization,
         // so OneOf whitespace won't accept a CRLF as one token. Stick to
-        // \n or \t in inputs, or switch to InputUnit.Rune if a grammar
-        // needs CRLF handling.
+        // \n or \t in inputs.
         Assert.That(ArithmeticEvaluator.Evaluate("\t1\n+\n2 "), Is.EqualTo(3));
     }
 

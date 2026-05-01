@@ -30,10 +30,9 @@ public class LiteralRuleTests
     [Test]
     public void Literal_matches_multi_rune_grapheme_under_grapheme_lexer()
     {
-        // Under GraphemeLexer the e+combining-acute is one token whose
-        // Chars span covers both chars. The lockstep compares the full
-        // token span against the two-char expected portion in a single
-        // iteration.
+        // The e+combining-acute is one token whose Chars span covers
+        // both chars. The lockstep compares the full token span
+        // against the two-char expected portion in a single iteration.
         var rule = Literal(LatinEAcuteGrapheme);
         var result = rule.Parse(LatinEAcuteGrapheme,
             new ParseOptions { NormalizeInput = null });
@@ -41,23 +40,12 @@ public class LiteralRuleTests
     }
 
     [Test]
-    public void Literal_matches_multi_rune_grapheme_under_rune_lexer()
-    {
-        // Under RuneLexer the same input tokenizes as two rune tokens.
-        // Same expected string, same lockstep loop, two iterations.
-        var rule = Literal(LatinEAcuteGrapheme);
-        var result = rule.Parse(LatinEAcuteGrapheme,
-            new ParseOptions { InputUnit = InputUnit.Rune, NormalizeInput = null });
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-    }
-
-    [Test]
     public void Literal_matches_word_then_grapheme_then_word()
     {
         // Mixed width: a two-char BMP prefix, a supplementary-plane rune
-        // (2 UTF-16 chars), and a BMP suffix. Under GraphemeLexer the
-        // guitar emoji is one token of length 2. The lockstep handles
-        // variable token widths naturally.
+        // (2 UTF-16 chars), and a BMP suffix. The guitar emoji is one
+        // token of length 2. The lockstep handles variable token widths
+        // naturally.
         var literal = "hi" + GuitarGrapheme + "!";
         var rule = Literal(literal);
         var result = rule.Parse(literal);

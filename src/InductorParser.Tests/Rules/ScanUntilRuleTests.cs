@@ -358,21 +358,6 @@ public class ScanUntilRuleTests
     }
 
     [Test]
-    public void ScanUntil_handles_supplementary_plane_rune()
-    {
-        // 'a' + '🎸' (U+1F3B8, a surrogate pair in UTF-16) + 'b'.
-        // The rune-decoding path in the scan loop needs to treat
-        // the pair as one rune and include both chars in the
-        // matched range.
-        var rule = ScanUntil(RuneSet.Runes("|"));
-        string input = "a\U0001F3B8b";
-        var result = rule.Parse(input, new ParseOptions { InputUnit = InputUnit.Rune });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo(input));
-    }
-
-    [Test]
     public void Sealed_ScanUntil_rejects_Flatten()
     {
         var rule = ScanUntil(RuneSet.Runes("|"));

@@ -523,21 +523,11 @@ public class StateMachineParserTests
         }
     }
 
-    // ---- Both lexers ----
-
     [Test]
-    public void Works_with_RuneLexer()
+    public void Works_on_default_lexer()
     {
         var rule = AllOf(Literal("hello"), Eof());
-        var stateMachine = StateMachineParser.Parse(rule, "hello", new ParseOptions { InputUnit = InputUnit.Rune });
-        Assert.That(stateMachine.Success, Is.True);
-    }
-
-    [Test]
-    public void Works_with_GraphemeLexer()
-    {
-        var rule = AllOf(Literal("hello"), Eof());
-        var stateMachine = StateMachineParser.Parse(rule, "hello", new ParseOptions { InputUnit = InputUnit.Grapheme });
+        var stateMachine = StateMachineParser.Parse(rule, "hello", new ParseOptions());
         Assert.That(stateMachine.Success, Is.True);
     }
 

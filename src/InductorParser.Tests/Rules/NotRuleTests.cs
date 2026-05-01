@@ -114,18 +114,6 @@ public class NotRuleTests
     }
 
     [Test]
-    public void Not_works_under_rune_lexer()
-    {
-        // Same negative-lookahead semantics under RuneLexer.
-        var rule = AllOf(Not(Grapheme('a')), AnyToken());
-        var result = rule.Parse("b",
-            new ParseOptions { InputUnit = InputUnit.Rune, PreserveAllSymbols = true });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("b"));
-    }
-
-    [Test]
     [RecursiveEngineOnly]
     public void Not_trace_success_produces_expected_output()
     {

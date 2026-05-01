@@ -129,31 +129,30 @@ public class ErrorMessageTemplateTests
     public void All_position_placeholders_substitute_values_matching_ParseResult()
     {
         // Input lays out a clean test of every position unit in one shot:
-        //   𝐀  (U+1D400, supplementary plane, 2 UTF-16 chars / 1 rune / 1 grapheme)
-        //   \n (newline, 1 char / 1 rune / 1 grapheme)
-        //   b  (1 char / 1 rune / 1 grapheme)
+        //   bold-A (U+1D400, supplementary plane, 2 UTF-16 chars / 1 grapheme)
+        //   \n (newline, 1 char / 1 grapheme)
+        //   b  (1 char / 1 grapheme)
         //   x  (the failing character)
-        // The grammar matches 𝐀 then \n then b, then asks for 'y' and
-        // gets 'x'. Failure point: char 4, rune 3, grapheme 3, line 1
+        // The grammar matches the bold-A then \n then b, then asks for
+        // 'y' and gets 'x'. Failure point: char 4, grapheme 3, line 1
         // column 1 (LSP zero-based).
         var rule = AllOf(
-            Grapheme("𝐀"),
+            Grapheme(0x1D400),
             Grapheme('\n'),
             Grapheme('b'),
             Grapheme('y'));
         var options = new ParseOptions
         {
             PositionalErrorTemplate =
-                "char={charIndex} rune={runeIndex} grapheme={graphemeIndex} line={line} col={column}",
+                "char={charIndex} grapheme={graphemeIndex} line={line} col={column}",
         };
-        var result = rule.Parse("𝐀\nbx", options);
+        var result = rule.Parse(char.ConvertFromUtf32(0x1D400) + "\nbx", options);
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("char=4 rune=3 grapheme=3 line=1 col=1"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("char=4 grapheme=3 line=1 col=1"));
         // Sanity check: the placeholder values match the ParseResult
         // properties they're supposed to mirror.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(4));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(3));
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
         Assert.That(result.ErrorColumn, Is.EqualTo(1));

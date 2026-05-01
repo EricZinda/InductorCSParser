@@ -124,16 +124,14 @@ public class SymbolPositionTests
         var symbol = result.Tree!.Find(target);
         var range = symbol!.SourceRange!.Value;
 
-        // Start: family emoji = 8 chars / 5 runes / 1 grapheme.
+        // Start: family emoji = 8 chars / 1 grapheme.
         Assert.That(range.Start.CharIndex, Is.EqualTo(8));
-        Assert.That(range.Start.RuneIndex, Is.EqualTo(5));
         Assert.That(range.Start.GraphemeIndex, Is.EqualTo(1));
         Assert.That(range.Start.Line, Is.EqualTo(0));
         Assert.That(range.Start.Column, Is.EqualTo(8));
 
-        // End: family emoji + "ab" = 10 chars / 7 runes / 3 graphemes.
+        // End: family emoji + "ab" = 10 chars / 3 graphemes.
         Assert.That(range.End.CharIndex, Is.EqualTo(10));
-        Assert.That(range.End.RuneIndex, Is.EqualTo(7));
         Assert.That(range.End.GraphemeIndex, Is.EqualTo(3));
     }
 
@@ -159,7 +157,6 @@ public class SymbolPositionTests
         var position = result.ErrorPosition;
         Assert.That(position, Is.Not.Null);
         Assert.That(position!.Value.CharIndex, Is.EqualTo(1));
-        Assert.That(position.Value.RuneIndex, Is.EqualTo(1));
         Assert.That(position.Value.GraphemeIndex, Is.EqualTo(1));
         Assert.That(position.Value.Line, Is.EqualTo(0));
         Assert.That(position.Value.Column, Is.EqualTo(1));
@@ -386,23 +383,21 @@ public class SymbolPositionTests
         var range = result.Tree!.SourceRange!.Value;
         Assert.That(range.Start.CharIndex, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(4));
-        Assert.That(range.End.RuneIndex, Is.EqualTo(4));
         Assert.That(range.End.GraphemeIndex, Is.EqualTo(3));
     }
 
     [Test]
-    public void Range_for_two_supplementary_emojis_diverges_char_from_rune()
+    public void Range_for_two_supplementary_emojis_diverges_char_from_grapheme()
     {
-        // Two waving-hand emojis (each 2 chars / 1 rune / 1 grapheme).
-        // End should be at char 4, rune 2, grapheme 2. Catches a bug
-        // where the End walks treat surrogate pairs as two runes.
+        // Two waving-hand emojis (each 2 chars / 1 grapheme). End
+        // should be at char 4, grapheme 2. Catches a bug where the
+        // End walks treat surrogate pairs as two graphemes.
         const string Input = WavingHandGrapheme + WavingHandGrapheme;
         var rule = Literal(Input).Preserve();
         var result = rule.Parse(Input);
 
         var range = result.Tree!.SourceRange!.Value;
         Assert.That(range.End.CharIndex, Is.EqualTo(4));
-        Assert.That(range.End.RuneIndex, Is.EqualTo(2));
         Assert.That(range.End.GraphemeIndex, Is.EqualTo(2));
     }
 
@@ -432,15 +427,14 @@ public class SymbolPositionTests
     public void Range_End_at_input_end_equals_input_length_in_all_units()
     {
         // The composite ends exactly at input.Length. CharIndex /
-        // RuneIndex / GraphemeIndex should all clamp / report the same
-        // value, and Column should be the full chars-on-this-line count
-        // (no off-by-one at the boundary).
+        // GraphemeIndex should both clamp / report the same value,
+        // and Column should be the full chars-on-this-line count (no
+        // off-by-one at the boundary).
         var rule = AllOf(Literal("xx").Preserve(), Literal("yy").Preserve()).As("composite").Preserve();
         var result = rule.Parse("xxyy");
 
         var range = result.Tree!.SourceRange!.Value;
         Assert.That(range.End.CharIndex, Is.EqualTo(4));
-        Assert.That(range.End.RuneIndex, Is.EqualTo(4));
         Assert.That(range.End.GraphemeIndex, Is.EqualTo(4));
         Assert.That(range.End.Line, Is.EqualTo(0));
         Assert.That(range.End.Column, Is.EqualTo(4));

@@ -504,8 +504,7 @@ public abstract class Rule
     // Parse: the main entry point for running a grammar
     //
     // Run the grammar against an input string. Auto-compiles on first call.
-    // Default ParseOptions uses the GraphemeLexer. Pass options explicitly
-    // to switch to the RuneLexer or change other parse-time settings.
+    // Pass options explicitly to change parse-time settings.
     public ParseResult Parse(string input) => Parse(input, new ParseOptions());
 
     // Dispatcher. Routes to the recursive evaluator by default. An
@@ -550,9 +549,7 @@ public abstract class Rule
             ? input.Normalize(options.NormalizeInput.Value)
             : input;
 
-        Lexer lexer = options.InputUnit == InputUnit.Rune
-            ? (Lexer)new RuneLexer(parseInput, options.TraceSink, options.TraceLevel)
-            : (Lexer)new GraphemeLexer(parseInput, options.TraceSink, options.TraceLevel);
+        Lexer lexer = new Lexer(parseInput, options.TraceSink, options.TraceLevel);
         lexer.ConfigureBudgets(options);
         Symbol? result;
         // Pre-allocate a root list so a root with FlattenType.Flatten
@@ -671,13 +668,13 @@ public abstract class Rule
             ("character", () => parseInput[posInParseInput].ToString()));
     }
 
-    // The five position placeholders shared by every default template.
+    // The four position placeholders shared by every default template.
     // {charIndex} is the failure position in chars (UTF-16 code units),
-    // matching ParseResult.ErrorCharIndex. {runeIndex} and {graphemeIndex}
-    // mirror ErrorRuneIndex and ErrorGraphemeIndex. {line} and {column} are
-    // zero-based, matching ErrorLine and ErrorColumn (LSP convention).
+    // matching ParseResult.ErrorCharIndex. {graphemeIndex} mirrors
+    // ErrorGraphemeIndex. {line} and {column} are zero-based, matching
+    // ErrorLine and ErrorColumn (LSP convention).
     //
-    // The Func<string> wrappers are deliberate: each rune / grapheme /
+    // The Func<string> wrappers are deliberate: each grapheme /
     // line-column conversion walks the input once, so we only want to pay
     // for the ones whose placeholder actually appears in the template the
     // caller chose. The default templates only use {charIndex}, so by
@@ -687,7 +684,6 @@ public abstract class Rule
         return new (string, Func<string>)[]
         {
             ("charIndex", () => charIndex.ToString()),
-            ("runeIndex", () => SourcePositionConverter.ToRuneIndex(input, charIndex).ToString()),
             ("graphemeIndex", () => SourcePositionConverter.ToGraphemeIndex(input, charIndex).ToString()),
             ("line", () =>
             {

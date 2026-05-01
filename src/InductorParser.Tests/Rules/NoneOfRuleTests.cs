@@ -47,12 +47,12 @@ public class NoneOfRuleTests
     }
 
     [Test]
-    public void NoneOf_matches_multi_rune_grapheme_under_grapheme_lexer()
+    public void NoneOf_matches_multi_rune_grapheme()
     {
-        // Under GraphemeLexer a multi-rune grapheme like LatinEAcuteGrapheme
-        // arrives as a single token whose RuneValue is -1. The "not a single
-        // rune in the set" predicate is trivially true for it: the token
-        // isn't any single rune at all. This is the property that lets
+        // A multi-rune grapheme like LatinEAcuteGrapheme arrives as a
+        // single token whose RuneValue is -1. The "not a single rune in
+        // the set" predicate is trivially true for it: the token isn't
+        // any single rune at all. This is the property that lets
         // ZeroOrMore(NoneOf(...)) sweep up arbitrary Unicode text.
         // NormalizeInput = null so the decomposed "e\u0301" arrives at the
         // lexer verbatim. The default NFC would compose it to "\u00E9" and
@@ -66,36 +66,22 @@ public class NoneOfRuleTests
     }
 
     [Test]
-    public void NoneOf_under_rune_lexer_matches_a_single_rune_outside_the_set()
-    {
-        // Under RuneLexer each token is exactly one rune. The asymmetry
-        // with GraphemeLexer doesn't apply here. A letter 'x' is one rune
-        // outside RuneSet.Digits, so the rule succeeds.
-        var rule = NoneOf(RuneSet.Digits);
-        var result = rule.Parse("x",
-            new ParseOptions { InputUnit = InputUnit.Rune });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("x"));
-    }
-
-    [Test]
     public void NoneOf_sweeps_passthrough_text_up_to_a_delimiter()
     {
         // The pass-through-text idiom: ZeroOrMore(NoneOf(stopSet)) matches
         // everything that isn't in the stop set, then the surrounding rule
         // handles the stop character. Here the stop is a single '\n'.
         //
-        // WARNING: this idiom is LF-only under the default GraphemeLexer.
+        // WARNING: this idiom is LF-only under grapheme tokenization.
         // A CRLF grapheme passes NoneOf unconditionally (it isn't a
         // single rune, so it can't be in any single-rune set), which
         // means the sweep silently consumes the CRLF and the trailing
         // Grapheme('\n') terminator then fails. For real line-based
-        // grammars under GraphemeLexer, don't use NoneOf as the line
-        // sweep at all. Use Not(EndOfLine()) + AnyToken() for the
-        // sweep and EndOfLine() for the terminator, which together
-        // handle CRLF, LF, CR, NEL, LS, and PS as one terminator each.
-        // See docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer".
+        // grammars, don't use NoneOf as the line sweep at all. Use
+        // Not(EndOfLine()) + AnyToken() for the sweep and EndOfLine()
+        // for the terminator, which together handle CRLF, LF, CR, NEL,
+        // LS, and PS as one terminator each.
+        // See docs/UnicodeGotchas.md § "CRLF Under Grapheme Tokenization".
         var rule = AllOf(
             ZeroOrMore(NoneOf(RuneSet.Single('\n'))),
             Grapheme('\n'));
@@ -168,10 +154,9 @@ public class NoneOfRuleTests
     [Test]
     public void NoneOf_with_multi_rune_set_rejects_the_listed_grapheme()
     {
-        // A multi-rune set as the exclude list. Under GraphemeLexer
-        // the flag arrives as one token and NoneOf finds it in the
-        // multi-rune array, so it fails. Other multi-rune graphemes
-        // pass.
+        // A multi-rune set as the exclude list. The flag arrives as
+        // one token and NoneOf finds it in the multi-rune array, so
+        // it fails. Other multi-rune graphemes pass.
         var rule = NoneOf(RuneSet.Runes(USFlagGrapheme));
 
         Assert.That(rule.Parse(USFlagGrapheme).Success, Is.False);

@@ -6,10 +6,10 @@ using static InductorParser.Tests.UnicodeExamples;
 namespace InductorParser.Tests;
 
 // Tests for the derived error-position properties on ParseResult:
-// ErrorLine, ErrorColumn, ErrorRuneIndex, ErrorGraphemeIndex. The
-// underlying ErrorCharIndex is covered by the per-rule test fixtures.
-// This file exercises the char-index -> (line, column, rune, grapheme)
-// conversions specifically.
+// ErrorLine, ErrorColumn, ErrorGraphemeIndex. The underlying
+// ErrorCharIndex is covered by the per-rule test fixtures. This file
+// exercises the char-index -> (line, column, grapheme) conversions
+// specifically.
 //
 // ------------------------------------------------------------------
 // LSP position rules the (line, column) cases below encode
@@ -25,9 +25,9 @@ namespace InductorParser.Tests;
 //   * Both line and column are 0-BASED. The first line is 0, not 1.
 //     The first character of a line is column 0.
 //
-//   * Column counts UTF-16 CODE UNITS, not runes and not graphemes.
-//     A supplementary-plane rune like the guitar emoji contributes 2
-//     to the column count because it occupies two UTF-16 chars.
+//   * Column counts UTF-16 CODE UNITS, not graphemes. A supplementary-
+//     plane rune like the guitar emoji contributes 2 to the column
+//     count because it occupies two UTF-16 chars.
 //
 //   * "\n", "\r", and "\r\n" are all line terminators. "\r\n" is ONE
 //     break, not two.
@@ -39,12 +39,6 @@ namespace InductorParser.Tests;
 //   * After the terminator, the next line starts at column 0. So the
 //     'X' in "aa\nX" is (line 1, column 0), NOT column 3 of some
 //     flat counter. Column is line-relative, not absolute.
-//
-//   * LSP positions can't fall between the '\r' and '\n' of a "\r\n"
-//     pair. A natural parse under the default GraphemeLexer never
-//     leaves the cursor there (the pair is one grapheme token), but
-//     if it ever does happen (e.g. RuneLexer), we attribute the '\n'
-//     to the prior line so the column stays non-negative.
 //
 // See docs/InductorParserDesignDecisions.md "LSP Position Semantics" for the full
 // rationale.
@@ -81,7 +75,6 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(0));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(0));
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(0));
     }
 
@@ -94,7 +87,6 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(0));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(0));
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(0));
     }
 
@@ -107,7 +99,6 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(3));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(3));
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
     }
 
@@ -120,7 +111,6 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
         Assert.That(result.ErrorColumn, Is.EqualTo(0));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(3));
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
     }
 
@@ -138,59 +128,7 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(2));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(2));
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(2));
-    }
-
-    [Test]
-    public void CRLF_is_one_break_next_line_starts_after_LF()
-    {
-        // Under the default GraphemeLexer "\r\n" is one token, so the
-        // helper grammar's OneOf (which fails on multi-rune tokens)
-        // won't consume it. Use RuneLexer so \r and \n are separate
-        // tokens: grammar consumes a,a,\r,\n then fails on 'X' at
-        // offset 4. The \r\n pair is one logical break so 'X' is on
-        // line 1 column 0.
-        var rule = AllOf(ZeroOrMore(OneOf(RuneSet.Single('a') | RuneSet.Single('\r') | RuneSet.Single('\n'))), Eof());
-        var result = rule.Parse("aa\r\nX", new ParseOptions { InputUnit = InputUnit.Rune });
-
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(4));
-        Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(4));
-        // \r\n is ONE grapheme cluster under UAX #29, so "aa\r\n" = 3 graphemes.
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
-    }
-
-    [Test]
-    public void Index_on_LF_half_of_CRLF_reports_prior_line()
-    {
-        // Under the default GraphemeLexer "\r\n" tokenizes as ONE
-        // grapheme, so a natural parse never leaves the cursor between
-        // the two halves. Use RuneLexer to split the pair: grammar
-        // consumes "aa\r" (three runes) and the trailing Eof then fails
-        // at offset 3 on the '\n'.
-        //
-        // LSP says positions can't fall inside a line terminator. We
-        // attribute the '\n' to the prior line so the caller gets line 0
-        // column 3 rather than some negative-column nonsense.
-        var rule = AllOf(
-            Grapheme('a'),
-            Grapheme('a'),
-            Grapheme('\r'),
-            Eof());
-        var result = rule.Parse("aa\r\n", new ParseOptions { InputUnit = InputUnit.Rune });
-
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(3));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(3));
-        // The char index lands inside the \r\n grapheme cluster. The
-        // grapheme walker steps over the whole cluster on the iteration
-        // that crosses the limit, so the count rounds up to 3.
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
     }
 
     [Test]
@@ -202,7 +140,6 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
         Assert.That(result.ErrorColumn, Is.EqualTo(0));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(3));
         // \r not followed by \n is its own grapheme cluster.
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
     }
@@ -217,7 +154,6 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(6));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
         Assert.That(result.ErrorColumn, Is.EqualTo(3));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(6));
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(6));
     }
 
@@ -231,39 +167,7 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(4));
         Assert.That(result.ErrorLine, Is.EqualTo(3));
         Assert.That(result.ErrorColumn, Is.EqualTo(0));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(4));
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(4));
-    }
-
-    [Test]
-    public void Rune_index_counts_BMP_chars_one_each()
-    {
-        // "abcX": three BMP chars before the failure at offset 3.
-        var result = ParseAtFailure("aaaX");
-
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(3));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
-    }
-
-    [Test]
-    public void Rune_index_collapses_surrogate_pair_to_one_rune()
-    {
-        // Guitar emoji (one rune, two UTF-16 chars) then 'X'. The grammar
-        // accepts OneOrMore(Grapheme(guitar)) followed by Eof. Fails on 'X'
-        // at char offset 2 (past the two UTF-16 halves of the guitar),
-        // which is one rune in.
-        var rule = AllOf(OneOrMore(Grapheme(GuitarGrapheme)), Eof());
-        var result = rule.Parse(GuitarGrapheme + "X");
-
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
-        Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(2));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(1));
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(1));
     }
 
     [Test]
@@ -275,7 +179,6 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(3));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(3));
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
     }
 
@@ -290,21 +193,20 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(2));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(1));
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(1));
     }
 
     [Test]
-    public void Multi_rune_single_grapheme_distinguishes_rune_and_grapheme_counts()
+    public void Multi_rune_single_grapheme_distinguishes_char_and_grapheme_counts()
     {
         // LatinEAcuteGrapheme is e + combining acute: ONE grapheme, TWO
-        // runes, TWO UTF-16 chars. This works on every runtime including
-        // legacy StringInfo. Grammar matches the whole grapheme as one
-        // token (under default GraphemeLexer) then fails on 'X'.
+        // UTF-16 chars. This works on every runtime including legacy
+        // StringInfo. Grammar matches the whole grapheme as one token
+        // then fails on the trailing letter.
         //
         // NormalizeInput = null so the decomposed input survives to the
         // lexer. The default NFC would compose to a one-char grapheme and
-        // the rune/grapheme counts the test is demonstrating wouldn't
+        // the char/grapheme counts the test is demonstrating wouldn't
         // diverge anymore.
         var rule = AllOf(OneOrMore(Grapheme(LatinEAcuteGrapheme)), Eof());
         var result = rule.Parse(LatinEAcuteGrapheme + "X",
@@ -314,7 +216,6 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(2));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(2));
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(1));
     }
 
@@ -335,7 +236,6 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(5));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
         Assert.That(result.ErrorColumn, Is.EqualTo(2));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(5));
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(5));
     }
 
@@ -350,7 +250,6 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(0));
-        Assert.That(result.ErrorRuneIndex, Is.EqualTo(0));
         Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(0));
     }
 }

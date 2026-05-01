@@ -7,11 +7,6 @@ namespace InductorParser;
 
 public sealed class ParseOptions
 {
-    // Atomic unit the lexer reads. Default is Grapheme so user-typed text
-    // usually behaves the way users expect: one visible character is one token
-    // grouped by StringInfo .
-    public InputUnit InputUnit { get; set; } = InputUnit.Grapheme;
-
     // Normalization form applied to the input before parsing. Default is the
     // composed form (FormC), which is what almost every grammar wants and
     // what essentially all web, source, and typed input already is. A
@@ -21,7 +16,7 @@ public sealed class ParseOptions
     // it. Set to null to skip normalization entirely.
     //
     // Positions reported in ParseResult (ErrorCharIndex and its derived
-    // line/column/rune/grapheme properties) are ALWAYS into the caller's
+    // line/column/grapheme properties) are ALWAYS into the caller's
     // original input string, regardless of this setting. When normalization
     // rewrites the input, the parser translates failure offsets back to
     // original-string coordinates at the boundary, so callers never have to
@@ -118,12 +113,11 @@ public sealed class ParseOptions
     // Placeholders are written as {name}. Unknown placeholders pass through
     // verbatim, so a typo shows up in the output rather than throwing.
     //
-    // Every template supports the same five position placeholders, named
+    // Every template supports the same four position placeholders, named
     // and numbered to match the ParseResult.ErrorXxx properties so a
     // template author can mirror whatever unit the rest of their code
     // already uses:
     //   {charIndex}      ParseResult.ErrorCharIndex     (UTF-16 code units)
-    //   {runeIndex}      ParseResult.ErrorRuneIndex     (Unicode code points)
     //   {graphemeIndex}  ParseResult.ErrorGraphemeIndex (StringInfo text elements)
     //   {line}           ParseResult.ErrorLine          (zero-based, LSP convention)
     //   {column}         ParseResult.ErrorColumn        (zero-based, in chars)
@@ -134,9 +128,9 @@ public sealed class ParseOptions
     //   RuleCountLimitAbortTemplate  {limit}      (options.RuleCountLimit)
     //   DepthLimitAbortTemplate      {limit}      (options.MaxDepth)
     //
-    // The rune-index, grapheme-index, and line/column conversions each
-    // walk the input once, so they're computed lazily and only paid for
-    // when the corresponding placeholder appears in the template. The
+    // The grapheme-index and line/column conversions each walk the
+    // input once, so they're computed lazily and only paid for when
+    // the corresponding placeholder appears in the template. The
     // default templates only mention {charIndex}, so by default the
     // O(n) scans never run.
     //

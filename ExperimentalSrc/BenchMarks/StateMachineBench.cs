@@ -166,15 +166,14 @@ internal static class StateMachineBench
         //    the JsonBench harness uses (Grapheme, Literal, OneOf, AllOf,
         //    FirstOf, ZeroOrMore, Optional, LateBound, ScanUntil). Run
         //    against the same Big / Long / Deep / Wide shapes the
-        //    main JsonBench measures. Both lexers eligible: pick Rune
-        //    here to match the harness's default code path.
-        var jsonRune = new GrammarCase(
-            "JSON-Rune",
+        //    main JsonBench measures.
+        var json = new GrammarCase(
+            "JSON",
             InductorJsonParser.JsonRule,
             "json",
-            new ParseOptions { InputUnit = InputUnit.Rune, MaxDepth = 0, NormalizeInput = null });
+            new ParseOptions { MaxDepth = 0, NormalizeInput = null });
 
-        return new List<GrammarCase> { identifier, balancedParens, keywordList, arithmetic, jsonRune };
+        return new List<GrammarCase> { identifier, balancedParens, keywordList, arithmetic, json };
     }
 
     private static Dictionary<string, List<(string label, string input)>> BuildInputs()

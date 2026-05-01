@@ -76,19 +76,6 @@ public class ScanWhileRuleTests
     }
 
     [Test]
-    public void ScanWhile_under_rune_lexer_consumes_supplementary_runes()
-    {
-        var allowed = RuneSet.Single(WavingHandRune) | RuneSet.Single(MediumSkinToneRune);
-        var rule = ScanWhile(allowed);
-
-        var result = rule.Parse(SkinTonedWaveGrapheme,
-            new ParseOptions { InputUnit = InputUnit.Rune });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo(SkinTonedWaveGrapheme));
-    }
-
-    [Test]
     [RecursiveEngineOnly]
     public void ScanWhile_trace_success_produces_expected_output()
     {

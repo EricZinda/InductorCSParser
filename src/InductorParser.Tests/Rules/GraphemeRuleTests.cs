@@ -41,8 +41,8 @@ public class GraphemeRuleTests
     public void Grapheme_string_with_multi_rune_grapheme_matches_under_grapheme_lexer()
     {
         // LatinEAcuteGrapheme is one grapheme made of two runes (2 UTF-16
-        // chars). Under GraphemeLexer this is one token, so GraphemeRule reads
-        // one token and compares the whole expected.
+        // chars). This is one token, so GraphemeRule reads one token and
+        // compares the whole expected.
         //
         // NormalizeInput = null because the default NFC would rewrite the
         // decomposed "e\u0301" input to the precomposed "\u00E9" before
@@ -52,19 +52,6 @@ public class GraphemeRuleTests
         var rule = Grapheme(LatinEAcuteGrapheme);
         var result = rule.Parse(LatinEAcuteGrapheme,
             new ParseOptions { NormalizeInput = null });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-    }
-
-    [Test]
-    public void Grapheme_string_with_multi_rune_grapheme_matches_under_rune_lexer()
-    {
-        // Same input as above but using the rune lexer. Here the lexer
-        // produces two rune tokens, so GraphemeRule reads both and compares
-        // each in lockstep against the corresponding section of the expected.
-        var rule = Grapheme(LatinEAcuteGrapheme);
-        var result = rule.Parse(LatinEAcuteGrapheme,
-            new ParseOptions { InputUnit = InputUnit.Rune, NormalizeInput = null });
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
@@ -202,41 +189,6 @@ public class GraphemeRuleTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
         Assert.That(result.ErrorMessage, Does.StartWith("Unexpected end of input"));
-    }
-
-    // Position-reporting tests for multi-rune Grapheme under RuneLexer. Same
-    // reasoning as the multi-rune grapheme tests above: LatinEAcuteGrapheme
-    // segments identically on every runtime, so these don't need a gate.
-    [Test]
-    public void Grapheme_multi_rune_mismatch_on_first_token_reports_at_zero()
-    {
-        // Under RuneLexer, LatinEAcuteGrapheme tokenizes into two rune
-        // tokens ('e' and U+0301). Input "xy" is two single-char tokens.
-        // GraphemeRule's lockstep fails at the first iteration where tokenStart
-        // is 0, so that's where the WithError message surfaces.
-        var rule = Grapheme(LatinEAcuteGrapheme).WithError("expected e-acute");
-        var result = rule.Parse("xy", new ParseOptions { InputUnit = InputUnit.Rune });
-
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected e-acute"));
-    }
-
-    [Test]
-    public void Grapheme_multi_rune_mismatch_on_second_token_reports_at_second_token_start()
-    {
-        // Under RuneLexer, LatinEAcuteGrapheme tokenizes into two BMP rune
-        // tokens of 1 char each. Input "ex" has the first rune matching
-        // then diverges. Second iteration's pre-read position is 1, and
-        // that's where the offender starts. Not 0 (whole-match start),
-        // not 2 (post-read).
-        var rule = Grapheme(LatinEAcuteGrapheme).WithError("expected e-acute");
-        var result = rule.Parse("ex",
-            new ParseOptions { InputUnit = InputUnit.Rune });
-
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected e-acute"));
     }
 
     [Test]

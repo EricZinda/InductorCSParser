@@ -322,7 +322,6 @@ public class BetweenInclusiveRuleTests
         string input = new string('x', 5000) + "Sherlock";
         var result = scanner.Parse(input, new ParseOptions
         {
-            InputUnit = InputUnit.Rune,
             NormalizeInput = null,
             RuleCountLimit = 100,
             MaxDepth = 0
@@ -347,7 +346,6 @@ public class BetweenInclusiveRuleTests
         string input = new string('s', 5000) + "sHeRlOcK hOlMeS";
         var result = scanner.Parse(input, new ParseOptions
         {
-            InputUnit = InputUnit.Rune,
             NormalizeInput = null,
             RuleCountLimit = 100,
             MaxDepth = 0
@@ -374,7 +372,6 @@ public class BetweenInclusiveRuleTests
         string input = new string('j', 5000) + "jOhN wAtSoN";
         var result = scanner.Parse(input, new ParseOptions
         {
-            InputUnit = InputUnit.Rune,
             NormalizeInput = null,
             RuleCountLimit = 100,
             MaxDepth = 0

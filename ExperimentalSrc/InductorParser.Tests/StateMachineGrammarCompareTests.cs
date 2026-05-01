@@ -248,14 +248,9 @@ public class StateMachineGrammarCompareTests
     // evaluator, state-machine evaluator. Same workload (one
     // accept/reject per input). Ratios reported relative to the
     // compiled regex (regex = 1.00x baseline).
-    //
-    // Uses InputUnit.Rune so the state-machine evaluator can take the
-    // fused-scan opcodes (ScanOneOfRune / ScanNoneOfRune). On the
-    // ASCII-only inputs in these corpora, Rune and Grapheme produce
-    // identical accept/reject verdicts.
     private static void Compare(string label, Regex regex, Rule rule, string[] corpus, int iterations)
     {
-        var options = new ParseOptions { NormalizeInput = null, MaxDepth = 0, InputUnit = InputUnit.Rune };
+        var options = new ParseOptions { NormalizeInput = null, MaxDepth = 0 };
 
         // Warmup: enough for tiered JIT and the rule's own Compile()
         // pass to settle. Hits all three paths so PGO has a chance to
@@ -333,7 +328,7 @@ public class StateMachineGrammarCompareTests
     // with all leaves Delete-flagged so no Symbols are produced.
     private static void CompareMatcher(string label, Regex regex, Rule rule, string[] corpus, int iterations)
     {
-        var options = new ParseOptions { NormalizeInput = null, MaxDepth = 0, InputUnit = InputUnit.Rune };
+        var options = new ParseOptions { NormalizeInput = null, MaxDepth = 0 };
 
         for (int i = 0; i < 1000; i++)
         {

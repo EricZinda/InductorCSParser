@@ -56,17 +56,6 @@ public class PeekRuleTests
     }
 
     [Test]
-    public void Peek_works_under_rune_lexer()
-    {
-        var rule = AllOf(Peek(Grapheme('x')), AnyToken());
-        var result = rule.Parse("x",
-            new ParseOptions { InputUnit = InputUnit.Rune, PreserveAllSymbols = true });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("x"));
-    }
-
-    [Test]
     public void Peek_gates_optional_else_branch_in_if_statement()
     {
         // The if-statement example from PeekRule's class comment. Peek

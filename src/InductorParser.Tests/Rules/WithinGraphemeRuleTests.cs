@@ -76,20 +76,6 @@ public class WithinGraphemeRuleTests
     }
 
     [Test]
-    public void Works_identically_under_rune_lexer_for_single_rune_input()
-    {
-        // Under RuneLexer each outer token is one rune, so the sub-lexer
-        // sees a one-rune stream. Inner rule that needs exactly one rune
-        // matches and consumes it, just like under GraphemeLexer for
-        // single-rune graphemes.
-        var rule = WithinGrapheme(OneOf(RuneSet.Ascii.Letters));
-        var result = rule.Parse("a", new ParseOptions { InputUnit = InputUnit.Rune });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("a"));
-    }
-
-    [Test]
     public void Composes_into_zero_or_more_for_multi_grapheme_sequences()
     {
         // ZeroOrMore(WithinGrapheme(letter)) walks a sequence of single-
