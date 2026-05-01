@@ -6,7 +6,8 @@ using static InductorParser.Tests.TestHelpers;
 namespace InductorParser.Tests;
 
 // XML corpus tests. The C++ InductorParser ships XmlCompiler
-// (src/FXPlatform/Languages/XmlCompiler.h), which parses XML with the
+// (https://github.com/EricZinda/InductorParser/blob/master/src/FXPlatform/Languages/XmlCompiler.h),
+// which parses XML with the
 // same HTML grammar and then walks the AST to validate that every start
 // tag matches its end tag. The grammar itself doesn't enforce tag
 // matching. That's an AST-walker responsibility that belongs in a

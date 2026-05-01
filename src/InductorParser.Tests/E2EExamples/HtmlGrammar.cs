@@ -3,8 +3,9 @@ using static InductorParser.Rules;
 
 namespace InductorParser.Tests;
 
-// HTML grammar: PEG port of the C++ InductorParser HTML parser in
-// src/FXPlatform/Languages/HtmlParser.h. Covers a pragmatic subset of
+// HTML grammar: Inductor Parser port of the C++ InductorParser HTML parser
+// (https://github.com/EricZinda/InductorParser/blob/master/src/FXPlatform/Languages/HtmlParser.h).
+// Covers a pragmatic subset of
 // HTML: tag names, attributes (four flavors: double-quoted, single-quoted,
 // unquoted, and empty), start tags, void start tags, end tags, XML-style
 // processing instructions, HTML comments, the non-replaceable
@@ -220,7 +221,7 @@ public static class HtmlGrammar
 
     // Ordering: comment first (starts with "<!--"), then the specific
     // <style> block (starts with "<style"), then void (ends with "/>")
-    // before normal (ends with ">"). PEG doesn't peek the end, so we
+    // before normal (ends with ">"). Inductor Parser doesn't peek the end, so we
     // commit in source order. Void must come before normal because the
     // two share the same left prefix and only diverge at the closing
     // "/" vs ">".
