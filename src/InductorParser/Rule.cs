@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text;
 using InductorParser.Lexing;
-using InductorParser.StateMachine;
 using InductorParser.SyntaxTree;
 using InductorParser.Tracing;
 
@@ -514,18 +513,28 @@ public abstract class Rule
     // to switch to the RuneLexer or change other parse-time settings.
     public ParseResult Parse(string input) => Parse(input, new ParseOptions());
 
-    // Dispatcher. Routes to the recursive evaluator by default. The
-    // test suite can flip the routing process-wide via
-    // ParseOptions.DefaultUseStateMachine, or per-call via
-    // ParseOptions.UseStateMachine, so the same fixtures can run
-    // through either engine without per-test rewrites. Outside callers
-    // who explicitly want the state machine should call
-    // StateMachineParser.Parse directly; the routing knob is internal
-    // test plumbing, not a documented user feature.
+    // Dispatcher. Routes to the recursive evaluator by default. An
+    // alternative-evaluator implementation (e.g. the state-machine
+    // engine that ships in ExperimentalSrc) can register itself by
+    // assigning AlternativeEvaluator at startup. The test suite can
+    // flip the routing process-wide via
+    // ParseOptions.DefaultUseAlternativeEvaluator, or per-call via
+    // ParseOptions.UseAlternativeEvaluator, so the same fixtures can
+    // run through either engine without per-test rewrites. The flag
+    // without a registered hook is inert: a recursive-only build
+    // always hits ParseRecursive regardless of the flag.
     public ParseResult Parse(string input, ParseOptions options) =>
-        options.ResolveUseStateMachine()
-            ? StateMachineParser.Parse(this, input, options)
+        options.ResolveUseAlternativeEvaluator() && AlternativeEvaluator is { } hook
+            ? hook(this, input, options)
             : ParseRecursive(input, options);
+
+    // Module-wide alternative-evaluator hook. Set by an alternative engine
+    // implementation at startup (typically from a test fixture's
+    // OneTimeSetUp). Null in a recursive-only build, which is the default.
+    // The hook receives the rule, the input, and the same ParseOptions
+    // the caller passed to Parse, and returns the same ParseResult shape
+    // ParseRecursive would.
+    internal static Func<Rule, string, ParseOptions, ParseResult>? AlternativeEvaluator;
 
     // The recursive evaluator's body. Compare fixtures that need a
     // guaranteed recursive-engine baseline (so the SM run can compare

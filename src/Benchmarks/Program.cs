@@ -40,11 +40,6 @@ public class Program
             return LexerCompare();
         }
 
-        if (args.Contains("--state-machine-compare"))
-        {
-            return StateMachineBench.Run();
-        }
-
         var summaries = BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
         foreach (var summary in summaries)
         {
@@ -219,21 +214,6 @@ public class Program
                     return $"parse failed: {r.ErrorMessage} at {r.ErrorCharIndex}";
                 var matched = r.Tree!.ToString();
                 return matched == input ? null : Diff(input, matched);
-            });
-
-            failures += Verify("InductorParserStateMachine", input, () =>
-            {
-                // The state-machine evaluator with the same Rune-lexer
-                // ParseOptions the benchmark measures. Tree text on the
-                // default (non-PreserveAllSymbols) path drops the JSON
-                // delimiters, so it won't match the original input
-                // verbatim. We round-trip through IJson instead, which
-                // is the same shape the InductorParserTyped verification
-                // uses below.
-                var r = InductorJsonParser.ParseStateMachine(input);
-                if (!r.Success)
-                    return $"parse failed: {r.ErrorMessage} at {r.ErrorCharIndex}";
-                return null;
             });
 
             failures += Verify("InductorParserTyped", input, () =>

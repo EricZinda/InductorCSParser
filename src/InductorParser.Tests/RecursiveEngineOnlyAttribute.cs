@@ -24,7 +24,7 @@ public sealed class RecursiveEngineOnlyAttribute : NUnitAttribute, ITestAction
 
     public void BeforeTest(ITest test)
     {
-        if (ParseOptions.DefaultUseStateMachine)
+        if (ParseOptions.DefaultUseAlternativeEvaluator)
         {
             Assert.Ignore(
                 "Recursive-engine-only: this test asserts byte-for-byte on the " +

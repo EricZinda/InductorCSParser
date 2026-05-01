@@ -13,7 +13,7 @@ namespace InductorParser.Benchmarks;
 // Hand-timed comparison between the existing recursive evaluator
 // (Rule.Parse) and the state-machine evaluator (StateMachineParser.Parse)
 // across a few representative grammars that stay inside the iteration-1
-// supported set (Literal, Token, OneOf, AllOf, FirstOf, BetweenInclusive,
+// supported set (Literal, Grapheme, OneOf, AllOf, FirstOf, BetweenInclusive,
 // Optional, Not, Peek, Eof, LateBound).
 //
 // Stopwatch loop with warmup, same shape as Program.LexerCompare. Not
@@ -132,7 +132,7 @@ internal static class StateMachineBench
         // 2. Balanced parens, recursive via LateBound. Pure structural
         //    recursion, no FirstOf alternatives, no token-level fanout.
         var parens = new LateBoundRule("parens");
-        parens.Bind(ZeroOrMore(AllOf(Token('('), parens, Token(')'))));
+        parens.Bind(ZeroOrMore(AllOf(Grapheme('('), parens, Grapheme(')'))));
         var balancedParens = new GrammarCase(
             "BalancedParens",
             AllOf(parens, Eof()),
@@ -148,14 +148,14 @@ internal static class StateMachineBench
             Literal("epsilon"), Literal("zeta"), Literal("eta"), Literal("theta"));
         var keywordList = new GrammarCase(
             "KeywordList",
-            AllOf(keyword, ZeroOrMore(AllOf(Token(','), keyword)), Eof()),
+            AllOf(keyword, ZeroOrMore(AllOf(Grapheme(','), keyword)), Eof()),
             "keywords");
 
         // 4. Recursive arithmetic with backtracking-heavy shape. expr =
         //    term (('+' / '-') term)*; term = digit / '(' expr ')'.
         var expr = new LateBoundRule("expr");
         var digit = OneOf(RuneSet.Ascii.Digits);
-        var term = FirstOf(digit, AllOf(Token('('), expr, Token(')')));
+        var term = FirstOf(digit, AllOf(Grapheme('('), expr, Grapheme(')')));
         expr.Bind(AllOf(term, ZeroOrMore(AllOf(OneOf("+-"), term))));
         var arithmetic = new GrammarCase(
             "Arithmetic",
@@ -163,7 +163,7 @@ internal static class StateMachineBench
             "arithmetic");
 
         // 5. Real-world JSON. The full InductorJsonParser grammar that
-        //    the JsonBench harness uses (Token, Literal, OneOf, AllOf,
+        //    the JsonBench harness uses (Grapheme, Literal, OneOf, AllOf,
         //    FirstOf, ZeroOrMore, Optional, LateBound, ScanUntil). Run
         //    against the same Big / Long / Deep / Wide shapes the
         //    main JsonBench measures. Both lexers eligible: pick Rune

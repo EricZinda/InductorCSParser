@@ -26,6 +26,17 @@
          second IVT is required for the synced sources to compile under
          Unity. See docs/TestArchitecture.md. -->
     <InternalsVisibleTo Include="InductorParser.PlayModeTests" />
+    <!-- The state-machine engine in ExperimentalSrc/ ships as a
+         separate assembly so consumers who don't need it can ship
+         without it. It needs access to internal members on Lexer,
+         Rule, Symbol, and ParseOptions because it's an alternative
+         evaluator, not an external API consumer. -->
+    <InternalsVisibleTo Include="InductorParser.StateMachine" />
+    <!-- Tests for the state-machine engine subclass Rule directly to
+         exercise the user-defined-rule contract, which means they need
+         to override the internal Rule.TryParseRule. Same rationale as
+         InductorParser.PlayModeTests above. -->
+    <InternalsVisibleTo Include="InductorParser.StateMachine.Tests" />
   </ItemGroup>
 
   <!-- After building the netstandard2.1 DLL (the one Unity's IL2CPP

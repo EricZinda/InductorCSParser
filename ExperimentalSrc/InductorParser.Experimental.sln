@@ -1,0 +1,53 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InductorParser", "..\src\InductorParser\InductorParser.csproj", "{8B7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F3E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InductorParser.Tests", "..\src\InductorParser.Tests\InductorParser.Tests.csproj", "{9B7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F3F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Benchmarks", "..\src\Benchmarks\Benchmarks.csproj", "{AB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F40}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InductorParser.StateMachine", "InductorParser\StateMachine\InductorParser.StateMachine.csproj", "{DB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F42}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InductorParser.StateMachine.Tests", "InductorParser.Tests\InductorParser.StateMachine.Tests.csproj", "{EB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F43}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InductorParser.StateMachine.Benchmarks", "BenchMarks\InductorParser.StateMachine.Benchmarks.csproj", "{FB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F44}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RebarRunner", "BenchMarks\Rebar\RebarRunner.csproj", "{0B7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F45}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8B7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F3E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8B7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F3E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8B7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F3E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8B7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F3E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9B7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F3F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9B7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F3F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9B7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F3F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9B7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F3F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F40}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F40}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F40}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F40}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F42}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F42}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F42}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F42}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F43}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F43}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F43}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F43}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F44}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F44}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F44}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FB7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F44}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0B7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F45}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0B7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F45}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0B7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F45}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0B7E5E1F-1A8E-4B6E-9F3E-1A8E4B6E9F45}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>InductorParser.StateMachine.Benchmarks</RootNamespace>
+    <AssemblyName>InductorParser.StateMachine.Benchmarks</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\InductorParser\InductorParser.csproj" />
+    <ProjectReference Include="..\InductorParser\StateMachine\InductorParser.StateMachine.csproj" />
+    <!-- Reference src/Benchmarks/ so the SM bench can reuse the
+         JsonBench.BuildJson corpus generator and InductorJsonParser's
+         JsonRule. The non-SM Benchmarks csproj doesn't reference
+         anything from ExperimentalSrc, so the dependency is one-way. -->
+    <ProjectReference Include="..\..\src\Benchmarks\Benchmarks.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Rebar lives under BenchMarks/Rebar/ but ships as its own
+         csproj (RebarRunner.csproj). Exclude it from this assembly's
+         compile so its sources aren't double-compiled. -->
+    <Compile Remove="Rebar\**\*.cs" />
+    <EmbeddedResource Remove="Rebar\**\*" />
+  </ItemGroup>
+
+</Project>
