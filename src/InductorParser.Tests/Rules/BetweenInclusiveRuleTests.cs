@@ -257,6 +257,7 @@ public class BetweenInclusiveRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void BetweenInclusive_trace_success_produces_expected_output()
     {
         var sink = NewSink();
@@ -279,6 +280,7 @@ public class BetweenInclusiveRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void BetweenInclusive_trace_failure_produces_expected_output()
     {
         var sink = NewSink();

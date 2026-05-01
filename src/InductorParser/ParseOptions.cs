@@ -188,24 +188,26 @@ public sealed class ParseOptions
 
     // Test-plumbing knob (intentionally internal) that lets the test
     // suite flip every Rule.Parse call from the recursive evaluator
-    // over to the state-machine evaluator without rewriting hundreds
-    // of test sites. Null means "use whatever DefaultUseStateMachine
-    // says"; an explicit true / false on a per-call ParseOptions wins
-    // over the default. Outside callers who want the state machine
-    // should keep calling StateMachineParser.Parse directly. This
-    // is not a documented user feature.
-    internal bool? UseStateMachine { get; set; }
+    // over to the alternative-evaluator hook (Rule.AlternativeEvaluator)
+    // without rewriting hundreds of test sites. Null means "use
+    // whatever DefaultUseAlternativeEvaluator says"; an explicit
+    // true / false on a per-call ParseOptions wins over the default.
+    // The flag is inert in a recursive-only build (no hook registered),
+    // so it's safe to leave in place when ExperimentalSrc isn't
+    // present.
+    internal bool? UseAlternativeEvaluator { get; set; }
 
-    // Process-wide default for UseStateMachine. The test suite's
-    // EngineSelectionFixture flips this to true when the
-    // INDUCTOR_DEFAULT_ENGINE environment variable is set to
-    // "statemachine", so a single CI invocation can run the entire
-    // suite through the state machine without touching individual
-    // ParseOptions instances. Defaults to false so production
-    // behavior is unchanged.
-    internal static bool DefaultUseStateMachine { get; set; }
+    // Process-wide default for UseAlternativeEvaluator. The
+    // EngineSelectionFixture that ships with the alternative-evaluator
+    // implementation flips this to true when the
+    // INDUCTOR_DEFAULT_ENGINE environment variable is set, so a single
+    // CI invocation can run the entire suite through the alternative
+    // engine without touching individual ParseOptions instances.
+    // Defaults to false so production behavior is unchanged. Without a
+    // registered hook the flag has no effect.
+    internal static bool DefaultUseAlternativeEvaluator { get; set; }
 
     // Combine the per-call override with the process-wide default.
     // Per-call wins; only consulted by the dispatcher in Rule.Parse.
-    internal bool ResolveUseStateMachine() => UseStateMachine ?? DefaultUseStateMachine;
+    internal bool ResolveUseAlternativeEvaluator() => UseAlternativeEvaluator ?? DefaultUseAlternativeEvaluator;
 }

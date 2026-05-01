@@ -665,7 +665,7 @@ internal static class BenchmarkRegistry
         // runes up to the first `=`.
         var match = AllOf(
             Optional(P(ScanUntil(RuneSet.Runes("=\r\n")))),
-            P(Token('=')),
+            P(Grapheme('=')),
             ZeroOrMore(P(OneOf(NotNewline)))
         );
         return new PatternGrammar(match, Array.Empty<Rule>());
@@ -682,11 +682,11 @@ internal static class BenchmarkRegistry
         // simplified case, we use ScanUntil to find the `=` without
         // backtracking the two outer .* parts.
         var prefixToken = FirstOf(
-            P(Token('"')),
-            P(Token('\'')),
-            P(Token(']')),
-            P(Token('}')),
-            P(Token('\\')),
+            P(Grapheme('"')),
+            P(Grapheme('\'')),
+            P(Grapheme(']')),
+            P(Grapheme('}')),
+            P(Grapheme('\\')),
             P(OneOf(RuneSet.Ascii.Digits)),
             P(Literal("nan")),
             P(Literal("infinity")),
@@ -696,26 +696,26 @@ internal static class BenchmarkRegistry
             P(Literal("undefined")),
             P(Literal("symbol")),
             P(Literal("math")),
-            P(Token('`')),
-            P(Token('-')),
-            P(Token('+'))
+            P(Grapheme('`')),
+            P(Grapheme('-')),
+            P(Grapheme('+'))
         );
         var noiseToken = FirstOf(
             P(OneOf(AsciiRegexWhitespace)),
-            P(Token('-')),
-            P(Token('~')),
-            P(Token('!')),
+            P(Grapheme('-')),
+            P(Grapheme('~')),
+            P(Grapheme('!')),
             P(Literal("{}")),
             P(Literal("||")),
-            P(Token('+'))
+            P(Grapheme('+'))
         );
         var match = AllOf(
             OneOrMore(prefixToken),
-            ZeroOrMore(P(Token(')'))),
-            Optional(P(Token(';'))),
+            ZeroOrMore(P(Grapheme(')'))),
+            Optional(P(Grapheme(';'))),
             ZeroOrMore(noiseToken),
             Optional(P(ScanUntil(RuneSet.Runes("=\r\n")))),
-            P(Token('=')),
+            P(Grapheme('=')),
             ZeroOrMore(P(OneOf(NotNewline)))
         );
         return new PatternGrammar(match, Array.Empty<Rule>());
@@ -828,7 +828,7 @@ internal static class BenchmarkRegistry
         // without backtracking through the body.
         var timestamp = Capture(AllOf(
             OneOrMore(P(OneOf(NotSpace))),
-            P(Token(' ')),
+            P(Grapheme(' ')),
             OneOrMore(P(OneOf(NotSpace)))
         ), "capture1");
         // Wrap the single-rune OneOf in AllOf so Find by capture rule
@@ -836,36 +836,36 @@ internal static class BenchmarkRegistry
         // rune's value (see the capture10 note in UcdParseLine).
         var level = Capture(AllOf(P(OneOf(LevelChar))), "capture2");
         var bracketContext = AllOf(
-            P(Token('[')),
+            P(Grapheme('[')),
             ZeroOrMore(P(OneOf(NotBracket))),
-            P(Token(']'))
+            P(Grapheme(']'))
         );
         var parenContext = AllOf(
-            P(Token('(')),
+            P(Grapheme('(')),
             ZeroOrMore(P(OneOf(NotParen))),
-            P(Token(')'))
+            P(Grapheme(')'))
         );
         var contextItem = AllOf(
             FirstOf(bracketContext, parenContext),
-            P(Token(':')),
-            P(Token(' '))
+            P(Grapheme(':')),
+            P(Grapheme(' '))
         );
         var header = Capture(ZeroOrMore(contextItem), "capture3");
         var body = Capture(ScanUntil(P(Literal(" {"))), "capture4");
         var location = Capture(ZeroOrMore(P(OneOf(NotCurly))), "capture5");
         var match = AllOf(
             timestamp,
-            P(Token(' ')),
+            P(Grapheme(' ')),
             level,
             P(OneOf(OneToFour)),
-            P(Token(':')),
-            P(Token(' ')),
+            P(Grapheme(':')),
+            P(Grapheme(' ')),
             header,
             body,
-            P(Token(' ')),
-            P(Token('{')),
+            P(Grapheme(' ')),
+            P(Grapheme('{')),
             location,
-            P(Token('}'))
+            P(Grapheme('}'))
         );
         return new PatternGrammar(match, new[] { timestamp, level, header, body, location });
     }
@@ -899,20 +899,20 @@ internal static class BenchmarkRegistry
         var capture14 = Capture(ZeroOrMore(P(OneOf(NotSemicolon))), "capture14");
         var capture15 = Capture(ZeroOrMore(P(OneOf(NotSemicolon))), "capture15");
         var match = AllOf(
-            capture1, P(Token(';')),
-            capture2, P(Token(';')),
-            capture3, P(Token(';')),
-            capture4, P(Token(';')),
-            capture5, P(Token(';')),
-            capture6, P(Token(';')),
-            capture7, P(Token(';')),
-            capture8, P(Token(';')),
-            capture9, P(Token(';')),
-            capture10, P(Token(';')),
-            capture11, P(Token(';')),
-            capture12, P(Token(';')),
-            capture13, P(Token(';')),
-            capture14, P(Token(';')),
+            capture1, P(Grapheme(';')),
+            capture2, P(Grapheme(';')),
+            capture3, P(Grapheme(';')),
+            capture4, P(Grapheme(';')),
+            capture5, P(Grapheme(';')),
+            capture6, P(Grapheme(';')),
+            capture7, P(Grapheme(';')),
+            capture8, P(Grapheme(';')),
+            capture9, P(Grapheme(';')),
+            capture10, P(Grapheme(';')),
+            capture11, P(Grapheme(';')),
+            capture12, P(Grapheme(';')),
+            capture13, P(Grapheme(';')),
+            capture14, P(Grapheme(';')),
             capture15
         );
         var captures = new[]

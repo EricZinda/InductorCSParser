@@ -12,7 +12,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\InductorParser\InductorParser.csproj" />
+    <ProjectReference Include="..\..\..\src\InductorParser\InductorParser.csproj" />
+    <!-- BenchmarkPlan.cs has a bool _useStateMachine flag and dispatches
+         to StateMachineParser when set. Hooked up here so the
+         "inductorparser-statemachine" engine name in Program.cs
+         actually has somewhere to route. -->
+    <ProjectReference Include="..\..\InductorParser\StateMachine\InductorParser.StateMachine.csproj" />
   </ItemGroup>
 
 </Project>

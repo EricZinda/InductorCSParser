@@ -18,6 +18,17 @@
     <ProjectReference Include="..\InductorParser\InductorParser.csproj" />
   </ItemGroup>
 
+  <!-- The state-machine test project in ExperimentalSrc/ shares
+       fixtures from this project (TraceTestHelpers, UnicodeExamples,
+       ChordGrammar, BacklogGrammar) which are internal. Granting it
+       visibility here lets it use those types directly without having
+       to either duplicate them or expose them as public to all
+       consumers of InductorParser.Tests. The grant is harmless when
+       ExperimentalSrc is not present. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="InductorParser.StateMachine.Tests" />
+  </ItemGroup>
+
   <!-- The Unity/ subfolder is its own self-contained Unity project for the
        IL2CPP smoke test (see docs/TestArchitecture.md). Its Library/ contains
        package-cache C# files that Unity regenerates on open; the SDK's default

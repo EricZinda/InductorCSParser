@@ -103,6 +103,7 @@ public class PeekRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void Peek_trace_success_produces_expected_output()
     {
         // Peek opens a transaction (depth=1). Grapheme inside opens its own
@@ -120,6 +121,7 @@ public class PeekRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void Peek_trace_failure_produces_expected_output()
     {
         var sink = NewSink();

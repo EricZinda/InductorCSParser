@@ -89,6 +89,7 @@ public class ScanWhileRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void ScanWhile_trace_success_produces_expected_output()
     {
         var sink = NewSink();

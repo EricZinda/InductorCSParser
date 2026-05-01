@@ -70,6 +70,7 @@ public class AllOfRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void AllOf_trace_success_produces_expected_output()
     {
         var sink = NewSink();
@@ -86,6 +87,7 @@ public class AllOfRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void AllOf_trace_failure_produces_expected_output()
     {
         // "ax" advances past 'a', then Grapheme('b') fails at position 1

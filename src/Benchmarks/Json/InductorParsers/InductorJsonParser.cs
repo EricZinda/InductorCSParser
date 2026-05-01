@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using global::InductorParser;
-using global::InductorParser.StateMachine;
 using global::InductorParser.SyntaxTree;
 using static global::InductorParser.Rules;
 
@@ -93,16 +92,6 @@ public static class InductorJsonParser
     };
 
     public static ParseResult Parse(string input) => JsonRule.Parse(input, _options);
-
-    // State-machine evaluator variant. Same grammar (JsonRule), same
-    // Rune lexer, same ParseOptions. Only the evaluator differs:
-    // routes through StateMachineParser, which lowers JsonRule to a
-    // flat State[] program once and runs it via the switch-dispatch
-    // inner loop instead of the recursive virtual TryParseRule path.
-    // Pairs with the InductorParserRune row so the comparison is
-    // purely evaluator-vs-evaluator.
-    public static ParseResult ParseStateMachine(string input) =>
-        StateMachineParser.Parse(JsonRule, input, _options);
 
     // Grapheme-lexer variant, exposed as its own JsonBench benchmark
     // (XxxJson_InductorParserGrapheme) alongside the Rune-lexer standard

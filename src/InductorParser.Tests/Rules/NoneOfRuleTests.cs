@@ -110,6 +110,7 @@ public class NoneOfRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void NoneOf_trace_success_produces_expected_output()
     {
         var sink = NewSink();
@@ -124,6 +125,7 @@ public class NoneOfRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
     public void NoneOf_trace_failure_produces_expected_output()
     {
         var sink = NewSink();
