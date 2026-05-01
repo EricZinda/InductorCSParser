@@ -644,7 +644,7 @@ public class RuneSetTests
         // Runes("\r\n") means "the CRLF grapheme as a unit." The
         // validation special-cases CR+LF and treats it as two
         // separate scalars, matching the common "line-terminator
-        // runes" idiom and the library's own RuneSet.Ascii.Whitespace.
+        // runes" idiom and the library's own RuneSet.Ascii.AnyWhitespace.
         var set = RuneSet.Runes("\r\n");
 
         Assert.That(set.Contains('\r'), Is.True);
@@ -844,19 +844,47 @@ public class RuneSetTests
     }
 
     [Test]
-    public void Whitespace_contains_ascii_and_unicode_whitespace()
+    public void InlineWhitespace_contains_intra_line_whitespace_only()
     {
-        // Built via char.IsWhiteSpace predicate over the BMP. Contains the
-        // obvious ASCII whitespace plus a few Unicode-only runes.
-        Assert.That(RuneSet.Whitespace.Contains(' '), Is.True);
-        Assert.That(RuneSet.Whitespace.Contains('\t'), Is.True);
-        Assert.That(RuneSet.Whitespace.Contains('\r'), Is.True);
-        Assert.That(RuneSet.Whitespace.Contains('\n'), Is.True);
-        Assert.That(RuneSet.Whitespace.Contains(0x00A0), Is.True); // NBSP
-        Assert.That(RuneSet.Whitespace.Contains(0x2028), Is.True); // LINE SEPARATOR
-        // Not whitespace.
-        Assert.That(RuneSet.Whitespace.Contains('a'), Is.False);
-        Assert.That(RuneSet.Whitespace.Contains('0'), Is.False);
+        // Built via char.IsWhiteSpace predicate over the BMP, MINUS the
+        // seven UAX #18 single-rune line terminators. Includes the
+        // obvious ASCII intra-line whitespace plus a few Unicode-only
+        // runes that are also intra-line.
+        Assert.That(RuneSet.InlineWhitespace.Contains(' '), Is.True);
+        Assert.That(RuneSet.InlineWhitespace.Contains('\t'), Is.True);
+        Assert.That(RuneSet.InlineWhitespace.Contains(0x00A0), Is.True); // NBSP
+        Assert.That(RuneSet.InlineWhitespace.Contains(0x1680), Is.True); // OGHAM SPACE MARK
+        Assert.That(RuneSet.InlineWhitespace.Contains(0x2003), Is.True); // EM SPACE
+        Assert.That(RuneSet.InlineWhitespace.Contains(0x202F), Is.True); // NARROW NO-BREAK SPACE
+        Assert.That(RuneSet.InlineWhitespace.Contains(0x3000), Is.True); // IDEOGRAPHIC SPACE
+        // Line terminators are NOT in InlineWhitespace; they live in
+        // LineTerminators / EndOfLine().
+        Assert.That(RuneSet.InlineWhitespace.Contains('\r'), Is.False);
+        Assert.That(RuneSet.InlineWhitespace.Contains('\n'), Is.False);
+        Assert.That(RuneSet.InlineWhitespace.Contains('\v'), Is.False); // VT
+        Assert.That(RuneSet.InlineWhitespace.Contains('\f'), Is.False); // FF
+        Assert.That(RuneSet.InlineWhitespace.Contains(0x0085), Is.False); // NEL
+        Assert.That(RuneSet.InlineWhitespace.Contains(0x2028), Is.False); // LINE SEPARATOR
+        Assert.That(RuneSet.InlineWhitespace.Contains(0x2029), Is.False); // PARAGRAPH SEPARATOR
+        // Not whitespace at all.
+        Assert.That(RuneSet.InlineWhitespace.Contains('a'), Is.False);
+        Assert.That(RuneSet.InlineWhitespace.Contains('0'), Is.False);
+    }
+
+    [Test]
+    public void InlineWhitespace_and_LineTerminators_are_disjoint()
+    {
+        // The whole point of the split: every rune that
+        // char.IsWhiteSpace accepts is in exactly one of the two sets.
+        // Verify the disjointness across the BMP.
+        for (int codepoint = 0; codepoint <= 0xFFFF; codepoint++)
+        {
+            if (codepoint >= 0xD800 && codepoint <= 0xDFFF) continue;
+            bool inInline = RuneSet.InlineWhitespace.Contains(codepoint);
+            bool inLineTerm = RuneSet.LineTerminators.Contains(codepoint);
+            Assert.That(inInline && inLineTerm, Is.False,
+                $"U+{codepoint:X4} is in both InlineWhitespace and LineTerminators");
+        }
     }
 
     [Test]
@@ -871,16 +899,33 @@ public class RuneSetTests
     }
 
     [Test]
-    public void Ascii_Whitespace_contains_only_space_tab_cr_lf()
+    public void Ascii_AnyWhitespace_contains_space_tab_cr_lf()
     {
-        Assert.That(RuneSet.Ascii.Whitespace.Contains(' '), Is.True);
-        Assert.That(RuneSet.Ascii.Whitespace.Contains('\t'), Is.True);
-        Assert.That(RuneSet.Ascii.Whitespace.Contains('\r'), Is.True);
-        Assert.That(RuneSet.Ascii.Whitespace.Contains('\n'), Is.True);
+        // ASCII whitespace including line terminators. The "regex \s on
+        // ASCII" set, for grammars that treat newlines as ordinary
+        // whitespace.
+        Assert.That(RuneSet.Ascii.AnyWhitespace.Contains(' '), Is.True);
+        Assert.That(RuneSet.Ascii.AnyWhitespace.Contains('\t'), Is.True);
+        Assert.That(RuneSet.Ascii.AnyWhitespace.Contains('\r'), Is.True);
+        Assert.That(RuneSet.Ascii.AnyWhitespace.Contains('\n'), Is.True);
         // Not in the literal " \t\r\n" set, even though char.IsWhiteSpace says yes.
-        Assert.That(RuneSet.Ascii.Whitespace.Contains(0x00A0), Is.False); // NBSP
-        Assert.That(RuneSet.Ascii.Whitespace.Contains('\v'), Is.False);   // vertical tab
-        Assert.That(RuneSet.Ascii.Whitespace.Contains('\f'), Is.False);   // form feed
+        Assert.That(RuneSet.Ascii.AnyWhitespace.Contains(0x00A0), Is.False); // NBSP
+        Assert.That(RuneSet.Ascii.AnyWhitespace.Contains('\v'), Is.False);   // vertical tab
+        Assert.That(RuneSet.Ascii.AnyWhitespace.Contains('\f'), Is.False);   // form feed
+    }
+
+    [Test]
+    public void Ascii_InlineWhitespace_contains_only_space_and_tab()
+    {
+        // ASCII intra-line whitespace. Mirrors the full-Unicode
+        // RuneSet.InlineWhitespace but stays inside ASCII.
+        Assert.That(RuneSet.Ascii.InlineWhitespace.Contains(' '), Is.True);
+        Assert.That(RuneSet.Ascii.InlineWhitespace.Contains('\t'), Is.True);
+        // Line terminators excluded by definition.
+        Assert.That(RuneSet.Ascii.InlineWhitespace.Contains('\r'), Is.False);
+        Assert.That(RuneSet.Ascii.InlineWhitespace.Contains('\n'), Is.False);
+        // Unicode-only whitespace excluded because this is the ASCII set.
+        Assert.That(RuneSet.Ascii.InlineWhitespace.Contains(0x00A0), Is.False); // NBSP
     }
 
     [Test]

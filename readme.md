@@ -42,9 +42,9 @@ var settingValue = FirstOf(
 
 var document = AllOf(
     settingName,
-    Optional(Whitespace()),
+    Optional(AnyWhitespace()),
     Grapheme('='),
-    Optional(Whitespace()),
+    Optional(AnyWhitespace()),
     settingValue
 );
 
@@ -67,7 +67,7 @@ document.Parse("नमस्ते = 1"); // name: "नमस्ते", value: 
 // 𠮷 is U+20BB7, one rune but two UTF-16 chars. 
 document.Parse("𠮷田 = 5"); // name: "𠮷田", value: "5"
 
-// Optional(Whitespace()) matches Unicode's White_Space property (UAX #44), not just ASCII
+// Optional(AnyWhitespace()) matches Unicode's White_Space property (UAX #44), not just ASCII
 document.Parse("setting\u00A0=\u00A05");  // (non-breaking space)
 document.Parse("setting\u3000=\u30005");  // (ideographic space) name: "setting", value: "5"
 

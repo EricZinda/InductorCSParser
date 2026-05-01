@@ -77,37 +77,37 @@ public static class JsonGrammar
 
         JsonMember = AllOf(
             JsonString,
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             Grapheme(':'),
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             value
         ).As("member").Preserve();
 
         JsonObject = AllOf(
             Grapheme('{'),
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             Optional(AllOf(
                 JsonMember,
-                ZeroOrMore(AllOf(Optional(Whitespace()), Grapheme(','), Optional(Whitespace()), JsonMember))
+                ZeroOrMore(AllOf(Optional(AnyWhitespace()), Grapheme(','), Optional(AnyWhitespace()), JsonMember))
             )),
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             Grapheme('}')
         ).As("object").Preserve();
 
         JsonArray = AllOf(
             Grapheme('['),
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             Optional(AllOf(
                 value,
-                ZeroOrMore(AllOf(Optional(Whitespace()), Grapheme(','), Optional(Whitespace()), value))
+                ZeroOrMore(AllOf(Optional(AnyWhitespace()), Grapheme(','), Optional(AnyWhitespace()), value))
             )),
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             Grapheme(']')
         ).As("array").Preserve();
 
         value.Bind(FirstOf(JsonString, JsonNumber, JsonObject, JsonArray, JsonTrue, JsonFalse, JsonNull));
 
-        Json = AllOf(Optional(Whitespace()), value, Optional(Whitespace()), Eof());
+        Json = AllOf(Optional(AnyWhitespace()), value, Optional(AnyWhitespace()), Eof());
         Json.Compile();
     }
 }

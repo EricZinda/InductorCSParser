@@ -7,8 +7,9 @@ namespace InductorParser;
 
 // A set of Unicode scalar values (runes), used to describe character classes
 // for OneOf and NoneOf. Build one with the factory methods (Single, Range,
-// Runes, Category) or one of the built-ins (Letters, Digits, Whitespace, and
-// their Ascii.* variants), then compose larger classes with the set operators:
+// Runes, Category) or one of the built-ins (Letters, Digits, InlineWhitespace,
+// LineTerminators, and their Ascii.* variants), then compose larger
+// classes with the set operators:
 //
 //     |   union           a | b           runes in a or b
 //     &   intersection    a & b           runes in a and b
@@ -497,11 +498,13 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
         return result;
     }
 
-    // Whitespace doesn't decompose cleanly into UnicodeCategory values
-    // (char.IsWhiteSpace includes a few specific Control-category code
-    // points like \t and \n, plus SpaceSeparator/LineSeparator/ParagraphSeparator).
-    // Keep it as its own predicate-based scan.
-    private static readonly Lazy<RuneSet> _whitespace = new Lazy<RuneSet>(BuildWhitespace);
+    // InlineWhitespace is "whitespace within a line": every rune that
+    // char.IsWhiteSpace accepts MINUS the seven UAX #18 single-rune line
+    // terminators (LF, VT, FF, CR, NEL, LS, PS). It doesn't decompose
+    // cleanly into UnicodeCategory values, so it's built by a predicate
+    // scan rather than CategoriesUnion. For line terminators see
+    // LineTerminators below and Rules.EndOfLine().
+    private static readonly Lazy<RuneSet> _inlineWhitespace = new Lazy<RuneSet>(BuildInlineWhitespace);
 
     // The set of Unicode scalar values that are letters in Unicode's
     // General_Category sense (Lu, Ll, Lt, Lm, Lo). Matches what
@@ -519,7 +522,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     // Not(stopRule) + AnyToken() for rule-based stops.
     public static RuneSet Letters => _letters.Value;
     public static RuneSet Digits => _digits.Value;
-    public static RuneSet Whitespace => _whitespace.Value;
+    public static RuneSet InlineWhitespace => _inlineWhitespace.Value;
 
     // The single-rune line terminators defined by UAX #18 Annex C:
     // LF (U+000A), VT (U+000B), FF (U+000C), CR (U+000D), NEL (U+0085),
@@ -527,14 +530,13 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     // matches what Java's \R, ECMAScript's "line terminator" concept,
     // and most modern regex engines treat as a newline rune.
     //
-    // Named SingleRuneLineTerminators (not just LineTerminators) as a
-    // reminder that a RuneSet holds individual code points, not
-    // sequences. The CRLF two-rune pair is also a line terminator
-    // under UAX #18, but it can't live in a rune set. Grammars that
-    // want CRLF-as-one-terminator combine this set with a
-    // Literal("\r\n") alternative, which is what Rules.EndOfLine()
-    // does.
-    public static readonly RuneSet SingleRuneLineTerminators =
+    // The CRLF two-rune pair is also a line terminator under UAX #18,
+    // but it can't live in a rune set (every RuneSet holds individual
+    // code points, not sequences). Grammars that want CRLF-as-one-
+    // terminator combine this set with a Literal("\r\n") alternative,
+    // which is what Rules.EndOfLine() does. For "any whitespace,
+    // newlines included" use Rules.AnyWhitespace().
+    public static readonly RuneSet LineTerminators =
           Single(0x000A)   // LF
         | Single(0x000B)   // VT
         | Single(0x000C)   // FF
@@ -547,14 +549,24 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     {
         public static readonly RuneSet Letters = Range('A', 'Z') | Range('a', 'z');
         public static readonly RuneSet Digits = Range('0', '9');
-        public static readonly RuneSet Whitespace = Runes(" \t\r\n");
+        // ASCII intra-line whitespace: SPACE and TAB only. Mirrors the
+        // full-Unicode RuneSet.InlineWhitespace.
+        public static readonly RuneSet InlineWhitespace = Runes(" \t");
+        // ASCII whitespace including line terminators: SPACE, TAB, CR, LF.
+        // Use this for grammars that treat newlines as ordinary whitespace
+        // (the regex \s convention). For grammars that need to distinguish
+        // intra-line whitespace from line terminators, use InlineWhitespace
+        // and Rules.EndOfLine() instead.
+        public static readonly RuneSet AnyWhitespace = Runes(" \t\r\n");
         public static readonly RuneSet HexDigits = Digits | Range('a', 'f') | Range('A', 'F');
     }
 
     // Build from predicate over code points that fit in one UTF-16 char
     // (U+0000..U+FFFF). Supplementary-plane whitespace is rare in real
-    // input and not needed for the smallest core.
-    private static RuneSet BuildWhitespace()
+    // input and not needed for the smallest core. Includes a code point
+    // when char.IsWhiteSpace accepts it AND it's not one of the seven
+    // UAX #18 single-rune line terminators (those belong to EndOfLine).
+    private static RuneSet BuildInlineWhitespace()
     {
         var list = new List<Interval>();
         int? currentLow = null;
@@ -564,7 +576,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
             // Skip the surrogate block: not valid Unicode scalar values.
             // See BuildFromPredicate below for the full rationale.
             if (codepoint >= 0xD800 && codepoint <= 0xDFFF) continue;
-            if (char.IsWhiteSpace((char)codepoint))
+            if (char.IsWhiteSpace((char)codepoint) && !IsLineTerminator(codepoint))
             {
                 if (currentLow == null) { currentLow = codepoint; currentHigh = codepoint; }
                 else currentHigh = codepoint;
@@ -578,6 +590,18 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
         if (currentLow != null) list.Add(new Interval(currentLow.Value, currentHigh));
         return new RuneSet(list.ToArray());
     }
+
+    // Mirror of LineTerminators contents, used by BuildInlineWhitespace
+    // at type-init time. Kept as an inline check so we don't depend on
+    // the LineTerminators field initialization order.
+    private static bool IsLineTerminator(int codepoint) =>
+        codepoint == 0x000A   // LF
+        || codepoint == 0x000B   // VT
+        || codepoint == 0x000C   // FF
+        || codepoint == 0x000D   // CR
+        || codepoint == 0x0085   // NEL
+        || codepoint == 0x2028   // LS
+        || codepoint == 0x2029;  // PS
 
     // Scan 0..0x10FFFF once and populate the cache with a RuneSet for every
     // requested category that isn't already cached. Each code point's

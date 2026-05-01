@@ -29,8 +29,8 @@ namespace InductorParser.Tests;
 //
 // Case-insensitivity: the regex's IgnoreCase flag matches ASCII letters
 // in either case, and in practice that's all the matching we need here
-// (the special symbols ♯♭°øΔ only appear in their printed form in real
-// chord notation). Every case-insensitive keyword, including single-letter
+// (the special symbols ♯♭°øΔ have no case variants, so case folding
+// wouldn't change them either way). Every case-insensitive keyword, including single-letter
 // ones like "m" and "o", goes through the library's LiteralIgnoreAsciiCase
 // leaf so each word is one transaction.
 public static class ChordGrammar

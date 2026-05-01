@@ -229,7 +229,7 @@ Every grammar handles the same JSON escape set: `\"`, `\\`, `\/`, `\b`, `\f`, `\
 
 All six grammar-based parsers skip whitespace between structural tokens. The style differs:
 
-- **InductorParser**, **Pegasus**, **Pidgin**, **Sprache**, **Superpower**: explicit whitespace rules (`Optional(Whitespace())` / `_ = [ \t\r\n]*` / `SkipWhitespaces` / `WhiteSpace.Many()`).
+- **InductorParser**, **Pegasus**, **Pidgin**, **Sprache**, **Superpower**: explicit whitespace rules (`Optional(AnyWhitespace())` / `_ = [ \t\r\n]*` / `SkipWhitespaces` / `WhiteSpace.Many()`).
 - **Parlot**: implicit via `Terms.Token(...)` which skips leading whitespace for every token.
 
 Work-equivalent. On inputs with no whitespace (what the bench generates via `ToString()`), all of them bottom out at "peek next char, it's not whitespace, done."
@@ -269,7 +269,7 @@ The shape of the output a parser hands back makes a big difference to timing, be
 
 InductorParser builds a bigger data structure than the IJson-producing parsers. Every structural rule in the grammar produces a Symbol, and each Symbol carries the source position it came from (offset plus length in the input) and the rule ID that produced it. That turns the parse tree into something you can actually use for IDE-class work: syntax highlighting, error-squiggle placement, jump-to-definition, formatting, refactoring, language-server integrations, anything that needs to map tree nodes back to locations in the source. A plain IJson tree throws all of that away at parse time and can't drive any of those uses.
 
-The parse-time optimizations keep the overhead as low as it can be. The Delete filter removes `Optional(Whitespace())` / delimiter nodes, the FirstOf-wrapper removal collapses every `FirstOf(...)` whose FlattenType is Flatten, the `ScanUntil` leaf produces one leaf Symbol for each string body instead of one per character, and the per-invocation `SuccessMode` routes each composite into either "merge my children into the caller's list" (no wrapper needed) or "wrap into a new Symbol" depending on what the FlattenType implies. What Typed adds on top is one IJson + backing per value, matching competitor libraries' output shape exactly.
+The parse-time optimizations keep the overhead as low as it can be. The Delete filter removes `Optional(AnyWhitespace())` / delimiter nodes, the FirstOf-wrapper removal collapses every `FirstOf(...)` whose FlattenType is Flatten, the `ScanUntil` leaf produces one leaf Symbol for each string body instead of one per character, and the per-invocation `SuccessMode` routes each composite into either "merge my children into the caller's list" (no wrapper needed) or "wrap into a new Symbol" depending on what the FlattenType implies. What Typed adds on top is one IJson + backing per value, matching competitor libraries' output shape exactly.
 
 This is inherent to what InductorParser is for. The library trades some speed for a parse tree that carries position and rule-id metadata you need for things like syntax highlighting, error recovery, and LSP integrations, the same kind of output a compiler frontend wants. The Typed row shows that even on top of that richer tree, walking to an IJson output costs only about 1.1x extra over the Grapheme row; the Symbol tree isn't "wasted" work, it's a superset that carriers metadata competitors throw away.
 
