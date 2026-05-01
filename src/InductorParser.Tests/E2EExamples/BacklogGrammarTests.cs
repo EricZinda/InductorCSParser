@@ -18,7 +18,7 @@ namespace InductorParser.Tests;
 //    verdict from reference regex and grammar.
 // 2. Timing. Same corpus, looped, wall-clock under Stopwatch. Grammar
 //    must come in within 2x of the compiled regex. Ignored today. The
-//    same composite overhead that puts ChordGrammar at ~17-18x applies
+//    same composite overhead that puts ChordGrammar at ~6-8x applies
 //    here, so we report ratios and leave the hard gate for the FirstOf
 //    required-runes dispatch work tracked separately.
 [TestFixture]
@@ -220,16 +220,16 @@ public class BacklogGrammarTests
 
 
     // Ignored. Ratios on this box (net8.0, Release, 5000 iters). Three-run
-    // range as of 2026-04-22, which is after FirstOf required-runes dispatch
+    // range as of 2026-04-30, which is after FirstOf required-runes dispatch
     // (p500) and BetweenInclusive first-rune skip (p750). Run-to-run noise
-    // on these short corpora is high; per-case numbers swing by ~2-3x
-    // between runs:
-    //   H1:        46-53x
-    //   H2:         8-27x
-    //   Bullet:     5-8x
-    //   HrRun:      5-6x
-    //   HrSpaced:   7-9x
-    //   Paragraph: 10-22x
+    // on these short corpora is high; per-case numbers swing by 2-3x or
+    // more between runs:
+    //   H1:        36-49x
+    //   H2:         7-30x
+    //   Bullet:     6-8x
+    //   HrRun:      4-15x
+    //   HrSpaced:   5-14x
+    //   Paragraph: 12-34x
     // Dispatch helps most when an FirstOf / composite has many branches and a
     // disjoint first-char set. These rules are simpler (one OneOf or one
     // Grapheme at the head), so the composite transaction overhead on the
