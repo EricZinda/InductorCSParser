@@ -7,7 +7,7 @@ This doc describes what makes a rule's test file "comprehensive" in this codebas
 Tests live in `src/InductorParser.Tests/`, organized into three subfolders:
 
 - `Rules/`: one file per rule (`GraphemeRuleTests.cs`, `OneOfRuleTests.cs`, `AllOfRuleTests.cs`, etc.), each named after the rule type with a `Tests` suffix.
-- `Core/`: cross-cutting concerns that don't belong to any one rule (`WithErrorTests.cs`, `LexerSwitchTests.cs`, `IdAssignmentTests.cs`, `TokenSetTests.cs`). Files are named after the concern.
+- `Core/`: cross-cutting concerns that don't belong to any one rule (`WithErrorTests.cs`, `IdAssignmentTests.cs`, `TokenSetTests.cs`). Files are named after the concern.
 - `E2EExamples/`: end-to-end grammar tests that exercise full grammars built from the public API (e.g. `SettingExampleTests.cs`).
 
 Test files in all three folders share the same `namespace InductorParser.Tests;`, so the folder layout is a discoverability convention, not a namespace boundary.
@@ -89,21 +89,6 @@ Required tests beyond single-token coverage:
 
 - **Mismatch on the first token.** Assert position is at the very start (offset 0 for a top-level rule).
 - **Mismatch on a later token.** Construct input that matches the first N-1 tokens successfully then diverges. Assert position equals the start of the Nth token (where `tokenStart` was captured in the Nth iteration), not the start of the whole match (offset 0) and not post-read (offset of the token after the failure).
-- **Both lexer modes where applicable.** For rules whose behavior changes between `GraphemeLexer` and `RuneLexer`, include at least one test under each via `new ParseOptions { InputUnit = InputUnit.Rune }`.
-
-Example (from `GraphemeRuleTests.cs`):
-
-```csharp
-[Test]
-public void Token_multi_rune_mismatch_on_second_token_reports_at_second_token_start()
-{
-    var rule = Token("\uD83D\uDC4B\uD83C\uDFFD").WithError("expected wave");
-    var result = rule.Parse("\uD83D\uDC4Bxy",
-        new ParseOptions { InputUnit = InputUnit.Rune });
-    Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
-    Assert.That(result.ErrorMessage, Is.EqualTo("expected wave"));
-}
-```
 
 ### Composite Rules
 
@@ -154,7 +139,6 @@ Required tests:
 
 Some tests don't belong to any one rule's file. These live in `Core/`:
 
-- **Lexer-mode switching** → `Core/LexerSwitchTests.cs`. Tests that exercise `ParseOptions.InputUnit` switching.
 - **WithError deepest-failure across multiple rules**: `Core/WithErrorTests.cs`. Tests that build grammars spanning several rules and assert the right message wins across them.
 - **Id assignment (Compile)**: `Core/IdAssignmentTests.cs`. Tests that verify the three-pass id assignment (pinned, named-hash, anonymous) behaves correctly.
 - **TokenSet behavior**: `Core/TokenSetTests.cs`. Tests for the `TokenSet` data type itself (not its consumers like `OneOfRule`).
@@ -172,7 +156,7 @@ End-to-end grammars built from the public API live in `E2EExamples/`. Examples t
 
 ## File Organization
 
-One test fixture per rule, in `Rules/`. File naming follows the rule's type name plus `Tests`: `Rules/GraphemeRuleTests.cs` → `GraphemeRule.cs`. Cross-cutting files in `Core/` are named after the concern (`WithErrorTests.cs`, `LexerSwitchTests.cs`).
+One test fixture per rule, in `Rules/`. File naming follows the rule's type name plus `Tests`: `Rules/GraphemeRuleTests.cs` → `GraphemeRule.cs`. Cross-cutting files in `Core/` are named after the concern (`WithErrorTests.cs`, `TracingTests.cs`).
 
 Tests inside a fixture are ordered loosely by category: success paths first, failure-position tests next, WithError-message tests after that, then edge cases and construction-time validation. This isn't enforced by tooling, it's a readability convention.
 

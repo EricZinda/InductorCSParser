@@ -269,7 +269,7 @@ foreach (var sectionSymbol in result.Tree!.FindAll(section))
 }
 ```
 
-`SourceRange` returns a `Start` and `End` pair, each a `SourcePosition` carrying the same five units as `ParseResult`'s error position: `CharIndex`, `RuneIndex`, `TokenIndex`, `Line`, `Column`. The `+ 1` here is because Language Server Protocol lines are zero-based but humans count from 1.
+`SourceRange` returns a `Start` and `End` pair, each a `SourcePosition` carrying the same four units as `ParseResult`'s error position: `CharIndex`, `TokenIndex`, `Line`, `Column`. The `+ 1` here is because Language Server Protocol lines are zero-based but humans count from 1.
 
 A composite node's range covers every leaf underneath it. Ask `keyValue.SourceRange` and you get the whole `host = "localhost"` line. Ask `value.SourceRange` and you get just the value. Pick the node and you pick the span.
 
@@ -315,41 +315,37 @@ Here's where it gets interesting. `ErrorColumn` and a sibling field `ErrorCharIn
 port oops
 ```
 
-That's a section name made of a single family emoji, then a malformed key/value line. The family emoji is the demo's whole point: it's one of the few characters that pulls the three counting units apart in opposite directions. A bare guitar emoji 🎸 is 2 chars but 1 rune and 1 grapheme (chars and runes diverge, runes and graphemes don't). A letter with a combining accent like `é` in NFD is 1 char per rune but 2 runes per grapheme (the other way around). The family emoji is 8 chars, 5 runes (man, ZWJ, woman, ZWJ, girl), and 1 grapheme. So char, rune, and grapheme all give different numbers, which is what makes "which one do I report?" a real question instead of a hypothetical one.
+That's a section name made of a single family emoji, then a malformed key/value line. The family emoji is the demo's whole point: it's one of the few characters that pulls chars and tokens apart by a wide margin. A bare guitar emoji 🎸 is 2 chars but 1 token (one user-visible character). The family emoji is 8 chars but still 1 token. So the char count and the token count give very different numbers, which is what makes "which one do I report?" a real question instead of a hypothetical one.
 
-The section header itself parses fine: `name` rejects single-rune whitespace and `]`, but a multi-rune grapheme cluster like the family emoji isn't any single rune in any set, so `NoneOf` accepts it as one token. The parser gets past the header and fails on line 2 at the same spot it would for an ASCII version: where the `=` should be.
+The section header itself parses fine: `name` rejects single-rune whitespace and `]`, but a multi-rune token like the family emoji isn't any single rune in any rune-only set, so `NoneOf` accepts it as one token. The parser gets past the header and fails on line 2 at the same spot it would for an ASCII version: where the `=` should be.
 
-But the position numbers diverge. To a human, the family is one character and the failure happens 5 characters into the second line. In memory, the family is five runes (man, ZWJ, woman, ZWJ, girl) and eight UTF-16 code units (each emoji is a surrogate pair, plus two code units for the two ZWJs). So which "position" should the parser report?
+But the position numbers diverge. To a human, the family is one character and the failure happens 5 characters into the second line. In memory, the family is eight UTF-16 code units (each emoji is a surrogate pair, plus two code units for the two ZWJs). So which "position" should the parser report?
 
-Inductor Parser reports it four ways, because the right unit depends on what the caller is going to do with the number:
+Inductor Parser reports it three ways plus line/column, because the right unit depends on what the caller is going to do with the number:
 
 ```CSharp
-result.ErrorCharIndex     // 16 - UTF-16 code units, what string.Substring uses
-result.ErrorRuneIndex     // 13 - runes
-result.ErrorTokenIndex // 9  - graphemes
-result.ErrorLine          // 1
-result.ErrorColumn        // 5  - same unit as ErrorCharIndex, used by the Language Server Protocol
+result.ErrorCharIndex   // 16 - UTF-16 code units, what string.Substring uses
+result.ErrorTokenIndex  // 9  - tokens (user-visible characters)
+result.ErrorLine        // 1
+result.ErrorColumn      // 5  - same unit as ErrorCharIndex, used by the Language Server Protocol
 ```
 
 All four point at the same place in the input. They just count it in different units.
 
 Use `ErrorCharIndex` (or `ErrorColumn`) when you're going to feed the number into something that thinks in chars: `string.Substring`, `ReadOnlySpan<char>.Slice`, a Language Server Protocol diagnostic, a regex offset. That's most production code, because chars are the unit .NET strings index in.
 
-Use `ErrorRuneIndex` when you're working with runes directly. Less common, but it shows up if you're stepping through `Rune.GetRunes(input)` and want to know which rune tripped the parser.
-
 Use `ErrorTokenIndex` for anything that faces a human. "Error at character 9" is what a person sees on screen. "Error at character 16" would seem to point past the end of what they typed, because they don't think of an emoji as taking up 8 of anything.
 
-Most of the time you won't care, because most input is ASCII and all four numbers are equal. But the moment a user pastes in an emoji, a flag, or a letter with a combining accent, the indices diverge, and "which one do I show in the error message" stops being a question you can ignore.
+Most of the time you won't care, because most input is ASCII and the two numbers are equal. But the moment a user pastes in an emoji, a flag, or a letter with a combining accent, the indices diverge, and "which one do I show in the error message" stops being a question you can ignore.
 
-The same multi-unit story applies to every Symbol's SourceRange, not just to errors. If the input has the family emoji as a section name and we want to underline it, the three units give three different widths:
+The same multi-unit story applies to every Symbol's SourceRange, not just to errors. If the input has the family emoji as a section name and we want to underline it, the two units give two different widths:
 
 ```CSharp
 var result = config.Parse("[👨‍👩‍👧]\n");
 var sectionName = result.Tree!.Find(section)!.Children[0];  // the "name" leaf
 var range = sectionName.SourceRange!.Value;
-int charWidth     = range.End.CharIndex     - range.Start.CharIndex;     // 8
-int runeWidth     = range.End.RuneIndex     - range.Start.RuneIndex;     // 5
-int graphemeWidth = range.End.TokenIndex - range.Start.TokenIndex; // 1
+int charWidth  = range.End.CharIndex  - range.Start.CharIndex;   // 8
+int tokenWidth = range.End.TokenIndex - range.Start.TokenIndex;  // 1
 ```
 
-All three are right. The right one to use is whichever your consumer counts in: chars to feed `string.Substring` or send a Language Server Protocol diagnostic, runes to step through `Rune.GetRunes(input)`, graphemes to draw a `^` under each thing the user sees on screen.
+Both are right. The right one to use is whichever your consumer counts in: chars to feed `string.Substring` or send a Language Server Protocol diagnostic, tokens to draw a `^` under each thing the user sees on screen.

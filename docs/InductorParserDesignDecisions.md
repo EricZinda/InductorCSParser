@@ -14,7 +14,7 @@ Related docs:
 
 - [InductorParserReference.md](InductorParserReference.md): user reference for how to write grammars with the library.
 - [Terminology.md](Terminology.md): library-specific meaning of terms used throughout these docs (leaf, composite, syntax tree, debug tree, AST, FlattenType writing conventions).
-- [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md): lexer internals (code units, runes, graphemes, the two lexers, normalization).
+- [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md): lexer internals (code units, runes, tokens, normalization).
 - [UnicodeGotchas.md](UnicodeGotchas.md): caller-side Unicode concerns the lexer can't fix.
 
 ## What We're Keeping From C++
@@ -153,15 +153,15 @@ The full contract including method signatures and the lexer API is covered below
 
 For grammars that compose existing leaves (which is most grammars) you never need to derive. The built-in composites cover the usual ways rules are combined: run these rules in order, try these alternatives, repeat this rule, or check ahead without consuming input. The built-in leaves cover the character-class cases. User-defined rules matter when you're adding behavior the composites can't express, for example a rule that consumes until a specific UTF-16 offset, a grammar-context-aware matcher that queries external state, or a custom character-boundary detector.
 
-## Why Two Lexers
+## Why One Lexer, Tokenizing By StringInfo Text Element
 
-The parser ships two lexers: `GraphemeLexer` (default) and `RuneLexer`. Both produce one "token" per `Read()` call. They differ in what counts as a token. `GraphemeLexer` walks by .NET `StringInfo` text elements, which are UAX #29-style grapheme clusters on modern .NET and more limited on legacy runtimes. `RuneLexer` walks by Unicode scalar value.
+The lexer hands the parser one .NET `StringInfo` text element per `Read()`. On modern .NET that's a UAX #29 extended grapheme cluster. On legacy runtimes it's the older Microsoft segmentation, with the gaps documented in [UnicodeGotchas.md](UnicodeGotchas.md#pre-net-5-grapheme-segmentation). Either way, the unit is "what a user perceives as one character." The guitar emoji 🎸 is one character. The family emoji 👨‍👩‍👧‍👦 is one character. The waving hand with a skin-tone modifier 👋🏽 is one character. Grammars that operate on user-typed text want that to be the unit they match.
 
-`GraphemeLexer` is the default because "one character" in the user's mental model is one grapheme (the guitar emoji 🎸 is one character, the family emoji 👨‍👩‍👧‍👦 is one character), and grammars that operate on user-typed text want that to be the unit they match. `RuneLexer` exists because some grammars specifically need rune-level access: parsing Unicode-category boundaries, walking combining-mark sequences individually, or implementing a Unicode library on top of the parser.
+An earlier design exposed two lexers (one rune-level, one grapheme-level) and let the caller pick via a `ParseOptions` field. We dropped that. Where the two diverged on real input the rune-level behavior was almost always the buggy one: a grammar consuming "one rune" from 👨‍👩‍👧‍👦 matched the first 👨 and left the other six runes (three ZWJs and three people emoji) dangling for subsequent rules to trip over. The grammar author rarely meant that. Picking the grapheme-level unit by default was already the right answer for almost every grammar. Making it the only answer removed a configuration knob whose other position silently produced wrong parses.
 
-The implementation details (how graphemes are detected, how position tracking works across the two, where the two produce different streams) live in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). The design rationale worth keeping here is: swapping the lexer is a `ParseOptions` field, not a grammar change, and grammars written against the `Rule` API work against either lexer. The rules whose behavior can observably differ between lexers are the ones that compare against a token directly (`Token`, `OneOf`, `NoneOf`, `Literal`, `Peek`, `Not`). Composite rules inherit any difference from a leaf inside them.
+The escape hatch for grammars that genuinely need to look inside one token (walk combining marks individually, validate each rune of a grapheme, parse a multi-rune cluster shape) is `WithinToken(innerRule)`. The outer parse reads one token, and the inner rule walks the runes of that one token via a sub-lexer that's bounded to the token's range. `Identifier()` uses this internally to handle Devanagari and Thai conjunct letters. Rune-level access stays available, just for the parts of the grammar that actually need it.
 
-Where the two diverge on real input, the `RuneLexer` behavior is usually the buggy one: it was matching part of a grapheme as if it were a standalone character. `GraphemeLexer` avoids that when the runtime's `StringInfo` groups the sequence as one text element. The reframing is "`GraphemeLexer` revealed that my grammar was silently wrong on multi-rune input," not "`GraphemeLexer` broke my grammar."
+`TokenSet` carries multi-rune entries alongside its rune ranges, so character classes like `TokenSet.Letters | TokenSet.Runes(USFlagGrapheme)` mean what they read: "any single letter rune, or the US flag." `OneOf` and `NoneOf` consult both halves on each token, which is the other half of why a single grapheme-aware lexer covers the cases the dual-lexer design was working around.
 
 ## Tokens and Leaves
 
@@ -184,28 +184,26 @@ public readonly ref struct Token
 
 `Token` is a `ref struct` so it can carry a `Span<char>` into the original input without allocating. Each token is the section of input that the lexer consumed to produce it. Leaf `Symbol`s store `Memory`, the heap-safe view over that same source text, so parsing still avoids substring copies.
 
-Under `RuneLexer` every well-formed token is one rune wide by construction (the lexer emits one scalar value per read; stray surrogate halves surface as one-code-unit tokens with no `RuneValue`). Under `GraphemeLexer` most tokens are still one rune (ASCII, composed-form Latin, CJK, most punctuation are all one grapheme = one rune), but emoji sequences, regional-indicator flags, skin-tone modified emoji, Devanagari conjuncts, and decomposed-form combinations produce multi-rune tokens when the runtime's `StringInfo` groups them as one text element.
+Most tokens are still one rune (ASCII, composed-form Latin, CJK, most punctuation are all one rune = one token), but emoji sequences, regional-indicator flags, skin-tone modified emoji, Devanagari conjuncts, and decomposed-form combinations produce multi-rune tokens when the runtime's `StringInfo` groups them as one text element.
 
-The token stores only the UTF-16 offset and length. Rune and grapheme positions aren't carried on every token; `ParseResult` and `Symbol.SourceRange` derive those from the char index only when a caller asks. Rules that need to ask "is this token exactly one rune?" read `Token.RuneValue`, which returns the code point for a one-rune token and `-1` for EOF or multi-rune grapheme tokens.
+The token stores only the UTF-16 offset and length. The token index isn't carried on every token. `ParseResult` and `Symbol.SourceRange` derive it from the char index only when a caller asks. Rules that need to ask "is this token exactly one rune?" read `Token.RuneValue`, which returns the code point for a one-rune token and `-1` for EOF or multi-rune tokens.
 
 ### Comparing Tokens: The Four Leaves
 
 Every built-in rule that looks at token content reduces to one of four operations.
 
-**`Token('=')`, `Token(Rune r)`, `Token(string grapheme)`.** Matches one `StringInfo` text element (a Token), specified at rule-construction time. The `string` overload requires exactly one text element and is validated at construction with `StringInfo.GetNextTextElement`. The `char`, `Rune`, and `int` overloads are convenience wrappers that build a one-element string. At match time the rule reads lexer tokens until it has consumed the expected string length, comparing each token's `Chars` span with the corresponding part of the expected string. Under `GraphemeLexer` that's a single-token compare. Under `RuneLexer` it's a one-to-N token compare (`Token("👋🏽")` expects two rune tokens, waving hand plus medium skin tone, so it reads two tokens and compares each).
+**`Token('=')`, `Token(Rune r)`, `Token(string token)`.** Matches one `StringInfo` text element, specified at rule-construction time. The `string` overload requires exactly one text element and is validated at construction with `StringInfo.GetNextTextElement`. The `char`, `Rune`, and `int` overloads are convenience wrappers that build a one-element string. At match time the rule reads one lexer token and compares its `Chars` span with the expected string. `Token("👋🏽")` matches the waving-hand-with-skin-tone token as a single unit; the lexer already grouped its two runes together so the comparison is a single span equal-check.
 
-**`OneOf(TokenSet cc)` and `NoneOf(TokenSet cc)`.** These are the rune-set tests. Both are defined in terms of the predicate "the token is exactly one rune *r*, and `cc.Contains(r)`." `OneOf` matches when the predicate is true. `NoneOf` matches when it's false. The asymmetry that falls out of this is important: a multi-rune token never matches `OneOf` (the predicate is false because the token isn't one rune) but it *does* match `NoneOf` (the predicate is false, so the negation is true). This is what makes `OneOrMore(NoneOf(formattingChars))` sweep up emoji correctly in the pass-through-text recipe.
+**`OneOf(TokenSet set)` and `NoneOf(TokenSet set)`.** These are the character-class tests. A `TokenSet` holds two kinds of members: rune intervals (the common case, what `TokenSet.Letters` and `TokenSet.Range(...)` produce) and explicit multi-rune tokens (added by passing a multi-rune grapheme to `TokenSet.Runes("...")`). Both rules ask the same question of each token, just with the answer flipped:
 
-The two semantics in prose:
+- `OneOf(set)` succeeds when the lexer's next token is in the set.
+- `NoneOf(set)` succeeds when it isn't.
 
-- `OneOf(class)` is existential: "is this token one of the runes in the class?" A multi-rune token isn't any single rune, so no.
-- `NoneOf(class)` is universal: "does this token avoid all runes in the class?" A multi-rune token avoids every single-rune value, so yes.
+For a single-rune token the test is "is the rune in any of the set's intervals?", which is a binary search over a small sorted list. For a multi-rune token the test is "is this exact grapheme in the set's multi-rune array?", which only fires when the set was given multi-rune content; rune-only sets short-circuit the multi-rune check entirely. The asymmetry that matters in practice: a multi-rune token like 👋🏽 fed to `OneOf(TokenSet.Letters)` doesn't match (Letters is rune-only and 👋🏽 isn't a single rune), but the same token fed to `NoneOf(TokenSet.Runes("\""))` does match (the closing-quote set has no multi-rune entries, so a multi-rune token can't be in it). This is what makes `OneOrMore(NoneOf(stopSet))` sweep up emoji correctly in the pass-through-text recipe, and what makes `OneOf(TokenSet.Letters | TokenSet.Runes(USFlagGrapheme))` accept letters and the US flag without needing a `FirstOf`.
 
-**`Literal(string s)`.** Generalizes `Token` to any non-empty string. It keeps the expected string and uses the same lockstep loop: read a lexer token, compare it with the corresponding range of the expected text, and advance by `token.Length`. Under `GraphemeLexer` a literal containing a multi-rune grapheme compares that grapheme as one token. Under `RuneLexer` the same text compares rune by rune. This is the only one of these types that routinely consumes more than one token in a single match. `Token(string)` can also consume multiple tokens under `RuneLexer` when its single expected grapheme contains multiple runes.
+**`Literal(string s)`.** Generalizes `Token` to any non-empty string. It keeps the expected string and uses a lockstep loop: read a lexer token, compare it with the corresponding range of the expected text, and advance by `token.Length`. A literal containing a multi-rune grapheme compares that grapheme as one token, the same way `Token` does. The only difference is that a literal can hold a sequence of multiple tokens, where `Token` requires exactly one. `Literal("👨‍👩‍👧‍👦 and friends")` reads one family-emoji token and then twelve more tokens for the trailing text.
 
-Because `Literal` compares in the lexer's token units, a literal like `Literal("👨‍👩‍👧‍👦")` is checked as one token under `GraphemeLexer` (the whole family-emoji grapheme) and seven tokens under `RuneLexer` (four people emoji plus three ZWJs). Either way, the literal matches input that contains the same sequence of characters.
-
-**`AnyToken()`.** Matches any single token regardless of content, as long as the lexer isn't at EOF. Under `RuneLexer` it matches any lexer token, including a stray surrogate token if malformed UTF-16 is present. Under `GraphemeLexer` it matches any `StringInfo` text element, including multi-rune ones. This is the "match one token, whatever it's" leaf.
+**`AnyToken()`.** Matches any single token regardless of content, as long as the lexer isn't at EOF. This is the "match one token, whatever it is" leaf.
 
 ### TokenSet: The Set Primitive
 
@@ -303,26 +301,24 @@ Everything else (flatten policies, error messages, named symbols) is metadata on
 Concretely, the four comparison leaves are all short:
 
 ```csharp
-// Token(string grapheme): _expected stores exactly one StringInfo text element.
-// The loop reads one token under GraphemeLexer, or 1..N rune tokens under RuneLexer.
+// Token(string text): _expected stores exactly one StringInfo text element.
+// One lexer Read returns one token whose Chars span covers the whole element.
 using var tx = lexer.BeginTransaction();
-int consumed = 0;
-while (consumed < _expected.Length)
-{
-    var actual = lexer.Read();
-    if (actual.IsEof) return null;
-    if (consumed + actual.Length > _expected.Length) return null;
-    if (!actual.Chars.SequenceEqual(_expected.AsSpan(consumed, actual.Length))) return null;
-    consumed += actual.Length;
-}
+var actual = lexer.Read();
+if (actual.IsEof) return null;
+if (actual.Length != _expected.Length) return null;
+if (!actual.Chars.SequenceEqual(_expected.AsSpan())) return null;
 tx.Commit();
-return makeSymbolFrom(...);
+return makeSymbolFrom(actual);
 
-// OneOf(TokenSet cc)
+// OneOf(TokenSet set)
 using var tx = lexer.BeginTransaction();
 var token = lexer.Read();
 if (token.IsEof) return null;
-if (!cc.Contains(token.RuneValue)) return null; // -1 for multi-rune tokens
+// Single-rune tokens probe the rune intervals; multi-rune tokens probe
+// the multi-rune array if the set has any. Rune-only sets short-circuit
+// the multi-rune check.
+if (!set.ContainsToken(token.Chars)) return null;
 tx.Commit();
 return makeSymbolFrom(token);
 
@@ -350,21 +346,20 @@ return makeSymbolFrom(token);
 
 Each is a handful of lines. The common shape (start a transaction, read a token, test, commit on success or fall out returning `null` on failure) is the scaffolding user-defined rules inherit when they derive from `Rule` (see the "Rule Is Extensible" section). The `using` on `tx` rolls the lexer back automatically on any path that doesn't call `Commit()`, including exceptions.
 
-### Matching Multi-Rune Graphemes
+### Matching Multi-Rune Tokens
 
-Under `GraphemeLexer`, a multi-rune grapheme like 👨‍👩‍👧‍👦 arrives as a single token whose `Chars` span covers the whole sequence (eleven UTF-16 chars, seven runes). The ways a grammar can match it:
+A multi-rune token like 👨‍👩‍👧‍👦 arrives from the lexer as a single token whose `Chars` span covers the whole sequence (eleven UTF-16 chars, seven runes). The ways a grammar can match it:
 
-- **`Token("👨‍👩‍👧‍👦")`** matches one grapheme by exact content. Construction-time validation rejects arguments that aren't exactly one grapheme, so `Token("ab")` throws at grammar-build time instead of failing silently at parse time.
-- **`Literal("👨‍👩‍👧‍👦 and friends")`** matches a sequence of graphemes by exact content. Same lockstep comparison as `Token`. The difference is that `Literal` accepts any length.
+- **`Token("👨‍👩‍👧‍👦")`** matches one token by exact content. Construction-time validation rejects arguments that aren't exactly one text element, so `Token("ab")` throws at grammar-build time instead of failing silently at parse time.
+- **`Literal("👨‍👩‍👧‍👦 and friends")`** matches a sequence of tokens by exact content. Same lockstep comparison as `Token`. The difference is that `Literal` accepts any length.
 - **`AnyToken()`** matches any token including multi-rune ones. Useful when the grammar is streaming text through as opaque content ("an identifier is any non-delimiter character").
-- **`NoneOf(someClass)`** matches multi-rune tokens because they aren't in any single-rune class. This is the mechanism behind the pass-through-text recipe.
+- **`OneOf(TokenSet.Runes("👋🏽🇺🇸"))`** matches the listed multi-rune tokens via the set's multi-rune array. Combine with rune ranges to express "letters or these flags": `TokenSet.Letters | TokenSet.Runes(USFlagGrapheme)`.
+- **`NoneOf(someSet)`** matches multi-rune tokens that aren't in the set's multi-rune array. For a rune-only set, every multi-rune token passes by definition (no multi-rune entry can be in a rune-only set). This is the mechanism behind the pass-through-text recipe.
 
 What you *can't* do:
 
-- **Define a `TokenSet` that includes specific multi-rune sequences.** A `TokenSet` is a set of code points, not a set of sequences. If you want to match "any of these specific multi-rune sequences," express it as `FirstOf(Token(a), Token(b), Token(c))`, not as a character class.
-- **Test "is this grapheme a letter?" with `OneOf(TokenSet.Letters)`** when the grapheme is multi-rune. The class is defined over single runes, so any multi-rune grapheme is outside it. If you want "any identifier character, including combining marks as part of a letter sequence," use `Identifier()`. For custom shapes, `WithinToken(...)` is the escape hatch: it first reads exactly one outer grapheme token, then runs your child rule over the runes inside that grapheme. The child must consume the whole grapheme. On success, the outer parse advances by one grapheme and, when preserved, exposes one leaf for the whole grapheme rather than separate leaves for the base letter and marks.
-
-The split that remains is between rune-set tests (`OneOf`, `NoneOf`) and content-match leaves (`Token`, `Literal`). The set tests are defined over single runes by construction (a `TokenSet` is a set of code points), and the content-match leaves compare raw `Chars` spans, so they handle multi-rune graphemes naturally. A glance at a rule tells you which half of the API it lives in.
+- **Use complement on a set with multi-rune entries.** `~set` is only defined when the set is rune-only. The grapheme universe is unbounded, so the complement of a set containing 👋🏽 has no finite explicit representation. The idiom `set & ~exclusions` keeps working in the typical case where `exclusions` is rune-only.
+- **Test "is this token a letter?" with `OneOf(TokenSet.Letters)`** when the token is multi-rune. `TokenSet.Letters` is built from rune intervals only, so any multi-rune token falls outside it. If you want "any identifier character, including combining marks as part of a letter sequence," use `Identifier()`. For custom shapes, `WithinToken(...)` is the escape hatch: it reads exactly one outer token, then runs your child rule over the runes inside that token. The child must consume the whole token. On success, the outer parse advances by one token and, when preserved, exposes one leaf for the whole token rather than separate leaves for the base letter and marks.
 
 ## Greedy Repetition, No Repetition Backtracking
 
@@ -443,7 +438,7 @@ A naive post-read implementation would record at 1 instead of 0, which equals `i
 
 **Single-token leaves** (`GraphemeRule` single-rune, `OneOfRule`, `EofRule`) open a transaction, read one token, and fail if the token doesn't match. The pre-read position is exactly `transaction.StartPosition`, which the `Lexer.Transaction` struct exposes for this purpose. No extra locals, no separate state: the transaction already knows.
 
-**Multi-token leaves** (`GraphemeRule`'s lockstep loop for multi-rune graphemes under `RuneLexer`, `LiteralRule`) read a sequence of tokens and fail when any one of them mismatches. The position is the start of the *specific* failing token, not the start of the whole attempt. A `Literal("abc")` that matches "ab" and fails on the third token reports offset 2, not offset 0. These rules track a per-iteration `tokenStart` local inside the loop.
+**Multi-token leaves** (`LiteralRule`) read a sequence of tokens and fail when any one of them mismatches. The position is the start of the *specific* failing token, not the start of the whole attempt. A `Literal("abc")` that matches "ab" and fails on the third token reports offset 2, not offset 0. These rules track a per-iteration `tokenStart` local inside the loop.
 
 **Composite rules** (`AllOfRule`, `FirstOfRule`, `BetweenInclusiveRule`) don't introduce new positions of their own. They call `RecordFailure(lexer.Position, ...)` (the current lexer position after a child's transaction has rolled back), which equals where the child started trying. The child has already recorded at its own pre-read position (which is the same or deeper, depending on whether the child committed any sub-tokens before failing), so the composite's record either ties or is shallower, and deepest-failure-wins routes to the child's more-specific location. The composite still gets a chance to attach its `WithError` message via the equal-depth message-claim rule below.
 
@@ -472,9 +467,9 @@ Three specific rules fall out:
 
 **Lines are 0-based.** The first line of the file is line 0, not line 1. This is the part that surprises people reading an error in isolation (editors display 1-based to humans), but the point of these fields is machine-to-machine handoff, not direct human display. If the caller wants 1-based for a user-facing error message they add one at the edge, exactly where the translation belongs.
 
-**Columns count UTF-16 code units, not runes or graphemes.** LSP 3.17 made the encoding negotiable via `PositionEncodingKind`, but UTF-16 is still the default every implementation ships with. Counting in UTF-16 means that a grapheme like 👋🏽 (two runes, four UTF-16 chars, one visible character) contributes four to the column count, same as what VS Code's internal buffer sees. The rune and grapheme counts live on their own properties (`ErrorRuneIndex`, `ErrorTokenIndex`) for callers whose mental model works in those units.
+**Columns count UTF-16 code units, not runes or tokens.** LSP 3.17 made the encoding negotiable via `PositionEncodingKind`, but UTF-16 is still the default every implementation ships with. Counting in UTF-16 means that a token like 👋🏽 (two runes, four UTF-16 chars, one visible character) contributes four to the column count, same as what VS Code's internal buffer sees. The token count lives on its own property (`ErrorTokenIndex`) for callers whose mental model works in tokens.
 
-**`\r\n` is one line break, attributed to the `\n`.** LSP treats the pair atomically: a position can't fall between the `\r` and the `\n`. An `ErrorCharIndex` that somehow does land on the `\n` half (possible under `RuneLexer`, where the two are separate tokens) is reported on the prior line so the column stays non-negative. Grammars using the default `GraphemeLexer` never hit this case because the lexer tokenizes `\r\n` as a single grapheme cluster per UAX #29.
+**`\r\n` is one line break, attributed to the `\n`.** LSP treats the pair atomically: a position can't fall between the `\r` and the `\n`. The lexer tokenizes `\r\n` as a single text element per UAX #29, so an `ErrorCharIndex` from a normal parse never lands inside the pair. The line/column conversion handles the boundary case anyway: a char index that somehow does land on the `\n` half (a caller computing positions by hand, for instance) gets reported on the prior line so the column stays non-negative.
 
 The equivalent C++ library returns a character offset and nothing else, leaving line/column computation to the caller. The C# port bundles them because the caller almost always wants them anyway, and bundling lets us pick the convention once and document it once.
 
@@ -572,7 +567,7 @@ Six places where the C# version is strictly nicer, not just different.
 
 No required class scaffolding. The C++ version makes a grammar a type: every rule is a class, grammar composition is template instantiation. The C# port makes a grammar a set of values, which means you can build one inline as local variables, pass rules around, compose rules across files, and write tests that construct ad-hoc grammars without any class boilerplate.
 
-Unicode-aware defaults. The GraphemeLexer calls `StringInfo.GetNextTextElement` at the current UTF-16 offset and emits that returned span as one token; on modern .NET this tracks extended grapheme clusters, while older `StringInfo` implementations have the caveats covered in the Unicode docs. `TokenSet` stores Unicode scalar ranges, and composition normalization runs by default. Grammars start from a much better place for emoji, combining marks, CJK, and non-Latin scripts. The C++ version is ASCII-only in practice.
+Unicode-aware defaults. The lexer calls `StringInfo.GetNextTextElement` at the current UTF-16 offset and emits that returned span as one token; on modern .NET this tracks extended grapheme clusters, while older `StringInfo` implementations have the caveats covered in the Unicode docs. `TokenSet` stores Unicode scalar ranges and accepts multi-rune grapheme entries alongside them, and composition normalization runs by default. Grammars start from a much better place for emoji, combining marks, CJK, and non-Latin scripts. The C++ version is ASCII-only in practice.
 
 Runtime defenses against catastrophic backtracking. The C++ version has no protection: a pathological input and a grammar with ambiguous alternatives can combine to spin for minutes. The C# port has three orthogonal budgets plus a `ParseCancellation` signal that can bridge from `CancellationToken`, with protective defaults on the two deterministic ones, and `ParseResult.Outcome` tells the caller which one tripped.
 

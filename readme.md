@@ -18,9 +18,9 @@ If you write grammars in Inductor Parser, you get a foundation that helps you su
 - By default, each token presented to a rule is a .NET `StringInfo` text element, which follows Unicode grapheme-cluster behavior on modern .NET and keeps ordinary grammars from breaking apart non-ASCII text or emoji sequences accidentally.
 - Built-in rules use Unicode-aware definitions for things like "whitespace" and "identifiers" so you don't miss common corner cases.
 - The parser defaults to normalizing input so that characters that can be written as multiple things in Unicode get normalized to one (and the error indexes reverse this so errors point to the right place in the original text)
-- Every Symbol in the parse tree carries a `SourceRange` that reports its span in chars, runes, and graphemes plus line and column, so error highlights and IDE tooltips can pick the unit that matches what they show
+- Every Symbol in the parse tree carries a `SourceRange` that reports its span in chars and tokens plus line and column, so error highlights and IDE tooltips can pick the unit that matches what they show
 
-You can also pretend you never heard the word "Token Cluster" and write rules naturally: it will still give you the right base to start from!
+You can also pretend you never heard the word "grapheme cluster" and write rules naturally: it will still give you the right base to start from!
 
 Here's a grammar for reading a simple setting, and examples that show how it handles classic Unicode edge cases.
 
@@ -81,31 +81,30 @@ document.Parse("motto = \"🇺🇸\"");  // (regional-indicator flag) name: "mot
 // the same way Python and Rust do:
 document.Parse("setting🎉 = 5"); // GrammarMismatch at char 7
 ```
-Error positions are also designed for Unicode and reported in multiple units. When the input contains supplementary-plane letters, char index and rune index are different. When it contains multi-rune graphemes, rune index and grapheme index are different. This gives you the right tools for different jobs:
+Error positions are also designed for Unicode and reported in multiple units. When the input contains supplementary-plane letters, the char index and the token index are different. When it contains multi-rune tokens, they're different too, just by more. This gives you the right tools for different jobs:
 
 ```CSharp
 var result = document.Parse("𠮷田 = ");
-// ErrorCharIndex=6, ErrorRuneIndex=5, ErrorTokenIndex=5
-// (each supplementary letter is two chars but one rune)
+// ErrorCharIndex=6, ErrorTokenIndex=5
+// (each supplementary letter is two chars but one token)
 
 var result = document.Parse("नमस्ते = ");
-// ErrorCharIndex=9, ErrorRuneIndex=9, ErrorTokenIndex=7
+// ErrorCharIndex=9, ErrorTokenIndex=7
 // (Devanagari is BMP, so chars == runes, but four of the name's
-//  six graphemes span two or three runes each)
+//  six tokens span two or three runes each)
 ```
 
-The same multi-unit positioning is available for every Symbol in the parse tree on success. Every Symbol carries a `SourceRange` that exposes the same five fields (`CharIndex`, `RuneIndex`, `TokenIndex`, `Line`, `Column`) for both `Start` and `End`:
+The same multi-unit positioning is available for every Symbol in the parse tree on success. Every Symbol carries a `SourceRange` that exposes the same four fields (`CharIndex`, `TokenIndex`, `Line`, `Column`) for both `Start` and `End`:
 
 ```CSharp
 var result = document.Parse("motto = \"👨‍👩‍👧\"");
 var range = result.Tree!.Find(settingValue)!.SourceRange!.Value;
 // Width of the matched value:
-//   range.End.CharIndex     - range.Start.CharIndex     == 10  // 8 for the family + 2 quotes
-//   range.End.RuneIndex     - range.Start.RuneIndex     ==  7  // 5 for the family + 2 quotes
+//   range.End.CharIndex  - range.Start.CharIndex  == 10  // 8 for the family + 2 quotes
 //   range.End.TokenIndex - range.Start.TokenIndex ==  3  // 1 for the family + 2 quotes
 ```
 
-Use whichever unit matches what your consumer counts in. Chars for `string.Substring` or an editor diagnostic. Graphemes for a `^^^` underline a human will look at and recognize as covering one thing.
+Use whichever unit matches what your consumer counts in. Chars for `string.Substring` or an editor diagnostic. Tokens for a `^^^` underline a human will look at and recognize as covering one thing.
 
 ## More Readable than Regex
 

@@ -1,4 +1,12 @@
-# Broaden TokenSet (renamed TokenSet) to include grapheme clusters
+# Broaden TokenSet (originally RuneSet) to include grapheme clusters
+
+> Superseded by Refactor Steps 1-5; kept for context. The change described here
+> shipped: `RuneSet` is now `TokenSet`, multi-rune entries live alongside the rune
+> ranges, and there's one grapheme-aware lexer instead of two. Read this doc as a
+> design rationale for the shape `TokenSet` ended up taking, not as instructions
+> for how to use the library today. For the current API see
+> [InductorParserReference.md](../InductorParserReference.md) and
+> [UnicodeInternalsArchitecture.md](../UnicodeInternalsArchitecture.md).
 
 ## Context
 

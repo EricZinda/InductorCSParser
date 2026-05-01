@@ -1,8 +1,8 @@
 # Unicode Gotchas
 
-Most Unicode surprises can't be fixed by the parser's lexer choice. They live outside the "what is a token?" question the lexers answer, so the fix is usually caller-side preprocessing (clean the input before parsing) or grammar-design (pick the right `TokenSet`, add explicit tolerance rules). A few gotchas below are lexer-specific, and those sections call that out directly.
+Most Unicode surprises live outside the "what is a token?" question the lexer answers, so the fix is usually caller-side preprocessing (clean the input before parsing) or grammar-design (pick the right `TokenSet`, add explicit tolerance rules). A few gotchas below are about how `OneOf` / `NoneOf` / `Literal` interact with multi-rune tokens, and those sections call that out directly.
 
-This doc lists the common gotchas, why they bite, and the idiomatic workaround for each. If you are choosing between `RuneLexer` and `GraphemeLexer`, see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). That is a different decision.
+This doc lists the common gotchas, why they bite, and the idiomatic workaround for each. For lexer internals (how tokens are detected, how positions are tracked), see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md).
 
 ## Identifier Matching
 
@@ -20,10 +20,10 @@ Two quiet wins you get for free:
 
 - **Runtime-backed `XID_Start` and `XID_Continue` tables.** Yes: `TokenSet.XidStart` and `TokenSet.XidContinue` are the Unicode XID properties used by UAX #31's default identifier shape, not custom Inductor-specific character classes. The version caveat is where the Unicode data comes from. Most of each set comes from Unicode General_Category data exposed by the .NET runtime: letters and letter numbers for start characters, plus combining marks, decimal digits, and connector punctuation for continuation characters. `TokenSet.Xid.cs` stores only the small UAX #31 add/remove lists needed on top of those categories, such as `U+2118` SCRIPT CAPITAL P and the Arabic ligatures excluded for NFKC stability. Exact code point coverage follows the Unicode version exposed by the runtime's category tables plus those stored exception tables.
 
-Identifier matching works across the scripts covered by the runtime's Unicode data under either lexer, including scripts where a "letter" is a base character plus a vowel mark (Devanagari, Thai, Arabic-with-vowels). When `StringInfo` bundles those clusters into single tokens, `Identifier()` uses [`WithinToken`](#withintoken-general-purpose-sub-grapheme-matching) internally to walk each token's runes and check them individually against the identifier rules. No `InputUnit.Rune` switch required:
+Identifier matching works across the scripts covered by the runtime's Unicode data, including scripts where a "letter" is a base character plus a vowel mark (Devanagari, Thai, Arabic-with-vowels). When `StringInfo` bundles those clusters into single tokens, `Identifier()` uses [`WithinToken`](#withintoken-general-purpose-sub-grapheme-matching) internally to walk each token's runes and check them individually against the identifier rules:
 
 ```csharp
-Identifier().Parse("हिन्दी");   // matches under the default grapheme lexer
+Identifier().Parse("हिन्दी");   // matches: Devanagari conjunct as one token
 Identifier().Parse("กำ");        // Thai with SARA AM: also matches
 Identifier().Parse("καλημέρα"); // Greek: matches
 ```
@@ -133,7 +133,7 @@ var result = grammar.Parse(cleaned);
 
 U+200B (zero-width space), U+200C (zero-width non-joiner), U+200D (zero-width joiner), U+00AD (soft hyphen), and similar runes appear as characters in the input but render as nothing or render conditionally. A string like `"ap\u00ADple"` looks like `"apple"` in an editor but doesn't match `Literal("apple")` because the soft hyphen is a real character in the token stream.
 
-On modern .NET, `GraphemeLexer` handles ZWJ correctly inside emoji sequences (it groups them into one grapheme per UAX #29). Bare ZWJs and other format characters outside emoji contexts still come through as their own tokens under both lexers. Legacy `StringInfo` runtimes have broader ZWJ gaps covered in [Pre-.NET 5 Token Segmentation](#pre-net-5-grapheme-segmentation).
+On modern .NET, the lexer handles ZWJ correctly inside emoji sequences (`StringInfo` groups them into one token per UAX #29). Bare ZWJs and other format characters outside emoji contexts still come through as their own tokens. Legacy `StringInfo` runtimes have broader ZWJ gaps covered in [Pre-.NET 5 Token Segmentation](#pre-net-5-grapheme-segmentation).
 
 **Fix.** The caller strips them before parsing, or the grammar's character classes tolerate them explicitly. For stripping:
 
@@ -153,11 +153,11 @@ var cleaned = string.Concat(input.EnumerateRunes()
 var result = grammar.Parse(cleaned);
 ```
 
-If your grammar uses `GraphemeLexer` and processes emoji sequences, don't strip ZWJ (U+200D) indiscriminately. You'll break 👨‍👩‍👧‍👦 and similar sequences.
+If your grammar processes emoji sequences, don't strip ZWJ (U+200D) indiscriminately. You'll break 👨‍👩‍👧‍👦 and similar sequences.
 
 ## Homoglyph Confusables
 
-Cyrillic `а` (U+0430) and Latin `a` (U+0061) render identically in most fonts but are different code points. A grammar using `TokenSet.Ascii.Letters` rejects Cyrillic `а` even though the user "sees" a Latin `a`. A grammar using `TokenSet.Letters` accepts both and doesn't distinguish them. Both lexers treat the code points identically because they really are different runes.
+Cyrillic `а` (U+0430) and Latin `a` (U+0061) render identically in most fonts but are different code points. A grammar using `TokenSet.Ascii.Letters` rejects Cyrillic `а` even though the user "sees" a Latin `a`. A grammar using `TokenSet.Letters` accepts both and doesn't distinguish them. The lexer treats the code points exactly as they are. They really are different runes.
 
 This is a grammar-design decision. For security-sensitive grammars (mixed-script identifier detection, phishing-resistance) it's a *feature*: refusing homoglyphs protects against visual-spoofing attacks. For forgiving grammars it's a gotcha.
 
@@ -182,7 +182,7 @@ For full UAX #31 Script_Extensions-based detection (the standard algorithm for "
 
 ## Variation Selectors
 
-U+FE00..U+FE0F and U+E0100..U+E01EF are invisible runes that select alternate glyph forms for the preceding character. U+FE0F is the one you are most likely to encounter: it flips emoji between text-style (`❤`) and emoji-style (`❤️`) rendering. Two strings that visually look identical can contain or omit a variation selector, which makes exact string matching fail. Neither lexer strips them.
+U+FE00..U+FE0F and U+E0100..U+E01EF are invisible runes that select alternate glyph forms for the preceding character. U+FE0F is the one you are most likely to encounter: it flips emoji between text-style (`❤`) and emoji-style (`❤️`) rendering. Two strings that visually look identical can contain or omit a variation selector, which makes exact string matching fail. The lexer doesn't strip them.
 
 **Fix.** The caller strips them if the grammar doesn't care about glyph selection:
 
@@ -196,17 +196,15 @@ var result = grammar.Parse(cleaned);
 
 If you are doing emoji-sensitive parsing, be careful: variation selectors are part of the encoded form of some emoji (the emoji-style heart, some keycap sequences), and stripping them can change which emoji the user sees.
 
-## CRLF Under GraphemeLexer
+## CRLF Line Endings
 
-Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 rule GB3), so `GraphemeLexer` hands the parser one two-char token whenever it sees a Windows line ending. This bites any line-based grammar that tries to match or stop on a bare `\n`:
+Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 rule GB3), so the lexer hands the parser one two-char token whenever it sees a Windows line ending. This bites any line-based grammar that tries to match or stop on a bare `\n`:
 
-- `Token('\n')` matches a one-grapheme token whose content is exactly `'\n'`. The CRLF grapheme has content `"\r\n"`, so `Token('\n')` does *not* match it.
-- `OneOf(TokenSet.Runes("\n"))` or `OneOf(TokenSet.Runes("\r\n"))` matches a single-rune token whose rune is in the set. A CRLF grapheme is two runes, so it matches no single-rune set. It fails `OneOf` regardless of what runes you put in the set.
-- `NoneOf(TokenSet.Runes("\n"))` does the opposite: multi-rune tokens pass `NoneOf` unconditionally. `ZeroOrMore(NoneOf(stopSet))` used to scan "everything up to a newline" will greedily swallow the terminating CRLF as body content instead of stopping at it, then the terminator fails because there is nothing left.
+- `Token('\n')` matches a one-element token whose content is exactly `'\n'`. The CRLF token has content `"\r\n"`, so `Token('\n')` does *not* match it.
+- `OneOf(TokenSet.Runes("\n"))` matches when the next token is one of the runes in the set. The CRLF token has two runes, and `TokenSet.Runes("\n")` is rune-only, so the token isn't in the set. Adding `\r\n` to the set as a multi-rune entry doesn't help via `Runes(...)` either: `TokenSet.Runes("\r\n")` *does* register the CRLF cluster as one multi-rune entry, but the single-rune `\n` it builds from also lives in the set, and a grammar that wants "any line terminator" needs all of LF, CR, VT, FF, NEL, LS, PS *and* CRLF, which is what `EndOfLine()` is for.
+- `NoneOf(TokenSet.Runes("\n"))` is the dual: a multi-rune token isn't in any rune-only set, so a `NoneOf` over a rune-only set passes CRLF through. `ZeroOrMore(NoneOf(stopSet))` used to scan "everything up to a newline" will greedily swallow the terminating CRLF as body content instead of stopping at it, then the terminator fails because there is nothing left.
 
-`RuneLexer` doesn't have this problem. It emits `'\r'` and `'\n'` as separate tokens. The bite is `GraphemeLexer`-specific, which is the default.
-
-**Fix.** Use the built-in `EndOfLine()` rule. It is `FirstOf(Literal("\r\n"), OneOf(TokenSet.LineTerminators))` under the hood, so the CRLF grapheme is tried as a unit before the single-rune terminators (LF, CR, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR per UAX #18 Annex C). Pass `eofIsEol: true` for the "line terminator here, or end of input" case, and wrap with `Optional` for "line terminator here, or none at all". Anywhere a grammar cares about line breaks, reach for these instead of building one with `Token('\n')` or a `OneOf` over a rune set:
+**Fix.** Use the built-in `EndOfLine()` rule. It is `FirstOf(Literal("\r\n"), OneOf(TokenSet.LineTerminators))` under the hood, so the CRLF token is tried as a unit before the single-rune terminators (LF, CR, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR per UAX #18 Annex C). Pass `eofIsEol: true` for the "line terminator here, or end of input" case, and wrap with `Optional` for "line terminator here, or none at all". Anywhere a grammar cares about line breaks, reach for these instead of building one with `Token('\n')` or a `OneOf` over a rune set:
 
 ```csharp
 // Match a Unicode line terminator (CRLF, LF, CR, NEL, LS, PS, VT, FF).
@@ -222,7 +220,7 @@ public static readonly Rule WhitespaceOrNewline = Optional(AnyWhitespace());
 public static readonly Rule HorizontalSpace = Optional(InlineWhitespace());
 
 // Scanning "up to end of line": use a rule-based stop with Not(EndOfLine()).
-// NoneOf over a single-rune set would silently eat the CRLF grapheme.
+// NoneOf over a single-rune set would silently eat the CRLF token.
 public static readonly Rule LineComment = AllOf(
     Token('%'),
     ZeroOrMore(AllOf(Not(EndOfLine()), AnyToken())),
@@ -233,25 +231,24 @@ public static readonly Rule LineComment = AllOf(
 The three anti-patterns to avoid in any line-based grammar:
 
 ```csharp
-// BROKEN on Windows line endings under GraphemeLexer.
+// BROKEN on Windows line endings.
 AllOf(..., Token('\n'))                             // fails on CRLF input
-ZeroOrMore(OneOf(TokenSet.Runes("\r\n")))        // skips zero CRLF graphemes
-ZeroOrMore(NoneOf(TokenSet.Single('\n')))      // swallows the CRLF terminator
+ZeroOrMore(NoneOf(TokenSet.Single('\n')))           // swallows the CRLF terminator
 ```
 
 If a grammar is a port of regex semantics that explicitly targets LF-only (some Markdown-style formats, for instance), the failure on CRLF is faithful to the source and you can leave `Token('\n')` as-is. Mark the grammar with a comment so the next reader knows the LF-only behavior is intentional, not an oversight.
 
 ## The Common Thread
 
-All of these are Unicode surprises that live *outside* the lexer's tokenization decision. They fix either upstream (caller-side input preprocessing) or sideways (grammar-design choice of character classes and tolerance rules). None of them are fixed by switching lexer mode.
+Most of these are Unicode surprises that live *outside* the lexer's tokenization decision. They fix either upstream (caller-side input preprocessing) or sideways (grammar-design choice of character classes and tolerance rules).
 
 If you want the parser to handle any of these natively someday, the "Open Questions" section of [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md) tracks which ones might eventually become first-class.
 
 ## Pre-.NET 5 Token Segmentation
 
-This one is different from the gotchas above. It isn't an input-side surprise the caller can preprocess away, and it isn't a grammar-design choice. It's the runtime under your feet behaving differently depending on which .NET you're on, and it only bites `GraphemeLexer`.
+This one is different from the gotchas above. It isn't an input-side surprise the caller can preprocess away, and it isn't a grammar-design choice. It's the runtime under your feet behaving differently depending on which .NET you're on.
 
-`GraphemeLexer` calls `System.Globalization.StringInfo.GetNextTextElement` to find the next grapheme boundary. On .NET 5 and later this is UAX #29 conformant, because the BCL switched to ICU for globalization. On .NET Framework, .NET Core 3.x, and the Mono runtime that Unity ships (which IL2CPP compiles from), `StringInfo` still uses an algorithm Microsoft wrote before UAX #29 stabilized. It's roughly "Unicode 3.x grapheme cluster": base character plus combining marks, surrogate pairs as one unit, Hangul syllable basics. It's not extended-grapheme-cluster aware.
+The lexer calls `System.Globalization.StringInfo.GetNextTextElement` to find the next token boundary. On .NET 5 and later this is UAX #29 conformant, because the BCL switched to ICU for globalization. On .NET Framework, .NET Core 3.x, and the Mono runtime that Unity ships (which IL2CPP compiles from), `StringInfo` still uses an algorithm Microsoft wrote before UAX #29 stabilized. It's roughly "Unicode 3.x grapheme cluster": base character plus combining marks, surrogate pairs as one unit, Hangul syllable basics. It's not extended-grapheme-cluster aware.
 
 What still works on the legacy runtimes:
 
@@ -270,10 +267,9 @@ What breaks:
 
 The common thread is timing. Combining marks have been in Unicode since the start, so the legacy walker handles them. Everything UAX #29 added later, especially the emoji rules from 2014 onward, the legacy walker doesn't know about. Microsoft updated `StringInfo` to ICU in .NET 5. Unity's Mono didn't follow, and IL2CPP compiles from that Mono.
 
-**Fix.** Three options, in order of effort:
+**Fix.** Two options, in order of effort:
 
-1. If the grammar doesn't actually need to tokenize emoji or complex-script text at the grapheme level, do nothing. ASCII, source code, config files, and most DSLs are unaffected.
-2. If a specific input causes trouble, switch that grammar to `RuneLexer` and handle the multi-rune sequence explicitly with a small rule. This trades grapheme convenience for one extra rule and works on every runtime.
-3. Add a custom UAX #29 implementation into the parser. Tracked in [xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md](../backlog/xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md). Gives full conformance everywhere, at the cost of maintaining Unicode data in the repository.
+1. If the grammar doesn't actually need to tokenize emoji or complex-script text at the user-perceived character level, do nothing. ASCII, source code, config files, and most DSLs are unaffected.
+2. Add a custom UAX #29 implementation into the parser. Tracked in [xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md](../backlog/xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md). Gives full conformance everywhere, at the cost of maintaining Unicode data in the repository.
 
 The repo's test suite documents the broken cases explicitly. Look for tests gated behind `#if !UNITY_INCLUDE_TESTS` in [GraphemeRuleTests.cs](../src/InductorParser.Tests/Rules/GraphemeRuleTests.cs). Each one is a category that the legacy walker mishandles.

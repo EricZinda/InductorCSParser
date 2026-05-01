@@ -6,7 +6,7 @@ To parse text using the Inductor Parser, you build up a set of rules that "consu
 "Anything"
 "Until I hit this sequence of characters"
 ```
-There are rules that consume text units, like `Token` (a single token: a grapheme by default, or a rune if you opt into `RuneLexer`), `Literal` (an exact string) and `Integer`. These are your basic building blocks. In this example, let's replace the second part with:
+There are rules that consume text units, like `Token` (one user-perceived character), `Literal` (an exact string) and `Integer`. These are your basic building blocks. In this example, let's replace the second part with:
 
 ```
 "Anything"
@@ -16,7 +16,7 @@ The `Literal("this sequence of characters")` will consume what we're looking for
 
 The parser has rules that consume a specific number of "something" you want, such as: `ZeroOrMore(rule)`, `AtLeast(n, rule)`, `BetweenInclusive(n, m, rule)`. These rules need to know what "something" you're counting, so you add a rule as an argument to tell it what to count. 
 
-In this case, "Anything" can be represented as "zero or more of any token" (under the default lexer, roughly one user-perceived character at a time), so lets start by using the `ZeroOrMore` and `AnyToken` rules:
+In this case, "Anything" can be represented as "zero or more of any token" (roughly one user-perceived character at a time), so lets start by using the `ZeroOrMore` and `AnyToken` rules:
 ```
 ZeroOrMore(AnyToken())
 Literal("this sequence of characters")
@@ -115,7 +115,9 @@ Note that `Not` doesn't actually consume anything so it has nothing to print out
 
 # What about Unicode?
 
-Notice we never said anything about characters versus bytes versus runes. We just wrote `AnyToken()` and the parser figured out what counted as "one token." That wasn't an accident. The default lexer treats one user-perceived character as one token, even when that character is built out of several Unicode code points underneath.
+Notice we never said anything about characters versus bytes versus runes. We just wrote `AnyToken()` and the parser figured out what counted as "one token." That wasn't an accident.
+
+The vocabulary is short. The lexer hands you **tokens**. Each token is one user-visible character. A token is made of one or more **runes** (the .NET term for a Unicode code point). Plain ASCII letters, CJK characters, and most punctuation are one rune each, so for those one token equals one rune. Emoji with a skin-tone modifier (👋🏽), regional-indicator flag pairs (🇺🇸), and ZWJ family emoji (👨‍👩‍👧) are several runes each, but they're still one token each because they're one user-visible character.
 
 Try the same grammar with emoji in both the input *and* the text we're matching on:
 
@@ -134,12 +136,19 @@ The output (with one space at the end):
 How can I match 👋🏽 anything up until 
 ```
 
-Two different multi-rune graphemes are at work here. The waving hand 👋🏽 is a base emoji plus a skin-tone modifier (two runes, one grapheme). The family 👨‍👩‍👧 is built from five runes joined by zero-width joiners (man, ZWJ, woman, ZWJ, girl) and takes eight UTF-16 code units to encode. The grammar didn't need to know any of that.
+Two different multi-rune tokens are at work here. The waving hand 👋🏽 is a base emoji plus a skin-tone modifier (two runes, one token). The family 👨‍👩‍👧 is built from five runes joined by zero-width joiners (man, ZWJ, woman, ZWJ, girl) and takes eight UTF-16 code units to encode. The grammar didn't need to know any of that. `AnyToken()` asked for "one token" in the middle and got the waving hand as a single unit. `Literal(...)` walks the input the same way the rest of the grammar does, so the family emoji in the target text matched as one token too. The exact-match string and the input string are both read as a stream of user-perceived characters, and they line up.
 
-`AnyToken()` asked for "one token" in the middle and got the waving hand as a single unit, the same way a person reading the string would count it. And `Literal("this 👨‍👩‍👧 sequence of characters")` matched the family emoji in the target text as one token too, because the Literal walks the input the same way the rest of the grammar does. There's no special "Unicode mode" you have to opt into. The exact-match string and the input string are both read as a stream of user-perceived characters, and they line up.
+The same thing works with accented letters typed as a base letter plus a combining mark, with regional-indicator flag pairs, and with combining-mark scripts like Devanagari or Thai. They all come through as one token each, both inside `AnyToken()` and inside `Literal(...)`.
 
-The same thing works with accented letters typed as a base letter plus a combining mark, with regional-indicator flag pairs like 🇺🇸, and with combining-mark scripts like Devanagari or Thai. They all come through as one token each, both inside `AnyToken()` and inside `Literal(...)`.
+If you want to define a character class that includes a multi-rune token (an emoji, say) alongside ordinary letter ranges, `TokenSet` accepts both:
 
-This matters because the most common Unicode bug in parsers is silently splitting a multi-rune grapheme into pieces. A grammar that consumes one rune from 👨‍👩‍👧 and stops would leave six dangling runes for the next rule to trip over. The default lexer (called `GraphemeLexer`) avoids this by walking the input one user-perceived character at a time. If you want to look *inside* a grapheme (to inspect combining marks individually, say) there's an opt-in `RuneLexer` and a `WithinToken(...)` helper. But for normal text processing, you don't have to think about any of this. The grammar above already does the right thing on emoji, accented letters, CJK text, and complex scripts.
+```CSharp
+// Letters of any script, plus the US flag emoji as a single token.
+var letterOrUSFlag = OneOf(TokenSet.Letters | TokenSet.Runes("🇺🇸"));
+```
 
-For the bigger picture (normalization, line terminators beyond `\n`, position tracking in chars vs. runes vs. graphemes) see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). For the surprises that *do* come up and how to handle them, see [UnicodeGotchas.md](UnicodeGotchas.md).
+`TokenSet.Runes(...)` adds whatever the runtime treats as one user-visible character to the set. Single runes go into the rune-range part. Multi-rune tokens like 🇺🇸 go into a separate multi-rune list. `OneOf` checks both halves on each token.
+
+This matters because the most common Unicode bug in parsers is silently splitting a multi-rune token into pieces. A grammar that consumes "one rune" from 👨‍👩‍👧 and stops would leave six dangling runes for the next rule to trip over. The lexer avoids this by walking the input one user-perceived character at a time. If you want to look *inside* a token (to inspect combining marks individually, say) there's a `WithinToken(...)` helper. But for normal text processing, you don't have to think about any of this. The grammar above already does the right thing on emoji, accented letters, CJK text, and complex scripts.
+
+For the bigger picture (normalization, line terminators beyond `\n`, position tracking in chars and tokens) see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). For the surprises that *do* come up and how to handle them, see [UnicodeGotchas.md](UnicodeGotchas.md).

@@ -197,25 +197,18 @@ Token(0x1F3B8)                   // same via int overload
 
 ### How Rules React to the Lexer
 
-The parser's token is a `StringInfo` text element by default (`GraphemeLexer`). Setting `ParseOptions.InputUnit = InputUnit.Rune` switches to rune-level lexing (`RuneLexer`). See [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md) for the mechanics. The two modes change how specific rules behave:
+The parser's token is a `StringInfo` text element: one user-perceived character. See [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md) for the mechanics. What that means for the leaves that compare against tokens:
 
-**Under `GraphemeLexer` (default):**
-
-- `Token('=')` matches the `[=]` grapheme. Single-rune graphemes compare to a single rune by identity, so ASCII and other characters that fit in a C# char literal work as you would expect.
-- `TokenSet.Letters` matches single-rune letter graphemes. For composed-form text (the default after normalization), almost all Latin-style letters are single-rune graphemes, so this works as expected. Multi-rune letter graphemes (Devanagari conjuncts, decomposed-form sequences with no precomposed equivalent) don't match `TokenSet.Letters` because the grapheme contains more than one rune. Use `Identifier()` or `WithinToken(...)` when you want to validate the runes inside a grapheme.
-- `Literal("café")` matches four graphemes, one per character in the literal.
+- `Token('=')` matches the `[=]` token. Single-rune tokens compare to a single rune by identity, so ASCII and other characters that fit in a C# char literal work as you would expect.
+- `Token("👋🏽")` matches the multi-rune waving-hand-with-skin-tone token as one unit. Construction-time validation rejects arguments that aren't exactly one text element.
+- `TokenSet.Letters` matches single-rune letter tokens. For composed-form text (the default after normalization), almost all Latin-style letters are single-rune tokens, so this works as expected. Multi-rune letter tokens (Devanagari conjuncts, decomposed-form sequences with no precomposed equivalent) don't match `TokenSet.Letters` because the token contains more than one rune. Use `Identifier()` or `WithinToken(...)` when you want to validate the runes inside a token.
+- `TokenSet.Letters | TokenSet.Runes("🇺🇸")` extends a rune set with explicit multi-rune tokens. `OneOf` and `NoneOf` consult both halves on each token, so the US flag matches as one token alongside the rune-only letter ranges.
+- `Literal("café")` matches four tokens, one per character in the literal. Composition normalization runs first so `café` typed as `e + U+0301` reaches the lexer as one token per visible character.
 - Emoji sequences (👋🏽, 🇺🇸, 👨‍👩‍👧‍👦) match as single tokens on runtimes whose `StringInfo` recognizes those extended grapheme clusters, which is almost always what you want.
 
-The default is right for almost every grammar that handles user-supplied text, because "one character" in the user's mental model is usually one grapheme. An emoji programming language works naturally on runtimes with modern `StringInfo` segmentation. Identifiers that include combining marks work naturally. Keywords like `function` parse the same way they always did (all ASCII, all single-rune text elements).
+This is right for almost every grammar that handles user-supplied text, because "one character" in the user's mental model is usually one user-perceived character. An emoji programming language works naturally on runtimes with modern `StringInfo` segmentation. Identifiers that include combining marks work naturally. Keywords like `function` parse the same way they always did (all ASCII, all single-rune text elements).
 
-**Under `RuneLexer` (opt-in):**
-
-- `Token('=')` same as `GraphemeLexer`: matches `[=]`.
-- `TokenSet.Letters` matches single-rune letters, and in this mode a combining mark is a separate token. A rule that consumed a letter and then encountered a combining mark would stop at the combining mark (it isn't a letter).
-- `Literal("café")` matches four runes if `café` uses the precomposed `é` (U+00E9), five runes if the `é` is stored as `e` + combining acute.
-- Emoji sequences come through as separate runes, so `👋🏽` is two units and `👨‍👩‍👧‍👦` is seven.
-
-Reach for `RuneLexer` when the grammar specifically needs rune-level access: parsing Unicode-category boundaries, walking combining-mark sequences individually, or matching specific rune values regardless of what grapheme they're part of. Most grammars don't need this.
+When a grammar genuinely needs to look inside one token (walk combining marks individually, validate each rune of a token), wrap the inner rule in `WithinToken(innerRule)`. The outer parse reads one full token; the inner rule walks its runes one at a time.
 
 ## Rule Construction Is Fluent
 
@@ -287,12 +280,11 @@ public readonly struct ParseResult
     public int  ErrorLine              { get; }   // 0-based line number (LSP)
     public int  ErrorColumn            { get; }   // 0-based column in UTF-16 chars (LSP)
 
-    // For callers that measure in other units. Derived lazily.
-    public int  ErrorRuneIndex         { get; }
-    public int  ErrorTokenIndex     { get; }
+    // For callers that count in tokens (user-perceived characters). Derived lazily.
+    public int  ErrorTokenIndex        { get; }
 
     // The error position bundled into a SourcePosition. Null on success.
-    // Use this when you want all five units in one shot (one walk of the
+    // Use this when you want all four units in one shot (one walk of the
     // input instead of several lazy ones).
     public SourcePosition? ErrorPosition { get; }
 }
@@ -308,9 +300,9 @@ public enum ParseOutcome
 }
 ```
 
-Putting the error position into the result directly removes an entire class of C++ pitfall where you forgot to ask the lexer for the error before it went out of scope. `ErrorLine` and `ErrorColumn` are computed lazily from `ErrorCharIndex` and the original input string. The char-based trio (`ErrorCharIndex`, `ErrorLine`, `ErrorColumn`) uses the same conventions the Language Server Protocol uses, so a caller forwarding a parse error into an editor through LSP does no arithmetic in between. See [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md) for the full rationale. The two extra index properties (`ErrorRuneIndex`, `ErrorTokenIndex`) are there for callers that measure in other units. They are computed lazily from the char index and cost nothing unless used.
+Putting the error position into the result directly removes an entire class of C++ pitfall where you forgot to ask the lexer for the error before it went out of scope. `ErrorLine` and `ErrorColumn` are computed lazily from `ErrorCharIndex` and the original input string. The char-based trio (`ErrorCharIndex`, `ErrorLine`, `ErrorColumn`) uses the same conventions the Language Server Protocol uses, so a caller forwarding a parse error into an editor through LSP does no arithmetic in between. See [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md) for the full rationale. `ErrorTokenIndex` is there for callers that count in user-perceived characters (a `^^^` underline a human will look at). It is computed lazily from the char index and costs nothing unless used.
 
-`Symbol.SourceRange` uses the same machinery for any node in the parse tree, not just the error point. Each `SourcePosition` (the type returned by `Start` and `End`) carries the same five fields, so a tool reporting "duplicate section on line 7" or "value out of range at char 42" reads from the symbol with the same semantics LSP and `string.Substring` already use.
+`Symbol.SourceRange` uses the same machinery for any node in the parse tree, not just the error point. Each `SourcePosition` (the type returned by `Start` and `End`) carries the same `CharIndex`, `TokenIndex`, `Line`, and `Column` fields, so a tool reporting "duplicate section on line 7" or "value out of range at char 42" reads from the symbol with the same semantics LSP and `string.Substring` already use.
 
 The `Outcome` field distinguishes "the grammar didn't match" from "we ran out of budget." A grammar mismatch means the input is invalid and you should show the user where. A timeout or rule-count-limit exhaustion means the input might be valid but we couldn't decide in the budget we were given, and the caller might want to reject it as suspicious, retry with a looser budget, or show a different error to the user. See the "Catastrophic Backtracking and Timeouts" section below for the mechanics.
 
@@ -533,10 +525,6 @@ public sealed class ParseOptions
     /// skip normalization entirely.
     public NormalizationForm? NormalizeInput { get; set; } = NormalizationForm.FormC;
 
-    /// Atomic unit the lexer reads. Default is Token. See
-    /// UnicodeInternalsArchitecture.md for details on the tradeoffs.
-    public InputUnit InputUnit { get; set; } = InputUnit.Token;
-
     /// Rule-count limit: maximum rule invocations before the parse aborts.
     /// A pure count, not a wall-clock measurement, so the same input and
     /// grammar trip at exactly the same point on every run regardless of
@@ -590,8 +578,6 @@ public sealed class ParseOptions
     /// Consuming All Input" for the rationale.
     public bool AllowTrailingInput { get; set; } = false;
 }
-
-public enum InputUnit { Token, Rune }
 ```
 
 **What to actually do as a caller:**

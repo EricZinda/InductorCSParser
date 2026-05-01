@@ -4,7 +4,7 @@ This document is for someone joining the project who needs to understand what th
 
 ## Two Ways To Run a Grammar
 
-There are two evaluators that can take a `Rule` tree and parse a string against it. They produce the same `ParseResult` and follow the same semantics (deepest-failure error position, FlattenType handling, PreserveAllSymbols, lexer choice). They just get there different ways.
+There are two evaluators that can take a `Rule` tree and parse a string against it. They produce the same `ParseResult` and follow the same semantics (deepest-failure error position, FlattenType handling, PreserveAllSymbols). They just get there different ways.
 
 The first is the recursive evaluator, exposed as `rule.Parse(input)`. Each rule type's `TryParseRule` calls into its children's `TryParseRule`, and backtracking falls out of normal C# control flow. It is small, readable, and the way the parser was originally built.
 
@@ -26,7 +26,7 @@ There are five stages between handing in a string and getting a tree back. Knowi
 
 First, the user builds a Rule tree using the fluent factory functions (`AllOf`, `FirstOf`, `Token`, etc.). This is identical to the recursive path. The state machine does not have its own grammar surface.
 
-Second, on the first call to `StateMachineParser.Parse(rule, input)` for a given root rule, the compiler walks the tree and produces a `CompiledProgram`. The program is cached on the rule (in fact, in one of four caches keyed on PreserveAllSymbols and InputUnit, since both shape what gets emitted). Subsequent parses on that same rule reuse the cached program.
+Second, on the first call to `StateMachineParser.Parse(rule, input)` for a given root rule, the compiler walks the tree and produces a `CompiledProgram`. The program is cached on the rule (in fact, in one of two caches keyed on PreserveAllSymbols, since that flag shapes which output states the lowerer skips). Subsequent parses on that same rule reuse the cached program.
 
 Third, the stepper runs the compiled program against a `Lexer`. The mutable run state lives in a `Machine` struct on the stack of `Stepper.Run`. The interpreter loop reads the current state index, looks up the state, switches on its opcode, runs the body, and updates the state index. It exits when the index goes negative (HaltSuccess or HaltFailure).
 
@@ -78,7 +78,7 @@ Once the basic state machine works, the compiler can recognize specific shapes i
 
 The clearest examples are the rune-only fused-scan opcodes. `BetweenInclusive(min, max, OneOf(set))` is, by default, compiled to a loop of "push backtrack frame, match one rune against set, increment counter, check max, repeat." `ScanOneOfRune` collapses that into one opcode whose body is one tight loop with inline rune decoding, no per-iteration backtrack frame, no virtual lexer call. The same pattern produces `ScanNoneOfRune`, `ScanAnyTokenRune` (for the very common `ZeroOrMore(AnyToken())` tail), and `ScanLiteralOneOfRune` (for the "repeated separator-then-content" shape).
 
-The rune-only `MatchOneOfRune`, `MatchNoneOfRune`, `MatchLiteralRune`, and friends inline the rune decode that the lexer's virtual `Read` would have done. They save one virtual call and one Token ref-struct construction per match. They are only emitted under `InputUnit.Rune` because grapheme-aware decoding can span more than two chars (ZWJ emoji, decomposed accents) and inlining a rune decode there would split a multi-rune grapheme.
+The rune-only `MatchOneOfRune`, `MatchNoneOfRune`, `MatchLiteralRune`, and friends inline the rune decode that the lexer's virtual `Read` would have done. They save one virtual call and one Token ref-struct construction per match. They are only emitted when the surrounding rule is known to operate on rune-only `TokenSet`s (no multi-rune entries) and when the input position is guaranteed to be on a token boundary, since otherwise inlining a rune decode could split a multi-rune token (ZWJ emoji, decomposed accents) the lexer would have grouped together.
 
 The fused `Not(SimpleMatch)` opcodes (`PeekRejectOneOfRune`, `PeekRejectLiteralRune`) replace the three-state `Not` shape with one peek-and-reject opcode that decodes one rune inline, returns failure if it matches the inner pattern, success otherwise. Zero-width on the lexer either way.
 
@@ -92,7 +92,7 @@ These fused opcodes are not magic. They are pattern matches in the compiler that
 
 A rough map of `src/InductorParser/StateMachine/`:
 
-`StateMachineParser.cs` is the public entry point. It owns the four caches (one per (PreserveAllSymbols, InputUnit) combo) and the per-thread lexer pool. `Parse` and `TryMatch` both live here. `TryMatch` is the matcher-only variant: it skips `TreeBuilder` and the result allocation when the answer just needs to be "yes or no."
+`StateMachineParser.cs` is the public entry point. It owns the two caches (one per `PreserveAllSymbols` value) and the per-thread lexer pool. `Parse` and `TryMatch` both live here. `TryMatch` is the matcher-only variant: it skips `TreeBuilder` and the result allocation when the answer just needs to be "yes or no."
 
 `Lowerer.cs` is the compiler. `Lower(rule)` does the cycle pre-pass and the main compilation pass and returns a `CompiledProgram`. `LoweringContext` is the per-compile scratch space (state list, dedup tables, cyclic-rule registry).
 
