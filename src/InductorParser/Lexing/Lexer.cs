@@ -358,7 +358,7 @@ public sealed class Lexer
         return t;
     }
 
-    internal void AdvanceUntilRuneIn(RuneSet candidates, char[]? bmpCandidates)
+    internal void AdvanceUntilRuneIn(TokenSet candidates, char[]? bmpCandidates)
     {
         if (IsEof) return;
 
@@ -385,7 +385,7 @@ public sealed class Lexer
         }
     }
 
-    internal int AdvanceWhileRuneIn(RuneSet set)
+    internal int AdvanceWhileRuneIn(TokenSet set)
     {
         int count = 0;
 
@@ -418,14 +418,14 @@ public sealed class Lexer
     }
 
     // Grapheme-aware variant of AdvanceWhileRuneIn. Used when the
-    // RuneSet has multi-rune entries: a multi-rune grapheme can be a
+    // TokenSet has multi-rune entries: a multi-rune grapheme can be a
     // member of the set, so the loop has to pull a full token per
     // iteration and check it against both halves of the set. Slower
     // per character than AdvanceWhileRuneIn (we pay per-grapheme
     // overhead instead of inline rune decode), but only fires when the
     // grammar actually contains multi-rune set entries. Rune-only sets
     // continue to use AdvanceWhileRuneIn via the rule's dispatch.
-    internal int AdvanceWhileTokenIn(RuneSet set)
+    internal int AdvanceWhileTokenIn(TokenSet set)
     {
         int count = 0;
         while (_position < _endPosition)
@@ -461,7 +461,7 @@ public sealed class Lexer
     }
 
     internal void AdvanceUntilLiteralCandidateIn(
-        RuneSet firstRunes,
+        TokenSet firstRunes,
         char[]? bmpFirstRunes,
         LiteralScannerCandidate[] literals,
         int[]? literalPositions)

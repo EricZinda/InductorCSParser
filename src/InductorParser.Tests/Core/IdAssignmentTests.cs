@@ -13,7 +13,7 @@ public class IdAssignmentTests
     [Test]
     public void Named_rule_id_is_in_custom_range()
     {
-        var rule = OneOrMore(OneOf(RuneSet.Letters)).As("settingName");
+        var rule = OneOrMore(OneOf(TokenSet.Letters)).As("settingName");
         rule.Compile();
 
         Assert.That(rule.Id.Value, Is.GreaterThanOrEqualTo(SymbolRanges.CustomRangeStart));
@@ -22,10 +22,10 @@ public class IdAssignmentTests
     [Test]
     public void Same_name_produces_same_id_within_a_process()
     {
-        var ruleA = OneOrMore(OneOf(RuneSet.Letters)).As("foo");
+        var ruleA = OneOrMore(OneOf(TokenSet.Letters)).As("foo");
         ruleA.Compile();
 
-        var ruleB = OneOrMore(OneOf(RuneSet.Letters)).As("foo");
+        var ruleB = OneOrMore(OneOf(TokenSet.Letters)).As("foo");
         ruleB.Compile();
 
         Assert.That(ruleB.Id.Value, Is.EqualTo(ruleA.Id.Value));
@@ -35,7 +35,7 @@ public class IdAssignmentTests
     public void Pinned_id_survives_compile()
     {
         var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 9999);
-        var rule = OneOrMore(OneOf(RuneSet.Letters)).As(pinned);
+        var rule = OneOrMore(OneOf(TokenSet.Letters)).As(pinned);
         rule.Compile();
 
         Assert.That(rule.Id, Is.EqualTo(pinned));
@@ -48,7 +48,7 @@ public class IdAssignmentTests
         // the hash to string.GetHashCode or swaps algorithms, this test fails
         // and forces a decision about whether breaking persisted ids is
         // acceptable.
-        var rule = OneOrMore(OneOf(RuneSet.Letters)).As("settingName");
+        var rule = OneOrMore(OneOf(TokenSet.Letters)).As("settingName");
         rule.Compile();
 
         int expected = Rule.HashNameToCustomRange("settingName");
@@ -58,8 +58,8 @@ public class IdAssignmentTests
     [Test]
     public void Two_reachable_rules_with_the_same_name_fail_to_compile()
     {
-        var firstRule = OneOrMore(OneOf(RuneSet.Letters)).As("foo");
-        var secondRule = OneOrMore(OneOf(RuneSet.Digits)).As("foo");
+        var firstRule = OneOrMore(OneOf(TokenSet.Letters)).As("foo");
+        var secondRule = OneOrMore(OneOf(TokenSet.Digits)).As("foo");
         var doc = AllOf(firstRule, secondRule);
 
         var exception = Assert.Throws<InvalidOperationException>(() => doc.Compile());
@@ -71,7 +71,7 @@ public class IdAssignmentTests
     {
         // Reachability is per-rule, not per-edge. A single rule reached via
         // two parents is still one rule, so its name should not be flagged.
-        var sharedRule = OneOrMore(OneOf(RuneSet.Letters)).As("shared");
+        var sharedRule = OneOrMore(OneOf(TokenSet.Letters)).As("shared");
         var doc = AllOf(sharedRule, sharedRule);
 
         Assert.DoesNotThrow(() => doc.Compile());
@@ -81,8 +81,8 @@ public class IdAssignmentTests
     public void Two_reachable_rules_pinned_to_the_same_SymbolId_fail_to_compile()
     {
         var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 1234);
-        var firstRule = OneOrMore(OneOf(RuneSet.Letters)).As(pinned).As("first");
-        var secondRule = OneOrMore(OneOf(RuneSet.Digits)).As(pinned).As("second");
+        var firstRule = OneOrMore(OneOf(TokenSet.Letters)).As(pinned).As("first");
+        var secondRule = OneOrMore(OneOf(TokenSet.Digits)).As(pinned).As("second");
         var doc = AllOf(firstRule, secondRule);
 
         var exception = Assert.Throws<InvalidOperationException>(() => doc.Compile());
@@ -97,7 +97,7 @@ public class IdAssignmentTests
         // Reachability is per-rule, not per-edge. A single rule reached via
         // two parents is still one rule, so its pin shouldn't be flagged.
         var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 4321);
-        var sharedRule = OneOrMore(OneOf(RuneSet.Letters)).As(pinned);
+        var sharedRule = OneOrMore(OneOf(TokenSet.Letters)).As(pinned);
         var doc = AllOf(sharedRule, sharedRule);
 
         Assert.DoesNotThrow(() => doc.Compile());
@@ -199,8 +199,8 @@ public class IdAssignmentTests
         const string name = "collisionTest";
         int slot = Rule.HashNameToCustomRange(name);
 
-        var pinnedLeaf = OneOf(RuneSet.Letters).As(new SymbolId(slot));
-        var namedLeaf = OneOf(RuneSet.Letters).As(name);
+        var pinnedLeaf = OneOf(TokenSet.Letters).As(new SymbolId(slot));
+        var namedLeaf = OneOf(TokenSet.Letters).As(name);
         var grammar = AllOf(pinnedLeaf, namedLeaf);
         grammar.Compile();
 
@@ -217,10 +217,10 @@ public class IdAssignmentTests
         const string name = "collisionTest";
         int slot = Rule.HashNameToCustomRange(name);
 
-        var pin0 = OneOf(RuneSet.Letters).As(new SymbolId(slot));
-        var pin1 = OneOf(RuneSet.Letters).As(new SymbolId(slot + 1));
-        var pin2 = OneOf(RuneSet.Letters).As(new SymbolId(slot + 2));
-        var namedLeaf = OneOf(RuneSet.Letters).As(name);
+        var pin0 = OneOf(TokenSet.Letters).As(new SymbolId(slot));
+        var pin1 = OneOf(TokenSet.Letters).As(new SymbolId(slot + 1));
+        var pin2 = OneOf(TokenSet.Letters).As(new SymbolId(slot + 2));
+        var namedLeaf = OneOf(TokenSet.Letters).As(name);
         var grammar = AllOf(pin0, pin1, pin2, namedLeaf);
         grammar.Compile();
 

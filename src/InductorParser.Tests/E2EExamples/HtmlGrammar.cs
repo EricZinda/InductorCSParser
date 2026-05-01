@@ -28,10 +28,10 @@ public static class HtmlGrammar
 {
     // Same ASCII-only choice as CssGrammar: the C++ WhitespaceSymbol
     // matches "\r\n\t " only, not the full Unicode whitespace class.
-    private static readonly RuneSet WhitespaceChars = RuneSet.Ascii.AnyWhitespace;
+    private static readonly TokenSet WhitespaceChars = TokenSet.Ascii.AnyWhitespace;
 
-    private static readonly RuneSet LetterOrDigitChars =
-        RuneSet.Ascii.Letters | RuneSet.Ascii.Digits;
+    private static readonly TokenSet LetterOrDigitChars =
+        TokenSet.Ascii.Letters | TokenSet.Ascii.Digits;
 
     private static readonly Rule OptionalWs =
         ZeroOrMore(OneOf(WhitespaceChars));
@@ -48,10 +48,10 @@ public static class HtmlGrammar
     // every HTML document that parsed under the narrow form still parses
     // under the wider form. The win is that XmlGrammarTests can use
     // realistic XML fixtures instead of alphanumeric-only placeholders.
-    private static readonly RuneSet TagNameStartChars =
-        RuneSet.Ascii.Letters | RuneSet.Runes("_");
-    private static readonly RuneSet TagNameContinueChars =
-        RuneSet.Ascii.Letters | RuneSet.Ascii.Digits | RuneSet.Runes("_-.");
+    private static readonly TokenSet TagNameStartChars =
+        TokenSet.Ascii.Letters | TokenSet.Runes("_");
+    private static readonly TokenSet TagNameContinueChars =
+        TokenSet.Ascii.Letters | TokenSet.Ascii.Digits | TokenSet.Runes("_-.");
 
     public static readonly Rule TagName = AllOf(
         OneOf(TagNameStartChars),
@@ -84,7 +84,7 @@ public static class HtmlGrammar
         Grapheme('='),
         OptionalWs,
         Grapheme('\''),
-        ScanUntil(RuneSet.Runes("'")),
+        ScanUntil(TokenSet.Runes("'")),
         Grapheme('\'')
     );
 
@@ -94,7 +94,7 @@ public static class HtmlGrammar
         Grapheme('='),
         OptionalWs,
         Grapheme('"'),
-        ScanUntil(RuneSet.Runes("\"")),
+        ScanUntil(TokenSet.Runes("\"")),
         Grapheme('"')
     );
 

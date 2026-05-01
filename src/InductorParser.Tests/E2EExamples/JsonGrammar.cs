@@ -38,8 +38,8 @@ public static class JsonGrammar
 
     static JsonGrammar()
     {
-        var simpleEscapeEnd = OneOf(RuneSet.Runes("\"\\/bfnrt"));
-        var hexDigit = OneOf(RuneSet.Ascii.HexDigits);
+        var simpleEscapeEnd = OneOf(TokenSet.Runes("\"\\/bfnrt"));
+        var hexDigit = OneOf(TokenSet.Ascii.HexDigits);
         var unicodeEscapeEnd = AllOf(Grapheme('u'), hexDigit, hexDigit, hexDigit, hexDigit);
         // .Delete() on the escapeEnd FirstOf triggers the ScanUntil
         // "don't allocate child Symbols for the escape-end match" fast
@@ -48,14 +48,14 @@ public static class JsonGrammar
         // is discarded either way. Marking them Delete skips the
         // allocation.
         JsonScanUntil = ScanUntil(
-                stopAt: RuneSet.Runes("\""),
+                stopAt: TokenSet.Runes("\""),
                 escapeStart: new Rune('\\'),
                 escapeEnd: FirstOf(simpleEscapeEnd, unicodeEscapeEnd).Delete())
             .As("stringBody");
         JsonString = AllOf(Grapheme('"'), JsonScanUntil, Grapheme('"'))
             .As("string").Preserve();
 
-        var digits = OneOrMore(OneOf(RuneSet.Ascii.Digits));
+        var digits = OneOrMore(OneOf(TokenSet.Ascii.Digits));
         var decimalPoint = Grapheme('.').Preserve(); // default FlattenType is Delete, but we want this in final string
         var sign = Grapheme('-').Preserve(); // default FlattenType is Delete, but we want this in final string
         var fraction = AllOf(decimalPoint, digits);

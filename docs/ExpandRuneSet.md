@@ -1,10 +1,10 @@
-# Broaden RuneSet (renamed TokenSet) to include grapheme clusters
+# Broaden TokenSet (renamed TokenSet) to include grapheme clusters
 
 ## Context
 
-Today RuneSet is a set of single Unicode scalar values, with closed set algebra (union, intersection, complement) over the rune universe. Multi-rune graphemes (skin-toned emoji, ZWJ sequences, regional indicator pairs, base+combining-mark clusters, etc.) aren't members of any RuneSet, and `Runes("...")` actively rejects them with one CRLF-shaped exception.
+Today TokenSet is a set of single Unicode scalar values, with closed set algebra (union, intersection, complement) over the rune universe. Multi-rune graphemes (skin-toned emoji, ZWJ sequences, regional indicator pairs, base+combining-mark clusters, etc.) aren't members of any TokenSet, and `Runes("...")` actively rejects them with one CRLF-shaped exception.
 
-Grammars that want to match a class of grapheme clusters have no clean tool. The only way is `FirstOf(Grapheme(a), Grapheme(b), ...)`, which doesn't compose with set algebra and can't be intersected with `RuneSet.Letters` or used as a `NoneOf` exclusion. The goal is to broaden the type so a single set can describe "this rune class plus these specific multi-rune graphemes" and still behave like a set. As part of the same change, rename `RuneSet` to `TokenSet` and `RuleStartRequirements.FirstConsumedRunes` to `FirstConsumedTokens`, since "rune" is no longer accurate for what the set holds and what a rule's lookahead is filtering against.
+Grammars that want to match a class of grapheme clusters have no clean tool. The only way is `FirstOf(Grapheme(a), Grapheme(b), ...)`, which doesn't compose with set algebra and can't be intersected with `TokenSet.Letters` or used as a `NoneOf` exclusion. The goal is to broaden the type so a single set can describe "this rune class plus these specific multi-rune graphemes" and still behave like a set. As part of the same change, rename `TokenSet` to `TokenSet` and `RuleStartRequirements.FirstConsumedTokens` to `FirstConsumedTokens`, since "rune" is no longer accurate for what the set holds and what a rule's lookahead is filtering against.
 
 ## The set-orientation challenge
 
@@ -74,11 +74,11 @@ Rules that consume a TokenSet today read one rune at a time. After the change, t
     let ScanWhile/ScanUntil pick based on `_set.HasMultiRuneGraphemes`.
 
 [RuleStartRequirements.cs](../src/InductorParser/RuleStartRequirements.cs)
-    Rename `FirstConsumedRunes` to `FirstConsumedTokens`. The lookahead test in the
+    Rename `FirstConsumedTokens` to `FirstConsumedTokens`. The lookahead test in the
     start-requirements check needs the same dual path (rune fast path plus the
     multi-rune fallback that walks the multi-rune array via the token's Chars span).
 
-Search for other consumers via grep for `RuneSet` outside `RuneSet.cs` (now `TokenSet.cs`) to make sure no other path silently breaks.
+Search for other consumers via grep for `TokenSet` outside `TokenSet.cs` (now `TokenSet.cs`) to make sure no other path silently breaks.
 
 ## Tradeoffs
 
@@ -102,13 +102,13 @@ Equality and hashing become slightly heavier when sets carry multi-rune content 
 
 ## Files to modify
 
-src/InductorParser/RuneSet.cs (rename to TokenSet.cs)
+src/InductorParser/TokenSet.cs (rename to TokenSet.cs)
     Add the multi-rune field, update the private constructor, rewrite the doc comment,
     extend Runes(string) to accept multi-rune text elements, extend Contains to take
     string, extend |, &, Equals, GetHashCode, ToString. Make ~ throw when multi-rune
     entries are present.
 
-src/InductorParser/RuneSet.Xid.cs (rename to TokenSet.Xid.cs)
+src/InductorParser/TokenSet.Xid.cs (rename to TokenSet.Xid.cs)
     Type rename only.
 
 [src/InductorParser/OneOfRule.cs](../src/InductorParser/OneOfRule.cs)
@@ -125,10 +125,10 @@ src/InductorParser/RuneSet.Xid.cs (rename to TokenSet.Xid.cs)
     Add the grapheme-aware variant. Keep the existing rune-fast variant.
 
 [src/InductorParser/RuleStartRequirements.cs](../src/InductorParser/RuleStartRequirements.cs)
-    Rename `FirstConsumedRunes` to `FirstConsumedTokens`. Update the lookahead-fail
+    Rename `FirstConsumedTokens` to `FirstConsumedTokens`. Update the lookahead-fail
     path to handle multi-rune tokens against `FirstConsumedTokens`.
 
-All call sites of `RuneSet` and `FirstConsumedRunes`
+All call sites of `TokenSet` and `FirstConsumedTokens`
     Mechanical rename. Tests, grammars, docs.
 
 ## Verification

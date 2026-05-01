@@ -15,17 +15,17 @@ namespace InductorParser;
 // IsEof == true and the rule fails without advancing, same as OneOfRule.
 internal sealed class NoneOfRule : Rule
 {
-    private readonly RuneSet _set;
+    private readonly TokenSet _set;
     private readonly string _setRendered;
 
-    public NoneOfRule(RuneSet runeSet) : base(FlattenType.Preserve)
+    public NoneOfRule(TokenSet runeSet) : base(FlattenType.Preserve)
     {
         _set = runeSet;
         _setRendered = runeSet.ToString();
     }
 
     // Accessor for the state-machine evaluator's lowering pass.
-    internal RuneSet LoweringSet => _set;
+    internal TokenSet LoweringSet => _set;
 
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
@@ -62,7 +62,7 @@ internal sealed class NoneOfRule : Rule
     }
 
     // Return the set of runes this rule might consume first (can be a superset)
-    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
+    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
     // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
@@ -74,7 +74,7 @@ internal sealed class NoneOfRule : Rule
         // rune is a multi-rune-entry head, because some of those
         // tokens are single-rune and pass NoneOf), which is the
         // safe direction for the lookahead shortcut.
-        RuneSet firstConsumed = _set.HasMultiRuneGraphemes
+        TokenSet firstConsumed = _set.HasMultiRuneGraphemes
             ? ~_set.RunesOnlyPart
             : ~_set;
         return new RuleStartRequirements(firstConsumed, Advance.Always);

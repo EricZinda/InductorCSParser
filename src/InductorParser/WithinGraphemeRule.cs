@@ -127,11 +127,11 @@ internal sealed class WithinGraphemeRule : Rule
         // We always consume exactly one outer token on success, so Advance
         // is Always. The first rune of that token has to satisfy whatever
         // the inner rule's first-rune requirement is, so we can propagate
-        // the inner's FirstConsumedRunes to the outer fast-fail path. That
+        // the inner's FirstConsumedTokens to the outer fast-fail path. That
         // lets FirstOf(WithinGrapheme(...), ...) skip this alternative without
         // calling into it when the next grapheme starts with a rune the
         // inner rule can't accept.
         var innerStart = _innerRule.ComputeRuleStart();
-        return new RuleStartRequirements(innerStart.FirstConsumedRunes, Advance.Always);
+        return new RuleStartRequirements(innerStart.FirstConsumedTokens, Advance.Always);
     }
 }

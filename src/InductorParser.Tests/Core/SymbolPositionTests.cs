@@ -270,7 +270,7 @@ public class SymbolPositionTests
         // recursing past it, this test would catch it.
         var rule = AllOf(
             Literal("a").Preserve(),
-            ScanUntil(RuneSet.Runes("b")).Preserve(),
+            ScanUntil(TokenSet.Runes("b")).Preserve(),
             Literal("b").Preserve()).As("composite").Preserve();
         var result = rule.Parse("ab");
 
@@ -290,7 +290,7 @@ public class SymbolPositionTests
         // empty leaf's position).
         var rule = AllOf(
             Literal("ab").Preserve(),
-            ScanUntil(RuneSet.Runes("z")).Preserve()).As("composite").Preserve();
+            ScanUntil(TokenSet.Runes("z")).Preserve()).As("composite").Preserve();
         var result = rule.Parse("ab");
 
         var range = result.Tree!.SourceRange!.Value;

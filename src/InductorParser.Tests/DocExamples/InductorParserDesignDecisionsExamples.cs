@@ -12,13 +12,13 @@ public class InductorParserDesignDecisionsExamples
 {
     // "Greedy Repetition, No Repetition Backtracking": the doc shows
     // that PEG DOESN'T backtrack inside a OneOrMore. So
-    //   AllOf(OneOrMore(OneOf(RuneSet.Letters)), Grapheme('a')).Parse("aaa")
+    //   AllOf(OneOrMore(OneOf(TokenSet.Letters)), Grapheme('a')).Parse("aaa")
     // greedily consumes "aaa", fails to match the trailing 'a' against
     // EOF, and the whole parse fails.
     [Test]
     public void PEG_does_not_backtrack_inside_repetition()
     {
-        var rule = AllOf(OneOrMore(OneOf(RuneSet.Letters)), Grapheme('a'));
+        var rule = AllOf(OneOrMore(OneOf(TokenSet.Letters)), Grapheme('a'));
         var result = rule.Parse("aaa");
 
         Assert.That(result.Success, Is.False,

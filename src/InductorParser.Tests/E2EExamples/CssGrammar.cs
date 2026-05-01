@@ -37,17 +37,17 @@ public static class CssGrammar
     // the ASCII-only "any whitespace" set (space, tab, CR, LF) so the
     // grammar decides the same way on inputs that contain NBSP or other
     // Unicode whitespace.
-    private static readonly RuneSet WhitespaceChars = RuneSet.Ascii.AnyWhitespace;
+    private static readonly TokenSet WhitespaceChars = TokenSet.Ascii.AnyWhitespace;
 
     // C++ Chars = ASCII letters only.
-    private static readonly RuneSet LetterChars = RuneSet.Ascii.Letters;
+    private static readonly TokenSet LetterChars = TokenSet.Ascii.Letters;
 
     // C++ CharsAndNumbers = ASCII alphanumerics.
-    private static readonly RuneSet LetterOrDigitChars =
-        RuneSet.Ascii.Letters | RuneSet.Ascii.Digits;
+    private static readonly TokenSet LetterOrDigitChars =
+        TokenSet.Ascii.Letters | TokenSet.Ascii.Digits;
 
     // C++ HexNumbers = 0-9 and A-F and a-f.
-    private static readonly RuneSet HexDigitChars = RuneSet.Ascii.HexDigits;
+    private static readonly TokenSet HexDigitChars = TokenSet.Ascii.HexDigits;
 
     // /* comment */, with the body as a single ScanUntil scan on a
     // rule-based stopper. ScanUntil peeks the stopper on each rune

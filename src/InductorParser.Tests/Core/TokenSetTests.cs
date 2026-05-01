@@ -8,52 +8,52 @@ using static InductorParser.Tests.UnicodeExamples;
 namespace InductorParser.Tests;
 
 [TestFixture]
-public class RuneSetTests
+public class TokenSetTests
 {
-    // Asserts both value equality and hash-code equality for two RuneSets.
+    // Asserts both value equality and hash-code equality for two TokenSets.
     // The standard contract is that equal values must hash the same. Using
-    // this helper everywhere two RuneSets are compared bakes the hash check
+    // this helper everywhere two TokenSets are compared bakes the hash check
     // into every equality assertion, so any drift between Equals and
     // GetHashCode shows up at whichever call site triggered it rather than
     // being caught only by a single dedicated test.
-    private static void AssertEqual(RuneSet actual, RuneSet expected)
+    private static void AssertEqual(TokenSet actual, TokenSet expected)
     {
         Assert.That(actual, Is.EqualTo(expected));
         Assert.That(actual.GetHashCode(), Is.EqualTo(expected.GetHashCode()),
-            "equal RuneSets must have equal hash codes");
+            "equal TokenSets must have equal hash codes");
     }
 
     [Test]
     public void Single_int_with_surrogate_throws()
     {
         // 0xD800..0xDFFF are surrogate code points, not valid Unicode scalar values.
-        Assert.Throws<ArgumentOutOfRangeException>(() => RuneSet.Single(0xD800));
-        Assert.Throws<ArgumentOutOfRangeException>(() => RuneSet.Single(0xDFFF));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Single(0xD800));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Single(0xDFFF));
     }
 
     [Test]
     public void Single_int_out_of_range_throws()
     {
         // Valid Unicode scalar values are 0x0000..0x10FFFF; anything outside is not a code point.
-        Assert.Throws<ArgumentOutOfRangeException>(() => RuneSet.Single(-1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => RuneSet.Single(0x110000));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Single(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Single(0x110000));
     }
 
     [Test]
     public void Single_char_with_surrogate_throws()
     {
         // (int)'\uD800' == 0xD800, delegates through Single(int) which throws.
-        Assert.Throws<ArgumentOutOfRangeException>(() => RuneSet.Single('\uD800'));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Single('\uD800'));
     }
 
     [Test]
     public void Range_with_invalid_low_or_high_throws()
     {
         // A range entirely inside the surrogate block has no valid scalar endpoints.
-        Assert.Throws<ArgumentOutOfRangeException>(() => RuneSet.Range(0xD800, 0xDFFF));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Range(0xD800, 0xDFFF));
         // Endpoints below 0 or above 0x10FFFF are not valid Unicode scalar values.
-        Assert.Throws<ArgumentOutOfRangeException>(() => RuneSet.Range(-1, 100));
-        Assert.Throws<ArgumentOutOfRangeException>(() => RuneSet.Range(100, 0x110000));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Range(-1, 100));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Range(100, 0x110000));
     }
 
     [Test]
@@ -63,7 +63,7 @@ public class RuneSetTests
         // straddles the surrogate block. The set contains "dead" slots in
         // 0xD800..0xDFFF, which is harmless because the lexer never produces
         // those as token values.
-        var set = RuneSet.Range(0x0000, 0x10FFFF);
+        var set = TokenSet.Range(0x0000, 0x10FFFF);
 
         Assert.That(set.Contains('a'), Is.True);
         Assert.That(set.Contains(GuitarRune), Is.True);
@@ -81,14 +81,14 @@ public class RuneSetTests
         // Runtime-constructed strings preserve the char value the caller
         // passed, which is what we want to verify here.
         var loneSurrogate = new string((char)0xD800, 1);
-        Assert.Throws<ArgumentException>(() => RuneSet.Runes(loneSurrogate));
+        Assert.Throws<ArgumentException>(() => TokenSet.Runes(loneSurrogate));
     }
 
     [Test]
     public void Runes_with_valid_surrogate_pair_works()
     {
         // Guitar as a surrogate pair. Treated as one codepoint.
-        var set = RuneSet.Runes(GuitarGrapheme);
+        var set = TokenSet.Runes(GuitarGrapheme);
 
         Assert.That(set.Contains(GuitarRune), Is.True);
     }
@@ -96,7 +96,7 @@ public class RuneSetTests
     [Test]
     public void Category_returns_runes_of_that_category()
     {
-        var uppercaseLetters = RuneSet.Category(UnicodeCategory.UppercaseLetter);
+        var uppercaseLetters = TokenSet.Category(UnicodeCategory.UppercaseLetter);
 
         Assert.That(uppercaseLetters.Contains('A'), Is.True);
         Assert.That(uppercaseLetters.Contains('Z'), Is.True);
@@ -120,10 +120,10 @@ public class RuneSetTests
     public void Category_returns_the_same_cached_instance_on_repeat_calls()
     {
         // Caching is the whole point: second call shouldn't rescan.
-        var first = RuneSet.Category(UnicodeCategory.DecimalDigitNumber);
-        var second = RuneSet.Category(UnicodeCategory.DecimalDigitNumber);
+        var first = TokenSet.Category(UnicodeCategory.DecimalDigitNumber);
+        var second = TokenSet.Category(UnicodeCategory.DecimalDigitNumber);
 
-        // RuneSet is a value type, but the internal _ranges array reference
+        // TokenSet is a value type, but the internal _ranges array reference
         // should be shared across both returns when the cache hit.
         Assert.That(first.Contains('5'), Is.True);
         Assert.That(second.Contains('5'), Is.True);
@@ -132,7 +132,7 @@ public class RuneSetTests
     [Test]
     public void Union_of_two_singletons_contains_both()
     {
-        var set = RuneSet.Single('a') | RuneSet.Single('z');
+        var set = TokenSet.Single('a') | TokenSet.Single('z');
 
         Assert.That(set.Contains('a'), Is.True);
         Assert.That(set.Contains('z'), Is.True);
@@ -146,7 +146,7 @@ public class RuneSetTests
         // We can't see the internal representation, but Contains over the
         // combined range (including the previously-uncovered 6 and 7) tells
         // us the merge happened.
-        var set = RuneSet.Range(1, 5) | RuneSet.Range(3, 7);
+        var set = TokenSet.Range(1, 5) | TokenSet.Range(3, 7);
 
         for (int codepoint = 1; codepoint <= 7; codepoint++)
             Assert.That(set.Contains(codepoint), Is.True, $"{codepoint} should be in union");
@@ -160,7 +160,7 @@ public class RuneSetTests
         // [1, 5] | [6, 10] are adjacent (no gap). Normalize coalesces them
         // because next.Low <= current.High + 1. Behaviorally the user just
         // sees one continuous covered range.
-        var set = RuneSet.Range(1, 5) | RuneSet.Range(6, 10);
+        var set = TokenSet.Range(1, 5) | TokenSet.Range(6, 10);
 
         for (int codepoint = 1; codepoint <= 10; codepoint++)
             Assert.That(set.Contains(codepoint), Is.True, $"{codepoint} should be in union");
@@ -172,7 +172,7 @@ public class RuneSetTests
     public void Union_of_disjoint_ranges_keeps_the_gap()
     {
         // [1, 5] | [10, 15]. Gap at 6..9 must stay uncovered.
-        var set = RuneSet.Range(1, 5) | RuneSet.Range(10, 15);
+        var set = TokenSet.Range(1, 5) | TokenSet.Range(10, 15);
 
         Assert.That(set.Contains(3), Is.True);
         Assert.That(set.Contains(12), Is.True);
@@ -184,30 +184,30 @@ public class RuneSetTests
     [Test]
     public void Union_is_commutative()
     {
-        var ab = RuneSet.Range(1, 5) | RuneSet.Range(10, 15);
-        var ba = RuneSet.Range(10, 15) | RuneSet.Range(1, 5);
+        var ab = TokenSet.Range(1, 5) | TokenSet.Range(10, 15);
+        var ba = TokenSet.Range(10, 15) | TokenSet.Range(1, 5);
 
         AssertEqual(ab, ba);
     }
 
     [Test]
-    public void Union_with_default_RuneSet_returns_the_other_side()
+    public void Union_with_default_TokenSet_returns_the_other_side()
     {
-        // default(RuneSet) has a null _ranges array. The | operator should
+        // default(TokenSet) has a null _ranges array. The | operator should
         // tolerate that and return a set equivalent to the non-empty side.
-        var set = default(RuneSet) | RuneSet.Single('x');
+        var set = default(TokenSet) | TokenSet.Single('x');
 
         Assert.That(set.Contains('x'), Is.True);
         Assert.That(set.Contains('y'), Is.False);
     }
 
     [Test]
-    public void Default_RuneSet_is_empty()
+    public void Default_TokenSet_is_empty()
     {
-        // Sanity: a default-constructed RuneSet has no intervals and matches
+        // Sanity: a default-constructed TokenSet has no intervals and matches
         // no codepoint. Contains relies on the null-ranges guard. IsEmpty
         // reports the same state directly.
-        var set = default(RuneSet);
+        var set = default(TokenSet);
 
         Assert.That(set.IsEmpty, Is.True);
         Assert.That(set.Contains('a'), Is.False);
@@ -220,17 +220,17 @@ public class RuneSetTests
         // they were built, because Normalize produces a canonical interval
         // list. Runes("abc") and Range('a','c') land on the same _ranges.
         // AssertEqual checks both Equals and GetHashCode in one shot.
-        AssertEqual(RuneSet.Runes("abc"), RuneSet.Range('a', 'c'));
-        AssertEqual(RuneSet.Single('a') | RuneSet.Single('b'),
-            RuneSet.Range('a', 'b'));
+        AssertEqual(TokenSet.Runes("abc"), TokenSet.Range('a', 'c'));
+        AssertEqual(TokenSet.Single('a') | TokenSet.Single('b'),
+            TokenSet.Range('a', 'b'));
         // Different membership compares unequal. (Unequal objects MAY share
         // hash codes, so don't add a hash check on this side.)
-        Assert.That(RuneSet.Single('a'), Is.Not.EqualTo(RuneSet.Single('b')));
+        Assert.That(TokenSet.Single('a'), Is.Not.EqualTo(TokenSet.Single('b')));
         // default and an explicit empty set are equal (both have no intervals).
-        AssertEqual(default(RuneSet), RuneSet.Runes(""));
+        AssertEqual(default(TokenSet), TokenSet.Runes(""));
         // == operator mirrors Equals.
-        Assert.That(RuneSet.Range('a', 'c') == RuneSet.Runes("abc"), Is.True);
-        Assert.That(RuneSet.Single('a') != RuneSet.Single('b'), Is.True);
+        Assert.That(TokenSet.Range('a', 'c') == TokenSet.Runes("abc"), Is.True);
+        Assert.That(TokenSet.Single('a') != TokenSet.Single('b'), Is.True);
     }
 
     [Test]
@@ -244,29 +244,29 @@ public class RuneSetTests
         //
         // Each case below builds the same logical set a different way. They
         // all must compare equal to the straightforwardly-built canonical form.
-        var expected = RuneSet.Range(1, 30);
+        var expected = TokenSet.Range(1, 30);
 
         // Adjacent intervals must merge into one.
-        AssertEqual(RuneSet.Range(1, 10) | RuneSet.Range(11, 20) | RuneSet.Range(21, 30),
+        AssertEqual(TokenSet.Range(1, 10) | TokenSet.Range(11, 20) | TokenSet.Range(21, 30),
             expected);
         // Overlapping intervals must merge.
-        AssertEqual(RuneSet.Range(1, 15) | RuneSet.Range(10, 25) | RuneSet.Range(20, 30),
+        AssertEqual(TokenSet.Range(1, 15) | TokenSet.Range(10, 25) | TokenSet.Range(20, 30),
             expected);
         // Out-of-order union must end up sorted.
-        AssertEqual(RuneSet.Range(21, 30) | RuneSet.Range(1, 10) | RuneSet.Range(11, 20),
+        AssertEqual(TokenSet.Range(21, 30) | TokenSet.Range(1, 10) | TokenSet.Range(11, 20),
             expected);
         // Intersection of larger ranges must collapse to the overlap.
-        AssertEqual(RuneSet.Range(0, 50) & RuneSet.Range(1, 30), expected);
+        AssertEqual(TokenSet.Range(0, 50) & TokenSet.Range(1, 30), expected);
         // Messy chain of overlapping fragments.
-        AssertEqual(RuneSet.Range(1, 5) | RuneSet.Range(3, 10) | RuneSet.Range(10, 15)
-            | RuneSet.Range(14, 22) | RuneSet.Range(20, 30), expected);
+        AssertEqual(TokenSet.Range(1, 5) | TokenSet.Range(3, 10) | TokenSet.Range(10, 15)
+            | TokenSet.Range(14, 22) | TokenSet.Range(20, 30), expected);
         // Double complement round-trip.
         AssertEqual(~~expected, expected);
         // Complement split across surrogate block, then complement again.
         // Verifies the surrogate-split path doesn't leak adjacent intervals.
-        AssertEqual(~~RuneSet.Range(0xD7FE, 0xD7FE), RuneSet.Range(0xD7FE, 0xD7FE));
+        AssertEqual(~~TokenSet.Range(0xD7FE, 0xD7FE), TokenSet.Range(0xD7FE, 0xD7FE));
         // A & ~B chain through the full operator set.
-        AssertEqual(RuneSet.Range(1, 30) & ~RuneSet.Range(40, 50), expected);
+        AssertEqual(TokenSet.Range(1, 30) & ~TokenSet.Range(40, 50), expected);
     }
 
     [Test]
@@ -275,9 +275,9 @@ public class RuneSetTests
         // Complement of the non-empty singleton contains everything except
         // that rune: IsEmpty should stay False. Covers the non-empty branch
         // of the _ranges null/length check.
-        Assert.That(RuneSet.Single('a').IsEmpty, Is.False);
-        Assert.That(RuneSet.Range('a', 'z').IsEmpty, Is.False);
-        Assert.That(RuneSet.Letters.IsEmpty, Is.False);
+        Assert.That(TokenSet.Single('a').IsEmpty, Is.False);
+        Assert.That(TokenSet.Range('a', 'z').IsEmpty, Is.False);
+        Assert.That(TokenSet.Letters.IsEmpty, Is.False);
     }
 
     [Test]
@@ -285,20 +285,20 @@ public class RuneSetTests
     {
         // Letters is now built as a union of five Category calls. Verify it
         // still behaves correctly (one sample per category).
-        Assert.That(RuneSet.Letters.Contains('A'), Is.True);  // UppercaseLetter
-        Assert.That(RuneSet.Letters.Contains('a'), Is.True);  // LowercaseLetter
-        Assert.That(RuneSet.Letters.Contains('\u01C5'), Is.True); // TitlecaseLetter (ǅ)
-        Assert.That(RuneSet.Letters.Contains('\u02B0'), Is.True); // ModifierLetter (ʰ)
-        Assert.That(RuneSet.Letters.Contains('\u4E2D'), Is.True); // OtherLetter (中)
-        Assert.That(RuneSet.Letters.Contains('1'), Is.False);
-        Assert.That(RuneSet.Letters.Contains(' '), Is.False);
+        Assert.That(TokenSet.Letters.Contains('A'), Is.True);  // UppercaseLetter
+        Assert.That(TokenSet.Letters.Contains('a'), Is.True);  // LowercaseLetter
+        Assert.That(TokenSet.Letters.Contains('\u01C5'), Is.True); // TitlecaseLetter (ǅ)
+        Assert.That(TokenSet.Letters.Contains('\u02B0'), Is.True); // ModifierLetter (ʰ)
+        Assert.That(TokenSet.Letters.Contains('\u4E2D'), Is.True); // OtherLetter (中)
+        Assert.That(TokenSet.Letters.Contains('1'), Is.False);
+        Assert.That(TokenSet.Letters.Contains(' '), Is.False);
     }
 
     [Test]
     public void Intersection_of_overlapping_ranges_keeps_the_overlap()
     {
         // [1, 7] & [5, 10] = [5, 7]. The classic overlap case.
-        var set = RuneSet.Range(1, 7) & RuneSet.Range(5, 10);
+        var set = TokenSet.Range(1, 7) & TokenSet.Range(5, 10);
 
         Assert.That(set.Contains(4), Is.False);
         Assert.That(set.Contains(5), Is.True);
@@ -310,17 +310,17 @@ public class RuneSetTests
     public void Intersection_of_disjoint_ranges_is_empty()
     {
         // [1, 5] & [10, 15] share no elements.
-        var set = RuneSet.Range(1, 5) & RuneSet.Range(10, 15);
+        var set = TokenSet.Range(1, 5) & TokenSet.Range(10, 15);
 
         Assert.That(set.IsEmpty, Is.True);
     }
 
     [Test]
-    public void Intersection_with_default_RuneSet_is_empty()
+    public void Intersection_with_default_TokenSet_is_empty()
     {
-        // default(RuneSet) has a null _ranges and represents the empty set.
+        // default(TokenSet) has a null _ranges and represents the empty set.
         // Intersecting anything with it returns empty.
-        var set = default(RuneSet) & RuneSet.Single('x');
+        var set = default(TokenSet) & TokenSet.Single('x');
 
         Assert.That(set.IsEmpty, Is.True);
     }
@@ -328,8 +328,8 @@ public class RuneSetTests
     [Test]
     public void Intersection_is_commutative()
     {
-        var left = RuneSet.Range(1, 10) | RuneSet.Range(20, 30);
-        var right = RuneSet.Range(5, 25);
+        var left = TokenSet.Range(1, 10) | TokenSet.Range(20, 30);
+        var right = TokenSet.Range(5, 25);
 
         AssertEqual(left & right, right & left);
     }
@@ -340,8 +340,8 @@ public class RuneSetTests
         // A = [1, 5] ∪ [10, 15] ∪ [20, 25]
         // B = [3, 12] ∪ [22, 30]
         // A & B = [3, 5] ∪ [10, 12] ∪ [22, 25]
-        var a = RuneSet.Range(1, 5) | RuneSet.Range(10, 15) | RuneSet.Range(20, 25);
-        var b = RuneSet.Range(3, 12) | RuneSet.Range(22, 30);
+        var a = TokenSet.Range(1, 5) | TokenSet.Range(10, 15) | TokenSet.Range(20, 25);
+        var b = TokenSet.Range(3, 12) | TokenSet.Range(22, 30);
         var intersection = a & b;
 
         // Inside the expected intervals.
@@ -358,7 +358,7 @@ public class RuneSetTests
         // Cyrillic block 0x0400..0x04FF intersected with Unicode Letters. The
         // motivating use case from docs/InductorParserDesignDecisions.md: narrow a semantic
         // class (Letters) by a script-range restriction.
-        var cyrillicLetters = RuneSet.Letters & RuneSet.Range(0x0400, 0x04FF);
+        var cyrillicLetters = TokenSet.Letters & TokenSet.Range(0x0400, 0x04FF);
 
         // ж (U+0436) is a Cyrillic letter (in both sets).
         Assert.That(cyrillicLetters.Contains(0x0436), Is.True);
@@ -369,16 +369,16 @@ public class RuneSetTests
     }
 
     // The set of every Unicode scalar value: [0, 0x10FFFF] minus the surrogate
-    // block [0xD800, 0xDFFF]. Equivalent to ~default(RuneSet). Pulled out so
+    // block [0xD800, 0xDFFF]. Equivalent to ~default(TokenSet). Pulled out so
     // complement tests can compare against it by equality instead of sampling
     // specific codepoints.
-    private static readonly RuneSet AllScalarValues =
-        RuneSet.Range(0, 0xD7FF) | RuneSet.Range(0xE000, 0x10FFFF);
+    private static readonly TokenSet AllScalarValues =
+        TokenSet.Range(0, 0xD7FF) | TokenSet.Range(0xE000, 0x10FFFF);
 
     [Test]
     public void Complement_of_empty_set_is_all_scalar_values()
     {
-        AssertEqual(~default(RuneSet), AllScalarValues);
+        AssertEqual(~default(TokenSet), AllScalarValues);
     }
 
     [Test]
@@ -386,11 +386,11 @@ public class RuneSetTests
     {
         // ~{'a'} = all scalar values minus 'a'. Build the expected set as
         // the two gaps around 'a'.
-        var expected = RuneSet.Range(0, 'a' - 1)
-            | RuneSet.Range('a' + 1, 0xD7FF)
-            | RuneSet.Range(0xE000, 0x10FFFF);
+        var expected = TokenSet.Range(0, 'a' - 1)
+            | TokenSet.Range('a' + 1, 0xD7FF)
+            | TokenSet.Range(0xE000, 0x10FFFF);
 
-        AssertEqual(~RuneSet.Single('a'), expected);
+        AssertEqual(~TokenSet.Single('a'), expected);
     }
 
     [Test]
@@ -398,7 +398,7 @@ public class RuneSetTests
     {
         // ~[0..0x10FFFF] = ∅ (the input already covers every gap, including
         // the dead slots in the surrogate block).
-        var set = ~RuneSet.Range(0, 0x10FFFF);
+        var set = ~TokenSet.Range(0, 0x10FFFF);
 
         Assert.That(set.IsEmpty, Is.True);
     }
@@ -408,7 +408,7 @@ public class RuneSetTests
     {
         // ~~A = A for any A. Surrogates aren't in either side, so value
         // equality is the right check.
-        var original = RuneSet.Range('a', 'z') | RuneSet.Range('A', 'Z');
+        var original = TokenSet.Range('a', 'z') | TokenSet.Range('A', 'Z');
 
         AssertEqual(~~original, original);
     }
@@ -418,7 +418,7 @@ public class RuneSetTests
     {
         // The idiom from the docs: A & ~B is "A minus B". Consonants as
         // ASCII letters minus vowels.
-        var asciiConsonants = RuneSet.Ascii.Letters & ~RuneSet.Runes("aeiouAEIOU");
+        var asciiConsonants = TokenSet.Ascii.Letters & ~TokenSet.Runes("aeiouAEIOU");
 
         // Consonants: in.
         Assert.That(asciiConsonants.Contains('b'), Is.True);
@@ -445,7 +445,7 @@ public class RuneSetTests
     {
         // Endpoints are inclusive on both sides. Lock it in so a future
         // off-by-one in the < vs <= choice in Contains breaks loudly.
-        var set = RuneSet.Range(10, 20);
+        var set = TokenSet.Range(10, 20);
 
         Assert.That(set.Contains(9), Is.False);
         Assert.That(set.Contains(10), Is.True);
@@ -458,8 +458,8 @@ public class RuneSetTests
     {
         // 0 and 0x10FFFF are valid scalar values. Make sure the boundary
         // codepoints don't get accidentally excluded.
-        var zero = RuneSet.Single(0);
-        var max = RuneSet.Single(0x10FFFF);
+        var zero = TokenSet.Single(0);
+        var max = TokenSet.Single(0x10FFFF);
 
         Assert.That(zero.Contains(0), Is.True);
         Assert.That(zero.Contains(1), Is.False);
@@ -470,7 +470,7 @@ public class RuneSetTests
     [Test]
     public void Contains_char_and_Rune_overloads_delegate_to_int_form()
     {
-        var set = RuneSet.Single(GuitarRune) | RuneSet.Single('a');
+        var set = TokenSet.Single(GuitarRune) | TokenSet.Single('a');
 
         // char overload: BMP only.
         Assert.That(set.Contains('a'), Is.True);
@@ -487,8 +487,8 @@ public class RuneSetTests
     {
         // Happy-path overloads weren't directly exercised before. char takes
         // the BMP path, Rune takes the supplementary-plane-capable path.
-        var fromChar = RuneSet.Single('Z');
-        var fromRune = RuneSet.Single(new Rune(GuitarRune));
+        var fromChar = TokenSet.Single('Z');
+        var fromRune = TokenSet.Single(new Rune(GuitarRune));
 
         Assert.That(fromChar.Contains('Z'), Is.True);
         Assert.That(fromRune.Contains(GuitarRune), Is.True);
@@ -497,8 +497,8 @@ public class RuneSetTests
     [Test]
     public void Range_char_and_Rune_overloads_cover_the_range()
     {
-        var charRange = RuneSet.Range('a', 'c');
-        var runeRange = RuneSet.Range(new Rune(GuitarRune), new Rune(MusicalKeyboardRune));
+        var charRange = TokenSet.Range('a', 'c');
+        var runeRange = TokenSet.Range(new Rune(GuitarRune), new Rune(MusicalKeyboardRune));
 
         Assert.That(charRange.Contains('a'), Is.True);
         Assert.That(charRange.Contains('b'), Is.True);
@@ -514,14 +514,14 @@ public class RuneSetTests
         // Endpoints are valid scalar values but inverted. Not an
         // ArgumentOutOfRangeException (the endpoints themselves are fine).
         // It's an ArgumentException because the pair is inconsistent.
-        Assert.Throws<ArgumentException>(() => RuneSet.Range(100, 50));
+        Assert.Throws<ArgumentException>(() => TokenSet.Range(100, 50));
     }
 
     [Test]
     public void Range_with_equal_endpoints_is_a_singleton()
     {
         // Range(x, x) is allowed and behaves like Single(x): one-codepoint set.
-        var set = RuneSet.Range(0x41, 0x41);
+        var set = TokenSet.Range(0x41, 0x41);
 
         Assert.That(set.Contains('A'), Is.True);
         Assert.That(set.Contains('B'), Is.False);
@@ -533,13 +533,13 @@ public class RuneSetTests
     [Test]
     public void Runes_null_throws()
     {
-        Assert.Throws<ArgumentNullException>(() => RuneSet.Runes(null!));
+        Assert.Throws<ArgumentNullException>(() => TokenSet.Runes(null!));
     }
 
     [Test]
     public void Runes_empty_string_is_empty_set()
     {
-        var set = RuneSet.Runes("");
+        var set = TokenSet.Runes("");
 
         Assert.That(set.IsEmpty, Is.True);
     }
@@ -550,7 +550,7 @@ public class RuneSetTests
         // Normalize sorts and merges. Repeated characters collapse into one
         // interval each. Observable as a set with the same membership as the
         // distinct-char version, and as the compact ToString.
-        var set = RuneSet.Runes("aabbccba");
+        var set = TokenSet.Runes("aabbccba");
 
         Assert.That(set.Contains('a'), Is.True);
         Assert.That(set.Contains('b'), Is.True);
@@ -568,7 +568,7 @@ public class RuneSetTests
         // test: "\uDC00" in a string constant becomes U+FFFD under IL2CPP.
         var loneLow = new string((char)0xDC00, 1);
 
-        Assert.Throws<ArgumentException>(() => RuneSet.Runes(loneLow));
+        Assert.Throws<ArgumentException>(() => TokenSet.Runes(loneLow));
     }
 
     [Test]
@@ -578,7 +578,7 @@ public class RuneSetTests
         // pair with. 
         var trailing = "a" + new string((char)0xD800, 1);
 
-        Assert.Throws<ArgumentException>(() => RuneSet.Runes(trailing));
+        Assert.Throws<ArgumentException>(() => TokenSet.Runes(trailing));
     }
 
     [Test]
@@ -587,7 +587,7 @@ public class RuneSetTests
         // High surrogate followed by a non-surrogate char is invalid.
         var malformed = new string((char)0xD800, 1) + "a";
 
-        Assert.Throws<ArgumentException>(() => RuneSet.Runes(malformed));
+        Assert.Throws<ArgumentException>(() => TokenSet.Runes(malformed));
     }
 
     [Test]
@@ -599,7 +599,7 @@ public class RuneSetTests
         // matches the whole grapheme as a unit, and Contains(int)
         // doesn't match either of the constituent runes by themselves.
         var thumbsUpSkinTone = "\U0001F44D\U0001F3FD";
-        var set = RuneSet.Runes(thumbsUpSkinTone);
+        var set = TokenSet.Runes(thumbsUpSkinTone);
 
         Assert.That(set.Contains(thumbsUpSkinTone), Is.True);
         Assert.That(set.Contains(0x1F44D), Is.False, "the base rune isn't a member on its own");
@@ -616,7 +616,7 @@ public class RuneSetTests
         // U+00E9.
         var decomposedE = "é";
 
-        var set = RuneSet.Runes(decomposedE);
+        var set = TokenSet.Runes(decomposedE);
 
         Assert.That(set.Contains(decomposedE), Is.True);
         Assert.That(set.Contains('e'), Is.False);
@@ -630,7 +630,7 @@ public class RuneSetTests
         // plane. One rune, one grapheme. The validation should let
         // this through and build a one-element set.
         var grinningFace = "\U0001F600";
-        var set = RuneSet.Runes(grinningFace);
+        var set = TokenSet.Runes(grinningFace);
 
         Assert.That(set.Contains(0x1F600), Is.True);
         Assert.That(set.Contains('A'), Is.False);
@@ -644,7 +644,7 @@ public class RuneSetTests
         // array like any other multi-rune grapheme. Callers that
         // wanted "{CR, LF} as separate runes" build the set with
         // Single('\r') | Single('\n') instead.
-        var set = RuneSet.Runes("\r\n");
+        var set = TokenSet.Runes("\r\n");
 
         Assert.That(set.Contains("\r\n"), Is.True);
         Assert.That(set.Contains('\r'), Is.False);
@@ -654,7 +654,7 @@ public class RuneSetTests
     [Test]
     public void OneOf_with_multi_rune_grapheme_builds_a_multi_rune_rule()
     {
-        // OneOf(string) delegates to RuneSet.Runes, which accepts
+        // OneOf(string) delegates to TokenSet.Runes, which accepts
         // multi-rune graphemes and stores them in the multi-rune
         // array. The resulting rule matches that grapheme as a unit
         // when it shows up as a single token under GraphemeLexer.
@@ -670,9 +670,9 @@ public class RuneSetTests
     [Test]
     public void ToString_renders_empty_singleton_and_range()
     {
-        Assert.That(default(RuneSet).ToString(), Is.EqualTo("[]"));
-        Assert.That(RuneSet.Single('a').ToString(), Is.EqualTo("[a]"));
-        Assert.That(RuneSet.Range('a', 'z').ToString(), Is.EqualTo("[a-z]"));
+        Assert.That(default(TokenSet).ToString(), Is.EqualTo("[]"));
+        Assert.That(TokenSet.Single('a').ToString(), Is.EqualTo("[a]"));
+        Assert.That(TokenSet.Range('a', 'z').ToString(), Is.EqualTo("[a-z]"));
     }
 
     [Test]
@@ -680,7 +680,7 @@ public class RuneSetTests
     {
         // Disjoint ranges render as comma-separated pieces, each using the
         // same low or low-high convention.
-        var set = RuneSet.Range('0', '9') | RuneSet.Range('A', 'Z') | RuneSet.Range('a', 'z');
+        var set = TokenSet.Range('0', '9') | TokenSet.Range('A', 'Z') | TokenSet.Range('a', 'z');
 
         Assert.That(set.ToString(), Is.EqualTo("[0-9,A-Z,a-z]"));
     }
@@ -690,21 +690,21 @@ public class RuneSetTests
     {
         // Printable ASCII boundary: 0x20 (space) and 0x7E (~) render literal.
         // 0x1F and 0x7F render as U+XXXX.
-        Assert.That(RuneSet.Single(0x20).ToString(), Is.EqualTo("[ ]"));
-        Assert.That(RuneSet.Single(0x7E).ToString(), Is.EqualTo("[~]"));
-        Assert.That(RuneSet.Single(0x1F).ToString(), Is.EqualTo("[U+001F]"));
-        Assert.That(RuneSet.Single(0x7F).ToString(), Is.EqualTo("[U+007F]"));
+        Assert.That(TokenSet.Single(0x20).ToString(), Is.EqualTo("[ ]"));
+        Assert.That(TokenSet.Single(0x7E).ToString(), Is.EqualTo("[~]"));
+        Assert.That(TokenSet.Single(0x1F).ToString(), Is.EqualTo("[U+001F]"));
+        Assert.That(TokenSet.Single(0x7F).ToString(), Is.EqualTo("[U+007F]"));
         // Supplementary plane codepoint: five hex digits, no zero-padding past X4.
-        Assert.That(RuneSet.Single(GuitarRune).ToString(), Is.EqualTo("[U+1F3B8]"));
+        Assert.That(TokenSet.Single(GuitarRune).ToString(), Is.EqualTo("[U+1F3B8]"));
         // Range with non-printable endpoints.
-        Assert.That(RuneSet.Range(0, 0x1F).ToString(), Is.EqualTo("[U+0000-U+001F]"));
+        Assert.That(TokenSet.Range(0, 0x1F).ToString(), Is.EqualTo("[U+0000-U+001F]"));
     }
 
     [Test]
     public void ToString_renders_up_to_eight_ranges_in_full()
     {
         // Eight non-adjacent single-rune ranges. All show, no tail.
-        var set = RuneSet.Runes("acegikmo");
+        var set = TokenSet.Runes("acegikmo");
         Assert.That(set.ToString(), Is.EqualTo("[a,c,e,g,i,k,m,o]"));
     }
 
@@ -713,9 +713,9 @@ public class RuneSetTests
     {
         // Nine non-adjacent single-rune ranges. First eight show, a
         // "+1 more" tail says the rest got dropped. Large classes like
-        // RuneSet.Letters would produce hundreds of ranges without
+        // TokenSet.Letters would produce hundreds of ranges without
         // this cap and make trace lines unreadable.
-        var set = RuneSet.Runes("acegikmoq");
+        var set = TokenSet.Runes("acegikmoq");
         Assert.That(set.ToString(), Is.EqualTo("[a,c,e,g,i,k,m,o,...+1 more]"));
     }
 
@@ -725,7 +725,7 @@ public class RuneSetTests
         // Ten non-adjacent single-rune ranges. First eight show, "+2
         // more" reports the remainder. Confirms the tail count tracks
         // actual overflow rather than a fixed placeholder.
-        var set = RuneSet.Runes("acegikmoqs");
+        var set = TokenSet.Runes("acegikmoqs");
         Assert.That(set.ToString(), Is.EqualTo("[a,c,e,g,i,k,m,o,...+2 more]"));
     }
 
@@ -734,7 +734,7 @@ public class RuneSetTests
     [Test]
     public void Union_of_two_default_sets_is_empty()
     {
-        var set = default(RuneSet) | default(RuneSet);
+        var set = default(TokenSet) | default(TokenSet);
 
         Assert.That(set.IsEmpty, Is.True);
     }
@@ -744,7 +744,7 @@ public class RuneSetTests
     {
         // a | a shouldn't double-count intervals. Normalize collapses the
         // duplicates back to the single-interval form.
-        var original = RuneSet.Range('a', 'z');
+        var original = TokenSet.Range('a', 'z');
         var doubled = original | original;
 
         Assert.That(doubled.ToString(), Is.EqualTo("[a-z]"));
@@ -754,9 +754,9 @@ public class RuneSetTests
     public void Union_of_fully_contained_range_yields_the_outer_range()
     {
         // [1, 100] | [10, 20] = [1, 100]. Inner range adds nothing.
-        var set = RuneSet.Range(1, 100) | RuneSet.Range(10, 20);
+        var set = TokenSet.Range(1, 100) | TokenSet.Range(10, 20);
 
-        AssertEqual(set, RuneSet.Range(1, 100));
+        AssertEqual(set, TokenSet.Range(1, 100));
     }
 
     // Intersection corners ---------------------------------------------------
@@ -764,7 +764,7 @@ public class RuneSetTests
     [Test]
     public void Intersection_of_identical_sets_is_that_set()
     {
-        var original = RuneSet.Range('a', 'z');
+        var original = TokenSet.Range('a', 'z');
 
         AssertEqual(original & original, original);
     }
@@ -773,8 +773,8 @@ public class RuneSetTests
     public void Intersection_with_containing_set_returns_contained_set()
     {
         // [10, 20] & [1, 100] = [10, 20] (the smaller set wins when nested).
-        var inner = RuneSet.Range(10, 20);
-        var outer = RuneSet.Range(1, 100);
+        var inner = TokenSet.Range(10, 20);
+        var outer = TokenSet.Range(1, 100);
 
         AssertEqual(inner & outer, inner);
     }
@@ -784,17 +784,17 @@ public class RuneSetTests
     {
         // [1, 5] and [6, 10] are adjacent, not overlapping. They'd merge
         // under union. Under intersection they share no elements.
-        var set = RuneSet.Range(1, 5) & RuneSet.Range(6, 10);
+        var set = TokenSet.Range(1, 5) & TokenSet.Range(6, 10);
 
         Assert.That(set.IsEmpty, Is.True);
     }
 
     [Test]
-    public void Intersection_with_default_RuneSet_on_right_is_empty()
+    public void Intersection_with_default_TokenSet_on_right_is_empty()
     {
         // Mirrors the existing "default on left" test. Both branches of the
         // null-check in the operator should short-circuit to empty.
-        var set = RuneSet.Single('x') & default(RuneSet);
+        var set = TokenSet.Single('x') & default(TokenSet);
 
         Assert.That(set.IsEmpty, Is.True);
     }
@@ -806,14 +806,14 @@ public class RuneSetTests
     {
         // Input ends at 0xD7FF. Complement is just [0xE000, 0x10FFFF].
         // No prefix, no surrogate slots, full suffix.
-        AssertEqual(~RuneSet.Range(0, 0xD7FF), RuneSet.Range(0xE000, 0x10FFFF));
+        AssertEqual(~TokenSet.Range(0, 0xD7FF), TokenSet.Range(0xE000, 0x10FFFF));
     }
 
     [Test]
     public void Complement_of_range_starting_at_surrogate_high_boundary()
     {
         // Input starts at 0xE000. Complement is just [0, 0xD7FF].
-        AssertEqual(~RuneSet.Range(0xE000, 0x10FFFF), RuneSet.Range(0, 0xD7FF));
+        AssertEqual(~TokenSet.Range(0xE000, 0x10FFFF), TokenSet.Range(0, 0xD7FF));
     }
 
     [Test]
@@ -821,12 +821,12 @@ public class RuneSetTests
     {
         // Input [5, 10] ∪ [20, 30]. Complement should be the three gaps,
         // with the trailing one split around the surrogate block.
-        var expected = RuneSet.Range(0, 4)
-            | RuneSet.Range(11, 19)
-            | RuneSet.Range(31, 0xD7FF)
-            | RuneSet.Range(0xE000, 0x10FFFF);
+        var expected = TokenSet.Range(0, 4)
+            | TokenSet.Range(11, 19)
+            | TokenSet.Range(31, 0xD7FF)
+            | TokenSet.Range(0xE000, 0x10FFFF);
 
-        AssertEqual(~(RuneSet.Range(5, 10) | RuneSet.Range(20, 30)), expected);
+        AssertEqual(~(TokenSet.Range(5, 10) | TokenSet.Range(20, 30)), expected);
     }
 
     // Built-ins --------------------------------------------------------------
@@ -834,17 +834,17 @@ public class RuneSetTests
     [Test]
     public void Digits_contains_decimal_digit_runes_across_scripts()
     {
-        // RuneSet.Digits is UnicodeCategory.DecimalDigitNumber, every
+        // TokenSet.Digits is UnicodeCategory.DecimalDigitNumber, every
         // decimal digit in every script, not just ASCII 0-9.
-        Assert.That(RuneSet.Digits.Contains('0'), Is.True);
-        Assert.That(RuneSet.Digits.Contains('9'), Is.True);
-        Assert.That(RuneSet.Digits.Contains(0x0660), Is.True); // Arabic-Indic digit zero ٠
-        Assert.That(RuneSet.Digits.Contains(0x09E6), Is.True); // Bengali digit zero ০
+        Assert.That(TokenSet.Digits.Contains('0'), Is.True);
+        Assert.That(TokenSet.Digits.Contains('9'), Is.True);
+        Assert.That(TokenSet.Digits.Contains(0x0660), Is.True); // Arabic-Indic digit zero ٠
+        Assert.That(TokenSet.Digits.Contains(0x09E6), Is.True); // Bengali digit zero ০
         // Letters and whitespace aren't digits.
-        Assert.That(RuneSet.Digits.Contains('a'), Is.False);
-        Assert.That(RuneSet.Digits.Contains(' '), Is.False);
+        Assert.That(TokenSet.Digits.Contains('a'), Is.False);
+        Assert.That(TokenSet.Digits.Contains(' '), Is.False);
         // Roman numeral letters are category NumberLetter, not digits.
-        Assert.That(RuneSet.Digits.Contains(0x2160), Is.False); // Ⅰ
+        Assert.That(TokenSet.Digits.Contains(0x2160), Is.False); // Ⅰ
     }
 
     [Test]
@@ -854,25 +854,25 @@ public class RuneSetTests
         // seven UAX #18 single-rune line terminators. Includes the
         // obvious ASCII intra-line whitespace plus a few Unicode-only
         // runes that are also intra-line.
-        Assert.That(RuneSet.InlineWhitespace.Contains(' '), Is.True);
-        Assert.That(RuneSet.InlineWhitespace.Contains('\t'), Is.True);
-        Assert.That(RuneSet.InlineWhitespace.Contains(0x00A0), Is.True); // NBSP
-        Assert.That(RuneSet.InlineWhitespace.Contains(0x1680), Is.True); // OGHAM SPACE MARK
-        Assert.That(RuneSet.InlineWhitespace.Contains(0x2003), Is.True); // EM SPACE
-        Assert.That(RuneSet.InlineWhitespace.Contains(0x202F), Is.True); // NARROW NO-BREAK SPACE
-        Assert.That(RuneSet.InlineWhitespace.Contains(0x3000), Is.True); // IDEOGRAPHIC SPACE
+        Assert.That(TokenSet.InlineWhitespace.Contains(' '), Is.True);
+        Assert.That(TokenSet.InlineWhitespace.Contains('\t'), Is.True);
+        Assert.That(TokenSet.InlineWhitespace.Contains(0x00A0), Is.True); // NBSP
+        Assert.That(TokenSet.InlineWhitespace.Contains(0x1680), Is.True); // OGHAM SPACE MARK
+        Assert.That(TokenSet.InlineWhitespace.Contains(0x2003), Is.True); // EM SPACE
+        Assert.That(TokenSet.InlineWhitespace.Contains(0x202F), Is.True); // NARROW NO-BREAK SPACE
+        Assert.That(TokenSet.InlineWhitespace.Contains(0x3000), Is.True); // IDEOGRAPHIC SPACE
         // Line terminators are NOT in InlineWhitespace; they live in
         // LineTerminators / EndOfLine().
-        Assert.That(RuneSet.InlineWhitespace.Contains('\r'), Is.False);
-        Assert.That(RuneSet.InlineWhitespace.Contains('\n'), Is.False);
-        Assert.That(RuneSet.InlineWhitespace.Contains('\v'), Is.False); // VT
-        Assert.That(RuneSet.InlineWhitespace.Contains('\f'), Is.False); // FF
-        Assert.That(RuneSet.InlineWhitespace.Contains(0x0085), Is.False); // NEL
-        Assert.That(RuneSet.InlineWhitespace.Contains(0x2028), Is.False); // LINE SEPARATOR
-        Assert.That(RuneSet.InlineWhitespace.Contains(0x2029), Is.False); // PARAGRAPH SEPARATOR
+        Assert.That(TokenSet.InlineWhitespace.Contains('\r'), Is.False);
+        Assert.That(TokenSet.InlineWhitespace.Contains('\n'), Is.False);
+        Assert.That(TokenSet.InlineWhitespace.Contains('\v'), Is.False); // VT
+        Assert.That(TokenSet.InlineWhitespace.Contains('\f'), Is.False); // FF
+        Assert.That(TokenSet.InlineWhitespace.Contains(0x0085), Is.False); // NEL
+        Assert.That(TokenSet.InlineWhitespace.Contains(0x2028), Is.False); // LINE SEPARATOR
+        Assert.That(TokenSet.InlineWhitespace.Contains(0x2029), Is.False); // PARAGRAPH SEPARATOR
         // Not whitespace at all.
-        Assert.That(RuneSet.InlineWhitespace.Contains('a'), Is.False);
-        Assert.That(RuneSet.InlineWhitespace.Contains('0'), Is.False);
+        Assert.That(TokenSet.InlineWhitespace.Contains('a'), Is.False);
+        Assert.That(TokenSet.InlineWhitespace.Contains('0'), Is.False);
     }
 
     [Test]
@@ -884,8 +884,8 @@ public class RuneSetTests
         for (int codepoint = 0; codepoint <= 0xFFFF; codepoint++)
         {
             if (codepoint >= 0xD800 && codepoint <= 0xDFFF) continue;
-            bool inInline = RuneSet.InlineWhitespace.Contains(codepoint);
-            bool inLineTerm = RuneSet.LineTerminators.Contains(codepoint);
+            bool inInline = TokenSet.InlineWhitespace.Contains(codepoint);
+            bool inLineTerm = TokenSet.LineTerminators.Contains(codepoint);
             Assert.That(inInline && inLineTerm, Is.False,
                 $"U+{codepoint:X4} is in both InlineWhitespace and LineTerminators");
         }
@@ -894,12 +894,12 @@ public class RuneSetTests
     [Test]
     public void Ascii_Digits_contains_only_0_through_9()
     {
-        Assert.That(RuneSet.Ascii.Digits.Contains('0'), Is.True);
-        Assert.That(RuneSet.Ascii.Digits.Contains('5'), Is.True);
-        Assert.That(RuneSet.Ascii.Digits.Contains('9'), Is.True);
+        Assert.That(TokenSet.Ascii.Digits.Contains('0'), Is.True);
+        Assert.That(TokenSet.Ascii.Digits.Contains('5'), Is.True);
+        Assert.That(TokenSet.Ascii.Digits.Contains('9'), Is.True);
         // The Unicode-full Digits would include Arabic-Indic zero. Ascii.Digits doesn't.
-        Assert.That(RuneSet.Ascii.Digits.Contains(0x0660), Is.False);
-        Assert.That(RuneSet.Ascii.Digits.Contains('a'), Is.False);
+        Assert.That(TokenSet.Ascii.Digits.Contains(0x0660), Is.False);
+        Assert.That(TokenSet.Ascii.Digits.Contains('a'), Is.False);
     }
 
     [Test]
@@ -908,28 +908,28 @@ public class RuneSetTests
         // ASCII whitespace including line terminators. The "regex \s on
         // ASCII" set, for grammars that treat newlines as ordinary
         // whitespace.
-        Assert.That(RuneSet.Ascii.AnyWhitespace.Contains(' '), Is.True);
-        Assert.That(RuneSet.Ascii.AnyWhitespace.Contains('\t'), Is.True);
-        Assert.That(RuneSet.Ascii.AnyWhitespace.Contains('\r'), Is.True);
-        Assert.That(RuneSet.Ascii.AnyWhitespace.Contains('\n'), Is.True);
+        Assert.That(TokenSet.Ascii.AnyWhitespace.Contains(' '), Is.True);
+        Assert.That(TokenSet.Ascii.AnyWhitespace.Contains('\t'), Is.True);
+        Assert.That(TokenSet.Ascii.AnyWhitespace.Contains('\r'), Is.True);
+        Assert.That(TokenSet.Ascii.AnyWhitespace.Contains('\n'), Is.True);
         // Not in the literal " \t\r\n" set, even though char.IsWhiteSpace says yes.
-        Assert.That(RuneSet.Ascii.AnyWhitespace.Contains(0x00A0), Is.False); // NBSP
-        Assert.That(RuneSet.Ascii.AnyWhitespace.Contains('\v'), Is.False);   // vertical tab
-        Assert.That(RuneSet.Ascii.AnyWhitespace.Contains('\f'), Is.False);   // form feed
+        Assert.That(TokenSet.Ascii.AnyWhitespace.Contains(0x00A0), Is.False); // NBSP
+        Assert.That(TokenSet.Ascii.AnyWhitespace.Contains('\v'), Is.False);   // vertical tab
+        Assert.That(TokenSet.Ascii.AnyWhitespace.Contains('\f'), Is.False);   // form feed
     }
 
     [Test]
     public void Ascii_InlineWhitespace_contains_only_space_and_tab()
     {
         // ASCII intra-line whitespace. Mirrors the full-Unicode
-        // RuneSet.InlineWhitespace but stays inside ASCII.
-        Assert.That(RuneSet.Ascii.InlineWhitespace.Contains(' '), Is.True);
-        Assert.That(RuneSet.Ascii.InlineWhitespace.Contains('\t'), Is.True);
+        // TokenSet.InlineWhitespace but stays inside ASCII.
+        Assert.That(TokenSet.Ascii.InlineWhitespace.Contains(' '), Is.True);
+        Assert.That(TokenSet.Ascii.InlineWhitespace.Contains('\t'), Is.True);
         // Line terminators excluded by definition.
-        Assert.That(RuneSet.Ascii.InlineWhitespace.Contains('\r'), Is.False);
-        Assert.That(RuneSet.Ascii.InlineWhitespace.Contains('\n'), Is.False);
+        Assert.That(TokenSet.Ascii.InlineWhitespace.Contains('\r'), Is.False);
+        Assert.That(TokenSet.Ascii.InlineWhitespace.Contains('\n'), Is.False);
         // Unicode-only whitespace excluded because this is the ASCII set.
-        Assert.That(RuneSet.Ascii.InlineWhitespace.Contains(0x00A0), Is.False); // NBSP
+        Assert.That(TokenSet.Ascii.InlineWhitespace.Contains(0x00A0), Is.False); // NBSP
     }
 
     [Test]
@@ -937,10 +937,10 @@ public class RuneSetTests
     {
         // The Ascii-qualified built-ins are the "only ASCII" versions. They
         // must not drift into full Unicode by accident.
-        Assert.That(RuneSet.Ascii.Letters.Contains('a'), Is.True);
-        Assert.That(RuneSet.Ascii.Letters.Contains('Z'), Is.True);
-        Assert.That(RuneSet.Ascii.Letters.Contains(0x00E9), Is.False); // é
-        Assert.That(RuneSet.Ascii.Letters.Contains(0x4E2D), Is.False); // 中
+        Assert.That(TokenSet.Ascii.Letters.Contains('a'), Is.True);
+        Assert.That(TokenSet.Ascii.Letters.Contains('Z'), Is.True);
+        Assert.That(TokenSet.Ascii.Letters.Contains(0x00E9), Is.False); // é
+        Assert.That(TokenSet.Ascii.Letters.Contains(0x4E2D), Is.False); // 中
     }
 
     // Category niche ---------------------------------------------------------
@@ -963,7 +963,7 @@ public class RuneSetTests
         // The build loop explicitly skips 0xD800..0xDFFF (they aren't valid
         // scalar values), so asking for UnicodeCategory.Surrogate yields an
         // empty set. Non-obvious and worth verifying.
-        var surrogates = RuneSet.Category(UnicodeCategory.Surrogate);
+        var surrogates = TokenSet.Category(UnicodeCategory.Surrogate);
 
         Assert.That(surrogates.IsEmpty, Is.True);
     }
@@ -973,7 +973,7 @@ public class RuneSetTests
     {
         // DecimalDigitNumber is exercised indirectly via Digits. Pick a
         // different non-letter category so the cache path sees more variety.
-        var spaces = RuneSet.Category(UnicodeCategory.SpaceSeparator);
+        var spaces = TokenSet.Category(UnicodeCategory.SpaceSeparator);
 
         Assert.That(spaces.Contains(' '), Is.True);       // U+0020 space
         Assert.That(spaces.Contains(0x00A0), Is.True);    // NBSP
@@ -990,7 +990,7 @@ public class RuneSetTests
         // Unicode 1.0 and is a stable Cn member. If the scan had an
         // off-by-one at the upper end of the enum, the set would come back
         // empty or miss this codepoint.
-        var unassigned = RuneSet.Category(UnicodeCategory.OtherNotAssigned);
+        var unassigned = TokenSet.Category(UnicodeCategory.OtherNotAssigned);
 
         Assert.That(unassigned.Contains(0x0378), Is.True);
         Assert.That(unassigned.Contains('A'), Is.False);
@@ -1006,7 +1006,7 @@ public class RuneSetTests
         // A ∩ ~A = ∅. One test covers the complement-then-intersect pipeline
         // for a nontrivial multi-interval A that also crosses the surrogate
         // split.
-        var a = RuneSet.Ascii.Letters | RuneSet.Range(0xE000, 0xE00F);
+        var a = TokenSet.Ascii.Letters | TokenSet.Range(0xE000, 0xE00F);
         var intersection = a & ~a;
 
         Assert.That(intersection.IsEmpty, Is.True);
@@ -1015,7 +1015,7 @@ public class RuneSetTests
     // Multi-rune grapheme support -------------------------------------------
     //
     // Below this point: tests that exercise the multi-rune side of the
-    // RuneSet (graphemes that occupy two or more runes). The rune fast
+    // TokenSet (graphemes that occupy two or more runes). The rune fast
     // path stays unchanged, so the rune-only tests above are still the
     // bulk of the coverage. These pin down the new capability: storage,
     // membership, set algebra, the documented complement-throws rule,
@@ -1029,7 +1029,7 @@ public class RuneSetTests
         // (another interval add). Verify all four show up by their
         // appropriate Contains overloads, and the ones that aren't
         // members don't accidentally match.
-        var set = RuneSet.Runes("a" + USFlagGrapheme + SkinTonedWaveGrapheme + "z");
+        var set = TokenSet.Runes("a" + USFlagGrapheme + SkinTonedWaveGrapheme + "z");
 
         Assert.That(set.Contains('a'), Is.True);
         Assert.That(set.Contains('z'), Is.True);
@@ -1045,7 +1045,7 @@ public class RuneSetTests
     [Test]
     public void Contains_string_on_empty_input_returns_false()
     {
-        var set = RuneSet.Runes("a") | RuneSet.Runes(USFlagGrapheme);
+        var set = TokenSet.Runes("a") | TokenSet.Runes(USFlagGrapheme);
 
         Assert.That(set.Contains(""), Is.False);
     }
@@ -1056,7 +1056,7 @@ public class RuneSetTests
         // A single-rune string is just shorthand for the rune-Contains
         // path. Build the set as multi-rune-only and verify a
         // single-rune Contains(string) doesn't hit it.
-        var set = RuneSet.Runes(USFlagGrapheme);
+        var set = TokenSet.Runes(USFlagGrapheme);
 
         Assert.That(set.Contains("a"), Is.False);
         Assert.That(set.Contains(USFlagGrapheme), Is.True);
@@ -1068,7 +1068,7 @@ public class RuneSetTests
         // Letters is a large rune-only set. USFlag is a multi-rune entry
         // built via Runes. Their union should contain every letter and
         // also match the flag grapheme.
-        var mixed = RuneSet.Letters | RuneSet.Runes(USFlagGrapheme);
+        var mixed = TokenSet.Letters | TokenSet.Runes(USFlagGrapheme);
 
         Assert.That(mixed.Contains('a'), Is.True);
         Assert.That(mixed.Contains('Z'), Is.True);
@@ -1082,8 +1082,8 @@ public class RuneSetTests
         // Build two mixed sets with overlapping rune intervals and
         // disjoint multi-rune entries. The union should contain every
         // rune from both sides and both multi-rune entries.
-        var left = RuneSet.Runes("ab" + USFlagGrapheme);
-        var right = RuneSet.Runes("bc" + SkinTonedWaveGrapheme);
+        var left = TokenSet.Runes("ab" + USFlagGrapheme);
+        var right = TokenSet.Runes("bc" + SkinTonedWaveGrapheme);
         var combined = left | right;
 
         Assert.That(combined.Contains('a'), Is.True);
@@ -1093,16 +1093,16 @@ public class RuneSetTests
         Assert.That(combined.Contains(SkinTonedWaveGrapheme), Is.True);
         // Same multi-rune entry on both sides shouldn't double-count or
         // produce a non-canonical array.
-        var withDup = RuneSet.Runes("a" + USFlagGrapheme) | RuneSet.Runes("b" + USFlagGrapheme);
-        AssertEqual(withDup, RuneSet.Runes("ab" + USFlagGrapheme));
+        var withDup = TokenSet.Runes("a" + USFlagGrapheme) | TokenSet.Runes("b" + USFlagGrapheme);
+        AssertEqual(withDup, TokenSet.Runes("ab" + USFlagGrapheme));
     }
 
     [Test]
     public void Intersection_of_two_mixed_sets_keeps_common_members()
     {
         // Both sides contain USFlag and 'a'. Only those should survive.
-        var left = RuneSet.Runes("ab" + USFlagGrapheme + SkinTonedWaveGrapheme);
-        var right = RuneSet.Runes("ac" + USFlagGrapheme);
+        var left = TokenSet.Runes("ab" + USFlagGrapheme + SkinTonedWaveGrapheme);
+        var right = TokenSet.Runes("ac" + USFlagGrapheme);
         var intersected = left & right;
 
         Assert.That(intersected.Contains('a'), Is.True);
@@ -1118,16 +1118,16 @@ public class RuneSetTests
         // The rune-only side has nothing to intersect against on the
         // multi-rune side. Letters & (Letters | USFlag) is just the
         // letters.
-        var rune = RuneSet.Runes("ab");
-        var mixed = RuneSet.Runes("ab" + USFlagGrapheme);
+        var rune = TokenSet.Runes("ab");
+        var mixed = TokenSet.Runes("ab" + USFlagGrapheme);
 
-        AssertEqual(rune & mixed, RuneSet.Runes("ab"));
+        AssertEqual(rune & mixed, TokenSet.Runes("ab"));
     }
 
     [Test]
     public void Complement_of_mixed_set_throws_with_documented_message()
     {
-        var mixed = RuneSet.Runes("a" + USFlagGrapheme);
+        var mixed = TokenSet.Runes("a" + USFlagGrapheme);
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
         {
@@ -1149,8 +1149,8 @@ public class RuneSetTests
         // pair with). Callers who want to preserve multi-rune entries
         // through a "subtract these runes" operation union them back
         // in explicitly.
-        var letters = RuneSet.Letters;
-        var withoutVowels = letters & ~RuneSet.Runes("aeiou");
+        var letters = TokenSet.Letters;
+        var withoutVowels = letters & ~TokenSet.Runes("aeiou");
 
         Assert.That(withoutVowels.Contains('b'), Is.True);
         Assert.That(withoutVowels.Contains('a'), Is.False);
@@ -1159,7 +1159,7 @@ public class RuneSetTests
         // the rune-only part, complement that, then union the
         // multi-rune part back in.
         var withoutVowelsKeepingFlag =
-            (letters & ~RuneSet.Runes("aeiou")) | RuneSet.Runes(USFlagGrapheme);
+            (letters & ~TokenSet.Runes("aeiou")) | TokenSet.Runes(USFlagGrapheme);
         Assert.That(withoutVowelsKeepingFlag.Contains(USFlagGrapheme), Is.True);
         Assert.That(withoutVowelsKeepingFlag.Contains('a'), Is.False);
     }
@@ -1169,11 +1169,11 @@ public class RuneSetTests
     {
         // Same logical content, different construction paths. Equals
         // and GetHashCode should both agree. AssertEqual checks both.
-        var sequential = RuneSet.Runes("a" + USFlagGrapheme + SkinTonedWaveGrapheme);
+        var sequential = TokenSet.Runes("a" + USFlagGrapheme + SkinTonedWaveGrapheme);
         var unioned =
-            RuneSet.Runes("a")
-            | RuneSet.Runes(USFlagGrapheme)
-            | RuneSet.Runes(SkinTonedWaveGrapheme);
+            TokenSet.Runes("a")
+            | TokenSet.Runes(USFlagGrapheme)
+            | TokenSet.Runes(SkinTonedWaveGrapheme);
 
         AssertEqual(sequential, unioned);
     }
@@ -1183,8 +1183,8 @@ public class RuneSetTests
     {
         // Same rune intervals, different multi-rune content. Equals
         // must report them unequal.
-        var withFlag = RuneSet.Runes("a" + USFlagGrapheme);
-        var withWave = RuneSet.Runes("a" + SkinTonedWaveGrapheme);
+        var withFlag = TokenSet.Runes("a" + USFlagGrapheme);
+        var withWave = TokenSet.Runes("a" + SkinTonedWaveGrapheme);
 
         Assert.That(withFlag, Is.Not.EqualTo(withWave));
     }
@@ -1194,8 +1194,8 @@ public class RuneSetTests
     {
         // Multi-rune array dedupe + sort means the order Runes() sees
         // graphemes shouldn't affect the hash.
-        var ab = RuneSet.Runes(USFlagGrapheme) | RuneSet.Runes(SkinTonedWaveGrapheme);
-        var ba = RuneSet.Runes(SkinTonedWaveGrapheme) | RuneSet.Runes(USFlagGrapheme);
+        var ab = TokenSet.Runes(USFlagGrapheme) | TokenSet.Runes(SkinTonedWaveGrapheme);
+        var ba = TokenSet.Runes(SkinTonedWaveGrapheme) | TokenSet.Runes(USFlagGrapheme);
 
         AssertEqual(ab, ba);
     }
@@ -1206,7 +1206,7 @@ public class RuneSetTests
         // Ranges first, then multi-rune entries, separated by commas
         // inside the brackets. Multi-rune entries render as the user-
         // perceived characters themselves.
-        var set = RuneSet.Range('a', 'z') | RuneSet.Runes(USFlagGrapheme);
+        var set = TokenSet.Range('a', 'z') | TokenSet.Runes(USFlagGrapheme);
 
         Assert.That(set.ToString(), Is.EqualTo("[a-z," + USFlagGrapheme + "]"));
     }
@@ -1218,9 +1218,9 @@ public class RuneSetTests
         // first 8 render in full; the trailing entry shows "+1 more".
         // Multi-rune entries land at the end of the entry list, so
         // the truncation falls on one of them.
-        var set = RuneSet.Runes("acegikm")
-            | RuneSet.Runes(USFlagGrapheme)
-            | RuneSet.Runes(SkinTonedWaveGrapheme);
+        var set = TokenSet.Runes("acegikm")
+            | TokenSet.Runes(USFlagGrapheme)
+            | TokenSet.Runes(SkinTonedWaveGrapheme);
 
         Assert.That(set.ToString(), Does.Contain("+1 more"));
     }
@@ -1228,15 +1228,15 @@ public class RuneSetTests
     [Test]
     public void HasMultiRuneGraphemes_is_false_for_rune_only_sets()
     {
-        Assert.That(RuneSet.Runes("abc").HasMultiRuneGraphemes, Is.False);
-        Assert.That(RuneSet.Letters.HasMultiRuneGraphemes, Is.False);
-        Assert.That(default(RuneSet).HasMultiRuneGraphemes, Is.False);
+        Assert.That(TokenSet.Runes("abc").HasMultiRuneGraphemes, Is.False);
+        Assert.That(TokenSet.Letters.HasMultiRuneGraphemes, Is.False);
+        Assert.That(default(TokenSet).HasMultiRuneGraphemes, Is.False);
     }
 
     [Test]
     public void HasMultiRuneGraphemes_is_true_after_adding_multi_rune_entry()
     {
-        Assert.That(RuneSet.Runes(USFlagGrapheme).HasMultiRuneGraphemes, Is.True);
-        Assert.That((RuneSet.Letters | RuneSet.Runes(USFlagGrapheme)).HasMultiRuneGraphemes, Is.True);
+        Assert.That(TokenSet.Runes(USFlagGrapheme).HasMultiRuneGraphemes, Is.True);
+        Assert.That((TokenSet.Letters | TokenSet.Runes(USFlagGrapheme)).HasMultiRuneGraphemes, Is.True);
     }
 }

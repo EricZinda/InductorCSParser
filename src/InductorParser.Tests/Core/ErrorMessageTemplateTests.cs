@@ -55,7 +55,7 @@ public class ErrorMessageTemplateTests
         // budget check. The custom template should surface in
         // ParseResult.ErrorMessage with the configured timeout
         // substituted.
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         var timeout = TimeSpan.FromTicks(1);
         var options = new ParseOptions
         {
@@ -72,7 +72,7 @@ public class ErrorMessageTemplateTests
     [Test]
     public void RuleCountLimitAbortTemplate_custom_substitutes_limit()
     {
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         var options = new ParseOptions
         {
             RuleCountLimit = 10,
@@ -112,7 +112,7 @@ public class ErrorMessageTemplateTests
         var cancellation = new ParseCancellation();
         cancellation.Cancel();
 
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         var options = new ParseOptions
         {
             Cancellation = cancellation,
@@ -165,7 +165,7 @@ public class ErrorMessageTemplateTests
         // budget template, not just the grammar-mismatch ones. A custom
         // RuleCountLimitAbortTemplate that asks for {line} and {limit}
         // should get both substituted.
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         var options = new ParseOptions
         {
             RuleCountLimit = 10,

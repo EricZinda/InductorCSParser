@@ -104,7 +104,7 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
         (uint)((c | 0x20) - 'a') <= ('z' - 'a');
 
     // Return the set of runes this rule might consume first (can be a superset)
-    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
+    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
     // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
@@ -124,8 +124,8 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
         {
             int lower = first | 0x20;
             int upper = lower & ~0x20;
-            return new RuleStartRequirements(RuneSet.Single(lower) | RuneSet.Single(upper), Advance.Always);
+            return new RuleStartRequirements(TokenSet.Single(lower) | TokenSet.Single(upper), Advance.Always);
         }
-        return new RuleStartRequirements(RuneSet.Single(first), Advance.Always);
+        return new RuleStartRequirements(TokenSet.Single(first), Advance.Always);
     }
 }

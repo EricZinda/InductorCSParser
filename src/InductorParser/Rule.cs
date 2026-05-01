@@ -24,7 +24,7 @@ namespace InductorParser;
 // Rule construction is fluent: Modifier methods like .As(name) and
 // .Flatten(type) return the same Rule so it can read as a chain:
 //
-//     var settingName = OneOrMore(OneOf(RuneSet.Letters))
+//     var settingName = OneOrMore(OneOf(TokenSet.Letters))
 //         .As(nameof(settingName))
 //         .Flatten(FlattenType.Preserve);
 //
@@ -46,20 +46,20 @@ public abstract class Rule
     private bool _idAssigned;
     private string? _errorMessage;
 
-    // FirstConsumedRunes and Advance drive the "can I skip this rule?"
+    // FirstConsumedTokens and Advance drive the "can I skip this rule?"
     // shortcut. See RuleStartRequirements for the full story. The type
     // returned by ComputeRuleStart encapsulates these two. Populated at
     // Compile time. The pessimistic defaults
     // below (Universe, Sometimes) mean any user-defined Rule subclass that
     // doesn't override ComputeRuleStart is safe and never gets shortcutted.
-    internal RuneSet FirstConsumedRunes { get; private set; } = RuneSet.Universe;
+    internal TokenSet FirstConsumedTokens { get; private set; } = TokenSet.Universe;
     internal Advance Advance { get; private set; } = Advance.Sometimes;
 
     // The "can I skip this rule?" shortcut's consumer-facing API.
     // See RuleStartRequirements for the full story.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool CannotMatchLookahead(int peekRune) =>
-        Advance == Advance.Always && !FirstConsumedRunes.Contains(peekRune);
+        Advance == Advance.Always && !FirstConsumedTokens.Contains(peekRune);
 
     // Returns true when every successful match of this rule is guaranteed
     // to consume text that contains the returned literal as a substring
@@ -430,7 +430,7 @@ public abstract class Rule
         visited.Clear();
         ValidateAll(this, visited);
 
-        // Compute FirstConsumedRunes / Advance for every reachable rule (see
+        // Compute FirstConsumedTokens / Advance for every reachable rule (see
         // RuleStartRequirements for the shortcut docs). Done after Validate so
         // LateBoundRule's _target is guaranteed non-null by the time we walk
         // its child.
@@ -821,7 +821,7 @@ public abstract class Rule
     //     populated automatically and Compile walks it to assign ids and
     //     seal the graph.
     //   * Optionally override ComputeRuleStart to publish this rule's
-    //     FirstConsumedRunes and Advance (see RuleStartRequirements for
+    //     FirstConsumedTokens and Advance (see RuleStartRequirements for
     //     the docs). Without an override the pessimistic defaults apply
     //     and enclosing rules never shortcut this rule (correct but
     //     slower).
@@ -849,7 +849,7 @@ public abstract class Rule
         return child.TryParse(lexer, listForChild);
     }
 
-    // Subclass hook that publishes this rule's FirstConsumedRunes and
+    // Subclass hook that publishes this rule's FirstConsumedTokens and
     // Advance. Called once per rule during Compile, in depth-first post-
     // order so children's values are already populated when a composite's
     // ComputeRuleStart runs. See RuleStartRequirements for what to produce
@@ -857,7 +857,7 @@ public abstract class Rule
     // fully-safe "I don't know" answer that never gets shortcutted.
     internal virtual RuleStartRequirements ComputeRuleStart()
     {
-        return new RuleStartRequirements(RuneSet.Universe, Advance.Sometimes);
+        return new RuleStartRequirements(TokenSet.Universe, Advance.Sometimes);
     }
 
     internal void SetIdInternal(SymbolId id)
@@ -1018,7 +1018,7 @@ public abstract class Rule
     }
 
     // Depth-first, post-order walk with cycle detection. A rule's
-    // ComputeRuleStart reads its children's FirstConsumedRunes/Advance, so
+    // ComputeRuleStart reads its children's FirstConsumedTokens/Advance, so
     // children have to be computed first. When a cycle is found
     // (LateBoundRule pointing back into a FirstOf that contains it, for
     // instance), the in-progress rule is left at its pessimistic default
@@ -1028,7 +1028,7 @@ public abstract class Rule
     // existed.
     //
     // A smarter algorithm could repeat the walk until no
-    // FirstConsumedRunes changes (each pass can only grow a FirstConsumedRunes, so this
+    // FirstConsumedTokens changes (each pass can only grow a FirstConsumedTokens, so this
     // terminates), which would tighten the result for self-referential
     // grammars and let FirstOfRule skip more branches inside them. But the
     // common case (LateBoundRule target is reachable via a non-cyclic
@@ -1042,17 +1042,17 @@ public abstract class Rule
             ComputeRuleStartAll(child, visited, computing);
         var start = r.ComputeRuleStart();
         // Advance.Never means the rule never consumes on success, so
-        // FirstConsumedRunes must be Empty. Anything else is dead data
+        // FirstConsumedTokens must be Empty. Anything else is dead data
         // that would mislead a reader. Fail at Compile time so subclass
         // authors find out immediately instead of debugging a wrong
         // AllOfRule union somewhere else.
-        if (start.Advance == Advance.Never && !start.FirstConsumedRunes.IsEmpty)
+        if (start.Advance == Advance.Never && !start.FirstConsumedTokens.IsEmpty)
             throw new InvalidOperationException(
                 $"Rule '{r.GetType().Name}' returned Advance.Never with non-empty " +
-                $"FirstConsumedRunes. A rule that never advances can't have a set " +
-                $"of possible first-consumed runes. Use RuneSet.Empty for " +
-                $"FirstConsumedRunes when Advance is Never.");
-        r.FirstConsumedRunes = start.FirstConsumedRunes;
+                $"FirstConsumedTokens. A rule that never advances can't have a set " +
+                $"of possible first-consumed runes. Use TokenSet.Empty for " +
+                $"FirstConsumedTokens when Advance is Never.");
+        r.FirstConsumedTokens = start.FirstConsumedTokens;
         r.Advance = start.Advance;
         computing.Remove(r);
         visited.Add(r);

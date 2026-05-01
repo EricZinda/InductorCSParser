@@ -17,19 +17,19 @@ public class RecipesExamples
     [Test]
     public void Pass_through_text_grammar_handles_emoji_and_cjk()
     {
-        var formatting = RuneSet.Runes("*_#`[]()\\");
+        var formatting = TokenSet.Runes("*_#`[]()\\");
         var textChar = NoneOf(formatting);
         var text = OneOrMore(textChar).As("text").Preserve();
 
         var bold = AllOf(
             Literal("**"),
-            OneOrMore(NoneOf(RuneSet.Runes("*"))),
+            OneOrMore(NoneOf(TokenSet.Runes("*"))),
             Literal("**")
         ).As("bold").Preserve();
 
         var code = AllOf(
             Grapheme('`'),
-            OneOrMore(NoneOf(RuneSet.Runes("`"))),
+            OneOrMore(NoneOf(TokenSet.Runes("`"))),
             Grapheme('`')
         ).As("code").Preserve();
 
@@ -103,11 +103,11 @@ public class RecipesExamples
 
     // "Matching an Identifier" / "programming-language profile that also
     // allows leading underscore": Identifier(extraStartRunes:
-    // RuneSet.Runes("_")) accepts _foo.
+    // TokenSet.Runes("_")) accepts _foo.
     [Test]
     public void Identifier_with_underscore_extra_start_rune()
     {
-        var identifier = Identifier(extraStartRunes: RuneSet.Runes("_")).Compile();
+        var identifier = Identifier(extraStartRunes: TokenSet.Runes("_")).Compile();
         Assert.That(identifier.Parse("_foo").Success, Is.True);
         Assert.That(identifier.Parse("foo_bar").Success, Is.True);
     }
@@ -117,8 +117,8 @@ public class RecipesExamples
     public void Identifier_with_dollar_sign_for_ecmascript()
     {
         var identifier = Identifier(
-            extraStartRunes: RuneSet.Runes("_$"),
-            extraBodyRunes: RuneSet.Runes("$")
+            extraStartRunes: TokenSet.Runes("_$"),
+            extraBodyRunes: TokenSet.Runes("$")
         ).Compile();
         Assert.That(identifier.Parse("$foo").Success, Is.True);
         Assert.That(identifier.Parse("foo$bar").Success, Is.True);

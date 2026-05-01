@@ -207,14 +207,14 @@ public class ChordGrammarTests
     //     work): ~17-18x. Word matches took one transaction each instead
     //     of N, but transaction overhead still dominated.
     //   - After FirstOf required-runes dispatch (this p500): ~10-11x. FirstOfRule now
-    //     peeks the lookahead at Compile-computed FirstConsumedRunes and skips
+    //     peeks the lookahead at Compile-computed FirstConsumedTokens and skips
     //     children whose first rune can't match, collapsing the N-way
     //     alternations to whichever branch the lookahead allows.
     //   - After first-rune lookahead skip on BetweenInclusiveRule (p750):
     //     ~6-8x (three-run range on this box, 2026-04-30). BetweenInclusive
     //     (ZeroOrMore / Optional / OneOrMore) now peeks one rune before
     //     opening a Transaction, and when Inner.Advance is Always and the
-    //     peek isn't in Inner.FirstConsumedRunes, skips the Inner.TryParse
+    //     peek isn't in Inner.FirstConsumedTokens, skips the Inner.TryParse
     //     entirely. Chord grammar has several Optional(...) and
     //     ZeroOrMore(...) wrappers around keyword-starting patterns.
     //     Whenever the next rune proves Inner can't match, the skip collapses

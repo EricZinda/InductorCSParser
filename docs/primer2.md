@@ -30,21 +30,21 @@ The grammar:
 // LINE SEPARATOR, PARAGRAPH SEPARATOR), so we can exclude them from
 // the body of a name, key, or value. EndOfLine() then consumes the
 // terminator itself, including CRLF as a single unit.
-var lineEndRunes = RuneSet.LineTerminators;
+var lineEndRunes = TokenSet.LineTerminators;
 
 // "Any single-rune whitespace, line terminators included." We need
 // this in the NoneOf stop sets below: a name or key should stop
 // either at horizontal whitespace OR at a line terminator. The
-// built-in RuneSet.InlineWhitespace is intra-line only by design,
+// built-in TokenSet.InlineWhitespace is intra-line only by design,
 // so we union with the line terminators here to get a single set
 // that covers both cases for use inside NoneOf.
-var anySpaceRunes = RuneSet.InlineWhitespace | lineEndRunes;
+var anySpaceRunes = TokenSet.InlineWhitespace | lineEndRunes;
 
 // Section names and keys: one or more non-whitespace runes, stopping
 // at the relevant terminator (']' for a name, '=' for a key).
-var name = OneOrMore(NoneOf(RuneSet.Runes("]") | anySpaceRunes))
+var name = OneOrMore(NoneOf(TokenSet.Runes("]") | anySpaceRunes))
     .As("name").Preserve();
-var key = OneOrMore(NoneOf(RuneSet.Runes("=") | anySpaceRunes))
+var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes))
     .As("key").Preserve();
 
 var section = AllOf(Grapheme('['), name, Grapheme(']'), Optional(InlineWhitespace()), EndOfLine())
@@ -56,10 +56,10 @@ var section = AllOf(Grapheme('['), name, Grapheme(']'), Optional(InlineWhitespac
 // otherwise commit to Integer on the leading "3" and stall.
 var quotedString = AllOf(
     Grapheme('"'),
-    ZeroOrMore(NoneOf(RuneSet.Runes("\"") | lineEndRunes)),
+    ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
     Grapheme('"')).As("quotedString").Preserve();
 
-var bareWord = OneOrMore(NoneOf(anySpaceRunes | RuneSet.Runes("\"")))
+var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\"")))
     .As("bareWord").Preserve();
 
 var floatValue = Float().As("float").Preserve();

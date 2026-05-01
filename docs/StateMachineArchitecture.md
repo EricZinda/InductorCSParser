@@ -42,9 +42,9 @@ The compiled program is, mostly, a `State[]`. Each `State` is sixteen bytes: a o
 
 The opcodes break into a few groups. Match opcodes (`MatchLiteral`, `MatchOneOf`, `MatchAnyToken`, `MatchEof`) consume input and either succeed or fail without changing any state on failure. They are atomic, so the interpreter does not need a backtrack frame around them. Control-flow opcodes (`Jump`, `Call`, `ReturnSuccess`, `ReturnFailure`) move the state index without touching input. Backtrack opcodes (`PushBacktrack`, `PopBacktrack`, `FailRestore`, `PushBetween`, `BetweenIncrementCheckMax`, etc.) manage the explicit backtrack stack. Output opcodes (`OpenComposite`, `CloseComposite`, `EmitLeafLiteral`, `EmitLeafOneOf`) append to the output list and never fail.
 
-Side tables hang off the program for anything bigger than a four-byte data field can hold: `Literals` for literal strings, `RuneSets` for rune-class membership, `SymbolMetadata` for the (SymbolId, FlattenType, error message) triples that outputs point to, `ScanSpecs` for fused scan loops, and so on. Opcodes index into these tables through their data field, which keeps the State struct small and the side tables in cache when the inner loop hits them repeatedly.
+Side tables hang off the program for anything bigger than a four-byte data field can hold: `Literals` for literal strings, `TokenSets` for rune-class membership, `SymbolMetadata` for the (SymbolId, FlattenType, error message) triples that outputs point to, `ScanSpecs` for fused scan loops, and so on. Opcodes index into these tables through their data field, which keeps the State struct small and the side tables in cache when the inner loop hits them repeatedly.
 
-The compiler deduplicates aggressively. Two rules that both want the literal `"true"` share one slot in the Literals table. Two rules with the same RuneSet share one entry in the RuneSets table. The compiled program tends to be small even for grammars with hundreds of rules.
+The compiler deduplicates aggressively. Two rules that both want the literal `"true"` share one slot in the Literals table. Two rules with the same TokenSet share one entry in the TokenSets table. The compiled program tends to be small even for grammars with hundreds of rules.
 
 ## Backtracking Without Recursion
 
@@ -82,7 +82,7 @@ The rune-only `MatchOneOfRune`, `MatchNoneOfRune`, `MatchLiteralRune`, and frien
 
 The fused `Not(SimpleMatch)` opcodes (`PeekRejectOneOfRune`, `PeekRejectLiteralRune`) replace the three-state `Not` shape with one peek-and-reject opcode that decodes one rune inline, returns failure if it matches the inner pattern, success otherwise. Zero-width on the lexer either way.
 
-The rule-stoppered `ScanUntilStopperEligibleRune` walks runes inline and only enters the stopper's full subprogram when the next rune is in the stopper's `FirstConsumedRunes` set. This is what makes paragraph terminators, CDATA's `]]>`, and Python triple-quotes fast even though their stopper is itself a rule.
+The rule-stoppered `ScanUntilStopperEligibleRune` walks runes inline and only enters the stopper's full subprogram when the next rune is in the stopper's `FirstConsumedTokens` set. This is what makes paragraph terminators, CDATA's `]]>`, and Python triple-quotes fast even though their stopper is itself a rule.
 
 The `ScannerSkipAdvance` opcode handles the `ZeroOrMore(FirstOf(match..., AnyToken.Delete))` shape that any "scan a haystack for sparse matches" grammar reduces to. At the top of each iteration, instead of invoking the inner `FirstOf` at every rune (and falling through to the deleted `AnyToken` for non-matches), the opcode jumps the lexer straight to the next position where one of the candidate matches could plausibly start. For literal-only alternatives the prefilter is stronger still: the scanner walks straight to the next full-literal candidate via the BCL's optimized substring search. This is the same skip the recursive evaluator does in `BetweenInclusiveRule.TryCreateScannerSkip`, ported as one opcode plus a side table on the program.
 

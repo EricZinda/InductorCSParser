@@ -16,7 +16,7 @@ public class PassThroughTextTests
     [Test]
     public void Line_comment_grammar_parses_everything_up_to_newline()
     {
-        // Delimiter-based stop: NoneOf(RuneSet.Single('\n')) sweeps up
+        // Delimiter-based stop: NoneOf(TokenSet.Single('\n')) sweeps up
         // every character that isn't a newline. Stopping at '\n' falls out
         // naturally from ZeroOrMore stopping when the inner fails.
         //
@@ -32,7 +32,7 @@ public class PassThroughTextTests
         var lineComment = AllOf(
             Grapheme('/'),
             Grapheme('/'),
-            ZeroOrMore(NoneOf(RuneSet.Single('\n'))),
+            ZeroOrMore(NoneOf(TokenSet.Single('\n'))),
             Grapheme('\n'));
 
         // PreserveAllSymbols keeps the Grapheme('/') leaves and the
@@ -56,7 +56,7 @@ public class PassThroughTextTests
         var lineComment = AllOf(
             Grapheme('/'),
             Grapheme('/'),
-            ZeroOrMore(NoneOf(RuneSet.Single('\n'))),
+            ZeroOrMore(NoneOf(TokenSet.Single('\n'))),
             Grapheme('\n'));
 
         var result = lineComment.Parse("// playing \uD83C\uDFB8 tonight\n");
@@ -96,7 +96,7 @@ public class PassThroughTextTests
         var keywordIf = AllOf(
             Grapheme('i'),
             Grapheme('f'),
-            Peek(Not(OneOf(RuneSet.Letters))));
+            Peek(Not(OneOf(TokenSet.Letters))));
 
         var justIfResult = AllOf(keywordIf, ZeroOrMore(AnyToken())).Parse("if x");
         Assert.That(justIfResult.Success, Is.True, justIfResult.ErrorMessage);

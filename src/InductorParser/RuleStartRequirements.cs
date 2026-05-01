@@ -1,7 +1,7 @@
 namespace InductorParser;
 
 // Return type of Rule.ComputeRuleStart. Carries the two compile-time
-// fields (FirstConsumedRunes, Advance) that power the "can I skip this
+// fields (FirstConsumedTokens, Advance) that power the "can I skip this
 // rule?" shortcut.
 //
 // ===== Definitive reference for the "can I skip this rule?" shortcut =====
@@ -11,11 +11,11 @@ namespace InductorParser;
 // decide whether the child could possibly succeed. If not, it skips
 // dispatch entirely, avoiding a wasted transaction/read/rollback cycle.
 //
-//   FirstConsumedRunes: The set of runes that could be this rule's
+//   FirstConsumedTokens: The set of runes that could be this rule's
 //       first consumed rune.
 //
 //       For a rule that *always* consumes something on success
-//       (Advance.Always), lookahead being in FirstConsumedRunes is
+//       (Advance.Always), lookahead being in FirstConsumedTokens is
 //       necessary but not sufficient for success. Necessary because
 //       it must move past the lookahead rune (possibly as part of a
 //       larger lexer token). Sufficient since it may consume more and fail:
@@ -31,7 +31,7 @@ namespace InductorParser;
 // succeed don't inspect these fields directly. They call
 // Rule.CannotMatchLookahead(peekRune), which combines them as:
 //
-//     Advance == Always && !FirstConsumedRunes.Contains(peek)
+//     Advance == Always && !FirstConsumedTokens.Contains(peek)
 //
 // Only Always makes the filter sound: Sometimes rules (e.g. ZeroOrMore)
 // can sometimes (e.g. Optional) succeed without consuming lookahead,
@@ -47,23 +47,23 @@ namespace InductorParser;
 //
 //   2. Composition. Parent rules (AllOf/FirstOf/BetweenInclusive) look at
 //      their children's Advance when computing their own
-//      FirstConsumedRunes. The three-way distinction tells a
+//      FirstConsumedTokens. The three-way distinction tells a
 //      composite "always claims the lookahead" (Always) vs. "might let the
 //      next sibling claim it" (Sometimes) vs. "examines the lookahead without
 //      claiming it" (Never):
 //
 //        * Always child. Say X.Advance == Always in AllOf(X, Y): X
 //          definitely reads the lookahead, Y reads later. The
-//          composite stops at X since Y's FirstConsumedRunes is
+//          composite stops at X since Y's FirstConsumedTokens is
 //          irrelevant to the AllOf's own.
 //
 //        * Sometimes child. Say Optional in AllOf(Optional(X), Y):
 //          Optional might match X or match zero. If it matches zero,
 //          Y reads the lookahead. The composite has to union both
-//          X's and Y's FirstConsumedRunes.
+//          X's and Y's FirstConsumedTokens.
 //
 //        * Never child. Say Peek in AllOf(Peek(X), Y): Peek never
-//          consumes, so Y reads the lookahead. Peek's FirstConsumedRunes
+//          consumes, so Y reads the lookahead. Peek's FirstConsumedTokens
 //          is Empty and contributes nothing. Never tells the
 //          composite "don't union my set into yours, move to the
 //          next sibling."
@@ -71,8 +71,8 @@ namespace InductorParser;
 // Notes:
 //   * A superset of actual first-consumed runes is safe (just slower).
 //     A subset would cause enclosing rules to wrongly skip a rule that
-//     could succeed. RuneSet.Universe means "I don't know, don't filter me."
-//   * Advance.Never requires FirstConsumedRunes == RuneSet.Empty
+//     could succeed. TokenSet.Universe means "I don't know, don't filter me."
+//   * Advance.Never requires FirstConsumedTokens == TokenSet.Empty
 //     (Compile enforces this). A rule that never consumes can't have
 //     a set of "runes it would consume first."
 //
@@ -86,7 +86,7 @@ namespace InductorParser;
 // else FIRST(X) ∪ FIRST(Y).
 //
 // We map directly:
-//   * FirstConsumedRunes ≈ LL(1)'s FIRST, over runes instead of
+//   * FirstConsumedTokens ≈ LL(1)'s FIRST, over runes instead of
 //     grammar terminals.
 //   * Advance ≈ nullability, but three-valued instead of binary.
 //     Always corresponds to "not nullable" (this rule consumes, stop
@@ -95,7 +95,7 @@ namespace InductorParser;
 //     predicates (Peek, Not, Eof) that inspect the lookahead without
 //     consuming. Semantically it overlaps with Sometimes (both are
 //     "always nullable"), but we keep it distinct so Compile can
-//     enforce the invariant "Advance.Never ⇒ FirstConsumedRunes.Empty".
+//     enforce the invariant "Advance.Never ⇒ FirstConsumedTokens.Empty".
 //     A zero-width rule can't have a meaningful set of first-consumed
 //     runes, and the check catches subclass authoring bugs at
 //     grammar-build time.
@@ -103,4 +103,4 @@ namespace InductorParser;
 // Populated at Compile time. Rule's pessimistic defaults (Universe,
 // Sometimes) mean any user-defined Rule subclass that doesn't override
 // ComputeRuleStart is safe: it'll never be shortcutted out.
-internal readonly record struct RuleStartRequirements(RuneSet FirstConsumedRunes, Advance Advance);
+internal readonly record struct RuleStartRequirements(TokenSet FirstConsumedTokens, Advance Advance);

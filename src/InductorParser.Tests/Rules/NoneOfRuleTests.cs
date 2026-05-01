@@ -15,7 +15,7 @@ public class NoneOfRuleTests
     public void NoneOf_matches_a_rune_outside_the_set()
     {
         // 'x' isn't a digit, so NoneOf(Digits) succeeds on it.
-        var rule = NoneOf(RuneSet.Digits);
+        var rule = NoneOf(TokenSet.Digits);
         var result = rule.Parse("x");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -26,7 +26,7 @@ public class NoneOfRuleTests
     public void NoneOf_fails_when_rune_is_in_the_set()
     {
         // '5' is a digit, so NoneOf(Digits) fails at offset 0.
-        var rule = NoneOf(RuneSet.Digits).WithError("no digits here");
+        var rule = NoneOf(TokenSet.Digits).WithError("no digits here");
         var result = rule.Parse("5");
 
         Assert.That(result.Success, Is.False);
@@ -38,7 +38,7 @@ public class NoneOfRuleTests
     public void NoneOf_fails_at_EOF()
     {
         // EOF isn't "a rune not in the set". It's no rune at all. Fail.
-        var rule = NoneOf(RuneSet.Digits).WithError("wanted a non-digit");
+        var rule = NoneOf(TokenSet.Digits).WithError("wanted a non-digit");
         var result = rule.Parse("");
 
         Assert.That(result.Success, Is.False);
@@ -57,7 +57,7 @@ public class NoneOfRuleTests
         // NormalizeInput = null so the decomposed "e\u0301" arrives at the
         // lexer verbatim. The default NFC would compose it to "\u00E9" and
         // collapse this test's "multi-rune grapheme" premise.
-        var rule = NoneOf(RuneSet.Ascii.Letters);
+        var rule = NoneOf(TokenSet.Ascii.Letters);
         var result = rule.Parse(LatinEAcuteGrapheme,
             new ParseOptions { NormalizeInput = null });
 
@@ -83,7 +83,7 @@ public class NoneOfRuleTests
         // LS, and PS as one terminator each.
         // See docs/UnicodeGotchas.md § "CRLF Under Grapheme Tokenization".
         var rule = AllOf(
-            ZeroOrMore(NoneOf(RuneSet.Single('\n'))),
+            ZeroOrMore(NoneOf(TokenSet.Single('\n'))),
             Grapheme('\n'));
 
         // PreserveAllSymbols keeps the trailing Grapheme('\n') in the
@@ -100,7 +100,7 @@ public class NoneOfRuleTests
     public void NoneOf_trace_success_produces_expected_output()
     {
         var sink = NewSink();
-        NoneOf(RuneSet.Ascii.Digits).Parse("x",
+        NoneOf(TokenSet.Ascii.Digits).Parse("x",
             new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
@@ -115,7 +115,7 @@ public class NoneOfRuleTests
     public void NoneOf_trace_failure_produces_expected_output()
     {
         var sink = NewSink();
-        NoneOf(RuneSet.Ascii.Digits).Parse("5",
+        NoneOf(TokenSet.Ascii.Digits).Parse("5",
             new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
@@ -157,7 +157,7 @@ public class NoneOfRuleTests
         // A multi-rune set as the exclude list. The flag arrives as
         // one token and NoneOf finds it in the multi-rune array, so
         // it fails. Other multi-rune graphemes pass.
-        var rule = NoneOf(RuneSet.Runes(USFlagGrapheme));
+        var rule = NoneOf(TokenSet.Runes(USFlagGrapheme));
 
         Assert.That(rule.Parse(USFlagGrapheme).Success, Is.False);
         Assert.That(rule.Parse(WomanShruggingGrapheme).Success, Is.True);
@@ -171,7 +171,7 @@ public class NoneOfRuleTests
         // The mixed-set version of the previous test: include a
         // letter range and a multi-rune entry. Tokens that hit
         // either get rejected.
-        var rule = NoneOf(RuneSet.Ascii.Letters | RuneSet.Runes(USFlagGrapheme));
+        var rule = NoneOf(TokenSet.Ascii.Letters | TokenSet.Runes(USFlagGrapheme));
 
         Assert.That(rule.Parse("a").Success, Is.False, "letters are rejected");
         Assert.That(rule.Parse(USFlagGrapheme).Success, Is.False, "the flag grapheme is rejected");

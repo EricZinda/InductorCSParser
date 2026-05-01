@@ -14,7 +14,7 @@ public class SymbolExtensionsTests
     [Test]
     public void PrintTree_renders_named_root_and_character_leaves()
     {
-        var word = OneOrMore(OneOf(RuneSet.Letters)).As("word").Flatten(FlattenType.Preserve);
+        var word = OneOrMore(OneOf(TokenSet.Letters)).As("word").Flatten(FlattenType.Preserve);
         var result = word.Parse("hi");
         Assert.That(result.Success, Is.True);
 

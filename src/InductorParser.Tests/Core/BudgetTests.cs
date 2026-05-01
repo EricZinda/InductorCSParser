@@ -19,7 +19,7 @@ public class BudgetTests
         // No options set: the protective defaults (10M invocations,
         // depth 1000) are in force but neither trips on a plain
         // well-formed parse.
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         var result = rule.Parse("hello");
 
         Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.Success));
@@ -35,7 +35,7 @@ public class BudgetTests
         // on a periodic budget check, so the count when we abort is
         // somewhere past the configured limit, which is fine: the test
         // is asserting the outcome, not the exact trip point.
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         var options = new ParseOptions { RuleCountLimit = 10 };
         var result = rule.Parse(new string('a', 5000), options);
 
@@ -52,7 +52,7 @@ public class BudgetTests
         // skips the rule-count comparison entirely and the parse
         // completes. Proves 0 is a real off switch, not just a value
         // small workloads happen to fit under.
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         var options = new ParseOptions { RuleCountLimit = 0 };
         var result = rule.Parse(new string('a', 5000), options);
 
@@ -107,7 +107,7 @@ public class BudgetTests
         // periodic budget check fires after the deadline. The check
         // interval is 1024, so the input has to be long enough to reach
         // the first periodic check.
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         var options = new ParseOptions
         {
             Timeout = TimeSpan.FromTicks(1),
@@ -126,7 +126,7 @@ public class BudgetTests
         // Same 5000-char workload that trips Timeout = 1 tick in the
         // test above. Setting Timeout to Zero means "no deadline,"
         // matching RuleCountLimit = 0 and MaxDepth = 0.
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         var options = new ParseOptions
         {
             Timeout = TimeSpan.Zero,
@@ -146,7 +146,7 @@ public class BudgetTests
         var cancellation = new ParseCancellation();
         cancellation.Cancel();
 
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         var options = new ParseOptions
         {
             Cancellation = cancellation,
@@ -165,7 +165,7 @@ public class BudgetTests
         // The default Cancellation (null) must not look canceled to the
         // periodic check. Verified here because if we ever forget the
         // null guard, every parse would NRE on the IsCanceled poll.
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         var options = new ParseOptions { Cancellation = null };
         var result = rule.Parse(new string('a', 5000), options);
 
@@ -180,7 +180,7 @@ public class BudgetTests
         // signal" from "the caller wants to cancel."
         var cancellation = new ParseCancellation();
 
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         var options = new ParseOptions { Cancellation = cancellation };
         var result = rule.Parse(new string('a', 5000), options);
 
@@ -234,7 +234,7 @@ public class BudgetTests
         // comes back as 0. The real progress-was-made case is covered by
         // Aborted_result_reflects_deepest_progress_when_failures_recorded
         // below.
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         var input = new string('a', 5000);
         var options = new ParseOptions { RuleCountLimit = 10 };
         var result = rule.Parse(input, options);

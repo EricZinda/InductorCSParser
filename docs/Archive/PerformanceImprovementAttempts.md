@@ -315,7 +315,7 @@ Engineering record of backlog item p750 ("First-rune lookahead skip on BetweenIn
 
 ### What p750 asked for
 
-From [backlog/p750-first-rune-lookahead-skip-on-betweeninclusiverule.md](../backlog/p750-first-rune-lookahead-skip-on-betweeninclusiverule.md): `FirstOfRule` has a first-rune lookahead (the p500 required-runes filter) that skips any child whose `Advance` is `Always` and whose `RequiredInitialRuneSet` rules the peek out. `BetweenInclusiveRule` (the composite that `ZeroOrMore` / `Optional` / `OneOrMore` wrap) had no equivalent, so every invocation ran at least one full `Inner.TryParse` even when the lookahead could have proved Inner can't match. On the JSON benchmark's Big shape, that amounted to 2089 `OneOf FAIL` outcomes (19% of all rule invocations), almost entirely from `OptionalWhitespace()` scanning for whitespace that isn't there. Deep was similarly lopsided at 1283 out of 6482 invocations (also ~20%).
+From [backlog/p750-first-rune-lookahead-skip-on-betweeninclusiverule.md](../backlog/p750-first-rune-lookahead-skip-on-betweeninclusiverule.md): `FirstOfRule` has a first-rune lookahead (the p500 required-runes filter) that skips any child whose `Advance` is `Always` and whose `RequiredInitialTokenSet` rules the peek out. `BetweenInclusiveRule` (the composite that `ZeroOrMore` / `Optional` / `OneOrMore` wrap) had no equivalent, so every invocation ran at least one full `Inner.TryParse` even when the lookahead could have proved Inner can't match. On the JSON benchmark's Big shape, that amounted to 2089 `OneOf FAIL` outcomes (19% of all rule invocations), almost entirely from `OptionalWhitespace()` scanning for whitespace that isn't there. Deep was similarly lopsided at 1283 out of 6482 invocations (also ~20%).
 
 ### What was actually tried
 
@@ -325,12 +325,12 @@ At the top of `BetweenInclusiveRule.TryParseRule`, before opening the iteration 
 - `Inner.ErrorMessage == null`: if the author set `.WithError(...)` on Inner, run it anyway so that message can surface via deepest-failure-wins (mirrors `FirstOfRule`'s same gate).
 - `!lexer.PreserveAllSymbols`: debug-tree mode still sees the same Inner invocations the grammar declares.
 
-If all three pass, `pos < input.Length`, and the next rune isn't in `Inner.RequiredInitialRuneSet`, Inner definitely can't match the first iteration:
+If all three pass, `pos < input.Length`, and the next rune isn't in `Inner.RequiredInitialTokenSet`, Inner definitely can't match the first iteration:
 
 - `AtLeast == 0` (`Optional`, `ZeroOrMore`): commit with zero iterations, return the empty-wrapper Symbol (or `Discarded` for `FlattenType.Delete` wrappers).
 - `AtLeast > 0` (`OneOrMore`, `BetweenInclusive(n, m)` with n≥1): record failure at the start position and return null.
 
-The three hints consulted (`Advance`, `RequiredInitialRuneSet`, `ErrorMessage`) are the exact three `FirstOfRule` already reads per child. No new compile-time analysis. Self-recursive grammars where `RequiredInitialRuneSet` falls back to `Universe` (via the cycle-detection path in `Rule.ComputeRuleStartAll`) never fire the skip because `Universe.Contains` is always true, a safe fallback.
+The three hints consulted (`Advance`, `RequiredInitialTokenSet`, `ErrorMessage`) are the exact three `FirstOfRule` already reads per child. No new compile-time analysis. Self-recursive grammars where `RequiredInitialTokenSet` falls back to `Universe` (via the cycle-detection path in `Rule.ComputeRuleStartAll`) never fire the skip because `Universe.Contains` is always true, a safe fallback.
 
 ### Files touched
 

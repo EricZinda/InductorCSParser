@@ -6,12 +6,12 @@ using static InductorParser.Rules;
 
 namespace InductorParser.Tests;
 
-// Tests for Rules.Identifier() and the underlying RuneSet.XidStart /
-// RuneSet.XidContinue tables. Two things under test:
+// Tests for Rules.Identifier() and the underlying TokenSet.XidStart /
+// TokenSet.XidContinue tables. Two things under test:
 //
 //   1. UAX #31 R1 shape: "XID_Start XID_Continue*". Start-only characters
 //      can't appear in Continue position and vice-versa.
-//   2. The hand-curated add/exclude tables in RuneSet.Xid.cs are actually
+//   2. The hand-curated add/exclude tables in TokenSet.Xid.cs are actually
 //      wired in. Two regression tests (U+FDFA reject, U+2118 accept) verify
 //      that. If someone swaps the implementation to a General_Category-only
 //      approximation, both tests fail.
@@ -48,7 +48,7 @@ public class XidIdentifierTests
     {
         // The programming-language profile that C# / Python / Rust use:
         // union "_" into Start via extraStartRunes.
-        var result = Identifier(extraStartRunes: RuneSet.Runes("_")).Parse("_foo");
+        var result = Identifier(extraStartRunes: TokenSet.Runes("_")).Parse("_foo");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("_foo"));
     }
@@ -60,8 +60,8 @@ public class XidIdentifierTests
         // exercises the body-side parameter, proving $ is accepted after
         // the first char even though Pc-less XID_Continue would reject it.
         var rule = Identifier(
-            extraStartRunes: RuneSet.Runes("_$"),
-            extraBodyRunes: RuneSet.Runes("$"));
+            extraStartRunes: TokenSet.Runes("_$"),
+            extraBodyRunes: TokenSet.Runes("$"));
         var result = rule.Parse("foo$bar");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("foo$bar"));

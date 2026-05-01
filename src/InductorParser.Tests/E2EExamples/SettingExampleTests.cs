@@ -17,7 +17,7 @@ public class SettingExampleTests
         // so the quotes themselves don't appear in the flattened match.
         var quotedString = AllOf(
             Grapheme('"'),
-            ScanUntil(RuneSet.Runes("\"")),
+            ScanUntil(TokenSet.Runes("\"")),
             Grapheme('"'));
 
         var settingValue = FirstOf(

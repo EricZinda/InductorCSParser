@@ -56,7 +56,7 @@ public class ErrorPositionTests
     // out explicitly. Tests that need a non-'a' prefix char inline their
     // own grammar.
     private static Rule AtFailureRule() =>
-        AllOf(ZeroOrMore(OneOf(RuneSet.Single('a') | RuneSet.Single('\r') | RuneSet.Single('\n'))), Eof());
+        AllOf(ZeroOrMore(OneOf(TokenSet.Single('a') | TokenSet.Single('\r') | TokenSet.Single('\n'))), Eof());
 
     private static ParseResult ParseAtFailure(string input)
     {

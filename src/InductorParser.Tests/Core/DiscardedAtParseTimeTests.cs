@@ -52,7 +52,7 @@ public class DiscardedAtParseTimeTests
         // the two token leaves only, with the whitespace contributing
         // nothing. OneOf has FlattenType.Preserve so the token leaves
         // survive. Their Id is the code point, so we assert on that.
-        var letter = OneOf(RuneSet.Ascii.Letters);
+        var letter = OneOf(TokenSet.Ascii.Letters);
         var rule = AllOf(letter, Optional(InlineWhitespace()), letter);
         var result = rule.Parse("a   b");
 
@@ -135,7 +135,7 @@ public class DiscardedAtParseTimeTests
         // Flatten wrapper (Optional) around a Delete wrapper (InlineWhitespace),
         // and AllOf is Flatten. All three flatten policies are exercised
         // in one tree.
-        var letter = OneOf(RuneSet.Ascii.Letters);
+        var letter = OneOf(TokenSet.Ascii.Letters);
         var rule = AllOf(letter, Optional(InlineWhitespace()), letter);
 
         var normal = rule.Parse("a   b");

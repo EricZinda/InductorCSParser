@@ -34,7 +34,7 @@ Every concept from the original [GettingStarted.md](https://github.com/EricZinda
 | `OptionalExpression<T>`            | `Optional(rule)`                                |
 | `AtLeastAndAtMostExpression<T,N,M>`| `BetweenInclusive(n, m, rule)`                  |
 | `CharacterSymbol<EqualString>`     | `Grapheme('=')`                                     |
-| `CharacterSetSymbol<Chars>`        | `OneOf(RuneSet.Letters)`                     |
+| `CharacterSetSymbol<Chars>`        | `OneOf(TokenSet.Letters)`                     |
 | `CharacterSetExceptSymbol<...>`    | `NoneOf(charClass)`                          |
 | `LiteralExpression<WordString>`    | `Literal("word")`                               |
 | `OptionalWhitespaceSymbol<>`       | `Optional(AnyWhitespace())`                     |
@@ -194,7 +194,7 @@ Every built-in rule that looks at token content reduces to one of four operation
 
 **`Grapheme('=')`, `Grapheme(Rune r)`, `Grapheme(string grapheme)`.** Matches one `StringInfo` text element (a Grapheme), specified at rule-construction time. The `string` overload requires exactly one text element and is validated at construction with `StringInfo.GetNextTextElement`. The `char`, `Rune`, and `int` overloads are convenience wrappers that build a one-element string. At match time the rule reads lexer tokens until it has consumed the expected string length, comparing each token's `Chars` span with the corresponding part of the expected string. Under `GraphemeLexer` that's a single-token compare. Under `RuneLexer` it's a one-to-N token compare (`Grapheme("👋🏽")` expects two rune tokens, waving hand plus medium skin tone, so it reads two tokens and compares each).
 
-**`OneOf(RuneSet cc)` and `NoneOf(RuneSet cc)`.** These are the rune-set tests. Both are defined in terms of the predicate "the token is exactly one rune *r*, and `cc.Contains(r)`." `OneOf` matches when the predicate is true. `NoneOf` matches when it's false. The asymmetry that falls out of this is important: a multi-rune token never matches `OneOf` (the predicate is false because the token isn't one rune) but it *does* match `NoneOf` (the predicate is false, so the negation is true). This is what makes `OneOrMore(NoneOf(formattingChars))` sweep up emoji correctly in the pass-through-text recipe.
+**`OneOf(TokenSet cc)` and `NoneOf(TokenSet cc)`.** These are the rune-set tests. Both are defined in terms of the predicate "the token is exactly one rune *r*, and `cc.Contains(r)`." `OneOf` matches when the predicate is true. `NoneOf` matches when it's false. The asymmetry that falls out of this is important: a multi-rune token never matches `OneOf` (the predicate is false because the token isn't one rune) but it *does* match `NoneOf` (the predicate is false, so the negation is true). This is what makes `OneOrMore(NoneOf(formattingChars))` sweep up emoji correctly in the pass-through-text recipe.
 
 The two semantics in prose:
 
@@ -207,42 +207,42 @@ Because `Literal` compares in the lexer's token units, a literal like `Literal("
 
 **`AnyToken()`.** Matches any single token regardless of content, as long as the lexer isn't at EOF. Under `RuneLexer` it matches any lexer token, including a stray surrogate token if malformed UTF-16 is present. Under `GraphemeLexer` it matches any `StringInfo` text element, including multi-rune ones. This is the "match one token, whatever it's" leaf.
 
-### RuneSet: The Set Primitive
+### TokenSet: The Set Primitive
 
-`OneOf` and `NoneOf` take a `RuneSet`, a set of Unicode scalar values with the standard set operations via operators. Keeping the set type separate from the rule types means character-class expressions compose the way set expressions do in ordinary code instead of having to wrap every union inside an `FirstOf(...)`.
+`OneOf` and `NoneOf` take a `TokenSet`, a set of Unicode scalar values with the standard set operations via operators. Keeping the set type separate from the rule types means character-class expressions compose the way set expressions do in ordinary code instead of having to wrap every union inside an `FirstOf(...)`.
 
 ```csharp
-public readonly struct RuneSet
+public readonly struct TokenSet
 {
     // Unicode-category built-ins, backed by the runtime's Unicode data
-    public static readonly RuneSet Letters;
-    public static readonly RuneSet Digits;
-    public static readonly RuneSet HexDigits;
-    public static readonly RuneSet InlineWhitespace; // intra-line whitespace only
-    public static readonly RuneSet LineTerminators;  // LF, VT, FF, CR, NEL, LS, PS
-    public static readonly RuneSet Identifier;
+    public static readonly TokenSet Letters;
+    public static readonly TokenSet Digits;
+    public static readonly TokenSet HexDigits;
+    public static readonly TokenSet InlineWhitespace; // intra-line whitespace only
+    public static readonly TokenSet LineTerminators;  // LF, VT, FF, CR, NEL, LS, PS
+    public static readonly TokenSet Identifier;
 
-    // ASCII-only variants faster than RuneSet.Letters
+    // ASCII-only variants faster than TokenSet.Letters
     public static class Ascii
     {
-        public static readonly RuneSet Letters          = Range('A','Z') | Range('a','z');
-        public static readonly RuneSet Digits           = Range('0','9');
-        public static readonly RuneSet HexDigits        = Digits | Range('a','f') | Range('A','F');
-        public static readonly RuneSet InlineWhitespace = Runes(" \t");
-        public static readonly RuneSet AnyWhitespace    = Runes(" \t\r\n");
-        public static readonly RuneSet Identifier       = Letters | Digits | Runes("_");
+        public static readonly TokenSet Letters          = Range('A','Z') | Range('a','z');
+        public static readonly TokenSet Digits           = Range('0','9');
+        public static readonly TokenSet HexDigits        = Digits | Range('a','f') | Range('A','F');
+        public static readonly TokenSet InlineWhitespace = Runes(" \t");
+        public static readonly TokenSet AnyWhitespace    = Runes(" \t\r\n");
+        public static readonly TokenSet Identifier       = Letters | Digits | Runes("_");
     }
 
-    public static RuneSet Single(char c);
-    public static RuneSet Single(Rune r);
-    public static RuneSet Range(char low, char high);
-    public static RuneSet Range(Rune low, Rune high);
-    public static RuneSet Runes(string characters);
-    public static RuneSet Category(UnicodeCategory c);
+    public static TokenSet Single(char c);
+    public static TokenSet Single(Rune r);
+    public static TokenSet Range(char low, char high);
+    public static TokenSet Range(Rune low, Rune high);
+    public static TokenSet Runes(string characters);
+    public static TokenSet Category(UnicodeCategory c);
 
-    public static RuneSet operator |(RuneSet a, RuneSet b);   // union
-    public static RuneSet operator &(RuneSet a, RuneSet b);   // intersection
-    public static RuneSet operator ~(RuneSet a);                // complement
+    public static TokenSet operator |(TokenSet a, TokenSet b);   // union
+    public static TokenSet operator &(TokenSet a, TokenSet b);   // intersection
+    public static TokenSet operator ~(TokenSet a);                // complement
 
     public bool Contains(Rune r);
     public bool Contains(char c);
@@ -251,42 +251,42 @@ public readonly struct RuneSet
 
 The three operator rationales:
 
-**`|` (union)** is the workhorse. `RuneSet.Letters | RuneSet.Digits | RuneSet.Runes("_-")` composes identifier characters by piecewise addition. Every grammar uses it.
+**`|` (union)** is the workhorse. `TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_-")` composes identifier characters by piecewise addition. Every grammar uses it.
 
 **`&` (intersection)** narrows one semantic set by another. It shines when one operand is a big Unicode-tracking class like `Letters` and the other is a script or script-block restriction:
 
 ```csharp
 // Cyrillic letters only: letters AND in the Cyrillic block.
 // The composition stays correct as Unicode adds new Cyrillic letters.
-RuneSet.Letters & RuneSet.Range(new Rune(0x0400), new Rune(0x04FF))
+TokenSet.Letters & TokenSet.Range(new Rune(0x0400), new Rune(0x04FF))
 
 // Hex-digit-like ASCII letters (a–f, A–F, without the 0–9).
-RuneSet.Ascii.Letters & RuneSet.Ascii.HexDigits
+TokenSet.Ascii.Letters & TokenSet.Ascii.HexDigits
 ```
 
 **`~` (complement)** is mostly useful combined with `&` as set difference (`A & ~B`). It's the only way to express "this class minus those elements" without hand-enumerating the result:
 
 ```csharp
 // Letters except vowels. No pre-built class. You build it by subtracting.
-RuneSet.Ascii.Letters & ~RuneSet.Runes("aeiouAEIOU")
+TokenSet.Ascii.Letters & ~TokenSet.Runes("aeiouAEIOU")
 
 // Identifier chars except underscore, for a language where '_' is reserved.
-RuneSet.Ascii.Identifier & ~RuneSet.Runes("_")
+TokenSet.Ascii.Identifier & ~TokenSet.Runes("_")
 
 // Any printable non-whitespace character. Start from "all runes",
 // subtract categories you don't want.
-~(RuneSet.InlineWhitespace | RuneSet.LineTerminators | RuneSet.Category(UnicodeCategory.Control))
+~(TokenSet.InlineWhitespace | TokenSet.LineTerminators | TokenSet.Category(UnicodeCategory.Control))
 ```
 
 `OneOf(~X)` and `NoneOf(X)` match the same single-rune tokens, so at the outermost level the complement operator is redundant with `NoneOf`. The reason complement exists on the class is that `NoneOf` is a rule and can't be fed back into another set expression. `~X` is a class and can be intersected, unioned, or handed to another `OneOf` / `NoneOf`.
 
 Intersection and complement are niche compared to union. Most grammars use `|` dozens of times and never touch the other two. They earn their spot because they're cheap (sorted-range intersection and complement are single passes), and because when an author does need set difference, hand-enumerating the ranges goes stale the moment Unicode adds a new letter to the base class.
 
-`RuneSet.Letters` and its siblings cover Unicode scalar values by category: `Letters` matches single-rune letters like `é`, `漢`, `Ω`, and `ж`. Grammars that specifically want ASCII-only can use `RuneSet.Ascii.Letters` to say so explicitly. A programming-language keyword parser wants ASCII keywords so a stray `café` doesn't parse as a keyword. A text-processing grammar often wants the full Unicode set, and for scripts whose visible letters are multi-rune graphemes it should combine those sets with `WithinGrapheme(...)` or use `Identifier()`.
+`TokenSet.Letters` and its siblings cover Unicode scalar values by category: `Letters` matches single-rune letters like `é`, `漢`, `Ω`, and `ж`. Grammars that specifically want ASCII-only can use `TokenSet.Ascii.Letters` to say so explicitly. A programming-language keyword parser wants ASCII keywords so a stray `café` doesn't parse as a keyword. A text-processing grammar often wants the full Unicode set, and for scripts whose visible letters are multi-rune graphemes it should combine those sets with `WithinGrapheme(...)` or use `Identifier()`.
 
 `Contains(Rune)` is the predicate every `OneOf` / `NoneOf` match resolves to, exposed as public so user-defined rules can reuse the same predicate without going through the rule wrapper.
 
-Internally a `RuneSet` is a sorted list of rune ranges. Union, intersection, and complement are all linear in the number of ranges, which is small for typical grammars (letters and digits are a handful of ranges each). Construction-time evaluation folds compound expressions into a single range list, so `Letters | Digits | Runes("_")` is one flat structure by the time a `OneOf` rule sees it.
+Internally a `TokenSet` is a sorted list of rune ranges. Union, intersection, and complement are all linear in the number of ranges, which is small for typical grammars (letters and digits are a handful of ranges each). Construction-time evaluation folds compound expressions into a single range list, so `Letters | Digits | Runes("_")` is one flat structure by the time a `OneOf` rule sees it.
 
 ### The Non-Content Leaves
 
@@ -318,7 +318,7 @@ while (consumed < _expected.Length)
 tx.Commit();
 return makeSymbolFrom(...);
 
-// OneOf(RuneSet cc)
+// OneOf(TokenSet cc)
 using var tx = lexer.BeginTransaction();
 var token = lexer.Read();
 if (token.IsEof) return null;
@@ -361,10 +361,10 @@ Under `GraphemeLexer`, a multi-rune grapheme like 👨‍👩‍👧‍👦 arri
 
 What you *can't* do:
 
-- **Define a `RuneSet` that includes specific multi-rune sequences.** A `RuneSet` is a set of code points, not a set of sequences. If you want to match "any of these specific multi-rune sequences," express it as `FirstOf(Grapheme(a), Grapheme(b), Grapheme(c))`, not as a character class.
-- **Test "is this grapheme a letter?" with `OneOf(RuneSet.Letters)`** when the grapheme is multi-rune. The class is defined over single runes, so any multi-rune grapheme is outside it. If you want "any identifier character, including combining marks as part of a letter sequence," use `Identifier()`. For custom shapes, `WithinGrapheme(...)` is the escape hatch: it first reads exactly one outer grapheme token, then runs your child rule over the runes inside that grapheme. The child must consume the whole grapheme. On success, the outer parse advances by one grapheme and, when preserved, exposes one leaf for the whole grapheme rather than separate leaves for the base letter and marks.
+- **Define a `TokenSet` that includes specific multi-rune sequences.** A `TokenSet` is a set of code points, not a set of sequences. If you want to match "any of these specific multi-rune sequences," express it as `FirstOf(Grapheme(a), Grapheme(b), Grapheme(c))`, not as a character class.
+- **Test "is this grapheme a letter?" with `OneOf(TokenSet.Letters)`** when the grapheme is multi-rune. The class is defined over single runes, so any multi-rune grapheme is outside it. If you want "any identifier character, including combining marks as part of a letter sequence," use `Identifier()`. For custom shapes, `WithinGrapheme(...)` is the escape hatch: it first reads exactly one outer grapheme token, then runs your child rule over the runes inside that grapheme. The child must consume the whole grapheme. On success, the outer parse advances by one grapheme and, when preserved, exposes one leaf for the whole grapheme rather than separate leaves for the base letter and marks.
 
-The split that remains is between rune-set tests (`OneOf`, `NoneOf`) and content-match leaves (`Grapheme`, `Literal`). The set tests are defined over single runes by construction (a `RuneSet` is a set of code points), and the content-match leaves compare raw `Chars` spans, so they handle multi-rune graphemes naturally. A glance at a rule tells you which half of the API it lives in.
+The split that remains is between rune-set tests (`OneOf`, `NoneOf`) and content-match leaves (`Grapheme`, `Literal`). The set tests are defined over single runes by construction (a `TokenSet` is a set of code points), and the content-match leaves compare raw `Chars` spans, so they handle multi-rune graphemes naturally. A glance at a rule tells you which half of the API it lives in.
 
 ## Greedy Repetition, No Repetition Backtracking
 
@@ -373,7 +373,7 @@ PEG parsers backtrack on alternatives (`FirstOf` tries each branch in order unti
 The practical consequence is the most common trip-up when moving from regex to PEG. Consider:
 
 ```csharp
-var rule = AllOf(OneOrMore(OneOf(RuneSet.Letters)), Grapheme('a'));
+var rule = AllOf(OneOrMore(OneOf(TokenSet.Letters)), Grapheme('a'));
 var result = rule.Parse("aaa");
 ```
 
@@ -572,13 +572,13 @@ Six places where the C# version is strictly nicer, not just different.
 
 No required class scaffolding. The C++ version makes a grammar a type: every rule is a class, grammar composition is template instantiation. The C# port makes a grammar a set of values, which means you can build one inline as local variables, pass rules around, compose rules across files, and write tests that construct ad-hoc grammars without any class boilerplate.
 
-Unicode-aware defaults. The GraphemeLexer calls `StringInfo.GetNextTextElement` at the current UTF-16 offset and emits that returned span as one token; on modern .NET this tracks extended grapheme clusters, while older `StringInfo` implementations have the caveats covered in the Unicode docs. `RuneSet` stores Unicode scalar ranges, and composition normalization runs by default. Grammars start from a much better place for emoji, combining marks, CJK, and non-Latin scripts. The C++ version is ASCII-only in practice.
+Unicode-aware defaults. The GraphemeLexer calls `StringInfo.GetNextTextElement` at the current UTF-16 offset and emits that returned span as one token; on modern .NET this tracks extended grapheme clusters, while older `StringInfo` implementations have the caveats covered in the Unicode docs. `TokenSet` stores Unicode scalar ranges, and composition normalization runs by default. Grammars start from a much better place for emoji, combining marks, CJK, and non-Latin scripts. The C++ version is ASCII-only in practice.
 
 Runtime defenses against catastrophic backtracking. The C++ version has no protection: a pathological input and a grammar with ambiguous alternatives can combine to spin for minutes. The C# port has three orthogonal budgets plus a `ParseCancellation` signal that can bridge from `CancellationToken`, with protective defaults on the two deterministic ones, and `ParseResult.Outcome` tells the caller which one tripped.
 
 Variadic rules without the `Args` wrapper. `AllOf(r1, r2, r3, r4)` beats `AndExpression<Args<r1, r2, r3, r4>>`.
 
-Composable character classes. `RuneSet.Letters | RuneSet.Digits | RuneSet.Runes("_-")` is worth the whole port by itself.
+Composable character classes. `TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_-")` is worth the whole port by itself.
 
 Proper error objects. `ParseResult.ErrorLine` and `ErrorColumn` are computed on demand from the position. In the C++ version you get a message and a character offset and you have to compute line/column yourself. The same conversion is also available on every parse-tree node via `Symbol.SourceRange`, so semantic errors ("duplicate section on line 7", "value out of range at char 42") report positions in the same units the parse error does.
 

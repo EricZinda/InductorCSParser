@@ -261,7 +261,7 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_trace_success_produces_expected_output()
     {
         var sink = NewSink();
-        BetweenInclusive(2, 4, OneOf(RuneSet.Ascii.Letters))
+        BetweenInclusive(2, 4, OneOf(TokenSet.Ascii.Letters))
             .Parse("abc", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(

@@ -7,7 +7,7 @@ namespace InductorParser.Tests;
 
 // Tests for Rules.EndOfLine() in both forms (strict and
 // eofIsEol: true), plus the backing
-// RuneSet.LineTerminators set.
+// TokenSet.LineTerminators set.
 //
 // Two things under test:
 //
@@ -172,13 +172,13 @@ public class EndOfLineRuleTests
     }
 
     [Test]
-    public void RuneSet_LineTerminators_contains_expected_runes()
+    public void TokenSet_LineTerminators_contains_expected_runes()
     {
         // Spot-check the set membership directly, independent of the
         // EndOfLine factory. A grammar that wanted "stop at any line
         // terminator rune" would read this set through NoneOf, so
         // its contents matter on their own.
-        var set = RuneSet.LineTerminators;
+        var set = TokenSet.LineTerminators;
         Assert.That(set.Contains(0x000A), Is.True, "LF");
         Assert.That(set.Contains(0x000B), Is.True, "VT");
         Assert.That(set.Contains(0x000C), Is.True, "FF");

@@ -35,11 +35,11 @@ public static class InductorJsonParser
 
     static InductorJsonParser()
     {
-        var simpleEscapeEnd = OneOf(RuneSet.Runes("\"\\/bfnrt"));
-        var hexDigit = OneOf(RuneSet.Ascii.HexDigits);
+        var simpleEscapeEnd = OneOf(TokenSet.Runes("\"\\/bfnrt"));
+        var hexDigit = OneOf(TokenSet.Ascii.HexDigits);
         var unicodeEscapeEnd = AllOf(Grapheme('u'), hexDigit, hexDigit, hexDigit, hexDigit);
         var escapeEnd = FirstOf(simpleEscapeEnd, unicodeEscapeEnd).Flatten(FlattenType.Delete);
-        var stringBody = ScanUntil(stopAt: RuneSet.Runes("\""), escapeStart: new Rune('\\'), escapeEnd: escapeEnd);
+        var stringBody = ScanUntil(stopAt: TokenSet.Runes("\""), escapeStart: new Rune('\\'), escapeEnd: escapeEnd);
         JsonStringRule = AllOf(Grapheme('"'), stringBody, Grapheme('"')).As("string").Preserve();
 
         var value = new LateBoundRule("value");

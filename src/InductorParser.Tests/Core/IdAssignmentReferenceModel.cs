@@ -110,7 +110,7 @@ public static class IdAssignmentReferenceModel
             // nothing hidden underneath. That's what keeps the spec list
             // one-to-one with the rules the production passes assign and
             // makes the model's predictions match what Compile produces.
-            Rule leaf = OneOf(RuneSet.Letters);
+            Rule leaf = OneOf(TokenSet.Letters);
             switch (specs[i].Role)
             {
                 case RuleRole.Pinned:

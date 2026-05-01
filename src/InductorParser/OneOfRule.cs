@@ -4,7 +4,7 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
-// Matches one token whose value belongs to the given RuneSet. A token
+// Matches one token whose value belongs to the given TokenSet. A token
 // is either a single rune (matched against the set's rune intervals)
 // or a multi-rune grapheme cluster (matched against the set's
 // multi-rune graphemes). Under RuneLexer every token is one rune so
@@ -16,24 +16,24 @@ namespace InductorParser;
 // membership test (one token whose value ISN'T in the set).
 internal sealed class OneOfRule : Rule
 {
-    private readonly RuneSet _set;
+    private readonly TokenSet _set;
 
     // Pre-rendered "[A-Z,a-z]" form of the set, computed once at
-    // construction. Trace lines reference this instead of the RuneSet
+    // construction. Trace lines reference this instead of the TokenSet
     // directly so we don't re-render the same string on every traced
-    // match. The RuneSet is immutable, so the rendering is too.
+    // match. The TokenSet is immutable, so the rendering is too.
     // Worth caching because tracing is intended to be usable while
     // iterating on a grammar, not just for one-off debug runs.
     private readonly string _setRendered;
 
-    public OneOfRule(RuneSet runeSet) : base(FlattenType.Preserve)
+    public OneOfRule(TokenSet runeSet) : base(FlattenType.Preserve)
     {
         _set = runeSet;
         _setRendered = runeSet.ToString();
     }
 
     // Accessor for the state-machine evaluator's lowering pass.
-    internal RuneSet LoweringSet => _set;
+    internal TokenSet LoweringSet => _set;
 
     internal override (string Text, bool IgnoreCase)? ComputeRequiredLiteral() =>
         ComputeConcatenableText();
@@ -111,7 +111,7 @@ internal sealed class OneOfRule : Rule
     }
 
     // Return the set of runes this rule might consume first (can be a superset)
-    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
+    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
     // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
@@ -129,9 +129,9 @@ internal sealed class OneOfRule : Rule
     // Build a rune-only set covering every possible first rune of any
     // member of `set`. Single-rune members contribute themselves;
     // multi-rune members contribute their first rune. Used as the
-    // FirstConsumedRunes value for OneOf and ScanWhile when their set
+    // FirstConsumedTokens value for OneOf and ScanWhile when their set
     // has multi-rune entries, so the lookahead shortcut stays sound.
-    internal static RuneSet LookaheadFirstRunes(RuneSet set)
+    internal static TokenSet LookaheadFirstRunes(TokenSet set)
     {
         if (!set.HasMultiRuneGraphemes) return set;
         var firstRunes = set.RunesOnlyPart;
@@ -148,7 +148,7 @@ internal sealed class OneOfRule : Rule
             {
                 firstRune = grapheme[0];
             }
-            firstRunes = firstRunes | RuneSet.Single(firstRune);
+            firstRunes = firstRunes | TokenSet.Single(firstRune);
         }
         return firstRunes;
     }

@@ -14,7 +14,7 @@ public class ScanWhileRuleTests
     [Test]
     public void ScanWhile_matches_a_run_into_one_leaf()
     {
-        var result = ScanWhile(RuneSet.Ascii.Letters).Parse("abcXYZ");
+        var result = ScanWhile(TokenSet.Ascii.Letters).Parse("abcXYZ");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("abcXYZ"));
@@ -24,7 +24,7 @@ public class ScanWhileRuleTests
     [Test]
     public void ScanWhile_stops_before_first_rune_outside_the_set()
     {
-        var rule = AllOf(ScanWhile(RuneSet.Ascii.Letters), Grapheme('!'));
+        var rule = AllOf(ScanWhile(TokenSet.Ascii.Letters), Grapheme('!'));
 
         var result = rule.Parse("abc!");
 
@@ -35,7 +35,7 @@ public class ScanWhileRuleTests
     [Test]
     public void ScanWhile_requires_at_least_one_rune()
     {
-        var result = ScanWhile(RuneSet.Ascii.Letters)
+        var result = ScanWhile(TokenSet.Ascii.Letters)
             .WithError("need a letter")
             .Parse("123");
 
@@ -47,7 +47,7 @@ public class ScanWhileRuleTests
     [Test]
     public void ScanWhile_honors_minimum_count()
     {
-        var result = ScanWhile(RuneSet.Ascii.Letters, minimumCount: 4)
+        var result = ScanWhile(TokenSet.Ascii.Letters, minimumCount: 4)
             .WithError("need four letters")
             .Parse("abc!");
 
@@ -60,14 +60,14 @@ public class ScanWhileRuleTests
     public void ScanWhile_rejects_zero_minimum_count()
     {
         Assert.That(
-            () => ScanWhile(RuneSet.Ascii.Letters, minimumCount: 0),
+            () => ScanWhile(TokenSet.Ascii.Letters, minimumCount: 0),
             Throws.TypeOf<System.ArgumentOutOfRangeException>());
     }
 
     [Test]
     public void ScanWhile_rejects_multi_rune_grapheme_under_grapheme_lexer()
     {
-        var rule = ScanWhile(RuneSet.Single(WavingHandRune));
+        var rule = ScanWhile(TokenSet.Single(WavingHandRune));
 
         var result = rule.Parse(SkinTonedWaveGrapheme);
 
@@ -80,7 +80,7 @@ public class ScanWhileRuleTests
     public void ScanWhile_trace_success_produces_expected_output()
     {
         var sink = NewSink();
-        ScanWhile(RuneSet.Ascii.Letters).Parse("abc",
+        ScanWhile(TokenSet.Ascii.Letters).Parse("abc",
             new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
@@ -95,7 +95,7 @@ public class ScanWhileRuleTests
     [Test]
     public void Sealed_ScanWhile_rejects_Flatten()
     {
-        var rule = ScanWhile(RuneSet.Ascii.Letters);
+        var rule = ScanWhile(TokenSet.Ascii.Letters);
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
     }
@@ -103,7 +103,7 @@ public class ScanWhileRuleTests
     [Test]
     public void Sealed_ScanWhile_rejects_WithError()
     {
-        var rule = ScanWhile(RuneSet.Ascii.Letters);
+        var rule = ScanWhile(TokenSet.Ascii.Letters);
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
     }
@@ -111,7 +111,7 @@ public class ScanWhileRuleTests
     [Test]
     public void Sealed_ScanWhile_rejects_As()
     {
-        var rule = ScanWhile(RuneSet.Ascii.Letters);
+        var rule = ScanWhile(TokenSet.Ascii.Letters);
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
@@ -123,7 +123,7 @@ public class ScanWhileRuleTests
     {
         // Set: { USFlag, WomanShrugging }. Input: USFlag + WomanShrugging.
         // ScanWhile should consume both emoji graphemes as one leaf.
-        var rule = ScanWhile(RuneSet.Runes(USFlagGrapheme + WomanShruggingGrapheme));
+        var rule = ScanWhile(TokenSet.Runes(USFlagGrapheme + WomanShruggingGrapheme));
 
         var result = rule.Parse(USFlagGrapheme + WomanShruggingGrapheme);
 
@@ -139,7 +139,7 @@ public class ScanWhileRuleTests
         // at the first token that's neither. AllowTrailingInput lets
         // the parse succeed even though ScanWhile doesn't consume the
         // trailing WomanShrugging that stopped it.
-        var rule = ScanWhile(RuneSet.Ascii.Letters | RuneSet.Runes(USFlagGrapheme));
+        var rule = ScanWhile(TokenSet.Ascii.Letters | TokenSet.Runes(USFlagGrapheme));
         var input = "abc" + USFlagGrapheme + "d" + WomanShruggingGrapheme;
 
         var result = rule.Parse(input, new ParseOptions { AllowTrailingInput = true });

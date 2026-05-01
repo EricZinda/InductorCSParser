@@ -40,48 +40,48 @@ bool isValid = Regex.IsMatch(input, pattern);
 
 To do this in Inductor Parser, we can start by thinking about how to scan a string until we hit something specific. Inductor Parser has a rule for this: `ScanUntil`. To scan a string until you hit a number you'd say:
 ```CSharp
-ScanUntil(RuneSet.Range('0', '9'))
+ScanUntil(TokenSet.Range('0', '9'))
 ```
 But `ScanUntil` always succeeds, even if no digit is found (it just consumes to end-of-input in that case). So we also need to make sure it stopped because it *did* hit one of them. We can just check if the next token is one of those digits:
 
 ```CSharp
-AllOf(ScanUntil(RuneSet.Range('0', '9')), OneOf(RuneSet.Range('0', '9')))
+AllOf(ScanUntil(TokenSet.Range('0', '9')), OneOf(TokenSet.Range('0', '9')))
 ```
 `AllOf` requires all of its rules to succeed, so this will only succeed if we found a string that has a digit in it. Since we'll be doing this a few times, we can make our own rule for it:
 
 ```CSharp
-Rule Contains(RuneSet options) =>
+Rule Contains(TokenSet options) =>
     AllOf(ScanUntil(options), OneOf(options));
 
 // Scan for one number
-Contains(RuneSet.Range('0', '9'))
+Contains(TokenSet.Range('0', '9'))
 
 // Scan for one upper case ASCII
-Contains(RuneSet.Range('A', 'Z'))
+Contains(TokenSet.Range('A', 'Z'))
 
 // Scan for one lower case ASCII
-Contains(RuneSet.Range('a', 'z'))
+Contains(TokenSet.Range('a', 'z'))
 
 // Scan for one special character
-Contains(RuneSet.Runes("#?!"))
+Contains(TokenSet.Runes("#?!"))
 ```
 Those rules succeed if they find at least one of the characters we specify, but they also *consume* them as they go. So running them one after the other wouldn't check the whole password each time, only what is left after the previous rule succeeded.
 
 The `Peek` rule is designed for just this case.  Like `Not` it checks if something is upcoming, but doesn't *consume* it. So, we can simply `Peek` at each rule so they each get to look at the entire password:
 
 ```CSharp
-Rule Contains(RuneSet options) =>
+Rule Contains(TokenSet options) =>
     Peek(AllOf(ScanUntil(options), OneOf(options)));
 ```
 And then we have to make this real C# by combining them into a single rule:
 ```CSharp
-Rule Contains(RuneSet options) =>
+Rule Contains(TokenSet options) =>
     Peek(AllOf(ScanUntil(options), OneOf(options)));
 
-var rule = AllOf(Contains(RuneSet.Range('0', '9')),
-                 Contains(RuneSet.Range('A', 'Z')),
-                 Contains(RuneSet.Range('a', 'z')),
-                 Contains(RuneSet.Runes("#?!")));
+var rule = AllOf(Contains(TokenSet.Range('0', '9')),
+                 Contains(TokenSet.Range('A', 'Z')),
+                 Contains(TokenSet.Range('a', 'z')),
+                 Contains(TokenSet.Runes("#?!")));
 ```
 The next two aren't character based checks, they look for whole strings:
 - cannot contain your username, "password", or "websitename"
@@ -114,14 +114,14 @@ So now we have:
 Rule Contains(Rule rule) =>
     Peek(AllOf(ScanUntil(rule), rule));
 
-Rule Contains(RuneSet options) =>
+Rule Contains(TokenSet options) =>
     Peek(AllOf(ScanUntil(options), OneOf(options)));
 
 AllOf(
-    Contains(RuneSet.Range('0', '9')),
-    Contains(RuneSet.Range('A', 'Z')),
-    Contains(RuneSet.Range('a', 'z')),
-    Contains(RuneSet.Runes("#?!")),
+    Contains(TokenSet.Range('0', '9')),
+    Contains(TokenSet.Range('A', 'Z')),
+    Contains(TokenSet.Range('a', 'z')),
+    Contains(TokenSet.Runes("#?!")),
     Not(Contains(Literal(username))),
     Not(Contains(Literal("password"))),
     Not(Contains(Literal(websitename))),
@@ -140,15 +140,15 @@ var websitename = ... get websitename ...;
 Rule Contains(Rule rule) =>
     Peek(AllOf(ScanUntil(rule), rule));
 
-Rule Contains(RuneSet options) =>
+Rule Contains(TokenSet options) =>
     Peek(AllOf(ScanUntil(options), OneOf(options)));
 
 var pattern = 
     AllOf(
-        Contains(RuneSet.Range('0', '9')),
-        Contains(RuneSet.Range('A', 'Z')),
-        Contains(RuneSet.Range('a', 'z')),
-        Contains(RuneSet.Runes("#?!")),
+        Contains(TokenSet.Range('0', '9')),
+        Contains(TokenSet.Range('A', 'Z')),
+        Contains(TokenSet.Range('a', 'z')),
+        Contains(TokenSet.Runes("#?!")),
         Not(Contains(Literal(username))),
         Not(Contains(Literal("password"))),
         Not(Contains(Literal(websitename))),

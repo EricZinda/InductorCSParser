@@ -19,7 +19,7 @@ public class NameOfTests
     [TestCase(0x7F)]   // last ASCII
     public void Ascii_codepoint_renders_as_rune_string(int codepoint)
     {
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         rule.Compile();
 
         string expected = new Rune(codepoint).ToString();
@@ -31,7 +31,7 @@ public class NameOfTests
     [TestCase(0xD7FF)] // last BMP before the surrogate hole
     public void Bmp_codepoint_below_surrogate_hole_renders_as_rune_string(int codepoint)
     {
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         rule.Compile();
 
         string expected = new Rune(codepoint).ToString();
@@ -43,7 +43,7 @@ public class NameOfTests
     [TestCase(0xFFFF)] // last BMP
     public void Bmp_codepoint_above_surrogate_hole_renders_as_rune_string(int codepoint)
     {
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         rule.Compile();
 
         string expected = new Rune(codepoint).ToString();
@@ -55,7 +55,7 @@ public class NameOfTests
     [TestCase(0x10FFFF)] // last valid Unicode scalar
     public void Supplementary_codepoint_renders_as_rune_string(int codepoint)
     {
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         rule.Compile();
 
         string expected = new Rune(codepoint).ToString();
@@ -71,7 +71,7 @@ public class NameOfTests
     [TestCase(0xDFFF)] // high edge of the surrogate hole
     public void Surrogate_half_returns_null(int codepoint)
     {
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         rule.Compile();
 
         Assert.That(rule.NameOf(new SymbolId(codepoint)), Is.Null);
@@ -80,7 +80,7 @@ public class NameOfTests
     [Test]
     public void Named_rule_returns_the_user_supplied_name()
     {
-        var settingName = OneOrMore(OneOf(RuneSet.Letters)).As("settingName");
+        var settingName = OneOrMore(OneOf(TokenSet.Letters)).As("settingName");
         settingName.Compile();
 
         Assert.That(settingName.NameOf(settingName.Id), Is.EqualTo("settingName"));
@@ -89,7 +89,7 @@ public class NameOfTests
     [Test]
     public void Unnamed_AllOf_rule_returns_class_derived_name()
     {
-        var allOfRule = AllOf(OneOf(RuneSet.Letters), OneOf(RuneSet.Digits));
+        var allOfRule = AllOf(OneOf(TokenSet.Letters), OneOf(TokenSet.Digits));
         allOfRule.Compile();
 
         Assert.That(allOfRule.NameOf(allOfRule.Id), Is.EqualTo("AllOf"));
@@ -103,8 +103,8 @@ public class NameOfTests
         // from NameOf. They're still distinguishable because each rule gets
         // its own SymbolId at Compile time. If a caller wants to tell two
         // AllOfs apart by label, the remedy is .As("...").
-        var firstAllOf = AllOf(OneOf(RuneSet.Letters), OneOf(RuneSet.Digits));
-        var secondAllOf = AllOf(OneOf(RuneSet.Digits), OneOf(RuneSet.Letters));
+        var firstAllOf = AllOf(OneOf(TokenSet.Letters), OneOf(TokenSet.Digits));
+        var secondAllOf = AllOf(OneOf(TokenSet.Digits), OneOf(TokenSet.Letters));
         var root = FirstOf(firstAllOf, secondAllOf);
         root.Compile();
 
@@ -119,7 +119,7 @@ public class NameOfTests
         // OneOrMore / ZeroOrMore / Optional are BetweenInclusiveRule under
         // the hood, but they stamp a friendly trace name at construction
         // time. NameOf should surface that friendly name.
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         rule.Compile();
 
         Assert.That(rule.NameOf(rule.Id), Is.EqualTo("OneOrMore"));
@@ -128,7 +128,7 @@ public class NameOfTests
     [Test]
     public void BetweenInclusive_rule_returns_name_with_bounds()
     {
-        var rule = BetweenInclusive(1, 3, OneOf(RuneSet.Letters));
+        var rule = BetweenInclusive(1, 3, OneOf(TokenSet.Letters));
         rule.Compile();
 
         Assert.That(rule.NameOf(rule.Id), Is.EqualTo("BetweenInclusive[1..3]"));
@@ -144,7 +144,7 @@ public class NameOfTests
         // which is why "any id you see while walking a parse tree" works.
         // NameOf called on a non-root rule only sees that rule's descendants,
         // not its siblings or ancestors.
-        var inner = OneOf(RuneSet.Letters).As("letter");
+        var inner = OneOf(TokenSet.Letters).As("letter");
         var outer = OneOrMore(inner).As("word");
         outer.Compile();
 
@@ -160,7 +160,7 @@ public class NameOfTests
         // view up the tree. Calling NameOf on the child can resolve the
         // child itself but not its parent, since the parent isn't reachable
         // by walking down from the child.
-        var inner = OneOf(RuneSet.Letters).As("letter");
+        var inner = OneOf(TokenSet.Letters).As("letter");
         var outer = OneOrMore(inner).As("word");
         outer.Compile();
 
@@ -171,7 +171,7 @@ public class NameOfTests
     [Test]
     public void Unknown_custom_id_returns_null()
     {
-        var rule = OneOrMore(OneOf(RuneSet.Letters)).As("word");
+        var rule = OneOrMore(OneOf(TokenSet.Letters)).As("word");
         rule.Compile();
 
         var stranger = new SymbolId(SymbolRanges.CustomRangeStart + 0x7FFFFF);
@@ -188,7 +188,7 @@ public class NameOfTests
         // We can't pass rule.Id here because it's still zero before Compile
         // (and zero routes through the character fallback). Instead we
         // predict the post-Compile id by hashing the rule's name.
-        var rule = OneOrMore(OneOf(RuneSet.Letters)).As("word");
+        var rule = OneOrMore(OneOf(TokenSet.Letters)).As("word");
         var predictedId = new SymbolId(Rule.HashNameToCustomRange("word"));
 
         string? name = rule.NameOf(predictedId);
@@ -201,7 +201,7 @@ public class NameOfTests
     {
         // Second call hits the cached _nameIndex path. First call builds it.
         // Both should return the same answer.
-        var rule = OneOrMore(OneOf(RuneSet.Letters)).As("word");
+        var rule = OneOrMore(OneOf(TokenSet.Letters)).As("word");
         rule.Compile();
 
         string? first = rule.NameOf(rule.Id);

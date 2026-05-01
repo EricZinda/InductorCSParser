@@ -14,7 +14,7 @@ public class OneOfRuleTests
     [Test]
     public void OneOf_matches_a_letter_and_returns_a_single_rune_symbol()
     {
-        var rule = OneOf(RuneSet.Letters);
+        var rule = OneOf(TokenSet.Letters);
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -26,7 +26,7 @@ public class OneOfRuleTests
     {
         // No WithError anywhere, so OneOf records a null message at offset
         // 0 and BuildErrorMessage's positional fallback decides what to say.
-        var rule = OneOrMore(OneOf(RuneSet.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
         var result = rule.Parse("1abc");
 
         Assert.That(result.Success, Is.False);
@@ -40,7 +40,7 @@ public class OneOfRuleTests
         // OneOrMore requires at least one letter. Empty input can't satisfy
         // that. OneOf sees EOF on its first read and records at its pre-
         // read position 0 with its WithError message.
-        var rule = OneOrMore(OneOf(RuneSet.Letters).WithError("need a letter"));
+        var rule = OneOrMore(OneOf(TokenSet.Letters).WithError("need a letter"));
 
         var result = rule.Parse("");
 
@@ -54,7 +54,7 @@ public class OneOfRuleTests
     {
         // '1' is at offset 0. Not a letter. OneOf records its WithError
         // message at pre-read position 0.
-        var rule = OneOrMore(OneOf(RuneSet.Letters).WithError("need a letter"));
+        var rule = OneOrMore(OneOf(TokenSet.Letters).WithError("need a letter"));
 
         var result = rule.Parse("1abc");
 
@@ -74,7 +74,7 @@ public class OneOfRuleTests
         //
         // To make the test unambiguous we only put a WithError on Grapheme(';')
         // so there's no contention.
-        var rule = AllOf(OneOrMore(OneOf(RuneSet.Letters)),
+        var rule = AllOf(OneOrMore(OneOf(TokenSet.Letters)),
                        Grapheme(';').WithError("expected ';'"));
 
         var result = rule.Parse("abc1");
@@ -89,7 +89,7 @@ public class OneOfRuleTests
     public void OneOf_trace_success_produces_expected_output()
     {
         var sink = NewSink();
-        OneOf(RuneSet.Ascii.Letters).Parse("x", new ParseOptions { TraceSink = sink });
+        OneOf(TokenSet.Ascii.Letters).Parse("x", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "   Lexer.Read: 'x', Consumed: 1",
@@ -103,7 +103,7 @@ public class OneOfRuleTests
     public void OneOf_trace_failure_produces_expected_output()
     {
         var sink = NewSink();
-        OneOf(RuneSet.Ascii.Letters).Parse("1", new ParseOptions { TraceSink = sink });
+        OneOf(TokenSet.Ascii.Letters).Parse("1", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "   Lexer.Read: '1', Consumed: 1",
@@ -146,7 +146,7 @@ public class OneOfRuleTests
         // == -1, and OneOf uses the multi-rune-array path to match it.
         // NormalizeInput stays default; the test inputs aren't
         // affected by NFC.
-        var rule = OneOf(RuneSet.Runes(USFlagGrapheme + WomanShruggingGrapheme));
+        var rule = OneOf(TokenSet.Runes(USFlagGrapheme + WomanShruggingGrapheme));
 
         Assert.That(rule.Parse(USFlagGrapheme).Success, Is.True);
         Assert.That(rule.Parse(WomanShruggingGrapheme).Success, Is.True);
@@ -163,7 +163,7 @@ public class OneOfRuleTests
         // big rune-only class plus a single multi-rune entry. OneOf
         // uses the rune intervals for letter tokens and the
         // multi-rune array for the flag token.
-        var rule = OneOf(RuneSet.Letters | RuneSet.Runes(USFlagGrapheme));
+        var rule = OneOf(TokenSet.Letters | TokenSet.Runes(USFlagGrapheme));
 
         Assert.That(rule.Parse("a").Success, Is.True);
         Assert.That(rule.Parse(USFlagGrapheme).Success, Is.True);

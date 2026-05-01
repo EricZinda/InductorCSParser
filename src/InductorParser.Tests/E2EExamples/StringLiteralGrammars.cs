@@ -5,7 +5,7 @@ using static InductorParser.Rules;
 namespace InductorParser.Tests;
 
 // End-to-end string-literal grammars that exercise every ScanUntil
-// shape: RuneSet stopAt, Rule stopAt, single-rune escape starts,
+// shape: TokenSet stopAt, Rule stopAt, single-rune escape starts,
 // no-escape forms. These mirror the sketches in
 // ScanUntilRule.cs's header comment, built out as runnable grammars
 // so the tests can feed real inputs through them.
@@ -66,8 +66,8 @@ public static class StringLiteralGrammars
 
     private static Rule BuildJson()
     {
-        var hexDigit = OneOf(RuneSet.Ascii.HexDigits);
-        var simpleEscapeEnd = OneOf(RuneSet.Runes("\"\\/bfnrt"));
+        var hexDigit = OneOf(TokenSet.Ascii.HexDigits);
+        var simpleEscapeEnd = OneOf(TokenSet.Runes("\"\\/bfnrt"));
         var unicodeEscapeEnd = AllOf(Grapheme('u'), hexDigit, hexDigit, hexDigit, hexDigit);
         var escapeEnd = FirstOf(simpleEscapeEnd, unicodeEscapeEnd);
 
@@ -75,7 +75,7 @@ public static class StringLiteralGrammars
         // Range(0x00, 0x1F) covers U+0000..U+001F inclusive. Those
         // include TAB (0x09), LF (0x0A), and CR (0x0D), all of
         // which JSON requires be escaped rather than embedded raw.
-        var stopAt = RuneSet.Runes("\"") | RuneSet.Range(0x00, 0x1F);
+        var stopAt = TokenSet.Runes("\"") | TokenSet.Range(0x00, 0x1F);
         var body = ScanUntil(stopAt: stopAt, escapeStart: new Rune('\\'), escapeEnd: escapeEnd);
 
         return AllOf(Grapheme('"'), body, Grapheme('"')).As("jsonString");
@@ -84,7 +84,7 @@ public static class StringLiteralGrammars
     private static Rule BuildPythonSingleLine()
     {
         var body = ScanUntil(
-            stopAt: RuneSet.Runes("\"") | RuneSet.Single(0x0A),
+            stopAt: TokenSet.Runes("\"") | TokenSet.Single(0x0A),
             escapeStart: new Rune('\\'),
             escapeEnd: BuildPythonEscapeEnd());
 
@@ -110,7 +110,7 @@ public static class StringLiteralGrammars
     {
         // No escape start. The literal-only ScanUntil overload.
         // Backslashes inside the body are just body content.
-        var body = ScanUntil(RuneSet.Runes("\""));
+        var body = ScanUntil(TokenSet.Runes("\""));
         return AllOf(Grapheme('r'), Grapheme('"'), body, Grapheme('"')).As("pyRawString");
     }
 
@@ -127,8 +127,8 @@ public static class StringLiteralGrammars
     //     \0 isn't in simple because octal already handles it.
     private static Rule BuildPythonEscapeEnd()
     {
-        var hexDigit = OneOf(RuneSet.Ascii.HexDigits);
-        var octalDigit = OneOf(RuneSet.Range('0', '7'));
+        var hexDigit = OneOf(TokenSet.Ascii.HexDigits);
+        var octalDigit = OneOf(TokenSet.Range('0', '7'));
 
         // \NNN  one to three octal digits
         var octalEscapeEnd = BetweenInclusive(1, 3, octalDigit);
@@ -148,12 +148,12 @@ public static class StringLiteralGrammars
         // name content to a printable-ASCII subset. We accept any
         // non-} rune as a simplifying sketch. Matches the shape,
         // not the validation.
-        var nameChar = OneOf(~RuneSet.Runes("}"));
+        var nameChar = OneOf(~TokenSet.Runes("}"));
         var namedEscapeEnd = AllOf(Grapheme('N'), Grapheme('{'), OneOrMore(nameChar), Grapheme('}'));
 
         // Simple single-char escapes. \0 is covered by octalEscapeEnd
         // so it isn't listed here.
-        var simpleEscapeEnd = OneOf(RuneSet.Runes("\\'\"abfnrtv"));
+        var simpleEscapeEnd = OneOf(TokenSet.Runes("\\'\"abfnrtv"));
 
         return FirstOf(octalEscapeEnd, hexEscapeEnd, unicode4EscapeEnd, unicode8EscapeEnd, namedEscapeEnd, simpleEscapeEnd);
     }

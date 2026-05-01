@@ -11,7 +11,7 @@ public class WithErrorTests
     public void WithError_message_appears_when_that_rule_is_deepest_failure()
     {
         // Name must be letters only. WithError gives the user-friendly message.
-        var settingName = OneOrMore(OneOf(RuneSet.Letters))
+        var settingName = OneOrMore(OneOf(TokenSet.Letters))
             .WithError("Expected a setting name");
 
         var document = AllOf(settingName, Grapheme('='), Grapheme(';'));
@@ -30,7 +30,7 @@ public class WithErrorTests
     [Test]
     public void Generic_error_when_no_rule_set_WithError()
     {
-        var document = AllOf(OneOrMore(OneOf(RuneSet.Letters)), Grapheme('='), Grapheme(';'));
+        var document = AllOf(OneOrMore(OneOf(TokenSet.Letters)), Grapheme('='), Grapheme(';'));
 
         var result = document.Parse("ab");
 
@@ -47,8 +47,8 @@ public class WithErrorTests
     {
         // Two rules with different WithError messages. The one whose failure
         // is deepest in the input should be the one the user sees.
-        var name = OneOrMore(OneOf(RuneSet.Letters)).WithError("need letters");
-        var digits = OneOrMore(OneOf(RuneSet.Digits)).WithError("need digits");
+        var name = OneOrMore(OneOf(TokenSet.Letters)).WithError("need letters");
+        var digits = OneOrMore(OneOf(TokenSet.Digits)).WithError("need digits");
         var doc = AllOf(name, Grapheme('='), digits);
 
         // "ab=x" reaches the digits rule before failing (x isn't a digit).

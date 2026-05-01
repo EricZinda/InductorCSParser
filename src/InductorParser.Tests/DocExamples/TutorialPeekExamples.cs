@@ -19,8 +19,8 @@ public class TutorialPeekExamples
     [Test]
     public void Contains_consuming_form_succeeds_only_when_digit_present()
     {
-        var rule = AllOf(ScanUntil(RuneSet.Range('0', '9')),
-                          OneOf(RuneSet.Range('0', '9')));
+        var rule = AllOf(ScanUntil(TokenSet.Range('0', '9')),
+                          OneOf(TokenSet.Range('0', '9')));
 
         // Wrap with AnyToken+Eof so a partial match doesn't fail Parse's
         // consume-all-input rule, since the doc presents this rule as
@@ -35,7 +35,7 @@ public class TutorialPeekExamples
     [Test]
     public void Contains_peek_form_does_not_consume_input()
     {
-        Rule Contains(RuneSet options) =>
+        Rule Contains(TokenSet options) =>
             Peek(AllOf(ScanUntil(options), OneOf(options)));
 
         // Combine: digit, upper, lower, special. Then run a final
@@ -43,10 +43,10 @@ public class TutorialPeekExamples
         // a single password should satisfy all four because each Peek
         // looks at the whole string.
         var rule = AllOf(
-            Contains(RuneSet.Range('0', '9')),
-            Contains(RuneSet.Range('A', 'Z')),
-            Contains(RuneSet.Range('a', 'z')),
-            Contains(RuneSet.Runes("#?!")),
+            Contains(TokenSet.Range('0', '9')),
+            Contains(TokenSet.Range('A', 'Z')),
+            Contains(TokenSet.Range('a', 'z')),
+            Contains(TokenSet.Runes("#?!")),
             ZeroOrMore(AnyToken()),
             Eof());
 
@@ -103,7 +103,7 @@ public class TutorialPeekExamples
         Rule Contains(Rule innerRule) =>
             Peek(AllOf(ScanUntil(innerRule), innerRule));
 
-        Rule ContainsSet(RuneSet options) =>
+        Rule ContainsSet(TokenSet options) =>
             Peek(AllOf(ScanUntil(options), OneOf(options)));
 
         var originalPassword = "OldPwd1!";
@@ -111,10 +111,10 @@ public class TutorialPeekExamples
         var websitename = "exospecies";
 
         var pattern = AllOf(
-            ContainsSet(RuneSet.Range('0', '9')),
-            ContainsSet(RuneSet.Range('A', 'Z')),
-            ContainsSet(RuneSet.Range('a', 'z')),
-            ContainsSet(RuneSet.Runes("#?!")),
+            ContainsSet(TokenSet.Range('0', '9')),
+            ContainsSet(TokenSet.Range('A', 'Z')),
+            ContainsSet(TokenSet.Range('a', 'z')),
+            ContainsSet(TokenSet.Runes("#?!")),
             Not(Contains(Literal(username))),
             Not(Contains(Literal("password"))),
             Not(Contains(Literal(websitename))),

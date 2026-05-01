@@ -18,21 +18,21 @@ namespace InductorParser;
 //     ~   complement      ~a              tokens not in a (rune-only sets)
 //
 // Set difference is the idiom a & ~b ("a minus b"). The operators return a
-// new RuneSet. The struct is immutable.
+// new TokenSet. The struct is immutable.
 //
-//     var unicodeIdentifier = RuneSet.Letters | RuneSet.Digits | RuneSet.Runes("_");
-//     var asciiConsonants   = RuneSet.Ascii.Letters & ~RuneSet.Runes("aeiouAEIOU");
-//     var cyrillicLetters   = RuneSet.Letters & RuneSet.Range(0x0400, 0x04FF);
-//     var emojiOrLetters    = RuneSet.Letters | RuneSet.Runes(USFlagGrapheme);
+//     var unicodeIdentifier = TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_");
+//     var asciiConsonants   = TokenSet.Ascii.Letters & ~TokenSet.Runes("aeiouAEIOU");
+//     var cyrillicLetters   = TokenSet.Letters & TokenSet.Range(0x0400, 0x04FF);
+//     var emojiOrLetters    = TokenSet.Letters | TokenSet.Runes(USFlagGrapheme);
 //
-// Internally a RuneSet keeps two pieces. _ranges is a sorted, non-overlapping,
+// Internally a TokenSet keeps two pieces. _ranges is a sorted, non-overlapping,
 // non-adjacent array of code-point runs that holds every single-rune member.
 // _multiRuneGraphemes is a sorted ordinal, deduped array of grapheme strings
 // that holds every member that occupies two or more runes. Single-rune
 // graphemes always go in _ranges, never in _multiRuneGraphemes, so a set
 // that's never given a multi-rune entry pays nothing. The rune fast path
 // (binary search of intervals) is unchanged, and a grammar rule that uses
-// RuneSet.Letters a thousand times pays the Unicode-table scan once at
+// TokenSet.Letters a thousand times pays the Unicode-table scan once at
 // startup and then a handful of Contains() calls per match.
 //
 // Complement is only defined when _multiRuneGraphemes is empty. The universe
@@ -41,10 +41,10 @@ namespace InductorParser;
 // by a finite explicit set. ~set on a mixed set throws InvalidOperationException
 // rather than silently dropping multi-rune entries. The idiom a & ~b keeps
 // working in the typical case where b is rune-only.
-public readonly partial struct RuneSet : IEquatable<RuneSet>
+public readonly partial struct TokenSet : IEquatable<TokenSet>
 {
     // One contiguous run of Unicode code points, inclusive on both ends:
-    // the closed interval [Low, High]. A RuneSet's rune part is represented
+    // the closed interval [Low, High]. A TokenSet's rune part is represented
     // as a sorted, non-overlapping, non-adjacent array of these runs. Named
     // Interval (not Range) to avoid colliding with the public Range(...)
     // factory method below.
@@ -58,9 +58,9 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     // Array.Empty<string>(); rune-only sets never allocate one.
     private readonly string[] _multiRuneGraphemes;
 
-    private RuneSet(Interval[] ranges) : this(ranges, null) { }
+    private TokenSet(Interval[] ranges) : this(ranges, null) { }
 
-    private RuneSet(Interval[] ranges, string[]? multiRuneGraphemes)
+    private TokenSet(Interval[] ranges, string[]? multiRuneGraphemes)
     {
         _ranges = ranges;
         _multiRuneGraphemes = multiRuneGraphemes ?? Array.Empty<string>();
@@ -76,8 +76,8 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     // build a complement (NoneOfRule, ScanUntilRule) when the original
     // set has multi-rune entries: ~set throws on a mixed set, so callers
     // first project down to the rune-only part and then complement.
-    internal RuneSet RunesOnlyPart =>
-        HasMultiRuneGraphemes ? new RuneSet(_ranges) : this;
+    internal TokenSet RunesOnlyPart =>
+        HasMultiRuneGraphemes ? new TokenSet(_ranges) : this;
 
     // Read-only view of the multi-rune graphemes, sorted ordinal. Used
     // by rules that need to walk the grapheme entries (the lookahead
@@ -216,12 +216,12 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
         return true;
     }
 
-    // Value equality: two RuneSets are equal iff they contain the same
+    // Value equality: two TokenSets are equal iff they contain the same
     // tokens. Normalize guarantees a canonical interval list (sorted,
     // non-overlapping, non-adjacent), and the multi-rune array is sorted
     // ordinal and deduped at construction. Equal sets therefore have
     // identical _ranges and identical _multiRuneGraphemes element-wise.
-    public bool Equals(RuneSet other)
+    public bool Equals(TokenSet other)
     {
         var mine = _ranges;
         var theirs = other._ranges;
@@ -242,7 +242,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
         return true;
     }
 
-    public override bool Equals(object? obj) => obj is RuneSet other && Equals(other);
+    public override bool Equals(object? obj) => obj is TokenSet other && Equals(other);
 
     public override int GetHashCode()
     {
@@ -253,8 +253,8 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
         // Equals treats null and an empty array as the same "empty" set
         // (both length 0) for both halves, so GetHashCode has to agree
         // or the contract breaks. A factory like Runes("") returns a
-        // RuneSet with empty arrays, which Equals reports as equal to
-        // default(RuneSet) but would hash differently if we only
+        // TokenSet with empty arrays, which Equals reports as equal to
+        // default(TokenSet) but would hash differently if we only
         // short-circuited on null.
         if (rangesLength == 0 && multiLength == 0) return 0;
         var hash = new HashCode();
@@ -265,11 +265,11 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
         return hash.ToHashCode();
     }
 
-    public static bool operator ==(RuneSet a, RuneSet b) => a.Equals(b);
-    public static bool operator !=(RuneSet a, RuneSet b) => !a.Equals(b);
+    public static bool operator ==(TokenSet a, TokenSet b) => a.Equals(b);
+    public static bool operator !=(TokenSet a, TokenSet b) => !a.Equals(b);
 
     // Maximum number of entries ToString renders before truncating.
-    // Large RuneSets (Unicode-category-wide classes like Letters) can
+    // Large TokenSets (Unicode-category-wide classes like Letters) can
     // hold hundreds of ranges, which would produce an unreadable trace
     // line. Capping at 8 keeps trace output legible while preserving
     // the useful information for small, hand-built classes. The
@@ -338,28 +338,28 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
         return $"U+{codepoint:X4}";
     }
 
-    // The empty set, containing no runes. Equivalent to default(RuneSet),
-    // exposed as a named constant so callers can write RuneSet.Empty
+    // The empty set, containing no runes. Equivalent to default(TokenSet),
+    // exposed as a named constant so callers can write TokenSet.Empty
     // instead of relying on "default happens to mean empty."
-    public static readonly RuneSet Empty = default;
+    public static readonly TokenSet Empty = default;
 
     // The universal set, containing every valid Unicode scalar value
     // (0..0x10FFFF minus the surrogate block). The complement of Empty.
-    // Used as the "unknown / anything goes" default for FirstConsumedRunes
+    // Used as the "unknown / anything goes" default for FirstConsumedTokens
     // (see RuleStartRequirements) so rules with no tighter information
     // never get filtered out.
-    public static readonly RuneSet Universe = ~default(RuneSet);
+    public static readonly TokenSet Universe = ~default(TokenSet);
 
-    public static RuneSet Single(char c) => Single((int)c);
-    public static RuneSet Single(Rune r) => Single(r.Value);
-    public static RuneSet Single(int codepoint)
+    public static TokenSet Single(char c) => Single((int)c);
+    public static TokenSet Single(Rune r) => Single(r.Value);
+    public static TokenSet Single(int codepoint)
     {
         ValidateScalarValue(codepoint, nameof(codepoint));
-        return new RuneSet(new[] { new Interval(codepoint, codepoint) });
+        return new TokenSet(new[] { new Interval(codepoint, codepoint) });
     }
 
-    public static RuneSet Range(char low, char high) => Range((int)low, (int)high);
-    public static RuneSet Range(Rune low, Rune high) => Range(low.Value, high.Value);
+    public static TokenSet Range(char low, char high) => Range((int)low, (int)high);
+    public static TokenSet Range(Rune low, Rune high) => Range(low.Value, high.Value);
     // Validates the endpoints themselves, not the interior of the range.
     // That means Range(0, 0x10FFFF) is allowed even though the interval
     // covers the surrogate block 0xD800..0xDFFF, which isn't a set of
@@ -369,20 +369,20 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     // can ever fire. Auto-splitting the range around the surrogate gap
     // would be more principled but also more code for zero user-visible
     // effect.
-    public static RuneSet Range(int low, int high)
+    public static TokenSet Range(int low, int high)
     {
         ValidateScalarValue(low, nameof(low));
         ValidateScalarValue(high, nameof(high));
         if (high < low) throw new ArgumentException("high must be >= low");
-        return new RuneSet(new[] { new Interval(low, high) });
+        return new TokenSet(new[] { new Interval(low, high) });
     }
 
-    // Construct a RuneSet from a list of code-point intervals. Each element
+    // Construct a TokenSet from a list of code-point intervals. Each element
     // is a closed range [Low, High]. The input doesn't need to be sorted or
     // non-overlapping; Normalize takes care of that. Intended as the bulk
     // factory for large hand-curated or generated tables that would be
     // tedious to chain through the | operator.
-    internal static RuneSet FromRanges(ReadOnlySpan<(int Low, int High)> ranges)
+    internal static TokenSet FromRanges(ReadOnlySpan<(int Low, int High)> ranges)
     {
         var list = new List<Interval>(ranges.Length);
         for (int index = 0; index < ranges.Length; index++)
@@ -396,10 +396,10 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
                     nameof(ranges));
             list.Add(new Interval(low, high));
         }
-        return new RuneSet(Normalize(list));
+        return new TokenSet(Normalize(list));
     }
 
-    public static RuneSet Runes(string characters)
+    public static TokenSet Runes(string characters)
     {
         if (characters == null) throw new ArgumentNullException(nameof(characters));
         var intervals = new List<Interval>();
@@ -457,7 +457,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
             }
             index += graphemeLength;
         }
-        return new RuneSet(Normalize(intervals), NormalizeGraphemes(graphemes));
+        return new TokenSet(Normalize(intervals), NormalizeGraphemes(graphemes));
     }
 
     // Walks a grapheme's runes by hand and throws on any lone surrogate
@@ -518,13 +518,13 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
                 "Must be a valid Unicode scalar value (0..0x10FFFF, excluding surrogates 0xD800..0xDFFF).");
     }
 
-    public static RuneSet operator |(RuneSet a, RuneSet b)
+    public static TokenSet operator |(TokenSet a, TokenSet b)
     {
         var combined = new List<Interval>();
         if (a._ranges != null) combined.AddRange(a._ranges);
         if (b._ranges != null) combined.AddRange(b._ranges);
         var mergedGraphemes = MergeMultiRuneUnion(a._multiRuneGraphemes, b._multiRuneGraphemes);
-        return new RuneSet(Normalize(combined), mergedGraphemes);
+        return new TokenSet(Normalize(combined), mergedGraphemes);
     }
 
     // Sorted-range intersection: walk both sets once, picking [max(low), min(high)]
@@ -534,13 +534,13 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     // result. Adjacent overlap fragments can't appear because that would imply
     // the inputs themselves had adjacent intervals, contradicting normalization.
     // Multi-rune graphemes are intersected separately by sorted ordinal merge.
-    public static RuneSet operator &(RuneSet a, RuneSet b)
+    public static TokenSet operator &(TokenSet a, TokenSet b)
     {
         var aRanges = a._ranges;
         var bRanges = b._ranges;
         var mergedGraphemes = MergeMultiRuneIntersect(a._multiRuneGraphemes, b._multiRuneGraphemes);
         if (aRanges == null || bRanges == null || aRanges.Length == 0 || bRanges.Length == 0)
-            return new RuneSet(Array.Empty<Interval>(), mergedGraphemes);
+            return new TokenSet(Array.Empty<Interval>(), mergedGraphemes);
 
         var result = new List<Interval>();
         int aIndex = 0;
@@ -556,7 +556,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
             if (aRanges[aIndex].High < bRanges[bIndex].High) aIndex++;
             else bIndex++;
         }
-        return new RuneSet(result.ToArray(), mergedGraphemes);
+        return new TokenSet(result.ToArray(), mergedGraphemes);
     }
 
     // Complement against the full set of Unicode scalar values: everything
@@ -571,11 +571,11 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     // complement against it can't be represented as a finite explicit
     // set. The workaround is to project the input down to its rune-only
     // part first: `set & ~runeOnlyMask`.
-    public static RuneSet operator ~(RuneSet a)
+    public static TokenSet operator ~(TokenSet a)
     {
         if (a.HasMultiRuneGraphemes)
             throw new InvalidOperationException(
-                "Cannot complement a RuneSet that contains multi-rune graphemes. " +
+                "Cannot complement a TokenSet that contains multi-rune graphemes. " +
                 "The universe of grapheme clusters is unbounded, so the result " +
                 "isn't representable as a finite set. Build the rune-only mask " +
                 "you want to subtract and use `set & ~runeOnlyMask` instead.");
@@ -595,7 +595,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
         }
         if (cursor <= MaxScalarValue)
             EmitIntervalSkippingSurrogates(result, cursor, MaxScalarValue);
-        return new RuneSet(result.ToArray());
+        return new TokenSet(result.ToArray());
     }
 
     // Sorted-merge union of two sorted-ordinal grapheme arrays. Linear
@@ -706,13 +706,13 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     // Per-category cache. Each UnicodeCategory's set of scalar values is
     // expensive to compute (a full 0..0x10FFFF scan), so we cache the result
     // the first time anyone asks. Subsequent lookups are hash-table reads.
-    // Concurrent because nothing else in RuneSet holds a lock. Multiple
+    // Concurrent because nothing else in TokenSet holds a lock. Multiple
     // threads resolving Letters on startup are fine.
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<UnicodeCategory, RuneSet> _categoryCache
-        = new System.Collections.Concurrent.ConcurrentDictionary<UnicodeCategory, RuneSet>();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<UnicodeCategory, TokenSet> _categoryCache
+        = new System.Collections.Concurrent.ConcurrentDictionary<UnicodeCategory, TokenSet>();
 
-    // One UnicodeCategory is one RuneSet and it's cached (if used).
-    public static RuneSet Category(UnicodeCategory category)
+    // One UnicodeCategory is one TokenSet and it's cached (if used).
+    public static TokenSet Category(UnicodeCategory category)
     {
         if (_categoryCache.TryGetValue(category, out var cached)) return cached;
         BuildCategories(new[] { category });
@@ -722,25 +722,25 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     // Composite built-ins. Letters is the union of the five "Letter"
     // UnicodeCategory values. Digits is one category. Wrapped in Lazy so
     // the union work happens once and is cached. Without it, every access
-    // to RuneSet.Letters would redo the four | merges.
+    // to TokenSet.Letters would redo the four | merges.
     //
     // The Lazy factory calls BuildCategories with the full batch first, so
     // all five category scans happen in a single 0..0x10FFFF pass rather
     // than five separate passes. Each subsequent Category(...) call lookup
     // is then a cache hit.
-    private static readonly Lazy<RuneSet> _letters = new Lazy<RuneSet>(() =>
+    private static readonly Lazy<TokenSet> _letters = new Lazy<TokenSet>(() =>
         CategoriesUnion(
             UnicodeCategory.UppercaseLetter,
             UnicodeCategory.LowercaseLetter,
             UnicodeCategory.TitlecaseLetter,
             UnicodeCategory.ModifierLetter,
             UnicodeCategory.OtherLetter));
-    private static readonly Lazy<RuneSet> _digits = new Lazy<RuneSet>(() =>
+    private static readonly Lazy<TokenSet> _digits = new Lazy<TokenSet>(() =>
         Category(UnicodeCategory.DecimalDigitNumber));
 
     // Shared helper for built-ins: ensure every target category is cached
     // (one scan for all missing targets), then union them in order.
-    private static RuneSet CategoriesUnion(params UnicodeCategory[] targets)
+    private static TokenSet CategoriesUnion(params UnicodeCategory[] targets)
     {
         BuildCategories(targets);
         var result = Category(targets[0]);
@@ -755,7 +755,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     // cleanly into UnicodeCategory values, so it's built by a predicate
     // scan rather than CategoriesUnion. For line terminators see
     // LineTerminators below and Rules.EndOfLine().
-    private static readonly Lazy<RuneSet> _inlineWhitespace = new Lazy<RuneSet>(BuildInlineWhitespace);
+    private static readonly Lazy<TokenSet> _inlineWhitespace = new Lazy<TokenSet>(BuildInlineWhitespace);
 
     // The set of Unicode scalar values that are letters in Unicode's
     // General_Category sense (Lu, Ll, Lt, Lm, Lo). Matches what
@@ -771,9 +771,9 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     // next delimiter" or "match anything the other rules didn't claim"
     // should use NoneOf(stopSet) for delimiter-based stops, or
     // Not(stopRule) + AnyToken() for rule-based stops.
-    public static RuneSet Letters => _letters.Value;
-    public static RuneSet Digits => _digits.Value;
-    public static RuneSet InlineWhitespace => _inlineWhitespace.Value;
+    public static TokenSet Letters => _letters.Value;
+    public static TokenSet Digits => _digits.Value;
+    public static TokenSet InlineWhitespace => _inlineWhitespace.Value;
 
     // The single-rune line terminators defined by UAX #18 Annex C:
     // LF (U+000A), VT (U+000B), FF (U+000C), CR (U+000D), NEL (U+0085),
@@ -782,12 +782,12 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     // and most modern regex engines treat as a newline rune.
     //
     // The CRLF two-rune pair is also a line terminator under UAX #18,
-    // but it can't live in a rune set (every RuneSet holds individual
+    // but it can't live in a rune set (every TokenSet holds individual
     // code points, not sequences). Grammars that want CRLF-as-one-
     // terminator combine this set with a Literal("\r\n") alternative,
     // which is what Rules.EndOfLine() does. For "any whitespace,
     // newlines included" use Rules.AnyWhitespace().
-    public static readonly RuneSet LineTerminators =
+    public static readonly TokenSet LineTerminators =
           Single(0x000A)   // LF
         | Single(0x000B)   // VT
         | Single(0x000C)   // FF
@@ -798,11 +798,11 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
 
     public static class Ascii
     {
-        public static readonly RuneSet Letters = Range('A', 'Z') | Range('a', 'z');
-        public static readonly RuneSet Digits = Range('0', '9');
+        public static readonly TokenSet Letters = Range('A', 'Z') | Range('a', 'z');
+        public static readonly TokenSet Digits = Range('0', '9');
         // ASCII intra-line whitespace: SPACE and TAB only. Mirrors the
-        // full-Unicode RuneSet.InlineWhitespace.
-        public static readonly RuneSet InlineWhitespace = Runes(" \t");
+        // full-Unicode TokenSet.InlineWhitespace.
+        public static readonly TokenSet InlineWhitespace = Runes(" \t");
         // ASCII whitespace including line terminators: SPACE, TAB, CR, LF.
         // Use this for grammars that treat newlines as ordinary whitespace
         // (the regex \s convention). For grammars that need to distinguish
@@ -814,8 +814,8 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
         // For "match space, tab, CR, or LF as individual whitespace
         // runes" we want all four in the rune intervals so OneOf reads
         // them as single-rune tokens.
-        public static readonly RuneSet AnyWhitespace = InlineWhitespace | Single('\r') | Single('\n');
-        public static readonly RuneSet HexDigits = Digits | Range('a', 'f') | Range('A', 'F');
+        public static readonly TokenSet AnyWhitespace = InlineWhitespace | Single('\r') | Single('\n');
+        public static readonly TokenSet HexDigits = Digits | Range('a', 'f') | Range('A', 'F');
     }
 
     // Build from predicate over code points that fit in one UTF-16 char
@@ -823,7 +823,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     // input and not needed for the smallest core. Includes a code point
     // when char.IsWhiteSpace accepts it AND it's not one of the seven
     // UAX #18 single-rune line terminators (those belong to EndOfLine).
-    private static RuneSet BuildInlineWhitespace()
+    private static TokenSet BuildInlineWhitespace()
     {
         var list = new List<Interval>();
         int? currentLow = null;
@@ -845,7 +845,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
             }
         }
         if (currentLow != null) list.Add(new Interval(currentLow.Value, currentHigh));
-        return new RuneSet(list.ToArray());
+        return new TokenSet(list.ToArray());
     }
 
     // Mirror of LineTerminators contents, used by BuildInlineWhitespace
@@ -860,7 +860,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
         || codepoint == 0x2028   // LS
         || codepoint == 0x2029;  // PS
 
-    // Scan 0..0x10FFFF once and populate the cache with a RuneSet for every
+    // Scan 0..0x10FFFF once and populate the cache with a TokenSet for every
     // requested category that isn't already cached. Each code point's
     // UnicodeCategory is looked up exactly once and compared against every
     // target in the missing list. So asking for one category costs one
@@ -925,12 +925,12 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
             }
         }
 
-        // Close any still-open intervals, materialize RuneSets, publish to cache.
+        // Close any still-open intervals, materialize TokenSets, publish to cache.
         for (int index = 0; index < missing.Count; index++)
         {
             if (currentLows[index] != null)
                 lists[index].Add(new Interval(currentLows[index]!.Value, currentHighs[index]));
-            _categoryCache.TryAdd(missing[index], new RuneSet(lists[index].ToArray()));
+            _categoryCache.TryAdd(missing[index], new TokenSet(lists[index].ToArray()));
         }
     }
 }

@@ -7,7 +7,7 @@ This doc describes what makes a rule's test file "comprehensive" in this codebas
 Tests live in `src/InductorParser.Tests/`, organized into three subfolders:
 
 - `Rules/`: one file per rule (`GraphemeRuleTests.cs`, `OneOfRuleTests.cs`, `AllOfRuleTests.cs`, etc.), each named after the rule type with a `Tests` suffix.
-- `Core/`: cross-cutting concerns that don't belong to any one rule (`WithErrorTests.cs`, `LexerSwitchTests.cs`, `IdAssignmentTests.cs`, `RuneSetTests.cs`). Files are named after the concern.
+- `Core/`: cross-cutting concerns that don't belong to any one rule (`WithErrorTests.cs`, `LexerSwitchTests.cs`, `IdAssignmentTests.cs`, `TokenSetTests.cs`). Files are named after the concern.
 - `E2EExamples/`: end-to-end grammar tests that exercise full grammars built from the public API (e.g. `SettingExampleTests.cs`).
 
 Test files in all three folders share the same `namespace InductorParser.Tests;`, so the folder layout is a discoverability convention, not a namespace boundary.
@@ -73,7 +73,7 @@ Example (from `OneOfRuleTests.cs`):
 [Test]
 public void OneOf_mismatch_after_successful_matches_points_at_first_bad_char()
 {
-    var rule = AllOf(OneOrMore(OneOf(RuneSet.Letters)),
+    var rule = AllOf(OneOrMore(OneOf(TokenSet.Letters)),
                    Grapheme(';').WithError("expected ';'"));
     var result = rule.Parse("abc1");
     Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
@@ -132,7 +132,7 @@ public void And_later_child_failure_reports_at_deeper_position()
 
 ### Rules with Construction-Time Validation
 
-Any rule (or factory) that validates its arguments and throws at build time. Today: `Grapheme(char/Rune/int/string)` rejects surrogates, out-of-range values, multi-grapheme strings. `RuneSet.Single`/`Range`/`Runes` reject invalid scalar values.
+Any rule (or factory) that validates its arguments and throws at build time. Today: `Grapheme(char/Rune/int/string)` rejects surrogates, out-of-range values, multi-grapheme strings. `TokenSet.Single`/`Range`/`Runes` reject invalid scalar values.
 
 Required tests:
 
@@ -157,7 +157,7 @@ Some tests don't belong to any one rule's file. These live in `Core/`:
 - **Lexer-mode switching** → `Core/LexerSwitchTests.cs`. Tests that exercise `ParseOptions.InputUnit` switching.
 - **WithError deepest-failure across multiple rules**: `Core/WithErrorTests.cs`. Tests that build grammars spanning several rules and assert the right message wins across them.
 - **Id assignment (Compile)**: `Core/IdAssignmentTests.cs`. Tests that verify the three-pass id assignment (pinned, named-hash, anonymous) behaves correctly.
-- **RuneSet behavior**: `Core/RuneSetTests.cs`. Tests for the `RuneSet` data type itself (not its consumers like `OneOfRule`).
+- **TokenSet behavior**: `Core/TokenSetTests.cs`. Tests for the `TokenSet` data type itself (not its consumers like `OneOfRule`).
 - **Tracing (cross-cutting concerns only)**: `Core/TracingTests.cs`. Covers behaviors that aren't any one rule's property: null TraceSink is a no-op, ParseOptions defaults (null sink, Diagnostic level), the trace-label fallback chain (Name > ErrorMessage > rule class name), `TraceLevel.Normal` suppresses output, `Lexer.Read` and `Lexer.RecordFailure` emit their own diagnostic lines, transaction depth returns to zero after a parse (regression guard, since running the same parse twice must produce identical trace output), and two side-effect proof tests (`Off_path_does_not_evaluate_interpolated_arguments`, `On_path_evaluates_interpolated_arguments_exactly_once`, plus `Rule_TraceSuccess_off_path_does_not_evaluate_interpolated_arguments`) that verify the C# interpolated-string-handler rewrite. They're the critical tests for "tracing is cheap when disabled and doesn't evaluate interpolated arguments."
 
 Rules emit their traces via two base-class helpers, `TraceSuccess(lexer, $"...")` and `TraceFailure(lexer, $"...")`, defined on `Rule`. The rule's class name (`"AllOf"`, `"Grapheme"`, etc.) is derived automatically from `GetType().Name` with the `"Rule"` suffix stripped and cached in the base constructor, so new rules get correct trace names without touching trace plumbing. Both helpers have explicit-level overloads (`TraceSuccess(lexer, level, $"...")`) for the rare case a rule wants to emit at something other than Diagnostic.

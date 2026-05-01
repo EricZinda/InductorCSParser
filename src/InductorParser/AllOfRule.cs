@@ -42,7 +42,7 @@ internal sealed class AllOfRule : Rule
     }
 
     // Return the set of runes this rule might consume first (can be a superset)
-    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
+    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
     // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
@@ -57,13 +57,13 @@ internal sealed class AllOfRule : Rule
         //   Always:    at least one child had Advance.Always so AllOf is guaranteed to consume too on success.
         //   Never:     every child is Never.
         //   Sometimes: otherwise.
-        RuneSet union = RuneSet.Empty;
+        TokenSet union = TokenSet.Empty;
         bool anyMightConsume = false;
         foreach (var child in Children)
         {
             if (child.Advance != Advance.Never)
             {
-                union |= child.FirstConsumedRunes;
+                union |= child.FirstConsumedTokens;
                 anyMightConsume = true;
             }
             if (child.Advance == Advance.Always)

@@ -3,7 +3,7 @@ using System.Globalization;
 
 namespace InductorParser;
 
-// XID identifier support for RuneSet.
+// XID identifier support for TokenSet.
 //
 // XID_Start and XID_Continue are Unicode properties defined in UAX #31
 // (Unicode Identifier and Pattern Syntax). They describe which code points
@@ -23,10 +23,10 @@ namespace InductorParser;
 // precomposed and "café" as e + combining acute produce the same
 // flattened string automatically. This file is only about R1.
 //
-// Why this file is split out from RuneSet.cs
+// Why this file is split out from TokenSet.cs
 //
 // Most of XID comes from Unicode's General_Category property, which the
-// .NET BCL exposes for free via RuneSet.Category(...). XID_Start is
+// .NET BCL exposes for free via TokenSet.Category(...). XID_Start is
 // mostly Lu+Ll+Lt+Lm+Lo+Nl (the Letter and LetterNumber categories).
 // XID_Continue adds Mn+Mc+Nd+Pc (combining marks, decimal digits,
 // connector punctuation).
@@ -39,7 +39,7 @@ namespace InductorParser;
 // identifier-ness, like the Arabic ligature "peace be upon him"
 // (U+FDFA), which decomposes into a phrase of letters and spaces).
 // Those small add/remove lists are what fill this file. Splitting
-// them out keeps the core set algebra in RuneSet.cs from getting
+// them out keeps the core set algebra in TokenSet.cs from getting
 // buried under a hundred lines of Unicode-data tables.
 //
 // How the exception tables are structured
@@ -76,7 +76,7 @@ namespace InductorParser;
 // file stay strict-spec. Callers extend via the extraStartRunes and
 // extraBodyRunes parameters on Rules.Identifier. See
 // docs/UnicodeGotchas.md for language-by-language recipes.
-public readonly partial struct RuneSet
+public readonly partial struct TokenSet
 {
     // Source: Unicode 17.0 XID_Start (DerivedCoreProperties.txt) minus
     // General_Category L + Nl. Code points in XID_Start that the BCL
@@ -155,25 +155,25 @@ public readonly partial struct RuneSet
         (0xFE7E, 0xFE7E),   // ARABIC SUKUN ISOLATED FORM
     };
 
-    private static readonly Lazy<RuneSet> _xidStart = new Lazy<RuneSet>(BuildXidStart);
-    private static readonly Lazy<RuneSet> _xidContinue = new Lazy<RuneSet>(BuildXidContinue);
+    private static readonly Lazy<TokenSet> _xidStart = new Lazy<TokenSet>(BuildXidStart);
+    private static readonly Lazy<TokenSet> _xidContinue = new Lazy<TokenSet>(BuildXidContinue);
 
     // The set of Unicode scalar values that may begin an identifier per
     // UAX #31 R1 (XID_Start). Use together with XidContinue and
     // Rules.Identifier for spec-compliant identifier matching. Doesn't
     // include "_". For the programming-language profile that allows
     // leading underscore, use
-    // Rules.Identifier(extraStartRunes: RuneSet.Runes("_")).
-    public static RuneSet XidStart => _xidStart.Value;
+    // Rules.Identifier(extraStartRunes: TokenSet.Runes("_")).
+    public static TokenSet XidStart => _xidStart.Value;
 
     // The set of Unicode scalar values that may continue an identifier
     // per UAX #31 R1 (XID_Continue). Includes everything in XidStart
     // plus combining marks, decimal digits, and connector punctuation
     // (so "_" is already in XidContinue regardless of the start-side
     // profile). Intended for the tail of an identifier match.
-    public static RuneSet XidContinue => _xidContinue.Value;
+    public static TokenSet XidContinue => _xidContinue.Value;
 
-    private static RuneSet BuildXidStart()
+    private static TokenSet BuildXidStart()
     {
         var lettersAndLetterNumber = CategoriesUnion(
             UnicodeCategory.UppercaseLetter,
@@ -186,7 +186,7 @@ public readonly partial struct RuneSet
             & ~FromRanges(XidStartExclusions);
     }
 
-    private static RuneSet BuildXidContinue()
+    private static TokenSet BuildXidContinue()
     {
         var continueBase = CategoriesUnion(
             UnicodeCategory.UppercaseLetter,

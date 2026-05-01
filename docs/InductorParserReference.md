@@ -166,24 +166,24 @@ Built-in symbol ids live in a static class and use a numbering space chosen so t
 0x200000..           Custom symbols from user-named rules
 ```
 
-## Characters and RuneSet
+## Characters and TokenSet
 
 The parser operates on Unicode text, not raw bytes. By default the lexer reads one .NET `StringInfo` text element per step. On modern .NET that means extended grapheme clusters, so `👨‍👩‍👧‍👦` is one token rather than seven scalar values. The full lexer story, including legacy-runtime caveats and how to opt into rune-level lexing instead, lives in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). For grammar-authoring purposes, you can ignore the distinction until you hit emoji or combining-mark input, at which point the Unicode doc has the answer.
 
-`RuneSet` is a composable value type for character sets. The full API surface (built-ins, factory methods, and the `|`, `&`, `~` operators) lives in [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md). The grammar-authoring shorthand is that you build a class out of built-ins and factory calls and combine them with `|` for union, `&` for intersection, and `~` for complement.
+`TokenSet` is a composable value type for character sets. The full API surface (built-ins, factory methods, and the `|`, `&`, `~` operators) lives in [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md). The grammar-authoring shorthand is that you build a class out of built-ins and factory calls and combine them with `|` for union, `&` for intersection, and `~` for complement.
 
 Grammar code reads like:
 
 ```csharp
-OneOf(RuneSet.Ascii.Letters)                                   // ASCII letters, explicit
-OneOf(RuneSet.Letters)                                         // Unicode letters (café, 名前, Ωmega)
-OneOf(RuneSet.Letters | RuneSet.Digits | RuneSet.Runes("_-"))   // combined
-NoneOf(RuneSet.Single('"'))                                  // anything except a quote
-OneOf(RuneSet.Single(new Rune(0x1F3B8)))                       // guitar emoji (above U+FFFF)
-OneOf(RuneSet.Range(new Rune(0x0370), new Rune(0x03FF)))       // Greek and Coptic block
+OneOf(TokenSet.Ascii.Letters)                                   // ASCII letters, explicit
+OneOf(TokenSet.Letters)                                         // Unicode letters (café, 名前, Ωmega)
+OneOf(TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_-"))   // combined
+NoneOf(TokenSet.Single('"'))                                  // anything except a quote
+OneOf(TokenSet.Single(new Rune(0x1F3B8)))                       // guitar emoji (above U+FFFF)
+OneOf(TokenSet.Range(new Rune(0x0370), new Rune(0x03FF)))       // Greek and Coptic block
 ```
 
-The default built-ins cover Unicode scalar values by category. `RuneSet.Letters` includes single-rune letters like `é`, `漢`, `Ω`, and `ж` according to the runtime's Unicode category tables. Grammars that specifically want ASCII-only use `RuneSet.Ascii.Letters` to say so explicitly.
+The default built-ins cover Unicode scalar values by category. `TokenSet.Letters` includes single-rune letters like `é`, `漢`, `Ω`, and `ж` according to the runtime's Unicode category tables. Grammars that specifically want ASCII-only use `TokenSet.Ascii.Letters` to say so explicitly.
 
 `Grapheme(...)` takes a `char` for any character that fits in a C# char literal (code points U+0000..U+FFFF) and a `Rune` for characters above U+FFFF:
 
@@ -202,7 +202,7 @@ The parser's token is a `StringInfo` text element by default (`GraphemeLexer`). 
 **Under `GraphemeLexer` (default):**
 
 - `Grapheme('=')` matches the `[=]` grapheme. Single-rune graphemes compare to a single rune by identity, so ASCII and other characters that fit in a C# char literal work as you would expect.
-- `RuneSet.Letters` matches single-rune letter graphemes. For composed-form text (the default after normalization), almost all Latin-style letters are single-rune graphemes, so this works as expected. Multi-rune letter graphemes (Devanagari conjuncts, decomposed-form sequences with no precomposed equivalent) don't match `RuneSet.Letters` because the grapheme contains more than one rune. Use `Identifier()` or `WithinGrapheme(...)` when you want to validate the runes inside a grapheme.
+- `TokenSet.Letters` matches single-rune letter graphemes. For composed-form text (the default after normalization), almost all Latin-style letters are single-rune graphemes, so this works as expected. Multi-rune letter graphemes (Devanagari conjuncts, decomposed-form sequences with no precomposed equivalent) don't match `TokenSet.Letters` because the grapheme contains more than one rune. Use `Identifier()` or `WithinGrapheme(...)` when you want to validate the runes inside a grapheme.
 - `Literal("café")` matches four graphemes, one per character in the literal.
 - Emoji sequences (👋🏽, 🇺🇸, 👨‍👩‍👧‍👦) match as single tokens on runtimes whose `StringInfo` recognizes those extended grapheme clusters, which is almost always what you want.
 
@@ -211,7 +211,7 @@ The default is right for almost every grammar that handles user-supplied text, b
 **Under `RuneLexer` (opt-in):**
 
 - `Grapheme('=')` same as `GraphemeLexer`: matches `[=]`.
-- `RuneSet.Letters` matches single-rune letters, and in this mode a combining mark is a separate token. A rule that consumed a letter and then encountered a combining mark would stop at the combining mark (it isn't a letter).
+- `TokenSet.Letters` matches single-rune letters, and in this mode a combining mark is a separate token. A rule that consumed a letter and then encountered a combining mark would stop at the combining mark (it isn't a letter).
 - `Literal("café")` matches four runes if `café` uses the precomposed `é` (U+00E9), five runes if the `é` is stored as `e` + combining acute.
 - Emoji sequences come through as separate runes, so `👋🏽` is two units and `👨‍👩‍👧‍👦` is seven.
 
@@ -429,7 +429,7 @@ To show how this scales, here is a mini settings file grammar where a document c
 ```csharp
 using static InductorParser.Rules;
 
-var key = Identifier(extraStartRunes: RuneSet.Runes("_")).As("key");
+var key = Identifier(extraStartRunes: TokenSet.Runes("_")).As("key");
 
 // Private helper, not named because it never appears in the final tree
 // (its children are flattened directly under `values`). The
@@ -439,7 +439,7 @@ var key = Identifier(extraStartRunes: RuneSet.Runes("_")).As("key");
 var valueAtom = FirstOf(
     Float().Flatten(FlattenType.Flatten),
     Integer().Flatten(FlattenType.Flatten),
-    Identifier(extraStartRunes: RuneSet.Runes("_"))
+    Identifier(extraStartRunes: TokenSet.Runes("_"))
         .Flatten(FlattenType.Flatten)
 );
 

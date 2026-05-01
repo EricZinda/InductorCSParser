@@ -33,7 +33,7 @@ public static class ArithmeticGrammar
 
     static ArithmeticGrammar()
     {
-        Number = OneOrMore(OneOf(RuneSet.Ascii.Digits))
+        Number = OneOrMore(OneOf(TokenSet.Ascii.Digits))
             .As("number").Preserve();
 
         AddOp = OneOf("+-").As("addOp").Preserve();

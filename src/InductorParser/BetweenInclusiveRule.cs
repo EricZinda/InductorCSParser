@@ -139,7 +139,7 @@ internal sealed class BetweenInclusiveRule : Rule
             || fallback.ErrorMessage != null)
             return null;
 
-        RuneSet candidates = RuneSet.Empty;
+        TokenSet candidates = TokenSet.Empty;
         var literalCandidates = new List<LiteralScannerCandidate>();
         bool allCandidatesAreLiterals = true;
         for (int index = 0; index < alternatives.Count - 1; index++)
@@ -147,7 +147,7 @@ internal sealed class BetweenInclusiveRule : Rule
             Rule alternative = alternatives[index];
             if (alternative.ErrorMessage != null || alternative.Advance != Advance.Always)
                 return null;
-            candidates |= alternative.FirstConsumedRunes;
+            candidates |= alternative.FirstConsumedTokens;
 
             // Optional stronger prefilter: if the real alternatives are all
             // literals, the scanner can skip false first-rune hits too. This
@@ -163,7 +163,7 @@ internal sealed class BetweenInclusiveRule : Rule
             }
         }
 
-        if (candidates.IsEmpty || candidates == RuneSet.Universe)
+        if (candidates.IsEmpty || candidates == TokenSet.Universe)
             return null;
 
         candidates.TryGetBmpChars(maxChars: 256, out var bmpCandidates);
@@ -234,7 +234,7 @@ internal sealed class BetweenInclusiveRule : Rule
     }
 
     private readonly record struct ScannerSkip(
-        RuneSet Candidates,
+        TokenSet Candidates,
         char[]? BmpCandidates,
         LiteralScannerCandidate[]? Literals,
         int[]? LiteralPositions)
@@ -251,7 +251,7 @@ internal sealed class BetweenInclusiveRule : Rule
     }
 
     // Return the set of runes this rule might consume first (can be a superset)
-    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
+    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
     // that first rune on success.
     internal override (string Text, bool IgnoreCase)? ComputeRequiredLiteral()
@@ -298,6 +298,6 @@ internal sealed class BetweenInclusiveRule : Rule
             advance = Inner.Advance == Advance.Never ? Advance.Never : Advance.Sometimes;
         else
             advance = Inner.Advance;
-        return new RuleStartRequirements(Inner.FirstConsumedRunes, advance);
+        return new RuleStartRequirements(Inner.FirstConsumedTokens, advance);
     }
 }

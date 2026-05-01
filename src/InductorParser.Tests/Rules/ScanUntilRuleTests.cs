@@ -15,15 +15,15 @@ public class ScanUntilRuleTests
     // any rune other than '|'. Scan stops at the first '|' without
     // consuming it. Mirrors the common "scan until the delimiter"
     // idiom that the stopper-based API is designed for.
-    private static Rule StopOnPipe() => ScanUntil(RuneSet.Runes("|"));
+    private static Rule StopOnPipe() => ScanUntil(TokenSet.Runes("|"));
 
     // A ScanUntil with the JSON-style shape: stop at ", escape start
     // \, escape end is one of "/\bfnrt. Matches the grammar the
     // benchmark uses in InductorJsonParser, minus the delimiters.
     private static Rule JsonLike()
     {
-        var escapeEnd = OneOf(RuneSet.Runes("\"\\/bfnrt"));
-        return ScanUntil(RuneSet.Runes("\""), new Rune('\\'), escapeEnd);
+        var escapeEnd = OneOf(TokenSet.Runes("\"\\/bfnrt"));
+        return ScanUntil(TokenSet.Runes("\""), new Rune('\\'), escapeEnd);
     }
 
     [Test]
@@ -165,8 +165,8 @@ public class ScanUntilRuleTests
         // Start is the two-rune sequence "$$". Stopper is '|'. End
         // is one letter. Matches "abc$$X" up through the end.
         var start = Literal("$$");
-        var end = OneOf(RuneSet.Ascii.Letters);
-        var rule = ScanUntil(RuneSet.Runes("|"), start, end);
+        var end = OneOf(TokenSet.Ascii.Letters);
+        var rule = ScanUntil(TokenSet.Runes("|"), start, end);
 
         var result = rule.Parse("abc$$X");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -181,8 +181,8 @@ public class ScanUntilRuleTests
         // and the '$' is consumed as body. The scan continues past it
         // until the pipe stopper.
         var start = Literal("$$");
-        var end = OneOf(RuneSet.Ascii.Letters);
-        var body = ScanUntil(RuneSet.Runes("|"), start, end);
+        var end = OneOf(TokenSet.Ascii.Letters);
+        var body = ScanUntil(TokenSet.Runes("|"), start, end);
         var rule = InductorParser.Rules.AllOf(body, Grapheme('|'));
 
         var result = rule.Parse("abc$xyz|");
@@ -198,8 +198,8 @@ public class ScanUntilRuleTests
         // ScanUntil fails, outer transaction rolls the position
         // back.
         var start = Literal("$$");
-        var end = OneOf(RuneSet.Ascii.Letters);
-        var rule = ScanUntil(RuneSet.Runes("|"), start, end);
+        var end = OneOf(TokenSet.Ascii.Letters);
+        var rule = ScanUntil(TokenSet.Runes("|"), start, end);
 
         var result = rule.Parse("abc$$1");
         Assert.That(result.Success, Is.False);
@@ -221,7 +221,7 @@ public class ScanUntilRuleTests
         // is just "Parse returns in bounded time."
         var zeroWidthStart = Optional(Grapheme('z'));  // matches empty if 'z' isn't next
         var zeroWidthEnd = Optional(Grapheme('z'));
-        var rule = ScanUntil(RuneSet.Runes("|"), zeroWidthStart, zeroWidthEnd);
+        var rule = ScanUntil(TokenSet.Runes("|"), zeroWidthStart, zeroWidthEnd);
 
         // Input contains no 'z' and no '|'. Every iteration would see
         // 'a' as non-stopper, zeroWidthStart matches empty, zeroWidthEnd
@@ -240,8 +240,8 @@ public class ScanUntilRuleTests
         // Starts are '$' OR '?'. Stopper is '|'. Demonstrates that
         // escapeStart can be a sub-rule, not just a fixed literal.
         var start = FirstOf(Grapheme('$'), Grapheme('?'));
-        var end = OneOf(RuneSet.Ascii.Letters);
-        var rule = ScanUntil(RuneSet.Runes("|"), start, end);
+        var end = OneOf(TokenSet.Ascii.Letters);
+        var rule = ScanUntil(TokenSet.Runes("|"), start, end);
 
         var r1 = rule.Parse("abc$X");
         Assert.That(r1.Success, Is.True, r1.ErrorMessage);
@@ -296,7 +296,7 @@ public class ScanUntilRuleTests
         // triple-quote DOES process escapes. Verify the combination
         // works: multi-rune stop boundary AND a backslash escape.
         var stopper = Literal("\"\"\"");
-        var escapeEnd = OneOf(RuneSet.Runes("\"\\nt"));
+        var escapeEnd = OneOf(TokenSet.Runes("\"\\nt"));
         var body = ScanUntil(stopper, new Rune('\\'), escapeEnd);
         var rule = InductorParser.Rules.AllOf(body, Literal("\"\"\""));
 
@@ -307,7 +307,7 @@ public class ScanUntilRuleTests
 
     // Malformed-UTF-16 cases. IL2CPP sanitizes lone-surrogate code
     // units in string *literals* to U+FFFD at compile time (see
-    // RuneSetTests.Runes_with_lone_surrogate_throws for the same
+    // TokenSetTests.Runes_with_lone_surrogate_throws for the same
     // pattern), so these tests build the malformed input at runtime
     // to make sure the TryPeekRune surrogate branch actually runs.
     //
@@ -360,7 +360,7 @@ public class ScanUntilRuleTests
     [Test]
     public void Sealed_ScanUntil_rejects_Flatten()
     {
-        var rule = ScanUntil(RuneSet.Runes("|"));
+        var rule = ScanUntil(TokenSet.Runes("|"));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
     }
@@ -368,7 +368,7 @@ public class ScanUntilRuleTests
     [Test]
     public void Sealed_ScanUntil_rejects_WithError()
     {
-        var rule = ScanUntil(RuneSet.Runes("|"));
+        var rule = ScanUntil(TokenSet.Runes("|"));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
     }
@@ -376,7 +376,7 @@ public class ScanUntilRuleTests
     [Test]
     public void Sealed_ScanUntil_rejects_As()
     {
-        var rule = ScanUntil(RuneSet.Runes("|"));
+        var rule = ScanUntil(TokenSet.Runes("|"));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
@@ -390,8 +390,8 @@ public class ScanUntilRuleTests
         // any single-rune token plus any non-USFlag grapheme. Scan
         // should consume "ab" + WomanShrugging and stop at the
         // following USFlag without consuming it.
-        var stopOnFlag = ScanUntil(RuneSet.Runes(USFlagGrapheme));
-        var rule = AllOf(stopOnFlag, OneOf(RuneSet.Runes(USFlagGrapheme)));
+        var stopOnFlag = ScanUntil(TokenSet.Runes(USFlagGrapheme));
+        var rule = AllOf(stopOnFlag, OneOf(TokenSet.Runes(USFlagGrapheme)));
 
         var input = "ab" + WomanShruggingGrapheme + USFlagGrapheme;
         var result = rule.Parse(input,
@@ -409,7 +409,7 @@ public class ScanUntilRuleTests
         // newline rune or the flag grapheme. Use AllowTrailingInput
         // because ScanUntil doesn't consume the stopper, so the parse
         // wouldn't reach EOF on its own.
-        var stopper = RuneSet.Single('\n') | RuneSet.Runes(USFlagGrapheme);
+        var stopper = TokenSet.Single('\n') | TokenSet.Runes(USFlagGrapheme);
         var rule = ScanUntil(stopper);
 
         var newlineCase = rule.Parse("hello\nrest", new ParseOptions { AllowTrailingInput = true });

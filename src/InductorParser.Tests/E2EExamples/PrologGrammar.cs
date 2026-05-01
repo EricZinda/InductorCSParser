@@ -15,26 +15,26 @@ namespace InductorParser.Tests;
 public static class PrologGrammar
 {
     // Character classes from Parser.cpp / PrologParser.cpp.
-    private static readonly RuneSet WhitespaceChars = RuneSet.Ascii.AnyWhitespace;
+    private static readonly TokenSet WhitespaceChars = TokenSet.Ascii.AnyWhitespace;
     // Built rune-by-rune because Runes("\r\n") would store CRLF as one
     // multi-rune grapheme entry (the general rule for multi-rune
     // graphemes) rather than as the two separate scalars CR and LF.
     // The line-break rule below specifically wants either CR or LF
     // to match as a single-rune token, so they belong in the rune
     // intervals.
-    private static readonly RuneSet CrlfChars = RuneSet.Single('\r') | RuneSet.Single('\n');
-    private static readonly RuneSet LetterChars = RuneSet.Ascii.Letters;
-    private static readonly RuneSet CapitalChars = RuneSet.Range('A', 'Z');
-    private static readonly RuneSet LetterDigitChars = RuneSet.Ascii.Letters | RuneSet.Ascii.Digits;
+    private static readonly TokenSet CrlfChars = TokenSet.Single('\r') | TokenSet.Single('\n');
+    private static readonly TokenSet LetterChars = TokenSet.Ascii.Letters;
+    private static readonly TokenSet CapitalChars = TokenSet.Range('A', 'Z');
+    private static readonly TokenSet LetterDigitChars = TokenSet.Ascii.Letters | TokenSet.Ascii.Digits;
 
     // (letter | digit | '_' | '-'): the set of characters allowed after the
     // first character of an identifier. shared by atoms, variables, and compound identifiers.
-    private static readonly RuneSet IdentifierTailChars =
-        LetterDigitChars | RuneSet.Runes("_-");
+    private static readonly TokenSet IdentifierTailChars =
+        LetterDigitChars | TokenSet.Runes("_-");
 
     // Prolog math symbols: +, -, <, >, =, /, *, \
     // Atoms like "+", "=", "<>" are legal (Prolog operators).
-    private static readonly RuneSet MathSymbolChars = RuneSet.Runes("+-<>=/*\\");
+    private static readonly TokenSet MathSymbolChars = TokenSet.Runes("+-<>=/*\\");
 
     // A newline token. Under the default GraphemeLexer, "\r\n" is one
     // grapheme cluster (Unicode GB3), so a plain OneOf({'\r', '\n'})
@@ -109,12 +109,12 @@ public static class PrologGrammar
         Grapheme('!'),
         AllOf(
             Grapheme('"'),
-            ScanUntil(RuneSet.Runes("\"")),
+            ScanUntil(TokenSet.Runes("\"")),
             Grapheme('"')
         ),
         AllOf(
             Grapheme('\''),
-            ScanUntil(RuneSet.Runes("'")),
+            ScanUntil(TokenSet.Runes("'")),
             Grapheme('\'')
         ),
         AllOf(

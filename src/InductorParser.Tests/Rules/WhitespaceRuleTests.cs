@@ -66,7 +66,7 @@ public class WhitespaceRuleTests
     {
         // Under the default GraphemeLexer, CRLF is one grapheme. The
         // single-rune InlineWhitespace check sees a CRLF token and
-        // rejects it because it isn't in RuneSet.InlineWhitespace.
+        // rejects it because it isn't in TokenSet.InlineWhitespace.
         Assert.That(InlineWhitespace().Parse(CRLF).Success, Is.False);
     }
 

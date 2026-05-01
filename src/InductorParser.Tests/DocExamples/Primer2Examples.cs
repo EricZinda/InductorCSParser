@@ -20,15 +20,15 @@ public class Primer2Examples
     private static (Rule config, Rule section, Rule keyValue, Rule key,
                     Rule value, Rule integerValue) BuildGrammar()
     {
-        var lineEndRunes = RuneSet.LineTerminators;
+        var lineEndRunes = TokenSet.LineTerminators;
         // Every single-rune whitespace, line terminators included, for
-        // NoneOf stop sets. RuneSet.InlineWhitespace is intra-line only,
+        // NoneOf stop sets. TokenSet.InlineWhitespace is intra-line only,
         // so unioning with lineEndRunes restores "any whitespace rune."
-        var anySpaceRunes = RuneSet.InlineWhitespace | lineEndRunes;
+        var anySpaceRunes = TokenSet.InlineWhitespace | lineEndRunes;
 
-        var name = OneOrMore(NoneOf(RuneSet.Runes("]") | anySpaceRunes))
+        var name = OneOrMore(NoneOf(TokenSet.Runes("]") | anySpaceRunes))
             .As("name").Preserve();
-        var key = OneOrMore(NoneOf(RuneSet.Runes("=") | anySpaceRunes))
+        var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes))
             .As("key").Preserve();
 
         var section = AllOf(Grapheme('['), name, Grapheme(']'), Optional(InlineWhitespace()), EndOfLine())
@@ -36,10 +36,10 @@ public class Primer2Examples
 
         var quotedString = AllOf(
             Grapheme('"'),
-            ZeroOrMore(NoneOf(RuneSet.Runes("\"") | lineEndRunes)),
+            ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
             Grapheme('"')).As("quotedString").Preserve();
 
-        var bareWord = OneOrMore(NoneOf(anySpaceRunes | RuneSet.Runes("\"")))
+        var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\"")))
             .As("bareWord").Preserve();
 
         var floatValue = Float().As("float").Preserve();
@@ -182,12 +182,12 @@ public class Primer2Examples
     [Test]
     public void WithError_message_surfaces_on_missing_equals()
     {
-        var lineEndRunes = RuneSet.LineTerminators;
-        var anySpaceRunes = RuneSet.InlineWhitespace | lineEndRunes;
+        var lineEndRunes = TokenSet.LineTerminators;
+        var anySpaceRunes = TokenSet.InlineWhitespace | lineEndRunes;
 
-        var name = OneOrMore(NoneOf(RuneSet.Runes("]") | anySpaceRunes))
+        var name = OneOrMore(NoneOf(TokenSet.Runes("]") | anySpaceRunes))
             .As("name").Preserve();
-        var key = OneOrMore(NoneOf(RuneSet.Runes("=") | anySpaceRunes))
+        var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes))
             .As("key").Preserve();
 
         var section = AllOf(Grapheme('['), name, Grapheme(']'), Optional(InlineWhitespace()), EndOfLine())
@@ -195,10 +195,10 @@ public class Primer2Examples
 
         var quotedString = AllOf(
             Grapheme('"'),
-            ZeroOrMore(NoneOf(RuneSet.Runes("\"") | lineEndRunes)),
+            ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
             Grapheme('"')).As("quotedString").Preserve();
 
-        var bareWord = OneOrMore(NoneOf(anySpaceRunes | RuneSet.Runes("\"")))
+        var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\"")))
             .As("bareWord").Preserve();
 
         var value = FirstOf(

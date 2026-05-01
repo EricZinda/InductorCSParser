@@ -130,7 +130,7 @@ internal sealed class GraphemeRule : Rule
     }
 
     // Return the set of runes this rule might consume first (can be a superset)
-    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
+    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
     // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
@@ -146,7 +146,7 @@ internal sealed class GraphemeRule : Rule
         // _expected[0] directly would return only the first char, which
         // isn't a usable rune on its own.
         Lexer.TryPeekRune(_expected, 0, out int first, out _);
-        return new RuleStartRequirements(RuneSet.Single(first), Advance.Always);
+        return new RuleStartRequirements(TokenSet.Single(first), Advance.Always);
     }
 
     // True iff the string is exactly one Unicode rune (one UTF-16 char

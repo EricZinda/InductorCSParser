@@ -32,15 +32,15 @@ namespace InductorParser.Tests;
 public class CompileTests
 {
     [Test]
-    public void Compile_throws_when_a_rule_reports_Advance_Never_with_non_empty_FirstConsumedRunes()
+    public void Compile_throws_when_a_rule_reports_Advance_Never_with_non_empty_FirstConsumedTokens()
     {
         // Advance.Never means "never consumes on success," which logically
-        // forces FirstConsumedRunes to be Empty. If nothing is consumed,
+        // forces FirstConsumedTokens to be Empty. If nothing is consumed,
         // there can't be a set of possible first-consumed runes. A subclass
         // that returns a non-empty set alongside Never is violating the
         // contract, and the check here catches it at Compile time rather
         // than letting the mismatch silently corrupt an enclosing AllOfRule's
-        // FirstConsumedRunes union.
+        // FirstConsumedTokens union.
         var bad = new InconsistentRuleStartRule();
 
         var ex = Assert.Throws<InvalidOperationException>(() => bad.Compile());
@@ -55,20 +55,20 @@ public class CompileTests
         // seal flag is the implementation, but several pieces of state
         // would become wrong if it ever re-ran: named-hash ids depend on
         // linear-probe order and could shift if pinned ids were
-        // re-collected against a clean usedIds set, FirstConsumedRunes
+        // re-collected against a clean usedIds set, FirstConsumedTokens
         // and Advance are computed bottom-up and could drift, and
         // ValidateAll could throw on a graph that's already settled.
         //
         // Snapshot every reachable rule's post-Compile state (type, id,
-        // name, flatten policy, FirstConsumedRunes, Advance) and verify
+        // name, flatten policy, FirstConsumedTokens, Advance) and verify
         // the second Compile is a true no-op against the full grammar
         // shape, not just the few ids the test happened to remember.
         // A grammar with a pinned id, a named rule, and anonymous rules
         // exercises all three id-assignment passes plus the bottom-up
         // RuleStartRequirements walk.
         var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 9999);
-        var named = OneOrMore(OneOf(RuneSet.Letters)).As("settingName");
-        var pinnedRule = OneOrMore(OneOf(RuneSet.Digits)).As(pinned);
+        var named = OneOrMore(OneOf(TokenSet.Letters)).As("settingName");
+        var pinnedRule = OneOrMore(OneOf(TokenSet.Digits)).As(pinned);
         var anonymous = ZeroOrMore(Grapheme('!'));
         var root = AllOf(named, pinnedRule, anonymous);
 
@@ -96,7 +96,7 @@ public class CompileTests
         //
         // .As(string) only sets Name, not Id, so an as-yet-uncompiled
         // named rule has the default SymbolId (Value 0).
-        var rule = OneOrMore(OneOf(RuneSet.Letters)).As("word");
+        var rule = OneOrMore(OneOf(TokenSet.Letters)).As("word");
         Assert.That(rule.Id.Value, Is.EqualTo(0),
             "named rule shouldn't have an id assigned before Compile / Parse runs");
 
@@ -119,10 +119,10 @@ public class CompileTests
         internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, System.Collections.Generic.List<Symbol>? outputSymbols) => null;
 
         // Return the set of runes this rule might consume first (can be a superset)
-        // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
+        // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
         // Then say whether the rule Always / Sometimes / Never consumes at least
         // that first rune on success.
         internal override RuleStartRequirements ComputeRuleStart()
-            => new RuleStartRequirements(RuneSet.Single('x'), Advance.Never);
+            => new RuleStartRequirements(TokenSet.Single('x'), Advance.Never);
     }
 }

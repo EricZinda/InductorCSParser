@@ -23,11 +23,11 @@ namespace InductorParser.PlayModeTests
         [Test]
         public void Parses_integer_setting_under_il2cpp()
         {
-            var settingName = OneOrMore(OneOf(RuneSet.Letters));
+            var settingName = OneOrMore(OneOf(TokenSet.Letters));
             var settingValue = FirstOf(
                 Float().Flatten(FlattenType.Flatten),
                 Integer().Flatten(FlattenType.Flatten),
-                OneOrMore(OneOf(RuneSet.Letters))
+                OneOrMore(OneOf(TokenSet.Letters))
             ).Flatten(FlattenType.Preserve);
             var document = AllOf(
                 settingName,
@@ -51,11 +51,11 @@ namespace InductorParser.PlayModeTests
         {
             // Tripwire for the ScanUntil primitive under IL2CPP.
             // Exercises the inline rune-decode helper
-            // (Lexer.TryPeekRune), the RuneSet-stopper fast path,
+            // (Lexer.TryPeekRune), the TokenSet-stopper fast path,
             // and the single-rune escape start plus escape-end
             // dispatch. Grammar mirrors a minimal JSON string body.
-            var escapeEnd = OneOf(RuneSet.Runes("\"\\/bfnrt"));
-            var body = ScanUntil(RuneSet.Runes("\""), new Rune('\\'), escapeEnd);
+            var escapeEnd = OneOf(TokenSet.Runes("\"\\/bfnrt"));
+            var body = ScanUntil(TokenSet.Runes("\""), new Rune('\\'), escapeEnd);
             var rule = AllOf(Grapheme('"'), body, Grapheme('"'));
 
             var result = rule.Parse("\"hello\\n\"");
@@ -68,7 +68,7 @@ namespace InductorParser.PlayModeTests
         public void Reports_failure_position_under_il2cpp()
         {
             var rule = AllOf(
-                OneOrMore(OneOf(RuneSet.Letters)),
+                OneOrMore(OneOf(TokenSet.Letters)),
                 Grapheme(';').WithError("expected ';'")
             );
 

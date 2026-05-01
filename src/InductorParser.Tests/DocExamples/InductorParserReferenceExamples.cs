@@ -184,7 +184,7 @@ public class InductorParserReferenceExamples
     [Test]
     public void Bigger_example_parses_multiple_pairs()
     {
-        var key = Identifier(extraStartRunes: RuneSet.Runes("_")).As("key");
+        var key = Identifier(extraStartRunes: TokenSet.Runes("_")).As("key");
 
         // Build a separate identifier-shaped alternative for valueAtom
         // because .Flatten(...) mutates the rule it's called on, and
@@ -192,7 +192,7 @@ public class InductorParserReferenceExamples
         var valueAtom = FirstOf(
             Float().Flatten(FlattenType.Flatten),
             Integer().Flatten(FlattenType.Flatten),
-            Identifier(extraStartRunes: RuneSet.Runes("_"))
+            Identifier(extraStartRunes: TokenSet.Runes("_"))
                 .Flatten(FlattenType.Flatten)
         );
 

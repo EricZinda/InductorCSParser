@@ -30,7 +30,7 @@ public static class BacklogGrammar
 
     // \s?
     private static readonly Rule OptionalOneWhitespace =
-        Optional(OneOf(RuneSet.InlineWhitespace));
+        Optional(OneOf(TokenSet.InlineWhitespace));
 
     // ^#(?!#)\s?(.*)$
     public static readonly Rule H1Heading = AllOf(
@@ -76,7 +76,7 @@ public static class BacklogGrammar
     // LF, zero-or-more intra-line whitespace, LF. LF-only.
     private static readonly Rule ParagraphTarget = AllOf(
         Grapheme('\n'),
-        ZeroOrMore(OneOf(RuneSet.InlineWhitespace)),
+        ZeroOrMore(OneOf(TokenSet.InlineWhitespace)),
         Grapheme('\n')
     );
 

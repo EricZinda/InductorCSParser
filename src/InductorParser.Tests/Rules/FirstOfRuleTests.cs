@@ -78,7 +78,7 @@ public class FirstOfRuleTests
     public void FirstOf_trace_success_produces_expected_output()
     {
         // Third alternative wins. Required-runes dispatch skips Grapheme('a') and
-        // Grapheme('b') on lookahead 'c' (their FirstConsumedRunes don't contain 'c'
+        // Grapheme('b') on lookahead 'c' (their FirstConsumedTokens don't contain 'c'
         // and neither is empty-capable), so only the matching Grapheme('c')
         // branch opens a transaction and emits trace lines. The
         // nesting remains depth 2 (FirstOf's transaction + Grapheme's transaction).

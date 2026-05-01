@@ -1,6 +1,6 @@
 # Unicode Gotchas
 
-Most Unicode surprises can't be fixed by the parser's lexer choice. They live outside the "what is a token?" question the lexers answer, so the fix is usually caller-side preprocessing (clean the input before parsing) or grammar-design (pick the right `RuneSet`, add explicit tolerance rules). A few gotchas below are lexer-specific, and those sections call that out directly.
+Most Unicode surprises can't be fixed by the parser's lexer choice. They live outside the "what is a token?" question the lexers answer, so the fix is usually caller-side preprocessing (clean the input before parsing) or grammar-design (pick the right `TokenSet`, add explicit tolerance rules). A few gotchas below are lexer-specific, and those sections call that out directly.
 
 This doc lists the common gotchas, why they bite, and the idiomatic workaround for each. If you are choosing between `RuneLexer` and `GraphemeLexer`, see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). That is a different decision.
 
@@ -18,7 +18,7 @@ Two quiet wins you get for free:
 
 - **NFC equivalence (UAX #31 R4).** `ParseOptions.NormalizeInput` defaults to `NormalizationForm.FormC`, so `café` precomposed (U+00E9) and `café` as `e` + combining acute (U+0301) normalize to the same string before the lexer sees them, and both parse to the same identifier. You don't write any code for this.
 
-- **Runtime-backed `XID_Start` and `XID_Continue` tables.** Yes: `RuneSet.XidStart` and `RuneSet.XidContinue` are the Unicode XID properties used by UAX #31's default identifier shape, not custom Inductor-specific character classes. The version caveat is where the Unicode data comes from. Most of each set comes from Unicode General_Category data exposed by the .NET runtime: letters and letter numbers for start characters, plus combining marks, decimal digits, and connector punctuation for continuation characters. `RuneSet.Xid.cs` stores only the small UAX #31 add/remove lists needed on top of those categories, such as `U+2118` SCRIPT CAPITAL P and the Arabic ligatures excluded for NFKC stability. Exact code point coverage follows the Unicode version exposed by the runtime's category tables plus those stored exception tables.
+- **Runtime-backed `XID_Start` and `XID_Continue` tables.** Yes: `TokenSet.XidStart` and `TokenSet.XidContinue` are the Unicode XID properties used by UAX #31's default identifier shape, not custom Inductor-specific character classes. The version caveat is where the Unicode data comes from. Most of each set comes from Unicode General_Category data exposed by the .NET runtime: letters and letter numbers for start characters, plus combining marks, decimal digits, and connector punctuation for continuation characters. `TokenSet.Xid.cs` stores only the small UAX #31 add/remove lists needed on top of those categories, such as `U+2118` SCRIPT CAPITAL P and the Arabic ligatures excluded for NFKC stability. Exact code point coverage follows the Unicode version exposed by the runtime's category tables plus those stored exception tables.
 
 Identifier matching works across the scripts covered by the runtime's Unicode data under either lexer, including scripts where a "letter" is a base character plus a vowel mark (Devanagari, Thai, Arabic-with-vowels). When `StringInfo` bundles those clusters into single tokens, `Identifier()` uses [`WithinGrapheme`](#withingrapheme-general-purpose-sub-grapheme-matching) internally to walk each token's runes and check them individually against the identifier rules. No `InputUnit.Rune` switch required:
 
@@ -37,7 +37,7 @@ Uses beyond identifiers:
 ```csharp
 // Accept any grapheme whose runes are all ASCII letters. Rejects "é"
 // (not ASCII) and decomposed "é" (two runes) alike.
-var asciiOnlyLetter = WithinGrapheme(OneOf(RuneSet.Ascii.Letters));
+var asciiOnlyLetter = WithinGrapheme(OneOf(TokenSet.Ascii.Letters));
 
 // Emoji-with-modifier matcher: one base emoji rune optionally followed
 // by skin-tone / ZWJ runes, all as one grapheme.
@@ -58,7 +58,7 @@ Caveats: the inner rule runs against a fresh sub-lexer that doesn't share trace 
 
 ### Matching specific languages
 
-`Identifier` takes two optional `RuneSet` parameters, `extraStartRunes` and `extraBodyRunes`, that get unioned into `XID_Start` and `XID_Continue` respectively. UAX #31 calls this a "profile extension." Combined with `ParseOptions.NormalizeInput`, these cover the real-world identifier rules of most languages that are built on UAX #31.
+`Identifier` takes two optional `TokenSet` parameters, `extraStartRunes` and `extraBodyRunes`, that get unioned into `XID_Start` and `XID_Continue` respectively. UAX #31 calls this a "profile extension." Combined with `ParseOptions.NormalizeInput`, these cover the real-world identifier rules of most languages that are built on UAX #31.
 
 Strict UAX #31 (the reference spec, no language-specific additions). Raku is the closest mainstream match.
 
@@ -69,7 +69,7 @@ Identifier();  // base UAX #31-style form
 Python 3 identifiers, per [PEP 3131](https://peps.python.org/pep-3131/) and the [Language Reference](https://docs.python.org/3/reference/lexical_analysis.html#identifiers). Python adds `_` to Start and uses NFKC (not NFC) for equivalence.
 
 ```csharp
-var python = Identifier(extraStartRunes: RuneSet.Runes("_"));
+var python = Identifier(extraStartRunes: TokenSet.Runes("_"));
 var result = python.Parse(input, new ParseOptions
 {
     NormalizeInput = NormalizationForm.FormKC,
@@ -79,7 +79,7 @@ var result = python.Parse(input, new ParseOptions
 Rust identifiers, per the [Rust Reference](https://doc.rust-lang.org/reference/identifiers.html). Same profile as Python 3 (adds `_` to Start, uses NFKC). One Rust-specific rule this recipe does **not** enforce: Rust rejects bare `_` as an identifier, requiring `_ XID_Continue+`. If you need that, wrap the rule in an explicit check for the second character. For most grammars the practical difference is negligible.
 
 ```csharp
-var rust = Identifier(extraStartRunes: RuneSet.Runes("_"));
+var rust = Identifier(extraStartRunes: TokenSet.Runes("_"));
 var result = rust.Parse(input, new ParseOptions
 {
     NormalizeInput = NormalizationForm.FormKC,
@@ -90,17 +90,17 @@ ECMAScript-style identifiers (JavaScript, TypeScript), per [ECMA-262 §12.7](htt
 
 ```csharp
 var ecmascript = Identifier(
-    extraStartRunes: RuneSet.Runes("_$"),
-    extraBodyRunes: RuneSet.Runes("$"));    // "_" is already in XID_Continue
+    extraStartRunes: TokenSet.Runes("_$"),
+    extraBodyRunes: TokenSet.Runes("$"));    // "_" is already in XID_Continue
 var result = ecmascript.Parse(input, new ParseOptions
 {
     NormalizeInput = null,
 });
 ```
 
-C# identifiers, per [ECMA-334 §7.4.3](https://www.ecma-international.org/publications-and-standards/standards/ecma-334/). C# allows `_` in Start and uses category-based rules rather than XID directly. For grammars, `Identifier(extraStartRunes: RuneSet.Runes("_"))` with default NFC is a close approximation for ordinary source. It isn't a spec-exact C# lexer.
+C# identifiers, per [ECMA-334 §7.4.3](https://www.ecma-international.org/publications-and-standards/standards/ecma-334/). C# allows `_` in Start and uses category-based rules rather than XID directly. For grammars, `Identifier(extraStartRunes: TokenSet.Runes("_"))` with default NFC is a close approximation for ordinary source. It isn't a spec-exact C# lexer.
 
-Java identifiers use `Character.isJavaIdentifierStart` and `Character.isJavaIdentifierPart`, which are their own rule. Not reproducible via `Identifier` parameters alone; a Java-conforming grammar would compose against a custom `RuneSet` built from those predicates.
+Java identifiers use `Character.isJavaIdentifierStart` and `Character.isJavaIdentifierPart`, which are their own rule. Not reproducible via `Identifier` parameters alone; a Java-conforming grammar would compose against a custom `TokenSet` built from those predicates.
 
 Swift has its own enumerated list of ranges that resembles XID but isn't a property reference. Not reproducible via `Identifier` parameters alone.
 
@@ -157,7 +157,7 @@ If your grammar uses `GraphemeLexer` and processes emoji sequences, don't strip 
 
 ## Homoglyph Confusables
 
-Cyrillic `а` (U+0430) and Latin `a` (U+0061) render identically in most fonts but are different code points. A grammar using `RuneSet.Ascii.Letters` rejects Cyrillic `а` even though the user "sees" a Latin `a`. A grammar using `RuneSet.Letters` accepts both and doesn't distinguish them. Both lexers treat the code points identically because they really are different runes.
+Cyrillic `а` (U+0430) and Latin `a` (U+0061) render identically in most fonts but are different code points. A grammar using `TokenSet.Ascii.Letters` rejects Cyrillic `а` even though the user "sees" a Latin `a`. A grammar using `TokenSet.Letters` accepts both and doesn't distinguish them. Both lexers treat the code points identically because they really are different runes.
 
 This is a grammar-design decision. For security-sensitive grammars (mixed-script identifier detection, phishing-resistance) it's a *feature*: refusing homoglyphs protects against visual-spoofing attacks. For forgiving grammars it's a gotcha.
 
@@ -166,19 +166,19 @@ This is a grammar-design decision. For security-sensitive grammars (mixed-script
 ```csharp
 // Latin script only: Basic Latin letters plus Latin-1 Supplement letters.
 // Rejects Cyrillic а, Greek ο, and other confusables.
-static readonly RuneSet LatinLetters =
-    RuneSet.Ascii.Letters |
-    RuneSet.Range(new Rune(0x00C0), new Rune(0x00FF));
+static readonly TokenSet LatinLetters =
+    TokenSet.Ascii.Letters |
+    TokenSet.Range(new Rune(0x00C0), new Rune(0x00FF));
 
 // Greek and Coptic block only
-static readonly RuneSet Greek =
-    RuneSet.Range(new Rune(0x0370), new Rune(0x03FF));
+static readonly TokenSet Greek =
+    TokenSet.Range(new Rune(0x0370), new Rune(0x03FF));
 
 public static readonly Rule LatinIdentifier =
-    OneOrMore(OneOf(LatinLetters | RuneSet.Ascii.Digits | RuneSet.Runes("_")));
+    OneOrMore(OneOf(LatinLetters | TokenSet.Ascii.Digits | TokenSet.Runes("_")));
 ```
 
-For full UAX #31 Script_Extensions-based detection (the standard algorithm for "is this identifier mixing scripts in a suspicious way"), use a dedicated library. The parser's `RuneSet` is the coarse-grained control.
+For full UAX #31 Script_Extensions-based detection (the standard algorithm for "is this identifier mixing scripts in a suspicious way"), use a dedicated library. The parser's `TokenSet` is the coarse-grained control.
 
 ## Variation Selectors
 
@@ -201,12 +201,12 @@ If you are doing emoji-sensitive parsing, be careful: variation selectors are pa
 Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 rule GB3), so `GraphemeLexer` hands the parser one two-char token whenever it sees a Windows line ending. This bites any line-based grammar that tries to match or stop on a bare `\n`:
 
 - `Grapheme('\n')` matches a one-grapheme token whose content is exactly `'\n'`. The CRLF grapheme has content `"\r\n"`, so `Grapheme('\n')` does *not* match it.
-- `OneOf(RuneSet.Runes("\n"))` or `OneOf(RuneSet.Runes("\r\n"))` matches a single-rune token whose rune is in the set. A CRLF grapheme is two runes, so it matches no single-rune set. It fails `OneOf` regardless of what runes you put in the set.
-- `NoneOf(RuneSet.Runes("\n"))` does the opposite: multi-rune tokens pass `NoneOf` unconditionally. `ZeroOrMore(NoneOf(stopSet))` used to scan "everything up to a newline" will greedily swallow the terminating CRLF as body content instead of stopping at it, then the terminator fails because there is nothing left.
+- `OneOf(TokenSet.Runes("\n"))` or `OneOf(TokenSet.Runes("\r\n"))` matches a single-rune token whose rune is in the set. A CRLF grapheme is two runes, so it matches no single-rune set. It fails `OneOf` regardless of what runes you put in the set.
+- `NoneOf(TokenSet.Runes("\n"))` does the opposite: multi-rune tokens pass `NoneOf` unconditionally. `ZeroOrMore(NoneOf(stopSet))` used to scan "everything up to a newline" will greedily swallow the terminating CRLF as body content instead of stopping at it, then the terminator fails because there is nothing left.
 
 `RuneLexer` doesn't have this problem. It emits `'\r'` and `'\n'` as separate tokens. The bite is `GraphemeLexer`-specific, which is the default.
 
-**Fix.** Use the built-in `EndOfLine()` rule. It is `FirstOf(Literal("\r\n"), OneOf(RuneSet.LineTerminators))` under the hood, so the CRLF grapheme is tried as a unit before the single-rune terminators (LF, CR, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR per UAX #18 Annex C). Pass `eofIsEol: true` for the "line terminator here, or end of input" case, and wrap with `Optional` for "line terminator here, or none at all". Anywhere a grammar cares about line breaks, reach for these instead of building one with `Grapheme('\n')` or a `OneOf` over a rune set:
+**Fix.** Use the built-in `EndOfLine()` rule. It is `FirstOf(Literal("\r\n"), OneOf(TokenSet.LineTerminators))` under the hood, so the CRLF grapheme is tried as a unit before the single-rune terminators (LF, CR, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR per UAX #18 Annex C). Pass `eofIsEol: true` for the "line terminator here, or end of input" case, and wrap with `Optional` for "line terminator here, or none at all". Anywhere a grammar cares about line breaks, reach for these instead of building one with `Grapheme('\n')` or a `OneOf` over a rune set:
 
 ```csharp
 // Match a Unicode line terminator (CRLF, LF, CR, NEL, LS, PS, VT, FF).
@@ -235,8 +235,8 @@ The three anti-patterns to avoid in any line-based grammar:
 ```csharp
 // BROKEN on Windows line endings under GraphemeLexer.
 AllOf(..., Grapheme('\n'))                             // fails on CRLF input
-ZeroOrMore(OneOf(RuneSet.Runes("\r\n")))        // skips zero CRLF graphemes
-ZeroOrMore(NoneOf(RuneSet.Single('\n')))      // swallows the CRLF terminator
+ZeroOrMore(OneOf(TokenSet.Runes("\r\n")))        // skips zero CRLF graphemes
+ZeroOrMore(NoneOf(TokenSet.Single('\n')))      // swallows the CRLF terminator
 ```
 
 If a grammar is a port of regex semantics that explicitly targets LF-only (some Markdown-style formats, for instance), the failure on CRLF is faithful to the source and you can leave `Grapheme('\n')` as-is. Mark the grammar with a comment so the next reader knows the LF-only behavior is intentional, not an oversight.

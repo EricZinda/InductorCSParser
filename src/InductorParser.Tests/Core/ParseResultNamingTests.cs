@@ -15,7 +15,7 @@ public class ParseResultNamingTests
     [Test]
     public void NameOf_resolves_root_rule_name_from_result()
     {
-        var word = OneOrMore(OneOf(RuneSet.Letters)).As("word").Flatten(FlattenType.Preserve);
+        var word = OneOrMore(OneOf(TokenSet.Letters)).As("word").Flatten(FlattenType.Preserve);
         var result = word.Parse("hello");
         Assert.That(result.Success, Is.True);
 
@@ -25,7 +25,7 @@ public class ParseResultNamingTests
     [Test]
     public void Name_resolves_symbol_to_rule_name()
     {
-        var word = OneOrMore(OneOf(RuneSet.Letters)).As("word").Flatten(FlattenType.Preserve);
+        var word = OneOrMore(OneOf(TokenSet.Letters)).As("word").Flatten(FlattenType.Preserve);
         var result = word.Parse("hello");
 
         Assert.That(result.Name(result.Tree!), Is.EqualTo("word"));
@@ -34,7 +34,7 @@ public class ParseResultNamingTests
     [Test]
     public void Name_resolves_character_leaf_symbol()
     {
-        var word = OneOrMore(OneOf(RuneSet.Letters)).As("word").Flatten(FlattenType.Preserve);
+        var word = OneOrMore(OneOf(TokenSet.Letters)).As("word").Flatten(FlattenType.Preserve);
         var result = word.Parse("h");
         var leaf = result.Tree!.Children[0];
 
@@ -44,7 +44,7 @@ public class ParseResultNamingTests
     [Test]
     public void PrintTree_on_result_matches_extension_output()
     {
-        var word = OneOrMore(OneOf(RuneSet.Letters)).As("word").Flatten(FlattenType.Preserve);
+        var word = OneOrMore(OneOf(TokenSet.Letters)).As("word").Flatten(FlattenType.Preserve);
         var result = word.Parse("hi");
 
         Assert.That(result.PrintTree(), Is.EqualTo(result.Tree!.PrintTree(word)));
@@ -53,7 +53,7 @@ public class ParseResultNamingTests
     [Test]
     public void PrintTree_returns_empty_string_when_parse_failed()
     {
-        var word = OneOrMore(OneOf(RuneSet.Letters)).As("word").Flatten(FlattenType.Preserve);
+        var word = OneOrMore(OneOf(TokenSet.Letters)).As("word").Flatten(FlattenType.Preserve);
         var result = word.Parse("123"); // no letters, parse fails
 
         Assert.That(result.Success, Is.False);

@@ -52,14 +52,14 @@ internal sealed class NotRule : Rule
     }
 
     // Return the set of runes this rule might consume first (can be a superset)
-    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
+    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
     // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
     {
         // Zero-width predicate: rolls back regardless of inner result,
-        // never advances the lexer. FirstConsumedRunes is Empty (it doesn't
+        // never advances the lexer. FirstConsumedTokens is Empty (it doesn't
         // consume anything, so the "starting rune" set is empty).
-        return new RuleStartRequirements(RuneSet.Empty, Advance.Never);
+        return new RuleStartRequirements(TokenSet.Empty, Advance.Never);
     }
 }

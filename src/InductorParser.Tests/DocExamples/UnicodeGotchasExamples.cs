@@ -66,7 +66,7 @@ public class UnicodeGotchasExamples
     [Test]
     public void WithinGrapheme_ascii_only_letter_example()
     {
-        var asciiOnlyLetter = WithinGrapheme(OneOf(RuneSet.Ascii.Letters))
+        var asciiOnlyLetter = WithinGrapheme(OneOf(TokenSet.Ascii.Letters))
             .Compile();
 
         Assert.That(asciiOnlyLetter.Parse("a").Success, Is.True);
@@ -80,7 +80,7 @@ public class UnicodeGotchasExamples
     [Test]
     public void Python3_identifier_recipe()
     {
-        var python = Identifier(extraStartRunes: RuneSet.Runes("_")).Compile();
+        var python = Identifier(extraStartRunes: TokenSet.Runes("_")).Compile();
 
         var result = python.Parse("_foo", new ParseOptions
         {
@@ -150,8 +150,8 @@ public class UnicodeGotchasExamples
     public void Homoglyph_LatinLetters_set_rejects_Cyrillic_a()
     {
         var latinLetters =
-            RuneSet.Ascii.Letters |
-            RuneSet.Range(new System.Text.Rune(0x00C0), new System.Text.Rune(0x00FF));
+            TokenSet.Ascii.Letters |
+            TokenSet.Range(new System.Text.Rune(0x00C0), new System.Text.Rune(0x00FF));
 
         var rule = OneOrMore(OneOf(latinLetters)).Compile();
 
@@ -201,7 +201,7 @@ public class UnicodeGotchasExamples
     {
         var lineBreak = FirstOf(
             Literal("\r\n"),
-            OneOf(RuneSet.Single('\r') | RuneSet.Single('\n'))
+            OneOf(TokenSet.Single('\r') | TokenSet.Single('\n'))
         );
         var grammar = AllOf(Literal("a"), lineBreak, Literal("b"), Eof()).Compile();
 
@@ -219,7 +219,7 @@ public class UnicodeGotchasExamples
     {
         var lineBreak = FirstOf(
             Literal("\r\n"),
-            OneOf(RuneSet.Single('\r') | RuneSet.Single('\n'))
+            OneOf(TokenSet.Single('\r') | TokenSet.Single('\n'))
         );
 
         var lineComment = AllOf(

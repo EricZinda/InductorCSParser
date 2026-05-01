@@ -5,7 +5,7 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
-// Scan forward while runes are in a RuneSet, returning the whole run
+// Scan forward while runes are in a TokenSet, returning the whole run
 // as one leaf Symbol. The optimization story: AtLeast(n, OneOf(set))
 // produces the same matched text but pays one transaction and one
 // per-rune leaf Symbol for every rune in the run, which the tree then
@@ -19,11 +19,11 @@ namespace InductorParser;
 // produce one Symbol per matched run.
 internal sealed class ScanWhileRule : Rule
 {
-    private readonly RuneSet _set;
+    private readonly TokenSet _set;
     private readonly int _minimumCount;
     private readonly string _setRendered;
 
-    public ScanWhileRule(RuneSet set, int minimumCount)
+    public ScanWhileRule(TokenSet set, int minimumCount)
         : base(FlattenType.Preserve)
     {
         if (minimumCount < 1)

@@ -26,7 +26,7 @@ public class TracingTests
         // ("nothing inside an interpolation hole runs when tracing is
         // off") is proven by Off_path_does_not_evaluate_interpolated_arguments
         // below, using a side-effect counter to verify no work happens.
-        var rule = OneOrMore(OneOf(RuneSet.Ascii.Letters));
+        var rule = OneOrMore(OneOf(TokenSet.Ascii.Letters));
         var result = rule.Parse("abc", new ParseOptions());
         Assert.That(result.Success, Is.True);
     }
@@ -47,7 +47,7 @@ public class TracingTests
         // it with the rule's class name via ":", producing
         // "settingName:OneOrMore" as the full trace label.
         var sink = NewSink();
-        var settingName = OneOrMore(OneOf(RuneSet.Ascii.Letters))
+        var settingName = OneOrMore(OneOf(TokenSet.Ascii.Letters))
             .As("settingName");
         settingName.Parse("foo", new ParseOptions { TraceSink = sink });
 

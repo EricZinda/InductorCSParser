@@ -17,8 +17,8 @@ namespace InductorParser;
 // contains.
 //
 // There are two options for the string body stop condition:
-//   * RuneSet stopAt (fast path): stop when the next rune is in the
-//     set. Only does one RuneSet.Contains per rune and handles any grammar whose
+//   * TokenSet stopAt (fast path): stop when the next rune is in the
+//     set. Only does one TokenSet.Contains per rune and handles any grammar whose
 //     closing boundary is a single rune: JSON ", Python ' or ", C# $"..."
 //     closing, etc.
 //   * Rule stopAt (general path): stop when a user-supplied rule
@@ -66,8 +66,8 @@ internal sealed class ScanUntilRule : Rule
     // Stopper discrimination. _stopperRule != null selects the general
     // path, otherwise _stopperSet is used. The general path is one
     // predictable branch per rune. JSON-style grammars that take the
-    // RuneSet path never pay for Rule dispatch.
-    private readonly RuneSet _stopperSet;
+    // TokenSet path never pay for Rule dispatch.
+    private readonly TokenSet _stopperSet;
     private readonly Rule? _stopperRule;
     private readonly string _stopperRendered;
 
@@ -106,8 +106,8 @@ internal sealed class ScanUntilRule : Rule
     // rolls the lexer back to where ScanUntil opened.
     private readonly Rule? _escapeEnd;
 
-    // FAST PATH, no escape. Per rune: one RuneSet.Contains.
-    public ScanUntilRule(RuneSet stopAt)
+    // FAST PATH, no escape. Per rune: one TokenSet.Contains.
+    public ScanUntilRule(TokenSet stopAt)
         : base(FlattenType.Preserve)
     {
         _stopperSet = stopAt;
@@ -123,7 +123,7 @@ internal sealed class ScanUntilRule : Rule
     // The recursive evaluator reads these private fields directly inside
     // TryParseRule; the lowering pass needs the same data without
     // running the rule.
-    internal RuneSet LoweringStopperSet => _stopperSet;
+    internal TokenSet LoweringStopperSet => _stopperSet;
     internal Rule? LoweringStopperRule => _stopperRule;
     internal bool LoweringHasEscape => _hasEscape;
     internal int LoweringEscapeStartRune => _escapeStartRune;
@@ -131,9 +131,9 @@ internal sealed class ScanUntilRule : Rule
     internal Rule? LoweringEscapeEnd => _escapeEnd;
 
     // FAST PATH, single-rune escape start. Per rune: one
-    // RuneSet.Contains plus one int equality on non-stopper runes.
+    // TokenSet.Contains plus one int equality on non-stopper runes.
     // Covers JSON, C, C++ regular, Python single-line.
-    public ScanUntilRule(RuneSet stopAt, Rune escapeStart, Rule escapeEnd)
+    public ScanUntilRule(TokenSet stopAt, Rune escapeStart, Rule escapeEnd)
         : base(FlattenType.Preserve, escapeEnd)
     {
         if (escapeEnd == null)
@@ -150,7 +150,7 @@ internal sealed class ScanUntilRule : Rule
     // General escape start. Adds one Rule.TryParse on non-stopper
     // runes only. Use for multi-rune starts like $$ or a choice
     // across several starts.
-    public ScanUntilRule(RuneSet stopAt, Rule escapeStart, Rule escapeEnd)
+    public ScanUntilRule(TokenSet stopAt, Rule escapeStart, Rule escapeEnd)
         : base(FlattenType.Preserve, escapeStart, escapeEnd)
     {
         if (escapeStart == null)
@@ -219,17 +219,17 @@ internal sealed class ScanUntilRule : Rule
 
             // Peek the next rune without advancing the lexer so the
             // fast stopper-check path can decide whether to consume.
-            // Rune-scoped even under GraphemeLexer because RuneSet
+            // Rune-scoped even under GraphemeLexer because TokenSet
             // membership and escape-start comparison are both
             // rune-scoped.
             if (!Lexer.TryPeekRune(input, pos, out int runeValue, out int runeLen))
                 // Malformed UTF-16 escape hatch:
                 // An isolated surrogate half can't match any
-                // RuneSet or rune start, so stop the scan and let the
+                // TokenSet or rune start, so stop the scan and let the
                 // surrounding grammar decide whether it's an error.
                 break;
 
-            // Stopper check. The RuneSet path is the fast case. The
+            // Stopper check. The TokenSet path is the fast case. The
             // Rule path opens a peek transaction that always rolls
             // back, so the stopper itself is never consumed by this
             // rule. When the stopper set has multi-rune entries
@@ -337,7 +337,7 @@ internal sealed class ScanUntilRule : Rule
     }
 
     // Return the set of runes this rule might consume first (can be a superset)
-    // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
+    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
     // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
@@ -346,9 +346,9 @@ internal sealed class ScanUntilRule : Rule
         // but it also consumes runes when the input has matchable ones.
         // That's Advance.Sometimes.
         //
-        // FirstConsumedRunes: the body consumes any rune not in the stopper
+        // FirstConsumedTokens: the body consumes any rune not in the stopper
         // set (the stop check fires first in the scan loop, so a stopper
-        // rune is never consumed). That's ~_stopperSet for the RuneSet
+        // rune is never consumed). That's ~_stopperSet for the TokenSet
         // stopper path. A Rule-based stopper can't be rendered as a rune
         // set, so we stay at Universe there. Escape-start runes, if a
         // grammar has them, are always outside the stopper set: the
@@ -364,10 +364,10 @@ internal sealed class ScanUntilRule : Rule
         // sometimes wrongly excluding single-rune body content with
         // the same first rune), which is the safe direction for the
         // lookahead shortcut.
-        RuneSet firstConsumed;
+        TokenSet firstConsumed;
         if (_stopperRule != null)
         {
-            firstConsumed = RuneSet.Universe;
+            firstConsumed = TokenSet.Universe;
         }
         else if (_stopperSet.HasMultiRuneGraphemes)
         {

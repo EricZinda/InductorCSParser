@@ -199,28 +199,28 @@ public static class Rules
 
     /// <summary>
     /// Match one rune whose value is in the given
-    /// <see cref="RuneSet"/>. Default <see cref="FlattenType"/>:
+    /// <see cref="TokenSet"/>. Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
-    /// The workhorse character-class rule. Pass any RuneSet built
+    /// The workhorse character-class rule. Pass any TokenSet built
     /// from the factories (Single, Range, Runes, Category) or one
     /// of the built-ins (Letters, Digits, InlineWhitespace, Ascii.*).
-    /// RuneSets compose with <c>|</c> (union), <c>&amp;</c>
+    /// TokenSets compose with <c>|</c> (union), <c>&amp;</c>
     /// (intersection), and <c>~</c> (complement):
     /// <code>
     /// // Identifier character: any letter, digit, or underscore
-    /// var idChar = OneOf(RuneSet.Letters | RuneSet.Digits | RuneSet.Runes("_"));
+    /// var idChar = OneOf(TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_"));
     ///
     /// // ASCII consonant: ASCII letter minus vowels
-    /// var consonant = OneOf(RuneSet.Ascii.Letters &amp; ~RuneSet.Runes("aeiouAEIOU"));
+    /// var consonant = OneOf(TokenSet.Ascii.Letters &amp; ~TokenSet.Runes("aeiouAEIOU"));
     ///
     /// // Printable non-whitespace: letters and digits only, in Latin script
     /// var latinAlnum = OneOf(
-    ///     (RuneSet.Letters | RuneSet.Digits) &amp; RuneSet.Range(0x0000, 0x024F));
+    ///     (TokenSet.Letters | TokenSet.Digits) &amp; TokenSet.Range(0x0000, 0x024F));
     /// </code>
     /// </remarks>
-    public static Rule OneOf(RuneSet set) => new OneOfRule(set);
+    public static Rule OneOf(TokenSet set) => new OneOfRule(set);
 
     /// <summary>
     /// Shortcut for the common "one of these literal runes" case.
@@ -228,16 +228,16 @@ public static class Rules
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
-    /// Equivalent to <c>OneOf(RuneSet.Runes(runes))</c>. When you
+    /// Equivalent to <c>OneOf(TokenSet.Runes(runes))</c>. When you
     /// need ranges, category unions, or complements, reach for
-    /// <see cref="RuneSet"/> directly and pass it to the
-    /// <see cref="OneOf(RuneSet)"/> overload.
+    /// <see cref="TokenSet"/> directly and pass it to the
+    /// <see cref="OneOf(TokenSet)"/> overload.
     /// </remarks>
-    public static Rule OneOf(string runes) => new OneOfRule(RuneSet.Runes(runes));
+    public static Rule OneOf(string runes) => new OneOfRule(TokenSet.Runes(runes));
 
     /// <summary>
     /// Match one rune whose value ISN'T in the given
-    /// <see cref="RuneSet"/>. Default <see cref="FlattenType"/>:
+    /// <see cref="TokenSet"/>. Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
@@ -245,7 +245,7 @@ public static class Rules
     /// as the body character in a bounded scan (for example,
     /// everything up to a closing quote).
     /// </remarks>
-    public static Rule NoneOf(RuneSet set) => new NoneOfRule(set);
+    public static Rule NoneOf(TokenSet set) => new NoneOfRule(set);
 
     /// <summary>
     /// Shortcut for "any rune except these specific ones."
@@ -253,9 +253,9 @@ public static class Rules
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
-    /// Equivalent to <c>NoneOf(RuneSet.Runes(runes))</c>.
+    /// Equivalent to <c>NoneOf(TokenSet.Runes(runes))</c>.
     /// </remarks>
-    public static Rule NoneOf(string runes) => new NoneOfRule(RuneSet.Runes(runes));
+    public static Rule NoneOf(string runes) => new NoneOfRule(TokenSet.Runes(runes));
 
     /// <summary>
     /// Scan forward while the next rune is in <paramref name="set"/>,
@@ -277,21 +277,21 @@ public static class Rules
     /// the scanner-skip optimization need to recognize a run as a single
     /// match span.
     ///
-    /// The exact converse of <see cref="ScanUntil(RuneSet)"/>: ScanUntil
+    /// The exact converse of <see cref="ScanUntil(TokenSet)"/>: ScanUntil
     /// stops when the next rune is in its stop set, ScanWhile stops when
     /// the next rune is outside its match set. Use <c>ScanWhile</c> when
     /// the run's character class is the natural way to describe the body
-    /// (identifiers, words, numbers), and <see cref="ScanUntil(RuneSet)"/>
+    /// (identifiers, words, numbers), and <see cref="ScanUntil(TokenSet)"/>
     /// when only the boundary is namable (string bodies, comment bodies).
     ///
     /// Under GraphemeLexer, "single-rune token" is literal: a multi-rune
     /// grapheme cluster whose first rune is in the set doesn't match.
-    /// That keeps this rule aligned with <see cref="OneOf(RuneSet)"/>.
+    /// That keeps this rule aligned with <see cref="OneOf(TokenSet)"/>.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="minimumCount"/> is less than 1.
     /// </exception>
-    public static Rule ScanWhile(RuneSet set, int minimumCount = 1) =>
+    public static Rule ScanWhile(TokenSet set, int minimumCount = 1) =>
         new ScanWhileRule(set, minimumCount);
 
     /// <summary>
@@ -306,17 +306,17 @@ public static class Rules
     /// <c>ZeroOrMore(NoneOf(stopAt))</c> for long strings.
     /// <code>
     /// // CSV field body: scan until the next comma or newline
-    /// var field = ScanUntil(RuneSet.Runes(",\n"));
+    /// var field = ScanUntil(TokenSet.Runes(",\n"));
     ///
     /// // Line comment body: scan until end-of-line
-    /// var lineCommentBody = ScanUntil(RuneSet.Single('\r') | RuneSet.Single('\n'));
+    /// var lineCommentBody = ScanUntil(TokenSet.Single('\r') | TokenSet.Single('\n'));
     /// </code>
     /// </remarks>
-    public static Rule ScanUntil(RuneSet stopAt) =>
+    public static Rule ScanUntil(TokenSet stopAt) =>
         new ScanUntilRule(stopAt);
 
     /// <summary>
-    /// <see cref="ScanUntil(RuneSet)"/> with escape sequences.
+    /// <see cref="ScanUntil(TokenSet)"/> with escape sequences.
     /// Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
@@ -329,12 +329,12 @@ public static class Rules
     /// // JSON-style string body: anything up to " or \, with
     /// // \n, \t, \r, \", \\ as the allowed single-rune escapes
     /// var body = ScanUntil(
-    ///     RuneSet.Runes("\"\\"),
+    ///     TokenSet.Runes("\"\\"),
     ///     new Rune('\\'),
     ///     OneOf("ntr\"\\"));
     /// </code>
     /// </remarks>
-    public static Rule ScanUntil(RuneSet stopAt, Rune escapeStart, Rule escapeEnd) =>
+    public static Rule ScanUntil(TokenSet stopAt, Rune escapeStart, Rule escapeEnd) =>
         new ScanUntilRule(stopAt, escapeStart, escapeEnd);
 
     /// <summary>
@@ -350,16 +350,16 @@ public static class Rules
     /// // followed by {) falls through to the normal stopper
     /// // path so the outer grammar can handle it separately.
     /// var body = ScanUntil(
-    ///     RuneSet.Runes("\"$"),
+    ///     TokenSet.Runes("\"$"),
     ///     Literal("${"),
     ///     AllOf(OneOrMore(NoneOf("}")), Grapheme('}')));
     /// </code>
     /// </remarks>
-    public static Rule ScanUntil(RuneSet stopAt, Rule escapeStart, Rule escapeEnd) =>
+    public static Rule ScanUntil(TokenSet stopAt, Rule escapeStart, Rule escapeEnd) =>
         new ScanUntilRule(stopAt, escapeStart, escapeEnd);
 
     /// <summary>
-    /// <see cref="ScanUntil(RuneSet)"/> with a rule-valued stop
+    /// <see cref="ScanUntil(TokenSet)"/> with a rule-valued stop
     /// condition. Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
@@ -415,7 +415,7 @@ public static class Rules
     /// </summary>
     /// <remarks>
     /// Use for "anything except X" shapes that
-    /// <see cref="NoneOf(RuneSet)"/> can't express because X is
+    /// <see cref="NoneOf(TokenSet)"/> can't express because X is
     /// longer than one rune.
     /// </remarks>
     public static Rule Not(Rule inner) => new NotRule(inner);
@@ -568,7 +568,7 @@ public static class Rules
     /// The shortcut is for the "N of these, no more, no less"
     /// shape: four hex runes in a \uXXXX escape, three digits in
     /// an area code, etc. Reads as
-    /// <c>Exactly(4, OneOf(RuneSet.Ascii.HexDigits))</c> instead
+    /// <c>Exactly(4, OneOf(TokenSet.Ascii.HexDigits))</c> instead
     /// of <c>BetweenInclusive(4, 4, ...)</c>. The trace name
     /// carries the count so traces stay self-describing.
     /// </remarks>
@@ -598,7 +598,7 @@ public static class Rules
     public static Rule Integer() =>
         AllOf(
             Optional(FirstOf(Grapheme('+'), Grapheme('-'))),
-            OneOrMore(OneOf(RuneSet.Digits))
+            OneOrMore(OneOf(TokenSet.Digits))
         );
 
     /// <summary>
@@ -621,7 +621,7 @@ public static class Rules
 
     /// <summary>
     /// Match one or more intra-line whitespace tokens as defined by
-    /// <c>RuneSet.InlineWhitespace</c>. Does NOT match line terminators
+    /// <c>TokenSet.InlineWhitespace</c>. Does NOT match line terminators
     /// (<c>\n</c>, <c>\r</c>, <c>\r\n</c>, NEL, LINE SEPARATOR,
     /// PARAGRAPH SEPARATOR, VT, FF). Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Delete"/> (applied by the factory).
@@ -640,11 +640,11 @@ public static class Rules
     /// "either intra-line whitespace or a line terminator" use
     /// <see cref="AnyWhitespace"/>.
     /// </remarks>
-    public static Rule InlineWhitespace() => OneOrMore(OneOf(RuneSet.InlineWhitespace)).Flatten(FlattenType.Delete);
+    public static Rule InlineWhitespace() => OneOrMore(OneOf(TokenSet.InlineWhitespace)).Flatten(FlattenType.Delete);
 
     /// <summary>
     /// Match one or more whitespace tokens, where each token is either
-    /// an intra-line whitespace rune (per <c>RuneSet.InlineWhitespace</c>)
+    /// an intra-line whitespace rune (per <c>TokenSet.InlineWhitespace</c>)
     /// or a line terminator (per <see cref="EndOfLine"/>, which handles
     /// CRLF as one two-rune unit). Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Delete"/>.
@@ -665,7 +665,7 @@ public static class Rules
     /// </para>
     /// </remarks>
     public static Rule AnyWhitespace() =>
-        OneOrMore(FirstOf(EndOfLine(), OneOf(RuneSet.InlineWhitespace))).Flatten(FlattenType.Delete);
+        OneOrMore(FirstOf(EndOfLine(), OneOf(TokenSet.InlineWhitespace))).Flatten(FlattenType.Delete);
 
     /// <summary>
     /// Match one Unicode line terminator per UAX #18 Annex C. When
@@ -685,7 +685,7 @@ public static class Rules
     /// <list type="bullet">
     /// <item><description>CRLF (the two-rune sequence <c>\r\n</c>)</description></item>
     /// <item><description>LF, VT, FF, CR, NEL, LINE SEPARATOR, or PARAGRAPH SEPARATOR
-    /// (the single-rune terminators in <see cref="RuneSet.LineTerminators"/>)</description></item>
+    /// (the single-rune terminators in <see cref="TokenSet.LineTerminators"/>)</description></item>
     /// <item><description>End-of-input, but only when <paramref name="eofIsEol"/> is <c>true</c></description></item>
     /// </list>
     /// CRLF is tried first so a CR immediately followed by an LF is
@@ -701,35 +701,35 @@ public static class Rules
     public static Rule EndOfLine(bool eofIsEol = false)
     {
         var alternatives = eofIsEol
-            ? new Rule[] { Literal("\r\n"), OneOf(RuneSet.LineTerminators), Eof() }
-            : new Rule[] { Literal("\r\n"), OneOf(RuneSet.LineTerminators) };
+            ? new Rule[] { Literal("\r\n"), OneOf(TokenSet.LineTerminators), Eof() }
+            : new Rule[] { Literal("\r\n"), OneOf(TokenSet.LineTerminators) };
         return FirstOf(alternatives).Flatten(FlattenType.Delete);
     }
 
     /// <summary>
     /// Encodes a UAX #31-style "programming language identifier" using
     /// runtime-backed XID tables plus the pinned exception tables in
-    /// <see cref="RuneSet"/>. Default
+    /// <see cref="TokenSet"/>. Default
     /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>,
     /// so the match appears in the tree as one named node whose
     /// children are the per-rune leaves.
     /// </summary>
     /// <param name="extraStartRunes">
-    /// Runes to union into <see cref="RuneSet.XidStart"/> for the
+    /// Runes to union into <see cref="TokenSet.XidStart"/> for the
     /// first character. UAX #31 calls this a "profile extension":
     /// the base Start property plus language-specific additions.
     /// Typical value for a programming-language grammar is
-    /// <c>RuneSet.Runes("_")</c>. Python and Rust use this shape; C#
+    /// <c>TokenSet.Runes("_")</c>. Python and Rust use this shape; C#
     /// also permits leading underscores, though its full identifier
     /// specification differs. Defaults to
-    /// <see cref="RuneSet.Empty"/> (the base UAX #31-style profile).
+    /// <see cref="TokenSet.Empty"/> (the base UAX #31-style profile).
     /// </param>
     /// <param name="extraBodyRunes">
-    /// Runes to union into <see cref="RuneSet.XidContinue"/> for
+    /// Runes to union into <see cref="TokenSet.XidContinue"/> for
     /// every character after the first. Same idea as
     /// <paramref name="extraStartRunes"/>. ECMAScript, for example,
     /// adds <c>$</c> to both positions. Defaults to
-    /// <see cref="RuneSet.Empty"/>.
+    /// <see cref="TokenSet.Empty"/>.
     /// </param>
     /// <remarks>
     /// The same word can be typed more than one way. "café" might be
@@ -759,10 +759,10 @@ public static class Rules
     /// ECMAScript) via these parameters plus NormalizeInput.
     /// </para>
     /// </remarks>
-    public static Rule Identifier(RuneSet extraStartRunes = default, RuneSet extraBodyRunes = default)
+    public static Rule Identifier(TokenSet extraStartRunes = default, TokenSet extraBodyRunes = default)
     {
-        var start = RuneSet.XidStart | extraStartRunes;
-        var body = RuneSet.XidContinue | extraBodyRunes;
+        var start = TokenSet.XidStart | extraStartRunes;
+        var body = TokenSet.XidContinue | extraBodyRunes;
         return AllOf(
             // First grapheme: starts with a Start rune, rest of its runes
             // (if any) are Body runes. Under GraphemeLexer this handles
@@ -796,7 +796,7 @@ public static class Rules
     /// scripts whose "letters" are multi-rune graphemes. Other uses:
     /// emoji-with-modifier matchers (<c>WithinGrapheme(AllOf(OneOf(EmojiBase),
     /// ZeroOrMore(OneOf(SkinToneOrZWJ))))</c>), ASCII-only strictness
-    /// (<c>WithinGrapheme(OneOf(RuneSet.Ascii.Letters))</c> rejects any
+    /// (<c>WithinGrapheme(OneOf(TokenSet.Ascii.Letters))</c> rejects any
     /// multi-rune grapheme), Hangul jamo clusters, etc.
     /// <para>
     /// One leaf Symbol is emitted per successful match, representing the
