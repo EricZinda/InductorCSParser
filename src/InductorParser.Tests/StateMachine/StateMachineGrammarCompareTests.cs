@@ -79,7 +79,7 @@ public class StateMachineGrammarCompareTests
     [Test]
     public void Backlog_bullet_state_machine_vs_recursive_vs_regex()
     {
-        Compare("Backlog/Bullet", BulletRegex, BacklogGrammar.Bullet, BacklogBullet, 5000);
+        Compare("Backlog/BulletHeading", BulletRegex, BacklogGrammar.BulletHeading, BacklogBullet, 5000);
     }
 
     [Test]
@@ -113,7 +113,7 @@ public class StateMachineGrammarCompareTests
     [Test]
     public void Backlog_bullet_matcher_state_machine_vs_recursive_vs_regex()
     {
-        CompareMatcher("Backlog/Bullet (matcher)", BulletRegex, BacklogMatcher.Bullet, BacklogBullet, 5000);
+        CompareMatcher("Backlog/BulletHeading (matcher)", BulletRegex, BacklogMatcher.BulletHeading, BacklogBullet, 5000);
     }
 
     [Test]
@@ -228,7 +228,7 @@ public class StateMachineGrammarCompareTests
             RestOfLine,
             Eof());
 
-        public static readonly Rule Bullet = AllOf(
+        public static readonly Rule BulletHeading = AllOf(
             OneOf("-*+").Delete(),
             OptionalOneWhitespace,
             RestOfLine,

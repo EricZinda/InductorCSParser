@@ -176,7 +176,7 @@ public class BacklogGrammarTests
     [Test]
     public void Equivalence_bullet()
     {
-        AssertAgreement(BulletCorpus, BulletRegex, BacklogGrammar.Bullet, nameof(BulletRegex));
+        AssertAgreement(BulletCorpus, BulletRegex, BacklogGrammar.BulletHeading, nameof(BulletRegex));
     }
 
     [Test]
@@ -247,7 +247,7 @@ public class BacklogGrammarTests
         {
             ("H1",         H1Regex,        BacklogGrammar.H1Heading,      H1Corpus),
             ("H2",         H2Regex,        BacklogGrammar.H2Heading,      H2Corpus),
-            ("Bullet",     BulletRegex,    BacklogGrammar.Bullet,         BulletCorpus),
+            ("Bullet",     BulletRegex,    BacklogGrammar.BulletHeading,         BulletCorpus),
             ("HrRun",      HrRunRegex,     BacklogGrammar.HrRun,          HrRunCorpus),
             ("HrSpaced",   HrSpacedRegex,  BacklogGrammar.HrSpaced,       HrSpacedCorpus),
             ("Paragraph",  ParagraphRegex, BacklogGrammar.ParagraphSplit, ParagraphCorpus),
