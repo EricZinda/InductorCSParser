@@ -6,9 +6,10 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
-// Match input whose content is exactly one specified token. The class
-// is named GraphemeRule because each token is one StringInfo grapheme
-// cluster (per UAX #29 on .NET 5+). The user-facing factory is
+// Match input whose content is exactly one specified token. A token is
+// one character as the user sees it (a grapheme cluster per UAX #29 on
+// .NET 5+), possibly built from several runes underneath. The class is
+// named GraphemeRule for that reason. The user-facing factory is
 // Rules.Token(...), which constructs one of these. The expected token
 // is stored as a string at construction and compared against the
 // lexer's output at match time.
@@ -46,7 +47,7 @@ internal sealed class GraphemeRule : Rule
         string firstElement = StringInfo.GetNextTextElement(expectedToken, 0);
         if (firstElement.Length != expectedToken.Length)
             throw new ArgumentException(
-                $"Token requires exactly one token (one StringInfo text element). Use Literal(string) for multi-token matches.",
+                $"Token requires exactly one user-perceived character (one StringInfo text element / grapheme cluster). Use Literal(string) for multi-token matches.",
                 nameof(expectedToken));
 
         _expected = expectedToken;

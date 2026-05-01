@@ -5,8 +5,9 @@ using InductorParser.SyntaxTree;
 namespace InductorParser;
 
 // Matches any single token, regardless of content. Fails only at EOF.
-// Each token is one StringInfo text element (one user-visible character,
-// possibly multi-rune), so AnyToken() matches that whole text element.
+// A token is one character as the user sees it (a grapheme cluster),
+// possibly built from several runes underneath, so AnyToken() consumes
+// one whole user-visible character.
 //
 // This is the "match one token, regardless of what it is" leaf. Its
 // companion idiom is ZeroOrMore(AllOf(Not(stopRule), AnyToken())), which

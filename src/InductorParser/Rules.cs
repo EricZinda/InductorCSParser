@@ -47,21 +47,17 @@ public static class Rules
     /// Default <see cref="FlattenType"/>: <see cref="FlattenType.Delete"/>.
     /// </summary>
     /// <remarks>
-    /// A token is one StringInfo text element, so <c>Token('a')</c>
-    /// matches when the token is the single char 'a' but fails when
-    /// 'a' is combined with a following accent (because the token is
-    /// then two runes). See docs/UnicodeGotchas.md for the cases
-    /// where this bites.
+    /// A token is one character as the user sees it (a grapheme
+    /// cluster), so <c>Token('a')</c> matches when the token is the
+    /// single char 'a' but fails when 'a' is combined with a
+    /// following accent (because the token is then rendered as one
+    /// 'a' with an accent over it, which doesn't match a bare 'a').
+    /// See docs/UnicodeGotchas.md for the cases where this bites.
     ///
     /// All four Token overloads funnel into <see cref="GraphemeRule"/>.
     /// The overloads exist for convenience and for early validation
     /// of their specific argument shape. For multi-character
-    /// matches use <see cref="Literal"/>. Not to be confused with
-    /// the <see cref="Lexing.Token"/> struct, which is the value the
-    /// lexer's <c>Read()</c> returns. C# resolves the two by
-    /// syntactic context: <c>Token('a')</c> with parens is this
-    /// factory call, <c>Token token = lexer.Read()</c> with an
-    /// identifier following is the struct.
+    /// matches use <see cref="Literal"/>.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="c"/> is a surrogate half. Use
@@ -82,13 +78,13 @@ public static class Rules
     /// <see cref="FlattenType.Delete"/>.
     /// </summary>
     /// <remarks>
-    /// A token is one StringInfo text element, so this matches when
-    /// the token at the current position is exactly the rune
-    /// <c>r</c> standing alone. It fails when <c>r</c> is followed
-    /// by a combining mark or is part of a ZWJ sequence, because
-    /// the token is then two or more runes and doesn't equal the
-    /// one-rune expected content. See docs/UnicodeGotchas.md for
-    /// the cases where this bites.
+    /// A token is one character as the user sees it (a grapheme
+    /// cluster), so this matches when the user sees one bare
+    /// <c>r</c> at the current position. It fails when <c>r</c> is
+    /// followed by a combining mark or is part of a ZWJ sequence,
+    /// because then the user sees one accented or composed character
+    /// at that position, not a bare <c>r</c>. See
+    /// docs/UnicodeGotchas.md for the cases where this bites.
     /// </remarks>
     public static Rule Token(Rune r) => new GraphemeRule(r.ToString());
 
@@ -98,13 +94,13 @@ public static class Rules
     /// <see cref="FlattenType.Delete"/>.
     /// </summary>
     /// <remarks>
-    /// A token is one StringInfo text element, so this matches when
-    /// the token at the current position is exactly the given rune
-    /// standing alone. It fails when the rune is followed by a
-    /// combining mark or is part of a ZWJ sequence, because the
-    /// token is then two or more runes and doesn't equal the
-    /// one-rune expected content. See docs/UnicodeGotchas.md for
-    /// the cases where this bites.
+    /// A token is one character as the user sees it (a grapheme
+    /// cluster), so this matches when the user sees the given rune
+    /// standing alone at the current position. It fails when the
+    /// rune is followed by a combining mark or is part of a ZWJ
+    /// sequence, because then the user sees one accented or composed
+    /// character at that position, not the bare rune. See
+    /// docs/UnicodeGotchas.md for the cases where this bites.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="codepoint"/> isn't a valid Unicode scalar
@@ -120,17 +116,17 @@ public static class Rules
     }
 
     /// <summary>
-    /// Match one token (StringInfo text element) whose content equals
-    /// the given string. Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Delete"/>.
+    /// Match one token (one character as the user sees it) whose
+    /// content equals the given string. Default
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Delete"/>.
     /// </summary>
     /// <remarks>
     /// The string may itself be multi-rune (ZWJ sequences, skin
-    /// tone modifiers, etc.). The <see cref="GraphemeRule"/>
-    /// constructor validates at grammar-build time that the string
-    /// is exactly one token (StringInfo text element). The input
-    /// text element arrives as a single token from the lexer and
-    /// this rule matches it in one compare.
+    /// tone modifiers, etc.) as long as the user perceives it as
+    /// one character. The <see cref="GraphemeRule"/> constructor
+    /// validates at grammar-build time that the string is exactly
+    /// one such character. The input arrives as a single token from
+    /// the lexer and this rule matches it in one compare.
     /// </remarks>
     public static Rule Token(string token) => new GraphemeRule(token);
 
@@ -170,16 +166,21 @@ public static class Rules
     public static Rule LiteralIgnoreAsciiCase(string value) => new LiteralIgnoreAsciiCaseRule(value);
 
     /// <summary>
-    /// Match one rune whose value is in the given
-    /// <see cref="TokenSet"/>. Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Preserve"/>.
+    /// Match one token (one character as the user sees it) when that
+    /// token is in the given <see cref="TokenSet"/>. Default
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
     /// The workhorse character-class rule. Pass any TokenSet built
     /// from the factories (Single, Range, Runes, Category) or one
     /// of the built-ins (Letters, Digits, InlineWhitespace, Ascii.*).
+    /// A TokenSet can hold both single runes and multi-rune
+    /// characters (skin-toned emoji, regional-indicator flags, ZWJ
+    /// sequences), so a set built with
+    /// <c>TokenSet.Letters | TokenSet.Runes("🇺🇸")</c> matches
+    /// either a letter or the US flag as one token.
     /// TokenSets compose with <c>|</c> (union), <c>&amp;</c>
-    /// (intersection), and <c>~</c> (complement):
+    /// (intersection), and <c>~</c> (complement, rune-only sets):
     /// <code>
     /// // Identifier character: any letter, digit, or underscore
     /// var idChar = OneOf(TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_"));
@@ -208,14 +209,18 @@ public static class Rules
     public static Rule OneOf(string runes) => new OneOfRule(TokenSet.Runes(runes));
 
     /// <summary>
-    /// Match one rune whose value ISN'T in the given
-    /// <see cref="TokenSet"/>. Default <see cref="FlattenType"/>:
+    /// Match one token (one character as the user sees it) when
+    /// that token ISN'T in the given <see cref="TokenSet"/>.
+    /// Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
-    /// The idiomatic "any rune except these" rule, commonly used
-    /// as the body character in a bounded scan (for example,
-    /// everything up to a closing quote).
+    /// The idiomatic "any character except these" rule, commonly
+    /// used as the body character in a bounded scan (for example,
+    /// everything up to a closing quote). A multi-rune character
+    /// like 👋🏽 passes a <c>NoneOf</c> over a rune-only set, so
+    /// pass-through-text grammars sweep up emoji correctly without
+    /// special handling.
     /// </remarks>
     public static Rule NoneOf(TokenSet set) => new NoneOfRule(set);
 
@@ -256,9 +261,9 @@ public static class Rules
     /// (identifiers, words, numbers), and <see cref="ScanUntil(TokenSet)"/>
     /// when only the boundary is namable (string bodies, comment bodies).
     ///
-    /// Under GraphemeLexer, "single-rune token" is literal: a multi-rune
-    /// grapheme cluster whose first rune is in the set doesn't match.
-    /// That keeps this rule aligned with <see cref="OneOf(TokenSet)"/>.
+    /// "Single-rune token" is literal: a multi-rune token whose first
+    /// rune is in a rune-only part of the set doesn't match. That keeps
+    /// this rule aligned with <see cref="OneOf(TokenSet)"/>.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="minimumCount"/> is less than 1.
@@ -369,8 +374,8 @@ public static class Rules
         new ScanUntilRule(stopAt, escapeStart, escapeEnd);
 
     /// <summary>
-    /// Match any one token (one StringInfo text element under GraphemeLexer,
-    /// one scalar-value token under RuneLexer). Default <see cref="FlattenType"/>:
+    /// Match any one token (one character as the user sees it).
+    /// Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
@@ -748,10 +753,11 @@ public static class Rules
 
     /// <summary>
     /// Reads one token from the lexer and runs <paramref name="innerRule"/>
-    /// against the runes inside that token. The outer token is a
-    /// StringInfo text element that may span several runes, and the inner
-    /// rule walks them one at a time over a sub-lexer switched to
-    /// one-rune-per-token mode. Default <see cref="FlattenType"/>:
+    /// against the runes inside that token. The outer token is one
+    /// character as the user sees it (a grapheme cluster) that may
+    /// span several runes, and the inner rule walks them one at a
+    /// time over a sub-lexer switched to one-rune-per-token mode.
+    /// Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <param name="innerRule">

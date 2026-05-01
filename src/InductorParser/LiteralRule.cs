@@ -7,9 +7,9 @@ namespace InductorParser;
 
 // Matches an exact multi-character string in a single transaction. This is
 // the N-character generalization of GraphemeRule. GraphemeRule stores exactly
-// one token (one StringInfo text element) at construction time and matches
-// it as one read. LiteralRule stores any non-empty string and uses the
-// same lockstep compare loop.
+// one token (one character as the user sees it) at construction time and
+// matches it as one read. LiteralRule stores any non-empty string and uses
+// the same lockstep compare loop.
 //
 // This is better than using AllOf(Token('m'), Token('a'), Token('j')) since each
 // Token rule opens its own transaction. A three-character AllOf of three Token rules

@@ -12,14 +12,14 @@ namespace InductorParser;
 //
 // The error-position family reports the same point (where the parse
 // got furthest before failing) in different units: ErrorCharIndex
-// (chars / UTF-16 code units), ErrorTokenIndex (StringInfo text
-// elements), and the ErrorLine / ErrorColumn pair (LSP-style
-// zero-based line and column). Pick whichever matches the unit the
-// caller will use the number in. ErrorPosition returns all four
-// bundled into one SourcePosition struct, so callers that want more
-// than one unit only pay for one walk of the input. The same
-// conversion is available on Symbol.SourceRange for any node in the
-// parse tree.
+// (chars / UTF-16 code units), ErrorTokenIndex (tokens, where a token
+// is one character as the user sees it), and the ErrorLine /
+// ErrorColumn pair (LSP-style zero-based line and column). Pick
+// whichever matches the unit the caller will use the number in.
+// ErrorPosition returns all four bundled into one SourcePosition
+// struct, so callers that want more than one unit only pay for one
+// walk of the input. The same conversion is available on
+// Symbol.SourceRange for any node in the parse tree.
 //
 // readonly struct so returning one is a handful of field copies, not
 // a heap allocation.
@@ -92,9 +92,10 @@ public readonly struct ParseResult
         }
     }
 
-    // Error position in tokens, using the same StringInfo text-element
-    // segmentation the lexer uses. On modern .NET this follows UAX #29
-    // extended grapheme clusters. Computed lazily from ErrorCharIndex.
+    // Error position in tokens (characters as the user sees them),
+    // using the same StringInfo text-element segmentation the lexer
+    // uses. On modern .NET this follows UAX #29 extended grapheme
+    // clusters. Computed lazily from ErrorCharIndex.
     public int ErrorTokenIndex =>
         SourcePositionConverter.ToTokenIndex(_input ?? string.Empty, ErrorCharIndex);
 
