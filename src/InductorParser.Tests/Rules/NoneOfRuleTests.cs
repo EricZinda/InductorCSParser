@@ -162,4 +162,35 @@ public class NoneOfRuleTests
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
+
+    // Multi-rune grapheme support -------------------------------------------
+
+    [Test]
+    public void NoneOf_with_multi_rune_set_rejects_the_listed_grapheme()
+    {
+        // A multi-rune set as the exclude list. Under GraphemeLexer
+        // the flag arrives as one token and NoneOf finds it in the
+        // multi-rune array, so it fails. Other multi-rune graphemes
+        // pass.
+        var rule = NoneOf(RuneSet.Runes(USFlagGrapheme));
+
+        Assert.That(rule.Parse(USFlagGrapheme).Success, Is.False);
+        Assert.That(rule.Parse(WomanShruggingGrapheme).Success, Is.True);
+        // Single-rune tokens not in the set's runes also pass.
+        Assert.That(rule.Parse("a").Success, Is.True);
+    }
+
+    [Test]
+    public void NoneOf_with_mixed_set_rejects_both_listed_runes_and_listed_graphemes()
+    {
+        // The mixed-set version of the previous test: include a
+        // letter range and a multi-rune entry. Tokens that hit
+        // either get rejected.
+        var rule = NoneOf(RuneSet.Ascii.Letters | RuneSet.Runes(USFlagGrapheme));
+
+        Assert.That(rule.Parse("a").Success, Is.False, "letters are rejected");
+        Assert.That(rule.Parse(USFlagGrapheme).Success, Is.False, "the flag grapheme is rejected");
+        Assert.That(rule.Parse("1").Success, Is.True, "digits are not in the set");
+        Assert.That(rule.Parse(WomanShruggingGrapheme).Success, Is.True, "other multi-rune graphemes pass");
+    }
 }

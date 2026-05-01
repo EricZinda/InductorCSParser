@@ -10,18 +10,13 @@ namespace InductorParser;
 // produces the same matched text but pays one transaction and one
 // per-rune leaf Symbol for every rune in the run, which the tree then
 // has to flatten away. ScanWhileRule opens one transaction at the
-// top, drops into lexer.AdvanceWhileSingleRuneIn for the inner loop,
+// top, drops into lexer.AdvanceWhileRuneIn for the inner loop,
 // and emits one leaf Symbol over the whole matched span. On the word
 // scan benchmarks that's a 2x speedup.
 //
 // Pairs with ScanUntilRule, which is the inverse stop condition: scan
 // while runes are NOT a stopper. Both are leaf-shaped scanners that
 // produce one Symbol per matched run.
-//
-// Tests live in src/InductorParser.Tests/Rules/ScanWhileRuleTests.cs.
-// See docs/TestArchitecture.md for the per-rule test conventions
-// (success, failure position, WithError propagation, positional fallback,
-// sealed-rule rejection).
 internal sealed class ScanWhileRule : Rule
 {
     private readonly RuneSet _set;
@@ -49,7 +44,13 @@ internal sealed class ScanWhileRule : Rule
         // Lexer primitive instead of a loop of OneOfRule.TryParse calls:
         // one transaction and one Symbol allocation regardless of the
         // run's length, versus one of each per rune in the OneOf form.
-        int count = lexer.AdvanceWhileSingleRuneIn(_set);
+        // Dispatch on whether the set has multi-rune entries: rune-only
+        // sets stay on the inline-rune fast path; mixed sets pull a
+        // full token per iteration so a multi-rune grapheme that's a
+        // member of the set can be part of the run.
+        int count = _set.HasMultiRuneGraphemes
+            ? lexer.AdvanceWhileTokenIn(_set)
+            : lexer.AdvanceWhileRuneIn(_set);
         if (count < _minimumCount)
         {
             TraceFailure(lexer, $"count= {count}, wanted at least {_minimumCount} of '{_setRendered}'");
@@ -80,7 +81,11 @@ internal sealed class ScanWhileRule : Rule
     {
         // minimumCount is guaranteed >= 1, so every successful match consumes
         // a first rune from _set. That lets scanner-style outer loops skip
-        // straight to the next possible run start.
-        return new RuleStartRequirements(_set, Advance.Always);
+        // straight to the next possible run start. For sets with multi-rune
+        // entries, the first rune of each multi-rune grapheme is also a
+        // valid lookahead (the whole grapheme is one token under the
+        // GraphemeLexer), so OneOfRule.LookaheadFirstRunes folds those
+        // first runes into the rune intervals.
+        return new RuleStartRequirements(OneOfRule.LookaheadFirstRunes(_set), Advance.Always);
     }
 }

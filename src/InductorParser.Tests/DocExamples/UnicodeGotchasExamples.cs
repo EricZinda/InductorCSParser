@@ -201,7 +201,7 @@ public class UnicodeGotchasExamples
     {
         var lineBreak = FirstOf(
             Literal("\r\n"),
-            OneOf(RuneSet.Runes("\r\n"))
+            OneOf(RuneSet.Single('\r') | RuneSet.Single('\n'))
         );
         var grammar = AllOf(Literal("a"), lineBreak, Literal("b"), Eof()).Compile();
 
@@ -219,7 +219,7 @@ public class UnicodeGotchasExamples
     {
         var lineBreak = FirstOf(
             Literal("\r\n"),
-            OneOf(RuneSet.Runes("\r\n"))
+            OneOf(RuneSet.Single('\r') | RuneSet.Single('\n'))
         );
 
         var lineComment = AllOf(

@@ -4,6 +4,7 @@ using InductorParser;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
+using static InductorParser.Tests.UnicodeExamples;
 
 namespace InductorParser.Tests;
 
@@ -133,5 +134,57 @@ public class OneOfRuleTests
         var rule = OneOf("abc");
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
+    }
+
+    // Multi-rune grapheme support -------------------------------------------
+
+    [Test]
+    public void OneOf_matches_a_multi_rune_grapheme_under_grapheme_lexer()
+    {
+        // OneOf(set) where set has multi-rune entries: under
+        // GraphemeLexer (the default) the lexer hands back the
+        // whole grapheme as one token with RuneValue == -1, and
+        // OneOf uses the multi-rune-array path to match it.
+        // NormalizeInput stays default; the test inputs aren't
+        // affected by NFC.
+        var rule = OneOf(RuneSet.Runes(USFlagGrapheme + WomanShruggingGrapheme));
+
+        Assert.That(rule.Parse(USFlagGrapheme).Success, Is.True);
+        Assert.That(rule.Parse(WomanShruggingGrapheme).Success, Is.True);
+        // A different multi-rune grapheme isn't a member.
+        Assert.That(rule.Parse(SkinTonedWaveGrapheme).Success, Is.False);
+        // EOF still fails.
+        Assert.That(rule.Parse("").Success, Is.False);
+    }
+
+    [Test]
+    public void OneOf_mixed_set_matches_both_letters_and_a_multi_rune_grapheme()
+    {
+        // Letters | Runes(USFlag) is the canonical mixed set: a
+        // big rune-only class plus a single multi-rune entry. OneOf
+        // uses the rune intervals for letter tokens and the
+        // multi-rune array for the flag token.
+        var rule = OneOf(RuneSet.Letters | RuneSet.Runes(USFlagGrapheme));
+
+        Assert.That(rule.Parse("a").Success, Is.True);
+        Assert.That(rule.Parse(USFlagGrapheme).Success, Is.True);
+        // A digit isn't a letter and isn't the flag.
+        Assert.That(rule.Parse("1").Success, Is.False);
+    }
+
+    [Test]
+    public void OneOf_with_multi_rune_set_under_rune_lexer_never_matches_the_multi_rune_entry()
+    {
+        // Under RuneLexer each token is exactly one rune. The
+        // multi-rune entries in the set are unreachable: the lexer
+        // never hands back a multi-rune token, so the OneOf rule's
+        // multi-rune-array probe never fires. Pin this so a future
+        // change doesn't accidentally let multi-rune matching leak
+        // into the rune lexer.
+        var rule = OneOf(RuneSet.Runes(USFlagGrapheme));
+        var result = rule.Parse(USFlagGrapheme,
+            new ParseOptions { InputUnit = InputUnit.Rune });
+
+        Assert.That(result.Success, Is.False, "RuneLexer breaks the flag into two tokens; neither is the whole grapheme");
     }
 }

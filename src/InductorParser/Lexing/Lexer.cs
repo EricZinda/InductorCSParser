@@ -223,6 +223,16 @@ public abstract class Lexer
     // etc. Called only when there's at least one char left in input.
     protected abstract int NextTokenLength(int startOffset);
 
+    // Public peek over the abstract NextTokenLength so rules outside the
+    // Lexer class can ask "how long is the next token at this position?"
+    // without having to call Read (which advances) or downcast on the
+    // lexer subclass. Returns 0 if `position` is at or past the end.
+    internal int PeekTokenLength(int position)
+    {
+        if (position >= _endPosition) return 0;
+        return NextTokenLength(position);
+    }
+
     // Peek the rune at `pos` in `input` without advancing any lexer
     // state. Writes the rune value and its UTF-16 length. Returns
     // false if the char at `pos` is a stray surrogate without its
@@ -321,7 +331,7 @@ public abstract class Lexer
         }
     }
 
-    internal int AdvanceWhileSingleRuneIn(RuneSet set)
+    internal int AdvanceWhileRuneIn(RuneSet set)
     {
         int count = 0;
 
@@ -344,7 +354,7 @@ public abstract class Lexer
 
                 _position = pos + runeLen;
                 count++;
-                Trace(TraceLevel.Diagnostic, "Lexer.AdvanceWhileSingleRuneIn", TraceOutcome.Info,
+                Trace(TraceLevel.Diagnostic, "Lexer.AdvanceWhileRuneIn", TraceOutcome.Info,
                     $"'{_input.Substring(pos, runeLen)}', Consumed: {_position}");
             }
             return count;
@@ -370,7 +380,50 @@ public abstract class Lexer
 
             _position = pos + tokenLength;
             count++;
-            Trace(TraceLevel.Diagnostic, "Lexer.AdvanceWhileSingleRuneIn", TraceOutcome.Info,
+            Trace(TraceLevel.Diagnostic, "Lexer.AdvanceWhileRuneIn", TraceOutcome.Info,
+                $"'{_input.Substring(pos, tokenLength)}', Consumed: {_position}");
+        }
+        return count;
+    }
+
+    // Grapheme-aware variant of AdvanceWhileRuneIn. Used when the
+    // RuneSet has multi-rune entries: a multi-rune grapheme can be a
+    // member of the set, so the loop has to pull a full token per
+    // iteration and check it against both halves of the set. Slower
+    // per character than AdvanceWhileRuneIn (we pay per-grapheme
+    // overhead instead of inline rune decode), but only fires when the
+    // grammar actually contains multi-rune set entries. Rune-only sets
+    // continue to use AdvanceWhileRuneIn via the rule's dispatch.
+    internal int AdvanceWhileTokenIn(RuneSet set)
+    {
+        int count = 0;
+        while (_position < _endPosition)
+        {
+            int pos = _position;
+            int tokenLength = NextTokenLength(pos);
+            if (tokenLength <= 0 || pos + tokenLength > _endPosition)
+                break;
+
+            // Try the rune fast path first. If the token is a single
+            // rune we don't have to hash a span against the multi-rune
+            // array. Multi-rune tokens fall through to the grapheme
+            // membership check.
+            bool inSet;
+            if (TryPeekRune(_input, pos, out int runeValue, out int runeLen)
+                && tokenLength == runeLen)
+            {
+                inSet = set.Contains(runeValue);
+            }
+            else
+            {
+                inSet = set.HasMultiRuneGraphemes
+                    && set.ContainsGrapheme(_input.AsSpan(pos, tokenLength));
+            }
+            if (!inSet) break;
+
+            _position = pos + tokenLength;
+            count++;
+            Trace(TraceLevel.Diagnostic, "Lexer.AdvanceWhileTokenIn", TraceOutcome.Info,
                 $"'{_input.Substring(pos, tokenLength)}', Consumed: {_position}");
         }
         return count;

@@ -16,7 +16,13 @@ public static class PrologGrammar
 {
     // Character classes from Parser.cpp / PrologParser.cpp.
     private static readonly RuneSet WhitespaceChars = RuneSet.Ascii.AnyWhitespace;
-    private static readonly RuneSet CrlfChars = RuneSet.Runes("\r\n");
+    // Built rune-by-rune because Runes("\r\n") would store CRLF as one
+    // multi-rune grapheme entry (the general rule for multi-rune
+    // graphemes) rather than as the two separate scalars CR and LF.
+    // The line-break rule below specifically wants either CR or LF
+    // to match as a single-rune token, so they belong in the rune
+    // intervals.
+    private static readonly RuneSet CrlfChars = RuneSet.Single('\r') | RuneSet.Single('\n');
     private static readonly RuneSet LetterChars = RuneSet.Ascii.Letters;
     private static readonly RuneSet CapitalChars = RuneSet.Range('A', 'Z');
     private static readonly RuneSet LetterDigitChars = RuneSet.Ascii.Letters | RuneSet.Ascii.Digits;

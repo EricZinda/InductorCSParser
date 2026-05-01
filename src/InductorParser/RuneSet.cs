@@ -5,15 +5,17 @@ using System.Text;
 
 namespace InductorParser;
 
-// A set of Unicode scalar values (runes), used to describe character classes
-// for OneOf and NoneOf. Build one with the factory methods (Single, Range,
-// Runes, Category) or one of the built-ins (Letters, Digits, InlineWhitespace,
-// LineTerminators, and their Ascii.* variants), then compose larger
-// classes with the set operators:
+// A set of tokens, used to describe character classes for OneOf and NoneOf.
+// A token is either a single Unicode scalar value (rune) or a multi-rune
+// grapheme cluster (skin-toned emoji, ZWJ family, regional-indicator pair,
+// base+combining-mark cluster). Build one with the factory methods (Single,
+// Range, Runes, Category) or one of the built-ins (Letters, Digits,
+// InlineWhitespace, LineTerminators, and their Ascii.* variants), then
+// compose larger classes with the set operators:
 //
-//     |   union           a | b           runes in a or b
-//     &   intersection    a & b           runes in a and b
-//     ~   complement      ~a              runes not in a
+//     |   union           a | b           tokens in a or b
+//     &   intersection    a & b           tokens in a and b
+//     ~   complement      ~a              tokens not in a (rune-only sets)
 //
 // Set difference is the idiom a & ~b ("a minus b"). The operators return a
 // new RuneSet. The struct is immutable.
@@ -21,30 +23,68 @@ namespace InductorParser;
 //     var unicodeIdentifier = RuneSet.Letters | RuneSet.Digits | RuneSet.Runes("_");
 //     var asciiConsonants   = RuneSet.Ascii.Letters & ~RuneSet.Runes("aeiouAEIOU");
 //     var cyrillicLetters   = RuneSet.Letters & RuneSet.Range(0x0400, 0x04FF);
+//     var emojiOrLetters    = RuneSet.Letters | RuneSet.Runes(USFlagGrapheme);
 //
-// Internally a RuneSet is a sorted, non-overlapping, non-adjacent array of
-// code-point runs. That makes every operator linear in the number of runs,
-// which is small for typical grammars (Letters is a few dozen runs, not a
-// million code points). A grammar rule that uses RuneSet.Letters a thousand
-// times pays the Unicode-table scan once at startup and then a handful of
-// Contains() calls per match.
+// Internally a RuneSet keeps two pieces. _ranges is a sorted, non-overlapping,
+// non-adjacent array of code-point runs that holds every single-rune member.
+// _multiRuneGraphemes is a sorted ordinal, deduped array of grapheme strings
+// that holds every member that occupies two or more runes. Single-rune
+// graphemes always go in _ranges, never in _multiRuneGraphemes, so a set
+// that's never given a multi-rune entry pays nothing. The rune fast path
+// (binary search of intervals) is unchanged, and a grammar rule that uses
+// RuneSet.Letters a thousand times pays the Unicode-table scan once at
+// startup and then a handful of Contains() calls per match.
 //
-// RuneSet is a set of code points, not graphemes. Multi-rune graphemes
-// (emoji sequences, combining-mark clusters) aren't a single element of any
-// RuneSet. See docs/InductorParserDesignDecisions.md for how that interacts with the
-// grapheme lexer.
+// Complement is only defined when _multiRuneGraphemes is empty. The universe
+// of grapheme clusters is unbounded (any rune sequence respecting UAX #29
+// boundaries is a grapheme), so complement against it can't be represented
+// by a finite explicit set. ~set on a mixed set throws InvalidOperationException
+// rather than silently dropping multi-rune entries. The idiom a & ~b keeps
+// working in the typical case where b is rune-only.
 public readonly partial struct RuneSet : IEquatable<RuneSet>
 {
     // One contiguous run of Unicode code points, inclusive on both ends:
-    // the closed interval [Low, High]. A RuneSet is represented as a sorted,
-    // non-overlapping, non-adjacent array of these runs. Named Interval
-    // (not Range) to avoid colliding with the public Range(...) factory
-    // method below.
+    // the closed interval [Low, High]. A RuneSet's rune part is represented
+    // as a sorted, non-overlapping, non-adjacent array of these runs. Named
+    // Interval (not Range) to avoid colliding with the public Range(...)
+    // factory method below.
     private readonly record struct Interval(int Low, int High);
 
     private readonly Interval[] _ranges;
 
-    private RuneSet(Interval[] ranges) => _ranges = ranges;
+    // Multi-rune grapheme members of the set. Sorted ordinal, deduped at
+    // construction. Each entry is the UTF-16 string for one grapheme that
+    // occupies two or more runes. Null is treated as the same as
+    // Array.Empty<string>(); rune-only sets never allocate one.
+    private readonly string[] _multiRuneGraphemes;
+
+    private RuneSet(Interval[] ranges) : this(ranges, null) { }
+
+    private RuneSet(Interval[] ranges, string[]? multiRuneGraphemes)
+    {
+        _ranges = ranges;
+        _multiRuneGraphemes = multiRuneGraphemes ?? Array.Empty<string>();
+    }
+
+    // True when the set has any multi-rune grapheme members. Rules that
+    // need to choose between the rune fast path and the grapheme-aware
+    // path branch on this once at parse-time entry, not per-token.
+    internal bool HasMultiRuneGraphemes =>
+        _multiRuneGraphemes != null && _multiRuneGraphemes.Length > 0;
+
+    // The rune-only portion of this set. Used by rules that need to
+    // build a complement (NoneOfRule, ScanUntilRule) when the original
+    // set has multi-rune entries: ~set throws on a mixed set, so callers
+    // first project down to the rune-only part and then complement.
+    internal RuneSet RunesOnlyPart =>
+        HasMultiRuneGraphemes ? new RuneSet(_ranges) : this;
+
+    // Read-only view of the multi-rune graphemes, sorted ordinal. Used
+    // by rules that need to walk the grapheme entries (the lookahead
+    // first-rune helper in OneOfRule, for instance). Empty when the
+    // set has no multi-rune content.
+    internal ReadOnlySpan<string> MultiRuneGraphemes =>
+        _multiRuneGraphemes ?? Array.Empty<string>();
 
     public bool Contains(int codepoint)
     {
@@ -61,7 +101,78 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     public bool Contains(char c) => Contains((int)c);
     public bool Contains(Rune r) => Contains(r.Value);
 
-    public bool IsEmpty => _ranges == null || _ranges.Length == 0;
+    // Membership over a grapheme. If the input decodes as exactly one
+    // Unicode scalar value (one rune in 1 or 2 UTF-16 chars), check the
+    // rune intervals. Otherwise binary search the sorted multi-rune
+    // grapheme array for an ordinal match. Empty input is never a member.
+    public bool Contains(string grapheme)
+    {
+        if (grapheme == null) throw new ArgumentNullException(nameof(grapheme));
+        if (grapheme.Length == 0) return false;
+        if (TrySingleRune(grapheme, out int runeValue))
+            return Contains(runeValue);
+        return BinarySearchMultiRune(grapheme.AsSpan()) >= 0;
+    }
+
+    // Span overload so rules can probe a token's Chars without building
+    // a string. Same semantics as Contains(string): single-rune spans
+    // hit the rune intervals, multi-rune spans hit the grapheme array.
+    internal bool ContainsGrapheme(ReadOnlySpan<char> grapheme)
+    {
+        if (grapheme.Length == 0) return false;
+        if (TrySingleRune(grapheme, out int runeValue))
+            return Contains(runeValue);
+        return BinarySearchMultiRune(grapheme) >= 0;
+    }
+
+    private static bool TrySingleRune(string grapheme, out int runeValue) =>
+        TrySingleRune(grapheme.AsSpan(), out runeValue);
+
+    private static bool TrySingleRune(ReadOnlySpan<char> grapheme, out int runeValue)
+    {
+        if (grapheme.Length == 1)
+        {
+            char c = grapheme[0];
+            if (char.IsSurrogate(c)) { runeValue = -1; return false; }
+            runeValue = c;
+            return true;
+        }
+        if (grapheme.Length == 2
+            && char.IsHighSurrogate(grapheme[0])
+            && char.IsLowSurrogate(grapheme[1]))
+        {
+            runeValue = char.ConvertToUtf32(grapheme[0], grapheme[1]);
+            return true;
+        }
+        runeValue = -1;
+        return false;
+    }
+
+    // Binary search the sorted multi-rune array for a span equal to
+    // `target`. Returns the index on hit, or ~insertionPoint on miss
+    // (the standard Array.BinarySearch convention so callers like the
+    // sorted-merge in operator| can reuse this). MemoryExtensions.
+    // SequenceCompareTo does the ordinal comparison without allocating.
+    private int BinarySearchMultiRune(ReadOnlySpan<char> target)
+    {
+        var array = _multiRuneGraphemes;
+        if (array == null || array.Length == 0) return ~0;
+        int low = 0;
+        int high = array.Length - 1;
+        while (low <= high)
+        {
+            int mid = (low + high) >> 1;
+            int cmp = array[mid].AsSpan().SequenceCompareTo(target);
+            if (cmp == 0) return mid;
+            if (cmp < 0) low = mid + 1;
+            else high = mid - 1;
+        }
+        return ~low;
+    }
+
+    public bool IsEmpty =>
+        (_ranges == null || _ranges.Length == 0)
+        && (_multiRuneGraphemes == null || _multiRuneGraphemes.Length == 0);
 
     internal bool TryGetBmpChars(int maxChars, out char[] chars)
     {
@@ -105,10 +216,11 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
         return true;
     }
 
-    // Value equality: two RuneSets are equal iff they contain the same runes.
-    // Normalize guarantees a canonical interval list (sorted, non-overlapping,
-    // non-adjacent), so equal sets necessarily have identical _ranges arrays.
-    // That reduces equality to a length check plus a pairwise Interval compare.
+    // Value equality: two RuneSets are equal iff they contain the same
+    // tokens. Normalize guarantees a canonical interval list (sorted,
+    // non-overlapping, non-adjacent), and the multi-rune array is sorted
+    // ordinal and deduped at construction. Equal sets therefore have
+    // identical _ranges and identical _multiRuneGraphemes element-wise.
     public bool Equals(RuneSet other)
     {
         var mine = _ranges;
@@ -118,6 +230,15 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
         if (mineLength != theirsLength) return false;
         for (int index = 0; index < mineLength; index++)
             if (mine![index] != theirs![index]) return false;
+
+        var mineMulti = _multiRuneGraphemes;
+        var theirsMulti = other._multiRuneGraphemes;
+        int mineMultiLength = mineMulti?.Length ?? 0;
+        int theirsMultiLength = theirsMulti?.Length ?? 0;
+        if (mineMultiLength != theirsMultiLength) return false;
+        for (int index = 0; index < mineMultiLength; index++)
+            if (!string.Equals(mineMulti![index], theirsMulti![index], StringComparison.Ordinal))
+                return false;
         return true;
     }
 
@@ -126,62 +247,84 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     public override int GetHashCode()
     {
         var ranges = _ranges;
-        // Equals treats null and an empty array as the same "empty" set (both
-        // length 0), so GetHashCode has to agree or the contract breaks. A
-        // factory like Runes("") returns a RuneSet with an empty _ranges
-        // array, which Equals reports as equal to default(RuneSet) but would
-        // hash differently if we only short-circuited on null.
-        if (ranges == null || ranges.Length == 0) return 0;
+        var multi = _multiRuneGraphemes;
+        int rangesLength = ranges?.Length ?? 0;
+        int multiLength = multi?.Length ?? 0;
+        // Equals treats null and an empty array as the same "empty" set
+        // (both length 0) for both halves, so GetHashCode has to agree
+        // or the contract breaks. A factory like Runes("") returns a
+        // RuneSet with empty arrays, which Equals reports as equal to
+        // default(RuneSet) but would hash differently if we only
+        // short-circuited on null.
+        if (rangesLength == 0 && multiLength == 0) return 0;
         var hash = new HashCode();
-        for (int index = 0; index < ranges.Length; index++)
-            hash.Add(ranges[index]);
+        for (int index = 0; index < rangesLength; index++)
+            hash.Add(ranges![index]);
+        for (int index = 0; index < multiLength; index++)
+            hash.Add(multi![index], StringComparer.Ordinal);
         return hash.ToHashCode();
     }
 
     public static bool operator ==(RuneSet a, RuneSet b) => a.Equals(b);
     public static bool operator !=(RuneSet a, RuneSet b) => !a.Equals(b);
 
-    // Maximum number of ranges ToString renders before truncating.
+    // Maximum number of entries ToString renders before truncating.
     // Large RuneSets (Unicode-category-wide classes like Letters) can
     // hold hundreds of ranges, which would produce an unreadable trace
     // line. Capping at 8 keeps trace output legible while preserving
     // the useful information for small, hand-built classes. The
     // truncated tail shows "+N more" so a reader can tell output was
-    // dropped.
-    private const int MaxRenderedRanges = 8;
+    // dropped. Multi-rune graphemes count as entries on equal footing
+    // with rune ranges, so a mixed set with 6 ranges and 3 graphemes
+    // shows the first 8 and "+1 more".
+    private const int MaxRenderedEntries = 8;
 
-    // Human-readable rendering of the range list, for trace output and
+    // Human-readable rendering of the set, for trace output and
     // debugger display. Produces "[a-z,A-Z,0-9]" style output with
     // single-codepoint ranges collapsed to one char and long ranges
     // rendered as low-high. Printable ASCII code points render as the
-    // literal character, everything else renders as U+XXXX. Classes
-    // with more than MaxRenderedRanges ranges are truncated with a
-    // "+N more" tail. Keeps trace lines legible without dragging in
-    // the entire Unicode database.
+    // literal character, everything else renders as U+XXXX. Multi-rune
+    // graphemes render as the user-perceived character itself, no
+    // special quoting (e.g. `[a-z,👋🏽,🇺🇸]`). Classes with more
+    // than MaxRenderedEntries entries are truncated with a "+N more"
+    // tail. Keeps trace lines legible without dragging in the entire
+    // Unicode database.
     public override string ToString()
     {
         var ranges = _ranges;
-        if (ranges == null || ranges.Length == 0) return "[]";
+        var multi = _multiRuneGraphemes;
+        int rangesLength = ranges?.Length ?? 0;
+        int multiLength = multi?.Length ?? 0;
+        if (rangesLength == 0 && multiLength == 0) return "[]";
         var sb = new StringBuilder();
         sb.Append('[');
-        int rendered = ranges.Length <= MaxRenderedRanges
-            ? ranges.Length
-            : MaxRenderedRanges;
-        for (int index = 0; index < rendered; index++)
+        int totalEntries = rangesLength + multiLength;
+        int rendered = totalEntries <= MaxRenderedEntries
+            ? totalEntries
+            : MaxRenderedEntries;
+        int written = 0;
+        for (int index = 0; index < rangesLength && written < rendered; index++)
         {
-            if (index > 0) sb.Append(',');
-            var interval = ranges[index];
+            if (written > 0) sb.Append(',');
+            var interval = ranges![index];
             sb.Append(RenderCodepoint(interval.Low));
             if (interval.High != interval.Low)
             {
                 sb.Append('-');
                 sb.Append(RenderCodepoint(interval.High));
             }
+            written++;
         }
-        if (ranges.Length > MaxRenderedRanges)
+        for (int index = 0; index < multiLength && written < rendered; index++)
+        {
+            if (written > 0) sb.Append(',');
+            sb.Append(multi![index]);
+            written++;
+        }
+        if (totalEntries > MaxRenderedEntries)
         {
             sb.Append(",...+");
-            sb.Append(ranges.Length - MaxRenderedRanges);
+            sb.Append(totalEntries - MaxRenderedEntries);
             sb.Append(" more");
         }
         sb.Append(']');
@@ -259,81 +402,110 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     public static RuneSet Runes(string characters)
     {
         if (characters == null) throw new ArgumentNullException(nameof(characters));
-        var list = new List<Interval>();
-        // Walk the string one grapheme at a time. A RuneSet holds single
-        // Unicode scalar values, so a multi-rune grapheme (skin-toned emoji,
-        // ZWJ family, decomposed accent) can't be one element of the set
-        // the caller is asking to build. Catching it here turns what used
-        // to be a silent "I built a two-rune set that matches neither
-        // rune the way the caller expected" into a loud exception at
-        // construction time. GetNextTextElement is the same API the
-        // GraphemeLexer uses, so validation and tokenization agree on
-        // what a text element is.
-        for (int index = 0; index < characters.Length;)
+        var intervals = new List<Interval>();
+        List<string>? graphemes = null;
+        // Walk the string one grapheme at a time. A single-rune text
+        // element joins the rune intervals; a multi-rune grapheme
+        // (skin-toned emoji, ZWJ family, regional-indicator pair,
+        // decomposed accent, even CRLF) joins the multi-rune array.
+        // GetNextTextElement is the same API the GraphemeLexer uses,
+        // so what gets stored agrees with what the lexer will hand
+        // back at parse time.
+        int index = 0;
+        while (index < characters.Length)
         {
             string grapheme = StringInfo.GetNextTextElement(characters, index);
             int graphemeStart = index;
-            int codepoint;
-            if (char.IsHighSurrogate(characters[index]) && index + 1 < characters.Length && char.IsLowSurrogate(characters[index + 1]))
+            int graphemeLength = grapheme.Length;
+            // First rune of the grapheme. Used both for the single-rune
+            // case (interval add) and to detect lone surrogate halves
+            // before the multi-rune branch can swallow them.
+            int firstRuneLength;
+            int firstRune;
+            if (char.IsHighSurrogate(characters[index])
+                && index + 1 < characters.Length
+                && char.IsLowSurrogate(characters[index + 1]))
             {
-                codepoint = char.ConvertToUtf32(characters[index], characters[index + 1]);
-                index += 2;
+                firstRune = char.ConvertToUtf32(characters[index], characters[index + 1]);
+                firstRuneLength = 2;
             }
             else
             {
-                codepoint = characters[index];
-                index++;
+                firstRune = characters[index];
+                firstRuneLength = 1;
             }
-            // Catches lone surrogate halves in the input string. A well-formed
-            // UTF-16 string shouldn't contain them, but we can't trust every
-            // caller's string to be well-formed.
-            if (!Rune.IsValid(codepoint))
+            // Catches lone surrogate halves in the input string. A
+            // well-formed UTF-16 string shouldn't contain them, but
+            // we can't trust every caller's string to be well-formed.
+            if (!Rune.IsValid(firstRune))
                 throw new ArgumentException(
-                    $"Runes(string) encountered an invalid Unicode scalar value (0x{codepoint:X4}) at UTF-16 offset {index - 1}. " +
+                    $"Runes(string) encountered an invalid Unicode scalar value (0x{firstRune:X4}) at UTF-16 offset {graphemeStart}. " +
                     "Lone surrogate halves aren't valid runes.",
                     nameof(characters));
-            // If the grapheme extends past the first rune we just
-            // consumed, it's a multi-rune grapheme. Refuse it. Grapheme
-            // and Literal are the grapheme-matching primitives.
-            //
-            // Exception: CRLF (\r\n) is one grapheme per UAX #29, but
-            // nobody calling Runes("\r\n") means "the CRLF grapheme as
-            // a unit." They mean "the set {CR, LF}," two separate
-            // scalars. CRLF is the only ASCII multi-rune grapheme, so
-            // letting it through without complaint keeps the common
-            // "line-terminator runes" idiom working while still
-            // catching the real silent-misuse cases (emoji with skin
-            // tone, decomposed accents, ZWJ sequences, etc.).
-            bool isCrlf = grapheme.Length == 2 && grapheme[0] == '\r' && grapheme[1] == '\n';
-            if (graphemeStart + grapheme.Length != index && !isCrlf)
+
+            if (graphemeLength == firstRuneLength)
             {
-                // Enumerate the grapheme's runes by hand since
-                // string.EnumerateRunes is .NET 5+ and this project targets
-                // netstandard2.1. Same surrogate-pair logic the outer loop uses.
-                var runeList = new List<string>();
-                for (int runeIndex = 0; runeIndex < grapheme.Length;)
-                {
-                    int runeCodepoint;
-                    if (char.IsHighSurrogate(grapheme[runeIndex]) && runeIndex + 1 < grapheme.Length && char.IsLowSurrogate(grapheme[runeIndex + 1]))
-                    {
-                        runeCodepoint = char.ConvertToUtf32(grapheme[runeIndex], grapheme[runeIndex + 1]);
-                        runeIndex += 2;
-                    }
-                    else
-                    {
-                        runeCodepoint = grapheme[runeIndex];
-                        runeIndex++;
-                    }
-                    runeList.Add($"U+{runeCodepoint:X4}");
-                }
-                throw new ArgumentException(
-                    $"Runes(string) cannot accept the multi-rune grapheme \"{grapheme}\" ({string.Join(", ", runeList)}) at UTF-16 offset {graphemeStart}. " +
-                    "A RuneSet holds single Unicode scalar values. To match this grapheme as a unit, use Grapheme(\"" + grapheme + "\") or Literal(\"" + grapheme + "\").",
-                    nameof(characters));
+                intervals.Add(new Interval(firstRune, firstRune));
             }
-            list.Add(new Interval(codepoint, codepoint));
+            else
+            {
+                // Multi-rune grapheme. Validate every rune in it so we
+                // catch lone surrogate halves past the first rune too.
+                ValidateGraphemeRunes(grapheme, graphemeStart);
+                graphemes ??= new List<string>();
+                graphemes.Add(grapheme);
+            }
+            index += graphemeLength;
         }
-        return new RuneSet(Normalize(list));
+        return new RuneSet(Normalize(intervals), NormalizeGraphemes(graphemes));
+    }
+
+    // Walks a grapheme's runes by hand and throws on any lone surrogate
+    // half. We've already validated the first rune in the outer loop;
+    // this is for runes 2..N of a multi-rune grapheme.
+    private static void ValidateGraphemeRunes(string grapheme, int graphemeStart)
+    {
+        for (int runeIndex = 0; runeIndex < grapheme.Length;)
+        {
+            int runeCodepoint;
+            if (char.IsHighSurrogate(grapheme[runeIndex])
+                && runeIndex + 1 < grapheme.Length
+                && char.IsLowSurrogate(grapheme[runeIndex + 1]))
+            {
+                runeCodepoint = char.ConvertToUtf32(grapheme[runeIndex], grapheme[runeIndex + 1]);
+                runeIndex += 2;
+            }
+            else
+            {
+                runeCodepoint = grapheme[runeIndex];
+                runeIndex++;
+            }
+            if (!Rune.IsValid(runeCodepoint))
+                throw new ArgumentException(
+                    $"Runes(string) encountered an invalid Unicode scalar value (0x{runeCodepoint:X4}) " +
+                    $"inside the grapheme at UTF-16 offset {graphemeStart}. " +
+                    "Lone surrogate halves aren't valid runes.",
+                    nameof(grapheme));
+        }
+    }
+
+    // Sort and dedupe the multi-rune grapheme list with ordinal
+    // comparison so the canonical form matches what Equals and the
+    // binary-search Contains expect.
+    private static string[] NormalizeGraphemes(List<string>? graphemes)
+    {
+        if (graphemes == null || graphemes.Count == 0) return Array.Empty<string>();
+        graphemes.Sort(StringComparer.Ordinal);
+        int writeIndex = 1;
+        for (int readIndex = 1; readIndex < graphemes.Count; readIndex++)
+        {
+            if (!string.Equals(graphemes[readIndex], graphemes[writeIndex - 1], StringComparison.Ordinal))
+                graphemes[writeIndex++] = graphemes[readIndex];
+        }
+        if (writeIndex == graphemes.Count) return graphemes.ToArray();
+        var result = new string[writeIndex];
+        graphemes.CopyTo(0, result, 0, writeIndex);
+        return result;
     }
 
     // Shared validator for the int factories. A rune is any code point in
@@ -351,7 +523,8 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
         var combined = new List<Interval>();
         if (a._ranges != null) combined.AddRange(a._ranges);
         if (b._ranges != null) combined.AddRange(b._ranges);
-        return new RuneSet(Normalize(combined));
+        var mergedGraphemes = MergeMultiRuneUnion(a._multiRuneGraphemes, b._multiRuneGraphemes);
+        return new RuneSet(Normalize(combined), mergedGraphemes);
     }
 
     // Sorted-range intersection: walk both sets once, picking [max(low), min(high)]
@@ -360,12 +533,14 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     // already normalized (sorted, non-overlapping, non-adjacent), and so is the
     // result. Adjacent overlap fragments can't appear because that would imply
     // the inputs themselves had adjacent intervals, contradicting normalization.
+    // Multi-rune graphemes are intersected separately by sorted ordinal merge.
     public static RuneSet operator &(RuneSet a, RuneSet b)
     {
         var aRanges = a._ranges;
         var bRanges = b._ranges;
-        if (aRanges == null || bRanges == null) return new RuneSet(Array.Empty<Interval>());
-        if (aRanges.Length == 0 || bRanges.Length == 0) return new RuneSet(Array.Empty<Interval>());
+        var mergedGraphemes = MergeMultiRuneIntersect(a._multiRuneGraphemes, b._multiRuneGraphemes);
+        if (aRanges == null || bRanges == null || aRanges.Length == 0 || bRanges.Length == 0)
+            return new RuneSet(Array.Empty<Interval>(), mergedGraphemes);
 
         var result = new List<Interval>();
         int aIndex = 0;
@@ -381,7 +556,7 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
             if (aRanges[aIndex].High < bRanges[bIndex].High) aIndex++;
             else bIndex++;
         }
-        return new RuneSet(result.ToArray());
+        return new RuneSet(result.ToArray(), mergedGraphemes);
     }
 
     // Complement against the full set of Unicode scalar values: everything
@@ -389,8 +564,21 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
     // a set of valid scalar values) and except the input set's intervals.
     // Implementation walks the input intervals and emits the gaps between
     // them, splitting any gap that straddles the surrogate block.
+    //
+    // Throws InvalidOperationException when the input has any multi-rune
+    // grapheme entries. The universe of grapheme clusters is unbounded
+    // (any rune sequence respecting UAX #29 boundaries is a grapheme), so
+    // complement against it can't be represented as a finite explicit
+    // set. The workaround is to project the input down to its rune-only
+    // part first: `set & ~runeOnlyMask`.
     public static RuneSet operator ~(RuneSet a)
     {
+        if (a.HasMultiRuneGraphemes)
+            throw new InvalidOperationException(
+                "Cannot complement a RuneSet that contains multi-rune graphemes. " +
+                "The universe of grapheme clusters is unbounded, so the result " +
+                "isn't representable as a finite set. Build the rune-only mask " +
+                "you want to subtract and use `set & ~runeOnlyMask` instead.");
         const int MinScalarValue = 0;
         const int MaxScalarValue = 0x10FFFF;
         var inputRanges = a._ranges;
@@ -408,6 +596,69 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
         if (cursor <= MaxScalarValue)
             EmitIntervalSkippingSurrogates(result, cursor, MaxScalarValue);
         return new RuneSet(result.ToArray());
+    }
+
+    // Sorted-merge union of two sorted-ordinal grapheme arrays. Linear
+    // in the sum of the two array lengths. Skips duplicates so the
+    // result stays canonical. Fast-paths when either side is empty so
+    // rune-only sets pay no allocation past the empty-array sentinel.
+    private static string[] MergeMultiRuneUnion(string[]? a, string[]? b)
+    {
+        int aLength = a?.Length ?? 0;
+        int bLength = b?.Length ?? 0;
+        if (aLength == 0 && bLength == 0) return Array.Empty<string>();
+        if (aLength == 0) return b!;
+        if (bLength == 0) return a!;
+        var merged = new List<string>(aLength + bLength);
+        int aIndex = 0;
+        int bIndex = 0;
+        while (aIndex < aLength && bIndex < bLength)
+        {
+            int cmp = string.CompareOrdinal(a![aIndex], b![bIndex]);
+            if (cmp == 0)
+            {
+                merged.Add(a[aIndex]);
+                aIndex++;
+                bIndex++;
+            }
+            else if (cmp < 0)
+            {
+                merged.Add(a[aIndex++]);
+            }
+            else
+            {
+                merged.Add(b[bIndex++]);
+            }
+        }
+        while (aIndex < aLength) merged.Add(a![aIndex++]);
+        while (bIndex < bLength) merged.Add(b![bIndex++]);
+        return merged.ToArray();
+    }
+
+    // Sorted-merge intersection of two sorted-ordinal grapheme arrays.
+    // Returns the empty sentinel when either side is empty so a
+    // rune-only side erases the other's multi-rune content under &.
+    private static string[] MergeMultiRuneIntersect(string[]? a, string[]? b)
+    {
+        int aLength = a?.Length ?? 0;
+        int bLength = b?.Length ?? 0;
+        if (aLength == 0 || bLength == 0) return Array.Empty<string>();
+        var merged = new List<string>(Math.Min(aLength, bLength));
+        int aIndex = 0;
+        int bIndex = 0;
+        while (aIndex < aLength && bIndex < bLength)
+        {
+            int cmp = string.CompareOrdinal(a![aIndex], b![bIndex]);
+            if (cmp == 0)
+            {
+                merged.Add(a[aIndex]);
+                aIndex++;
+                bIndex++;
+            }
+            else if (cmp < 0) aIndex++;
+            else bIndex++;
+        }
+        return merged.Count == 0 ? Array.Empty<string>() : merged.ToArray();
     }
 
     // Emit [low, high] into result, splitting around the surrogate block
@@ -557,7 +808,13 @@ public readonly partial struct RuneSet : IEquatable<RuneSet>
         // (the regex \s convention). For grammars that need to distinguish
         // intra-line whitespace from line terminators, use InlineWhitespace
         // and Rules.EndOfLine() instead.
-        public static readonly RuneSet AnyWhitespace = Runes(" \t\r\n");
+        // Built up rune-by-rune instead of via Runes(" \t\r\n") because
+        // CRLF is one grapheme cluster and Runes() puts multi-rune
+        // graphemes in the multi-rune array, not in the rune intervals.
+        // For "match space, tab, CR, or LF as individual whitespace
+        // runes" we want all four in the rune intervals so OneOf reads
+        // them as single-rune tokens.
+        public static readonly RuneSet AnyWhitespace = InlineWhitespace | Single('\r') | Single('\n');
         public static readonly RuneSet HexDigits = Digits | Range('a', 'f') | Range('A', 'F');
     }
 

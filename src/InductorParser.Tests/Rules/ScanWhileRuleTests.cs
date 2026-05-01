@@ -97,9 +97,9 @@ public class ScanWhileRuleTests
             new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
-            "   Lexer.AdvanceWhileSingleRuneIn: 'a', Consumed: 1",
-            "   Lexer.AdvanceWhileSingleRuneIn: 'b', Consumed: 2",
-            "   Lexer.AdvanceWhileSingleRuneIn: 'c', Consumed: 3",
+            "   Lexer.AdvanceWhileRuneIn: 'a', Consumed: 1",
+            "   Lexer.AdvanceWhileRuneIn: 'b', Consumed: 2",
+            "   Lexer.AdvanceWhileRuneIn: 'c', Consumed: 3",
             "   SUCC | ScanWhile: count= 3, 3 chars, wanted one or more of '[A-Z,a-z]'"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
@@ -127,5 +127,37 @@ public class ScanWhileRuleTests
         var rule = ScanWhile(RuneSet.Ascii.Letters);
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
+    }
+
+    // Multi-rune grapheme support -------------------------------------------
+
+    [Test]
+    public void ScanWhile_with_multi_rune_set_consumes_a_run_of_graphemes()
+    {
+        // Set: { USFlag, WomanShrugging }. Input: USFlag + WomanShrugging.
+        // ScanWhile should consume both emoji graphemes as one leaf.
+        var rule = ScanWhile(RuneSet.Runes(USFlagGrapheme + WomanShruggingGrapheme));
+
+        var result = rule.Parse(USFlagGrapheme + WomanShruggingGrapheme);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(USFlagGrapheme + WomanShruggingGrapheme));
+    }
+
+    [Test]
+    public void ScanWhile_with_mixed_set_stops_at_first_token_outside_the_set()
+    {
+        // Mix of letters and one multi-rune entry. The scan should
+        // pull as many letters or USFlag tokens as possible and stop
+        // at the first token that's neither. AllowTrailingInput lets
+        // the parse succeed even though ScanWhile doesn't consume the
+        // trailing WomanShrugging that stopped it.
+        var rule = ScanWhile(RuneSet.Ascii.Letters | RuneSet.Runes(USFlagGrapheme));
+        var input = "abc" + USFlagGrapheme + "d" + WomanShruggingGrapheme;
+
+        var result = rule.Parse(input, new ParseOptions { AllowTrailingInput = true });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("abc" + USFlagGrapheme + "d"));
     }
 }

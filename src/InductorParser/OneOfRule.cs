@@ -4,17 +4,16 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
-// Matches one token if it's a single rune that belongs to the given
-// RuneSet. Under GraphemeLexer a multi-rune grapheme (skin-toned
-// emoji, ZWJ sequences, CJK + combining mark) fails because it isn't
-// a single code point. EOF also fails. NoneOfRule is the mirror:
-// same rule, opposite membership test (one rune whose value ISN'T
-// in the set).
-//
-// Tests live in src/InductorParser.Tests/Rules/OneOfRuleTests.cs.
-// See docs/TestArchitecture.md for the per-rule test conventions
-// (success, failure position, WithError propagation, positional fallback,
-// sealed-rule rejection).
+// Matches one token whose value belongs to the given RuneSet. A token
+// is either a single rune (matched against the set's rune intervals)
+// or a multi-rune grapheme cluster (matched against the set's
+// multi-rune graphemes). Under RuneLexer every token is one rune so
+// only the rune intervals are reachable. Under GraphemeLexer a
+// multi-rune grapheme (skin-toned emoji, ZWJ sequence, CJK + combining
+// mark, regional-indicator pair, CRLF) is one token and matches only
+// when the set has the same grapheme as a multi-rune entry. EOF
+// always fails. NoneOfRule is the mirror: same rule, opposite
+// membership test (one token whose value ISN'T in the set).
 internal sealed class OneOfRule : Rule
 {
     private readonly RuneSet _set;
@@ -66,7 +65,7 @@ internal sealed class OneOfRule : Rule
     {
         using var transaction = lexer.BeginTransaction();
         var token = lexer.Read();
-        if (token.IsEof || !_set.Contains(token.RuneValue))
+        if (token.IsEof || !TokenInSet(token))
         {
             TraceFailure(lexer,
                 $"found '{(token.IsEof ? "<EOF>" : lexer.Input.Substring(token.Offset, token.Length))}', wanted one of '{_setRendered}'");
@@ -81,7 +80,14 @@ internal sealed class OneOfRule : Rule
         transaction.Commit();
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
-        var leafSymbol = new Symbol(new SymbolId(token.RuneValue), FlattenType, token.Memory);
+        // SymbolId wraps a single int. A single-rune token fits, so we
+        // pin its rune value into the id and tree consumers can branch
+        // on which rune matched. A multi-rune grapheme cluster is two
+        // or more code points, which won't fit in one int, so we fall
+        // back to the rule's own id.
+        int runeValue = token.RuneValue;
+        SymbolId leafId = runeValue >= 0 ? new SymbolId(runeValue) : Id;
+        var leafSymbol = new Symbol(leafId, FlattenType, token.Memory);
         if (effectiveFlattenType == FlattenType.Flatten)
         {
             outputSymbols!.Add(leafSymbol);
@@ -90,12 +96,60 @@ internal sealed class OneOfRule : Rule
         return leafSymbol;
     }
 
+    // Membership test that handles both halves of the set. Single-rune
+    // tokens (RuneValue >= 0) hit the rune intervals via Contains(int).
+    // Multi-rune tokens (RuneValue == -1 under GraphemeLexer) probe the
+    // multi-rune array via the token's Chars span. Sets without any
+    // multi-rune entries short-circuit on the first branch and never
+    // touch the grapheme array.
+    private bool TokenInSet(Lexing.Token token)
+    {
+        int runeValue = token.RuneValue;
+        if (runeValue >= 0) return _set.Contains(runeValue);
+        if (!_set.HasMultiRuneGraphemes) return false;
+        return _set.ContainsGrapheme(token.Chars);
+    }
+
     // Return the set of runes this rule might consume first (can be a superset)
     // (RuneSet.Empty when Advance.Never. RuneSet.Universe means "I don't know").
     // Then say whether the rule Always / Sometimes / Never consumes at least
     // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
     {
-        return new RuleStartRequirements(_set, Advance.Always);
+        // The lookahead shortcut peeks ONE rune off the input. If the
+        // set has multi-rune entries, the first rune of each multi-rune
+        // grapheme is also a valid lookahead (the lexer might be about
+        // to hand us that whole grapheme as one token). Add those first
+        // runes to the rune intervals so CannotMatchLookahead doesn't
+        // wrongly skip OneOfRule when the input begins with a grapheme
+        // whose first rune isn't otherwise in the set.
+        return new RuleStartRequirements(LookaheadFirstRunes(_set), Advance.Always);
+    }
+
+    // Build a rune-only set covering every possible first rune of any
+    // member of `set`. Single-rune members contribute themselves;
+    // multi-rune members contribute their first rune. Used as the
+    // FirstConsumedRunes value for OneOf and ScanWhile when their set
+    // has multi-rune entries, so the lookahead shortcut stays sound.
+    internal static RuneSet LookaheadFirstRunes(RuneSet set)
+    {
+        if (!set.HasMultiRuneGraphemes) return set;
+        var firstRunes = set.RunesOnlyPart;
+        foreach (string grapheme in set.MultiRuneGraphemes)
+        {
+            int firstRune;
+            if (grapheme.Length >= 2
+                && char.IsHighSurrogate(grapheme[0])
+                && char.IsLowSurrogate(grapheme[1]))
+            {
+                firstRune = char.ConvertToUtf32(grapheme[0], grapheme[1]);
+            }
+            else
+            {
+                firstRune = grapheme[0];
+            }
+            firstRunes = firstRunes | RuneSet.Single(firstRune);
+        }
+        return firstRunes;
     }
 }

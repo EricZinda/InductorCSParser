@@ -62,7 +62,7 @@ public class ErrorPositionTests
     // out explicitly. Tests that need a non-'a' prefix char inline their
     // own grammar.
     private static Rule AtFailureRule() =>
-        AllOf(ZeroOrMore(OneOf(RuneSet.Runes("a\r\n"))), Eof());
+        AllOf(ZeroOrMore(OneOf(RuneSet.Single('a') | RuneSet.Single('\r') | RuneSet.Single('\n'))), Eof());
 
     private static ParseResult ParseAtFailure(string input)
     {
@@ -151,7 +151,7 @@ public class ErrorPositionTests
         // tokens: grammar consumes a,a,\r,\n then fails on 'X' at
         // offset 4. The \r\n pair is one logical break so 'X' is on
         // line 1 column 0.
-        var rule = AllOf(ZeroOrMore(OneOf(RuneSet.Runes("a\r\n"))), Eof());
+        var rule = AllOf(ZeroOrMore(OneOf(RuneSet.Single('a') | RuneSet.Single('\r') | RuneSet.Single('\n'))), Eof());
         var result = rule.Parse("aa\r\nX", new ParseOptions { InputUnit = InputUnit.Rune });
 
         Assert.That(result.Success, Is.False);

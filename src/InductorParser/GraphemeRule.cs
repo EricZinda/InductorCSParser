@@ -36,11 +36,6 @@ namespace InductorParser;
 // pinned to that code point so Symbol leaves produced by this rule
 // carry the "id == rune" shape. For multi-rune graphemes
 // the Id comes from Compile's custom-range assignment.
-//
-// Tests live in src/InductorParser.Tests/Rules/GraphemeRuleTests.cs.
-// See docs/TestArchitecture.md for the per-rule test conventions
-// (success, failure position, WithError propagation, positional fallback,
-// sealed-rule rejection).
 internal sealed class GraphemeRule : Rule
 {
     private readonly string _expected;

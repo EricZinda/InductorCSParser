@@ -17,11 +17,6 @@ namespace InductorParser;
 // Each iteration checks that stopRule doesn't match here, then consumes
 // one token and advances. When stopRule would match, Not fails, the
 // AllOf fails, and the ZeroOrMore stops leaving the cursor at the stop.
-//
-// Tests live in src/InductorParser.Tests/Rules/NotRuleTests.cs.
-// See docs/TestArchitecture.md for the per-rule test conventions
-// (success, failure position, WithError propagation, positional fallback,
-// sealed-rule rejection).
 internal sealed class NotRule : Rule
 {
     // FlattenType.Delete because Not is a zero-width lookahead: it

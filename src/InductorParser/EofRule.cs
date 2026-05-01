@@ -8,11 +8,6 @@ namespace InductorParser;
 // Succeeds only at end of input. Consumes nothing either way. Used as
 // the last element of a grammar's top-level rule to assert that the
 // parse consumed the entire input rather than stopping early.
-//
-// Tests live in src/InductorParser.Tests/Rules/EofRuleTests.cs.
-// See docs/TestArchitecture.md for the per-rule test conventions
-// (success, failure position, WithError propagation, positional fallback,
-// sealed-rule rejection).
 internal sealed class EofRule : Rule
 {
     public EofRule() : base(FlattenType.Delete) { }

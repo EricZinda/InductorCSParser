@@ -4,6 +4,7 @@ using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
+using static InductorParser.Tests.UnicodeExamples;
 
 namespace InductorParser.Tests;
 
@@ -393,5 +394,45 @@ public class ScanUntilRuleTests
         var rule = ScanUntil(RuneSet.Runes("|"));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
+    }
+
+    // Multi-rune grapheme stopper -----------------------------------------
+
+    [Test]
+    public void ScanUntil_with_multi_rune_stopper_stops_at_the_grapheme()
+    {
+        // Stopper set has only the USFlag multi-rune entry. Body is
+        // any single-rune token plus any non-USFlag grapheme. Scan
+        // should consume "ab" + WomanShrugging and stop at the
+        // following USFlag without consuming it.
+        var stopOnFlag = ScanUntil(RuneSet.Runes(USFlagGrapheme));
+        var rule = AllOf(stopOnFlag, OneOf(RuneSet.Runes(USFlagGrapheme)));
+
+        var input = "ab" + WomanShruggingGrapheme + USFlagGrapheme;
+        var result = rule.Parse(input,
+            new ParseOptions { PreserveAllSymbols = true });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(input));
+    }
+
+    [Test]
+    public void ScanUntil_with_mixed_stopper_stops_at_first_matching_token()
+    {
+        // Mixed stopper: rune-only newline plus a multi-rune flag.
+        // The body should consume letters until it hits either a
+        // newline rune or the flag grapheme. Use AllowTrailingInput
+        // because ScanUntil doesn't consume the stopper, so the parse
+        // wouldn't reach EOF on its own.
+        var stopper = RuneSet.Single('\n') | RuneSet.Runes(USFlagGrapheme);
+        var rule = ScanUntil(stopper);
+
+        var newlineCase = rule.Parse("hello\nrest", new ParseOptions { AllowTrailingInput = true });
+        Assert.That(newlineCase.Success, Is.True, newlineCase.ErrorMessage);
+        Assert.That(newlineCase.Tree!.ToString(), Is.EqualTo("hello"));
+
+        var flagCase = rule.Parse("hello" + USFlagGrapheme + "rest", new ParseOptions { AllowTrailingInput = true });
+        Assert.That(flagCase.Success, Is.True, flagCase.ErrorMessage);
+        Assert.That(flagCase.Tree!.ToString(), Is.EqualTo("hello"));
     }
 }

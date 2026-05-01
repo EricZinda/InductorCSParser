@@ -13,11 +13,6 @@ namespace InductorParser;
 // This is the "match one token, regardless of what it is" leaf. Its
 // companion idiom is ZeroOrMore(AllOf(Not(stopRule), AnyToken())), which
 // consumes content until wherever stopRule would fire.
-//
-// Tests live in src/InductorParser.Tests/Rules/AnyTokenRuleTests.cs.
-// See docs/TestArchitecture.md for the per-rule test conventions
-// (success, failure position, WithError propagation, positional fallback,
-// sealed-rule rejection).
 internal sealed class AnyTokenRule : Rule
 {
     public AnyTokenRule() : base(FlattenType.Preserve) { }

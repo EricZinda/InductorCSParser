@@ -9,11 +9,6 @@ namespace InductorParser;
 // Matches a sequence of rules in order. Every child must match for the
 // AllOf to succeed. On any child's failure the whole AllOf fails and the
 // lexer rolls back to where the AllOf started.
-//
-// Tests live in src/InductorParser.Tests/Rules/AllOfRuleTests.cs.
-// See docs/TestArchitecture.md for the per-rule test conventions
-// (success, failure position, WithError propagation, positional fallback,
-// sealed-rule rejection).
 internal sealed class AllOfRule : Rule
 {
     public AllOfRule(Rule[] children) : base(FlattenType.Flatten, children) { }

@@ -232,10 +232,23 @@ internal sealed class ScanUntilRule : Rule
             // Stopper check. The RuneSet path is the fast case. The
             // Rule path opens a peek transaction that always rolls
             // back, so the stopper itself is never consumed by this
-            // rule.
+            // rule. When the stopper set has multi-rune entries
+            // (e.g. stop on a US flag emoji), the rune fast check
+            // misses them, so we additionally test the next full
+            // token against the multi-rune array.
             if (_stopperRule == null)
             {
                 if (_stopperSet.Contains(runeValue)) break;
+                if (_stopperSet.HasMultiRuneGraphemes)
+                {
+                    int tokenLen = lexer.PeekTokenLength(pos);
+                    if (tokenLen > runeLen
+                        && pos + tokenLen <= inputLen
+                        && _stopperSet.ContainsGrapheme(input.AsSpan(pos, tokenLen)))
+                    {
+                        break;
+                    }
+                }
             }
             else
             {
@@ -343,9 +356,27 @@ internal sealed class ScanUntilRule : Rule
         // escape-start that was also a stopper would be unreachable
         // dead code. That means ~_stopperSet already covers the
         // escape path. No separate union needed.
-        RuneSet firstConsumed = _stopperRule == null
-            ? ~_stopperSet
-            : RuneSet.Universe;
+        //
+        // When the stopper set has multi-rune entries, ~set throws,
+        // so we project down to the rune-only part first. The result
+        // is a SUPERSET of the actual first-consumed runes (we can't
+        // exclude the first runes of multi-rune stoppers without
+        // sometimes wrongly excluding single-rune body content with
+        // the same first rune), which is the safe direction for the
+        // lookahead shortcut.
+        RuneSet firstConsumed;
+        if (_stopperRule != null)
+        {
+            firstConsumed = RuneSet.Universe;
+        }
+        else if (_stopperSet.HasMultiRuneGraphemes)
+        {
+            firstConsumed = ~_stopperSet.RunesOnlyPart;
+        }
+        else
+        {
+            firstConsumed = ~_stopperSet;
+        }
         return new RuleStartRequirements(firstConsumed, Advance.Sometimes);
     }
 }

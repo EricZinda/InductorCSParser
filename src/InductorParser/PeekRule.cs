@@ -13,11 +13,6 @@ namespace InductorParser;
 // without actually consuming it. For example, an if-statement rule that
 // wants to check for the "else" keyword without committing the lexer:
 // Peek(Literal("else")).
-//
-// Tests live in src/InductorParser.Tests/Rules/PeekRuleTests.cs.
-// See docs/TestArchitecture.md for the per-rule test conventions
-// (success, failure position, WithError propagation, positional fallback,
-// sealed-rule rejection).
 internal sealed class PeekRule : Rule
 {
     public PeekRule(Rule inner) : base(FlattenType.Delete, inner)

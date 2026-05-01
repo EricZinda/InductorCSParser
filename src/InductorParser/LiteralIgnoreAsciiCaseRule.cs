@@ -14,11 +14,6 @@ namespace InductorParser;
 // and the keyword-heavy grammars that want this leaf (SQL, HTTP methods,
 // chord notation) only ever need ASCII in practice. See docs/UnicodeGotchas.md
 // for the longer explanation.
-//
-// Tests live in src/InductorParser.Tests/Rules/LiteralRuleTests.cs.
-// See docs/TestArchitecture.md for the per-rule test conventions
-// (success, failure position, WithError propagation, positional fallback,
-// sealed-rule rejection).
 internal sealed class LiteralIgnoreAsciiCaseRule : Rule
 {
     private readonly string _expected;

@@ -4,11 +4,8 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
-// Mirror of OneOfRule with the predicate flipped: matches one token iff
-// the token isn't a single rune in the set. A RuneSet is a set of
-// Unicode code points, so under GraphemeLexer a multi-rune grapheme
-// (skin-toned emoji, ZWJ family, CJK + combining mark) is trivially not
-// in any set, since it isn't a single code point at all.
+// Mirror of OneOfRule with the predicate flipped: matches one token
+// iff the token's value isn't in the set.
 
 // ZeroOrMore(NoneOf(stopSet)) is commonly used to
 // sweep up arbitrary user-typed text while still stopping at the stop
@@ -16,11 +13,6 @@ namespace InductorParser;
 //
 // EOF never matches. The rule reads one token. At EOF the token has
 // IsEof == true and the rule fails without advancing, same as OneOfRule.
-//
-// Tests live in src/InductorParser.Tests/Rules/NoneOfRuleTests.cs.
-// See docs/TestArchitecture.md for the per-rule test conventions
-// (success, failure position, WithError propagation, positional fallback,
-// sealed-rule rejection).
 internal sealed class NoneOfRule : Rule
 {
     private readonly RuneSet _set;
@@ -45,12 +37,11 @@ internal sealed class NoneOfRule : Rule
             lexer.RecordFailure(transaction.StartPosition, ErrorMessage);
             return null;
         }
-        // RuneValue == -1 for multi-rune tokens (grapheme clusters under
-        // GraphemeLexer). A multi-rune token isn't any single rune in any
-        // set, so it passes NoneOf unconditionally. The set.Contains
-        // check only runs on the single-rune branch.
         int runeValue = token.RuneValue;
-        if (runeValue >= 0 && _set.Contains(runeValue))
+        bool inSet = runeValue >= 0
+            ? _set.Contains(runeValue)
+            : _set.HasMultiRuneGraphemes && _set.ContainsGrapheme(token.Chars);
+        if (inSet)
         {
             TraceFailure(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted one not in '{_setRendered}'");
             lexer.RecordFailure(transaction.StartPosition, ErrorMessage);
@@ -76,6 +67,16 @@ internal sealed class NoneOfRule : Rule
     // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
     {
-        return new RuleStartRequirements(~_set, Advance.Always);
+        // ~set throws on a mixed set, so when _set has multi-rune
+        // entries we project down to the rune-only part first and
+        // complement that. The result is a SUPERSET of the actual
+        // first-consumed runes (we can't filter out tokens whose first
+        // rune is a multi-rune-entry head, because some of those
+        // tokens are single-rune and pass NoneOf), which is the
+        // safe direction for the lookahead shortcut.
+        RuneSet firstConsumed = _set.HasMultiRuneGraphemes
+            ? ~_set.RunesOnlyPart
+            : ~_set;
+        return new RuleStartRequirements(firstConsumed, Advance.Always);
     }
 }

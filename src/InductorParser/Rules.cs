@@ -309,7 +309,7 @@ public static class Rules
     /// var field = ScanUntil(RuneSet.Runes(",\n"));
     ///
     /// // Line comment body: scan until end-of-line
-    /// var lineCommentBody = ScanUntil(RuneSet.Runes("\r\n"));
+    /// var lineCommentBody = ScanUntil(RuneSet.Single('\r') | RuneSet.Single('\n'));
     /// </code>
     /// </remarks>
     public static Rule ScanUntil(RuneSet stopAt) =>

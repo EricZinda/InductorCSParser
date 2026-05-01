@@ -591,25 +591,23 @@ public class RuneSetTests
     }
 
     [Test]
-    public void Runes_with_multi_rune_emoji_grapheme_throws()
+    public void Runes_with_multi_rune_emoji_grapheme_stores_it_as_one_entry()
     {
-        // Skin-tone-modified thumbs-up: U+1F44D U+1F3FD. One grapheme under
-        // UAX #29, two runes. A RuneSet holds single scalars, so this
-        // can't be one element of the set the caller is asking to build.
-        // The validation in Runes() refuses it at construction time
-        // rather than letting the caller walk away with a broken set
-        // that silently matches neither the grapheme nor anything else
-        // useful.
+        // Skin-tone-modified thumbs-up: U+1F44D U+1F3FD. One grapheme
+        // under UAX #29, two runes. The set holds it as one multi-rune
+        // entry, not as two separate rune adds. Contains(string)
+        // matches the whole grapheme as a unit, and Contains(int)
+        // doesn't match either of the constituent runes by themselves.
         var thumbsUpSkinTone = "\U0001F44D\U0001F3FD";
+        var set = RuneSet.Runes(thumbsUpSkinTone);
 
-        var exception = Assert.Throws<ArgumentException>(() => RuneSet.Runes(thumbsUpSkinTone));
-        Assert.That(exception!.Message, Does.Contain("multi-rune grapheme"));
-        Assert.That(exception.Message, Does.Contain("U+1F44D"));
-        Assert.That(exception.Message, Does.Contain("U+1F3FD"));
+        Assert.That(set.Contains(thumbsUpSkinTone), Is.True);
+        Assert.That(set.Contains(0x1F44D), Is.False, "the base rune isn't a member on its own");
+        Assert.That(set.Contains(0x1F3FD), Is.False, "the modifier rune isn't a member on its own");
     }
 
     [Test]
-    public void Runes_with_decomposed_accent_throws()
+    public void Runes_with_decomposed_accent_stores_it_as_one_entry()
     {
         // "e" + combining acute in decomposed form: U+0065 + U+0301.
         // One grapheme, two runes. Built with explicit escapes so the
@@ -618,10 +616,11 @@ public class RuneSetTests
         // U+00E9.
         var decomposedE = "é";
 
-        var exception = Assert.Throws<ArgumentException>(() => RuneSet.Runes(decomposedE));
-        Assert.That(exception!.Message, Does.Contain("multi-rune grapheme"));
-        Assert.That(exception.Message, Does.Contain("U+0065"));
-        Assert.That(exception.Message, Does.Contain("U+0301"));
+        var set = RuneSet.Runes(decomposedE);
+
+        Assert.That(set.Contains(decomposedE), Is.True);
+        Assert.That(set.Contains('e'), Is.False);
+        Assert.That(set.Contains(0x0301), Is.False);
     }
 
     [Test]
@@ -638,27 +637,32 @@ public class RuneSetTests
     }
 
     [Test]
-    public void Runes_with_crlf_is_allowed_as_two_runes()
+    public void Runes_with_crlf_stores_it_as_one_multi_rune_entry()
     {
-        // CRLF is one grapheme per UAX #29 but nobody calling
-        // Runes("\r\n") means "the CRLF grapheme as a unit." The
-        // validation special-cases CR+LF and treats it as two
-        // separate scalars, matching the common "line-terminator
-        // runes" idiom and the library's own RuneSet.Ascii.AnyWhitespace.
+        // CRLF is one grapheme per UAX #29. After dropping the CRLF
+        // special case in Runes(), it now lands in the multi-rune
+        // array like any other multi-rune grapheme. Callers that
+        // wanted "{CR, LF} as separate runes" build the set with
+        // Single('\r') | Single('\n') instead.
         var set = RuneSet.Runes("\r\n");
 
-        Assert.That(set.Contains('\r'), Is.True);
-        Assert.That(set.Contains('\n'), Is.True);
+        Assert.That(set.Contains("\r\n"), Is.True);
+        Assert.That(set.Contains('\r'), Is.False);
+        Assert.That(set.Contains('\n'), Is.False);
     }
 
     [Test]
-    public void OneOf_with_multi_rune_grapheme_throws()
+    public void OneOf_with_multi_rune_grapheme_builds_a_multi_rune_rule()
     {
-        // OneOf(string) delegates to RuneSet.Runes, so the grapheme
-        // check fires there too.
+        // OneOf(string) delegates to RuneSet.Runes, which accepts
+        // multi-rune graphemes and stores them in the multi-rune
+        // array. The resulting rule matches that grapheme as a unit
+        // when it shows up as a single token under GraphemeLexer.
         var thumbsUpSkinTone = "\U0001F44D\U0001F3FD";
+        var rule = Rules.OneOf(thumbsUpSkinTone);
 
-        Assert.Throws<ArgumentException>(() => Rules.OneOf(thumbsUpSkinTone));
+        var result = rule.Parse(thumbsUpSkinTone);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 
     // ToString ---------------------------------------------------------------
@@ -1006,5 +1010,233 @@ public class RuneSetTests
         var intersection = a & ~a;
 
         Assert.That(intersection.IsEmpty, Is.True);
+    }
+
+    // Multi-rune grapheme support -------------------------------------------
+    //
+    // Below this point: tests that exercise the multi-rune side of the
+    // RuneSet (graphemes that occupy two or more runes). The rune fast
+    // path stays unchanged, so the rune-only tests above are still the
+    // bulk of the coverage. These pin down the new capability: storage,
+    // membership, set algebra, the documented complement-throws rule,
+    // equality, and ToString.
+
+    [Test]
+    public void Runes_with_mixed_input_splits_into_intervals_and_multi_rune_entries()
+    {
+        // 'a' is one rune (interval add). USFlag and SkinTonedWave are
+        // two-rune graphemes (multi-rune entries). 'z' is one rune
+        // (another interval add). Verify all four show up by their
+        // appropriate Contains overloads, and the ones that aren't
+        // members don't accidentally match.
+        var set = RuneSet.Runes("a" + USFlagGrapheme + SkinTonedWaveGrapheme + "z");
+
+        Assert.That(set.Contains('a'), Is.True);
+        Assert.That(set.Contains('z'), Is.True);
+        Assert.That(set.Contains(USFlagGrapheme), Is.True);
+        Assert.That(set.Contains(SkinTonedWaveGrapheme), Is.True);
+        // The first runes of the multi-rune entries aren't single-rune
+        // members on their own.
+        Assert.That(set.Contains(0x1F1FA), Is.False, "regional indicator U not a single-rune member");
+        Assert.That(set.Contains(WavingHandRune), Is.False, "lone waving hand isn't in the set");
+        Assert.That(set.Contains('m'), Is.False);
+    }
+
+    [Test]
+    public void Contains_string_on_empty_input_returns_false()
+    {
+        var set = RuneSet.Runes("a") | RuneSet.Runes(USFlagGrapheme);
+
+        Assert.That(set.Contains(""), Is.False);
+    }
+
+    [Test]
+    public void Contains_string_with_single_rune_input_routes_to_rune_intervals()
+    {
+        // A single-rune string is just shorthand for the rune-Contains
+        // path. Build the set as multi-rune-only and verify a
+        // single-rune Contains(string) doesn't hit it.
+        var set = RuneSet.Runes(USFlagGrapheme);
+
+        Assert.That(set.Contains("a"), Is.False);
+        Assert.That(set.Contains(USFlagGrapheme), Is.True);
+    }
+
+    [Test]
+    public void Union_of_rune_only_and_mixed_keeps_both_halves()
+    {
+        // Letters is a large rune-only set. USFlag is a multi-rune entry
+        // built via Runes. Their union should contain every letter and
+        // also match the flag grapheme.
+        var mixed = RuneSet.Letters | RuneSet.Runes(USFlagGrapheme);
+
+        Assert.That(mixed.Contains('a'), Is.True);
+        Assert.That(mixed.Contains('Z'), Is.True);
+        Assert.That(mixed.Contains(USFlagGrapheme), Is.True);
+        Assert.That(mixed.Contains('1'), Is.False);
+    }
+
+    [Test]
+    public void Union_of_two_mixed_sets_unions_both_halves()
+    {
+        // Build two mixed sets with overlapping rune intervals and
+        // disjoint multi-rune entries. The union should contain every
+        // rune from both sides and both multi-rune entries.
+        var left = RuneSet.Runes("ab" + USFlagGrapheme);
+        var right = RuneSet.Runes("bc" + SkinTonedWaveGrapheme);
+        var combined = left | right;
+
+        Assert.That(combined.Contains('a'), Is.True);
+        Assert.That(combined.Contains('b'), Is.True);
+        Assert.That(combined.Contains('c'), Is.True);
+        Assert.That(combined.Contains(USFlagGrapheme), Is.True);
+        Assert.That(combined.Contains(SkinTonedWaveGrapheme), Is.True);
+        // Same multi-rune entry on both sides shouldn't double-count or
+        // produce a non-canonical array.
+        var withDup = RuneSet.Runes("a" + USFlagGrapheme) | RuneSet.Runes("b" + USFlagGrapheme);
+        AssertEqual(withDup, RuneSet.Runes("ab" + USFlagGrapheme));
+    }
+
+    [Test]
+    public void Intersection_of_two_mixed_sets_keeps_common_members()
+    {
+        // Both sides contain USFlag and 'a'. Only those should survive.
+        var left = RuneSet.Runes("ab" + USFlagGrapheme + SkinTonedWaveGrapheme);
+        var right = RuneSet.Runes("ac" + USFlagGrapheme);
+        var intersected = left & right;
+
+        Assert.That(intersected.Contains('a'), Is.True);
+        Assert.That(intersected.Contains(USFlagGrapheme), Is.True);
+        Assert.That(intersected.Contains('b'), Is.False);
+        Assert.That(intersected.Contains('c'), Is.False);
+        Assert.That(intersected.Contains(SkinTonedWaveGrapheme), Is.False);
+    }
+
+    [Test]
+    public void Intersection_of_rune_only_and_mixed_drops_multi_rune_entries()
+    {
+        // The rune-only side has nothing to intersect against on the
+        // multi-rune side. Letters & (Letters | USFlag) is just the
+        // letters.
+        var rune = RuneSet.Runes("ab");
+        var mixed = RuneSet.Runes("ab" + USFlagGrapheme);
+
+        AssertEqual(rune & mixed, RuneSet.Runes("ab"));
+    }
+
+    [Test]
+    public void Complement_of_mixed_set_throws_with_documented_message()
+    {
+        var mixed = RuneSet.Runes("a" + USFlagGrapheme);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+        {
+            var _ = ~mixed;
+        });
+        Assert.That(exception!.Message, Does.Contain("multi-rune"));
+        Assert.That(exception.Message, Does.Contain("set & ~runeOnlyMask"));
+    }
+
+    [Test]
+    public void Complement_via_explicit_rune_only_mask_works_for_rune_only_sets()
+    {
+        // The complement-of-a-rune-only-set workaround: build the
+        // rune-only mask, complement that, intersect with the
+        // rune-only side. Multi-rune entries on the input side aren't
+        // preserved by `mixed & ~runeOnlyMask`, because intersecting
+        // a mixed set with a rune-only set drops the multi-rune
+        // entries (the rune-only side has no multi-rune entries to
+        // pair with). Callers who want to preserve multi-rune entries
+        // through a "subtract these runes" operation union them back
+        // in explicitly.
+        var letters = RuneSet.Letters;
+        var withoutVowels = letters & ~RuneSet.Runes("aeiou");
+
+        Assert.That(withoutVowels.Contains('b'), Is.True);
+        Assert.That(withoutVowels.Contains('a'), Is.False);
+
+        // To keep a multi-rune entry through the operation, project
+        // the rune-only part, complement that, then union the
+        // multi-rune part back in.
+        var withoutVowelsKeepingFlag =
+            (letters & ~RuneSet.Runes("aeiou")) | RuneSet.Runes(USFlagGrapheme);
+        Assert.That(withoutVowelsKeepingFlag.Contains(USFlagGrapheme), Is.True);
+        Assert.That(withoutVowelsKeepingFlag.Contains('a'), Is.False);
+    }
+
+    [Test]
+    public void Equality_treats_mixed_sets_built_two_ways_as_equal()
+    {
+        // Same logical content, different construction paths. Equals
+        // and GetHashCode should both agree. AssertEqual checks both.
+        var sequential = RuneSet.Runes("a" + USFlagGrapheme + SkinTonedWaveGrapheme);
+        var unioned =
+            RuneSet.Runes("a")
+            | RuneSet.Runes(USFlagGrapheme)
+            | RuneSet.Runes(SkinTonedWaveGrapheme);
+
+        AssertEqual(sequential, unioned);
+    }
+
+    [Test]
+    public void Equality_distinguishes_sets_that_only_differ_in_multi_rune_entries()
+    {
+        // Same rune intervals, different multi-rune content. Equals
+        // must report them unequal.
+        var withFlag = RuneSet.Runes("a" + USFlagGrapheme);
+        var withWave = RuneSet.Runes("a" + SkinTonedWaveGrapheme);
+
+        Assert.That(withFlag, Is.Not.EqualTo(withWave));
+    }
+
+    [Test]
+    public void GetHashCode_matches_for_equal_mixed_sets_built_in_different_orders()
+    {
+        // Multi-rune array dedupe + sort means the order Runes() sees
+        // graphemes shouldn't affect the hash.
+        var ab = RuneSet.Runes(USFlagGrapheme) | RuneSet.Runes(SkinTonedWaveGrapheme);
+        var ba = RuneSet.Runes(SkinTonedWaveGrapheme) | RuneSet.Runes(USFlagGrapheme);
+
+        AssertEqual(ab, ba);
+    }
+
+    [Test]
+    public void ToString_renders_multi_rune_entries_inline_with_runes()
+    {
+        // Ranges first, then multi-rune entries, separated by commas
+        // inside the brackets. Multi-rune entries render as the user-
+        // perceived characters themselves.
+        var set = RuneSet.Range('a', 'z') | RuneSet.Runes(USFlagGrapheme);
+
+        Assert.That(set.ToString(), Is.EqualTo("[a-z," + USFlagGrapheme + "]"));
+    }
+
+    [Test]
+    public void ToString_truncation_counts_multi_rune_entries_as_entries()
+    {
+        // 7 single-rune ranges + 2 multi-rune entries = 9 total. The
+        // first 8 render in full; the trailing entry shows "+1 more".
+        // Multi-rune entries land at the end of the entry list, so
+        // the truncation falls on one of them.
+        var set = RuneSet.Runes("acegikm")
+            | RuneSet.Runes(USFlagGrapheme)
+            | RuneSet.Runes(SkinTonedWaveGrapheme);
+
+        Assert.That(set.ToString(), Does.Contain("+1 more"));
+    }
+
+    [Test]
+    public void HasMultiRuneGraphemes_is_false_for_rune_only_sets()
+    {
+        Assert.That(RuneSet.Runes("abc").HasMultiRuneGraphemes, Is.False);
+        Assert.That(RuneSet.Letters.HasMultiRuneGraphemes, Is.False);
+        Assert.That(default(RuneSet).HasMultiRuneGraphemes, Is.False);
+    }
+
+    [Test]
+    public void HasMultiRuneGraphemes_is_true_after_adding_multi_rune_entry()
+    {
+        Assert.That(RuneSet.Runes(USFlagGrapheme).HasMultiRuneGraphemes, Is.True);
+        Assert.That((RuneSet.Letters | RuneSet.Runes(USFlagGrapheme)).HasMultiRuneGraphemes, Is.True);
     }
 }

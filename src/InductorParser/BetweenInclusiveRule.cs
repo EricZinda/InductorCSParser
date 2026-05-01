@@ -18,11 +18,6 @@ namespace InductorParser;
 //   AtLeast(n, inner)     == BetweenInclusive(n, int.MaxValue, inner)
 //   AtMost(n, inner)      == BetweenInclusive(0, n, inner)
 //   Exactly(n, inner)     == BetweenInclusive(n, n, inner)
-//
-// Tests live in src/InductorParser.Tests/Rules/BetweenInclusiveRuleTests.cs.
-// See docs/TestArchitecture.md for the per-rule test conventions
-// (success, failure position, WithError propagation, positional fallback,
-// sealed-rule rejection).
 internal sealed class BetweenInclusiveRule : Rule
 {
     internal int AtLeast { get; }
