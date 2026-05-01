@@ -28,7 +28,7 @@ public static class HtmlGrammar
 {
     // Same ASCII-only choice as CssGrammar: the C++ WhitespaceSymbol
     // matches "\r\n\t " only, not the full Unicode whitespace class.
-    private static readonly RuneSet WhitespaceChars = RuneSet.Ascii.Whitespace;
+    private static readonly RuneSet WhitespaceChars = RuneSet.Ascii.AnyWhitespace;
 
     private static readonly RuneSet LetterOrDigitChars =
         RuneSet.Ascii.Letters | RuneSet.Ascii.Digits;

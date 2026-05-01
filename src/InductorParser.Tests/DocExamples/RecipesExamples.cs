@@ -168,15 +168,15 @@ public class RecipesExamples
 
         public static readonly Rule Document =
             AllOf(
-                Optional(Whitespace()),
+                Optional(AnyWhitespace()),
                 SettingName,
-                Optional(Whitespace()),
+                Optional(AnyWhitespace()),
                 Grapheme('='),
-                Optional(Whitespace()),
+                Optional(AnyWhitespace()),
                 SettingValue,
-                Optional(Whitespace()),
+                Optional(AnyWhitespace()),
                 Grapheme(';'),
-                Optional(Whitespace()),
+                Optional(AnyWhitespace()),
                 Eof()
             ).As(nameof(Document)).Preserve().Compile();
     }

@@ -18,9 +18,9 @@ namespace InductorParser;
 /// <code>
 /// var expression = AllOf(
 ///     Identifier(),
-///     Optional(Whitespace()),
+///     Optional(AnyWhitespace()),
 ///     Grapheme('='),
-///     Optional(Whitespace()),
+///     Optional(AnyWhitespace()),
 ///     Integer()
 /// );
 /// </code>
@@ -205,7 +205,7 @@ public static class Rules
     /// <remarks>
     /// The workhorse character-class rule. Pass any RuneSet built
     /// from the factories (Single, Range, Runes, Category) or one
-    /// of the built-ins (Letters, Digits, Whitespace, Ascii.*).
+    /// of the built-ins (Letters, Digits, InlineWhitespace, Ascii.*).
     /// RuneSets compose with <c>|</c> (union), <c>&amp;</c>
     /// (intersection), and <c>~</c> (complement):
     /// <code>
@@ -620,8 +620,10 @@ public static class Rules
         );
 
     /// <summary>
-    /// Match one or more single-rune whitespace tokens as defined by
-    /// <c>RuneSet.Whitespace</c>. Default <see cref="FlattenType"/>:
+    /// Match one or more intra-line whitespace tokens as defined by
+    /// <c>RuneSet.InlineWhitespace</c>. Does NOT match line terminators
+    /// (<c>\n</c>, <c>\r</c>, <c>\r\n</c>, NEL, LINE SEPARATOR,
+    /// PARAGRAPH SEPARATOR, VT, FF). Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Delete"/> (applied by the factory).
     /// </summary>
     /// <remarks>
@@ -633,12 +635,38 @@ public static class Rules
     /// <see cref="FlattenType.Flatten"/>.
     /// For the "skip any whitespace here, including none" shape
     /// (between tokens that don't require a separator), wrap it as
-    /// <c>Optional(Whitespace())</c>.
-    /// Under <see cref="InputUnit.Grapheme"/>, CRLF is one two-rune
-    /// token and therefore isn't consumed by this rule. Use
-    /// <see cref="EndOfLine"/> for line terminators.
+    /// <c>Optional(InlineWhitespace())</c>.
+    /// For line terminators see <see cref="EndOfLine"/>. For
+    /// "either intra-line whitespace or a line terminator" use
+    /// <see cref="AnyWhitespace"/>.
     /// </remarks>
-    public static Rule Whitespace() => OneOrMore(OneOf(RuneSet.Whitespace)).Flatten(FlattenType.Delete);
+    public static Rule InlineWhitespace() => OneOrMore(OneOf(RuneSet.InlineWhitespace)).Flatten(FlattenType.Delete);
+
+    /// <summary>
+    /// Match one or more whitespace tokens, where each token is either
+    /// an intra-line whitespace rune (per <c>RuneSet.InlineWhitespace</c>)
+    /// or a line terminator (per <see cref="EndOfLine"/>, which handles
+    /// CRLF as one two-rune unit). Default <see cref="FlattenType"/>:
+    /// <see cref="FlattenType.Delete"/>.
+    /// </summary>
+    /// <remarks>
+    /// The "skip any whitespace including newlines" rule, for free-form
+    /// grammars (JSON, arithmetic expressions, etc.) that treat line
+    /// breaks as ordinary whitespace.
+    /// <para>
+    /// <see cref="EndOfLine"/> is tried first inside the
+    /// <see cref="FirstOf"/>, so that under <see cref="InputUnit.Grapheme"/>
+    /// a CRLF grapheme is consumed as one terminator rather than only
+    /// matching the CR via the single-rune side.
+    /// </para>
+    /// <para>
+    /// For "skip whitespace here, possibly none," wrap as
+    /// <c>Optional(AnyWhitespace())</c>. For strict intra-line whitespace
+    /// (no line terminators) use <see cref="InlineWhitespace"/>.
+    /// </para>
+    /// </remarks>
+    public static Rule AnyWhitespace() =>
+        OneOrMore(FirstOf(EndOfLine(), OneOf(RuneSet.InlineWhitespace))).Flatten(FlattenType.Delete);
 
     /// <summary>
     /// Match one Unicode line terminator per UAX #18 Annex C. When
@@ -658,7 +686,7 @@ public static class Rules
     /// <list type="bullet">
     /// <item><description>CRLF (the two-rune sequence <c>\r\n</c>)</description></item>
     /// <item><description>LF, VT, FF, CR, NEL, LINE SEPARATOR, or PARAGRAPH SEPARATOR
-    /// (the single-rune terminators in <see cref="RuneSet.SingleRuneLineTerminators"/>)</description></item>
+    /// (the single-rune terminators in <see cref="RuneSet.LineTerminators"/>)</description></item>
     /// <item><description>End-of-input, but only when <paramref name="eofIsEol"/> is <c>true</c></description></item>
     /// </list>
     /// CRLF is tried first so a CR immediately followed by an LF is
@@ -674,8 +702,8 @@ public static class Rules
     public static Rule EndOfLine(bool eofIsEol = false)
     {
         var alternatives = eofIsEol
-            ? new Rule[] { Literal("\r\n"), OneOf(RuneSet.SingleRuneLineTerminators), Eof() }
-            : new Rule[] { Literal("\r\n"), OneOf(RuneSet.SingleRuneLineTerminators) };
+            ? new Rule[] { Literal("\r\n"), OneOf(RuneSet.LineTerminators), Eof() }
+            : new Rule[] { Literal("\r\n"), OneOf(RuneSet.LineTerminators) };
         return FirstOf(alternatives).Flatten(FlattenType.Delete);
     }
 

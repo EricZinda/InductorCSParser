@@ -37,8 +37,8 @@ Every concept from the original [GettingStarted.md](https://github.com/EricZinda
 | `CharacterSetSymbol<Chars>`        | `OneOf(RuneSet.Letters)`                     |
 | `CharacterSetExceptSymbol<...>`    | `NoneOf(charClass)`                          |
 | `LiteralExpression<WordString>`    | `Literal("word")`                               |
-| `OptionalWhitespaceSymbol<>`       | `Optional(Whitespace())`                        |
-| `WhitespaceSymbol<>`               | `Whitespace()`                                  |
+| `OptionalWhitespaceSymbol<>`       | `Optional(AnyWhitespace())`                     |
+| `WhitespaceSymbol<>`               | `AnyWhitespace()`                               |
 | `Integer<>`, `Float<>`             | `Integer()`, `Float()`                          |
 | `PeekExpression<T>`                | `Peek(rule)`                                    |
 | `NotPeekExpression<T>`             | `Not(rule)`                                     |
@@ -218,17 +218,19 @@ public readonly struct RuneSet
     public static readonly RuneSet Letters;
     public static readonly RuneSet Digits;
     public static readonly RuneSet HexDigits;
-    public static readonly RuneSet Whitespace;
+    public static readonly RuneSet InlineWhitespace; // intra-line whitespace only
+    public static readonly RuneSet LineTerminators;  // LF, VT, FF, CR, NEL, LS, PS
     public static readonly RuneSet Identifier;
 
     // ASCII-only variants faster than RuneSet.Letters
     public static class Ascii
     {
-        public static readonly RuneSet Letters    = Range('A','Z') | Range('a','z');
-        public static readonly RuneSet Digits     = Range('0','9');
-        public static readonly RuneSet HexDigits  = Digits | Range('a','f') | Range('A','F');
-        public static readonly RuneSet Whitespace = Runes(" \t\r\n");
-        public static readonly RuneSet Identifier = Letters | Digits | Runes("_");
+        public static readonly RuneSet Letters          = Range('A','Z') | Range('a','z');
+        public static readonly RuneSet Digits           = Range('0','9');
+        public static readonly RuneSet HexDigits        = Digits | Range('a','f') | Range('A','F');
+        public static readonly RuneSet InlineWhitespace = Runes(" \t");
+        public static readonly RuneSet AnyWhitespace    = Runes(" \t\r\n");
+        public static readonly RuneSet Identifier       = Letters | Digits | Runes("_");
     }
 
     public static RuneSet Single(char c);
@@ -273,7 +275,7 @@ RuneSet.Ascii.Identifier & ~RuneSet.Runes("_")
 
 // Any printable non-whitespace character. Start from "all runes",
 // subtract categories you don't want.
-~(RuneSet.Whitespace | RuneSet.Category(UnicodeCategory.Control))
+~(RuneSet.InlineWhitespace | RuneSet.LineTerminators | RuneSet.Category(UnicodeCategory.Control))
 ```
 
 `OneOf(~X)` and `NoneOf(X)` match the same single-rune tokens, so at the outermost level the complement operator is redundant with `NoneOf`. The reason complement exists on the class is that `NoneOf` is a rule and can't be fed back into another set expression. `~X` is a class and can be intersected, unioned, or handed to another `OneOf` / `NoneOf`.

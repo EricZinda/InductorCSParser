@@ -31,11 +31,11 @@ namespace InductorParser.PlayModeTests
             ).Flatten(FlattenType.Preserve);
             var document = AllOf(
                 settingName,
-                Optional(Whitespace()),
+                Optional(AnyWhitespace()),
                 Grapheme('='),
-                Optional(Whitespace()),
+                Optional(AnyWhitespace()),
                 settingValue,
-                Optional(Whitespace()),
+                Optional(AnyWhitespace()),
                 Grapheme(';')
             );
 

@@ -30,11 +30,11 @@ public class InductorParserReferenceExamples
 
         var document = AllOf(
             settingName,
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             Grapheme('='),
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             settingValue,
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             Grapheme(';')
         ).Preserve();
 
@@ -136,15 +136,15 @@ public class InductorParserReferenceExamples
         ).As("settingValue").Preserve();
 
         var document = AllOf(
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             settingName,
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             Grapheme('='),
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             settingValue,
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             Grapheme(';'),
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             Eof()
         ).As("document").Preserve().Compile();
 
@@ -200,9 +200,9 @@ public class InductorParserReferenceExamples
             valueAtom,
             ZeroOrMore(
                 AllOf(
-                    Optional(Whitespace()),
+                    Optional(AnyWhitespace()),
                     Grapheme(','),
-                    Optional(Whitespace()),
+                    Optional(AnyWhitespace()),
                     valueAtom
                 )
             )
@@ -210,18 +210,18 @@ public class InductorParserReferenceExamples
 
         var pair = AllOf(
             key,
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             Grapheme('='),
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             values,
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             Grapheme(';')
         ).As("pair").Preserve();
 
         var document = AllOf(
-            Optional(Whitespace()),
+            Optional(AnyWhitespace()),
             ZeroOrMore(
-                AllOf(pair, Optional(Whitespace()))
+                AllOf(pair, Optional(AnyWhitespace()))
             ),
             Eof()
         ).As("document").Preserve().Compile();
