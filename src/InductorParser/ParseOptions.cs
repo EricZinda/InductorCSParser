@@ -16,7 +16,7 @@ public sealed class ParseOptions
     // it. Set to null to skip normalization entirely.
     //
     // Positions reported in ParseResult (ErrorCharIndex and its derived
-    // line/column/grapheme properties) are ALWAYS into the caller's
+    // line/column/token properties) are ALWAYS into the caller's
     // original input string, regardless of this setting. When normalization
     // rewrites the input, the parser translates failure offsets back to
     // original-string coordinates at the boundary, so callers never have to
@@ -117,10 +117,10 @@ public sealed class ParseOptions
     // and numbered to match the ParseResult.ErrorXxx properties so a
     // template author can mirror whatever unit the rest of their code
     // already uses:
-    //   {charIndex}      ParseResult.ErrorCharIndex     (UTF-16 code units)
-    //   {graphemeIndex}  ParseResult.ErrorGraphemeIndex (StringInfo text elements)
-    //   {line}           ParseResult.ErrorLine          (zero-based, LSP convention)
-    //   {column}         ParseResult.ErrorColumn        (zero-based, in chars)
+    //   {charIndex}    ParseResult.ErrorCharIndex   (UTF-16 code units)
+    //   {tokenIndex}   ParseResult.ErrorTokenIndex  (StringInfo text elements)
+    //   {line}         ParseResult.ErrorLine        (zero-based, LSP convention)
+    //   {column}       ParseResult.ErrorColumn      (zero-based, in chars)
     //
     // Templates that mention an additional unit-specific placeholder:
     //   PositionalErrorTemplate      {character}  (the unexpected input character)
@@ -128,7 +128,7 @@ public sealed class ParseOptions
     //   RuleCountLimitAbortTemplate  {limit}      (options.RuleCountLimit)
     //   DepthLimitAbortTemplate      {limit}      (options.MaxDepth)
     //
-    // The grapheme-index and line/column conversions each walk the
+    // The token-index and line/column conversions each walk the
     // input once, so they're computed lazily and only paid for when
     // the corresponding placeholder appears in the template. The
     // default templates only mention {charIndex}, so by default the

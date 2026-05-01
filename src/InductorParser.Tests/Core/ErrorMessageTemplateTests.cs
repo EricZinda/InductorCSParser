@@ -15,11 +15,11 @@ public class ErrorMessageTemplateTests
     [Test]
     public void PositionalErrorTemplate_custom_substitutes_charIndex_and_character()
     {
-        // AllOf(Grapheme('a'), Grapheme('b')) consumes 'a' then fails on
+        // AllOf(Token('a'), Token('b')) consumes 'a' then fails on
         // 'x' at offset 1. No WithError on either child, so the failure
         // path goes through the positional template and the parser
         // substitutes {charIndex} and {character}.
-        var rule = AllOf(Grapheme('a'), Grapheme('b'));
+        var rule = AllOf(Token('a'), Token('b'));
         var options = new ParseOptions
         {
             PositionalErrorTemplate = "want X at {charIndex}, got '{character}'",
@@ -33,10 +33,10 @@ public class ErrorMessageTemplateTests
     [Test]
     public void EndOfInputErrorTemplate_custom_substitutes_charIndex()
     {
-        // Input "a" runs out before Grapheme('b') runs, so the
+        // Input "a" runs out before Token('b') runs, so the
         // failure position equals input.Length and the EOF template
         // path fires. Only {charIndex} is meaningful here.
-        var rule = AllOf(Grapheme('a'), Grapheme('b'));
+        var rule = AllOf(Token('a'), Token('b'));
         var options = new ParseOptions
         {
             EndOfInputErrorTemplate = "ran out of input at {charIndex}",
@@ -91,8 +91,8 @@ public class ErrorMessageTemplateTests
         // once per open paren until the depth budget trips.
         var nested = new LateBoundRule("nested");
         nested.Bind(FirstOf(
-            AllOf(Grapheme('('), nested, Grapheme(')')),
-            Grapheme('x')));
+            AllOf(Token('('), nested, Token(')')),
+            Token('x')));
 
         string input = new string('(', 100) + "x" + new string(')', 100);
         var options = new ParseOptions
@@ -137,14 +137,14 @@ public class ErrorMessageTemplateTests
         // 'y' and gets 'x'. Failure point: char 4, grapheme 3, line 1
         // column 1 (LSP zero-based).
         var rule = AllOf(
-            Grapheme(0x1D400),
-            Grapheme('\n'),
-            Grapheme('b'),
-            Grapheme('y'));
+            Token(0x1D400),
+            Token('\n'),
+            Token('b'),
+            Token('y'));
         var options = new ParseOptions
         {
             PositionalErrorTemplate =
-                "char={charIndex} grapheme={graphemeIndex} line={line} col={column}",
+                "char={charIndex} grapheme={tokenIndex} line={line} col={column}",
         };
         var result = rule.Parse(char.ConvertFromUtf32(0x1D400) + "\nbx", options);
 
@@ -153,7 +153,7 @@ public class ErrorMessageTemplateTests
         // Sanity check: the placeholder values match the ParseResult
         // properties they're supposed to mirror.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(4));
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
+        Assert.That(result.ErrorTokenIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
         Assert.That(result.ErrorColumn, Is.EqualTo(1));
     }
@@ -184,7 +184,7 @@ public class ErrorMessageTemplateTests
         // positional template. The parser leaves it alone rather than
         // throwing, so a typo is visible in the output instead of
         // crashing every parse.
-        var rule = AllOf(Grapheme('a'), Grapheme('b'));
+        var rule = AllOf(Token('a'), Token('b'));
         var options = new ParseOptions
         {
             PositionalErrorTemplate = "got {bogus} at {charIndex}",
@@ -197,7 +197,7 @@ public class ErrorMessageTemplateTests
     [Test]
     public void Template_with_repeated_placeholder_substitutes_all_occurrences()
     {
-        var rule = AllOf(Grapheme('a'), Grapheme('b'));
+        var rule = AllOf(Token('a'), Token('b'));
         var options = new ParseOptions
         {
             PositionalErrorTemplate = "{charIndex} and {charIndex} again",

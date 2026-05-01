@@ -14,7 +14,7 @@ public class GraphemeRuleTests
     [Test]
     public void Grapheme_string_with_ASCII_grapheme_works()
     {
-        var rule = Grapheme("a");
+        var rule = Token("a");
         var result = rule.Parse("a");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
@@ -25,7 +25,7 @@ public class GraphemeRuleTests
         // Guitar emoji is one rune and one grapheme, represented in UTF-16
         // as a surrogate pair. The "single rune" fast path in GraphemeRule
         // should set the id to GuitarRune.
-        var rule = Grapheme(GuitarGrapheme);
+        var rule = Token(GuitarGrapheme);
         var result = rule.Parse(GuitarGrapheme);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -49,7 +49,7 @@ public class GraphemeRuleTests
         // the lexer saw it, and the whole point of this test is that the
         // rule and input sit in the same decomposed form at match time.
         // NormalizationTests covers the NFC-on behavior separately.
-        var rule = Grapheme(LatinEAcuteGrapheme);
+        var rule = Token(LatinEAcuteGrapheme);
         var result = rule.Parse(LatinEAcuteGrapheme,
             new ParseOptions { NormalizeInput = null });
 
@@ -59,23 +59,23 @@ public class GraphemeRuleTests
     [Test]
     public void Grapheme_string_with_more_than_one_grapheme_throws_at_construction()
     {
-        var ex = Assert.Throws<ArgumentException>(() => Grapheme("ab"));
-        Assert.That(ex!.Message, Does.Contain("one grapheme"));
+        var ex = Assert.Throws<ArgumentException>(() => Token("ab"));
+        Assert.That(ex!.Message, Does.Contain("one token"));
     }
 
     [Test]
     public void Grapheme_string_empty_throws()
     {
-        Assert.Throws<ArgumentException>(() => Grapheme(""));
+        Assert.Throws<ArgumentException>(() => Token(""));
     }
 
     [Test]
-    public void Grapheme_Rune_overload_matches_the_corresponding_grapheme()
+    public void Grapheme_Rune_overload_matches_the_corresponding_Token()
     {
-        // Grapheme(Rune) is a convenience overload that funnels through the
+        // Token(Rune) is a convenience overload that funnels through the
         // string ctor. Rune's own ctor enforces validity, so this overload
         // doesn't need its own argument validation.
-        var rule = Grapheme(new System.Text.Rune('='));
+        var rule = Token(new System.Text.Rune('='));
 
         var result = rule.Parse("=");
 
@@ -86,29 +86,29 @@ public class GraphemeRuleTests
     public void Grapheme_int_with_surrogate_throws()
     {
         // 0xD800 is a high-surrogate code unit, not a valid scalar value.
-        Assert.Throws<ArgumentOutOfRangeException>(() => Grapheme(0xD800));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Token(0xD800));
     }
 
     [Test]
     public void Grapheme_int_with_out_of_range_throws()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => Grapheme(0x110000));
-        Assert.Throws<ArgumentOutOfRangeException>(() => Grapheme(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Token(0x110000));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Token(-1));
     }
 
     [Test]
     public void Grapheme_char_with_surrogate_throws()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => Grapheme('\uD800'));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Token('\uD800'));
     }
 
     [Test]
     public void Grapheme_string_match_failure_records_position_correctly()
     {
-        // Multi-rune Grapheme fails on the grapheme-sized token that didn't
+        // Multi-rune Token fails on the grapheme-sized token that didn't
         // match. Under the error-position principle the failing read's
         // pre-read position is 0.
-        var rule = Grapheme(GuitarGrapheme).WithError("expected guitar");
+        var rule = Token(GuitarGrapheme).WithError("expected guitar");
         var result = rule.Parse(MusicalKeyboardGrapheme);
 
         Assert.That(result.Success, Is.False);
@@ -119,11 +119,11 @@ public class GraphemeRuleTests
     [Test]
     public void Grapheme_mismatch_on_single_char_input_points_at_offender()
     {
-        // The original off-by-one bug: Grapheme('a').Parse("x") SHOULDN'T
+        // The original off-by-one bug: Token('a').Parse("x") SHOULDN'T
         // report "Unexpected end of input" at offset 1. Under the error-
         // position principle the failing read's pre-read position (0) is
-        // what gets recorded, and Grapheme's WithError message surfaces.
-        var rule = Grapheme('a').WithError("need 'a'");
+        // what gets recorded, and Token's WithError message surfaces.
+        var rule = Token('a').WithError("need 'a'");
         var result = rule.Parse("x");
 
         Assert.That(result.Success, Is.False);
@@ -134,11 +134,11 @@ public class GraphemeRuleTests
     [Test]
     public void Grapheme_EOF_on_empty_input_points_at_zero()
     {
-        // Legitimate EOF case: input is genuinely empty. Grapheme('a') opens a
+        // Legitimate EOF case: input is genuinely empty. Token('a') opens a
         // transaction at position 0 and the lexer immediately returns EOF.
         // The failing read's pre-read position is 0, so the WithError
         // message still surfaces at offset 0 even though it's EOF.
-        var rule = Grapheme('a').WithError("need 'a'");
+        var rule = Token('a').WithError("need 'a'");
         var result = rule.Parse("");
 
         Assert.That(result.Success, Is.False);
@@ -149,14 +149,14 @@ public class GraphemeRuleTests
     [Test]
     public void Grapheme_mismatch_after_successful_matches_points_at_first_bad_char()
     {
-        // Composite context: Grapheme('a') commits at offset 0, then Grapheme('b')
+        // Composite context: Token('a') commits at offset 0, then Token('b')
         // runs at offset 1, reads 'x', and records at pre-read position 1.
         // This is the "points-at-offender-in-context" test: a buggy single-
-        // rune Grapheme that hard-coded 0 (or used the outer parse's start)
+        // rune Token that hard-coded 0 (or used the outer parse's start)
         // would still pass the zero-position tests above. This one proves
         // it's actually tracking the pre-read of its own read.
-        var rule = AllOf(Grapheme('a'),
-                       Grapheme('b').WithError("need a 'b'"));
+        var rule = AllOf(Token('a'),
+                       Token('b').WithError("need a 'b'"));
         var result = rule.Parse("ax");
 
         Assert.That(result.Success, Is.False);
@@ -169,12 +169,12 @@ public class GraphemeRuleTests
     {
         // 0xD7FF is the last scalar before the surrogate block. 0xE000 is
         // the first after. Both should build fine.
-        Assert.DoesNotThrow(() => Grapheme(0xD7FF));
-        Assert.DoesNotThrow(() => Grapheme(0xE000));
+        Assert.DoesNotThrow(() => Token(0xD7FF));
+        Assert.DoesNotThrow(() => Token(0xE000));
         // 0x10FFFF is the last valid Unicode scalar. Also fine.
-        Assert.DoesNotThrow(() => Grapheme(0x10FFFF));
+        Assert.DoesNotThrow(() => Token(0x10FFFF));
         // 0xDFFF is the last surrogate. Still invalid.
-        Assert.Throws<ArgumentOutOfRangeException>(() => Grapheme(0xDFFF));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Token(0xDFFF));
     }
 
     [Test]
@@ -183,7 +183,7 @@ public class GraphemeRuleTests
         // When no WithError is set, BuildErrorMessage's fallback decides
         // what to say. Pos equals input.Length here, so it renders the
         // "Unexpected end of input" branch.
-        var rule = Grapheme('a');
+        var rule = Token('a');
         var result = rule.Parse("");
 
         Assert.That(result.Success, Is.False);
@@ -196,11 +196,11 @@ public class GraphemeRuleTests
     public void Grapheme_trace_success_produces_expected_output()
     {
         var sink = NewSink();
-        Grapheme('a').Parse("a", new ParseOptions { TraceSink = sink });
+        Token('a').Parse("a", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "   Lexer.Read: 'a', Consumed: 1",
-            "   SUCC | Grapheme: found 'a'"
+            "   SUCC | Token: found 'a'"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
@@ -210,11 +210,11 @@ public class GraphemeRuleTests
     public void Grapheme_trace_failure_produces_expected_output()
     {
         var sink = NewSink();
-        Grapheme('a').Parse("x", new ParseOptions { TraceSink = sink });
+        Token('a').Parse("x", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "   Lexer.Read: 'x', Consumed: 1",
-            "   FAIL | Grapheme: found 'x', wanted 'a'"
+            "   FAIL | Token: found 'x', wanted 'a'"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
@@ -222,9 +222,9 @@ public class GraphemeRuleTests
 #if !UNITY_INCLUDE_TESTS
     // Known-broken-on-legacy-StringInfo cases. Each test documents one
     // UAX #29 rule category that pre-.NET 5 / IL2CPP StringInfo doesn't
-    // implement. Gated to net8.0 / CoreCLR because Grapheme(...) rejects these
+    // implement. Gated to net8.0 / CoreCLR because Token(...) rejects these
     // at construction on the legacy walker (it sees more than one grapheme
-    // and throws). See docs/UnicodeGotchas.md "Pre-.NET 5 Grapheme
+    // and throws). See docs/UnicodeGotchas.md "Pre-.NET 5 Token
     // Segmentation" and
     // backlog/xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md.
 
@@ -233,7 +233,7 @@ public class GraphemeRuleTests
     {
         // Modifier sequence: base emoji + skin-tone modifier. UAX #29 rule
         // GB10/GB11. Two runes, one grapheme on UAX #29. Legacy splits.
-        var rule = Grapheme(SkinTonedWaveGrapheme);
+        var rule = Token(SkinTonedWaveGrapheme);
         var result = rule.Parse(SkinTonedWaveGrapheme);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -245,7 +245,7 @@ public class GraphemeRuleTests
         // ZWJ sequence: base + ZWJ + joiner + variation selector. UAX #29
         // rule GB11 with extended pictographic. Four runes, one grapheme on
         // UAX #29. Legacy splits at every ZWJ.
-        var rule = Grapheme(WomanShruggingGrapheme);
+        var rule = Token(WomanShruggingGrapheme);
         var result = rule.Parse(WomanShruggingGrapheme);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -256,7 +256,7 @@ public class GraphemeRuleTests
     {
         // Regional indicator pair: two RI code points form one flag. UAX #29
         // rule GB12/GB13. Two runes, one grapheme on UAX #29. Legacy splits.
-        var rule = Grapheme(USFlagGrapheme);
+        var rule = Token(USFlagGrapheme);
         var result = rule.Parse(USFlagGrapheme);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -268,7 +268,7 @@ public class GraphemeRuleTests
         // Thai SARA AM: consonant + SARA AM forms one extended grapheme
         // cluster. The canonical SpacingMark case from UAX #29 rule GB9a.
         // Two runes, one grapheme on UAX #29. Legacy splits.
-        var rule = Grapheme(ThaiKamGrapheme);
+        var rule = Token(ThaiKamGrapheme);
         var result = rule.Parse(ThaiKamGrapheme);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -278,7 +278,7 @@ public class GraphemeRuleTests
     [Test]
     public void Sealed_Grapheme_rejects_Flatten()
     {
-        var rule = Grapheme('a');
+        var rule = Token('a');
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
     }
@@ -286,7 +286,7 @@ public class GraphemeRuleTests
     [Test]
     public void Sealed_Grapheme_rejects_WithError()
     {
-        var rule = Grapheme('a');
+        var rule = Token('a');
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
     }
@@ -294,7 +294,7 @@ public class GraphemeRuleTests
     [Test]
     public void Sealed_Grapheme_rejects_As()
     {
-        var rule = Grapheme('a');
+        var rule = Token('a');
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }

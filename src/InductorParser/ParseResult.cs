@@ -12,7 +12,7 @@ namespace InductorParser;
 //
 // The error-position family reports the same point (where the parse
 // got furthest before failing) in different units: ErrorCharIndex
-// (chars / UTF-16 code units), ErrorGraphemeIndex (StringInfo text
+// (chars / UTF-16 code units), ErrorTokenIndex (StringInfo text
 // elements), and the ErrorLine / ErrorColumn pair (LSP-style
 // zero-based line and column). Pick whichever matches the unit the
 // caller will use the number in. ErrorPosition returns all four
@@ -92,12 +92,11 @@ public readonly struct ParseResult
         }
     }
 
-    // Error position in graphemes, using the same StringInfo
-    // text-element segmentation the lexer uses. On modern .NET this
-    // follows UAX #29 extended grapheme clusters. Computed lazily from
-    // ErrorCharIndex.
-    public int ErrorGraphemeIndex =>
-        SourcePositionConverter.ToGraphemeIndex(_input ?? string.Empty, ErrorCharIndex);
+    // Error position in tokens, using the same StringInfo text-element
+    // segmentation the lexer uses. On modern .NET this follows UAX #29
+    // extended grapheme clusters. Computed lazily from ErrorCharIndex.
+    public int ErrorTokenIndex =>
+        SourcePositionConverter.ToTokenIndex(_input ?? string.Empty, ErrorCharIndex);
 
     // The error position bundled into a SourcePosition struct. Returns
     // null on a successful parse. Use this when you need more than one

@@ -6,58 +6,55 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
-// Match input whose content is exactly one specified grapheme. How
-// many tokens the match reads depends on the configured lexer, see
-// below. The expected grapheme is stored as a string at construction
-// and compared against the lexer's output at match time.
+// Match input whose content is exactly one specified token. The class
+// is named GraphemeRule because each token is one StringInfo grapheme
+// cluster (per UAX #29 on .NET 5+). The user-facing factory is
+// Rules.Token(...), which constructs one of these. The expected token
+// is stored as a string at construction and compared against the
+// lexer's output at match time.
 //
-// Under GraphemeLexer, a grapheme (even a multi-rune one like 👨‍👩‍👧‍👦)
-// arrives as a single token whose Chars span is the whole grapheme. The
-// match is one token read and one SequenceEqual compare.
+// A token (even a multi-rune one like 👨‍👩‍👧‍👦) arrives from the lexer
+// as a single Token whose Chars span is the whole text element. The
+// match is one Read and one SequenceEqual compare.
 //
-// Under RuneLexer, a multi-rune grapheme arrives as multiple rune tokens
-// (the family emoji is seven rune tokens: four people + three ZWJs). The
-// match reads those tokens in order and compares each against the
-// corresponding section of the expected string. Lockstep one-to-N read.
-//
-// Both behaviors fall out of the same loop: read a token, compare its
-// Chars to the expected[consumed..consumed+token.Length] section, advance.
-// No lexer-specific branching.
-//
-// Construction validates that the expected string is exactly one
-// grapheme via StringInfo.GetNextTextElement. Grapheme("ab") throws at
+// Construction validates that the expected string is exactly one token
+// via StringInfo.GetNextTextElement. Token("ab") throws at
 // grammar-build time instead of silently failing at parse time. (Note:
 // on pre-.NET 5 runtimes StringInfo isn't UAX #29 compliant, so the
-// grapheme count for exotic Unicode inputs can be wrong. See
+// token count for exotic Unicode inputs can be wrong. See
 // backlog/xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md.)
 //
-// If the expected grapheme is exactly one rune (the common case for
+// If the expected token is exactly one rune (the common case for
 // ASCII, emoji that fit in a single code point, CJK, etc.), the Id is
 // pinned to that code point so Symbol leaves produced by this rule
-// carry the "id == rune" shape. For multi-rune graphemes
-// the Id comes from Compile's custom-range assignment.
+// carry the "id == rune" shape. For multi-rune tokens the Id comes
+// from Compile's custom-range assignment.
 internal sealed class GraphemeRule : Rule
 {
     private readonly string _expected;
 
-    public GraphemeRule(string expectedGrapheme) : base(FlattenType.Delete)
+    public GraphemeRule(string expectedToken) : base(FlattenType.Delete)
     {
-        if (expectedGrapheme == null)
-            throw new ArgumentNullException(nameof(expectedGrapheme));
-        if (expectedGrapheme.Length == 0)
-            throw new ArgumentException("Grapheme requires a non-empty grapheme.", nameof(expectedGrapheme));
-        string firstElement = StringInfo.GetNextTextElement(expectedGrapheme, 0);
-        if (firstElement.Length != expectedGrapheme.Length)
+        // Trace name follows the user-facing factory name, not the
+        // internal class name. Rules.Token(...) is the only way to
+        // construct one, so traces and error labels read "Token".
+        SetTraceName("Token");
+        if (expectedToken == null)
+            throw new ArgumentNullException(nameof(expectedToken));
+        if (expectedToken.Length == 0)
+            throw new ArgumentException("Token requires a non-empty token.", nameof(expectedToken));
+        string firstElement = StringInfo.GetNextTextElement(expectedToken, 0);
+        if (firstElement.Length != expectedToken.Length)
             throw new ArgumentException(
-                $"Grapheme requires exactly one grapheme. Use Literal(string) for multi-grapheme matches.",
-                nameof(expectedGrapheme));
+                $"Token requires exactly one token (one StringInfo text element). Use Literal(string) for multi-token matches.",
+                nameof(expectedToken));
 
-        _expected = expectedGrapheme;
+        _expected = expectedToken;
 
-        // Single-rune graphemes get their code point pinned as the rule's
+        // Single-rune tokens get their code point pinned as the rule's
         // Id, matching C++ character-symbol numbering. Multi-rune
-        // graphemes fall through to Compile's custom-range assignment.
-        if (TrySingleRuneValue(expectedGrapheme, out int runeValue))
+        // tokens fall through to Compile's custom-range assignment.
+        if (TrySingleRuneValue(expectedToken, out int runeValue))
             SetIdInternal(new SymbolId(runeValue));
     }
 
@@ -76,11 +73,13 @@ internal sealed class GraphemeRule : Rule
         int consumed = 0;
 
         // No heap allocations here except the one for the Symbol we return at the end.
-        // Iterate once per lexer token, the consumed+= token.length is what does
-        // the magic. GraphemeLexer emits one token for
-        // the whole grapheme (loop runs once). RuneLexer emits one token
-        // per rune, so a 2-rune grapheme takes two iterations, a 7-rune
-        // ZWJ emoji takes seven, etc.
+        // The lexer emits one token for the whole text element so the
+        // loop runs once per match in the normal path. The
+        // consumed += token.Length pattern also carries the
+        // multi-iteration sub-lexer case (WithinTokenRule's
+        // one-rune-per-token sub-lexer reading a multi-rune token):
+        // each rune iteration accumulates until consumed catches up
+        // to _expected.Length.
         //
         // tokenStart is the pre-read position for THIS iteration's read.
         // Required for multi-token matches so we report the offender at
@@ -92,9 +91,10 @@ internal sealed class GraphemeRule : Rule
             var token = lexer.Read();
             // Error Positioning: tokenStart is where the specific failing token began.
             // For a single-token match this equals transaction.StartPosition.
-            // For multi-token lockstep (multi-rune grapheme under RuneLexer)
-            // it's the start of whichever token mismatched, not the start
-            // of the whole attempt.
+            // For multi-token lockstep (a multi-rune token under the
+            // WithinToken sub-lexer's one-rune-per-token mode) it's the
+            // start of whichever token mismatched, not the start of the
+            // whole attempt.
             if (token.IsEof)
             {
                 TraceFailure(lexer, $"found '<EOF>', wanted '{_expected}'");
@@ -113,11 +113,11 @@ internal sealed class GraphemeRule : Rule
 
         TraceSuccess(lexer, $"found '{_expected}'");
         transaction.Commit();
-        // Default FlattenType is Delete, so most Grapheme matches end up
+        // Default FlattenType is Delete, so most Token matches end up
         // in the discard branch and return the shared Discarded value
         // (no per-match Symbol allocation). Grammar authors who want
         // the character in the tree opt in with .Flatten(FlattenType.Preserve)
-        // on the Grapheme rule.
+        // on the Token rule.
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
         var leafSymbol = new Symbol(Id, FlattenType, lexer.Input.AsMemory(transaction.StartPosition, consumed));
@@ -135,9 +135,9 @@ internal sealed class GraphemeRule : Rule
     // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
     {
-        // Whatever the expected grapheme is, its first rune is the only
+        // Whatever the expected token is, its first rune is the only
         // thing the lookahead has to match for this rule to have a chance.
-        // Multi-rune graphemes (ZWJ sequences, etc.) still pin the set to
+        // Multi-rune tokens (ZWJ sequences, etc.) still pin the set to
         // the first rune. The follow-on runes are checked by the rule's
         // own lockstep compare against _expected.
         //

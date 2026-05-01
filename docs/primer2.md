@@ -47,7 +47,7 @@ var name = OneOrMore(NoneOf(TokenSet.Runes("]") | anySpaceRunes))
 var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes))
     .As("key").Preserve();
 
-var section = AllOf(Grapheme('['), name, Grapheme(']'), Optional(InlineWhitespace()), EndOfLine())
+var section = AllOf(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
     .As("section").Preserve();
 
 // Typed values. Each alternative is .As(name).Preserve() so the
@@ -55,9 +55,9 @@ var section = AllOf(Grapheme('['), name, Grapheme(']'), Optional(InlineWhitespac
 // Order matters in FirstOf: Float before Integer because "3.14" would
 // otherwise commit to Integer on the leading "3" and stall.
 var quotedString = AllOf(
-    Grapheme('"'),
+    Token('"'),
     ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
-    Grapheme('"')).As("quotedString").Preserve();
+    Token('"')).As("quotedString").Preserve();
 
 var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\"")))
     .As("bareWord").Preserve();
@@ -68,7 +68,7 @@ var integerValue = Integer().As("integer").Preserve();
 var value = FirstOf(floatValue, integerValue, quotedString, bareWord)
     .As("value").Preserve();
 
-var keyValue = AllOf(key, Optional(InlineWhitespace()), Grapheme('='), Optional(InlineWhitespace()), value, Optional(InlineWhitespace()), EndOfLine())
+var keyValue = AllOf(key, Optional(InlineWhitespace()), Token('='), Optional(InlineWhitespace()), value, Optional(InlineWhitespace()), EndOfLine())
     .As("keyValue").Preserve();
 
 var blankLine = AllOf(Optional(InlineWhitespace()), EndOfLine());
@@ -81,7 +81,7 @@ var config = AllOf(ZeroOrMore(line), Eof()).As("config").Preserve();
 
 `value` is where typing happens. Each alternative is `.As(name).Preserve()` so the matching one lands in the tree as a typed child. `Float()` and `Integer()` are built-in rules, `quotedString` is the standard open-quote/body/close-quote shape and `bareWord` catches everything else. Order in `FirstOf` matters because it stops at the first match: `Float` is before `Integer` so `3.14` doesn't commit to `3` and leave `.14` for the next rule to choke on.
 
-`EndOfLine()` accepts CRLF as a unit plus any of the seven Unicode single-rune line terminators. `Grapheme('\n')` only handles LF and would silently cause a bug on a CRLF Windows file or anything using NEL, LINE SEPARATOR, or PARAGRAPH SEPARATOR.
+`EndOfLine()` accepts CRLF as a unit plus any of the seven Unicode single-rune line terminators. `Token('\n')` only handles LF and would silently cause a bug on a CRLF Windows file or anything using NEL, LINE SEPARATOR, or PARAGRAPH SEPARATOR.
 
 `.As(name).Preserve()` is the same pattern as primer1: name the rule so you can find it later, keep its wrapper in the tree so there's something to find.
 
@@ -214,7 +214,7 @@ The default error message is generic. To upgrade it, attach `.WithError(...)` to
 var keyValue = AllOf(
     key,
     Optional(InlineWhitespace()),
-    Grapheme('=').WithError("Expected '=' after the setting name"),
+    Token('=').WithError("Expected '=' after the setting name"),
     Optional(InlineWhitespace()),
     value,
     Optional(InlineWhitespace()),
@@ -222,7 +222,7 @@ var keyValue = AllOf(
     .As("keyValue").Preserve();
 ```
 
-If `Grapheme('=')` is the deepest failure when a parse fails (the rule that got furthest before giving up), `result.ErrorMessage` will be your custom string instead of the default. Re-running the same `[server]\nport oops\n` input now reports:
+If `Token('=')` is the deepest failure when a parse fails (the rule that got furthest before giving up), `result.ErrorMessage` will be your custom string instead of the default. Re-running the same `[server]\nport oops\n` input now reports:
 
 ```
 Parse failed at line 1, column 5
@@ -250,7 +250,7 @@ Output:
 Erreur à la position 14: caractère 'o' inattendu.
 ```
 
-The position placeholders work in every template: `{charIndex}`, `{runeIndex}`, `{graphemeIndex}`, `{line}`, `{column}`. The positional template gets one extra, `{character}`, for the input character that didn't match. Four matching templates exist for the budget aborts (timeout, rule-count limit, recursion-depth limit, cancellation) with their own unit-specific placeholders like `{timeout}` and `{limit}`. 
+The position placeholders work in every template: `{charIndex}`, `{runeIndex}`, `{tokenIndex}`, `{line}`, `{column}`. The positional template gets one extra, `{character}`, for the input character that didn't match. Four matching templates exist for the budget aborts (timeout, rule-count limit, recursion-depth limit, cancellation) with their own unit-specific placeholders like `{timeout}` and `{limit}`. 
 
 Semantic errors happen after the parse: a duplicate section, a missing required key, a number out of range. The parse already succeeded so now you need to walk the tree and check things.
 
@@ -269,7 +269,7 @@ foreach (var sectionSymbol in result.Tree!.FindAll(section))
 }
 ```
 
-`SourceRange` returns a `Start` and `End` pair, each a `SourcePosition` carrying the same five units as `ParseResult`'s error position: `CharIndex`, `RuneIndex`, `GraphemeIndex`, `Line`, `Column`. The `+ 1` here is because Language Server Protocol lines are zero-based but humans count from 1.
+`SourceRange` returns a `Start` and `End` pair, each a `SourcePosition` carrying the same five units as `ParseResult`'s error position: `CharIndex`, `RuneIndex`, `TokenIndex`, `Line`, `Column`. The `+ 1` here is because Language Server Protocol lines are zero-based but humans count from 1.
 
 A composite node's range covers every leaf underneath it. Ask `keyValue.SourceRange` and you get the whole `host = "localhost"` line. Ask `value.SourceRange` and you get just the value. Pick the node and you pick the span.
 
@@ -326,7 +326,7 @@ Inductor Parser reports it four ways, because the right unit depends on what the
 ```CSharp
 result.ErrorCharIndex     // 16 - UTF-16 code units, what string.Substring uses
 result.ErrorRuneIndex     // 13 - runes
-result.ErrorGraphemeIndex // 9  - graphemes
+result.ErrorTokenIndex // 9  - graphemes
 result.ErrorLine          // 1
 result.ErrorColumn        // 5  - same unit as ErrorCharIndex, used by the Language Server Protocol
 ```
@@ -337,7 +337,7 @@ Use `ErrorCharIndex` (or `ErrorColumn`) when you're going to feed the number int
 
 Use `ErrorRuneIndex` when you're working with runes directly. Less common, but it shows up if you're stepping through `Rune.GetRunes(input)` and want to know which rune tripped the parser.
 
-Use `ErrorGraphemeIndex` for anything that faces a human. "Error at character 9" is what a person sees on screen. "Error at character 16" would seem to point past the end of what they typed, because they don't think of an emoji as taking up 8 of anything.
+Use `ErrorTokenIndex` for anything that faces a human. "Error at character 9" is what a person sees on screen. "Error at character 16" would seem to point past the end of what they typed, because they don't think of an emoji as taking up 8 of anything.
 
 Most of the time you won't care, because most input is ASCII and all four numbers are equal. But the moment a user pastes in an emoji, a flag, or a letter with a combining accent, the indices diverge, and "which one do I show in the error message" stops being a question you can ignore.
 
@@ -349,7 +349,7 @@ var sectionName = result.Tree!.Find(section)!.Children[0];  // the "name" leaf
 var range = sectionName.SourceRange!.Value;
 int charWidth     = range.End.CharIndex     - range.Start.CharIndex;     // 8
 int runeWidth     = range.End.RuneIndex     - range.Start.RuneIndex;     // 5
-int graphemeWidth = range.End.GraphemeIndex - range.Start.GraphemeIndex; // 1
+int graphemeWidth = range.End.TokenIndex - range.Start.TokenIndex; // 1
 ```
 
 All three are right. The right one to use is whichever your consumer counts in: chars to feed `string.Substring` or send a Language Server Protocol diagnostic, runes to step through `Rune.GetRunes(input)`, graphemes to draw a `^` under each thing the user sees on screen.

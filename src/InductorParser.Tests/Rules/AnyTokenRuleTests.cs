@@ -33,7 +33,7 @@ public class AnyTokenRuleTests
     }
 
     [Test]
-    public void AnyToken_under_grapheme_lexer_consumes_whole_grapheme()
+    public void AnyToken_under_grapheme_lexer_consumes_whole_Token()
     {
         // LatinEAcuteGrapheme is one token (two runes, one grapheme).
         // AnyToken consumes the whole token as a single match.

@@ -68,7 +68,7 @@ public static class StringLiteralGrammars
     {
         var hexDigit = OneOf(TokenSet.Ascii.HexDigits);
         var simpleEscapeEnd = OneOf(TokenSet.Runes("\"\\/bfnrt"));
-        var unicodeEscapeEnd = AllOf(Grapheme('u'), hexDigit, hexDigit, hexDigit, hexDigit);
+        var unicodeEscapeEnd = AllOf(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
         var escapeEnd = FirstOf(simpleEscapeEnd, unicodeEscapeEnd);
 
         // Stop-at set: the closing quote plus every C0 control char.
@@ -78,7 +78,7 @@ public static class StringLiteralGrammars
         var stopAt = TokenSet.Runes("\"") | TokenSet.Range(0x00, 0x1F);
         var body = ScanUntil(stopAt: stopAt, escapeStart: new Rune('\\'), escapeEnd: escapeEnd);
 
-        return AllOf(Grapheme('"'), body, Grapheme('"')).As("jsonString");
+        return AllOf(Token('"'), body, Token('"')).As("jsonString");
     }
 
     private static Rule BuildPythonSingleLine()
@@ -88,7 +88,7 @@ public static class StringLiteralGrammars
             escapeStart: new Rune('\\'),
             escapeEnd: BuildPythonEscapeEnd());
 
-        return AllOf(Grapheme('"'), body, Grapheme('"')).As("pyLineString");
+        return AllOf(Token('"'), body, Token('"')).As("pyLineString");
     }
 
     private static Rule BuildPythonTripleQuote()
@@ -111,7 +111,7 @@ public static class StringLiteralGrammars
         // No escape start. The literal-only ScanUntil overload.
         // Backslashes inside the body are just body content.
         var body = ScanUntil(TokenSet.Runes("\""));
-        return AllOf(Grapheme('r'), Grapheme('"'), body, Grapheme('"')).As("pyRawString");
+        return AllOf(Token('r'), Token('"'), body, Token('"')).As("pyRawString");
     }
 
     // Python's escape end: try more-specific shapes before
@@ -134,13 +134,13 @@ public static class StringLiteralGrammars
         var octalEscapeEnd = BetweenInclusive(1, 3, octalDigit);
 
         // \xNN  exactly two hex digits
-        var hexEscapeEnd = AllOf(Grapheme('x'), hexDigit, hexDigit);
+        var hexEscapeEnd = AllOf(Token('x'), hexDigit, hexDigit);
 
         // \uNNNN  exactly four hex digits
-        var unicode4EscapeEnd = AllOf(Grapheme('u'), hexDigit, hexDigit, hexDigit, hexDigit);
+        var unicode4EscapeEnd = AllOf(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
 
         // \UNNNNNNNN  exactly eight hex digits
-        var unicode8EscapeEnd = AllOf(Grapheme('U'),
+        var unicode8EscapeEnd = AllOf(Token('U'),
                            hexDigit, hexDigit, hexDigit, hexDigit,
                            hexDigit, hexDigit, hexDigit, hexDigit);
 
@@ -149,7 +149,7 @@ public static class StringLiteralGrammars
         // non-} rune as a simplifying sketch. Matches the shape,
         // not the validation.
         var nameChar = OneOf(~TokenSet.Runes("}"));
-        var namedEscapeEnd = AllOf(Grapheme('N'), Grapheme('{'), OneOrMore(nameChar), Grapheme('}'));
+        var namedEscapeEnd = AllOf(Token('N'), Token('{'), OneOrMore(nameChar), Token('}'));
 
         // Simple single-char escapes. \0 is covered by octalEscapeEnd
         // so it isn't listed here.

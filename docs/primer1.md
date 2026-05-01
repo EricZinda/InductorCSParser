@@ -6,7 +6,7 @@ To parse text using the Inductor Parser, you build up a set of rules that "consu
 "Anything"
 "Until I hit this sequence of characters"
 ```
-There are rules that consume text units, like `Grapheme` (a single token: a grapheme by default, or a rune if you opt into `RuneLexer`), `Literal` (an exact string) and `Integer`. These are your basic building blocks. In this example, let's replace the second part with:
+There are rules that consume text units, like `Token` (a single token: a grapheme by default, or a rune if you opt into `RuneLexer`), `Literal` (an exact string) and `Integer`. These are your basic building blocks. In this example, let's replace the second part with:
 
 ```
 "Anything"
@@ -109,7 +109,7 @@ AllOf: "How can I match anything up until this sequence of characters"
 ```
 First, each symbol is shown indented based on where in the tree it was, followed by ":" and what `ToString()` would return for it. This means the root node should always show the full document.
 
-Next, `Grapheme` just prints out its value without `Grapheme` in front of it. This is why you see bare `'H'` and `'o'` in the output.
+Next, `Token` just prints out its value without `Token` in front of it. This is why you see bare `'H'` and `'o'` in the output.
 
 Note that `Not` doesn't actually consume anything so it has nothing to print out. It just ensures that whatever is inside it isn't coming up.
 
@@ -140,6 +140,6 @@ Two different multi-rune graphemes are at work here. The waving hand 👋🏽 is
 
 The same thing works with accented letters typed as a base letter plus a combining mark, with regional-indicator flag pairs like 🇺🇸, and with combining-mark scripts like Devanagari or Thai. They all come through as one token each, both inside `AnyToken()` and inside `Literal(...)`.
 
-This matters because the most common Unicode bug in parsers is silently splitting a multi-rune grapheme into pieces. A grammar that consumes one rune from 👨‍👩‍👧 and stops would leave six dangling runes for the next rule to trip over. The default lexer (called `GraphemeLexer`) avoids this by walking the input one user-perceived character at a time. If you want to look *inside* a grapheme (to inspect combining marks individually, say) there's an opt-in `RuneLexer` and a `WithinGrapheme(...)` helper. But for normal text processing, you don't have to think about any of this. The grammar above already does the right thing on emoji, accented letters, CJK text, and complex scripts.
+This matters because the most common Unicode bug in parsers is silently splitting a multi-rune grapheme into pieces. A grammar that consumes one rune from 👨‍👩‍👧 and stops would leave six dangling runes for the next rule to trip over. The default lexer (called `GraphemeLexer`) avoids this by walking the input one user-perceived character at a time. If you want to look *inside* a grapheme (to inspect combining marks individually, say) there's an opt-in `RuneLexer` and a `WithinToken(...)` helper. But for normal text processing, you don't have to think about any of this. The grammar above already does the right thing on emoji, accented letters, CJK text, and complex scripts.
 
 For the bigger picture (normalization, line terminators beyond `\n`, position tracking in chars vs. runes vs. graphemes) see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). For the surprises that *do* come up and how to handle them, see [UnicodeGotchas.md](UnicodeGotchas.md).

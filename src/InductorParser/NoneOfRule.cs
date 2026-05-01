@@ -40,7 +40,7 @@ internal sealed class NoneOfRule : Rule
         int runeValue = token.RuneValue;
         bool inSet = runeValue >= 0
             ? _set.Contains(runeValue)
-            : _set.HasMultiRuneGraphemes && _set.ContainsGrapheme(token.Chars);
+            : _set.HasMultiRuneGraphemes && _set.ContainsToken(token.Chars);
         if (inSet)
         {
             TraceFailure(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted one not in '{_setRendered}'");

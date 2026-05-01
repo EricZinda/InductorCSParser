@@ -69,8 +69,8 @@ public class BudgetTests
         // enough input would blow the .NET call stack.
         var nested = new LateBoundRule("nested");
         nested.Bind(FirstOf(
-            AllOf(Grapheme('('), nested, Grapheme(')')),
-            Grapheme('x')));
+            AllOf(Token('('), nested, Token(')')),
+            Token('x')));
 
         // 100 levels of nesting, far past the MaxDepth = 10 budget.
         string input = new string('(', 100) + "x" + new string(')', 100);
@@ -90,8 +90,8 @@ public class BudgetTests
         // call stack).
         var nested = new LateBoundRule("nested");
         nested.Bind(FirstOf(
-            AllOf(Grapheme('('), nested, Grapheme(')')),
-            Grapheme('x')));
+            AllOf(Token('('), nested, Token(')')),
+            Token('x')));
 
         string input = new string('(', 50) + "x" + new string(')', 50);
         var options = new ParseOptions { MaxDepth = 0, RuleCountLimit = 0 };
@@ -200,7 +200,7 @@ public class BudgetTests
         // textbook "OneOrMore(OneOrMore(A)) on letters" example doesn't
         // actually backtrack catastrophically in this engine. To push
         // past 10M invocations cheaply, lean on the BetweenInclusive
-        // lookahead early-out: an Optional whose inner Grapheme can't match
+        // lookahead early-out: an Optional whose inner Token can't match
         // the next rune returns immediately without invoking the inner
         // rule at all, so each Optional costs roughly one peek-and-return
         // worth of work per outer iteration. Stack 40 of those plus a
@@ -215,7 +215,7 @@ public class BudgetTests
         // a second in Debug.
         var optionalsAndAnyToken = new Rule[41];
         for (int index = 0; index < 40; index++)
-            optionalsAndAnyToken[index] = Optional(Grapheme((char)('0' + index % 10)));
+            optionalsAndAnyToken[index] = Optional(Token((char)('0' + index % 10)));
         optionalsAndAnyToken[40] = AnyToken();
 
         var rule = OneOrMore(AllOf(optionalsAndAnyToken));
@@ -253,12 +253,12 @@ public class BudgetTests
         // meaningful "how far did we get" hint.
         //
         // Grammar: each iteration tries Literal("ab") first (matches 'a',
-        // fails on the second Grapheme, records a failure), then falls back
-        // to Grapheme('a') which succeeds. DeepestFailure grows with every
+        // fails on the second Token, records a failure), then falls back
+        // to Token('a') which succeeds. DeepestFailure grows with every
         // iteration, so by the time the budget trips it's well above 0.
         // If Parse used lexer.Position here (pre-fix behavior), the
         // rolled-back value of 0 would make this assertion fail.
-        var rule = OneOrMore(FirstOf(Literal("ab"), Grapheme('a')));
+        var rule = OneOrMore(FirstOf(Literal("ab"), Token('a')));
         var input = new string('a', 5000);
         var options = new ParseOptions { RuleCountLimit = 100 };
         var result = rule.Parse(input, options);
@@ -268,12 +268,12 @@ public class BudgetTests
         //   - Outer OneOrMore.TryParse is invocation 1.
         //   - Each successful iter does 3 invocations: FirstOf, Literal
         //     (fails on the second token, records a failure at iter-start
-        //     + 1), Grapheme (succeeds, cursor advances by one).
+        //     + 1), Token (succeeds, cursor advances by one).
         //   - The periodic budget check fires on multiples of 1024 (the
         //     check interval). With RuleCountLimit = 100 the first check
         //     is at invocation 1024, which trips immediately.
         //   - 1 + 3N = 1024 puts the trip mid-iteration 341, on the
-        //     EnterRule of Grapheme('a') for iter 341. By that point Literal
+        //     EnterRule of Token('a') for iter 341. By that point Literal
         //     has just recorded a failure at position 341. That's the
         //     value DeepestFailure has when Parse converts the abort into
         //     a ParseResult, so ErrorCharIndex is exactly 341.

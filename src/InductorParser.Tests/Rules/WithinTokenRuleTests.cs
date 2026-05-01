@@ -7,18 +7,18 @@ using static InductorParser.Tests.UnicodeExamples;
 
 namespace InductorParser.Tests;
 
-// Tests for Rules.WithinGrapheme, the combinator that runs an inner rule
+// Tests for Rules.WithinToken, the combinator that runs an inner rule
 // against the runes inside one outer token. Used by Identifier() to handle
 // Devanagari / Thai / Arabic-with-vowels under the default grapheme lexer,
 // but usable by any grammar that needs to validate grapheme-internal
 // structure (emoji sequences, Hangul jamo clusters, ASCII strictness).
 [TestFixture]
-public class WithinGraphemeRuleTests
+public class WithinTokenRuleTests
 {
     [Test]
     public void Single_rune_grapheme_matches_inner_rune_rule()
     {
-        var rule = WithinGrapheme(OneOf(TokenSet.Ascii.Letters));
+        var rule = WithinToken(OneOf(TokenSet.Ascii.Letters));
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -28,7 +28,7 @@ public class WithinGraphemeRuleTests
     [Test]
     public void Single_rune_grapheme_fails_when_inner_rejects()
     {
-        var rule = WithinGrapheme(OneOf(TokenSet.Ascii.Letters));
+        var rule = WithinToken(OneOf(TokenSet.Ascii.Letters));
         var result = rule.Parse("3");
 
         Assert.That(result.Success, Is.False);
@@ -42,7 +42,7 @@ public class WithinGraphemeRuleTests
         // The inner rule accepts both in order: a letter then a combining
         // mark. Uses NormalizeInput=null so the decomposed form survives
         // to the lexer.
-        var rule = WithinGrapheme(AllOf(
+        var rule = WithinToken(AllOf(
             OneOf(TokenSet.Ascii.Letters),
             OneOf(TokenSet.Category(System.Globalization.UnicodeCategory.NonSpacingMark))
         ));
@@ -57,8 +57,8 @@ public class WithinGraphemeRuleTests
     {
         // A grapheme is atomic. If the inner rule matches just the first
         // rune and leaves the combining mark unconsumed, the whole
-        // WithinGrapheme fails rather than accepting a partial match.
-        var rule = WithinGrapheme(OneOf(TokenSet.Ascii.Letters));
+        // WithinToken fails rather than accepting a partial match.
+        var rule = WithinToken(OneOf(TokenSet.Ascii.Letters));
         var result = rule.Parse(LatinEAcuteGrapheme, new ParseOptions { NormalizeInput = null });
 
         Assert.That(result.Success, Is.False);
@@ -67,7 +67,7 @@ public class WithinGraphemeRuleTests
     [Test]
     public void Fails_at_end_of_input()
     {
-        var rule = WithinGrapheme(AnyToken()).WithError("wanted a grapheme");
+        var rule = WithinToken(AnyToken()).WithError("wanted a grapheme");
         var result = rule.Parse("");
 
         Assert.That(result.Success, Is.False);
@@ -78,10 +78,10 @@ public class WithinGraphemeRuleTests
     [Test]
     public void Composes_into_zero_or_more_for_multi_grapheme_sequences()
     {
-        // ZeroOrMore(WithinGrapheme(letter)) walks a sequence of single-
+        // ZeroOrMore(WithinToken(letter)) walks a sequence of single-
         // rune graphemes. Proves the combinator composes into the normal
         // repeat combinators without special handling.
-        var rule = ZeroOrMore(WithinGrapheme(OneOf(TokenSet.Ascii.Letters)))
+        var rule = ZeroOrMore(WithinToken(OneOf(TokenSet.Ascii.Letters)))
             .Flatten(FlattenType.Preserve)
             .As("letters");
         var result = rule.Parse("abc");
@@ -93,11 +93,11 @@ public class WithinGraphemeRuleTests
     [Test]
     public void Emits_exactly_one_leaf_per_grapheme_regardless_of_inner_structure()
     {
-        // The inner rule is a two-piece AllOf, but WithinGrapheme hides
+        // The inner rule is a two-piece AllOf, but WithinToken hides
         // that and emits a single leaf Symbol for the whole grapheme.
-        // Grammar authors can rely on WithinGrapheme looking like a leaf
+        // Grammar authors can rely on WithinToken looking like a leaf
         // from the outside.
-        var rule = WithinGrapheme(AllOf(
+        var rule = WithinToken(AllOf(
             OneOf(TokenSet.Ascii.Letters),
             OneOf(TokenSet.Category(System.Globalization.UnicodeCategory.NonSpacingMark))
         ));
@@ -112,11 +112,11 @@ public class WithinGraphemeRuleTests
     [Test]
     public void Reject_multi_rune_graphemes_idiom_works()
     {
-        // WithinGrapheme(OneOf(singleTokenSet)) is the idiomatic "reject
+        // WithinToken(OneOf(singleTokenSet)) is the idiomatic "reject
         // any multi-rune grapheme" rule. Passes on ASCII, fails on
         // precomposed "é" (single rune but not ASCII), fails on
         // decomposed "é" (two runes).
-        var asciiOnly = WithinGrapheme(OneOf(TokenSet.Ascii.Letters));
+        var asciiOnly = WithinToken(OneOf(TokenSet.Ascii.Letters));
 
         Assert.That(asciiOnly.Parse("a").Success, Is.True);
         Assert.That(asciiOnly.Parse("é").Success, Is.False);  // é isn't ASCII
@@ -124,7 +124,7 @@ public class WithinGraphemeRuleTests
             new ParseOptions { NormalizeInput = null }).Success, Is.False);  // two runes
     }
 
-    // The three tests below are the real-world reason WithinGrapheme
+    // The three tests below are the real-world reason WithinToken
     // exists. Devanagari, Thai, and Arabic-with-vowels all produce
     // multi-rune graphemes unconditionally (NFC doesn't compose them),
     // which is the case the Latin-decomposed tests above only simulate
@@ -137,7 +137,7 @@ public class WithinGraphemeRuleTests
         // "हि" is one grapheme under the grapheme lexer, two runes:
         // U+0939 DEVANAGARI LETTER HA (Lo) + U+093F DEVANAGARI VOWEL SIGN I (Mc).
         // The inner rule walks both runes.
-        var rule = WithinGrapheme(AllOf(
+        var rule = WithinToken(AllOf(
             OneOf(TokenSet.XidStart),
             OneOf(TokenSet.XidContinue)));
         var result = rule.Parse("हि");
@@ -153,7 +153,7 @@ public class WithinGraphemeRuleTests
         // (Lo, in XID_Start) + U+0E33 THAI CHARACTER SARA AM (in
         // XID_Continue, excluded from XID_Start via the NFKC-unstable
         // table since its NFKC decomposition is NIKHAHIT + SARA AA).
-        var rule = WithinGrapheme(AllOf(
+        var rule = WithinToken(AllOf(
             OneOf(TokenSet.XidStart),
             OneOf(TokenSet.XidContinue)));
         var result = rule.Parse("กำ");
@@ -169,7 +169,7 @@ public class WithinGraphemeRuleTests
         // U+064E ARABIC FATHA (Mn). Represents the common case of Arabic
         // text written with the optional vowel diacritics, which bundle
         // with their preceding consonant under grapheme clustering.
-        var rule = WithinGrapheme(AllOf(
+        var rule = WithinToken(AllOf(
             OneOf(TokenSet.XidStart),
             OneOf(TokenSet.XidContinue)));
         var result = rule.Parse("كَ");
@@ -179,25 +179,25 @@ public class WithinGraphemeRuleTests
     }
 
     [Test]
-    public void Sealed_WithinGrapheme_rejects_Flatten()
+    public void Sealed_WithinToken_rejects_Flatten()
     {
-        var rule = WithinGrapheme(Grapheme('a'));
+        var rule = WithinToken(Token('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.Flatten(FlattenType.Preserve));
     }
 
     [Test]
-    public void Sealed_WithinGrapheme_rejects_WithError()
+    public void Sealed_WithinToken_rejects_WithError()
     {
-        var rule = WithinGrapheme(Grapheme('a'));
+        var rule = WithinToken(Token('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.WithError("late"));
     }
 
     [Test]
-    public void Sealed_WithinGrapheme_rejects_As()
+    public void Sealed_WithinToken_rejects_As()
     {
-        var rule = WithinGrapheme(Grapheme('a'));
+        var rule = WithinToken(Token('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }

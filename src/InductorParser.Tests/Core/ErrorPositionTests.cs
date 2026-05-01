@@ -6,7 +6,7 @@ using static InductorParser.Tests.UnicodeExamples;
 namespace InductorParser.Tests;
 
 // Tests for the derived error-position properties on ParseResult:
-// ErrorLine, ErrorColumn, ErrorGraphemeIndex. The underlying
+// ErrorLine, ErrorColumn, ErrorTokenIndex. The underlying
 // ErrorCharIndex is covered by the per-rule test fixtures. This file
 // exercises the char-index -> (line, column, grapheme) conversions
 // specifically.
@@ -68,14 +68,14 @@ public class ErrorPositionTests
     [Test]
     public void Success_has_zero_positions_and_line_zero_column_zero()
     {
-        var rule = AllOf(Grapheme('a'), Eof());
+        var rule = AllOf(Token('a'), Eof());
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(0));
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorTokenIndex, Is.EqualTo(0));
     }
 
     [Test]
@@ -87,7 +87,7 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(0));
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorTokenIndex, Is.EqualTo(0));
     }
 
     [Test]
@@ -99,7 +99,7 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(3));
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
+        Assert.That(result.ErrorTokenIndex, Is.EqualTo(3));
     }
 
     [Test]
@@ -111,7 +111,7 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
         Assert.That(result.ErrorColumn, Is.EqualTo(0));
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
+        Assert.That(result.ErrorTokenIndex, Is.EqualTo(3));
     }
 
     [Test]
@@ -121,14 +121,14 @@ public class ErrorPositionTests
         // lands on the first non-'a' char. Input "aa\n" fails at offset 2
         // (the '\n' itself). '\n' is the line terminator. The index that
         // lands ON it reports the line that just ended.
-        var rule = AllOf(OneOrMore(Grapheme('a')), Eof());
+        var rule = AllOf(OneOrMore(Token('a')), Eof());
         var result = rule.Parse("aa\n");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(2));
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(2));
+        Assert.That(result.ErrorTokenIndex, Is.EqualTo(2));
     }
 
     [Test]
@@ -141,7 +141,7 @@ public class ErrorPositionTests
         Assert.That(result.ErrorLine, Is.EqualTo(1));
         Assert.That(result.ErrorColumn, Is.EqualTo(0));
         // \r not followed by \n is its own grapheme cluster.
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
+        Assert.That(result.ErrorTokenIndex, Is.EqualTo(3));
     }
 
     [Test]
@@ -154,7 +154,7 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(6));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
         Assert.That(result.ErrorColumn, Is.EqualTo(3));
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(6));
+        Assert.That(result.ErrorTokenIndex, Is.EqualTo(6));
     }
 
     [Test]
@@ -167,7 +167,7 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(4));
         Assert.That(result.ErrorLine, Is.EqualTo(3));
         Assert.That(result.ErrorColumn, Is.EqualTo(0));
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(4));
+        Assert.That(result.ErrorTokenIndex, Is.EqualTo(4));
     }
 
     [Test]
@@ -179,21 +179,21 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(3));
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(3));
+        Assert.That(result.ErrorTokenIndex, Is.EqualTo(3));
     }
 
     [Test]
-    public void Grapheme_index_collapses_supplementary_rune_to_one_grapheme()
+    public void Grapheme_index_collapses_supplementary_rune_to_one_Token()
     {
         // Guitar emoji is one grapheme and two UTF-16 chars.
-        var rule = AllOf(OneOrMore(Grapheme(GuitarGrapheme)), Eof());
+        var rule = AllOf(OneOrMore(Token(GuitarGrapheme)), Eof());
         var result = rule.Parse(GuitarGrapheme + "X");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(2));
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(1));
+        Assert.That(result.ErrorTokenIndex, Is.EqualTo(1));
     }
 
     [Test]
@@ -208,7 +208,7 @@ public class ErrorPositionTests
         // lexer. The default NFC would compose to a one-char grapheme and
         // the char/grapheme counts the test is demonstrating wouldn't
         // diverge anymore.
-        var rule = AllOf(OneOrMore(Grapheme(LatinEAcuteGrapheme)), Eof());
+        var rule = AllOf(OneOrMore(Token(LatinEAcuteGrapheme)), Eof());
         var result = rule.Parse(LatinEAcuteGrapheme + "X",
             new ParseOptions { NormalizeInput = null });
 
@@ -216,27 +216,27 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(2));
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(1));
+        Assert.That(result.ErrorTokenIndex, Is.EqualTo(1));
     }
 
     [Test]
     public void EOF_failure_reports_line_and_column_of_virtual_position()
     {
         // Grammar consumes five specific chars then requires a sixth.
-        // Input "aa\naa" is five chars, so the Grapheme(';') at the end hits
+        // Input "aa\naa" is five chars, so the Token(';') at the end hits
         // EOF at position 5: on line 1 ("aa"), column 2 (one past the
         // last 'a' in 0-based terms).
         var rule = AllOf(
-            Grapheme('a'), Grapheme('a'), Grapheme('\n'),
-            Grapheme('a'), Grapheme('a'),
-            Grapheme(';'));
+            Token('a'), Token('a'), Token('\n'),
+            Token('a'), Token('a'),
+            Token(';'));
         var result = rule.Parse("aa\naa");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(5));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
         Assert.That(result.ErrorColumn, Is.EqualTo(2));
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(5));
+        Assert.That(result.ErrorTokenIndex, Is.EqualTo(5));
     }
 
     [Test]
@@ -250,6 +250,6 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(0));
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorTokenIndex, Is.EqualTo(0));
     }
 }

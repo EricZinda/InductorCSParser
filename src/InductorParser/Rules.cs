@@ -19,7 +19,7 @@ namespace InductorParser;
 /// var expression = AllOf(
 ///     Identifier(),
 ///     Optional(AnyWhitespace()),
-///     Grapheme('='),
+///     Token('='),
 ///     Optional(AnyWhitespace()),
 ///     Integer()
 /// );
@@ -43,99 +43,75 @@ namespace InductorParser;
 public static class Rules
 {
     /// <summary>
-    /// Match one grapheme whose content is exactly the given character.
+    /// Match one token whose content is exactly the given character.
     /// Default <see cref="FlattenType"/>: <see cref="FlattenType.Delete"/>.
     /// </summary>
     /// <remarks>
-    /// What counts as "one token" depends on the configured lexer.
-    /// Under GraphemeLexer (the default) a token is one StringInfo text element, so
-    /// <c>Grapheme('a')</c> matches when the grapheme is the single
-    /// char 'a' but fails when 'a' is combined with a following
-    /// accent (because the grapheme is then two runes). Under
-    /// RuneLexer a token is one rune, so <c>Grapheme('a')</c> matches
-    /// the 'a' rune regardless of what follows. That last case is
-    /// easy to trip over: if the input has 'a' followed by U+0301
-    /// combining acute (which together render as 'á' in an editor),
-    /// <c>Grapheme('a')</c> under RuneLexer happily matches the 'a'
-    /// and the combining mark stays in the stream as its own token
-    /// for the next rule to handle. Grammars running under
-    /// RuneLexer have to be explicit about combining marks or
-    /// normalize the input before parsing. See
-    /// docs/UnicodeGotchas.md for the list of cases where this
-    /// bites.
+    /// A token is one StringInfo text element, so <c>Token('a')</c>
+    /// matches when the token is the single char 'a' but fails when
+    /// 'a' is combined with a following accent (because the token is
+    /// then two runes). See docs/UnicodeGotchas.md for the cases
+    /// where this bites.
     ///
-    /// All four Grapheme overloads funnel into <see cref="GraphemeRule"/>.
+    /// All four Token overloads funnel into <see cref="GraphemeRule"/>.
     /// The overloads exist for convenience and for early validation
     /// of their specific argument shape. For multi-character
-    /// matches use <see cref="Literal"/>.
+    /// matches use <see cref="Literal"/>. Not to be confused with
+    /// the <see cref="Lexing.Token"/> struct, which is the value the
+    /// lexer's <c>Read()</c> returns. C# resolves the two by
+    /// syntactic context: <c>Token('a')</c> with parens is this
+    /// factory call, <c>Token token = lexer.Read()</c> with an
+    /// identifier following is the struct.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="c"/> is a surrogate half. Use
-    /// <see cref="Grapheme(Rune)"/> or <see cref="Grapheme(int)"/> for a
+    /// <see cref="Token(Rune)"/> or <see cref="Token(int)"/> for a
     /// supplementary-plane code point.
     /// </exception>
-    public static Rule Grapheme(char c)
+    public static Rule Token(char c)
     {
         if (char.IsSurrogate(c))
             throw new ArgumentOutOfRangeException(nameof(c),
-                "Surrogate halves aren't valid grapheme content. Use Grapheme(Rune) or Grapheme(int) for a supplementary-plane code point.");
+                "Surrogate halves aren't valid token content. Use Token(Rune) or Token(int) for a supplementary-plane code point.");
         return new GraphemeRule(c.ToString());
     }
 
     /// <summary>
-    /// Match one grapheme whose content is exactly the given
+    /// Match one token whose content is exactly the given
     /// <see cref="Rune"/>. Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Delete"/>.
     /// </summary>
     /// <remarks>
-    /// Under GraphemeLexer (the default) a token is one StringInfo text element,
-    /// so this matches when the grapheme at the current position
-    /// is exactly the rune <c>r</c> standing alone. It fails when
-    /// <c>r</c> is followed by a combining mark or is part of a ZWJ
-    /// sequence, because the grapheme is then two or more runes
-    /// and doesn't equal the one-rune expected content. Under
-    /// RuneLexer a token is one rune, so this matches the <c>r</c>
-    /// rune directly regardless of what follows. That last case is
-    /// easy to trip over: if the input has <c>r</c> followed by a
-    /// combining mark, <c>Grapheme(r)</c> under RuneLexer happily
-    /// matches the <c>r</c> rune and the combining mark stays in
-    /// the stream as its own token for the next rule to handle.
-    /// Grammars running under RuneLexer have to be explicit about
-    /// combining marks or normalize the input before parsing. See
-    /// docs/UnicodeGotchas.md for the list of cases where this
-    /// bites.
+    /// A token is one StringInfo text element, so this matches when
+    /// the token at the current position is exactly the rune
+    /// <c>r</c> standing alone. It fails when <c>r</c> is followed
+    /// by a combining mark or is part of a ZWJ sequence, because
+    /// the token is then two or more runes and doesn't equal the
+    /// one-rune expected content. See docs/UnicodeGotchas.md for
+    /// the cases where this bites.
     /// </remarks>
-    public static Rule Grapheme(Rune r) => new GraphemeRule(r.ToString());
+    public static Rule Token(Rune r) => new GraphemeRule(r.ToString());
 
     /// <summary>
-    /// Match one grapheme whose content is exactly the rune with the
+    /// Match one token whose content is exactly the rune with the
     /// given integer code point. Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Delete"/>.
     /// </summary>
     /// <remarks>
-    /// Under GraphemeLexer (the default) a token is one StringInfo text element,
-    /// so this matches when the grapheme at the current position
-    /// is exactly the given rune standing alone. It fails when the
-    /// rune is followed by a combining mark or is part of a ZWJ
-    /// sequence, because the grapheme is then two or more runes
-    /// and doesn't equal the one-rune expected content. Under
-    /// RuneLexer a token is one rune, so this matches the rune
-    /// directly regardless of what follows. That last case is easy
-    /// to trip over: if the input has the rune followed by a
-    /// combining mark, this rule under RuneLexer happily matches
-    /// the rune and the combining mark stays in the stream as its
-    /// own token for the next rule to handle. Grammars running
-    /// under RuneLexer have to be explicit about combining marks
-    /// or normalize the input before parsing. See
-    /// docs/UnicodeGotchas.md for the list of cases where this
-    /// bites.
+    /// A token is one StringInfo text element, so this matches when
+    /// the token at the current position is exactly the given rune
+    /// standing alone. It fails when the rune is followed by a
+    /// combining mark or is part of a ZWJ sequence, because the
+    /// token is then two or more runes and doesn't equal the
+    /// one-rune expected content. See docs/UnicodeGotchas.md for
+    /// the cases where this bites.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="codepoint"/> isn't a valid Unicode scalar
     /// (outside 0..0x10FFFF or inside the surrogate block
     /// 0xD800..0xDFFF).
     /// </exception>
-    public static Rule Grapheme(int codepoint)
+    public static Rule Token(int codepoint)
     {
         if (!Rune.IsValid(codepoint))
             throw new ArgumentOutOfRangeException(nameof(codepoint), codepoint,
@@ -144,23 +120,19 @@ public static class Rules
     }
 
     /// <summary>
-    /// Match one grapheme (StringInfo text element) whose content equals the given string.
-    /// Default <see cref="FlattenType"/>:
+    /// Match one token (StringInfo text element) whose content equals
+    /// the given string. Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Delete"/>.
     /// </summary>
     /// <remarks>
     /// The string may itself be multi-rune (ZWJ sequences, skin
     /// tone modifiers, etc.). The <see cref="GraphemeRule"/>
     /// constructor validates at grammar-build time that the string
-    /// is exactly one grapheme (StringInfo text element).
-    ///
-    /// Under GraphemeLexer the input text element arrives as a single
-    /// token and this rule matches it in one compare. Under
-    /// RuneLexer the same text arrives as N rune tokens (one
-    /// per rune) and this rule matches them in
-    /// lockstep.
+    /// is exactly one token (StringInfo text element). The input
+    /// text element arrives as a single token from the lexer and
+    /// this rule matches it in one compare.
     /// </remarks>
-    public static Rule Grapheme(string grapheme) => new GraphemeRule(grapheme);
+    public static Rule Token(string token) => new GraphemeRule(token);
 
     /// <summary>
     /// Match an exact multi-character string in a single
@@ -168,9 +140,9 @@ public static class Rules
     /// <see cref="FlattenType.Delete"/>.
     /// </summary>
     /// <remarks>
-    /// For a one-grapheme match use <see cref="Grapheme(string)"/>.
-    /// Literal is the N-grapheme generalization and collapses what
-    /// would otherwise be N Grapheme rules (and N transactions) into
+    /// For a one-token match use <see cref="Token(string)"/>.
+    /// Literal is the N-token generalization and collapses what
+    /// would otherwise be N Token rules (and N transactions) into
     /// one. Rejects empty strings at construction.
     /// </remarks>
     public static Rule Literal(string value) => new LiteralRule(value);
@@ -352,7 +324,7 @@ public static class Rules
     /// var body = ScanUntil(
     ///     TokenSet.Runes("\"$"),
     ///     Literal("${"),
-    ///     AllOf(OneOrMore(NoneOf("}")), Grapheme('}')));
+    ///     AllOf(OneOrMore(NoneOf("}")), Token('}')));
     /// </code>
     /// </remarks>
     public static Rule ScanUntil(TokenSet stopAt, Rule escapeStart, Rule escapeEnd) =>
@@ -597,7 +569,7 @@ public static class Rules
     /// </remarks>
     public static Rule Integer() =>
         AllOf(
-            Optional(FirstOf(Grapheme('+'), Grapheme('-'))),
+            Optional(FirstOf(Token('+'), Token('-'))),
             OneOrMore(OneOf(TokenSet.Digits))
         );
 
@@ -613,9 +585,9 @@ public static class Rules
     /// </remarks>
     public static Rule Float() =>
         AllOf(
-            Optional(Grapheme('-').Flatten(FlattenType.Flatten)),
+            Optional(Token('-').Flatten(FlattenType.Flatten)),
             Integer(),
-            Grapheme('.').Flatten(FlattenType.Preserve),
+            Token('.').Flatten(FlattenType.Preserve),
             Integer()
         );
 
@@ -764,47 +736,47 @@ public static class Rules
         var start = TokenSet.XidStart | extraStartRunes;
         var body = TokenSet.XidContinue | extraBodyRunes;
         return AllOf(
-            // First grapheme: starts with a Start rune, rest of its runes
-            // (if any) are Body runes. Under GraphemeLexer this handles
-            // precomposed "é", "ñ", etc. as single-rune graphemes and
-            // "हि"-style consonant+vowel-sign graphemes as multi-rune.
-            WithinGrapheme(AllOf(OneOf(start), ZeroOrMore(OneOf(body)))),
-            // Subsequent graphemes: every rune must be a Body rune.
-            ZeroOrMore(WithinGrapheme(OneOrMore(OneOf(body))))
+            // First token: starts with a Start rune, rest of its runes
+            // (if any) are Body runes. Handles precomposed "é", "ñ",
+            // etc. as single-rune tokens and "हि"-style
+            // consonant+vowel-sign tokens as multi-rune.
+            WithinToken(AllOf(OneOf(start), ZeroOrMore(OneOf(body)))),
+            // Subsequent tokens: every rune must be a Body rune.
+            ZeroOrMore(WithinToken(OneOrMore(OneOf(body))))
         ).Flatten(FlattenType.Preserve);
     }
 
     /// <summary>
-    /// Reads one grapheme cluster token from the lexer and runs
-    /// <paramref name="innerRule"/> against the runes inside that token.
-    /// The outer token is a StringInfo text element that may span several
-    /// runes, and the inner rule walks them one at a time over a sub-lexer
-    /// switched to one-rune-per-token mode. Default
-    /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>.
+    /// Reads one token from the lexer and runs <paramref name="innerRule"/>
+    /// against the runes inside that token. The outer token is a
+    /// StringInfo text element that may span several runes, and the inner
+    /// rule walks them one at a time over a sub-lexer switched to
+    /// one-rune-per-token mode. Default <see cref="FlattenType"/>:
+    /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <param name="innerRule">
-    /// The rule to run against the grapheme's runes. Must consume every
-    /// rune of the grapheme on success; a rule that matches only a
-    /// prefix causes the whole <c>WithinGrapheme</c> to fail. Any rule
+    /// The rule to run against the token's runes. Must consume every
+    /// rune of the token on success; a rule that matches only a
+    /// prefix causes the whole <c>WithinToken</c> to fail. Any rule
     /// composition is allowed inside (<see cref="AllOf"/>, <see cref="FirstOf"/>,
     /// <c>OneOf</c>, etc.).
     /// </param>
     /// <remarks>
-    /// Building block for rules that care about grapheme-internal
+    /// Building block for rules that care about token-internal
     /// structure. Used by <see cref="Identifier"/> to make identifier
     /// matching work on Devanagari, Thai, Arabic-with-vowels, and other
-    /// scripts whose "letters" are multi-rune graphemes. Other uses:
-    /// emoji-with-modifier matchers (<c>WithinGrapheme(AllOf(OneOf(EmojiBase),
+    /// scripts whose "letters" are multi-rune tokens. Other uses:
+    /// emoji-with-modifier matchers (<c>WithinToken(AllOf(OneOf(EmojiBase),
     /// ZeroOrMore(OneOf(SkinToneOrZWJ))))</c>), ASCII-only strictness
-    /// (<c>WithinGrapheme(OneOf(TokenSet.Ascii.Letters))</c> rejects any
-    /// multi-rune grapheme), Hangul jamo clusters, etc.
+    /// (<c>WithinToken(OneOf(TokenSet.Ascii.Letters))</c> rejects any
+    /// multi-rune token), Hangul jamo clusters, etc.
     /// <para>
     /// One leaf Symbol is emitted per successful match, representing the
-    /// whole grapheme. Inner-rule symbols are discarded. Inner-rule
+    /// whole token. Inner-rule symbols are discarded. Inner-rule
     /// tracing isn't propagated to the outer trace. The inner parse is
-    /// bounded to the grapheme's rune span, but the sub-lexer doesn't
+    /// bounded to the token's rune span, but the sub-lexer doesn't
     /// share the outer parse's trace or budget counters.
     /// </para>
     /// </remarks>
-    public static Rule WithinGrapheme(Rule innerRule) => new WithinGraphemeRule(innerRule);
+    public static Rule WithinToken(Rule innerRule) => new WithinTokenRule(innerRule);
 }

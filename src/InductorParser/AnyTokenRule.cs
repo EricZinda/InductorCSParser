@@ -5,10 +5,8 @@ using InductorParser.SyntaxTree;
 namespace InductorParser;
 
 // Matches any single token, regardless of content. Fails only at EOF.
-// Under RuneLexer each well-formed token is one rune, so AnyToken() matches
-// any rune; malformed surrogate halves still arrive as one token.
-// Under GraphemeLexer each token is one StringInfo text element (i.e. a Grapheme, possibly
-// multi-rune), so AnyToken() matches that whole text element.
+// Each token is one StringInfo text element (one user-visible character,
+// possibly multi-rune), so AnyToken() matches that whole text element.
 //
 // This is the "match one token, regardless of what it is" leaf. Its
 // companion idiom is ZeroOrMore(AllOf(Not(stopRule), AnyToken())), which

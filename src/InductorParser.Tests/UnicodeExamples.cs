@@ -41,7 +41,7 @@ internal static class UnicodeExamples
     // to form a multi-rune grapheme. Not a standalone grapheme.
     public const string CombiningAcuteText = "\u0301";
 
-    // é as e + combining acute. The textbook multi-rune grapheme: TWO runes,
+    // é as e + combining acute. The textbook multi-rune Token: TWO runes,
     // ONE grapheme (2 UTF-16 chars total). Works on every runtime including
     // legacy StringInfo because the base+combining-mark rule predates UAX #29.
     // Use this when a test needs a multi-rune grapheme that segments the same

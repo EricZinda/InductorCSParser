@@ -16,9 +16,9 @@ public class SettingExampleTests
         // body in one tight loop. The Tokens default to FlattenType.Delete
         // so the quotes themselves don't appear in the flattened match.
         var quotedString = AllOf(
-            Grapheme('"'),
+            Token('"'),
             ScanUntil(TokenSet.Runes("\"")),
-            Grapheme('"'));
+            Token('"'));
 
         var settingValue = FirstOf(
             Float(),
@@ -29,11 +29,11 @@ public class SettingExampleTests
         var document = AllOf(
             settingName,
             Optional(AnyWhitespace()),
-            Grapheme('='),
+            Token('='),
             Optional(AnyWhitespace()),
             settingValue,
             Optional(AnyWhitespace()),
-            Grapheme(';')
+            Token(';')
         ).Flatten(FlattenType.Preserve);
 
         return (document, settingName, settingValue);
@@ -86,7 +86,7 @@ public class SettingExampleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.GrammarMismatch));
-        // Grapheme(';') tries at offset 11 (end of input) and finds EOF.
+        // Token(';') tries at offset 11 (end of input) and finds EOF.
         // Under the error-position principle the failure is recorded at
         // the pre-read position 11, which equals input.Length, so the
         // error message renders "Unexpected end of input".

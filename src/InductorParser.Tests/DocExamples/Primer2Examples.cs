@@ -31,13 +31,13 @@ public class Primer2Examples
         var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes))
             .As("key").Preserve();
 
-        var section = AllOf(Grapheme('['), name, Grapheme(']'), Optional(InlineWhitespace()), EndOfLine())
+        var section = AllOf(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
             .As("section").Preserve();
 
         var quotedString = AllOf(
-            Grapheme('"'),
+            Token('"'),
             ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
-            Grapheme('"')).As("quotedString").Preserve();
+            Token('"')).As("quotedString").Preserve();
 
         var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\"")))
             .As("bareWord").Preserve();
@@ -48,7 +48,7 @@ public class Primer2Examples
         var value = FirstOf(floatValue, integerValue, quotedString, bareWord)
             .As("value").Preserve();
 
-        var keyValue = AllOf(key, Optional(InlineWhitespace()), Grapheme('='), Optional(InlineWhitespace()),
+        var keyValue = AllOf(key, Optional(InlineWhitespace()), Token('='), Optional(InlineWhitespace()),
                              value, Optional(InlineWhitespace()), EndOfLine())
             .As("keyValue").Preserve();
 
@@ -190,13 +190,13 @@ public class Primer2Examples
         var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes))
             .As("key").Preserve();
 
-        var section = AllOf(Grapheme('['), name, Grapheme(']'), Optional(InlineWhitespace()), EndOfLine())
+        var section = AllOf(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
             .As("section").Preserve();
 
         var quotedString = AllOf(
-            Grapheme('"'),
+            Token('"'),
             ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
-            Grapheme('"')).As("quotedString").Preserve();
+            Token('"')).As("quotedString").Preserve();
 
         var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\"")))
             .As("bareWord").Preserve();
@@ -210,7 +210,7 @@ public class Primer2Examples
         var keyValue = AllOf(
             key,
             Optional(InlineWhitespace()),
-            Grapheme('=').WithError("Expected '=' after the setting name"),
+            Token('=').WithError("Expected '=' after the setting name"),
             Optional(InlineWhitespace()),
             value,
             Optional(InlineWhitespace()),
@@ -254,7 +254,7 @@ public class Primer2Examples
     // that for input "[\u{family}]\nport oops\n", with the family ZWJ
     // emoji at the start, the error position diverges across units:
     //   ErrorCharIndex      == 16 (UTF-16 code units)
-    //   ErrorGraphemeIndex  == 9  (graphemes)
+    //   ErrorTokenIndex  == 9  (graphemes)
     //   ErrorLine           == 1
     //   ErrorColumn         == 5  (UTF-16 chars, LSP)
     [Test]
@@ -272,7 +272,7 @@ public class Primer2Examples
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(16),
             "8 UTF-16 chars for family + '[' + ']' + '\\n' + 4 chars 'port' + ' ' = 16");
-        Assert.That(result.ErrorGraphemeIndex, Is.EqualTo(9),
+        Assert.That(result.ErrorTokenIndex, Is.EqualTo(9),
             "1 grapheme for family + '[' + ']' + '\\n' + 4 graphemes 'port' + ' ' = 9");
         Assert.That(result.ErrorLine, Is.EqualTo(1));
         Assert.That(result.ErrorColumn, Is.EqualTo(5));

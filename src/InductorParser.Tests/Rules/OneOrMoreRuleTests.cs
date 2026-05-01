@@ -23,15 +23,15 @@ public class OneOrMoreRuleTests
         // atMost = int.MaxValue, since the loop ran past the lower bound
         // and only stopped when the inner rule failed.
         var sink = NewSink();
-        OneOrMore(Grapheme('a')).Parse("aa", new ParseOptions { TraceSink = sink });
+        OneOrMore(Token('a')).Parse("aa", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | Grapheme: found 'a'",
+            "      SUCC | Token: found 'a'",
             "      Lexer.Read: 'a', Consumed: 2",
-            "      SUCC | Grapheme: found 'a'",
+            "      SUCC | Token: found 'a'",
             "      Lexer.Read: '<EOF>', Consumed: 2",
-            "      FAIL | Grapheme: found '<EOF>', wanted 'a'",
+            "      FAIL | Token: found '<EOF>', wanted 'a'",
             "      Lexer.RecordFailure: new deepest failure at char 2",
             "   SUCC | OneOrMore: count= 2"
         );
@@ -43,7 +43,7 @@ public class OneOrMoreRuleTests
     {
         // The "OneOrMore"-specific bound is atLeast=1: zero matches must
         // fail. This is what distinguishes OneOrMore from ZeroOrMore.
-        var result = OneOrMore(Grapheme('a')).Parse("z");
+        var result = OneOrMore(Token('a')).Parse("z");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));

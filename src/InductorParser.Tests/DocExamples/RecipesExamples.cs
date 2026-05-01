@@ -28,9 +28,9 @@ public class RecipesExamples
         ).As("bold").Preserve();
 
         var code = AllOf(
-            Grapheme('`'),
+            Token('`'),
             OneOrMore(NoneOf(TokenSet.Runes("`"))),
-            Grapheme('`')
+            Token('`')
         ).As("code").Preserve();
 
         var inline = FirstOf(bold, code, text);
@@ -66,16 +66,16 @@ public class RecipesExamples
     [Test]
     public void Block_comment_grammar_stops_at_close_marker()
     {
-        var closeMarker = AllOf(Grapheme('*'), Grapheme('/'));
+        var closeMarker = AllOf(Token('*'), Token('/'));
         var blockComment = AllOf(
-            Grapheme('/'), Grapheme('*'),
+            Token('/'), Token('*'),
             ZeroOrMore(AllOf(Not(closeMarker), AnyToken())).Preserve(),
             closeMarker).Preserve();
 
         var result = blockComment.Parse("/* hello world */");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
 
-        // The comment delimiters Grapheme('/'), Grapheme('*') default to
+        // The comment delimiters Token('/'), Token('*') default to
         // FlattenType.Delete, so result.Tree.ToString() carries only
         // the body text. The success of the parse plus consumption of
         // the trailing close marker is the doc's claim.
@@ -171,11 +171,11 @@ public class RecipesExamples
                 Optional(AnyWhitespace()),
                 SettingName,
                 Optional(AnyWhitespace()),
-                Grapheme('='),
+                Token('='),
                 Optional(AnyWhitespace()),
                 SettingValue,
                 Optional(AnyWhitespace()),
-                Grapheme(';'),
+                Token(';'),
                 Optional(AnyWhitespace()),
                 Eof()
             ).As(nameof(Document)).Preserve().Compile();

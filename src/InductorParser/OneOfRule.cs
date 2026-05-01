@@ -107,7 +107,7 @@ internal sealed class OneOfRule : Rule
         int runeValue = token.RuneValue;
         if (runeValue >= 0) return _set.Contains(runeValue);
         if (!_set.HasMultiRuneGraphemes) return false;
-        return _set.ContainsGrapheme(token.Chars);
+        return _set.ContainsToken(token.Chars);
     }
 
     // Return the set of runes this rule might consume first (can be a superset)

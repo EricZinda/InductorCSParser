@@ -32,11 +32,11 @@ namespace InductorParser.PlayModeTests
             var document = AllOf(
                 settingName,
                 Optional(AnyWhitespace()),
-                Grapheme('='),
+                Token('='),
                 Optional(AnyWhitespace()),
                 settingValue,
                 Optional(AnyWhitespace()),
-                Grapheme(';')
+                Token(';')
             );
 
             var result = document.Parse("setting = 5;");
@@ -56,7 +56,7 @@ namespace InductorParser.PlayModeTests
             // dispatch. Grammar mirrors a minimal JSON string body.
             var escapeEnd = OneOf(TokenSet.Runes("\"\\/bfnrt"));
             var body = ScanUntil(TokenSet.Runes("\""), new Rune('\\'), escapeEnd);
-            var rule = AllOf(Grapheme('"'), body, Grapheme('"'));
+            var rule = AllOf(Token('"'), body, Token('"'));
 
             var result = rule.Parse("\"hello\\n\"");
 
@@ -69,7 +69,7 @@ namespace InductorParser.PlayModeTests
         {
             var rule = AllOf(
                 OneOrMore(OneOf(TokenSet.Letters)),
-                Grapheme(';').WithError("expected ';'")
+                Token(';').WithError("expected ';'")
             );
 
             var result = rule.Parse("abc1");

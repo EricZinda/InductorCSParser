@@ -10,12 +10,12 @@ namespace InductorParser;
 
 // Rule is the base of everything in a grammar. A grammar is a tree of Rule
 // objects: composites like AllOf/FirstOf/OneOrMore wrap other Rules, leaves like
-// Grapheme/OneOf sit at the bottom, and the root is whatever Rule you
+// Token/OneOf sit at the bottom, and the root is whatever Rule you
 // hand to Parse(). Calling Parse on the root walks the tree and tries to
 // match the input.
 //
 // Rules are instances, not types.
-// In C# you build a Rule by calling factory functions (AllOf, FirstOf, Grapheme, etc.)
+// In C# you build a Rule by calling factory functions (AllOf, FirstOf, Token, etc.)
 // that return Rule instances. The tree is built at runtime, compiled once,
 // and reused for every parse after that. A grammar can live anywhere a
 // reference can live: a local variable, a static field, an entry in a
@@ -166,9 +166,9 @@ public abstract class Rule
 
     // Cached rule class name for trace output, derived from GetType().Name
     // in the constructor. The "Rule" suffix is stripped so "AllOfRule"
-    // becomes "AllOf", "GraphemeRule" becomes "Grapheme", matching the trace
-    // naming convention. Reading this is a field load which is cheaper than
-    // calling GetType().Name on every trace output. Works under
+    // becomes "AllOf", "WithinTokenRule" becomes "WithinToken", matching the
+    // trace naming convention. Reading this is a field load which is cheaper
+    // than calling GetType().Name on every trace output. Works under
     // IL2CPP because it's baked in at construction time, not looked
     // up via name-based reflection.
     //
@@ -269,7 +269,7 @@ public abstract class Rule
 
     // The child rules this rule is built from. Composites (AllOf, FirstOf, OneOrMore,
     // etc.) pass their children to the base constructor and access them via
-    // this property. Leaf rules (Grapheme, OneOf, Eof) don't pass any children,
+    // this property. Leaf rules (Token, OneOf, Eof) don't pass any children,
     // and the constructor below swaps in the shared empty list (NoChildren)
     // when that happens. Compile walks this list to assign ids and seal every
     // reachable rule.
@@ -456,7 +456,7 @@ public abstract class Rule
     //   2. Per-grammar rule index: a lazily-built Dictionary<SymbolId, Rule>
     //      keyed on every rule reachable from this root. For a rule created
     //      with .As("foo"), returns "foo". For an unnamed rule, returns the
-    //      class-derived trace name ("AllOf", "OneOrMore", "Grapheme",
+    //      class-derived trace name ("AllOf", "OneOrMore", "Token",
     //      "BetweenInclusive[1..3]"). Returns null if the id isn't in the
     //      grammar.
     //
@@ -670,11 +670,11 @@ public abstract class Rule
 
     // The four position placeholders shared by every default template.
     // {charIndex} is the failure position in chars (UTF-16 code units),
-    // matching ParseResult.ErrorCharIndex. {graphemeIndex} mirrors
-    // ErrorGraphemeIndex. {line} and {column} are zero-based, matching
+    // matching ParseResult.ErrorCharIndex. {tokenIndex} mirrors
+    // ErrorTokenIndex. {line} and {column} are zero-based, matching
     // ErrorLine and ErrorColumn (LSP convention).
     //
-    // The Func<string> wrappers are deliberate: each grapheme /
+    // The Func<string> wrappers are deliberate: each token-index /
     // line-column conversion walks the input once, so we only want to pay
     // for the ones whose placeholder actually appears in the template the
     // caller chose. The default templates only use {charIndex}, so by
@@ -684,7 +684,7 @@ public abstract class Rule
         return new (string, Func<string>)[]
         {
             ("charIndex", () => charIndex.ToString()),
-            ("graphemeIndex", () => SourcePositionConverter.ToGraphemeIndex(input, charIndex).ToString()),
+            ("tokenIndex", () => SourcePositionConverter.ToTokenIndex(input, charIndex).ToString()),
             ("line", () =>
             {
                 SourcePositionConverter.ToLineColumn(input, charIndex, out int line, out _);
@@ -876,9 +876,9 @@ public abstract class Rule
     //
     // Two ids are out of scope for this check:
     //
-    //   * Pre-pinned ids in the rune range (every single-rune Grapheme has
+    //   * Pre-pinned ids in the rune range (every single-rune Token has
     //     its code point pinned at construction time). A grammar that
-    //     mentions Grapheme('a') twice has two rules sharing id 97 by design,
+    //     mentions Token('a') twice has two rules sharing id 97 by design,
     //     NameOf short-circuits the rune range to the rune string, and
     //     there's no rule-name ambiguity to resolve.
     //

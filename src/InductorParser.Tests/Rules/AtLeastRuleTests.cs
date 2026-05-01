@@ -19,20 +19,20 @@ public class AtLeastRuleTests
     {
         // Trace label "AtLeast[2]" proves the named factory was used and
         // the lower bound was carried into the trace label. The probe
-        // past two matches (Lexer.Read at EOF, FAIL on Grapheme,
+        // past two matches (Lexer.Read at EOF, FAIL on Token,
         // RecordFailure at char 2) followed by SUCC at count= 2 proves
         // atMost = int.MaxValue: the loop ran past the lower bound and
         // only stopped when the inner rule failed.
         var sink = NewSink();
-        AtLeast(2, Grapheme('a')).Parse("aa", new ParseOptions { TraceSink = sink });
+        AtLeast(2, Token('a')).Parse("aa", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | Grapheme: found 'a'",
+            "      SUCC | Token: found 'a'",
             "      Lexer.Read: 'a', Consumed: 2",
-            "      SUCC | Grapheme: found 'a'",
+            "      SUCC | Token: found 'a'",
             "      Lexer.Read: '<EOF>', Consumed: 2",
-            "      FAIL | Grapheme: found '<EOF>', wanted 'a'",
+            "      FAIL | Token: found '<EOF>', wanted 'a'",
             "      Lexer.RecordFailure: new deepest failure at char 2",
             "   SUCC | AtLeast[2]: count= 2"
         );
@@ -44,7 +44,7 @@ public class AtLeastRuleTests
     {
         // atLeast = 2: only one match is not enough. This is what
         // distinguishes AtLeast(2, ...) from OneOrMore.
-        var result = AtLeast(2, Grapheme('a')).Parse("a");
+        var result = AtLeast(2, Token('a')).Parse("a");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));

@@ -149,7 +149,7 @@ public class LiteralRuleTests
     public void Literal_trace_failure_produces_expected_output()
     {
         // Failure on the first token of the literal: deepest-failure stays
-        // at 0, so RecordFailure doesn't trace, matching Grapheme's fail-at-0
+        // at 0, so RecordFailure doesn't trace, matching Token's fail-at-0
         // shape. The mid-literal-fail case is covered by the RecordFailure
         // trace line that appears when position advances past 0.
         var sink = NewSink();

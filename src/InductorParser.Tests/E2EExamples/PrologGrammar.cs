@@ -45,7 +45,7 @@ public static class PrologGrammar
     // forcing callers to switch the lexer via ParseOptions.
     //
     // See docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer" for the
-    // full explanation of why OneOf / NoneOf / Grapheme('\n') all fail
+    // full explanation of why OneOf / NoneOf / Token('\n') all fail
     // on CRLF input and the three-anti-patterns-to-avoid list.
     private static readonly Rule LineBreak = FirstOf(
         Literal("\r\n"),
@@ -68,7 +68,7 @@ public static class PrologGrammar
     // nothing to match.
     public static readonly Rule Comment = FirstOf(
         AllOf(
-            Grapheme('%'),
+            Token('%'),
             ScanUntil(LineBreak),
             FirstOf(
                 OneOrMore(LineBreak),
@@ -106,19 +106,19 @@ public static class PrologGrammar
         Float(),
         Integer(),
         OneOrMore(OneOf(MathSymbolChars)),
-        Grapheme('!'),
+        Token('!'),
         AllOf(
-            Grapheme('"'),
+            Token('"'),
             ScanUntil(TokenSet.Runes("\"")),
-            Grapheme('"')
+            Token('"')
         ),
         AllOf(
-            Grapheme('\''),
+            Token('\''),
             ScanUntil(TokenSet.Runes("'")),
-            Grapheme('\'')
+            Token('\'')
         ),
         AllOf(
-            FirstOf(OneOf(LetterChars), Grapheme('-')),
+            FirstOf(OneOf(LetterChars), Token('-')),
             ZeroOrMore(OneOf(IdentifierTailChars))
         )
     );
@@ -126,7 +126,7 @@ public static class PrologGrammar
     // Variable body shared between both flavors: starts with '_', then
     // zero-or-more identifier-tail chars. "_foo", "_", "_X123-Y".
     private static readonly Rule UnderscoreVariable = AllOf(
-        Grapheme('_'),
+        Token('_'),
         ZeroOrMore(OneOf(IdentifierTailChars))
     );
 
@@ -142,7 +142,7 @@ public static class PrologGrammar
     // name itself is scanned, which sidesteps the "is this capitalized?"
     // lookahead that standard Prolog needs.
     public static readonly Rule HtnVariableRule = AllOf(
-        Grapheme('?'),
+        Token('?'),
         Atom
     );
 
@@ -181,13 +181,13 @@ public static class PrologGrammar
             termForward,
             OptionalWhitespace,
             ZeroOrMore(AllOf(
-                Grapheme(','),
+                Token(','),
                 OptionalWhitespace,
                 termForward,
                 OptionalWhitespace
             )),
             Optional(AllOf(
-                Grapheme('|'),
+                Token('|'),
                 OptionalWhitespace,
                 termForward,
                 OptionalWhitespace
@@ -201,10 +201,10 @@ public static class PrologGrammar
         var list = FirstOf(
             Literal("[]"),
             AllOf(
-                Grapheme('['),
+                Token('['),
                 OptionalWhitespace,
                 termList,
-                Grapheme(']')
+                Token(']')
             )
         );
 
@@ -223,11 +223,11 @@ public static class PrologGrammar
             Not(variableFlavorRule),
             Atom,
             Optional(AllOf(
-                Grapheme('('),
+                Token('('),
                 OptionalWhitespace,
                 Optional(termList),
                 OptionalWhitespace,
-                Grapheme(')')
+                Token(')')
             ))
         );
 
@@ -245,7 +245,7 @@ public static class PrologGrammar
             functor,
             OptionalWhitespace,
             ZeroOrMore(AllOf(
-                Grapheme(','),
+                Token(','),
                 OptionalWhitespace,
                 functor,
                 OptionalWhitespace
@@ -272,7 +272,7 @@ public static class PrologGrammar
             OptionalWhitespace,
             functorList,
             OptionalWhitespace,
-            Grapheme('.'),
+            Token('.'),
             OptionalWhitespace,
             Eof()
         );
@@ -288,7 +288,7 @@ public static class PrologGrammar
                 OptionalWhitespace,
                 FirstOf(rule, functor, list),
                 OptionalWhitespace,
-                Grapheme('.'),
+                Token('.'),
                 OptionalWhitespace
             )),
             OptionalWhitespace,

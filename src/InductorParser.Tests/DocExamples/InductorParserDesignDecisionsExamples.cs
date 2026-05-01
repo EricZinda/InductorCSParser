@@ -12,28 +12,28 @@ public class InductorParserDesignDecisionsExamples
 {
     // "Greedy Repetition, No Repetition Backtracking": the doc shows
     // that PEG DOESN'T backtrack inside a OneOrMore. So
-    //   AllOf(OneOrMore(OneOf(TokenSet.Letters)), Grapheme('a')).Parse("aaa")
+    //   AllOf(OneOrMore(OneOf(TokenSet.Letters)), Token('a')).Parse("aaa")
     // greedily consumes "aaa", fails to match the trailing 'a' against
     // EOF, and the whole parse fails.
     [Test]
     public void PEG_does_not_backtrack_inside_repetition()
     {
-        var rule = AllOf(OneOrMore(OneOf(TokenSet.Letters)), Grapheme('a'));
+        var rule = AllOf(OneOrMore(OneOf(TokenSet.Letters)), Token('a'));
         var result = rule.Parse("aaa");
 
         Assert.That(result.Success, Is.False,
-            "PEG OneOrMore is greedy with no rewind, so trailing Grapheme('a') has nothing to match");
+            "PEG OneOrMore is greedy with no rewind, so trailing Token('a') has nothing to match");
     }
 
     // "Parse Requires Consuming All Input": doc claim
-    //   OneOrMore(Grapheme('a')).Parse("aabb")
+    //   OneOrMore(Token('a')).Parse("aabb")
     //   result.Success == false
     //   result.ErrorCharIndex == 2
     //   result.ErrorMessage starts with "Parse failed at offset 2"
     [Test]
     public void Parse_requires_consuming_all_input()
     {
-        var rule = OneOrMore(Grapheme('a'));
+        var rule = OneOrMore(Token('a'));
         var result = rule.Parse("aabb");
 
         Assert.That(result.Success, Is.False);
@@ -42,29 +42,29 @@ public class InductorParserDesignDecisionsExamples
     }
 
     // "Where Errors Get Positioned" / "Walk through the smallest case":
-    // doc claim Grapheme('a').Parse("x") records failure at offset 0
+    // doc claim Token('a').Parse("x") records failure at offset 0
     // (pre-read) and the error message identifies the unexpected 'x'.
     [Test]
     public void Token_failure_pre_read_position_is_offset_zero()
     {
-        var result = Grapheme('a').Parse("x");
+        var result = Token('a').Parse("x");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0),
-            "Grapheme records at transaction.StartPosition (pre-read), not after consuming the wrong rune");
+            "Token records at transaction.StartPosition (pre-read), not after consuming the wrong rune");
         Assert.That(result.ErrorMessage, Does.Contain("'x'"));
     }
 
     // "A Known Heuristic Limitation": doc claim about Optional capturing
     // the deepest failure. Concrete case from the doc:
-    //   AllOf(Optional(Literal("abc")), Grapheme('x')).Parse("abdy")
+    //   AllOf(Optional(Literal("abc")), Token('x')).Parse("abdy")
     // Optional inner reads "ab" and fails on 'd' vs 'c' at offset 2.
-    // Optional catches and succeeds with empty children. Then Grapheme('x')
+    // Optional catches and succeeds with empty children. Then Token('x')
     // tries at offset 0, fails on 'a'. Deepest-failure-wins picks offset 2.
     [Test]
     public void Optional_can_capture_error_position_via_deepest_failure_wins()
     {
-        var rule = AllOf(Optional(Literal("abc")), Grapheme('x'));
+        var rule = AllOf(Optional(Literal("abc")), Token('x'));
         var result = rule.Parse("abdy");
 
         Assert.That(result.Success, Is.False);
@@ -75,8 +75,8 @@ public class InductorParserDesignDecisionsExamples
     // "Things That Got Worse" / "Rule graphs can have order-of-init traps":
     // the LateBoundRule pattern with self-reference. Doc claim: the
     //   static readonly LateBoundRule Expression = new();
-    //   static readonly Rule Term = FirstOf(Integer(), AllOf(Grapheme('('), Expression, Grapheme(')')));
-    //   static readonly Rule Sum = AllOf(Term, ZeroOrMore(AllOf(Grapheme('+'), Term)));
+    //   static readonly Rule Term = FirstOf(Integer(), AllOf(Token('('), Expression, Token(')')));
+    //   static readonly Rule Sum = AllOf(Term, ZeroOrMore(AllOf(Token('+'), Term)));
     //   static readonly Rule _init = Expression.Bind(Sum);
     // pattern parses "(1+2)+3" successfully.
     private static class ExpressionGrammar
@@ -86,10 +86,10 @@ public class InductorParserDesignDecisionsExamples
         public static readonly Rule Term =
             FirstOf(
                 Integer(),
-                AllOf(Grapheme('('), Expression, Grapheme(')')));
+                AllOf(Token('('), Expression, Token(')')));
 
         public static readonly Rule Sum =
-            AllOf(Term, ZeroOrMore(AllOf(Grapheme('+'), Term)));
+            AllOf(Term, ZeroOrMore(AllOf(Token('+'), Term)));
 
         public static readonly Rule _Init = Expression.Bind(Sum);
     }

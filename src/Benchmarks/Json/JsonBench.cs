@@ -53,7 +53,7 @@ public class JsonBench
     public object BigJson_Parlot() => ParlotJsonParser.Parse(_bigJson)!;
 
     [Benchmark, BenchmarkCategory("Big")]
-    public object BigJson_InductorParserGrapheme() => InductorJsonParser.ParseGrapheme(_bigJson);
+    public object BigJson_InductorParserToken() => InductorJsonParser.ParseToken(_bigJson);
 
     [Benchmark, BenchmarkCategory("Big")]
     public object BigJson_InductorParserTyped() => InductorJsonParser.ParseTyped(_bigJson);
@@ -85,7 +85,7 @@ public class JsonBench
     public object LongJson_Parlot() => ParlotJsonParser.Parse(_longJson)!;
 
     [Benchmark, BenchmarkCategory("Long")]
-    public object LongJson_InductorParserGrapheme() => InductorJsonParser.ParseGrapheme(_longJson);
+    public object LongJson_InductorParserToken() => InductorJsonParser.ParseToken(_longJson);
 
     [Benchmark, BenchmarkCategory("Long")]
     public object LongJson_InductorParserTyped() => InductorJsonParser.ParseTyped(_longJson);
@@ -118,7 +118,7 @@ public class JsonBench
     public object DeepJson_Parlot() => ParlotJsonParser.Parse(_deepJson)!;
 
     [Benchmark, BenchmarkCategory("Deep")]
-    public object DeepJson_InductorParserGrapheme() => InductorJsonParser.ParseGrapheme(_deepJson);
+    public object DeepJson_InductorParserToken() => InductorJsonParser.ParseToken(_deepJson);
 
     [Benchmark, BenchmarkCategory("Deep")]
     public object DeepJson_InductorParserTyped() => InductorJsonParser.ParseTyped(_deepJson);
@@ -147,7 +147,7 @@ public class JsonBench
     public object WideJson_Parlot() => ParlotJsonParser.Parse(_wideJson)!;
 
     [Benchmark, BenchmarkCategory("Wide")]
-    public object WideJson_InductorParserGrapheme() => InductorJsonParser.ParseGrapheme(_wideJson);
+    public object WideJson_InductorParserToken() => InductorJsonParser.ParseToken(_wideJson);
 
     [Benchmark, BenchmarkCategory("Wide")]
     public object WideJson_InductorParserTyped() => InductorJsonParser.ParseTyped(_wideJson);

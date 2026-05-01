@@ -244,7 +244,7 @@ internal sealed class ScanUntilRule : Rule
                     int tokenLen = lexer.PeekTokenLength(pos);
                     if (tokenLen > runeLen
                         && pos + tokenLen <= inputLen
-                        && _stopperSet.ContainsGrapheme(input.AsSpan(pos, tokenLen)))
+                        && _stopperSet.ContainsToken(input.AsSpan(pos, tokenLen)))
                     {
                         break;
                     }

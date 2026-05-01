@@ -42,11 +42,11 @@ namespace InductorParser.Lexing;
 // Editors want to highlight the whole bad grapheme or ligature anyway, so
 // this matches what a diagnostic consumer expects to see.
 //
-// Grapheme segmentation tracks whatever the .NET runtime the parser is
+// Token segmentation tracks whatever the .NET runtime the parser is
 // running on provides: UAX #29 compliant on .NET 5 and later,
 // slightly-off on legacy runtimes (a handful of real grapheme clusters
 // segment incorrectly). The translator uses the same primitive the
-// grapheme lexer does, so whatever the lexer saw, the translator sees
+// lexer does, so whatever the lexer saw, the translator sees
 // too.
 internal static class NormalizedPositionMap
 {
@@ -119,9 +119,9 @@ internal static class NormalizedPositionMap
     // and stitch them back together and trust the result.
     //
     // The spec's "safe to split here" positions have a name: stable
-    // code points (UAX #15 section 9.1). Grapheme cluster boundaries
-    // from UAX #29 aren't the same thing. So splitting by grapheme is
-    // an engineering shortcut, not the spec-blessed operation.
+    // code points (UAX #15 section 9.1). Token boundaries (UAX #29
+    // grapheme cluster boundaries) aren't the same thing. So splitting
+    // by token is an engineering shortcut, not the spec-blessed operation.
     //
     // The shortcut is safe for real text because UAX #29 rule GB9 keeps
     // combining marks glued to their base character inside the same

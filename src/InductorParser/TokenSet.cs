@@ -117,7 +117,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // Span overload so rules can probe a token's Chars without building
     // a string. Same semantics as Contains(string): single-rune spans
     // hit the rune intervals, multi-rune spans hit the grapheme array.
-    internal bool ContainsGrapheme(ReadOnlySpan<char> grapheme)
+    internal bool ContainsToken(ReadOnlySpan<char> grapheme)
     {
         if (grapheme.Length == 0) return false;
         if (TrySingleRune(grapheme, out int runeValue))

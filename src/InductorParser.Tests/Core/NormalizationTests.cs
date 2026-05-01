@@ -39,9 +39,9 @@ public class NormalizationTests
     private const string CafeDecomposed = "cafe" + CombiningAcuteText;
 
     // Grammar for "café" spelled in the precomposed form that most grammar
-    // authors write. Four Grapheme rules in sequence.
+    // authors write. Four Token rules in sequence.
     private static Rule CafeRule() =>
-        AllOf(Grapheme('c'), Grapheme('a'), Grapheme('f'), Grapheme("\u00E9"));
+        AllOf(Token('c'), Token('a'), Token('f'), Token("\u00E9"));
 
     [Test]
     public void Default_NFC_matches_precomposed_input_against_precomposed_grammar()
@@ -59,7 +59,7 @@ public class NormalizationTests
     {
         // The headline promise: the same precomposed grammar matches the
         // decomposed form of the same word. Without normalization the
-        // comparison at Grapheme("\u00E9") would see "e" and fail.
+        // comparison at Token("\u00E9") would see "e" and fail.
         var result = AllOf(CafeRule(), Eof()).Parse(CafeDecomposed);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
@@ -98,7 +98,7 @@ public class NormalizationTests
         // '\u0301', not 'x'. The contract is original coordinates, so the
         // reported index has to be 5 (the 'x' in the caller's input).
         string input = CafeDecomposed + "xyz";
-        var rule = AllOf(CafeRule(), Grapheme('1'), Eof());
+        var rule = AllOf(CafeRule(), Token('1'), Eof());
         var result = rule.Parse(input);
 
         Assert.That(result.Success, Is.False);
@@ -107,7 +107,7 @@ public class NormalizationTests
         // y=5, z=6. The 'x' is char 5, rune 5, grapheme 4.
         AssertErrorPosition(result,
             charIndex: 5, line: 0, column: 5,
-            graphemeIndex: 4);
+            TokenIndex: 4);
         Assert.That(input[result.ErrorCharIndex], Is.EqualTo('x'),
             "the char at ErrorCharIndex should be the one the grammar rejected");
     }
@@ -122,7 +122,7 @@ public class NormalizationTests
         // what an editor needs to highlight the whole bad grapheme rather
         // than landing in the middle of a combining sequence.
         string input = CafeDecomposed;
-        var rule = AllOf(Grapheme('c'), Grapheme('a'), Grapheme('f'), Grapheme('1'), Eof());
+        var rule = AllOf(Token('c'), Token('a'), Token('f'), Token('1'), Eof());
         var result = rule.Parse(input);
 
         Assert.That(result.Success, Is.False);
@@ -130,7 +130,7 @@ public class NormalizationTests
         // that starts the failing 'é' grapheme.
         AssertErrorPosition(result,
             charIndex: 3, line: 0, column: 3,
-            graphemeIndex: 3);
+            TokenIndex: 3);
         Assert.That(input[result.ErrorCharIndex], Is.EqualTo('e'));
     }
 
@@ -142,7 +142,7 @@ public class NormalizationTests
         // identical to the no-normalization path whether the runtime
         // returns the same string reference or an equivalent one.
         string input = CafePrecomposed + "X";
-        var rule = AllOf(CafeRule(), Grapheme('1'), Eof());
+        var rule = AllOf(CafeRule(), Token('1'), Eof());
 
         var withNfc = rule.Parse(input);
         var withoutNormalization = rule.Parse(input,
@@ -160,7 +160,7 @@ public class NormalizationTests
         // positions are trivially into the original. This test locks in
         // that baseline so a future refactor can't silently regress it.
         string input = CafeDecomposed + "X";
-        var rule = AllOf(Grapheme('c'), Grapheme('a'), Grapheme('f'), Grapheme('X'), Eof());
+        var rule = AllOf(Token('c'), Token('a'), Token('f'), Token('X'), Eof());
         var result = rule.Parse(input, new ParseOptions { NormalizeInput = null });
 
         Assert.That(result.Success, Is.False);
@@ -169,7 +169,7 @@ public class NormalizationTests
         // Graphemes: c=0, a=1, f=2, é=3.
         AssertErrorPosition(result,
             charIndex: 3, line: 0, column: 3,
-            graphemeIndex: 3);
+            TokenIndex: 3);
         Assert.That(input[result.ErrorCharIndex], Is.EqualTo('e'));
     }
 
@@ -232,10 +232,10 @@ public class NormalizationTests
     public void FormKC_folds_ligature_so_unfolded_grammar_matches_ligature_input()
     {
         // Grammar spells "fish" in the plain ASCII form. Input uses the fi
-        // ligature. Without normalization the Grapheme('f') would see "\uFB01"
+        // ligature. Without normalization the Token('f') would see "\uFB01"
         // and fail. FormKC folds the ligature to "fi" before the lexer
         // runs, so the grammar matches through.
-        var rule = AllOf(Grapheme('f'), Grapheme('i'), Grapheme('s'), Grapheme('h'), Eof());
+        var rule = AllOf(Token('f'), Token('i'), Token('s'), Token('h'), Eof());
         var result = rule.Parse(FiLigature + "sh",
             new ParseOptions { NormalizeInput = NormalizationForm.FormKC });
 
@@ -251,7 +251,7 @@ public class NormalizationTests
         // coordinates is at index 2 (the 's'). In ORIGINAL coordinates
         // 's' sits at index 1, right after the 1-char ligature.
         string input = FiLigature + "sh";
-        var rule = AllOf(Grapheme('f'), Grapheme('i'), Grapheme('X'));
+        var rule = AllOf(Token('f'), Token('i'), Token('X'));
         var result = rule.Parse(input,
             new ParseOptions { NormalizeInput = NormalizationForm.FormKC });
 
@@ -261,7 +261,7 @@ public class NormalizationTests
         // so char/rune/grapheme indices line up at position 1.
         AssertErrorPosition(result,
             charIndex: 1, line: 0, column: 1,
-            graphemeIndex: 1);
+            TokenIndex: 1);
         Assert.That(input[result.ErrorCharIndex], Is.EqualTo('s'));
     }
 
@@ -275,7 +275,7 @@ public class NormalizationTests
         // index 1). The translator has to snap back to the start of the
         // ligature grapheme at index 0.
         string input = FiLigature;
-        var rule = AllOf(Grapheme('f'), Grapheme('X'));
+        var rule = AllOf(Token('f'), Token('X'));
         var result = rule.Parse(input,
             new ParseOptions { NormalizeInput = NormalizationForm.FormKC });
 
@@ -285,7 +285,7 @@ public class NormalizationTests
         // every unit.
         AssertErrorPosition(result,
             charIndex: 0, line: 0, column: 0,
-            graphemeIndex: 0);
+            TokenIndex: 0);
     }
 
     [Test]
@@ -297,7 +297,7 @@ public class NormalizationTests
         // output here. This test verifies that the FormKD path through
         // the translator works end-to-end, not that the decomposed
         // endpoint differs for this particular input.
-        var rule = AllOf(Grapheme('f'), Grapheme('i'), Grapheme('s'), Grapheme('h'), Eof());
+        var rule = AllOf(Token('f'), Token('i'), Token('s'), Token('h'), Eof());
         var result = rule.Parse(FiLigature + "sh",
             new ParseOptions { NormalizeInput = NormalizationForm.FormKD });
 
@@ -310,13 +310,13 @@ public class NormalizationTests
         // Same position-snap case as the FormKC test above, but through
         // FormKD to prove the compatibility-form dispatch catches both.
         string input = FiLigature;
-        var rule = AllOf(Grapheme('f'), Grapheme('X'));
+        var rule = AllOf(Token('f'), Token('X'));
         var result = rule.Parse(input,
             new ParseOptions { NormalizeInput = NormalizationForm.FormKD });
 
         Assert.That(result.Success, Is.False);
         AssertErrorPosition(result,
             charIndex: 0, line: 0, column: 0,
-            graphemeIndex: 0);
+            TokenIndex: 0);
     }
 }

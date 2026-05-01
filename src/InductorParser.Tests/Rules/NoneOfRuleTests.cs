@@ -47,7 +47,7 @@ public class NoneOfRuleTests
     }
 
     [Test]
-    public void NoneOf_matches_multi_rune_grapheme()
+    public void NoneOf_matches_multi_rune_Token()
     {
         // A multi-rune grapheme like LatinEAcuteGrapheme arrives as a
         // single token whose RuneValue is -1. The "not a single rune in
@@ -76,17 +76,17 @@ public class NoneOfRuleTests
         // A CRLF grapheme passes NoneOf unconditionally (it isn't a
         // single rune, so it can't be in any single-rune set), which
         // means the sweep silently consumes the CRLF and the trailing
-        // Grapheme('\n') terminator then fails. For real line-based
+        // Token('\n') terminator then fails. For real line-based
         // grammars, don't use NoneOf as the line sweep at all. Use
         // Not(EndOfLine()) + AnyToken() for the sweep and EndOfLine()
         // for the terminator, which together handle CRLF, LF, CR, NEL,
         // LS, and PS as one terminator each.
-        // See docs/UnicodeGotchas.md § "CRLF Under Grapheme Tokenization".
+        // See docs/UnicodeGotchas.md § "CRLF Under Token Tokenization".
         var rule = AllOf(
             ZeroOrMore(NoneOf(TokenSet.Single('\n'))),
-            Grapheme('\n'));
+            Token('\n'));
 
-        // PreserveAllSymbols keeps the trailing Grapheme('\n') in the
+        // PreserveAllSymbols keeps the trailing Token('\n') in the
         // tree so Tree.ToString reproduces the full matched line.
         var result = rule.Parse("hello world\n",
             new ParseOptions { PreserveAllSymbols = true });
@@ -152,7 +152,7 @@ public class NoneOfRuleTests
     // Multi-rune grapheme support -------------------------------------------
 
     [Test]
-    public void NoneOf_with_multi_rune_set_rejects_the_listed_grapheme()
+    public void NoneOf_with_multi_rune_set_rejects_the_listed_Token()
     {
         // A multi-rune set as the exclude list. The flag arrives as
         // one token and NoneOf finds it in the multi-rune array, so

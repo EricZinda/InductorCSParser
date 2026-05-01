@@ -21,19 +21,19 @@ public class OptionalRuleTests
         // SUCC at count= 1 inside the Optional segment with no probe-past
         // proves atMost = 1: the loop stopped at one match even though
         // the surrounding input had a second matchable 'a' available.
-        // The follow-up Grapheme('a') consuming the second 'a' proves
+        // The follow-up Token('a') consuming the second 'a' proves
         // Optional released control after one match rather than running
         // off the end.
         var sink = NewSink();
-        AllOf(Optional(Grapheme('a')), Grapheme('a'))
+        AllOf(Optional(Token('a')), Token('a'))
             .Parse("aa", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "         Lexer.Read: 'a', Consumed: 1",
-            "         SUCC | Grapheme: found 'a'",
+            "         SUCC | Token: found 'a'",
             "      SUCC | Optional: count= 1",
             "      Lexer.Read: 'a', Consumed: 2",
-            "      SUCC | Grapheme: found 'a'",
+            "      SUCC | Token: found 'a'",
             "   SUCC | AllOf: found 2"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
@@ -44,8 +44,8 @@ public class OptionalRuleTests
     {
         // atLeast = 0: when the inner rule can't match, Optional still
         // succeeds with no consumption. This is what distinguishes
-        // Optional from a Grapheme('-') used directly.
-        var result = AllOf(Optional(Grapheme('-')), Grapheme('a')).Parse("a");
+        // Optional from a Token('-') used directly.
+        var result = AllOf(Optional(Token('-')), Token('a')).Parse("a");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }

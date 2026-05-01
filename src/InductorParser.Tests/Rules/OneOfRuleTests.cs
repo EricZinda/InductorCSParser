@@ -66,16 +66,16 @@ public class OneOfRuleTests
     [Test]
     public void OneOf_mismatch_after_successful_matches_points_at_first_bad_char()
     {
-        // OneOrMore(Letters) commits "abc" up to offset 3. Then Grapheme(';')
+        // OneOrMore(Letters) commits "abc" up to offset 3. Then Token(';')
         // runs at offset 3, reads '1', and records its own WithError at
         // pre-read offset 3. That's deeper than the letter's WithError
         // (which is at offset 3 too, from the OneOrMore's terminating
         // attempt, but recorded first). First-writer at equal depth wins.
         //
-        // To make the test unambiguous we only put a WithError on Grapheme(';')
+        // To make the test unambiguous we only put a WithError on Token(';')
         // so there's no contention.
         var rule = AllOf(OneOrMore(OneOf(TokenSet.Letters)),
-                       Grapheme(';').WithError("expected ';'"));
+                       Token(';').WithError("expected ';'"));
 
         var result = rule.Parse("abc1");
 
@@ -157,7 +157,7 @@ public class OneOfRuleTests
     }
 
     [Test]
-    public void OneOf_mixed_set_matches_both_letters_and_a_multi_rune_grapheme()
+    public void OneOf_mixed_set_matches_both_letters_and_a_multi_rune_Token()
     {
         // Letters | Runes(USFlag) is the canonical mixed set: a
         // big rune-only class plus a single multi-rune entry. OneOf

@@ -2,13 +2,17 @@ using System;
 
 namespace InductorParser.Lexing;
 
-// A Token is one chunk of input the lexer just consumed: one scalar-value
-// token (Rune) under RuneLexer for well-formed UTF-16 input, one .NET text element (Grapheme)
-// under GraphemeLexer, or a flag-only token at end-of-input. Stray surrogate
-// halves under RuneLexer surface as one-code-unit tokens with no RuneValue.
-// Instead of copying the matched text into a new
-// string, a Token keeps a reference to the original input plus an offset
-// and a length.
+// A Token is one chunk of input the lexer just consumed: one .NET text
+// element (one StringInfo grapheme cluster, possibly several runes wide)
+// or a flag-only token at end-of-input. Instead of copying the matched
+// text into a new string, a Token keeps a reference to the original
+// input plus an offset and a length.
+//
+// Not to be confused with the <see cref="InductorParser.Rules.Token"/>
+// factory in the rules namespace, which constructs a rule that matches
+// one Token from the input. C# resolves the two by syntactic context:
+// a method call <c>Token('a')</c> is the rule factory; a type usage
+// <c>Token token = lexer.Read()</c> is this struct.
 //
 // This matters because PEG parsers backtrack. The
 // same cursor gets visited many times as alternatives are tried and
@@ -46,7 +50,7 @@ public readonly ref struct Token
     // Chars is a ReadOnlySpan<char> over the source input. Spans don't
     // allocate. They're (pointer, length) structs that live on the
     // stack, pointing into the original string. Comparison rules like
-    // Literal("function") or Grapheme('=') precompute their expected sequence
+    // Literal("function") or Token('=') precompute their expected sequence
     // at construction time and at match time call SequenceEqual on the
     // spans. No string allocation anywhere in the matching loop.
     //
@@ -78,12 +82,12 @@ public readonly ref struct Token
         IsEof ? ReadOnlyMemory<char>.Empty : Source.AsMemory(Offset, Length);
 
     // RuneValue returns the rune value when the token is exactly one rune,
-    // or -1 otherwise. EOF returns -1. Multi-rune grapheme tokens (the
-    // family emoji 👨‍👩‍👧‍👦 under GraphemeLexer, for example) also return
-    // -1, so single-rune tests like GraphemeRule and OneOfRule fail correctly
-    // without each caller having to special-case the multi-rune path.
-    // Returned as int rather than System.Text.Rune because -1 is the "no
-    // single rune here" marker, and Rune has no invalid state.
+    // or -1 otherwise. EOF returns -1. Multi-rune tokens (the family
+    // emoji 👨‍👩‍👧‍👦, for example) also return -1, so single-rune tests
+    // like GraphemeRule and OneOfRule fail correctly without each
+    // caller having to special-case the multi-rune path. Returned as
+    // int rather than System.Text.Rune because -1 is the "no single
+    // rune here" marker, and Rune has no invalid state.
     public int RuneValue
     {
         get

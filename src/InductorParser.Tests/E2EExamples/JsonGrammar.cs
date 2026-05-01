@@ -40,7 +40,7 @@ public static class JsonGrammar
     {
         var simpleEscapeEnd = OneOf(TokenSet.Runes("\"\\/bfnrt"));
         var hexDigit = OneOf(TokenSet.Ascii.HexDigits);
-        var unicodeEscapeEnd = AllOf(Grapheme('u'), hexDigit, hexDigit, hexDigit, hexDigit);
+        var unicodeEscapeEnd = AllOf(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
         // .Delete() on the escapeEnd FirstOf triggers the ScanUntil
         // "don't allocate child Symbols for the escape-end match" fast
         // path. The ScanUntil primitive always produces a single leaf
@@ -52,12 +52,12 @@ public static class JsonGrammar
                 escapeStart: new Rune('\\'),
                 escapeEnd: FirstOf(simpleEscapeEnd, unicodeEscapeEnd).Delete())
             .As("stringBody");
-        JsonString = AllOf(Grapheme('"'), JsonScanUntil, Grapheme('"'))
+        JsonString = AllOf(Token('"'), JsonScanUntil, Token('"'))
             .As("string").Preserve();
 
         var digits = OneOrMore(OneOf(TokenSet.Ascii.Digits));
-        var decimalPoint = Grapheme('.').Preserve(); // default FlattenType is Delete, but we want this in final string
-        var sign = Grapheme('-').Preserve(); // default FlattenType is Delete, but we want this in final string
+        var decimalPoint = Token('.').Preserve(); // default FlattenType is Delete, but we want this in final string
+        var sign = Token('-').Preserve(); // default FlattenType is Delete, but we want this in final string
         var fraction = AllOf(decimalPoint, digits);
         var exponent = AllOf(OneOf("eE"), Optional(OneOf("+-")), digits);
         JsonNumber = AllOf(
@@ -78,31 +78,31 @@ public static class JsonGrammar
         JsonMember = AllOf(
             JsonString,
             Optional(AnyWhitespace()),
-            Grapheme(':'),
+            Token(':'),
             Optional(AnyWhitespace()),
             value
         ).As("member").Preserve();
 
         JsonObject = AllOf(
-            Grapheme('{'),
+            Token('{'),
             Optional(AnyWhitespace()),
             Optional(AllOf(
                 JsonMember,
-                ZeroOrMore(AllOf(Optional(AnyWhitespace()), Grapheme(','), Optional(AnyWhitespace()), JsonMember))
+                ZeroOrMore(AllOf(Optional(AnyWhitespace()), Token(','), Optional(AnyWhitespace()), JsonMember))
             )),
             Optional(AnyWhitespace()),
-            Grapheme('}')
+            Token('}')
         ).As("object").Preserve();
 
         JsonArray = AllOf(
-            Grapheme('['),
+            Token('['),
             Optional(AnyWhitespace()),
             Optional(AllOf(
                 value,
-                ZeroOrMore(AllOf(Optional(AnyWhitespace()), Grapheme(','), Optional(AnyWhitespace()), value))
+                ZeroOrMore(AllOf(Optional(AnyWhitespace()), Token(','), Optional(AnyWhitespace()), value))
             )),
             Optional(AnyWhitespace()),
-            Grapheme(']')
+            Token(']')
         ).As("array").Preserve();
 
         value.Bind(FirstOf(JsonString, JsonNumber, JsonObject, JsonArray, JsonTrue, JsonFalse, JsonNull));

@@ -21,7 +21,7 @@ public class PassThroughTextTests
         // naturally from ZeroOrMore stopping when the inner fails.
         //
         // WARNING: this example is LF-only on purpose. Under the default
-        // GraphemeLexer, "\r\n" is one grapheme cluster, so Grapheme('\n')
+        // GraphemeLexer, "\r\n" is one grapheme cluster, so Token('\n')
         // DOESN'T match a CRLF line ending and NoneOf silently
         // swallows the CRLF grapheme as body content. If you're copying
         // this idiom for a line-based grammar that must accept Windows
@@ -30,13 +30,13 @@ public class PassThroughTextTests
         // docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer" for the
         // full pattern.
         var lineComment = AllOf(
-            Grapheme('/'),
-            Grapheme('/'),
+            Token('/'),
+            Token('/'),
             ZeroOrMore(NoneOf(TokenSet.Single('\n'))),
-            Grapheme('\n'));
+            Token('\n'));
 
-        // PreserveAllSymbols keeps the Grapheme('/') leaves and the
-        // Grapheme('\n') leaf in the tree so Tree.ToString reproduces the
+        // PreserveAllSymbols keeps the Token('/') leaves and the
+        // Token('\n') leaf in the tree so Tree.ToString reproduces the
         // full comment text.
         var result = lineComment.Parse("// anything up to the newline\n",
             new ParseOptions { PreserveAllSymbols = true });
@@ -54,10 +54,10 @@ public class PassThroughTextTests
         // grapheme like 🎸 passes NoneOf because it isn't any single
         // rune in the stop set. The comment body scoops it up cleanly.
         var lineComment = AllOf(
-            Grapheme('/'),
-            Grapheme('/'),
+            Token('/'),
+            Token('/'),
             ZeroOrMore(NoneOf(TokenSet.Single('\n'))),
-            Grapheme('\n'));
+            Token('\n'));
 
         var result = lineComment.Parse("// playing \uD83C\uDFB8 tonight\n");
 
@@ -71,10 +71,10 @@ public class PassThroughTextTests
         // how you express "match until a multi-character terminator
         // would fire." A simple NoneOf can't express this because
         // the stop condition spans two characters.
-        var closeMarker = AllOf(Grapheme('*'), Grapheme('/'));
+        var closeMarker = AllOf(Token('*'), Token('/'));
         var blockComment = AllOf(
-            Grapheme('/'),
-            Grapheme('*'),
+            Token('/'),
+            Token('*'),
             ZeroOrMore(AllOf(Not(closeMarker), AnyToken())),
             closeMarker);
 
@@ -94,8 +94,8 @@ public class PassThroughTextTests
         // share a prefix. Peek(Not(letter)) confirms the keyword really
         // ends after "if" before the caller commits.
         var keywordIf = AllOf(
-            Grapheme('i'),
-            Grapheme('f'),
+            Token('i'),
+            Token('f'),
             Peek(Not(OneOf(TokenSet.Letters))));
 
         var justIfResult = AllOf(keywordIf, ZeroOrMore(AnyToken())).Parse("if x");

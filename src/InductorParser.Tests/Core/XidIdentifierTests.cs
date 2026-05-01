@@ -82,7 +82,7 @@ public class XidIdentifierTests
     {
         // "हिन्दी" is six runes: ह (Lo), ि (Mc), न (Lo), ् (Mn), द (Lo), ी (Mc).
         // Under the grapheme lexer these compose into three multi-rune
-        // graphemes. Identifier uses WithinGrapheme internally, which
+        // graphemes. Identifier uses WithinToken internally, which
         // walks each grapheme's runes and checks them against the
         // identifier rules, so the whole word matches.
         var result = Identifier().Parse("हिन्दी");
@@ -185,7 +185,7 @@ public class XidIdentifierTests
     public void Nfc_disabled_stops_the_equivalence()
     {
         // With normalization turned off, the decomposed form still matches
-        // (WithinGrapheme walks the grapheme's runes and Mn is in
+        // (WithinToken walks the grapheme's runes and Mn is in
         // XID_Continue) but the match text differs between the two
         // inputs. Proves the equivalence in the previous test comes from
         // normalization, not the rule.

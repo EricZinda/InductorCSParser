@@ -163,7 +163,7 @@ public class Program
 
             failures += Verify("InductorParserTyped", input, () =>
             {
-                // Typed variant: parse with Grapheme lexer, then walk the
+                // Typed variant: parse with Token lexer, then walk the
                 // Symbol tree into an IJson tree. Round-trip goes through
                 // IJson.ToString() (same path Pegasus / Pidgin / Sprache /
                 // Superpower / Parlot use) so this verifies both the parse

@@ -7,7 +7,7 @@ using static InductorParser.Tests.TraceTestHelpers;
 
 namespace InductorParser.Tests;
 
-// Cross-cutting trace-format tests. Per-rule trace output (Grapheme, OneOf,
+// Cross-cutting trace-format tests. Per-rule trace output (Token, OneOf,
 // Eof, AllOf, FirstOf, OneOrMore, ZeroOrMore, Optional) is in
 // each rule's own test file, so the failure surfaces right next to the
 // rule being edited. This file covers the concerns that aren't any one
@@ -79,12 +79,12 @@ public class TracingTests
         // failure ("expected an A"). It DOESN'T appear as part of the
         // trace label. That position is reserved for .As() names.
         var sink = NewSink();
-        var rule = Grapheme('a').WithError("expected an A");
+        var rule = Token('a').WithError("expected an A");
         rule.Parse("x", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "   Lexer.Read: 'x', Consumed: 1",
-            "   FAIL | Grapheme: found 'x', wanted 'a' \"expected an A\""
+            "   FAIL | Token: found 'x', wanted 'a' \"expected an A\""
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
@@ -94,16 +94,16 @@ public class TracingTests
     public void Lexer_Read_emits_one_line_per_token()
     {
         var sink = NewSink();
-        var rule = AllOf(Grapheme('a'), Grapheme('b'), Grapheme('c'));
+        var rule = AllOf(Token('a'), Token('b'), Token('c'));
         rule.Parse("abc", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | Grapheme: found 'a'",
+            "      SUCC | Token: found 'a'",
             "      Lexer.Read: 'b', Consumed: 2",
-            "      SUCC | Grapheme: found 'b'",
+            "      SUCC | Token: found 'b'",
             "      Lexer.Read: 'c', Consumed: 3",
-            "      SUCC | Grapheme: found 'c'",
+            "      SUCC | Token: found 'c'",
             "   SUCC | AllOf: found 3"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
@@ -118,14 +118,14 @@ public class TracingTests
         // advances past 'a' then fails at position 1, which is > 0, so
         // the announcement appears.
         var sink = NewSink();
-        var rule = AllOf(Grapheme('a'), Grapheme('b'));
+        var rule = AllOf(Token('a'), Token('b'));
         rule.Parse("ax", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | Grapheme: found 'a'",
+            "      SUCC | Token: found 'a'",
             "      Lexer.Read: 'x', Consumed: 2",
-            "      FAIL | Grapheme: found 'x', wanted 'b'",
+            "      FAIL | Token: found 'x', wanted 'b'",
             "      Lexer.RecordFailure: new deepest failure at char 1",
             "   FAIL | AllOf: symbol #1"
         );
@@ -148,15 +148,15 @@ public class TracingTests
         // that changed the second run would slip through.
         var sink1 = NewSink();
         var sink2 = NewSink();
-        var rule = AllOf(Grapheme('a'), Grapheme('b'));
+        var rule = AllOf(Token('a'), Token('b'));
         rule.Parse("ab", new ParseOptions { TraceSink = sink1 });
         rule.Parse("ab", new ParseOptions { TraceSink = sink2 });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | Grapheme: found 'a'",
+            "      SUCC | Token: found 'a'",
             "      Lexer.Read: 'b', Consumed: 2",
-            "      SUCC | Grapheme: found 'b'",
+            "      SUCC | Token: found 'b'",
             "   SUCC | AllOf: found 2"
         );
         Assert.That(sink1.ToString(), Is.EqualTo(expected),
@@ -172,7 +172,7 @@ public class TracingTests
         // Diagnostic trace outputs are gated on TraceLevel >=
         // Diagnostic. With TraceLevel.Normal the sink stays empty even
         // though TraceSink is wired up. The grammar below exercises
-        // every rule type (Grapheme, OneOf, AllOf, FirstOf, OneOrMore,
+        // every rule type (Token, OneOf, AllOf, FirstOf, OneOrMore,
         // ZeroOrMore, Optional, Eof) on both success and failure paths,
         // so an ungated trace emission added to any single rule would
         // leak into the sink and fail this test.
@@ -186,9 +186,9 @@ public class TracingTests
         //   ZeroOrMore('!'):  fails at EOF, ZeroOrMore still succeeds
         //   Eof:              succeeds at EOF
         var rule = AllOf(
-            OneOrMore(FirstOf(Grapheme('a'), OneOf("b"))),
-            Optional(Grapheme('z')),
-            ZeroOrMore(Grapheme('!')),
+            OneOrMore(FirstOf(Token('a'), OneOf("b"))),
+            Optional(Token('z')),
+            ZeroOrMore(Token('!')),
             Eof()
         );
 

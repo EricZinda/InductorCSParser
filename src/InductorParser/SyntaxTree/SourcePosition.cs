@@ -13,13 +13,13 @@ public readonly struct SourcePosition
     // UTF-16 code units, what string.Substring / Span<char>.Slice / LSP use.
     public int CharIndex { get; }
 
-    // User-perceived characters, using the same StringInfo text-element
-    // segmentation the lexer uses. On modern .NET that follows UAX #29
-    // extended grapheme clusters. An emoji ZWJ sequence or a
-    // letter-plus-combining-mark may count as one grapheme, so this index
-    // is smaller than or equal to CharIndex on any input containing
-    // multi-char graphemes.
-    public int GraphemeIndex { get; }
+    // User-perceived characters (tokens), using the same StringInfo
+    // text-element segmentation the lexer uses. On modern .NET that
+    // follows UAX #29 extended grapheme clusters. An emoji ZWJ sequence
+    // or a letter-plus-combining-mark may count as one token, so this
+    // index is smaller than or equal to CharIndex on any input containing
+    // multi-char tokens.
+    public int TokenIndex { get; }
 
     // Zero-based line number, LSP convention.
     public int Line { get; }
@@ -28,17 +28,17 @@ public readonly struct SourcePosition
     // same unit as CharIndex.
     public int Column { get; }
 
-    internal SourcePosition(int charIndex, int graphemeIndex, int line, int column)
+    internal SourcePosition(int charIndex, int tokenIndex, int line, int column)
     {
         CharIndex = charIndex;
-        GraphemeIndex = graphemeIndex;
+        TokenIndex = tokenIndex;
         Line = line;
         Column = column;
     }
 
     // Compute all four position units from a character index into the
     // input string. Walks the string from 0 to charIndex once, counting
-    // graphemes and line breaks along the way. O(charIndex).
+    // tokens and line breaks along the way. O(charIndex).
     // Out-of-range charIndex values are clamped to [0, input.Length].
     public static SourcePosition From(string input, int charIndex)
     {
@@ -47,8 +47,8 @@ public readonly struct SourcePosition
         if (limit < 0) limit = 0;
         if (limit > input.Length) limit = input.Length;
 
-        int graphemeIndex = SourcePositionConverter.ToGraphemeIndex(input, limit);
+        int tokenIndex = SourcePositionConverter.ToTokenIndex(input, limit);
         SourcePositionConverter.ToLineColumn(input, limit, out int line, out int column);
-        return new SourcePosition(limit, graphemeIndex, line, column);
+        return new SourcePosition(limit, tokenIndex, line, column);
     }
 }

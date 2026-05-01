@@ -24,7 +24,7 @@ public class ZeroOrMoreRuleTests
         // is a real zero-match success, not a one-match success after
         // an inner SUCC line.
         var sink = NewSink();
-        ZeroOrMore(Grapheme('a')).Parse("z", new ParseOptions { TraceSink = sink });
+        ZeroOrMore(Token('a')).Parse("z", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "   SUCC | ZeroOrMore: count= 0"
@@ -35,20 +35,20 @@ public class ZeroOrMoreRuleTests
     [Test]
     public void ZeroOrMore_loops_past_two_matches_proving_atMost_is_int_max()
     {
-        // The probe past two matches (Lexer.Read at EOF, FAIL on Grapheme,
+        // The probe past two matches (Lexer.Read at EOF, FAIL on Token,
         // RecordFailure at char 2) proves the loop's upper bound is
         // unbounded: it kept asking the inner rule for another match
         // after the second succeeded.
         var sink = NewSink();
-        ZeroOrMore(Grapheme('a')).Parse("aa", new ParseOptions { TraceSink = sink });
+        ZeroOrMore(Token('a')).Parse("aa", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | Grapheme: found 'a'",
+            "      SUCC | Token: found 'a'",
             "      Lexer.Read: 'a', Consumed: 2",
-            "      SUCC | Grapheme: found 'a'",
+            "      SUCC | Token: found 'a'",
             "      Lexer.Read: '<EOF>', Consumed: 2",
-            "      FAIL | Grapheme: found '<EOF>', wanted 'a'",
+            "      FAIL | Token: found '<EOF>', wanted 'a'",
             "      Lexer.RecordFailure: new deepest failure at char 2",
             "   SUCC | ZeroOrMore: count= 2"
         );

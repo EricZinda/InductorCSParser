@@ -13,14 +13,14 @@ namespace InductorParser.SyntaxTree;
 //
 // Leaf: carries a ReadOnlyMemory<char> pointing into a section of
 //     the original input string. Used by rules that match content
-//     (Grapheme, Literal, OneOf, ScanUntil). ToString() returns the
+//     (Token, Literal, OneOf, ScanUntil). ToString() returns the
 //     text it points at. The parse never copies input into a new
 //     string.
 //
 // Because the leaf memory points back into the input, a Symbol can
 // also report where in the source it came from: SourceRange returns
-// a Start/End pair of SourcePositions covering the same char / rune /
-// grapheme / line / column units ParseResult uses for error positions.
+// a Start/End pair of SourcePositions covering the same char / token
+// / line / column units ParseResult uses for error positions.
 public sealed class Symbol
 {
     // Shared empty array for the Children field on leaf symbols. Array.Empty<T>()

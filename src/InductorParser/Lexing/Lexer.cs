@@ -20,10 +20,10 @@ namespace InductorParser.Lexing;
 // (the Setting example, most config-file grammars) are unaffected.
 //
 // One sub-lexer mode (selected by an internal constructor and used only
-// by WithinGraphemeRule) walks one rune per token instead of one
-// grapheme. That sub-lexer reads a bounded range of the same shared
+// by WithinTokenRule) walks one rune per token instead of one full
+// token. That sub-lexer reads a bounded range of the same shared
 // input string and lets the inner rule walk the runes inside one
-// grapheme. The mode is one private bool checked once in Read; not a
+// token. The mode is one private bool checked once in Read; not a
 // virtual dispatch.
 public sealed class Lexer
 {
@@ -40,7 +40,7 @@ public sealed class Lexer
     private string _input;
     // Exclusive upper bound on _position. Defaults to _input.Length (a
     // lexer reads to end of input). Sub-lexer constructors bound this to
-    // a sub-range of the shared input string so rules like WithinGrapheme
+    // a sub-range of the shared input string so rules like WithinToken
     // can run inner rules over a portion of the same string without
     // allocating a Substring copy. Tokens and positions still use
     // absolute offsets into _input, so outer error-position reporting
@@ -52,9 +52,9 @@ public sealed class Lexer
 
     // Sub-lexer mode: when true, Read advances one rune at a time
     // instead of one grapheme cluster. Set only by the internal
-    // bounded-range constructor used by WithinGraphemeRule, which
-    // creates a sub-lexer over the runes inside one outer grapheme.
-    // All public construction paths leave this false (grapheme mode).
+    // bounded-range constructor used by WithinTokenRule, which
+    // creates a sub-lexer over the runes inside one outer token.
+    // All public construction paths leave this false (token mode).
     private readonly bool _oneRunePerToken;
 
     // Trace destination and verbosity. Null _traceSink means tracing is off.
@@ -113,8 +113,8 @@ public sealed class Lexer
     // from the main lexer or a sub-lexer.
     //
     // oneRunePerToken switches Read to walk one rune at a time instead
-    // of one grapheme cluster. WithinGraphemeRule passes true so the
-    // inner rule sees the runes inside the outer grapheme; everywhere
+    // of one grapheme cluster. WithinTokenRule passes true so the
+    // inner rule sees the runes inside the outer token; everywhere
     // else the default (false) keeps grapheme tokenization.
     internal Lexer(string input, int startPosition, int endPosition, TextWriter? traceSink, TraceLevel traceLevel, bool oneRunePerToken)
     {
@@ -290,10 +290,10 @@ public sealed class Lexer
     // Unicode character).
     //
     // Always one rune at a time. Rules that need to walk rune-by-rune
-    // (like the WithinGrapheme sub-lexer) get consistent semantics
+    // (like the WithinToken sub-lexer) get consistent semantics
     // regardless of how the outer lexer is tokenizing. Callers that
     // want to inspect one token at a time in the lexer's natural unit
-    // (one grapheme cluster, or one rune in the WithinGrapheme sub-
+    // (one grapheme cluster, or one rune in the WithinToken sub-
     // lexer mode) should call lexer.Read(). Note that Read() advances
     // the lexer, so for peek semantics wrap it in an uncommitted
     // transaction:
@@ -392,7 +392,7 @@ public sealed class Lexer
         // OneOf semantics: a character-class rule matches only when
         // the whole token is exactly one rune in the set. A multi-rune
         // grapheme whose first rune happens to be in the set isn't
-        // part of the run. Under the WithinGrapheme sub-lexer mode
+        // part of the run. Under the WithinToken sub-lexer mode
         // every token is one rune, so the tokenLength == runeLen
         // guard is trivially satisfied; the same loop handles both.
         while (_position < _endPosition)
@@ -417,11 +417,11 @@ public sealed class Lexer
         return count;
     }
 
-    // Grapheme-aware variant of AdvanceWhileRuneIn. Used when the
-    // TokenSet has multi-rune entries: a multi-rune grapheme can be a
+    // Token-aware variant of AdvanceWhileRuneIn. Used when the
+    // TokenSet has multi-rune entries: a multi-rune token can be a
     // member of the set, so the loop has to pull a full token per
     // iteration and check it against both halves of the set. Slower
-    // per character than AdvanceWhileRuneIn (we pay per-grapheme
+    // per character than AdvanceWhileRuneIn (we pay per-token
     // overhead instead of inline rune decode), but only fires when the
     // grammar actually contains multi-rune set entries. Rune-only sets
     // continue to use AdvanceWhileRuneIn via the rule's dispatch.
@@ -448,7 +448,7 @@ public sealed class Lexer
             else
             {
                 inSet = set.HasMultiRuneGraphemes
-                    && set.ContainsGrapheme(_input.AsSpan(pos, tokenLength));
+                    && set.ContainsToken(_input.AsSpan(pos, tokenLength));
             }
             if (!inSet) break;
 

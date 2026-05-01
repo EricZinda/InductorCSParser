@@ -17,7 +17,7 @@ public class SymbolPositionTests
     [Test]
     public void Leaf_token_has_range_pointing_at_its_char_in_input()
     {
-        var rule = Grapheme('a').Preserve();
+        var rule = Token('a').Preserve();
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True);
@@ -41,12 +41,12 @@ public class SymbolPositionTests
     [Test]
     public void Composite_range_spans_leftmost_leaf_to_rightmost_leaf()
     {
-        // AllOf(Grapheme, Grapheme, Grapheme) wrapped as a named composite. Its
+        // AllOf(Token, Token, Token) wrapped as a named composite. Its
         // range should run from the first 'a' to one past the last 'c'.
-        // Preserve each Grapheme explicitly: Grapheme defaults to Delete, and
+        // Preserve each Token explicitly: Token defaults to Delete, and
         // a composite whose leaves are all Delete-flattened has no
         // surviving text to report a range over.
-        var rule = AllOf(Grapheme('a').Preserve(), Grapheme('b').Preserve(), Grapheme('c').Preserve())
+        var rule = AllOf(Token('a').Preserve(), Token('b').Preserve(), Token('c').Preserve())
             .As("triple").Preserve();
         var result = rule.Parse("abc");
 
@@ -126,19 +126,19 @@ public class SymbolPositionTests
 
         // Start: family emoji = 8 chars / 1 grapheme.
         Assert.That(range.Start.CharIndex, Is.EqualTo(8));
-        Assert.That(range.Start.GraphemeIndex, Is.EqualTo(1));
+        Assert.That(range.Start.TokenIndex, Is.EqualTo(1));
         Assert.That(range.Start.Line, Is.EqualTo(0));
         Assert.That(range.Start.Column, Is.EqualTo(8));
 
         // End: family emoji + "ab" = 10 chars / 3 graphemes.
         Assert.That(range.End.CharIndex, Is.EqualTo(10));
-        Assert.That(range.End.GraphemeIndex, Is.EqualTo(3));
+        Assert.That(range.End.TokenIndex, Is.EqualTo(3));
     }
 
     [Test]
     public void ErrorPosition_returns_null_on_success()
     {
-        var rule = Grapheme('a').Preserve();
+        var rule = Token('a').Preserve();
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True);
@@ -150,14 +150,14 @@ public class SymbolPositionTests
     {
         // "ab" with grammar expecting just 'a' followed by Eof fails at
         // offset 1.
-        var rule = AllOf(Grapheme('a'), Eof());
+        var rule = AllOf(Token('a'), Eof());
         var result = rule.Parse("ab");
 
         Assert.That(result.Success, Is.False);
         var position = result.ErrorPosition;
         Assert.That(position, Is.Not.Null);
         Assert.That(position!.Value.CharIndex, Is.EqualTo(1));
-        Assert.That(position.Value.GraphemeIndex, Is.EqualTo(1));
+        Assert.That(position.Value.TokenIndex, Is.EqualTo(1));
         Assert.That(position.Value.Line, Is.EqualTo(0));
         Assert.That(position.Value.Column, Is.EqualTo(1));
     }
@@ -321,7 +321,7 @@ public class SymbolPositionTests
     {
         // CRLF is a single LSP line terminator and a single UAX #29
         // grapheme. A literal that spans it should bump End.Line by
-        // exactly 1 and End.GraphemeIndex by 5 (a, b, \r\n, c, d).
+        // exactly 1 and End.TokenIndex by 5 (a, b, \r\n, c, d).
         var rule = Literal("ab\r\ncd").Preserve();
         var result = rule.Parse("ab\r\ncd");
 
@@ -329,7 +329,7 @@ public class SymbolPositionTests
         Assert.That(range.End.CharIndex, Is.EqualTo(6));
         Assert.That(range.End.Line, Is.EqualTo(1));
         Assert.That(range.End.Column, Is.EqualTo(2));
-        Assert.That(range.End.GraphemeIndex, Is.EqualTo(5));
+        Assert.That(range.End.TokenIndex, Is.EqualTo(5));
     }
 
     [Test]
@@ -371,9 +371,9 @@ public class SymbolPositionTests
         // four runes, four UTF-16 chars. With normalization disabled
         // (default NFC would otherwise compose e+combining into the
         // precomposed "e-acute" and collapse to 3 chars), Identifier
-        // consumes all of it via WithinGrapheme leaves, and its
+        // consumes all of it via WithinToken leaves, and its
         // composite range should report End.CharIndex ==
-        // End.RuneIndex == 4 but End.GraphemeIndex == 3. Verifies the
+        // End.RuneIndex == 4 but End.TokenIndex == 3. Verifies the
         // stitching across multi-rune-grapheme leaves.
         const string Input = "re" + CombiningAcuteText + "x";
         var rule = Identifier();
@@ -383,11 +383,11 @@ public class SymbolPositionTests
         var range = result.Tree!.SourceRange!.Value;
         Assert.That(range.Start.CharIndex, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(4));
-        Assert.That(range.End.GraphemeIndex, Is.EqualTo(3));
+        Assert.That(range.End.TokenIndex, Is.EqualTo(3));
     }
 
     [Test]
-    public void Range_for_two_supplementary_emojis_diverges_char_from_grapheme()
+    public void Range_for_two_supplementary_emojis_diverges_char_from_Token()
     {
         // Two waving-hand emojis (each 2 chars / 1 grapheme). End
         // should be at char 4, grapheme 2. Catches a bug where the
@@ -398,7 +398,7 @@ public class SymbolPositionTests
 
         var range = result.Tree!.SourceRange!.Value;
         Assert.That(range.End.CharIndex, Is.EqualTo(4));
-        Assert.That(range.End.GraphemeIndex, Is.EqualTo(2));
+        Assert.That(range.End.TokenIndex, Is.EqualTo(2));
     }
 
     [Test]
@@ -409,7 +409,7 @@ public class SymbolPositionTests
         // should span only its own children. Verifies that Find +
         // SourceRange together don't leak the outer range when the
         // caller asks for the inner.
-        var inner = AllOf(Grapheme('x').Preserve(), Grapheme('y').Preserve()).As("inner").Preserve();
+        var inner = AllOf(Token('x').Preserve(), Token('y').Preserve()).As("inner").Preserve();
         var outer = AllOf(Literal("ab").Preserve(), inner, Literal("cd").Preserve()).As("outer").Preserve();
         var result = outer.Parse("abxycd");
 
@@ -427,7 +427,7 @@ public class SymbolPositionTests
     public void Range_End_at_input_end_equals_input_length_in_all_units()
     {
         // The composite ends exactly at input.Length. CharIndex /
-        // GraphemeIndex should both clamp / report the same value,
+        // TokenIndex should both clamp / report the same value,
         // and Column should be the full chars-on-this-line count (no
         // off-by-one at the boundary).
         var rule = AllOf(Literal("xx").Preserve(), Literal("yy").Preserve()).As("composite").Preserve();
@@ -435,7 +435,7 @@ public class SymbolPositionTests
 
         var range = result.Tree!.SourceRange!.Value;
         Assert.That(range.End.CharIndex, Is.EqualTo(4));
-        Assert.That(range.End.GraphemeIndex, Is.EqualTo(4));
+        Assert.That(range.End.TokenIndex, Is.EqualTo(4));
         Assert.That(range.End.Line, Is.EqualTo(0));
         Assert.That(range.End.Column, Is.EqualTo(4));
     }

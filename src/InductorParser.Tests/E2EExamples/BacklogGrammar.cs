@@ -34,8 +34,8 @@ public static class BacklogGrammar
 
     // ^#(?!#)\s?(.*)$
     public static readonly Rule H1Heading = AllOf(
-        Grapheme('#'),
-        Not(Grapheme('#')),
+        Token('#'),
+        Not(Token('#')),
         OptionalOneWhitespace,
         RestOfLine,
         Eof()
@@ -44,7 +44,7 @@ public static class BacklogGrammar
     // ^##(?!#)\s?(.*)$
     public static readonly Rule H2Heading = AllOf(
         Literal("##"),
-        Not(Grapheme('#')),
+        Not(Token('#')),
         OptionalOneWhitespace,
         RestOfLine,
         Eof()
@@ -69,15 +69,15 @@ public static class BacklogGrammar
     // ^[-*+]( [-*+]){2,}$
     public static readonly Rule HrSpaced = AllOf(
         OneOf("-*+"),
-        AtLeast(2, AllOf(Grapheme(' '), OneOf("-*+"))),
+        AtLeast(2, AllOf(Token(' '), OneOf("-*+"))),
         Eof()
     );
 
     // LF, zero-or-more intra-line whitespace, LF. LF-only.
     private static readonly Rule ParagraphTarget = AllOf(
-        Grapheme('\n'),
+        Token('\n'),
         ZeroOrMore(OneOf(TokenSet.InlineWhitespace)),
-        Grapheme('\n')
+        Token('\n')
     );
 
     // Scan up to a ParagraphTarget, consume it, then the rest.

@@ -2,11 +2,11 @@ using System.Globalization;
 
 namespace InductorParser.SyntaxTree;
 
-// Char-index to (grapheme / line / column) conversions, shared
+// Char-index to (token / line / column) conversions, shared
 // between ParseResult.Error* properties and Symbol.SourceRange.
 internal static class SourcePositionConverter
 {
-    public static int ToGraphemeIndex(string input, int charIndex)
+    public static int ToTokenIndex(string input, int charIndex)
     {
         int limit = charIndex;
         if (limit > input.Length) limit = input.Length;

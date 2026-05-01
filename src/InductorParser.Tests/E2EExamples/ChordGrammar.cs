@@ -57,9 +57,9 @@ public static class ChordGrammar
             AllOf(LiteralIgnoreAsciiCase("sus"), Optional(OneOf("24"))),
             LiteralIgnoreAsciiCase("m"),
             LiteralIgnoreAsciiCase("o"),
-            Grapheme('°'),
-            Grapheme('+'),
-            Grapheme('5')
+            Token('°'),
+            Token('+'),
+            Token('5')
         );
 
         // (6|7|9|11|13)?
@@ -68,9 +68,9 @@ public static class ChordGrammar
         var ext1 = FirstOf(
             LiteralIgnoreAsciiCase("11"),
             LiteralIgnoreAsciiCase("13"),
-            Grapheme('6'),
-            Grapheme('7'),
-            Grapheme('9')
+            Token('6'),
+            Token('7'),
+            Token('9')
         );
 
         // (maj|M|Δ|m|ø|°)?
@@ -78,17 +78,17 @@ public static class ChordGrammar
         var quality2 = FirstOf(
             LiteralIgnoreAsciiCase("maj"),
             LiteralIgnoreAsciiCase("m"),
-            Grapheme('Δ'),
-            Grapheme('ø'),
-            Grapheme('°')
+            Token('Δ'),
+            Token('ø'),
+            Token('°')
         );
 
         // (7|9|11|13)?
         var ext2 = FirstOf(
             LiteralIgnoreAsciiCase("11"),
             LiteralIgnoreAsciiCase("13"),
-            Grapheme('7'),
-            Grapheme('9')
+            Token('7'),
+            Token('9')
         );
 
         // (add[2469]|add1[13]|b5|#5|b9|#9|#11|b13|no[357]|sus[24]?|alt)*
@@ -110,7 +110,7 @@ public static class ChordGrammar
         );
 
         // (\/[A-Ga-g][#b♯♭x]*)?
-        var slashBass = AllOf(Grapheme('/'), root, ZeroOrMore(accidental));
+        var slashBass = AllOf(Token('/'), root, ZeroOrMore(accidental));
 
         return AllOf(
             root,

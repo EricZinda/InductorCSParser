@@ -44,11 +44,11 @@ public static class ArithmeticGrammar
         var factor = FirstOf(
             Number,
             AllOf(
-                Grapheme('('),
+                Token('('),
                 Optional(AnyWhitespace()),
                 exprForward,
                 Optional(AnyWhitespace()),
-                Grapheme(')')
+                Token(')')
             )
         );
 

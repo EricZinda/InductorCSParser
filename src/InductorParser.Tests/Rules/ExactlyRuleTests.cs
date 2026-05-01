@@ -24,15 +24,15 @@ public class ExactlyRuleTests
         // because count == atMost). The sibling test below verifies
         // atLeast = 3 by failing when the count is below 3.
         var sink = NewSink();
-        Exactly(3, Grapheme('a')).Parse("aaa", new ParseOptions { TraceSink = sink });
+        Exactly(3, Token('a')).Parse("aaa", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "      Lexer.Read: 'a', Consumed: 1",
-            "      SUCC | Grapheme: found 'a'",
+            "      SUCC | Token: found 'a'",
             "      Lexer.Read: 'a', Consumed: 2",
-            "      SUCC | Grapheme: found 'a'",
+            "      SUCC | Token: found 'a'",
             "      Lexer.Read: 'a', Consumed: 3",
-            "      SUCC | Grapheme: found 'a'",
+            "      SUCC | Token: found 'a'",
             "   SUCC | Exactly[3]: count= 3"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
@@ -43,7 +43,7 @@ public class ExactlyRuleTests
     {
         // atLeast = 3: matching only twice is not enough. This is what
         // distinguishes Exactly from AtMost.
-        var result = Exactly(3, Grapheme('a')).Parse("aa");
+        var result = Exactly(3, Token('a')).Parse("aa");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));

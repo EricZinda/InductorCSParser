@@ -6,14 +6,13 @@ using InductorParser.SyntaxTree;
 namespace InductorParser;
 
 // Matches an exact multi-character string in a single transaction. This is
-// the N-character generalization of GraphemeRule. GraphemeRule stores exactly one
-// grapheme at construction time. Depending on the
-// selected lexer, matching that one expected grapheme may read one token
-// (GraphemeLexer) or several rune tokens (RuneLexer). LiteralRule stores any
-// non-empty string and uses the same lockstep compare loop.
+// the N-character generalization of GraphemeRule. GraphemeRule stores exactly
+// one token (one StringInfo text element) at construction time and matches
+// it as one read. LiteralRule stores any non-empty string and uses the
+// same lockstep compare loop.
 //
-// This is better than using AllOf(Grapheme('m'), Grapheme('a'), Grapheme('j')) since each
-// Grapheme rule opens its own transaction. A three-character AllOf of three Grapheme rules
+// This is better than using AllOf(Token('m'), Token('a'), Token('j')) since each
+// Token rule opens its own transaction. A three-character AllOf of three Token rules
 // does three BeginTransaction/Commit cycles and three RecordFailure slots.
 // Literal("maj") does one. For keyword-heavy grammars (chord notation, SQL
 // keywords, HTTP methods) this is the difference between per-keyword O(N)
@@ -21,11 +20,9 @@ namespace InductorParser;
 //
 // The match loop is the same lockstep pattern GraphemeRule uses: read a token,
 // compare its Chars span against the matching section of the expected string,
-// advance by token.Length. Under GraphemeLexer each iteration consumes
-// exactly one grapheme worth of chars. Under RuneLexer each
-// well-formed iteration consumes exactly one rune. Same loop, both lexers, because SequenceEqual
-// only cares about the underlying chars lining up, not how the lexer chose
-// to group them.
+// advance by token.Length. Each iteration consumes exactly one token's worth
+// of chars. SequenceEqual only cares about the underlying chars lining up,
+// not how the lexer chose to group them.
 //
 // Error position on mismatch is the pre-read offset of the specific failing
 // token, not the start of the whole attempt. Same as GraphemeRule: this is what

@@ -66,7 +66,7 @@ Recursion is different. A grammar where `Value` references `Array`, and `Array` 
 
 ## Bridging Back To The Recursive Evaluator
 
-The state machine does not natively compile every rule type. `WithinGraphemeRule`, the rule-stoppered shape of `ScanUntil`, and any user-defined `Rule` subclass all bridge back to the recursive evaluator at parse time.
+The state machine does not natively compile every rule type. `WithinTokenRule`, the rule-stoppered shape of `ScanUntil`, and any user-defined `Rule` subclass all bridge back to the recursive evaluator at parse time.
 
 Bridging is one opcode: `BridgeToRecursive`. Its body invokes `Rule.TryParse` against the current lexer, captures whatever `Symbol(s)` the recursive evaluator produces, and emits them as `Prebuilt` output ops. The `TreeBuilder` then appends those Symbols directly into the surrounding tree as if a native opcode had produced them. Slower per call than a native compilation, but correctness-preserving for everything the recursive evaluator can handle.
 

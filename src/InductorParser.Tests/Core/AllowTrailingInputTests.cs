@@ -16,7 +16,7 @@ public class AllowTrailingInputTests
     [Test]
     public void Default_rejects_trailing_input()
     {
-        var rule = OneOrMore(Grapheme('a'));
+        var rule = OneOrMore(Token('a'));
         var result = rule.Parse("aabb");
 
         Assert.That(result.Success, Is.False);
@@ -29,11 +29,11 @@ public class AllowTrailingInputTests
     {
         // Same input shape as the default-rejects test above. With the flag
         // on, the OneOrMore claims "aa" and the parse returns success
-        // instead of failing at offset 2 on the unconsumed "bb". Grapheme
+        // instead of failing at offset 2 on the unconsumed "bb". Token
         // defaults to FlattenType.Delete, so .Preserve() the inner token
         // to keep its leaf in the tree; that's what makes the consumed
         // text observable below.
-        var rule = OneOrMore(Grapheme('a').Preserve());
+        var rule = OneOrMore(Token('a').Preserve());
         var result = rule.Parse("aabb", new ParseOptions { AllowTrailingInput = true });
 
         Assert.That(result.Success, Is.True);
@@ -47,7 +47,7 @@ public class AllowTrailingInputTests
         // The rule never matches a single 'a', so the parse must fail
         // even with trailing input allowed. AllowTrailingInput only relaxes
         // the post-rule EOF check, not the rule's own success condition.
-        var rule = OneOrMore(Grapheme('a'));
+        var rule = OneOrMore(Token('a'));
         var result = rule.Parse("bbbb", new ParseOptions { AllowTrailingInput = true });
 
         Assert.That(result.Success, Is.False);
@@ -60,7 +60,7 @@ public class AllowTrailingInputTests
         // No tail to swallow: the grammar consumes everything. The flag
         // shouldn't change the outcome on inputs that the strict default
         // would already accept.
-        var rule = OneOrMore(Grapheme('a').Preserve());
+        var rule = OneOrMore(Token('a').Preserve());
         var result = rule.Parse("aaa", new ParseOptions { AllowTrailingInput = true });
 
         Assert.That(result.Success, Is.True);
@@ -74,7 +74,7 @@ public class AllowTrailingInputTests
         // ZeroOrMore on empty input matches zero times. Default would still
         // succeed (lexer is at EOF), but verify explicitly that
         // AllowTrailingInput doesn't perturb the empty-input path.
-        var rule = ZeroOrMore(Grapheme('a')).Preserve();
+        var rule = ZeroOrMore(Token('a')).Preserve();
         var result = rule.Parse("", new ParseOptions { AllowTrailingInput = true });
 
         Assert.That(result.Success, Is.True);
@@ -100,11 +100,11 @@ public class AllowTrailingInputTests
         // The rule itself fails part-way through, and AllowTrailingInput
         // doesn't paper over that. Failure still reports the in-rule
         // position via deepest-failure-wins, just like the default path.
-        var rule = AllOf(Grapheme('a'), Grapheme('b'), Grapheme('c'));
+        var rule = AllOf(Token('a'), Token('b'), Token('c'));
         var result = rule.Parse("abXdef", new ParseOptions { AllowTrailingInput = true });
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2),
-            "Grapheme('c') fails at offset 2 because 'X' isn't 'c'; trailing input flag is irrelevant here");
+            "Token('c') fails at offset 2 because 'X' isn't 'c'; trailing input flag is irrelevant here");
     }
 }

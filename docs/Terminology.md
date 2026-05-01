@@ -2,7 +2,7 @@
 
 A few terms used throughout these docs mean specific things in this library, here's guidance on how they're used and what terms are preferred for anyone writing documentation:
 
-**Leaf rule.** A rule with no child rules. The matching logic consumes input directly (or doesn't consume at all, for zero-width predicates) rather than delegating to other rules. Grapheme, Literal, LiteralIgnoreAsciiCase, OneOf, NoneOf, AnyToken, ScanUntil, Eof, Not, Peek are all leaves. Use "leaf" rather than "primitive" or "terminal" when talking about this category.
+**Leaf rule.** A rule with no child rules. The matching logic consumes input directly (or doesn't consume at all, for zero-width predicates) rather than delegating to other rules. Token, Literal, LiteralIgnoreAsciiCase, OneOf, NoneOf, AnyToken, ScanUntil, Eof, Not, Peek are all leaves. Use "leaf" rather than "primitive" or "terminal" when talking about this category.
 
 **Composite rule.** A rule built out of other rules. AllOf, FirstOf, BetweenInclusive (plus its wrappers OneOrMore, ZeroOrMore, Optional, AtLeast, AtMost, Exactly), and LateBoundRule are the composites. Use "composite" rather than "combinator."
 
