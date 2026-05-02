@@ -51,10 +51,10 @@ internal sealed class BenchmarkPlan
         // Collect every distinct first char across all alternatives. For
         // OrdinalIgnoreCase, fold each ASCII letter to both cases so the
         // IndexOfAny scan still hits all candidate positions. We keep this
-        // narrow (BMP first chars only, ASCII case fold only) because it
+        // narrow (BMP first chars only, ASCII case invariance only) because it
         // mirrors LiteralIgnoreAsciiCaseRule's match semantics; we never
         // emit a multi-literal trigger that needs broader Unicode case
-        // folding.
+        // invariance.
         bool ignoreCase = comparison == StringComparison.OrdinalIgnoreCase;
         var seen = new HashSet<char>();
         foreach (string alternative in alternatives)

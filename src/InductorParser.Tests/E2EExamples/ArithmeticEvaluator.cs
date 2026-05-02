@@ -9,7 +9,7 @@ namespace InductorParser.Tests;
 // A "little compiler" for ArithmeticGrammar. Parses an expression,
 // flattens the tree, and evaluates it to a long.
 //
-// What the flattened tree looks like. (Expr, Term,
+// What the flattened tree looks like: (Expr, Term,
 // Number) is FlattenType.Preserve so they stay in the final tree.
 // Everything else disappears since it's just syntax for the user:
 //

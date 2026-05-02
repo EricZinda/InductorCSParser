@@ -88,7 +88,12 @@ public static class JsonGrammar
             Optional(AnyWhitespace()),
             Optional(AllOf(
                 JsonMember,
-                ZeroOrMore(AllOf(Optional(AnyWhitespace()), Token(','), Optional(AnyWhitespace()), JsonMember))
+                ZeroOrMore(AllOf(
+                    Optional(AnyWhitespace()),
+                    Token(','),
+                    Optional(AnyWhitespace()),
+                    JsonMember
+                ))
             )),
             Optional(AnyWhitespace()),
             Token('}')
@@ -99,7 +104,12 @@ public static class JsonGrammar
             Optional(AnyWhitespace()),
             Optional(AllOf(
                 value,
-                ZeroOrMore(AllOf(Optional(AnyWhitespace()), Token(','), Optional(AnyWhitespace()), value))
+                ZeroOrMore(AllOf(
+                    Optional(AnyWhitespace()),
+                    Token(','),
+                    Optional(AnyWhitespace()),
+                    value
+                ))
             )),
             Optional(AnyWhitespace()),
             Token(']')
@@ -107,7 +117,12 @@ public static class JsonGrammar
 
         value.Bind(FirstOf(JsonString, JsonNumber, JsonObject, JsonArray, JsonTrue, JsonFalse, JsonNull));
 
-        Json = AllOf(Optional(AnyWhitespace()), value, Optional(AnyWhitespace()), Eof());
+        Json = AllOf(
+            Optional(AnyWhitespace()),
+            value,
+            Optional(AnyWhitespace()),
+            Eof()
+        );
         Json.Compile();
     }
 }

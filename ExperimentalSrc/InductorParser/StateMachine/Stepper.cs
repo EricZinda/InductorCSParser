@@ -291,7 +291,7 @@ internal static class Stepper
     }
 
     // ASCII-only case-insensitive compare. Bit-exact match for non-letters,
-    // case-folded match within A-Z / a-z. Same logic as the recursive
+    // case-invariant match within A-Z / a-z. Same logic as the recursive
     // LiteralIgnoreAsciiCaseRule.AsciiCaseEquals.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool AsciiCaseEquals(ReadOnlySpan<char> a, ReadOnlySpan<char> b)

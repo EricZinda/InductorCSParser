@@ -63,7 +63,7 @@ public abstract class Rule
 
     // Returns true when every successful match of this rule is guaranteed
     // to consume text that contains the returned literal as a substring
-    // (case-folded if ignoreAsciiCase is true). Useful for callers that
+    // (case-invariant if ignoreAsciiCase is true). Useful for callers that
     // want to pre-filter input before invoking the parser: the rebar
     // grep runner uses this to skip past lines that can't possibly match
     // via one BCL substring search across the whole haystack, before

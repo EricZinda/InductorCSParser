@@ -131,7 +131,12 @@ public static class CssGrammar
     public static readonly Rule SelectorList = AllOf(
         CssWhitespace,
         Selector,
-        ZeroOrMore(AllOf(CssWhitespace, Token(','), CssWhitespace, Selector))
+        ZeroOrMore(AllOf(
+            CssWhitespace,
+            Token(','),
+            CssWhitespace,
+            Selector
+        ))
     );
 
     // url("...") or url(anything-but-close-paren)
