@@ -10,6 +10,8 @@ A few terms used throughout these docs mean specific things in this library, her
 
 **Debug tree.** What you get back when `ParseOptions.PreserveAllSymbols` is on. Contains every matched token: delimiters, whitespace, individual leaf symbols, and every `FlattenType.Flatten` / `FlattenType.Delete` wrapper the grammar declares. Mirrors the grammar one-to-one. Useful for `PrintTree` output and for `Find`-queries against wrappers that would otherwise be removed. Not the default because most callers want the syntax tree.
 
+**Case invariance.** Use "case invariance" (noun) and "case-invariant" (adjective) when discussing rules or matching that treat upper- and lower-case letters as equivalent. Avoid "case folding" / "case-folded", which are Unicode-spec jargon and read as writer-jargon to a general reader.
+
 **AST.** Not used in this library's vocabulary. The C++ original has `Compiler<T>::ProcessAst` and calls the post-flatten artifact an AST, but the C# port deliberately avoids the term. A true AST in compiler tradition is the user's domain types (something like `Setting(name, value)`) produced by a hand-written compile pass over the syntax tree, not anything the library itself produces. Keeping "syntax tree" as the library's own term means a reader can later talk about "the AST" without overloading the word.
 
 The namespace `InductorParser.SyntaxTree` contains the primitives (`Symbol`, `SymbolId`, `FlattenType`, `SymbolRanges`) that participate in both trees. The namespace name points at the default output shape.

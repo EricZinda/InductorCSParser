@@ -12,7 +12,7 @@
         - Unanchored patterns → ZeroOrMore(And(Not(target), AnyChar())) scanner wrap.
         - Word boundary \b → Peek/Not over the flavor-appropriate word-char RuneSet (ASCII for JS, Unicode for .NET/PCRE).
         - Direct translations for everything else: char classes, alternation, sequencing, greedy/possessive/atomic quantifiers (PEG is already possessive), anchors ^/$/\A/\z, dot, \p{L} Unicode categories.
-        - Refuse with a specific error: backreferences (PEG is context-free, (\w+) \1 can't be expressed), lookbehind (Rules.cs exposes forward-only Peek/Not), lazy-at-end inside a capture group (no terminator to rewrite against; greedy fallback would capture the wrong span), case-insensitive flag on a pattern containing non-ASCII (related to a1ss; InductorCSParser case folding is ASCII-only).
+        - Refuse with a specific error: backreferences (PEG is context-free, (\w+) \1 can't be expressed), lookbehind (Rules.cs exposes forward-only Peek/Not), lazy-at-end inside a capture group (no terminator to rewrite against; greedy fallback would capture the wrong span), case-insensitive flag on a pattern containing non-ASCII (related to ejdu; InductorCSParser case invariance is ASCII-only).
     - Examples loaded by default: the six BacklogGrammar.cs regexes on the Performance branch (H1, H2, Bullet, HrRun, HrSpaced, Paragraph). Each acts as a self-test: the converter's output for them should match the hand-written rule bodies modulo whitespace and the Literal("##") vs two Char('#') choice.
     - Done when:
         - tools/regex-to-grammar/index.html exists as a single self-contained file.
@@ -20,4 +20,4 @@
         - Backreferences, lookbehind, lazy-at-end-in-capture, and non-ASCII case-insensitive each produce a specific refusal error in the page.
         - Version stamp visible in the footer; no-cache meta tags present in <head>.
     - Verification: manual, against the six-example corpus. The translator factoring out into a module is a natural follow-up if anyone adds a test suite later.
-    - Related: a1ss-need-to-do-proper-case-folding.md — lifting the ASCII-only case folding restriction in InductorCSParser would also lift the refusal in this tool for /i on Unicode patterns.
+    - Related: ejdu-need-to-do-proper-case-invariance.md — lifting the ASCII-only case invariance restriction in InductorCSParser would also lift the refusal in this tool for /i on Unicode patterns.

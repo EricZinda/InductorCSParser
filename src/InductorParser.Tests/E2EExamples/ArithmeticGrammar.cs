@@ -14,11 +14,10 @@ namespace InductorParser.Tests;
 //   factor     = number | '(' expression ')'
 //
 // Every spine rule (expr, term, number) is .As(name) + FlattenType.Preserve
-// so it survives flattening as a named node the evaluator can dispatch
-// on. The AllOf/FirstOf/ZeroOrMore compositors around them keep their default
-// FlattenType.Flatten and dissolve at flatten time, so a term's
-// flattened children are a clean alternation of factor-payloads and
-// mulOp leaves with no anonymous wrapper layers in between.
+// so it survives flattening as a named node the evaluator can see.
+// The AllOf/FirstOf/ZeroOrMore compositors around them keep their default
+// FlattenType.Flatten and dissolve at flatten time, so a term's children
+// flatten to alternating factors and mulOps with no wrapper nodes.
 //
 // AddOp and MulOp use OneOf so the matched rune survives as a leaf and
 // ToString() returns "+", "-", "*", or "/" for the evaluator to dispatch on.
@@ -54,12 +53,22 @@ public static class ArithmeticGrammar
 
         Term = AllOf(
             factor,
-            ZeroOrMore(AllOf(Optional(AnyWhitespace()), MulOp, Optional(AnyWhitespace()), factor))
+            ZeroOrMore(AllOf(
+                Optional(AnyWhitespace()),
+                MulOp,
+                Optional(AnyWhitespace()),
+                factor
+            ))
         ).As("term").Preserve();
 
         Expr = AllOf(
             Term,
-            ZeroOrMore(AllOf(Optional(AnyWhitespace()), AddOp, Optional(AnyWhitespace()), Term))
+            ZeroOrMore(AllOf(
+                Optional(AnyWhitespace()),
+                AddOp,
+                Optional(AnyWhitespace()),
+                Term
+            ))
         ).As("expr").Preserve();
 
         exprForward.Bind(Expr);
@@ -68,7 +77,12 @@ public static class ArithmeticGrammar
         // strict Eof so "1+2 garbage" fails instead of silently parsing
         // the "1+2" prefix. Expr itself has no Eof so the parenthesized
         // factor can reuse it recursively.
-        Document = AllOf(Optional(AnyWhitespace()), Expr, Optional(AnyWhitespace()), Eof());
+        Document = AllOf(
+            Optional(AnyWhitespace()),
+            Expr,
+            Optional(AnyWhitespace()),
+            Eof()
+        );
         Document.Compile();
     }
 }

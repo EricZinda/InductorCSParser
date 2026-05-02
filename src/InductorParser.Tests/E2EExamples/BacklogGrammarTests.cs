@@ -9,18 +9,16 @@ using static InductorParser.Tests.TestHelpers;
 
 namespace InductorParser.Tests;
 
-// Phase 0-style gate for the MergeableBacklog-regex-to-InductorParser
-// mapping, mirroring ChordGrammarTests. For every regex in the six
-// format detectors, we pair the reference regex with the equivalent
-// grammar rule and check:
+// Pairs each MergeableBacklog format-detector regex with the
+// equivalent InductorParser grammar rule, then for every corpus
+// input checks (same shape as ChordGrammarTests):
 //
 // 1. Equivalence. Every corpus input produces the same accept/reject
 //    verdict from reference regex and grammar.
 // 2. Timing. Same corpus, looped, wall-clock under Stopwatch. Grammar
 //    must come in within 2x of the compiled regex. Ignored today. The
 //    same composite overhead that puts ChordGrammar at ~6-8x applies
-//    here, so we report ratios and leave the hard gate for the FirstOf
-//    required-runes dispatch work tracked separately.
+//    here.
 [TestFixture]
 public class BacklogGrammarTests
 {
@@ -219,24 +217,20 @@ public class BacklogGrammarTests
     }
 
 
-    // Ignored. Ratios on this box (net8.0, Release, 5000 iters). Three-run
-    // range as of 2026-04-30, which is after FirstOf required-runes dispatch
-    // (p500) and BetweenInclusive first-rune skip (p750). Run-to-run noise
-    // on these short corpora is high; per-case numbers swing by 2-3x or
-    // more between runs:
+    // Ignored. Ratios on this box (net8.0, Release, 5000 iters),
+    // three-run range. Run-to-run noise on these short corpora is high.
+    // Per-case numbers swing by 2-3x or more between runs:
     //   H1:        36-49x
     //   H2:         7-30x
     //   Bullet:     6-8x
     //   HrRun:      4-15x
     //   HrSpaced:   5-14x
     //   Paragraph: 12-34x
-    // Dispatch helps most when an FirstOf / composite has many branches and a
-    // disjoint first-char set. These rules are simpler (one OneOf or one
-    // Token at the head), so the composite transaction overhead on the
-    // inner path is what dominates, the same architectural bottleneck as
-    // ChordGrammar's remaining gap. A separate backlog item will target
-    // that tier (lazy transactions, allocation-free empty matches,
-    // compiled emitter, etc.).
+    // First-char dispatch helps most when a FirstOf has many branches
+    // with disjoint first-char sets. These rules are simpler (one OneOf
+    // or one Token at the head), so composite transaction overhead on
+    // the inner path dominates instead. Closing the gap needs work at
+    // the transaction / emitter tier.
     [Test, Ignore("Grammar is still multi-x slower than regex; see comment above for tier needed to close the gap.")]
     public void Timing_grammar_is_within_two_times_compiled_regex()
     {

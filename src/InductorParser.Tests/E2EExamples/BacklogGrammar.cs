@@ -14,8 +14,9 @@ namespace InductorParser.Tests;
 //   HrSpaced:   /^[-*+]( [-*+]){2,}$/    "- - -" / "* * *"
 //   Paragraph:  /\n\s*\n/                blank-line break, anywhere
 //
-// Anchored rules end in Eof(). Paragraph is unanchored, so it uses
-// ScanUntil to find the target anywhere in the input.
+// The ^...$ rules above end in Eof() to enforce the $ (the ^ is
+// implicit, since rules match from the start of input). Paragraph
+// has no anchors, so it uses ScanUntil to find the break anywhere.
 //
 // Paragraph: middle is InlineWhitespace so it stops at the trailing
 // \n. AnyWhitespace would eat the \n and leave nothing for the
