@@ -185,7 +185,7 @@ OneOf(TokenSet.Range(new Rune(0x0370), new Rune(0x03FF)))       // Greek and Cop
 
 The default built-ins cover Unicode scalar values by category. `TokenSet.Letters` includes single-rune letters like `é`, `漢`, `Ω`, and `ж` according to the runtime's Unicode category tables. Grammars that specifically want ASCII-only use `TokenSet.Ascii.Letters` to say so explicitly.
 
-`Token(...)` takes a `char` for any character that fits in a C# char literal (code points U+0000..U+FFFF) and a `Rune` for characters above U+FFFF:
+`Token(...)` takes a `char` for any character that fits in a C# char literal (code points — the integers Unicode assigns to characters — in the range U+0000..U+FFFF) and a `Rune` for characters above U+FFFF:
 
 ```csharp
 Token('=')                       // ASCII

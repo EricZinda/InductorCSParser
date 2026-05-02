@@ -157,7 +157,7 @@ If your grammar processes emoji sequences, don't strip ZWJ (U+200D) indiscrimina
 
 ## Homoglyph Confusables
 
-Cyrillic `а` (U+0430) and Latin `a` (U+0061) render identically in most fonts but are different code points. A grammar using `TokenSet.Ascii.Letters` rejects Cyrillic `а` even though the user "sees" a Latin `a`. A grammar using `TokenSet.Letters` accepts both and doesn't distinguish them. The lexer treats the code points exactly as they are. They really are different runes.
+Cyrillic `а` (U+0430) and Latin `a` (U+0061) render identically in most fonts but are different code points (different integers in the Unicode standard). A grammar using `TokenSet.Ascii.Letters` rejects Cyrillic `а` even though the user "sees" a Latin `a`. A grammar using `TokenSet.Letters` accepts both and doesn't distinguish them. The lexer treats the code points exactly as they are. They really are different runes.
 
 This is a grammar-design decision. For security-sensitive grammars (mixed-script identifier detection, phishing-resistance) it's a *feature*: refusing homoglyphs protects against visual-spoofing attacks. For forgiving grammars it's a gotcha.
 

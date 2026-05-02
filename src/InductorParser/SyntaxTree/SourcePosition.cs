@@ -13,12 +13,13 @@ public readonly struct SourcePosition
     // UTF-16 code units, what string.Substring / Span<char>.Slice / LSP use.
     public int CharIndex { get; }
 
-    // User-perceived characters (tokens), using the same StringInfo
-    // text-element segmentation the lexer uses. On modern .NET that
-    // follows UAX #29 extended grapheme clusters. An emoji ZWJ sequence
-    // or a letter-plus-combining-mark may count as one token, so this
-    // index is smaller than or equal to CharIndex on any input containing
-    // multi-char tokens.
+    // Tokens (characters as the user sees them), using the same
+    // StringInfo text-element segmentation the lexer uses. On modern
+    // .NET that follows UAX #29 extended grapheme clusters. A family
+    // emoji or an accented letter the user typed as base + accent is
+    // one token even though it's several runes underneath, so this
+    // index is smaller than or equal to CharIndex on any input that
+    // contains those.
     public int TokenIndex { get; }
 
     // Zero-based line number, LSP convention.

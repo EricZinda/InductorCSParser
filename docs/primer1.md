@@ -117,7 +117,7 @@ Note that `Not` doesn't actually consume anything so it has nothing to print out
 
 Notice we never said anything about characters versus bytes versus runes. We just wrote `AnyToken()` and the parser figured out what counted as "one token." That wasn't an accident.
 
-The vocabulary is short. The lexer hands you **tokens**. Each token is one user-visible character. A token is made of one or more **runes** (the .NET term for a Unicode code point). Plain ASCII letters, CJK characters, and most punctuation are one rune each, so for those one token equals one rune. Emoji with a skin-tone modifier (👋🏽), regional-indicator flag pairs (🇺🇸), and ZWJ family emoji (👨‍👩‍👧) are several runes each, but they're still one token each because they're one user-visible character.
+The vocabulary is short. The lexer hands you **tokens**. Each token is one user-visible character. A token is made of one or more **runes** (the .NET term for a code point, which is the integer Unicode assigns to a character). Plain ASCII letters, CJK characters, and most punctuation are one rune each, so for those one token equals one rune. Emoji with a skin-tone modifier (👋🏽), regional-indicator flag pairs (🇺🇸), and ZWJ family emoji (👨‍👩‍👧) are several runes each, but they're still one token each because they're one user-visible character.
 
 Try the same grammar with emoji in both the input *and* the text we're matching on:
 
