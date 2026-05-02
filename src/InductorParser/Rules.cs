@@ -160,8 +160,7 @@ public static class Rules
     ///
     /// The ASCII in the name is critical: full Unicode
     /// case-insensitive matching is locale- and script-dependent
-    /// and this leaf doesn't attempt it. See
-    /// docs/UnicodeGotchas.md for the reasoning and limits.
+    /// and this leaf doesn't attempt it. 
     /// </remarks>
     public static Rule LiteralIgnoreAsciiCase(string value) => new LiteralIgnoreAsciiCaseRule(value);
 
@@ -171,16 +170,12 @@ public static class Rules
     /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
-    /// The workhorse character-class rule. Pass any TokenSet built
-    /// from the factories (Single, Range, Runes, Category) or one
-    /// of the built-ins (Letters, Digits, InlineWhitespace, Ascii.*).
-    /// A TokenSet can hold both single runes and multi-rune
-    /// characters (skin-toned emoji, regional-indicator flags, ZWJ
-    /// sequences), so a set built with
-    /// <c>TokenSet.Letters | TokenSet.Runes("🇺🇸")</c> matches
-    /// either a letter or the US flag as one token.
-    /// TokenSets compose with <c>|</c> (union), <c>&amp;</c>
-    /// (intersection), and <c>~</c> (complement, rune-only sets):
+    /// The workhorse character-class rule.
+    /// A TokenSet can hold sets of anything the user sees as one
+    /// character, including composed sequences like skin-toned
+    /// emoji, regional-indicator flags, and family emoji. So a set
+    /// built with <c>TokenSet.Letters | TokenSet.Runes("🇺🇸")</c>
+    /// matches either a letter or the US flag, each as one token.
     /// <code>
     /// // Identifier character: any letter, digit, or underscore
     /// var idChar = OneOf(TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_"));
@@ -202,7 +197,7 @@ public static class Rules
     /// </summary>
     /// <remarks>
     /// Equivalent to <c>OneOf(TokenSet.Runes(runes))</c>. When you
-    /// need ranges, category unions, or complements, reach for
+    /// need ranges, category unions, or complements, use 
     /// <see cref="TokenSet"/> directly and pass it to the
     /// <see cref="OneOf(TokenSet)"/> overload.
     /// </remarks>

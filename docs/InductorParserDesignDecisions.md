@@ -126,7 +126,7 @@ A class Symbol has a unique memory address. `Find(someRule)` returns a specific 
 - A `Dictionary<Symbol, Metadata>` attaching information to specific tree positions keys on instance identity today. As a struct, it would key on field contents, so anything structurally equal collides.
 - Debugger views of a tree with shared subtrees show one expandable node for each instance. With a struct, every copy looks like a separate entry even when it represents the same position.
 
-None of those patterns appear in this codebase yet. The Symbol API today is read-only tree traversal plus `Find`-by-rule. So the struct change would be fine for the code that exists. The worry is the code that doesn't exist yet. The first time a future user reaches for one of those patterns expecting reference semantics, they'd get value semantics and a silent bug.
+None of those patterns appear in this codebase yet. The Symbol API today is read-only tree traversal plus `Find`-by-rule. So the struct change would be fine for the code that exists. The worry is the code that doesn't exist yet. The first time a future user uses one of those patterns expecting reference semantics, they'd get value semantics and a silent bug.
 
 Beyond identity, a handful of smaller costs:
 
