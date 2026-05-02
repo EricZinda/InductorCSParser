@@ -52,12 +52,8 @@ public static class Rules
     /// single char 'a' but fails when 'a' is combined with a
     /// following accent (because the token is then rendered as one
     /// 'a' with an accent over it, which doesn't match a bare 'a').
-    /// See docs/UnicodeGotchas.md for the cases where this bites.
     ///
-    /// All four Token overloads funnel into <see cref="GraphemeRule"/>.
-    /// The overloads exist for convenience and for early validation
-    /// of their specific argument shape. For multi-character
-    /// matches use <see cref="Literal"/>.
+    /// For multi-character matches use <see cref="Literal"/>.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="c"/> is a surrogate half. Use
@@ -81,26 +77,27 @@ public static class Rules
     /// A token is one character as the user sees it (a grapheme
     /// cluster), so this matches when the user sees one bare
     /// <c>r</c> at the current position. It fails when <c>r</c> is
-    /// followed by a combining mark or is part of a ZWJ sequence,
-    /// because then the user sees one accented or composed character
-    /// at that position, not a bare <c>r</c>. See
-    /// docs/UnicodeGotchas.md for the cases where this bites.
+    /// followed by Unicode characters that tell the renderer to
+    /// glue them all into a single composed character, because
+    /// then the user sees one combined character at that position,
+    /// not a bare <c>r</c>.
     /// </remarks>
     public static Rule Token(Rune r) => new GraphemeRule(r.ToString());
 
     /// <summary>
     /// Match one token whose content is exactly the rune with the
-    /// given integer code point. Default <see cref="FlattenType"/>:
+    /// given integer code point (the integer Unicode assigns to a
+    /// character). Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Delete"/>.
     /// </summary>
     /// <remarks>
     /// A token is one character as the user sees it (a grapheme
     /// cluster), so this matches when the user sees the given rune
     /// standing alone at the current position. It fails when the
-    /// rune is followed by a combining mark or is part of a ZWJ
-    /// sequence, because then the user sees one accented or composed
-    /// character at that position, not the bare rune. See
-    /// docs/UnicodeGotchas.md for the cases where this bites.
+    /// rune is followed by Unicode characters that tell the
+    /// renderer to glue them all into a single composed character,
+    /// because then the user sees one combined character at that
+    /// position, not the bare rune.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="codepoint"/> isn't a valid Unicode scalar
@@ -121,12 +118,15 @@ public static class Rules
     /// <see cref="FlattenType"/>: <see cref="FlattenType.Delete"/>.
     /// </summary>
     /// <remarks>
-    /// The string may itself be multi-rune (ZWJ sequences, skin
-    /// tone modifiers, etc.) as long as the user perceives it as
-    /// one character. The <see cref="GraphemeRule"/> constructor
-    /// validates at grammar-build time that the string is exactly
-    /// one such character. The input arrives as a single token from
-    /// the lexer and this rule matches it in one compare.
+    /// The string can be longer than one C# char as long as the
+    /// user sees it as one character (skin-tone emoji like 👋🏽,
+    /// regional-indicator flags like 🇺🇸, family emoji like 👨‍👩‍👧,
+    /// an accented letter typed as base + accent, etc.).
+    /// Construction validates that the string is exactly one such
+    /// character and throws otherwise; <c>Token("ab")</c> fails at
+    /// grammar-build time, not at parse time. The input arrives as
+    /// a single token from the lexer and this rule matches it in
+    /// one compare.
     /// </remarks>
     public static Rule Token(string token) => new GraphemeRule(token);
 
