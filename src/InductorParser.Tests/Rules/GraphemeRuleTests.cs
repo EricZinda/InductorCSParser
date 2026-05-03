@@ -50,8 +50,8 @@ public class GraphemeRuleTests
         // rule and input sit in the same decomposed form at match time.
         // NormalizationTests covers the NFC-on behavior separately.
         var rule = Token(LatinEAcuteGrapheme);
-        var result = rule.Parse(LatinEAcuteGrapheme,
-            new ParseOptions { NormalizeInput = null });
+        rule.Compile(null);
+        var result = rule.Parse(LatinEAcuteGrapheme);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
@@ -60,7 +60,7 @@ public class GraphemeRuleTests
     public void Grapheme_string_with_more_than_one_grapheme_throws_at_construction()
     {
         var ex = Assert.Throws<ArgumentException>(() => Token("ab"));
-        Assert.That(ex!.Message, Does.Contain("one token"));
+        Assert.That(ex!.Message, Does.Contain("one user-perceived character"));
     }
 
     [Test]

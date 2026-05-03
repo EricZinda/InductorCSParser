@@ -481,10 +481,9 @@ public class StateMachineParserTests
         // WithinGrapheme is bridged. The state machine delegates the
         // whole rule to the recursive evaluator's TryParse, captures
         // its Symbol output, and folds it into the surrounding tree.
-        // Test: under the GraphemeLexer, "é" arrives as one grapheme
-        // (one rune, since this é is the precomposed form). WithinGrapheme
-        // walks it rune-by-rune via the Rune sub-lexer and lets the
-        // inner OneOf match.
+        // Test: "é" arrives as one token (one rune, since this é is
+        // the precomposed form). WithinGrapheme walks it rune-by-rune
+        // via the Rune sub-lexer and lets the inner OneOf match.
         var rule = AllOf(
             WithinGrapheme(OneOf(RuneSet.Letters)),
             Eof());

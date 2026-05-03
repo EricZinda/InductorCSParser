@@ -34,8 +34,8 @@ public class LiteralRuleTests
         // both chars. The lockstep compares the full token span
         // against the two-char expected portion in a single iteration.
         var rule = Literal(LatinEAcuteGrapheme);
-        var result = rule.Parse(LatinEAcuteGrapheme,
-            new ParseOptions { NormalizeInput = null });
+        rule.Compile(null);
+        var result = rule.Parse(LatinEAcuteGrapheme);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 

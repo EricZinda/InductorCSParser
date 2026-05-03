@@ -80,12 +80,10 @@ public class UnicodeGotchasExamples
     [Test]
     public void Python3_identifier_recipe()
     {
-        var python = Identifier(extraStartRunes: TokenSet.Runes("_")).Compile();
+        var python = Identifier(extraStartRunes: TokenSet.Runes("_"))
+            .Compile(NormalizationForm.FormKC);
 
-        var result = python.Parse("_foo", new ParseOptions
-        {
-            NormalizeInput = NormalizationForm.FormKC,
-        });
+        var result = python.Parse("_foo");
         Assert.That(result.Success, Is.True);
     }
 

@@ -6,8 +6,8 @@ namespace InductorParser.Lexing;
 // Maps a char index for a normalized string back to a char index for
 // the caller's original (un-normalized) string, so ParseResult can report
 // failure positions in the coordinate system the caller passed in rather
-// than the internal normalized one. See ParseOptions.NormalizeInput for
-// the wider picture.
+// than the internal normalized one. See Rule.Compile(NormalizationForm?)
+// for the wider picture.
 //
 // Cost: a no-op reference check when normalization returned the original
 // string reference. When normalization rewrote the input, or when the

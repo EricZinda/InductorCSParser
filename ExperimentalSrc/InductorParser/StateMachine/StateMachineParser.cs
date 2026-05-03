@@ -56,7 +56,7 @@ public static class StateMachineParser
     public static bool TryMatch(Rule rootRule, string input, ParseOptions options)
     {
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
-        string parseInput = NormalizeIfRequested(input, options.NormalizeInput);
+        string parseInput = NormalizeIfRequested(input, rootRule.NormalizationForm);
         Lexer lexer = RentLexer(parseInput, options);
         lexer.ConfigureBudgets(options);
         Machine machine = default;
@@ -93,7 +93,7 @@ public static class StateMachineParser
         // text), String.Normalize short-circuits and returns the same
         // reference, which makes the downstream position translation a
         // pass-through. NormalizeInput = null skips the step entirely.
-        string parseInput = NormalizeIfRequested(input, options.NormalizeInput);
+        string parseInput = NormalizeIfRequested(input, rootRule.NormalizationForm);
 
         Lexer lexer = RentLexer(parseInput, options);
 
@@ -128,7 +128,7 @@ public static class StateMachineParser
                 // ParseOutcome, so a side-by-side compare on the
                 // recursive vs SM run agrees on outcome and position.
                 int abortRaw = System.Math.Max(System.Math.Max(machine.DeepestFailure, lexer.DeepestFailure), lexer.Position);
-                int abortPos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, abortRaw, options.NormalizeInput);
+                int abortPos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, abortRaw, rootRule.NormalizationForm);
                 return ParseResult.Aborted(budget.Outcome, abortPos, Rule.BuildBudgetMessage(budget.Outcome, abortPos, input, options), input, rootRule);
             }
 
@@ -141,7 +141,7 @@ public static class StateMachineParser
             if (!succeeded || trailingInputForbidden)
             {
                 int failurePosition = System.Math.Max(machine.DeepestFailure, lexer.Position);
-                int reportedPosition = NormalizedPositionMap.TranslateToOriginal(input, parseInput, failurePosition, options.NormalizeInput);
+                int reportedPosition = NormalizedPositionMap.TranslateToOriginal(input, parseInput, failurePosition, rootRule.NormalizationForm);
                 string message = Rule.BuildErrorMessage(machine.DeepestFailureMessage, failurePosition, parseInput, reportedPosition, input, options);
                 return ParseResult.Failed(reportedPosition, message, input, rootRule);
             }
@@ -255,7 +255,7 @@ public static class StateMachineParser
         T failureValue)
     {
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
-        string parseInput = NormalizeIfRequested(input, options.NormalizeInput);
+        string parseInput = NormalizeIfRequested(input, rootRule.NormalizationForm);
         Lexer lexer = RentLexer(parseInput, options);
         lexer.ConfigureBudgets(options);
         Machine machine = default;
@@ -293,7 +293,7 @@ public static class StateMachineParser
         SymbolId[] captureIds)
     {
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
-        string parseInput = NormalizeIfRequested(input, options.NormalizeInput);
+        string parseInput = NormalizeIfRequested(input, rootRule.NormalizationForm);
         Lexer lexer = RentLexer(parseInput, options);
         lexer.ConfigureBudgets(options);
         Machine machine = default;
@@ -321,9 +321,9 @@ public static class StateMachineParser
     // Normalize the caller's input string into the form the lexer should
     // see. When the input is already in the target form, String.Normalize
     // returns the same reference and the downstream position-translation
-    // step is a pointer-equality pass-through. NormalizeInput = null
-    // skips normalization entirely (the opt-out documented on
-    // ParseOptions.NormalizeInput).
+    // step is a pointer-equality pass-through. A null form skips
+    // normalization entirely. The form is read from the compiled rule
+    // (Rule.NormalizationForm), where it's committed at Compile time.
     private static string NormalizeIfRequested(string input, NormalizationForm? form) =>
         form.HasValue ? input.Normalize(form.Value) : input;
 

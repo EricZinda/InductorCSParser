@@ -46,6 +46,27 @@ public abstract class Rule
     private bool _idAssigned;
     private string? _errorMessage;
 
+    // The Unicode normalization form this grammar was compiled against. Set
+    // by Compile(form) on every reachable rule, but only the root's value
+    // matters at parse time. Default NormalizationForm.FormC matches the
+    // historical default. null means "skip normalization." The form is
+    // committed at first compile. A subsequent Compile call with a different
+    // form throws (see Compile for the conflict check).
+    //
+    // NormalizationForm is a property of the grammar, not the parse, because
+    // every literal-bearing rule (Token / Literal / LiteralIgnoreAsciiCase)
+    // commits to a specific form the moment its expected text is written
+    // into source. Switching forms between parses on the same compiled
+    // grammar would silently break match behavior, so the form is locked in
+    // at Compile time and validated against every literal in the graph.
+    private System.Text.NormalizationForm? _normalizationForm = System.Text.NormalizationForm.FormC;
+
+    // The Unicode normalization form this grammar was compiled against, or
+    // null if normalization is disabled. Set during Compile and read by
+    // Parse to normalize the input string before lexing. Public so callers
+    // and tests can introspect a compiled grammar.
+    public System.Text.NormalizationForm? NormalizationForm => _normalizationForm;
+
     // FirstConsumedTokens and Advance drive the "can I skip this rule?"
     // shortcut. See RuleStartRequirements for the full story. The type
     // returned by ComputeRuleStart encapsulates these two. Populated at
@@ -406,9 +427,35 @@ public abstract class Rule
     //
     // Then a validation pass asks each rule whether it's well-formed, and
     // a final pass seals the graph against further mutation.
-    public Rule Compile()
+    public Rule Compile() => Compile(System.Text.NormalizationForm.FormC);
+
+    // Compile with an explicit normalization form. Pass null to opt out of
+    // normalization entirely. The form is committed at first compile and
+    // applies to every parse afterward. A subsequent Compile call with a
+    // different form throws InvalidOperationException; the form is part of
+    // the grammar's identity, not a per-parse knob.
+    //
+    // Validation: when form is non-null, every reachable Token / Literal /
+    // LiteralIgnoreAsciiCase rule's expected text is checked against its
+    // normalization in the chosen form. If any literal isn't already in
+    // that form, Compile throws with a message listing every offender and
+    // showing the suggested normalized text. This catches the silent
+    // "rule never matches" failure mode where an author wrote a decomposed
+    // 'é' but the grammar will run against FormC-normalized input that
+    // only ever produces the precomposed 'é' as a token.
+    public Rule Compile(NormalizationForm? normalizeInput)
     {
-        if (_sealed) return this;
+        if (_sealed)
+        {
+            if (_normalizationForm != normalizeInput)
+                throw new InvalidOperationException(
+                    $"Rule has already been compiled against " +
+                    $"{FormatNormalizationForm(_normalizationForm)}. Re-compiling " +
+                    $"with {FormatNormalizationForm(normalizeInput)} isn't allowed: " +
+                    $"the normalization form is part of the grammar's identity and " +
+                    $"is committed at first compile.");
+            return this;
+        }
 
         var usedIds = new HashSet<int>();
         var pinnedRules = new Dictionary<int, Rule>();
@@ -438,8 +485,30 @@ public abstract class Rule
         visited.Clear();
         ComputeRuleStartAll(this, visited, computing);
 
+        // Validate every literal-bearing rule against the chosen normalization
+        // form. Skipped when normalizeInput is null (the author opted out).
+        // Throws one InvalidOperationException listing every offender so
+        // grammar authors fix all mismatches in one pass instead of one at
+        // a time.
+        if (normalizeInput.HasValue)
+        {
+            var offenders = new List<(Rule rule, string original, string normalized)>();
+            visited.Clear();
+            CollectNormalizationOffenders(this, visited, normalizeInput.Value, offenders);
+            if (offenders.Count > 0)
+                throw new InvalidOperationException(BuildNormalizationErrorMessage(normalizeInput.Value, offenders));
+        }
+
         visited.Clear();
         SealAll(this, visited);
+
+        // Stamp the form onto every reachable rule so any subsequent
+        // Compile call (which can land on any rule, not just the original
+        // root) sees the form for its conflict check. Only the root's
+        // value is read at parse time.
+        visited.Clear();
+        StampNormalizationForm(this, visited, normalizeInput);
+
         return this;
     }
 
@@ -475,7 +544,7 @@ public abstract class Rule
             return Rune.IsValid(value) ? new Rune(value).ToString() : null;
         }
 
-        Compile();
+        if (!_sealed) Compile();
         _nameIndex ??= BuildNameIndex();
         return _nameIndex.TryGetValue(id, out var name) ? name : null;
     }
@@ -536,7 +605,13 @@ public abstract class Rule
     // instead of going through Parse.
     internal ParseResult ParseRecursive(string input, ParseOptions options)
     {
-        Compile();
+        // Auto-compile preserves whatever form the grammar is already
+        // compiled with. If the caller hasn't compiled yet, fall back
+        // to the FormC default that matches Compile()'s zero-argument
+        // overload. This avoids a spurious form-conflict throw when a
+        // grammar was explicitly compiled with a non-FormC form (or
+        // null) and then parsed without re-specifying it.
+        if (!_sealed) Compile();
 
         // Normalize before the lexer sees the input so grammars written
         // against one composition form also match the other. The common
@@ -545,8 +620,11 @@ public abstract class Rule
         // normalization returns the original string reference, downstream position
         // translation is skipped. Null means "skip normalization entirely,"
         // which trades the safety net for character-exact round-trippability.
-        string parseInput = options.NormalizeInput.HasValue
-            ? input.Normalize(options.NormalizeInput.Value)
+        // The form was committed at Compile time and is part of the
+        // grammar's identity; see Compile(NormalizationForm?) for the rationale.
+        NormalizationForm? normalizeInput = _normalizationForm;
+        string parseInput = normalizeInput.HasValue
+            ? input.Normalize(normalizeInput.Value)
             : input;
 
         Lexer lexer = new Lexer(parseInput, options.TraceSink, options.TraceLevel);
@@ -573,19 +651,19 @@ public abstract class Rule
             // same Math.Max idiom as the normal failure path below for
             // consistency.
             int abortRaw = Math.Max(lexer.DeepestFailure, lexer.Position);
-            int abortPos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, abortRaw, options.NormalizeInput);
+            int abortPos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, abortRaw, normalizeInput);
             return ParseResult.Aborted(budget.Outcome, abortPos, BuildBudgetMessage(budget.Outcome, abortPos, input, options), input, this);
         }
         if (result == null && rootList.Count == 0)
         {
             var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
-            int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, options.NormalizeInput);
+            int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, normalizeInput);
             return ParseResult.Failed(failurePos, BuildErrorMessage(lexer.DeepestFailureMessage, pos, parseInput, failurePos, input, options), input, this);
         }
         if (!options.AllowTrailingInput && !lexer.IsEof)
         {
             var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
-            int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, options.NormalizeInput);
+            int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, normalizeInput);
             return ParseResult.Failed(failurePos, BuildErrorMessage(lexer.DeepestFailureMessage, pos, parseInput, failurePos, input, options), input, this);
         }
         // Three success shapes:
@@ -1064,6 +1142,125 @@ public abstract class Rule
         r._sealed = true;
         foreach (var child in r.Children)
             SealAll(child, visited);
+    }
+
+    // Walk the rule graph and compare each literal-bearing rule's expected
+    // text against its normalization in the chosen form. Records every
+    // offender; the caller throws one combined exception. Reads the
+    // existing internal accessors on the three rule types that hold
+    // user-supplied literal text.
+    private static void CollectNormalizationOffenders(
+        Rule r,
+        HashSet<Rule> visited,
+        NormalizationForm form,
+        List<(Rule rule, string original, string normalized)> offenders)
+    {
+        if (!visited.Add(r)) return;
+
+        string? expected = r switch
+        {
+            GraphemeRule g => g.LoweringExpected,
+            LiteralRule l => l.Expected,
+            LiteralIgnoreAsciiCaseRule li => li.Expected,
+            _ => null
+        };
+        if (expected != null)
+        {
+            string normalized = expected.Normalize(form);
+            if (!string.Equals(expected, normalized, StringComparison.Ordinal))
+                offenders.Add((r, expected, normalized));
+        }
+
+        foreach (var child in r.Children)
+            CollectNormalizationOffenders(child, visited, form, offenders);
+    }
+
+    // Build the multi-rule error message. One header line names the form,
+    // then one line per offender with the rule's display name, the
+    // original literal, and the suggested normalized form. Authors copy
+    // the suggested text back into source to fix every offender in one
+    // edit pass.
+    private static string BuildNormalizationErrorMessage(
+        NormalizationForm form,
+        List<(Rule rule, string original, string normalized)> offenders)
+    {
+        var builder = new StringBuilder();
+        builder.Append("Compile failed: ")
+               .Append(offenders.Count)
+               .Append(offenders.Count == 1 ? " rule has" : " rules have")
+               .Append(" expected text that isn't in ")
+               .Append(FormatNormalizationForm(form))
+               .AppendLine(". The parser normalizes input to this form before")
+               .AppendLine("matching, so a rule whose expected text is in a different form will")
+               .AppendLine("never match. Use the suggested form below or pass a different");
+        builder.AppendLine("normalization form to Compile (or null to disable normalization):");
+        foreach (var (rule, original, normalized) in offenders)
+        {
+            string displayName = rule.Name ?? rule._ruleTraceName;
+            string ruleType = rule.GetType().Name;
+            builder.Append("  - ")
+                   .Append(displayName)
+                   .Append(" (")
+                   .Append(ruleType)
+                   .Append("): ")
+                   .Append(FormatLiteralForError(original))
+                   .Append(" should be ")
+                   .Append(FormatLiteralForError(normalized))
+                   .AppendLine();
+        }
+        return builder.ToString().TrimEnd();
+    }
+
+    // Render a literal for the error message. Wraps in single quotes and
+    // escapes embedded quotes / backslashes. Bare runes outside the
+    // printable range get a U+XXXX form so the user can tell what
+    // changed even when the difference is invisible (combining marks,
+    // ZWJ, variation selectors, etc.).
+    private static string FormatLiteralForError(string literal)
+    {
+        var builder = new StringBuilder();
+        builder.Append('\'');
+        for (int index = 0; index < literal.Length;)
+        {
+            int runeValue;
+            int runeLength;
+            char c0 = literal[index];
+            if (char.IsHighSurrogate(c0) && index + 1 < literal.Length && char.IsLowSurrogate(literal[index + 1]))
+            {
+                runeValue = char.ConvertToUtf32(c0, literal[index + 1]);
+                runeLength = 2;
+            }
+            else
+            {
+                runeValue = c0;
+                runeLength = 1;
+            }
+
+            if (runeValue >= 0x20 && runeValue < 0x7F && runeValue != '\'' && runeValue != '\\')
+                builder.Append((char)runeValue);
+            else if (runeValue == '\'' || runeValue == '\\')
+                builder.Append('\\').Append((char)runeValue);
+            else
+                builder.Append("U+").Append(runeValue.ToString("X4"));
+
+            index += runeLength;
+        }
+        builder.Append('\'');
+        return builder.ToString();
+    }
+
+    private static string FormatNormalizationForm(NormalizationForm? form) =>
+        form.HasValue ? form.Value.ToString() : "no normalization (null)";
+
+    // Walk the graph and stamp the form on every rule, so a later
+    // Compile call landing on any rule in the graph can run its
+    // conflict check. Only the root's value is read at parse time.
+    private static void StampNormalizationForm(Rule r, HashSet<Rule> visited, NormalizationForm? form)
+    {
+        if (!visited.Add(r)) return;
+        r._normalizationForm = form;
+        foreach (var child in r.Children)
+            StampNormalizationForm(child, visited, form);
     }
 
     private void ThrowIfSealed()

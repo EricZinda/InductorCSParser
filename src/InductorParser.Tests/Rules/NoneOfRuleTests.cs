@@ -58,8 +58,8 @@ public class NoneOfRuleTests
         // lexer verbatim. The default NFC would compose it to "\u00E9" and
         // collapse this test's "multi-rune grapheme" premise.
         var rule = NoneOf(TokenSet.Ascii.Letters);
-        var result = rule.Parse(LatinEAcuteGrapheme,
-            new ParseOptions { NormalizeInput = null });
+        rule.Compile(null);
+        var result = rule.Parse(LatinEAcuteGrapheme);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo(LatinEAcuteGrapheme));

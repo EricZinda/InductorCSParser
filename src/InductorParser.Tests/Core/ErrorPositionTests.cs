@@ -209,8 +209,8 @@ public class ErrorPositionTests
         // the char/grapheme counts the test is demonstrating wouldn't
         // diverge anymore.
         var rule = AllOf(OneOrMore(Token(LatinEAcuteGrapheme)), Eof());
-        var result = rule.Parse(LatinEAcuteGrapheme + "X",
-            new ParseOptions { NormalizeInput = null });
+        rule.Compile(null);
+        var result = rule.Parse(LatinEAcuteGrapheme + "X");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
