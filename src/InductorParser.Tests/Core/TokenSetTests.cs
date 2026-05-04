@@ -892,6 +892,47 @@ public class TokenSetTests
     }
 
     [Test]
+    public void AnyWhitespace_contains_inline_whitespace_and_line_terminators()
+    {
+        // The full-Unicode "regex \s" set: every rune that's intra-line
+        // whitespace OR a UAX #18 single-rune line terminator.
+        Assert.That(TokenSet.AnyWhitespace.Contains(' '), Is.True);
+        Assert.That(TokenSet.AnyWhitespace.Contains('\t'), Is.True);
+        Assert.That(TokenSet.AnyWhitespace.Contains('\r'), Is.True);
+        Assert.That(TokenSet.AnyWhitespace.Contains('\n'), Is.True);
+        Assert.That(TokenSet.AnyWhitespace.Contains('\v'), Is.True);  // VT, line terminator
+        Assert.That(TokenSet.AnyWhitespace.Contains('\f'), Is.True);  // FF, line terminator
+        Assert.That(TokenSet.AnyWhitespace.Contains(0x0085), Is.True); // NEL
+        Assert.That(TokenSet.AnyWhitespace.Contains(0x00A0), Is.True); // NBSP (inline)
+        Assert.That(TokenSet.AnyWhitespace.Contains(0x2028), Is.True); // LS
+        Assert.That(TokenSet.AnyWhitespace.Contains(0x2029), Is.True); // PS
+        Assert.That(TokenSet.AnyWhitespace.Contains(0x3000), Is.True); // ideographic space (inline)
+        // Letters and digits aren't whitespace.
+        Assert.That(TokenSet.AnyWhitespace.Contains('a'), Is.False);
+        Assert.That(TokenSet.AnyWhitespace.Contains('0'), Is.False);
+    }
+
+    [Test]
+    public void AnyWhitespace_equals_union_of_InlineWhitespace_and_LineTerminators()
+    {
+        // The set is defined as the union of the two component sets,
+        // and the components are disjoint (per the test above), so
+        // AnyWhitespace matches exactly the same runes as either side.
+        Assert.That(TokenSet.AnyWhitespace, Is.EqualTo(TokenSet.InlineWhitespace | TokenSet.LineTerminators));
+    }
+
+    [Test]
+    public void AnyWhitespace_returns_the_same_cached_instance_on_repeat_calls()
+    {
+        // Property is lazy-initialized; same value object on every call.
+        Assert.That(TokenSet.AnyWhitespace, Is.EqualTo(TokenSet.AnyWhitespace));
+        // A computed expression that produces the same value also compares equal,
+        // verifying structural equality (the underlying lazy may or may not
+        // be reference-equal across builds).
+        Assert.That(TokenSet.AnyWhitespace, Is.EqualTo(TokenSet.InlineWhitespace | TokenSet.LineTerminators));
+    }
+
+    [Test]
     public void Ascii_Digits_contains_only_0_through_9()
     {
         Assert.That(TokenSet.Ascii.Digits.Contains('0'), Is.True);

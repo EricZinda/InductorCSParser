@@ -796,6 +796,17 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         | Single(0x2028)   // LS
         | Single(0x2029);  // PS
 
+    // All single-rune whitespace runes: full-Unicode intra-line
+    // whitespace plus the seven UAX #18 single-rune line terminators.
+    // The CRLF two-rune cluster isn't a rune and so can't live in a
+    // rune set; grammars that want CRLF-as-one-terminator should pair
+    // this set with a Literal("\r\n") alternative (which is what
+    // Rules.AnyWhitespace() does internally). For ASCII-only
+    // whitespace use Ascii.AnyWhitespace.
+    public static TokenSet AnyWhitespace => _anyWhitespace.Value;
+    private static readonly Lazy<TokenSet> _anyWhitespace =
+        new Lazy<TokenSet>(() => InlineWhitespace | LineTerminators);
+
     public static class Ascii
     {
         public static readonly TokenSet Letters = Range('A', 'Z') | Range('a', 'z');
