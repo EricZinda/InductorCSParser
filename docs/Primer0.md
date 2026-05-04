@@ -115,14 +115,33 @@ But Korean also has 2 *more* ways to write a character that is "equivalent", but
 Now lets look at how the grammar will behave on malformed Unicode input.
 
 # Unexpected Unicode
-There are very few ways to write a truly "malformed" or "illegal" Unicode document. The parser actually throws an exception during normalization for those cases. However, there are many ways the text could be "unexpected", especially for someone new to Unicode. The parser is designed to keep grammars understandable and avoid pitfalls with those.
+There are very few ways to write a truly "illegal" Unicode document. The parser actually throws an exception during normalization for those cases. However, there are many ways the text could be "unexpected", especially for someone new to Unicode. The parser is designed to keep grammars understandable and avoid pitfalls with those.
 
-The parser takes a .Net `String`, and if you used .Net's encoding to load a file into a string like:
+## Legitimate Ill-formed Input
+The parser takes a .Net `String`. If you created your string from a file or a sequence of bytes using any of .Net's UTF encoding types, like:
 
 ```CSharp
 string text = File.ReadAllText(path, new UTF8Encoding());
+string text = Encoding.UTF32.GetString(bytes)
+
 ```
+... then .Net already made sure any illegal Unicode characters are replaced with a special Unicode character called a "replacement character" (`U+FFFD`). 
 
-.Net already makes sure any illegal sequences are replaced with a special Unicode character called a "replacement character" (`U+FFFD`). 
+Non-Unicode encodings (ASCII, Latin-1, Windows-1252) use a different fallback character: a literal ? (`U+003F`). That's the abstract Encoding class default. Only the Unicode encodings override it to `U+FFFD`.
 
-But if your code doesn't do this or got a string by some other means it could still contain invalid Unicode sequences.
+But if your code doesn't do this, or got a string by some other means, it could contain invalid Unicode sequences. 
+
+In that case, when you call .Parse() using the defaults, you will get an exception. The default FormC normalization will catch it and throw. 
+
+If you decide to go without Normalization at all by calling `Compile(null)` and then `Parse()`, the engine will treat ill-formed code points as separate tokens that you can match using all of the Rules that match any tokens. And that is the only way you will match them. 
+
+All of these together ensure that your Grammar will not get "confused" by ill-formed input (and will fail if it exists) unless you are truly testing for it.
+
+## Unexpected (Often Non-visible) Characters
+There are many characters that are perfectly valid in a Unicode document but might be unexpected by most developers.
+
+BARE ATTACHING CHARACTERS
+INVISIBLE FORMATTING CHARACTERS
+NONCHARACTERS
+PRIVATE USE
+REPLACEMENT

@@ -384,6 +384,72 @@ public class UnexpectedUnicodeTests
         Assert.That(AllOf(Token(UnicodeExamples.MaximumCodePointRune), Eof()).Parse(input).Success, Is.True);
     }
 
+    // Coverage matrix: every non-null normalization form routes
+    // input through String.Normalize before the lexer runs, and
+    // Normalize rejects ill-formed UTF-16 by throwing
+    // ArgumentException. So all four non-null forms produce the
+    // same Parse-time throw on lone surrogates and reversed pairs.
+    // The earlier per-input tests (Lone_high_surrogate_handling
+    // etc.) cover only FormC; this parameterized test fills the
+    // FormD / FormKC / FormKD gap so a future runtime change that
+    // diverged any of them from FormC would surface here.
+    //
+    // Inputs are passed as int[] code points and built into the
+    // string inside the test, because NUnit's [TestCase] attribute
+    // serializes parameters in a way that drops or reinterprets
+    // lone surrogates. Building from code points side-steps that.
+    [TestCase(NormalizationForm.FormC, new[] { 0xD800 }, TestName = "FormC + lone high surrogate U+D800")]
+    [TestCase(NormalizationForm.FormC, new[] { 0xDFFF }, TestName = "FormC + lone low surrogate U+DFFF")]
+    [TestCase(NormalizationForm.FormC, new[] { 0xDC00, 0xD800 }, TestName = "FormC + reversed surrogate pair (low,high)")]
+    [TestCase(NormalizationForm.FormD, new[] { 0xD800 }, TestName = "FormD + lone high surrogate U+D800")]
+    [TestCase(NormalizationForm.FormD, new[] { 0xDFFF }, TestName = "FormD + lone low surrogate U+DFFF")]
+    [TestCase(NormalizationForm.FormD, new[] { 0xDC00, 0xD800 }, TestName = "FormD + reversed surrogate pair (low,high)")]
+    [TestCase(NormalizationForm.FormKC, new[] { 0xD800 }, TestName = "FormKC + lone high surrogate U+D800")]
+    [TestCase(NormalizationForm.FormKC, new[] { 0xDFFF }, TestName = "FormKC + lone low surrogate U+DFFF")]
+    [TestCase(NormalizationForm.FormKC, new[] { 0xDC00, 0xD800 }, TestName = "FormKC + reversed surrogate pair (low,high)")]
+    [TestCase(NormalizationForm.FormKD, new[] { 0xD800 }, TestName = "FormKD + lone high surrogate U+D800")]
+    [TestCase(NormalizationForm.FormKD, new[] { 0xDFFF }, TestName = "FormKD + lone low surrogate U+DFFF")]
+    [TestCase(NormalizationForm.FormKD, new[] { 0xDC00, 0xD800 }, TestName = "FormKD + reversed surrogate pair (low,high)")]
+    public void Ill_formed_input_throws_under_every_non_null_normalization_form(
+        NormalizationForm form, int[] illFormedCodeUnits)
+    {
+        string illFormedInput = BuildStringFromCodeUnits(illFormedCodeUnits);
+        var rule = AllOf(Literal("hello"), Eof());
+        rule.Compile(form);
+
+        Assert.Throws<ArgumentException>(() => rule.Parse(illFormedInput),
+            $"{form} should route input through String.Normalize, " +
+            $"which rejects ill-formed UTF-16 with ArgumentException");
+    }
+
+    [TestCase(new[] { 0xD800 }, TestName = "Compile(null) accepts lone high surrogate U+D800")]
+    [TestCase(new[] { 0xDFFF }, TestName = "Compile(null) accepts lone low surrogate U+DFFF")]
+    [TestCase(new[] { 0xDC00, 0xD800 }, TestName = "Compile(null) accepts reversed surrogate pair")]
+    public void Ill_formed_input_does_not_throw_under_null_normalization(int[] illFormedCodeUnits)
+    {
+        // Compile(null) skips normalization entirely. The lexer
+        // surfaces each ill-formed code unit as a token with no
+        // RuneValue, and the grammar fails normally rather than
+        // throwing. This is the safety valve for callers that need
+        // to handle bytes-as-tokens (WTF-8 round-tripping, JSON
+        // unpaired-surrogate handling) and don't want the
+        // Normalize-time throw.
+        string illFormedInput = BuildStringFromCodeUnits(illFormedCodeUnits);
+        var rule = AllOf(Literal("hello"), Eof());
+        rule.Compile(null);
+
+        Assert.DoesNotThrow(() => rule.Parse(illFormedInput),
+            "Compile(null) should skip String.Normalize, so ill-formed " +
+            "input passes through to the lexer instead of throwing");
+    }
+
+    private static string BuildStringFromCodeUnits(int[] codeUnits)
+    {
+        var chars = new char[codeUnits.Length];
+        for (int i = 0; i < codeUnits.Length; i++) chars[i] = (char)codeUnits[i];
+        return new string(chars);
+    }
+
     // ============================================================
     // Group 2: Bare attaching characters (no base to attach to)
     //   expected: surfaces as a normal token, so grammar mismatches
@@ -889,6 +955,52 @@ public class UnexpectedUnicodeTests
         // detect and surface decoder-replacement markers in their
         // output.
         Assert.That(AllOf(Token(UnicodeExamples.ReplacementCharacterText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+    }
+
+    [Test]
+    public void Replacement_character_from_decoder_is_detected_by_TokenSet_Replacement()
+    {
+        // End-to-end test of the .NET decoder -> U+FFFD -> grammar
+        // chain. When .NET's Unicode-encoding decoders hit an
+        // ill-formed byte sequence, the default
+        // DecoderReplacementFallback substitutes U+FFFD into the
+        // output string. A grammar that wants to surface or reject
+        // those substitutions can use OneOf(TokenSet.Replacement).
+
+        // Ill-formed UTF-8: 0xFF is never a valid UTF-8 lead byte,
+        // so the decoder substitutes U+FFFD for it.
+        byte[] illFormedUtf8 = [0x68, 0x65, 0xFF, 0x6C, 0x6C, 0x6F];
+        string fromUtf8 = Encoding.UTF8.GetString(illFormedUtf8);
+        Assert.That(fromUtf8, Does.Contain("�"),
+            "UTF-8 decoder should substitute U+FFFD for the ill-formed 0xFF byte");
+
+        // Ill-formed UTF-16 LE: an odd byte count leaves a
+        // dangling single byte that can't be paired into a code
+        // unit. The decoder substitutes U+FFFD for the orphan.
+        byte[] illFormedUtf16 = [0x68, 0x00, 0x65, 0x00, 0xFF];
+        string fromUtf16 = Encoding.Unicode.GetString(illFormedUtf16);
+        Assert.That(fromUtf16, Does.Contain("�"),
+            "UTF-16 decoder should substitute U+FFFD for the dangling byte");
+
+        // Grammar: scan past any non-replacement tokens, match
+        // exactly one U+FFFD via TokenSet.Replacement, then consume
+        // the rest. Useful for "reject any input that's been
+        // through a permissive decoder" patterns.
+        var rule = AllOf(
+            ZeroOrMore(NoneOf(TokenSet.Replacement)),
+            OneOf(TokenSet.Replacement),
+            ZeroOrMore(AnyToken()),
+            Eof());
+
+        Assert.That(rule.Parse(fromUtf8).Success, Is.True,
+            "TokenSet.Replacement matches the U+FFFD from the UTF-8 decoder");
+        Assert.That(rule.Parse(fromUtf16).Success, Is.True,
+            "TokenSet.Replacement matches the U+FFFD from the UTF-16 decoder");
+
+        // Negative case: clean input has no U+FFFD, so the OneOf
+        // step has nothing to match and the grammar fails.
+        Assert.That(rule.Parse("hello").Success, Is.False,
+            "TokenSet.Replacement has nothing to match in clean input");
     }
 
     // ============================================================

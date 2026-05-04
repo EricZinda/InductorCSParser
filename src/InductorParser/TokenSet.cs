@@ -807,6 +807,16 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     private static readonly Lazy<TokenSet> _anyWhitespace =
         new Lazy<TokenSet>(() => InlineWhitespace | LineTerminators);
 
+    // U+FFFD REPLACEMENT CHARACTER. .NET's Unicode-encoding decoders
+    // (Encoding.UTF8, Encoding.Unicode, Encoding.UTF32) substitute
+    // U+FFFD for ill-formed byte sequences when using the default
+    // DecoderReplacementFallback. So a U+FFFD in your input is the
+    // fingerprint of an upstream decoder that swallowed something
+    // malformed. Grammars that want to surface or reject those
+    // markers can use OneOf(TokenSet.Replacement) or
+    // NoneOf(TokenSet.Replacement | ...).
+    public static readonly TokenSet Replacement = Single(0xFFFD);
+
     public static class Ascii
     {
         public static readonly TokenSet Letters = Range('A', 'Z') | Range('a', 'z');
