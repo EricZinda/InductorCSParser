@@ -6,33 +6,37 @@ using static InductorParser.Rules;
 
 namespace InductorParser.Tests;
 
-// Probes parser behavior on Unicode inputs that aren't well-formed or
-// don't fit comfortably into UAX #29's grapheme-cluster model. Two
+// Probes parser behavior on Unicode inputs that are either technically
+// ill-formed or end up being unexpected gotchas or edge cases. Two
 // goals: (1) document how the parser reacts to each category so
 // callers know what to expect, and (2) lock the reactions in against
 // silent regressions.
 //
 // The categories are grouped into seven buckets:
 //
-//   1. ENCODING-LEVEL MALFORMED INPUT: throws cleanly or surfaces
+//   1. ENCODING-LEVEL ILL-FORMED INPUT: throws cleanly or surfaces
 //      as an untyped token, never silently corrupts.
-//      UTF-16 invariants broken: lone surrogates, reversed surrogate
+//      These are (the only) cases truly defined as "ill formed" 
+//      by the Unicode standard and are all examples where 
+//      UTF-16 invariants are broken: lone surrogates, reversed surrogate
 //      pairs, the U+10FFFF maximum boundary. Only UTF-16 here because
 //      the parser takes a .NET string, and .NET strings are UTF-16
 //      internally. UTF-8 / UTF-32 / legacy-codepage decoding errors
 //      get resolved upstream by the caller's Encoding.GetString call
 //      (usually as U+FFFD replacements; see Group 4) before the
 //      parser is ever invoked. Under default FormC, .NET's
-//      string.Normalize rejects malformed UTF-16 by throwing
+//      string.Normalize rejects ill-formed UTF-16 by throwing
 //      ArgumentException out of Parse() — the caller sees the
 //      problem before any grammar runs. Under Compile(null) the
-//      lexer surfaces each malformed code unit as a token with no
+//      lexer surfaces each ill-formed code unit as a token with no
 //      RuneValue, which OneOf and similar rules predictably reject.
 //      Either path is safe; a grammar can't silently match a
-//      malformed surrogate.
+//      ill-formed surrogate.
 //
 //   2. BARE ATTACHING CHARACTERS: surfaces as a normal token, so
 //      grammar mismatches produce a normal error.
+//      Not technically "ill formed" but can be unexpected and should
+//      be handled consistently and transparently. These are:
 //      UAX #29 attaching characters (combining marks, Zero Width
 //      Joiner, variation selectors, regional indicators, skin-tone
 //      modifiers, prepend, Indic linker) appearing without their
@@ -46,6 +50,8 @@ namespace InductorParser.Tests;
 //
 //   3. INVISIBLE FORMATTING CHARACTERS: surfaces as a normal token,
 //      so grammar mismatches produce a normal error.
+//      Not technically "ill formed" but can be unexpected and should
+//      be handled consistently and transparently. These are:
 //      Characters that don't render as a glyph: zero-width spaces
 //      and joiners, soft hyphens, BOMs, variation selectors, the
 //      bidi-direction controls (the same ones that power Trojan-
@@ -64,6 +70,8 @@ namespace InductorParser.Tests;
 //   4. NONCHARACTERS, PRIVATE USE, REPLACEMENT: surfaces as a
 //      normal token, so grammar mismatches produce a normal error
 //      (one .NET-specific exception throws cleanly).
+//      Not technically "ill formed" but can be unexpected and should
+//      be handled consistently and transparently. These are:
 //      Code points designated never-a-character (FFFE/FFFF,
 //      FDD0..FDEF), Private Use Area (E000..F8FF), and the
 //      replacement character U+FFFD that decoders write for
@@ -74,8 +82,13 @@ namespace InductorParser.Tests;
 //      string.Normalize rejects U+FFFE specifically as "invalid
 //      Unicode code points," so default FormC parsing of input
 //      containing U+FFFE throws ArgumentException out of Parse().
-//      THe caller can
-//      catch and translate, or compile with null to skip
+//      Why U+FFFE and not the other noncharacters: U+FFFE is the
+//      byte-swapped form of U+FEFF (BOM), so its presence in a
+//      string is a signal that upstream byte-order detection
+//      failed. Windows' NormalizeString refuses to process such
+//      strings on that theory. U+FFFF and U+FDD0..U+FDEF carry
+//      no such signal and pass through.
+//      The caller can catch and translate, or compile with null to skip
 //      normalization. U+FFFF, U+FDD0, the rest of the Private Use
 //      Area, and U+FFFD all pass through as ordinary tokens.
 //
@@ -83,19 +96,30 @@ namespace InductorParser.Tests;
 //      grammar can't silently fail to match.
 //      Cases where one logical character has more than one valid
 //      Unicode encoding, and the parser has to make sure the
-//      grammar's literals and the input agree. Four sub-cases:
+//      grammar's literals and the input agree.
+//
+//      All four sub-cases are protected by the same validation
+//      rule: at Compile time, every rule's text is compared against
+//      its own normalization in the chosen form. If they differ,
+//      Compile throws with a clear message. So an author who writes
+//      a literal in any non-canonical form gets a startup error
+//      pointing at the offender. Whichever path you take, the
+//      grammar can't silently fail to match because of a mismatch
+//      between the literal's encoding and the input's normalization.
+//
+//      Four sub-cases:
 //
 //        * Multi-mark canonical reordering: combining marks of
 //          different classes can appear in raw input in either order
-//          and Unicode says they're equivalent. NFC normalizes the
+//          and Unicode says they're equivalent. FormC normalizes the
 //          input at parse time, so the parser handles this for free.
 //
 //        * Hangul jamo decomposition: a precomposed Korean syllable
 //          like 한 (U+D55C) is canonically equivalent to its three
 //          jamo (U+1112 + U+1161 + U+11AB). Under FormC the grammar
-//          literal has to be written in the precomposed form (NFC
+//          literal has to be written in the precomposed form (FormC
 //          composes the jamo into the syllable). The grammar then
-//          matches input written either way, because NFC composes
+//          matches input written either way, because FormC composes
 //          the input the same way before the lexer sees it.
 //
 //        * Canonical singletons: a few characters in Unicode exist
@@ -105,7 +129,7 @@ namespace InductorParser.Tests;
 //          different code points, but they're the same character.
 //          They render identically as Å. Unicode declared U+212B
 //          canonically equivalent to U+00C5 and gave it a canonical
-//          decomposition that maps it to U+00C5. NFC always
+//          decomposition that maps it to U+00C5. FormC always
 //          rewrites a singleton to its canonical form when it
 //          normalizes a string (U+212B becomes U+00C5, and the
 //          same is true for the other four singletons listed
@@ -129,9 +153,10 @@ namespace InductorParser.Tests;
 //          duplicate Latin or Greek letters that already exist) and
 //          the two angle brackets U+2329 / U+232A (which Unicode
 //          declared identical to the CJK angle brackets U+3008 /
-//          U+3009). All five behave the same way: NFC folds them
-//          and the Compile validation rejects a literal that uses
-//          the singleton form.
+//          U+3009). All five behave the same way: FormC folds them
+//          into their canonical forms (singleton -> canonical), and
+//          the Compile validation rejects a literal that uses the
+//          singleton form.
 //
 //        * Compatibility singletons: characters that are a
 //          presentation variant of a plain character. The
@@ -143,8 +168,8 @@ namespace InductorParser.Tests;
 //          each pair to be the same content with different
 //          presentation.
 //
-//          Compatibility singletons are NOT folded by NFC (FormC
-//          leaves them alone). They ARE folded by NFKC (FormKC).
+//          Compatibility singletons are NOT folded by FormC. They 
+//          ARE folded by NFKC (FormKC).
 //          That gives the grammar author a deliberate choice and
 //          both choices are safe:
 //
@@ -172,27 +197,23 @@ namespace InductorParser.Tests;
 //          author who picks the wrong literal form for their
 //          chosen normalization gets a clear error at startup.
 //
-//      All four sub-cases are protected by the same validation
-//      rule: at Compile time, every rule's text is
-//      compared against its own normalization in the chosen form.
-//      If they differ, Compile throws with a clear message. So an
-//      author who writes a literal in any non-canonical form gets a 
-//      startup error pointing at the offender.
-//      Whichever path you take, the grammar can't silently fail to
-//      match because of a mismatch between the literal's encoding
-//      and the input's normalization.
-//
 //   6. IDENTIFIER-RELEVANT EDGE CASES: the default Identifier rule
-//      has no anti-spoofing logic. Restrict via a custom script-
-//      bounded TokenSet if you care about UTS #39 homoglyph attacks.
-//      Mixed-script identifiers like "aа" (Latin 'a' followed by
-//      Cyrillic 'а' that renders identically) are accepted because
-//      both runes are XidContinue per UAX #31. The "fix" path
-//      (a custom LatinLetters set rejecting Cyrillic 'а') lives
-//      in UnicodeGotchasExamples. Other identifier-adjacent
-//      behaviors — non-ASCII digits in TokenSet.Digits, all five
-//      Letter subcategories in TokenSet.Letters — are covered in
-//      TokenSetTests rather than here.
+//      doesn't try to detect lookalike-character attacks. If the
+//      grammar accepts identifiers and the input might be hostile,
+//      build a TokenSet that only allows one script (Latin only,
+//      Cyrillic only, etc.). UTS #39 is the Unicode security spec
+//      that covers this attack.
+//
+//      Example: "aа" looks like one word but is actually Latin 'a'
+//      (U+0061) followed by Cyrillic 'а' (U+0430). Both render
+//      identically. Identifier() accepts this string because both
+//      characters are identifier-valid per UAX #31 (the XID_Continue
+//      property). The fix (a Latin-only TokenSet that rejects the
+//      Cyrillic version) is in UnicodeGotchasExamples.
+//
+//      Other identifier-related behavior (non-ASCII digits in
+//      TokenSet.Digits, the five Letter categories in
+//      TokenSet.Letters) is covered in TokenSetTests, not here.
 //
 //   7. TRIVIAL / DEFENSIVE: parser doesn't crash, regardless of
 //      shape or length.
