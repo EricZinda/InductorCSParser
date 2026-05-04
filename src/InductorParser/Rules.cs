@@ -260,8 +260,8 @@ public static class Rules
         new ScanWhileRule(set, minimumCount);
 
     /// <summary>
-    /// Match text up to (but not including) a token that starts with a
-    /// rune in the stopAt set. Default <see cref="FlattenType"/>:
+    /// Match text up to (but not including) a token in the stopAt set.
+    /// Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
@@ -269,12 +269,24 @@ public static class Rules
     /// next, the matched text is empty. One leaf scans chars directly,
     /// which is a meaningful speedup over
     /// <c>ZeroOrMore(NoneOf(stopAt))</c> for long strings.
+    /// <para>
+    /// Stopper membership is checked against the next whole token (one
+    /// user-perceived character / grapheme cluster), the same way
+    /// <see cref="OneOf(TokenSet)"/> does. A stopper of <c>'"'</c>
+    /// matches a bare quote token but not a <c>'"'</c> followed by a
+    /// combining mark (which is one cluster, not equal to <c>'"'</c>).
+    /// For multi-rune stops, put the whole grapheme in the set: the
+    /// built-in <see cref="TokenSet.LineTerminators"/> already includes
+    /// the <c>CRLF</c> cluster, and <c>TokenSet.Runes("...")</c> adds a
+    /// custom multi-rune cluster.
+    /// </para>
     /// <code>
-    /// // CSV field body: scan until the next comma or newline
+    /// // CSV field body: scan until the next comma or LF
     /// var field = ScanUntil(TokenSet.Runes(",\n"));
     ///
-    /// // Line comment body: scan until end-of-line
-    /// var lineCommentBody = ScanUntil(TokenSet.Single('\r') | TokenSet.Single('\n'));
+    /// // Line comment body: stops at any UAX #18 line terminator,
+    /// // including the CRLF cluster as one stop unit
+    /// var lineCommentBody = ScanUntil(TokenSet.LineTerminators);
     /// </code>
     /// </remarks>
     public static Rule ScanUntil(TokenSet stopAt) =>

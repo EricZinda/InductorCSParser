@@ -7,11 +7,10 @@ using NUnit.Framework;
 
 namespace InductorParser.Tests;
 
-// Phase 0 gate for migrating UnityTabs from a single chord-detection regex
-// to an Inductor Parser grammar. UnityTabs is a private real-world side
-// project that parses guitar tablature files; readers of this repo won't
-// have access to its source, so the regex being gated against is reproduced
-// verbatim below as the reference implementation.
+// Pairs the chord-detection regex from UnityTabs (a private
+// guitar-tablature parser) with an equivalent Inductor Parser
+// grammar. Readers of this repo can't see UnityTabs' source, so
+// the reference regex is reproduced verbatim below.
 //
 // Two checks:
 //
@@ -19,9 +18,8 @@ namespace InductorParser.Tests;
 //    accept/reject verdict from the reference regex and the new grammar.
 //    If one disagrees we fail loud with the input and both verdicts.
 //
-// 2. Timing gate. Same corpus, looped, wall-clock under Stopwatch. The
-//    grammar must come in within 2x of the compiled regex. Anything slower
-//    sends us back to the plan's "stop and rethink" branch.
+// 2. Timing. Same corpus, looped, wall-clock under Stopwatch. The
+//    grammar must come in within 2x of the compiled regex.
 [TestFixture]
 public class ChordGrammarTests
 {
@@ -196,39 +194,41 @@ public class ChordGrammarTests
                 + string.Join(", ", accepted.Select(a => $"\"{a}\"")));
     }
 
-    // Phase 0 gate. Grammar wall-clock time must stay within 2x of the
-    // compiled regex over the full corpus.
+    // Grammar wall-clock time must stay within 2x of the compiled
+    // regex over the full corpus.
     //
-    // Currently ignored. History on this box (net8.0, Release, 5000 iters
-    // x 151 inputs):
-    //   - Naive composite version (pre-p500 / Literal): ~21x slower
-    //     than compiled regex. Every keyword expanded to N rune reads.
-    //   - After shipping Literal / LiteralIgnoreAsciiCase (earlier p500
-    //     work): ~17-18x. Word matches took one transaction each instead
-    //     of N, but transaction overhead still dominated.
-    //   - After FirstOf required-runes dispatch (this p500): ~10-11x. FirstOfRule now
-    //     peeks the lookahead at Compile-computed FirstConsumedTokens and skips
-    //     children whose first rune can't match, collapsing the N-way
-    //     alternations to whichever branch the lookahead allows.
-    //   - After first-rune lookahead skip on BetweenInclusiveRule (p750):
-    //     ~6-8x (three-run range on this box, 2026-04-30). BetweenInclusive
-    //     (ZeroOrMore / Optional / OneOrMore) now peeks one rune before
-    //     opening a Transaction, and when Inner.Advance is Always and the
-    //     peek isn't in Inner.FirstConsumedTokens, skips the Inner.TryParse
+    // Currently ignored. History on this box (net8.0, Release, 5000
+    // iters x 151 inputs):
+    //   - Naive composite version: ~21x slower than compiled regex.
+    //     Every keyword expanded to N rune reads.
+    //   - After shipping Literal / LiteralIgnoreAsciiCase: ~17-18x.
+    //     Word matches took one transaction each instead of N, but
+    //     transaction overhead still dominated.
+    //   - After FirstOf required-runes dispatch: ~10-11x. FirstOfRule
+    //     now peeks the lookahead at Compile-computed
+    //     FirstConsumedTokens and skips children whose first rune
+    //     can't match, collapsing the N-way alternations to whichever
+    //     branch the lookahead allows.
+    //   - After first-rune lookahead skip on BetweenInclusiveRule:
+    //     ~6-8x (three-run range). BetweenInclusive (ZeroOrMore /
+    //     Optional / OneOrMore) now peeks one rune before opening a
+    //     Transaction, and when Inner.Advance is Always and the peek
+    //     isn't in Inner.FirstConsumedTokens, skips the Inner.TryParse
     //     entirely. Chord grammar has several Optional(...) and
     //     ZeroOrMore(...) wrappers around keyword-starting patterns.
-    //     Whenever the next rune proves Inner can't match, the skip collapses
-    //     a full interpreter frame (EnterRule / BeginTransaction / Read /
-    //     set-contains / RecordFailure / Dispose) into three comparisons.
+    //     Whenever the next rune proves Inner can't match, the skip
+    //     collapses a full interpreter frame (EnterRule /
+    //     BeginTransaction / Read / set-contains / RecordFailure /
+    //     Dispose) into three comparisons.
     //   - Remaining gap to 2x: transaction / allocation overhead on
-    //     the inner path where rules DO match. The outer AllOf(...) still
-    //     opens a transaction for every Optional / ZeroOrMore wrapper
-    //     even when those happen to consume zero runes. Closing this
-    //     needs a different tier: lazier transaction opening (skip when
-    //     the child is a zero-width success), fewer per-iteration
-    //     allocations, or a compiled "state machine" emitter for
-    //     stable grammars. Tracked separately (see backlog/p800).
-    [Test, Ignore("Ratio is ~6-8x after p750 first-rune skip; 2x needs a new tier (see comment above).")]
+    //     the inner path where rules DO match. The outer AllOf(...)
+    //     still opens a transaction for every Optional / ZeroOrMore
+    //     wrapper even when those happen to consume zero runes.
+    //     Closing this needs work at the transaction / emitter tier:
+    //     lazier transaction opening (skip when the child is a
+    //     zero-width success), fewer per-iteration allocations, or a
+    //     compiled "state machine" emitter for stable grammars.
+    [Test, Ignore("Ratio is ~6-8x after the first-rune skip pass. 2x needs a new tier (see comment above).")]
     public void Timing_grammar_is_within_two_times_compiled_regex()
     {
         const int iterations = 5_000;

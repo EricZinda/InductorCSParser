@@ -208,47 +208,56 @@ internal sealed class ScanUntilRule : Rule
         string input = lexer.Input;
         int inputLen = input.Length;
 
-        // Scan forward one rune at a time. The loop has three ways out:
-        // end-of-input (the while condition), a stopper match, or a
-        // malformed UTF-16 surrogate that can't form a rune. Each
-        // iteration consumes one rune as body, one escape sequence,
-        // or bails to one of those exits.
+        // Scan forward one token (one user-perceived character) at a
+        // time. Token-scoped for the same reason every other rule in
+        // the parser is: a token is one grapheme cluster. The loop
+        // has two ways out: end-of-input (the while condition) or a
+        // stopper match. Each iteration consumes one token as body
+        // or one escape sequence.
+        //
+        // Lone surrogates flow through as body. The lexer surfaces
+        // each unpaired surrogate code unit as a one-char token with
+        // RuneValue == -1 (see MalformedUnicodeTests for the canonical
+        // behavior). Such a token can't be in any TokenSet (entries
+        // are valid Unicode scalars) and can't equal the escape-start
+        // rune (also a valid scalar), so the stopper and escape-start
+        // checks both correctly say "no match" and the body fall-
+        // through advances past it. The Memory the leaf Symbol holds
+        // is a zero-copy slice of the input string, so the surrogate
+        // round-trips through ToString() byte-for-byte. Mirrors what
+        // ZeroOrMore(NoneOf(stopAt)) would do on the same input.
+        // Lone surrogates only reach this rule under Compile(null),
+        // because string.Normalize rejects malformed UTF-16 with
+        // ArgumentException out of Parse() under any other form.
         while (lexer.Position < inputLen)
         {
             int pos = lexer.Position;
 
-            // Peek the next rune without advancing the lexer so the
-            // fast stopper-check path can decide whether to consume.
-            // Rune-scoped even under GraphemeLexer because TokenSet
-            // membership and escape-start comparison are both
-            // rune-scoped.
-            if (!Lexer.TryPeekRune(input, pos, out int runeValue, out int runeLen))
-                // Malformed UTF-16 escape hatch:
-                // An isolated surrogate half can't match any
-                // TokenSet or rune start, so stop the scan and let the
-                // surrounding grammar decide whether it's an error.
-                break;
+            // Peek the next rune for the single-rune escape-start
+            // fast path's runeValue compare. TryPeekRune returns false
+            // on a lone surrogate (sets runeValue = -1, runeLen = 0);
+            // we DON'T short-circuit on that, because the surrogate
+            // is still a valid token and falls through to body. The
+            // tokenLen != runeLen check on the escape-start branch
+            // already excludes lone-surrogate tokens (tokenLen == 1,
+            // runeLen == 0) from the fast path, and -1 isn't a valid
+            // escape-start rune anyway, so no further guard is needed.
+            Lexer.TryPeekRune(input, pos, out int runeValue, out int runeLen);
 
             // Stopper check. The TokenSet path is the fast case. The
             // Rule path opens a peek transaction that always rolls
             // back, so the stopper itself is never consumed by this
-            // rule. When the stopper set has multi-rune entries
-            // (e.g. stop on a US flag emoji), the rune fast check
-            // misses them, so we additionally test the next full
-            // token against the multi-rune array.
+            // rule. ContainsToken handles both halves of the set
+            // (single-rune intervals and multi-rune entries) against
+            // the next full token, so a stopper of '"' doesn't match
+            // a '"<combining-mark>' cluster — the same answer
+            // OneOf("\"") would give on the same input.
+            int tokenLen = lexer.PeekTokenLength(pos);
             if (_stopperRule == null)
             {
-                if (_stopperSet.Contains(runeValue)) break;
-                if (_stopperSet.HasMultiRuneGraphemes)
-                {
-                    int tokenLen = lexer.PeekTokenLength(pos);
-                    if (tokenLen > runeLen
-                        && pos + tokenLen <= inputLen
-                        && _stopperSet.ContainsToken(input.AsSpan(pos, tokenLen)))
-                    {
-                        break;
-                    }
-                }
+                if (pos + tokenLen <= inputLen
+                    && _stopperSet.ContainsToken(input.AsSpan(pos, tokenLen)))
+                    break;
             }
             else
             {
@@ -269,7 +278,7 @@ internal sealed class ScanUntilRule : Rule
                     // General start path. TryParse opens its own
                     // transaction, so a start mismatch rolls the
                     // position back to `pos` and we fall through to
-                    // consume the rune as body.
+                    // consume the token as body.
                     var start = _escapeStartRule.TryParse(lexer, outputSymbols: null);
                     if (start != null)
                     {
@@ -300,27 +309,36 @@ internal sealed class ScanUntilRule : Rule
                     }
                     // Start didn't match: fall through to consume as body.
                 }
-                else if (runeValue == _escapeStartRune)
+                else if (tokenLen == runeLen && runeValue == _escapeStartRune)
                 {
-                    // Single-rune start fast path. Consume the start,
-                    // then hand off to the end.
-                    lexer.Read();
+                    // Single-rune start fast path. The token must be
+                    // exactly the escape rune with nothing else glued
+                    // onto it: '\' alone matches, but '\<combining
+                    // mark>' (one cluster, two runes by UAX #29 GB9)
+                    // does NOT, the same way Token('\\') would refuse
+                    // it. tokenLen == runeLen is the test for "this
+                    // cluster is one rune long," which is what makes
+                    // the fast path safe under the parser-wide
+                    // grapheme invariant.
+                    lexer.SetPositionUnchecked(pos + tokenLen);
                     var end = _escapeEnd!.TryParse(lexer, outputSymbols: null);
                     if (end == null)
                     {
-                        TraceFailure(lexer, $"bad escape end at offset {pos + runeLen}");
-                        lexer.RecordFailure(pos + runeLen, ErrorMessage);
+                        TraceFailure(lexer, $"bad escape end at offset {pos + tokenLen}");
+                        lexer.RecordFailure(pos + tokenLen, ErrorMessage);
                         return null;
                     }
                     continue;
                 }
             }
 
-            // Not a stopper, not an escape start: consume one rune as
-            // body and keep scanning. Using Read keeps the position
-            // bookkeeping (tracing, EOF handling) in one place rather
-            // than duplicating the increment here.
-            lexer.Read();
+            // Not a stopper, not an escape start: consume the whole
+            // token as body and keep scanning. Token-by-token advance
+            // (rather than rune-by-rune) keeps the loop on real
+            // grapheme-cluster boundaries, which is what the rest of
+            // the parser sees.
+            if (pos + tokenLen > inputLen) break;
+            lexer.SetPositionUnchecked(pos + tokenLen);
         }
 
         int length = lexer.Position - startPosition;
@@ -343,40 +361,16 @@ internal sealed class ScanUntilRule : Rule
     internal override RuleStartRequirements ComputeRuleStart()
     {
         // ScanUntil always succeeds (a zero-length body is legal),
-        // but it also consumes runes when the input has matchable ones.
-        // That's Advance.Sometimes.
-        //
-        // FirstConsumedTokens: the body consumes any rune not in the stopper
-        // set (the stop check fires first in the scan loop, so a stopper
-        // rune is never consumed). That's ~_stopperSet for the TokenSet
-        // stopper path. A Rule-based stopper can't be rendered as a rune
-        // set, so we stay at Universe there. Escape-start runes, if a
-        // grammar has them, are always outside the stopper set: the
-        // scan loop checks the stopper before the escape, so an
-        // escape-start that was also a stopper would be unreachable
-        // dead code. That means ~_stopperSet already covers the
-        // escape path. No separate union needed.
-        //
-        // When the stopper set has multi-rune entries, ~set throws,
-        // so we project down to the rune-only part first. The result
-        // is a SUPERSET of the actual first-consumed runes (we can't
-        // exclude the first runes of multi-rune stoppers without
-        // sometimes wrongly excluding single-rune body content with
-        // the same first rune), which is the safe direction for the
-        // lookahead shortcut.
-        TokenSet firstConsumed;
-        if (_stopperRule != null)
-        {
-            firstConsumed = TokenSet.Universe;
-        }
-        else if (_stopperSet.HasMultiRuneGraphemes)
-        {
-            firstConsumed = ~_stopperSet.RunesOnlyPart;
-        }
-        else
-        {
-            firstConsumed = ~_stopperSet;
-        }
-        return new RuleStartRequirements(firstConsumed, Advance.Sometimes);
+        // but it also consumes tokens when the input has matchable
+        // ones. That's Advance.Sometimes. Combined with Universe
+        // below, CannotMatchLookahead always returns false for this
+        // rule (the skip optimization needs Advance.Always to fire),
+        // so the FirstConsumedTokens value here doesn't actually
+        // change parser behavior. Universe is the honest answer:
+        // body consumes whole tokens (clusters), and a multi-rune
+        // body cluster can start with any rune at all, including a
+        // rune that's also a single-rune stopper-set entry (the
+        // cluster as a whole isn't the stopper, so it's body).
+        return new RuleStartRequirements(TokenSet.Universe, Advance.Sometimes);
     }
 }

@@ -193,6 +193,51 @@ public class EndOfLineRuleTests
     }
 
     [Test]
+    public void TokenSet_LineTerminators_contains_CRLF_cluster()
+    {
+        // CRLF is one user-perceived character (UAX #29 GB3 keeps CR and
+        // LF in the same grapheme cluster). LineTerminators carries it
+        // as a multi-rune entry so OneOf, NoneOf, ScanUntil, and
+        // ScanWhile all treat the cluster as one terminator. Without
+        // this entry, ScanUntil(LineTerminators) (which is
+        // grapheme-scoped) would treat the CRLF cluster as body
+        // because the cluster as a whole isn't equal to any single-rune
+        // entry.
+        var set = TokenSet.LineTerminators;
+        Assert.That(set.Contains("\r\n"), Is.True, "CRLF cluster");
+        Assert.That(set.Contains("\r"), Is.True, "bare CR still matches");
+        Assert.That(set.Contains("\n"), Is.True, "bare LF still matches");
+        Assert.That(set.Contains("ab"), Is.False, "non-terminator multi-char isn't in set");
+    }
+
+    [Test]
+    public void OneOf_LineTerminators_matches_CRLF_as_one_cluster()
+    {
+        // Direct check that the multi-rune entry actually flows through
+        // to OneOf semantics: a CRLF input is consumed as one token,
+        // not split.
+        var rule = OneOf(TokenSet.LineTerminators);
+        var result = rule.Parse("\r\n");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("\r\n"));
+    }
+
+    [Test]
+    public void ScanUntil_LineTerminators_stops_at_CRLF_cluster()
+    {
+        // The line-comment shape: ScanUntil(LineTerminators) walks body
+        // characters and stops at the next line terminator, including
+        // a CRLF cluster as one stop unit. Use AllowTrailingInput because
+        // ScanUntil doesn't consume the stopper.
+        var rule = ScanUntil(TokenSet.LineTerminators);
+        var result = rule.Parse("// comment\r\nrest",
+            new ParseOptions { AllowTrailingInput = true });
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("// comment"),
+            "scan should stop at the start of the CRLF cluster, not include it.");
+    }
+
+    [Test]
     public void Line_without_hede_recipe_accepts_zwj_family()
     {
         // Documents the recipe shape the readme uses: Not(Literal("hede"))

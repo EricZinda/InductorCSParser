@@ -63,8 +63,6 @@ public static class ChordGrammar
         );
 
         // (6|7|9|11|13)?
-        // Try two-digit numbers first so "11" and "13" don't get partial-matched
-        // as "1" with nothing to follow.
         var ext1 = FirstOf(
             LiteralIgnoreAsciiCase("11"),
             LiteralIgnoreAsciiCase("13"),

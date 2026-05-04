@@ -775,18 +775,18 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     public static TokenSet Digits => _digits.Value;
     public static TokenSet InlineWhitespace => _inlineWhitespace.Value;
 
-    // The single-rune line terminators defined by UAX #18 Annex C:
-    // LF (U+000A), VT (U+000B), FF (U+000C), CR (U+000D), NEL (U+0085),
-    // LINE SEPARATOR (U+2028), and PARAGRAPH SEPARATOR (U+2029). This
-    // matches what Java's \R, ECMAScript's "line terminator" concept,
-    // and most modern regex engines treat as a newline rune.
+    // The line terminators defined by UAX #18 Annex C: the seven
+    // single-rune terminators LF (U+000A), VT (U+000B), FF (U+000C),
+    // CR (U+000D), NEL (U+0085), LINE SEPARATOR (U+2028),
+    // PARAGRAPH SEPARATOR (U+2029), plus the CRLF two-rune cluster
+    // (which UAX #29 GB3 keeps glued together in one grapheme).
+    // Matches what Java's \R, ECMAScript's "line terminator" concept,
+    // and most modern regex engines treat as a newline.
     //
-    // The CRLF two-rune pair is also a line terminator under UAX #18,
-    // but it can't live in a rune set (every TokenSet holds individual
-    // code points, not sequences). Grammars that want CRLF-as-one-
-    // terminator combine this set with a Literal("\r\n") alternative,
-    // which is what Rules.EndOfLine() does. For "any whitespace,
-    // newlines included" use Rules.AnyWhitespace().
+    // CRLF lives in the set as a multi-rune entry (TokenSet supports
+    // mixing single-rune and multi-rune entries), so OneOf / NoneOf / 
+    // ScanUntil / ScanWhile against
+    // this set all treat the CRLF cluster as one terminator. 
     public static readonly TokenSet LineTerminators =
           Single(0x000A)   // LF
         | Single(0x000B)   // VT
@@ -794,15 +794,15 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         | Single(0x000D)   // CR
         | Single(0x0085)   // NEL
         | Single(0x2028)   // LS
-        | Single(0x2029);  // PS
+        | Single(0x2029)   // PS
+        | Runes("\r\n");   // CRLF cluster
 
-    // All single-rune whitespace runes: full-Unicode intra-line
-    // whitespace plus the seven UAX #18 single-rune line terminators.
-    // The CRLF two-rune cluster isn't a rune and so can't live in a
-    // rune set; grammars that want CRLF-as-one-terminator should pair
-    // this set with a Literal("\r\n") alternative (which is what
-    // Rules.AnyWhitespace() does internally). For ASCII-only
-    // whitespace use Ascii.AnyWhitespace.
+    // Full-Unicode intra-line whitespace plus every UAX #18 line
+    // terminator (the seven single-rune terminators and the CRLF
+    // two-rune cluster, which LineTerminators carries as a multi-rune
+    // entry). Use this for grammars that treat any whitespace as
+    // ordinary separator. For ASCII-only whitespace use
+    // Ascii.AnyWhitespace.
     public static TokenSet AnyWhitespace => _anyWhitespace.Value;
     private static readonly Lazy<TokenSet> _anyWhitespace =
         new Lazy<TokenSet>(() => InlineWhitespace | LineTerminators);
@@ -814,18 +814,17 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         // ASCII intra-line whitespace: SPACE and TAB only. Mirrors the
         // full-Unicode TokenSet.InlineWhitespace.
         public static readonly TokenSet InlineWhitespace = Runes(" \t");
-        // ASCII whitespace including line terminators: SPACE, TAB, CR, LF.
-        // Use this for grammars that treat newlines as ordinary whitespace
-        // (the regex \s convention). For grammars that need to distinguish
-        // intra-line whitespace from line terminators, use InlineWhitespace
-        // and Rules.EndOfLine() instead.
-        // Built up rune-by-rune instead of via Runes(" \t\r\n") because
-        // CRLF is one grapheme cluster and Runes() puts multi-rune
-        // graphemes in the multi-rune array, not in the rune intervals.
-        // For "match space, tab, CR, or LF as individual whitespace
-        // runes" we want all four in the rune intervals so OneOf reads
-        // them as single-rune tokens.
-        public static readonly TokenSet AnyWhitespace = InlineWhitespace | Single('\r') | Single('\n');
+        // ASCII whitespace including line terminators: SPACE, TAB, CR,
+        // LF, plus the CRLF two-rune cluster as a multi-rune entry.
+        // Use this for grammars that treat newlines as ordinary
+        // whitespace (the regex \s convention). For grammars that need
+        // to distinguish intra-line whitespace from line terminators,
+        // use InlineWhitespace and Rules.EndOfLine() instead.
+        // CR, LF, and the CRLF cluster all live in the set so that
+        // OneOf / NoneOf / ScanUntil match each consistently: an input
+        // CRLF cluster is the multi-rune entry, a bare CR or LF is the
+        // matching single-rune entry.
+        public static readonly TokenSet AnyWhitespace = InlineWhitespace | Single('\r') | Single('\n') | Runes("\r\n");
         public static readonly TokenSet HexDigits = Digits | Range('a', 'f') | Range('A', 'F');
     }
 

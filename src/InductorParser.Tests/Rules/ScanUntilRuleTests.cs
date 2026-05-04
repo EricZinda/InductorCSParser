@@ -134,6 +134,49 @@ public class ScanUntilRuleTests
     }
 
     [Test]
+    public void ScanUntil_escape_start_check_is_grapheme_scoped()
+    {
+        // Parser-wide invariant: a token is one user-perceived character
+        // (one UAX #29 grapheme cluster). Token('\\'), OneOf("\\"),
+        // and Literal("\\") all refuse to match a '\<combining mark>'
+        // cluster because the cluster as a whole isn't a single-char '\'.
+        // ScanUntil's single-rune escape-start fast path follows the
+        // same rule: the escape rune only triggers when the next token
+        // is exactly that one rune, with no extending characters glued
+        // onto it.
+        //
+        // For '\<U+0301>' (COMBINING ACUTE ACCENT, one two-rune cluster
+        // by GB9), the cluster isn't the escape rune. It falls through
+        // to body and is consumed wholesale. The remaining 'n' is also
+        // body. The parse succeeds with the whole input as the body.
+        var rule = JsonLike();
+        var result = rule.Parse("\\́n");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("\\́n"),
+            "the cluster '\\<U+0301>' is not the single-rune escape '\\', so it's body, " +
+            "matching how Token('\\\\') and OneOf(\"\\\\\") would treat the same cluster.");
+    }
+
+    [Test]
+    public void ScanUntil_stopper_check_is_grapheme_scoped()
+    {
+        // Companion to ScanUntil_escape_start_check_is_grapheme_scoped.
+        // The stopper TokenSet membership runs against the whole next
+        // token, not just its first rune. A '"<U+0301>' cluster is one
+        // user-perceived character that isn't equal to '"' alone, so
+        // ScanUntil(Runes("\"")) treats it as body and keeps scanning,
+        // matching how OneOf("\"") refuses the same cluster.
+        var rule = ScanUntil(TokenSet.Runes("\""));
+        var result = rule.Parse("ab\"́cd");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("ab\"́cd"),
+            "the '\"<U+0301>' cluster is not the single-rune stopper '\"', " +
+            "so the scan continues past it as body.");
+    }
+
+    [Test]
     public void ScanUntil_body_consumes_backslash_when_no_escape_configured()
     {
         // No-escape form, stopper is '|'. A '\' isn't a stopper and
@@ -309,54 +352,93 @@ public class ScanUntilRuleTests
     // units in string *literals* to U+FFFD at compile time (see
     // TokenSetTests.Runes_with_lone_surrogate_throws for the same
     // pattern), so these tests build the malformed input at runtime
-    // to make sure the TryPeekRune surrogate branch actually runs.
+    // to make sure the lone-surrogate path actually runs.
     //
     // The default Compile uses FormC and string.Normalize would itself
     // throw on malformed UTF-16 before ScanUntil ever sees the input.
     // Compile each rule with null first to skip normalization and
     // deliver the surrogate through to the rule unchanged.
+    //
+    // The behavior under the grapheme-scoped design: the lexer
+    // surfaces a lone surrogate as a one-char token with no
+    // RuneValue. That token isn't in any TokenSet (entries are
+    // valid Unicode scalars) and isn't the escape-start rune, so
+    // ScanUntil consumes it as body, the same way
+    // ZeroOrMore(NoneOf(stopAt)) would. See MalformedUnicodeTests
+    // for the parser-wide story on lone surrogates.
 
     [TestCase((char)0xD800, TestName = "lone high surrogate (first)")]
     [TestCase((char)0xDBFF, TestName = "lone high surrogate (last)")]
     [TestCase((char)0xDC00, TestName = "lone low surrogate (first)")]
     [TestCase((char)0xDFFF, TestName = "lone low surrogate (last)")]
-    public void ScanUntil_stops_at_isolated_surrogate_half(char loneSurrogate)
+    public void ScanUntil_consumes_isolated_surrogate_half_as_body(char loneSurrogate)
     {
         // "abc" + <surrogate> + "xyz|"
-        // ScanUntil scans 'a', 'b', 'c' as body. At position 3 it
-        // peeks the surrogate: TryPeekRune returns false, the scan
-        // breaks without throwing or looping. Outer Token('|') then
-        // tries to match at position 3, can't match a surrogate, so
-        // the whole parse fails with ErrorCharIndex pointing at 3.
+        // ScanUntil consumes 'a', 'b', 'c', the lone surrogate, 'x',
+        // 'y', 'z' as body and stops at the '|' stopper. Outer
+        // Token('|') then matches the '|' and the parse succeeds.
+        // The body Symbol's text equals the input slice byte-for-
+        // byte, lone surrogate included.
         string input = "abc" + new string(loneSurrogate, 1) + "xyz|";
         var rule = InductorParser.Rules.AllOf(StopOnPipe(), Token('|'));
         rule.Compile(null);
 
         var result = rule.Parse(input);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(3),
-            "ScanUntil should stop exactly at the surrogate, not before or after");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("abc" + new string(loneSurrogate, 1) + "xyz"),
+            "ScanUntil body should include the lone surrogate as one body token.");
     }
 
     [Test]
-    public void ScanUntil_stops_at_lone_high_surrogate_at_end_of_input()
+    public void ScanUntil_consumes_lone_high_surrogate_at_end_of_input_as_body()
     {
         // Surrogate at the very end of input, nothing to pair with.
-        // Hits the branch of TryPeekRune where pos+1 >= inputLen so
-        // the pair-decode short-circuit is skipped and the IsSurrogate
-        // fallback catches it.
+        // ScanUntil consumes 'a', 'b', 'c', then the lone surrogate
+        // as body, then hits EOF and exits the loop normally.
         string input = "abc" + new string((char)0xD800, 1);
         var rule = StopOnPipe();
         rule.Compile(null);
 
         var result = rule.Parse(input);
 
-        // ScanUntil matches "abc" and stops at position 3. The
-        // outer Parse's EOF check fails because the surrogate is
-        // unconsumed.
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(input),
+            "Body should include the trailing lone surrogate.");
+    }
+
+    [Test]
+    public void ScanUntil_lone_surrogate_round_trips_through_ToString()
+    {
+        // Round-trip property: the leaf Symbol's Memory is a zero-copy
+        // slice of the input string, so whatever code units were in
+        // the input come out of ToString() unchanged. This includes
+        // unpaired surrogate halves, which .NET's System.String holds
+        // verbatim (a String is any sequence of UTF-16 code units, no
+        // well-formedness validation). MalformedUnicodeTests pins the
+        // same property for AnyToken / Token(string) / OneOf / etc.;
+        // this test pins it for ScanUntil specifically.
+        string input = "before" + new string((char)0xD83D, 1) + "after|";
+        // ScanUntil doesn't consume the stopper, so the parse leaves
+        // trailing '|' input. AllowTrailingInput keeps Parse from
+        // failing on the unconsumed pipe.
+        var rule = InductorParser.Rules.AllOf(StopOnPipe(), Token('|'));
+        rule.Compile(null);
+
+        var result = rule.Parse(input);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        string body = result.Tree!.ToString();
+
+        // Round-trip: ToString() reproduces the input slice exactly.
+        Assert.That(body, Is.EqualTo("before" + new string((char)0xD83D, 1) + "after"));
+        // Length and the specific code unit at each position survive
+        // unchanged. The lone-surrogate code unit at position 6 still
+        // reads as 0xD83D.
+        Assert.That(body.Length, Is.EqualTo(12));
+        Assert.That(body[6], Is.EqualTo((char)0xD83D));
+        // Reading back into the original input produces the same chars.
+        Assert.That(body, Is.EqualTo(input.Substring(0, body.Length)));
     }
 
     [Test]
