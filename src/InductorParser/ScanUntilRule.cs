@@ -217,7 +217,7 @@ internal sealed class ScanUntilRule : Rule
         //
         // Lone surrogates flow through as body. The lexer surfaces
         // each unpaired surrogate code unit as a one-char token with
-        // RuneValue == -1 (see MalformedUnicodeTests for the canonical
+        // RuneValue == -1 (see UnexpectedUnicodeTests for the canonical
         // behavior). Such a token can't be in any TokenSet (entries
         // are valid Unicode scalars) and can't equal the escape-start
         // rune (also a valid scalar), so the stopper and escape-start

@@ -364,7 +364,7 @@ public class ScanUntilRuleTests
     // RuneValue. That token isn't in any TokenSet (entries are
     // valid Unicode scalars) and isn't the escape-start rune, so
     // ScanUntil consumes it as body, the same way
-    // ZeroOrMore(NoneOf(stopAt)) would. See MalformedUnicodeTests
+    // ZeroOrMore(NoneOf(stopAt)) would. See UnexpectedUnicodeTests
     // for the parser-wide story on lone surrogates.
 
     [TestCase((char)0xD800, TestName = "lone high surrogate (first)")]
@@ -415,7 +415,7 @@ public class ScanUntilRuleTests
         // the input come out of ToString() unchanged. This includes
         // unpaired surrogate halves, which .NET's System.String holds
         // verbatim (a String is any sequence of UTF-16 code units, no
-        // well-formedness validation). MalformedUnicodeTests pins the
+        // well-formedness validation). UnexpectedUnicodeTests pins the
         // same property for AnyToken / Token(string) / OneOf / etc.;
         // this test pins it for ScanUntil specifically.
         string input = "before" + new string((char)0xD83D, 1) + "after|";

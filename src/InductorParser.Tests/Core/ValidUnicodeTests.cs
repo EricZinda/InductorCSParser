@@ -4,7 +4,7 @@ using static InductorParser.Rules;
 
 namespace InductorParser.Tests;
 
-// Sibling to MalformedUnicodeTests. Where that file probes inputs that
+// Sibling to UnexpectedUnicodeTests. Where that file probes inputs that
 // are encoding-broken or sit outside UAX #29's normal model, this file
 // covers Unicode inputs that are valid and well-formed but unusual
 // enough that a reader might wonder if the parser handles them. The

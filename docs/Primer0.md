@@ -114,7 +114,9 @@ But Korean also has 2 *more* ways to write a character that is "equivalent", but
 
 Now lets look at how the grammar will behave on malformed Unicode input.
 
-# Malformed Unicode
+# Unexpected Unicode
+There are very few ways to write a truly "malformed" or "illegal" Unicode document. The parser actually throws an exception during normalization for those cases. However, there are many ways the text could be "unexpected", especially for someone new to Unicode. The parser is designed to keep grammars understandable and avoid pitfalls with those.
+
 The parser takes a .Net `String`, and if you used .Net's encoding to load a file into a string like:
 
 ```CSharp

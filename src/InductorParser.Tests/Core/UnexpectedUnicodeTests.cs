@@ -222,7 +222,7 @@ namespace InductorParser.Tests;
 //      characters" against future regressions.
 //
 [TestFixture]
-public class MalformedUnicodeTests
+public class UnexpectedUnicodeTests
 {
     // ============================================================
     // Group 1: Encoding-level malformed input (broken UTF-16)
