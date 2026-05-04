@@ -6,12 +6,9 @@ namespace InductorParser;
 
 // Matches one token whose value belongs to the given TokenSet. A token
 // is either a single rune (matched against the set's rune intervals)
-// or a multi-rune grapheme cluster (matched against the set's
-// multi-rune graphemes). Under RuneLexer every token is one rune so
-// only the rune intervals are reachable. Under GraphemeLexer a
-// multi-rune grapheme (skin-toned emoji, ZWJ sequence, CJK + combining
-// mark, regional-indicator pair, CRLF) is one token and matches only
-// when the set has the same grapheme as a multi-rune entry. EOF
+// or a multi-rune sequence the lexer grouped as one user-visible
+// character (skin-toned emoji, ZWJ family, regional-indicator pair,
+// CRLF, etc., matched against the set's multi-rune entries). EOF
 // always fails. NoneOfRule is the mirror: same rule, opposite
 // membership test (one token whose value ISN'T in the set).
 internal sealed class OneOfRule : Rule
@@ -40,7 +37,7 @@ internal sealed class OneOfRule : Rule
 
     internal override (string Text, bool IgnoreCase)? ComputeConcatenableText()
     {
-        // OneOfRule consumes exactly one rune. Two shapes feed the
+        // OneOfRule consumes exactly one token. Two shapes feed the
         // required-literal prefilter cleanly: a single-rune set
         // (OneOf("x") matches only 'x') and a two-rune set that's an
         // ASCII letter pair (OneOf("Nn") is effectively a case-
@@ -69,9 +66,9 @@ internal sealed class OneOfRule : Rule
         {
             TraceFailure(lexer,
                 $"found '{(token.IsEof ? "<EOF>" : lexer.Input.Substring(token.Offset, token.Length))}', wanted one of '{_setRendered}'");
-            // Error Positioning: the position of the rune we tried to read. OneOfRule
-            // does exactly one Read, so the transaction's saved start
-            // position is exactly where that rune sits in the input (or
+            // Error Positioning: the position of the token we tried to read.
+            // OneOfRule does exactly one Read, so the transaction's saved start
+            // position is exactly where that token sits in the input (or
             // equals input.Length on EOF).
             lexer.RecordFailure(transaction.StartPosition, ErrorMessage);
             return null;

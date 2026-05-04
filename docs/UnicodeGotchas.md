@@ -16,7 +16,7 @@ That accepts `foo`, `café`, `καλημέρα`, `ℼ`, and rejects `2foo`, `_fo
 
 Two quiet wins you get for free:
 
-- **NFC equivalence (UAX #31 R4).** `ParseOptions.NormalizeInput` defaults to `NormalizationForm.FormC`, so `café` precomposed (U+00E9) and `café` as `e` + combining acute (U+0301) normalize to the same string before the lexer sees them, and both parse to the same identifier. You don't write any code for this.
+- **NFC equivalence (UAX #31 R4).** Compiling a grammar with `Rule.Compile()` defaults to `NormalizationForm.FormC`, so `café` precomposed (U+00E9) and `café` as `e` + combining acute (U+0301) normalize to the same string before the lexer sees them, and both parse to the same identifier. You don't write any code for this.
 
 - **Runtime-backed `XID_Start` and `XID_Continue` tables.** Yes: `TokenSet.XidStart` and `TokenSet.XidContinue` are the Unicode XID properties used by UAX #31's default identifier shape, not custom Inductor-specific character classes. The version caveat is where the Unicode data comes from. Most of each set comes from Unicode General_Category data exposed by the .NET runtime: letters and letter numbers for start characters, plus combining marks, decimal digits, and connector punctuation for continuation characters. `TokenSet.Xid.cs` stores only the small UAX #31 add/remove lists needed on top of those categories, such as `U+2118` SCRIPT CAPITAL P and the Arabic ligatures excluded for NFKC stability. Exact code point coverage follows the Unicode version exposed by the runtime's category tables plus those stored exception tables.
 
@@ -58,7 +58,7 @@ Caveats: the inner rule runs against a fresh sub-lexer that doesn't share trace 
 
 ### Matching specific languages
 
-`Identifier` takes two optional `TokenSet` parameters, `extraStartRunes` and `extraBodyRunes`, that get unioned into `XID_Start` and `XID_Continue` respectively. UAX #31 calls this a "profile extension." Combined with `ParseOptions.NormalizeInput`, these cover the real-world identifier rules of most languages that are built on UAX #31.
+`Identifier` takes two optional `TokenSet` parameters, `extraStartRunes` and `extraBodyRunes`, that get unioned into `XID_Start` and `XID_Continue` respectively. UAX #31 calls this a "profile extension." Combined with the normalization form chosen at `Compile` time, these cover the real-world identifier rules of most languages that are built on UAX #31.
 
 Strict UAX #31 (the reference spec, no language-specific additions). Raku is the closest mainstream match.
 
@@ -69,21 +69,17 @@ Identifier();  // base UAX #31-style form
 Python 3 identifiers, per [PEP 3131](https://peps.python.org/pep-3131/) and the [Language Reference](https://docs.python.org/3/reference/lexical_analysis.html#identifiers). Python adds `_` to Start and uses NFKC (not NFC) for equivalence.
 
 ```csharp
-var python = Identifier(extraStartRunes: TokenSet.Runes("_"));
-var result = python.Parse(input, new ParseOptions
-{
-    NormalizeInput = NormalizationForm.FormKC,
-});
+var python = Identifier(extraStartRunes: TokenSet.Runes("_"))
+    .Compile(NormalizationForm.FormKC);
+var result = python.Parse(input);
 ```
 
 Rust identifiers, per the [Rust Reference](https://doc.rust-lang.org/reference/identifiers.html). Same profile as Python 3 (adds `_` to Start, uses NFKC). One Rust-specific rule this recipe does **not** enforce: Rust rejects bare `_` as an identifier, requiring `_ XID_Continue+`. If you need that, wrap the rule in an explicit check for the second character. For most grammars the practical difference is negligible.
 
 ```csharp
-var rust = Identifier(extraStartRunes: TokenSet.Runes("_"));
-var result = rust.Parse(input, new ParseOptions
-{
-    NormalizeInput = NormalizationForm.FormKC,
-});
+var rust = Identifier(extraStartRunes: TokenSet.Runes("_"))
+    .Compile(NormalizationForm.FormKC);
+var result = rust.Parse(input);
 ```
 
 ECMAScript-style identifiers (JavaScript, TypeScript), per [ECMA-262 §12.7](https://tc39.es/ecma262/#sec-names-and-keywords). The shape is right (add `_` and `$` to both positions, no normalization), but note the caveat: ECMAScript officially uses `ID_Start` and `ID_Continue`, not the X variants. The parser only exposes the XID sets, which are a strict subset, so this recipe accepts slightly less than a spec-conformant JS engine would. The difference is a handful of exotic code points that almost never appear in real source.
@@ -91,11 +87,9 @@ ECMAScript-style identifiers (JavaScript, TypeScript), per [ECMA-262 §12.7](htt
 ```csharp
 var ecmascript = Identifier(
     extraStartRunes: TokenSet.Runes("_$"),
-    extraBodyRunes: TokenSet.Runes("$"));    // "_" is already in XID_Continue
-var result = ecmascript.Parse(input, new ParseOptions
-{
-    NormalizeInput = null,
-});
+    extraBodyRunes: TokenSet.Runes("$"))    // "_" is already in XID_Continue
+    .Compile(null);
+var result = ecmascript.Parse(input);
 ```
 
 C# identifiers, per [ECMA-334 §7.4.3](https://www.ecma-international.org/publications-and-standards/standards/ecma-334/). C# allows `_` in Start and uses category-based rules rather than XID directly. For grammars, `Identifier(extraStartRunes: TokenSet.Runes("_"))` with default NFC is a close approximation for ordinary source. It isn't a spec-exact C# lexer.
@@ -204,7 +198,7 @@ Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 ru
 - `OneOf(TokenSet.Runes("\n"))` matches when the next token is one of the runes in the set. The CRLF token has two runes, and `TokenSet.Runes("\n")` is rune-only, so the token isn't in the set. Adding `\r\n` to the set as a multi-rune entry doesn't help via `Runes(...)` either: `TokenSet.Runes("\r\n")` *does* register the CRLF cluster as one multi-rune entry, but the single-rune `\n` it builds from also lives in the set, and a grammar that wants "any line terminator" needs all of LF, CR, VT, FF, NEL, LS, PS *and* CRLF, which is what `EndOfLine()` is for.
 - `NoneOf(TokenSet.Runes("\n"))` is the dual: a multi-rune token isn't in any rune-only set, so a `NoneOf` over a rune-only set passes CRLF through. `ZeroOrMore(NoneOf(stopSet))` used to scan "everything up to a newline" will greedily swallow the terminating CRLF as body content instead of stopping at it, then the terminator fails because there is nothing left.
 
-**Fix.** Use the built-in `EndOfLine()` rule. It is `FirstOf(Literal("\r\n"), OneOf(TokenSet.LineTerminators))` under the hood, so the CRLF token is tried as a unit before the single-rune terminators (LF, CR, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR per UAX #18 Annex C). Pass `eofIsEol: true` for the "line terminator here, or end of input" case, and wrap with `Optional` for "line terminator here, or none at all". Anywhere a grammar cares about line breaks, reach for these instead of building one with `Token('\n')` or a `OneOf` over a rune set:
+**Fix.** Use the built-in `EndOfLine()` rule. It is `FirstOf(Literal("\r\n"), OneOf(TokenSet.LineTerminators))` under the hood, so the CRLF token is tried as a unit before the single-rune terminators (LF, CR, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR per UAX #18 Annex C). Pass `eofIsEol: true` for the "line terminator here, or end of input" case, and wrap with `Optional` for "line terminator here, or none at all". Anywhere a grammar cares about line breaks, use these instead of building one with `Token('\n')` or a `OneOf` over a rune set:
 
 ```csharp
 // Match a Unicode line terminator (CRLF, LF, CR, NEL, LS, PS, VT, FF).

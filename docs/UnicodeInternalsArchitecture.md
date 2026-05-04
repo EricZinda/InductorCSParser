@@ -107,16 +107,19 @@ The parser normalizes input to the composed form by default. This is because mos
 
 Unicode defines four normalization forms. The library uses the .NET enum directly to access the Unicode forms (`NormalizationForm.FormC` is composed, `FormD` is decomposed, `FormKC` and `FormKD` are the "compatibility" variants that also fold things like superscripts and ligatures into their canonical equivalents). `FormC` (composed) is what almost every grammar wants.
 
+The form is a grammar-level decision committed at `Compile` time, not a per-parse option. Pick it once when you compile the grammar:
+
 ```csharp
-public sealed class ParseOptions
-{
-    // Default normalization form. Composed form is usual. Set to null to disable.
-    public NormalizationForm? NormalizeInput { get; set; } = NormalizationForm.FormC;
-    // ... other options
-}
+var grammar = AllOf(...).Compile();                              // FormC default
+var grammar = AllOf(...).Compile(NormalizationForm.FormKC);      // explicit FormKC
+var grammar = AllOf(...).Compile(null);                          // no normalization
 ```
 
-Callers who want character-exact round-trippability (where `tree.ToString()` must match the original input string character for character) set `NormalizeInput = null`. The tradeoff is that input in the "wrong" form will silently fail exact-match rules that are written for a specific composition.
+Why grammar-level instead of per-parse: the moment you write `Token("é")` you've committed to a specific Unicode form for that literal. If a later `Parse` ran the grammar against decomposed input under FormD, the lexer would hand back the two-rune `e + U+0301` form and your `Token("é")` rule (looking for the single-rune U+00E9) would silently never match. The form is part of the grammar's identity, so it lives on the grammar, not the call.
+
+`Compile(form)` validates every literal-bearing rule (`Token`, `Literal`, `LiteralIgnoreAsciiCase`) against the chosen form. A literal whose text isn't already in that form gets reported in a single `InvalidOperationException` listing every offender and the suggested normalized form, so the author fixes them all in one pass. Validation is skipped when the form is `null`.
+
+Callers who want character-exact round-trippability (where `tree.ToString()` must match the original input string character for character) compile with `null`. The tradeoff is that input in the "wrong" form will silently fail exact-match rules that are written for a specific composition.
 
 Positions reported in `ParseResult` (`ErrorCharIndex` and its derived line/column/token properties) are always into the caller's original input string, never into the normalized form. The parser normalizes internally for the lexer to operate on, then translates any failure offset back to original coordinates at the boundary. When normalization is a no-op and .NET returns the original string reference, translation is skipped. When input got rewritten, or when the runtime returns a distinct but equivalent string, the parser maps the failure position back to the original string. This mapping is paid only on failure or budget-abort paths, not on success.
 

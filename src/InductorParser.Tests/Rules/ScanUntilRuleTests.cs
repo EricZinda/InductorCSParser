@@ -311,11 +311,10 @@ public class ScanUntilRuleTests
     // pattern), so these tests build the malformed input at runtime
     // to make sure the TryPeekRune surrogate branch actually runs.
     //
-    // The default ParseOptions.NormalizeInput calls string.Normalize,
-    // which itself throws on malformed UTF-16 before ScanUntil ever
-    // sees the input. Pass NormalizeInput = null to skip normalization
-    // and deliver the surrogate through to the rule unchanged.
-    private static readonly ParseOptions NoNormalize = new() { NormalizeInput = null };
+    // The default Compile uses FormC and string.Normalize would itself
+    // throw on malformed UTF-16 before ScanUntil ever sees the input.
+    // Compile each rule with null first to skip normalization and
+    // deliver the surrogate through to the rule unchanged.
 
     [TestCase((char)0xD800, TestName = "lone high surrogate (first)")]
     [TestCase((char)0xDBFF, TestName = "lone high surrogate (last)")]
@@ -331,8 +330,9 @@ public class ScanUntilRuleTests
         // the whole parse fails with ErrorCharIndex pointing at 3.
         string input = "abc" + new string(loneSurrogate, 1) + "xyz|";
         var rule = InductorParser.Rules.AllOf(StopOnPipe(), Token('|'));
+        rule.Compile(null);
 
-        var result = rule.Parse(input, NoNormalize);
+        var result = rule.Parse(input);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3),
@@ -347,8 +347,10 @@ public class ScanUntilRuleTests
         // the pair-decode short-circuit is skipped and the IsSurrogate
         // fallback catches it.
         string input = "abc" + new string((char)0xD800, 1);
+        var rule = StopOnPipe();
+        rule.Compile(null);
 
-        var result = StopOnPipe().Parse(input, NoNormalize);
+        var result = rule.Parse(input);
 
         // ScanUntil matches "abc" and stops at position 3. The
         // outer Parse's EOF check fails because the surrogate is

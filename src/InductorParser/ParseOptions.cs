@@ -7,23 +7,23 @@ namespace InductorParser;
 
 public sealed class ParseOptions
 {
-    // Normalization form applied to the input before parsing. Default is the
-    // composed form (FormC), which is what almost every grammar wants and
-    // what essentially all web, source, and typed input already is. A
-    // grammar written against Literal("café") (precomposed é, U+00E9) with this
-    // default will also match decomposed "cafe\u0301" input, because the
-    // normalizer rewrites the latter to the former before the lexer sees
-    // it. Set to null to skip normalization entirely.
+    // Note: Unicode normalization form is no longer set here. It's a
+    // grammar-level decision committed at Compile time. Call
+    // rule.Compile(NormalizationForm.FormC) (or null to disable) before
+    // parsing if you want a form other than the FormC default. See
+    // Rule.Compile(NormalizationForm?) for the rationale and the
+    // compile-time validation that catches rules whose literal text
+    // isn't already in the chosen form.
     //
     // Positions reported in ParseResult (ErrorCharIndex and its derived
     // line/column/token properties) are ALWAYS into the caller's
-    // original input string, regardless of this setting. When normalization
-    // rewrites the input, the parser translates failure offsets back to
-    // original-string coordinates at the boundary, so callers never have to
-    // think about which coordinate system a position lives in. If
-    // normalization returns the original string reference, translation is
-    // skipped; otherwise the mapping is paid only on failure / abort paths.
-    public NormalizationForm? NormalizeInput { get; set; } = NormalizationForm.FormC;
+    // original input string, regardless of which form the grammar was
+    // compiled against. When normalization rewrites the input, the parser
+    // translates failure offsets back to original-string coordinates at
+    // the boundary, so callers never have to think about which coordinate
+    // system a position lives in. If normalization returns the original
+    // string reference, translation is skipped; otherwise the mapping is
+    // paid only on failure / abort paths.
 
     // Where trace output goes when the parser is tracing. Null means
     // tracing is off

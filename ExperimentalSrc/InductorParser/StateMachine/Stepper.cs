@@ -313,9 +313,9 @@ internal static class Stepper
         (uint)((c | 0x20) - 'a') <= ('z' - 'a');
 
     // MatchNoneOf mirrors MatchOneOf but with the membership test
-    // inverted. Multi-rune grapheme tokens (RuneValue == -1 under
-    // GraphemeLexer) trivially aren't single runes in any set, so they
-    // pass NoneOf unconditionally. EOF still fails.
+    // inverted. Multi-rune tokens (RuneValue == -1) trivially aren't
+    // single runes in any set, so they pass NoneOf unconditionally
+    // when the set has no multi-rune entries. EOF still fails.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Step_MatchNoneOf(in State state, ref Machine machine)
     {
@@ -344,8 +344,9 @@ internal static class Stepper
     }
 
     // MatchAnyToken consumes one token, whatever it is. Fails only at
-    // EOF. Under GraphemeLexer the token is a grapheme cluster; under
-    // RuneLexer it's a single rune.
+    // EOF. The token is whatever the lexer hands back: one
+    // user-visible character (a grapheme cluster), possibly built
+    // from several runes underneath.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Step_MatchAnyToken(in State state, ref Machine machine)
     {
@@ -799,9 +800,8 @@ internal static class Stepper
     //     state whose OnSuccess routes back to this scan state, so the
     //     loop resumes after the escape body completes.
     //
-    // Operates rune-by-rune even under the GraphemeLexer because the
-    // stopper-set / escape-start checks are rune-scoped. Same as the
-    // recursive ScanUntilRule.
+    // Operates rune-by-rune because the stopper-set and escape-start
+    // checks are rune-scoped. Same as the recursive ScanUntilRule.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Step_ScanUntilFast(in State state, ref Machine machine)
     {

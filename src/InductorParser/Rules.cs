@@ -160,8 +160,7 @@ public static class Rules
     ///
     /// The ASCII in the name is critical: full Unicode
     /// case-insensitive matching is locale- and script-dependent
-    /// and this leaf doesn't attempt it. See
-    /// docs/UnicodeGotchas.md for the reasoning and limits.
+    /// and this leaf doesn't attempt it. 
     /// </remarks>
     public static Rule LiteralIgnoreAsciiCase(string value) => new LiteralIgnoreAsciiCaseRule(value);
 
@@ -171,16 +170,12 @@ public static class Rules
     /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
-    /// The workhorse character-class rule. Pass any TokenSet built
-    /// from the factories (Single, Range, Runes, Category) or one
-    /// of the built-ins (Letters, Digits, InlineWhitespace, Ascii.*).
-    /// A TokenSet can hold both single runes and multi-rune
-    /// characters (skin-toned emoji, regional-indicator flags, ZWJ
-    /// sequences), so a set built with
-    /// <c>TokenSet.Letters | TokenSet.Runes("🇺🇸")</c> matches
-    /// either a letter or the US flag as one token.
-    /// TokenSets compose with <c>|</c> (union), <c>&amp;</c>
-    /// (intersection), and <c>~</c> (complement, rune-only sets):
+    /// The workhorse character-class rule.
+    /// A TokenSet can hold sets of anything the user sees as one
+    /// character, including composed sequences like skin-toned
+    /// emoji, regional-indicator flags, and family emoji. So a set
+    /// built with <c>TokenSet.Letters | TokenSet.Runes("🇺🇸")</c>
+    /// matches either a letter or the US flag, each as one token.
     /// <code>
     /// // Identifier character: any letter, digit, or underscore
     /// var idChar = OneOf(TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_"));
@@ -202,7 +197,7 @@ public static class Rules
     /// </summary>
     /// <remarks>
     /// Equivalent to <c>OneOf(TokenSet.Runes(runes))</c>. When you
-    /// need ranges, category unions, or complements, reach for
+    /// need ranges, category unions, or complements, use 
     /// <see cref="TokenSet"/> directly and pass it to the
     /// <see cref="OneOf(TokenSet)"/> overload.
     /// </remarks>
@@ -217,10 +212,7 @@ public static class Rules
     /// <remarks>
     /// The idiomatic "any character except these" rule, commonly
     /// used as the body character in a bounded scan (for example,
-    /// everything up to a closing quote). A multi-rune character
-    /// like 👋🏽 passes a <c>NoneOf</c> over a rune-only set, so
-    /// pass-through-text grammars sweep up emoji correctly without
-    /// special handling.
+    /// everything up to a closing quote).
     /// </remarks>
     public static Rule NoneOf(TokenSet set) => new NoneOfRule(set);
 
@@ -235,8 +227,8 @@ public static class Rules
     public static Rule NoneOf(string runes) => new NoneOfRule(TokenSet.Runes(runes));
 
     /// <summary>
-    /// Scan forward while the next rune is in <paramref name="set"/>,
-    /// stopping at the first rune outside the set, and return the whole
+    /// Scan forward while the next token is in <paramref name="set"/>,
+    /// stopping at the first token outside the set, and return the whole
     /// run as one leaf <see cref="SyntaxTree.Symbol"/>. Default
     /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>.
     /// </summary>
@@ -246,7 +238,7 @@ public static class Rules
     /// a unit, not N independent tokens. The matched text is the same as
     /// a greedy <c>AtLeast(minimumCount, OneOf(set))</c>, but the runtime
     /// cost is very different. The <c>OneOf</c> form opens a transaction
-    /// and allocates a Symbol per rune (which the tree then flattens
+    /// and allocates a Symbol per token (which the tree then flattens
     /// away). This rule opens one transaction at the top, runs a tight
     /// scan loop in the lexer, and emits one Symbol over the whole run.
     /// On the word-scan rebar benchmarks that's a 2x speedup. The
@@ -255,15 +247,11 @@ public static class Rules
     /// match span.
     ///
     /// The exact converse of <see cref="ScanUntil(TokenSet)"/>: ScanUntil
-    /// stops when the next rune is in its stop set, ScanWhile stops when
-    /// the next rune is outside its match set. Use <c>ScanWhile</c> when
+    /// stops when the next token is in its stop set, ScanWhile stops when
+    /// the next token is outside its match set. Use <c>ScanWhile</c> when
     /// the run's character class is the natural way to describe the body
     /// (identifiers, words, numbers), and <see cref="ScanUntil(TokenSet)"/>
     /// when only the boundary is namable (string bodies, comment bodies).
-    ///
-    /// "Single-rune token" is literal: a multi-rune token whose first
-    /// rune is in a rune-only part of the set doesn't match. That keeps
-    /// this rule aligned with <see cref="OneOf(TokenSet)"/>.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="minimumCount"/> is less than 1.
@@ -392,8 +380,9 @@ public static class Rules
     /// </summary>
     /// <remarks>
     /// Use for "anything except X" shapes that
-    /// <see cref="NoneOf(TokenSet)"/> can't express because X is
-    /// longer than one rune.
+    /// <see cref="NoneOf(TokenSet)"/> can't express because X spans
+    /// more than one token (a multi-character literal like
+    /// <c>"function"</c>, for example).
     /// </remarks>
     public static Rule Not(Rule inner) => new NotRule(inner);
 
@@ -716,24 +705,24 @@ public static class Rules
     /// the parser treats them as the same identifier, so a grammar
     /// doesn't have to care which form it gets.
     /// <para>
-    /// Pass <c>NormalizeInput = null</c> on
-    /// <see cref="ParseOptions"/> to match the input string as written,
-    /// without canonical or compatibility normalization. Pass
-    /// <c>NormalizationForm.FormKC</c> for a stronger rule that also
-    /// treats fullwidth <c>ｆｏｏ</c> and plain <c>foo</c>, or the
-    /// ligature <c>ﬀ</c> and <c>ff</c>, as the same identifier.
-    /// That's the Python 3 and Rust behavior.
-    /// The stronger rule can, however, collapse things
-    /// you may want kept distinct. It folds <c>ℓ</c> (script small L,
-    /// used in physics) into <c>l</c>, and <c>Ⅷ</c> (Roman numeral)
-    /// into <c>VIII</c>. A grammar that parses math or legal text
-    /// probably wants those distinctions. Identifier-heavy grammars
-    /// (Python source, say) almost always don't.
+    /// Pass <c>null</c> to <c>Compile(NormalizationForm?)</c> to match
+    /// the input string as written, without canonical or compatibility
+    /// normalization. Pass <c>NormalizationForm.FormKC</c> for a stronger
+    /// rule that also treats fullwidth <c>ｆｏｏ</c> and plain <c>foo</c>,
+    /// or the ligature <c>ﬀ</c> and <c>ff</c>, as the same identifier.
+    /// That's the Python 3 and Rust behavior. The stronger rule can,
+    /// however, collapse things you may want kept distinct. It folds
+    /// <c>ℓ</c> (script small L, used in physics) into <c>l</c>, and
+    /// <c>Ⅷ</c> (Roman numeral) into <c>VIII</c>. A grammar that parses
+    /// math or legal text probably wants those distinctions.
+    /// Identifier-heavy grammars (Python source, say) almost always
+    /// don't.
     /// </para>
     /// <para>
     /// See docs/UnicodeGotchas.md for recipes that reproduce the
     /// identifier rules of specific languages (Python 3, Rust,
-    /// ECMAScript) via these parameters plus NormalizeInput.
+    /// ECMAScript) via these parameters plus the form chosen at
+    /// <c>Compile</c> time.
     /// </para>
     /// </remarks>
     public static Rule Identifier(TokenSet extraStartRunes = default, TokenSet extraBodyRunes = default)

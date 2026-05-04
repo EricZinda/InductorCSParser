@@ -77,7 +77,7 @@ var line = FirstOf(section, keyValue, blankLine);
 var config = AllOf(ZeroOrMore(line), Eof()).As("config").Preserve();
 ```
 
-`name` and `key` are the same shape: one or more tokens that aren't single-rune whitespace and not the stop character (`]` for names, `=` for keys). `NoneOf(set)` matches a token when it isn't exactly one rune from the set, and `|` is set union.
+`name` and `key` are the same shape: one or more tokens that aren't whitespace and aren't the stop character (`]` for names, `=` for keys). `NoneOf(set)` matches a token when that token isn't in the set, and `|` is set union.
 
 `value` is where typing happens. Each alternative is `.As(name).Preserve()` so the matching one lands in the tree as a typed child. `Float()` and `Integer()` are built-in rules, `quotedString` is the standard open-quote/body/close-quote shape and `bareWord` catches everything else. Order in `FirstOf` matters because it stops at the first match: `Float` is before `Integer` so `3.14` doesn't commit to `3` and leave `.14` for the next rule to choke on.
 

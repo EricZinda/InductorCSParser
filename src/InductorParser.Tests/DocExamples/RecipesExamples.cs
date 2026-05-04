@@ -132,20 +132,17 @@ public class RecipesExamples
     [Test]
     public void Identifier_with_NFKC_treats_fullwidth_as_ascii()
     {
-        var identifier = Identifier().Compile();
+        var identifierFormC = Identifier().Compile();
+        var identifierFormKC = Identifier().Compile(System.Text.NormalizationForm.FormKC);
 
         // With default FormC, fullwidth ｆｏｏ is its own valid identifier
         // (still letters, just different code points than ASCII foo).
-        Assert.That(identifier.Parse("ｆｏｏ").Success, Is.True);
+        Assert.That(identifierFormC.Parse("ｆｏｏ").Success, Is.True);
 
         // With FormKC, fullwidth normalizes to ASCII, so the matched
-        // text after the parser sees it's "foo" (we test the result's
-        // round-trip via ToString uses the normalized form, but the
-        // critical claim is that it parses successfully under FormKC).
-        var result = identifier.Parse("ｆｏｏ", new ParseOptions
-        {
-            NormalizeInput = System.Text.NormalizationForm.FormKC,
-        });
+        // text after the parser sees is "foo". The critical claim is
+        // that it parses successfully under FormKC.
+        var result = identifierFormKC.Parse("ｆｏｏ");
         Assert.That(result.Success, Is.True);
     }
 

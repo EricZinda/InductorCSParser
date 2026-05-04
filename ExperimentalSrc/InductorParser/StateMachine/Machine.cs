@@ -55,11 +55,11 @@ internal struct Machine
     // Start position of the most recent successful token read by a
     // Match opcode (OneOf / NoneOf / AnyToken). Used by the matching
     // EmitLeaf opcode to compute the leaf's char span without walking
-    // back through the input. Token length under GraphemeLexer can be
-    // arbitrary (multi-rune ZWJ sequences, decomposed accents), so we
-    // can't infer it from a fixed-width walk-back the way single-rune
-    // OneOf could. Match opcodes set this before advancing the lexer
-    // and the next EmitLeaf reads it.
+    // back through the input. Token length can be arbitrary (multi-rune
+    // ZWJ sequences, decomposed accents), so we can't infer it from a
+    // fixed-width walk-back the way single-rune OneOf could. Match
+    // opcodes set this before advancing the lexer and the next EmitLeaf
+    // reads it.
     public int LastConsumedTokenStart;
 
     // Per-spec literal-position cache used by ScannerSkipAdvance when

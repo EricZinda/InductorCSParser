@@ -46,7 +46,8 @@ public class WithinTokenRuleTests
             OneOf(TokenSet.Ascii.Letters),
             OneOf(TokenSet.Category(System.Globalization.UnicodeCategory.NonSpacingMark))
         ));
-        var result = rule.Parse(LatinEAcuteGrapheme, new ParseOptions { NormalizeInput = null });
+        rule.Compile(null);
+        var result = rule.Parse(LatinEAcuteGrapheme);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo(LatinEAcuteGrapheme));
@@ -59,7 +60,8 @@ public class WithinTokenRuleTests
         // rune and leaves the combining mark unconsumed, the whole
         // WithinToken fails rather than accepting a partial match.
         var rule = WithinToken(OneOf(TokenSet.Ascii.Letters));
-        var result = rule.Parse(LatinEAcuteGrapheme, new ParseOptions { NormalizeInput = null });
+        rule.Compile(null);
+        var result = rule.Parse(LatinEAcuteGrapheme);
 
         Assert.That(result.Success, Is.False);
     }
@@ -101,7 +103,8 @@ public class WithinTokenRuleTests
             OneOf(TokenSet.Ascii.Letters),
             OneOf(TokenSet.Category(System.Globalization.UnicodeCategory.NonSpacingMark))
         ));
-        var result = rule.Parse(LatinEAcuteGrapheme, new ParseOptions { NormalizeInput = null });
+        rule.Compile(null);
+        var result = rule.Parse(LatinEAcuteGrapheme);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         // One Symbol in the tree representing the whole grapheme. No
@@ -117,11 +120,13 @@ public class WithinTokenRuleTests
         // precomposed "é" (single rune but not ASCII), fails on
         // decomposed "é" (two runes).
         var asciiOnly = WithinToken(OneOf(TokenSet.Ascii.Letters));
+        var asciiOnlyNoNorm = WithinToken(OneOf(TokenSet.Ascii.Letters));
+        asciiOnlyNoNorm.Compile(null);
 
         Assert.That(asciiOnly.Parse("a").Success, Is.True);
         Assert.That(asciiOnly.Parse("é").Success, Is.False);  // é isn't ASCII
-        Assert.That(asciiOnly.Parse(LatinEAcuteGrapheme,
-            new ParseOptions { NormalizeInput = null }).Success, Is.False);  // two runes
+        Assert.That(asciiOnlyNoNorm.Parse(LatinEAcuteGrapheme).Success,
+            Is.False);  // two runes
     }
 
     // The three tests below are the real-world reason WithinToken

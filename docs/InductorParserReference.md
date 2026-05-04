@@ -113,7 +113,9 @@ This is just the first form with a literal string instead of a `nameof`. The tra
 
 ### What `Compile` Actually Does
 
-Calling `.Compile()` on a rule walks the rule graph using that rule as the root and does four things. The pass is idempotent, returns the same rule for chaining, and is invoked automatically on the first call to `.Parse(...)` if it hasn't already run. Explicit `.Compile()` exists for callers who want grammar-construction errors to surface at program startup rather than on first parse.
+Calling `.Compile()` on a rule walks the rule graph using that rule as the root and does five things. The pass is idempotent, returns the same rule for chaining, and is invoked automatically on the first call to `.Parse(...)` if it hasn't already run. Explicit `.Compile()` exists for callers who want grammar-construction errors to surface at program startup rather than on first parse.
+
+`Compile` has an overload that takes a Unicode normalization form: `Compile(NormalizationForm? normalizeInput)`. The default is `NormalizationForm.FormC`. Pass `null` to opt out of normalization. The form is part of the grammar's identity and is committed at first compile: a subsequent `Compile` with a different form throws `InvalidOperationException`. The chosen form is readable on the compiled rule via the public `NormalizationForm` property.
 
 **Assign symbol ids.** Rules with an explicit pin (via `.As(new SymbolId(SymbolRanges.CustomRangeStart + 42))`) get their pinned id first, so pinned ids never shift. Rules named with a string (via `.As("name")` or `.As(nameof(X))`) get an id by hashing the name into the custom range. If the hash lands on a slot that is already in use, the id linear-probes from the hash slot upward until it finds an empty slot. Anonymous rules get ids based on their position in the graph and probe the same way. Because the rule graph is frozen after `Compile` returns, every probe resolution is deterministic and stable for the life of the program.
 
@@ -129,6 +131,8 @@ That is a much better failure mode than a runtime exception.
 **Freeze the rule graph.** After `Compile` returns, every rule in the graph is sealed. Calling `.As(...)`, `.Flatten(...)`, `.WithError(...)`, or any other modification method on a sealed rule throws `InvalidOperationException`. This makes the "effectively immutable" claim enforced rather than implicit, and it closes a bug where user code could accidentally mutate a shared rule after parsing has started. One boolean flag per rule, one check per mutation method, negligible cost.
 
 **Validate against obvious mistakes.** A handful of cheap sanity checks worth running once rather than discovering at parse time: `LateBoundRule` bound to itself or a trivial cycle, rules whose id somehow ended up unset, and rule-specific construction invariants. Unreachable rules are *not* flagged because a user might legitimately be building standalone rules to use elsewhere. Pinned `SymbolId` slots are reserved so anonymous and named rules don't steal them, and two reachable rules pinned to the same `SymbolId` are rejected at compile time with an error that names both rules. Allowing duplicates would break parse-tree lookups by raw `SymbolId` and let `Rule.NameOf` return whichever rule the graph walk visited second.
+
+**Validate every literal against the chosen normalization form.** When `Compile` is given a non-null form, every reachable `Token`, `Literal`, and `LiteralIgnoreAsciiCase` rule has its expected text checked against its own normalization in that form. A literal that isn't already in the chosen form would silently never match (the lexer normalizes input before tokenizing, so a rule looking for an unnormalized sequence sees nothing the lexer produces). Compile collects every offending rule and throws one `InvalidOperationException` listing each name, the original literal, and the suggested normalized form. The check is skipped when the form is `null` (the author opted out of normalization).
 
 ### SymbolId
 
@@ -225,7 +229,10 @@ public abstract class Rule
     public Rule Flatten(FlattenType type);          // sets the flatten policy
     public Rule WithError(string errorMessage);     // sets the static error message
 
-    public Rule Compile();
+    public Rule Compile();                                       // FormC default
+    public Rule Compile(NormalizationForm? normalizeInput);      // explicit form, or null to disable
+    public NormalizationForm? NormalizationForm { get; }         // form the grammar was compiled against
+
     public ParseResult Parse(string input);
     public ParseResult Parse(string input, ParseOptions options);
 
@@ -520,11 +527,6 @@ PEG parsers can backtrack pathologically on certain grammar/input combinations. 
 ```csharp
 public sealed class ParseOptions
 {
-    /// Normalization form applied to the input before parsing. Default
-    /// is the composed form (`NormalizationForm.FormC`). Set to null to
-    /// skip normalization entirely.
-    public NormalizationForm? NormalizeInput { get; set; } = NormalizationForm.FormC;
-
     /// Rule-count limit: maximum rule invocations before the parse aborts.
     /// A pure count, not a wall-clock measurement, so the same input and
     /// grammar trip at exactly the same point on every run regardless of

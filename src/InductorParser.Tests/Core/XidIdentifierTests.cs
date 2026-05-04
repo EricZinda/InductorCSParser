@@ -123,9 +123,12 @@ public class XidIdentifierTests
         // that promise: under NFKC the fullwidth letters decompose to
         // ASCII before the lexer runs, so both inputs produce the same
         // flattened match text.
-        var options = new ParseOptions { NormalizeInput = System.Text.NormalizationForm.FormKC };
-        var fullwidth = Identifier().Parse("ｆｏｏ", options);
-        var plain = Identifier().Parse("foo", options);
+        var fullwidthRule = Identifier();
+        fullwidthRule.Compile(System.Text.NormalizationForm.FormKC);
+        var plainRule = Identifier();
+        plainRule.Compile(System.Text.NormalizationForm.FormKC);
+        var fullwidth = fullwidthRule.Parse("ｆｏｏ");
+        var plain = plainRule.Parse("foo");
 
         Assert.That(fullwidth.Success, Is.True, fullwidth.ErrorMessage);
         Assert.That(plain.Success, Is.True, plain.ErrorMessage);
@@ -139,9 +142,12 @@ public class XidIdentifierTests
         // U+FB00 LATIN SMALL LIGATURE FF. NFKC decomposes it to "ff".
         // Same promise: the ligatured and un-ligatured inputs match the
         // same identifier under FormKC.
-        var options = new ParseOptions { NormalizeInput = System.Text.NormalizationForm.FormKC };
-        var ligature = Identifier().Parse("ﬀoo", options);
-        var plain = Identifier().Parse("ffoo", options);
+        var ligatureRule = Identifier();
+        ligatureRule.Compile(System.Text.NormalizationForm.FormKC);
+        var plainRule = Identifier();
+        plainRule.Compile(System.Text.NormalizationForm.FormKC);
+        var ligature = ligatureRule.Parse("ﬀoo");
+        var plain = plainRule.Parse("ffoo");
 
         Assert.That(ligature.Success, Is.True, ligature.ErrorMessage);
         Assert.That(plain.Success, Is.True, plain.ErrorMessage);
@@ -155,9 +161,12 @@ public class XidIdentifierTests
         // Mathematical Bold letters (U+1D400..U+1D433 for bold A..z, etc.)
         // are supplementary-plane code points NFKC-equivalent to plain
         // ASCII. This is the case that catches "𝐟𝐨𝐨" vs "foo" spoofing.
-        var options = new ParseOptions { NormalizeInput = System.Text.NormalizationForm.FormKC };
-        var mathBold = Identifier().Parse("𝐟𝐨𝐨", options);
-        var plain = Identifier().Parse("foo", options);
+        var mathBoldRule = Identifier();
+        mathBoldRule.Compile(System.Text.NormalizationForm.FormKC);
+        var plainRule = Identifier();
+        plainRule.Compile(System.Text.NormalizationForm.FormKC);
+        var mathBold = mathBoldRule.Parse("𝐟𝐨𝐨");
+        var plain = plainRule.Parse("foo");
 
         Assert.That(mathBold.Success, Is.True, mathBold.ErrorMessage);
         Assert.That(plain.Success, Is.True, plain.ErrorMessage);
@@ -189,12 +198,12 @@ public class XidIdentifierTests
         // XID_Continue) but the match text differs between the two
         // inputs. Proves the equivalence in the previous test comes from
         // normalization, not the rule.
-        var options = new ParseOptions
-        {
-            NormalizeInput = null,
-        };
-        var precomposed = Identifier().Parse("café", options);
-        var decomposed = Identifier().Parse("café", options);
+        var precomposedRule = Identifier();
+        precomposedRule.Compile(null);
+        var decomposedRule = Identifier();
+        decomposedRule.Compile(null);
+        var precomposed = precomposedRule.Parse("café");
+        var decomposed = decomposedRule.Parse("café");
 
         Assert.That(precomposed.Success, Is.True, precomposed.ErrorMessage);
         Assert.That(decomposed.Success, Is.True, decomposed.ErrorMessage);

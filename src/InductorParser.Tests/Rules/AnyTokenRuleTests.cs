@@ -42,8 +42,8 @@ public class AnyTokenRuleTests
         // the lexer. The default NFC would compose to a one-rune grapheme
         // and undo this test's premise.
         var rule = AnyToken();
-        var result = rule.Parse(LatinEAcuteGrapheme,
-            new ParseOptions { NormalizeInput = null });
+        rule.Compile(null);
+        var result = rule.Parse(LatinEAcuteGrapheme);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo(LatinEAcuteGrapheme));

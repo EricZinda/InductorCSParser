@@ -377,7 +377,8 @@ public class SymbolPositionTests
         // stitching across multi-rune-grapheme leaves.
         const string Input = "re" + CombiningAcuteText + "x";
         var rule = Identifier();
-        var result = rule.Parse(Input, new ParseOptions { NormalizeInput = null });
+        rule.Compile(null);
+        var result = rule.Parse(Input);
 
         Assert.That(result.Success, Is.True);
         var range = result.Tree!.SourceRange!.Value;

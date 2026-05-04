@@ -320,9 +320,9 @@ public class BetweenInclusiveRuleTests
         // times). RuleCountLimit=100 caps invocations, so a successful parse
         // can only mean the scanner skip jumped over the 'x' run.
         string input = new string('x', 5000) + "Sherlock";
+        scanner.Compile(null);
         var result = scanner.Parse(input, new ParseOptions
         {
-            NormalizeInput = null,
             RuleCountLimit = 100,
             MaxDepth = 0
         });
@@ -344,9 +344,9 @@ public class BetweenInclusiveRuleTests
         )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
 
         string input = new string('s', 5000) + "sHeRlOcK hOlMeS";
+        scanner.Compile(null);
         var result = scanner.Parse(input, new ParseOptions
         {
-            NormalizeInput = null,
             RuleCountLimit = 100,
             MaxDepth = 0
         });
@@ -370,9 +370,9 @@ public class BetweenInclusiveRuleTests
         )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
 
         string input = new string('j', 5000) + "jOhN wAtSoN";
+        scanner.Compile(null);
         var result = scanner.Parse(input, new ParseOptions
         {
-            NormalizeInput = null,
             RuleCountLimit = 100,
             MaxDepth = 0
         });

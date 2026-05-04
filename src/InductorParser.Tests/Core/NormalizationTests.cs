@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Text;
 using NUnit.Framework;
@@ -8,7 +9,7 @@ using static InductorParser.Tests.UnicodeExamples;
 
 namespace InductorParser.Tests;
 
-// Tests for ParseOptions.NormalizeInput. Two promises the feature has to keep:
+// Tests for Rule.Compile(NormalizationForm?). Two promises the feature has to keep:
 //
 //   1. The input is rewritten into the form NormalizeInput names (NFC by
 //      default) before the lexer sees a single character. So a grammar
@@ -68,9 +69,10 @@ public class NormalizationTests
     public void NormalizeInput_null_fails_decomposed_input_against_precomposed_grammar()
     {
         // Opt out of normalization and the precomposed vs decomposed
-        // distinction is back in the caller's face. Documents the trade.
-        var result = AllOf(CafeRule(), Eof()).Parse(CafeDecomposed,
-            new ParseOptions { NormalizeInput = null });
+        // distinction appears.
+        var rule = AllOf(CafeRule(), Eof());
+        rule.Compile(null);
+        var result = rule.Parse(CafeDecomposed);
         Assert.That(result.Success, Is.False);
     }
 
@@ -80,8 +82,9 @@ public class NormalizationTests
         // Turning off normalization only matters when the input would have
         // been rewritten. Precomposed "café" is already in NFC, so opting
         // out changes nothing here and the parse still succeeds.
-        var result = AllOf(CafeRule(), Eof()).Parse(CafePrecomposed,
-            new ParseOptions { NormalizeInput = null });
+        var rule = AllOf(CafeRule(), Eof());
+        rule.Compile(null);
+        var result = rule.Parse(CafePrecomposed);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 
@@ -144,9 +147,11 @@ public class NormalizationTests
         string input = CafePrecomposed + "X";
         var rule = AllOf(CafeRule(), Token('1'), Eof());
 
+        var ruleWithNullForm = AllOf(CafeRule(), Token('1'), Eof());
+        ruleWithNullForm.Compile(null);
+
         var withNfc = rule.Parse(input);
-        var withoutNormalization = rule.Parse(input,
-            new ParseOptions { NormalizeInput = null });
+        var withoutNormalization = ruleWithNullForm.Parse(input);
 
         Assert.That(withNfc.Success, Is.False);
         Assert.That(withoutNormalization.Success, Is.False);
@@ -161,7 +166,8 @@ public class NormalizationTests
         // that baseline so a future refactor can't silently regress it.
         string input = CafeDecomposed + "X";
         var rule = AllOf(Token('c'), Token('a'), Token('f'), Token('X'), Eof());
-        var result = rule.Parse(input, new ParseOptions { NormalizeInput = null });
+        rule.Compile(null);
+        var result = rule.Parse(input);
 
         Assert.That(result.Success, Is.False);
         // Grammar consumed "caf" then wanted 'X' but got 'e'. The failing
@@ -177,10 +183,11 @@ public class NormalizationTests
     public void NFC_default_is_FormC()
     {
         // Lock in the default so a careless refactor that flipped it to
-        // FormD or null would fail loudly here rather than break a
-        // hundred grammars silently.
-        var options = new ParseOptions();
-        Assert.That(options.NormalizeInput, Is.EqualTo(NormalizationForm.FormC));
+        // FormD or null failse. The form lives on the compiled rule
+        // (set by Compile) and the default is FormC, matching the
+        // historical ParseOptions.NormalizeInput default.
+        var rule = AllOf(Token('a'), Eof()).Compile();
+        Assert.That(rule.NormalizationForm, Is.EqualTo(NormalizationForm.FormC));
     }
 
     [Test]
@@ -236,8 +243,8 @@ public class NormalizationTests
         // and fail. FormKC folds the ligature to "fi" before the lexer
         // runs, so the grammar matches through.
         var rule = AllOf(Token('f'), Token('i'), Token('s'), Token('h'), Eof());
-        var result = rule.Parse(FiLigature + "sh",
-            new ParseOptions { NormalizeInput = NormalizationForm.FormKC });
+        rule.Compile(NormalizationForm.FormKC);
+        var result = rule.Parse(FiLigature + "sh");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
@@ -252,8 +259,8 @@ public class NormalizationTests
         // 's' sits at index 1, right after the 1-char ligature.
         string input = FiLigature + "sh";
         var rule = AllOf(Token('f'), Token('i'), Token('X'));
-        var result = rule.Parse(input,
-            new ParseOptions { NormalizeInput = NormalizationForm.FormKC });
+        rule.Compile(NormalizationForm.FormKC);
+        var result = rule.Parse(input);
 
         Assert.That(result.Success, Is.False);
         // Original chars: ﬁ(0) s(1) h(2). Each is its own grapheme
@@ -276,8 +283,8 @@ public class NormalizationTests
         // ligature grapheme at index 0.
         string input = FiLigature;
         var rule = AllOf(Token('f'), Token('X'));
-        var result = rule.Parse(input,
-            new ParseOptions { NormalizeInput = NormalizationForm.FormKC });
+        rule.Compile(NormalizationForm.FormKC);
+        var result = rule.Parse(input);
 
         Assert.That(result.Success, Is.False);
         // Original input is just the ligature: char 0, rune 0, grapheme 0,
@@ -298,8 +305,8 @@ public class NormalizationTests
         // the translator works end-to-end, not that the decomposed
         // endpoint differs for this particular input.
         var rule = AllOf(Token('f'), Token('i'), Token('s'), Token('h'), Eof());
-        var result = rule.Parse(FiLigature + "sh",
-            new ParseOptions { NormalizeInput = NormalizationForm.FormKD });
+        rule.Compile(NormalizationForm.FormKD);
+        var result = rule.Parse(FiLigature + "sh");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
@@ -311,12 +318,131 @@ public class NormalizationTests
         // FormKD to prove the compatibility-form dispatch catches both.
         string input = FiLigature;
         var rule = AllOf(Token('f'), Token('X'));
-        var result = rule.Parse(input,
-            new ParseOptions { NormalizeInput = NormalizationForm.FormKD });
+        rule.Compile(NormalizationForm.FormKD);
+        var result = rule.Parse(input);
 
         Assert.That(result.Success, Is.False);
         AssertErrorPosition(result,
             charIndex: 0, line: 0, column: 0,
             TokenIndex: 0);
+    }
+
+    // Compile-time validation pass tests. The form chosen at Compile is
+    // checked against every literal-bearing rule's expected text. A rule
+    // whose text isn't already in that form would silently never match
+    // (the lexer normalizes input, so the literal would be looking for
+    // bytes the lexer can't produce). Compile catches that at startup.
+
+    [Test]
+    public void Compile_throws_when_literal_isnt_in_FormC()
+    {
+        // Build a rule whose Token literal is decomposed (e + combining
+        // acute, two runes that render as one user-visible character).
+        // Default Compile uses FormC, which composes the two runes into
+        // U+00E9. The lexer would never produce a two-rune "e+acute" for
+        // this rule to match. Compile catches that at grammar-build time.
+        var rule = Token(CafeDecomposed[3..]);  // "é", a one-grapheme decomposed form
+        var ex = Assert.Throws<InvalidOperationException>(() => rule.Compile());
+        Assert.That(ex!.Message, Does.Contain("FormC"));
+        Assert.That(ex.Message, Does.Contain("expected text that isn't in"));
+    }
+
+    [Test]
+    public void Compile_null_skips_validation()
+    {
+        // Same decomposed-Token rule. With null normalization the
+        // validation pass is skipped entirely (the author opted out of
+        // normalization, so any literal form is acceptable).
+        var rule = Token(CafeDecomposed[3..]);
+        Assert.DoesNotThrow(() => rule.Compile(null));
+        Assert.That(rule.NormalizationForm, Is.Null);
+    }
+
+    [Test]
+    public void Compile_FormD_accepts_decomposed()
+    {
+        // The decomposed literal IS in FormD already, so compiling
+        // against FormD passes validation.
+        var rule = Token(CafeDecomposed[3..]);
+        Assert.DoesNotThrow(() => rule.Compile(NormalizationForm.FormD));
+        Assert.That(rule.NormalizationForm, Is.EqualTo(NormalizationForm.FormD));
+    }
+
+    [Test]
+    public void Compile_lists_all_offenders_in_one_exception()
+    {
+        // A grammar with two bad literals should produce one exception
+        // listing both. Authors fix every offender in a single pass
+        // instead of running build-fix-build-fix.
+        var firstBad = Literal("e" + CombiningAcuteText).As("firstBad");
+        var secondBad = Token(CafeDecomposed[3..]).As("secondBad");
+        var rule = AllOf(firstBad, secondBad);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => rule.Compile());
+        Assert.That(ex!.Message, Does.Contain("firstBad"));
+        Assert.That(ex.Message, Does.Contain("secondBad"));
+    }
+
+    [Test]
+    public void Compile_LiteralIgnoreAsciiCase_validates_non_ASCII_only()
+    {
+        // Pure-ASCII LiteralIgnoreAsciiCase passes any normalization form
+        // because ASCII is invariant under all four NFC/NFD/NFKC/NFKD.
+        Assert.DoesNotThrow(() =>
+            LiteralIgnoreAsciiCase("HELLO").Compile());
+
+        // Mixed ASCII + decomposed non-ASCII fails under FormC because
+        // the non-ASCII portion isn't already FormC-normalized.
+        var bad = LiteralIgnoreAsciiCase("caf" + "e" + CombiningAcuteText);
+        var ex = Assert.Throws<InvalidOperationException>(() => bad.Compile());
+        Assert.That(ex!.Message, Does.Contain("FormC"));
+    }
+
+    [Test]
+    public void Compile_with_different_form_after_first_throws()
+    {
+        // The form is committed at first compile. A subsequent Compile
+        // with a different form throws because the grammar's identity
+        // (and the validation result) is tied to the first chosen form.
+        var rule = AllOf(Token('a'), Token('b'));
+        rule.Compile();  // FormC default
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            rule.Compile(NormalizationForm.FormD));
+        Assert.That(ex!.Message, Does.Contain("already been compiled"));
+        Assert.That(ex.Message, Does.Contain("FormC"));
+        Assert.That(ex.Message, Does.Contain("FormD"));
+    }
+
+    [Test]
+    public void Compile_with_same_form_is_idempotent()
+    {
+        // Re-Compile with the same form is a no-op (matching the
+        // existing _sealed early-return contract). Important because
+        // Parse triggers an auto-Compile that should never throw on
+        // an already-compiled grammar.
+        var rule = AllOf(Token('a'), Token('b'));
+        rule.Compile();
+        Assert.DoesNotThrow(() => rule.Compile());
+        Assert.DoesNotThrow(() => rule.Compile(NormalizationForm.FormC));
+    }
+
+    [Test]
+    public void NormalizationForm_property_returns_compiled_form()
+    {
+        // The public read-only NormalizationForm property reflects what
+        // was passed to Compile. Callers and tests can introspect a
+        // compiled grammar's form without parsing.
+        var ruleC = AllOf(Token('a'), Token('b'));
+        ruleC.Compile();
+        Assert.That(ruleC.NormalizationForm, Is.EqualTo(NormalizationForm.FormC));
+
+        var ruleNull = AllOf(Token('a'), Token('b'));
+        ruleNull.Compile(null);
+        Assert.That(ruleNull.NormalizationForm, Is.Null);
+
+        var ruleKC = AllOf(Token('a'), Token('b'));
+        ruleKC.Compile(NormalizationForm.FormKC);
+        Assert.That(ruleKC.NormalizationForm, Is.EqualTo(NormalizationForm.FormKC));
     }
 }
