@@ -206,4 +206,55 @@ public class WithinTokenRuleTests
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
+
+    [Test]
+    public void WithinToken_partial_inner_match_reports_outer_cluster_position()
+    {
+        // WithinToken on a multi-rune cluster ("é" decomposed = 'e' +
+        // combining acute) where the inner rule consumes only the first
+        // rune. The whole grapheme is one outer token, so the failure
+        // belongs at offset 0 (the cluster's start), not offset 1 (mid-
+        // cluster, INSIDE the outer token). Asserts every position unit
+        // because the rest of the parser only ever reports cluster-
+        // boundary positions and a divergence here means user-visible
+        // diagnostics lie about where the parser was looking.
+        var rule = WithinToken(OneOf(TokenSet.Ascii.Letters));
+        rule.Compile(null);
+        var result = rule.Parse(LatinEAcuteGrapheme);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(0),
+            "failing cluster starts at offset 0; offset 1 is inside the cluster");
+        Assert.That(result.ErrorTokenIndex, Is.EqualTo(0),
+            "input has exactly one token; an index of 1 is past-the-end");
+        Assert.That(result.ErrorLine, Is.EqualTo(0));
+        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorPosition!.Value.CharIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorPosition!.Value.TokenIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorMessage,
+            Is.EqualTo("Parse failed at offset 0: unexpected '" + LatinEAcuteGrapheme + "'."));
+    }
+
+    [Test]
+    public void WithinToken_inner_composite_failure_reports_outer_cluster_position()
+    {
+        // The other failure path: inner is an AllOf whose first child
+        // succeeds and advances the sub-lexer past the first rune, then
+        // the second child fails. WithinTokenRule's inner-failure branch
+        // reads subLexer.DeepestFailure (set by the second child at the
+        // rune offset where it failed) and feeds that mid-cluster offset
+        // to outerLexer.RecordFailure. Same outer-view invariant
+        // violation as the prefix-match path above.
+        var rule = WithinToken(AllOf(Token('e'), Token('b')));
+        rule.Compile(null);
+        var result = rule.Parse(LatinEAcuteGrapheme);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorTokenIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorLine, Is.EqualTo(0));
+        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorMessage,
+            Is.EqualTo("Parse failed at offset 0: unexpected '" + LatinEAcuteGrapheme + "'."));
+    }
 }
