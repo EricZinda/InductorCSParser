@@ -1,0 +1,4 @@
+- Local violations of the grapheme invariant
+    - The parser-wide invariant is that one token equals one user-perceived character (one UAX #29 grapheme cluster), and rules compare tokens as units. Any rule that drops to the rune level (peeks a single rune, compares against a fixed rune, advances by rune length) is locally answering a different question than the rest of the parser.
+    - ScanUntilRule had this shape and it produced two divergences from the rest of the parser at once: a stopper of `'"'` matching a `'"<combining-mark>'` cluster (where `OneOf("\"")` would refuse it) and a single-rune escape-start matching when the start rune was glued to extending characters (where `Token('\\')` would refuse it). See backlog 7scu.
+    - When reviewing a rule, ask: does this rule ever look at a partial cluster? If yes, it's potentially out of step with `OneOf`, `Token`, etc. on the same input.

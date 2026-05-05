@@ -1,4 +1,4 @@
-using System.Globalization;
+using InductorParser.Lexing;
 
 namespace InductorParser.SyntaxTree;
 
@@ -8,21 +8,13 @@ internal static class SourcePositionConverter
 {
     public static int ToTokenIndex(string input, int charIndex)
     {
-        int limit = charIndex;
-        if (limit > input.Length) limit = input.Length;
-        if (limit <= 0) return 0;
-
-        int count = 0;
-        int i = 0;
-        while (i < limit)
-        {
-            string element = StringInfo.GetNextTextElement(input, i);
-            int step = element.Length;
-            if (step <= 0) step = 1;
-            i += step;
-            count++;
-        }
-        return count;
+        if (input == null || charIndex <= 0) return 0;
+        // Goes through GraphemeClusterIndex.For so this share the
+        // same cache the Lexer populated during the parse. After a
+        // full parse the cache is typically already walked end-to-end,
+        // so this call is pure bool-array reads with no StringInfo
+        // calls and no per-cluster substring allocations.
+        return GraphemeClusterIndex.For(input).CountClustersUpTo(charIndex);
     }
 
     public static void ToLineColumn(string input, int charIndex, out int line, out int column)

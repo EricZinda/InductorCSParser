@@ -1,0 +1,5 @@
+- Byte-level fast paths that bypass grapheme tokenization
+    - Optimization paths that use `string.IndexOfAny`, `string.IndexOf`, or other UTF-16-code-unit searches to fast-forward over input they don't care about (`Lexer.AdvanceUntilRuneIn`, `Lexer.AdvanceUntilLiteralCandidateIn`, `LiteralScannerCandidate.IndexIn`) can land at offsets that aren't grapheme-cluster boundaries the rest of the parser would visit.
+    - The practical case is the LF inside a CRLF cluster (UAX #29 GB3 keeps CR LF in one cluster, so the LF is at a non-token-boundary offset), but ZWJ inside emoji ZWJ sequences and combining marks attached to earlier bases have the same shape.
+    - When reviewing a fast-path that uses one of these searches, ask: can the candidate char ever appear as the second-or-later rune of a multi-rune cluster? If yes, the landing position has to be re-validated before the lexer's `_position` is set to it.
+    - See the 2026-05-04 "Scanner-skip fast path" entry in `BugSearchLog.md` for the CRLF / combining-mark / ZWJ / VS cases and the `Lexer.IsAtMidGraphemeCluster` post-validation it added.

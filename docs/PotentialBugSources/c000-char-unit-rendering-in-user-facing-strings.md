@@ -1,0 +1,5 @@
+- Char-unit rendering in user-facing strings
+    - Anywhere the parser shows the user a "character" of input (the `{character}` placeholder in default error messages, trace lines that quote the current token, debug renderers), the unit shown should match what the parser reads as one token: a UAX #29 grapheme cluster.
+    - Indexing the input with `input[pos]` returns one UTF-16 code unit, which is a lone surrogate half for any supplementary-plane rune (every emoji past the BMP, math alphanumerics like `𝐀`) and only the first rune of a multi-rune cluster under `Compile(null)` (`é` decomposed, CRLF, ZWJ emoji sequences). The rendered message lies about what the parser actually saw.
+    - `BuildErrorMessage` had this shape; see backlog c9p3.
+    - The fix is to render via `StringInfo.GetNextTextElement(input, pos)` (or any other path that returns the full token), matching the lexer.
