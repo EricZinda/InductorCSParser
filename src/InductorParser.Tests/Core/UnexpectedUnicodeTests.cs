@@ -350,6 +350,53 @@ public class UnexpectedUnicodeTests
     }
 
     [Test]
+    public void FirstOf_with_AnyToken_fallback_matches_lone_surrogate_under_null_normalization()
+    {
+        // FirstOf(specific, AnyToken()) on lone-surrogate input under
+        // Compile(null): the wildcard fallback matches the surrogate as
+        // a one-char token, the FirstOf succeeds, and the matched text
+        // round-trips the surrogate verbatim. Same shape grammars use
+        // for "specific case, otherwise pass through anything," now
+        // exercised on input where the next position is a surrogate
+        // half (no valid rune) rather than a real rune.
+        string input = UnicodeExamples.HighSurrogateMinText;
+        var rule = FirstOf(Literal("X"), AnyToken());
+        rule.Compile(null);
+
+        var result = rule.Parse(input);
+        Assert.That(result.Success, Is.True,
+            "AnyToken fallback should match the lone surrogate as a one-char token");
+        Assert.That(result.ToString(), Is.EqualTo(input),
+            "matched text round-trips the surrogate verbatim");
+    }
+
+    [Test]
+    public void FirstOf_with_AnyToken_fallback_matches_lone_low_surrogate_under_null_normalization()
+    {
+        // Mirror of the high-surrogate test using a lone LOW surrogate so
+        // both halves of the surrogate range get exercised through the
+        // FirstOf + AnyToken fallback.
+        string input = UnicodeExamples.LowSurrogateMaxText;
+        var rule = FirstOf(Literal("X"), AnyToken());
+        rule.Compile(null);
+
+        Assert.That(rule.Parse(input).Success, Is.True);
+    }
+
+    [Test]
+    public void FirstOf_eof_shortcut_lets_zero_width_children_match()
+    {
+        // FirstOf(specific, Eof()) on empty input: every Always child
+        // (Literal here) is correctly skipped at EOF since there's no
+        // rune to consume, and Eof (Advance.Never) is still tried and
+        // matches. Asserts the EOF fast-fail behavior the lookahead
+        // shortcut delivers, separate from the surrogate-handling
+        // tests above.
+        var rule = FirstOf(Literal("X"), Eof()).Compile();
+        Assert.That(rule.Parse("").Success, Is.True);
+    }
+
+    [Test]
     public void OneOf_universe_rejects_lone_surrogate_under_null_normalization()
     {
         // A lone surrogate has no RuneValue, so OneOf rejects it even
