@@ -43,7 +43,7 @@ The built-in rules we've used here play well with someone including any Unicode 
 - `AnyToken()`: Accepts all Unicode input, so they are free to write any Unicode characters in their todo item
 
 ## Arbitrary Unicode in Rules
-If we wanted to localize our app into other languages, the built-in rules make sure the specific keyword characters our grammar looks for  will match properly.
+If we wanted to localize our app into other languages, the built-in rules make sure the specific keyword characters our grammar looks for will match properly.
 
 Let's do Spanish first:
 
