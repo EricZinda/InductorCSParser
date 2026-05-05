@@ -152,6 +152,51 @@ public class DiscardedAtParseTimeTests
     }
 
     [Test]
+    public void FlattenInto_Flatten_branch_keeps_a_hand_built_Flatten_leaf()
+    {
+        // A leaf with FlattenType.Flatten survives in the parse tree under
+        // PreserveAllSymbols=true, because parse-time leaf construction stamps
+        // the rule's FlattenType onto the leaf and PreserveAllSymbols suppresses
+        // the parse-time lift. Symbol.FlattenInto's Flatten branch then has to
+        // handle that leaf shape: a leaf has no children to lift, so the
+        // intent of "Flatten" on a leaf is the same as parse-time's "add
+        // myself to outputSymbols" branch (see OneOfRule / GraphemeRule's
+        // Flatten case). Dropping the leaf here would silently lose its
+        // text. See backlog b4xv.
+        var leaf = new Symbol(new SymbolId(1), FlattenType.Flatten, "x".AsMemory());
+        var composite = new Symbol(new SymbolId(2), FlattenType.Preserve, new[] { leaf });
+
+        var flattened = composite.Flatten();
+
+        Assert.That(string.Concat(flattened.Select(s => s.ToString())), Is.EqualTo("x"));
+    }
+
+    [Test]
+    public void PreserveAllSymbols_then_post_hoc_Flatten_keeps_Float_minus_sign()
+    {
+        // Real-world repro: Float() in Rules.cs uses
+        // Token('-').Flatten(FlattenType.Flatten) for the optional leading
+        // minus sign. Under PreserveAllSymbols=true the '-' lands in the
+        // tree as a Flatten-typed leaf. Calling .Flatten() on the preserved
+        // tree to recover the normal-parse shape used to drop the '-'
+        // because Symbol.FlattenInto's Flatten branch only iterated
+        // Children (empty for a leaf) and never added the leaf itself.
+        var rule = Float();
+        var normal = rule.Parse("-1.5");
+        var preserved = rule.Parse("-1.5", new ParseOptions { PreserveAllSymbols = true });
+
+        Assert.That(normal.Success, Is.True, normal.ErrorMessage);
+        Assert.That(preserved.Success, Is.True, preserved.ErrorMessage);
+
+        var flattened = preserved.Tree!.Flatten();
+        string flattenedText = string.Concat(flattened.Select(s => s.ToString()));
+        string normalText = string.Concat(normal.Symbols.Select(s => s.ToString()));
+
+        Assert.That(flattenedText, Is.EqualTo(normalText),
+            "post-hoc Flatten should recover the same text as a normal parse");
+    }
+
+    [Test]
     public void FlattenInto_Delete_branch_drops_a_hand_built_Delete_node()
     {
         // Low-level guard for the Delete branch of Symbol.FlattenInto.

@@ -247,6 +247,21 @@ public sealed class Symbol
             case FlattenType.Delete:
                 return;
             case FlattenType.Flatten:
+                // A Flatten leaf has no children to lift, so it bubbles up
+                // as itself. Mirrors the parse-time Flatten branch in
+                // GraphemeRule / OneOfRule etc., which adds the leaf to the
+                // parent's outputSymbols rather than dropping it. Without
+                // this gate the leaf's text would silently disappear from
+                // the post-hoc Flatten output, breaking the
+                // PreserveAllSymbols-then-Flatten round-trip for any
+                // grammar that uses .Flatten(FlattenType.Flatten) on a leaf
+                // rule (Rules.Float()'s leading-minus token is the canonical
+                // case).
+                if (_isLeaf)
+                {
+                    result.Add(this);
+                    return;
+                }
                 foreach (var child in Children) child.FlattenInto(result);
                 return;
             default: // Preserve

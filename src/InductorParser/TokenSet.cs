@@ -408,9 +408,9 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         // element joins the rune intervals; a multi-rune grapheme
         // (skin-toned emoji, ZWJ family, regional-indicator pair,
         // decomposed accent, even CRLF) joins the multi-rune array.
-        // GetNextTextElement is the same API the GraphemeLexer uses,
-        // so what gets stored agrees with what the lexer will hand
-        // back at parse time.
+        // GetNextTextElement is the same API the lexer uses, so what
+        // gets stored agrees with what the lexer will hand back at
+        // parse time.
         int index = 0;
         while (index < characters.Length)
         {

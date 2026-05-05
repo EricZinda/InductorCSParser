@@ -36,17 +36,16 @@ public static class PrologGrammar
     // Atoms like "+", "=", "<>" are legal (Prolog operators).
     private static readonly TokenSet MathSymbolChars = TokenSet.Runes("+-<>=/*\\");
 
-    // A newline token. Under the default GraphemeLexer, "\r\n" is one
-    // grapheme cluster (Unicode GB3), so a plain OneOf({'\r', '\n'})
-    // won't match it. OneOf only matches single-rune tokens, and a
-    // CRLF grapheme is two runes. Adding Literal("\r\n") as a first
-    // alternative lets every whitespace rule in this grammar accept
-    // both LF- and CRLF-terminated input under either lexer without
-    // forcing callers to switch the lexer via ParseOptions.
+    // A newline token. The lexer treats "\r\n" as one grapheme cluster
+    // (Unicode GB3), so a plain OneOf({'\r', '\n'}) won't match it.
+    // OneOf only matches single-rune tokens, and a CRLF grapheme is two
+    // runes. Adding Literal("\r\n") as a first alternative lets every
+    // whitespace rule in this grammar accept both LF- and CRLF-
+    // terminated input.
     //
-    // See docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer" for the
-    // full explanation of why OneOf / NoneOf / Token('\n') all fail
-    // on CRLF input and the three-anti-patterns-to-avoid list.
+    // See docs/UnicodeGotchas.md § "CRLF Line Endings" for the full
+    // explanation of why OneOf / NoneOf / Token('\n') all fail on CRLF
+    // input and the three-anti-patterns-to-avoid list.
     private static readonly Rule LineBreak = FirstOf(
         Literal("\r\n"),
         OneOf(CrlfChars)
@@ -62,10 +61,9 @@ public static class PrologGrammar
     // matched body text.
     //
     // The line-comment body specifically needs the Rule-stopper form
-    // (not OneOf) because under GraphemeLexer a CRLF grapheme is
-    // multi-rune and trivially passes any NoneOf, which would
-    // greedily swallow the line-ending CRLF and leave the terminator
-    // nothing to match.
+    // (not OneOf) because a CRLF grapheme is multi-rune and trivially
+    // passes any NoneOf, which would greedily swallow the line-ending
+    // CRLF and leave the terminator nothing to match.
     public static readonly Rule Comment = FirstOf(
         AllOf(
             Token('%'),

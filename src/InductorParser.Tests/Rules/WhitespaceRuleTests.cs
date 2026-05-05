@@ -64,9 +64,9 @@ public class WhitespaceRuleTests
     [Test]
     public void InlineWhitespace_rejects_crlf()
     {
-        // Under the default GraphemeLexer, CRLF is one grapheme. The
-        // single-rune InlineWhitespace check sees a CRLF token and
-        // rejects it because it isn't in TokenSet.InlineWhitespace.
+        // The lexer reads CRLF as one grapheme. The single-rune
+        // InlineWhitespace check sees a CRLF token and rejects it
+        // because it isn't in TokenSet.InlineWhitespace.
         Assert.That(InlineWhitespace().Parse(CRLF).Success, Is.False);
     }
 
@@ -106,8 +106,9 @@ public class WhitespaceRuleTests
     public void AnyWhitespace_matches_crlf_as_one_unit()
     {
         // EndOfLine() comes first inside the FirstOf, so CRLF is
-        // consumed as one terminator under the default GraphemeLexer
-        // rather than only matching the CR via the single-rune side.
+        // consumed as one terminator (the lexer treats CRLF as one
+        // grapheme) rather than only matching the CR via the single-
+        // rune side.
         Assert.That(AnyWhitespace().Parse(CRLF).Success, Is.True);
     }
 

@@ -9,7 +9,7 @@ namespace InductorParser.Tests;
 
 // Tests for Rules.WithinToken, the combinator that runs an inner rule
 // against the runes inside one outer token. Used by Identifier() to handle
-// Devanagari / Thai / Arabic-with-vowels under the default grapheme lexer,
+// Devanagari / Thai / Arabic-with-vowels under the grapheme-cluster lexer,
 // but usable by any grammar that needs to validate grapheme-internal
 // structure (emoji sequences, Hangul jamo clusters, ASCII strictness).
 [TestFixture]
@@ -133,13 +133,13 @@ public class WithinTokenRuleTests
     // exists. Devanagari, Thai, and Arabic-with-vowels all produce
     // multi-rune graphemes unconditionally (NFC doesn't compose them),
     // which is the case the Latin-decomposed tests above only simulate
-    // via NormalizeInput=null. These tests run under the default
-    // grapheme lexer and the default NFC normalization.
+    // via NormalizeInput=null. These tests run under the lexer's
+    // grapheme-cluster tokenization and the default NFC normalization.
 
     [Test]
     public void Devanagari_consonant_plus_vowel_sign_grapheme_matches()
     {
-        // "हि" is one grapheme under the grapheme lexer, two runes:
+        // "हि" is one grapheme, two runes:
         // U+0939 DEVANAGARI LETTER HA (Lo) + U+093F DEVANAGARI VOWEL SIGN I (Mc).
         // The inner rule walks both runes.
         var rule = WithinToken(AllOf(

@@ -78,24 +78,24 @@ public class XidIdentifierTests
     }
 
     [Test]
-    public void Devanagari_identifier_with_combining_marks_matches_under_default_grapheme_lexer()
+    public void Devanagari_identifier_with_combining_marks_matches()
     {
         // "हिन्दी" is six runes: ह (Lo), ि (Mc), न (Lo), ् (Mn), द (Lo), ी (Mc).
-        // Under the grapheme lexer these compose into three multi-rune
-        // graphemes. Identifier uses WithinToken internally, which
-        // walks each grapheme's runes and checks them against the
-        // identifier rules, so the whole word matches.
+        // The lexer composes these into three multi-rune graphemes.
+        // Identifier uses WithinToken internally, which walks each
+        // grapheme's runes and checks them against the identifier rules,
+        // so the whole word matches.
         var result = Identifier().Parse("हिन्दी");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("हिन्दी"));
     }
 
     [Test]
-    public void Thai_identifier_with_sara_am_matches_under_default_grapheme_lexer()
+    public void Thai_identifier_with_sara_am_matches()
     {
-        // "กำ" is ก (Lo) + ำ (Mc SARA AM), which the grapheme lexer
-        // bundles into a single two-rune grapheme. Identifier accepts
-        // ก as Start and ำ as Continue inside the same grapheme.
+        // "กำ" is ก (Lo) + ำ (Mc SARA AM), which the lexer bundles into
+        // a single two-rune grapheme. Identifier accepts ก as Start and
+        // ำ as Continue inside the same grapheme.
         var result = Identifier().Parse("กำ");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("กำ"));
