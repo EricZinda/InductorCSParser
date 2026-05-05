@@ -112,7 +112,17 @@ internal sealed class LiteralRule : Rule
         // takes two chars in the C# string (emoji, many CJK). Reading
         // _expected[0] directly would return only the first char, which
         // isn't a usable rune on its own.
-        Lexer.TryPeekRune(_expected, 0, out int first, out _);
+        if (!Lexer.TryPeekRune(_expected, 0, out int first, out _))
+        {
+            // The literal starts with a lone surrogate (or other non-decodable
+            // first char). TokenSet only holds valid scalars, so there's no
+            // single-rune set to advertise. Fall back to Universe — the parser
+            // skips the first-rune-lookahead shortcut and runs the per-token
+            // compare directly, which works fine for surrogate-half literals
+            // under Compile(null) (the documented WTF-8 / unpaired-surrogate
+            // round-tripping case).
+            return new RuleStartRequirements(TokenSet.Universe, Advance.Always);
+        }
         return new RuleStartRequirements(TokenSet.Single(first), Advance.Always);
     }
 }

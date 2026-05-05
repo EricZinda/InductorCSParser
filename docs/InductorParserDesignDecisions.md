@@ -8,6 +8,7 @@ Primers:
 
 - [Primer 1: Getting Started](primer1.md): build a grammar that consumes everything up to a stop sequence, parse some input, look at the tree.
 - [Primer 2: Walking the Tree](primer2.md): a tiny INI-style config grammar with typed values, a tree walker, and Unicode-aware error positions.
+- [Primer 3: Unicode Edge Cases](Primer3.md): how the parser handles Unicode normalization, ill-formed input, unexpected characters, and security-related concerns.
 - [Tutorial: Peek](tutorial-peek.md): a password-validation regex translated into the parser, using `Peek` for non-consuming lookahead.
 
 Related docs:
