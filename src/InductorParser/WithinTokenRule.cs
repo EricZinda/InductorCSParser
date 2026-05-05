@@ -82,21 +82,29 @@ internal sealed class WithinTokenRule : Rule
 
         if (innerResult == null && innerOutputs.Count == 0)
         {
-            // Inner rule failed. Sub-lexer positions are already absolute
-            // in the outer input, so propagate them directly.
-            int failurePos = Math.Max(subLexer.DeepestFailure, subLexer.Position);
-            TraceFailure(outerLexer, $"inner rule failed at token rune offset {failurePos - token.Offset}");
-            outerLexer.RecordFailure(failurePos, subLexer.DeepestFailureMessage ?? ErrorMessage);
+            // Inner rule failed. Sub-lexer positions are absolute in
+            // the outer input but live at rune boundaries inside the
+            // outer token, which can sit MID-grapheme-cluster from the
+            // outer view. Snap the recorded failure back to the outer
+            // cluster's start so the parser-wide "errors land at
+            // cluster boundaries" invariant holds. Trace can still
+            // cite the rune-level offset for debug.
+            int innerFailurePos = Math.Max(subLexer.DeepestFailure, subLexer.Position);
+            TraceFailure(outerLexer, $"inner rule failed at token rune offset {innerFailurePos - token.Offset}");
+            outerLexer.RecordFailure(outerTransaction.StartPosition, subLexer.DeepestFailureMessage ?? ErrorMessage);
             return null;
         }
 
         if (!subLexer.IsEof)
         {
             // Inner rule matched a prefix of the token but not all of
-            // it. A token is atomic, so partial matches don't count.
+            // it. A token is atomic from the outer view, so the failure
+            // belongs at the outer cluster's start, not at the rune
+            // offset where the inner rule stopped reading (which is
+            // mid-cluster from outside).
             int consumed = subLexer.Position - token.Offset;
             TraceFailure(outerLexer, $"inner rule consumed only {consumed}/{token.Length} of the token");
-            outerLexer.RecordFailure(subLexer.Position, ErrorMessage);
+            outerLexer.RecordFailure(outerTransaction.StartPosition, ErrorMessage);
             return null;
         }
 

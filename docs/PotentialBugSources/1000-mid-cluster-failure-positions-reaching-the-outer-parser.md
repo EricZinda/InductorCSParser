@@ -1,0 +1,5 @@
+- Mid-cluster failure positions reaching the outer parser
+    - Related to "Char-unit rendering in user-facing strings": even when rendering uses the right primitive, the POSITION fed into it can be mid-cluster if a sub-lexer in rune-per-token mode (only `WithinTokenRule` today) hands its inner rune offset straight to `outerLexer.RecordFailure`.
+    - The outer parser treats the whole cluster as one token, so the recorded position needs to snap back to the outer cluster's start before it leaves the rule. `WithinTokenRule` had this shape; see backlog p3kt.
+    - When reviewing a rule that drives a sub-lexer (or otherwise records a position computed in finer-than-grapheme units), ask: would `StringInfo.GetNextTextElement(input, pos)` return a "defective" cluster fragment at this `pos`? If yes, the outer-view invariant is broken and `ErrorTokenIndex` / `{character}` will lie about what the user typed.
+    - The fix is to record at `transaction.StartPosition` (the outer cluster's start) rather than the sub-lexer's rune position. Trace messages can keep the rune-level offset for debugging since they're inner-token relative.
