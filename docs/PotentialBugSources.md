@@ -1,223 +1,26 @@
-# Potential bug sources
+- Local violations of the grapheme invariant
+    - The parser-wide invariant is that one token equals one user-perceived character (one UAX #29 grapheme cluster), and rules compare tokens as units. Any rule that drops to the rune level (peeks a single rune, compares against a fixed rune, advances by rune length) is locally answering a different question than the rest of the parser.
+    - ScanUntilRule had this shape and it produced two divergences from the rest of the parser at once: a stopper of `'"'` matching a `'"<combining-mark>'` cluster (where `OneOf("\"")` would refuse it) and a single-rune escape-start matching when the start rune was glued to extending characters (where `Token('\\')` would refuse it). See backlog 7scu.
+    - When reviewing a rule, ask: does this rule ever look at a partial cluster? If yes, it's potentially out of step with `OneOf`, `Token`, etc. on the same input.
 
-Cumulative log of bug-hunting sweeps through the parser source. The point
-is to keep future hunts from re-walking ground a previous one already
-covered. When a sweep finds something, the bug-and-fix detail goes into
-its own backlog item; this doc just records "we already looked here, on
-this date, for this kind of issue."
+- Char-unit rendering in user-facing strings
+    - Anywhere the parser shows the user a "character" of input (the `{character}` placeholder in default error messages, trace lines that quote the current token, debug renderers), the unit shown should match what the parser reads as one token: a UAX #29 grapheme cluster.
+    - Indexing the input with `input[pos]` returns one UTF-16 code unit, which is a lone surrogate half for any supplementary-plane rune (every emoji past the BMP, math alphanumerics like `𝐀`) and only the first rune of a multi-rune cluster under `Compile(null)` (`é` decomposed, CRLF, ZWJ emoji sequences). The rendered message lies about what the parser actually saw.
+    - `BuildErrorMessage` had this shape; see backlog c9p3.
+    - The fix is to render via `StringInfo.GetNextTextElement(input, pos)` (or any other path that returns the full token), matching the lexer.
 
-## Patterns to watch for
+- Recursive vs. state-machine engine divergence
+    - The recursive evaluator and the state-machine evaluator should produce the same ParseResult on the same input. A divergence is almost always a bug in one of them.
+    - Cross-check rule implementations in `src/InductorParser/*Rule.cs` against their lowered counterparts in `ExperimentalSrc/InductorParser/StateMachine/Stepper.cs` and `Lowerer.cs` when looking for bugs.
+    - The cross-engine compare fixtures in `ExperimentalSrc/InductorParser.Tests/StateMachine*CompareTests.cs` are the right place to add a regression test for any new divergence found.
 
-The following recurring shapes have caused real bugs. New code in the
-named areas should be reviewed for these specifically; future hunts
-should prefer them when picking where to dig next.
+- Byte-level fast paths that bypass grapheme tokenization
+    - Optimization paths that use `string.IndexOfAny`, `string.IndexOf`, or other UTF-16-code-unit searches to fast-forward over input they don't care about (`Lexer.AdvanceUntilRuneIn`, `Lexer.AdvanceUntilLiteralCandidateIn`, `LiteralScannerCandidate.IndexIn`) can land at offsets that aren't grapheme-cluster boundaries the rest of the parser would visit.
+    - The practical case is the LF inside a CRLF cluster (UAX #29 GB3 keeps CR LF in one cluster, so the LF is at a non-token-boundary offset), but ZWJ inside emoji ZWJ sequences and combining marks attached to earlier bases have the same shape.
+    - When reviewing a fast-path that uses one of these searches, ask: can the candidate char ever appear as the second-or-later rune of a multi-rune cluster? If yes, the landing position has to be re-validated before the lexer's `_position` is set to it.
+    - See the 2026-05-04 "Scanner-skip fast path" entry in `BugSearchLog.md` for the CRLF / combining-mark / ZWJ / VS cases and the `Lexer.IsAtMidGraphemeCluster` post-validation it added.
 
-- **Local violations of the grapheme invariant.** The parser-wide
-  invariant is that one token equals one user-perceived character (one
-  UAX #29 grapheme cluster), and rules compare tokens as units. Any
-  rule that drops to the rune level (peeks a single rune, compares
-  against a fixed rune, advances by rune length) is locally answering
-  a different question than the rest of the parser. ScanUntilRule had
-  this shape and it produced two divergences from the rest of the
-  parser at once: a stopper of `'"'` matching a `'"<combining-mark>'`
-  cluster (where `OneOf("\"")` would refuse it) and a single-rune
-  escape-start matching when the start rune was glued to extending
-  characters (where `Token('\\')` would refuse it). See backlog 7scu.
-  When reviewing a rule, ask: does this rule ever look at a partial
-  cluster? If yes, it's potentially out of step with `OneOf`,
-  `Token`, etc. on the same input.
-- **Char-unit rendering in user-facing strings.** Anywhere the parser
-  shows the user a "character" of input (the `{character}` placeholder
-  in default error messages, trace lines that quote the current token,
-  debug renderers), the unit shown should match what the parser reads
-  as one token: a UAX #29 grapheme cluster. Indexing the input with
-  `input[pos]` returns one UTF-16 code unit, which is a lone surrogate
-  half for any supplementary-plane rune (every emoji past the BMP, math
-  alphanumerics like `𝐀`) and only the first rune of a multi-rune
-  cluster under `Compile(null)` (`é` decomposed, CRLF, ZWJ emoji
-  sequences). The rendered message lies about what the parser actually
-  saw. `BuildErrorMessage` had this shape; see backlog c9p3. The fix
-  is to render via `StringInfo.GetNextTextElement(input, pos)` (or any
-  other path that returns the full token), matching the lexer.
-- **Recursive vs. state-machine engine divergence.** The recursive
-  evaluator and the state-machine evaluator should produce the same
-  ParseResult on the same input. A divergence is almost always a bug
-  in one of them. Cross-check rule implementations in
-  `src/InductorParser/*Rule.cs` against their lowered counterparts in
-  `ExperimentalSrc/InductorParser/StateMachine/Stepper.cs` and
-  `Lowerer.cs` when looking for bugs. The cross-engine compare
-  fixtures in `ExperimentalSrc/InductorParser.Tests/StateMachine*CompareTests.cs`
-  are the right place to add a regression test for any new divergence
-  found.
-- **Byte-level fast paths that bypass grapheme tokenization.**
-  Optimization paths that use `string.IndexOfAny`, `string.IndexOf`,
-  or other UTF-16-code-unit searches to fast-forward over input they
-  don't care about (`Lexer.AdvanceUntilRuneIn`,
-  `Lexer.AdvanceUntilLiteralCandidateIn`,
-  `LiteralScannerCandidate.IndexIn`) can land at offsets that aren't
-  grapheme-cluster boundaries the rest of the parser would visit. The
-  practical case is the LF inside a CRLF cluster (UAX #29 GB3 keeps
-  CR LF in one cluster, so the LF is at a non-token-boundary offset),
-  but ZWJ inside emoji ZWJ sequences and combining marks attached to
-  earlier bases have the same shape. When reviewing a fast-path that
-  uses one of these searches, ask: can the candidate char ever appear
-  as the second-or-later rune of a multi-rune cluster? If yes, the
-  landing position has to be re-validated before the lexer's
-  `_position` is set to it. See the 2026-05-04 entry below for the
-  CRLF / combining-mark / ZWJ / VS cases and the
-  `Lexer.IsAtMidGraphemeCluster` post-validation it added.
-- **Discarding `Lexer.TryPeekRune`'s bool return when the rune feeds
-  a TokenSet factory.** `TryPeekRune` returns `false` and writes
-  `runeValue = -1` for lone surrogates; the validating `TokenSet.Single(int)`
-  and friends reject `-1` with `ArgumentOutOfRangeException`. A rule that
-  ignores the bool and pipes the out parameter straight into a TokenSet
-  factory (LiteralRule and LiteralIgnoreAsciiCaseRule's ComputeRuleStart
-  had this shape, see backlog pj8x) blows up from inside the factory
-  with a "codepoint -1" error that doesn't explain the real cause.
-  When reviewing a rule that calls TryPeekRune, ask: does the code use
-  the bool return value? If not, and the runeValue feeds anything that
-  validates scalar values, fall back to `TokenSet.Universe` /
-  Advance.Always (the GraphemeRule pattern) so surrogate-prefixed text
-  flows through under Compile(null) for WTF-8 round-tripping.
-
-## Search log
-
-Append-only. Newest entry on top. Don't rewrite past entries; the log
-is a record of who-checked-what-when, not a current snapshot.
-
-### 2026-05-04: Scanner-skip fast path (BetweenInclusiveRule + Lexer)
-Reviewed: `BetweenInclusiveRule.cs` (the `TryCreateScannerSkip` /
-`ScannerSkip.Advance` path), `Lexer.AdvanceUntilRuneIn`,
-`Lexer.AdvanceUntilLiteralCandidateIn`, `Lexer.AdvanceWhileRuneIn`,
-`Lexer.AdvanceWhileTokenIn`, `LiteralScannerCandidate.IndexIn` /
-`MatchesAt` / `CanStartWith`, `TokenSet.TryGetBmpChars`, and the existing
-scanner-shape tests in `BetweenInclusiveRuleTests.cs`. Cross-checked the
-SM-side caller `ExperimentalSrc/InductorParser/StateMachine/Stepper.cs`
-line 170 (it forwards to the same `AdvanceUntilRuneIn` so the
-recursive-side fix carries over). Categories: byte-level-search vs
-grapheme-token boundary mismatches, comments claiming ASCII-tokens-of-
-themselves properties, optimization equivalence with the slow path,
-multi-rune cluster handling at the IndexOfAny landing, recursive-vs-SM
-divergence through a shared lexer helper. Found and fixed: the
-`bmpCandidates` fast path in `AdvanceUntilRuneIn` was landing on the
-LF inside a CRLF cluster when `\n` was in the candidate set, after
-which the inner `FirstOf(OneOf("\n"), AnyToken.Delete)` read a fresh
-one-rune `\n` token from a non-token-boundary offset and `OneOf`
-mistakenly matched it. The slow path walks one grapheme at a time and
-correctly rejects the CRLF cluster as a multi-rune token. The fix adds an `IsAtMidGraphemeCluster`
-post-validation that walks one cluster forward from the codepoint
-before the IndexOf landing (via `StringInfo.GetNextTextElement`) and
-returns true when that cluster spans the landing offset. In
-`AdvanceUntilRuneIn` the IndexOfAny is now in a loop that re-enters
-when it lands mid-cluster; in both `AdvanceUntilLiteralCandidateIn`
-paths (single-literal cached path, BMP-firstrunes IndexOfAny path) the
-`AnyLiteralMatchesAt` confirmation is gated on the same check. The
-generalized check covers CRLF, base+combining-mark (e.g. `é`),
-emoji ZWJ sequences (e.g. man+ZWJ+woman), and base+variation-selector
-(e.g. `#️`) within a two-codepoint span. Regression tests for
-each cluster shape, plus a "still finds LF after CRLF" path and the
-two `AdvanceUntilLiteralCandidateIn` paths, landed in
-`BetweenInclusiveRuleTests.cs` next to the other scanner-shape tests.
-
-### 2026-05-04: trace-output char-unit follow-up
-Re-walked the trace-emission paths after the previous sweep added the
-"Char-unit rendering in user-facing strings" pattern bullet, looking
-for the same shape in trace lines this time. Greppped
-`src/InductorParser/` for `lexer.Input[`, `_input[`, and other
-single-char indexing in interpolated trace strings. Reviewed the
-trace call sites in `EofRule.cs`, `PeekRule.cs`, `NotRule.cs`,
-`LateBoundRule.cs`, `GraphemeRule.cs`, `LiteralRule.cs`,
-`LiteralIgnoreAsciiCaseRule.cs`, `OneOfRule.cs`, `NoneOfRule.cs`,
-`AnyTokenRule.cs`, plus the `Lexer.Read` / `AdvanceWhile*` traces
-inside `Lexing/Lexer.cs`. Found and fixed: `EofRule`'s failure
-trace read `lexer.Input[lexer.Position]`, one UTF-16 code unit. On
-a supplementary-plane unconsumed token (every emoji past the BMP,
-math alphanumerics like `𝐀`) the trace showed a lone high
-surrogate; under `Compile(null)` a multi-rune cluster (`e` +
-combining acute, CRLF, ZWJ emoji) showed only the first rune.
-Backlog h2rx has the write-up. The fix swaps in
-`lexer.Input.Substring(lexer.Position,
-lexer.PeekTokenLength(lexer.Position))` to render the same full
-grapheme cluster every other rule's trace already produces via
-`Substring(token.Offset, token.Length)` after a `Read`. Only one
-instance found across the parser sources; the rest of the trace
-output was already grapheme-aware via the read-then-Substring
-pattern.
-
-### 2026-05-04: error-message rendering + position math sweep
-Reviewed: `Rule.cs` (BuildErrorMessage / FormatTemplate / PositionPlaceholders),
-`ParseOptions.cs`, `ParseResult.cs`, `SyntaxTree/SourcePosition.cs`,
-`SyntaxTree/SourcePositionConverter.cs`, `SyntaxTree/Symbol.cs`,
-`SyntaxTree/SourceRange.cs`, `SyntaxTree/SymbolExtensions.cs`,
-`SyntaxTree/SymbolId.cs`, `SyntaxTree/SymbolRanges.cs`, `EofRule.cs`,
-`PeekRule.cs`, `NotRule.cs`, `AllOfRule.cs`, `FirstOfRule.cs`,
-`AnyTokenRule.cs`, `WithinTokenRule.cs`. Categories: char-vs-rune-vs-
-grapheme rendering in user-facing strings, EOF / end-position edge
-cases in line/column math, surrogate-pair handling in placeholder
-substitution, multi-rune grapheme cluster handling under
-`Compile(null)`, partial-output cleanup on inner-rule failure.
-Found and fixed: `BuildErrorMessage` rendered `{character}` via
-`parseInput[posInParseInput].ToString()`, which is one UTF-16 char
-even when the token the parser was looking at is several chars
-(supplementary-plane rune like `𝐀`, multi-rune cluster like `é`
-under `Compile(null)`). On a supplementary-plane fail the message
-showed a lone surrogate (rendered as `'�'`); on a decomposed-grapheme
-fail it showed only the first rune of the cluster. Backlog c9p3 has
-the write-up. The fix swaps the substitution to
-`StringInfo.GetNextTextElement(parseInput, posInParseInput)` so the
-substituted value is exactly the token the lexer would have read.
-Added two regression tests in `ErrorMessageTemplateTests.cs`. ASCII
-messages are unchanged (one char == one grapheme).
-
-### 2026-05-04: LiteralRule + LiteralIgnoreAsciiCaseRule ComputeRuleStart sweep
-Reviewed: `LiteralRule.cs`, `LiteralIgnoreAsciiCaseRule.cs`,
-`GraphemeRule.cs` (for comparison), `Lexer.TryPeekRune`. Cross-checked
-the FormC normalization-validation path in `Rule.Compile` and the
-`UnexpectedUnicodeTests.cs` Token(string) round-tripping comments to
-confirm a surrogate-prefixed literal under Compile(null) is a
-documented use case and not a "don't do that." Found and fixed:
-both `LiteralRule.ComputeRuleStart` and
-`LiteralIgnoreAsciiCaseRule.ComputeRuleStart` discarded the bool
-return from `Lexer.TryPeekRune` and passed the resulting
-`runeValue = -1` straight to `TokenSet.Single`, which validates the
-codepoint and threw `ArgumentOutOfRangeException` ("Actual value
-was -1.") out of Compile when the literal's first char was a lone
-surrogate. `GraphemeRule.ComputeRuleStart` already handled this
-correctly by checking the return value and falling back to
-`TokenSet.Universe`; the fix mirrors that. Backlog pj8x has the
-full write-up. Three regression tests in `UnexpectedUnicodeTests`
-lock in the surrogate-prefix Literal / LiteralIgnoreAsciiCase /
-low-surrogate-first-char shapes.
-
-### 2026-05-04: ScanUntilRule + Lexer + TokenSet sweep
-Reviewed: `ScanUntilRule.cs`, `ScanWhileRule.cs`, `OneOfRule.cs`,
-`NoneOfRule.cs`, `LiteralRule.cs`, `LiteralIgnoreAsciiCaseRule.cs`,
-`GraphemeRule.cs`, `AnyTokenRule.cs`, `NotRule.cs`,
-`BetweenInclusiveRule.cs`, `Rules.cs`, `TokenSet.cs`, `Lexing/Lexer.cs`,
-`Lexing/Token.cs`, `Lexing/NormalizedPositionMap.cs`,
-`WithinTokenRule.cs`, `Rule.cs` (partial). Cross-checked
-`ExperimentalSrc/InductorParser/StateMachine/Stepper.cs` for the
-ScanUntil opcode. Categories: rune-vs-token boundary mismatch,
-escape-handling fast paths, multi-rune grapheme cluster handling, lone
-surrogate handling, normalization-form interaction, recursive-vs-SM
-divergence. Found and fixed: `ScanUntilRule`'s loop was rune-scoped
-(stopper check via `_stopperSet.Contains(runeValue)`, escape-start
-check via `runeValue == _escapeStartRune`, early-exit on
-`!Lexer.TryPeekRune` for lone surrogates) while the rest of the
-parser is grapheme-scoped, so its answers diverged from `OneOf` /
-`Token` / `ZeroOrMore(NoneOf(...))` on inputs with multi-rune
-clusters whose first rune was a stopper or escape, and on inputs
-containing lone surrogates under `Compile(null)`. Backlog 7scu has
-the full write-up. The fix moved both checks to
-`_stopperSet.ContainsToken(...)` and `tokenLen == runeLen && runeValue
-== _escapeStartRune` so the rule asks the same question as `OneOf`
-on the same input, and dropped the lone-surrogate early-exit so
-unpaired surrogates flow through as one-char body tokens (the leaf
-Memory is a zero-copy slice, so they round-trip through `ToString()`
-verbatim). Also added the CRLF cluster as a multi-rune entry to
-`TokenSet.LineTerminators` and `TokenSet.Ascii.AnyWhitespace` (the
-comment claiming "CRLF can't live in a rune set" was stale since the
-multi-rune-TokenSet refactor) so line-oriented grammars don't lose
-CRLF coverage under the new grapheme-scoped checks. One followup
-deferred: parallel change in `Step_ScanUntilFast` (tracked in backlog
-9sm2, blocked on the ExperimentalSrc/ RuneSet → TokenSet rename).
+- Discarding `Lexer.TryPeekRune`'s bool return when the rune feeds a TokenSet factory
+    - `TryPeekRune` returns `false` and writes `runeValue = -1` for lone surrogates; the validating `TokenSet.Single(int)` and friends reject `-1` with `ArgumentOutOfRangeException`.
+    - A rule that ignores the bool and pipes the out parameter straight into a TokenSet factory (`LiteralRule` and `LiteralIgnoreAsciiCaseRule`'s `ComputeRuleStart` had this shape, see backlog pj8x) blows up from inside the factory with a "codepoint -1" error that doesn't explain the real cause.
+    - When reviewing a rule that calls TryPeekRune, ask: does the code use the bool return value? If not, and the runeValue feeds anything that validates scalar values, fall back to `TokenSet.Universe` / Advance.Always (the GraphemeRule pattern) so surrogate-prefixed text flows through under Compile(null) for WTF-8 round-tripping.
