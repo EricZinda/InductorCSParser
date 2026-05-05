@@ -95,6 +95,46 @@ public class AllowTrailingInputTests
     }
 
     [Test]
+    public void Trailing_input_failure_reports_position_of_first_unconsumed_char()
+    {
+        // FirstOf tries Literal("hello") which matches four chars before
+        // failing on 'z' at offset 4, then falls back to Token('h') and
+        // succeeds at offset 0 (consuming one char). Parsing stops at
+        // offset 1 with trailing "ellz" unconsumed. The doc contract
+        // (InductorParserDesignDecisions.md "Trailing Input Is a Failure")
+        // is that ErrorCharIndex is the first leftover character (offset
+        // 1, the 'e'), not a position from a rolled-back alternative
+        // (offset 4, the 'z' that the abandoned Literal hit and that
+        // lexer.DeepestFailure still records).
+        var rule = FirstOf(Literal("hello"), Token('h'));
+        var result = rule.Parse("hellz");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(1),
+            "trailing input begins at offset 1; the 'z' at offset 4 belongs to a rolled-back alternative");
+        Assert.That(result.ErrorMessage,
+            Is.EqualTo("Parse failed at offset 1: unexpected 'e'."));
+    }
+
+    [Test]
+    public void Trailing_input_failure_does_not_surface_message_from_rolled_back_alternative()
+    {
+        // The rolled-back Literal here has a WithError attached. The
+        // trailing-input failure shouldn't surface that message: the
+        // rule that owned it isn't on the success path. The standard
+        // PositionalErrorTemplate should describe the trailing tail.
+        var rule = FirstOf(
+            Literal("hello").WithError("Expected the word 'hello'"),
+            Token('h'));
+        var result = rule.Parse("hellz");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage,
+            Is.EqualTo("Parse failed at offset 1: unexpected 'e'."),
+            "WithError on a rolled-back alternative shouldn't surface as the trailing-input message");
+    }
+
+    [Test]
     public void AllowTrailingInput_does_not_affect_inner_failure_position()
     {
         // The rule itself fails part-way through, and AllowTrailingInput

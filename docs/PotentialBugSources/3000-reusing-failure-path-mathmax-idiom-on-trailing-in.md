@@ -1,0 +1,5 @@
+- Reusing the failure-path Math.Max idiom on a SUCCESS-then-trailing-input path
+    - `Rule.ParseRecursive` has three "report failure" branches: a parse-failed branch, a budget-aborted branch, and a trailing-input-after-success branch. The first two correctly use `Math.Max(lexer.DeepestFailure, lexer.Position)` because rollback put `lexer.Position` at 0 and `DeepestFailure` is the only meaningful "how far did we get" hint.
+    - The third doesn't have that property: the parse SUCCEEDED, `lexer.Position` is the position of the first unconsumed char, and `DeepestFailure` is from a sibling alternative the parser tried and discarded via rollback. Copy-pasting the Math.Max idiom into the trailing-input branch surfaces the rolled-back position and (worse) the rolled-back rule's `WithError` message, both contradicting the documented contract that `input[ErrorCharIndex]` is the character that didn't match.
+    - See backlog h4tn.
+    - When reviewing a position-reporting branch, ask: which of `lexer.Position` and `DeepestFailure` is the meaningful one in this control-flow state? They aren't interchangeable.
