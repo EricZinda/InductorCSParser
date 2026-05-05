@@ -1,0 +1,4 @@
+- Discarding `Lexer.TryPeekRune`'s bool return when the rune feeds a TokenSet factory
+    - `TryPeekRune` returns `false` and writes `runeValue = -1` for lone surrogates; the validating `TokenSet.Single(int)` and friends reject `-1` with `ArgumentOutOfRangeException`.
+    - A rule that ignores the bool and pipes the out parameter straight into a TokenSet factory (`LiteralRule` and `LiteralIgnoreAsciiCaseRule`'s `ComputeRuleStart` had this shape, see backlog pj8x) blows up from inside the factory with a "codepoint -1" error that doesn't explain the real cause.
+    - When reviewing a rule that calls TryPeekRune, ask: does the code use the bool return value? If not, and the runeValue feeds anything that validates scalar values, fall back to `TokenSet.Universe` / Advance.Always (the GraphemeRule pattern) so surrogate-prefixed text flows through under Compile(null) for WTF-8 round-tripping.

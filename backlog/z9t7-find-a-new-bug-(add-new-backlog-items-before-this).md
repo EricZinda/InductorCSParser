@@ -4,7 +4,7 @@ This is a real backlog item, if you reach it, do it!
 
 This item should always be the last item in the backlog. Add new backlog items before it, not after.
 
-Before you start, read [docs/BugSearchLog.md](../docs/BugSearchLog.md) for the search log of which files and categories prior hunts have already swept, and [docs/PotentialBugSources.md](../docs/PotentialBugSources.md) for the recurring patterns those hunts surfaced. Don't re-tread the same files for the same patterns unless you have a specific reason (e.g. the code has changed since, or you spot something the prior sweep missed).
+Before you start, read [docs/BugSearchLog.backlog](../docs/BugSearchLog.backlog) for the search log of which files and categories prior hunts have already swept, and [docs/PotentialBugSources.backlog](../docs/PotentialBugSources.backlog) for the recurring patterns those hunts surfaced. Don't re-tread the same files for the same patterns unless you have a specific reason (e.g. the code has changed since, or you spot something the prior sweep missed).
 
 Read through the source files in `src/` and find one real bug that isn't already covered by an existing backlog item. Be creative with what you are looking for but focus on things users will actually do. If you run out of ideas look for things like: off-by-one errors, edge cases, silent data loss, inconsistent or unexpected behavior, missing edge case handling, incorrect assumptions about input, claims about unicode behavior that aren't backed by a solid citation or are wrong.
 
@@ -26,8 +26,8 @@ The filename should follow the `NNN-slug.md` pattern where NNN is the next avail
 
 Two updates, one for each doc:
 
-1. **Search log entry (required)** — append a terse dated entry to the Search log in [docs/BugSearchLog.md](../docs/BugSearchLog.md) listing the files you reviewed and the categories you checked, plus a one-line note on what (if anything) you fixed. This is the cumulative record that prevents future hunts from repeating your work, so keep it compact. Do not rewrite past entries.
-2. **Pattern documentation (if applicable)** — if the bug you found points to a broader category of issues (like "string truncation can split surrogate pairs"), add a new item to [docs/PotentialBugSources.md](../docs/PotentialBugSources.md) describing the pattern. Follow the backlog-style format the other entries use (top-level `- Title`, indented sub-bullets for body sections).
+1. **Search log entry (required)** — append a terse dated entry to [docs/BugSearchLog.backlog](../docs/BugSearchLog.backlog) listing the files you reviewed and the categories you checked, plus a one-line note on what (if anything) you fixed. This is the cumulative record that prevents future hunts from repeating your work, so keep it compact. Do not rewrite past entries.
+2. **Pattern documentation (if applicable)** — if the bug you found points to a broader category of issues (like "string truncation can split surrogate pairs"), add a new item to [docs/PotentialBugSources.backlog](../docs/PotentialBugSources.backlog) describing the pattern.
 
 ## Important
 
