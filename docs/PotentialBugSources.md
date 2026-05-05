@@ -39,6 +39,7 @@ should prefer them when picking where to dig next.
   saw. `BuildErrorMessage` had this shape; see backlog c9p3. The fix
   is to render via `StringInfo.GetNextTextElement(input, pos)` (or any
   other path that returns the full token), matching the lexer.
+- **Reusing the failure-path Math.Max idiom on a SUCCESS-then-trailing-input path.** `Rule.ParseRecursive` has three "report failure" branches: a parse-failed branch, a budget-aborted branch, and a trailing-input-after-success branch. The first two correctly use `Math.Max(lexer.DeepestFailure, lexer.Position)` because rollback put `lexer.Position` at 0 and `DeepestFailure` is the only meaningful "how far did we get" hint. The third doesn't have that property: the parse SUCCEEDED, `lexer.Position` is the position of the first unconsumed char, and `DeepestFailure` is from a sibling alternative the parser tried and discarded via rollback. Copy-pasting the Math.Max idiom into the trailing-input branch surfaces the rolled-back position and (worse) the rolled-back rule's `WithError` message, both contradicting the documented contract that `input[ErrorCharIndex]` is the character that didn't match. See backlog h4tn. When reviewing a position-reporting branch, ask: which of `lexer.Position` and `DeepestFailure` is the meaningful one in this control-flow state? They aren't interchangeable.
 - **Recursive vs. state-machine engine divergence.** The recursive
   evaluator and the state-machine evaluator should produce the same
   ParseResult on the same input. A divergence is almost always a bug
@@ -67,6 +68,40 @@ should prefer them when picking where to dig next.
 
 Append-only. Newest entry on top. Don't rewrite past entries; the log
 is a record of who-checked-what-when, not a current snapshot.
+
+### 2026-05-05: error-position handling sweep (trailing-input branch)
+Reviewed: `Rule.ParseRecursive`'s three failure-reporting branches
+(parse-failed / budget-aborted / trailing-input-after-success) and
+their interaction with `lexer.DeepestFailure` /
+`lexer.DeepestFailureMessage` / `lexer.Position`,
+`Lexing/NormalizedPositionMap.cs` (lockstep + per-grapheme walkers
+under FormC/FormD/FormKC/FormKD and the ReferenceEquals fast path),
+`SyntaxTree/SourcePositionConverter.cs` (token-index, line/column,
+CRLF and BMP-vs-supplementary handling), `Lexing/Lexer.cs`'s
+`RecordFailure` (the deepest-wins + equal-depth-claim logic).
+Categories: position-vs-message-mismatch in the failure-rendering
+branches, rolled-back-alternative leakage into trailing-input
+output, normalization-form position translation edge cases, line/
+column math on `\r\n` boundaries, defensive Math.Max idioms
+applied where their rationale doesn't hold. Found and fixed:
+the trailing-input branch of `ParseRecursive` reported
+`Math.Max(lexer.DeepestFailure, lexer.Position)` instead of just
+`lexer.Position`, so when a sibling alternative explored deeper
+than where the rule stopped consuming and rolled back, the
+trailing-input error pointed at a character the parser had already
+abandoned. Same branch passed `lexer.DeepestFailureMessage` as the
+custom error message, so a `WithError` on a rolled-back rule
+appeared as the trailing-input message even though that rule
+wasn't on the success path. Both contradicted the documented
+"first leftover character" / "input[ErrorCharIndex] is the
+character that didn't match" contract in
+`docs/InductorParserDesignDecisions.md`. The fix drops the Math.Max
+and passes `customMessage: null` in the trailing-input branch
+only; the parse-failed and budget-aborted branches still use the
+Math.Max idiom because their rationale (`lexer.Position` is 0 after
+rollback) still applies. Two regression tests in
+`AllowTrailingInputTests.cs` lock in the position fix and the
+message-leakage fix. Backlog h4tn had the write-up.
 
 ### 2026-05-04: error-message rendering + position math sweep
 Reviewed: `Rule.cs` (BuildErrorMessage / FormatTemplate / PositionPlaceholders),

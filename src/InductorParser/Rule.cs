@@ -663,9 +663,21 @@ public abstract class Rule
         }
         if (!options.AllowTrailingInput && !lexer.IsEof)
         {
-            var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
+            // Trailing-input branch: the parse SUCCEEDED but the rule
+            // didn't claim everything. Report at lexer.Position (the
+            // start of the unconsumed tail), not the high-water
+            // DeepestFailure that the two branches above use. The
+            // Math.Max idiom only fits when rollback put Position at
+            // 0; here Position is meaningful and DeepestFailure is
+            // from a sibling alternative the parser deliberately
+            // abandoned. Same reason for passing customMessage: null
+            // instead of DeepestFailureMessage. A WithError on a
+            // rolled-back rule isn't relevant to "you have leftover
+            // input"; let the standard PositionalErrorTemplate
+            // describe the trailing tail.
+            int pos = lexer.Position;
             int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, normalizeInput);
-            return ParseResult.Failed(failurePos, BuildErrorMessage(lexer.DeepestFailureMessage, pos, parseInput, failurePos, input, options), input, this);
+            return ParseResult.Failed(failurePos, BuildErrorMessage(customMessage: null, pos, parseInput, failurePos, input, options), input, this);
         }
         // Three success shapes:
         //   * Preserve root: result is its wrapper Symbol, rootList is empty.
