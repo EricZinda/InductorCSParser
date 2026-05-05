@@ -10,6 +10,7 @@ If you just want to learn how to use it, follow the primers:
 
 - [Primer 1: Getting Started](docs/primer1.md)
 - [Primer 2: Walking the Tree](docs/primer2.md)
+- [Primer 3: Unicode Edge Cases](docs/Primer3.md)
 - [Tutorial: Peek](docs/tutorial-peek.md)
 
 ## Designed for World Languages

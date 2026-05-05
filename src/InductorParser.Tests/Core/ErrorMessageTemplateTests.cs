@@ -208,6 +208,43 @@ public class ErrorMessageTemplateTests
     }
 
     [Test]
+    public void Character_placeholder_renders_full_supplementary_plane_rune()
+    {
+        // Bold-A (U+1D400) is one rune but two UTF-16 chars (a high
+        // surrogate at offset 0, a low surrogate at offset 1). The
+        // {character} placeholder is supposed to render the unexpected
+        // user-perceived character. If the substitution only takes
+        // parseInput[pos] it grabs a lone surrogate half, which is
+        // malformed Unicode that displays as garbage. The right answer
+        // is the full rune, "𝐀".
+        string boldA = char.ConvertFromUtf32(0x1D400);
+        var rule = Token('a');
+        var result = rule.Parse(boldA);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage,
+            Is.EqualTo($"Parse failed at offset 0: unexpected '{boldA}'."));
+    }
+
+    [Test]
+    public void Character_placeholder_renders_full_grapheme_cluster_under_no_normalization()
+    {
+        // Compile(null) keeps the input verbatim, so a decomposed
+        // grapheme like "e" + combining acute survives to the parser
+        // as two chars / one grapheme cluster. The user perceives one
+        // character ("é") and the {character} placeholder should match
+        // what they see, not the bare 'e' before the combining mark.
+        string eAcute = "é";
+        var rule = Token('a');
+        rule.Compile(null);
+        var result = rule.Parse(eAcute);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage,
+            Is.EqualTo($"Parse failed at offset 0: unexpected '{eAcute}'."));
+    }
+
+    [Test]
     public void Setting_template_to_null_throws_ArgumentNullException()
     {
         var options = new ParseOptions();

@@ -1,5 +1,5 @@
 using System;
-using System.Globalization;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Runtime.CompilerServices;
 using InductorParser.Tracing;
@@ -7,17 +7,8 @@ using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace InductorParser.Lexing;
 
-// One token per .NET text element (grapheme cluster). The implementation
-// uses System.Globalization.StringInfo.GetNextTextElement, which is UAX
-// #29 rev. 35 compliant on .NET 5 and later but uses pre-UAX29 custom
-// logic on .NET Framework, .NET Core 3.x, and the Mono runtimes Unity
-// ships. On those older runtimes some real grapheme clusters split
-// incorrectly (Thai "kam", multi-codepoint emoji like the woman-shrugging
-// sequence). Replacing this with a bundled UAX #29 implementation would
-// make the behavior uniform across runtimes. Until then, this class uses
-// the StringInfo implementation provided by the runtime it runs on.
-// Grammars that operate on ASCII-only or single-UTF-16-char content
-// (the Setting example, most config-file grammars) are unaffected.
+// One token per .NET text element (grapheme cluster). Cluster
+// boundaries come from the GraphemeClusterIndex on the input string
 //
 // One sub-lexer mode (selected by an internal constructor and used only
 // by WithinTokenRule) walks one rune per token instead of one full
@@ -25,7 +16,7 @@ namespace InductorParser.Lexing;
 // input string and lets the inner rule walk the runes inside one
 // token. The mode is one private bool checked once in Read; not a
 // virtual dispatch.
-public sealed class Lexer
+public sealed partial class Lexer
 {
     // _input is the one reference kept to the input string, which is immutable and shared by
     // every Token and ReadOnlySpan<char> the parser hands out. The GC sees this one string
@@ -56,6 +47,9 @@ public sealed class Lexer
     // creates a sub-lexer over the runes inside one outer token.
     // All public construction paths leave this false (token mode).
     private readonly bool _oneRunePerToken;
+
+    // Per-input cache of UAX #29 grapheme cluster boundaries.
+    private GraphemeClusterIndex _graphemeIndex;
 
     // Trace destination and verbosity. Null _traceSink means tracing is off.
     // When set, every rule, Lexer.Read, and deepest-failure update writes
@@ -118,28 +112,22 @@ public sealed class Lexer
     // else the default (false) keeps grapheme tokenization.
     internal Lexer(string input, int startPosition, int endPosition, TextWriter? traceSink, TraceLevel traceLevel, bool oneRunePerToken)
     {
-        _input = input ?? throw new ArgumentNullException(nameof(input));
-        if ((uint)startPosition > (uint)_input.Length)
+        if (input == null) throw new ArgumentNullException(nameof(input));
+        if ((uint)startPosition > (uint)input.Length)
             throw new ArgumentOutOfRangeException(nameof(startPosition), startPosition, "startPosition must be in [0, input.Length].");
-        if (endPosition < startPosition || endPosition > _input.Length)
+        if (endPosition < startPosition || endPosition > input.Length)
             throw new ArgumentOutOfRangeException(nameof(endPosition), endPosition, "endPosition must be in [startPosition, input.Length].");
-        _position = startPosition;
-        _endPosition = endPosition;
-        _traceSink = traceSink;
-        _traceLevel = traceLevel;
         _oneRunePerToken = oneRunePerToken;
+        BindInput(input, startPosition, endPosition, traceSink, traceLevel);
     }
 
     public string Input => _input;
     public int Position => _position;
     public int DeepestFailure => _deepestFailure;
 
-    // Direct write-access to the read cursor for the state-machine
-    // evaluator's backtrack-rollback path. Outside that path,
-    // BeginTransaction is the right mechanism. The state machine
-    // already tracks its own backtrack frames and restores positions
-    // explicitly on failure, so it doesn't need the Transaction
-    // wrapper's commit / rollback machinery.
+    // Direct write-access to the read cursor for alternative
+    // evaluator's backtrack-rollback path. For the recursive evaluator,
+    // BeginTransaction is the right mechanism. 
     internal void SetPositionUnchecked(int position) => _position = position;
 
     // Re-bind a previously-used Lexer to a new input string and reset
@@ -159,11 +147,7 @@ public sealed class Lexer
     internal void ResetForReuse(string input, TextWriter? traceSink, TraceLevel traceLevel)
     {
         if (input == null) throw new ArgumentNullException(nameof(input));
-        _input = input;
-        _position = 0;
-        _endPosition = input.Length;
-        _traceSink = traceSink;
-        _traceLevel = traceLevel;
+        BindInput(input, startPosition: 0, endPosition: input.Length, traceSink, traceLevel);
         _deepestFailure = 0;
         _deepestFailureMessage = null;
         _transactionDepth = 0;
@@ -175,6 +159,24 @@ public sealed class Lexer
         _stopwatch = null;
         _cancellation = null;
         PreserveAllSymbols = false;
+    }
+
+    // Set the per-input fields that both the constructor and
+    // ResetForReuse have to assign: input string, position bounds,
+    // trace destination, and the grapheme-cluster index for the new
+    // input. Doesn't touch _oneRunePerToken (readonly, set-once in the
+    // constructor) and doesn't reset per-parse counters / budgets
+    // (those are zero-initialized for fresh constructions, and
+    // ResetForReuse clears them itself).
+    [MemberNotNull(nameof(_input), nameof(_graphemeIndex))]
+    private void BindInput(string input, int startPosition, int endPosition, TextWriter? traceSink, TraceLevel traceLevel)
+    {
+        _input = input;
+        _position = startPosition;
+        _endPosition = endPosition;
+        _traceSink = traceSink;
+        _traceLevel = traceLevel;
+        _graphemeIndex = GraphemeClusterIndex.For(input);
     }
 
     // The error message associated with the deepest failure seen so far
@@ -195,7 +197,6 @@ public sealed class Lexer
     // TraceInterpolatedStringHandler for how the compiler rewrite
     // actually works.
     //
-
     // Cost when tracing is off (canonical reference for trace perf):
     // Note that lexer.Trace(...) still gets called even when tracing
     // is off. The TraceInterpolatedStringHandler argument only gates the
@@ -271,8 +272,7 @@ public sealed class Lexer
             }
             return 1;
         }
-        string element = StringInfo.GetNextTextElement(_input, startOffset);
-        return element.Length;
+        return _graphemeIndex.LengthAt(startOffset);
     }
 
     // "How long is the next token at this position?" without
@@ -288,6 +288,16 @@ public sealed class Lexer
     // false if the char at `pos` is a stray surrogate without its
     // paired half (malformed UTF-16 that doesn't represent any real
     // Unicode character).
+    //
+    // `pos` must be a valid index into `input`
+    // (0 <= pos < input.Length). Calling at end-of-input throws
+    // IndexOutOfRangeException, by design: the false return is
+    // reserved for "stray surrogate" so callers don't have to
+    // distinguish "EOF" from "malformed input" off one boolean.
+    // Callers gate this call with their own EOF check (most live
+    // inside `while (_position < _endPosition)` loops; rules that
+    // peek at the lookahead position guard with `pos < input.Length`
+    // explicitly).
     //
     // Always one rune at a time. Rules that need to walk rune-by-rune
     // (like the WithinToken sub-lexer) get consistent semantics
@@ -356,252 +366,6 @@ public sealed class Lexer
         _position += len;
         Trace(TraceLevel.Diagnostic, "Lexer.Read", TraceOutcome.Info, $"'{_input.Substring(t.Offset, t.Length)}', Consumed: {_position}");
         return t;
-    }
-
-    internal void AdvanceUntilRuneIn(TokenSet candidates, char[]? bmpCandidates)
-    {
-        if (IsEof) return;
-
-        // Under grapheme tokenization, ASCII chars are tokens of
-        // themselves: every char in the BMP that fits in one byte is
-        // one grapheme cluster on its own. So an IndexOfAny over an
-        // ASCII candidate set is safe: any hit is guaranteed to land
-        // on a token boundary.
-        if (bmpCandidates is { Length: > 0 })
-        {
-            int found = _input.IndexOfAny(bmpCandidates, _position, _endPosition - _position);
-            _position = found >= 0 ? found : _endPosition;
-            return;
-        }
-
-        while (_position < _endPosition)
-        {
-            if (TryPeekRune(_input, _position, out int runeValue, out _) && candidates.Contains(runeValue))
-                return;
-
-            int len = NextTokenLength(_position);
-            if (len <= 0) len = 1;
-            _position = Math.Min(_position + len, _endPosition);
-        }
-    }
-
-    internal int AdvanceWhileRuneIn(TokenSet set)
-    {
-        int count = 0;
-
-        // OneOf semantics: a character-class rule matches only when
-        // the whole token is exactly one rune in the set. A multi-rune
-        // grapheme whose first rune happens to be in the set isn't
-        // part of the run. Under the WithinToken sub-lexer mode
-        // every token is one rune, so the tokenLength == runeLen
-        // guard is trivially satisfied; the same loop handles both.
-        while (_position < _endPosition)
-        {
-            int pos = _position;
-            int tokenLength = NextTokenLength(pos);
-            if (tokenLength <= 0)
-                break;
-            if (!TryPeekRune(_input, pos, out int runeValue, out int runeLen)
-                || pos + tokenLength > _endPosition
-                || tokenLength != runeLen
-                || !set.Contains(runeValue))
-            {
-                break;
-            }
-
-            _position = pos + tokenLength;
-            count++;
-            Trace(TraceLevel.Diagnostic, "Lexer.AdvanceWhileRuneIn", TraceOutcome.Info,
-                $"'{_input.Substring(pos, tokenLength)}', Consumed: {_position}");
-        }
-        return count;
-    }
-
-    // Token-aware variant of AdvanceWhileRuneIn. Used when the
-    // TokenSet has multi-rune entries: a multi-rune token can be a
-    // member of the set, so the loop has to pull a full token per
-    // iteration and check it against both halves of the set. Slower
-    // per character than AdvanceWhileRuneIn (we pay per-token
-    // overhead instead of inline rune decode), but only fires when the
-    // grammar actually contains multi-rune set entries. Rune-only sets
-    // continue to use AdvanceWhileRuneIn via the rule's dispatch.
-    internal int AdvanceWhileTokenIn(TokenSet set)
-    {
-        int count = 0;
-        while (_position < _endPosition)
-        {
-            int pos = _position;
-            int tokenLength = NextTokenLength(pos);
-            if (tokenLength <= 0 || pos + tokenLength > _endPosition)
-                break;
-
-            // Try the rune fast path first. If the token is a single
-            // rune we don't have to hash a span against the multi-rune
-            // array. Multi-rune tokens fall through to the grapheme
-            // membership check.
-            bool inSet;
-            if (TryPeekRune(_input, pos, out int runeValue, out int runeLen)
-                && tokenLength == runeLen)
-            {
-                inSet = set.Contains(runeValue);
-            }
-            else
-            {
-                inSet = set.HasMultiRuneGraphemes
-                    && set.ContainsToken(_input.AsSpan(pos, tokenLength));
-            }
-            if (!inSet) break;
-
-            _position = pos + tokenLength;
-            count++;
-            Trace(TraceLevel.Diagnostic, "Lexer.AdvanceWhileTokenIn", TraceOutcome.Info,
-                $"'{_input.Substring(pos, tokenLength)}', Consumed: {_position}");
-        }
-        return count;
-    }
-
-    internal void AdvanceUntilLiteralCandidateIn(
-        TokenSet firstRunes,
-        char[]? bmpFirstRunes,
-        LiteralScannerCandidate[] literals,
-        int[]? literalPositions)
-    {
-        if (IsEof) return;
-
-        // The stronger scanner fast path for
-        // ZeroOrMore(Or(literal-choice, AnyToken.Delete)). A plain
-        // first-rune skip still stops at every "s" for a case-insensitive
-        // "Sherlock" search and then invokes the full parser to reject
-        // it. Here we keep consuming the deleted fallback ourselves
-        // until the whole literal could match at the current lexer
-        // position. The outer loop then calls the real rule, preserving
-        // the same tree and capture behavior as the unoptimized parse.
-        //
-        // Single-literal only. The runtime's optimized substring search
-        // jumps straight to the next full-literal candidate instead of
-        // stopping at every matching first character. Multi-literal
-        // alternates use the IndexOfAny path below: an experiment that
-        // enabled the cached path for them measured 23x slower on the
-        // rebar Sherlock haystack because the BCL's IndexOfAny is SIMD-
-        // tuned for "any of these chars" while N separate IndexOf calls
-        // are not. See src/Benchmarks/Rebar/results/multi-literal-cache-rebar-2026-04-28.csv.
-        //
-        // Both fast paths are safe under grapheme tokenization: a
-        // literal hit positions us at the literal's start, which is
-        // either an ASCII character (a token of itself) or the first
-        // char of a multi-byte rune that's part of the literal text
-        // we're searching for. Either way the position lines up with
-        // a token boundary the outer parser can legally start at.
-        if (literalPositions != null && literals.Length == 1)
-        {
-            while (_position < _endPosition)
-            {
-                int found = FindNextLiteralCandidate(literals, literalPositions, _input, _position, _endPosition);
-                if (found < 0)
-                {
-                    _position = _endPosition;
-                    return;
-                }
-
-                _position = found;
-                if (AnyLiteralMatchesAt(literals, _input, _position, _endPosition))
-                    return;
-
-                int len = NextTokenLength(_position);
-                if (len <= 0) len = 1;
-                _position = Math.Min(_position + len, _endPosition);
-            }
-            return;
-        }
-
-        if (bmpFirstRunes is { Length: > 0 })
-        {
-            // Literal alternates still benefit from staying inside the
-            // scanner: the real parser is only invoked when a complete
-            // literal candidate matches. Use IndexOfAny for the shared
-            // first-rune set, then check only plausible literals at the
-            // candidate position.
-            while (_position < _endPosition)
-            {
-                int found = _input.IndexOfAny(bmpFirstRunes, _position, _endPosition - _position);
-                if (found < 0)
-                {
-                    _position = _endPosition;
-                    return;
-                }
-
-                _position = found;
-                if (AnyLiteralMatchesAt(literals, _input, _position, _endPosition))
-                    return;
-
-                int len = NextTokenLength(_position);
-                if (len <= 0) len = 1;
-                _position = Math.Min(_position + len, _endPosition);
-            }
-            return;
-        }
-
-        while (_position < _endPosition)
-        {
-            if (TryPeekRune(_input, _position, out int runeValue, out _)
-                && firstRunes.Contains(runeValue)
-                && AnyLiteralMatchesAt(literals, _input, _position, _endPosition))
-            {
-                return;
-            }
-
-            // Fall-through path: advance in the lexer's natural token
-            // units so we never manufacture a start position inside a
-            // grapheme cluster. A full literal match is only useful at
-            // positions where the outer parser could legally start.
-            int len = NextTokenLength(_position);
-            if (len <= 0) len = 1;
-            _position = Math.Min(_position + len, _endPosition);
-        }
-    }
-
-    private static int FindNextLiteralCandidate(
-        LiteralScannerCandidate[] literals,
-        int[] literalPositions,
-        string input,
-        int position,
-        int endPosition)
-    {
-        int best = -1;
-        for (int index = 0; index < literals.Length; index++)
-        {
-            int found = literalPositions[index];
-            if (found < position)
-            {
-                // Cache each literal's next substring hit. Literal-alternate
-                // scanners call Advance once per real match; without this,
-                // five alternatives would rescan the whole remaining input
-                // five times after every match. Cached future hits survive
-                // until the lexer moves past them.
-                found = literals[index].IndexIn(input, position, endPosition);
-                literalPositions[index] = found;
-            }
-            if (found >= 0 && (best < 0 || found < best))
-                best = found;
-        }
-        return best;
-    }
-
-    private static bool AnyLiteralMatchesAt(
-        LiteralScannerCandidate[] literals,
-        string input,
-        int position,
-        int endPosition)
-    {
-        int firstRune = -1;
-        TryPeekRune(input, position, out firstRune, out _);
-        for (int index = 0; index < literals.Length; index++)
-            if (literals[index].CanStartWith(firstRune)
-                && literals[index].MatchesAt(input, position, endPosition))
-            {
-                return true;
-            }
-        return false;
     }
 
     // Record that a rule just failed at the given input position. The
@@ -838,82 +602,4 @@ public sealed class Lexer
             }
         }
     }
-}
-
-internal readonly struct LiteralScannerCandidate
-{
-    private readonly int _firstRune;
-
-    public LiteralScannerCandidate(string text, bool ignoreAsciiCase)
-    {
-        Text = text ?? throw new ArgumentNullException(nameof(text));
-        IgnoreAsciiCase = ignoreAsciiCase;
-        Lexer.TryPeekRune(text, 0, out _firstRune, out _);
-    }
-
-    public string Text { get; }
-    public bool IgnoreAsciiCase { get; }
-
-    public int IndexIn(string input, int position, int endPosition)
-    {
-        int count = endPosition - position;
-        if (count < Text.Length)
-            return -1;
-
-        // Use the BCL's optimized substring search to hop across whole
-        // spans of non-candidates. OrdinalIgnoreCase is broader than this
-        // parser's ASCII-only ignore-case rule for some Unicode text, so
-        // callers still confirm with MatchesAt before stopping. Broader
-        // prefilter candidates are safe: they may cause extra parser work,
-        // but they never skip a real ASCII-ignore-case match.
-        return input.IndexOf(
-            Text,
-            position,
-            count,
-            IgnoreAsciiCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
-    }
-
-    public bool CanStartWith(int runeValue)
-    {
-        if (runeValue == _firstRune)
-            return true;
-
-        // LiteralIgnoreAsciiCase is intentionally ASCII-only. Keep the
-        // scanner prefilter under the exact same rule: only A-Z/a-z match
-        // case-insensitively, and every other rune has to match by exact code
-        // point. This prevents the optimization from accepting full-Unicode
-        // case-insensitive candidates that the real rule would reject.
-        return IgnoreAsciiCase
-            && _firstRune >= 0
-            && _firstRune <= char.MaxValue
-            && runeValue >= 0
-            && runeValue <= char.MaxValue
-            && IsAsciiLetter((char)_firstRune)
-            && IsAsciiLetter((char)runeValue)
-            && (_firstRune | 0x20) == (runeValue | 0x20);
-    }
-
-    public bool MatchesAt(string input, int position, int endPosition)
-    {
-        if (position + Text.Length > endPosition)
-            return false;
-
-        ReadOnlySpan<char> actual = input.AsSpan(position, Text.Length);
-        ReadOnlySpan<char> expected = Text.AsSpan();
-        if (!IgnoreAsciiCase)
-            return actual.SequenceEqual(expected);
-
-        for (int index = 0; index < expected.Length; index++)
-        {
-            char ca = actual[index];
-            char cb = expected[index];
-            if (ca == cb) continue;
-            if (IsAsciiLetter(ca) && IsAsciiLetter(cb) && (ca | 0x20) == (cb | 0x20)) continue;
-            return false;
-        }
-        return true;
-    }
-
-    private static bool IsAsciiLetter(char c) =>
-        (uint)((c | 0x20) - 'a') <= ('z' - 'a');
 }

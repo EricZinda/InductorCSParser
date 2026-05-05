@@ -1,8 +1,9 @@
+# Unicode Edge Cases
 When you build grammars in the Inductor Parser you don't need to worry about the encoding complexities of Unicode, you build rules around the characters you care about and the engine ensures that:
 
 1) The text stream is normalized into a form that is canonical. Invalid Unicode throws.
-2) Characters in your rules are encoded in the same normalized form so they match properly. Rules in non-normalized form throw.
-3) Tokens given to your rules are always characters the user (and you!) perceives as a single character (i.e. "Grapheme Clusters") 
+2) Characters in your rules are encoded in the same normalized form so they match properly. Rules in non-normalized form throw at compile time.
+3) Tokens given to your rules are always characters the user (and you!) perceives as a single character (i.e. "Grapheme Clusters") and match exactly that character in the text.
 
 It is designed so you can safely write grammars over Unicode text without having to be a Unicode expert. 
 
@@ -42,7 +43,7 @@ The built-in rules we've used here play well with someone including any Unicode 
 - `AnyToken()`: Accepts all Unicode input, so they are free to write any Unicode characters in their todo item
 
 ## Arbitrary Unicode in Rules
-If we wanted to localize our app into other languages, the built-in rules make sure the specific keyword characters our grammar looks for  will match properly.
+If we wanted to localize our app into other languages, the built-in rules make sure the specific keyword characters our grammar looks for will match properly.
 
 Let's do Spanish first:
 
@@ -114,10 +115,10 @@ But Korean also has 2 *more* ways to write a character that is "equivalent", but
 
 Now lets look at how the grammar will behave on malformed Unicode input.
 
-# Unexpected Unicode
+## Unexpected Unicode
 There are very few ways to write a truly "illegal" Unicode document. The parser actually throws an exception during normalization for those cases. However, there are many ways the text could be "unexpected", especially for someone new to Unicode. The parser is designed to keep grammars understandable and avoid pitfalls with those.
 
-## Legitimate Ill-formed Input
+### Legitimate Ill-formed Input
 The parser takes a .Net `String`. If you created your string from a file or a sequence of bytes using any of .Net's UTF encoding types, like:
 
 ```CSharp
@@ -133,15 +134,30 @@ But if your code doesn't do this, or got a string by some other means, it could 
 
 In that case, when you call .Parse() using the defaults, you will get an exception. The default FormC normalization will catch it and throw. 
 
-If you decide to go without Normalization at all by calling `Compile(null)` and then `Parse()`, the engine will treat ill-formed code points as separate tokens that you can match using all of the Rules that match any tokens. And that is the only way you will match them. 
+If you decide to go without Normalization at all by calling `Compile(null)` and then `Parse()`, the engine will treat ill-formed code points as separate tokens that you can match specifically by using any Rule that matches specific tokens (e.g. `Token`), or collect them with a range of "any" text in all tokens like `AnyToken` that match literally anything. Those are the only ways you will match them. 
 
 All of these together ensure that your Grammar will not get "confused" by ill-formed input (and will fail if it exists) unless you are truly testing for it.
 
-## Unexpected (Often Non-visible) Characters
-There are many characters that are perfectly valid in a Unicode document but might be unexpected by most developers.
+### Unexpected (Often Non-visible) Characters
+There are many characters that are perfectly valid in a Unicode document but might be unexpected to most developers. These surface as their own stand-alone token in the parser and thus will never match any rules looking for *particular* text in your grammar. For example: `Token(' ')` won't match a non-breaking space in a document. 
 
-BARE ATTACHING CHARACTERS
-INVISIBLE FORMATTING CHARACTERS
-NONCHARACTERS
-PRIVATE USE
-REPLACEMENT
+Just like ill-formed tokens above, the only way you can match these is by putting them in a Rule that matches specific tokens (e.g. `Token`), or by using a rule designed to match literally "any" text like `AnyToken`.
+
+- Bare attaching characters: characters meant to combine with the one before or after, but appearing alone. Examples: a stray combining accent (`U+0301`) without a letter under it, a Zero Width Joiner (`U+200D`) without emoji to glue together, an unpaired regional indicator (the things that compose country flags).
+- Invisible formatting characters: don't render as a glyph but still take a position in the text. Examples: zero-width space (`U+200B`), soft hyphen (`U+00AD`), byte-order mark (`U+FEFF`), bidi-direction controls (the characters behind "Trojan Source" attacks).
+- Noncharacters: code points Unicode reserved for internal use, not supposed to appear in real text. Examples: `U+FFFE`, `U+FFFF`, and the block `U+FDD0`..`U+FDEF`. One special case: parsing input containing `U+FFFE` under default normalization throws, because .NET treats it as a sign of byte-order confusion upstream.
+- Private use: code points Unicode set aside for private agreements between apps, with no assigned meaning. Examples: Apple's logo at `U+F8FF`, corporate logo fonts, game icon fonts. Main block is `U+E000`..`U+F8FF`.
+- Replacement: a single character, `U+FFFD` (often shown as � or a question mark in a box), inserted by .NET decoders for bytes that weren't valid in the source encoding. Its presence means an upstream decoder swallowed something. The parser exposes `TokenSet.Replacement` to detect or reject these.
+
+## Security-related Concerns
+Unicode opens up a few classic ways to attack a parser. The good news is that grammars written naturally already block most of them. The one to be aware of is whether your rule defines what's *allowed* (your rule must match for input to be accepted) or what's *blocked* (your rule must match for input to be rejected). The default behavior is right for "allowed" rules. For "blocked" rules, you sometimes need to do a little extra work.
+
+- Trojan Source: an attacker hides a bidi-direction character (like `U+202E`) in input so an editor renders the text in one order while the parser sees a different one. The same source code can look like one thing to a reviewer and mean another to a compiler. Your grammar isn't fooled because the parser doesn't reorder anything based on bidi controls. It just sees the raw character sequence in the input, in the actual logical order the attacker submitted. The visual rearrangement an editor would have shown to a human reviewer doesn't exist as far as the grammar is concerned.
+
+- Lookalike characters: some characters look almost identical to common letters but are different code points. `𝐀` (math-bold A), `Ａ` (fullwidth A), and hundreds of others all look like A but aren't. An attacker writes `ｓｅｌｅｃｔ` to slip past a SQL filter, or `𝐚dmin` to register an account that looks like admin. For "allowed" rules, the default `FormC` is good because the lookalike doesn't match. For "blocked" rules, compile with `FormKC` instead. It turns lookalikes into plain letters before the rule runs.
+
+- Invisible characters: zero-width spaces, soft hyphens, BOMs, and similar characters don't render but still take up a position in the text. An attacker writes `ki<ZWS>ll` to slip a banned word past a profanity filter, or registers a name that displays as `admin` but compares as different. For "allowed" rules, the default is good — the invisibles don't match. For "blocked" rules, no normalization form strips invisibles, so you have to filter them out yourself before parsing.
+
+- Homoglyphs (the one the parser does NOT defend against by default): Latin `a` (`U+0061`) and Cyrillic `а` (`U+0430`) look identical but are different code points from different scripts. Greek `α` and several other scripts do the same for various letters. Anywhere your grammar accepts letters from arbitrary scripts (`Identifier()`, `OneOf(TokenSet.Letters)`, or any other rule that takes a broad letter set) an attacker can mix scripts to make text that looks legitimate but compares as different. The fix: restrict your grammar to one script's letters, use `TokenSet.Ascii.Letters` for ASCII-only, or build a custom set covering the script(s) you actually want to support.
+
+For each of these, there's a focused test in `SecurityByDefaultTests.cs` showing the attack and how the parser handles it.
