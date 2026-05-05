@@ -209,8 +209,7 @@ internal sealed class ScanUntilRule : Rule
         int inputLen = input.Length;
 
         // Scan forward one token (one user-perceived character) at a
-        // time. Token-scoped for the same reason every other rule in
-        // the parser is: a token is one grapheme cluster. The loop
+        // time: a token is one grapheme cluster. The loop
         // has two ways out: end-of-input (the while condition) or a
         // stopper match. Each iteration consumes one token as body
         // or one escape sequence.

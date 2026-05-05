@@ -412,6 +412,252 @@ public class BetweenInclusiveRuleTests
         Assert.That(result.Tree!.ToString(), Is.EqualTo("xxS"));
     }
 
+    // ----- Scanner-skip optimization: CRLF mid-cluster regression tests -----
+    //
+    // CRLF is one grapheme cluster (UAX #29 GB3). The scanner-skip fast paths
+    // in Lexer.AdvanceUntilRuneIn and Lexer.AdvanceUntilLiteralCandidateIn use
+    // string.IndexOfAny / string.IndexOf, which operate on UTF-16 code units
+    // and don't know about cluster boundaries. Without a guard, they land on
+    // the LF inside CRLF, the inner FirstOf reads a fresh one-rune "\n" token
+    // at the mid-cluster offset, and a rule that should reject the multi-rune
+    // CRLF cluster (OneOf("\n"), Literal("\nfoo"), etc.) mistakenly matches
+    // it. The slow path walks one grapheme at a time and is the source of
+    // truth for what these grammars should produce. See backlog 7crl.
+
+    [Test]
+    public void BetweenInclusive_scanner_shape_AdvanceUntilRuneIn_does_not_split_crlf_at_lf()
+    {
+        var match = OneOf("\n").Flatten(SyntaxTree.FlattenType.Preserve);
+        var scanner = BetweenInclusive(0, int.MaxValue, 
+                        FirstOf(match,
+                                AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
+        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
+
+        scanner.Compile(null);
+        var result = scanner.Parse("\r\n");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.Children.Count, Is.EqualTo(0),
+            "AnyToken.Delete should swallow the whole CRLF cluster; no OneOf(\"\\n\") match should appear because the LF inside CRLF isn't a token boundary.");
+    }
+
+    [Test]
+    public void BetweenInclusive_unoptimized_path_does_not_match_lf_inside_crlf()
+    {
+        // Control: AtLeast=1 disables the scanner-skip optimization, so the
+        // loop walks one grapheme at a time. This pins the slow-path
+        // behavior (CRLF cluster swallowed whole) as the source of truth.
+        var match = OneOf("\n").Flatten(SyntaxTree.FlattenType.Preserve);
+        var scanner = BetweenInclusive(1, int.MaxValue, 
+                        FirstOf(match,
+                                AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
+        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
+
+        scanner.Compile(null);
+        var result = scanner.Parse("\r\n");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.Children.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void BetweenInclusive_scanner_shape_single_literal_cache_does_not_split_crlf_at_lf()
+    {
+        // Exercises the cached single-literal path in
+        // AdvanceUntilLiteralCandidateIn (literalPositions != null,
+        // literals.Length == 1). IndexOf("\nfoo", ...) lands on the LF
+        // inside CRLF. Without the guard, AnyLiteralMatchesAt confirms
+        // the literal at the mid-cluster offset and the inner Literal
+        // rule then reads "\nfoo" from that offset.
+        var match = Literal("\nfoo").Flatten(SyntaxTree.FlattenType.Preserve);
+        var scanner = BetweenInclusive(0, int.MaxValue, 
+                        FirstOf(match,
+                                AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
+        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
+
+        scanner.Compile(null);
+        var result = scanner.Parse("\r\nfoo");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(""),
+            "Literal(\"\\nfoo\") should not match starting at the LF inside CRLF; the slow path consumes \\r\\n then f, o, o each as deleted AnyTokens and produces an empty preserved tree.");
+    }
+
+    [Test]
+    public void BetweenInclusive_scanner_shape_multi_literal_IndexOfAny_does_not_split_crlf_at_lf()
+    {
+        // Exercises the BMP-firstrunes IndexOfAny path in
+        // AdvanceUntilLiteralCandidateIn (literalPositions == null because
+        // there are two literals; bmpFirstRunes carries '\n' for both).
+        // Same mid-CRLF landing problem as the single-literal cache.
+        var matchFoo = Literal("\nfoo").Flatten(SyntaxTree.FlattenType.Preserve);
+        var matchBar = Literal("\nbar").Flatten(SyntaxTree.FlattenType.Preserve);
+        var scanner = BetweenInclusive(0, int.MaxValue, FirstOf(
+            matchFoo,
+            matchBar,
+            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
+        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
+
+        scanner.Compile(null);
+        var result = scanner.Parse("\r\nfoo");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(""));
+    }
+
+    [Test]
+    public void BetweenInclusive_scanner_shape_AdvanceUntilRuneIn_still_finds_lf_after_crlf()
+    {
+        // After the fix skips past a mid-CRLF LF, a real standalone LF
+        // later in the input still has to be found. This test exercises
+        // the "skip the CRLF, then keep searching" path.
+        var match = OneOf("\n").Flatten(SyntaxTree.FlattenType.Preserve);
+        var scanner = BetweenInclusive(0, int.MaxValue, FirstOf(
+            match,
+            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
+        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
+
+        scanner.Compile(null);
+        var result = scanner.Parse("\r\nx\nz");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.Children.Count, Is.EqualTo(1),
+            "The CRLF should be swallowed by AnyToken.Delete and the standalone LF after 'x' should match OneOf(\"\\n\").");
+        Assert.That(result.Tree!.Children[0].ToString(), Is.EqualTo("\n"));
+    }
+
+    // The same byte-level-search bug shape applies to any BMP char that
+    // can sit as the second-or-later rune of a multi-rune cluster.
+    // CRLF is the practical case; the others below test the broader
+    // contract so a future regression in the IsAtMidGraphemeCluster
+    // gate gets caught for the categories that actually appear in real
+    // grammars.
+    //
+    // Most of these inputs contain invisible / hard-to-distinguish
+    // codepoints (combining marks, ZWJ, variation selectors, Indic
+    // viramas), so they're named below as constants. Reading the
+    // tests becomes a matter of reading the constant names rather
+    // than peering at lookalike whitespace.
+
+    private const string CombiningAcute = "\u0301";       // combining acute accent
+    private const string ZeroWidthJoiner = "\u200D";      // ZWJ
+    private const string VariationSelector16 = "\uFE0F";  // emoji-presentation selector
+    private const string ManEmoji = "\U0001F468";         // surrogate pair in UTF-16
+    private const string WomanEmoji = "\U0001F469";       // surrogate pair in UTF-16
+    private const string DevanagariKa = "\u0915";         // क
+    private const string DevanagariVirama = "\u094D";     // ्
+    private const string DevanagariSsa = "\u0937";        // ष
+
+    [Test]
+    public void BetweenInclusive_scanner_shape_does_not_split_combining_mark_cluster()
+    {
+        // U+0301 (combining acute) attaches to the previous base under
+        // UAX #29 GB9, so "e" + acute is one cluster. A grammar that
+        // looks for OneOf(CombiningAcute) expects the standalone
+        // combining mark, so the cluster must be rejected as multi-rune.
+        const string baseChar = "e";
+        string clusterInput = baseChar + CombiningAcute;
+
+        var match = OneOf(CombiningAcute).Flatten(SyntaxTree.FlattenType.Preserve);
+        var scanner = BetweenInclusive(0, int.MaxValue, FirstOf(
+            match,
+            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
+        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
+
+        scanner.Compile(null);
+        var result = scanner.Parse(clusterInput);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.Children.Count, Is.EqualTo(0),
+            "AnyToken.Delete should swallow the e+combining-acute cluster whole; OneOf(combining-acute) must not match the combining mark inside the cluster.");
+    }
+
+    [Test]
+    public void BetweenInclusive_scanner_shape_does_not_split_zwj_emoji_sequence()
+    {
+        // ZWJ glues Extended_Pictographic chars into one cluster under
+        // UAX #29 GB11. man + ZWJ + woman is one cluster.
+        // OneOf(ZeroWidthJoiner) should reject the cluster because the
+        // cluster is multi-rune, not a standalone ZWJ.
+        string zwjSequenceInput = ManEmoji + ZeroWidthJoiner + WomanEmoji;
+
+        var match = OneOf(ZeroWidthJoiner).Flatten(SyntaxTree.FlattenType.Preserve);
+        var scanner = BetweenInclusive(0, int.MaxValue, FirstOf(
+            match,
+            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
+        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
+
+        scanner.Compile(null);
+        var result = scanner.Parse(zwjSequenceInput);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.Children.Count, Is.EqualTo(0),
+            "ZWJ inside an emoji ZWJ sequence isn't a token boundary; OneOf(ZWJ) must not match it.");
+    }
+
+    [Test]
+    public void BetweenInclusive_scanner_shape_does_not_split_variation_selector_cluster()
+    {
+        // Variation Selector 16 attaches to the previous base under
+        // UAX #29 GB9 (it's in the Extend set). "#" + VS-16 is one
+        // cluster (the keycap base). OneOf(VariationSelector16) should
+        // reject the cluster.
+        const string baseChar = "#";
+        string clusterInput = baseChar + VariationSelector16;
+
+        var match = OneOf(VariationSelector16).Flatten(SyntaxTree.FlattenType.Preserve);
+        var scanner = BetweenInclusive(0, int.MaxValue, FirstOf(
+            match,
+            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
+        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
+
+        scanner.Compile(null);
+        var result = scanner.Parse(clusterInput);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.Children.Count, Is.EqualTo(0),
+            "Variation selector inside a base+VS cluster isn't a token boundary; OneOf(VS-16) must not match it.");
+    }
+
+    [Test]
+    public void BetweenInclusive_scanner_shape_indic_conjunct_agrees_with_unoptimized_path()
+    {
+        // Devanagari ka + virama + ssa. UAX #29 rev. 39 (GB9c) keeps
+        // these glued as one Indic conjunct cluster; earlier revisions
+        // break before the trailing consonant. .NET 8's StringInfo
+        // currently uses the older rules, so the slow path treats this
+        // as two clusters and OneOf(ssa) matches at the trailing
+        // consonant. What this test pins is that the scanner-skip fast
+        // path agrees with the slow path on whichever runtime is
+        // hosting the suite: AtLeast=0 and AtLeast=1 produce the same
+        // number of matches. If a future runtime upgrade implements
+        // GB9c, both numbers will change in lockstep and the assertion
+        // still holds.
+        string conjunctInput = DevanagariKa + DevanagariVirama + DevanagariSsa;
+
+        var fastMatch = OneOf(DevanagariSsa).Flatten(SyntaxTree.FlattenType.Preserve);
+        var fastScanner = BetweenInclusive(0, int.MaxValue, FirstOf(
+            fastMatch,
+            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
+        )).As("scan-fast").Flatten(SyntaxTree.FlattenType.Preserve);
+        fastScanner.Compile(null);
+        var fastResult = fastScanner.Parse(conjunctInput);
+
+        var slowMatch = OneOf(DevanagariSsa).Flatten(SyntaxTree.FlattenType.Preserve);
+        var slowScanner = BetweenInclusive(1, int.MaxValue, FirstOf(
+            slowMatch,
+            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
+        )).As("scan-slow").Flatten(SyntaxTree.FlattenType.Preserve);
+        slowScanner.Compile(null);
+        var slowResult = slowScanner.Parse(conjunctInput);
+
+        Assert.That(fastResult.Success, Is.True, fastResult.ErrorMessage);
+        Assert.That(slowResult.Success, Is.True, slowResult.ErrorMessage);
+        Assert.That(fastResult.Tree!.Children.Count,
+            Is.EqualTo(slowResult.Tree!.Children.Count),
+            "Scanner-skip fast path must produce the same tree shape as the un-optimized AtLeast=1 walk.");
+    }
+
     [Test]
     public void Sealed_BetweenInclusive_rejects_Flatten()
     {

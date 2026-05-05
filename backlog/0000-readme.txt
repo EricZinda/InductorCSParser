@@ -43,7 +43,7 @@ For formatId "h2-heading" (H2 Headings):
   A line that starts with "## " begins a new item. Don't put one in the body. (Lines starting with "#" alone or "###" or deeper are fine.)
 
 For formatId "bullet" (Bullet Points):
-  A line that starts with "-", "*", or "+" at the left margin (no leading whitespace) begins a new item. If you want a list inside an item, indent it by at least two spaces.
+  A line that starts with "- " (or just "-") at the left margin begins a new item. "*" and "+" are not treated as item bullets, so they can appear in your text. If you want a sub-list inside an item, indent it by at least two spaces.
 
 For formatId "paragraph" (Paragraphs):
   A blank line begins a new item. Don't put blank lines inside the body. Use a single newline if you need a line break.

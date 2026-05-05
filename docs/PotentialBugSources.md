@@ -36,11 +36,62 @@ should prefer them when picking where to dig next.
   fixtures in `ExperimentalSrc/InductorParser.Tests/StateMachine*CompareTests.cs`
   are the right place to add a regression test for any new divergence
   found.
+- **Byte-level fast paths that bypass grapheme tokenization.**
+  Optimization paths that use `string.IndexOfAny`, `string.IndexOf`,
+  or other UTF-16-code-unit searches to fast-forward over input they
+  don't care about (`Lexer.AdvanceUntilRuneIn`,
+  `Lexer.AdvanceUntilLiteralCandidateIn`,
+  `LiteralScannerCandidate.IndexIn`) can land at offsets that aren't
+  grapheme-cluster boundaries the rest of the parser would visit. The
+  practical case is the LF inside a CRLF cluster (UAX #29 GB3 keeps
+  CR LF in one cluster, so the LF is at a non-token-boundary offset),
+  but ZWJ inside emoji ZWJ sequences and combining marks attached to
+  earlier bases have the same shape. When reviewing a fast-path that
+  uses one of these searches, ask: can the candidate char ever appear
+  as the second-or-later rune of a multi-rune cluster? If yes, the
+  landing position has to be re-validated before the lexer's
+  `_position` is set to it. See the 2026-05-04 entry below for the
+  CRLF / combining-mark / ZWJ / VS cases and the
+  `Lexer.IsAtMidGraphemeCluster` post-validation it added.
 
 ## Search log
 
 Append-only. Newest entry on top. Don't rewrite past entries; the log
 is a record of who-checked-what-when, not a current snapshot.
+
+### 2026-05-04: Scanner-skip fast path (BetweenInclusiveRule + Lexer)
+Reviewed: `BetweenInclusiveRule.cs` (the `TryCreateScannerSkip` /
+`ScannerSkip.Advance` path), `Lexer.AdvanceUntilRuneIn`,
+`Lexer.AdvanceUntilLiteralCandidateIn`, `Lexer.AdvanceWhileRuneIn`,
+`Lexer.AdvanceWhileTokenIn`, `LiteralScannerCandidate.IndexIn` /
+`MatchesAt` / `CanStartWith`, `TokenSet.TryGetBmpChars`, and the existing
+scanner-shape tests in `BetweenInclusiveRuleTests.cs`. Cross-checked the
+SM-side caller `ExperimentalSrc/InductorParser/StateMachine/Stepper.cs`
+line 170 (it forwards to the same `AdvanceUntilRuneIn` so the
+recursive-side fix carries over). Categories: byte-level-search vs
+grapheme-token boundary mismatches, comments claiming ASCII-tokens-of-
+themselves properties, optimization equivalence with the slow path,
+multi-rune cluster handling at the IndexOfAny landing, recursive-vs-SM
+divergence through a shared lexer helper. Found and fixed: the
+`bmpCandidates` fast path in `AdvanceUntilRuneIn` was landing on the
+LF inside a CRLF cluster when `\n` was in the candidate set, after
+which the inner `FirstOf(OneOf("\n"), AnyToken.Delete)` read a fresh
+one-rune `\n` token from a non-token-boundary offset and `OneOf`
+mistakenly matched it. The slow path walks one grapheme at a time and
+correctly rejects the CRLF cluster as a multi-rune token. The fix adds an `IsAtMidGraphemeCluster`
+post-validation that walks one cluster forward from the codepoint
+before the IndexOf landing (via `StringInfo.GetNextTextElement`) and
+returns true when that cluster spans the landing offset. In
+`AdvanceUntilRuneIn` the IndexOfAny is now in a loop that re-enters
+when it lands mid-cluster; in both `AdvanceUntilLiteralCandidateIn`
+paths (single-literal cached path, BMP-firstrunes IndexOfAny path) the
+`AnyLiteralMatchesAt` confirmation is gated on the same check. The
+generalized check covers CRLF, base+combining-mark (e.g. `é`),
+emoji ZWJ sequences (e.g. man+ZWJ+woman), and base+variation-selector
+(e.g. `#️`) within a two-codepoint span. Regression tests for
+each cluster shape, plus a "still finds LF after CRLF" path and the
+two `AdvanceUntilLiteralCandidateIn` paths, landed in
+`BetweenInclusiveRuleTests.cs` next to the other scanner-shape tests.
 
 ### 2026-05-04: ScanUntilRule + Lexer + TokenSet sweep
 Reviewed: `ScanUntilRule.cs`, `ScanWhileRule.cs`, `OneOfRule.cs`,
