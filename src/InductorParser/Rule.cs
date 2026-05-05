@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
 using InductorParser.Lexing;
@@ -743,7 +744,7 @@ public abstract class Rule
                 PositionPlaceholders(failurePos, input));
         return FormatTemplate(options.PositionalErrorTemplate,
             PositionPlaceholders(failurePos, input),
-            ("character", () => parseInput[posInParseInput].ToString()));
+            ("character", () => StringInfo.GetNextTextElement(parseInput, posInParseInput)));
     }
 
     // The four position placeholders shared by every default template.
