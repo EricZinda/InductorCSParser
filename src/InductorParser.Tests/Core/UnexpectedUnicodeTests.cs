@@ -305,6 +305,51 @@ public class UnexpectedUnicodeTests
     }
 
     [Test]
+    public void Literal_with_lone_surrogate_first_char_compiles_under_null_normalization()
+    {
+        // Mirrors the Token(string) round-tripping case at the top of this
+        // file: a grammar that wants to deliberately accept WTF-8 / unpaired-
+        // surrogate input under Compile(null) should be able to write the
+        // surrogate as the first char of a Literal too, not just as a
+        // single-token Token(string). Regression: ComputeRuleStart used to
+        // pass TryPeekRune's -1 marker straight to TokenSet.Single, which
+        // blew up with "Actual value was -1." out of Compile.
+        string input = UnicodeExamples.HighSurrogateMinText + "X";
+        var rule = Literal(UnicodeExamples.HighSurrogateMinText + "X");
+
+        Assert.DoesNotThrow(() => rule.Compile(null));
+        Assert.That(rule.Parse(input).Success, Is.True);
+    }
+
+    [Test]
+    public void LiteralIgnoreAsciiCase_with_lone_surrogate_first_char_compiles_under_null_normalization()
+    {
+        // Same shape as the Literal regression: surrogate-prefixed literal
+        // text with ASCII-ignore-case applied to the rest. The ignore-case
+        // path runs through a different ComputeRuleStart but the bug was
+        // the same (TryPeekRune false return ignored, -1 fed to
+        // TokenSet.Single).
+        string input = UnicodeExamples.HighSurrogateMinText + "x";
+        var rule = LiteralIgnoreAsciiCase(UnicodeExamples.HighSurrogateMinText + "X");
+
+        Assert.DoesNotThrow(() => rule.Compile(null));
+        Assert.That(rule.Parse(input).Success, Is.True);
+    }
+
+    [Test]
+    public void Literal_with_lone_low_surrogate_first_char_compiles_under_null_normalization()
+    {
+        // Lone LOW surrogate at the start of the literal exercises the
+        // char.IsSurrogate-but-not-high branch of TryPeekRune. The fix
+        // covers both halves the same way.
+        string input = UnicodeExamples.LowSurrogateMaxText + "X";
+        var rule = Literal(UnicodeExamples.LowSurrogateMaxText + "X");
+
+        Assert.DoesNotThrow(() => rule.Compile(null));
+        Assert.That(rule.Parse(input).Success, Is.True);
+    }
+
+    [Test]
     public void OneOf_universe_rejects_lone_surrogate_under_null_normalization()
     {
         // A lone surrogate has no RuneValue, so OneOf rejects it even
