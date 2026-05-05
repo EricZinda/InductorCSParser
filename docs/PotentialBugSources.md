@@ -26,6 +26,19 @@ should prefer them when picking where to dig next.
   When reviewing a rule, ask: does this rule ever look at a partial
   cluster? If yes, it's potentially out of step with `OneOf`,
   `Token`, etc. on the same input.
+- **Char-unit rendering in user-facing strings.** Anywhere the parser
+  shows the user a "character" of input (the `{character}` placeholder
+  in default error messages, trace lines that quote the current token,
+  debug renderers), the unit shown should match what the parser reads
+  as one token: a UAX #29 grapheme cluster. Indexing the input with
+  `input[pos]` returns one UTF-16 code unit, which is a lone surrogate
+  half for any supplementary-plane rune (every emoji past the BMP, math
+  alphanumerics like `𝐀`) and only the first rune of a multi-rune
+  cluster under `Compile(null)` (`é` decomposed, CRLF, ZWJ emoji
+  sequences). The rendered message lies about what the parser actually
+  saw. `BuildErrorMessage` had this shape; see backlog c9p3. The fix
+  is to render via `StringInfo.GetNextTextElement(input, pos)` (or any
+  other path that returns the full token), matching the lexer.
 - **Recursive vs. state-machine engine divergence.** The recursive
   evaluator and the state-machine evaluator should produce the same
   ParseResult on the same input. A divergence is almost always a bug
@@ -41,6 +54,31 @@ should prefer them when picking where to dig next.
 
 Append-only. Newest entry on top. Don't rewrite past entries; the log
 is a record of who-checked-what-when, not a current snapshot.
+
+### 2026-05-04: error-message rendering + position math sweep
+Reviewed: `Rule.cs` (BuildErrorMessage / FormatTemplate / PositionPlaceholders),
+`ParseOptions.cs`, `ParseResult.cs`, `SyntaxTree/SourcePosition.cs`,
+`SyntaxTree/SourcePositionConverter.cs`, `SyntaxTree/Symbol.cs`,
+`SyntaxTree/SourceRange.cs`, `SyntaxTree/SymbolExtensions.cs`,
+`SyntaxTree/SymbolId.cs`, `SyntaxTree/SymbolRanges.cs`, `EofRule.cs`,
+`PeekRule.cs`, `NotRule.cs`, `AllOfRule.cs`, `FirstOfRule.cs`,
+`AnyTokenRule.cs`, `WithinTokenRule.cs`. Categories: char-vs-rune-vs-
+grapheme rendering in user-facing strings, EOF / end-position edge
+cases in line/column math, surrogate-pair handling in placeholder
+substitution, multi-rune grapheme cluster handling under
+`Compile(null)`, partial-output cleanup on inner-rule failure.
+Found and fixed: `BuildErrorMessage` rendered `{character}` via
+`parseInput[posInParseInput].ToString()`, which is one UTF-16 char
+even when the token the parser was looking at is several chars
+(supplementary-plane rune like `𝐀`, multi-rune cluster like `é`
+under `Compile(null)`). On a supplementary-plane fail the message
+showed a lone surrogate (rendered as `'�'`); on a decomposed-grapheme
+fail it showed only the first rune of the cluster. Backlog c9p3 has
+the write-up. The fix swaps the substitution to
+`StringInfo.GetNextTextElement(parseInput, posInParseInput)` so the
+substituted value is exactly the token the lexer would have read.
+Added two regression tests in `ErrorMessageTemplateTests.cs`. ASCII
+messages are unchanged (one char == one grapheme).
 
 ### 2026-05-04: ScanUntilRule + Lexer + TokenSet sweep
 Reviewed: `ScanUntilRule.cs`, `ScanWhileRule.cs`, `OneOfRule.cs`,
