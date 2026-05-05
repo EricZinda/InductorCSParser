@@ -24,8 +24,8 @@ internal static class UnicodeExamples
     public const string MediumSkinToneText = "\uD83C\uDFFD";
 
     // 👋🏽 waving hand + medium skin tone. ONE grapheme made of TWO runes
-    // (4 UTF-16 chars total). Under the grapheme lexer this is a single
-    // token. Under the rune lexer it's two tokens.
+    // (4 UTF-16 chars total). The lexer reads the whole sequence as a
+    // single token.
     public const string SkinTonedWaveGrapheme = WavingHandGrapheme + MediumSkinToneText;
 
     // 🎸 guitar. One rune, one grapheme.

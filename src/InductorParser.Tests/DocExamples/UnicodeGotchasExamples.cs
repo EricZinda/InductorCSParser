@@ -48,7 +48,7 @@ public class UnicodeGotchasExamples
     }
 
     // "Identifier Matching": works on Devanagari, Thai with SARA AM,
-    // Greek under default GraphemeLexer.
+    // Greek under the lexer.
     [Test]
     public void Identifier_works_on_multi_script_input()
     {
@@ -179,20 +179,20 @@ public class UnicodeGotchasExamples
         Assert.That(grammar.Parse(cleaned).Success, Is.True);
     }
 
-    // "CRLF Under GraphemeLexer": doc claim: Token('\n') DOESN'T match
+    // "CRLF Line Endings": doc claim: Token('\n') DOESN'T match
     // a CRLF grapheme. Use FirstOf(Literal("\r\n"), OneOf(...)) instead.
     [Test]
-    public void CRLF_token_lf_does_not_match_under_graphemelexer()
+    public void CRLF_token_lf_does_not_match()
     {
         var lfOnly = AllOf(Literal("a"), Token('\n'), Literal("b"), Eof()).Compile();
-        // CRLF input: under GraphemeLexer, "\r\n" is one grapheme, and
+        // CRLF input: the lexer reads "\r\n" as one grapheme, and
         // Token('\n') compares to a single-rune \n, so the grapheme
         // doesn't match.
         Assert.That(lfOnly.Parse("a\r\nb").Success, Is.False);
         Assert.That(lfOnly.Parse("a\nb").Success, Is.True);
     }
 
-    // "CRLF Under GraphemeLexer" / fix recipe: a LineBreak rule that
+    // "CRLF Line Endings" / fix recipe: a LineBreak rule that
     // accepts LF, CR, or CRLF.
     [Test]
     public void CRLF_line_break_recipe_handles_all_three()
@@ -208,7 +208,7 @@ public class UnicodeGotchasExamples
         Assert.That(grammar.Parse("a\rb").Success, Is.True);
     }
 
-    // "CRLF Under GraphemeLexer" / line-comment recipe:
+    // "CRLF Line Endings" / line-comment recipe:
     //   ZeroOrMore(AllOf(Not(LineBreak), AnyToken())) stops just before
     //   any LineBreak (including CRLF) and the trailing LineBreak/EOF
     //   completes the comment.

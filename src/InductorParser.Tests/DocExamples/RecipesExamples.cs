@@ -83,7 +83,7 @@ public class RecipesExamples
     }
 
     // "Matching an Identifier": Identifier accepts foo, café,
-    // καλημέρα, Devanagari, Thai under the default lexer.
+    // καλημέρα, Devanagari, Thai under the lexer.
     [Test]
     public void Identifier_matches_unicode_scripts()
     {

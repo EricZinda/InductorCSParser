@@ -255,9 +255,9 @@ public sealed partial class Lexer
     }
 
     // How many UTF-16 chars are in the next token at `startOffset`.
-    // Picks one rune (sub-lexer mode) or one grapheme cluster (default
-    // mode). Caller has already verified there's at least one char
-    // left in the readable range.
+    // Returns one rune in WithinToken sub-lexer mode, or one grapheme
+    // cluster otherwise. Caller has already verified there's at least
+    // one char left in the readable range.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private int NextTokenLength(int startOffset)
     {

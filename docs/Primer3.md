@@ -19,10 +19,14 @@ The grammar would be:
 ```
 priority = FirstOf(Literal("top"), 
                    Literal("med"), 
-                   Literal("low")).As("priority");
+                   Literal("low"))
+                   .As("priority")
+                   .Preserve();
 
 itemText = OneOrMore(AllOf(Not(EndOfLine(eofIsEol:true)), 
-                           AnyToken())).As("itemText");
+                           AnyToken()))
+                           .As("itemText")
+                           .Preserve();
 
 todoLine = AllOf(Optional(InlineWhitespace()),
                  Token('['), 
@@ -54,7 +58,9 @@ Let's do Spanish first:
 // [mín] Refactor the parser internals
 priority = FirstOf(Literal("máx"), 
                    Literal("med"), 
-                   Literal("mín")).As("priority");
+                   Literal("mín"))
+                   .As("priority")
+                   .Preserve();
 
 ```
 The normal Unicode gotcha here is that many accented characters (and all of the Spanish ones) can be written as a single character like `á` (`U+00E1`) or by starting with the base `a` (U+0061) and following with the accent (`U+0301`) like this: `á`. It looks the same but is really two Unicode code points, and that's the gotcha. Do you have to put both in every rule? Or just one? Which one?
@@ -107,7 +113,9 @@ With that in mind, let's try Korean in our example:
 // [낮음] Refactor the parser internals
 priority = FirstOf(Literal("높음"), 
                    Literal("보통"), 
-                   Literal("낮음")).As("priority");
+                   Literal("낮음"))
+                   .As("priority")
+                   .Preserve();
 ```
 Korean characters are composable and decomposable just like `á` can be `á` (`U+00E1`) or base `a` (U+0061) + accent mark (`U+0301`). And, just like the Spanish grammar above, the Korean grammar properly handles both forms and ensures that your rule is written to match the composed version by default.
 
