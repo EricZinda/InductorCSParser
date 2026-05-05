@@ -26,6 +26,19 @@ should prefer them when picking where to dig next.
   When reviewing a rule, ask: does this rule ever look at a partial
   cluster? If yes, it's potentially out of step with `OneOf`,
   `Token`, etc. on the same input.
+- **Char-unit rendering in user-facing strings.** Anywhere the parser
+  shows the user a "character" of input (the `{character}` placeholder
+  in default error messages, trace lines that quote the current token,
+  debug renderers), the unit shown should match what the parser reads
+  as one token: a UAX #29 grapheme cluster. Indexing the input with
+  `input[pos]` returns one UTF-16 code unit, which is a lone surrogate
+  half for any supplementary-plane rune (every emoji past the BMP, math
+  alphanumerics like `𝐀`) and only the first rune of a multi-rune
+  cluster under `Compile(null)` (`é` decomposed, CRLF, ZWJ emoji
+  sequences). The rendered message lies about what the parser actually
+  saw. `BuildErrorMessage` had this shape; see backlog c9p3. The fix
+  is to render via `StringInfo.GetNextTextElement(input, pos)` (or any
+  other path that returns the full token), matching the lexer.
 - **Recursive vs. state-machine engine divergence.** The recursive
   evaluator and the state-machine evaluator should produce the same
   ParseResult on the same input. A divergence is almost always a bug
@@ -53,6 +66,19 @@ should prefer them when picking where to dig next.
   `_position` is set to it. See the 2026-05-04 entry below for the
   CRLF / combining-mark / ZWJ / VS cases and the
   `Lexer.IsAtMidGraphemeCluster` post-validation it added.
+- **Discarding `Lexer.TryPeekRune`'s bool return when the rune feeds
+  a TokenSet factory.** `TryPeekRune` returns `false` and writes
+  `runeValue = -1` for lone surrogates; the validating `TokenSet.Single(int)`
+  and friends reject `-1` with `ArgumentOutOfRangeException`. A rule that
+  ignores the bool and pipes the out parameter straight into a TokenSet
+  factory (LiteralRule and LiteralIgnoreAsciiCaseRule's ComputeRuleStart
+  had this shape, see backlog pj8x) blows up from inside the factory
+  with a "codepoint -1" error that doesn't explain the real cause.
+  When reviewing a rule that calls TryPeekRune, ask: does the code use
+  the bool return value? If not, and the runeValue feeds anything that
+  validates scalar values, fall back to `TokenSet.Universe` /
+  Advance.Always (the GraphemeRule pattern) so surrogate-prefixed text
+  flows through under Compile(null) for WTF-8 round-tripping.
 
 ## Search log
 
@@ -92,6 +118,76 @@ emoji ZWJ sequences (e.g. man+ZWJ+woman), and base+variation-selector
 each cluster shape, plus a "still finds LF after CRLF" path and the
 two `AdvanceUntilLiteralCandidateIn` paths, landed in
 `BetweenInclusiveRuleTests.cs` next to the other scanner-shape tests.
+
+### 2026-05-04: trace-output char-unit follow-up
+Re-walked the trace-emission paths after the previous sweep added the
+"Char-unit rendering in user-facing strings" pattern bullet, looking
+for the same shape in trace lines this time. Greppped
+`src/InductorParser/` for `lexer.Input[`, `_input[`, and other
+single-char indexing in interpolated trace strings. Reviewed the
+trace call sites in `EofRule.cs`, `PeekRule.cs`, `NotRule.cs`,
+`LateBoundRule.cs`, `GraphemeRule.cs`, `LiteralRule.cs`,
+`LiteralIgnoreAsciiCaseRule.cs`, `OneOfRule.cs`, `NoneOfRule.cs`,
+`AnyTokenRule.cs`, plus the `Lexer.Read` / `AdvanceWhile*` traces
+inside `Lexing/Lexer.cs`. Found and fixed: `EofRule`'s failure
+trace read `lexer.Input[lexer.Position]`, one UTF-16 code unit. On
+a supplementary-plane unconsumed token (every emoji past the BMP,
+math alphanumerics like `𝐀`) the trace showed a lone high
+surrogate; under `Compile(null)` a multi-rune cluster (`e` +
+combining acute, CRLF, ZWJ emoji) showed only the first rune.
+Backlog h2rx has the write-up. The fix swaps in
+`lexer.Input.Substring(lexer.Position,
+lexer.PeekTokenLength(lexer.Position))` to render the same full
+grapheme cluster every other rule's trace already produces via
+`Substring(token.Offset, token.Length)` after a `Read`. Only one
+instance found across the parser sources; the rest of the trace
+output was already grapheme-aware via the read-then-Substring
+pattern.
+
+### 2026-05-04: error-message rendering + position math sweep
+Reviewed: `Rule.cs` (BuildErrorMessage / FormatTemplate / PositionPlaceholders),
+`ParseOptions.cs`, `ParseResult.cs`, `SyntaxTree/SourcePosition.cs`,
+`SyntaxTree/SourcePositionConverter.cs`, `SyntaxTree/Symbol.cs`,
+`SyntaxTree/SourceRange.cs`, `SyntaxTree/SymbolExtensions.cs`,
+`SyntaxTree/SymbolId.cs`, `SyntaxTree/SymbolRanges.cs`, `EofRule.cs`,
+`PeekRule.cs`, `NotRule.cs`, `AllOfRule.cs`, `FirstOfRule.cs`,
+`AnyTokenRule.cs`, `WithinTokenRule.cs`. Categories: char-vs-rune-vs-
+grapheme rendering in user-facing strings, EOF / end-position edge
+cases in line/column math, surrogate-pair handling in placeholder
+substitution, multi-rune grapheme cluster handling under
+`Compile(null)`, partial-output cleanup on inner-rule failure.
+Found and fixed: `BuildErrorMessage` rendered `{character}` via
+`parseInput[posInParseInput].ToString()`, which is one UTF-16 char
+even when the token the parser was looking at is several chars
+(supplementary-plane rune like `𝐀`, multi-rune cluster like `é`
+under `Compile(null)`). On a supplementary-plane fail the message
+showed a lone surrogate (rendered as `'�'`); on a decomposed-grapheme
+fail it showed only the first rune of the cluster. Backlog c9p3 has
+the write-up. The fix swaps the substitution to
+`StringInfo.GetNextTextElement(parseInput, posInParseInput)` so the
+substituted value is exactly the token the lexer would have read.
+Added two regression tests in `ErrorMessageTemplateTests.cs`. ASCII
+messages are unchanged (one char == one grapheme).
+
+### 2026-05-04: LiteralRule + LiteralIgnoreAsciiCaseRule ComputeRuleStart sweep
+Reviewed: `LiteralRule.cs`, `LiteralIgnoreAsciiCaseRule.cs`,
+`GraphemeRule.cs` (for comparison), `Lexer.TryPeekRune`. Cross-checked
+the FormC normalization-validation path in `Rule.Compile` and the
+`UnexpectedUnicodeTests.cs` Token(string) round-tripping comments to
+confirm a surrogate-prefixed literal under Compile(null) is a
+documented use case and not a "don't do that." Found and fixed:
+both `LiteralRule.ComputeRuleStart` and
+`LiteralIgnoreAsciiCaseRule.ComputeRuleStart` discarded the bool
+return from `Lexer.TryPeekRune` and passed the resulting
+`runeValue = -1` straight to `TokenSet.Single`, which validates the
+codepoint and threw `ArgumentOutOfRangeException` ("Actual value
+was -1.") out of Compile when the literal's first char was a lone
+surrogate. `GraphemeRule.ComputeRuleStart` already handled this
+correctly by checking the return value and falling back to
+`TokenSet.Universe`; the fix mirrors that. Backlog pj8x has the
+full write-up. Three regression tests in `UnexpectedUnicodeTests`
+lock in the surrogate-prefix Literal / LiteralIgnoreAsciiCase /
+low-surrogate-first-char shapes.
 
 ### 2026-05-04: ScanUntilRule + Lexer + TokenSet sweep
 Reviewed: `ScanUntilRule.cs`, `ScanWhileRule.cs`, `OneOfRule.cs`,

@@ -1,6 +1,6 @@
 # Unicode Internals Architecture
 
-This doc is about how the parser handles Unicode text at its lowest levels. Read this if you want to understand what the parser sees when you feed it a string, or debug a Unicode-related issue. If you just want to write grammars, start with [primer1.md](primer1.md) and [primer2.md](primer2.md), then use [InductorParserReference.md](InductorParserReference.md) as the full API reference.
+This doc is about how the parser handles Unicode text at its lowest levels. Read this if you want to understand what the parser sees when you feed it a string, or debug a Unicode-related issue. If you just want to write grammars, start with [primer1.md](primer1.md), [primer2.md](primer2.md), and [Primer3.md](Primer3.md), then use [InductorParserReference.md](InductorParserReference.md) as the full API reference.
 
 ## Unicode In One Page
 

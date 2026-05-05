@@ -4,6 +4,7 @@ using InductorParser;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
+using static InductorParser.Tests.UnicodeExamples;
 
 namespace InductorParser.Tests;
 
@@ -75,6 +76,50 @@ public class EofRuleTests
 
         string expected = Lines(
             "   FAIL | Eof: found x",
+            "   FAIL | AllOf: symbol #0"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Eof_trace_failure_renders_full_grapheme_for_supplementary_plane()
+    {
+        // The unconsumed character in EofRule's failure trace should be
+        // the full token the lexer would have read, not the first UTF-16
+        // code unit. A waving-hand emoji is one rune / one grapheme but
+        // two UTF-16 chars (a surrogate pair), so input[position] is the
+        // lone high surrogate and rendering that lies about what the
+        // parser actually saw. Same shape as the {character}-placeholder
+        // bug fixed in BuildErrorMessage; trace lines that quote the
+        // current token are the next instance documented in
+        // PotentialBugSources.md "Char-unit rendering in user-facing strings."
+        var sink = NewSink();
+        AllOf(Eof()).Parse(WavingHandGrapheme, new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   FAIL | Eof: found " + WavingHandGrapheme,
+            "   FAIL | AllOf: symbol #0"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Eof_trace_failure_renders_full_grapheme_for_decomposed_cluster()
+    {
+        // Under Compile(null), a decomposed grapheme like "e + combining
+        // acute" stays as two chars / one cluster. EofRule's trace should
+        // report the full cluster the lexer would have read, not just
+        // the first rune. Without this, a parse failure trace shows "e"
+        // for an input the user perceives as "é".
+        var sink = NewSink();
+        var rule = AllOf(Eof());
+        rule.Compile(null);
+        rule.Parse(LatinEAcuteGrapheme, new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   FAIL | Eof: found " + LatinEAcuteGrapheme,
             "   FAIL | AllOf: symbol #0"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
