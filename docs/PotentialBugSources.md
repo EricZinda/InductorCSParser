@@ -36,11 +36,44 @@ should prefer them when picking where to dig next.
   fixtures in `ExperimentalSrc/InductorParser.Tests/StateMachine*CompareTests.cs`
   are the right place to add a regression test for any new divergence
   found.
+- **Discarding `Lexer.TryPeekRune`'s bool return when the rune feeds
+  a TokenSet factory.** `TryPeekRune` returns `false` and writes
+  `runeValue = -1` for lone surrogates; the validating `TokenSet.Single(int)`
+  and friends reject `-1` with `ArgumentOutOfRangeException`. A rule that
+  ignores the bool and pipes the out parameter straight into a TokenSet
+  factory (LiteralRule and LiteralIgnoreAsciiCaseRule's ComputeRuleStart
+  had this shape, see backlog pj8x) blows up from inside the factory
+  with a "codepoint -1" error that doesn't explain the real cause.
+  When reviewing a rule that calls TryPeekRune, ask: does the code use
+  the bool return value? If not, and the runeValue feeds anything that
+  validates scalar values, fall back to `TokenSet.Universe` /
+  Advance.Always (the GraphemeRule pattern) so surrogate-prefixed text
+  flows through under Compile(null) for WTF-8 round-tripping.
 
 ## Search log
 
 Append-only. Newest entry on top. Don't rewrite past entries; the log
 is a record of who-checked-what-when, not a current snapshot.
+
+### 2026-05-04: LiteralRule + LiteralIgnoreAsciiCaseRule ComputeRuleStart sweep
+Reviewed: `LiteralRule.cs`, `LiteralIgnoreAsciiCaseRule.cs`,
+`GraphemeRule.cs` (for comparison), `Lexer.TryPeekRune`. Cross-checked
+the FormC normalization-validation path in `Rule.Compile` and the
+`UnexpectedUnicodeTests.cs` Token(string) round-tripping comments to
+confirm a surrogate-prefixed literal under Compile(null) is a
+documented use case and not a "don't do that." Found and fixed:
+both `LiteralRule.ComputeRuleStart` and
+`LiteralIgnoreAsciiCaseRule.ComputeRuleStart` discarded the bool
+return from `Lexer.TryPeekRune` and passed the resulting
+`runeValue = -1` straight to `TokenSet.Single`, which validates the
+codepoint and threw `ArgumentOutOfRangeException` ("Actual value
+was -1.") out of Compile when the literal's first char was a lone
+surrogate. `GraphemeRule.ComputeRuleStart` already handled this
+correctly by checking the return value and falling back to
+`TokenSet.Universe`; the fix mirrors that. Backlog pj8x has the
+full write-up. Three regression tests in `UnexpectedUnicodeTests`
+lock in the surrogate-prefix Literal / LiteralIgnoreAsciiCase /
+low-surrogate-first-char shapes.
 
 ### 2026-05-04: ScanUntilRule + Lexer + TokenSet sweep
 Reviewed: `ScanUntilRule.cs`, `ScanWhileRule.cs`, `OneOfRule.cs`,

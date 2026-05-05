@@ -119,7 +119,14 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
         // takes two chars in the C# string (emoji, many CJK). Reading
         // _expected[0] directly would return only the first char, which
         // isn't a usable rune on its own.
-        Lexer.TryPeekRune(_expected, 0, out int first, out _);
+        //
+        // If the literal starts with a lone surrogate (or other non-decodable
+        // first char), TokenSet only holds valid scalars, so there's no
+        // single-rune set to advertise. Fall back to Universe — the per-token
+        // compare in TryParseRule still works for surrogate-half literals
+        // under Compile(null).
+        if (!Lexer.TryPeekRune(_expected, 0, out int first, out _))
+            return new RuleStartRequirements(TokenSet.Universe, Advance.Always);
         if (IsAsciiLetter((char)first))
         {
             int lower = first | 0x20;
