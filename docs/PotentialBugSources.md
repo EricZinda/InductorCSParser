@@ -49,11 +49,50 @@ should prefer them when picking where to dig next.
   validates scalar values, fall back to `TokenSet.Universe` /
   Advance.Always (the GraphemeRule pattern) so surrogate-prefixed text
   flows through under Compile(null) for WTF-8 round-tripping.
+- **Discarding `Lexer.TryPeekRune`'s bool return when the rune feeds
+  the lookahead-skip shortcut.** Same root cause as the TokenSet-factory
+  variant above, in a different consumer. EOF and a lone surrogate both
+  produce `peekValue = -1`, but the two cases need opposite shortcut
+  decisions: at EOF, every `Advance.Always` child has nothing to read
+  and is correctly skipped; at a lone surrogate, the surrogate IS a
+  one-char token a wildcard child like `AnyToken()` can match, so the
+  shortcut would wrongly skip it. `FirstOfRule.TryParseRule` had this
+  shape (see backlog 5kf2), and the user-visible consequence under
+  `Compile(null)` was that grammars like `FirstOf(SpecificMatch, AnyToken())`
+  failed on surrogate-prefixed input even though the wildcard would have
+  matched. `BetweenInclusiveRule.TryParseRule` got this right by gating
+  the shortcut on `&& Lexer.TryPeekRune(...)`, which short-circuits on
+  `false`. When reviewing a rule that uses `CannotMatchLookahead` for
+  early-exit, ask: does the EOF-or-surrogate distinction matter here,
+  and does the code use TryPeekRune's bool return to make it?
 
 ## Search log
 
 Append-only. Newest entry on top. Don't rewrite past entries; the log
 is a record of who-checked-what-when, not a current snapshot.
+
+### 2026-05-04: FirstOfRule lookahead shortcut + AnyToken / lone-surrogate sweep
+Reviewed: `FirstOfRule.cs`, `BetweenInclusiveRule.cs` (for comparison),
+`AllOfRule.cs`, `AnyTokenRule.cs`, `EofRule.cs`, `PeekRule.cs`,
+`NotRule.cs`, `Rule.CannotMatchLookahead`, `RuleStartRequirements.cs`,
+`TokenSet.Universe.Contains`, `Lexer.TryPeekRune`. Cross-checked every
+caller of `CannotMatchLookahead` (FirstOfRule + BetweenInclusiveRule)
+for the discard-the-bool-return shape. Categories: EOF vs lone-surrogate
+conflation in lookahead shortcuts, AnyToken-fallback wildcard handling
+on surrogate-prefixed input, FirstOf-vs-BetweenInclusive shortcut
+divergence, Universe.Contains(-1) sanity. Found and fixed:
+`FirstOfRule.TryParseRule` discarded `Lexer.TryPeekRune`'s bool return
+and let a lone-surrogate `peekValue = -1` reach `CannotMatchLookahead`,
+which wrongly skipped `Advance.Always` children whose
+`FirstConsumedTokens` is `Universe` (notably `AnyToken()`). Under
+`Compile(null)` this broke `FirstOf(specific, AnyToken())`-style grammars
+on surrogate-prefixed input even though the wildcard fallback would
+have matched the surrogate as a one-char token. `BetweenInclusiveRule`
+already handled this correctly by short-circuiting on the bool return
+(`&& Lexer.TryPeekRune(...)`); the fix mirrors that. Two regression
+tests in `UnexpectedUnicodeTests` lock in the high- and low-surrogate
+shapes; a third pinning test confirms the EOF half of the shortcut
+still fires after the fix. Backlog 5kf2 has the full write-up.
 
 ### 2026-05-04: LiteralRule + LiteralIgnoreAsciiCaseRule ComputeRuleStart sweep
 Reviewed: `LiteralRule.cs`, `LiteralIgnoreAsciiCaseRule.cs`,
