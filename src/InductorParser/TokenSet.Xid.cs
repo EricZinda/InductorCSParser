@@ -90,6 +90,7 @@ public readonly partial struct TokenSet
         (0x1885, 0x1886),   // MONGOLIAN LETTER ALI GALI BALUDA..THREE BALUDA (Mn)
         (0x2118, 0x2118),   // SCRIPT CAPITAL P (Sm)
         (0x212E, 0x212E),   // ESTIMATED SYMBOL (So)
+        (0x309B, 0x309C),   // KATAKANA-HIRAGANA VOICED / SEMI-VOICED SOUND MARK (Sk)
     };
 
     // Source: Unicode 17.0. Code points in General_Category L + Nl that
@@ -128,6 +129,7 @@ public readonly partial struct TokenSet
         (0x200C, 0x200D),   // ZERO WIDTH NON-JOINER, ZERO WIDTH JOINER (Cf)
         (0x2118, 0x2118),   // SCRIPT CAPITAL P (Sm), also in XidStartAdds
         (0x212E, 0x212E),   // ESTIMATED SYMBOL (So), also in XidStartAdds
+        (0x309B, 0x309C),   // KATAKANA-HIRAGANA VOICED / SEMI-VOICED SOUND MARK (Sk), also in XidStartAdds
         (0x30FB, 0x30FB),   // KATAKANA MIDDLE DOT (Po)
         (0xFF65, 0xFF65),   // HALFWIDTH KATAKANA MIDDLE DOT (Po)
     };
