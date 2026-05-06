@@ -1,10 +1,10 @@
-The Inductor Parser (IP) is a loose port of the [Inductor C++ Parser](https://github.com/EricZinda/InductorParser), designed for C#. I ported this as part of a Unity editor project, and during a period where I've been subjected to way too many Claude generated Regex's I had to review. My goal is to design a parser library that is:
+The Inductor Parser (IP) is a loose port of the [Inductor C++ Parser](https://github.com/EricZinda/InductorParser), designed for C#. I ported this while creating a new porject in Unity and during a period where I've been subjected to reviewing way too many Claude generated Regex's. My goal is to design a parser library that is:
 
-- **Designed for World Languages:** From the default lexer, to the built-in rules, to normalization, it's designed around Unicode so grammars have a good starting point for world-language text.
 - **More Readable than Regex:** The grammars are self-describing and human readable so they can be reasoned about, code reviewed and understood without looking up obscure letters and symbols. 
+- **Designed for World Languages:** From the lexer, to the built-in rules, to normalization, it's designed around Unicode so grammars have a good starting point for world-language text.
 - **Safer Against Pathological Input:** It's designed to avoid "catastrophic backtracking" and pitfalls like it that can hang your app, blow your stack, etc.
-- **Able to run on WebGL and .NET Standard 2.1 (and later) using IL2CPP** and doesn't use Reflection.Emit or threads so that it can run in Unity targeting WebGL or IL2CPP on iPhone
-- **Fast enough to be used in production**
+- **Able to run on WebGL and .NET Standard 2.1 (and later) using IL2CPP**: it doesn't use Reflection.Emit or threads so that it can run in Unity targeting WebGL or IL2CPP on iPhone
+- **Fast enough to be used in production**: It is competitive against other .Net Parsers and fast enough to be used as a regex replacement for most uses.
 
 If you just want to learn how to use it, follow the primers:
 
@@ -13,12 +13,54 @@ If you just want to learn how to use it, follow the primers:
 - [Primer 3: Unicode Edge Cases](docs/Primer3.md)
 - [Tutorial: Peek](docs/tutorial-peek.md)
 
-## Designed for World Languages
-If you write grammars in Inductor Parser, you get a foundation that helps you support Unicode from the start:
+For more background, read on.
 
-- By default, each token presented to a rule is a .NET `StringInfo` text element, which follows Unicode grapheme-cluster behavior on modern .NET and keeps ordinary grammars from breaking apart non-ASCII text or emoji sequences accidentally.
-- Built-in rules use Unicode-aware definitions for things like "whitespace" and "identifiers" so you don't miss common corner cases.
-- The parser defaults to normalizing input so that characters that can be written as multiple things in Unicode get normalized to one (and the error indexes reverse this so errors point to the right place in the original text)
+## More Readable than Regex
+
+A major goal in building this parser is to be able to replace hieroglyphic Regex patterns or complicated, hard to debug parsing code with something more readable, debuggable and understandable. Especially as I'm doing more and more reviewing of code written by LLMs, I've found it invaluable to have the LLM write pattern matching and parsing code in a form that I can actually review for correctness. 
+
+Compare a couple top Regex questions from StackOverflow:
+
+Match numbers only (From https://stackoverflow.com/q/273141)
+
+```Re
+Regex: ^\d+$
+```
+```CSharp
+Inductor Parser:
+
+var numbersOnly = AllOf(
+    OneOrMore(OneOf(TokenSet.Digits)),
+    Eof()
+);
+
+```
+
+Match a line that doesn't contain the word "hede" (From https://stackoverflow.com/q/406230): 
+
+```re
+Regex: ^((?!hede).)*$
+```
+```csharp
+Inductor Parser (actually matches all end of line variants which the OP probably really wanted):
+
+var lineWithoutHede = AllOf(
+    ZeroOrMore(AllOf(
+        Not(Literal("hede")),
+        Not(EndOfLine()),
+        AnyToken()
+    )),
+    EndOfLine(eofIsEol: true)
+);
+```
+
+
+## Designed for World Languages
+If you write grammars using the Inductor Parser, you get a foundation that supports Unicode from the start:
+
+- Each token presented to a rule is a user-perceived character (a "Grapheme Cluster" in Unicode) which keeps  grammars from breaking apart non-ASCII text or emoji sequences accidentally.
+- Built-in rules use Unicode-aware definitions for things like "whitespace" and "identifiers" so you don't miss corner cases.
+- The parser defaults to normalizing input so that characters that can be written multiple ways in Unicode get normalized to one (and the error indexes reverse this so errors point to the right place in the original text)
 - Every Symbol in the parse tree carries a `SourceRange` that reports its span in chars and tokens plus line and column, so error highlights and IDE tooltips can pick the unit that matches what they show
 
 You can also pretend you never heard the word "grapheme cluster" and write rules naturally: it will still give you the right base to start from!
@@ -106,45 +148,6 @@ var range = result.Tree!.Find(settingValue)!.SourceRange!.Value;
 ```
 
 Use whichever unit matches what your consumer counts in. Chars for `string.Substring` or an editor diagnostic. Tokens for a `^^^` underline a human will look at and recognize as covering one thing.
-
-## More Readable than Regex
-
-A major goal in building this parser is to be able to replace hieroglyphic Regex patterns or complicated, hard to debug parsing code with something more readable, debuggable and understandable. Especially as I'm doing more and more reviewing of code written by LLMs, I've found it invaluable to have the LLM write pattern matching and parsing code in a form that I can actually review for correctness. 
-
-Compare a couple top Regex questions from StackOverflow:
-
-Match numbers only (From https://stackoverflow.com/q/273141)
-
-```Re
-Regex: ^\d+$
-```
-```CSharp
-Inductor Parser:
-
-var numbersOnly = AllOf(
-    OneOrMore(OneOf(TokenSet.Digits)),
-    Eof()
-);
-
-```
-
-Match a line that doesn't contain the word "hede" (From https://stackoverflow.com/q/406230): 
-
-```re
-Regex: ^((?!hede).)*$
-```
-```csharp
-Inductor Parser (actually matches all end of line variants which the OP probably really wanted):
-
-var lineWithoutHede = AllOf(
-    ZeroOrMore(AllOf(
-        Not(Literal("hede")),
-        Not(EndOfLine()),
-        AnyToken()
-    )),
-    EndOfLine(eofIsEol: true)
-);
-```
 
 ## Safer Against Pathological Input
 

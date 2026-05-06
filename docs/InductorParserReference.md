@@ -17,7 +17,7 @@ Related docs:
 
 - [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md): design and architecture of the library. Why it's shaped the way it's, what tradeoffs were made.
 - [Terminology.md](Terminology.md): library-specific meaning of terms used throughout these docs (leaf, composite, syntax tree, debug tree, AST, FlattenType writing conventions).
-- [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md): lexer internals (code units, runes, graphemes, normalization, the two lexers).
+- [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md): lexer internals (code units, runes, graphemes, normalization).
 - [UnicodeGotchas.md](UnicodeGotchas.md): caller-side Unicode concerns the lexer can't fix (case-insensitive matching, BOMs, homoglyphs, etc.).
 
 ## Hello World Example

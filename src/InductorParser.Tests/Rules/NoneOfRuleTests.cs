@@ -81,7 +81,7 @@ public class NoneOfRuleTests
         // Not(EndOfLine()) + AnyToken() for the sweep and EndOfLine()
         // for the terminator, which together handle CRLF, LF, CR, NEL,
         // LS, and PS as one terminator each.
-        // See docs/UnicodeGotchas.md § "CRLF Under Token Tokenization".
+        // See docs/UnicodeGotchas.md § "CRLF Line Endings".
         var rule = AllOf(
             ZeroOrMore(NoneOf(TokenSet.Single('\n'))),
             Token('\n'));

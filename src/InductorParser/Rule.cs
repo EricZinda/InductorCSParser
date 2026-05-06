@@ -666,9 +666,8 @@ public abstract class Rule
             // Trailing-input branch: the parse SUCCEEDED but the rule
             // didn't claim everything. Report at lexer.Position (the
             // start of the unconsumed tail), not the high-water
-            // DeepestFailure that the two branches above use. The
-            // Math.Max idiom only fits when rollback put Position at
-            // 0; here Position is meaningful and DeepestFailure is
+            // DeepestFailure that the two branches above use. 
+            // Position is meaningful and DeepestFailure is
             // from a sibling alternative the parser deliberately
             // abandoned. Same reason for passing customMessage: null
             // instead of DeepestFailureMessage. A WithError on a

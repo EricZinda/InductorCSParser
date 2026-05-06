@@ -60,10 +60,10 @@ internal sealed class WithinTokenRule : Rule
         }
 
         // Sub-lexer over the token's runes. Owns a substring of the
-        // outer input: the runes the inner rule walks live in
-        // subInput[0 .. token.Length), and the sub-lexer's
-        // _position / _endPosition / DeepestFailure are all 0-based on
-        // that substring. Other rules don't need to know what mode the lexer is in.
+        // outer input: the inner rule walks subInput[0 .. token.Length),
+        // and the sub-lexer's Input / Position / IsEof / DeepestFailure
+        // / Read() Token offsets are all 0-based on that substring.
+        // Other rules don't need to know what mode the lexer is in.
         // Switched to one-rune-per-token mode so the inner rule sees
         // each rune of the outer token as its own token.
         //
@@ -72,15 +72,11 @@ internal sealed class WithinTokenRule : Rule
         // payoff is that lexer.Input.Length, lexer.Position, and
         // lexer.IsEof all agree about the readable range, so any rule
         // that bounds its own loop on lexer.Input.Length stays correct.
-        // That removes the trap that made ScanUntilRule infinite-loop
-        // when used inside WithinToken before backlog 9scu was fixed
-        // (and would have bitten any user-defined Rule subclass
-        // following the same pattern).
-        //
-        // Positions inside the sub-lexer are translated back to outer-
-        // input coordinates at this boundary via `+ token.Offset` so
-        // the outer parse's deepest-failure / error-position reporting
-        // stays in the caller's coordinate system.
+        // That removes a trap that bit ScanUntilRule (it looped on
+        // lexer.Input.Length, which used to be the FULL outer string,
+        // and infinite-looped past the sub-lexer's bound) and would
+        // have bitten any user-defined Rule subclass following the same
+        // pattern.
         string subInput = outerLexer.Input.Substring(token.Offset, token.Length);
         var subLexer = new Lexer(
             subInput,
@@ -98,26 +94,29 @@ internal sealed class WithinTokenRule : Rule
 
         if (innerResult == null && innerOutputs.Count == 0)
         {
-            // Inner rule failed. Sub-lexer positions are 0-based on
-            // the substring, so add token.Offset to get back to outer-
-            // input coordinates for the outer parse's deepest-failure
-            // tracking.
+            // Sub-lexer positions are 0-based on the substring, so they're
+            // rune offsets within the outer token. Snap the recorded
+            // outer-coordinate failure back to the outer cluster's start
+            // so the parser-wide "errors land at cluster boundaries"
+            // invariant holds. Trace cites the rune-level offset for
+            // debug.
             int innerFailurePos = Math.Max(subLexer.DeepestFailure, subLexer.Position);
-            int outerFailurePos = innerFailurePos + token.Offset;
             TraceFailure(outerLexer, $"inner rule failed at token rune offset {innerFailurePos}");
-            outerLexer.RecordFailure(outerFailurePos, subLexer.DeepestFailureMessage ?? ErrorMessage);
+            outerLexer.RecordFailure(outerTransaction.StartPosition, subLexer.DeepestFailureMessage ?? ErrorMessage);
             return null;
         }
 
         if (!subLexer.IsEof)
         {
-            // Inner rule matched a prefix of the token but not all of
-            // it. A token is atomic, so partial matches don't count.
-            // subLexer.Position is already 0-based on the substring,
-            // so it's the consumed rune count directly.
+            // Inner rule matched a prefix of the token but not all of it.
+            // A token is atomic from the outer view, so the failure
+            // belongs at the outer cluster's start, not at the rune
+            // offset where the inner rule stopped reading (which is
+            // mid-cluster from outside). subLexer.Position is 0-based on
+            // the substring, so it's the consumed rune count directly.
             int consumed = subLexer.Position;
             TraceFailure(outerLexer, $"inner rule consumed only {consumed}/{token.Length} of the token");
-            outerLexer.RecordFailure(subLexer.Position + token.Offset, ErrorMessage);
+            outerLexer.RecordFailure(outerTransaction.StartPosition, ErrorMessage);
             return null;
         }
 

@@ -12,3 +12,11 @@ BenchmarkDotNet.Artifacts/
 .external/
 .rustup-home/
 .tools/
+
+# Build artifact: dropped here by the CopyToUnity MSBuild target in
+# src/InductorParser/InductorParser.csproj after every netstandard2.1
+# build. runil2cpptest.sh runs the dotnet build first, so the IL2CPP
+# pass regenerates it. Run `dotnet build src/InductorParser/InductorParser.csproj
+# -f netstandard2.1` before opening the Unity Editor interactively.
+# The .meta file IS tracked so Unity's GUID stays stable.
+src/InductorParser.Tests/Unity/Assets/Plugins/InductorParser.dll
