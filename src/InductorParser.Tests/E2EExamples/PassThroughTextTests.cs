@@ -20,15 +20,14 @@ public class PassThroughTextTests
         // every character that isn't a newline. Stopping at '\n' falls out
         // naturally from ZeroOrMore stopping when the inner fails.
         //
-        // WARNING: this example is LF-only on purpose. Under the default
-        // GraphemeLexer, "\r\n" is one grapheme cluster, so Token('\n')
-        // DOESN'T match a CRLF line ending and NoneOf silently
-        // swallows the CRLF grapheme as body content. If you're copying
-        // this idiom for a line-based grammar that must accept Windows
-        // line endings, add Literal("\r\n") as an explicit alternative
-        // on both the body stop and the terminator. See
-        // docs/UnicodeGotchas.md § "CRLF Under GraphemeLexer" for the
-        // full pattern.
+        // WARNING: this example is LF-only on purpose. The lexer reads
+        // "\r\n" as one grapheme cluster, so Token('\n') DOESN'T match
+        // a CRLF line ending and NoneOf silently swallows the CRLF
+        // grapheme as body content. If you're copying this idiom for a
+        // line-based grammar that must accept Windows line endings, add
+        // Literal("\r\n") as an explicit alternative on both the body
+        // stop and the terminator. See docs/UnicodeGotchas.md § "CRLF
+        // Line Endings" for the full pattern.
         var lineComment = AllOf(
             Token('/'),
             Token('/'),

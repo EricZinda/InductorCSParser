@@ -657,7 +657,7 @@ public class TokenSetTests
         // OneOf(string) delegates to TokenSet.Runes, which accepts
         // multi-rune graphemes and stores them in the multi-rune
         // array. The resulting rule matches that grapheme as a unit
-        // when it shows up as a single token under GraphemeLexer.
+        // when the lexer reads it as a single token.
         var thumbsUpSkinTone = "\U0001F44D\U0001F3FD";
         var rule = Rules.OneOf(thumbsUpSkinTone);
 

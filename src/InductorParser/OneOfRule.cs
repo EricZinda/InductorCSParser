@@ -70,10 +70,10 @@ internal sealed class OneOfRule : Rule
 
     // Membership test that handles both halves of the set. Single-rune
     // tokens (RuneValue >= 0) hit the rune intervals via Contains(int).
-    // Multi-rune tokens (RuneValue == -1 under GraphemeLexer) probe the
-    // multi-rune array via the token's Chars span. Sets without any
-    // multi-rune entries short-circuit on the first branch and never
-    // touch the grapheme array.
+    // Multi-rune tokens (RuneValue == -1) probe the multi-rune array
+    // via the token's Chars span. Sets without any multi-rune entries
+    // short-circuit on the first branch and never touch the grapheme
+    // array.
     private bool TokenInSet(Lexing.Token token)
     {
         int runeValue = token.RuneValue;

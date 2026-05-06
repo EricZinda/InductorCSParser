@@ -17,13 +17,20 @@ internal sealed class FirstOfRule : Rule
     {
         string input = lexer.Input;
         int pos = lexer.Position;
-        // Peek the next rune once for the skip shortcut. At EOF or on a
-        // malformed surrogate, use -1 (a value no FirstConsumedTokens can
-        // contain) so an Always child is still correctly skipped: it would
-        // need to read a rune and there isn't one.
+        // Peek the next rune once for the skip shortcut. Two cases get the
+        // peekValue = -1 marker: EOF (no rune to read) and a lone surrogate
+        // (TryPeekRune returns false because a surrogate half isn't a valid
+        // scalar). The shortcut is sound for EOF: an Always child there has
+        // nothing to read and is correctly skipped. It is NOT sound for a
+        // lone surrogate, which is still a one-char token a wildcard child
+        // like AnyToken can match. Track which case we're in so the shortcut
+        // applies at EOF or on a real rune but not on a lone surrogate.
+        // Mirrors BetweenInclusiveRule, which short-circuits on the same
+        // TryPeekRune bool return.
         int peekValue = -1;
+        bool loneSurrogate = false;
         if (pos < input.Length)
-            Lexer.TryPeekRune(input, pos, out peekValue, out _);
+            loneSurrogate = !Lexer.TryPeekRune(input, pos, out peekValue, out _);
 
         // If we're preserving this node, create a new list to capture its outputSymbols
         if (effectiveFlattenType == FlattenType.Preserve)
@@ -36,7 +43,7 @@ internal sealed class FirstOfRule : Rule
             // The ErrorMessage == null guard preserves WithError message
             // surfacing: a child with a friendly message still gets attempted
             // so its failure can reach DeepestFailureMessage.
-            if (child.CannotMatchLookahead(peekValue) && child.ErrorMessage == null)
+            if (!loneSurrogate && child.CannotMatchLookahead(peekValue) && child.ErrorMessage == null)
             {
                 continue;
             }

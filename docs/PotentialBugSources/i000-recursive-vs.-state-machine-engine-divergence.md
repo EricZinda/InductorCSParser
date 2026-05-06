@@ -1,0 +1,4 @@
+- Recursive vs. state-machine engine divergence
+    - The recursive evaluator and the state-machine evaluator should produce the same ParseResult on the same input. A divergence is almost always a bug in one of them.
+    - Cross-check rule implementations in `src/InductorParser/*Rule.cs` against their lowered counterparts in `ExperimentalSrc/InductorParser/StateMachine/Stepper.cs` and `Lowerer.cs` when looking for bugs.
+    - The cross-engine compare fixtures in `ExperimentalSrc/InductorParser.Tests/StateMachine*CompareTests.cs` are the right place to add a regression test for any new divergence found.

@@ -214,6 +214,15 @@ internal sealed class ScanUntilRule : Rule
         // stopper match. Each iteration consumes one token as body
         // or one escape sequence.
         //
+        // The loop bound is `!lexer.IsEof`, which is `_position <
+        // _endPosition` for a sub-lexer (the one WithinToken hands us
+        // when this rule is the inner of WithinToken(ScanUntil(...))).
+        // Comparing against input.Length would be the FULL outer string
+        // and let the loop run past the sub-lexer's bound: PeekTokenLength
+        // would return 0 there, the body fall-through's
+        // SetPositionUnchecked(pos + 0) wouldn't move the cursor, and the
+        // loop would spin forever.
+        //
         // Lone surrogates flow through as body. The lexer surfaces
         // each unpaired surrogate code unit as a one-char token with
         // RuneValue == -1 (see UnexpectedUnicodeTests for the canonical
@@ -228,7 +237,7 @@ internal sealed class ScanUntilRule : Rule
         // Lone surrogates only reach this rule under Compile(null),
         // because string.Normalize rejects malformed UTF-16 with
         // ArgumentException out of Parse() under any other form.
-        while (lexer.Position < inputLen)
+        while (!lexer.IsEof)
         {
             int pos = lexer.Position;
 
