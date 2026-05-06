@@ -43,7 +43,7 @@
          engine consults it; it exists for the rebar grep benchmark and
          any other caller that wants to pre-filter input before invoking
          the parser. Needs internal access to rule-type accessors
-         (LiteralRule.Expected, OneOfRule.LoweringSet, etc.) and to
+         (Rule.ExpectedText, OneOfRule.LoweringSet, etc.) and to
          TokenSet's HasMultiRuneGraphemes / TryGetBmpChars helpers. -->
     <InternalsVisibleTo Include="InductorParser.Prefilter" />
   </ItemGroup>

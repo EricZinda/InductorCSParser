@@ -37,7 +37,7 @@ namespace InductorParser.Lexing;
 //     but correct when rewrites change character counts.
 //
 // Semantics: when the failure lands inside a character sequence that got
-// rewritten (a combining sequence composed, or a ligature folded), the
+// rewritten (a combining sequence composed, or a ligature converted), the
 // returned position is the start of that sequence in the original string.
 // Editors want to highlight the whole bad grapheme or ligature anyway, so
 // this matches what a diagnostic consumer expects to see.

@@ -123,9 +123,9 @@ public class XidIdentifierTests
         // that promise: under NFKC the fullwidth letters decompose to
         // ASCII before the lexer runs, so both inputs produce the same
         // flattened match text.
-        var fullwidthRule = Identifier();
+        var fullwidthRule = Identifier(System.Text.NormalizationForm.FormKC);
         fullwidthRule.Compile(System.Text.NormalizationForm.FormKC);
-        var plainRule = Identifier();
+        var plainRule = Identifier(System.Text.NormalizationForm.FormKC);
         plainRule.Compile(System.Text.NormalizationForm.FormKC);
         var fullwidth = fullwidthRule.Parse("ｆｏｏ");
         var plain = plainRule.Parse("foo");
@@ -142,9 +142,9 @@ public class XidIdentifierTests
         // U+FB00 LATIN SMALL LIGATURE FF. NFKC decomposes it to "ff".
         // Same promise: the ligatured and un-ligatured inputs match the
         // same identifier under FormKC.
-        var ligatureRule = Identifier();
+        var ligatureRule = Identifier(System.Text.NormalizationForm.FormKC);
         ligatureRule.Compile(System.Text.NormalizationForm.FormKC);
-        var plainRule = Identifier();
+        var plainRule = Identifier(System.Text.NormalizationForm.FormKC);
         plainRule.Compile(System.Text.NormalizationForm.FormKC);
         var ligature = ligatureRule.Parse("ﬀoo");
         var plain = plainRule.Parse("ffoo");
@@ -161,9 +161,9 @@ public class XidIdentifierTests
         // Mathematical Bold letters (U+1D400..U+1D433 for bold A..z, etc.)
         // are supplementary-plane code points NFKC-equivalent to plain
         // ASCII. This is the case that catches "𝐟𝐨𝐨" vs "foo" spoofing.
-        var mathBoldRule = Identifier();
+        var mathBoldRule = Identifier(System.Text.NormalizationForm.FormKC);
         mathBoldRule.Compile(System.Text.NormalizationForm.FormKC);
-        var plainRule = Identifier();
+        var plainRule = Identifier(System.Text.NormalizationForm.FormKC);
         plainRule.Compile(System.Text.NormalizationForm.FormKC);
         var mathBold = mathBoldRule.Parse("𝐟𝐨𝐨");
         var plain = plainRule.Parse("foo");

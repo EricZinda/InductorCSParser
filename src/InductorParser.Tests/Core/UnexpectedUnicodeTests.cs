@@ -92,110 +92,9 @@ namespace InductorParser.Tests;
 //      normalization. U+FFFF, U+FDD0, the rest of the Private Use
 //      Area, and U+FFFD all pass through as ordinary tokens.
 //
-//   5. NORMALIZATION EDGE CASES: caught at Compile time so the
-//      grammar can't silently fail to match.
-//      Cases where one logical character has more than one valid
-//      Unicode encoding, and the parser has to make sure the
-//      grammar's literals and the input agree.
-//
-//      All four sub-cases are protected by the same validation
-//      rule: at Compile time, every rule's text is compared against
-//      its own normalization in the chosen form. If they differ,
-//      Compile throws with a clear message. So an author who writes
-//      a literal in any non-canonical form gets a startup error
-//      pointing at the offender. Whichever path you take, the
-//      grammar can't silently fail to match because of a mismatch
-//      between the literal's encoding and the input's normalization.
-//
-//      Four sub-cases:
-//
-//        * Multi-mark canonical reordering: combining marks of
-//          different classes can appear in raw input in either order
-//          and Unicode says they're equivalent. FormC normalizes the
-//          input at parse time, so the parser handles this for free.
-//
-//        * Hangul jamo decomposition: a precomposed Korean syllable
-//          like 한 (U+D55C) is canonically equivalent to its three
-//          jamo (U+1112 + U+1161 + U+11AB). Under FormC the grammar
-//          literal has to be written in the precomposed form (FormC
-//          composes the jamo into the syllable). The grammar then
-//          matches input written either way, because FormC composes
-//          the input the same way before the lexer sees it.
-//
-//        * Canonical singletons: a few characters in Unicode exist
-//          twice for historical reasons. The Angstrom sign (U+212B,
-//          inherited from older scientific-notation codepages) and
-//          LATIN CAPITAL LETTER A WITH RING ABOVE (U+00C5) are two
-//          different code points, but they're the same character.
-//          They render identically as Å. Unicode declared U+212B
-//          canonically equivalent to U+00C5 and gave it a canonical
-//          decomposition that maps it to U+00C5. FormC always
-//          rewrites a singleton to its canonical form when it
-//          normalizes a string (U+212B becomes U+00C5, and the
-//          same is true for the other four singletons listed
-//          below).
-//
-//          Without compile-time validation this would be a silent
-//          trap for a grammar author: write Token('Å')
-//          (the Angstrom version), the parser normalizes input to
-//          FormC before the lexer runs, so any U+212B in input
-//          becomes U+00C5. The lexer never sees U+212B, and your
-//          rule looking for U+212B never matches anything, even
-//          though every Å in your input renders the same as the
-//          one you typed. The Compile validation pass catches this
-//          exact case: it sees the literal U+212B differs from its
-//          FormC normalization (U+00C5) and throws
-//          InvalidOperationException at startup, telling the author
-//          to use U+00C5 instead.
-//
-//          There are five canonical singletons in Unicode total:
-//          the famous trio Angstrom / Ohm / Kelvin (all of which
-//          duplicate Latin or Greek letters that already exist) and
-//          the two angle brackets U+2329 / U+232A (which Unicode
-//          declared identical to the CJK angle brackets U+3008 /
-//          U+3009). All five behave the same way: FormC folds them
-//          into their canonical forms (singleton -> canonical), and
-//          the Compile validation rejects a literal that uses the
-//          singleton form.
-//
-//        * Compatibility singletons: characters that are a
-//          presentation variant of a plain character. The
-//          mathematical bold A (𝐀, U+1D400) is the typographic-bold
-//          version of plain A. The fullwidth A (Ａ, U+FF21, common
-//          in CJK input) is the wide-form version of plain A. The
-//          superscript two (², U+00B2) is the raised version of
-//          plain 2. There are hundreds of these. Unicode considers
-//          each pair to be the same content with different
-//          presentation.
-//
-//          Compatibility singletons are NOT folded by FormC. They 
-//          ARE folded by NFKC (FormKC).
-//          That gives the grammar author a deliberate choice and
-//          both choices are safe:
-//
-//          Under default FormC (the common case), 𝐀 and A look
-//          visually different and the parser treats them as
-//          different. If you type Token('𝐀') the rule matches the
-//          math-bold A and only the math-bold A in input, not
-//          plain A. No surprises: you wrote what you meant, and
-//          you'll get back what you wrote. Compile passes.
-//
-//          Under FormKC, the parser is matching by MEANING instead
-//          of by visual form. NFKC folds 𝐀, ℂ, Ａ, ², and the
-//          rest of the presentation variants down to their plain
-//          ASCII / Greek / etc. equivalents before the lexer runs.
-//          A grammar that wants to treat these as equivalent opts
-//          into FormKC at Compile time. If the author then writes
-//          Token('𝐀') they hit the same trap canonical singletons
-//          have under FormC: NFKC rewrites the input's 𝐀 to A, so
-//          the rule looking for 𝐀 never matches anything. The
-//          Compile validation catches this exact case and throws,
-//          telling the author to use the plain-A form.
-//
-//          So the design is: visual matching is the safe default,
-//          meaning-based matching is opt-in, and either way an
-//          author who picks the wrong literal form for their
-//          chosen normalization gets a clear error at startup.
+//   5. NORMALIZATION EDGE CASES: compile-time normalization checks
+//      ensure literals match the chosen form; see NormalizationTests.cs
+//      for the full coverage.
 //
 //   6. IDENTIFIER-RELEVANT EDGE CASES: the default Identifier rule
 //      doesn't try to detect lookalike-character attacks. If the
@@ -305,6 +204,74 @@ public class UnexpectedUnicodeTests
     }
 
     [Test]
+    public void Token_with_stray_surrogate_under_default_Compile_throws_clear_error()
+    {
+        // A surrogate-bearing literal can never be normalized to FormC (or any
+        // other form). The user has to use Compile(null) for these, per the
+        // documented WTF-8 / unpaired-surrogate round-tripping case. Compile()
+        // should surface that in a clear InvalidOperationException with the
+        // same helpful shape as other normalization mismatches, not let .NET's
+        // generic ArgumentException leak out. The original ArgumentException
+        // is preserved as InnerException (wrapped in AggregateException so the
+        // shape stays uniform when multiple literals each trip Normalize) so
+        // a programmatic caller can still drill in to the runtime cause.
+        var rule = Token(UnicodeExamples.HighSurrogateMinText);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => rule.Compile());
+        Assert.That(exception!.Message, Does.Contain("surrogate"),
+            "Compile error should mention surrogates so the author knows what to fix.");
+        Assert.That(exception.Message, Does.Contain("Compile(null)"),
+            "Compile error should suggest Compile(null) as the documented path.");
+        Assert.That(exception.InnerException, Is.InstanceOf<AggregateException>(),
+            "InnerException should expose the runtime cause.");
+        var aggregate = (AggregateException)exception.InnerException!;
+        Assert.That(aggregate.InnerExceptions, Has.Count.EqualTo(1));
+        Assert.That(aggregate.InnerExceptions[0], Is.InstanceOf<ArgumentException>());
+    }
+
+    [Test]
+    public void Literal_with_stray_surrogate_under_default_Compile_throws_clear_error()
+    {
+        // Same shape as Token, applied to LiteralRule. The form-validation
+        // pass walks every literal-bearing rule, so the same fix has to cover
+        // GraphemeRule, LiteralRule, and LiteralIgnoreAsciiCaseRule alike.
+        var rule = Literal(UnicodeExamples.HighSurrogateMinText + "X");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => rule.Compile());
+        Assert.That(exception!.Message, Does.Contain("surrogate"));
+        Assert.That(exception.InnerException, Is.InstanceOf<AggregateException>());
+    }
+
+    [Test]
+    public void LiteralIgnoreAsciiCase_with_stray_surrogate_under_default_Compile_throws_clear_error()
+    {
+        var rule = LiteralIgnoreAsciiCase(UnicodeExamples.HighSurrogateMinText + "x");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => rule.Compile());
+        Assert.That(exception!.Message, Does.Contain("surrogate"));
+        Assert.That(exception.InnerException, Is.InstanceOf<AggregateException>());
+    }
+
+    [Test]
+    public void Multiple_surrogate_literals_under_default_Compile_aggregate_inner_exceptions()
+    {
+        // Every literal-bearing rule that trips string.Normalize contributes
+        // one ArgumentException to the AggregateException. The grammar author
+        // sees a single multi-rule message in InvalidOperationException.Message
+        // and can walk InnerExceptions for the per-rule runtime cause.
+        var rule = AllOf(
+            Token(UnicodeExamples.HighSurrogateMinText),
+            Literal(UnicodeExamples.HighSurrogateMinText + "X"),
+            LiteralIgnoreAsciiCase(UnicodeExamples.HighSurrogateMinText + "y"));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => rule.Compile());
+        Assert.That(exception!.InnerException, Is.InstanceOf<AggregateException>());
+        var aggregate = (AggregateException)exception.InnerException!;
+        Assert.That(aggregate.InnerExceptions, Has.Count.EqualTo(3));
+        Assert.That(aggregate.InnerExceptions, Has.All.InstanceOf<ArgumentException>());
+    }
+
+    [Test]
     public void Literal_with_lone_surrogate_first_char_compiles_under_null_normalization()
     {
         // Mirrors the Token(string) round-tripping case at the top of this
@@ -399,21 +366,80 @@ public class UnexpectedUnicodeTests
     [Test]
     public void OneOf_universe_rejects_lone_surrogate_under_null_normalization()
     {
-        // A lone surrogate has no RuneValue, so OneOf rejects it even
-        // when the set is the "matches anything" Universe. The
-        // predicate is "is the token's RuneValue in the set," and -1
-        // (the no-rune marker the lexer emits for surrogate halves)
-        // is by definition not a valid Unicode scalar, so it can't
-        // be a member of any TokenSet — Universe included. Using
-        // Universe here (instead of a narrow set like Letters) makes
-        // the failure unambiguously about RuneValue membership, not
-        // about the surrogate happening to fall outside a category.
+        // Universe = ~default(TokenSet) is [0, 0xD7FF] union [0xE000,
+        // 0x10FFFF]: the complement operator splits around the surrogate
+        // block, so Universe doesn't include surrogates by construction.
+        // A lone surrogate token therefore doesn't match Universe —
+        // not because of the membership logic, but because the surrogate
+        // isn't in the set. Compare with the Range(0, 0x10FFFF) test
+        // below which explicitly does include the surrogate block and
+        // does match a stray surrogate.
         var rule = OneOf(TokenSet.Universe);
         rule.Compile(null);
         string input = UnicodeExamples.HighSurrogateMinText;
         var result = rule.Parse(input);
 
         Assert.That(result.Success, Is.False);
+    }
+
+    [Test]
+    public void OneOf_with_range_including_surrogates_matches_lone_high_surrogate()
+    {
+        // Range(0, 0x10FFFF) is documented to include the surrogate gap
+        // as legal-but-rarely-useful interior of the interval (see
+        // TokenSet.Range docs around TokenSet.cs:363-371). Under
+        // Compile(null) a stray surrogate is a valid one-char token. The
+        // OneOf membership check disambiguates the three RuneValue == -1
+        // cases (EOF / multi-rune / stray surrogate) and queries the
+        // rune intervals using the surrogate's UTF-16 code unit value
+        // for the surrogate case, so a user-typed Range that includes
+        // surrogate code points correctly matches them. The motivating
+        // use case is WTF-8 / unpaired-surrogate round-tripping.
+        var rule = OneOf(TokenSet.Range(0, 0x10FFFF));
+        rule.Compile(null);
+
+        Assert.That(rule.Parse("\uD800").Success, Is.True,
+            "Range(0, 0x10FFFF) includes the high surrogate min; should match it.");
+        Assert.That(rule.Parse("\uDFFF").Success, Is.True,
+            "Range(0, 0x10FFFF) includes the low surrogate max; should match it.");
+        Assert.That(rule.Parse("a").Success, Is.True,
+            "Range(0, 0x10FFFF) still matches ordinary scalars.");
+    }
+
+    [Test]
+    public void NoneOf_with_range_including_surrogates_rejects_lone_surrogate()
+    {
+        // The mirror case for NoneOf. Without the surrogate-aware
+        // membership check, NoneOf wrongly accepted lone surrogates
+        // even when the user's set explicitly negated them: the
+        // membership probe returned false (because RuneValue was -1
+        // and the rune intervals weren't queried), NoneOf inverted
+        // false to true, and the false-positive match shipped. The
+        // surrogate-aware check fixes both directions in lockstep.
+        var rule = AllOf(NoneOf(TokenSet.Range(0, 0x10FFFF)), Eof());
+        rule.Compile(null);
+
+        Assert.That(rule.Parse("\uD800").Success, Is.False,
+            "NoneOf(range that includes surrogates) should reject a high surrogate.");
+        Assert.That(rule.Parse("\uDFFF").Success, Is.False,
+            "NoneOf(range that includes surrogates) should reject a low surrogate.");
+        Assert.That(rule.Parse("a").Success, Is.False,
+            "NoneOf(Range(0, 0x10FFFF)) covers everything; rejects ASCII too.");
+    }
+
+    [Test]
+    public void OneOf_with_range_excluding_surrogates_still_rejects_lone_surrogate()
+    {
+        // Sanity counter-test. A user-typed Range that doesn't include
+        // surrogates (the typical case — Range('a','z'), Letters, etc.)
+        // should still reject lone-surrogate input. The fix only adds a
+        // new path; it doesn't change how non-surrogate-bearing sets
+        // behave.
+        var rule = OneOf(TokenSet.Range('a', 'z'));
+        rule.Compile(null);
+
+        Assert.That(rule.Parse("\uD800").Success, Is.False);
+        Assert.That(rule.Parse("a").Success, Is.True);
     }
 
     [Test]
@@ -437,7 +463,7 @@ public class UnexpectedUnicodeTests
         Assert.That(anyTokenResult.Success, Is.True);
         Assert.That(anyTokenResult.ToString(), Is.EqualTo(input),
             "matched text equals the input character-for-character; " +
-            "the parser didn't swap the surrogates or fold them");
+            "the parser didn't swap the surrogates or convert them");
         Assert.That(anyTokenResult.Symbols.Count, Is.EqualTo(2),
             "two distinct AnyToken matches, one per surrogate, " +
             "proving the lexer didn't merge them into a single token");
@@ -1093,230 +1119,6 @@ public class UnexpectedUnicodeTests
         // step has nothing to match and the grammar fails.
         Assert.That(rule.Parse("hello").Success, Is.False,
             "TokenSet.Replacement has nothing to match in clean input");
-    }
-
-    // ============================================================
-    // Group 5: Normalization edge cases
-    //   expected: caught at Compile time so the grammar can't
-    //   silently fail to match.
-    // ============================================================
-
-    [Test]
-    public void Multiple_combining_marks_get_canonicalized_under_FormC()
-    {
-        // Vietnamese a-circumflex-dot-below (U+1EAD) decomposes to
-        // a + dot-below (ccc=220) + circumflex (ccc=230). The marks
-        // have different combining classes, so NFC reorders them
-        // when they appear in non-canonical order. Token(U+1EAD)
-        // matches input regardless of which order the author used,
-        // because NFC composes both orderings to the same
-        // precomposed character. (Same-class marks like acute +
-        // circumflex are NOT reordered and would NOT have this
-        // property.)
-        var precomposedRule = AllOf(Token(UnicodeExamples.VietnameseACircumflexDotBelowRune), Eof());
-
-        // Canonical order (ccc 220 then 230): NFC composes directly.
-        Assert.That(precomposedRule.Parse(UnicodeExamples.VietnameseACircumflexDotBelowCanonicalText).Success,
-            Is.True, "canonical order");
-
-        // Reversed order (ccc 230 then 220): NFC reorders by class
-        // first, then composes. Same result.
-        Assert.That(precomposedRule.Parse(UnicodeExamples.VietnameseACircumflexDotBelowReorderedText).Success,
-            Is.True, "NFC reorders different-class marks before composing");
-    }
-
-    [Test]
-    public void Compile_throws_for_non_canonical_combining_mark_order_under_FormC()
-    {
-        // The flip side of the test above: a grammar literal that
-        // uses non-canonical mark order would silently never match
-        // any input under FormC, because every input gets canonicalized
-        // before the lexer sees it. The Compile validation pass
-        // catches this and throws so the author fixes the literal at
-        // grammar-build time instead of debugging silent match
-        // failures.
-        var rule = Token(UnicodeExamples.VietnameseACircumflexDotBelowReorderedText);
-
-        var ex = Assert.Throws<InvalidOperationException>(() => rule.Compile());
-        Assert.That(ex!.Message, Does.Contain("FormC"));
-    }
-
-    [Test]
-    public void Hangul_precomposed_and_decomposed_match_same_grammar_under_FormC()
-    {
-        // Hangul "han" U+D55C precomposed. Canonical decomposition
-        // is U+1112 + U+1161 + U+11AB (three jamo). NFC composes the
-        // jamo back to U+D55C, so a grammar with Token(precomposed)
-        // matches both forms. UAX #15 has special-case rules for
-        // Hangul composition.
-        var rule = AllOf(Token(UnicodeExamples.HangulHanGrapheme), Eof());
-
-        var precomposed = rule.Parse(UnicodeExamples.HangulHanGrapheme);
-        var decomposed = rule.Parse(UnicodeExamples.HangulHanDecomposedText);
-
-        Assert.That(precomposed.Success, Is.True, "precomposed");
-        Assert.That(decomposed.Success, Is.True,
-            "NFC composes the three jamo back to U+D55C");
-    }
-
-    [Test]
-    public void Compile_throws_for_decomposed_Hangul_jamo_under_FormC()
-    {
-        // The flip side of the test above: a grammar literal in
-        // decomposed-jamo form would silently never match any input
-        // under FormC, because every input gets canonicalized
-        // (composed back to U+D55C) before the lexer sees it. The
-        // Compile validation pass catches this.
-        var rule = Token(UnicodeExamples.HangulHanDecomposedText);
-
-        var ex = Assert.Throws<InvalidOperationException>(() => rule.Compile());
-        Assert.That(ex!.Message, Does.Contain("FormC"));
-    }
-
-    [Test]
-    public void Compile_throws_for_canonical_singleton_Angstrom()
-    {
-        // U+212B ANGSTROM SIGN canonically decomposes to U+00C5 LATIN
-        // CAPITAL LETTER A WITH RING ABOVE. NFC rewrites the Angstrom
-        // form to U+00C5 before the lexer sees the input. So a grammar
-        // with Token("Å") under FormC would silently never match.
-        // The new compile-time validation pass catches this and tells
-        // the author to use U+00C5 instead.
-        var badRule = Token(UnicodeExamples.AngstromGrapheme);
-        var ex = Assert.Throws<InvalidOperationException>(() => badRule.Compile());
-        Assert.That(ex!.Message, Does.Contain("FormC"));
-        Assert.That(ex.Message, Does.Contain("U+212B").Or.Contains("U+00C5"),
-            "the message names either the offending literal or its " +
-            "FormC-normalized replacement");
-
-        // Positive case: a grammar with the canonical replacement
-        // (U+00C5) compiles fine and matches input typed as the
-        // singleton (U+212B), because NFC folds U+212B to U+00C5
-        // before the lexer runs.
-        var goodRule = AllOf(Token(UnicodeExamples.LatinCapitalAWithRingAboveGrapheme), Eof());
-        Assert.That(goodRule.Parse(UnicodeExamples.AngstromGrapheme).Success, Is.True,
-            "U+00C5 grammar matches U+212B input under FormC");
-    }
-
-    [Test]
-    public void Compile_throws_for_Angstrom_singleton_under_FormD()
-    {
-        // Under FormD the Angstrom decomposes to A + combining ring,
-        // and the literal text U+212B matches its own FormD only by
-        // accident. Actually NFD of U+212B is "Å" (A + ring),
-        // so the literal does NOT match its own FormD. Lock in the
-        // Compile-time error here.
-        var badRule = Token(UnicodeExamples.AngstromGrapheme);
-        var ex = Assert.Throws<InvalidOperationException>(() =>
-            badRule.Compile(NormalizationForm.FormD));
-        Assert.That(ex!.Message, Does.Contain("FormD"));
-
-        // Positive case: a grammar with the FormD decomposed form
-        // ("A" + combining ring) compiles fine and matches input
-        // typed as the Angstrom singleton, because NFD decomposes
-        // U+212B to that exact two-rune sequence.
-        var goodRule = AllOf(Token(UnicodeExamples.LatinAWithRingAboveDecomposedText), Eof());
-        goodRule.Compile(NormalizationForm.FormD);
-        Assert.That(goodRule.Parse(UnicodeExamples.AngstromGrapheme).Success, Is.True,
-            "decomposed grammar matches U+212B input under FormD");
-    }
-
-    [Test]
-    public void Compile_throws_for_canonical_singleton_Ohm_under_FormC()
-    {
-        // U+2126 OHM SIGN is a canonical singleton: it canonically
-        // decomposes to U+03A9 GREEK CAPITAL LETTER OMEGA. NFC
-        // rewrites U+2126 to U+03A9. A grammar with the Ohm form
-        // would silently never match.
-        var badRule = Token(UnicodeExamples.OhmGrapheme);
-        var ex = Assert.Throws<InvalidOperationException>(() => badRule.Compile());
-        Assert.That(ex!.Message, Does.Contain("FormC"));
-
-        // Positive case: a grammar with U+03A9 (Greek capital Omega)
-        // matches input typed as the Ohm singleton (U+2126), because
-        // NFC folds U+2126 to U+03A9 before the lexer runs.
-        var goodRule = AllOf(Token(UnicodeExamples.GreekCapitalOmegaGrapheme), Eof());
-        Assert.That(goodRule.Parse(UnicodeExamples.OhmGrapheme).Success, Is.True,
-            "U+03A9 grammar matches U+2126 input under FormC");
-    }
-
-    [Test]
-    public void Compile_throws_for_canonical_singleton_Kelvin_under_FormC()
-    {
-        // U+212A KELVIN SIGN is a canonical singleton: it canonically
-        // decomposes to plain U+004B LATIN CAPITAL LETTER K. NFC
-        // rewrites U+212A to U+004B. The third member of the
-        // Angstrom / Ohm / Kelvin trio.
-        var badRule = Token(UnicodeExamples.KelvinGrapheme);
-        var ex = Assert.Throws<InvalidOperationException>(() => badRule.Compile());
-        Assert.That(ex!.Message, Does.Contain("FormC"));
-
-        // Positive case: a grammar with ASCII 'K' (U+004B) matches
-        // input typed as the Kelvin singleton (U+212A), because NFC
-        // folds U+212A to U+004B before the lexer runs.
-        var goodRule = AllOf(Token(UnicodeExamples.AsciiCapitalKGrapheme), Eof());
-        Assert.That(goodRule.Parse(UnicodeExamples.KelvinGrapheme).Success, Is.True,
-            "ASCII K grammar matches U+212A input under FormC");
-    }
-
-    [Test]
-    public void Compile_throws_for_canonical_singleton_angle_bracket_under_FormC()
-    {
-        // U+2329 LEFT-POINTING ANGLE BRACKET is a canonical singleton:
-        // canonically decomposes to U+3008 LEFT ANGLE BRACKET (the
-        // CJK angle bracket). NFC rewrites U+2329 to U+3008. The
-        // less-famous canonical singleton; not a Latin/Greek
-        // duplicate but the same mechanism.
-        var badRule = Token(UnicodeExamples.LeftPointingAngleBracketGrapheme);
-        var ex = Assert.Throws<InvalidOperationException>(() => badRule.Compile());
-        Assert.That(ex!.Message, Does.Contain("FormC"));
-
-        // Positive case: a grammar with U+3008 (CJK angle bracket)
-        // matches input typed as U+2329, because NFC folds U+2329
-        // to U+3008 before the lexer runs.
-        var goodRule = AllOf(Token(UnicodeExamples.CjkLeftAngleBracketGrapheme), Eof());
-        Assert.That(goodRule.Parse(UnicodeExamples.LeftPointingAngleBracketGrapheme).Success, Is.True,
-            "U+3008 grammar matches U+2329 input under FormC");
-    }
-
-    [Test]
-    public void Compile_accepts_compatibility_singleton_under_FormC()
-    {
-        // U+2102 DOUBLE-STRUCK CAPITAL C is a compatibility singleton:
-        // its compatibility decomposition is U+0043 plain C, but its
-        // canonical decomposition is itself. FormC only does canonical
-        // decompositions, so U+2102 passes through NFC unchanged.
-        // The grammar literal in the source character matches its own
-        // FormC, so Compile validation accepts it.
-        var rule = Token(UnicodeExamples.DoubleStruckCGrapheme);
-
-        Assert.DoesNotThrow(() => rule.Compile());
-    }
-
-    [Test]
-    public void Compile_throws_for_compatibility_singleton_under_FormKC()
-    {
-        // Same character (U+2102 DOUBLE-STRUCK CAPITAL C). Under
-        // FormKC, NFKC also applies compatibility decompositions,
-        // so U+2102 normalizes to U+0043 plain C. A grammar literal
-        // in the source character would silently never match. The
-        // Compile validation pass catches this exactly the same way
-        // it catches canonical singletons under FormC.
-        var badRule = Token(UnicodeExamples.DoubleStruckCGrapheme);
-        var ex = Assert.Throws<InvalidOperationException>(() =>
-            badRule.Compile(NormalizationForm.FormKC));
-        Assert.That(ex!.Message, Does.Contain("FormKC"));
-
-        // Positive case: a grammar with ASCII 'C' (U+0043) compiled
-        // for FormKC matches input typed as the double-struck C
-        // singleton (U+2102), because NFKC folds U+2102 to U+0043
-        // before the lexer runs. This is the matching-by-meaning
-        // path: the author opts into FormKC to treat presentation
-        // variants as equivalent to their plain forms.
-        var goodRule = AllOf(Token(UnicodeExamples.AsciiCapitalCGrapheme), Eof());
-        goodRule.Compile(NormalizationForm.FormKC);
-        Assert.That(goodRule.Parse(UnicodeExamples.DoubleStruckCGrapheme).Success, Is.True,
-            "ASCII C grammar matches U+2102 input under FormKC");
     }
 
     // ============================================================

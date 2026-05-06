@@ -1,0 +1,1 @@
+- `OneOf(TokenSet.Letters).Compile().Parse("དྷ")` (Tibetan composite letter U+0F52, NFC-decomposable to "U+0F51U+0FB7") fails because Letters has U+0F52 as a single-rune interval but doesn't have the decomposed multi-rune cluster as a multi-rune entry. Most BCL category sets share this blind spot for any precomposed character whose NFD form is a multi-rune cluster.

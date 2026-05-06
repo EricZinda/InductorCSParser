@@ -48,6 +48,11 @@ internal static class UnicodeExamples
     // way on .NET 5+ and on Unity Mono / IL2CPP.
     public const string LatinEAcuteGrapheme = "e" + CombiningAcuteText;
 
+    // é as the single precomposed rune U+00E9 (LATIN SMALL LETTER E WITH
+    // ACUTE). One rune, one grapheme. Pair with LatinEAcuteGrapheme when
+    // a test wants to be explicit about which form it's using.
+    public const string LatinEAcutePrecomposedGrapheme = "é";
+
     // 🤷‍♀️ woman shrugging. ZWJ emoji sequence: base shrug rune + ZWJ +
     // female sign + emoji variation selector. UAX #29 sees ONE grapheme.
     // Legacy StringInfo splits it. Use this to test the ZWJ rule.
@@ -209,7 +214,7 @@ internal static class UnicodeExamples
     // NFC composes the three jamo back to U+D55C.
     public const string HangulHanDecomposedText = "\u1112\u1161\u11AB";
 
-    // U+212B ANGSTROM SIGN. Canonical singleton; NFC folds to U+00C5.
+    // U+212B ANGSTROM SIGN. Canonical singleton; NFC converts to U+00C5.
     // Renders identically to U+00C5 LATIN CAPITAL LETTER A WITH RING ABOVE.
     public const string AngstromGrapheme = "\u212B";
 
@@ -221,7 +226,7 @@ internal static class UnicodeExamples
     // both U+00C5 and U+212B. Used as a literal under Compile(FormD).
     public const string LatinAWithRingAboveDecomposedText = "A\u030A";
 
-    // U+2126 OHM SIGN. Canonical singleton; NFC folds to U+03A9.
+    // U+2126 OHM SIGN. Canonical singleton; NFC converts to U+03A9.
     // Renders identically to U+03A9 GREEK CAPITAL LETTER OMEGA.
     public const string OhmGrapheme = "\u2126";
 
@@ -229,7 +234,7 @@ internal static class UnicodeExamples
     // that NFC produces from the Ohm singleton.
     public const string GreekCapitalOmegaGrapheme = "\u03A9";
 
-    // U+212A KELVIN SIGN. Canonical singleton; NFC folds to U+004B.
+    // U+212A KELVIN SIGN. Canonical singleton; NFC converts to U+004B.
     // Renders identically to ASCII 'K'. Most dangerous of the singletons
     // in source: a literal "K" might be either the Kelvin sign or the
     // ASCII K and a reader can't tell.
@@ -241,15 +246,15 @@ internal static class UnicodeExamples
     public const string AsciiCapitalKGrapheme = "K";
 
     // U+2329 LEFT-POINTING ANGLE BRACKET. Canonical singleton; NFC
-    // folds to U+3008 (CJK angle bracket). Renders similarly.
+    // converts to U+3008 (CJK angle bracket). Renders similarly.
     public const string LeftPointingAngleBracketGrapheme = "\u2329";
 
     // U+3008 LEFT ANGLE BRACKET (CJK). The canonical replacement
     // that NFC produces from U+2329.
     public const string CjkLeftAngleBracketGrapheme = "\u3008";
 
-    // U+2102 DOUBLE-STRUCK CAPITAL C. Compatibility singleton; NFKC
-    // folds to ASCII 'C', NFC leaves it alone.
+    // U+2102 DOUBLE-STRUCK CAPITAL C. Compatibility singleton: NFKC
+    // converts to ASCII 'C', NFC leaves it alone.
     public const string DoubleStruckCGrapheme = "\u2102";
 
     // U+0043 ASCII 'C'. The compatibility-form replacement that NFKC

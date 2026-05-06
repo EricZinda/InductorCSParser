@@ -419,10 +419,24 @@ public abstract class Rule
         if (normalizeInput.HasValue)
         {
             var offenders = new List<(Rule rule, string original, string normalized)>();
+            // Captures any ArgumentException string.Normalize throws for
+            // literals it can't normalize (in practice, unpaired surrogates).
+            // We aggregate these as InnerException on the thrown
+            // InvalidOperationException so a programmatic caller can walk
+            // the runtime causes; the user-facing message stays the
+            // multi-rule offender list BuildNormalizationErrorMessage emits.
+            var normalizeFailures = new List<ArgumentException>();
             visited.Clear();
-            CollectNormalizationOffenders(this, visited, normalizeInput.Value, offenders);
+            CollectNormalizationOffendersAll(this, visited, normalizeInput.Value, offenders, normalizeFailures);
             if (offenders.Count > 0)
-                throw new InvalidOperationException(BuildNormalizationErrorMessage(normalizeInput.Value, offenders));
+            {
+                Exception? inner = normalizeFailures.Count > 0
+                    ? new AggregateException(normalizeFailures)
+                    : null;
+                throw new InvalidOperationException(
+                    BuildNormalizationErrorMessage(normalizeInput.Value, offenders),
+                    inner);
+            }
         }
 
         visited.Clear();
@@ -875,6 +889,69 @@ public abstract class Rule
         return new RuleStartRequirements(TokenSet.Universe, Advance.Sometimes);
     }
 
+    // The user-supplied literal text this rule matches against, exposed
+    // on the base so every consumer that wants "the literal" reads from
+    // one polymorphic spot instead of switching on rule type. Default
+    // null means "this rule has no literal text" (composites, zero-width
+    // predicates, OneOf / NoneOf which carry rune sets, etc.).
+    // GraphemeRule, LiteralRule, and LiteralIgnoreAsciiCaseRule override
+    // to return their expected text. Used by BetweenInclusiveRule's
+    // scanner-skip optimization, which collects literal candidates for
+    // the substring-search fast path.
+    // Compile's normalization-form validation does NOT read this. It
+    // calls CollectNormalizationOffenders below instead, which lets each
+    // rule (including OneOf / NoneOf with set entries that aren't a
+    // single string) validate its own data shape.
+    internal virtual string? ExpectedText => null;
+
+    // Subclass hook for Compile-time normalization-form validation. Each
+    // rule that holds user-supplied text the parser will compare against
+    // normalized input overrides this to walk its own data and add an
+    // offender (or an ArgumentException to failures) for any text whose
+    // normalization differs from the chosen form. Default no-op covers
+    // composites, zero-width predicates, and any rule whose match doesn't
+    // depend on stored fixed text. Compile's static walker (below) calls
+    // this on every reachable rule and recurses into Children. See
+    // backlog n4kp for the form-check shape and the user-visible error
+    // message.
+    internal virtual void CollectNormalizationOffenders(
+        NormalizationForm form,
+        List<(Rule rule, string original, string normalized)> offenders,
+        List<ArgumentException> failures)
+    {
+        // default no-op
+    }
+
+    // Helper for rules that have one fixed expected string. Tries to
+    // convert `text` to `form`. Returns the normalized text on success.
+    // On ArgumentException (in practice an unpaired surrogate, which
+    // string.Normalize rejects regardless of which form was requested),
+    // captures the exception in `failures` and adds a synthetic offender
+    // entry that points at Compile(null), then returns null. Callers that
+    // get a non-null result should replace their stored expected text
+    // with it; the auto-convert behavior makes the rule's match-time view
+    // canonically equivalent to the user's typed text under any form.
+    protected static string? TryConvertToForm(
+        Rule rule, string text,
+        NormalizationForm form,
+        List<(Rule rule, string original, string normalized)> offenders,
+        List<ArgumentException> failures)
+    {
+        try
+        {
+            return text.Normalize(form);
+        }
+        catch (ArgumentException exception)
+        {
+            failures.Add(exception);
+            offenders.Add((rule, text,
+                $"<string.Normalize rejected this literal: {exception.Message} " +
+                $"This is usually an unpaired surrogate. Use Compile(null) to keep " +
+                $"surrogate-bearing literals as-is.>"));
+            return null;
+        }
+    }
+
     internal void SetIdInternal(SymbolId id)
     {
         Id = id;
@@ -1081,35 +1158,24 @@ public abstract class Rule
             SealAll(child, visited);
     }
 
-    // Walk the rule graph and compare each literal-bearing rule's expected
-    // text against its normalization in the chosen form. Records every
-    // offender; the caller throws one combined exception. Reads the
-    // existing internal accessors on the three rule types that hold
-    // user-supplied literal text.
-    private static void CollectNormalizationOffenders(
+    // Walk the rule graph and ask each rule to validate its own user-
+    // supplied text against the chosen normalization form. Each rule
+    // overrides the instance-level CollectNormalizationOffenders to do
+    // the right thing for its own data shape: literal-bearing rules
+    // normalize one fixed string, set-bearing rules walk their entries,
+    // composites no-op (this walker recurses into Children separately).
+    // Records every offender; the caller throws one combined exception.
+    private static void CollectNormalizationOffendersAll(
         Rule r,
         HashSet<Rule> visited,
         NormalizationForm form,
-        List<(Rule rule, string original, string normalized)> offenders)
+        List<(Rule rule, string original, string normalized)> offenders,
+        List<ArgumentException> normalizeFailures)
     {
         if (!visited.Add(r)) return;
-
-        string? expected = r switch
-        {
-            GraphemeRule g => g.LoweringExpected,
-            LiteralRule l => l.Expected,
-            LiteralIgnoreAsciiCaseRule li => li.Expected,
-            _ => null
-        };
-        if (expected != null)
-        {
-            string normalized = expected.Normalize(form);
-            if (!string.Equals(expected, normalized, StringComparison.Ordinal))
-                offenders.Add((r, expected, normalized));
-        }
-
+        r.CollectNormalizationOffenders(form, offenders, normalizeFailures);
         foreach (var child in r.Children)
-            CollectNormalizationOffenders(child, visited, form, offenders);
+            CollectNormalizationOffendersAll(child, visited, form, offenders, normalizeFailures);
     }
 
     // Build the multi-rule error message. One header line names the form,
