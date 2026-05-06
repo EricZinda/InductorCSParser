@@ -59,17 +59,33 @@ internal sealed class WithinTokenRule : Rule
             return null;
         }
 
-        // Sub-lexer over the token's runes. Same input string as
-        // the outer lexer, bounded to [token.Offset, token.Offset +
-        // token.Length), and switched to one-rune-per-token mode so
-        // the inner rule sees the runes inside the outer token.
-        // No Substring allocation: the sub-lexer shares the outer's
-        // string and uses absolute positions, so its DeepestFailure
-        // and Position are already outer-input coordinates.
+        // Sub-lexer over the token's runes. Owns a substring of the
+        // outer input: the runes the inner rule walks live in
+        // subInput[0 .. token.Length), and the sub-lexer's
+        // _position / _endPosition / DeepestFailure are all 0-based on
+        // that substring. Other rules don't need to know what mode the lexer is in.
+        // Switched to one-rune-per-token mode so the inner rule sees
+        // each rune of the outer token as its own token.
+        //
+        // The substring allocation costs one short string per
+        // WithinToken match (typically 1-4 chars per cluster). The
+        // payoff is that lexer.Input.Length, lexer.Position, and
+        // lexer.IsEof all agree about the readable range, so any rule
+        // that bounds its own loop on lexer.Input.Length stays correct.
+        // That removes the trap that made ScanUntilRule infinite-loop
+        // when used inside WithinToken before backlog 9scu was fixed
+        // (and would have bitten any user-defined Rule subclass
+        // following the same pattern).
+        //
+        // Positions inside the sub-lexer are translated back to outer-
+        // input coordinates at this boundary via `+ token.Offset` so
+        // the outer parse's deepest-failure / error-position reporting
+        // stays in the caller's coordinate system.
+        string subInput = outerLexer.Input.Substring(token.Offset, token.Length);
         var subLexer = new Lexer(
-            outerLexer.Input,
-            token.Offset,
-            token.Offset + token.Length,
+            subInput,
+            startPosition: 0,
+            endPosition: subInput.Length,
             traceSink: null,
             traceLevel: TraceLevel.Normal,
             oneRunePerToken: true);
@@ -82,11 +98,14 @@ internal sealed class WithinTokenRule : Rule
 
         if (innerResult == null && innerOutputs.Count == 0)
         {
-            // Inner rule failed. Sub-lexer positions are already absolute
-            // in the outer input, so propagate them directly.
-            int failurePos = Math.Max(subLexer.DeepestFailure, subLexer.Position);
-            TraceFailure(outerLexer, $"inner rule failed at token rune offset {failurePos - token.Offset}");
-            outerLexer.RecordFailure(failurePos, subLexer.DeepestFailureMessage ?? ErrorMessage);
+            // Inner rule failed. Sub-lexer positions are 0-based on
+            // the substring, so add token.Offset to get back to outer-
+            // input coordinates for the outer parse's deepest-failure
+            // tracking.
+            int innerFailurePos = Math.Max(subLexer.DeepestFailure, subLexer.Position);
+            int outerFailurePos = innerFailurePos + token.Offset;
+            TraceFailure(outerLexer, $"inner rule failed at token rune offset {innerFailurePos}");
+            outerLexer.RecordFailure(outerFailurePos, subLexer.DeepestFailureMessage ?? ErrorMessage);
             return null;
         }
 
@@ -94,9 +113,11 @@ internal sealed class WithinTokenRule : Rule
         {
             // Inner rule matched a prefix of the token but not all of
             // it. A token is atomic, so partial matches don't count.
-            int consumed = subLexer.Position - token.Offset;
+            // subLexer.Position is already 0-based on the substring,
+            // so it's the consumed rune count directly.
+            int consumed = subLexer.Position;
             TraceFailure(outerLexer, $"inner rule consumed only {consumed}/{token.Length} of the token");
-            outerLexer.RecordFailure(subLexer.Position, ErrorMessage);
+            outerLexer.RecordFailure(subLexer.Position + token.Offset, ErrorMessage);
             return null;
         }
 

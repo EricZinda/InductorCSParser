@@ -206,4 +206,44 @@ public class WithinTokenRuleTests
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
+
+    [Test]
+    public void ScanUntil_inside_WithinToken_consumes_one_rune_token_with_trailing_input()
+    {
+        // A no-stopper / no-escape ScanUntil iteration calls no TryParse,
+        // so RuleCountLimit / Timeout / Cancellation don't trip if the
+        // rule fails to make progress. The Task.Wait is the external
+        // catch: a regression that breaks the sub-lexer's end-of-input
+        // bound shows up as a wait timeout, not a hung test runner.
+        var rule = WithinToken(ScanUntil(TokenSet.Runes("?")));
+        var options = new ParseOptions { AllowTrailingInput = true };
+
+        var task = System.Threading.Tasks.Task.Run(() => rule.Parse("aX", options));
+        bool completed = task.Wait(TimeSpan.FromSeconds(5));
+        Assert.That(completed, Is.True, "WithinToken(ScanUntil(...)) hung past its outer token");
+
+        var result = task.Result;
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("a"));
+    }
+
+    [Test]
+    public void ScanUntil_inside_WithinToken_consumes_every_rune_of_a_multi_rune_cluster()
+    {
+        // Compile(null) so the decomposed e + combining acute survives
+        // to the lexer as one two-rune cluster instead of being
+        // precomposed away by NFC.
+        var rule = WithinToken(ScanUntil(TokenSet.Runes("?")));
+        rule.Compile(null);
+        var options = new ParseOptions { AllowTrailingInput = true };
+
+        var task = System.Threading.Tasks.Task.Run(
+            () => rule.Parse(LatinEAcuteGrapheme + "X", options));
+        bool completed = task.Wait(TimeSpan.FromSeconds(5));
+        Assert.That(completed, Is.True, "WithinToken(ScanUntil(...)) hung past its outer token");
+
+        var result = task.Result;
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(LatinEAcuteGrapheme));
+    }
 }

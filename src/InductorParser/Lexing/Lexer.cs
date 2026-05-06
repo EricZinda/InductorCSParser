@@ -121,6 +121,14 @@ public sealed partial class Lexer
         BindInput(input, startPosition, endPosition, traceSink, traceLevel);
     }
 
+    // The string this lexer reads from. For a top-level lexer this is
+    // the input the caller passed to Parse. For a sub-lexer (the one
+    // WithinTokenRule builds over the runes of one outer token) this is
+    // the substring covering just those runes; the sub-lexer's
+    // Position, IsEof, DeepestFailure, and Read() / Token offsets are
+    // all expressed in coordinates of this string. Rule code can bound
+    // its own loops on Input.Length safely either way: the lexer's
+    // readable range and Input.Length are always the same string.
     public string Input => _input;
     public int Position => _position;
     public int DeepestFailure => _deepestFailure;

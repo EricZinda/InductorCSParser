@@ -353,7 +353,7 @@ public class UnexpectedUnicodeTests
     public void FirstOf_with_AnyToken_fallback_matches_lone_surrogate_under_null_normalization()
     {
         // FirstOf(specific, AnyToken()) on lone-surrogate input under
-        // Compile(null): the wildcard fallback matches the surrogate as
+        // Compile(null): AnyToken() matches the surrogate as
         // a one-char token, the FirstOf succeeds, and the matched text
         // round-trips the surrogate verbatim. Same shape grammars use
         // for "specific case, otherwise pass through anything," now
