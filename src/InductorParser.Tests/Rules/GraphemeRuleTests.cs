@@ -298,4 +298,54 @@ public class GraphemeRuleTests
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
+
+    [Test]
+    public void Named_single_rune_Token_is_findable_via_Find_and_renders_with_user_name()
+    {
+        // A single-rune Token has its rule Id pinned to the rune's code
+        // point at construction (Token('a').Id == 0x61). Tree.Find still
+        // resolves through rule.Id, NameOf returns the user-supplied name
+        // for the user-named case, and PrintTree shows the long form.
+        var aChar = Token('a').As("aChar").Preserve();
+        var result = aChar.Parse("a");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.Is(aChar), Is.True);
+        Assert.That(result.Tree!.Find(aChar), Is.Not.Null);
+        Assert.That(aChar.NameOf(result.Tree!.Id), Is.EqualTo("aChar"));
+        Assert.That(result.Tree!.PrintTree(aChar), Is.EqualTo("aChar: \"a\"\n"));
+    }
+
+    [Test]
+    public void Named_multi_rune_Token_is_findable_via_Find_and_renders_with_user_name()
+    {
+        // A multi-rune Token (Devanagari "हि" = HA + VOWEL SIGN I) has
+        // rule.Id assigned at Compile time in the custom range, since the
+        // construction-time rune-Id assignment only fires for single-rune
+        // expected text. NameOf returns the user-supplied name and
+        // PrintTree shows the long form.
+        var devChar = Token("हि").As("devChar").Preserve();
+        var result = devChar.Parse("हि");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.Is(devChar), Is.True);
+        Assert.That(result.Tree!.Find(devChar), Is.Not.Null);
+        Assert.That(devChar.NameOf(result.Tree!.Id), Is.EqualTo("devChar"));
+        Assert.That(result.Tree!.PrintTree(devChar), Is.EqualTo("devChar: \"हि\"\n"));
+    }
+
+    [Test]
+    public void Unnamed_multi_rune_Token_is_findable_and_renders_with_class_trace_name()
+    {
+        // An unnamed multi-rune Token has rule.Id in the custom range and
+        // Name == null. NameOf returns the class-derived trace name
+        // ("Token") and PrintTree uses the long form.
+        var rule = Token("हि").Preserve();
+        var result = rule.Parse("हि");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.Is(rule), Is.True);
+        Assert.That(rule.NameOf(result.Tree!.Id), Is.EqualTo("Token"));
+        Assert.That(result.Tree!.PrintTree(rule), Is.EqualTo("Token: \"हि\"\n"));
+    }
 }

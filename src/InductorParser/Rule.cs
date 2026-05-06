@@ -93,7 +93,12 @@ public abstract class Rule
     // Lazily-built reverse index from SymbolId to human-readable name
     // for every rule reachable from this root. Populated on the first
     // NameOf call. Grammars that never ask never pay the allocation.
-    private Dictionary<SymbolId, string>? _nameIndex;
+    // The IsUserSupplied flag distinguishes entries set by the user via
+    // .As("name") from the class-derived trace-name fallback (AllOf,
+    // OneOrMore, Token, etc.). NameOf uses the flag to decide whether
+    // the entry should win over the rune-string default for ids that
+    // happen to land in the Unicode scalar range.
+    private Dictionary<SymbolId, (string Name, bool IsUserSupplied)>? _nameIndex;
 
     public SymbolId Id { get; private set; }
     public string? Name { get; private set; }
@@ -464,34 +469,54 @@ public abstract class Rule
     // aren't stable until Compile runs.
     public string? NameOf(SymbolId id)
     {
-        int value = id.Value;
-        if (value >= 0 && value < SymbolRanges.CharacterRangeEnd)
-        {
-            return Rune.IsValid(value) ? new Rune(value).ToString() : null;
-        }
-
         if (!_sealed) Compile();
         _nameIndex ??= BuildNameIndex();
-        return _nameIndex.TryGetValue(id, out var name) ? name : null;
+
+        // A user-supplied .As("name") wins over every default. Returns
+        // "aChar" for Token('a').As("aChar"), "letter" for
+        // OneOf(...).As("letter"), and so on, regardless of where the
+        // id lands in the SymbolRanges layout.
+        if (_nameIndex.TryGetValue(id, out var entry) && entry.IsUserSupplied)
+            return entry.Name;
+
+        // Unicode scalar range with no user-supplied name: the rune's
+        // own text is the natural label (single-rune Tokens render as
+        // 'c' rather than Token: "c"). Returns null on invalid scalars
+        // (surrogate halves) since they aren't representable as a Rune.
+        int value = id.Value;
+        if (value >= 0 && value < SymbolRanges.CharacterRangeEnd)
+            return Rune.IsValid(value) ? new Rune(value).ToString() : null;
+
+        // Custom-range or built-in id with no user-supplied name: the
+        // class-derived trace name (AllOf, OneOrMore,
+        // BetweenInclusive[1..3]).
+        return entry.Name;
     }
 
-    private Dictionary<SymbolId, string> BuildNameIndex()
+    private Dictionary<SymbolId, (string Name, bool IsUserSupplied)> BuildNameIndex()
     {
-        var map = new Dictionary<SymbolId, string>();
+        var map = new Dictionary<SymbolId, (string Name, bool IsUserSupplied)>();
         var visited = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
         CollectNames(this, visited, map);
         return map;
     }
 
     // Populate the reverse index by walking the sealed rule graph once.
-    // For each rule, prefer the user-supplied Name (from .As("foo")) and
-    // fall back to the class-derived trace name, which is what tracing
-    // shows for unnamed rules and what a tree-walker expects to see for
-    // things like AllOf / OneOrMore / BetweenInclusive[1..3].
-    private static void CollectNames(Rule r, HashSet<Rule> visited, Dictionary<SymbolId, string> map)
+    // Each entry tracks both the resolved name (the user-supplied .As
+    // name when set, otherwise the class-derived trace name) and whether
+    // the user supplied it. NameOf reads the flag to decide whether the
+    // entry should override the rune-string default for character-range
+    // ids. A user-supplied name on one rule wins over a trace-name
+    // fallback on a different rule that happens to share the same id
+    // (single-rune Tokens use the rune's code point as their Id, so
+    // multiple Token rules in the same grammar share an id).
+    private static void CollectNames(Rule r, HashSet<Rule> visited, Dictionary<SymbolId, (string Name, bool IsUserSupplied)> map)
     {
         if (!visited.Add(r)) return;
-        map[r.Id] = r.Name ?? r._ruleTraceName;
+        bool isUser = r.Name != null;
+        string name = r.Name ?? r._ruleTraceName;
+        if (!map.TryGetValue(r.Id, out var existing) || (isUser && !existing.IsUserSupplied))
+            map[r.Id] = (name, isUser);
         foreach (var child in r.Children)
             CollectNames(child, visited, map);
     }

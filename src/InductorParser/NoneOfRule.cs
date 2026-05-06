@@ -51,7 +51,11 @@ internal sealed class NoneOfRule : Rule
         transaction.Commit();
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
-        SymbolId leafId = runeValue >= 0 ? new SymbolId(runeValue) : Id;
+        // Use the rune value as the leaf Id when the rule is unnamed;
+        // otherwise use the rule's own Id so .As("name") makes the leaf
+        // findable via Tree.Find / Tree.Is / NameOf. See OneOfRule for
+        // the rationale.
+        SymbolId leafId = (Name == null && runeValue >= 0) ? new SymbolId(runeValue) : Id;
         var leafSymbol = new Symbol(leafId, FlattenType, token.Memory);
         if (effectiveFlattenType == FlattenType.Flatten)
         {
