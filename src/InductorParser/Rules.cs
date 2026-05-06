@@ -580,21 +580,30 @@ public static class Rules
         );
 
     /// <summary>
-    /// Match a simple decimal: an optional leading -, one or more
-    /// digits, a literal '.', and one or more digits. Default
-    /// <see cref="FlattenType"/>: <see cref="FlattenType.Flatten"/>
-    /// (from the composed outer <see cref="AllOf"/>).
+    /// Match a simple decimal: an optional leading <c>+</c> or
+    /// <c>-</c>, one or more digits, a literal <c>'.'</c>, and one
+    /// or more digits. Default <see cref="FlattenType"/>:
+    /// <see cref="FlattenType.Flatten"/> (from the composed outer
+    /// <see cref="AllOf"/>).
     /// </summary>
     /// <remarks>
-    /// Doesn't handle exponents, scientific notation, or leading
-    /// '+'. Grammars that need those compose their own.
+    /// The optional leading sign matches <see cref="Integer"/>'s
+    /// convention, so a grammar that uses
+    /// <c>FirstOf(Float(), Integer())</c> treats <c>+5</c> and
+    /// <c>+5.5</c> consistently. A sign is allowed only at the front:
+    /// the fractional part is digits-only, and inputs like
+    /// <c>3.+14</c> or <c>--3.14</c> don't match.
+    /// <para>
+    /// Doesn't handle exponents or scientific notation. Grammars
+    /// that need those compose their own.
+    /// </para>
     /// </remarks>
     public static Rule Float() =>
         AllOf(
-            Optional(Token('-').Flatten(FlattenType.Flatten)),
-            Integer(),
+            Optional(OneOf("+-").Flatten(FlattenType.Flatten)),
+            OneOrMore(OneOf(TokenSet.Digits)),
             Token('.').Flatten(FlattenType.Preserve),
-            Integer()
+            OneOrMore(OneOf(TokenSet.Digits))
         );
 
     /// <summary>
