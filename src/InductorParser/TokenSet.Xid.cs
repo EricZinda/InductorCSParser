@@ -17,12 +17,6 @@ namespace InductorParser;
 // rule via Rules.Identifier(), which wires these two sets into the
 // combinator (see Rules.cs).
 //
-// UAX #31 R4 (NFC equivalence) says two identifiers are equal if their
-// NFC normalizations are equal. That's handled elsewhere: ParseOptions
-// normalizes input to NFC by default before the lexer runs, so "café"
-// precomposed and "café" as e + combining acute produce the same
-// flattened string automatically. This file is only about R1.
-//
 // Why this file is split out from TokenSet.cs
 //
 // Most of XID comes from Unicode's General_Category property, which the
@@ -90,6 +84,7 @@ public readonly partial struct TokenSet
         (0x1885, 0x1886),   // MONGOLIAN LETTER ALI GALI BALUDA..THREE BALUDA (Mn)
         (0x2118, 0x2118),   // SCRIPT CAPITAL P (Sm)
         (0x212E, 0x212E),   // ESTIMATED SYMBOL (So)
+        (0x309B, 0x309C),   // KATAKANA-HIRAGANA VOICED / SEMI-VOICED SOUND MARK (Sk)
     };
 
     // Source: Unicode 17.0. Code points in General_Category L + Nl that
@@ -128,6 +123,7 @@ public readonly partial struct TokenSet
         (0x200C, 0x200D),   // ZERO WIDTH NON-JOINER, ZERO WIDTH JOINER (Cf)
         (0x2118, 0x2118),   // SCRIPT CAPITAL P (Sm), also in XidStartAdds
         (0x212E, 0x212E),   // ESTIMATED SYMBOL (So), also in XidStartAdds
+        (0x309B, 0x309C),   // KATAKANA-HIRAGANA VOICED / SEMI-VOICED SOUND MARK (Sk), also in XidStartAdds
         (0x30FB, 0x30FB),   // KATAKANA MIDDLE DOT (Po)
         (0xFF65, 0xFF65),   // HALFWIDTH KATAKANA MIDDLE DOT (Po)
     };
