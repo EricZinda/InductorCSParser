@@ -311,7 +311,7 @@ internal sealed class LoweringContext
 
     private int LowerLiteralIgnoreAsciiCase(LiteralIgnoreAsciiCaseRule rule, int onSuccess, int onFailure)
     {
-        int literalIndex = InternLiteral(rule.LoweringExpected);
+        int literalIndex = InternLiteral(rule.ExpectedText!);
         var effective = ResolveEffective(rule.FlattenType);
         bool needMetadataForEmit = effective != FlattenType.Delete;
         bool needMetadataForError = rule.ErrorMessage != null;
@@ -895,13 +895,13 @@ internal sealed class LoweringContext
         switch (rule)
         {
             case LiteralRule literal:
-                candidates.Add(new LiteralScannerCandidate(literal.LoweringExpected, ignoreAsciiCase: false));
+                candidates.Add(new LiteralScannerCandidate(literal.ExpectedText!, ignoreAsciiCase: false));
                 return true;
             case LiteralIgnoreAsciiCaseRule literalIc:
-                candidates.Add(new LiteralScannerCandidate(literalIc.LoweringExpected, ignoreAsciiCase: true));
+                candidates.Add(new LiteralScannerCandidate(literalIc.ExpectedText!, ignoreAsciiCase: true));
                 return true;
             case GraphemeRule grapheme:
-                candidates.Add(new LiteralScannerCandidate(grapheme.LoweringExpected, ignoreAsciiCase: false));
+                candidates.Add(new LiteralScannerCandidate(grapheme.ExpectedText!, ignoreAsciiCase: false));
                 return true;
             case FirstOfRule firstOf:
                 if (firstOf.Children.Count == 0) return false;
@@ -1150,8 +1150,8 @@ internal sealed class LoweringContext
     // We add internal-visible getters via reflection-free helpers
     // (added on the rule classes in companion edits).
 
-    private static string GetLiteralExpected(LiteralRule rule) => rule.LoweringExpected;
-    private static string GetGraphemeExpected(GraphemeRule rule) => rule.LoweringExpected;
+    private static string GetLiteralExpected(LiteralRule rule) => rule.ExpectedText!;
+    private static string GetGraphemeExpected(GraphemeRule rule) => rule.ExpectedText!;
     private static TokenSet GetOneOfSet(OneOfRule rule) => rule.LoweringSet;
 
     private int InternLiteral(string text)

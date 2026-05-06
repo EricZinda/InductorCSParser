@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
@@ -15,7 +16,7 @@ namespace InductorParser;
 // IsEof == true and the rule fails without advancing, same as OneOfRule.
 internal sealed class NoneOfRule : Rule
 {
-    private readonly TokenSet _set;
+    private TokenSet _set;
     private readonly string _setRendered;
 
     public NoneOfRule(TokenSet runeSet) : base(FlattenType.Preserve)
@@ -27,6 +28,16 @@ internal sealed class NoneOfRule : Rule
     // Accessor for the state-machine evaluator's lowering pass.
     internal TokenSet LoweringSet => _set;
 
+    // See Rule.CollectNormalizationOffenders for the contract. Same
+    // shape as OneOfRule and shares the implementation.
+    internal override void CollectNormalizationOffenders(
+        System.Text.NormalizationForm form,
+        List<(Rule rule, string original, string normalized)> offenders,
+        List<ArgumentException> failures)
+    {
+        OneOfRule.NormalizeAndValidate(this, ref _set, form, offenders);
+    }
+
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         using var transaction = lexer.BeginTransaction();
@@ -37,11 +48,7 @@ internal sealed class NoneOfRule : Rule
             lexer.RecordFailure(transaction.StartPosition, ErrorMessage);
             return null;
         }
-        int runeValue = token.RuneValue;
-        bool inSet = runeValue >= 0
-            ? _set.Contains(runeValue)
-            : _set.HasMultiRuneGraphemes && _set.ContainsToken(token.Chars);
-        if (inSet)
+        if (_set.ContainsToken(token.Chars))
         {
             TraceFailure(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted one not in '{_setRendered}'");
             lexer.RecordFailure(transaction.StartPosition, ErrorMessage);
@@ -51,7 +58,12 @@ internal sealed class NoneOfRule : Rule
         transaction.Commit();
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
-        SymbolId leafId = runeValue >= 0 ? new SymbolId(runeValue) : Id;
+        // Use the rune value as the leaf Id when the rule is unnamed;
+        // otherwise use the rule's own Id so .As("name") makes the leaf
+        // findable via Tree.Find / Tree.Is / NameOf. See OneOfRule for
+        // the rationale.
+        int runeValue = token.RuneValue;
+        SymbolId leafId = (Name == null && runeValue >= 0) ? new SymbolId(runeValue) : Id;
         var leafSymbol = new Symbol(leafId, FlattenType, token.Memory);
         if (effectiveFlattenType == FlattenType.Flatten)
         {

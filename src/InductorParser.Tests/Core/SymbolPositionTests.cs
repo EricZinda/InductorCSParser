@@ -260,6 +260,58 @@ public class SymbolPositionTests
     }
 
     [Test]
+    public void Standalone_empty_leaf_reports_zero_width_SourceRange_at_match_position()
+    {
+        // ScanUntil whose stopper is at the cursor matches a zero-width body
+        // and emits a leaf Symbol with empty memory. The leaf still has a
+        // well-defined position in the input (the offset where the stopper
+        // sat), recoverable via MemoryMarshal.TryGetString on the leaf's
+        // memory. SourceRange should report a zero-width range at that
+        // position, not null.
+        //
+        // AllowTrailingInput so the parse succeeds with the empty body
+        // even though 'X' is still unconsumed.
+        var rule = ScanUntil(TokenSet.Runes("X")).Preserve();
+        var options = new ParseOptions { AllowTrailingInput = true };
+        var result = rule.Parse("X", options);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree, Is.Not.Null);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(""));
+
+        var range = result.Tree!.SourceRange;
+        Assert.That(range, Is.Not.Null,
+            "standalone empty leaf should still report a position");
+        Assert.That(range!.Value.Start.CharIndex, Is.EqualTo(0));
+        Assert.That(range.Value.End.CharIndex, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Empty_string_body_in_composite_reports_position_between_delimiters()
+    {
+        // The user-visible canonical case: a JSON-style string grammar with
+        // ScanUntil for the body. An empty input "" should let the user
+        // highlight the position between the quotes (offset 1, zero width).
+        // The body Symbol's SourceRange should report a zero-width range
+        // at offset 1 — consumers that highlight bodies or read offsets
+        // need a position even when the body is empty.
+        var body = ScanUntil(TokenSet.Runes("\"")).As("body").Preserve();
+        var rule = AllOf(Token('"'), body, Token('"'));
+        var result = rule.Parse("\"\"");
+
+        Assert.That(result.Success, Is.True);
+        var bodySymbol = result.Tree!.Find(body);
+        Assert.That(bodySymbol, Is.Not.Null);
+        Assert.That(bodySymbol!.ToString(), Is.EqualTo(""));
+
+        var range = bodySymbol.SourceRange;
+        Assert.That(range, Is.Not.Null,
+            "empty body should report its position between the quotes");
+        Assert.That(range!.Value.Start.CharIndex, Is.EqualTo(1));
+        Assert.That(range.Value.End.CharIndex, Is.EqualTo(1));
+    }
+
+    [Test]
     public void Empty_leaf_in_middle_does_not_truncate_composite_range()
     {
         // ScanUntil with the stopper already at the cursor position
@@ -277,6 +329,77 @@ public class SymbolPositionTests
         var range = result.Tree!.SourceRange!.Value;
         Assert.That(range.Start.CharIndex, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Leading_empty_leaf_does_not_break_composite_range()
+    {
+        // Mirror of Empty_leaf_in_middle / Trailing_empty_leaf: pin that
+        // a LEADING empty leaf doesn't change the range either. ScanUntil
+        // with the stopper at the cursor produces an empty leaf at offset
+        // 0; the following Literal matches at offset 0. Children:
+        // [empty leaf at 0, "a" leaf at 0-1]. Range should be (0, 1).
+        var rule = AllOf(
+            ScanUntil(TokenSet.Runes("a")).Preserve(),
+            Literal("a").Preserve()).As("composite").Preserve();
+        var result = rule.Parse("a");
+
+        Assert.That(result.Success, Is.True);
+        var range = result.Tree!.SourceRange!.Value;
+        Assert.That(range.Start.CharIndex, Is.EqualTo(0));
+        Assert.That(range.End.CharIndex, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Composite_with_only_empty_leaves_reports_zero_width_range_at_their_position()
+    {
+        // Two ScanUntils whose stopper is at the cursor each produce an
+        // empty leaf at the same offset. The composite's children list is
+        // [empty, empty]. The Token('a') that lets the parse advance is
+        // Delete-flattened so it never enters the tree. SourceRange
+        // should report a zero-width range at the offset both empty
+        // leaves sit at, not null.
+        var rule = AllOf(
+            ScanUntil(TokenSet.Runes("a")).Preserve(),
+            ScanUntil(TokenSet.Runes("a")).Preserve(),
+            Token('a')).As("composite").Preserve();
+        var result = rule.Parse("a");
+
+        Assert.That(result.Success, Is.True);
+        var range = result.Tree!.SourceRange;
+        Assert.That(range, Is.Not.Null,
+            "composite with only empty leaves should still report a position");
+        Assert.That(range!.Value.Start.CharIndex, Is.EqualTo(0));
+        Assert.That(range.Value.End.CharIndex, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Nested_composite_whose_only_leaf_is_empty_reports_zero_width_range()
+    {
+        // Outer composite -> inner composite -> empty leaf. The recursive
+        // walker should descend through the inner composite and find the
+        // empty leaf at the bottom, then report a zero-width range at its
+        // position. Verifies that the leaf-finding walk traverses arbitrary
+        // depth rather than only looking at the immediate children.
+        var inner = AllOf(ScanUntil(TokenSet.Runes("a")).Preserve()).As("inner").Preserve();
+        var rule = AllOf(inner, Token('a')).As("outer").Preserve();
+        var result = rule.Parse("a");
+
+        Assert.That(result.Success, Is.True);
+
+        var outerRange = result.Tree!.SourceRange;
+        Assert.That(outerRange, Is.Not.Null,
+            "outer composite should walk through inner to find the empty leaf");
+        Assert.That(outerRange!.Value.Start.CharIndex, Is.EqualTo(0));
+        Assert.That(outerRange.Value.End.CharIndex, Is.EqualTo(0));
+
+        var innerSymbol = result.Tree!.Find(inner);
+        Assert.That(innerSymbol, Is.Not.Null);
+        var innerRange = innerSymbol!.SourceRange;
+        Assert.That(innerRange, Is.Not.Null,
+            "inner composite should report the empty leaf's position");
+        Assert.That(innerRange!.Value.Start.CharIndex, Is.EqualTo(0));
+        Assert.That(innerRange.Value.End.CharIndex, Is.EqualTo(0));
     }
 
     [Test]

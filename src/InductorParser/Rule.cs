@@ -93,7 +93,12 @@ public abstract class Rule
     // Lazily-built reverse index from SymbolId to human-readable name
     // for every rule reachable from this root. Populated on the first
     // NameOf call. Grammars that never ask never pay the allocation.
-    private Dictionary<SymbolId, string>? _nameIndex;
+    // The IsUserSupplied flag distinguishes entries set by the user via
+    // .As("name") from the class-derived trace-name fallback (AllOf,
+    // OneOrMore, Token, etc.). NameOf uses the flag to decide whether
+    // the entry should win over the rune-string default for ids that
+    // happen to land in the Unicode scalar range.
+    private Dictionary<SymbolId, (string Name, bool IsUserSupplied)>? _nameIndex;
 
     public SymbolId Id { get; private set; }
     public string? Name { get; private set; }
@@ -419,10 +424,24 @@ public abstract class Rule
         if (normalizeInput.HasValue)
         {
             var offenders = new List<(Rule rule, string original, string normalized)>();
+            // Captures any ArgumentException string.Normalize throws for
+            // literals it can't normalize (in practice, unpaired surrogates).
+            // We aggregate these as InnerException on the thrown
+            // InvalidOperationException so a programmatic caller can walk
+            // the runtime causes; the user-facing message stays the
+            // multi-rule offender list BuildNormalizationErrorMessage emits.
+            var normalizeFailures = new List<ArgumentException>();
             visited.Clear();
-            CollectNormalizationOffenders(this, visited, normalizeInput.Value, offenders);
+            CollectNormalizationOffendersAll(this, visited, normalizeInput.Value, offenders, normalizeFailures);
             if (offenders.Count > 0)
-                throw new InvalidOperationException(BuildNormalizationErrorMessage(normalizeInput.Value, offenders));
+            {
+                Exception? inner = normalizeFailures.Count > 0
+                    ? new AggregateException(normalizeFailures)
+                    : null;
+                throw new InvalidOperationException(
+                    BuildNormalizationErrorMessage(normalizeInput.Value, offenders),
+                    inner);
+            }
         }
 
         visited.Clear();
@@ -464,34 +483,54 @@ public abstract class Rule
     // aren't stable until Compile runs.
     public string? NameOf(SymbolId id)
     {
-        int value = id.Value;
-        if (value >= 0 && value < SymbolRanges.CharacterRangeEnd)
-        {
-            return Rune.IsValid(value) ? new Rune(value).ToString() : null;
-        }
-
         if (!_sealed) Compile();
         _nameIndex ??= BuildNameIndex();
-        return _nameIndex.TryGetValue(id, out var name) ? name : null;
+
+        // A user-supplied .As("name") wins over every default. Returns
+        // "aChar" for Token('a').As("aChar"), "letter" for
+        // OneOf(...).As("letter"), and so on, regardless of where the
+        // id lands in the SymbolRanges layout.
+        if (_nameIndex.TryGetValue(id, out var entry) && entry.IsUserSupplied)
+            return entry.Name;
+
+        // Unicode scalar range with no user-supplied name: the rune's
+        // own text is the natural label (single-rune Tokens render as
+        // 'c' rather than Token: "c"). Returns null on invalid scalars
+        // (surrogate halves) since they aren't representable as a Rune.
+        int value = id.Value;
+        if (value >= 0 && value < SymbolRanges.CharacterRangeEnd)
+            return Rune.IsValid(value) ? new Rune(value).ToString() : null;
+
+        // Custom-range or built-in id with no user-supplied name: the
+        // class-derived trace name (AllOf, OneOrMore,
+        // BetweenInclusive[1..3]).
+        return entry.Name;
     }
 
-    private Dictionary<SymbolId, string> BuildNameIndex()
+    private Dictionary<SymbolId, (string Name, bool IsUserSupplied)> BuildNameIndex()
     {
-        var map = new Dictionary<SymbolId, string>();
+        var map = new Dictionary<SymbolId, (string Name, bool IsUserSupplied)>();
         var visited = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
         CollectNames(this, visited, map);
         return map;
     }
 
     // Populate the reverse index by walking the sealed rule graph once.
-    // For each rule, prefer the user-supplied Name (from .As("foo")) and
-    // fall back to the class-derived trace name, which is what tracing
-    // shows for unnamed rules and what a tree-walker expects to see for
-    // things like AllOf / OneOrMore / BetweenInclusive[1..3].
-    private static void CollectNames(Rule r, HashSet<Rule> visited, Dictionary<SymbolId, string> map)
+    // Each entry tracks both the resolved name (the user-supplied .As
+    // name when set, otherwise the class-derived trace name) and whether
+    // the user supplied it. NameOf reads the flag to decide whether the
+    // entry should override the rune-string default for character-range
+    // ids. A user-supplied name on one rule wins over a trace-name
+    // fallback on a different rule that happens to share the same id
+    // (single-rune Tokens use the rune's code point as their Id, so
+    // multiple Token rules in the same grammar share an id).
+    private static void CollectNames(Rule r, HashSet<Rule> visited, Dictionary<SymbolId, (string Name, bool IsUserSupplied)> map)
     {
         if (!visited.Add(r)) return;
-        map[r.Id] = r.Name ?? r._ruleTraceName;
+        bool isUser = r.Name != null;
+        string name = r.Name ?? r._ruleTraceName;
+        if (!map.TryGetValue(r.Id, out var existing) || (isUser && !existing.IsUserSupplied))
+            map[r.Id] = (name, isUser);
         foreach (var child in r.Children)
             CollectNames(child, visited, map);
     }
@@ -875,6 +914,69 @@ public abstract class Rule
         return new RuleStartRequirements(TokenSet.Universe, Advance.Sometimes);
     }
 
+    // The user-supplied literal text this rule matches against, exposed
+    // on the base so every consumer that wants "the literal" reads from
+    // one polymorphic spot instead of switching on rule type. Default
+    // null means "this rule has no literal text" (composites, zero-width
+    // predicates, OneOf / NoneOf which carry rune sets, etc.).
+    // GraphemeRule, LiteralRule, and LiteralIgnoreAsciiCaseRule override
+    // to return their expected text. Used by BetweenInclusiveRule's
+    // scanner-skip optimization, which collects literal candidates for
+    // the substring-search fast path.
+    // Compile's normalization-form validation does NOT read this. It
+    // calls CollectNormalizationOffenders below instead, which lets each
+    // rule (including OneOf / NoneOf with set entries that aren't a
+    // single string) validate its own data shape.
+    internal virtual string? ExpectedText => null;
+
+    // Subclass hook for Compile-time normalization-form validation. Each
+    // rule that holds user-supplied text the parser will compare against
+    // normalized input overrides this to walk its own data and add an
+    // offender (or an ArgumentException to failures) for any text whose
+    // normalization differs from the chosen form. Default no-op covers
+    // composites, zero-width predicates, and any rule whose match doesn't
+    // depend on stored fixed text. Compile's static walker (below) calls
+    // this on every reachable rule and recurses into Children. See
+    // backlog n4kp for the form-check shape and the user-visible error
+    // message.
+    internal virtual void CollectNormalizationOffenders(
+        NormalizationForm form,
+        List<(Rule rule, string original, string normalized)> offenders,
+        List<ArgumentException> failures)
+    {
+        // default no-op
+    }
+
+    // Helper for rules that have one fixed expected string. Tries to
+    // convert `text` to `form`. Returns the normalized text on success.
+    // On ArgumentException (in practice an unpaired surrogate, which
+    // string.Normalize rejects regardless of which form was requested),
+    // captures the exception in `failures` and adds a synthetic offender
+    // entry that points at Compile(null), then returns null. Callers that
+    // get a non-null result should replace their stored expected text
+    // with it; the auto-convert behavior makes the rule's match-time view
+    // canonically equivalent to the user's typed text under any form.
+    protected static string? TryConvertToForm(
+        Rule rule, string text,
+        NormalizationForm form,
+        List<(Rule rule, string original, string normalized)> offenders,
+        List<ArgumentException> failures)
+    {
+        try
+        {
+            return text.Normalize(form);
+        }
+        catch (ArgumentException exception)
+        {
+            failures.Add(exception);
+            offenders.Add((rule, text,
+                $"<string.Normalize rejected this literal: {exception.Message} " +
+                $"This is usually an unpaired surrogate. Use Compile(null) to keep " +
+                $"surrogate-bearing literals as-is.>"));
+            return null;
+        }
+    }
+
     internal void SetIdInternal(SymbolId id)
     {
         Id = id;
@@ -1081,35 +1183,24 @@ public abstract class Rule
             SealAll(child, visited);
     }
 
-    // Walk the rule graph and compare each literal-bearing rule's expected
-    // text against its normalization in the chosen form. Records every
-    // offender; the caller throws one combined exception. Reads the
-    // existing internal accessors on the three rule types that hold
-    // user-supplied literal text.
-    private static void CollectNormalizationOffenders(
+    // Walk the rule graph and ask each rule to validate its own user-
+    // supplied text against the chosen normalization form. Each rule
+    // overrides the instance-level CollectNormalizationOffenders to do
+    // the right thing for its own data shape: literal-bearing rules
+    // normalize one fixed string, set-bearing rules walk their entries,
+    // composites no-op (this walker recurses into Children separately).
+    // Records every offender; the caller throws one combined exception.
+    private static void CollectNormalizationOffendersAll(
         Rule r,
         HashSet<Rule> visited,
         NormalizationForm form,
-        List<(Rule rule, string original, string normalized)> offenders)
+        List<(Rule rule, string original, string normalized)> offenders,
+        List<ArgumentException> normalizeFailures)
     {
         if (!visited.Add(r)) return;
-
-        string? expected = r switch
-        {
-            GraphemeRule g => g.LoweringExpected,
-            LiteralRule l => l.Expected,
-            LiteralIgnoreAsciiCaseRule li => li.Expected,
-            _ => null
-        };
-        if (expected != null)
-        {
-            string normalized = expected.Normalize(form);
-            if (!string.Equals(expected, normalized, StringComparison.Ordinal))
-                offenders.Add((r, expected, normalized));
-        }
-
+        r.CollectNormalizationOffenders(form, offenders, normalizeFailures);
         foreach (var child in r.Children)
-            CollectNormalizationOffenders(child, visited, form, offenders);
+            CollectNormalizationOffendersAll(child, visited, form, offenders, normalizeFailures);
     }
 
     // Build the multi-rule error message. One header line names the form,
