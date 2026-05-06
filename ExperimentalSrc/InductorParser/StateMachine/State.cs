@@ -12,7 +12,7 @@ namespace InductorParser.StateMachine;
 //
 // Data: opcode-specific. For MatchLiteral it's an index into
 // CompiledProgram.Literals. For MatchOneOf it's an index into
-// CompiledProgram.RuneSets. For PushBacktrack it's the failure
+// CompiledProgram.TokenSets. For PushBacktrack it's the failure
 // target the frame stores. For Call it's the subprogram entry.
 // For OpenComposite and EmitLeaf* it's an index into
 // CompiledProgram.SymbolMetadata.

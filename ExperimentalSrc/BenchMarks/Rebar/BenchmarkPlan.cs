@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using InductorParser.Prefilter;
 using InductorParser.StateMachine;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
@@ -9,9 +10,12 @@ namespace InductorParser.Benchmarks.Rebar;
 
 internal sealed class BenchmarkPlan
 {
+    // Normalization is now committed at Compile time, not on ParseOptions.
+    // CompileScanner below calls scanner.Compile(null) so the rebar grammars
+    // see the input unnormalized (matching the original NormalizeInput = null
+    // behavior).
     private static readonly ParseOptions SearchOptions = new()
     {
-        NormalizeInput = null,
         RuleCountLimit = 0,
         MaxDepth = 0
     };
@@ -317,27 +321,27 @@ internal sealed class BenchmarkPlan
 
 internal static class BenchmarkRegistry
 {
-    private static readonly RuneSet AsciiUpper = RuneSet.Range('A', 'Z');
-    private static readonly RuneSet AsciiLower = RuneSet.Range('a', 'z');
-    private static readonly RuneSet AsciiAlpha = AsciiUpper | AsciiLower;
-    private static readonly RuneSet AsciiWord = AsciiAlpha | RuneSet.Ascii.Digits | RuneSet.Runes("_");
-    private static readonly RuneSet AwsKeyTail = AsciiUpper | RuneSet.Range('0', '7');
-    private static readonly RuneSet AsciiRegexWhitespace = RuneSet.Runes(" \t\r\n\f\v");
-    private static readonly RuneSet CodeSeparator = RuneSet.Runes(",") | AsciiRegexWhitespace;
-    private static readonly RuneSet NotNewline = ~RuneSet.Runes("\r\n");
-    private static readonly RuneSet NotUppercase = ~AsciiUpper;
-    private static readonly RuneSet NotSpace = ~RuneSet.Runes(" ");
-    private static readonly RuneSet NotSemicolon = ~RuneSet.Runes(";");
-    private static readonly RuneSet NotBracket = ~RuneSet.Runes("]");
-    private static readonly RuneSet NotParen = ~RuneSet.Runes(")");
-    private static readonly RuneSet NotCurly = ~RuneSet.Runes("}");
-    private static readonly RuneSet B64Char = AsciiAlpha | RuneSet.Ascii.Digits | RuneSet.Runes("+/");
-    private static readonly RuneSet UcdField9 = RuneSet.Ascii.Digits | RuneSet.Runes("-/");
-    private static readonly RuneSet LevelChar = RuneSet.Runes("DIWEF");
-    private static readonly RuneSet OneToFour = RuneSet.Runes("1234");
-    private static readonly RuneSet YesNo = RuneSet.Runes("YN");
-    private static readonly RuneSet DateSeparator = RuneSet.Runes("/:-,. \t\r\n_+@");
-    private static readonly RuneSet Quote = RuneSet.Runes("'\"");
+    private static readonly TokenSet AsciiUpper = TokenSet.Range('A', 'Z');
+    private static readonly TokenSet AsciiLower = TokenSet.Range('a', 'z');
+    private static readonly TokenSet AsciiAlpha = AsciiUpper | AsciiLower;
+    private static readonly TokenSet AsciiWord = AsciiAlpha | TokenSet.Ascii.Digits | TokenSet.Runes("_");
+    private static readonly TokenSet AwsKeyTail = AsciiUpper | TokenSet.Range('0', '7');
+    private static readonly TokenSet AsciiRegexWhitespace = TokenSet.Runes(" \t\r\n\f\v");
+    private static readonly TokenSet CodeSeparator = TokenSet.Runes(",") | AsciiRegexWhitespace;
+    private static readonly TokenSet NotNewline = ~TokenSet.Runes("\r\n");
+    private static readonly TokenSet NotUppercase = ~AsciiUpper;
+    private static readonly TokenSet NotSpace = ~TokenSet.Runes(" ");
+    private static readonly TokenSet NotSemicolon = ~TokenSet.Runes(";");
+    private static readonly TokenSet NotBracket = ~TokenSet.Runes("]");
+    private static readonly TokenSet NotParen = ~TokenSet.Runes(")");
+    private static readonly TokenSet NotCurly = ~TokenSet.Runes("}");
+    private static readonly TokenSet B64Char = AsciiAlpha | TokenSet.Ascii.Digits | TokenSet.Runes("+/");
+    private static readonly TokenSet UcdField9 = TokenSet.Ascii.Digits | TokenSet.Runes("-/");
+    private static readonly TokenSet LevelChar = TokenSet.Runes("DIWEF");
+    private static readonly TokenSet OneToFour = TokenSet.Runes("1234");
+    private static readonly TokenSet YesNo = TokenSet.Runes("YN");
+    private static readonly TokenSet DateSeparator = TokenSet.Runes("/:-,. \t\r\n_+@");
+    private static readonly TokenSet Quote = TokenSet.Runes("'\"");
 
     public static BenchmarkPlan Build(RebarConfig config, bool useStateMachine = false)
     {
@@ -452,7 +456,7 @@ internal static class BenchmarkRegistry
             grammar.Match,
             AnyToken().Flatten(FlattenType.Delete)
         )).As("scan").Flatten(FlattenType.Preserve);
-        scanner.Compile();
+        scanner.Compile(null);
 
         // Ask the match rule for a required literal that any successful
         // match must contain. When the analysis finds one (e.g. "# noqa"
@@ -551,14 +555,14 @@ internal static class BenchmarkRegistry
         var leadingWhitespace = Capture(ZeroOrMore(P(OneOf(AsciiRegexWhitespace))), "capture1");
         var codeItem = Capture(AllOf(
             OneOrMore(P(OneOf(AsciiUpper))),
-            OneOrMore(P(OneOf(RuneSet.Ascii.Digits))),
+            OneOrMore(P(OneOf(TokenSet.Ascii.Digits))),
             Optional(OneOrMore(P(OneOf(CodeSeparator))))
         ), "capture4");
         var codeList = Capture(OneOrMore(codeItem), "capture3");
         var noqa = Capture(AllOf(
             NoqaLiteral(),
             Optional(AllOf(
-                P(Grapheme(':')),
+                P(Token(':')),
                 Optional(P(OneOf(AsciiRegexWhitespace))),
                 codeList
             ))
@@ -573,14 +577,14 @@ internal static class BenchmarkRegistry
     {
         var codeItem = Capture(AllOf(
             OneOrMore(P(OneOf(AsciiUpper))),
-            OneOrMore(P(OneOf(RuneSet.Ascii.Digits))),
+            OneOrMore(P(OneOf(TokenSet.Ascii.Digits))),
             Optional(OneOrMore(P(OneOf(CodeSeparator))))
         ), "capture2");
         var codeList = Capture(OneOrMore(codeItem), "capture1");
         var match = AllOf(
             NoqaLiteral(),
             Optional(AllOf(
-                P(Grapheme(':')),
+                P(Token(':')),
                 Optional(P(OneOf(AsciiRegexWhitespace))),
                 codeList
             ))
@@ -644,7 +648,7 @@ internal static class BenchmarkRegistry
         // haystack of 'A' repeated, the first alternative always
         // fails and every match comes from the `[A-Z]` branch.
         var firstAlternative = AllOf(
-            ScanUntil(NotUppercase | RuneSet.Runes("\r\n")),
+            ScanUntil(NotUppercase | TokenSet.Runes("\r\n")),
             P(OneOf(NotUppercase))
         );
         var secondAlternative = P(OneOf(AsciiUpper));
@@ -663,8 +667,8 @@ internal static class BenchmarkRegistry
         // describe the same thing in this haystack: any non-newline
         // runes up to the first `=`.
         var match = AllOf(
-            Optional(P(ScanUntil(RuneSet.Runes("=\r\n")))),
-            P(Grapheme('=')),
+            Optional(P(ScanUntil(TokenSet.Runes("=\r\n")))),
+            P(Token('=')),
             ZeroOrMore(P(OneOf(NotNewline)))
         );
         return new PatternGrammar(match, Array.Empty<Rule>());
@@ -681,12 +685,12 @@ internal static class BenchmarkRegistry
         // simplified case, we use ScanUntil to find the `=` without
         // backtracking the two outer .* parts.
         var prefixToken = FirstOf(
-            P(Grapheme('"')),
-            P(Grapheme('\'')),
-            P(Grapheme(']')),
-            P(Grapheme('}')),
-            P(Grapheme('\\')),
-            P(OneOf(RuneSet.Ascii.Digits)),
+            P(Token('"')),
+            P(Token('\'')),
+            P(Token(']')),
+            P(Token('}')),
+            P(Token('\\')),
+            P(OneOf(TokenSet.Ascii.Digits)),
             P(Literal("nan")),
             P(Literal("infinity")),
             P(Literal("true")),
@@ -695,26 +699,26 @@ internal static class BenchmarkRegistry
             P(Literal("undefined")),
             P(Literal("symbol")),
             P(Literal("math")),
-            P(Grapheme('`')),
-            P(Grapheme('-')),
-            P(Grapheme('+'))
+            P(Token('`')),
+            P(Token('-')),
+            P(Token('+'))
         );
         var noiseToken = FirstOf(
             P(OneOf(AsciiRegexWhitespace)),
-            P(Grapheme('-')),
-            P(Grapheme('~')),
-            P(Grapheme('!')),
+            P(Token('-')),
+            P(Token('~')),
+            P(Token('!')),
             P(Literal("{}")),
             P(Literal("||")),
-            P(Grapheme('+'))
+            P(Token('+'))
         );
         var match = AllOf(
             OneOrMore(prefixToken),
-            ZeroOrMore(P(Grapheme(')'))),
-            Optional(P(Grapheme(';'))),
+            ZeroOrMore(P(Token(')'))),
+            Optional(P(Token(';'))),
             ZeroOrMore(noiseToken),
-            Optional(P(ScanUntil(RuneSet.Runes("=\r\n")))),
-            P(Grapheme('=')),
+            Optional(P(ScanUntil(TokenSet.Runes("=\r\n")))),
+            P(Token('=')),
             ZeroOrMore(P(OneOf(NotNewline)))
         );
         return new PatternGrammar(match, Array.Empty<Rule>());
@@ -827,7 +831,7 @@ internal static class BenchmarkRegistry
         // without backtracking through the body.
         var timestamp = Capture(AllOf(
             OneOrMore(P(OneOf(NotSpace))),
-            P(Grapheme(' ')),
+            P(Token(' ')),
             OneOrMore(P(OneOf(NotSpace)))
         ), "capture1");
         // Wrap the single-rune OneOf in AllOf so Find by capture rule
@@ -835,36 +839,36 @@ internal static class BenchmarkRegistry
         // rune's value (see the capture10 note in UcdParseLine).
         var level = Capture(AllOf(P(OneOf(LevelChar))), "capture2");
         var bracketContext = AllOf(
-            P(Grapheme('[')),
+            P(Token('[')),
             ZeroOrMore(P(OneOf(NotBracket))),
-            P(Grapheme(']'))
+            P(Token(']'))
         );
         var parenContext = AllOf(
-            P(Grapheme('(')),
+            P(Token('(')),
             ZeroOrMore(P(OneOf(NotParen))),
-            P(Grapheme(')'))
+            P(Token(')'))
         );
         var contextItem = AllOf(
             FirstOf(bracketContext, parenContext),
-            P(Grapheme(':')),
-            P(Grapheme(' '))
+            P(Token(':')),
+            P(Token(' '))
         );
         var header = Capture(ZeroOrMore(contextItem), "capture3");
         var body = Capture(ScanUntil(P(Literal(" {"))), "capture4");
         var location = Capture(ZeroOrMore(P(OneOf(NotCurly))), "capture5");
         var match = AllOf(
             timestamp,
-            P(Grapheme(' ')),
+            P(Token(' ')),
             level,
             P(OneOf(OneToFour)),
-            P(Grapheme(':')),
-            P(Grapheme(' ')),
+            P(Token(':')),
+            P(Token(' ')),
             header,
             body,
-            P(Grapheme(' ')),
-            P(Grapheme('{')),
+            P(Token(' ')),
+            P(Token('{')),
             location,
-            P(Grapheme('}'))
+            P(Token('}'))
         );
         return new PatternGrammar(match, new[] { timestamp, level, header, body, location });
     }
@@ -875,15 +879,15 @@ internal static class BenchmarkRegistry
         //   ^([A-Z0-9]+);([^;]+);([^;]+);([0-9]+);([^;]+);([^;]*);([0-9]*);
         //    ([0-9]*);([-0-9/]*);([YN]);([^;]*);([^;]*);([^;]*);([^;]*);([^;]*)$
         // 15 semicolon-separated capture groups.
-        var hexAlnum = AsciiUpper | RuneSet.Ascii.Digits;
+        var hexAlnum = AsciiUpper | TokenSet.Ascii.Digits;
         var capture1 = Capture(OneOrMore(P(OneOf(hexAlnum))), "capture1");
         var capture2 = Capture(OneOrMore(P(OneOf(NotSemicolon))), "capture2");
         var capture3 = Capture(OneOrMore(P(OneOf(NotSemicolon))), "capture3");
-        var capture4 = Capture(OneOrMore(P(OneOf(RuneSet.Ascii.Digits))), "capture4");
+        var capture4 = Capture(OneOrMore(P(OneOf(TokenSet.Ascii.Digits))), "capture4");
         var capture5 = Capture(OneOrMore(P(OneOf(NotSemicolon))), "capture5");
         var capture6 = Capture(ZeroOrMore(P(OneOf(NotSemicolon))), "capture6");
-        var capture7 = Capture(ZeroOrMore(P(OneOf(RuneSet.Ascii.Digits))), "capture7");
-        var capture8 = Capture(ZeroOrMore(P(OneOf(RuneSet.Ascii.Digits))), "capture8");
+        var capture7 = Capture(ZeroOrMore(P(OneOf(TokenSet.Ascii.Digits))), "capture7");
+        var capture8 = Capture(ZeroOrMore(P(OneOf(TokenSet.Ascii.Digits))), "capture8");
         var capture9 = Capture(ZeroOrMore(P(OneOf(UcdField9))), "capture9");
         // Wrap the single-rune OneOf in AllOf so the produced Symbol
         // carries this capture's rule Id. A bare OneOfRule emits a
@@ -898,20 +902,20 @@ internal static class BenchmarkRegistry
         var capture14 = Capture(ZeroOrMore(P(OneOf(NotSemicolon))), "capture14");
         var capture15 = Capture(ZeroOrMore(P(OneOf(NotSemicolon))), "capture15");
         var match = AllOf(
-            capture1, P(Grapheme(';')),
-            capture2, P(Grapheme(';')),
-            capture3, P(Grapheme(';')),
-            capture4, P(Grapheme(';')),
-            capture5, P(Grapheme(';')),
-            capture6, P(Grapheme(';')),
-            capture7, P(Grapheme(';')),
-            capture8, P(Grapheme(';')),
-            capture9, P(Grapheme(';')),
-            capture10, P(Grapheme(';')),
-            capture11, P(Grapheme(';')),
-            capture12, P(Grapheme(';')),
-            capture13, P(Grapheme(';')),
-            capture14, P(Grapheme(';')),
+            capture1, P(Token(';')),
+            capture2, P(Token(';')),
+            capture3, P(Token(';')),
+            capture4, P(Token(';')),
+            capture5, P(Token(';')),
+            capture6, P(Token(';')),
+            capture7, P(Token(';')),
+            capture8, P(Token(';')),
+            capture9, P(Token(';')),
+            capture10, P(Token(';')),
+            capture11, P(Token(';')),
+            capture12, P(Token(';')),
+            capture13, P(Token(';')),
+            capture14, P(Token(';')),
             capture15
         );
         var captures = new[]
@@ -964,13 +968,13 @@ internal static class BenchmarkRegistry
         // the secret's opening quote. Without this, ZeroOrMore would
         // run to end-of-line and the secret rule would have nothing
         // left to match.
-        Optional(P(ScanUntil(Quote | RuneSet.Runes("\r\n")))),
+        Optional(P(ScanUntil(Quote | TokenSet.Runes("\r\n")))),
         QuotedSecret()
     );
 
     private static Rule QuotedSecretThenAws() => AllOf(
         QuotedSecret(),
-        Optional(P(ScanUntil(Quote | RuneSet.Runes("\r\n")))),
+        Optional(P(ScanUntil(Quote | TokenSet.Runes("\r\n")))),
         QuotedAwsKey()
     );
 
@@ -986,9 +990,9 @@ internal static class BenchmarkRegistry
         // that would need the real monster regex.
         var year = AllOf(
             FirstOf(P(Literal("19")), P(Literal("20"))),
-            Exactly(2, P(OneOf(RuneSet.Ascii.Digits)))
+            Exactly(2, P(OneOf(TokenSet.Ascii.Digits)))
         );
-        var number = OneOrMore(P(OneOf(RuneSet.Ascii.Digits)));
+        var number = OneOrMore(P(OneOf(TokenSet.Ascii.Digits)));
         var separator = OneOrMore(P(OneOf(DateSeparator)));
         var match = FirstOf(year, number, separator);
         return new PatternGrammar(match, Array.Empty<Rule>());

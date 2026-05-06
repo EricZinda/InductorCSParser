@@ -18,6 +18,12 @@
          "inductorparser-statemachine" engine name in Program.cs
          actually has somewhere to route. -->
     <ProjectReference Include="..\..\InductorParser\StateMachine\InductorParser.StateMachine.csproj" />
+    <!-- Required-literal prefilter analysis. BenchmarkPlan.CompileScanner
+         uses TryGetRequiredLiteral / TryGetRequiredLiteralAlternatives
+         (extension methods on Rule from this project) as a grep
+         pre-scan trigger to skip non-matching lines before invoking
+         the parser. -->
+    <ProjectReference Include="..\..\InductorParser.Prefilter\InductorParser.Prefilter.csproj" />
   </ItemGroup>
 
 </Project>

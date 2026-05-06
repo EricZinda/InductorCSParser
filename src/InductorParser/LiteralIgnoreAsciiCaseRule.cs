@@ -30,14 +30,9 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
         SetTraceName("LiteralIgnoreAsciiCase");
     }
 
-    // Accessor for the state-machine evaluator's lowering pass.
+    // Accessor for the state-machine evaluator's lowering pass and the
+    // prefilter analyzer (ExperimentalSrc/InductorParser.Prefilter/LiteralIgnoreAsciiCaseRule.cs).
     internal string LoweringExpected => _expected;
-
-    internal override (string Text, bool IgnoreCase)? ComputeRequiredLiteral() =>
-        (_expected, true);
-
-    internal override (string Text, bool IgnoreCase)? ComputeConcatenableText() =>
-        (_expected, true);
 
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {

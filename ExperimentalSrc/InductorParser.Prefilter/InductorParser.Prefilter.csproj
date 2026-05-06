@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.1;net8.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <RootNamespace>InductorParser.Prefilter</RootNamespace>
+    <AssemblyName>InductorParser.Prefilter</AssemblyName>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Same doc-file settings as core. Ship XML doc next to the DLL,
+         suppress CS1591 because public API docs are added type-by-type. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\InductorParser\InductorParser.csproj" />
+  </ItemGroup>
+
+</Project>

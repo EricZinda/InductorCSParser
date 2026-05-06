@@ -47,16 +47,11 @@ internal sealed class LiteralRule : Rule
     }
 
     // Accessor for the state-machine evaluator's lowering pass
-    // (StateMachine/Lowerer.cs). The original TryParseRule reads
-    // _expected directly; the lowerer needs the same data without
-    // running the rule.
+    // (StateMachine/Lowerer.cs) and the prefilter analyzer
+    // (ExperimentalSrc/InductorParser.Prefilter/LiteralRule.cs). The
+    // original TryParseRule reads _expected directly; both external
+    // consumers need the same data without running the rule.
     internal string LoweringExpected => _expected;
-
-    internal override (string Text, bool IgnoreCase)? ComputeRequiredLiteral() =>
-        (_expected, false);
-
-    internal override (string Text, bool IgnoreCase)? ComputeConcatenableText() =>
-        (_expected, false);
 
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {

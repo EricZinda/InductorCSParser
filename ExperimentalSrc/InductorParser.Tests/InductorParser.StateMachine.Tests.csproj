@@ -26,6 +26,9 @@
          project being run, so referencing this project doesn't cause
          the main test suite to re-execute here. -->
     <ProjectReference Include="..\..\src\InductorParser.Tests\InductorParser.Tests.csproj" />
+    <!-- The Prefilter regression tests in Prefilter/*Tests.cs depend
+         on the InductorParser.Prefilter extension methods. -->
+    <ProjectReference Include="..\InductorParser.Prefilter\InductorParser.Prefilter.csproj" />
   </ItemGroup>
 
 </Project>

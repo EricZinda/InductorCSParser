@@ -66,7 +66,25 @@ public class StateMachineNormalizationCompareTests
 
     private static void AssertEvaluatorsAgree(Rule rule, string input, NormalizationForm? normalizationForm, bool expectSuccess)
     {
-        var options = new ParseOptions { NormalizeInput = normalizationForm };
+        // Normalization is now committed at Compile time, not on
+        // ParseOptions. Compile the freshly-constructed rule with the
+        // form under test before each parse. A grammar whose literals
+        // aren't already in the chosen form throws here (Compile-time
+        // validation), which counts as the "this combination always
+        // rejects" outcome — every test case under FormD has
+        // expectSuccess == false, so the throw is the rejection.
+        try
+        {
+            rule.Compile(normalizationForm);
+        }
+        catch (System.InvalidOperationException) when (!expectSuccess)
+        {
+            // Compile-time rejection. Both engines would behave the
+            // same way (both go through Rule.Compile), so there's
+            // nothing more to compare.
+            return;
+        }
+        var options = new ParseOptions();
         var legacy = rule.ParseRecursive(input, options);
         var stateMachine = StateMachineParser.Parse(rule, input, options);
 

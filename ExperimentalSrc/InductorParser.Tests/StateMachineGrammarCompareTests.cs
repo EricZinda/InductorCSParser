@@ -153,32 +153,32 @@ public class StateMachineGrammarCompareTests
             AllOf(LiteralIgnoreAsciiCase("sus"), Optional(OneOf("24").Delete())),
             LiteralIgnoreAsciiCase("m"),
             LiteralIgnoreAsciiCase("o"),
-            Grapheme('°'),
-            Grapheme('+'),
-            Grapheme('5')
+            Token('°'),
+            Token('+'),
+            Token('5')
         );
 
         var ext1 = FirstOf(
             LiteralIgnoreAsciiCase("11"),
             LiteralIgnoreAsciiCase("13"),
-            Grapheme('6'),
-            Grapheme('7'),
-            Grapheme('9')
+            Token('6'),
+            Token('7'),
+            Token('9')
         );
 
         var quality2 = FirstOf(
             LiteralIgnoreAsciiCase("maj"),
             LiteralIgnoreAsciiCase("m"),
-            Grapheme('Δ'),
-            Grapheme('ø'),
-            Grapheme('°')
+            Token('Δ'),
+            Token('ø'),
+            Token('°')
         );
 
         var ext2 = FirstOf(
             LiteralIgnoreAsciiCase("11"),
             LiteralIgnoreAsciiCase("13"),
-            Grapheme('7'),
-            Grapheme('9')
+            Token('7'),
+            Token('9')
         );
 
         var addMod = FirstOf(
@@ -195,7 +195,7 @@ public class StateMachineGrammarCompareTests
             LiteralIgnoreAsciiCase("alt")
         );
 
-        var slashBass = AllOf(Grapheme('/'), root, ZeroOrMore(accidental));
+        var slashBass = AllOf(Token('/'), root, ZeroOrMore(accidental));
 
         return AllOf(
             root,
@@ -219,11 +219,11 @@ public class StateMachineGrammarCompareTests
             ZeroOrMore(NoneOf("\n").Delete());
 
         private static readonly Rule OptionalOneWhitespace =
-            Optional(OneOf(RuneSet.InlineWhitespace).Delete());
+            Optional(OneOf(TokenSet.InlineWhitespace).Delete());
 
         public static readonly Rule H1Heading = AllOf(
-            Grapheme('#'),
-            Not(Grapheme('#')),
+            Token('#'),
+            Not(Token('#')),
             OptionalOneWhitespace,
             RestOfLine,
             Eof());
@@ -240,7 +240,7 @@ public class StateMachineGrammarCompareTests
 
         public static readonly Rule HrSpaced = AllOf(
             OneOf("-*+").Delete(),
-            AtLeast(2, AllOf(Grapheme(' '), OneOf("-*+").Delete())),
+            AtLeast(2, AllOf(Token(' '), OneOf("-*+").Delete())),
             Eof());
     }
 
@@ -250,7 +250,10 @@ public class StateMachineGrammarCompareTests
     // compiled regex (regex = 1.00x baseline).
     private static void Compare(string label, Regex regex, Rule rule, string[] corpus, int iterations)
     {
-        var options = new ParseOptions { NormalizeInput = null, MaxDepth = 0 };
+        // Normalization is committed at Compile time now. The rule is
+        // compiled below in the warmup loop with default (FormC) form;
+        // the timing comparison just uses default ParseOptions.
+        var options = new ParseOptions { MaxDepth = 0 };
 
         // Warmup: enough for tiered JIT and the rule's own Compile()
         // pass to settle. Hits all three paths so PGO has a chance to
@@ -328,7 +331,10 @@ public class StateMachineGrammarCompareTests
     // with all leaves Delete-flagged so no Symbols are produced.
     private static void CompareMatcher(string label, Regex regex, Rule rule, string[] corpus, int iterations)
     {
-        var options = new ParseOptions { NormalizeInput = null, MaxDepth = 0 };
+        // Normalization is committed at Compile time now. The rule is
+        // compiled below in the warmup loop with default (FormC) form;
+        // the timing comparison just uses default ParseOptions.
+        var options = new ParseOptions { MaxDepth = 0 };
 
         for (int i = 0; i < 1000; i++)
         {

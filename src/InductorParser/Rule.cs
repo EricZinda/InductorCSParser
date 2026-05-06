@@ -47,6 +47,13 @@ public abstract class Rule
     private bool _idAssigned;
     private string? _errorMessage;
 
+    // Has this rule been compiled yet? External engines (the state-machine
+    // lowerer, alternative evaluators) check this before calling Compile()
+    // so a caller who already compiled the rule with a specific normalization
+    // form (or with null to opt out) doesn't get an InvalidOperationException
+    // from the engine forcing the FormC default.
+    internal bool IsCompiled => _sealed;
+
     // The Unicode normalization form this grammar was compiled against. Set
     // by Compile(form) on every reachable rule, but only the root's value
     // matters at parse time. Default NormalizationForm.FormC matches the
@@ -82,88 +89,6 @@ public abstract class Rule
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool CannotMatchLookahead(int peekRune) =>
         Advance == Advance.Always && !FirstConsumedTokens.Contains(peekRune);
-
-    // Returns true when every successful match of this rule is guaranteed
-    // to consume text that contains the returned literal as a substring
-    // (case-invariant if ignoreAsciiCase is true). Useful for callers that
-    // want to pre-filter input before invoking the parser: the rebar
-    // grep runner uses this to skip past lines that can't possibly match
-    // via one BCL substring search across the whole haystack, before
-    // line-by-line parsing kicks in. Mirrors the literal-prefilter
-    // analysis every serious regex engine does internally (rust/regex's
-    // 'literal' module, .NET's compiled regex, PCRE2's "studied"
-    // patterns).
-    //
-    // The derived literal is the longest contiguous run of fixed-text
-    // children at any position in the rule tree (LiteralRule,
-    // LiteralIgnoreAsciiCaseRule, TokenRule, OneOfRule with a single
-    // BMP char or a single ASCII letter pair like 'Nn'). Concatenated
-    // through AllOf and propagated through BetweenInclusive[atLeast>=1]
-    // and FlattenType wrappers. Returns false (literal == "") when no
-    // such required substring can be derived from the rule.
-    public bool TryGetRequiredLiteral(out string literal, out bool ignoreAsciiCase)
-    {
-        var result = ComputeRequiredLiteral();
-        if (result == null)
-        {
-            literal = "";
-            ignoreAsciiCase = false;
-            return false;
-        }
-        literal = result.Value.Text;
-        ignoreAsciiCase = result.Value.IgnoreCase;
-        return literal.Length > 0;
-    }
-
-    // Returns true when every successful match of this rule is guaranteed
-    // to contain at least one of the returned literals as a substring. Use
-    // when no single shared literal can be derived (TryGetRequiredLiteral
-    // returns false) but the rule has a small fixed set of literal-prefix
-    // alternatives. The AWS-keys grammar's FirstOf("ASIA"|"AKIA"|"AROA"|"AIDA")
-    // is the motivating shape: every match contains exactly one of those
-    // four literals, so a multi-substring pre-scan still skips lines that
-    // can't possibly match.
-    //
-    // <paramref name="maxAlternatives"/> caps the returned set size. The
-    // caller picks a cap that makes a multi-substring scan worth it
-    // (8-16 is reasonable for the rebar grep runner; a 2000-literal
-    // dictionary would have selectivity at most 1 in 26 from the
-    // first-rune set and isn't worth pre-filtering with this analysis).
-    // Returns false when no analyzable set exists or when it exceeds the
-    // cap.
-    public bool TryGetRequiredLiteralAlternatives(
-        int maxAlternatives,
-        out IReadOnlyList<(string Text, bool IgnoreCase)> alternatives)
-    {
-        var result = ComputeRequiredLiteralAlternatives();
-        if (result == null || result.Count == 0 || result.Count > maxAlternatives)
-        {
-            alternatives = Array.Empty<(string Text, bool IgnoreCase)>();
-            return false;
-        }
-        alternatives = result;
-        return true;
-    }
-
-    // Subclasses override to declare what fixed text every successful
-    // match consumes. Default is "no required literal." See the
-    // matching override on each composite / leaf rule for specifics.
-    internal virtual (string Text, bool IgnoreCase)? ComputeRequiredLiteral() => null;
-
-    // Like ComputeRequiredLiteral, but returns a set of literals when the
-    // rule's structure guarantees every match contains at least one. The
-    // canonical shape this captures is FirstOf(literal-branches): every
-    // branch must succeed via its own literal, so the union across branches
-    // is required. AllOf surfaces a multi-literal child if it has one.
-    internal virtual IReadOnlyList<(string Text, bool IgnoreCase)>? ComputeRequiredLiteralAlternatives() => null;
-
-    // Subclasses override when they always consume a fixed-length run
-    // of text. AllOf uses this to concatenate consecutive fixed-text
-    // children into one required literal. A null return means "this
-    // rule's match length isn't fixed at compile time" — the AllOf
-    // walker breaks the concatenation run there and recurses for a
-    // standalone candidate instead.
-    internal virtual (string Text, bool IgnoreCase)? ComputeConcatenableText() => null;
 
     // Lazily-built reverse index from SymbolId to human-readable name
     // for every rule reachable from this root. Populated on the first

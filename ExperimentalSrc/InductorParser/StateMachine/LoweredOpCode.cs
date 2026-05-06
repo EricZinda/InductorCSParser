@@ -77,7 +77,7 @@ internal enum LoweredOpCode : byte
 
     // FirstOf first-rune skip. LoadPeekedRune peeks the next rune in
     // the input and stashes it on Machine.PeekedRune.
-    // CheckPeekedRuneInSet tests that stashed rune against a RuneSet
+    // CheckPeekedRuneInSet tests that stashed rune against a TokenSet
     // without re-peeking, so an N-alternative FirstOf pays one peek +
     // N membership checks instead of N peeks + N checks. Mirrors what
     // the recursive FirstOfRule does.
@@ -96,7 +96,7 @@ internal enum LoweredOpCode : byte
     // index into CompiledProgram.OrJumpTables.
     LoadPeekedRuneAndJumpAlt,
 
-    // ScanUntil scan loop (RuneSet stopper + optional Rune escape
+    // ScanUntil scan loop (TokenSet stopper + optional Rune escape
     // start). ScanUntilFast walks runes until it hits a stopper
     // (success exit), EOF / malformed surrogate (success exit, empty
     // tail), or an escape-start rune (consumes the start rune, then

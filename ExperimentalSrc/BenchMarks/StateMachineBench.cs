@@ -33,8 +33,11 @@ internal static class StateMachineBench
         {
             // Pre-compile and pre-lower so first-run cost doesn't skew
             // the numbers. We're measuring steady-state parse cost.
-            grammar.Rule.Compile();
-            var parseOptions = grammar.Options ?? new ParseOptions { NormalizeInput = null };
+            // Compile with null form so the input flows through
+            // unnormalized (matches the original NormalizeInput = null
+            // behavior; normalization is now committed at Compile time).
+            grammar.Rule.Compile(null);
+            var parseOptions = grammar.Options ?? new ParseOptions();
             // Warm StateMachineParser's per-rule cache.
             foreach (var (label, input) in inputs[grammar.InputKind])
                 StateMachineParser.Parse(grammar.Rule, input, parseOptions);
@@ -124,15 +127,15 @@ internal static class StateMachineBench
         var identifier = new GrammarCase(
             "Identifier",
             AllOf(
-                OneOf(RuneSet.Letters | RuneSet.Runes("_")),
-                ZeroOrMore(OneOf(RuneSet.Letters | RuneSet.Digits | RuneSet.Runes("_"))),
+                OneOf(TokenSet.Letters | TokenSet.Runes("_")),
+                ZeroOrMore(OneOf(TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_"))),
                 Eof()),
             "identifier");
 
         // 2. Balanced parens, recursive via LateBound. Pure structural
         //    recursion, no FirstOf alternatives, no token-level fanout.
         var parens = new LateBoundRule("parens");
-        parens.Bind(ZeroOrMore(AllOf(Grapheme('('), parens, Grapheme(')'))));
+        parens.Bind(ZeroOrMore(AllOf(Token('('), parens, Token(')'))));
         var balancedParens = new GrammarCase(
             "BalancedParens",
             AllOf(parens, Eof()),
@@ -148,14 +151,14 @@ internal static class StateMachineBench
             Literal("epsilon"), Literal("zeta"), Literal("eta"), Literal("theta"));
         var keywordList = new GrammarCase(
             "KeywordList",
-            AllOf(keyword, ZeroOrMore(AllOf(Grapheme(','), keyword)), Eof()),
+            AllOf(keyword, ZeroOrMore(AllOf(Token(','), keyword)), Eof()),
             "keywords");
 
         // 4. Recursive arithmetic with backtracking-heavy shape. expr =
         //    term (('+' / '-') term)*; term = digit / '(' expr ')'.
         var expr = new LateBoundRule("expr");
-        var digit = OneOf(RuneSet.Ascii.Digits);
-        var term = FirstOf(digit, AllOf(Grapheme('('), expr, Grapheme(')')));
+        var digit = OneOf(TokenSet.Ascii.Digits);
+        var term = FirstOf(digit, AllOf(Token('('), expr, Token(')')));
         expr.Bind(AllOf(term, ZeroOrMore(AllOf(OneOf("+-"), term))));
         var arithmetic = new GrammarCase(
             "Arithmetic",
@@ -171,7 +174,10 @@ internal static class StateMachineBench
             "JSON",
             InductorJsonParser.JsonRule,
             "json",
-            new ParseOptions { MaxDepth = 0, NormalizeInput = null });
+            // Normalization is now committed at Compile time; the
+            // benchmark's grammar.Rule.Compile() call above uses the
+            // default form (FormC). Pass plain ParseOptions here.
+            new ParseOptions { MaxDepth = 0 });
 
         return new List<GrammarCase> { identifier, balancedParens, keywordList, arithmetic, json };
     }

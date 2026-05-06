@@ -147,7 +147,7 @@ internal static class Stepper
         // input, so without a tick here the surrounding ZeroOrMore frame
         // pushes alone wouldn't drive the periodic budget check.
         lexer.TickPeriodicBudget();
-        RuneSet candidates = machine.Program.RuneSets[spec.CandidatesRuneSetIndex];
+        TokenSet candidates = machine.Program.TokenSets[spec.CandidatesTokenSetIndex];
 
         if (spec.Literals is { Length: > 0 })
         {
@@ -173,7 +173,7 @@ internal static class Stepper
     }
 
     // Match opcodes pack their data field as:
-    //   bits 0-15:  payload index (literal index, RuneSet index, or 0
+    //   bits 0-15:  payload index (literal index, TokenSet index, or 0
     //               for the no-payload opcodes MatchAnyToken / MatchEof)
     //   bits 16-31: error-metadata index, or 0xFFFF for "no message"
     // The error-metadata index points at SymbolMetadata.ErrorMessage,
@@ -228,7 +228,7 @@ internal static class Stepper
     }
 
     // MatchOneOf reads one token and checks the rune-value membership
-    // against the named RuneSet. EOF or a multi-rune grapheme token
+    // against the named TokenSet. EOF or a multi-rune grapheme token
     // (which has RuneValue == -1) fails. Records the token start on
     // success so the matching EmitLeaf can build the leaf span.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -236,14 +236,14 @@ internal static class Stepper
     {
         Lexer lexer = machine.Lexer;
         int entryPosition = lexer.Position;
-        int runeSetIndex = state.Data & 0xFFFF;
+        int tokenSetIndex = state.Data & 0xFFFF;
         if (lexer.IsEof)
         {
             machine.RecordFailure(entryPosition, ResolveMatchErrorMessage(in machine, state.Data));
             return state.OnFailure;
         }
         var token = lexer.Read();
-        RuneSet set = machine.Program.RuneSets[runeSetIndex];
+        TokenSet set = machine.Program.TokenSets[tokenSetIndex];
         if (!set.Contains(token.RuneValue))
         {
             lexer.SetPositionUnchecked(entryPosition);
@@ -321,7 +321,7 @@ internal static class Stepper
     {
         Lexer lexer = machine.Lexer;
         int entryPosition = lexer.Position;
-        int runeSetIndex = state.Data & 0xFFFF;
+        int tokenSetIndex = state.Data & 0xFFFF;
         if (lexer.IsEof)
         {
             machine.RecordFailure(entryPosition, ResolveMatchErrorMessage(in machine, state.Data));
@@ -331,7 +331,7 @@ internal static class Stepper
         int runeValue = token.RuneValue;
         if (runeValue >= 0)
         {
-            RuneSet set = machine.Program.RuneSets[runeSetIndex];
+            TokenSet set = machine.Program.TokenSets[tokenSetIndex];
             if (set.Contains(runeValue))
             {
                 lexer.SetPositionUnchecked(entryPosition);
@@ -739,13 +739,13 @@ internal static class Stepper
     }
 
     // CheckPeekedRuneInSet returns success iff the stashed PeekedRune
-    // is in the named RuneSet. Used by the FirstOf first-rune-skip lowering
-    // to drop alternatives whose FirstConsumedRunes can't possibly
+    // is in the named TokenSet. Used by the FirstOf first-rune-skip lowering
+    // to drop alternatives whose FirstConsumedTokens can't possibly
     // match the next input rune.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Step_CheckPeekedRuneInSet(in State state, ref Machine machine)
     {
-        RuneSet set = machine.Program.RuneSets[state.Data];
+        TokenSet set = machine.Program.TokenSets[state.Data];
         if (set.Contains(machine.PeekedRune))
             return state.OnSuccess;
         return state.OnFailure;
@@ -806,7 +806,7 @@ internal static class Stepper
     private static int Step_ScanUntilFast(in State state, ref Machine machine)
     {
         ScanUntilSpec spec = machine.Program.ScanUntilSpecs[state.Data];
-        RuneSet stopperSet = machine.Program.RuneSets[spec.StopperSetIndex];
+        TokenSet stopperSet = machine.Program.TokenSets[spec.StopperSetIndex];
         Lexer lexer = machine.Lexer;
         string input = lexer.Input;
         int inputLen = input.Length;

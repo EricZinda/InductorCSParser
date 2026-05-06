@@ -9,13 +9,13 @@ namespace InductorParser.StateMachine;
 // One CompiledProgram per Rule, cached on the Rule via
 // StateMachineParser.GetOrBuild.
 //
-// The runtime reads States, Literals, RuneSets, and SymbolMetadata
+// The runtime reads States, Literals, TokenSets, and SymbolMetadata
 // while the inner loop is running. Nothing else.
 internal sealed class CompiledProgram
 {
     public State[] States { get; }
     public string[] Literals { get; }
-    public RuneSet[] RuneSets { get; }
+    public TokenSet[] TokenSets { get; }
     public SymbolMetadata[] SymbolMetadata { get; }
     public ScanUntilSpec[] ScanUntilSpecs { get; }
     public ScanSpec[] ScanSpecs { get; }
@@ -55,7 +55,7 @@ internal sealed class CompiledProgram
     public CompiledProgram(
         State[] states,
         string[] literals,
-        RuneSet[] runeSets,
+        TokenSet[] tokenSets,
         SymbolMetadata[] symbolMetadata,
         ScanUntilSpec[] stringBodySpecs,
         ScanSpec[] scanSpecs,
@@ -71,7 +71,7 @@ internal sealed class CompiledProgram
     {
         States = states;
         Literals = literals;
-        RuneSets = runeSets;
+        TokenSets = tokenSets;
         SymbolMetadata = symbolMetadata;
         ScanUntilSpecs = stringBodySpecs;
         ScanSpecs = scanSpecs;
@@ -98,33 +98,33 @@ internal sealed class CompiledProgram
 // opcode just isn't emitted), so the syntax tree never changes.
 //
 // The rune-set + BMP-char prefilter is universally safe for any inner
-// shape that matches via FirstConsumedRunes. The literal payload is
+// shape that matches via FirstConsumedTokens. The literal payload is
 // the stronger prefilter that fires when every alternative is a
 // (possibly nested) literal: the scanner walks straight to the next
 // full-literal candidate via BCL string search instead of stopping at
 // every matching first rune.
 internal readonly struct ScannerSkipSpec
 {
-    public readonly int CandidatesRuneSetIndex;
+    public readonly int CandidatesTokenSetIndex;
     public readonly char[]? BmpCandidates;
     public readonly LiteralScannerCandidate[]? Literals;
     public readonly bool UseLiteralPositionsCache;
 
     public ScannerSkipSpec(
-        int candidatesRuneSetIndex,
+        int candidatesTokenSetIndex,
         char[]? bmpCandidates,
         LiteralScannerCandidate[]? literals,
         bool useLiteralPositionsCache)
     {
-        CandidatesRuneSetIndex = candidatesRuneSetIndex;
+        CandidatesTokenSetIndex = candidatesTokenSetIndex;
         BmpCandidates = bmpCandidates;
         Literals = literals;
         UseLiteralPositionsCache = useLiteralPositionsCache;
     }
 }
 
-// Spec for ScanUntilStopperEligibleRune. Carries the RuneSet index
-// of the stopper rule's FirstConsumedRunes — runes outside this set
+// Spec for ScanUntilStopperEligibleRune. Carries the TokenSet index
+// of the stopper rule's FirstConsumedTokens — runes outside this set
 // cannot start a stopper match, so the scan can advance past them
 // without calling the stopper subprogram.
 internal readonly struct RuleStopperSpec
@@ -147,15 +147,15 @@ internal readonly struct RuleStopperSpec
 internal readonly struct ScanAndPairSpec
 {
     public readonly int LeftLiteralIndex;
-    public readonly int RightRuneSetIndex;
+    public readonly int RightTokenSetIndex;
     public readonly int AtLeast;
     public readonly int AtMost;
     public readonly int ErrorMetadataIndex;
 
-    public ScanAndPairSpec(int leftLiteralIndex, int rightRuneSetIndex, int atLeast, int atMost, int errorMetadataIndex)
+    public ScanAndPairSpec(int leftLiteralIndex, int rightTokenSetIndex, int atLeast, int atMost, int errorMetadataIndex)
     {
         LeftLiteralIndex = leftLiteralIndex;
-        RightRuneSetIndex = rightRuneSetIndex;
+        RightTokenSetIndex = rightTokenSetIndex;
         AtLeast = atLeast;
         AtMost = atMost;
         ErrorMetadataIndex = errorMetadataIndex;
@@ -164,20 +164,20 @@ internal readonly struct ScanAndPairSpec
 
 // One entry per fused-scan opcode in the lowered program. Carries
 // everything ScanOneOfRune / ScanNoneOfRune needs to run a tight
-// inline scan: which RuneSet to test, how many iterations are
+// inline scan: which TokenSet to test, how many iterations are
 // allowed, whether to emit per-iteration leaves, and an optional
 // error-message attribution slot for the BetweenInclusive's WithError.
 internal readonly struct ScanSpec
 {
-    public readonly int RuneSetIndex;
+    public readonly int TokenSetIndex;
     public readonly int AtLeast;
     public readonly int AtMost;
     public readonly int LeafMetadataIndex;
     public readonly int ErrorMetadataIndex;
 
-    public ScanSpec(int runeSetIndex, int atLeast, int atMost, int leafMetadataIndex, int errorMetadataIndex)
+    public ScanSpec(int tokenSetIndex, int atLeast, int atMost, int leafMetadataIndex, int errorMetadataIndex)
     {
-        RuneSetIndex = runeSetIndex;
+        TokenSetIndex = tokenSetIndex;
         AtLeast = atLeast;
         AtMost = atMost;
         LeafMetadataIndex = leafMetadataIndex;

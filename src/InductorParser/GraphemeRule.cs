@@ -59,14 +59,9 @@ internal sealed class GraphemeRule : Rule
             SetIdInternal(new SymbolId(runeValue));
     }
 
-    // Accessor for the state-machine evaluator's lowering pass.
+    // Accessor for the state-machine evaluator's lowering pass and the
+    // prefilter analyzer (ExperimentalSrc/InductorParser.Prefilter/GraphemeRule.cs).
     internal string LoweringExpected => _expected;
-
-    internal override (string Text, bool IgnoreCase)? ComputeRequiredLiteral() =>
-        (_expected, false);
-
-    internal override (string Text, bool IgnoreCase)? ComputeConcatenableText() =>
-        (_expected, false);
 
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {

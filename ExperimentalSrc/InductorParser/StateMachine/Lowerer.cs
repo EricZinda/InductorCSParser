@@ -22,7 +22,11 @@ internal static class Lowerer
 {
     public static CompiledProgram Lower(Rule rootRule, bool preserveAllSymbols = false)
     {
-        rootRule.Compile();
+        // Only force-compile when the caller hasn't already done so.
+        // If they pre-compiled with a non-default normalization form
+        // (FormD, null, etc.), calling Compile() here would throw a
+        // form-conflict.
+        if (!rootRule.IsCompiled) rootRule.Compile();
         var context = new LoweringContext(rootRule, preserveAllSymbols);
 
         // Cycle pre-pass.
@@ -51,7 +55,7 @@ internal static class Lowerer
         return new CompiledProgram(
             context.States.ToArray(),
             context.Literals.ToArray(),
-            context.RuneSets.ToArray(),
+            context.TokenSets.ToArray(),
             context.SymbolMetadata.ToArray(),
             context.ScanUntilSpecs.ToArray(),
             context.ScanSpecs.ToArray(),
@@ -122,7 +126,7 @@ internal sealed class LoweringContext
 {
     public readonly List<State> States = new();
     public readonly List<string> Literals = new();
-    public readonly List<RuneSet> RuneSets = new();
+    public readonly List<TokenSet> TokenSets = new();
     public readonly List<SymbolMetadata> SymbolMetadata = new();
     public readonly List<ScanUntilSpec> ScanUntilSpecs = new();
     public readonly List<ScanSpec> ScanSpecs = new();
@@ -140,11 +144,11 @@ internal sealed class LoweringContext
     // lowered. Subsequent encounters Call this index.
     public readonly Dictionary<Rule, int> SubprogramEntries = new(ReferenceComparer<Rule>.Instance);
 
-    // Dedup tables. Same literal text or same RuneSet appearing in
+    // Dedup tables. Same literal text or same TokenSet appearing in
     // multiple rules shares one slot in the runtime table. Keeps the
     // tables small and improves CPU cache behavior.
     private readonly Dictionary<string, int> _literalIndex = new();
-    private readonly Dictionary<RuneSet, int> _runeSetIndex = new();
+    private readonly Dictionary<TokenSet, int> _tokenSetIndex = new();
 
     public LoweringContext(Rule rootRule, bool preserveAllSymbols)
     {
@@ -268,14 +272,14 @@ internal sealed class LoweringContext
 
     private int LowerOneOf(OneOfRule rule, int onSuccess, int onFailure)
     {
-        int runeSetIndex = InternRuneSet(GetOneOfSet(rule));
-        return EmitTokenMatch(rule, LoweredOpCode.MatchOneOf, runeSetIndex, onSuccess, onFailure);
+        int tokenSetIndex = InternTokenSet(GetOneOfSet(rule));
+        return EmitTokenMatch(rule, LoweredOpCode.MatchOneOf, tokenSetIndex, onSuccess, onFailure);
     }
 
     private int LowerNoneOf(NoneOfRule rule, int onSuccess, int onFailure)
     {
-        int runeSetIndex = InternRuneSet(rule.LoweringSet);
-        return EmitTokenMatch(rule, LoweredOpCode.MatchNoneOf, runeSetIndex, onSuccess, onFailure);
+        int tokenSetIndex = InternTokenSet(rule.LoweringSet);
+        return EmitTokenMatch(rule, LoweredOpCode.MatchNoneOf, tokenSetIndex, onSuccess, onFailure);
     }
 
     private int LowerAnyToken(AnyTokenRule rule, int onSuccess, int onFailure)
@@ -400,7 +404,7 @@ internal sealed class LoweringContext
 
         // Decide whether this FirstOf benefits from the first-rune-skip
         // optimization. We need at least one alternative whose
-        // FirstConsumedRunes is non-trivial (Advance.Always and
+        // FirstConsumedTokens is non-trivial (Advance.Always and
         // strictly smaller than Universe), and skipping has to be
         // safe under the existing semantics: alternatives carrying
         // a custom WithError still need to run so their message can
@@ -446,7 +450,7 @@ internal sealed class LoweringContext
 
             // Prefix the alternative's PushBacktrack with a peek check
             // when this child can't match a peeked rune outside its
-            // FirstConsumedRunes set. The check skips the
+            // FirstConsumedTokens set. The check skips the
             // PushBacktrack/inner-attempt entirely on a mismatch and
             // routes straight to the next alternative's start (no
             // frame to pop because we never pushed one).
@@ -454,8 +458,8 @@ internal sealed class LoweringContext
             int altStart = pushIdx;
             if (skipEligible)
             {
-                int runeSetIdx = InternRuneSet(child.FirstConsumedRunes);
-                altStart = AddState(LoweredOpCode.CheckPeekedRuneInSet, runeSetIdx, pushIdx, nextAltStartWithoutPop);
+                int tokenSetIdx = InternTokenSet(child.FirstConsumedTokens);
+                altStart = AddState(LoweredOpCode.CheckPeekedRuneInSet, tokenSetIdx, pushIdx, nextAltStartWithoutPop);
             }
 
             altRecords?.Add((child, pushIdx, skipEligible));
@@ -512,7 +516,7 @@ internal sealed class LoweringContext
     // Whether this alternative could be safely skipped on a peeked-rune
     // mismatch. Mirrors FirstOfRule's runtime guard: only skip when the
     // child Always advances (so its first rune is guaranteed to be
-    // consumed) AND has a strictly tighter FirstConsumedRunes than the
+    // consumed) AND has a strictly tighter FirstConsumedTokens than the
     // universe. Custom WithError alternatives are NOT skipped because
     // the existing code lets them run so their error message can reach
     // DeepestFailureMessage on a parse failure.
@@ -520,10 +524,10 @@ internal sealed class LoweringContext
     {
         if (child.Advance != Advance.Always) return false;
         if (child.ErrorMessage != null) return false;
-        // FirstConsumedRunes equality with Universe means the set
+        // FirstConsumedTokens equality with Universe means the set
         // accepts any rune, so the peek check would never skip. Avoid
         // the wasted state.
-        if (child.FirstConsumedRunes.Equals(RuneSet.Universe)) return false;
+        if (child.FirstConsumedTokens.Equals(TokenSet.Universe)) return false;
         return true;
     }
 
@@ -532,7 +536,7 @@ internal sealed class LoweringContext
     // by the reverse-lowering loop, so we walk it tail-to-head to
     // restore priority order. For each ASCII rune r:
     //   * Walk alts in priority order. For each alt:
-    //     * skipEligible alt: if its FirstConsumedRunes contains r,
+    //     * skipEligible alt: if its FirstConsumedTokens contains r,
     //       this alt wins (table[r] = pushIdx). Else skip.
     //     * non-skipEligible alt: the chain would attempt this alt
     //       unconditionally, so it wins for any rune that hasn't
@@ -554,7 +558,7 @@ internal sealed class LoweringContext
                 var record = altRecords[recordIndex];
                 if (record.skipEligible)
                 {
-                    if (record.child.FirstConsumedRunes.Contains(rune))
+                    if (record.child.FirstConsumedTokens.Contains(rune))
                     {
                         table[rune] = record.pushIdx;
                         break;
@@ -804,7 +808,7 @@ internal sealed class LoweringContext
             || fallback.ErrorMessage != null)
             return false;
 
-        RuneSet candidates = RuneSet.Empty;
+        TokenSet candidates = TokenSet.Empty;
         var literalCandidates = new List<LiteralScannerCandidate>();
         bool allCandidatesAreLiterals = true;
         for (int index = 0; index < firstOf.Children.Count - 1; index++)
@@ -812,7 +816,7 @@ internal sealed class LoweringContext
             Rule alternative = firstOf.Children[index];
             if (alternative.ErrorMessage != null || alternative.Advance != Advance.Always)
                 return false;
-            candidates |= alternative.FirstConsumedRunes;
+            candidates |= alternative.FirstConsumedTokens;
 
             if (allCandidatesAreLiterals
                 && !TryCollectScannerLiteralCandidates(alternative, literalCandidates))
@@ -822,7 +826,7 @@ internal sealed class LoweringContext
             }
         }
 
-        if (candidates.IsEmpty || candidates == RuneSet.Universe) return false;
+        if (candidates.IsEmpty || candidates == TokenSet.Universe) return false;
 
         candidates.TryGetBmpChars(maxChars: 256, out var bmpCandidates);
         LiteralScannerCandidate[]? literals =
@@ -838,10 +842,10 @@ internal sealed class LoweringContext
         // CSV at src/Benchmarks/Rebar/results/multi-literal-cache-rebar-2026-04-28.csv.
         bool useLiteralPositionsCache = literals is { Length: 1 };
 
-        int candidatesRuneSetIndex = InternRuneSet(candidates);
+        int candidatesTokenSetIndex = InternTokenSet(candidates);
         int specIndex = ScannerSkipSpecs.Count;
         ScannerSkipSpecs.Add(new ScannerSkipSpec(
-            candidatesRuneSetIndex,
+            candidatesTokenSetIndex,
             bmpCandidates.Length == 0 ? null : bmpCandidates,
             literals,
             useLiteralPositionsCache));
@@ -1028,7 +1032,7 @@ internal sealed class LoweringContext
         if (rule.LoweringHasEscape && rule.LoweringEscapeStartRule != null)
             return LowerViaBridge(rule, onSuccess, onFailure);
 
-        int stopperSetIdx = InternRuneSet(rule.LoweringStopperSet);
+        int stopperSetIdx = InternTokenSet(rule.LoweringStopperSet);
         int escapeStartRune = rule.LoweringHasEscape ? rule.LoweringEscapeStartRune : -1;
 
         // Lower escape-end as a subprogram so the scan loop's escape
@@ -1148,7 +1152,7 @@ internal sealed class LoweringContext
 
     private static string GetLiteralExpected(LiteralRule rule) => rule.LoweringExpected;
     private static string GetGraphemeExpected(GraphemeRule rule) => rule.LoweringExpected;
-    private static RuneSet GetOneOfSet(OneOfRule rule) => rule.LoweringSet;
+    private static TokenSet GetOneOfSet(OneOfRule rule) => rule.LoweringSet;
 
     private int InternLiteral(string text)
     {
@@ -1162,12 +1166,12 @@ internal sealed class LoweringContext
         return newIndex;
     }
 
-    private int InternRuneSet(RuneSet set)
+    private int InternTokenSet(TokenSet set)
     {
-        if (_runeSetIndex.TryGetValue(set, out int existing)) return existing;
-        int newIndex = RuneSets.Count;
-        RuneSets.Add(set);
-        _runeSetIndex[set] = newIndex;
+        if (_tokenSetIndex.TryGetValue(set, out int existing)) return existing;
+        int newIndex = TokenSets.Count;
+        TokenSets.Add(set);
+        _tokenSetIndex[set] = newIndex;
         return newIndex;
     }
 

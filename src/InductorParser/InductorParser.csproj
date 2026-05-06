@@ -37,6 +37,15 @@
          to override the internal Rule.TryParseRule. Same rationale as
          InductorParser.PlayModeTests above. -->
     <InternalsVisibleTo Include="InductorParser.StateMachine.Tests" />
+    <!-- Required-literal prefilter analysis (ExperimentalSrc/InductorParser.Prefilter)
+         introspects rule types from outside the core assembly to derive
+         a substring every successful match must contain. Neither parsing
+         engine consults it; it exists for the rebar grep benchmark and
+         any other caller that wants to pre-filter input before invoking
+         the parser. Needs internal access to rule-type accessors
+         (LiteralRule.Expected, OneOfRule.LoweringSet, etc.) and to
+         TokenSet's HasMultiRuneGraphemes / TryGetBmpChars helpers. -->
+    <InternalsVisibleTo Include="InductorParser.Prefilter" />
   </ItemGroup>
 
   <!-- After building the netstandard2.1 DLL (the one Unity's IL2CPP

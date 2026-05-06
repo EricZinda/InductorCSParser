@@ -29,8 +29,8 @@ public class StateMachineBudgetCompareTests
     {
         var nested = new LateBoundRule("nested");
         nested.Bind(FirstOf(
-            AllOf(Grapheme('('), nested, Grapheme(')')),
-            Grapheme('x')));
+            AllOf(Token('('), nested, Token(')')),
+            Token('x')));
         return nested;
     }
 
@@ -42,14 +42,14 @@ public class StateMachineBudgetCompareTests
     {
         var many = new LateBoundRule("many");
         many.Bind(FirstOf(
-            AllOf(Grapheme('a'), many),
+            AllOf(Token('a'), many),
             Eof()));
         return many;
     }
 
     // Backtracking-heavy FirstOf wrapped in cyclic recursion. The first
     // alternative tries Literal("ab") (matches 'a', fails on the second
-    // token, records a failure), then falls back to Grapheme('a') and
+    // token, records a failure), then falls back to Token('a') and
     // recurses. Each iteration costs three calls (cycle + Literal +
     // Grapheme), so a 5000-char input drives well past the periodic-check
     // boundary while exposing the deepest-failure tracking on abort.
@@ -57,7 +57,7 @@ public class StateMachineBudgetCompareTests
     {
         var loop = new LateBoundRule("loop");
         loop.Bind(FirstOf(
-            AllOf(FirstOf(Literal("ab"), Grapheme('a')), loop),
+            AllOf(FirstOf(Literal("ab"), Token('a')), loop),
             Eof()));
         return loop;
     }
