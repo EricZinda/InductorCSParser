@@ -52,13 +52,19 @@ internal sealed class OneOfRule : Rule
         transaction.Commit();
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
-        // SymbolId wraps a single int. A single-rune token fits, so we
-        // pin its rune value into the id and tree consumers can branch
-        // on which rune matched. A multi-rune grapheme cluster is two
-        // or more code points, which won't fit in one int, so we fall
-        // back to the rule's own id.
+        // SymbolId wraps a single int. A single-rune token fits, so for
+        // an unnamed rule we use the rune value as the leaf id directly,
+        // letting tree consumers branch on which rune matched without
+        // going through a synthetic per-OneOf id. A multi-rune grapheme
+        // cluster (two or more code points) doesn't fit in one int, so
+        // it falls back to the rule's own id either way. When the user
+        // named the rule via .As("..."), that name is the user's
+        // explicit signal "find me by reference," so the rule's Id wins
+        // over the rune value: Tree.Find, Tree.Is, and NameOf all need
+        // leaf.Id == rule.Id for the named rule to be findable. Same
+        // gate applies in AnyTokenRule, NoneOfRule, and WithinTokenRule.
         int runeValue = token.RuneValue;
-        SymbolId leafId = runeValue >= 0 ? new SymbolId(runeValue) : Id;
+        SymbolId leafId = (Name == null && runeValue >= 0) ? new SymbolId(runeValue) : Id;
         var leafSymbol = new Symbol(leafId, FlattenType, token.Memory);
         if (effectiveFlattenType == FlattenType.Flatten)
         {

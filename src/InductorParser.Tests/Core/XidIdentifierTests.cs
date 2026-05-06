@@ -265,4 +265,55 @@ public class XidIdentifierTests
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("℘"));
     }
+
+    [Test]
+    public void Katakana_voiced_sound_mark_309B_is_in_xid_start()
+    {
+        // U+309B KATAKANA-HIRAGANA VOICED SOUND MARK is GC=Sk
+        // (Modifier_Symbol), so the L+Nl base in BuildXidStart doesn't
+        // include it. UAX #31 adds it to XID_Start via Other_ID_Start
+        // (PropList.txt: 309B..309C, in the property since Unicode 5.1).
+        // The XidStartAdds table has to list this range explicitly because
+        // the BCL's category lookup won't add it.
+        var result = Identifier().Parse("゛");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("゛"));
+    }
+
+    [Test]
+    public void Katakana_semivoiced_sound_mark_309C_is_in_xid_start()
+    {
+        // U+309C KATAKANA-HIRAGANA SEMI-VOICED SOUND MARK is the high end
+        // of the same Sk range covered by 309B's regression test. Tests the
+        // upper endpoint so a future fat-fingered range like (0x309B, 0x309B)
+        // would also fail this test.
+        var result = Identifier().Parse("゜");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("゜"));
+    }
+
+    [Test]
+    public void Katakana_voiced_sound_mark_309B_is_in_xid_continue()
+    {
+        // 309B is in XID_Continue too (XID_Start is a subset of
+        // XID_Continue). Same Sk gap exists in XidContinueAdds. Use a
+        // Hiragana letter as the start so this test exercises the
+        // continue-position table specifically; if XidStartAdds were
+        // fixed but XidContinueAdds were not, the start-position test
+        // above would pass while this one would fail.
+        var result = Identifier().Parse("か゛");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("か゛"));
+    }
+
+    [Test]
+    public void Katakana_semivoiced_sound_mark_309C_is_in_xid_continue()
+    {
+        // Upper endpoint of the Sk range in continue position. Same shape
+        // as the 309B continue-position test, locking in coverage of both
+        // ends of the (0x309B, 0x309C) range in XidContinueAdds.
+        var result = Identifier().Parse("か゜");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("か゜"));
+    }
 }

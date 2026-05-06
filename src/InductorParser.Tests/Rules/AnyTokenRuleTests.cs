@@ -111,4 +111,53 @@ public class AnyTokenRuleTests
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
+
+    [Test]
+    public void Unnamed_AnyToken_uses_the_rune_value_as_the_leaf_id_for_single_rune_tokens()
+    {
+        // Same Name-gated leaf-Id story as OneOfRule: an unnamed rule with
+        // a single-rune match uses the rune as the leaf id so tree
+        // consumers can dispatch on the rune.
+        var rule = AnyToken();
+        var result = rule.Parse("a");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.Id.Value, Is.EqualTo(0x61));
+    }
+
+    [Test]
+    public void Named_AnyToken_uses_rule_id_so_Find_resolves_the_named_rule()
+    {
+        // .As("name") makes the rule findable via Tree.Find / Tree.Is /
+        // NameOf, regardless of whether the matched grapheme is one rune
+        // or several.
+        var anyChar = AnyToken().As("anyChar");
+        var result = anyChar.Parse("a");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.Is(anyChar), Is.True);
+        Assert.That(result.Tree!.Find(anyChar), Is.Not.Null);
+    }
+
+    [Test]
+    public void AnyToken_with_multi_rune_match_uses_rule_id_regardless_of_naming()
+    {
+        // A multi-rune cluster (regional-indicator US flag) has
+        // Token.RuneValue == -1 because two runes don't fit in one int,
+        // so the leaf carries the rule's own Id whether the rule is named
+        // or not.
+        var unnamedRule = AnyToken();
+        var unnamedResult = unnamedRule.Parse(USFlagGrapheme);
+        Assert.That(unnamedResult.Success, Is.True);
+        Assert.That(unnamedResult.Tree!.Id, Is.EqualTo(unnamedRule.Id));
+        Assert.That(unnamedResult.Tree!.Find(unnamedRule), Is.Not.Null);
+        Assert.That(unnamedRule.NameOf(unnamedResult.Tree!.Id), Is.EqualTo("AnyToken"));
+
+        var namedRule = AnyToken().As("anyChar");
+        var namedResult = namedRule.Parse(USFlagGrapheme);
+        Assert.That(namedResult.Success, Is.True);
+        Assert.That(namedResult.Tree!.Id, Is.EqualTo(namedRule.Id));
+        Assert.That(namedResult.Tree!.Find(namedRule), Is.Not.Null);
+        Assert.That(namedRule.NameOf(namedResult.Tree!.Id), Is.EqualTo("anyChar"));
+    }
 }
