@@ -198,16 +198,36 @@ public sealed class Symbol
     {
         get
         {
-            Symbol? firstLeaf = FindFirstLeafWithText(this);
-            Symbol? lastLeaf = FindLastLeafWithText(this);
-            if (firstLeaf == null || lastLeaf == null) return null;
+            // Range is leftmost-leaf's-start to rightmost-leaf's-end. Any
+            // leaf counts, even a zero-width one (ScanUntil with the
+            // stopper at the cursor produces one): the leaf's memory
+            // still carries its source string and offset, so its
+            // position is well-defined. Returns null only when the tree
+            // has no leaf at all (an empty composite, or a composite
+            // whose every descendant is itself an empty composite, or a
+            // composite whose leaves were all Delete-flattened away
+            // before reaching the tree).
+            Symbol? firstLeaf = FindFirstLeaf(this);
+            if (firstLeaf == null) return null;
+            // FindLastLeaf can't return null when FindFirstLeaf didn't:
+            // both walk the same tree looking for any leaf, just from
+            // opposite ends. If a leaf exists, both find one.
+            Symbol lastLeaf = FindLastLeaf(this)!;
 
+            // Defensive: parser-produced leaves are always backed by the
+            // input string the caller passed to Parse (every rule builds
+            // its leaf from lexer.Input.AsMemory(...) or token.Memory,
+            // which is the same string). TryGetString can only fail if
+            // someone hand-constructed a Symbol whose leaf memory came
+            // from a char[] or other non-string source, and the
+            // ReferenceEquals check below can only fail if leaves from
+            // two different parses ended up in the same tree. Both
+            // shapes are "user built something weird" cases, not
+            // anything the parser produces.
             if (!MemoryMarshal.TryGetString(firstLeaf._leafChars, out string? firstInput, out int firstStart, out _))
                 return null;
             if (!MemoryMarshal.TryGetString(lastLeaf._leafChars, out string? lastInput, out int lastStart, out int lastLength))
                 return null;
-            // Both leaves should reference the same input string. If not,
-            // we have no meaningful range to report.
             if (!ReferenceEquals(firstInput, lastInput)) return null;
 
             return new SourceRange(
@@ -216,25 +236,23 @@ public sealed class Symbol
         }
     }
 
-    private static Symbol? FindFirstLeafWithText(Symbol symbol)
+    private static Symbol? FindFirstLeaf(Symbol symbol)
     {
-        if (symbol._isLeaf)
-            return symbol._leafChars.IsEmpty ? null : symbol;
+        if (symbol._isLeaf) return symbol;
         foreach (var child in symbol.Children)
         {
-            var leaf = FindFirstLeafWithText(child);
+            var leaf = FindFirstLeaf(child);
             if (leaf != null) return leaf;
         }
         return null;
     }
 
-    private static Symbol? FindLastLeafWithText(Symbol symbol)
+    private static Symbol? FindLastLeaf(Symbol symbol)
     {
-        if (symbol._isLeaf)
-            return symbol._leafChars.IsEmpty ? null : symbol;
+        if (symbol._isLeaf) return symbol;
         for (int i = symbol.Children.Count - 1; i >= 0; i--)
         {
-            var leaf = FindLastLeafWithText(symbol.Children[i]);
+            var leaf = FindLastLeaf(symbol.Children[i]);
             if (leaf != null) return leaf;
         }
         return null;

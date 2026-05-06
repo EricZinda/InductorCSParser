@@ -209,4 +209,40 @@ public class NameOfTests
 
         Assert.That(second, Is.EqualTo(first));
     }
+
+    [Test]
+    public void Named_single_rune_Token_returns_the_user_supplied_name()
+    {
+        // GraphemeRule (Rules.Token) writes its rune's code point as the
+        // rule's own Id at construction time. For Token('a').As("aChar"),
+        // rule.Id is 0x61 (in the Unicode scalar range) and Name is
+        // "aChar". NameOf returns the user-supplied name.
+        var aChar = Token('a').As("aChar").Preserve();
+        aChar.Compile();
+
+        Assert.That(aChar.NameOf(aChar.Id), Is.EqualTo("aChar"));
+    }
+
+    [Test]
+    public void Unnamed_single_rune_Token_returns_the_rune_text()
+    {
+        // For an unnamed Token('a'), rule.Id is 0x61 and Name is null.
+        // NameOf returns the rune's text as the default for character-
+        // range ids without a user-supplied name.
+        var rule = Token('a').Preserve();
+        rule.Compile();
+
+        Assert.That(rule.NameOf(rule.Id), Is.EqualTo("a"));
+    }
+
+    [Test]
+    public void Named_supplementary_Token_returns_the_user_supplied_name()
+    {
+        // Same shape as Named_single_rune_Token with a supplementary-
+        // plane rune (id past 0xFFFF but still in the character range).
+        var guitar = Token("🎸").As("guitar").Preserve();
+        guitar.Compile();
+
+        Assert.That(guitar.NameOf(guitar.Id), Is.EqualTo("guitar"));
+    }
 }
