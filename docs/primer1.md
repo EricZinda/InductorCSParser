@@ -123,11 +123,7 @@ Note that `Not` doesn't actually consume anything so it has nothing to print out
 
 # What about Unicode?
 
-Notice we not even thought about Unicode anything so far. We just wrote `AnyToken()` and the parser does the right thing. But what is it doing?
-
-The lexer hands you **tokens**. Each token is one user-visible character. A token is made of one or more **runes** (the .NET term for a code point, which is the integer Unicode assigns to a character). Plain ASCII letters, CJK characters, and most punctuation are one rune each, so for those one token equals one rune. Emoji with a skin-tone modifier (👋🏽), regional-indicator flag pairs (🇺🇸), and ZWJ family emoji (👨‍👩‍👧) are several runes each, but they're still one token each because they're one user-visible character.
-
-Try the same grammar with emoji in both the input *and* the text we're matching on:
+Notice we've not even thought about Unicode anything so far. Let's try the same grammar with emoji in both the input *and* the text we're matching on:
 
 ```CSharp
 var target = Literal("this 👨‍👩‍👧 sequence of characters");
