@@ -381,9 +381,36 @@ public abstract class Rule
         return this;
     }
 
-    // Set by .As(SymbolId) and only by .As(SymbolId). Auto-pin sites
-    // (SetIdInternal callers) check this so they don't override a user pin.
+    // Set by .As(SymbolId) and only by .As(SymbolId). Two consumers,
+    // both checking for "user explicitly identified this rule by id":
+    //   * Auto-pin sites (SetIdInternal callers like
+    //     GraphemeRule.CollectNormalizationOffenders) skip the auto-pin
+    //     so a user pin survives normalization.
+    //   * Leaf-emitting rules with the rune-as-leaf-id optimization
+    //     (OneOfRule / NoneOfRule / AnyTokenRule / WithinTokenRule, via
+    //     ResolveLeafId below) skip the optimization so leaves carry the
+    //     user's pinned id and Tree.Find / Tree.Is resolve through the
+    //     user's reference.
+    // Parallel to Name (set by .As(string)) for the second consumer:
+    // either user-identification path disables the rune-as-leaf-id
+    // shortcut.
     internal bool IsUserSymbolIdPinned => _idUserPinned;
+
+    // The leaf-id rule for OneOfRule / NoneOfRule / AnyTokenRule /
+    // WithinTokenRule. A truly anonymous single-rune match carries the
+    // rune's code point as its leaf id, so tree consumers can dispatch
+    // on `leaf.Id == 'a'` without going through a synthetic per-rule id.
+    // A user-identified rule (`.As(string)` sets Name, `.As(SymbolId)`
+    // sets IsUserSymbolIdPinned) carries the rule's own Id so
+    // Tree.Find / Tree.Is / NameOf resolve through the user's reference.
+    // A multi-rune token has runeValue == -1 and falls through to Id
+    // either way, since one int can't hold a multi-rune code point.
+    // Centralized here so the four leaf-emitting rules can't drift on
+    // the gate.
+    protected SymbolId ResolveLeafId(int runeValue) =>
+        (Name == null && !IsUserSymbolIdPinned && runeValue >= 0)
+            ? new SymbolId(runeValue)
+            : Id;
 
     // Set the flatten policy (Preserve / Delete / Flatten) that controls
     // how this rule contributes to the parse tree on a successful match.
@@ -500,19 +527,19 @@ public abstract class Rule
         visited.Clear();
         ValidateAll(this, visited);
 
-        // Compute FirstConsumedTokens / Advance for every reachable rule (see
-        // RuleStartRequirements for the shortcut docs). Done after Validate so
-        // LateBoundRule's _target is guaranteed non-null by the time we walk
-        // its child.
-        var computing = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
-        visited.Clear();
-        ComputeRuleStartAll(this, visited, computing);
-
         // Validate every literal-bearing rule against the chosen normalization
         // form. Skipped when normalizeInput is null (the author opted out).
         // Throws one InvalidOperationException listing every offender so
         // grammar authors fix all mismatches in one pass instead of one at
-        // a time.
+        // a time. Runs BEFORE ComputeRuleStartAll so the cached
+        // FirstConsumedTokens reflects the post-normalization _set /
+        // _expected. The pass mutates literal-bearing rules' stored text
+        // (Token / Literal / LiteralIgnoreAsciiCase) and OneOf / NoneOf
+        // sets when the original entries aren't already in the chosen
+        // form. ComputeRuleStartAll then sees the rewritten data, so the
+        // first-rune the rule actually matches at parse time matches what
+        // OrRule / BetweenInclusiveRule's lookahead shortcut peeks
+        // for.
         if (normalizeInput.HasValue)
         {
             var offenders = new List<(Rule rule, string original, string normalized)>();
@@ -535,6 +562,16 @@ public abstract class Rule
                     inner);
             }
         }
+
+        // Compute FirstConsumedTokens / Advance for every reachable rule (see
+        // RuleStartRequirements for the shortcut docs). Done after Validate so
+        // LateBoundRule's _target is guaranteed non-null by the time we walk
+        // its child, and after the normalization-form pass so the cached
+        // FirstConsumedTokens reflects the post-normalization _set /
+        // _expected.
+        var computing = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
+        visited.Clear();
+        ComputeRuleStartAll(this, visited, computing);
 
         visited.Clear();
         SealAll(this, visited);

@@ -67,7 +67,7 @@ internal sealed class ScanUntilRule : Rule
     // path, otherwise _stopperSet is used. The general path is one
     // predictable branch per rune. JSON-style grammars that take the
     // TokenSet path never pay for Rule dispatch.
-    private readonly TokenSet _stopperSet;
+    private TokenSet _stopperSet;
     private readonly Rule? _stopperRule;
     private readonly string _stopperRendered;
 
@@ -199,6 +199,26 @@ internal sealed class ScanUntilRule : Rule
         _hasEscape = true;
         _escapeStartRune = escapeStart.Value;
         _escapeStartRule = null;
+    }
+
+    internal override void CollectNormalizationOffenders(
+        System.Text.NormalizationForm form,
+        List<(Rule rule, string original, string normalized)> offenders,
+        List<ArgumentException> failures)
+    {
+        // ScanUntil's TokenSet stopper checks one grapheme at a time
+        // (via ContainsToken on the next whole token), so its set
+        // entries need the same form projection OneOf / NoneOf get.
+        // Without this override a stopper written as the precomposed
+        // 'é' wouldn't match the decomposed "e + combining acute"
+        // the FormD-normalized lexer hands the rule, and the body
+        // would silently swallow the boundary the user typed in.
+        // Rule-mode stoppers (and the optional escapeEnd / escapeStartRule
+        // sub-rules) handle their own normalization through the
+        // walker's recursion into Children, so only _stopperSet needs
+        // projection here.
+        if (_stopperRule == null)
+            OneOfRule.NormalizeAndValidate(this, ref _stopperSet, form, offenders);
     }
 
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)

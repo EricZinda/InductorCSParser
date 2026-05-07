@@ -126,17 +126,13 @@ internal sealed class WithinTokenRule : Rule
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
 
-        // One leaf Symbol per token. Same Name-gated leaf-Id rule as
-        // OneOfRule / AnyTokenRule / NoneOfRule: an unnamed rule with a
-        // single-rune outer token uses the rune value as the leaf id
-        // (cheap rune-dispatch for tree consumers), and a named rule
-        // (.As("...")) or a multi-rune outer token uses the rule's own
-        // Id so Tree.Find / Tree.Is / NameOf resolve to the user's
-        // chosen name. The Memory points into the outer input, not the
-        // substring we passed to the sub-lexer, so callers that walk
-        // the tree get spans that reference the caller's original string.
-        int runeValue = token.RuneValue;
-        SymbolId leafId = (Name == null && runeValue >= 0) ? new SymbolId(runeValue) : Id;
+        // One leaf Symbol per token. See Rule.ResolveLeafId for the
+        // leaf-id rule shared across OneOfRule / NoneOfRule /
+        // AnyTokenRule / WithinTokenRule. The Memory points into the
+        // outer input, not the substring we passed to the sub-lexer, so
+        // callers that walk the tree get spans that reference the
+        // caller's original string.
+        SymbolId leafId = ResolveLeafId(token.RuneValue);
         var leafSymbol = new Symbol(leafId, FlattenType, token.Memory);
         if (effectiveFlattenType == FlattenType.Flatten)
         {

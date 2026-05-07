@@ -27,6 +27,28 @@ public class ScanUntilRuleTests
     }
 
     [Test]
+    public void ScanUntil_with_precomposed_stopper_set_stops_at_decomposed_input_under_FormD()
+    {
+        // Stopper set: precomposed U+00E9. Under FormD the lexer
+        // decomposes input "é" to a multi-rune cluster "e + combining
+        // acute". Without compile-time set projection, _stopperSet
+        // stays as the rune-only U+00E9 entry and ContainsToken on
+        // the cluster returns false: ScanUntil consumes the cluster
+        // as body and runs to EOF instead of stopping where the user
+        // expected. OneOf with the same set / same input matches the
+        // cluster, so the asymmetry is the bug.
+        var rule = InductorParser.Rules.And(
+            ScanUntil(TokenSet.Runes(LatinEAcutePrecomposedGrapheme)),
+            Token(LatinEAcutePrecomposedGrapheme));
+        rule.Compile(System.Text.NormalizationForm.FormD);
+
+        var result = rule.Parse("abc" + LatinEAcutePrecomposedGrapheme);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("abc"));
+    }
+
+    [Test]
     public void ScanUntil_matches_a_run_of_body_chars_into_one_leaf()
     {
         // "abcXYZ" has no '|' anywhere, so the whole input is body.
@@ -185,6 +207,29 @@ public class ScanUntilRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo(@"abc\"));
+    }
+
+    [Test]
+    public void ScanUntil_with_pinned_SymbolId_uses_pinned_id_for_body_leaf()
+    {
+        // Sibling of the OneOf / NoneOf / AnyToken / WithinToken pinned-
+        // SymbolId tests added in p1nd. ScanUntil emits one leaf per
+        // body run with the rule's Id directly (no rune-as-leaf-id
+        // shortcut, since a body of multiple tokens doesn't have one
+        // distinguished rune to carry). .As(SymbolId) writes the user's
+        // pinned value into Id, so the leaf carries it by construction.
+        // Test locks in the matrix so a future leaf-id refactor that
+        // routes ScanUntil through ResolveLeafId or a similar helper has
+        // to keep .As(SymbolId) honored.
+        var pinnedId = new SymbolId(SymbolRanges.CustomRangeStart + 105);
+        var rule = ScanUntil(TokenSet.Runes("|")).As(pinnedId);
+        var result = rule.Parse("abc");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.Id, Is.EqualTo(pinnedId),
+            "leaf carries the user-pinned SymbolId");
+        Assert.That(result.Tree!.Is(rule), Is.True);
+        Assert.That(result.Tree!.Find(rule), Is.Not.Null);
     }
 
     [Test]

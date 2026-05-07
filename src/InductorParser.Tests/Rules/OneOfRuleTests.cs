@@ -253,4 +253,48 @@ public class OneOfRuleTests
         Assert.That(sink.ToString(), Does.Not.Contain("SKIP | OneOf:"));
     }
 
+    [Test]
+    public void OneOf_in_OneOrMore_matches_after_FormC_canonical_singleton_substitution()
+    {
+        // U+212B ANGSTROM SIGN is a canonical singleton: under FormC it
+        // converts to U+00C5 LATIN CAPITAL LETTER A WITH RING ABOVE.
+        // OneOf(TokenSet.Single(0x212B)) compiled with FormC has its set
+        // re-projected at Compile time: _set becomes {0x00C5}. The lexer
+        // sees input runes in the same form (Parse normalizes the input
+        // first), so a token of U+00C5 should match the projected set.
+        //
+        // The bug: ComputeRuleStartAll runs BEFORE the normalization-form
+        // pass that mutates _set, so OneOfRule.FirstConsumedTokens stays
+        // pinned to the pre-projection set {0x212B}. OneOrMore's lookahead
+        // shortcut peeks the input's first rune (0x00C5), checks it
+        // against the cached {0x212B} (not Contains), concludes the inner
+        // can't match, and fails the OneOrMore at AtLeast=1. The inner
+        // OneOf would have matched if it had been called.
+        var rule = OneOrMore(OneOf(TokenSet.Single(0x212B)))
+            .Compile(System.Text.NormalizationForm.FormC);
+        var result = rule.Parse("Å");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
+
+    [Test]
+    public void OneOf_with_pinned_SymbolId_uses_pinned_id_for_single_rune_leaves()
+    {
+        // .As(SymbolId) is the user's "pin a stable id on this rule"
+        // signal, used for serialized parse trees and cross-version id
+        // stability. The leaf has to carry that pinned id so
+        // Tree.Find(rule), Tree.Is(rule), and any downstream lookup keyed
+        // off SymbolId resolve back to the user's pinned value. The same
+        // gate that respects .As("name") should respect .As(SymbolId)
+        // since both are explicit "find me by reference" signals.
+        var pinnedId = new SymbolId(SymbolRanges.CustomRangeStart + 100);
+        var rule = OneOf(TokenSet.Ascii.Letters).As(pinnedId);
+        var result = rule.Parse("a");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.Id, Is.EqualTo(pinnedId),
+            "leaf carries the user-pinned SymbolId, not the rune value");
+        Assert.That(result.Tree!.Is(rule), Is.True);
+        Assert.That(result.Tree!.Find(rule), Is.Not.Null);
+    }
+
 }

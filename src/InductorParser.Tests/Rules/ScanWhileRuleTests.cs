@@ -116,7 +116,28 @@ public class ScanWhileRuleTests
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
 
-    // Multi-rune grapheme support -------------------------------------------
+    [Test]
+    public void ScanWhile_with_pinned_SymbolId_uses_pinned_id_for_run_leaf()
+    {
+        // Sibling of the OneOf / NoneOf / AnyToken / WithinToken pinned-
+        // SymbolId tests added in p1nd. ScanWhile emits one leaf per
+        // matched run with the rule's Id directly (no rune-as-leaf-id
+        // shortcut, since a run of multiple tokens doesn't have one
+        // distinguished rune to carry). .As(SymbolId) writes the user's
+        // pinned value into Id, so the leaf carries it by construction.
+        // Test locks in the matrix so a future leaf-id refactor that
+        // routes ScanWhile through ResolveLeafId or a similar helper has
+        // to keep .As(SymbolId) honored.
+        var pinnedId = new SymbolId(SymbolRanges.CustomRangeStart + 104);
+        var rule = ScanWhile(TokenSet.Ascii.Letters).As(pinnedId);
+        var result = rule.Parse("abc");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.Id, Is.EqualTo(pinnedId),
+            "leaf carries the user-pinned SymbolId");
+        Assert.That(result.Tree!.Is(rule), Is.True);
+        Assert.That(result.Tree!.Find(rule), Is.Not.Null);
+    }
 
     [Test]
     public void ScanWhile_with_multi_rune_set_consumes_a_run_of_graphemes()
@@ -129,6 +150,23 @@ public class ScanWhileRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo(USFlagGrapheme + WomanShruggingGrapheme));
+    }
+
+    [Test]
+    public void ScanWhile_with_precomposed_set_entry_matches_decomposed_input_under_FormD()
+    {
+        // Set: precomposed U+00E9. Under FormD the lexer feeds the rule
+        // "e + combining acute" as one two-rune cluster. Without compile-
+        // time set projection, the rune-only set has only U+00E9 and the
+        // cluster fails the rune-fast-path's tokenLength == runeLen check.
+        // OneOf with the same set / same input matches, so the asymmetry
+        // is the bug.
+        var rule = ScanWhile(TokenSet.Runes(LatinEAcutePrecomposedGrapheme));
+        rule.Compile(System.Text.NormalizationForm.FormD);
+
+        var result = rule.Parse(LatinEAcutePrecomposedGrapheme);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 
     [Test]
