@@ -34,7 +34,7 @@ public static class BacklogGrammar
         Optional(OneOf(TokenSet.InlineWhitespace));
 
     // ^#(?!#)\s?(.*)$
-    public static readonly Rule H1Heading = AllOf(
+    public static readonly Rule H1Heading = And(
         Token('#'),
         Not(Token('#')),
         OptionalOneWhitespace,
@@ -43,7 +43,7 @@ public static class BacklogGrammar
     );
 
     // ^##(?!#)\s?(.*)$
-    public static readonly Rule H2Heading = AllOf(
+    public static readonly Rule H2Heading = And(
         Literal("##"),
         Not(Token('#')),
         OptionalOneWhitespace,
@@ -52,7 +52,7 @@ public static class BacklogGrammar
     );
 
     // ^[-*+]\s?(.*)$
-    public static readonly Rule BulletHeading = AllOf(
+    public static readonly Rule BulletHeading = And(
         OneOf("-*+"),
         OptionalOneWhitespace,
         RestOfLine,
@@ -61,21 +61,21 @@ public static class BacklogGrammar
 
     // Horizontal rule from 3+ repeated chars: ---, ***, +++.
     // ^[-*+]{3,}$
-    public static readonly Rule HrRun = AllOf(
+    public static readonly Rule HrRun = And(
         AtLeast(3, OneOf("-*+")),
         Eof()
     );
 
     // Horizontal rule from 3+ chars separated by single spaces: - - -, * * *.
     // ^[-*+]( [-*+]){2,}$
-    public static readonly Rule HrSpaced = AllOf(
+    public static readonly Rule HrSpaced = And(
         OneOf("-*+"),
-        AtLeast(2, AllOf(Token(' '), OneOf("-*+"))),
+        AtLeast(2, And(Token(' '), OneOf("-*+"))),
         Eof()
     );
 
     // LF, zero-or-more intra-line whitespace, LF. LF-only.
-    private static readonly Rule ParagraphTarget = AllOf(
+    private static readonly Rule ParagraphTarget = And(
         Token('\n'),
         ZeroOrMore(OneOf(TokenSet.InlineWhitespace)),
         Token('\n')
@@ -83,8 +83,8 @@ public static class BacklogGrammar
 
     // Scan up to a ParagraphTarget, consume it, then the rest.
     // ScanUntil with a rule-based stopper replaces the manual
-    // ZeroOrMore(AllOf(Not(target), AnyToken())) idiom.
-    public static readonly Rule ParagraphSplit = AllOf(
+    // ZeroOrMore(And(Not(target), AnyToken())) idiom.
+    public static readonly Rule ParagraphSplit = And(
         ScanUntil(ParagraphTarget),
         ParagraphTarget,
         ZeroOrMore(AnyToken())

@@ -46,7 +46,7 @@ public static class PrologGrammar
     // See docs/UnicodeGotchas.md § "CRLF Line Endings" for the full
     // explanation of why OneOf / NoneOf / Token('\n') all fail on CRLF
     // input and the three-anti-patterns-to-avoid list.
-    private static readonly Rule LineBreak = FirstOf(
+    private static readonly Rule LineBreak = Or(
         Literal("\r\n"),
         OneOf(CrlfChars)
     );
@@ -55,8 +55,8 @@ public static class PrologGrammar
     //
     // Both bodies use ScanUntil with a rule-based stopper. It peeks
     // the stopper on each rune and rolls back, so the terminator is
-    // left for the surrounding AllOf to consume. ScanUntil replaces
-    // the manual ZeroOrMore(AllOf(Not(stop), AnyToken())) idiom with a
+    // left for the surrounding And to consume. ScanUntil replaces
+    // the manual ZeroOrMore(And(Not(stop), AnyToken())) idiom with a
     // tight single-rule scan that returns one leaf Symbol over the
     // matched body text.
     //
@@ -64,16 +64,16 @@ public static class PrologGrammar
     // (not OneOf) because a CRLF grapheme is multi-rune and trivially
     // passes any NoneOf, which would greedily swallow the line-ending
     // CRLF and leave the terminator nothing to match.
-    public static readonly Rule Comment = FirstOf(
-        AllOf(
+    public static readonly Rule Comment = Or(
+        And(
             Token('%'),
             ScanUntil(LineBreak),
-            FirstOf(
+            Or(
                 OneOrMore(LineBreak),
                 Eof()
             )
         ),
-        AllOf(
+        And(
             Literal("/*"),
             ScanUntil(Literal("*/")),
             Literal("*/")
@@ -82,7 +82,7 @@ public static class PrologGrammar
 
     // Whitespace or comment, zero or more. CRLF-as-grapheme is handled
     // via the Literal alternative for the same reason as in Comment.
-    public static readonly Rule OptionalWhitespace = ZeroOrMore(FirstOf(
+    public static readonly Rule OptionalWhitespace = ZeroOrMore(Or(
         Literal("\r\n"),
         OneOf(WhitespaceChars),
         Comment
@@ -100,37 +100,37 @@ public static class PrologGrammar
     // doesn't either. "\\'" inside a single-quoted atom would end the
     // atom at the first apostrophe regardless of the preceding
     // backslash. Keeping the same behavior for fidelity.
-    public static readonly Rule Atom = FirstOf(
+    public static readonly Rule Atom = Or(
         Float(),
         Integer(),
         OneOrMore(OneOf(MathSymbolChars)),
         Token('!'),
-        AllOf(
+        And(
             Token('"'),
             ScanUntil(TokenSet.Runes("\"")),
             Token('"')
         ),
-        AllOf(
+        And(
             Token('\''),
             ScanUntil(TokenSet.Runes("'")),
             Token('\'')
         ),
-        AllOf(
-            FirstOf(OneOf(LetterChars), Token('-')),
+        And(
+            Or(OneOf(LetterChars), Token('-')),
             ZeroOrMore(OneOf(IdentifierTailChars))
         )
     );
 
     // Variable body shared between both flavors: starts with '_', then
     // zero-or-more identifier-tail chars. "_foo", "_", "_X123-Y".
-    private static readonly Rule UnderscoreVariable = AllOf(
+    private static readonly Rule UnderscoreVariable = And(
         Token('_'),
         ZeroOrMore(OneOf(IdentifierTailChars))
     );
 
     // Standard Prolog: variable = Capital (letter|digit|_|-)*
     // "X", "Foo", "MyVar_1".
-    public static readonly Rule CapitalizedVariableRule = AllOf(
+    public static readonly Rule CapitalizedVariableRule = And(
         OneOf(CapitalChars),
         ZeroOrMore(OneOf(IdentifierTailChars))
     );
@@ -139,7 +139,7 @@ public static class PrologGrammar
     // prefix tells the parser it's looking at a variable before the
     // name itself is scanned, which sidesteps the "is this capitalized?"
     // lookahead that standard Prolog needs.
-    public static readonly Rule HtnVariableRule = AllOf(
+    public static readonly Rule HtnVariableRule = And(
         Token('?'),
         Atom
     );
@@ -169,22 +169,22 @@ public static class PrologGrammar
         var termForward = new LateBoundRule("term");
 
         // Variable = flavor | '_' Tail
-        var variable = FirstOf(variableFlavorRule, UnderscoreVariable);
+        var variable = Or(variableFlavorRule, UnderscoreVariable);
 
         // TermList = Term ws (, ws Term ws)* (| ws Term ws)?
         // Prolog list tail syntax [H | T] rides on the final optional
         // clause. Trailing OptionalWhitespace after each term means the
         // close bracket in List doesn't need its own leading ws.
-        var termList = AllOf(
+        var termList = And(
             termForward,
             OptionalWhitespace,
-            ZeroOrMore(AllOf(
+            ZeroOrMore(And(
                 Token(','),
                 OptionalWhitespace,
                 termForward,
                 OptionalWhitespace
             )),
-            Optional(AllOf(
+            Optional(And(
                 Token('|'),
                 OptionalWhitespace,
                 termForward,
@@ -196,9 +196,9 @@ public static class PrologGrammar
         // The empty-list literal goes first because the "[" prefix is
         // shared and we want first-match-wins to commit to the empty
         // branch for input "[]".
-        var list = FirstOf(
+        var list = Or(
             Literal("[]"),
-            AllOf(
+            And(
                 Token('['),
                 OptionalWhitespace,
                 termList,
@@ -217,10 +217,10 @@ public static class PrologGrammar
         // HtnVariableRule), not the underscore form. "_foo" parses
         // as a variable regardless, since Atom's bare branch doesn't
         // accept a leading underscore anyway.
-        var functor = AllOf(
+        var functor = And(
             Not(variableFlavorRule),
             Atom,
-            Optional(AllOf(
+            Optional(And(
                 Token('('),
                 OptionalWhitespace,
                 Optional(termList),
@@ -234,15 +234,15 @@ public static class PrologGrammar
         // because every functor-atom shape is also reached here. List
         // last because its "[" prefix doesn't collide with the other
         // two.
-        var termDef = FirstOf(variable, functor, list);
+        var termDef = Or(variable, functor, list);
         var _termBinding = termForward.Bind(termDef);
 
         // FunctorList = Functor (, ws Functor ws)*
         // Used by Query, which is a list of goals separated by commas.
-        var functorList = AllOf(
+        var functorList = And(
             functor,
             OptionalWhitespace,
-            ZeroOrMore(AllOf(
+            ZeroOrMore(And(
                 Token(','),
                 OptionalWhitespace,
                 functor,
@@ -255,7 +255,7 @@ public static class PrologGrammar
         // (CharacterSymbol<Colon> + CharacterSymbol<Dash>). Either form
         // is equivalent for matching. Using Literal(":-") here for
         // readability.
-        var rule = AllOf(
+        var rule = And(
             functor,
             OptionalWhitespace,
             Literal(":-"),
@@ -266,7 +266,7 @@ public static class PrologGrammar
         // Query = ws FunctorList ws "." ws Eof
         // Queries are a single statement terminated by '.', no
         // OneOrMore wrapper, unlike Document.
-        var query = AllOf(
+        var query = And(
             OptionalWhitespace,
             functorList,
             OptionalWhitespace,
@@ -281,10 +281,10 @@ public static class PrologGrammar
         // empty file is a parse error. Inside each item, Rule is tried
         // first so "foo :- bar." doesn't get mis-identified as a fact
         // "foo" followed by garbage ":- bar." that can't find its '.'.
-        var document = AllOf(
-            OneOrMore(AllOf(
+        var document = And(
+            OneOrMore(And(
                 OptionalWhitespace,
-                FirstOf(rule, functor, list),
+                Or(rule, functor, list),
                 OptionalWhitespace,
                 Token('.'),
                 OptionalWhitespace

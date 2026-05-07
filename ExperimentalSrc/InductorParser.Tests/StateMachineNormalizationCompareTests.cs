@@ -30,7 +30,7 @@ public class StateMachineNormalizationCompareTests
     // form's canonical equivalent, so both forms accept both renderings
     // of the input.
     private static Rule CafeRule() =>
-        AllOf(Literal("café"), Eof());
+        And(Literal("café"), Eof());
 
     [TestCase(CafePrecomposed, true)]
     [TestCase(CafeDecomposed, true)]

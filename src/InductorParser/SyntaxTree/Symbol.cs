@@ -9,7 +9,7 @@ namespace InductorParser.SyntaxTree;
 // A node in the parse tree produced by Rule.Parse. It has wwo shapes:
 //
 // Composite: carries a list of child Symbols. Used by rules that
-//     build structure (AllOf, FirstOf, OneOrMore wrapping content).
+//     build structure (And, Or, OneOrMore wrapping content).
 //
 // Leaf: carries a ReadOnlyMemory<char> pointing into a section of
 //     the original input string. Used by rules that match content
@@ -29,7 +29,7 @@ public sealed class Symbol
     private static readonly IReadOnlyList<Symbol> EmptyChildren = Array.Empty<Symbol>();
 
     // Shared Symbol a Rule.TryParse returns in place of a real one when
-    // the rule's effective FlattenType is Delete. Consumers like AllOfRule
+    // the rule's effective FlattenType is Delete. Consumers like AndRule
     // filter it out before it reaches the
     // parent's Children list, so rules with FlattenType.Delete never
     // contribute a Discarded Symbol to the final tree.

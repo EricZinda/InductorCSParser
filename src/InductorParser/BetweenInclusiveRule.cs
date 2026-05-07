@@ -118,7 +118,7 @@ internal sealed class BetweenInclusiveRule : Rule
 
     private ScannerSkip? TryCreateScannerSkip(Lexer lexer)
     {
-        // Recognize scanner-style loops: ZeroOrMore(FirstOf(match, AnyToken.Delete)).
+        // Recognize scanner-style loops: ZeroOrMore(Or(match, AnyToken.Delete)).
         // The deleted AnyToken fallback means non-matching input would be thrown
         // away one token at a time, so we can jump directly to the next rune that
         // could start a real match without changing the emitted syntax tree.
@@ -126,7 +126,7 @@ internal sealed class BetweenInclusiveRule : Rule
             return null;
         if (lexer.PreserveAllSymbols || lexer.IsTracing(TraceLevel.Normal))
             return null;
-        if (Inner is not FirstOfRule || Inner.ErrorMessage != null)
+        if (Inner is not OrRule || Inner.ErrorMessage != null)
             return null;
 
         var alternatives = Inner.Children;
@@ -218,12 +218,12 @@ internal sealed class BetweenInclusiveRule : Rule
                 candidates.Add(new LiteralScannerCandidate(literal.ExpectedText!, ignoreAsciiCase: true));
                 return true;
 
-            case FirstOfRule firstOfRule:
-                if (firstOfRule.Children.Count == 0)
+            case OrRule orRule:
+                if (orRule.Children.Count == 0)
                     return false;
-                for (int index = 0; index < firstOfRule.Children.Count; index++)
+                for (int index = 0; index < orRule.Children.Count; index++)
                 {
-                    if (!TryCollectLiteralScannerCandidates(firstOfRule.Children[index], candidates))
+                    if (!TryCollectLiteralScannerCandidates(orRule.Children[index], candidates))
                         return false;
                 }
                 return true;

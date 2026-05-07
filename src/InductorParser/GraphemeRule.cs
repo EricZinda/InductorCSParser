@@ -81,7 +81,7 @@ internal sealed class GraphemeRule : Rule
             offenders.Add((this, _expected,
                 $"<Token converts to multi-grapheme sequence \"{normalized}\" under {form}. " +
                 $"Token matches exactly one grapheme. Use Literal(\"{normalized}\") or " +
-                $"AllOf(Token-per-grapheme) instead.>"));
+                $"And(Token-per-grapheme) instead.>"));
             return;
         }
 

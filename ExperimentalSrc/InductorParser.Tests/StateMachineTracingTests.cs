@@ -36,7 +36,7 @@ public class StateMachineTracingTests
     private static (LateBoundRule LateBound, Rule InnerCyclic) BuildParensGrammar()
     {
         var parens = new LateBoundRule("parens");
-        var inner = ZeroOrMore(AllOf(Token('('), parens, Token(')'))).As("parensInner");
+        var inner = ZeroOrMore(And(Token('('), parens, Token(')'))).As("parensInner");
         parens.Bind(inner);
         return (parens, inner);
     }
@@ -45,7 +45,7 @@ public class StateMachineTracingTests
     public void Cyclic_rule_emits_success_trace_line_with_rule_label()
     {
         var (parens, inner) = BuildParensGrammar();
-        var rooted = AllOf(parens, Eof());
+        var rooted = And(parens, Eof());
         var sink = NewSink();
 
         var result = StateMachineParser.Parse(rooted, "(())", new ParseOptions { TraceSink = sink });
@@ -67,15 +67,15 @@ public class StateMachineTracingTests
     public void Cyclic_rule_emits_failure_trace_line_when_inner_attempt_fails()
     {
         // Parens grammar's inner ZeroOrMore can't fail (zero matches
-        // is success), so use an AllOf-shaped recursive rule whose
+        // is success), so use an And-shaped recursive rule whose
         // body must consume at least one '[' character. With input
         // that doesn't open a bracket, the cyclic rule fails on its
         // first attempt and the SM should emit a FAIL trace line
         // labeled with the rule's TraceLabel.
         var nested = new LateBoundRule("nested");
-        var inner = AllOf(Token('['), Optional(nested), Token(']')).As("nestedInner");
+        var inner = And(Token('['), Optional(nested), Token(']')).As("nestedInner");
         nested.Bind(inner);
-        var rooted = AllOf(nested, Eof());
+        var rooted = And(nested, Eof());
 
         var sink = NewSink();
         var result = StateMachineParser.Parse(rooted, "abc", new ParseOptions { TraceSink = sink });
@@ -97,7 +97,7 @@ public class StateMachineTracingTests
         // even on a cyclic grammar that would normally emit several
         // rule-level trace lines.
         var (parens, _) = BuildParensGrammar();
-        var rooted = AllOf(parens, Eof());
+        var rooted = And(parens, Eof());
 
         var sink = NewSink();
         var result = StateMachineParser.Parse(
@@ -118,7 +118,7 @@ public class StateMachineTracingTests
         // EmitCallReturnTrace returns early on a null sink, so this
         // should parse cleanly.
         var (parens, _) = BuildParensGrammar();
-        var rooted = AllOf(parens, Eof());
+        var rooted = And(parens, Eof());
 
         var result = StateMachineParser.Parse(rooted, "((()))", new ParseOptions());
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -134,7 +134,7 @@ public class StateMachineTracingTests
         // parens match cleanly so every exit is a success, no FAIL
         // for the cyclic rule itself appears in the trace.
         var (parens, inner) = BuildParensGrammar();
-        var rooted = AllOf(parens, Eof());
+        var rooted = And(parens, Eof());
         var sink = NewSink();
 
         var result = StateMachineParser.Parse(rooted, "(())", new ParseOptions { TraceSink = sink });

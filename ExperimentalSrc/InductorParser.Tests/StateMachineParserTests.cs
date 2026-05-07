@@ -21,7 +21,7 @@ public class StateMachineParserTests
     [Test]
     public void Literal_matches_exact_string()
     {
-        var rule = AllOf(Literal("hello"), Eof());
+        var rule = And(Literal("hello"), Eof());
         AssertSameOutcome(rule, "hello", expectSuccess: true);
         AssertSameOutcome(rule, "hellx", expectSuccess: false);
         AssertSameOutcome(rule, "hell", expectSuccess: false);
@@ -30,7 +30,7 @@ public class StateMachineParserTests
     [Test]
     public void Literal_with_Preserve_keeps_leaf_text()
     {
-        var rule = AllOf(Literal("hello").Preserve(), Eof());
+        var rule = And(Literal("hello").Preserve(), Eof());
         var stateMachine = StateMachineParser.Parse(rule, "hello");
         Assert.That(stateMachine.Success, Is.True, stateMachine.ErrorMessage);
         Assert.That(stateMachine.ToString(), Is.EqualTo("hello"));
@@ -41,7 +41,7 @@ public class StateMachineParserTests
     [Test]
     public void Grapheme_matches_one_grapheme()
     {
-        var rule = AllOf(Token('a'), Token('b'), Token('c'), Eof());
+        var rule = And(Token('a'), Token('b'), Token('c'), Eof());
         AssertSameOutcome(rule, "abc", expectSuccess: true);
         AssertSameOutcome(rule, "abd", expectSuccess: false);
     }
@@ -51,7 +51,7 @@ public class StateMachineParserTests
     [Test]
     public void OneOf_matches_one_rune_in_set()
     {
-        var rule = AllOf(OneOf(TokenSet.Ascii.Letters), Eof());
+        var rule = And(OneOf(TokenSet.Ascii.Letters), Eof());
         AssertSameOutcome(rule, "a", expectSuccess: true);
         AssertSameOutcome(rule, "Z", expectSuccess: true);
         AssertSameOutcome(rule, "5", expectSuccess: false);
@@ -72,24 +72,24 @@ public class StateMachineParserTests
     [Test]
     public void Eof_succeeds_at_end_only()
     {
-        var rule = AllOf(Token('a'), Eof());
+        var rule = And(Token('a'), Eof());
         AssertSameOutcome(rule, "a", expectSuccess: true);
         AssertSameOutcome(rule, "ab", expectSuccess: false);
     }
 
-    // ---- AllOf ----
+    // ---- And ----
 
     [Test]
     public void And_all_children_succeed()
     {
-        var rule = AllOf(Token('a'), Token('b'), Token('c'), Eof());
+        var rule = And(Token('a'), Token('b'), Token('c'), Eof());
         AssertSameOutcome(rule, "abc", expectSuccess: true);
     }
 
     [Test]
     public void And_first_child_fails()
     {
-        var rule = AllOf(Token('a'), Token('b'), Eof());
+        var rule = And(Token('a'), Token('b'), Eof());
         AssertSameOutcome(rule, "xb", expectSuccess: false);
     }
 
@@ -98,20 +98,20 @@ public class StateMachineParserTests
     {
         // After failure, position rolls back to start so the parent
         // alternative can try again.
-        var rule = FirstOf(
-            AllOf(Token('a'), Token('b'), Token('c')),
-            AllOf(Token('a'), Token('x'), Token('y')));
-        var rooted = AllOf(rule, Eof());
+        var rule = Or(
+            And(Token('a'), Token('b'), Token('c')),
+            And(Token('a'), Token('x'), Token('y')));
+        var rooted = And(rule, Eof());
         AssertSameOutcome(rooted, "axy", expectSuccess: true);
         AssertSameOutcome(rooted, "axx", expectSuccess: false);
     }
 
-    // ---- FirstOf ----
+    // ---- Or ----
 
     [Test]
     public void Or_first_alternative_matches()
     {
-        var rule = AllOf(FirstOf(Literal("hello"), Literal("world")), Eof());
+        var rule = And(Or(Literal("hello"), Literal("world")), Eof());
         AssertSameOutcome(rule, "hello", expectSuccess: true);
         AssertSameOutcome(rule, "world", expectSuccess: true);
         AssertSameOutcome(rule, "other", expectSuccess: false);
@@ -122,7 +122,7 @@ public class StateMachineParserTests
     {
         // Longer literal must come first under PEG semantics; "ma"
         // would otherwise commit and "maj" never tried.
-        var rule = AllOf(FirstOf(Literal("maj"), Literal("ma")), Eof());
+        var rule = And(Or(Literal("maj"), Literal("ma")), Eof());
         AssertSameOutcome(rule, "maj", expectSuccess: true);
         AssertSameOutcome(rule, "ma", expectSuccess: true);
     }
@@ -132,7 +132,7 @@ public class StateMachineParserTests
     [Test]
     public void Optional_present_or_absent_both_succeed()
     {
-        var rule = AllOf(Optional(Token('!')), Eof());
+        var rule = And(Optional(Token('!')), Eof());
         AssertSameOutcome(rule, "!", expectSuccess: true);
         AssertSameOutcome(rule, "", expectSuccess: true);
         AssertSameOutcome(rule, "a", expectSuccess: false);
@@ -141,7 +141,7 @@ public class StateMachineParserTests
     [Test]
     public void ZeroOrMore_matches_run_of_chars()
     {
-        var rule = AllOf(ZeroOrMore(OneOf(TokenSet.Ascii.Digits)), Eof());
+        var rule = And(ZeroOrMore(OneOf(TokenSet.Ascii.Digits)), Eof());
         AssertSameOutcome(rule, "", expectSuccess: true);
         AssertSameOutcome(rule, "1", expectSuccess: true);
         AssertSameOutcome(rule, "12345", expectSuccess: true);
@@ -151,7 +151,7 @@ public class StateMachineParserTests
     [Test]
     public void OneOrMore_requires_at_least_one()
     {
-        var rule = AllOf(OneOrMore(OneOf(TokenSet.Ascii.Letters)), Eof());
+        var rule = And(OneOrMore(OneOf(TokenSet.Ascii.Letters)), Eof());
         AssertSameOutcome(rule, "", expectSuccess: false);
         AssertSameOutcome(rule, "a", expectSuccess: true);
         AssertSameOutcome(rule, "abc", expectSuccess: true);
@@ -160,7 +160,7 @@ public class StateMachineParserTests
     [Test]
     public void Exactly_three_letters()
     {
-        var rule = AllOf(Exactly(3, OneOf(TokenSet.Ascii.Letters)), Eof());
+        var rule = And(Exactly(3, OneOf(TokenSet.Ascii.Letters)), Eof());
         AssertSameOutcome(rule, "ab", expectSuccess: false);
         AssertSameOutcome(rule, "abc", expectSuccess: true);
         AssertSameOutcome(rule, "abcd", expectSuccess: false);
@@ -170,7 +170,7 @@ public class StateMachineParserTests
     public void BetweenInclusive_collects_children_into_preserve_wrapper()
     {
         var letters = OneOrMore(OneOf(TokenSet.Ascii.Letters)).As("letters").Preserve();
-        var rooted = AllOf(letters, Eof());
+        var rooted = And(letters, Eof());
 
         var stateMachine = StateMachineParser.Parse(rooted, "abc");
         Assert.That(stateMachine.Success, Is.True);
@@ -189,7 +189,7 @@ public class StateMachineParserTests
     {
         // Match "a" only when not followed by "b". The Not is
         // zero-width so the lexer still has the next char available.
-        var rule = AllOf(Token('a'), Not(Token('b')), Eof());
+        var rule = And(Token('a'), Not(Token('b')), Eof());
         AssertSameOutcome(rule, "a", expectSuccess: true);
         AssertSameOutcome(rule, "ab", expectSuccess: false);
     }
@@ -200,8 +200,8 @@ public class StateMachineParserTests
         // Read digits until "x" appears. Not(Token('x')) succeeds as long
         // as the next token isn't 'x'. Combined with OneOf(digits) we
         // consume one digit per iteration.
-        var rule = AllOf(
-            OneOrMore(AllOf(Not(Token('x')), OneOf(TokenSet.Ascii.Digits))),
+        var rule = And(
+            OneOrMore(And(Not(Token('x')), OneOf(TokenSet.Ascii.Digits))),
             Token('x'),
             Eof());
         AssertSameOutcome(rule, "123x", expectSuccess: true);
@@ -213,7 +213,7 @@ public class StateMachineParserTests
     [Test]
     public void Peek_succeeds_without_consuming()
     {
-        var rule = AllOf(Peek(Token('a')), Token('a'), Eof());
+        var rule = And(Peek(Token('a')), Token('a'), Eof());
         AssertSameOutcome(rule, "a", expectSuccess: true);
         AssertSameOutcome(rule, "b", expectSuccess: false);
     }
@@ -221,8 +221,8 @@ public class StateMachineParserTests
     [Test]
     public void Peek_failure_propagates()
     {
-        var rule = AllOf(Peek(Token('a')), Eof());
-        // Peek('a') fails at empty input. So the AllOf fails.
+        var rule = And(Peek(Token('a')), Eof());
+        // Peek('a') fails at empty input. So the And fails.
         AssertSameOutcome(rule, "", expectSuccess: false);
     }
 
@@ -234,8 +234,8 @@ public class StateMachineParserTests
         // parens = ( "(" parens ")" )*
         // Matches any balanced-parens string, including the empty one.
         var parens = new LateBoundRule("parens");
-        parens.Bind(ZeroOrMore(AllOf(Token('('), parens, Token(')'))));
-        var rooted = AllOf(parens, Eof());
+        parens.Bind(ZeroOrMore(And(Token('('), parens, Token(')'))));
+        var rooted = And(parens, Eof());
 
         AssertSameOutcome(rooted, "", expectSuccess: true);
         AssertSameOutcome(rooted, "()", expectSuccess: true);
@@ -254,9 +254,9 @@ public class StateMachineParserTests
         // Tests both LateBound and BetweenInclusive over a recursive sub-rule.
         var expression = new LateBoundRule("expression");
         var digit = OneOf(TokenSet.Ascii.Digits);
-        var term = FirstOf(digit, AllOf(Token('('), expression, Token(')')));
-        expression.Bind(AllOf(term, ZeroOrMore(AllOf(OneOf("+-"), term))));
-        var rooted = AllOf(expression, Eof());
+        var term = Or(digit, And(Token('('), expression, Token(')')));
+        expression.Bind(And(term, ZeroOrMore(And(OneOf("+-"), term))));
+        var rooted = And(expression, Eof());
 
         AssertSameOutcome(rooted, "1", expectSuccess: true);
         AssertSameOutcome(rooted, "1+2", expectSuccess: true);
@@ -274,8 +274,8 @@ public class StateMachineParserTests
     {
         // Token defaults to Delete: keywords and punctuation don't
         // appear in the tree under the default path.
-        var named = AllOf(Token('('), OneOrMore(OneOf(TokenSet.Ascii.Letters)), Token(')')).As("group").Preserve();
-        var rooted = AllOf(named, Eof());
+        var named = And(Token('('), OneOrMore(OneOf(TokenSet.Ascii.Letters)), Token(')')).As("group").Preserve();
+        var rooted = And(named, Eof());
 
         var stateMachine = StateMachineParser.Parse(rooted, "(abc)");
         Assert.That(stateMachine.Success, Is.True);
@@ -289,7 +289,7 @@ public class StateMachineParserTests
     [Test]
     public void PreserveAllSymbols_keeps_every_grammar_node()
     {
-        var rule = AllOf(Token('a'), Token('b'), Token('c'));
+        var rule = And(Token('a'), Token('b'), Token('c'));
         var stateMachine = StateMachineParser.Parse(rule, "abc", new ParseOptions { PreserveAllSymbols = true });
         Assert.That(stateMachine.Success, Is.True);
         // Tree.ToString() walks the whole structure. Under
@@ -303,7 +303,7 @@ public class StateMachineParserTests
     [Test]
     public void Error_position_reports_deepest_failure()
     {
-        var rule = AllOf(Literal("hello"), Eof());
+        var rule = And(Literal("hello"), Eof());
         var stateMachine = StateMachineParser.Parse(rule, "hellx");
         Assert.That(stateMachine.Success, Is.False);
         Assert.That(stateMachine.ErrorCharIndex, Is.EqualTo(4));
@@ -312,15 +312,15 @@ public class StateMachineParserTests
     [Test]
     public void Error_position_in_alternative_picks_furthest_attempt()
     {
-        // "abc" matches the first three of "abcde". FirstOf's first
+        // "abc" matches the first three of "abcde". Or's first
         // alternative reads past "abc" and fails at offset 4. The
         // second alternative also fails earlier. Deepest wins.
-        var rule = AllOf(
-            FirstOf(Literal("abcXY"), Literal("ab")),
+        var rule = And(
+            Or(Literal("abcXY"), Literal("ab")),
             Eof());
         var stateMachine = StateMachineParser.Parse(rule, "abcde");
         Assert.That(stateMachine.Success, Is.False);
-        // The deepest read inside the failed FirstOf alternative was at
+        // The deepest read inside the failed Or alternative was at
         // position 3 (matched abc, then failed at X). That's where
         // we should be.
         Assert.That(stateMachine.ErrorCharIndex, Is.GreaterThanOrEqualTo(2));
@@ -331,7 +331,7 @@ public class StateMachineParserTests
     [Test]
     public void ScanUntil_no_escape_scans_until_stopper()
     {
-        var rule = AllOf(
+        var rule = And(
             Token('"'),
             ScanUntil(TokenSet.Runes("\"")),
             Token('"'),
@@ -344,7 +344,7 @@ public class StateMachineParserTests
     public void ScanUntil_with_simple_escape_handles_backslash_pairs()
     {
         var simpleEscape = OneOf(TokenSet.Runes("\"\\nrtbf/"));
-        var rule = AllOf(
+        var rule = And(
             Token('"'),
             ScanUntil(stopAt: TokenSet.Runes("\""), escapeStart: new System.Text.Rune('\\'), escapeEnd: simpleEscape),
             Token('"'),
@@ -360,9 +360,9 @@ public class StateMachineParserTests
     {
         var simpleEscape = OneOf(TokenSet.Runes("\"\\/bfnrt"));
         var hexDigit = OneOf(TokenSet.Ascii.HexDigits);
-        var unicodeEscape = AllOf(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
-        var escape = FirstOf(simpleEscape, unicodeEscape).Flatten(FlattenType.Delete);
-        var rule = AllOf(
+        var unicodeEscape = And(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
+        var escape = Or(simpleEscape, unicodeEscape).Flatten(FlattenType.Delete);
+        var rule = And(
             Token('"'),
             ScanUntil(stopAt: TokenSet.Runes("\""), escapeStart: new System.Text.Rune('\\'), escapeEnd: escape),
             Token('"'),
@@ -375,7 +375,7 @@ public class StateMachineParserTests
     [Test]
     public void ScanUntil_preserves_leaf_text()
     {
-        var rule = AllOf(Token('"'), ScanUntil(TokenSet.Runes("\"")), Token('"'), Eof());
+        var rule = And(Token('"'), ScanUntil(TokenSet.Runes("\"")), Token('"'), Eof());
         var stateMachine = StateMachineParser.Parse(rule, "\"hello\"");
         Assert.That(stateMachine.Success, Is.True);
         Assert.That(stateMachine.ToString(), Is.EqualTo("hello"));
@@ -386,7 +386,7 @@ public class StateMachineParserTests
     [Test]
     public void AnyToken_matches_any_single_token()
     {
-        var rule = AllOf(AnyToken(), Eof());
+        var rule = And(AnyToken(), Eof());
         AssertSameOutcome(rule, "a", expectSuccess: true);
         AssertSameOutcome(rule, "z", expectSuccess: true);
         AssertSameOutcome(rule, "5", expectSuccess: true);
@@ -397,8 +397,8 @@ public class StateMachineParserTests
     public void AnyToken_in_until_pattern()
     {
         // Read everything up to 'x'.
-        var rule = AllOf(
-            ZeroOrMore(AllOf(Not(Token('x')), AnyToken())),
+        var rule = And(
+            ZeroOrMore(And(Not(Token('x')), AnyToken())),
             Token('x'),
             Eof());
         AssertSameOutcome(rule, "x", expectSuccess: true);
@@ -412,7 +412,7 @@ public class StateMachineParserTests
     [Test]
     public void NoneOf_matches_runes_outside_set()
     {
-        var rule = AllOf(OneOrMore(NoneOf(TokenSet.Runes("\""))), Token('"'), Eof());
+        var rule = And(OneOrMore(NoneOf(TokenSet.Runes("\""))), Token('"'), Eof());
         AssertSameOutcome(rule, "hello\"", expectSuccess: true);
         AssertSameOutcome(rule, "\"", expectSuccess: false); // empty body, OneOrMore needs >= 1
     }
@@ -432,7 +432,7 @@ public class StateMachineParserTests
     [Test]
     public void LiteralIgnoreAsciiCase_matches_either_case()
     {
-        var rule = AllOf(LiteralIgnoreAsciiCase("hello"), Eof());
+        var rule = And(LiteralIgnoreAsciiCase("hello"), Eof());
         AssertSameOutcome(rule, "hello", expectSuccess: true);
         AssertSameOutcome(rule, "HELLO", expectSuccess: true);
         AssertSameOutcome(rule, "Hello", expectSuccess: true);
@@ -445,7 +445,7 @@ public class StateMachineParserTests
     {
         // ASCII letters fold; non-ASCII does not. Same as
         // LiteralIgnoreAsciiCaseRule.
-        var rule = AllOf(LiteralIgnoreAsciiCase("café"), Eof());
+        var rule = And(LiteralIgnoreAsciiCase("café"), Eof());
         AssertSameOutcome(rule, "café", expectSuccess: true);
         AssertSameOutcome(rule, "CAFé", expectSuccess: true);
         AssertSameOutcome(rule, "CAFÉ", expectSuccess: false); // É is non-ASCII, doesn't fold
@@ -457,7 +457,7 @@ public class StateMachineParserTests
     public void WithError_message_surfaces_at_deepest_failure()
     {
         var keyword = Literal("hello").WithError("expected the greeting");
-        var rule = AllOf(keyword, Eof());
+        var rule = And(keyword, Eof());
         var stateMachine = StateMachineParser.Parse(rule, "world");
         Assert.That(stateMachine.Success, Is.False);
         Assert.That(stateMachine.ErrorMessage, Is.EqualTo("expected the greeting"));
@@ -467,7 +467,7 @@ public class StateMachineParserTests
     public void WithError_on_OneOf_surfaces_at_failure()
     {
         var digit = OneOf(TokenSet.Ascii.Digits).WithError("expected a digit");
-        var rule = AllOf(digit, Eof());
+        var rule = And(digit, Eof());
         var stateMachine = StateMachineParser.Parse(rule, "x");
         Assert.That(stateMachine.Success, Is.False);
         Assert.That(stateMachine.ErrorMessage, Is.EqualTo("expected a digit"));
@@ -484,7 +484,7 @@ public class StateMachineParserTests
         // Test: "é" arrives as one token (one rune, since this é is
         // the precomposed form). WithinGrapheme walks it rune-by-rune
         // via the Rune sub-lexer and lets the inner OneOf match.
-        var rule = AllOf(
+        var rule = And(
             WithinToken(OneOf(TokenSet.Letters)),
             Eof());
 
@@ -498,7 +498,7 @@ public class StateMachineParserTests
         // A user-defined Rule subclass: matches exactly two consecutive
         // 'q' characters. The state machine has no native lowering for
         // CustomTwoQs; falls through to LowerViaBridge.
-        var rule = AllOf(new CustomTwoQs(), Eof());
+        var rule = And(new CustomTwoQs(), Eof());
         AssertSameOutcome(rule, "qq", expectSuccess: true);
         AssertSameOutcome(rule, "qx", expectSuccess: false);
         AssertSameOutcome(rule, "q", expectSuccess: false);
@@ -525,7 +525,7 @@ public class StateMachineParserTests
     [Test]
     public void Works_on_default_lexer()
     {
-        var rule = AllOf(Literal("hello"), Eof());
+        var rule = And(Literal("hello"), Eof());
         var stateMachine = StateMachineParser.Parse(rule, "hello", new ParseOptions());
         Assert.That(stateMachine.Success, Is.True);
     }

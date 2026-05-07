@@ -21,8 +21,8 @@ namespace InductorParser;
 // The canonical pattern:
 //
 //     static readonly LateBoundRule Expression = new LateBoundRule("expression");
-//     static readonly Rule Term = FirstOf(Integer(), AllOf(Token('('), Expression, Token(')')));
-//     static readonly Rule Sum  = AllOf(Term, ZeroOrMore(AllOf(Token('+'), Term)));
+//     static readonly Rule Term = Or(Integer(), And(Token('('), Expression, Token(')')));
+//     static readonly Rule Sum  = And(Term, ZeroOrMore(And(Token('+'), Term)));
 //     static readonly Rule _init = Expression.Bind(Sum);
 //
 // Term sees Expression as a valid (but unbound) rule at construction
@@ -101,7 +101,7 @@ public sealed class LateBoundRule : Rule
         // own TryParse shim is about to normalize that wrapper to
         // Symbol.Discarded. Push the target's wrapper into outputSymbols
         // ourselves so the Preserve tree node reaches the parent list
-        // (AllOfRule / FirstOfRule / BetweenInclusiveRule only add children they
+        // (AndRule / OrRule / BetweenInclusiveRule only add children they
         // see returned, not ones lost inside a transparent proxy).
         if (targetSymbol != null
             && !ReferenceEquals(targetSymbol, Symbol.Discarded)
@@ -137,7 +137,7 @@ public sealed class LateBoundRule : Rule
         // forms a cycle back through this LateBoundRule, the cycle-detection
         // path leaves whichever node it hit during recursion at the
         // pessimistic default (Universe, Advance.Sometimes). That keeps
-        // FirstOfRule conservative. A future pass could refine by re-walking
+        // OrRule conservative. A future pass could refine by re-walking
         // until no FirstConsumedTokens changes if a grammar shows up where it
         // matters.
         return new RuleStartRequirements(_target!.FirstConsumedTokens, _target.Advance);

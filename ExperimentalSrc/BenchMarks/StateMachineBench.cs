@@ -13,7 +13,7 @@ namespace InductorParser.Benchmarks;
 // Hand-timed comparison between the existing recursive evaluator
 // (Rule.Parse) and the state-machine evaluator (StateMachineParser.Parse)
 // across a few representative grammars that stay inside the iteration-1
-// supported set (Literal, Grapheme, OneOf, AllOf, FirstOf, BetweenInclusive,
+// supported set (Literal, Grapheme, OneOf, And, Or, BetweenInclusive,
 // Optional, Not, Peek, Eof, LateBound).
 //
 // Stopwatch loop with warmup, same shape as Program.LexerCompare. Not
@@ -126,48 +126,48 @@ internal static class StateMachineBench
         //    hot-loop shape. No backtracking, no recursion.
         var identifier = new GrammarCase(
             "Identifier",
-            AllOf(
+            And(
                 OneOf(TokenSet.Letters | TokenSet.Runes("_")),
                 ZeroOrMore(OneOf(TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_"))),
                 Eof()),
             "identifier");
 
         // 2. Balanced parens, recursive via LateBound. Pure structural
-        //    recursion, no FirstOf alternatives, no token-level fanout.
+        //    recursion, no Or alternatives, no token-level fanout.
         var parens = new LateBoundRule("parens");
-        parens.Bind(ZeroOrMore(AllOf(Token('('), parens, Token(')'))));
+        parens.Bind(ZeroOrMore(And(Token('('), parens, Token(')'))));
         var balancedParens = new GrammarCase(
             "BalancedParens",
-            AllOf(parens, Eof()),
+            And(parens, Eof()),
             "parens");
 
-        // 3. Many-alternative keyword match. Stresses FirstOf's per-alternative
+        // 3. Many-alternative keyword match. Stresses Or's per-alternative
         //    PushBacktrack/FailRestore plus repeated Literal matches. The
         //    grammar accepts a sequence of one of N keywords separated
         //    by commas. Mirrors the keyword-fanout of the chord grammar
         //    minus the LiteralIgnoreAsciiCase.
-        var keyword = FirstOf(
+        var keyword = Or(
             Literal("alpha"), Literal("beta"), Literal("gamma"), Literal("delta"),
             Literal("epsilon"), Literal("zeta"), Literal("eta"), Literal("theta"));
         var keywordList = new GrammarCase(
             "KeywordList",
-            AllOf(keyword, ZeroOrMore(AllOf(Token(','), keyword)), Eof()),
+            And(keyword, ZeroOrMore(And(Token(','), keyword)), Eof()),
             "keywords");
 
         // 4. Recursive arithmetic with backtracking-heavy shape. expr =
         //    term (('+' / '-') term)*; term = digit / '(' expr ')'.
         var expr = new LateBoundRule("expr");
         var digit = OneOf(TokenSet.Ascii.Digits);
-        var term = FirstOf(digit, AllOf(Token('('), expr, Token(')')));
-        expr.Bind(AllOf(term, ZeroOrMore(AllOf(OneOf("+-"), term))));
+        var term = Or(digit, And(Token('('), expr, Token(')')));
+        expr.Bind(And(term, ZeroOrMore(And(OneOf("+-"), term))));
         var arithmetic = new GrammarCase(
             "Arithmetic",
-            AllOf(expr, Eof()),
+            And(expr, Eof()),
             "arithmetic");
 
         // 5. Real-world JSON. The full InductorJsonParser grammar that
-        //    the JsonBench harness uses (Grapheme, Literal, OneOf, AllOf,
-        //    FirstOf, ZeroOrMore, Optional, LateBound, ScanUntil). Run
+        //    the JsonBench harness uses (Grapheme, Literal, OneOf, And,
+        //    Or, ZeroOrMore, Optional, LateBound, ScanUntil). Run
         //    against the same Big / Long / Deep / Wide shapes the
         //    main JsonBench measures.
         var json = new GrammarCase(

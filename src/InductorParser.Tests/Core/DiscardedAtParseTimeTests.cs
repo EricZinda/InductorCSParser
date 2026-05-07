@@ -10,7 +10,7 @@ namespace InductorParser.Tests;
 
 // Parse-time Delete filtering. Rules whose effective FlattenType is Delete
 // return the shared Symbol.Discarded value from TryParse, and composite
-// parents (AllOf / FirstOf / BetweenInclusive) filter it out of their
+// parents (And / Or / BetweenInclusive) filter it out of their
 // Children list. That's the fast path: Delete symbols never make it
 // into the tree, so most callers never need to think about flattening.
 //
@@ -48,12 +48,12 @@ public class DiscardedAtParseTimeTests
     public void Optional_Whitespace_inside_composite_leaves_no_whitespace_children()
     {
         // The realistic JSON-style shape: Optional(InlineWhitespace()) sits between
-        // two tokens inside an AllOf. The top-level Symbols list should hold
+        // two tokens inside an And. The top-level Symbols list should hold
         // the two token leaves only, with the whitespace contributing
         // nothing. OneOf has FlattenType.Preserve so the token leaves
         // survive. Their Id is the code point, so we assert on that.
         var letter = OneOf(TokenSet.Ascii.Letters);
-        var rule = AllOf(letter, Optional(InlineWhitespace()), letter);
+        var rule = And(letter, Optional(InlineWhitespace()), letter);
         var result = rule.Parse("a   b");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -78,14 +78,14 @@ public class DiscardedAtParseTimeTests
         Assert.That(charResult.Success, Is.True);
         Assert.That(charResult.Symbols, Is.Empty);
 
-        var notResult = AllOf(Not(Token('y')), Token('x')).Parse("x");
-        // Top-level AllOf holds no children because both its children were
-        // Discarded. AllOf is Flatten, so its children bubble up to the
+        var notResult = And(Not(Token('y')), Token('x')).Parse("x");
+        // Top-level And holds no children because both its children were
+        // Discarded. And is Flatten, so its children bubble up to the
         // root list, which is empty since the children were Discarded.
         Assert.That(notResult.Success, Is.True);
         Assert.That(notResult.Symbols, Is.Empty);
 
-        var peekResult = AllOf(Peek(Token('x')), Token('x')).Parse("x");
+        var peekResult = And(Peek(Token('x')), Token('x')).Parse("x");
         Assert.That(peekResult.Success, Is.True);
         Assert.That(peekResult.Symbols, Is.Empty);
     }
@@ -100,13 +100,13 @@ public class DiscardedAtParseTimeTests
         // the full PrintTree rendering in one shot is easier to read
         // than per-child assertions, and any drift shows up as a
         // string diff naming the exact node that moved.
-        var rule = AllOf(Token('a'), Optional(InlineWhitespace()), Token('b'));
+        var rule = And(Token('a'), Optional(InlineWhitespace()), Token('b'));
         var options = new ParseOptions { PreserveAllSymbols = true };
         var result = rule.Parse("a   b", options);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.PrintTree(), Is.EqualTo(
-            "AllOf: \"a   b\"\n" +
+            "And: \"a   b\"\n" +
             "  'a'\n" +
             "  Optional: \"   \"\n" +
             "    OneOrMore: \"   \"\n" +
@@ -133,10 +133,10 @@ public class DiscardedAtParseTimeTests
         // Grammar choice: OneOf(Letters) defaults to Preserve so its
         // leaves survive both ways, Optional(InlineWhitespace()) gives a
         // Flatten wrapper (Optional) around a Delete wrapper (InlineWhitespace),
-        // and AllOf is Flatten. All three flatten policies are exercised
+        // and And is Flatten. All three flatten policies are exercised
         // in one tree.
         var letter = OneOf(TokenSet.Ascii.Letters);
-        var rule = AllOf(letter, Optional(InlineWhitespace()), letter);
+        var rule = And(letter, Optional(InlineWhitespace()), letter);
 
         var normal = rule.Parse("a   b");
         var preserved = rule.Parse("a   b", new ParseOptions { PreserveAllSymbols = true });
@@ -144,7 +144,7 @@ public class DiscardedAtParseTimeTests
         Assert.That(normal.Success, Is.True, normal.ErrorMessage);
         Assert.That(preserved.Success, Is.True, preserved.ErrorMessage);
 
-        // preserved.Tree is the AllOf wrapper (Flatten-typed). FlattenInto
+        // preserved.Tree is the And wrapper (Flatten-typed). FlattenInto
         // lifts its children, so the result is the lifted child list.
         var flattened = preserved.Tree!.Flatten();
 

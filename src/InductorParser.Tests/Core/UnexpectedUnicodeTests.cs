@@ -153,25 +153,25 @@ public class UnexpectedUnicodeTests
 
         // (0) Default FormC throws out of Parse before the lexer
         // runs.
-        Assert.Throws<ArgumentException>(() => AllOf(Literal("hello"), Eof()).Parse(input));
+        Assert.Throws<ArgumentException>(() => And(Literal("hello"), Eof()).Parse(input));
 
         // (1) Compile(null) + naive grammar fails normally:
         // Literal("hello") doesn't match a surrogate followed by 'h'.
         // Lone surrogates don't match any normal predicate (their
         // RuneValue is -1, which no TokenSet accepts), so OneOf and
         // TokenSet-based rules skip them too.
-        var naiveRule = AllOf(Literal("hello"), Eof());
+        var naiveRule = And(Literal("hello"), Eof());
         naiveRule.Compile(null);
         Assert.That(naiveRule.Parse(input).Success, Is.False);
 
         // (2) AnyToken at the front consumes the lone surrogate as
         // a wildcard.
-        var anyTokenRule = AllOf(AnyToken(), Literal("hello"), Eof());
+        var anyTokenRule = And(AnyToken(), Literal("hello"), Eof());
         anyTokenRule.Compile(null);
         Assert.That(anyTokenRule.Parse(input).Success, Is.True);
 
         // (3) Targeting the surrogate via Token(string) also works.
-        var targetedRule = AllOf(Token(UnicodeExamples.HighSurrogateMinText), Literal("hello"), Eof());
+        var targetedRule = And(Token(UnicodeExamples.HighSurrogateMinText), Literal("hello"), Eof());
         targetedRule.Compile(null);
         Assert.That(targetedRule.Parse(input).Success, Is.True);
     }
@@ -185,20 +185,20 @@ public class UnexpectedUnicodeTests
         string input = UnicodeExamples.LowSurrogateMaxText + "hello";
 
         // (0) Default FormC throws.
-        Assert.Throws<ArgumentException>(() => AllOf(Literal("hello"), Eof()).Parse(input));
+        Assert.Throws<ArgumentException>(() => And(Literal("hello"), Eof()).Parse(input));
 
         // (1) Compile(null) + naive grammar fails normally.
-        var naiveRule = AllOf(Literal("hello"), Eof());
+        var naiveRule = And(Literal("hello"), Eof());
         naiveRule.Compile(null);
         Assert.That(naiveRule.Parse(input).Success, Is.False);
 
         // (2) AnyToken accommodation succeeds.
-        var anyTokenRule = AllOf(AnyToken(), Literal("hello"), Eof());
+        var anyTokenRule = And(AnyToken(), Literal("hello"), Eof());
         anyTokenRule.Compile(null);
         Assert.That(anyTokenRule.Parse(input).Success, Is.True);
 
         // (3) Token-specific accommodation succeeds.
-        var targetedRule = AllOf(Token(UnicodeExamples.LowSurrogateMaxText), Literal("hello"), Eof());
+        var targetedRule = And(Token(UnicodeExamples.LowSurrogateMaxText), Literal("hello"), Eof());
         targetedRule.Compile(null);
         Assert.That(targetedRule.Parse(input).Success, Is.True);
     }
@@ -259,7 +259,7 @@ public class UnexpectedUnicodeTests
         // one ArgumentException to the AggregateException. The grammar author
         // sees a single multi-rule message in InvalidOperationException.Message
         // and can walk InnerExceptions for the per-rule runtime cause.
-        var rule = AllOf(
+        var rule = And(
             Token(UnicodeExamples.HighSurrogateMinText),
             Literal(UnicodeExamples.HighSurrogateMinText + "X"),
             LiteralIgnoreAsciiCase(UnicodeExamples.HighSurrogateMinText + "y"));
@@ -317,17 +317,17 @@ public class UnexpectedUnicodeTests
     }
 
     [Test]
-    public void FirstOf_with_AnyToken_fallback_matches_lone_surrogate_under_null_normalization()
+    public void Or_with_AnyToken_fallback_matches_lone_surrogate_under_null_normalization()
     {
-        // FirstOf(specific, AnyToken()) on lone-surrogate input under
+        // Or(specific, AnyToken()) on lone-surrogate input under
         // Compile(null): AnyToken() matches the surrogate as
-        // a one-char token, the FirstOf succeeds, and the matched text
+        // a one-char token, the Or succeeds, and the matched text
         // round-trips the surrogate verbatim. Same shape grammars use
         // for "specific case, otherwise pass through anything," now
         // exercised on input where the next position is a surrogate
         // half (no valid rune) rather than a real rune.
         string input = UnicodeExamples.HighSurrogateMinText;
-        var rule = FirstOf(Literal("X"), AnyToken());
+        var rule = Or(Literal("X"), AnyToken());
         rule.Compile(null);
 
         var result = rule.Parse(input);
@@ -338,28 +338,28 @@ public class UnexpectedUnicodeTests
     }
 
     [Test]
-    public void FirstOf_with_AnyToken_fallback_matches_lone_low_surrogate_under_null_normalization()
+    public void Or_with_AnyToken_fallback_matches_lone_low_surrogate_under_null_normalization()
     {
         // Mirror of the high-surrogate test using a lone LOW surrogate so
         // both halves of the surrogate range get exercised through the
-        // FirstOf + AnyToken fallback.
+        // Or + AnyToken fallback.
         string input = UnicodeExamples.LowSurrogateMaxText;
-        var rule = FirstOf(Literal("X"), AnyToken());
+        var rule = Or(Literal("X"), AnyToken());
         rule.Compile(null);
 
         Assert.That(rule.Parse(input).Success, Is.True);
     }
 
     [Test]
-    public void FirstOf_eof_shortcut_lets_zero_width_children_match()
+    public void Or_eof_shortcut_lets_zero_width_children_match()
     {
-        // FirstOf(specific, Eof()) on empty input: every Always child
+        // Or(specific, Eof()) on empty input: every Always child
         // (Literal here) is correctly skipped at EOF since there's no
         // rune to consume, and Eof (Advance.Never) is still tried and
         // matches. Asserts the EOF fast-fail behavior the lookahead
         // shortcut delivers, separate from the surrogate-handling
         // tests above.
-        var rule = FirstOf(Literal("X"), Eof()).Compile();
+        var rule = Or(Literal("X"), Eof()).Compile();
         Assert.That(rule.Parse("").Success, Is.True);
     }
 
@@ -416,7 +416,7 @@ public class UnexpectedUnicodeTests
         // and the rune intervals weren't queried), NoneOf inverted
         // false to true, and the false-positive match shipped. The
         // surrogate-aware check fixes both directions in lockstep.
-        var rule = AllOf(NoneOf(TokenSet.Range(0, 0x10FFFF)), Eof());
+        var rule = And(NoneOf(TokenSet.Range(0, 0x10FFFF)), Eof());
         rule.Compile(null);
 
         Assert.That(rule.Parse("\uD800").Success, Is.False,
@@ -473,7 +473,7 @@ public class UnexpectedUnicodeTests
         // for grammars that want to surface unpaired surrogates as
         // distinct entities (WTF-8 round-tripping, JSON unpaired-
         // surrogate handling).
-        var targetedRule = AllOf(
+        var targetedRule = And(
             Token(UnicodeExamples.LowSurrogateMinText),
             Token(UnicodeExamples.HighSurrogateMinText),
             Eof());
@@ -499,7 +499,7 @@ public class UnexpectedUnicodeTests
         // U+10FFFF fails normally at the orphan; the positive-match
         // path is just for grammars that want to deliberately do
         // something with this exact code point.
-        Assert.That(AllOf(Token(UnicodeExamples.MaximumCodePointRune), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token(UnicodeExamples.MaximumCodePointRune), Eof()).Parse(input).Success, Is.True);
     }
 
     // Coverage matrix: every non-null normalization form routes
@@ -532,7 +532,7 @@ public class UnexpectedUnicodeTests
         NormalizationForm form, int[] illFormedCodeUnits)
     {
         string illFormedInput = BuildStringFromCodeUnits(illFormedCodeUnits);
-        var rule = AllOf(Literal("hello"), Eof());
+        var rule = And(Literal("hello"), Eof());
         rule.Compile(form);
 
         Assert.Throws<ArgumentException>(() => rule.Parse(illFormedInput),
@@ -553,7 +553,7 @@ public class UnexpectedUnicodeTests
         // unpaired-surrogate handling) and don't want the
         // Normalize-time throw.
         string illFormedInput = BuildStringFromCodeUnits(illFormedCodeUnits);
-        var rule = AllOf(Literal("hello"), Eof());
+        var rule = And(Literal("hello"), Eof());
         rule.Compile(null);
 
         Assert.DoesNotThrow(() => rule.Parse(illFormedInput),
@@ -585,15 +585,15 @@ public class UnexpectedUnicodeTests
 
         // (1) Naive grammar fails: Literal("hello") doesn't match
         // a combining mark followed by 'h'.
-        Assert.That(AllOf(Literal("hello"), Eof()).Parse(input).Success, Is.False);
+        Assert.That(And(Literal("hello"), Eof()).Parse(input).Success, Is.False);
 
         // (2) AnyToken at the front consumes the orphaned mark
         // as a wildcard.
-        Assert.That(AllOf(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting the combining mark specifically via
         // Token(...) also works.
-        Assert.That(AllOf(Token(UnicodeExamples.CombiningAcuteText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token(UnicodeExamples.CombiningAcuteText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
     }
 
     [Test]
@@ -618,15 +618,15 @@ public class UnexpectedUnicodeTests
 
         // (1) Naive grammar fails: Literal("hello") doesn't match
         // a joiner followed by 'h'.
-        Assert.That(AllOf(Literal("hello"), Eof()).Parse(input).Success, Is.False);
+        Assert.That(And(Literal("hello"), Eof()).Parse(input).Success, Is.False);
 
         // (2) AnyToken at the front consumes the orphaned joiner
         // as a wildcard.
-        Assert.That(AllOf(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting the joiner specifically via Token(...)
         // also works.
-        Assert.That(AllOf(Token(UnicodeExamples.ZeroWidthJoinerText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token(UnicodeExamples.ZeroWidthJoinerText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
     }
 
     [Test]
@@ -638,15 +638,15 @@ public class UnexpectedUnicodeTests
 
         // (1) Naive grammar fails: Literal("hello") doesn't match
         // a variation selector followed by 'h'.
-        Assert.That(AllOf(Literal("hello"), Eof()).Parse(input).Success, Is.False);
+        Assert.That(And(Literal("hello"), Eof()).Parse(input).Success, Is.False);
 
         // (2) AnyToken at the front consumes the orphan as a
         // wildcard.
-        Assert.That(AllOf(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting the variation selector specifically via
         // Token(...) also works.
-        Assert.That(AllOf(Token(UnicodeExamples.EmojiVariationSelectorText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token(UnicodeExamples.EmojiVariationSelectorText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
     }
 
     [Test]
@@ -661,15 +661,15 @@ public class UnexpectedUnicodeTests
 
         // (1) Naive grammar fails: Literal("hello") doesn't match
         // an unpaired regional indicator followed by 'h'.
-        Assert.That(AllOf(Literal("hello"), Eof()).Parse(input).Success, Is.False);
+        Assert.That(And(Literal("hello"), Eof()).Parse(input).Success, Is.False);
 
         // (2) AnyToken at the front consumes the orphaned indicator
         // as a wildcard.
-        Assert.That(AllOf(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting the regional indicator specifically via
         // Token(...) also works.
-        Assert.That(AllOf(Token(UnicodeExamples.RegionalIndicatorURune), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token(UnicodeExamples.RegionalIndicatorURune), Literal("hello"), Eof()).Parse(input).Success, Is.True);
     }
 
     [Test]
@@ -682,15 +682,15 @@ public class UnexpectedUnicodeTests
 
         // (1) Naive grammar fails: Literal("hello") doesn't match
         // a skin-tone modifier followed by 'h'.
-        Assert.That(AllOf(Literal("hello"), Eof()).Parse(input).Success, Is.False);
+        Assert.That(And(Literal("hello"), Eof()).Parse(input).Success, Is.False);
 
         // (2) AnyToken at the front consumes the orphan as a
         // wildcard.
-        Assert.That(AllOf(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting the skin-tone modifier specifically via
         // Token(...) also works.
-        Assert.That(AllOf(Token(UnicodeExamples.MediumSkinToneRune), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token(UnicodeExamples.MediumSkinToneRune), Literal("hello"), Eof()).Parse(input).Success, Is.True);
     }
 
     [Test]
@@ -706,15 +706,15 @@ public class UnexpectedUnicodeTests
 
         // (1) Naive grammar fails: Literal("hello") + Eof doesn't
         // match because the trailing Prepend is in the way of Eof.
-        Assert.That(AllOf(Literal("hello"), Eof()).Parse(input).Success, Is.False);
+        Assert.That(And(Literal("hello"), Eof()).Parse(input).Success, Is.False);
 
         // (2) AnyToken after "hello" consumes the orphaned Prepend
         // as a wildcard.
-        Assert.That(AllOf(Literal("hello"), AnyToken(), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Literal("hello"), AnyToken(), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting the Prepend specifically via Token(...)
         // also works.
-        Assert.That(AllOf(Literal("hello"), Token(UnicodeExamples.ArabicNumberSignText), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Literal("hello"), Token(UnicodeExamples.ArabicNumberSignText), Eof()).Parse(input).Success, Is.True);
     }
 
     [Test]
@@ -730,15 +730,15 @@ public class UnexpectedUnicodeTests
 
         // (1) Naive grammar fails: Literal("hello") doesn't match
         // a virama followed by 'h'.
-        Assert.That(AllOf(Literal("hello"), Eof()).Parse(input).Success, Is.False);
+        Assert.That(And(Literal("hello"), Eof()).Parse(input).Success, Is.False);
 
         // (2) AnyToken at the front consumes the orphaned virama
         // as a wildcard.
-        Assert.That(AllOf(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting the virama specifically via Token(...) also
         // works.
-        Assert.That(AllOf(Token(UnicodeExamples.DevanagariViramaText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token(UnicodeExamples.DevanagariViramaText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
     }
 
     // ============================================================
@@ -758,17 +758,17 @@ public class UnexpectedUnicodeTests
 
         // (1) Strict grammar fails: Literal("hello") doesn't match a
         // BOM followed by 'h'.
-        var strictResult = AllOf(Literal("hello"), Eof()).Parse(input);
+        var strictResult = And(Literal("hello"), Eof()).Parse(input);
         Assert.That(strictResult.Success, Is.False);
         Assert.That(strictResult.ErrorCharIndex, Is.EqualTo(0));
 
         // (2) AnyToken at the front consumes the BOM as a wildcard.
-        Assert.That(AllOf(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting the BOM specifically via Token(...) also
         // works. The positive-match path is for grammars that want
         // to deliberately recognize and process a leading BOM.
-        Assert.That(AllOf(Token(UnicodeExamples.ByteOrderMarkText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token(UnicodeExamples.ByteOrderMarkText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
     }
 
     [Test]
@@ -780,18 +780,18 @@ public class UnexpectedUnicodeTests
         string input = ("a" + UnicodeExamples.ByteOrderMarkText + "b");
 
         // (1) Strict a-b grammar fails at offset 1 where the BOM sits.
-        var strictResult = AllOf(Token('a'), Token('b'), Eof()).Parse(input);
+        var strictResult = And(Token('a'), Token('b'), Eof()).Parse(input);
         Assert.That(strictResult.Success, Is.False);
         Assert.That(strictResult.ErrorCharIndex, Is.EqualTo(1),
             "the BOM at position 1 isn't 'b'");
 
         // (2) AnyToken consumes the BOM as a wildcard between the
         // letters.
-        Assert.That(AllOf(Token('a'), AnyToken(), Token('b'), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token('a'), AnyToken(), Token('b'), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting the BOM specifically via Token(...) makes
         // the same input parse successfully.
-        Assert.That(AllOf(Token('a'), Token(UnicodeExamples.ByteOrderMarkText), Token('b'), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token('a'), Token(UnicodeExamples.ByteOrderMarkText), Token('b'), Eof()).Parse(input).Success, Is.True);
     }
 
     [Test]
@@ -804,15 +804,15 @@ public class UnexpectedUnicodeTests
         string input = ("a" + UnicodeExamples.ZeroWidthSpaceText + "b");
 
         // (1) Strict a-b grammar fails at the ZWS.
-        Assert.That(AllOf(Token('a'), Token('b'), Eof()).Parse(input).Success, Is.False);
+        Assert.That(And(Token('a'), Token('b'), Eof()).Parse(input).Success, Is.False);
 
         // (2) AnyToken consumes the ZWS as a wildcard between the
         // letters.
-        Assert.That(AllOf(Token('a'), AnyToken(), Token('b'), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token('a'), AnyToken(), Token('b'), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting the ZWS specifically via Token(...) makes
         // the same input parse successfully.
-        Assert.That(AllOf(Token('a'), Token(UnicodeExamples.ZeroWidthSpaceText), Token('b'), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token('a'), Token(UnicodeExamples.ZeroWidthSpaceText), Token('b'), Eof()).Parse(input).Success, Is.True);
     }
 
     [Test]
@@ -827,16 +827,16 @@ public class UnexpectedUnicodeTests
         // (1) Naive a-b grammar fails. The lexer hands back the
         // ("a" + ZWNJ) cluster as one token, so Token('a') doesn't
         // match — it expects a token whose RuneValue is 'a' alone.
-        Assert.That(AllOf(Token('a'), Token('b'), Eof()).Parse(input).Success, Is.False);
+        Assert.That(And(Token('a'), Token('b'), Eof()).Parse(input).Success, Is.False);
 
         // (2) AnyToken consumes the ("a" + ZWNJ) cluster as a
         // wildcard, then Token('b') matches the second cluster.
-        Assert.That(AllOf(AnyToken(), Token('b'), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(AnyToken(), Token('b'), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting the multi-rune cluster as a single literal
         // via Token(string) also works. Token("a" + ZWNJ) matches
         // the exact two-rune cluster the lexer produces.
-        Assert.That(AllOf(Token("a" + UnicodeExamples.ZeroWidthNonJoinerText), Token('b'), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token("a" + UnicodeExamples.ZeroWidthNonJoinerText), Token('b'), Eof()).Parse(input).Success, Is.True);
     }
 
     [Test]
@@ -855,11 +855,11 @@ public class UnexpectedUnicodeTests
 
         // (2) AnyToken consumes the soft hyphen as a wildcard
         // between the two halves of the word.
-        Assert.That(AllOf(Literal("ap"), AnyToken(), Literal("ple"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Literal("ap"), AnyToken(), Literal("ple"), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting the soft hyphen specifically via Token(...)
         // makes the same input parse successfully.
-        Assert.That(AllOf(Literal("ap"), Token(UnicodeExamples.SoftHyphenText), Literal("ple"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Literal("ap"), Token(UnicodeExamples.SoftHyphenText), Literal("ple"), Eof()).Parse(input).Success, Is.True);
     }
 
     [Test]
@@ -877,20 +877,20 @@ public class UnexpectedUnicodeTests
 
         // (1) Identifier() fails: U+202E ends the identifier at
         // offset 2.
-        var identifierResult = AllOf(Identifier(), Eof()).Parse(input);
+        var identifierResult = And(Identifier(), Eof()).Parse(input);
         Assert.That(identifierResult.Success, Is.False,
             "U+202E isn't a valid identifier-continue character, " +
             "so the identifier ends at the bidi control");
 
         // (2) AnyToken consumes the RLO as a wildcard between the
         // two halves of the word.
-        Assert.That(AllOf(Literal("ab"), AnyToken(), Literal("cd"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Literal("ab"), AnyToken(), Literal("cd"), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting the RLO specifically via Token(...) makes
         // the same input parse successfully. Useful if a grammar
         // wants to detect bidi controls and either flag them or
         // process around them.
-        Assert.That(AllOf(Literal("ab"), Token(UnicodeExamples.RightToLeftOverrideText), Literal("cd"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Literal("ab"), Token(UnicodeExamples.RightToLeftOverrideText), Literal("cd"), Eof()).Parse(input).Success, Is.True);
     }
 
     [Test]
@@ -903,15 +903,15 @@ public class UnexpectedUnicodeTests
 
         // (1) Naive grammar fails: Literal("hello") doesn't match
         // a tag character followed by 'h'.
-        Assert.That(AllOf(Literal("hello"), Eof()).Parse(input).Success, Is.False);
+        Assert.That(And(Literal("hello"), Eof()).Parse(input).Success, Is.False);
 
         // (2) AnyToken at the front consumes the tag character as
         // a wildcard.
-        Assert.That(AllOf(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting the tag character specifically via
         // Token(...) also works.
-        Assert.That(AllOf(Token(UnicodeExamples.LanguageTagRune), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token(UnicodeExamples.LanguageTagRune), Literal("hello"), Eof()).Parse(input).Success, Is.True);
     }
 
     [Test]
@@ -926,13 +926,13 @@ public class UnexpectedUnicodeTests
 
         // (1) Naive grammar fails: Literal("hello") doesn't match
         // a Mongolian vowel separator followed by 'h'.
-        Assert.That(AllOf(Literal("hello"), Eof()).Parse(input).Success, Is.False);
+        Assert.That(And(Literal("hello"), Eof()).Parse(input).Success, Is.False);
 
         // (2) AnyToken at the front consumes it as a wildcard.
-        Assert.That(AllOf(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting it specifically via Token(...) also works.
-        Assert.That(AllOf(Token(UnicodeExamples.MongolianVowelSeparatorText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token(UnicodeExamples.MongolianVowelSeparatorText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
     }
 
     // ============================================================
@@ -958,24 +958,24 @@ public class UnexpectedUnicodeTests
         // runs. The exception propagates to the caller; callers
         // whose input might contain U+FFFE either strip it upstream
         // or compile with null.
-        Assert.Throws<ArgumentException>(() => AllOf(Literal("hello"), Eof()).Parse(input));
+        Assert.Throws<ArgumentException>(() => And(Literal("hello"), Eof()).Parse(input));
 
         // (1) Compile(null) + naive grammar fails normally:
         // Literal("hello") doesn't match a noncharacter followed
         // by 'h'.
-        var naiveRule = AllOf(Literal("hello"), Eof());
+        var naiveRule = And(Literal("hello"), Eof());
         naiveRule.Compile(null);
         Assert.That(naiveRule.Parse(input).Success, Is.False);
 
         // (2) AnyToken at the front consumes the noncharacter as
         // a wildcard.
-        var anyTokenRule = AllOf(AnyToken(), Literal("hello"), Eof());
+        var anyTokenRule = And(AnyToken(), Literal("hello"), Eof());
         anyTokenRule.Compile(null);
         Assert.That(anyTokenRule.Parse(input).Success, Is.True);
 
         // (3) Targeting U+FFFE specifically via Token(...) also
         // works.
-        var targetedRule = AllOf(Token(UnicodeExamples.NoncharacterFFFEText), Literal("hello"), Eof());
+        var targetedRule = And(Token(UnicodeExamples.NoncharacterFFFEText), Literal("hello"), Eof());
         targetedRule.Compile(null);
         Assert.That(targetedRule.Parse(input).Success, Is.True);
     }
@@ -993,15 +993,15 @@ public class UnexpectedUnicodeTests
 
         // (1) Naive grammar fails: Literal("hello") doesn't match
         // a noncharacter followed by 'h'.
-        Assert.That(AllOf(Literal("hello"), Eof()).Parse(input).Success, Is.False);
+        Assert.That(And(Literal("hello"), Eof()).Parse(input).Success, Is.False);
 
         // (2) AnyToken at the front consumes the noncharacter as
         // a wildcard.
-        Assert.That(AllOf(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting U+FFFF specifically via Token(...) also
         // works.
-        Assert.That(AllOf(Token(UnicodeExamples.NoncharacterFFFFText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token(UnicodeExamples.NoncharacterFFFFText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
     }
 
     [Test]
@@ -1016,15 +1016,15 @@ public class UnexpectedUnicodeTests
 
         // (1) Naive grammar fails: Literal("hello") doesn't match
         // a noncharacter followed by 'h'.
-        Assert.That(AllOf(Literal("hello"), Eof()).Parse(input).Success, Is.False);
+        Assert.That(And(Literal("hello"), Eof()).Parse(input).Success, Is.False);
 
         // (2) AnyToken at the front consumes the noncharacter as
         // a wildcard.
-        Assert.That(AllOf(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting U+FDD0 specifically via Token(...) also
         // works.
-        Assert.That(AllOf(Token(UnicodeExamples.NoncharacterFDD0Text), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token(UnicodeExamples.NoncharacterFDD0Text), Literal("hello"), Eof()).Parse(input).Success, Is.True);
     }
 
     [Test]
@@ -1038,16 +1038,16 @@ public class UnexpectedUnicodeTests
 
         // (1) Naive grammar fails: Literal("hello") doesn't match
         // a PUA character followed by 'h'.
-        Assert.That(AllOf(Literal("hello"), Eof()).Parse(input).Success, Is.False);
+        Assert.That(And(Literal("hello"), Eof()).Parse(input).Success, Is.False);
 
         // (2) AnyToken at the front consumes the PUA character as
         // a wildcard.
-        Assert.That(AllOf(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting U+E000 specifically via Token(...) also
         // works. Useful for a private protocol that assigns
         // meaning to a PUA range.
-        Assert.That(AllOf(Token(UnicodeExamples.PrivateUseAreaStartText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token(UnicodeExamples.PrivateUseAreaStartText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
     }
 
     [Test]
@@ -1062,17 +1062,17 @@ public class UnexpectedUnicodeTests
 
         // (1) Naive grammar fails: Literal("hello") doesn't match
         // a U+FFFD followed by 'h'.
-        Assert.That(AllOf(Literal("hello"), Eof()).Parse(input).Success, Is.False);
+        Assert.That(And(Literal("hello"), Eof()).Parse(input).Success, Is.False);
 
         // (2) AnyToken at the front consumes the replacement
         // character as a wildcard.
-        Assert.That(AllOf(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting U+FFFD specifically via Token(...) also
         // works. Useful for grammars that want to deliberately
         // detect and surface decoder-replacement markers in their
         // output.
-        Assert.That(AllOf(Token(UnicodeExamples.ReplacementCharacterText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token(UnicodeExamples.ReplacementCharacterText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
     }
 
     [Test]
@@ -1104,7 +1104,7 @@ public class UnexpectedUnicodeTests
         // exactly one U+FFFD via TokenSet.Replacement, then consume
         // the rest. Useful for "reject any input that's been
         // through a permissive decoder" patterns.
-        var rule = AllOf(
+        var rule = And(
             ZeroOrMore(NoneOf(TokenSet.Replacement)),
             OneOf(TokenSet.Replacement),
             ZeroOrMore(AnyToken()),
@@ -1143,7 +1143,7 @@ public class UnexpectedUnicodeTests
         // restricted TokenSet manually. The "fix" side (a custom
         // LatinLetters set rejecting Cyrillic 'а') is shown in
         // UnicodeGotchasExamples.Homoglyph_LatinLetters_set_rejects_Cyrillic_a.
-        var rule = AllOf(Identifier(), Eof());
+        var rule = And(Identifier(), Eof());
         string input = "a" + UnicodeExamples.CyrillicSmallAGrapheme;
         var result = rule.Parse(input);
 
@@ -1183,16 +1183,16 @@ public class UnexpectedUnicodeTests
 
         // (1) Naive grammar fails: Literal("hello") doesn't match
         // a NULL byte followed by 'h'.
-        Assert.That(AllOf(Literal("hello"), Eof()).Parse(input).Success, Is.False);
+        Assert.That(And(Literal("hello"), Eof()).Parse(input).Success, Is.False);
 
         // (2) AnyToken at the front consumes the NULL byte as a
         // wildcard.
-        Assert.That(AllOf(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(AnyToken(), Literal("hello"), Eof()).Parse(input).Success, Is.True);
 
         // (3) Targeting U+0000 specifically via Token(...) also
         // works. Useful for a binary-friendly format that uses
         // NUL as a separator.
-        Assert.That(AllOf(Token(UnicodeExamples.NullText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token(UnicodeExamples.NullText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
     }
 
     [Test]
@@ -1237,7 +1237,7 @@ public class UnexpectedUnicodeTests
         // Man emoji + Zero Width Joiner at end of input, no following
         // base. UAX #29 includes the trailing joiner in the man's
         // cluster (extending rule).
-        var rule = AllOf(AnyToken(), Eof());
+        var rule = And(AnyToken(), Eof());
         string input = UnicodeExamples.ManEmojiGrapheme + UnicodeExamples.ZeroWidthJoinerText;
         var result = rule.Parse(input);
 

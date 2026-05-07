@@ -66,7 +66,7 @@ of their time inside the `# noqa` substring search, not in tree
 construction.
 
 The bounded-repeat rows (`10-bounded-repeat/context` at ~660ms
-before and after) also stay roughly the same. The 101-way FirstOf
+before and after) also stay roughly the same. The 101-way Or
 chain in the grammar dominates; tree construction is a small
 fraction.
 
@@ -128,7 +128,7 @@ The four reducers are:
   the match's `Open/Close` range.
 - `CountMatchesAndCapturesCore`: per match, counts the match plus
   one for each distinct capture-rule id seen inside. Captures can
-  be composites (`Capture(AllOf(...))`) or leaves
+  be composites (`Capture(And(...))`) or leaves
   (`Capture(ScanUntil(...))`); both shapes contribute, matching
   the recursive `match.Find(capture) != null` semantics.
 

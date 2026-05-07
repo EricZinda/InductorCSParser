@@ -13,19 +13,19 @@ namespace InductorParser.Tests.DocExamples;
 public class TutorialPeekExamples
 {
     // tutorial-peek.md "Inductor Parser has a rule for this: ScanUntil"
-    // The first form: AllOf(ScanUntil(set), OneOf(set)) succeeds only if
+    // The first form: And(ScanUntil(set), OneOf(set)) succeeds only if
     // the input contains a digit (consuming everything up to and including
     // the first one).
     [Test]
     public void Contains_consuming_form_succeeds_only_when_digit_present()
     {
-        var rule = AllOf(ScanUntil(TokenSet.Range('0', '9')),
+        var rule = And(ScanUntil(TokenSet.Range('0', '9')),
                           OneOf(TokenSet.Range('0', '9')));
 
         // Wrap with AnyToken+Eof so a partial match doesn't fail Parse's
         // consume-all-input rule, since the doc presents this rule as
         // standalone.
-        var anchored = AllOf(rule, ZeroOrMore(AnyToken()), Eof());
+        var anchored = And(rule, ZeroOrMore(AnyToken()), Eof());
         Assert.That(anchored.Parse("abc1xyz").Success, Is.True);
         Assert.That(anchored.Parse("noDigitsAtAll").Success, Is.False);
     }
@@ -36,13 +36,13 @@ public class TutorialPeekExamples
     public void Contains_peek_form_does_not_consume_input()
     {
         Rule Contains(TokenSet options) =>
-            Peek(AllOf(ScanUntil(options), OneOf(options)));
+            Peek(And(ScanUntil(options), OneOf(options)));
 
         // Combine: digit, upper, lower, special. Then run a final
         // AnyToken-loop to consume the actual input. If the Peeks worked,
         // a single password should satisfy all four because each Peek
         // looks at the whole string.
-        var rule = AllOf(
+        var rule = And(
             Contains(TokenSet.Range('0', '9')),
             Contains(TokenSet.Range('A', 'Z')),
             Contains(TokenSet.Range('a', 'z')),
@@ -64,9 +64,9 @@ public class TutorialPeekExamples
     public void Contains_rule_overload_finds_substring()
     {
         Rule Contains(Rule innerRule) =>
-            Peek(AllOf(ScanUntil(innerRule), innerRule));
+            Peek(And(ScanUntil(innerRule), innerRule));
 
-        var notPassword = AllOf(
+        var notPassword = And(
             Not(Contains(Literal("password"))),
             ZeroOrMore(AnyToken()),
             Eof());
@@ -78,13 +78,13 @@ public class TutorialPeekExamples
     }
 
     // tutorial-peek.md "The original spec said it also can't *be* the
-    // original password": Not(AllOf(Literal(orig), Eof())).
+    // original password": Not(And(Literal(orig), Eof())).
     [Test]
     public void Cannot_be_the_original_password()
     {
         var originalPassword = "OldPwd1!";
-        var notOriginal = AllOf(
-            Not(AllOf(Literal(originalPassword), Eof())),
+        var notOriginal = And(
+            Not(And(Literal(originalPassword), Eof())),
             ZeroOrMore(AnyToken()),
             Eof());
 
@@ -101,16 +101,16 @@ public class TutorialPeekExamples
     public void Full_pattern_validates_password()
     {
         Rule Contains(Rule innerRule) =>
-            Peek(AllOf(ScanUntil(innerRule), innerRule));
+            Peek(And(ScanUntil(innerRule), innerRule));
 
         Rule ContainsSet(TokenSet options) =>
-            Peek(AllOf(ScanUntil(options), OneOf(options)));
+            Peek(And(ScanUntil(options), OneOf(options)));
 
         var originalPassword = "OldPwd1!";
         var username = "alice";
         var websitename = "exospecies";
 
-        var pattern = AllOf(
+        var pattern = And(
             ContainsSet(TokenSet.Range('0', '9')),
             ContainsSet(TokenSet.Range('A', 'Z')),
             ContainsSet(TokenSet.Range('a', 'z')),
@@ -118,7 +118,7 @@ public class TutorialPeekExamples
             Not(Contains(Literal(username))),
             Not(Contains(Literal("password"))),
             Not(Contains(Literal(websitename))),
-            Not(AllOf(Literal(originalPassword), Eof())),
+            Not(And(Literal(originalPassword), Eof())),
             AtLeast(8, AnyToken()));
 
         Assert.That(pattern.Parse("AbcdefG1!").Success, Is.True,

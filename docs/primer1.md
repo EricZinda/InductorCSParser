@@ -31,17 +31,17 @@ We need the first part to consume all text *except* what the second part consume
 
 ```CSharp
 var target = Literal("this sequence of characters");
-ZeroOrMore(AllOf(Not(target), AnyToken()))
+ZeroOrMore(And(Not(target), AnyToken()))
 target
 ```
-Instead of just consuming `AnyToken`, we now start by checking to see if it's `Not` what we want to end with. We glue those together with `AllOf` which requires that all of the rules you pass it succeed, in the order they're given.  We have to put `Not` first for the same greedy reason: If `AnyToken()` was first it would consume all the characters before we ever get to `Not`.
+Instead of just consuming `AnyToken`, we now start by checking to see if it's `Not` what we want to end with. We glue those together with `And` which requires that all of the rules you pass it succeed, in the order they're given.  We have to put `Not` first for the same greedy reason: If `AnyToken()` was first it would consume all the characters before we ever get to `Not`.
 
 But this won't actually compile, yet. The second and third lines aren't valid C#, we need to combine them and assign them to a variable. 
 
-So, we'll join our rules together, using composite rules like `AllOf` or `FirstOf`. `AllOf` requires *all* the rules you give it succeed, in order:
+So, we'll join our rules together, using composite rules like `And` or `Or`. `And` requires *all* the rules you give it succeed, in order:
 ```
 var target = Literal("this sequence of characters");
-var example = AllOf(ZeroOrMore(AllOf(Not(target),
+var example = And(ZeroOrMore(And(Not(target),
                                AnyToken())), 
                     target);
 ```
@@ -51,7 +51,7 @@ We've now defined a simple "grammar", which is just a set of rules that go toget
 
 ```CSharp
 var target = Literal("this sequence of characters");
-var example = AllOf(ZeroOrMore(AllOf(Not(target),
+var example = And(ZeroOrMore(And(Not(target),
                                AnyToken())), 
                     target);
 
@@ -77,7 +77,7 @@ So, when you call `ToString()` on the result of a parse, all the symbols left in
 
 ```CSharp
 var target = Literal("this sequence of characters");
-var example = AllOf(ZeroOrMore(AllOf(Not(target),
+var example = And(ZeroOrMore(And(Not(target),
                                AnyToken())), 
                     target);
 
@@ -88,7 +88,7 @@ To help with debugging, you can flip them all to `Preserve` with options on the 
 
 ```CSharp
 var target = Literal("this sequence of characters");
-var example = AllOf(ZeroOrMore(AllOf(Not(target),
+var example = And(ZeroOrMore(And(Not(target),
                                AnyToken())), 
                     target);
 
@@ -101,16 +101,16 @@ Console.WriteLine(result.PrintTree());
 `result.PrintTree()` walks the parse tree and prints each Symbol on its own line, indented by its depth. The output looks like this (how to decode it is described right after): 
 
 ```CSharp
-AllOf: "How can I match anything up until this sequence of characters"
+And: "How can I match anything up until this sequence of characters"
   ZeroOrMore: "How can I match anything up until "
-    AllOf: "H"
+    And: "H"
       Not: ""
       'H'
-    AllOf: "o"
+    And: "o"
       Not: ""
       'o'
-    [... 32 more AllOf/Not/char triples, one per consumed token ...]
-    AllOf: " "
+    [... 32 more And/Not/char triples, one per consumed token ...]
+    And: " "
       Not: ""
       ' '
   Literal: "this sequence of characters"
@@ -127,7 +127,7 @@ Notice we've not even thought about Unicode anything so far. Let's try the same 
 
 ```CSharp
 var target = Literal("this 👨‍👩‍👧 sequence of characters");
-var example = AllOf(ZeroOrMore(AllOf(Not(target),
+var example = And(ZeroOrMore(And(Not(target),
                                AnyToken())), 
                     target);
 

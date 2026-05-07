@@ -110,9 +110,9 @@ Unicode defines four normalization forms. The library uses the .NET enum directl
 The form is a grammar-level decision committed at `Compile` time, not a per-parse option. Pick it once when you compile the grammar:
 
 ```csharp
-var grammar = AllOf(...).Compile();                              // FormC default
-var grammar = AllOf(...).Compile(NormalizationForm.FormKC);      // explicit FormKC
-var grammar = AllOf(...).Compile(null);                          // no normalization
+var grammar = And(...).Compile();                              // FormC default
+var grammar = And(...).Compile(NormalizationForm.FormKC);      // explicit FormKC
+var grammar = And(...).Compile(null);                          // no normalization
 ```
 
 Why grammar-level instead of per-parse: the moment you write `Token("é")` you've committed to a specific Unicode form for that literal. If a later `Parse` ran the grammar against decomposed input under FormD, the lexer would hand back the two-rune `e + U+0301` form and your `Token("é")` rule (looking for the single-rune U+00E9) would silently never match. The form is part of the grammar's identity, so it lives on the grammar, not the call.

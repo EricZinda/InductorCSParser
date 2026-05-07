@@ -82,7 +82,7 @@ public class NoneOfRuleTests
         // for the terminator, which together handle CRLF, LF, CR, NEL,
         // LS, and PS as one terminator each.
         // See docs/UnicodeGotchas.md § "CRLF Line Endings".
-        var rule = AllOf(
+        var rule = And(
             ZeroOrMore(NoneOf(TokenSet.Single('\n'))),
             Token('\n'));
 
@@ -244,13 +244,13 @@ public class NoneOfRuleTests
     }
 
     [Test]
-    public void FirstOf_NoneOf_admits_multi_rune_cluster_starting_with_a_set_rune()
+    public void Or_NoneOf_admits_multi_rune_cluster_starting_with_a_set_rune()
     {
-        // FirstOfRule has the same CannotMatchLookahead shortcut as
+        // OrRule has the same CannotMatchLookahead shortcut as
         // BetweenInclusiveRule, so NoneOf has to admit any peeked first
         // rune in this context too. The literal alternative is
         // unreachable here: NoneOf has to be the one that matches.
-        var rule = FirstOf(NoneOf(TokenSet.Single('a')), Literal("zzzZZZ"));
+        var rule = Or(NoneOf(TokenSet.Single('a')), Literal("zzzZZZ"));
         rule.Compile(null);
         var result = rule.Parse("a" + CombiningAcuteText);
 

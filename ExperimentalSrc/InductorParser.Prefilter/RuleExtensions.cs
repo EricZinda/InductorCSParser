@@ -35,7 +35,7 @@ public static class RuleExtensions
     /// children at any position in the rule tree (LiteralRule,
     /// LiteralIgnoreAsciiCaseRule, TokenRule, OneOfRule with a single
     /// BMP char or a single ASCII letter pair like 'Nn'). Concatenated
-    /// through AllOf and propagated through BetweenInclusive[atLeast&gt;=1]
+    /// through And and propagated through BetweenInclusive[atLeast&gt;=1]
     /// and FlattenType wrappers. Returns false (literal == "") when no
     /// such required substring can be derived from the rule.
     /// </para>
@@ -61,7 +61,7 @@ public static class RuleExtensions
     /// substring. Use when no single shared literal can be derived
     /// (<see cref="TryGetRequiredLiteral"/> returns false) but the rule
     /// has a small fixed set of literal-prefix alternatives. The
-    /// AWS-keys grammar's <c>FirstOf("ASIA"|"AKIA"|"AROA"|"AIDA")</c>
+    /// AWS-keys grammar's <c>Or("ASIA"|"AKIA"|"AROA"|"AIDA")</c>
     /// is the motivating shape: every match contains exactly one of
     /// those four literals, so a multi-substring pre-scan still skips
     /// lines that can't possibly match.
@@ -110,7 +110,7 @@ public static class RuleExtensions
         LiteralIgnoreAsciiCaseRule literal => LiteralIgnoreAsciiCaseRulePrefilter.ComputeRequiredLiteral(literal),
         GraphemeRule grapheme => GraphemeRulePrefilter.ComputeRequiredLiteral(grapheme),
         OneOfRule oneOf => OneOfRulePrefilter.ComputeRequiredLiteral(oneOf),
-        AllOfRule allOf => AllOfRulePrefilter.ComputeRequiredLiteral(allOf),
+        AndRule andRule => AndRulePrefilter.ComputeRequiredLiteral(andRule),
         BetweenInclusiveRule between => BetweenInclusiveRulePrefilter.ComputeRequiredLiteral(between),
         _ => null,
     };
@@ -121,15 +121,15 @@ public static class RuleExtensions
         LiteralIgnoreAsciiCaseRule literal => LiteralIgnoreAsciiCaseRulePrefilter.ComputeConcatenableText(literal),
         GraphemeRule grapheme => GraphemeRulePrefilter.ComputeConcatenableText(grapheme),
         OneOfRule oneOf => OneOfRulePrefilter.ComputeConcatenableText(oneOf),
-        AllOfRule allOf => AllOfRulePrefilter.ComputeConcatenableText(allOf),
+        AndRule andRule => AndRulePrefilter.ComputeConcatenableText(andRule),
         BetweenInclusiveRule between => BetweenInclusiveRulePrefilter.ComputeConcatenableText(between),
         _ => null,
     };
 
     internal static IReadOnlyList<(string Text, bool IgnoreCase)>? ComputeRequiredLiteralAlternatives(Rule rule) => rule switch
     {
-        FirstOfRule firstOf => FirstOfRulePrefilter.ComputeRequiredLiteralAlternatives(firstOf),
-        AllOfRule allOf => AllOfRulePrefilter.ComputeRequiredLiteralAlternatives(allOf),
+        OrRule orRule => OrRulePrefilter.ComputeRequiredLiteralAlternatives(orRule),
+        AndRule andRule => AndRulePrefilter.ComputeRequiredLiteralAlternatives(andRule),
         _ => null,
     };
 }

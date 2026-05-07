@@ -13,7 +13,7 @@ public class Primer1Examples
     // primer1.md "Inductor Parser Primer 1: Getting Started"
     // The grammar built up in the doc:
     //   var target = Literal("this sequence of characters");
-    //   var example = AllOf(ZeroOrMore(AllOf(Not(target), AnyToken())), target);
+    //   var example = And(ZeroOrMore(And(Not(target), AnyToken())), target);
     // Doc claim:
     //   var result = example.Parse(...);
     //   Console.WriteLine(result.ToString());
@@ -26,8 +26,8 @@ public class Primer1Examples
     public void Anything_until_sequence_returns_prefix_only_via_ToString()
     {
         var target = Literal("this sequence of characters");
-        var example = AllOf(
-            ZeroOrMore(AllOf(Not(target), AnyToken())),
+        var example = And(
+            ZeroOrMore(And(Not(target), AnyToken())),
             target);
 
         var result = example.Parse("How can I match anything up until this sequence of characters");
@@ -44,8 +44,8 @@ public class Primer1Examples
     public void PreserveAllSymbols_PrintTree_matches_documented_shape()
     {
         var target = Literal("this sequence of characters");
-        var example = AllOf(
-            ZeroOrMore(AllOf(Not(target), AnyToken())),
+        var example = And(
+            ZeroOrMore(And(Not(target), AnyToken())),
             target);
 
         var options = new ParseOptions { PreserveAllSymbols = true };
@@ -58,14 +58,14 @@ public class Primer1Examples
         var lines = result.PrintTree().Split('\n');
 
         // First three lines from the doc:
-        //   AllOf: "How can I match anything up until this sequence of characters"
+        //   And: "How can I match anything up until this sequence of characters"
         //     ZeroOrMore: "How can I match anything up until "
-        //       AllOf: "H"
+        //       And: "H"
         Assert.That(lines[0],
-            Is.EqualTo("AllOf: \"How can I match anything up until this sequence of characters\""));
+            Is.EqualTo("And: \"How can I match anything up until this sequence of characters\""));
         Assert.That(lines[1],
             Is.EqualTo("  ZeroOrMore: \"How can I match anything up until \""));
-        Assert.That(lines[2], Is.EqualTo("    AllOf: \"H\""));
+        Assert.That(lines[2], Is.EqualTo("    And: \"H\""));
         Assert.That(lines[3], Is.EqualTo("      Not: \"\""));
         Assert.That(lines[4], Is.EqualTo("      'H'"));
 
@@ -80,14 +80,14 @@ public class Primer1Examples
     }
 
     // The same setup as the previous test, asserting the structural counts
-    // the doc's tree-shape output implies (one inner AllOf per consumed
+    // the doc's tree-shape output implies (one inner And per consumed
     // token, each with Not+AnyToken children).
     [Test]
     public void PreserveAllSymbols_yields_grammar_shaped_tree()
     {
         var target = Literal("this sequence of characters");
-        var example = AllOf(
-            ZeroOrMore(AllOf(Not(target), AnyToken())),
+        var example = And(
+            ZeroOrMore(And(Not(target), AnyToken())),
             target);
 
         var options = new ParseOptions { PreserveAllSymbols = true };
@@ -97,21 +97,21 @@ public class Primer1Examples
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
 
-        // Root: AllOf with two children (the ZeroOrMore and the Literal).
+        // Root: And with two children (the ZeroOrMore and the Literal).
         var root = result.Tree!;
         Assert.That(root.Children.Count, Is.EqualTo(2),
-            "root AllOf should have ZeroOrMore + Literal as children");
+            "root And should have ZeroOrMore + Literal as children");
 
         // First child is the ZeroOrMore matching the prefix.
         var zeroOrMore = root.Children[0];
         Assert.That(zeroOrMore.ToString(),
             Is.EqualTo("How can I match anything up until "));
 
-        // ZeroOrMore's children are one inner AllOf per consumed token.
+        // ZeroOrMore's children are one inner And per consumed token.
         // "How can I match anything up until " is 34 chars / 34 graphemes.
         Assert.That(zeroOrMore.Children.Count, Is.EqualTo(34));
 
-        // Each inner AllOf has Not + AnyToken children (Not is zero-width).
+        // Each inner And has Not + AnyToken children (Not is zero-width).
         var firstInner = zeroOrMore.Children[0];
         Assert.That(firstInner.ToString(), Is.EqualTo("H"));
         Assert.That(firstInner.Children.Count, Is.EqualTo(2));
@@ -130,8 +130,8 @@ public class Primer1Examples
     public void Parse_failure_carries_error_message()
     {
         var target = Literal("this sequence of characters");
-        var example = AllOf(
-            ZeroOrMore(AllOf(Not(target), AnyToken())),
+        var example = And(
+            ZeroOrMore(And(Not(target), AnyToken())),
             target);
 
         var result = example.Parse("input that doesn't contain the target");

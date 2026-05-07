@@ -15,7 +15,7 @@ when the analysis returns one, pre-skip lines that contain none of
 them via `String.IndexOfAny` over the unique first chars plus a
 `string.Compare` per first-char hit. Mirrors what the parser-side
 `BetweenInclusiveRule.TryCreateScannerSkip` already does for the
-`ZeroOrMore(FirstOf(literal-choice, AnyToken.Delete))` scanner shape,
+`ZeroOrMore(Or(literal-choice, AnyToken.Delete))` scanner shape,
 just hoisted to the runner's per-line iteration.
 
 The win shows up almost entirely on the two AWS-keys grep rows. Other
@@ -56,9 +56,9 @@ AWS access key (the bench's expected count is 0). Without a
 prefilter, the runner had to invoke the parser on every line just
 to discover that. With the prefilter:
 
-1. The match-rule analysis sees `AllOf(FirstOf(Literal("ASIA"), Literal("AKIA"),
+1. The match-rule analysis sees `And(Or(Literal("ASIA"), Literal("AKIA"),
    Literal("AROA"), Literal("AIDA")), Exactly(16, ...))` and walks
-   into the FirstOf, returning the four literals as a required-set.
+   into the Or, returning the four literals as a required-set.
 2. The runner's IndexOfAny over `['A']` (all four literals share a
    first char) walks the haystack in one SIMD-tuned pass.
 3. Each candidate position runs four cheap string compares; the
@@ -74,7 +74,7 @@ just doing a tuned IndexOfAny + four memcmp's per hit.
 
 `04-ruff-noqa/real` and `04-ruff-noqa/tweaked` already had a single
 required literal (`# noqa`, derived from the
-`AllOf(Literal("# "), OneOf("Nn"), OneOf("Oo"), ...)` shape).
+`And(Literal("# "), OneOf("Nn"), OneOf("Oo"), ...)` shape).
 The new multi-literal path only kicks in when the single-literal
 analysis fails, so those rows take the existing fast path and stay
 where they were:
@@ -101,13 +101,13 @@ Three pieces added across two files:
   caps the candidate-set size and returns the small set of literals
   derived from the rule's structure. Cap defaults to 8 in the runner
   (covers the AWS-keys 4-prefix case with headroom; keeps a 2,663-
-  literal English-dictionary FirstOf from accidentally feeding the
+  literal English-dictionary Or from accidentally feeding the
   prefilter).
-- `FirstOfRule.ComputeRequiredLiteralAlternatives`: union of children's
+- `OrRule.ComputeRequiredLiteralAlternatives`: union of children's
   required literals when every child has one. Recurses into a
-  child's own multi-literal set for nested FirstOfs.
-- `AllOfRule.ComputeRequiredLiteralAlternatives`: surfaces the first
-  child's multi-literal set if any child has one. Single-literal AllOf
+  child's own multi-literal set for nested Ors.
+- `AndRule.ComputeRequiredLiteralAlternatives`: surfaces the first
+  child's multi-literal set if any child has one. Single-literal And
   shapes (like ruff's `# noqa`) keep using the existing
   `ComputeRequiredLiteral` walker, which the caller checks first.
 

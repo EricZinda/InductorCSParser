@@ -12,13 +12,13 @@ public class InductorParserDesignDecisionsExamples
 {
     // "Greedy Repetition, No Repetition Backtracking": the doc shows
     // that PEG DOESN'T backtrack inside a OneOrMore. So
-    //   AllOf(OneOrMore(OneOf(TokenSet.Letters)), Token('a')).Parse("aaa")
+    //   And(OneOrMore(OneOf(TokenSet.Letters)), Token('a')).Parse("aaa")
     // greedily consumes "aaa", fails to match the trailing 'a' against
     // EOF, and the whole parse fails.
     [Test]
     public void PEG_does_not_backtrack_inside_repetition()
     {
-        var rule = AllOf(OneOrMore(OneOf(TokenSet.Letters)), Token('a'));
+        var rule = And(OneOrMore(OneOf(TokenSet.Letters)), Token('a'));
         var result = rule.Parse("aaa");
 
         Assert.That(result.Success, Is.False,
@@ -57,14 +57,14 @@ public class InductorParserDesignDecisionsExamples
 
     // "A Known Heuristic Limitation": doc claim about Optional capturing
     // the deepest failure. Concrete case from the doc:
-    //   AllOf(Optional(Literal("abc")), Token('x')).Parse("abdy")
+    //   And(Optional(Literal("abc")), Token('x')).Parse("abdy")
     // Optional inner reads "ab" and fails on 'd' vs 'c' at offset 2.
     // Optional catches and succeeds with empty children. Then Token('x')
     // tries at offset 0, fails on 'a'. Deepest-failure-wins picks offset 2.
     [Test]
     public void Optional_can_capture_error_position_via_deepest_failure_wins()
     {
-        var rule = AllOf(Optional(Literal("abc")), Token('x'));
+        var rule = And(Optional(Literal("abc")), Token('x'));
         var result = rule.Parse("abdy");
 
         Assert.That(result.Success, Is.False);
@@ -75,8 +75,8 @@ public class InductorParserDesignDecisionsExamples
     // "Things That Got Worse" / "Rule graphs can have order-of-init traps":
     // the LateBoundRule pattern with self-reference. Doc claim: the
     //   static readonly LateBoundRule Expression = new();
-    //   static readonly Rule Term = FirstOf(Integer(), AllOf(Token('('), Expression, Token(')')));
-    //   static readonly Rule Sum = AllOf(Term, ZeroOrMore(AllOf(Token('+'), Term)));
+    //   static readonly Rule Term = Or(Integer(), And(Token('('), Expression, Token(')')));
+    //   static readonly Rule Sum = And(Term, ZeroOrMore(And(Token('+'), Term)));
     //   static readonly Rule _init = Expression.Bind(Sum);
     // pattern parses "(1+2)+3" successfully.
     private static class ExpressionGrammar
@@ -84,12 +84,12 @@ public class InductorParserDesignDecisionsExamples
         public static readonly LateBoundRule Expression = new LateBoundRule();
 
         public static readonly Rule Term =
-            FirstOf(
+            Or(
                 Integer(),
-                AllOf(Token('('), Expression, Token(')')));
+                And(Token('('), Expression, Token(')')));
 
         public static readonly Rule Sum =
-            AllOf(Term, ZeroOrMore(AllOf(Token('+'), Term)));
+            And(Term, ZeroOrMore(And(Token('+'), Term)));
 
         public static readonly Rule _Init = Expression.Bind(Sum);
     }
@@ -97,7 +97,7 @@ public class InductorParserDesignDecisionsExamples
     [Test]
     public void LateBoundRule_self_reference_pattern_parses()
     {
-        var grammar = AllOf(ExpressionGrammar.Expression, Eof()).Compile();
+        var grammar = And(ExpressionGrammar.Expression, Eof()).Compile();
         Assert.That(grammar.Parse("1").Success, Is.True);
         Assert.That(grammar.Parse("1+2").Success, Is.True);
         Assert.That(grammar.Parse("(1+2)+3").Success, Is.True);

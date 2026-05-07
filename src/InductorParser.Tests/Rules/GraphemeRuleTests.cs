@@ -155,7 +155,7 @@ public class GraphemeRuleTests
         // rune Token that hard-coded 0 (or used the outer parse's start)
         // would still pass the zero-position tests above. This one proves
         // it's actually tracking the pre-read of its own read.
-        var rule = AllOf(Token('a'),
+        var rule = And(Token('a'),
                        Token('b').WithError("need a 'b'"));
         var result = rule.Parse("ax");
 

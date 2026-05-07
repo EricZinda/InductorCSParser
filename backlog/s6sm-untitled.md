@@ -1,3 +1,5 @@
+# Untitled
+
 - SM polarity-aware dispatch and token-peek opcodes (Phase 6 follow-up to the token-peek refactor)
 
 The recursive engine's lookahead shortcut now peeks the next TOKEN (one grapheme cluster) and dispatches on a polarity-tagged TokenSet (Polarity.MustBeIn or MustNotBeIn). NoneOf publishes its set as MustNotBeIn so the shortcut can precisely skip a NoneOf branch when the peek IS in the fail-set. The state-machine engine still dispatches via rune-peek opcodes (LoadPeekedRune, CheckPeekedRuneInSet, LoadPeekedRuneAndJumpAlt) and Lowerer.cs has two stopgaps:
@@ -16,7 +18,7 @@ The proper fix is to make the SM token-aware:
 Once the new opcodes land, the two stopgaps in Lowerer.cs can come out:
 
 - Drop the `child.Polarity == MustNotBeIn` short-circuit in CanSkipUnreachableAlt; let MustNotBeIn alts use the new CheckPeekedTokenNotInSet path.
-- Drop the OneOfRule.LookaheadFirstRunes flattening in the FirstOf-alt and BuildOrJumpTable paths; pass the rule's published FirstConsumedTokens directly to CheckPeekedTokenInSet, which now handles multi-rune entries.
+- Drop the OneOfRule.LookaheadFirstRunes flattening in the Or-alt and BuildOrJumpTable paths; pass the rule's published FirstConsumedTokens directly to CheckPeekedTokenInSet, which now handles multi-rune entries.
 
 The scanner-skip path's Lowerer.TryCreateScannerSkipSpec still needs LookaheadFirstRunes (it feeds Lexer.AdvanceUntilRuneIn, which is rune-only by design and won't move to token-peek). That call site stays.
 
@@ -30,7 +32,7 @@ The scanner-skip path's Lowerer.TryCreateScannerSkipSpec still needs LookaheadFi
 ## Verification
 
 - All existing SM tests pass (96 in InductorParser.StateMachine.Tests + the recursive-engine suite under INDUCTOR_DEFAULT_ENGINE=statemachine).
-- Add a test that runs `FirstOf(NoneOf(TokenSet.Single('a')), Literal("a"))` against `"a"` under SM and confirms the SM precisely skips NoneOf via CheckPeekedTokenNotInSet (observable in trace output, or by checking the lowered program's opcode sequence).
-- Add a test for OneOf with multi-rune entries inside a FirstOf, confirming the SM no longer needs the LookaheadFirstRunes pre-flatten and dispatches via the new CheckPeekedTokenInSet against the rule's full set.
+- Add a test that runs `Or(NoneOf(TokenSet.Single('a')), Literal("a"))` against `"a"` under SM and confirms the SM precisely skips NoneOf via CheckPeekedTokenNotInSet (observable in trace output, or by checking the lowered program's opcode sequence).
+- Add a test for OneOf with multi-rune entries inside a Or, confirming the SM no longer needs the LookaheadFirstRunes pre-flatten and dispatches via the new CheckPeekedTokenInSet against the rule's full set.
 
 The current code is correct, just slower than it needs to be in NoneOf-heavy or multi-rune-OneOf-heavy SM grammars. Rate of return depends on whether those shapes show up on the rebar / production benchmarks.

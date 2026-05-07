@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Text;
 using NUnit.Framework;
@@ -42,7 +42,7 @@ public class NormalizationTests
     // Grammar for "café" spelled in the precomposed form that most grammar
     // authors write. Four Token rules in sequence.
     private static Rule CafeRule() =>
-        AllOf(Token('c'), Token('a'), Token('f'), Token("\u00E9"));
+        And(Token('c'), Token('a'), Token('f'), Token("\u00E9"));
 
     [Test]
     public void Default_NFC_matches_precomposed_input_against_precomposed_grammar()
@@ -51,7 +51,7 @@ public class NormalizationTests
         // default normalization is effectively a no-op and the parse just
         // works. The interesting case is the next test, where the input is
         // decomposed and only matches because the normalizer composes it.
-        var result = AllOf(CafeRule(), Eof()).Parse(CafePrecomposed);
+        var result = And(CafeRule(), Eof()).Parse(CafePrecomposed);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 
@@ -61,7 +61,7 @@ public class NormalizationTests
         // The headline promise: the same precomposed grammar matches the
         // decomposed form of the same word. Without normalization the
         // comparison at Token("\u00E9") would see "e" and fail.
-        var result = AllOf(CafeRule(), Eof()).Parse(CafeDecomposed);
+        var result = And(CafeRule(), Eof()).Parse(CafeDecomposed);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 
@@ -70,7 +70,7 @@ public class NormalizationTests
     {
         // Opt out of normalization and the precomposed vs decomposed
         // distinction appears.
-        var rule = AllOf(CafeRule(), Eof());
+        var rule = And(CafeRule(), Eof());
         rule.Compile(null);
         var result = rule.Parse(CafeDecomposed);
         Assert.That(result.Success, Is.False);
@@ -82,7 +82,7 @@ public class NormalizationTests
         // Turning off normalization only matters when the input would have
         // been rewritten. Precomposed "café" is already in NFC, so opting
         // out changes nothing here and the parse still succeeds.
-        var rule = AllOf(CafeRule(), Eof());
+        var rule = And(CafeRule(), Eof());
         rule.Compile(null);
         var result = rule.Parse(CafePrecomposed);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -101,7 +101,7 @@ public class NormalizationTests
         // '\u0301', not 'x'. The contract is original coordinates, so the
         // reported index has to be 5 (the 'x' in the caller's input).
         string input = CafeDecomposed + "xyz";
-        var rule = AllOf(CafeRule(), Token('1'), Eof());
+        var rule = And(CafeRule(), Token('1'), Eof());
         var result = rule.Parse(input);
 
         Assert.That(result.Success, Is.False);
@@ -125,7 +125,7 @@ public class NormalizationTests
         // what an editor needs to highlight the whole bad grapheme rather
         // than landing in the middle of a combining sequence.
         string input = CafeDecomposed;
-        var rule = AllOf(Token('c'), Token('a'), Token('f'), Token('1'), Eof());
+        var rule = And(Token('c'), Token('a'), Token('f'), Token('1'), Eof());
         var result = rule.Parse(input);
 
         Assert.That(result.Success, Is.False);
@@ -145,9 +145,9 @@ public class NormalizationTests
         // identical to the no-normalization path whether the runtime
         // returns the same string reference or an equivalent one.
         string input = CafePrecomposed + "X";
-        var rule = AllOf(CafeRule(), Token('1'), Eof());
+        var rule = And(CafeRule(), Token('1'), Eof());
 
-        var ruleWithNullForm = AllOf(CafeRule(), Token('1'), Eof());
+        var ruleWithNullForm = And(CafeRule(), Token('1'), Eof());
         ruleWithNullForm.Compile(null);
 
         var withNfc = rule.Parse(input);
@@ -165,7 +165,7 @@ public class NormalizationTests
         // positions are trivially into the original. This test locks in
         // that baseline so a future refactor can't silently regress it.
         string input = CafeDecomposed + "X";
-        var rule = AllOf(Token('c'), Token('a'), Token('f'), Token('X'), Eof());
+        var rule = And(Token('c'), Token('a'), Token('f'), Token('X'), Eof());
         rule.Compile(null);
         var result = rule.Parse(input);
 
@@ -186,7 +186,7 @@ public class NormalizationTests
         // FormD or null failse. The form lives on the compiled rule
         // (set by Compile) and the default is FormC, matching the
         // historical ParseOptions.NormalizeInput default.
-        var rule = AllOf(Token('a'), Eof()).Compile();
+        var rule = And(Token('a'), Eof()).Compile();
         Assert.That(rule.NormalizationForm, Is.EqualTo(NormalizationForm.FormC));
     }
 
@@ -242,7 +242,7 @@ public class NormalizationTests
         // ligature. Without normalization the Token('f') would see "\uFB01"
         // and fail. FormKC converts the ligature to "fi" before the lexer
         // runs, so the grammar matches through.
-        var rule = AllOf(Token('f'), Token('i'), Token('s'), Token('h'), Eof());
+        var rule = And(Token('f'), Token('i'), Token('s'), Token('h'), Eof());
         rule.Compile(NormalizationForm.FormKC);
         var result = rule.Parse(FiLigature + "sh");
 
@@ -258,7 +258,7 @@ public class NormalizationTests
         // coordinates is at index 2 (the 's'). In ORIGINAL coordinates
         // 's' sits at index 1, right after the 1-char ligature.
         string input = FiLigature + "sh";
-        var rule = AllOf(Token('f'), Token('i'), Token('X'));
+        var rule = And(Token('f'), Token('i'), Token('X'));
         rule.Compile(NormalizationForm.FormKC);
         var result = rule.Parse(input);
 
@@ -282,7 +282,7 @@ public class NormalizationTests
         // index 1). The translator has to snap back to the start of the
         // ligature grapheme at index 0.
         string input = FiLigature;
-        var rule = AllOf(Token('f'), Token('X'));
+        var rule = And(Token('f'), Token('X'));
         rule.Compile(NormalizationForm.FormKC);
         var result = rule.Parse(input);
 
@@ -304,7 +304,7 @@ public class NormalizationTests
         // output here. This test verifies that the FormKD path through
         // the translator works end-to-end, not that the decomposed
         // endpoint differs for this particular input.
-        var rule = AllOf(Token('f'), Token('i'), Token('s'), Token('h'), Eof());
+        var rule = And(Token('f'), Token('i'), Token('s'), Token('h'), Eof());
         rule.Compile(NormalizationForm.FormKD);
         var result = rule.Parse(FiLigature + "sh");
 
@@ -317,7 +317,7 @@ public class NormalizationTests
         // Same position-snap case as the FormKC test above, but through
         // FormKD to prove the compatibility-form dispatch catches both.
         string input = FiLigature;
-        var rule = AllOf(Token('f'), Token('X'));
+        var rule = And(Token('f'), Token('X'));
         rule.Compile(NormalizationForm.FormKD);
         var result = rule.Parse(input);
 
@@ -374,7 +374,7 @@ public class NormalizationTests
         // compiles cleanly and parses correctly.
         var firstLiteral = Literal("e" + CombiningAcuteText).As("first");
         var secondLiteral = Token(CafeDecomposed[3..]).As("second");
-        var rule = AllOf(firstLiteral, secondLiteral);
+        var rule = And(firstLiteral, secondLiteral);
 
         Assert.DoesNotThrow(() => rule.Compile());
         // Parse a precomposed-form input — the auto-converted literals match.
@@ -404,7 +404,7 @@ public class NormalizationTests
         // The form is committed at first compile. A subsequent Compile
         // with a different form throws because the grammar's identity
         // (and the validation result) is tied to the first chosen form.
-        var rule = AllOf(Token('a'), Token('b'));
+        var rule = And(Token('a'), Token('b'));
         rule.Compile();  // FormC default
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
@@ -421,7 +421,7 @@ public class NormalizationTests
         // existing _sealed early-return contract). Important because
         // Parse triggers an auto-Compile that should never throw on
         // an already-compiled grammar.
-        var rule = AllOf(Token('a'), Token('b'));
+        var rule = And(Token('a'), Token('b'));
         rule.Compile();
         Assert.DoesNotThrow(() => rule.Compile());
         Assert.DoesNotThrow(() => rule.Compile(NormalizationForm.FormC));
@@ -433,15 +433,15 @@ public class NormalizationTests
         // The public read-only NormalizationForm property reflects what
         // was passed to Compile. Callers and tests can introspect a
         // compiled grammar's form without parsing.
-        var ruleC = AllOf(Token('a'), Token('b'));
+        var ruleC = And(Token('a'), Token('b'));
         ruleC.Compile();
         Assert.That(ruleC.NormalizationForm, Is.EqualTo(NormalizationForm.FormC));
 
-        var ruleNull = AllOf(Token('a'), Token('b'));
+        var ruleNull = And(Token('a'), Token('b'));
         ruleNull.Compile(null);
         Assert.That(ruleNull.NormalizationForm, Is.Null);
 
-        var ruleKC = AllOf(Token('a'), Token('b'));
+        var ruleKC = And(Token('a'), Token('b'));
         ruleKC.Compile(NormalizationForm.FormKC);
         Assert.That(ruleKC.NormalizationForm, Is.EqualTo(NormalizationForm.FormKC));
     }
@@ -461,7 +461,7 @@ public class NormalizationTests
         // Built fresh for each form so each rule has its own
         // _set / _expected mutated by Compile.
         static Rule BuildIdentifierGrammar(NormalizationForm? form) =>
-            AllOf(Identifier(form), Eof());
+            And(Identifier(form), Eof());
 
         var ruleC = BuildIdentifierGrammar(NormalizationForm.FormC);
         ruleC.Compile(NormalizationForm.FormC);
@@ -567,7 +567,7 @@ public class NormalizationTests
         // false, NoneOf inverts that into a false-positive match. Set
         // normalization adds the decomposed cluster to the set so NoneOf
         // correctly rejects both forms.
-        var rule = AllOf(NoneOf(LatinEAcutePrecomposedGrapheme), Eof());
+        var rule = And(NoneOf(LatinEAcutePrecomposedGrapheme), Eof());
         rule.Compile(System.Text.NormalizationForm.FormD);
 
         Assert.That(rule.Parse(LatinEAcutePrecomposedGrapheme).Success, Is.False);
@@ -639,7 +639,7 @@ public class NormalizationTests
         // lexer hands the rule that two-rune cluster.
         // OneOf(TokenSet.Letters).Compile() must set-normalize the set
         // (add the multi-rune composed equivalent) so the rule still matches.
-        var rule = AllOf(OneOf(TokenSet.Letters), Eof());
+        var rule = And(OneOf(TokenSet.Letters), Eof());
         Assert.DoesNotThrow(() => rule.Compile());
         Assert.That(rule.Parse("གྷ").Success, Is.True,
             "single-rune tibetan letter still matches");
@@ -695,15 +695,15 @@ public class NormalizationTests
         // two separate graphemes. Token matches exactly one grapheme,
         // so no auto-conversion is possible. Compile must throw a clear
         // error naming the multi-grapheme conversion and pointing the
-        // user at Literal or AllOf.
+        // user at Literal or And.
         var rule = Token("ﬁ");
 
         var exception = Assert.Throws<InvalidOperationException>(
             () => rule.Compile(NormalizationForm.FormKC));
         Assert.That(exception!.Message, Does.Contain("fi"),
             "error message shows the multi-grapheme conversion result");
-        Assert.That(exception.Message, Does.Contain("Literal").Or.Contain("AllOf"),
-            "error message suggests Literal or AllOf as the fix");
+        Assert.That(exception.Message, Does.Contain("Literal").Or.Contain("And"),
+            "error message suggests Literal or And as the fix");
     }
 
     [Test]
@@ -781,14 +781,14 @@ public class NormalizationTests
         // 'f' and 'i' as separate set members, so the rule matches each
         // grapheme the lexer produces from input 'ﬁ' as "fi".
         var set = TokenSet.Runes("ﬁ").WithCompatibilityEquivalents(NormalizationForm.FormKC);
-        var singleGraphemeRule = AllOf(OneOf(set), Eof());
+        var singleGraphemeRule = And(OneOf(set), Eof());
         singleGraphemeRule.Compile(NormalizationForm.FormKC);
         Assert.That(singleGraphemeRule.Parse("f").Success, Is.True);
         Assert.That(singleGraphemeRule.Parse("i").Success, Is.True);
 
         // Input 'ﬁ' converts to two tokens ('f' then 'i'), so a
         // structurally-larger rule that consumes both graphemes now matches.
-        var bothGraphemesRule = AllOf(OneOf(set), OneOf(set), Eof());
+        var bothGraphemesRule = And(OneOf(set), OneOf(set), Eof());
         bothGraphemesRule.Compile(NormalizationForm.FormKC);
         Assert.That(bothGraphemesRule.Parse("ﬁ").Success, Is.True,
             "input 'ﬁ' converts to 'f' + 'i', both graphemes match");
@@ -832,7 +832,7 @@ public class NormalizationTests
         // precomposed character. (Same-class marks like acute +
         // circumflex are NOT reordered and would NOT have this
         // property.)
-        var precomposedRule = AllOf(Token(UnicodeExamples.VietnameseACircumflexDotBelowRune), Eof());
+        var precomposedRule = And(Token(UnicodeExamples.VietnameseACircumflexDotBelowRune), Eof());
 
         // Canonical order (ccc 220 then 230): NFC composes directly.
         Assert.That(precomposedRule.Parse(UnicodeExamples.VietnameseACircumflexDotBelowCanonicalText).Success,
@@ -870,7 +870,7 @@ public class NormalizationTests
         // jamo back to U+D55C, so a grammar with Token(precomposed)
         // matches both forms. UAX #15 has special-case rules for
         // Hangul composition.
-        var rule = AllOf(Token(UnicodeExamples.HangulHanGrapheme), Eof());
+        var rule = And(Token(UnicodeExamples.HangulHanGrapheme), Eof());
 
         var precomposed = rule.Parse(UnicodeExamples.HangulHanGrapheme);
         var decomposed = rule.Parse(UnicodeExamples.HangulHanDecomposedText);
@@ -915,7 +915,7 @@ public class NormalizationTests
         // (U+00C5) compiles fine and matches input typed as the
         // singleton (U+212B), because NFC converts U+212B to U+00C5
         // before the lexer runs.
-        var goodRule = AllOf(Token(UnicodeExamples.LatinCapitalAWithRingAboveGrapheme), Eof());
+        var goodRule = And(Token(UnicodeExamples.LatinCapitalAWithRingAboveGrapheme), Eof());
         Assert.That(goodRule.Parse(UnicodeExamples.AngstromGrapheme).Success, Is.True,
             "U+00C5 grammar matches U+212B input under FormC");
     }
@@ -937,7 +937,7 @@ public class NormalizationTests
         // ("A" + combining ring) compiles fine and matches input
         // typed as the Angstrom singleton, because NFD decomposes
         // U+212B to that exact two-rune sequence.
-        var goodRule = AllOf(Token(UnicodeExamples.LatinAWithRingAboveDecomposedText), Eof());
+        var goodRule = And(Token(UnicodeExamples.LatinAWithRingAboveDecomposedText), Eof());
         goodRule.Compile(NormalizationForm.FormD);
         Assert.That(goodRule.Parse(UnicodeExamples.AngstromGrapheme).Success, Is.True,
             "decomposed grammar matches U+212B input under FormD");
@@ -959,7 +959,7 @@ public class NormalizationTests
         // Positive case: a grammar with U+03A9 (Greek capital Omega)
         // matches input typed as the Ohm singleton (U+2126), because
         // NFC converts U+2126 to U+03A9 before the lexer runs.
-        var goodRule = AllOf(Token(UnicodeExamples.GreekCapitalOmegaGrapheme), Eof());
+        var goodRule = And(Token(UnicodeExamples.GreekCapitalOmegaGrapheme), Eof());
         Assert.That(goodRule.Parse(UnicodeExamples.OhmGrapheme).Success, Is.True,
             "U+03A9 grammar matches U+2126 input under FormC");
     }
@@ -980,7 +980,7 @@ public class NormalizationTests
         // Positive case: a grammar with ASCII 'K' (U+004B) matches
         // input typed as the Kelvin singleton (U+212A), because NFC
         // converts U+212A to U+004B before the lexer runs.
-        var goodRule = AllOf(Token(UnicodeExamples.AsciiCapitalKGrapheme), Eof());
+        var goodRule = And(Token(UnicodeExamples.AsciiCapitalKGrapheme), Eof());
         Assert.That(goodRule.Parse(UnicodeExamples.KelvinGrapheme).Success, Is.True,
             "ASCII K grammar matches U+212A input under FormC");
     }
@@ -1002,7 +1002,7 @@ public class NormalizationTests
         // Positive case: a grammar with U+3008 (CJK angle bracket)
         // matches input typed as U+2329, because NFC converts U+2329
         // to U+3008 before the lexer runs.
-        var goodRule = AllOf(Token(UnicodeExamples.CjkLeftAngleBracketGrapheme), Eof());
+        var goodRule = And(Token(UnicodeExamples.CjkLeftAngleBracketGrapheme), Eof());
         Assert.That(goodRule.Parse(UnicodeExamples.LeftPointingAngleBracketGrapheme).Success, Is.True,
             "U+3008 grammar matches U+2329 input under FormC");
     }
@@ -1041,7 +1041,7 @@ public class NormalizationTests
         // before the lexer runs. This is the matching-by-meaning
         // path: the author opts into FormKC to treat presentation
         // variants as equivalent to their plain forms.
-        var goodRule = AllOf(Token(UnicodeExamples.AsciiCapitalCGrapheme), Eof());
+        var goodRule = And(Token(UnicodeExamples.AsciiCapitalCGrapheme), Eof());
         goodRule.Compile(NormalizationForm.FormKC);
         Assert.That(goodRule.Parse(UnicodeExamples.DoubleStruckCGrapheme).Success, Is.True,
             "ASCII C grammar matches U+2102 input under FormKC");

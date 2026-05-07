@@ -24,12 +24,12 @@ namespace InductorParser.PlayModeTests
         public void Parses_integer_setting_under_il2cpp()
         {
             var settingName = OneOrMore(OneOf(TokenSet.Letters));
-            var settingValue = FirstOf(
+            var settingValue = Or(
                 Float().Flatten(FlattenType.Flatten),
                 Integer().Flatten(FlattenType.Flatten),
                 OneOrMore(OneOf(TokenSet.Letters))
             ).Flatten(FlattenType.Preserve);
-            var document = AllOf(
+            var document = And(
                 settingName,
                 Optional(AnyWhitespace()),
                 Token('='),
@@ -56,7 +56,7 @@ namespace InductorParser.PlayModeTests
             // dispatch. Grammar mirrors a minimal JSON string body.
             var escapeEnd = OneOf(TokenSet.Runes("\"\\/bfnrt"));
             var body = ScanUntil(TokenSet.Runes("\""), new Rune('\\'), escapeEnd);
-            var rule = AllOf(Token('"'), body, Token('"'));
+            var rule = And(Token('"'), body, Token('"'));
 
             var result = rule.Parse("\"hello\\n\"");
 
@@ -67,7 +67,7 @@ namespace InductorParser.PlayModeTests
         [Test]
         public void Reports_failure_position_under_il2cpp()
         {
-            var rule = AllOf(
+            var rule = And(
                 OneOrMore(OneOf(TokenSet.Letters)),
                 Token(';').WithError("expected ';'")
             );

@@ -47,7 +47,7 @@ public class ScanUntilRuleTests
         // matches is still a successful parse. Wrap it with Token('|')
         // so the outer rule consumes the full input and the EOF check
         // passes.
-        var rule = InductorParser.Rules.AllOf(StopOnPipe(), Token('|'));
+        var rule = InductorParser.Rules.And(StopOnPipe(), Token('|'));
         var result = rule.Parse("|");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -64,7 +64,7 @@ public class ScanUntilRuleTests
         // consuming it. The surrounding Token('|') then consumes the
         // '|' itself. Tree text is "abc" (the body) plus "" (the
         // FlattenType.Delete delimiter) = "abc".
-        var rule = InductorParser.Rules.AllOf(StopOnPipe(), Token('|'));
+        var rule = InductorParser.Rules.And(StopOnPipe(), Token('|'));
         var result = rule.Parse("abc|");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -226,7 +226,7 @@ public class ScanUntilRuleTests
         var start = Literal("$$");
         var end = OneOf(TokenSet.Ascii.Letters);
         var body = ScanUntil(TokenSet.Runes("|"), start, end);
-        var rule = InductorParser.Rules.AllOf(body, Token('|'));
+        var rule = InductorParser.Rules.And(body, Token('|'));
 
         var result = rule.Parse("abc$xyz|");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -282,7 +282,7 @@ public class ScanUntilRuleTests
     {
         // Starts are '$' OR '?'. Stopper is '|'. Demonstrates that
         // escapeStart can be a sub-rule, not just a fixed literal.
-        var start = FirstOf(Token('$'), Token('?'));
+        var start = Or(Token('$'), Token('?'));
         var end = OneOf(TokenSet.Ascii.Letters);
         var rule = ScanUntil(TokenSet.Runes("|"), start, end);
 
@@ -304,7 +304,7 @@ public class ScanUntilRuleTests
         // ScanUntil. The surrounding grammar matches it after.
         var stopper = Literal("\"\"\"");
         var body = ScanUntil(stopper);
-        var rule = InductorParser.Rules.AllOf(body, Literal("\"\"\""));
+        var rule = InductorParser.Rules.And(body, Literal("\"\"\""));
 
         var result = rule.Parse("hello \"world\" yes\"\"\"");
 
@@ -322,7 +322,7 @@ public class ScanUntilRuleTests
         // the surrounding grammar can match it.
         var stopper = Literal("END");
         var body = ScanUntil(stopper);
-        var rule = InductorParser.Rules.AllOf(body, Literal("END"));
+        var rule = InductorParser.Rules.And(body, Literal("END"));
 
         // If the stopper had been consumed by ScanUntil, the
         // outer Literal("END") would fail (EOF or leftover garbage).
@@ -341,7 +341,7 @@ public class ScanUntilRuleTests
         var stopper = Literal("\"\"\"");
         var escapeEnd = OneOf(TokenSet.Runes("\"\\nt"));
         var body = ScanUntil(stopper, new Rune('\\'), escapeEnd);
-        var rule = InductorParser.Rules.AllOf(body, Literal("\"\"\""));
+        var rule = InductorParser.Rules.And(body, Literal("\"\"\""));
 
         var result = rule.Parse("a\\nb\"c\"\"\"");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -380,7 +380,7 @@ public class ScanUntilRuleTests
         // The body Symbol's text equals the input slice byte-for-
         // byte, lone surrogate included.
         string input = "abc" + new string(loneSurrogate, 1) + "xyz|";
-        var rule = InductorParser.Rules.AllOf(StopOnPipe(), Token('|'));
+        var rule = InductorParser.Rules.And(StopOnPipe(), Token('|'));
         rule.Compile(null);
 
         var result = rule.Parse(input);
@@ -422,7 +422,7 @@ public class ScanUntilRuleTests
         // ScanUntil doesn't consume the stopper, so the parse leaves
         // trailing '|' input. AllowTrailingInput keeps Parse from
         // failing on the unconsumed pipe.
-        var rule = InductorParser.Rules.AllOf(StopOnPipe(), Token('|'));
+        var rule = InductorParser.Rules.And(StopOnPipe(), Token('|'));
         rule.Compile(null);
 
         var result = rule.Parse(input);
@@ -475,7 +475,7 @@ public class ScanUntilRuleTests
         // should consume "ab" + WomanShrugging and stop at the
         // following USFlag without consuming it.
         var stopOnFlag = ScanUntil(TokenSet.Runes(USFlagGrapheme));
-        var rule = AllOf(stopOnFlag, OneOf(TokenSet.Runes(USFlagGrapheme)));
+        var rule = And(stopOnFlag, OneOf(TokenSet.Runes(USFlagGrapheme)));
 
         var input = "ab" + WomanShruggingGrapheme + USFlagGrapheme;
         var result = rule.Parse(input,

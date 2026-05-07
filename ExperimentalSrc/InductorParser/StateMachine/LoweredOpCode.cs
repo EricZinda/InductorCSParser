@@ -75,16 +75,16 @@ internal enum LoweredOpCode : byte
     EmitLeafLiteral,
     EmitLeafOneOf,
 
-    // FirstOf first-rune skip. LoadPeekedRune peeks the next rune in
+    // Or first-rune skip. LoadPeekedRune peeks the next rune in
     // the input and stashes it on Machine.PeekedRune.
     // CheckPeekedRuneInSet tests that stashed rune against a TokenSet
-    // without re-peeking, so an N-alternative FirstOf pays one peek +
+    // without re-peeking, so an N-alternative Or pays one peek +
     // N membership checks instead of N peeks + N checks. Mirrors what
-    // the recursive FirstOfRule does.
+    // the recursive OrRule does.
     LoadPeekedRune,
     CheckPeekedRuneInSet,
 
-    // ASCII jump-table dispatch for FirstOf first-rune-skip. Replaces the
+    // ASCII jump-table dispatch for Or first-rune-skip. Replaces the
     // LoadPeekedRune + leading CheckPeekedRuneInSet chain when at least
     // one alternative can be peek-skipped. Decodes one rune at the
     // lexer position; for an ASCII rune (0..127) jumps directly to the
@@ -130,9 +130,9 @@ internal enum LoweredOpCode : byte
     // opcodes instead and routes the surviving rule-stoppered
     // ScanUntil shapes through BridgeToRecursive.)
 
-    // Bulk skip at the top of a ZeroOrMore(FirstOf(match..., AnyToken.Delete))
+    // Bulk skip at the top of a ZeroOrMore(Or(match..., AnyToken.Delete))
     // scanner loop. Advances the lexer to the next position where one of
-    // the candidate matches could plausibly start, so the inner FirstOf
+    // the candidate matches could plausibly start, so the inner Or
     // doesn't waste a per-rune attempt + fail-over to the deleted
     // AnyToken on every non-candidate rune. state.Data indexes into
     // CompiledProgram.ScannerSkipSpecs. Always succeeds (advances the

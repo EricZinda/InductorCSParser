@@ -16,7 +16,7 @@ namespace InductorParser;
 /// lets a grammar read close to the shape you'd write on a
 /// whiteboard:
 /// <code>
-/// var expression = AllOf(
+/// var expression = And(
 ///     Identifier(),
 ///     Optional(AnyWhitespace()),
 ///     Token('='),
@@ -329,7 +329,7 @@ public static class Rules
     /// var body = ScanUntil(
     ///     TokenSet.Runes("\"$"),
     ///     Literal("${"),
-    ///     AllOf(OneOrMore(NoneOf("}")), Token('}')));
+    ///     And(OneOrMore(NoneOf("}")), Token('}')));
     /// </code>
     /// </remarks>
     public static Rule ScanUntil(TokenSet stopAt, Rule escapeStart, Rule escapeEnd) =>
@@ -421,11 +421,11 @@ public static class Rules
     /// <exception cref="ArgumentException">
     /// <paramref name="children"/> is null or empty.
     /// </exception>
-    public static Rule AllOf(params Rule[] children)
+    public static Rule And(params Rule[] children)
     {
         if (children == null || children.Length == 0)
-            throw new ArgumentException("AllOf requires at least one child rule.", nameof(children));
-        return new AllOfRule(children);
+            throw new ArgumentException("And requires at least one child rule.", nameof(children));
+        return new AndRule(children);
     }
 
     /// <summary>
@@ -441,11 +441,11 @@ public static class Rules
     /// <exception cref="ArgumentException">
     /// <paramref name="children"/> is null or empty.
     /// </exception>
-    public static Rule FirstOf(params Rule[] children)
+    public static Rule Or(params Rule[] children)
     {
         if (children == null || children.Length == 0)
-            throw new ArgumentException("FirstOf requires at least one child rule.", nameof(children));
-        return new FirstOfRule(children);
+            throw new ArgumentException("Or requires at least one child rule.", nameof(children));
+        return new OrRule(children);
     }
 
     /// <summary>
@@ -568,14 +568,14 @@ public static class Rules
     /// Match a signed integer: an optional leading + or -,
     /// followed by one or more decimal digits. Default
     /// <see cref="FlattenType"/>: <see cref="FlattenType.Flatten"/>
-    /// (from the composed outer <see cref="AllOf"/>).
+    /// (from the composed outer <see cref="And"/>).
     /// </summary>
     /// <remarks>
     /// Pre-built because every grammar ends up wanting it.
     /// </remarks>
     public static Rule Integer() =>
-        AllOf(
-            Optional(FirstOf(Token('+'), Token('-'))),
+        And(
+            Optional(Or(Token('+'), Token('-'))),
             OneOrMore(OneOf(TokenSet.Digits))
         );
 
@@ -584,12 +584,12 @@ public static class Rules
     /// <c>-</c>, one or more digits, a literal <c>'.'</c>, and one
     /// or more digits. Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Flatten"/> (from the composed outer
-    /// <see cref="AllOf"/>).
+    /// <see cref="And"/>).
     /// </summary>
     /// <remarks>
     /// The optional leading sign matches <see cref="Integer"/>'s
     /// convention, so a grammar that uses
-    /// <c>FirstOf(Float(), Integer())</c> treats <c>+5</c> and
+    /// <c>Or(Float(), Integer())</c> treats <c>+5</c> and
     /// <c>+5.5</c> consistently. A sign is allowed only at the front:
     /// the fractional part is digits-only, and inputs like
     /// <c>3.+14</c> or <c>--3.14</c> don't match.
@@ -599,7 +599,7 @@ public static class Rules
     /// </para>
     /// </remarks>
     public static Rule Float() =>
-        AllOf(
+        And(
             Optional(OneOf("+-").Flatten(FlattenType.Flatten)),
             OneOrMore(OneOf(TokenSet.Digits)),
             Token('.').Flatten(FlattenType.Preserve),
@@ -642,7 +642,7 @@ public static class Rules
     /// breaks as ordinary whitespace.
     /// <para>
     /// <see cref="EndOfLine"/> is tried first inside the
-    /// <see cref="FirstOf"/>, so that a CRLF grapheme is consumed as one
+    /// <see cref="Or"/>, so that a CRLF grapheme is consumed as one
     /// terminator rather than only matching the CR via the single-rune side.
     /// </para>
     /// <para>
@@ -652,7 +652,7 @@ public static class Rules
     /// </para>
     /// </remarks>
     public static Rule AnyWhitespace() =>
-        OneOrMore(FirstOf(EndOfLine(), OneOf(TokenSet.InlineWhitespace))).Flatten(FlattenType.Delete);
+        OneOrMore(Or(EndOfLine(), OneOf(TokenSet.InlineWhitespace))).Flatten(FlattenType.Delete);
 
     /// <summary>
     /// Match one Unicode line terminator per UAX #18 Annex C. When
@@ -690,7 +690,7 @@ public static class Rules
         var alternatives = eofIsEol
             ? new Rule[] { Literal("\r\n"), OneOf(TokenSet.LineTerminators), Eof() }
             : new Rule[] { Literal("\r\n"), OneOf(TokenSet.LineTerminators) };
-        return FirstOf(alternatives).Flatten(FlattenType.Delete);
+        return Or(alternatives).Flatten(FlattenType.Delete);
     }
 
     /// <summary>
@@ -777,12 +777,12 @@ public static class Rules
             start = start.WithCompatibilityEquivalents(form.Value);
             body = body.WithCompatibilityEquivalents(form.Value);
         }
-        return AllOf(
+        return And(
             // First token: starts with a Start rune, rest of its runes
             // (if any) are Body runes. Handles precomposed "é", "ñ",
             // etc. as single-rune tokens and "हि"-style
             // consonant+vowel-sign tokens as multi-rune.
-            WithinToken(AllOf(OneOf(start), ZeroOrMore(OneOf(body)))),
+            WithinToken(And(OneOf(start), ZeroOrMore(OneOf(body)))),
             // Subsequent tokens: every rune must be a Body rune.
             ZeroOrMore(WithinToken(OneOrMore(OneOf(body))))
         ).Flatten(FlattenType.Preserve);
@@ -801,7 +801,7 @@ public static class Rules
     /// The rule to run against the token's runes. Must consume every
     /// rune of the token on success; a rule that matches only a
     /// prefix causes the whole <c>WithinToken</c> to fail. Any rule
-    /// composition is allowed inside (<see cref="AllOf"/>, <see cref="FirstOf"/>,
+    /// composition is allowed inside (<see cref="And"/>, <see cref="Or"/>,
     /// <c>OneOf</c>, etc.).
     /// </param>
     /// <remarks>
@@ -809,7 +809,7 @@ public static class Rules
     /// structure. Used by <see cref="Identifier"/> to make identifier
     /// matching work on Devanagari, Thai, Arabic-with-vowels, and other
     /// scripts whose "letters" are multi-rune tokens. Other uses:
-    /// emoji-with-modifier matchers (<c>WithinToken(AllOf(OneOf(EmojiBase),
+    /// emoji-with-modifier matchers (<c>WithinToken(And(OneOf(EmojiBase),
     /// ZeroOrMore(OneOf(SkinToneOrZWJ))))</c>), ASCII-only strictness
     /// (<c>WithinToken(OneOf(TokenSet.Ascii.Letters))</c> rejects any
     /// multi-rune token), Hangul jamo clusters, etc.

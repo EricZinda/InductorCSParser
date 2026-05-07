@@ -38,7 +38,7 @@ Groups added:
   `compile-context`, `compile-capitals`. The `context` regex's
   `{0,100}` greedy gap with the trailing `Result` literal needs a
   greedy-with-bound shape that InductorParser can't express
-  natively, so the grammar emits a FirstOf chain that tries the
+  natively, so the grammar emits a Or chain that tries the
   largest gap first and shrinks down. That mirrors a regex
   backtracker's preference for the longest match without requiring
   parser-level backtracking.
@@ -189,7 +189,7 @@ alternates with broad first-rune coverage (most ASCII letters
 appear at least once), so the scanner's `IndexOfAny` prefilter
 hits very often without filtering much. The compile time
 (`compile-single`) is dramatically faster than `.NET compiled`
-(0.06x) because we're just constructing a FirstOf rule and calling
+(0.06x) because we're just constructing a Or rule and calling
 Compile, not converting a regex string into an internal automaton.
 
 The `compile` rows in general (any benchmark whose model is
@@ -212,14 +212,14 @@ Three changes to the runner went in alongside the new grammars:
   mode) because the affected benchmarks all happened to have
   non-empty captures throughout.
 - A small `GreedyBoundedGap(maximum, follow)` helper builds a
-  FirstOf chain `{maximum anytokens, follow} | {maximum-1, follow}
+  Or chain `{maximum anytokens, follow} | {maximum-1, follow}
   | ... | {0, follow}` to model regex's "greedy with bound" shape
   without InductorParser-level backtracking. Used by
   `10-bounded-repeat/context` for the `[\s\S]{0,100}` gaps; the
   count of 53 on rust-src-tools depends on the latest match
   position, which a forward-stop ScanUntil can't pick.
 - Single-rune captures (`OneOf` wrapping in `Capture`) get wrapped
-  in `AllOf` so their parse-tree node carries the rule's id rather
+  in `And` so their parse-tree node carries the rule's id rather
   than the matched rune's value. Without this, `match.Find(rule)`
   returns null on those captures and the grep-captures count is
   off by one capture per match. Affected `07-unicode-character-data`

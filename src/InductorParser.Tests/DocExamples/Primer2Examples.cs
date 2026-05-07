@@ -31,10 +31,10 @@ public class Primer2Examples
         var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes))
             .As("key").Preserve();
 
-        var section = AllOf(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
+        var section = And(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
             .As("section").Preserve();
 
-        var quotedString = AllOf(
+        var quotedString = And(
             Token('"'),
             ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
             Token('"')).As("quotedString").Preserve();
@@ -45,17 +45,17 @@ public class Primer2Examples
         var floatValue = Float().As("float").Preserve();
         var integerValue = Integer().As("integer").Preserve();
 
-        var value = FirstOf(floatValue, integerValue, quotedString, bareWord)
+        var value = Or(floatValue, integerValue, quotedString, bareWord)
             .As("value").Preserve();
 
-        var keyValue = AllOf(key, Optional(InlineWhitespace()), Token('='), Optional(InlineWhitespace()),
+        var keyValue = And(key, Optional(InlineWhitespace()), Token('='), Optional(InlineWhitespace()),
                              value, Optional(InlineWhitespace()), EndOfLine())
             .As("keyValue").Preserve();
 
-        var blankLine = AllOf(Optional(InlineWhitespace()), EndOfLine());
+        var blankLine = And(Optional(InlineWhitespace()), EndOfLine());
 
-        var line = FirstOf(section, keyValue, blankLine);
-        var config = AllOf(ZeroOrMore(line), Eof()).As("config").Preserve();
+        var line = Or(section, keyValue, blankLine);
+        var config = And(ZeroOrMore(line), Eof()).As("config").Preserve();
 
         return (config, section, keyValue, key, value, integerValue);
     }
@@ -190,10 +190,10 @@ public class Primer2Examples
         var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes))
             .As("key").Preserve();
 
-        var section = AllOf(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
+        var section = And(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
             .As("section").Preserve();
 
-        var quotedString = AllOf(
+        var quotedString = And(
             Token('"'),
             ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
             Token('"')).As("quotedString").Preserve();
@@ -201,13 +201,13 @@ public class Primer2Examples
         var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\"")))
             .As("bareWord").Preserve();
 
-        var value = FirstOf(
+        var value = Or(
             Float().As("float").Preserve(),
             Integer().As("integer").Preserve(),
             quotedString,
             bareWord).As("value").Preserve();
 
-        var keyValue = AllOf(
+        var keyValue = And(
             key,
             Optional(InlineWhitespace()),
             Token('=').WithError("Expected '=' after the setting name"),
@@ -217,9 +217,9 @@ public class Primer2Examples
             EndOfLine())
             .As("keyValue").Preserve();
 
-        var blankLine = AllOf(Optional(InlineWhitespace()), EndOfLine());
-        var line = FirstOf(section, keyValue, blankLine);
-        var config = AllOf(ZeroOrMore(line), Eof()).As("config").Preserve();
+        var blankLine = And(Optional(InlineWhitespace()), EndOfLine());
+        var line = Or(section, keyValue, blankLine);
+        var config = And(ZeroOrMore(line), Eof()).As("config").Preserve();
 
         var result = config.Parse("[server]\nport oops\n");
 

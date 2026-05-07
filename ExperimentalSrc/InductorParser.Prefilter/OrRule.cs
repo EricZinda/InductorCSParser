@@ -2,15 +2,15 @@ using System.Collections.Generic;
 
 namespace InductorParser.Prefilter;
 
-// FirstOf matches exactly one branch on success. If every branch has
+// Or matches exactly one branch on success. If every branch has
 // at least one required literal (single or its own multi-literal set),
-// the union of those literals is required by FirstOf as a whole: any
+// the union of those literals is required by Or as a whole: any
 // successful match is guaranteed to contain one of them as a substring.
 // If even one branch has no analyzable literal, the union doesn't hold
 // and we return null.
-internal static class FirstOfRulePrefilter
+internal static class OrRulePrefilter
 {
-    internal static IReadOnlyList<(string Text, bool IgnoreCase)>? ComputeRequiredLiteralAlternatives(FirstOfRule rule)
+    internal static IReadOnlyList<(string Text, bool IgnoreCase)>? ComputeRequiredLiteralAlternatives(OrRule rule)
     {
         if (rule.Children.Count == 0) return null;
         var union = new List<(string Text, bool IgnoreCase)>();

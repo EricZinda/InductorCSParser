@@ -6,12 +6,12 @@ namespace InductorParser;
 
 // Matches the first child that succeeds. Tries
 // children left-to-right, committing to whichever one matches first.
-// If none match, the FirstOf fails. Each child attempt runs in its own
+// If none match, the Or fails. Each child attempt runs in its own
 // transaction so a failed alternative leaves the lexer where it was
-// before FirstOf was called.
-internal sealed class FirstOfRule : Rule
+// before Or was called.
+internal sealed class OrRule : Rule
 {
-    public FirstOfRule(Rule[] children) : base(FlattenType.Flatten, children) { }
+    public OrRule(Rule[] children) : base(FlattenType.Flatten, children) { }
 
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
@@ -73,13 +73,13 @@ internal sealed class FirstOfRule : Rule
     // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
     {
-        // FirstOf matches any of its children, so its FirstConsumedTokens is the
+        // Or matches any of its children, so its FirstConsumedTokens is the
         // union of children's FirstConsumedTokens.
         //
         // Advance:
-        //   Always:    If every child advances then FirstOf always advances too
-        //   Never:     If no child advances then FirstOf never advances
-        //   Sometimes: If mixed (FirstOf matches are in different classes) then FirstOf
+        //   Always:    If every child advances then Or always advances too
+        //   Never:     If no child advances then Or never advances
+        //   Sometimes: If mixed (Or matches are in different classes) then Or
         //               might or might not advance depending on branch.
         TokenSet union = TokenSet.Empty;
         bool allAlways = Children.Count > 0;
