@@ -17,6 +17,7 @@
     <PackageReference Include="Sprache" Version="2.3.1" />
     <PackageReference Include="Superpower" Version="3.0.0" />
     <PackageReference Include="Pegasus" Version="4.1.0" PrivateAssets="all" />
+    <PackageReference Include="ScottPlot" Version="5.0.55" />
   </ItemGroup>
 
   <ItemGroup>

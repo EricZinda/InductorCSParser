@@ -17,7 +17,7 @@
 <body>
 
 <h1>JSON parser performance by shape</h1>
-<div class="subtitle">Mean parse time in microseconds. Lower is better. BenchmarkDotNet ShortRun, .NET 8.0.25 on Arm64. Four lines, one per input shape (Big, Deep, Long, Wide). Regenerated automatically on every benchmark run. <strong>Run: 2026-05-06 18:32</strong></div>
+<div class="subtitle">Mean parse time in microseconds. Lower is better. BenchmarkDotNet ShortRun, .NET 8.0.25 on Arm64. Four lines, one per input shape (Big, Deep, Long, Wide). Regenerated automatically on every benchmark run. <strong>Run: 2026-05-06 20:49</strong></div>
 
 <div class="chart-wrapper">
   <canvas id="chart"></canvas>
@@ -54,7 +54,7 @@ const data = {
   datasets: [
     {
       label: "Big",
-      data: [24.98, 60.37, 62.11, 239.49, 284.24, 323.58, 657.62, 742.18, 864.74, 1716.48],
+      data: [28.21, 59.63, 59.96, 240.31, 272.08, 338.11, 694.15, 752.18, 946.09, 2007.02],
       borderColor: "#1f77b4",
       backgroundColor: "#1f77b4",
       borderWidth: 2,
@@ -62,7 +62,7 @@ const data = {
     },
     {
       label: "Deep",
-      data: [82.12, 41.95, 41.32, 147.70, 158.36, 308.14, 324.17, 325.43, null, 1495.05],
+      data: [86.00, 45.23, 44.74, 144.99, 173.04, 320.84, 351.93, 370.90, null, 1798.86],
       borderColor: "#ff7f0e",
       backgroundColor: "#ff7f0e",
       borderWidth: 2,
@@ -71,7 +71,7 @@ const data = {
     },
     {
       label: "Long",
-      data: [18.48, 52.63, 52.57, 169.28, 191.47, 246.19, 451.13, 472.77, 677.79, 1334.00],
+      data: [19.17, 58.48, 54.98, 160.29, 191.13, 249.99, 452.77, 489.36, 676.50, 1358.49],
       borderColor: "#2ca02c",
       backgroundColor: "#2ca02c",
       borderWidth: 2,
@@ -79,7 +79,7 @@ const data = {
     },
     {
       label: "Wide",
-      data: [11.55, 29.26, 29.15, 117.56, 142.09, 176.14, 346.96, 385.20, 436.07, 746.68],
+      data: [12.11, 29.36, 29.04, 116.21, 129.06, 179.32, 343.85, 386.67, 441.68, 764.84],
       borderColor: "#d62728",
       backgroundColor: "#d62728",
       borderWidth: 2,
@@ -96,7 +96,7 @@ new Chart(document.getElementById("chart"), {
     maintainAspectRatio: false,
     interaction: { mode: "index", intersect: false },
     plugins: {
-      title: { display: true, text: "JSON parser performance — run 2026-05-06 18:32", font: { size: 14 }, padding: { top: 4, bottom: 12 } },
+      title: { display: true, text: "JSON parser performance — run 2026-05-06 20:49", font: { size: 14 }, padding: { top: 4, bottom: 12 } },
       legend: { position: "top", labels: { boxWidth: 14, padding: 14 } },
       tooltip: {
         callbacks: {

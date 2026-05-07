@@ -34,27 +34,27 @@ Job=ShortRun  IterationCount=3  LaunchCount=1  WarmupCount=3
 
 | Method                              | Mean        | Ratio | Allocated  | Alloc Ratio |
 |------------------------------------ |------------:|------:|-----------:|------------:|
-| BigJson_SystemTextJson              |    24.98 μs |  1.00 |   24.12 KB |        1.00 |
-| BigJson_InductorParserStateMachine  |   183.67 μs |  7.35 |  193.56 KB |        8.02 |
-| BigJson_InductorParserToken         |   239.49 μs |  9.59 |  197.50 KB |        8.19 |
+| BigJson_SystemTextJson              |    28.21 μs |  1.00 |   24.12 KB |        1.00 |
+| BigJson_InductorParserStateMachine  |   184.22 μs |  6.53 |  193.56 KB |        8.02 |
+| BigJson_InductorParserToken         |   240.31 μs |  8.52 |  197.50 KB |        8.19 |
 |                                     |             |       |            |             |
-| DeepJson_SystemTextJson             |    82.12 μs |  1.00 |   20.24 KB |        1.00 |
-| DeepJson_InductorParserStateMachine |    94.69 μs |  1.15 |   86.48 KB |        4.27 |
-| DeepJson_InductorParserToken        |   147.70 μs |  1.80 |   88.45 KB |        4.37 |
+| DeepJson_SystemTextJson             |    86.00 μs |  1.00 |   20.24 KB |        1.00 |
+| DeepJson_InductorParserStateMachine |    94.08 μs |  1.09 |   86.48 KB |        4.27 |
+| DeepJson_InductorParserToken        |   144.99 μs |  1.69 |   88.45 KB |        4.37 |
 |                                     |             |       |            |             |
-| LongJson_SystemTextJson             |    18.48 μs |  1.00 |   24.12 KB |        1.00 |
-| LongJson_InductorParserStateMachine |   137.76 μs |  7.45 |  140.36 KB |        5.82 |
-| LongJson_InductorParserToken        |   169.28 μs |  9.16 |  143.90 KB |        5.97 |
+| LongJson_SystemTextJson             |    19.17 μs |  1.00 |   24.12 KB |        1.00 |
+| LongJson_InductorParserStateMachine |   136.60 μs |  7.13 |  140.36 KB |        5.82 |
+| LongJson_InductorParserToken        |   160.29 μs |  8.36 |  143.90 KB |        5.97 |
 |                                     |             |       |            |             |
-| WideJson_SystemTextJson             |    11.55 μs |  1.00 |   16.12 KB |        1.00 |
-| WideJson_InductorParserStateMachine |    90.56 μs |  7.84 |  108.52 KB |        6.73 |
-| WideJson_InductorParserToken        |   117.56 μs | 10.18 |  111.29 KB |        6.90 |
+| WideJson_SystemTextJson             |    12.11 μs |  1.00 |   16.12 KB |        1.00 |
+| WideJson_InductorParserStateMachine |    90.48 μs |  7.47 |  108.52 KB |        6.73 |
+| WideJson_InductorParserToken        |   116.21 μs |  9.60 |  111.29 KB |        6.90 |
 
 `Ratio` is relative to `SystemTextJson`. Same baseline framing as the main bench: STJ is the hand-written, allocation-aware JSON parser in the .NET BCL, so it's the reasonable "how fast can a .NET programmer actually get" reference point.
 
 ## What the numbers say
 
-On every shape the state machine runs about 1.23x to 1.56x faster than the recursive evaluator on the same grammar. Deep is the closest case: at 94.69 μs vs STJ's 82.12 μs (1.15x), a grammar-based parser is within striking distance of the hand-written BCL JSON reference.
+On every shape the state machine runs about 1.17x to 1.54x faster than the recursive evaluator on the same grammar. Deep is the closest case: at 94.08 μs vs STJ's 86.00 μs (1.09x), a grammar-based parser is essentially even with the hand-written BCL JSON reference.
 
 The win comes entirely from the evaluator. Lowering the grammar once to a flat opcode array means the inner loop is one indirect dispatch (a switch on a small enum that the JIT lowers to a jump table) per state transition, against the recursive evaluator's per-rule virtual `TryParseRule` call plus the per-rule transaction setup `Rule.TryParse` does on top. The state machine also pools its backtrack and output buffers across parses via thread-static slots, so back-to-back parses on the same thread allocate nothing for the evaluator's own bookkeeping. Per-iteration backtrack frames are dropped when the loop's inner rule is one of the always-advancing single-state matches (`Literal`, `Token`, `OneOf`), and `FirstOf` alternatives skip themselves on a peeked-rune mismatch the same way the recursive `FirstOfRule` does at runtime. See [../InductorParser/StateMachine/Lowerer.cs](../InductorParser/StateMachine/Lowerer.cs) for what each rule lowers to.
 
