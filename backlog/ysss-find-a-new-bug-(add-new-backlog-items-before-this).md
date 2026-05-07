@@ -1,9 +1,25 @@
 # Find a new bug (add new backlog items before this)
 
+**Read this first:** every path you touch as part of this task must be under the worktree root you started in. Backlog item, search log, pattern doc, failing test, source fix, scratch notes — all of it. Details in the "All edits stay inside the worktree you are running in" section below.
 
 This is a real backlog item, if you reach it, do it!
 
 This item should always be the last item in the backlog. Add new backlog items before it, not after.
+
+## All edits stay inside the worktree you are running in
+
+Every file you write or modify as part of this task goes inside the worktree you started in. That includes:
+
+- the new backlog item under `backlog/`
+- the search log entry under `docs/BugSearchLog/`
+- the pattern doc (if any) under `docs/PotentialBugSources/`
+- the failing test in the appropriate test file
+- the source fix in `src/`
+- any other notes, scratch files, or run logs you produce while working
+
+If you are running under `InductorCSParserWorktrees/<branch>/`, every path you touch must be under that same `InductorCSParserWorktrees/<branch>/` root. Don't write into the main `InductorCSParser/` checkout. Don't edit files in a sibling worktree. The branch this worktree owns has to carry the complete change, so splitting edits across trees breaks the work and leaves orphaned files in the wrong place.
+
+Before you save anything, double-check the absolute path starts with the worktree root you started in.
 
 Before you start, read the entries under [docs/BugSearchLog/](../docs/BugSearchLog/) for the search log of which files and categories prior hunts have already swept, and the entries under [docs/PotentialBugSources/](../docs/PotentialBugSources/) for the recurring patterns those hunts surfaced. Each entry is its own `.md` file inside the folder. The `.backlog` pointer files next to those folders are just VS Code extension metadata. Don't re-tread the same files for the same patterns unless you have a specific reason (e.g. the code has changed since, or you spot something the prior sweep missed).
 
