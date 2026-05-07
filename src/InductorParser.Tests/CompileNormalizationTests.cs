@@ -144,6 +144,75 @@ public class CompileNormalizationTests
             $"should succeed. Error was: {result.ErrorMessage}");
     }
 
+    // ScanWhile(TokenSet.Runes(source)) wrapped in OneOrMore. Sibling
+    // of the OneOf path: ScanWhile holds the same shape of TokenSet
+    // _set field, and its CollectNormalizationOffenders override
+    // routes through the same OneOfRule.NormalizeAndValidate helper.
+    // Lone-surrogate rejection happens at TokenSet.Runes construction
+    // before any Compile runs, same as OneOf.
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void ScanWhile_in_OneOrMore_matches_input_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        {
+            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            return;
+        }
+
+        var rule = OneOrMore(ScanWhile(TokenSet.Runes(row.Source)));
+
+        if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+        {
+            // Multi-grapheme post-form: ScanWhile reports the entry as
+            // an offender via the same single-grapheme-per-token rule
+            // OneOf / NoneOf use, so Compile throws.
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True,
+            $"OneOrMore(ScanWhile(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\"))).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should succeed. Error was: {result.ErrorMessage}");
+    }
+
+    // ScanUntil(TokenSet.Runes(source)) followed by Token(source) so
+    // the parse consumes both an empty body and the stopper itself,
+    // exercising the stopper-set form-projection path. ScanUntil's
+    // _stopperSet shares the OneOfRule.NormalizeAndValidate routine
+    // with the rules above, so the same multi-grapheme / lone-surrogate
+    // outcomes apply. The body is intentionally empty (input starts
+    // with the stopper) so a stale stopper-set surfaces as ScanUntil
+    // running off the end and the trailing Token failing.
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void ScanUntil_with_stopper_set_matches_input_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        {
+            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            return;
+        }
+
+        var rule = And(ScanUntil(TokenSet.Runes(row.Source)), Token(row.Source));
+
+        if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+        {
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True,
+            $"And(ScanUntil(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\")), Token(...)).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should succeed. Error was: {result.ErrorMessage}");
+    }
+
     // Or-wrapped Token with an AnyToken fallback. Exercises the
     // OrRule.CannotMatchLookahead shortcut path (separate from
     // BetweenInclusive's). Asserts the Token branch matched, not the
