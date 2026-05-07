@@ -1,1 +1,0 @@
-- All existing SM tests pass (96 in InductorParser.StateMachine.Tests + the recursive-engine suite under INDUCTOR_DEFAULT_ENGINE=statemachine).

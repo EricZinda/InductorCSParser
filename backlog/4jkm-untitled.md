@@ -1,9 +1,3 @@
-- Untitled
-# Need to code/comment review all tests and docs still
+# Untitled
 
-core code is done
-docs directory is done
-Core tests are done
-Rule tests are done
-<refactor>
-starting with key docs	
+- Untitled

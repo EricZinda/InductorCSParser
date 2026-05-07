@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
@@ -297,4 +298,117 @@ public class OneOfRuleTests
         Assert.That(result.Tree!.Find(rule), Is.Not.Null);
     }
 
+    // -----------------------------------------------------------------
+    // Compile-form normalization matrix
+    //
+    // See GraphemeRuleTests for the full matrix rationale. OneOf's
+    // matching data lives in OneOfRule._set rather than a string of
+    // expected text; the same shape staleness bugs apply.
+    // -----------------------------------------------------------------
+
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void OneOf_bare_matches_input_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        {
+            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            return;
+        }
+
+        var rule = OneOf(TokenSet.Runes(row.Source));
+
+        if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+        {
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True,
+            $"OneOf(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\")).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should succeed. Error was: {result.ErrorMessage}");
+    }
+
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void OneOf_in_OneOrMore_matches_input_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        {
+            // TokenSet.Runes validates each rune at construction and
+            // rejects lone surrogates before any rule wraps it. The
+            // form parameter is irrelevant; the throw is from
+            // TokenSet.Runes itself.
+            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            return;
+        }
+
+        var rule = OneOrMore(OneOf(TokenSet.Runes(row.Source)));
+
+        if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+        {
+            // OneOfRule reports the multi-grapheme entry as a Compile-
+            // time offender, same as Token does.
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True,
+            $"OneOrMore(OneOf(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\"))).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should succeed. Error was: {result.ErrorMessage}");
+    }
+
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void OneOf_in_Or_with_fallback_matches_oneof_branch_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+            return; // covered by OneOf_in_OneOrMore's TokenSet.Runes-throws path
+        if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+            return; // multi-grapheme post-form is covered by the OneOf_in_OneOrMore Compile-throws path
+
+        var oneOfRule = OneOf(TokenSet.Runes(row.Source)).As("oneOfBranch");
+        var fallback = AnyToken().As("fallbackBranch");
+        var rule = Or(oneOfRule, fallback);
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.Find(oneOfRule), Is.Not.Null,
+            $"Or(OneOf(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\")), AnyToken).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"matched the AnyToken fallback instead of the OneOf branch.");
+    }
+
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void OneOf_in_AllOf_with_Eof_matches_full_input_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        {
+            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            return;
+        }
+
+        var rule = And(OneOf(TokenSet.Runes(row.Source)), Eof());
+
+        if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+        {
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True,
+            $"And(OneOf(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\")), Eof()).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should succeed. Error was: {result.ErrorMessage}");
+    }
 }

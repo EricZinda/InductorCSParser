@@ -1,0 +1,3 @@
+# Untitled
+
+- Add a test that runs `Or(NoneOf(TokenSet.Single('a')), Literal("a"))` against `"a"` under SM and confirms the SM precisely skips NoneOf via CheckPeekedTokenNotInSet (observable in trace output, or by checking the lowered program's opcode sequence).
