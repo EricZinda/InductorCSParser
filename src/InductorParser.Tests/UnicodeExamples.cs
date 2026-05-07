@@ -15,75 +15,75 @@ internal static class UnicodeExamples
     // 👋 waving hand. Supplementary-plane rune (needs a surrogate pair in
     // UTF-16). One rune, one grapheme on its own.
     public const int WavingHandRune = 0x1F44B;
-    public const string WavingHandGrapheme = "\uD83D\uDC4B";
+    public const string WavingHandGrapheme = "\uD83D\uDC4B"; // looks like waving hand emoji
 
     // 🏽 medium skin tone modifier. Combining modifier rune that attaches to a
     // base character to form a multi-rune grapheme. Not typically rendered
     // standalone.
     public const int MediumSkinToneRune = 0x1F3FD;
-    public const string MediumSkinToneText = "\uD83C\uDFFD";
+    public const string MediumSkinToneText = "\uD83C\uDFFD"; // looks like medium-skin-tone modifier (combines with preceding emoji)
 
     // 👋🏽 waving hand + medium skin tone. ONE grapheme made of TWO runes
     // (4 UTF-16 chars total). The lexer reads the whole sequence as a
     // single token.
-    public const string SkinTonedWaveGrapheme = WavingHandGrapheme + MediumSkinToneText;
+    public const string SkinTonedWaveGrapheme = WavingHandGrapheme + MediumSkinToneText; // looks like medium-skin-tone waving hand
 
     // 🎸 guitar. One rune, one grapheme.
     public const int GuitarRune = 0x1F3B8;
-    public const string GuitarGrapheme = "\uD83C\uDFB8";
+    public const string GuitarGrapheme = "\uD83C\uDFB8"; // looks like guitar emoji
 
     // 🎹 musical keyboard. One rune, one grapheme. Used alongside Guitar
     // as a "different emoji, same shape" mismatch example.
     public const int MusicalKeyboardRune = 0x1F3B9;
-    public const string MusicalKeyboardGrapheme = "\uD83C\uDFB9";
+    public const string MusicalKeyboardGrapheme = "\uD83C\uDFB9"; // looks like musical keyboard emoji
 
     // U+0301 combining acute. Combining mark that attaches to a base character
     // to form a multi-rune grapheme. Not a standalone grapheme.
-    public const string CombiningAcuteText = "\u0301";
+    public const string CombiningAcuteText = "\u0301"; // looks like a floating acute accent (attaches to preceding base)
 
     // é as e + combining acute. The textbook multi-rune Token: TWO runes,
     // ONE grapheme (2 UTF-16 chars total). Works on every runtime including
     // legacy StringInfo because the base+combining-mark rule predates UAX #29.
     // Use this when a test needs a multi-rune grapheme that segments the same
     // way on .NET 5+ and on Unity Mono / IL2CPP.
-    public const string LatinEAcuteGrapheme = "e" + CombiningAcuteText;
+    public const string LatinEAcuteGrapheme = "e" + CombiningAcuteText; // looks like é (e + combining acute, decomposed)
 
     // é as the single precomposed rune U+00E9 (LATIN SMALL LETTER E WITH
     // ACUTE). One rune, one grapheme. Pair with LatinEAcuteGrapheme when
     // a test wants to be explicit about which form it's using.
-    public const string LatinEAcutePrecomposedGrapheme = "é";
+    public const string LatinEAcutePrecomposedGrapheme = "é"; // looks like é (precomposed)
 
     // 🤷‍♀️ woman shrugging. ZWJ emoji sequence: base shrug rune + ZWJ +
     // female sign + emoji variation selector. UAX #29 sees ONE grapheme.
     // Legacy StringInfo splits it. Use this to test the ZWJ rule.
-    public const string WomanShruggingGrapheme = "\uD83E\uDD37\u200D\u2640\uFE0F";
+    public const string WomanShruggingGrapheme = "\uD83E\uDD37\u200D\u2640\uFE0F"; // looks like woman-shrugging emoji (ZWJ sequence)
 
     // 🇺🇸 US flag. Two regional indicator code points (U + S). UAX #29 sees
     // ONE grapheme. Legacy StringInfo splits it. Use this to test the
     // regional-indicator pairing rule.
-    public const string USFlagGrapheme = "\uD83C\uDDFA\uD83C\uDDF8";
+    public const string USFlagGrapheme = "\uD83C\uDDFA\uD83C\uDDF8"; // looks like US flag emoji (regional indicator pair)
 
     // ก + ํา Thai "kam". SARA AM is the canonical extended-grapheme-cluster
     // case (a vowel sign that visually composes with the preceding consonant).
     // UAX #29 sees ONE grapheme. Legacy StringInfo splits it. Use this to
     // test the SARA AM rule.
-    public const string ThaiKamGrapheme = "\u0E01\u0E33";
+    public const string ThaiKamGrapheme = "\u0E01\u0E33"; // looks like \u0E01\u0E33 (Thai KO KAI + SARA AM, "kam")
 
     // 👨 man. One rune, one grapheme. Used as a base for ZWJ sequences
     // in malformed-Unicode and joiner tests.
     public const int ManEmojiRune = 0x1F468;
-    public const string ManEmojiGrapheme = "\uD83D\uDC68";
+    public const string ManEmojiGrapheme = "\uD83D\uDC68"; // looks like man emoji
 
     // 🇺 REGIONAL INDICATOR SYMBOL LETTER U. One half of a flag emoji
     // pair (two regional indicators in a row form a country flag). UAX #29 pairs
     // two of these into one cluster; a single one stands alone.
     public const int RegionalIndicatorURune = 0x1F1FA;
-    public const string RegionalIndicatorUText = "\uD83C\uDDFA";
+    public const string RegionalIndicatorUText = "\uD83C\uDDFA"; // looks like regional-indicator letter U (one half of a flag pair)
 
     // U+10FFFF maximum Unicode scalar value. Encoded as the surrogate pair
     // (U+DBFF, U+DFFF) in UTF-16. Boundary case for rune decoding.
     public const int MaximumCodePointRune = 0x10FFFF;
-    public const string MaximumCodePointGrapheme = "\uDBFF\uDFFF";
+    public const string MaximumCodePointGrapheme = "\uDBFF\uDFFF"; // looks like (font-dependent \u2014 U+10FFFF, max Unicode scalar)
 
     // === Lone surrogate halves (not valid scalars on their own) ===
     // UTF-16 encodes supplementary-plane scalars as a HIGH-then-LOW
@@ -92,13 +92,13 @@ internal static class UnicodeExamples
     // can still hold one. Useful for the malformed-input tests.
 
     // U+D800: lowest high-surrogate code unit. "Min" of the high range.
-    public const string HighSurrogateMinText = "\uD800";
+    public const string HighSurrogateMinText = "\uD800"; // looks like (no rendering — lone high surrogate, invalid scalar)
 
     // U+DC00: lowest low-surrogate code unit. "Min" of the low range.
-    public const string LowSurrogateMinText = "\uDC00";
+    public const string LowSurrogateMinText = "\uDC00"; // looks like (no rendering — lone low surrogate, invalid scalar)
 
     // U+DFFF: highest low-surrogate code unit. "Max" of the low range.
-    public const string LowSurrogateMaxText = "\uDFFF";
+    public const string LowSurrogateMaxText = "\uDFFF"; // looks like (no rendering — lone low surrogate, invalid scalar)
 
     // === Format / control characters that don't render as a glyph ===
     // The names exist so test source stays readable. Inline literals like
@@ -108,71 +108,71 @@ internal static class UnicodeExamples
     // U+200D ZERO WIDTH JOINER. Glues emoji together into composed sequences
     // (the family / professions / variant emojis). UAX #29 GCB=ZWJ; semantically
     // attaches to surrounding bases.
-    public const string ZeroWidthJoinerText = "\u200D";
+    public const string ZeroWidthJoinerText = "\u200D"; // looks like (invisible \u2014 zero-width joiner)
 
     // U+200C ZERO WIDTH NON-JOINER. Suppresses default joining behavior in
     // scripts like Arabic and Indic. UAX #29 GCB=Extend.
-    public const string ZeroWidthNonJoinerText = "\u200C";
+    public const string ZeroWidthNonJoinerText = "\u200C"; // looks like (invisible \u2014 zero-width non-joiner)
 
     // U+200B ZERO WIDTH SPACE. Invisible word-break hint. UAX #29 GCB=Other
     // (breaks on both sides).
-    public const string ZeroWidthSpaceText = "\u200B";
+    public const string ZeroWidthSpaceText = "\u200B"; // looks like (invisible \u2014 zero-width space)
 
     // U+FE0F EMOJI VARIATION SELECTOR. Selects emoji-style presentation for
     // the preceding base. UAX #29 GCB=Extend.
-    public const string EmojiVariationSelectorText = "\uFE0F";
+    public const string EmojiVariationSelectorText = "\uFE0F"; // looks like (invisible \u2014 emoji variation selector)
 
     // U+FEFF BYTE ORDER MARK / ZERO WIDTH NO-BREAK SPACE. Marks UTF byte
     // order at the start of streams; left over from older encodings.
-    public const string ByteOrderMarkText = "\uFEFF";
+    public const string ByteOrderMarkText = "\uFEFF"; // looks like (invisible \u2014 byte order mark / ZWNBSP)
 
     // U+00AD SOFT HYPHEN. Hyphenation hint. UAX #29 breaks on both sides so
     // it surfaces as its own token between surrounding letters.
-    public const string SoftHyphenText = "\u00AD";
+    public const string SoftHyphenText = "\u00AD"; // looks like (invisible by default \u2014 soft hyphen, hyphenation hint)
 
     // U+202E RIGHT-TO-LEFT OVERRIDE. Bidi-direction control; the same
     // character used in the Trojan Source attack to make source code render
     // differently from its logical order.
-    public const string RightToLeftOverrideText = "\u202E";
+    public const string RightToLeftOverrideText = "\u202E"; // looks like (invisible \u2014 right-to-left bidi override)
 
     // U+0600 ARABIC NUMBER SIGN. UAX #29 Prepend category, normally attaches
     // to the FOLLOWING character.
-    public const string ArabicNumberSignText = "\u0600";
+    public const string ArabicNumberSignText = "\u0600"; // looks like \u0600 (Arabic number sign, UAX #29 Prepend)
 
     // U+094D DEVANAGARI SIGN VIRAMA. Indic linker that joins consonants into
     // conjuncts. UAX #29 GCB=Extend.
-    public const string DevanagariViramaText = "\u094D";
+    public const string DevanagariViramaText = "\u094D"; // looks like \u094D (Devanagari virama, conjunct linker)
 
     // U+E0001 LANGUAGE TAG. Used inside emoji tag sequences for subdivision
     // flags. UAX #29 GCB=Extend.
     public const int LanguageTagRune = 0xE0001;
-    public const string LanguageTagText = "\uDB40\uDC01";
+    public const string LanguageTagText = "\uDB40\uDC01"; // looks like (invisible \u2014 language tag, used in emoji subdivision flags)
 
     // U+180E MONGOLIAN VOWEL SEPARATOR. Property has shifted across Unicode
     // versions (Cf, then Whitespace, now Cf again depending on the runtime's
     // data).
-    public const string MongolianVowelSeparatorText = "\u180E";
+    public const string MongolianVowelSeparatorText = "\u180E"; // looks like (invisible \u2014 Mongolian vowel separator, property has shifted across Unicode versions)
 
     // === Noncharacters, Private Use, Replacement ===
 
     // U+FFFE / U+FFFF: BMP noncharacters. .NET's string.Normalize rejects
     // U+FFFE specifically as "invalid Unicode code points" but accepts
     // U+FFFF (.NET-specific asymmetry).
-    public const string NoncharacterFFFEText = "\uFFFE";
-    public const string NoncharacterFFFFText = "\uFFFF";
+    public const string NoncharacterFFFEText = "\uFFFE"; // looks like (no rendering \u2014 BMP noncharacter U+FFFE, rejected by .NET Normalize)
+    public const string NoncharacterFFFFText = "\uFFFF"; // looks like (no rendering \u2014 BMP noncharacter U+FFFF, accepted by .NET Normalize)
 
     // U+FDD0 noncharacter. First code point in the U+FDD0..U+FDEF
     // noncharacter block. .NET's Normalize accepts these.
-    public const string NoncharacterFDD0Text = "\uFDD0";
+    public const string NoncharacterFDD0Text = "\uFDD0"; // looks like (no rendering \u2014 noncharacter U+FDD0)
 
     // U+E000 start of the BMP Private Use Area. Valid scalar with no
     // assigned character; no Unicode category data.
-    public const string PrivateUseAreaStartText = "\uE000";
+    public const string PrivateUseAreaStartText = "\uE000"; // looks like (font-dependent \u2014 start of BMP Private Use Area)
 
     // U+FFFD REPLACEMENT CHARACTER. What permissive decoders write when they
     // hit invalid bytes. By the time it reaches the parser it's a perfectly
     // valid scalar.
-    public const string ReplacementCharacterText = "\uFFFD";
+    public const string ReplacementCharacterText = "\uFFFD"; // looks like \uFFFD (replacement character \u2014 what permissive decoders write for invalid bytes)
 
     // U+0000 NULL. Cc control. Valid scalar. Most editors render as a box
     // or as zero-width, depending on font.
@@ -194,11 +194,11 @@ internal static class UnicodeExamples
     // different classes" — same-class marks (e.g. acute+circumflex,
     // both ccc=230) are NOT reordered, so input order matters there.
     public const int VietnameseACircumflexDotBelowRune = 0x1EAD;
-    public const string VietnameseACircumflexDotBelowGrapheme = "\u1EAD";
+    public const string VietnameseACircumflexDotBelowGrapheme = "\u1EAD"; // looks like \u1EAD (precomposed, U+1EAD)
 
     // "a + dot-below + circumflex" — already in canonical order
     // (ccc 220 then 230). NFC composes directly to U+1EAD.
-    public const string VietnameseACircumflexDotBelowCanonicalText = "a\u0323\u0302";
+    public const string VietnameseACircumflexDotBelowCanonicalText = "a\u0323\u0302"; // looks like \u1ead (a + dot-below + circumflex, canonical mark order)
 
     // "a + circumflex + dot-below" — non-canonical order
     // (ccc 230 then 220). NFC reorders to canonical (220 then 230),
