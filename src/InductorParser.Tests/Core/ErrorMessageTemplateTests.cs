@@ -279,4 +279,39 @@ public class ErrorMessageTemplateTests
         Assert.That(options.CancellationAbortTemplate,
             Is.EqualTo("Parse aborted: cancellation requested."));
     }
+
+    [Test]
+    public void Character_placeholder_renders_user_typed_character_under_NFKC()
+    {
+        // Under FormKC, fullwidth "１" (U+FF11) folds to ASCII "1" before
+        // the lexer sees it. Token('x') is stable under FormKC and rejects
+        // '1' on the normalized side. The {character} placeholder in the
+        // default PositionalErrorTemplate should show what the user typed
+        // ('１'), not the normalized character ('1') the parser saw
+        // internally. Otherwise the message contradicts the source code
+        // the user is looking at.
+        var rule = Token('x');
+        rule.Compile(System.Text.NormalizationForm.FormKC);
+        var result = rule.Parse("１");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage,
+            Is.EqualTo("Parse failed at offset 0: unexpected '１'."));
+    }
+
+    [Test]
+    public void Character_placeholder_renders_user_typed_ligature_under_NFKC()
+    {
+        // U+FB01 LATIN SMALL LIGATURE FI folds to "fi" under FormKC.
+        // Token('a') won't accept 'f', so this fails at offset 0. The
+        // message should report the user's ligature, not the unfolded
+        // "f" the parser saw internally.
+        var rule = Token('a');
+        rule.Compile(System.Text.NormalizationForm.FormKC);
+        var result = rule.Parse("ﬁoo");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage,
+            Is.EqualTo("Parse failed at offset 0: unexpected 'ﬁ'."));
+    }
 }
