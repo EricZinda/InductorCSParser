@@ -1,6 +1,6 @@
 # Unicode Internals Architecture
 
-This doc is about how the parser handles Unicode text at its lowest levels. Read this if you want to understand what the parser sees when you feed it a string, or debug a Unicode-related issue. If you just want to write grammars, start with [primer1.md](primer1.md), [primer2.md](primer2.md), and [Primer3.md](Primer3.md), then use [InductorParserReference.md](InductorParserReference.md) as the full API reference.
+This doc is about how the parser handles Unicode text at its lowest levels. Read this if you want to understand what the parser sees when you feed it a string, or debug a Unicode-related issue. If you just want to write grammars, start with [primer1.md](primer1.md), [primer2.md](primer2.md), [Primer3.md](Primer3.md), and [Primer4.md](Primer4.md), then use [InductorParserReference.md](InductorParserReference.md) as the full API reference.
 
 ## Unicode In One Page
 
@@ -105,7 +105,7 @@ If the caller doesn't know the encoding of a file, they figure it out upstream (
 
 The parser normalizes input to the composed form by default. This is because most people don't want to write their grammars anticipating all the different ways a single Unicode character might be built, they want to depend on the ultimate form of it. Most input is already composed (web content, modern source files, anything produced by normal typing on modern OSes), so the normalization pass is usually a cheap scan with no textual rewrite. It fixes potential bugs for denormalized input when grammars don't account for it.
 
-Unicode defines four normalization forms. The library uses the .NET enum directly to access the Unicode forms (`NormalizationForm.FormC` is composed, `FormD` is decomposed, `FormKC` and `FormKD` are the "compatibility" variants that also fold things like superscripts and ligatures into their canonical equivalents). `FormC` (composed) is what almost every grammar wants.
+Unicode defines four normalization forms. The library uses the .NET enum directly to access the Unicode forms (`NormalizationForm.FormC` is composed, `FormD` is decomposed, `FormKC` and `FormKD` are the "compatibility" variants that also convert things like superscripts and ligatures into their canonical equivalents). `FormC` (composed) is what almost every grammar wants.
 
 The form is a grammar-level decision committed at `Compile` time, not a per-parse option. Pick it once when you compile the grammar:
 
