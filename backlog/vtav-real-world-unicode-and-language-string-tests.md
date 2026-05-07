@@ -1,4 +1,5 @@
-- Real-world unicode and language string tests
+# Real-world unicode and language string tests
+
     - Current state: tests mostly use ASCII and a handful of hand-picked unicode samples. We don't have systematic coverage for what the parser does on real-world text from other scripts, emoji sequences, RTL, combining marks, or the awkward stuff (ZWJ sequences, flag sequences, skin-tone modifiers, variation selectors, zero-width spaces in identifiers, NFC vs NFD differences).
     - Why it matters: the lexer and the string-scanning rules (ScanUntilRule, OneOf/NoneOf) all claim to handle unicode correctly, but we're validating that claim against toy inputs. The UAX #29 backlog item (xlll) calls out known grapheme-splitting bugs on older runtimes; we need tests that would actually catch those if the vendored implementation regresses.
     - What to gather:

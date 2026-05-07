@@ -79,16 +79,25 @@ internal sealed class NoneOfRule : Rule
     // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
     {
-        // ~set throws on a mixed set, so when _set has multi-rune
-        // entries we project down to the rune-only part first and
-        // complement that. The result is a SUPERSET of the actual
-        // first-consumed runes (we can't filter out tokens whose first
-        // rune is a multi-rune-entry head, because some of those
-        // tokens are single-rune and pass NoneOf), which is the
-        // safe direction for the lookahead shortcut.
-        TokenSet firstConsumed = _set.HasMultiRuneGraphemes
-            ? ~_set.RunesOnlyPart
-            : ~_set;
-        return new RuleStartRequirements(firstConsumed, Advance.Always);
+        // The lookahead peek sees ONE rune. NoneOf, asked "could a token
+        // starting with this rune match?", has to admit that yes for any
+        // rune. A token here is one grapheme cluster, and a multi-rune
+        // cluster like "X<combining mark>" or "X<ZWJ>Y" starts with X
+        // for any base rune X. NoneOf admits any cluster whose chars
+        // aren't in _set's multi-rune part, so for every rune R there's
+        // some multi-rune cluster starting with R that NoneOf would
+        // accept (regardless of whether R itself is in the rune-only
+        // part of _set, because R-as-a-single-rune-token and "R..."
+        // -as-a-multi-rune-cluster are different tokens with different
+        // membership tests).
+        //
+        // The previous tighter `~_set.RunesOnlyPart` answer ignored that
+        // second case. OneOrMore(NoneOf({'a'})) parsing "á" (one
+        // grapheme under Compile(null), admitted by NoneOf because the
+        // cluster isn't a single-rune 'a') wrongly failed: the
+        // BetweenInclusive shortcut peeked 'a', saw it wasn't in
+        // ~{'a'}, and concluded NoneOf couldn't match. Universe is the
+        // soundest answer.
+        return new RuleStartRequirements(TokenSet.Universe, Advance.Always);
     }
 }

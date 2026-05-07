@@ -1,4 +1,5 @@
-- Token / Literal / LiteralIgnoreAsciiCase with a stray-surrogate literal throws a generic ArgumentException out of default Compile()
+# Token / Literal / LiteralIgnoreAsciiCase with a stray-surrogate literal throws a generic ArgumentException out of default Compile()
+
 
 When a grammar contains a literal-bearing rule (`Token(string)`, `Literal(string)`, or `LiteralIgnoreAsciiCase(string)`) whose expected text contains a stray surrogate half, calling `.Compile()` (or any Compile that picks a real `NormalizationForm`) throws a generic `System.ArgumentException` from inside .NET's `string.Normalize`. On .NET 8 the message reads `String contains invalid Unicode code points. (Parameter 'strInput')`. The grammar author has no way to tell from that message that the issue is a stray surrogate in their literal, which rule's literal is the offender, or that `Compile(null)` is the documented path for surrogate-bearing literals (called out for `Rules.Token(string)` and the WTF-8 / unpaired-surrogate use case the existing `Literal_with_lone_surrogate_first_char_compiles_under_null_normalization` test covers).
 

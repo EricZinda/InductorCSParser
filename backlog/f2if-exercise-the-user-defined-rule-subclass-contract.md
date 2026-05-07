@@ -1,4 +1,5 @@
-- Exercise the user-defined Rule subclass contract
+# Exercise the user-defined Rule subclass contract
+
     - Current state: Rule is abstract, and docs/InductorParserDesignDecisions.md describes the contract a user subclass has to satisfy: implement TryParse returning a Symbol on success / null on failure, never consume input on failure, use the lexer's transactional API, participate in Compile via ChildRules, emit trace output in the same format as built-ins. All of the library's internal rules follow that contract, but nothing tests it from outside. If a user tries to subclass Rule today, they might discover the contract has gaps we haven't noticed.
     - Work:
         - Write a user-defined rule as a test, something the built-in composites can't express cleanly. Candidates: a rule that matches "the rest of the current line", a rule that consumes exactly N characters (for fixed-width formats), a rule that queries an external state object. Pick one simple enough to fit in 20-30 lines.

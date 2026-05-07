@@ -1,4 +1,5 @@
-- XML doc comments on the public API for IntelliSense
+# XML doc comments on the public API for IntelliSense
+
     - Current state: Public types and members have informative `//` prose comments explaining design rationale, but no `///` XML doc comments. That means nothing shows up in IntelliSense tooltips when a user types `rule.` or hovers over `RuneSet.Letters`. For a library that expects users to author grammars by composing factory calls, IntelliSense is the primary way they discover the API. Not having `///` means every first-time user has to read source files to find out what methods exist and what they do.
     - Scope of what should get doc comments:
         - `Rule` and every public method (As, Flatten, WithError, Compile, Parse, and the abstract Children property).
