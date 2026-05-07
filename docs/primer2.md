@@ -47,14 +47,14 @@ var name = OneOrMore(NoneOf(TokenSet.Runes("]") | anySpaceRunes))
 var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes))
     .As("key").Preserve();
 
-var section = AllOf(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
+var section = And(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
     .As("section").Preserve();
 
 // Typed values. Each alternative is .As(name).Preserve() so the
 // matching one survives flattening as a discoverable child of value.
-// Order matters in FirstOf: Float before Integer because "3.14" would
+// Order matters in Or: Float before Integer because "3.14" would
 // otherwise commit to Integer on the leading "3" and stall.
-var quotedString = AllOf(
+var quotedString = And(
     Token('"'),
     ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
     Token('"')).As("quotedString").Preserve();
@@ -65,21 +65,21 @@ var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\"")))
 var floatValue = Float().As("float").Preserve();
 var integerValue = Integer().As("integer").Preserve();
 
-var value = FirstOf(floatValue, integerValue, quotedString, bareWord)
+var value = Or(floatValue, integerValue, quotedString, bareWord)
     .As("value").Preserve();
 
-var keyValue = AllOf(key, Optional(InlineWhitespace()), Token('='), Optional(InlineWhitespace()), value, Optional(InlineWhitespace()), EndOfLine())
+var keyValue = And(key, Optional(InlineWhitespace()), Token('='), Optional(InlineWhitespace()), value, Optional(InlineWhitespace()), EndOfLine())
     .As("keyValue").Preserve();
 
-var blankLine = AllOf(Optional(InlineWhitespace()), EndOfLine());
+var blankLine = And(Optional(InlineWhitespace()), EndOfLine());
 
-var line = FirstOf(section, keyValue, blankLine);
-var config = AllOf(ZeroOrMore(line), Eof()).As("config").Preserve();
+var line = Or(section, keyValue, blankLine);
+var config = And(ZeroOrMore(line), Eof()).As("config").Preserve();
 ```
 
 `name` and `key` are the same shape: one or more tokens that aren't whitespace and aren't the stop character (`]` for names, `=` for keys). `NoneOf(set)` matches a token when that token isn't in the set, and `|` is set union.
 
-`value` is where typing happens. Each alternative is `.As(name).Preserve()` so the matching one lands in the tree as a typed child. `Float()` and `Integer()` are built-in rules, `quotedString` is the standard open-quote/body/close-quote shape and `bareWord` catches everything else. Order in `FirstOf` matters because it stops at the first match: `Float` is before `Integer` so `3.14` doesn't commit to `3` and leave `.14` for the next rule to choke on.
+`value` is where typing happens. Each alternative is `.As(name).Preserve()` so the matching one lands in the tree as a typed child. `Float()` and `Integer()` are built-in rules, `quotedString` is the standard open-quote/body/close-quote shape and `bareWord` catches everything else. Order in `Or` matters because it stops at the first match: `Float` is before `Integer` so `3.14` doesn't commit to `3` and leave `.14` for the next rule to choke on.
 
 `EndOfLine()` accepts CRLF as a unit plus any of the seven Unicode single-rune line terminators. `Token('\n')` only handles LF and would silently cause a bug on a CRLF Windows file or anything using NEL, LINE SEPARATOR, or PARAGRAPH SEPARATOR.
 
@@ -152,7 +152,7 @@ int port = int.Parse(typed.ToString(), CultureInfo.InvariantCulture);
 
 The grammar already verified the value's shape. If the input was `port = abc`, the typed child would be a `bareWord` (not an `integerValue`). If the input was `port = "8080"`, the typed child would be a `quotedString` and we can either coerce or reject it. 
 
-`symbol.ToString()` returns the matched text. For a leaf, that's the consumed string. For a composite like `AllOf`, it's the concatenation of every leaf underneath. Either way, you get back what the rule consumed.
+`symbol.ToString()` returns the matched text. For a leaf, that's the consumed string. For a composite like `And`, it's the concatenation of every leaf underneath. Either way, you get back what the rule consumed.
 
 If you want every section regardless of context, two helpers besides `.Is()` come up enough to be worth knowing:
 
@@ -211,7 +211,7 @@ Parse failed at line 1, column 5
 The default error message is generic. To upgrade it, attach `.WithError(...)` to the rule that's most likely to be where the user went wrong:
 
 ```CSharp
-var keyValue = AllOf(
+var keyValue = And(
     key,
     Optional(InlineWhitespace()),
     Token('=').WithError("Expected '=' after the setting name"),

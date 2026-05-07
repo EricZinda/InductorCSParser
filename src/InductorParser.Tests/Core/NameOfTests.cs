@@ -87,30 +87,30 @@ public class NameOfTests
     }
 
     [Test]
-    public void Unnamed_AllOf_rule_returns_class_derived_name()
+    public void Unnamed_And_rule_returns_class_derived_name()
     {
-        var allOfRule = AllOf(OneOf(TokenSet.Letters), OneOf(TokenSet.Digits));
-        allOfRule.Compile();
+        var andRule = And(OneOf(TokenSet.Letters), OneOf(TokenSet.Digits));
+        andRule.Compile();
 
-        Assert.That(allOfRule.NameOf(allOfRule.Id), Is.EqualTo("AllOf"));
+        Assert.That(andRule.NameOf(andRule.Id), Is.EqualTo("And"));
     }
 
     [Test]
-    public void Two_unnamed_AllOf_rules_share_the_class_derived_name_but_have_distinct_ids()
+    public void Two_unnamed_And_rules_share_the_class_derived_name_but_have_distinct_ids()
     {
         // The trace label for an unnamed rule comes from its class name, so
-        // two unrelated AllOf rules in the same grammar both report "AllOf"
+        // two unrelated And rules in the same grammar both report "And"
         // from NameOf. They're still distinguishable because each rule gets
         // its own SymbolId at Compile time. If a caller wants to tell two
-        // AllOfs apart by label, the remedy is .As("...").
-        var firstAllOf = AllOf(OneOf(TokenSet.Letters), OneOf(TokenSet.Digits));
-        var secondAllOf = AllOf(OneOf(TokenSet.Digits), OneOf(TokenSet.Letters));
-        var root = FirstOf(firstAllOf, secondAllOf);
+        // Ands apart by label, the remedy is .As("...").
+        var firstAnd = And(OneOf(TokenSet.Letters), OneOf(TokenSet.Digits));
+        var secondAnd = And(OneOf(TokenSet.Digits), OneOf(TokenSet.Letters));
+        var root = Or(firstAnd, secondAnd);
         root.Compile();
 
-        Assert.That(firstAllOf.Id, Is.Not.EqualTo(secondAllOf.Id));
-        Assert.That(root.NameOf(firstAllOf.Id), Is.EqualTo("AllOf"));
-        Assert.That(root.NameOf(secondAllOf.Id), Is.EqualTo("AllOf"));
+        Assert.That(firstAnd.Id, Is.Not.EqualTo(secondAnd.Id));
+        Assert.That(root.NameOf(firstAnd.Id), Is.EqualTo("And"));
+        Assert.That(root.NameOf(secondAnd.Id), Is.EqualTo("And"));
     }
 
     [Test]

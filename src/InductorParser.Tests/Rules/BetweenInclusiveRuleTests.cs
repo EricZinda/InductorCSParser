@@ -57,7 +57,7 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_at_lower_bound_succeeds()
     {
         var rule = BetweenInclusive(2, 5, Token('a'));
-        var result = AllOf(rule, OneOrMore(Token('b'))).Parse("aabbb", Debug());
+        var result = And(rule, OneOrMore(Token('b'))).Parse("aabbb", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("aabbb"));
@@ -67,7 +67,7 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_at_upper_bound_succeeds()
     {
         var rule = BetweenInclusive(2, 5, Token('a'));
-        var result = AllOf(rule, Token('b')).Parse("aaaaab", Debug());
+        var result = And(rule, Token('b')).Parse("aaaaab", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("aaaaab"));
@@ -76,7 +76,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_stops_at_upper_bound_even_with_more_input()
     {
-        var rule = AllOf(BetweenInclusive(1, 3, Token('a')), OneOrMore(Token('a')));
+        var rule = And(BetweenInclusive(1, 3, Token('a')), OneOrMore(Token('a')));
         var result = rule.Parse("aaaaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -96,7 +96,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_zero_zero_succeeds_with_no_matches()
     {
-        var rule = AllOf(BetweenInclusive(0, 0, Token('a')), Token('b'));
+        var rule = And(BetweenInclusive(0, 0, Token('a')), Token('b'));
         var result = rule.Parse("b", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -106,7 +106,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_zero_zero_does_not_consume_matching_input()
     {
-        var rule = AllOf(BetweenInclusive(0, 0, Token('a')), OneOrMore(Token('a')));
+        var rule = And(BetweenInclusive(0, 0, Token('a')), OneOrMore(Token('a')));
         var result = rule.Parse("aaa", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -191,15 +191,15 @@ public class BetweenInclusiveRuleTests
     {
         // Lower bound 0 means the rule always succeeds, so a WithError on
         // it never reaches the deepest-failure slot. Document the behavior
-        // by verifying it. A failing parse here fails on the outer AllOf,
+        // by verifying it. A failing parse here fails on the outer And,
         // not on the BetweenInclusive.
-        var rule = AllOf(
+        var rule = And(
             BetweenInclusive(0, 3, Token('a')).WithError("unreachable"),
             Token('z'));
         var result = rule.Parse("aaab");
 
         Assert.That(result.Success, Is.False);
-        // BetweenInclusive consumed three 'a's. The outer AllOf failed on
+        // BetweenInclusive consumed three 'a's. The outer And failed on
         // Token('z') against 'b' at offset 3.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorMessage, Does.Not.Contain("unreachable"));
@@ -212,7 +212,7 @@ public class BetweenInclusiveRuleTests
         // is 0 and whose inner fails deeper than the required path can
         // still win the error message via deepest-failure-wins.
         //
-        // Grammar: AllOf(BetweenInclusive(0, 1, AllOf(a, b, c-with-message)),
+        // Grammar: And(BetweenInclusive(0, 1, And(a, b, c-with-message)),
         //                x-with-message)
         // Input:   "abdy"
         //
@@ -221,9 +221,9 @@ public class BetweenInclusiveRuleTests
         // empty (lower bound 0). Token('x') then fails at offset 0 with
         // its own "need 'x'". Deepest-wins picks offset 2: user sees
         // "need 'c'", pointing inside what was supposedly optional.
-        var rule = AllOf(
+        var rule = And(
             BetweenInclusive(0, 1,
-                AllOf(Token('a'),
+                And(Token('a'),
                       Token('b'),
                       Token('c').WithError("need 'c'"))),
             Token('x').WithError("need 'x'"));
@@ -301,7 +301,7 @@ public class BetweenInclusiveRuleTests
     // ----- Scanner-skip optimization (atLeast=0, atMost=int.MaxValue) -----
     //
     // BetweenInclusiveRule.TryCreateScannerSkip recognizes the shape
-    // ZeroOrMore(FirstOf(match, AnyToken.Delete)) and jumps directly to
+    // ZeroOrMore(Or(match, AnyToken.Delete)) and jumps directly to
     // the next rune that could start a real match. The optimization only
     // triggers when atLeast=0 and atMost=int.MaxValue, which is the
     // ZeroOrMore-equivalent shape, so these tests construct that shape
@@ -311,12 +311,12 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_scanner_shape_skips_deleted_fallback_runs()
     {
         var match = Literal("Sherlock").As("match").Flatten(SyntaxTree.FlattenType.Preserve);
-        var scanner = BetweenInclusive(0, int.MaxValue, FirstOf(
+        var scanner = BetweenInclusive(0, int.MaxValue, Or(
             match,
             AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
         )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
 
-        // The slow path would invoke the inner FirstOf once per rune (5000+
+        // The slow path would invoke the inner Or once per rune (5000+
         // times). RuleCountLimit=100 caps invocations, so a successful parse
         // can only mean the scanner skip jumped over the 'x' run.
         string input = new string('x', 5000) + "Sherlock";
@@ -338,7 +338,7 @@ public class BetweenInclusiveRuleTests
         var match = LiteralIgnoreAsciiCase("Sherlock Holmes")
             .As("match")
             .Flatten(SyntaxTree.FlattenType.Preserve);
-        var scanner = BetweenInclusive(0, int.MaxValue, FirstOf(
+        var scanner = BetweenInclusive(0, int.MaxValue, Or(
             match,
             AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
         )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
@@ -359,12 +359,12 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_scanner_shape_prefilters_nested_literal_alternates()
     {
-        var match = FirstOf(
+        var match = Or(
             LiteralIgnoreAsciiCase("Sherlock Holmes").Flatten(SyntaxTree.FlattenType.Preserve),
             LiteralIgnoreAsciiCase("John Watson").Flatten(SyntaxTree.FlattenType.Preserve),
             LiteralIgnoreAsciiCase("Irene Adler").Flatten(SyntaxTree.FlattenType.Preserve)
         ).As("match").Flatten(SyntaxTree.FlattenType.Preserve);
-        var scanner = BetweenInclusive(0, int.MaxValue, FirstOf(
+        var scanner = BetweenInclusive(0, int.MaxValue, Or(
             match,
             AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
         )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
@@ -386,7 +386,7 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_scanner_shape_preserves_debug_tree_when_requested()
     {
         var match = Literal("S").As("match").Flatten(SyntaxTree.FlattenType.Preserve);
-        var scanner = BetweenInclusive(0, int.MaxValue, FirstOf(
+        var scanner = BetweenInclusive(0, int.MaxValue, Or(
             match,
             AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
         )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
@@ -401,7 +401,7 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_scanner_shape_does_not_skip_preserved_fallback()
     {
         var match = Literal("S").As("match").Flatten(SyntaxTree.FlattenType.Preserve);
-        var scanner = BetweenInclusive(0, int.MaxValue, FirstOf(
+        var scanner = BetweenInclusive(0, int.MaxValue, Or(
             match,
             AnyToken()
         )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
@@ -418,7 +418,7 @@ public class BetweenInclusiveRuleTests
     // in Lexer.AdvanceUntilRuneIn and Lexer.AdvanceUntilLiteralCandidateIn use
     // string.IndexOfAny / string.IndexOf, which operate on UTF-16 code units
     // and don't know about cluster boundaries. Without a guard, they land on
-    // the LF inside CRLF, the inner FirstOf reads a fresh one-rune "\n" token
+    // the LF inside CRLF, the inner Or reads a fresh one-rune "\n" token
     // at the mid-cluster offset, and a rule that should reject the multi-rune
     // CRLF cluster (OneOf("\n"), Literal("\nfoo"), etc.) mistakenly matches
     // it. The slow path walks one grapheme at a time and is the source of
@@ -429,7 +429,7 @@ public class BetweenInclusiveRuleTests
     {
         var match = OneOf("\n").Flatten(SyntaxTree.FlattenType.Preserve);
         var scanner = BetweenInclusive(0, int.MaxValue, 
-                        FirstOf(match,
+                        Or(match,
                                 AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
         )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
 
@@ -449,7 +449,7 @@ public class BetweenInclusiveRuleTests
         // behavior (CRLF cluster swallowed whole) as the source of truth.
         var match = OneOf("\n").Flatten(SyntaxTree.FlattenType.Preserve);
         var scanner = BetweenInclusive(1, int.MaxValue, 
-                        FirstOf(match,
+                        Or(match,
                                 AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
         )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
 
@@ -471,7 +471,7 @@ public class BetweenInclusiveRuleTests
         // rule then reads "\nfoo" from that offset.
         var match = Literal("\nfoo").Flatten(SyntaxTree.FlattenType.Preserve);
         var scanner = BetweenInclusive(0, int.MaxValue, 
-                        FirstOf(match,
+                        Or(match,
                                 AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
         )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
 
@@ -492,7 +492,7 @@ public class BetweenInclusiveRuleTests
         // Same mid-CRLF landing problem as the single-literal cache.
         var matchFoo = Literal("\nfoo").Flatten(SyntaxTree.FlattenType.Preserve);
         var matchBar = Literal("\nbar").Flatten(SyntaxTree.FlattenType.Preserve);
-        var scanner = BetweenInclusive(0, int.MaxValue, FirstOf(
+        var scanner = BetweenInclusive(0, int.MaxValue, Or(
             matchFoo,
             matchBar,
             AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
@@ -512,7 +512,7 @@ public class BetweenInclusiveRuleTests
         // later in the input still has to be found. This test exercises
         // the "skip the CRLF, then keep searching" path.
         var match = OneOf("\n").Flatten(SyntaxTree.FlattenType.Preserve);
-        var scanner = BetweenInclusive(0, int.MaxValue, FirstOf(
+        var scanner = BetweenInclusive(0, int.MaxValue, Or(
             match,
             AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
         )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
@@ -559,7 +559,7 @@ public class BetweenInclusiveRuleTests
         string clusterInput = baseChar + CombiningAcute;
 
         var match = OneOf(CombiningAcute).Flatten(SyntaxTree.FlattenType.Preserve);
-        var scanner = BetweenInclusive(0, int.MaxValue, FirstOf(
+        var scanner = BetweenInclusive(0, int.MaxValue, Or(
             match,
             AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
         )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
@@ -582,7 +582,7 @@ public class BetweenInclusiveRuleTests
         string zwjSequenceInput = ManEmoji + ZeroWidthJoiner + WomanEmoji;
 
         var match = OneOf(ZeroWidthJoiner).Flatten(SyntaxTree.FlattenType.Preserve);
-        var scanner = BetweenInclusive(0, int.MaxValue, FirstOf(
+        var scanner = BetweenInclusive(0, int.MaxValue, Or(
             match,
             AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
         )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
@@ -606,7 +606,7 @@ public class BetweenInclusiveRuleTests
         string clusterInput = baseChar + VariationSelector16;
 
         var match = OneOf(VariationSelector16).Flatten(SyntaxTree.FlattenType.Preserve);
-        var scanner = BetweenInclusive(0, int.MaxValue, FirstOf(
+        var scanner = BetweenInclusive(0, int.MaxValue, Or(
             match,
             AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
         )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
@@ -636,7 +636,7 @@ public class BetweenInclusiveRuleTests
         string conjunctInput = DevanagariKa + DevanagariVirama + DevanagariSsa;
 
         var fastMatch = OneOf(DevanagariSsa).Flatten(SyntaxTree.FlattenType.Preserve);
-        var fastScanner = BetweenInclusive(0, int.MaxValue, FirstOf(
+        var fastScanner = BetweenInclusive(0, int.MaxValue, Or(
             fastMatch,
             AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
         )).As("scan-fast").Flatten(SyntaxTree.FlattenType.Preserve);
@@ -644,7 +644,7 @@ public class BetweenInclusiveRuleTests
         var fastResult = fastScanner.Parse(conjunctInput);
 
         var slowMatch = OneOf(DevanagariSsa).Flatten(SyntaxTree.FlattenType.Preserve);
-        var slowScanner = BetweenInclusive(1, int.MaxValue, FirstOf(
+        var slowScanner = BetweenInclusive(1, int.MaxValue, Or(
             slowMatch,
             AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
         )).As("scan-slow").Flatten(SyntaxTree.FlattenType.Preserve);
@@ -680,5 +680,40 @@ public class BetweenInclusiveRuleTests
         var rule = BetweenInclusive(1, 5, Token('a'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
+    }
+
+    // The inner-loop shortcut (peek before each iteration, take count==0
+    // fast-exit when inner can't match) is covered by ZeroOrMoreRuleTests.
+    // The tests below cover the OTHER direction: an enclosing Or
+    // skipping a BetweenInclusive whose AtLeast >= 1 (so its Advance is
+    // Always and the outer shortcut can fire).
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_OneOrMore_skips_when_peek_is_not_in_inner_set()
+    {
+        // OneOrMore(inner) forwards inner's first-set with Advance.Always
+        // (since AtLeast == 1). Peek 'x' isn't in {'a'}, so the outer
+        // Or skips OneOrMore.
+        var sink = NewSink();
+        var rule = Or(OneOrMore(Token('a')), Literal("x"));
+        var result = rule.Parse("x", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Contain("SKIP | OneOrMore:"));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_OneOrMore_runs_when_peek_is_in_inner_set()
+    {
+        // Peek 'a' is in {'a'}, so the outer Or doesn't skip
+        // OneOrMore. It runs and matches.
+        var sink = NewSink();
+        var rule = Or(OneOrMore(Token('a')), Literal("x"));
+        var result = rule.Parse("aaa", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | OneOrMore:"));
     }
 }

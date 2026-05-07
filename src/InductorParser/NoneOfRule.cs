@@ -58,12 +58,9 @@ internal sealed class NoneOfRule : Rule
         transaction.Commit();
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
-        // Use the rune value as the leaf Id when the rule is unnamed;
-        // otherwise use the rule's own Id so .As("name") makes the leaf
-        // findable via Tree.Find / Tree.Is / NameOf. See OneOfRule for
-        // the rationale.
-        int runeValue = token.RuneValue;
-        SymbolId leafId = (Name == null && runeValue >= 0) ? new SymbolId(runeValue) : Id;
+        // See Rule.ResolveLeafId for the leaf-id rule shared across
+        // OneOfRule / NoneOfRule / AnyTokenRule / WithinTokenRule.
+        SymbolId leafId = ResolveLeafId(token.RuneValue);
         var leafSymbol = new Symbol(leafId, FlattenType, token.Memory);
         if (effectiveFlattenType == FlattenType.Flatten)
         {
@@ -73,31 +70,6 @@ internal sealed class NoneOfRule : Rule
         return leafSymbol;
     }
 
-    // Return the set of runes this rule might consume first (can be a superset)
-    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
-    // Then say whether the rule Always / Sometimes / Never consumes at least
-    // that first rune on success.
-    internal override RuleStartRequirements ComputeRuleStart()
-    {
-        // The lookahead peek sees ONE rune. NoneOf, asked "could a token
-        // starting with this rune match?", has to admit that yes for any
-        // rune. A token here is one grapheme cluster, and a multi-rune
-        // cluster like "X<combining mark>" or "X<ZWJ>Y" starts with X
-        // for any base rune X. NoneOf admits any cluster whose chars
-        // aren't in _set's multi-rune part, so for every rune R there's
-        // some multi-rune cluster starting with R that NoneOf would
-        // accept (regardless of whether R itself is in the rune-only
-        // part of _set, because R-as-a-single-rune-token and "R..."
-        // -as-a-multi-rune-cluster are different tokens with different
-        // membership tests).
-        //
-        // The previous tighter `~_set.RunesOnlyPart` answer ignored that
-        // second case. OneOrMore(NoneOf({'a'})) parsing "á" (one
-        // grapheme under Compile(null), admitted by NoneOf because the
-        // cluster isn't a single-rune 'a') wrongly failed: the
-        // BetweenInclusive shortcut peeked 'a', saw it wasn't in
-        // ~{'a'}, and concluded NoneOf couldn't match. Universe is the
-        // soundest answer.
-        return new RuleStartRequirements(TokenSet.Universe, Advance.Always);
-    }
+    internal override RuleStartRequirements ComputeRuleStart() =>
+        RuleStartRequirements.FirstTokenMustNotBeInSet(_set);
 }

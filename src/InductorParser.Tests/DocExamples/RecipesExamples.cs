@@ -21,19 +21,19 @@ public class RecipesExamples
         var textChar = NoneOf(formatting);
         var text = OneOrMore(textChar).As("text").Preserve();
 
-        var bold = AllOf(
+        var bold = And(
             Literal("**"),
             OneOrMore(NoneOf(TokenSet.Runes("*"))),
             Literal("**")
         ).As("bold").Preserve();
 
-        var code = AllOf(
+        var code = And(
             Token('`'),
             OneOrMore(NoneOf(TokenSet.Runes("`"))),
             Token('`')
         ).As("code").Preserve();
 
-        var inline = FirstOf(bold, code, text);
+        var inline = Or(bold, code, text);
         var paragraph = OneOrMore(inline).As("paragraph").Preserve();
 
         const string input = "Hello 🎸 **world** 你好 `code` done";
@@ -61,15 +61,15 @@ public class RecipesExamples
     }
 
     // "Stopping at a Multi-Character Terminator", block comment grammar.
-    // Doc claim: ZeroOrMore(AllOf(Not(stop), AnyToken())) followed by stop
+    // Doc claim: ZeroOrMore(And(Not(stop), AnyToken())) followed by stop
     // matches a block comment without prematurely consuming the close marker.
     [Test]
     public void Block_comment_grammar_stops_at_close_marker()
     {
-        var closeMarker = AllOf(Token('*'), Token('/'));
-        var blockComment = AllOf(
+        var closeMarker = And(Token('*'), Token('/'));
+        var blockComment = And(
             Token('/'), Token('*'),
-            ZeroOrMore(AllOf(Not(closeMarker), AnyToken())).Preserve(),
+            ZeroOrMore(And(Not(closeMarker), AnyToken())).Preserve(),
             closeMarker).Preserve();
 
         var result = blockComment.Parse("/* hello world */");
@@ -156,7 +156,7 @@ public class RecipesExamples
             Identifier().As(nameof(SettingName));
 
         public static readonly Rule SettingValue =
-            FirstOf(
+            Or(
                 Float().Flatten(FlattenType.Flatten),
                 Integer().Flatten(FlattenType.Flatten),
                 Identifier()
@@ -164,7 +164,7 @@ public class RecipesExamples
              .Flatten(FlattenType.Preserve);
 
         public static readonly Rule Document =
-            AllOf(
+            And(
                 Optional(AnyWhitespace()),
                 SettingName,
                 Optional(AnyWhitespace()),

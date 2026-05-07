@@ -74,7 +74,7 @@ public class OneOfRuleTests
         //
         // To make the test unambiguous we only put a WithError on Token(';')
         // so there's no contention.
-        var rule = AllOf(OneOrMore(OneOf(TokenSet.Letters)),
+        var rule = And(OneOrMore(OneOf(TokenSet.Letters)),
                        Token(';').WithError("expected ';'"));
 
         var result = rule.Parse("abc1");
@@ -220,6 +220,81 @@ public class OneOfRuleTests
         Assert.That(namedResult.Tree!.Id, Is.EqualTo(namedRule.Id));
         Assert.That(namedResult.Tree!.Find(namedRule), Is.Not.Null);
         Assert.That(namedRule.NameOf(namedResult.Tree!.Id), Is.EqualTo("flag"));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_OneOf_skips_when_peek_is_outside_set()
+    {
+        // OneOf publishes (set, Always, MustBeIn). Or peeks 'b',
+        // sees 'b' isn't in {a}, skips OneOf via the shortcut, falls to
+        // the literal "b" alternative. The SKIP line proves the
+        // shortcut fired.
+        var sink = NewSink();
+        var rule = Or(OneOf(TokenSet.Runes("a")), Literal("b"));
+        var result = rule.Parse("b", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Contain("SKIP | OneOf:"));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_OneOf_runs_when_peek_is_in_set()
+    {
+        // Mirror of the previous test: peek 'a' is in {a}, so the
+        // shortcut doesn't skip. OneOf runs and matches. No SKIP line
+        // for OneOf appears in the trace.
+        var sink = NewSink();
+        var rule = Or(OneOf(TokenSet.Runes("a")), Literal("b"));
+        var result = rule.Parse("a", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | OneOf:"));
+    }
+
+    [Test]
+    public void OneOf_in_OneOrMore_matches_after_FormC_canonical_singleton_substitution()
+    {
+        // U+212B ANGSTROM SIGN is a canonical singleton: under FormC it
+        // converts to U+00C5 LATIN CAPITAL LETTER A WITH RING ABOVE.
+        // OneOf(TokenSet.Single(0x212B)) compiled with FormC has its set
+        // re-projected at Compile time: _set becomes {0x00C5}. The lexer
+        // sees input runes in the same form (Parse normalizes the input
+        // first), so a token of U+00C5 should match the projected set.
+        //
+        // The bug: ComputeRuleStartAll runs BEFORE the normalization-form
+        // pass that mutates _set, so OneOfRule.FirstConsumedTokens stays
+        // pinned to the pre-projection set {0x212B}. OneOrMore's lookahead
+        // shortcut peeks the input's first rune (0x00C5), checks it
+        // against the cached {0x212B} (not Contains), concludes the inner
+        // can't match, and fails the OneOrMore at AtLeast=1. The inner
+        // OneOf would have matched if it had been called.
+        var rule = OneOrMore(OneOf(TokenSet.Single(0x212B)))
+            .Compile(System.Text.NormalizationForm.FormC);
+        var result = rule.Parse("Å");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
+
+    [Test]
+    public void OneOf_with_pinned_SymbolId_uses_pinned_id_for_single_rune_leaves()
+    {
+        // .As(SymbolId) is the user's "pin a stable id on this rule"
+        // signal, used for serialized parse trees and cross-version id
+        // stability. The leaf has to carry that pinned id so
+        // Tree.Find(rule), Tree.Is(rule), and any downstream lookup keyed
+        // off SymbolId resolve back to the user's pinned value. The same
+        // gate that respects .As("name") should respect .As(SymbolId)
+        // since both are explicit "find me by reference" signals.
+        var pinnedId = new SymbolId(SymbolRanges.CustomRangeStart + 100);
+        var rule = OneOf(TokenSet.Ascii.Letters).As(pinnedId);
+        var result = rule.Parse("a");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.Id, Is.EqualTo(pinnedId),
+            "leaf carries the user-pinned SymbolId, not the rune value");
+        Assert.That(result.Tree!.Is(rule), Is.True);
+        Assert.That(result.Tree!.Find(rule), Is.Not.Null);
     }
 
 }

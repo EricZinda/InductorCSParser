@@ -21,8 +21,8 @@ namespace InductorParser;
 // The canonical pattern:
 //
 //     static readonly LateBoundRule Expression = new LateBoundRule("expression");
-//     static readonly Rule Term = FirstOf(Integer(), AllOf(Token('('), Expression, Token(')')));
-//     static readonly Rule Sum  = AllOf(Term, ZeroOrMore(AllOf(Token('+'), Term)));
+//     static readonly Rule Term = Or(Integer(), And(Token('('), Expression, Token(')')));
+//     static readonly Rule Sum  = And(Term, ZeroOrMore(And(Token('+'), Term)));
 //     static readonly Rule _init = Expression.Bind(Sum);
 //
 // Term sees Expression as a valid (but unbound) rule at construction
@@ -101,7 +101,7 @@ public sealed class LateBoundRule : Rule
         // own TryParse shim is about to normalize that wrapper to
         // Symbol.Discarded. Push the target's wrapper into outputSymbols
         // ourselves so the Preserve tree node reaches the parent list
-        // (AllOfRule / FirstOfRule / BetweenInclusiveRule only add children they
+        // (AndRule / OrRule / BetweenInclusiveRule only add children they
         // see returned, not ones lost inside a transparent proxy).
         if (targetSymbol != null
             && !ReferenceEquals(targetSymbol, Symbol.Discarded)
@@ -124,22 +124,13 @@ public sealed class LateBoundRule : Rule
         }
     }
 
-    // Return the set of runes this rule might consume first (can be a superset)
-    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
-    // Then say whether the rule Always / Sometimes / Never consumes at least
-    // that first rune on success.
-    internal override RuleStartRequirements ComputeRuleStart()
-    {
-        // LateBoundRule is transparent at parse time, so its RuleStartRequirements is
-        // just the target's. Compile's depth-first walk visits the target
-        // as our one child, so in the acyclic case the target's values are
-        // already populated by the time we land here. If the target graph
-        // forms a cycle back through this LateBoundRule, the cycle-detection
-        // path leaves whichever node it hit during recursion at the
-        // pessimistic default (Universe, Advance.Sometimes). That keeps
-        // FirstOfRule conservative. A future pass could refine by re-walking
-        // until no FirstConsumedTokens changes if a grammar shows up where it
-        // matters.
-        return new RuleStartRequirements(_target!.FirstConsumedTokens, _target.Advance);
-    }
+    // LateBoundRule is transparent at parse time. Compile's depth-first
+    // walk visits the target as our one child, so the target's values
+    // are populated by the time we land here. If the target graph
+    // forms a cycle back through this LateBoundRule, the cycle-detection
+    // path leaves whichever node it hit at the pessimistic default
+    // (Universe, Advance.Sometimes, MustBeIn). That keeps OrRule
+    // conservative.
+    internal override RuleStartRequirements ComputeRuleStart() =>
+        RuleStartRequirements.PassesThroughTo(_target!);
 }

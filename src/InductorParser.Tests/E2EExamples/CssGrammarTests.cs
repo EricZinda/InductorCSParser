@@ -196,7 +196,7 @@ public class CssGrammarTests
     [Test]
     public void Hex_color_requires_3_or_6_digits()
     {
-        var grammar = AllOf(CssGrammar.ValueColorHex, Rules.Eof());
+        var grammar = And(CssGrammar.ValueColorHex, Rules.Eof());
         Assert.That(grammar.Parse("#fff").Success, Is.True);
         Assert.That(grammar.Parse("#FFFFFF").Success, Is.True);
         Assert.That(grammar.Parse("#ff").Success, Is.False);
@@ -207,13 +207,13 @@ public class CssGrammarTests
     [Test]
     public void Identifier_rejects_leading_digit()
     {
-        var grammar = AllOf(CssGrammar.Identifier, Rules.Eof());
+        var grammar = And(CssGrammar.Identifier, Rules.Eof());
         Assert.That(grammar.Parse("foo").Success, Is.True);
         Assert.That(grammar.Parse("foo-bar").Success, Is.True);
         Assert.That(grammar.Parse("_foo").Success, Is.True);
         Assert.That(grammar.Parse("1foo").Success, Is.False);
     }
 
-    private static Rule AllOf(Rule a, Rule b) => Rules.AllOf(a, b);
+    private static Rule And(Rule a, Rule b) => Rules.And(a, b);
 
 }

@@ -184,8 +184,8 @@ internal sealed class LoweringContext
             NoneOfRule noneOf => LowerNoneOf(noneOf, onSuccess, onFailure),
             AnyTokenRule anyToken => LowerAnyToken(anyToken, onSuccess, onFailure),
             EofRule eof => LowerEof(eof, onSuccess, onFailure),
-            AllOfRule allOf => LowerAllOf(allOf, onSuccess, onFailure),
-            FirstOfRule firstOf => LowerFirstOf(firstOf, onSuccess, onFailure),
+            AndRule andRule => LowerAnd(andRule, onSuccess, onFailure),
+            OrRule orRule => LowerOr(orRule, onSuccess, onFailure),
             BetweenInclusiveRule between => LowerBetween(between, onSuccess, onFailure),
             NotRule not => LowerNot(not, onSuccess, onFailure),
             PeekRule peek => LowerPeek(peek, onSuccess, onFailure),
@@ -219,8 +219,8 @@ internal sealed class LoweringContext
             NoneOfRule noneOf => LowerNoneOf(noneOf, onSuccess, onFailure),
             AnyTokenRule anyToken => LowerAnyToken(anyToken, onSuccess, onFailure),
             EofRule eof => LowerEof(eof, onSuccess, onFailure),
-            AllOfRule allOf => LowerAllOf(allOf, onSuccess, onFailure),
-            FirstOfRule firstOf => LowerFirstOf(firstOf, onSuccess, onFailure),
+            AndRule andRule => LowerAnd(andRule, onSuccess, onFailure),
+            OrRule orRule => LowerOr(orRule, onSuccess, onFailure),
             BetweenInclusiveRule between => LowerBetween(between, onSuccess, onFailure),
             NotRule not => LowerNot(not, onSuccess, onFailure),
             PeekRule peek => LowerPeek(peek, onSuccess, onFailure),
@@ -359,7 +359,7 @@ internal sealed class LoweringContext
         return AddState(LoweredOpCode.MatchEof, matchPacked, afterMatch, onFailure);
     }
 
-    private int LowerAllOf(AllOfRule rule, int onSuccess, int onFailure)
+    private int LowerAnd(AndRule rule, int onSuccess, int onFailure)
     {
         // Skip Open/Close for Flatten composites: children flow into
         // the enclosing Preserve naturally without a wrapper, and
@@ -385,7 +385,7 @@ internal sealed class LoweringContext
         return next;
     }
 
-    private int LowerFirstOf(FirstOfRule rule, int onSuccess, int onFailure)
+    private int LowerOr(OrRule rule, int onSuccess, int onFailure)
     {
         var effective = ResolveEffective(rule.FlattenType);
         int compositeAfter = onSuccess;
@@ -402,7 +402,7 @@ internal sealed class LoweringContext
         // route to handlers that continue trying.
         int outerFailRestore = AddState(LoweredOpCode.FailRestore, 0, onFailure, onFailure);
 
-        // Decide whether this FirstOf benefits from the first-rune-skip
+        // Decide whether this Or benefits from the first-rune-skip
         // optimization. We need at least one alternative whose
         // FirstConsumedTokens is non-trivial (Advance.Always and
         // strictly smaller than Universe), and skipping has to be
@@ -458,7 +458,16 @@ internal sealed class LoweringContext
             int altStart = pushIdx;
             if (skipEligible)
             {
-                int tokenSetIdx = InternTokenSet(child.FirstConsumedTokens);
+                // The SM's CheckPeekedRuneInSet test is rune-only
+                // (machine.PeekedRune is one rune). Flatten multi-rune
+                // entries' first runes into the rune intervals so a
+                // peek of the cluster's first rune still passes the
+                // check when the rule matches a multi-rune cluster.
+                // The recursive engine's CannotMatchLookahead does the
+                // same thing implicitly via its first-rune-or-cluster
+                // membership test.
+                TokenSet smSet = child.FirstConsumedTokens.LookaheadFirstRunes;
+                int tokenSetIdx = InternTokenSet(smSet);
                 altStart = AddState(LoweredOpCode.CheckPeekedRuneInSet, tokenSetIdx, pushIdx, nextAltStartWithoutPop);
             }
 
@@ -476,14 +485,14 @@ internal sealed class LoweringContext
                 // When the next alt's start is a CheckPeekedRuneInSet,
                 // refresh machine.PeekedRune after the failed alt's
                 // FailRestore. The failed alt's body may have run a
-                // nested FirstOf that called LoadPeekedRune /
+                // nested Or that called LoadPeekedRune /
                 // LoadPeekedRuneAndJumpAlt at a different lexer
                 // position and overwrote the stash. After FailRestore
                 // rolls the lexer back, the chain's CheckPeekedRuneInSet
                 // states need the rune at the rolled-back position, not
                 // the stale one. Skip the refresh when the next alt
                 // isn't skip-eligible — its altStart doesn't read
-                // PeekedRune (any nested FirstOf inside the alt body
+                // PeekedRune (any nested Or inside the alt body
                 // does its own peek on entry).
                 int handlerTarget = altStart;
                 if (skipEligible)
@@ -514,7 +523,7 @@ internal sealed class LoweringContext
     }
 
     // Whether this alternative could be safely skipped on a peeked-rune
-    // mismatch. Mirrors FirstOfRule's runtime guard: only skip when the
+    // mismatch. Mirrors OrRule's runtime guard: only skip when the
     // child Always advances (so its first rune is guaranteed to be
     // consumed) AND has a strictly tighter FirstConsumedTokens than the
     // universe. Custom WithError alternatives are NOT skipped because
@@ -522,16 +531,27 @@ internal sealed class LoweringContext
     // DeepestFailureMessage on a parse failure.
     private static bool CanSkipUnreachableAlt(Rule child)
     {
+        if (Rule.DisableLookaheadShortcut) return false;
         if (child.Advance != Advance.Always) return false;
         if (child.ErrorMessage != null) return false;
         // FirstConsumedTokens equality with Universe means the set
         // accepts any rune, so the peek check would never skip. Avoid
         // the wasted state.
         if (child.FirstConsumedTokens.Equals(TokenSet.Universe)) return false;
+        // MustNotBeIn polarity inverts the membership test: peek IN
+        // set => rule definitely fails. The SM's CheckPeekedRuneInSet
+        // opcode tests the positive direction (peek IN set => alt is
+        // eligible), so a MustNotBeIn alt would be lowered with
+        // inverted semantics. Until the SM gets polarity-aware opcodes
+        // (CheckPeekedRuneNotInSet etc.), let MustNotBeIn alts go
+        // through the general PushBacktrack path so they get tried
+        // without the peek pre-check. See backlog for the SM
+        // polarity-aware dispatch follow-up.
+        if (child.Polarity == Polarity.MustNotBeIn) return false;
         return true;
     }
 
-    // Build the 128-entry ASCII jump table for a FirstOf that uses
+    // Build the 128-entry ASCII jump table for a Or that uses
     // first-rune-skip. altRecords is filled in reverse-priority order
     // by the reverse-lowering loop, so we walk it tail-to-head to
     // restore priority order. For each ASCII rune r:
@@ -549,6 +569,19 @@ internal sealed class LoweringContext
         for (int rune = 0; rune < 128; rune++)
             table[rune] = onFailure;
 
+        // Pre-flatten each skip-eligible child's FirstConsumedTokens
+        // into a rune-only set for the ASCII jump table. The flattening
+        // mirrors what CheckPeekedRuneInSet uses (multi-rune entries'
+        // first runes folded into the rune intervals) so a multi-rune
+        // cluster whose first rune lands in the ASCII range still
+        // jumps to the right alt.
+        var flattenedSets = new TokenSet[altRecords.Count];
+        for (int i = 0; i < altRecords.Count; i++)
+        {
+            flattenedSets[i] = altRecords[i].skipEligible
+                ? altRecords[i].child.FirstConsumedTokens.LookaheadFirstRunes
+                : default;
+        }
         // altRecords is reverse-priority. Walk forward through indices
         // count-1 down to 0 so we visit alts in priority order.
         for (int rune = 0; rune < 128; rune++)
@@ -558,7 +591,7 @@ internal sealed class LoweringContext
                 var record = altRecords[recordIndex];
                 if (record.skipEligible)
                 {
-                    if (record.child.FirstConsumedTokens.Contains(rune))
+                    if (flattenedSets[recordIndex].Contains(rune))
                     {
                         table[rune] = record.pushIdx;
                         break;
@@ -600,13 +633,13 @@ internal sealed class LoweringContext
             return onSuccess;
         }
 
-        // Scanner-shape skip: ZeroOrMore(FirstOf(match..., AnyToken.Delete)).
-        // When the inner is a FirstOf whose last alternative is a deleted
+        // Scanner-shape skip: ZeroOrMore(Or(match..., AnyToken.Delete)).
+        // When the inner is a Or whose last alternative is a deleted
         // AnyToken, non-matching input would just be consumed one rune at
         // a time. The scanner-skip opcode jumps straight to the next
         // candidate first-rune (or, for literal-only alternatives, to the
         // next position where the literal text could match) so the inner
-        // FirstOf isn't attempted at every non-candidate position. Mirrors
+        // Or isn't attempted at every non-candidate position. Mirrors
         // the recursive evaluator's ScannerSkip in BetweenInclusiveRule.
         if (TryLowerBetweenScanner(rule, onSuccess, onFailure, out int scannerEntry))
             return scannerEntry;
@@ -624,7 +657,7 @@ internal sealed class LoweringContext
         // PushBetween/PopIterationCheck/BetweenExitCheckMin trio and
         // lowers to the minimal Push/Pop pair plus a FailRestore. The
         // generic loop path runs five wrapper opcodes per attempt; the
-        // Optional shape runs two. Big win on Optional(FirstOf(...)) and
+        // Optional shape runs two. Big win on Optional(Or(...)) and
         // Optional(LiteralIgnoreAsciiCase(...)) shapes that don't qualify
         // for the scan paths or the atomic-inner shape.
         if (rule.AtLeast == 0 && rule.AtMost == 1 && rule.ErrorMessage == null)
@@ -775,11 +808,11 @@ internal sealed class LoweringContext
         return pushIdx;
     }
 
-    // Detects ZeroOrMore(FirstOf(match..., AnyToken.Delete)). When the
+    // Detects ZeroOrMore(Or(match..., AnyToken.Delete)). When the
     // shape matches, lowers to the generic Between loop with a
     // ScannerSkipAdvance opcode injected at the top of each iteration so
     // the loop jumps past non-candidate runes in bulk instead of
-    // attempting the inner FirstOf at every position. Mirrors the
+    // attempting the inner Or at every position. Mirrors the
     // recursive evaluator's TryCreateScannerSkip in BetweenInclusiveRule.
     private bool TryLowerBetweenScanner(
         BetweenInclusiveRule rule,
@@ -798,11 +831,11 @@ internal sealed class LoweringContext
 
         if (rule.Children.Count == 0) return false;
         Rule inner = rule.Children[0];
-        if (inner is not FirstOfRule firstOf) return false;
+        if (inner is not OrRule orRule) return false;
         if (inner.ErrorMessage != null) return false;
-        if (firstOf.Children.Count < 2) return false;
+        if (orRule.Children.Count < 2) return false;
 
-        Rule fallback = firstOf.Children[firstOf.Children.Count - 1];
+        Rule fallback = orRule.Children[orRule.Children.Count - 1];
         if (fallback is not AnyTokenRule
             || fallback.FlattenType != FlattenType.Delete
             || fallback.ErrorMessage != null)
@@ -811,12 +844,18 @@ internal sealed class LoweringContext
         TokenSet candidates = TokenSet.Empty;
         var literalCandidates = new List<LiteralScannerCandidate>();
         bool allCandidatesAreLiterals = true;
-        for (int index = 0; index < firstOf.Children.Count - 1; index++)
+        for (int index = 0; index < orRule.Children.Count - 1; index++)
         {
-            Rule alternative = firstOf.Children[index];
+            Rule alternative = orRule.Children[index];
             if (alternative.ErrorMessage != null || alternative.Advance != Advance.Always)
                 return false;
-            candidates |= alternative.FirstConsumedTokens;
+            // Flatten multi-rune entries' first runes into the rune
+            // intervals so AdvanceUntilRuneIn (rune-only) and the
+            // BMP IndexOfAny fast path still pull the scanner to
+            // candidate positions for multi-rune-cluster matches.
+            // See the recursive engine's TryCreateScannerSkip for the
+            // sibling shape.
+            candidates |= alternative.FirstConsumedTokens.LookaheadFirstRunes;
 
             if (allCandidatesAreLiterals
                 && !TryCollectScannerLiteralCandidates(alternative, literalCandidates))
@@ -903,10 +942,10 @@ internal sealed class LoweringContext
             case GraphemeRule grapheme:
                 candidates.Add(new LiteralScannerCandidate(grapheme.ExpectedText!, ignoreAsciiCase: false));
                 return true;
-            case FirstOfRule firstOf:
-                if (firstOf.Children.Count == 0) return false;
-                for (int i = 0; i < firstOf.Children.Count; i++)
-                    if (!TryCollectScannerLiteralCandidates(firstOf.Children[i], candidates))
+            case OrRule orRule:
+                if (orRule.Children.Count == 0) return false;
+                for (int i = 0; i < orRule.Children.Count; i++)
+                    if (!TryCollectScannerLiteralCandidates(orRule.Children[i], candidates))
                         return false;
                 return true;
             default:
@@ -1116,7 +1155,7 @@ internal sealed class LoweringContext
     // Lower `rule` as a Call/Return-shaped subprogram, returning the
     // entry state index. Used both by the cyclic-rule path and by
     // ScanUntil for its escape-end. Caches per-rule so two callers
-    // referencing the same rule (e.g. a shared FirstOf used as the escape
+    // referencing the same rule (e.g. a shared Or used as the escape
     // end of two StringBodies) share one subprogram body.
     private int GetOrCreateSubprogram(Rule rule)
     {

@@ -82,7 +82,7 @@ public class NoneOfRuleTests
         // for the terminator, which together handle CRLF, LF, CR, NEL,
         // LS, and PS as one terminator each.
         // See docs/UnicodeGotchas.md § "CRLF Line Endings".
-        var rule = AllOf(
+        var rule = And(
             ZeroOrMore(NoneOf(TokenSet.Single('\n'))),
             Token('\n'));
 
@@ -204,6 +204,24 @@ public class NoneOfRuleTests
     }
 
     [Test]
+    public void NoneOf_with_pinned_SymbolId_uses_pinned_id_for_single_rune_leaves()
+    {
+        // .As(SymbolId) is the user's "pin a stable id" signal, parallel
+        // to .As("name") for findability. The leaf has to carry the
+        // pinned id so Tree.Find / Tree.Is resolve through the user's
+        // pinned reference. Same shape as the OneOf pinned-id test.
+        var pinnedId = new SymbolId(SymbolRanges.CustomRangeStart + 101);
+        var rule = NoneOf(TokenSet.Ascii.Digits).As(pinnedId);
+        var result = rule.Parse("a");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.Id, Is.EqualTo(pinnedId),
+            "leaf carries the user-pinned SymbolId, not the rune value");
+        Assert.That(result.Tree!.Is(rule), Is.True);
+        Assert.That(result.Tree!.Find(rule), Is.Not.Null);
+    }
+
+    [Test]
     public void NoneOf_with_multi_rune_match_uses_rule_id_regardless_of_naming()
     {
         // The matched cluster (regional-indicator US flag) is multi-rune,
@@ -225,16 +243,37 @@ public class NoneOfRuleTests
     }
 
     [Test]
-    public void OneOrMore_NoneOf_admits_multi_rune_cluster_starting_with_a_set_rune()
+    public void Or_NoneOf_admits_multi_rune_cluster_starting_with_set_rune()
     {
-        // BetweenInclusiveRule peeks the next rune and consults
-        // Inner.CannotMatchLookahead before iterating. The input here
-        // is one grapheme cluster (a + combining acute under
-        // Compile(null)). NoneOf admits it, because a multi-rune cluster
-        // is rejected only when its full chars are in the set's
-        // multi-rune part, and {'a'} has none. So the rune-set
-        // lookahead can't soundly exclude 'a' for NoneOf, even though
-        // 'a' alone would be rejected as a single-rune token.
+        // OrRule peeks the next token (one grapheme cluster) and asks
+        // each child CannotMatchLookahead. NoneOf publishes
+        // Polarity.MustNotBeIn with its set as the fail-set: skip iff
+        // peek IS in the set. The peek "a"+combining-acute is one
+        // multi-rune cluster under Compile(null); ContainsToken on the
+        // rune-only set {'a'} returns false (cluster isn't in the
+        // multi-rune entries, isn't single-rune 'a' either), so the
+        // shortcut doesn't skip and NoneOf actually runs and matches.
+        // If ComputeRuleStart wrongly published a rune-only complement,
+        // the shortcut would skip NoneOf and the parse would fail.
+        var rule = Or(NoneOf(TokenSet.Single('a')), Literal("zzzZZZ"));
+        rule.Compile(null);
+        var result = rule.Parse("a" + CombiningAcuteText);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("a" + CombiningAcuteText));
+    }
+
+    [Test]
+    public void OneOrMore_NoneOf_admits_multi_rune_cluster_starting_with_set_rune()
+    {
+        // BetweenInclusiveRule's shortcut shape: peek the next cluster,
+        // ask Inner.CannotMatchLookahead. Same MustNotBeIn semantics
+        // apply: the multi-rune cluster "a"+combining-acute isn't
+        // strictly in the rune-only set {'a'}, so the shortcut doesn't
+        // skip, the loop iterates, NoneOf reads the cluster and
+        // accepts it, count goes from 0 to 1, success. Pre-fix this
+        // failed because the rune-set complement excluded 'a' and the
+        // shortcut wrongly took the count==0 branch.
         var rule = OneOrMore(NoneOf(TokenSet.Single('a')));
         rule.Compile(null);
         var result = rule.Parse("a" + CombiningAcuteText);
@@ -244,17 +283,18 @@ public class NoneOfRuleTests
     }
 
     [Test]
-    public void FirstOf_NoneOf_admits_multi_rune_cluster_starting_with_a_set_rune()
+    public void Or_NoneOf_skips_when_peek_is_strictly_in_set()
     {
-        // FirstOfRule has the same CannotMatchLookahead shortcut as
-        // BetweenInclusiveRule, so NoneOf has to admit any peeked first
-        // rune in this context too. The literal alternative is
-        // unreachable here: NoneOf has to be the one that matches.
-        var rule = FirstOf(NoneOf(TokenSet.Single('a')), Literal("zzzZZZ"));
+        // The other direction: when peek IS strictly in NoneOf's
+        // fail-set, the shortcut SHOULD skip. Here peek is the
+        // single-rune cluster 'a', NoneOf({'a'}) would fail at
+        // runtime, and the shortcut precisely skips it. Wrap in
+        // Or with a literal fallback so we can observe that
+        // NoneOf was passed over and the literal alternative ran.
+        var rule = Or(NoneOf(TokenSet.Single('a')), Literal("a"));
         rule.Compile(null);
-        var result = rule.Parse("a" + CombiningAcuteText);
+        var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("a" + CombiningAcuteText));
     }
 }

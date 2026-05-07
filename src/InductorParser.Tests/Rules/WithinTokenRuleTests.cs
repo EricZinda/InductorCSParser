@@ -3,6 +3,7 @@ using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
+using static InductorParser.Tests.TraceTestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
 
 namespace InductorParser.Tests;
@@ -42,7 +43,7 @@ public class WithinTokenRuleTests
         // The inner rule accepts both in order: a letter then a combining
         // mark. Uses NormalizeInput=null so the decomposed form survives
         // to the lexer.
-        var rule = WithinToken(AllOf(
+        var rule = WithinToken(And(
             OneOf(TokenSet.Ascii.Letters),
             OneOf(TokenSet.Category(System.Globalization.UnicodeCategory.NonSpacingMark))
         ));
@@ -95,11 +96,11 @@ public class WithinTokenRuleTests
     [Test]
     public void Emits_exactly_one_leaf_per_grapheme_regardless_of_inner_structure()
     {
-        // The inner rule is a two-piece AllOf, but WithinToken hides
+        // The inner rule is a two-piece And, but WithinToken hides
         // that and emits a single leaf Symbol for the whole grapheme.
         // Grammar authors can rely on WithinToken looking like a leaf
         // from the outside.
-        var rule = WithinToken(AllOf(
+        var rule = WithinToken(And(
             OneOf(TokenSet.Ascii.Letters),
             OneOf(TokenSet.Category(System.Globalization.UnicodeCategory.NonSpacingMark))
         ));
@@ -108,7 +109,7 @@ public class WithinTokenRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         // One Symbol in the tree representing the whole grapheme. No
-        // children from the inner AllOf / OneOf pair.
+        // children from the inner And / OneOf pair.
         Assert.That(result.Tree!.Children.Count, Is.EqualTo(0));
     }
 
@@ -142,7 +143,7 @@ public class WithinTokenRuleTests
         // "हि" is one grapheme, two runes:
         // U+0939 DEVANAGARI LETTER HA (Lo) + U+093F DEVANAGARI VOWEL SIGN I (Mc).
         // The inner rule walks both runes.
-        var rule = WithinToken(AllOf(
+        var rule = WithinToken(And(
             OneOf(TokenSet.XidStart),
             OneOf(TokenSet.XidContinue)));
         var result = rule.Parse("हि");
@@ -158,7 +159,7 @@ public class WithinTokenRuleTests
         // (Lo, in XID_Start) + U+0E33 THAI CHARACTER SARA AM (in
         // XID_Continue, excluded from XID_Start via the NFKC-unstable
         // table since its NFKC decomposition is NIKHAHIT + SARA AA).
-        var rule = WithinToken(AllOf(
+        var rule = WithinToken(And(
             OneOf(TokenSet.XidStart),
             OneOf(TokenSet.XidContinue)));
         var result = rule.Parse("กำ");
@@ -174,7 +175,7 @@ public class WithinTokenRuleTests
         // U+064E ARABIC FATHA (Mn). Represents the common case of Arabic
         // text written with the optional vowel diacritics, which bundle
         // with their preceding consonant under grapheme clustering.
-        var rule = WithinToken(AllOf(
+        var rule = WithinToken(And(
             OneOf(TokenSet.XidStart),
             OneOf(TokenSet.XidContinue)));
         var result = rule.Parse("كَ");
@@ -278,14 +279,14 @@ public class WithinTokenRuleTests
     [Test]
     public void WithinToken_inner_composite_failure_reports_outer_cluster_position()
     {
-        // The other failure path: inner is an AllOf whose first child
+        // The other failure path: inner is an And whose first child
         // succeeds and advances the sub-lexer past the first rune, then
         // the second child fails. WithinTokenRule's inner-failure branch
         // reads subLexer.DeepestFailure (set by the second child at the
         // rune offset where it failed) and feeds that mid-cluster offset
         // to outerLexer.RecordFailure. Same outer-view invariant
         // violation as the prefix-match path above.
-        var rule = WithinToken(AllOf(Token('e'), Token('b')));
+        var rule = WithinToken(And(Token('e'), Token('b')));
         rule.Compile(null);
         var result = rule.Parse(LatinEAcuteGrapheme);
 
@@ -324,8 +325,8 @@ public class WithinTokenRuleTests
         // Id regardless of whether the matched grapheme is one rune
         // (ASCII "a") or several (Devanagari "हि"), so Find resolves
         // the same way in both cases.
-        var character = WithinToken(FirstOf(
-            AllOf(OneOf(TokenSet.XidStart), OneOf(TokenSet.XidContinue)),
+        var character = WithinToken(Or(
+            And(OneOf(TokenSet.XidStart), OneOf(TokenSet.XidContinue)),
             OneOf(TokenSet.Ascii.Letters))).As("character");
 
         var devResult = character.Parse("हि");
@@ -340,25 +341,74 @@ public class WithinTokenRuleTests
     }
 
     [Test]
+    public void WithinToken_with_pinned_SymbolId_uses_pinned_id_for_single_rune_outer_token()
+    {
+        // .As(SymbolId) is the user's "pin a stable id" signal, parallel
+        // to .As("name") for findability. The leaf has to carry the
+        // pinned id so Tree.Find / Tree.Is resolve through the user's
+        // pinned reference. Same shape as the OneOf pinned-id test.
+        var pinnedId = new SymbolId(SymbolRanges.CustomRangeStart + 103);
+        var rule = WithinToken(OneOf(TokenSet.Ascii.Letters)).As(pinnedId);
+        var result = rule.Parse("a");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.Id, Is.EqualTo(pinnedId),
+            "leaf carries the user-pinned SymbolId, not the rune value");
+        Assert.That(result.Tree!.Is(rule), Is.True);
+        Assert.That(result.Tree!.Find(rule), Is.Not.Null);
+    }
+
+    [Test]
     public void WithinToken_with_multi_rune_match_uses_rule_id_regardless_of_naming()
     {
         // For a multi-rune outer token (Token.RuneValue == -1), the leaf
         // carries the rule's own Id regardless of naming. Locks the
         // multi-rune branch so Find resolves through rule.Id for unnamed
         // rules too.
-        var unnamedRule = WithinToken(AllOf(OneOf(TokenSet.XidStart), OneOf(TokenSet.XidContinue)));
+        var unnamedRule = WithinToken(And(OneOf(TokenSet.XidStart), OneOf(TokenSet.XidContinue)));
         var unnamedResult = unnamedRule.Parse("हि");
         Assert.That(unnamedResult.Success, Is.True);
         Assert.That(unnamedResult.Tree!.Id, Is.EqualTo(unnamedRule.Id));
         Assert.That(unnamedResult.Tree!.Find(unnamedRule), Is.Not.Null);
         Assert.That(unnamedRule.NameOf(unnamedResult.Tree!.Id), Is.EqualTo("WithinToken"));
 
-        var namedRule = WithinToken(AllOf(OneOf(TokenSet.XidStart), OneOf(TokenSet.XidContinue)))
+        var namedRule = WithinToken(And(OneOf(TokenSet.XidStart), OneOf(TokenSet.XidContinue)))
             .As("character");
         var namedResult = namedRule.Parse("हि");
         Assert.That(namedResult.Success, Is.True);
         Assert.That(namedResult.Tree!.Id, Is.EqualTo(namedRule.Id));
         Assert.That(namedResult.Tree!.Find(namedRule), Is.Not.Null);
         Assert.That(namedRule.NameOf(namedResult.Tree!.Id), Is.EqualTo("character"));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_WithinToken_skips_when_peek_first_rune_is_outside_inner_set()
+    {
+        // WithinToken forwards the inner rule's first-token set with
+        // Advance.Always. The inner OneOf({a..z}) gives a first-rune set
+        // covering ASCII lowercase. Peek '1' isn't in that set, so the
+        // shortcut skips WithinToken and the second branch wins.
+        var sink = NewSink();
+        var rule = Or(WithinToken(OneOf(TokenSet.Ascii.Letters)), Literal("1"));
+        var result = rule.Parse("1", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Contain("SKIP | WithinToken:"));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_WithinToken_runs_when_peek_first_rune_is_in_inner_set()
+    {
+        // Peek 'a' is in the inner's first-rune set, so the shortcut
+        // doesn't skip. WithinToken runs and the inner rule consumes
+        // the cluster.
+        var sink = NewSink();
+        var rule = Or(WithinToken(OneOf(TokenSet.Ascii.Letters)), Literal("1"));
+        var result = rule.Parse("a", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | WithinToken:"));
     }
 }

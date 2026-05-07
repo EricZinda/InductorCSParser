@@ -11,8 +11,8 @@ namespace InductorParser;
 // matches it as one read. LiteralRule stores any non-empty string and uses
 // the same lockstep compare loop.
 //
-// This is better than using AllOf(Token('m'), Token('a'), Token('j')) since each
-// Token rule opens its own transaction. A three-character AllOf of three Token rules
+// This is better than using And(Token('m'), Token('a'), Token('j')) since each
+// Token rule opens its own transaction. A three-character And of three Token rules
 // does three BeginTransaction/Commit cycles and three RecordFailure slots.
 // Literal("maj") does one. For keyword-heavy grammars (chord notation, SQL
 // keywords, HTTP methods) this is the difference between per-keyword O(N)
@@ -101,31 +101,6 @@ internal sealed class LiteralRule : Rule
         return leafSymbol;
     }
 
-    // Return the set of runes this rule might consume first (can be a superset)
-    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
-    // Then say whether the rule Always / Sometimes / Never consumes at least
-    // that first rune on success.
-    internal override RuleStartRequirements ComputeRuleStart()
-    {
-        // The only rune that can start a match of this literal is the first
-        // rune of the expected string. Advance is Always because a literal
-        // always consumes at least one rune to match.
-        //
-        // TryPeekRune decodes the first rune correctly even when that rune
-        // takes two chars in the C# string (emoji, many CJK). Reading
-        // _expected[0] directly would return only the first char, which
-        // isn't a usable rune on its own.
-        if (!Lexer.TryPeekRune(_expected, 0, out int first, out _))
-        {
-            // The literal starts with a lone surrogate (or other non-decodable
-            // first char). TokenSet only holds valid scalars, so there's no
-            // single-rune set to advertise. Fall back to Universe — the parser
-            // skips the first-rune-lookahead shortcut and runs the per-token
-            // compare directly, which works fine for surrogate-half literals
-            // under Compile(null) (the documented WTF-8 / unpaired-surrogate
-            // round-tripping case).
-            return new RuleStartRequirements(TokenSet.Universe, Advance.Always);
-        }
-        return new RuleStartRequirements(TokenSet.Single(first), Advance.Always);
-    }
+    internal override RuleStartRequirements ComputeRuleStart() =>
+        RuleStartRequirements.FirstTokenMustBeFirstGraphemeOf(_expected);
 }

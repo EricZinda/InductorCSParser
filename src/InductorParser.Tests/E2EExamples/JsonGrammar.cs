@@ -40,8 +40,8 @@ public static class JsonGrammar
     {
         var simpleEscapeEnd = OneOf(TokenSet.Runes("\"\\/bfnrt"));
         var hexDigit = OneOf(TokenSet.Ascii.HexDigits);
-        var unicodeEscapeEnd = AllOf(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
-        // .Delete() on the escapeEnd FirstOf triggers the ScanUntil
+        var unicodeEscapeEnd = And(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
+        // .Delete() on the escapeEnd Or triggers the ScanUntil
         // "don't allocate child Symbols for the escape-end match" fast
         // path. The ScanUntil primitive always produces a single leaf
         // over the raw body text, so the escape-end sub-rules' output
@@ -50,17 +50,17 @@ public static class JsonGrammar
         JsonScanUntil = ScanUntil(
                 stopAt: TokenSet.Runes("\""),
                 escapeStart: new Rune('\\'),
-                escapeEnd: FirstOf(simpleEscapeEnd, unicodeEscapeEnd).Delete())
+                escapeEnd: Or(simpleEscapeEnd, unicodeEscapeEnd).Delete())
             .As("stringBody");
-        JsonString = AllOf(Token('"'), JsonScanUntil, Token('"'))
+        JsonString = And(Token('"'), JsonScanUntil, Token('"'))
             .As("string").Preserve();
 
         var digits = OneOrMore(OneOf(TokenSet.Ascii.Digits));
         var decimalPoint = Token('.').Preserve(); // default FlattenType is Delete, but we want this in final string
         var sign = Token('-').Preserve(); // default FlattenType is Delete, but we want this in final string
-        var fraction = AllOf(decimalPoint, digits);
-        var exponent = AllOf(OneOf("eE"), Optional(OneOf("+-")), digits);
-        JsonNumber = AllOf(
+        var fraction = And(decimalPoint, digits);
+        var exponent = And(OneOf("eE"), Optional(OneOf("+-")), digits);
+        JsonNumber = And(
             Optional(sign),
             digits,
             Optional(fraction),
@@ -75,7 +75,7 @@ public static class JsonGrammar
 
         var value = new LateBoundRule("value");
 
-        JsonMember = AllOf(
+        JsonMember = And(
             JsonString,
             Optional(AnyWhitespace()),
             Token(':'),
@@ -83,12 +83,12 @@ public static class JsonGrammar
             value
         ).As("member").Preserve();
 
-        JsonObject = AllOf(
+        JsonObject = And(
             Token('{'),
             Optional(AnyWhitespace()),
-            Optional(AllOf(
+            Optional(And(
                 JsonMember,
-                ZeroOrMore(AllOf(
+                ZeroOrMore(And(
                     Optional(AnyWhitespace()),
                     Token(','),
                     Optional(AnyWhitespace()),
@@ -99,12 +99,12 @@ public static class JsonGrammar
             Token('}')
         ).As("object").Preserve();
 
-        JsonArray = AllOf(
+        JsonArray = And(
             Token('['),
             Optional(AnyWhitespace()),
-            Optional(AllOf(
+            Optional(And(
                 value,
-                ZeroOrMore(AllOf(
+                ZeroOrMore(And(
                     Optional(AnyWhitespace()),
                     Token(','),
                     Optional(AnyWhitespace()),
@@ -115,9 +115,9 @@ public static class JsonGrammar
             Token(']')
         ).As("array").Preserve();
 
-        value.Bind(FirstOf(JsonString, JsonNumber, JsonObject, JsonArray, JsonTrue, JsonFalse, JsonNull));
+        value.Bind(Or(JsonString, JsonNumber, JsonObject, JsonArray, JsonTrue, JsonFalse, JsonNull));
 
-        Json = AllOf(
+        Json = And(
             Optional(AnyWhitespace()),
             value,
             Optional(AnyWhitespace()),

@@ -17,18 +17,18 @@ Let's imagine we're building a parser for a todo list program that has three pri
 ```
 The grammar would be:
 ```
-priority = FirstOf(Literal("top"), 
+priority = Or(Literal("top"), 
                    Literal("med"), 
                    Literal("low"))
                    .As("priority")
                    .Preserve();
 
-itemText = OneOrMore(AllOf(Not(EndOfLine(eofIsEol:true)), 
+itemText = OneOrMore(And(Not(EndOfLine(eofIsEol:true)), 
                            AnyToken()))
                            .As("itemText")
                            .Preserve();
 
-todoLine = AllOf(Optional(InlineWhitespace()),
+todoLine = And(Optional(InlineWhitespace()),
                  Token('['), 
                  Optional(InlineWhitespace()),
                  priority,
@@ -56,7 +56,7 @@ Let's do Spanish first:
 // [máx] Fix the database connection bug
 // [med] Update the README with new examples
 // [mín] Refactor the parser internals
-priority = FirstOf(Literal("máx"), 
+priority = Or(Literal("máx"), 
                    Literal("med"), 
                    Literal("mín"))
                    .As("priority")
@@ -111,7 +111,7 @@ With that in mind, let's try Korean in our example:
 // [높음] Fix the database connection bug
 // [보통] Update the README with new examples
 // [낮음] Refactor the parser internals
-priority = FirstOf(Literal("높음"), 
+priority = Or(Literal("높음"), 
                    Literal("보통"), 
                    Literal("낮음"))
                    .As("priority")

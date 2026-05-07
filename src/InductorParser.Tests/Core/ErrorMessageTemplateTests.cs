@@ -15,11 +15,11 @@ public class ErrorMessageTemplateTests
     [Test]
     public void PositionalErrorTemplate_custom_substitutes_charIndex_and_character()
     {
-        // AllOf(Token('a'), Token('b')) consumes 'a' then fails on
+        // And(Token('a'), Token('b')) consumes 'a' then fails on
         // 'x' at offset 1. No WithError on either child, so the failure
         // path goes through the positional template and the parser
         // substitutes {charIndex} and {character}.
-        var rule = AllOf(Token('a'), Token('b'));
+        var rule = And(Token('a'), Token('b'));
         var options = new ParseOptions
         {
             PositionalErrorTemplate = "want X at {charIndex}, got '{character}'",
@@ -36,7 +36,7 @@ public class ErrorMessageTemplateTests
         // Input "a" runs out before Token('b') runs, so the
         // failure position equals input.Length and the EOF template
         // path fires. Only {charIndex} is meaningful here.
-        var rule = AllOf(Token('a'), Token('b'));
+        var rule = And(Token('a'), Token('b'));
         var options = new ParseOptions
         {
             EndOfInputErrorTemplate = "ran out of input at {charIndex}",
@@ -90,8 +90,8 @@ public class ErrorMessageTemplateTests
         // Recursive balanced-parens grammar from BudgetTests; recurses
         // once per open paren until the depth budget trips.
         var nested = new LateBoundRule("nested");
-        nested.Bind(FirstOf(
-            AllOf(Token('('), nested, Token(')')),
+        nested.Bind(Or(
+            And(Token('('), nested, Token(')')),
             Token('x')));
 
         string input = new string('(', 100) + "x" + new string(')', 100);
@@ -136,7 +136,7 @@ public class ErrorMessageTemplateTests
         // The grammar matches the bold-A then \n then b, then asks for
         // 'y' and gets 'x'. Failure point: char 4, grapheme 3, line 1
         // column 1 (LSP zero-based).
-        var rule = AllOf(
+        var rule = And(
             Token(0x1D400),
             Token('\n'),
             Token('b'),
@@ -184,7 +184,7 @@ public class ErrorMessageTemplateTests
         // positional template. The parser leaves it alone rather than
         // throwing, so a typo is visible in the output instead of
         // crashing every parse.
-        var rule = AllOf(Token('a'), Token('b'));
+        var rule = And(Token('a'), Token('b'));
         var options = new ParseOptions
         {
             PositionalErrorTemplate = "got {bogus} at {charIndex}",
@@ -197,7 +197,7 @@ public class ErrorMessageTemplateTests
     [Test]
     public void Template_with_repeated_placeholder_substitutes_all_occurrences()
     {
-        var rule = AllOf(Token('a'), Token('b'));
+        var rule = And(Token('a'), Token('b'));
         var options = new ParseOptions
         {
             PositionalErrorTemplate = "{charIndex} and {charIndex} again",

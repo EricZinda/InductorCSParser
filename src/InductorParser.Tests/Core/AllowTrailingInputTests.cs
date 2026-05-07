@@ -97,7 +97,7 @@ public class AllowTrailingInputTests
     [Test]
     public void Trailing_input_failure_reports_position_of_first_unconsumed_char()
     {
-        // FirstOf tries Literal("hello") which matches four chars before
+        // Or tries Literal("hello") which matches four chars before
         // failing on 'z' at offset 4, then falls back to Token('h') and
         // succeeds at offset 0 (consuming one char). Parsing stops at
         // offset 1 with trailing "ellz" unconsumed. The doc contract
@@ -106,7 +106,7 @@ public class AllowTrailingInputTests
         // 1, the 'e'), not a position from a rolled-back alternative
         // (offset 4, the 'z' that the abandoned Literal hit and that
         // lexer.DeepestFailure still records).
-        var rule = FirstOf(Literal("hello"), Token('h'));
+        var rule = Or(Literal("hello"), Token('h'));
         var result = rule.Parse("hellz");
 
         Assert.That(result.Success, Is.False);
@@ -123,7 +123,7 @@ public class AllowTrailingInputTests
         // trailing-input failure shouldn't surface that message: the
         // rule that owned it isn't on the success path. The standard
         // PositionalErrorTemplate should describe the trailing tail.
-        var rule = FirstOf(
+        var rule = Or(
             Literal("hello").WithError("Expected the word 'hello'"),
             Token('h'));
         var result = rule.Parse("hellz");
@@ -140,7 +140,7 @@ public class AllowTrailingInputTests
         // The rule itself fails part-way through, and AllowTrailingInput
         // doesn't paper over that. Failure still reports the in-rule
         // position via deepest-failure-wins, just like the default path.
-        var rule = AllOf(Token('a'), Token('b'), Token('c'));
+        var rule = And(Token('a'), Token('b'), Token('c'));
         var result = rule.Parse("abXdef", new ParseOptions { AllowTrailingInput = true });
 
         Assert.That(result.Success, Is.False);

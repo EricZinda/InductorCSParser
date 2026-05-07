@@ -20,7 +20,7 @@ namespace InductorParser;
 // produce one Symbol per matched run.
 internal sealed class ScanWhileRule : Rule
 {
-    private readonly TokenSet _set;
+    private TokenSet _set;
     private readonly int _minimumCount;
     private readonly string _setRendered;
 
@@ -35,6 +35,26 @@ internal sealed class ScanWhileRule : Rule
         _minimumCount = minimumCount;
         _setRendered = set.ToString();
         SetTraceName(minimumCount == 1 ? "ScanWhile" : $"ScanWhile[{minimumCount}..]");
+    }
+
+    internal override void CollectNormalizationOffenders(
+        System.Text.NormalizationForm form,
+        List<(Rule rule, string original, string normalized)> offenders,
+        List<ArgumentException> failures)
+    {
+        // ScanWhile matches one grapheme per consumed run iteration
+        // against _set, the same shape OneOf uses. Project the set's
+        // entries under the chosen form so a user-typed precomposed
+        // entry (or a decomposed one) survives normalization to match
+        // canonically equivalent input. Without this override the set
+        // stays in its pre-normalization shape and the rule silently
+        // refuses to match input the lexer's normalization would
+        // otherwise hand it. Multi-grapheme conversions are reported
+        // through the same NormalizeAndValidate helper OneOf / NoneOf
+        // use. The message says OneOf / NoneOf, but the
+        // single-grapheme-per-token shape applies here too, and the
+        // user sees the offending rule via the offender's `Rule` ref.
+        OneOfRule.NormalizeAndValidate(this, ref _set, form, offenders);
     }
 
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
@@ -78,15 +98,6 @@ internal sealed class ScanWhileRule : Rule
         return leafSymbol;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart()
-    {
-        // minimumCount is guaranteed >= 1, so every successful match consumes
-        // a first rune from _set. That lets scanner-style outer loops skip
-        // straight to the next possible run start. For sets with multi-rune
-        // entries, the first rune of each multi-rune token is also a valid
-        // lookahead (the whole token comes from the lexer as one unit), so
-        // OneOfRule.LookaheadFirstRunes folds those first runes into the
-        // rune intervals.
-        return new RuleStartRequirements(OneOfRule.LookaheadFirstRunes(_set), Advance.Always);
-    }
+    internal override RuleStartRequirements ComputeRuleStart() =>
+        RuleStartRequirements.FirstTokenMustBeInSet(_set);
 }

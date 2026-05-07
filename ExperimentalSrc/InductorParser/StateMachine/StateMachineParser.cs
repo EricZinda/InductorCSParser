@@ -13,7 +13,7 @@ namespace InductorParser.StateMachine;
 // path. The first call for a given rule lowers and caches the
 // program. Subsequent calls reuse it.
 //
-// Iteration 1 scope: Literal, Grapheme, OneOf, Eof, AllOf, FirstOf,
+// Iteration 1 scope: Literal, Grapheme, OneOf, Eof, And, Or,
 // BetweenInclusive (covers Optional / OneOrMore / ZeroOrMore /
 // AtLeast / AtMost / Exactly), Not, Peek, LateBound. Error position.
 // FlattenType handling. PreserveAllSymbols. No budgets, no
@@ -329,7 +329,7 @@ public static class StateMachineParser
 
     private static long ReduceCountMatches(List<OutputOp> ops, string input, SymbolId matchId, long _)
     {
-        // The match rule may be either a composite (AllOf, FirstOf,
+        // The match rule may be either a composite (And, Or,
         // BetweenInclusive, ...) emitted as Open/Close framing or a
         // leaf (Literal, LiteralIgnoreAsciiCase, ScanWhile) emitted as
         // a single EmitLeaf. Both shapes count toward "this rule
@@ -481,7 +481,7 @@ public static class StateMachineParser
         // For each match (Open/Close pair with matchId), count the
         // match itself plus the number of distinct capture rules
         // that fire anywhere within its sub-range. Capture rules can
-        // appear as composites (Capture(AllOf(...)) emits Open/Close)
+        // appear as composites (Capture(And(...)) emits Open/Close)
         // or as leaves (Capture(ScanUntil(...)) emits a single
         // EmitLeaf), depending on what the wrapped rule lowers to.
         // The check matches by SymbolId regardless of op kind so

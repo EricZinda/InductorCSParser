@@ -437,7 +437,7 @@ public class PrologGrammarTests
         // OptionalWhitespace on its own doesn't force EOF. To check the
         // corpus covers the full input we tack on an Eof so a half-
         // matched whitespace run fails loudly.
-        var rule = Rules.AllOf(PrologGrammar.OptionalWhitespace, Rules.Eof());
+        var rule = Rules.And(PrologGrammar.OptionalWhitespace, Rules.Eof());
         AssertAllParse(rule, CppOptionalWhitespaceCorpus, "OptionalWhitespace");
     }
 

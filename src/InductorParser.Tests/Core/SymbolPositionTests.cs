@@ -41,12 +41,12 @@ public class SymbolPositionTests
     [Test]
     public void Composite_range_spans_leftmost_leaf_to_rightmost_leaf()
     {
-        // AllOf(Token, Token, Token) wrapped as a named composite. Its
+        // And(Token, Token, Token) wrapped as a named composite. Its
         // range should run from the first 'a' to one past the last 'c'.
         // Preserve each Token explicitly: Token defaults to Delete, and
         // a composite whose leaves are all Delete-flattened has no
         // surviving text to report a range over.
-        var rule = AllOf(Token('a').Preserve(), Token('b').Preserve(), Token('c').Preserve())
+        var rule = And(Token('a').Preserve(), Token('b').Preserve(), Token('c').Preserve())
             .As("triple").Preserve();
         var result = rule.Parse("abc");
 
@@ -61,7 +61,7 @@ public class SymbolPositionTests
         // The named subrule should report a range starting at offset 2,
         // even though the outer parse started at 0.
         var inner = Literal("XYZ").As("inner").Preserve();
-        var rule = AllOf(Literal("ab"), inner);
+        var rule = And(Literal("ab"), inner);
         var result = rule.Parse("abXYZ");
 
         var innerSymbol = result.Tree!.Find(inner);
@@ -86,7 +86,7 @@ public class SymbolPositionTests
     {
         // Input has the matched literal on line 2 (zero-based).
         var literal = Literal("target").As("target").Preserve();
-        var rule = AllOf(
+        var rule = And(
             Literal("first\n"),
             Literal("second\n"),
             literal,
@@ -118,7 +118,7 @@ public class SymbolPositionTests
         // Man + ZWJ + Woman + ZWJ + Girl. 8 chars, 5 runes, 1 grapheme.
         const string FamilyEmoji = "\U0001F468‍\U0001F469‍\U0001F467";
         var target = Literal("ab").As("target").Preserve();
-        var rule = AllOf(Literal(FamilyEmoji), target);
+        var rule = And(Literal(FamilyEmoji), target);
         var result = rule.Parse(FamilyEmoji + "ab");
 
         var symbol = result.Tree!.Find(target);
@@ -150,7 +150,7 @@ public class SymbolPositionTests
     {
         // "ab" with grammar expecting just 'a' followed by Eof fails at
         // offset 1.
-        var rule = AllOf(Token('a'), Eof());
+        var rule = And(Token('a'), Eof());
         var result = rule.Parse("ab");
 
         Assert.That(result.Success, Is.False);
@@ -168,10 +168,10 @@ public class SymbolPositionTests
         // The "ab" prefix is matched but Delete-flattened, so it never
         // enters the tree. The named composite's SourceRange.Start must
         // come from the first PRESERVED leaf ("cd" at offset 2), not
-        // from the AllOf's start position. If a future change tried to
+        // from the And's start position. If a future change tried to
         // store "I consumed from offset 0" on the composite directly,
         // this test would catch it.
-        var rule = AllOf(Literal("ab"), Literal("cd").Preserve()).As("composite").Preserve();
+        var rule = And(Literal("ab"), Literal("cd").Preserve()).As("composite").Preserve();
         var result = rule.Parse("abcd");
 
         Assert.That(result.Success, Is.True);
@@ -185,8 +185,8 @@ public class SymbolPositionTests
     {
         // Mirror of the leading-delete case: trailing "cd" is consumed
         // but Delete-flattened, so the composite's End comes from the
-        // last preserved leaf, not from where the AllOf finished.
-        var rule = AllOf(Literal("ab").Preserve(), Literal("cd")).As("composite").Preserve();
+        // last preserved leaf, not from where the And finished.
+        var rule = And(Literal("ab").Preserve(), Literal("cd")).As("composite").Preserve();
         var result = rule.Parse("abcd");
 
         var range = result.Tree!.SourceRange!.Value;
@@ -201,7 +201,7 @@ public class SymbolPositionTests
         // leftmost-leaf-to-rightmost-leaf contract means the gap is
         // INCLUDED in End - Start: the composite reports a range of 6
         // chars even though only 4 are physically in the tree.
-        var rule = AllOf(
+        var rule = And(
             Literal("ab").Preserve(),
             Literal("cd"),
             Literal("ef").Preserve()).As("composite").Preserve();
@@ -216,10 +216,10 @@ public class SymbolPositionTests
     public void Composite_with_only_deleted_children_has_null_SourceRange()
     {
         // Every child is Delete-flattened. The composite ends up with
-        // an empty children list even though the AllOf consumed 3 chars,
+        // an empty children list even though the And consumed 3 chars,
         // so SourceRange returns null. This pins the documented "no
         // associated text => null" behavior.
-        var rule = AllOf(Literal("a"), Literal("b"), Literal("c")).As("composite").Preserve();
+        var rule = And(Literal("a"), Literal("b"), Literal("c")).As("composite").Preserve();
         var result = rule.Parse("abc");
 
         Assert.That(result.Success, Is.True);
@@ -233,7 +233,7 @@ public class SymbolPositionTests
         // composite has no children. SourceRange returns null because
         // there's no leaf text to span.
         var optional = Optional(Literal("X").Preserve()).As("opt").Preserve();
-        var rule = AllOf(optional, Literal("Y").Preserve()).Preserve();
+        var rule = And(optional, Literal("Y").Preserve()).Preserve();
         var result = rule.Parse("Y");
 
         Assert.That(result.Success, Is.True);
@@ -250,7 +250,7 @@ public class SymbolPositionTests
         // verifies the zero-width predicate path doesn't accidentally
         // pick up a phantom range from the lookahead.
         var peek = Peek(Literal("X")).As("peek").Preserve();
-        var rule = AllOf(peek, Literal("X").Preserve()).Preserve();
+        var rule = And(peek, Literal("X").Preserve()).Preserve();
         var result = rule.Parse("X");
 
         Assert.That(result.Success, Is.True);
@@ -296,7 +296,7 @@ public class SymbolPositionTests
         // at offset 1 — consumers that highlight bodies or read offsets
         // need a position even when the body is empty.
         var body = ScanUntil(TokenSet.Runes("\"")).As("body").Preserve();
-        var rule = AllOf(Token('"'), body, Token('"'));
+        var rule = And(Token('"'), body, Token('"'));
         var result = rule.Parse("\"\"");
 
         Assert.That(result.Success, Is.True);
@@ -320,7 +320,7 @@ public class SymbolPositionTests
         // and the composite range should still span "ab" through "cd".
         // If those walkers ever stopped on the empty leaf instead of
         // recursing past it, this test would catch it.
-        var rule = AllOf(
+        var rule = And(
             Literal("a").Preserve(),
             ScanUntil(TokenSet.Runes("b")).Preserve(),
             Literal("b").Preserve()).As("composite").Preserve();
@@ -339,7 +339,7 @@ public class SymbolPositionTests
         // with the stopper at the cursor produces an empty leaf at offset
         // 0; the following Literal matches at offset 0. Children:
         // [empty leaf at 0, "a" leaf at 0-1]. Range should be (0, 1).
-        var rule = AllOf(
+        var rule = And(
             ScanUntil(TokenSet.Runes("a")).Preserve(),
             Literal("a").Preserve()).As("composite").Preserve();
         var result = rule.Parse("a");
@@ -359,7 +359,7 @@ public class SymbolPositionTests
         // Delete-flattened so it never enters the tree. SourceRange
         // should report a zero-width range at the offset both empty
         // leaves sit at, not null.
-        var rule = AllOf(
+        var rule = And(
             ScanUntil(TokenSet.Runes("a")).Preserve(),
             ScanUntil(TokenSet.Runes("a")).Preserve(),
             Token('a')).As("composite").Preserve();
@@ -381,8 +381,8 @@ public class SymbolPositionTests
         // empty leaf at the bottom, then report a zero-width range at its
         // position. Verifies that the leaf-finding walk traverses arbitrary
         // depth rather than only looking at the immediate children.
-        var inner = AllOf(ScanUntil(TokenSet.Runes("a")).Preserve()).As("inner").Preserve();
-        var rule = AllOf(inner, Token('a')).As("outer").Preserve();
+        var inner = And(ScanUntil(TokenSet.Runes("a")).Preserve()).As("inner").Preserve();
+        var rule = And(inner, Token('a')).As("outer").Preserve();
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True);
@@ -411,7 +411,7 @@ public class SymbolPositionTests
         // would happen to give the same answer here, but the test pins
         // that lastLength==0 doesn't accidentally produce End at the
         // empty leaf's position).
-        var rule = AllOf(
+        var rule = And(
             Literal("ab").Preserve(),
             ScanUntil(TokenSet.Runes("z")).Preserve()).As("composite").Preserve();
         var result = rule.Parse("ab");
@@ -533,8 +533,8 @@ public class SymbolPositionTests
         // should span only its own children. Verifies that Find +
         // SourceRange together don't leak the outer range when the
         // caller asks for the inner.
-        var inner = AllOf(Token('x').Preserve(), Token('y').Preserve()).As("inner").Preserve();
-        var outer = AllOf(Literal("ab").Preserve(), inner, Literal("cd").Preserve()).As("outer").Preserve();
+        var inner = And(Token('x').Preserve(), Token('y').Preserve()).As("inner").Preserve();
+        var outer = And(Literal("ab").Preserve(), inner, Literal("cd").Preserve()).As("outer").Preserve();
         var result = outer.Parse("abxycd");
 
         var outerRange = result.Tree!.SourceRange!.Value;
@@ -554,7 +554,7 @@ public class SymbolPositionTests
         // TokenIndex should both clamp / report the same value,
         // and Column should be the full chars-on-this-line count (no
         // off-by-one at the boundary).
-        var rule = AllOf(Literal("xx").Preserve(), Literal("yy").Preserve()).As("composite").Preserve();
+        var rule = And(Literal("xx").Preserve(), Literal("yy").Preserve()).As("composite").Preserve();
         var result = rule.Parse("xxyy");
 
         var range = result.Tree!.SourceRange!.Value;
@@ -567,14 +567,14 @@ public class SymbolPositionTests
     [Test]
     public void Nested_flatten_composite_with_all_deleted_children_does_not_contribute_to_range()
     {
-        // The first AllOf is Flatten with two Delete children, so it
+        // The first And is Flatten with two Delete children, so it
         // contributes nothing to the outer's children list. The
-        // composite range should start at the second AllOf's first
+        // composite range should start at the second And's first
         // preserved leaf, not at offset 0 where the deleted prefix
         // began. Locks in that flattened-but-empty subtrees never
         // add phantom leaves.
-        var deletedPrefix = AllOf(Literal("aa"), Literal("bb"));
-        var rule = AllOf(deletedPrefix, Literal("cc").Preserve()).As("composite").Preserve();
+        var deletedPrefix = And(Literal("aa"), Literal("bb"));
+        var rule = And(deletedPrefix, Literal("cc").Preserve()).As("composite").Preserve();
         var result = rule.Parse("aabbcc");
 
         var range = result.Tree!.SourceRange!.Value;
@@ -590,7 +590,7 @@ public class SymbolPositionTests
         // line-relative column even though the outer parse started at
         // line 0.
         var target = Literal("hi").As("target").Preserve();
-        var rule = AllOf(Literal("first\nsecond\n  "), target);
+        var rule = And(Literal("first\nsecond\n  "), target);
         var result = rule.Parse("first\nsecond\n  hi");
 
         var symbol = result.Tree!.Find(target);

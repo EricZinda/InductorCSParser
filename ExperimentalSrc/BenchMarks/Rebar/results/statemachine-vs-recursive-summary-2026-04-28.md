@@ -85,7 +85,7 @@ two `compile` rows. It loses on every other row, often badly:
 
 The reason is the scanner-shape skip optimization. The recursive
 evaluator has a fast path for the
-`ZeroOrMore(FirstOf(match, AnyToken.Delete))` shape that the rebar
+`ZeroOrMore(Or(match, AnyToken.Delete))` shape that the rebar
 runner builds for every search benchmark. When the next input rune
 can't possibly start a `match`, the scanner skips it directly
 without calling into `match` and getting back a failure. That
@@ -93,7 +93,7 @@ optimization is what keeps the recursive evaluator at 1-3x .NET
 compiled on the literal cases.
 
 The state-machine evaluator doesn't have the same skip implemented.
-It compiles the scanner shape into a generic FirstOf loop that
+It compiles the scanner shape into a generic Or loop that
 attempts `match` at every position, takes the failure, then falls
 through to consume one token. On a 900KB haystack with thousands of
 positions where the literal could conceivably start, that's the

@@ -67,7 +67,7 @@ internal sealed class OneOfRule : Rule
                 $"\"{normalized}\". OneOf / NoneOf match exactly one grapheme " +
                 $"per token, so no single input token can match. Use " +
                 $"Literal(\"{normalized}\") for the whole sequence, " +
-                $"AllOf(Token-per-grapheme) for token-by-token control, or call " +
+                $"And(Token-per-grapheme) for token-by-token control, or call " +
                 $"`set.WithCompatibilityEquivalents({form})` before OneOf / " +
                 $"NoneOf to expand into the grapheme pieces as separate " +
                 $"set members.>"));
@@ -93,19 +93,12 @@ internal sealed class OneOfRule : Rule
         transaction.Commit();
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
-        // SymbolId wraps a single int. A single-rune token fits, so for
-        // an unnamed rule we use the rune value as the leaf id directly,
-        // letting tree consumers branch on which rune matched without
-        // going through a synthetic per-OneOf id. A multi-rune grapheme
-        // cluster (two or more code points) doesn't fit in one int, so
-        // it falls back to the rule's own id either way. When the user
-        // named the rule via .As("..."), that name is the user's
-        // explicit signal "find me by reference," so the rule's Id wins
-        // over the rune value: Tree.Find, Tree.Is, and NameOf all need
-        // leaf.Id == rule.Id for the named rule to be findable. Same
-        // gate applies in AnyTokenRule, NoneOfRule, and WithinTokenRule.
-        int runeValue = token.RuneValue;
-        SymbolId leafId = (Name == null && runeValue >= 0) ? new SymbolId(runeValue) : Id;
+        // ResolveLeafId carries the leaf-id rule shared with NoneOfRule,
+        // AnyTokenRule, and WithinTokenRule: rune value when the rule is
+        // truly anonymous and the token is one rune, rule's own Id when
+        // the user identified the rule via .As(string) / .As(SymbolId)
+        // or the token is multi-rune.
+        SymbolId leafId = ResolveLeafId(token.RuneValue);
         var leafSymbol = new Symbol(leafId, FlattenType, token.Memory);
         if (effectiveFlattenType == FlattenType.Flatten)
         {
@@ -115,46 +108,6 @@ internal sealed class OneOfRule : Rule
         return leafSymbol;
     }
 
-    // Return the set of runes this rule might consume first (can be a superset)
-    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
-    // Then say whether the rule Always / Sometimes / Never consumes at least
-    // that first rune on success.
-    internal override RuleStartRequirements ComputeRuleStart()
-    {
-        // The lookahead shortcut peeks ONE rune off the input. If the
-        // set has multi-rune entries, the first rune of each multi-rune
-        // grapheme is also a valid lookahead (the lexer might be about
-        // to hand us that whole grapheme as one token). Add those first
-        // runes to the rune intervals so CannotMatchLookahead doesn't
-        // wrongly skip OneOfRule when the input begins with a grapheme
-        // whose first rune isn't otherwise in the set.
-        return new RuleStartRequirements(LookaheadFirstRunes(_set), Advance.Always);
-    }
-
-    // Build a rune-only set covering every possible first rune of any
-    // member of `set`. Single-rune members contribute themselves;
-    // multi-rune members contribute their first rune. Used as the
-    // FirstConsumedTokens value for OneOf and ScanWhile when their set
-    // has multi-rune entries, so the lookahead shortcut stays sound.
-    internal static TokenSet LookaheadFirstRunes(TokenSet set)
-    {
-        if (!set.HasMultiRuneGraphemes) return set;
-        var firstRunes = set.RunesOnlyPart;
-        foreach (string grapheme in set.MultiRuneGraphemes)
-        {
-            int firstRune;
-            if (grapheme.Length >= 2
-                && char.IsHighSurrogate(grapheme[0])
-                && char.IsLowSurrogate(grapheme[1]))
-            {
-                firstRune = char.ConvertToUtf32(grapheme[0], grapheme[1]);
-            }
-            else
-            {
-                firstRune = grapheme[0];
-            }
-            firstRunes = firstRunes | TokenSet.Single(firstRune);
-        }
-        return firstRunes;
-    }
+    internal override RuleStartRequirements ComputeRuleStart() =>
+        RuleStartRequirements.FirstTokenMustBeInSet(_set);
 }

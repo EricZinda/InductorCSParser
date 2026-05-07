@@ -22,13 +22,13 @@ public class InductorParserReferenceExamples
     {
         var settingName = Identifier();
 
-        var settingValue = FirstOf(
+        var settingValue = Or(
             Float().Flatten(FlattenType.Flatten),
             Integer().Flatten(FlattenType.Flatten),
             Identifier()
         ).Preserve();
 
-        var document = AllOf(
+        var document = And(
             settingName,
             Optional(AnyWhitespace()),
             Token('='),
@@ -75,7 +75,7 @@ public class InductorParserReferenceExamples
     {
         var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 42);
         var thing = Identifier().As(pinned).As("Thing");
-        var document = AllOf(thing, Eof()).Compile();
+        var document = And(thing, Eof()).Compile();
 
         Assert.That(thing.Id, Is.EqualTo(pinned));
         Assert.That(document.NameOf(pinned), Is.EqualTo("Thing"));
@@ -87,7 +87,7 @@ public class InductorParserReferenceExamples
     public void Compile_seals_the_rule_graph()
     {
         var settingName = Identifier();
-        var document = AllOf(settingName, Eof()).Compile();
+        var document = And(settingName, Eof()).Compile();
 
         Assert.Throws<System.InvalidOperationException>(() => document.As("doc"));
         Assert.Throws<System.InvalidOperationException>(() => document.Flatten(FlattenType.Preserve));
@@ -129,13 +129,13 @@ public class InductorParserReferenceExamples
     private static (Rule document, Rule settingName, Rule settingValue) BuildWalkthroughGrammar()
     {
         var settingName = Identifier().As("settingName");
-        var settingValue = FirstOf(
+        var settingValue = Or(
             Float().Flatten(FlattenType.Flatten),
             Integer().Flatten(FlattenType.Flatten),
             Identifier()
         ).As("settingValue").Preserve();
 
-        var document = AllOf(
+        var document = And(
             Optional(AnyWhitespace()),
             settingName,
             Optional(AnyWhitespace()),
@@ -189,17 +189,17 @@ public class InductorParserReferenceExamples
         // Build a separate identifier-shaped alternative for valueAtom
         // because .Flatten(...) mutates the rule it's called on, and
         // reusing `key` here would flatten its position inside `pair` too.
-        var valueAtom = FirstOf(
+        var valueAtom = Or(
             Float().Flatten(FlattenType.Flatten),
             Integer().Flatten(FlattenType.Flatten),
             Identifier(extraStartRunes: TokenSet.Runes("_"))
                 .Flatten(FlattenType.Flatten)
         );
 
-        var values = AllOf(
+        var values = And(
             valueAtom,
             ZeroOrMore(
-                AllOf(
+                And(
                     Optional(AnyWhitespace()),
                     Token(','),
                     Optional(AnyWhitespace()),
@@ -208,7 +208,7 @@ public class InductorParserReferenceExamples
             )
         ).As("values").Preserve();
 
-        var pair = AllOf(
+        var pair = And(
             key,
             Optional(AnyWhitespace()),
             Token('='),
@@ -218,10 +218,10 @@ public class InductorParserReferenceExamples
             Token(';')
         ).As("pair").Preserve();
 
-        var document = AllOf(
+        var document = And(
             Optional(AnyWhitespace()),
             ZeroOrMore(
-                AllOf(pair, Optional(AnyWhitespace()))
+                And(pair, Optional(AnyWhitespace()))
             ),
             Eof()
         ).As("document").Preserve().Compile();
@@ -256,7 +256,7 @@ public class InductorParserReferenceExamples
     [Test]
     public void TraceSink_receives_output()
     {
-        var grammar = AllOf(Identifier(), Eof()).Compile();
+        var grammar = And(Identifier(), Eof()).Compile();
         var sink = new System.IO.StringWriter();
 
         var options = new ParseOptions

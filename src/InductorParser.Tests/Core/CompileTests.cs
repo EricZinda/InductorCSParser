@@ -19,7 +19,7 @@ namespace InductorParser.Tests;
 //   - NameOf auto-compile: NameOfTests.NameOf_auto_compiles_when_called_before_compile.
 //   - LateBoundRule auto-compile through Parse, plus a regression that
 //     ValidateAll walks nested rules: LateBoundRuleTests
-//     (the never-bound rule is two levels deep inside FirstOf+AllOf).
+//     (the never-bound rule is two levels deep inside Or+And).
 //   - Cycle handling in ComputeRuleStartAll: exercised indirectly by
 //     every recursive grammar test (would hang otherwise).
 //
@@ -39,7 +39,7 @@ public class CompileTests
         // there can't be a set of possible first-consumed runes. A subclass
         // that returns a non-empty set alongside Never is violating the
         // contract, and the check here catches it at Compile time rather
-        // than letting the mismatch silently corrupt an enclosing AllOfRule's
+        // than letting the mismatch silently corrupt an enclosing AndRule's
         // FirstConsumedTokens union.
         var bad = new InconsistentRuleStartRule();
 
@@ -70,7 +70,7 @@ public class CompileTests
         var named = OneOrMore(OneOf(TokenSet.Letters)).As("settingName");
         var pinnedRule = OneOrMore(OneOf(TokenSet.Digits)).As(pinned);
         var anonymous = ZeroOrMore(Token('!'));
-        var root = AllOf(named, pinnedRule, anonymous);
+        var root = And(named, pinnedRule, anonymous);
 
         root.Compile();
         string firstSnapshot = SnapshotGrammar(root);
@@ -118,10 +118,13 @@ public class CompileTests
 
         internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, System.Collections.Generic.List<Symbol>? outputSymbols) => null;
 
-        // Return the set of runes this rule might consume first (can be a superset)
-        // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
-        // Then say whether the rule Always / Sometimes / Never consumes at least
-        // that first rune on success.
+        // Return the set of tokens (grapheme clusters) this rule
+        // might consume as its first token (can be a superset).
+        // TokenSet.Empty when Advance.Never. TokenSet.Universe means
+        // "I don't know". Then say whether the rule Always / Sometimes
+        // / Never consumes at least that first token on success. See
+        // RuleStartRequirements for the full shortcut story including
+        // polarity composition.
         internal override RuleStartRequirements ComputeRuleStart()
             => new RuleStartRequirements(TokenSet.Single('x'), Advance.Never);
     }

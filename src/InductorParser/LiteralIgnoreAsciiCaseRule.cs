@@ -108,36 +108,28 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
     private static bool IsAsciiLetter(char c) =>
         (uint)((c | 0x20) - 'a') <= ('z' - 'a');
 
-    // Return the set of runes this rule might consume first (can be a superset)
-    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
-    // Then say whether the rule Always / Sometimes / Never consumes at least
-    // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
     {
-        // First rune decides the lookahead. For an ASCII letter, include
-        // both cases so the caller's input in either case admits us.
-        // Non-letters (digits, punctuation) only match themselves. The
-        // same bit-exact rule AsciiCaseEquals applies to non-letter
-        // positions.
-        //
-        // TryPeekRune decodes the first rune correctly even when that rune
-        // takes two chars in the C# string (emoji, many CJK). Reading
-        // _expected[0] directly would return only the first char, which
-        // isn't a usable rune on its own.
-        //
-        // If the literal starts with a lone surrogate (or other non-decodable
-        // first char), TokenSet only holds valid scalars, so there's no
-        // single-rune set to advertise. Fall back to Universe — the per-token
-        // compare in TryParseRule still works for surrogate-half literals
-        // under Compile(null).
-        if (!Lexer.TryPeekRune(_expected, 0, out int first, out _))
-            return new RuleStartRequirements(TokenSet.Universe, Advance.Always);
-        if (IsAsciiLetter((char)first))
+        // Same first-grapheme extraction as LiteralRule, but when the
+        // first cluster is one ASCII letter we admit both cases so input
+        // in either case can pass the lookahead check (AsciiCaseEquals is
+        // the runtime equivalent). Multi-rune clusters and non-letters
+        // go through the standard FirstTokenMustBeFirstGraphemeOf path.
+        try
         {
-            int lower = first | 0x20;
-            int upper = lower & ~0x20;
-            return new RuleStartRequirements(TokenSet.Single(lower) | TokenSet.Single(upper), Advance.Always);
+            string firstElement = System.Globalization.StringInfo.GetNextTextElement(_expected, 0);
+            if (firstElement.Length == 1 && IsAsciiLetter(firstElement[0]))
+            {
+                int lower = firstElement[0] | 0x20;
+                int upper = lower & ~0x20;
+                return RuleStartRequirements.FirstTokenMustBeInSet(
+                    TokenSet.Single(lower) | TokenSet.Single(upper));
+            }
         }
-        return new RuleStartRequirements(TokenSet.Single(first), Advance.Always);
+        catch (ArgumentException)
+        {
+            return RuleStartRequirements.AlwaysAdvancesByOneToken;
+        }
+        return RuleStartRequirements.FirstTokenMustBeFirstGraphemeOf(_expected);
     }
 }

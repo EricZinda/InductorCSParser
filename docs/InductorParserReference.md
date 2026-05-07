@@ -2,9 +2,9 @@
 
 This document is a reference document and is more technical and detailed than the primers (see below). It goes into detail about every aspect of the parser and discusses how to write grammars with the library. It shows what the API looks like, gives working examples end to end, and points at the other docs when you want depth on a specific topic.
 
-In this library a *rule* is a C# object. You build rules by calling factory functions like `AllOf(...)`, `FirstOf(...)`, `Token('=')`, you compose them into a grammar, and you call `.Parse(input)` on the root rule to get a tree back.
+In this library a *rule* is a C# object. You build rules by calling factory functions like `And(...)`, `Or(...)`, `Token('=')`, you compose them into a grammar, and you call `.Parse(input)` on the root rule to get a tree back.
 
-The library implements a [Parsing Expression Grammar (PEG)](https://en.wikipedia.org/wiki/Parsing_expression_grammar) parser. In PEG terms, `AllOf` is sequence (match a, then b, then c), `FirstOf` is ordered choice (try each alternative in order, the first match wins, so grammars are unambiguous by construction), `OneOrMore` and `ZeroOrMore` are greedy repetition, and `Peek` and `Not` are the lookahead predicates. Matching is recursive-descent with backtracking on failure, but greedy repetition never gives input back once it has matched, so grammars are written with that in mind.
+The library implements a [Parsing Expression Grammar (PEG)](https://en.wikipedia.org/wiki/Parsing_expression_grammar) parser. In PEG terms, `And` is sequence (match a, then b, then c), `Or` is ordered choice (try each alternative in order, the first match wins, so grammars are unambiguous by construction), `OneOrMore` and `ZeroOrMore` are greedy repetition, and `Peek` and `Not` are the lookahead predicates. Matching is recursive-descent with backtracking on failure, but greedy repetition never gives input back once it has matched, so grammars are written with that in mind.
 
 Primers:
 
@@ -32,13 +32,13 @@ using static InductorParser.Rules;
 
 var settingName = Identifier();
 
-var settingValue = FirstOf(
+var settingValue = Or(
     Float().Flatten(FlattenType.Flatten),
     Integer().Flatten(FlattenType.Flatten),
     Identifier()
 ).Preserve();
 
-var document = AllOf(
+var document = And(
     settingName,
     Optional(AnyWhitespace()),
     Token('='),
@@ -61,23 +61,23 @@ else
 }
 ```
 
-The `.Preserve()` on the root keeps the whole document under a single wrapper Symbol, which is what `result.Tree` returns. Without it, `AllOf`'s default `FlattenType.Flatten` lifts every child up to the top level and `result.Tree` is null because there's more than one top-level Symbol; in that case use `result.Symbols` to walk the bubbled-up children directly.
+The `.Preserve()` on the root keeps the whole document under a single wrapper Symbol, which is what `result.Tree` returns. Without it, `And`'s default `FlattenType.Flatten` lifts every child up to the top level and `result.Tree` is null because there's more than one top-level Symbol; in that case use `result.Symbols` to walk the bubbled-up children directly.
 
 Four variables hold rules, one call to `.Parse(...)` returns a tree, and `result.Tree.Find(someRule)` locates the node that rule produced. Renaming any of the local variables via an IDE refactor updates every reference including the lookups, because `Find` matches on the rule reference itself, not on any separate name or id.
 
 Compare that side by side with the C++ version from `GettingStarted.md` and you can see they line up rule by rule. Every C++ template instantiation becomes a C# factory call, and the trailing template parameters (flatten policy, symbol id, error message) become fluent method calls on the returned `Rule`. The `MySymbolID` class and the stack of `.As(MySymbolIds.X)` calls from the C++ tutorial are gone: lookups use the rule reference you already have in scope.
 
-The `using static InductorParser.Rules;` at the top is what lets us write `AllOf(...)` and `FirstOf(...)` and `Token('=')` without a class qualifier. It is the C# moral equivalent of `using namespace FXPlat;` in the C++ version. Grammars that want a cleaner look use this import. Grammars that want to be explicit can write `Rules.AllOf(...)`.
+The `using static InductorParser.Rules;` at the top is what lets us write `And(...)` and `Or(...)` and `Token('=')` without a class qualifier. It is the C# moral equivalent of `using namespace FXPlat;` in the C++ version. Grammars that want a cleaner look use this import. Grammars that want to be explicit can write `Rules.And(...)`.
 
-Two things happen automatically in this example but are worth knowing about for when you want more control. First, the rule graph is finalized (validated, frozen, ids stamped on whatever named rules exist) on the first call to `.Parse(...)`. You can force this earlier by calling `.Compile()` on the root rule explicitly, which is useful when you want grammar-construction errors to surface at program startup rather than on first use. Second, nothing in this example has a user-supplied name: the rules are anonymous. Parsing works fine, `Find(someRule)` works fine (it matches on rule identity), but trace output and error messages will fall back to class-derived labels like `AllOf` or `OneOrMore`, which tell you the rule's shape but not what it represents in your grammar. Adding explicit `.As(nameof(...))` calls for better names is covered in the next section for grammars that want them.
+Two things happen automatically in this example but are worth knowing about for when you want more control. First, the rule graph is finalized (validated, frozen, ids stamped on whatever named rules exist) on the first call to `.Parse(...)`. You can force this earlier by calling `.Compile()` on the root rule explicitly, which is useful when you want grammar-construction errors to surface at program startup rather than on first use. Second, nothing in this example has a user-supplied name: the rules are anonymous. Parsing works fine, `Find(someRule)` works fine (it matches on rule identity), but trace output and error messages will fall back to class-derived labels like `And` or `OneOrMore`, which tell you the rule's shape but not what it represents in your grammar. Adding explicit `.As(nameof(...))` calls for better names is covered in the next section for grammars that want them.
 
 ## Naming Rules
 
 Most rules don't need a name. `Find(someRule)` matches on the rule object itself, so as long as you have a reference to the rule you want to locate, you can find its nodes in the tree.
 
-One caveat: `Find(rule)` only hits rules with `FlattenType.Preserve`. Rules with the default `FlattenType.Flatten` (every `AllOf`, `FirstOf`, `OneOrMore`, `ZeroOrMore`, `Optional`, `BetweenInclusive`) have their children lifted up into the parent and their own wrapper removed from `ParseResult.Tree`, so Find can't locate them. If you want to `Find(someRule)` and have it hit, set `FlattenType.Preserve` on the rule to keep its wrapper (or use the `.Preserve()` shortcut). For debugging, `ParseOptions.PreserveAllSymbols` turns the lift-up off globally so the tree matches the grammar one-to-one.
+One caveat: `Find(rule)` only hits rules with `FlattenType.Preserve`. Rules with the default `FlattenType.Flatten` (every `And`, `Or`, `OneOrMore`, `ZeroOrMore`, `Optional`, `BetweenInclusive`) have their children lifted up into the parent and their own wrapper removed from `ParseResult.Tree`, so Find can't locate them. If you want to `Find(someRule)` and have it hit, set `FlattenType.Preserve` on the rule to keep its wrapper (or use the `.Preserve()` shortcut). For debugging, `ParseOptions.PreserveAllSymbols` turns the lift-up off globally so the tree matches the grammar one-to-one.
 
-Sometimes names do matter though: trace output, error messages, serialization. Trace output prints rule names to show which rule was tried at each position. Error messages quote the "deepest rule" that failed. Without an explicit name, these fall back to a class-derived label like `AllOf`, `OneOrMore`, or `BetweenInclusive[1..3]`, which tells you the rule's shape but not what it represents in your grammar.
+Sometimes names do matter though: trace output, error messages, serialization. Trace output prints rule names to show which rule was tried at each position. Error messages quote the "deepest rule" that failed. Without an explicit name, these fall back to a class-derived label like `And`, `OneOrMore`, or `BetweenInclusive[1..3]`, which tells you the rule's shape but not what it represents in your grammar.
 
 Here are different ways you can name rules:
 
@@ -100,7 +100,7 @@ The rule's id is derived deterministically from the string, and the name carries
 **`.As("some label")` on inline rules that don't live in a variable.** If you want to label a chunk of rule tree that isn't pulled out into its own variable, pass a string literal:
 
 ```csharp
-AllOf(
+And(
     Identifier().As("operatorName"),
     Optional(AnyWhitespace()),
     Token(':'),
@@ -162,7 +162,7 @@ public abstract class Rule
 }
 ```
 
-`rule.NameOf(someId)` consults two sources in order and returns the first match. For rune-range ids (0..0x10FFFF) it renders the code point directly as a single-rune string (`"A"` or `"漢"`). Otherwise it looks the id up in a per-grammar index built at compile time, which maps every reachable rule's id to the user's `.As(...)` name (if set) or the rule's class-derived name like `"AllOf"`, `"OneOrMore"`, or `"BetweenInclusive[1..3]"`. Returns null if the id isn't in the grammar.
+`rule.NameOf(someId)` consults two sources in order and returns the first match. For rune-range ids (0..0x10FFFF) it renders the code point directly as a single-rune string (`"A"` or `"漢"`). Otherwise it looks the id up in a per-grammar index built at compile time, which maps every reachable rule's id to the user's `.As(...)` name (if set) or the rule's class-derived name like `"And"`, `"OneOrMore"`, or `"BetweenInclusive[1..3]"`. Returns null if the id isn't in the grammar.
 
 Built-in symbol ids live in a static class and use a numbering space chosen so the three kinds of symbol id never collide:
 
@@ -218,7 +218,7 @@ When a grammar genuinely needs to look inside one token (walk combining marks in
 
 ## Rule Construction Is Fluent
 
-Every rule factory (the `Token`, `Literal`, `AllOf`, `FirstOf`, etc. functions used above) is a static method on the `Rules` class in [src/InductorParser/Rules.cs](../src/InductorParser/Rules.cs), which is what `using static InductorParser.Rules;` brings into scope. Each one returns a `Rule` object. Modifier methods mutate one property in place and return the same rule for chaining:
+Every rule factory (the `Token`, `Literal`, `And`, `Or`, etc. functions used above) is a static method on the `Rules` class in [src/InductorParser/Rules.cs](../src/InductorParser/Rules.cs), which is what `using static InductorParser.Rules;` brings into scope. Each one returns a `Rule` object. Modifier methods mutate one property in place and return the same rule for chaining:
 
 ```csharp
 public abstract class Rule
@@ -251,11 +251,11 @@ var settingName = Identifier()
     .WithError("Expected a setting name");
 ```
 
-`.Compile()` walks the rule graph, stamps ids, resolves `LateBoundRule`s, freezes the graph, and returns the same rule for chaining. `.Parse(...)` auto-compiles on first call, so you don't need to call `.Compile()` yourself unless you want grammar-construction errors to surface at startup rather than at first parse. `.Compile()` doesn't assign names: a rule's user-supplied name comes from an explicit `.As(...)` call, and unnamed rules already carry a class-derived trace label like `AllOf` or `OneOrMore` from their constructor that trace output and error messages fall back to.
+`.Compile()` walks the rule graph, stamps ids, resolves `LateBoundRule`s, freezes the graph, and returns the same rule for chaining. `.Parse(...)` auto-compiles on first call, so you don't need to call `.Compile()` yourself unless you want grammar-construction errors to surface at startup rather than at first parse. `.Compile()` doesn't assign names: a rule's user-supplied name comes from an explicit `.As(...)` call, and unnamed rules already carry a class-derived trace label like `And` or `OneOrMore` from their constructor that trace output and error messages fall back to.
 
 Rules are mutable up until `Compile` runs and then sealed. `.As(...)`, `.Flatten(...)`, `.WithError(...)` mutate the rule in place and return the same rule for chaining, so `var rule = Identifier(); rule.Flatten(FlattenType.Preserve);` and `var rule = Identifier().Flatten(FlattenType.Preserve);` produce the same end state on the same object. The practical consequence: if you keep a reference to a rule and reuse it in multiple places, calling `.Flatten(...)` on one of those references changes the policy at every other use site too. To get two flatten policies for the same shape, build two separate rule instances. After `Compile` returns the rule graph is sealed: calling `.As(...)`, `.Flatten(...)`, or any other mutation method on a sealed rule throws `InvalidOperationException`.
 
-Default values for `Flatten`, error messages, and so on mostly match the C++ defaults from the original source. `InlineWhitespace()` and `AnyWhitespace()` default to `FlattenType.Delete`. `Token('=')` defaults to `FlattenType.Delete`. `AllOf(...)` defaults to `FlattenType.Flatten`. `Integer()` and `Float()` are compositions whose outer rule also defaults to `FlattenType.Flatten`; call `.Preserve()` when you want to find them as wrapper nodes. `Parse` applies these types to the tree before returning: `Delete` nodes are dropped, `Flatten` wrappers have their children lifted into the parent, and `Preserve` wrappers survive. `ParseOptions.PreserveAllSymbols` turns the whole pass off and gives you back a grammar-shaped debug tree with every wrapper in place.
+Default values for `Flatten`, error messages, and so on mostly match the C++ defaults from the original source. `InlineWhitespace()` and `AnyWhitespace()` default to `FlattenType.Delete`. `Token('=')` defaults to `FlattenType.Delete`. `And(...)` defaults to `FlattenType.Flatten`. `Integer()` and `Float()` are compositions whose outer rule also defaults to `FlattenType.Flatten`; call `.Preserve()` when you want to find them as wrapper nodes. `Parse` applies these types to the tree before returning: `Delete` nodes are dropped, `Flatten` wrappers have their children lifted into the parent, and `Preserve` wrappers survive. `ParseOptions.PreserveAllSymbols` turns the whole pass off and gives you back a grammar-shaped debug tree with every wrapper in place.
 
 ### User-Defined Rules
 
@@ -377,13 +377,13 @@ using static InductorParser.Rules;
 
 var settingName  = Identifier().As("settingName");
 
-var settingValue = FirstOf(
+var settingValue = Or(
     Float().Flatten(FlattenType.Flatten),
     Integer().Flatten(FlattenType.Flatten),
     Identifier()
 ).As("settingValue").Preserve();
 
-var document = AllOf(
+var document = And(
     Optional(AnyWhitespace()),
     settingName,
     Optional(AnyWhitespace()),
@@ -437,17 +437,17 @@ var key = Identifier(extraStartRunes: TokenSet.Runes("_")).As("key");
 // identifier-shaped alternative is built fresh here rather than reusing
 // `key` because `.Flatten(...)` mutates the rule it's called on, and
 // reusing `key` would also flatten its tree position inside `pair`.
-var valueAtom = FirstOf(
+var valueAtom = Or(
     Float().Flatten(FlattenType.Flatten),
     Integer().Flatten(FlattenType.Flatten),
     Identifier(extraStartRunes: TokenSet.Runes("_"))
         .Flatten(FlattenType.Flatten)
 );
 
-var values = AllOf(
+var values = And(
     valueAtom,
     ZeroOrMore(
-        AllOf(
+        And(
             Optional(AnyWhitespace()),
             Token(','),
             Optional(AnyWhitespace()),
@@ -456,7 +456,7 @@ var values = AllOf(
     )
 ).As("values").Preserve();
 
-var pair = AllOf(
+var pair = And(
     key,
     Optional(AnyWhitespace()),
     Token('='),
@@ -466,10 +466,10 @@ var pair = AllOf(
     Token(';')
 ).As("pair").Preserve();
 
-var document = AllOf(
+var document = And(
     Optional(AnyWhitespace()),
     ZeroOrMore(
-        AllOf(pair, Optional(AnyWhitespace()))
+        And(pair, Optional(AnyWhitespace()))
     ),
     Eof()
 ).As("document").Preserve().Compile();

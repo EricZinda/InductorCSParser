@@ -81,12 +81,14 @@ internal sealed class GraphemeRule : Rule
             offenders.Add((this, _expected,
                 $"<Token converts to multi-grapheme sequence \"{normalized}\" under {form}. " +
                 $"Token matches exactly one grapheme. Use Literal(\"{normalized}\") or " +
-                $"AllOf(Token-per-grapheme) instead.>"));
+                $"And(Token-per-grapheme) instead.>"));
             return;
         }
 
         _expected = normalized;
-        if (TrySingleRuneValue(_expected, out int runeValue))
+        // Skip the rune re-pin when the user fixed an Id via .As(SymbolId);
+        // their pin is the stable-numbering contract.
+        if (!IsUserSymbolIdPinned && TrySingleRuneValue(_expected, out int runeValue))
             SetIdInternal(new SymbolId(runeValue));
     }
 
@@ -161,33 +163,8 @@ internal sealed class GraphemeRule : Rule
         return leafSymbol;
     }
 
-    // Return the set of runes this rule might consume first (can be a superset)
-    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
-    // Then say whether the rule Always / Sometimes / Never consumes at least
-    // that first rune on success.
-    internal override RuleStartRequirements ComputeRuleStart()
-    {
-        // Whatever the expected token is, its first rune is the only
-        // thing the lookahead has to match for this rule to have a chance.
-        // Multi-rune tokens (ZWJ sequences, etc.) still pin the set to
-        // the first rune. The follow-on runes are checked by the rule's
-        // own lockstep compare against _expected.
-        //
-        // TryPeekRune decodes the first rune correctly even when that rune
-        // takes two chars in the C# string (emoji, many CJK). Reading
-        // _expected[0] directly would return only the first char, which
-        // isn't a usable rune on its own.
-        if (!Lexer.TryPeekRune(_expected, 0, out int first, out _))
-        {
-            // The literal starts with a lone surrogate (or other non-decodable
-            // first char). TokenSet only holds valid scalars, so there's no
-            // single-rune set to advertise. Fall back to Universe — the parser
-            // skips the first-rune-lookahead shortcut and runs the SequenceEqual
-            // compare directly, which works fine for surrogate-half literals.
-            return new RuleStartRequirements(TokenSet.Universe, Advance.Always);
-        }
-        return new RuleStartRequirements(TokenSet.Single(first), Advance.Always);
-    }
+    internal override RuleStartRequirements ComputeRuleStart() =>
+        RuleStartRequirements.FirstTokenMustBeFirstGraphemeOf(_expected);
 
     // True iff the string is exactly one Unicode rune (one UTF-16 char
     // or one surrogate pair). Works without depending on

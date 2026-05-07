@@ -28,8 +28,8 @@ public class StateMachineBudgetCompareTests
     private static Rule BuildNestedParens()
     {
         var nested = new LateBoundRule("nested");
-        nested.Bind(FirstOf(
-            AllOf(Token('('), nested, Token(')')),
+        nested.Bind(Or(
+            And(Token('('), nested, Token(')')),
             Token('x')));
         return nested;
     }
@@ -41,23 +41,23 @@ public class StateMachineBudgetCompareTests
     private static Rule BuildManyAs()
     {
         var many = new LateBoundRule("many");
-        many.Bind(FirstOf(
-            AllOf(Token('a'), many),
+        many.Bind(Or(
+            And(Token('a'), many),
             Eof()));
         return many;
     }
 
-    // Backtracking-heavy FirstOf wrapped in cyclic recursion. The first
+    // Backtracking-heavy Or wrapped in cyclic recursion. The first
     // alternative tries Literal("ab") (matches 'a', fails on the second
     // token, records a failure), then falls back to Token('a') and
     // recurses. Each iteration costs three calls (cycle + Literal +
     // Grapheme), so a 5000-char input drives well past the periodic-check
     // boundary while exposing the deepest-failure tracking on abort.
-    private static Rule BuildBacktrackingFirstOf()
+    private static Rule BuildBacktrackingOr()
     {
         var loop = new LateBoundRule("loop");
-        loop.Bind(FirstOf(
-            AllOf(FirstOf(Literal("ab"), Token('a')), loop),
+        loop.Bind(Or(
+            And(Or(Literal("ab"), Token('a')), loop),
             Eof()));
         return loop;
     }
@@ -100,7 +100,7 @@ public class StateMachineBudgetCompareTests
         // MaxDepth is disabled because this grammar tail-recurses one
         // level per char and would otherwise hit the default depth cap
         // before the rule-count cap.
-        var rule = BuildBacktrackingFirstOf();
+        var rule = BuildBacktrackingOr();
         string input = new string('a', 5000);
         var options = new ParseOptions { RuleCountLimit = 100, MaxDepth = 0 };
 

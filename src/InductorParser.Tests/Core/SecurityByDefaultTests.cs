@@ -55,7 +55,7 @@ public class SecurityByDefaultTests
         // UAX #31, so a naive Identifier() grammar rejects any
         // input that contains it. No attacker-aware logic in the
         // grammar — the rule just doesn't match.
-        var grammar = AllOf(Identifier(), Eof()).Compile();
+        var grammar = And(Identifier(), Eof()).Compile();
 
         string trojanInput = "ab‮cd";  // logical order: a, b, RLO, c, d
         Assert.That(grammar.Parse(trojanInput).Success, Is.False,
@@ -112,7 +112,7 @@ public class SecurityByDefaultTests
         //     That converts lookalikes to plain letters before the
         //     rule runs, so "ｓｅｌｅｃｔ" becomes "select" and
         //     your blocker catches it.
-        var grammar = AllOf(Token('A'), Eof()).Compile();
+        var grammar = And(Token('A'), Eof()).Compile();
 
         Assert.That(grammar.Parse("A").Success, Is.True,
             "plain A matches plain A");
@@ -138,7 +138,7 @@ public class SecurityByDefaultTests
         // matches "ｓｅｌｅｃｔ" and the block catches the bypass.
 
         // Default FormC: the blocker misses the lookalike.
-        var defaultRule = AllOf(Literal("select"), Eof()).Compile();
+        var defaultRule = And(Literal("select"), Eof()).Compile();
         Assert.That(defaultRule.Parse("select").Success, Is.True,
             "plain 'select' matches as expected");
         Assert.That(defaultRule.Parse("ｓｅｌｅｃｔ").Success, Is.False,
@@ -146,7 +146,7 @@ public class SecurityByDefaultTests
             "FormC — this is the bypass to fix");
 
         // FormKC: the blocker catches the lookalike.
-        var formKCRule = AllOf(Literal("select"), Eof()).Compile(NormalizationForm.FormKC);
+        var formKCRule = And(Literal("select"), Eof()).Compile(NormalizationForm.FormKC);
         Assert.That(formKCRule.Parse("select").Success, Is.True,
             "plain 'select' still matches under FormKC");
         Assert.That(formKCRule.Parse("ｓｅｌｅｃｔ").Success, Is.True,
@@ -205,7 +205,7 @@ public class SecurityByDefaultTests
         //     real characters with their own purpose, just non-
         //     rendering ones. You have to strip them yourself
         //     before parsing. See the next test for the shape.
-        var grammar = AllOf(Literal("apple"), Eof()).Compile();
+        var grammar = And(Literal("apple"), Eof()).Compile();
 
         Assert.That(grammar.Parse("apple").Success, Is.True,
             "clean 'apple' matches");
@@ -233,7 +233,7 @@ public class SecurityByDefaultTests
         // recipe is in UnicodeGotchasExamples.cs at
         // Invisible_format_character_strip_recipe.
 
-        var blocker = AllOf(Literal("apple"), Eof()).Compile();
+        var blocker = And(Literal("apple"), Eof()).Compile();
 
         // Default: the blocker misses the invisible-laden
         // version.
@@ -283,7 +283,7 @@ public class SecurityByDefaultTests
         // exception propagates out of Parse. The caller learns
         // the input was corrupt; no grammar rule ever sees the
         // ill-formed input and never silently matches against it.
-        var grammar = AllOf(Literal("hello"), Eof()).Compile();  // default FormC
+        var grammar = And(Literal("hello"), Eof()).Compile();  // default FormC
 
         string loneHigh = BuildString(0xD800);
         Assert.Throws<ArgumentException>(
@@ -328,7 +328,7 @@ public class SecurityByDefaultTests
         // permissive decoder. The author opts in by writing
         // NoneOf(TokenSet.Replacement) where they would otherwise
         // have written AnyToken or NoneOf(...).
-        var grammar = AllOf(
+        var grammar = And(
             OneOrMore(NoneOf(TokenSet.Replacement)),
             Eof()).Compile();
 
@@ -370,7 +370,7 @@ public class SecurityByDefaultTests
         // Unicode-related security issue is handled automatically.
         // The homoglyph case is the main one where the grammar
         // author has to think about it.
-        var grammar = AllOf(Identifier(), Eof()).Compile();
+        var grammar = And(Identifier(), Eof()).Compile();
 
         string homoglyphInput = "aаmin";  // Latin a + Cyrillic а + 'min'
         Assert.That(grammar.Parse(homoglyphInput).Success, Is.True,

@@ -10,7 +10,7 @@ namespace InductorParser;
 // It's a specialized scanner for the "string body" grammar shape: scan
 // forward until a stopper is seen at the current lexer position, handling
 // escape sequences inline.
-// Collapses ZeroOrMore(FirstOf(bodyRune, AllOf(escapeStart, escapeEnd))) into one rule that
+// Collapses ZeroOrMore(Or(bodyRune, And(escapeStart, escapeEnd))) into one rule that
 // does the scan in a tight loop and returns one leaf Symbol
 // covering the matched section of input. One dispatch for the outer rule
 // and one Symbol allocation per matched run, however many runes the run
@@ -67,7 +67,7 @@ internal sealed class ScanUntilRule : Rule
     // path, otherwise _stopperSet is used. The general path is one
     // predictable branch per rune. JSON-style grammars that take the
     // TokenSet path never pay for Rule dispatch.
-    private readonly TokenSet _stopperSet;
+    private TokenSet _stopperSet;
     private readonly Rule? _stopperRule;
     private readonly string _stopperRendered;
 
@@ -199,6 +199,26 @@ internal sealed class ScanUntilRule : Rule
         _hasEscape = true;
         _escapeStartRune = escapeStart.Value;
         _escapeStartRule = null;
+    }
+
+    internal override void CollectNormalizationOffenders(
+        System.Text.NormalizationForm form,
+        List<(Rule rule, string original, string normalized)> offenders,
+        List<ArgumentException> failures)
+    {
+        // ScanUntil's TokenSet stopper checks one grapheme at a time
+        // (via ContainsToken on the next whole token), so its set
+        // entries need the same form projection OneOf / NoneOf get.
+        // Without this override a stopper written as the precomposed
+        // 'é' wouldn't match the decomposed "e + combining acute"
+        // the FormD-normalized lexer hands the rule, and the body
+        // would silently swallow the boundary the user typed in.
+        // Rule-mode stoppers (and the optional escapeEnd / escapeStartRule
+        // sub-rules) handle their own normalization through the
+        // walker's recursion into Children, so only _stopperSet needs
+        // projection here.
+        if (_stopperRule == null)
+            OneOfRule.NormalizeAndValidate(this, ref _stopperSet, form, offenders);
     }
 
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
@@ -362,23 +382,6 @@ internal sealed class ScanUntilRule : Rule
         return leafSymbol;
     }
 
-    // Return the set of runes this rule might consume first (can be a superset)
-    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
-    // Then say whether the rule Always / Sometimes / Never consumes at least
-    // that first rune on success.
-    internal override RuleStartRequirements ComputeRuleStart()
-    {
-        // ScanUntil always succeeds (a zero-length body is legal),
-        // but it also consumes tokens when the input has matchable
-        // ones. That's Advance.Sometimes. Combined with Universe
-        // below, CannotMatchLookahead always returns false for this
-        // rule (the skip optimization needs Advance.Always to fire),
-        // so the FirstConsumedTokens value here doesn't actually
-        // change parser behavior. Universe is the honest answer:
-        // body consumes whole tokens (clusters), and a multi-rune
-        // body cluster can start with any rune at all, including a
-        // rune that's also a single-rune stopper-set entry (the
-        // cluster as a whole isn't the stopper, so it's body).
-        return new RuleStartRequirements(TokenSet.Universe, Advance.Sometimes);
-    }
+    internal override RuleStartRequirements ComputeRuleStart() =>
+        RuleStartRequirements.MayAdvanceByAnyTokens;
 }

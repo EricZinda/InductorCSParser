@@ -155,7 +155,7 @@ public class GraphemeRuleTests
         // rune Token that hard-coded 0 (or used the outer parse's start)
         // would still pass the zero-position tests above. This one proves
         // it's actually tracking the pre-read of its own read.
-        var rule = AllOf(Token('a'),
+        var rule = And(Token('a'),
                        Token('b').WithError("need a 'b'"));
         var result = rule.Parse("ax");
 
@@ -347,5 +347,54 @@ public class GraphemeRuleTests
         Assert.That(result.Tree!.Is(rule), Is.True);
         Assert.That(rule.NameOf(result.Tree!.Id), Is.EqualTo("Token"));
         Assert.That(result.Tree!.PrintTree(rule), Is.EqualTo("Token: \"हि\"\n"));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_Token_skips_when_peek_is_not_the_token()
+    {
+        // Token('a') publishes ({'a'}, Always, MustBeIn). Peek 'b' isn't
+        // in {'a'}, so the shortcut skips Token and the second branch
+        // wins. Token's trace label is "Token" (set in the constructor).
+        var sink = NewSink();
+        var rule = Or(Token('a'), Literal("b"));
+        var result = rule.Parse("b", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Contain("SKIP | Token:"));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_Token_runs_when_peek_is_the_token()
+    {
+        // Peek 'a' is in {'a'}, so the shortcut doesn't skip. Token
+        // runs and matches.
+        var sink = NewSink();
+        var rule = Or(Token('a'), Literal("b"));
+        var result = rule.Parse("a", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | Token:"));
+    }
+
+    [Test]
+    public void Token_in_OneOrMore_matches_after_FormC_canonical_singleton_substitution()
+    {
+        // Same staleness shape as the OneOf test in OneOfRuleTests:
+        // GraphemeRule.ComputeRuleStart reads _expected and pins
+        // FirstConsumedTokens to the first rune of that text. The Compile
+        // pipeline then runs the normalization-form pass, which can
+        // rewrite _expected (U+212B ANGSTROM SIGN converts to U+00C5
+        // LATIN CAPITAL LETTER A WITH RING ABOVE under FormC). The
+        // cached FirstConsumedTokens stays {0x212B} even though the rule
+        // now matches a token of U+00C5. OneOrMore's lookahead shortcut
+        // peeks the input's first rune (also U+00C5 after Parse-time
+        // input normalization), checks against the stale set, and bails
+        // before calling the rule.
+        var rule = OneOrMore(Token("Å"))
+            .Compile(System.Text.NormalizationForm.FormC);
+        var result = rule.Parse("Å");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 }

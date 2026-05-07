@@ -12,7 +12,7 @@
 
 Today TokenSet is a set of single Unicode scalar values, with closed set algebra (union, intersection, complement) over the rune universe. Multi-rune graphemes (skin-toned emoji, ZWJ sequences, regional indicator pairs, base+combining-mark clusters, etc.) aren't members of any TokenSet, and `Runes("...")` actively rejects them with one CRLF-shaped exception.
 
-Grammars that want to match a class of grapheme clusters have no clean tool. The only way is `FirstOf(Token(a), Token(b), ...)`, which doesn't compose with set algebra and can't be intersected with `TokenSet.Letters` or used as a `NoneOf` exclusion. The goal is to broaden the type so a single set can describe "this rune class plus these specific multi-rune graphemes" and still behave like a set. As part of the same change, rename `TokenSet` to `TokenSet` and `RuleStartRequirements.FirstConsumedTokens` to `FirstConsumedTokens`, since "rune" is no longer accurate for what the set holds and what a rule's lookahead is filtering against.
+Grammars that want to match a class of grapheme clusters have no clean tool. The only way is `Or(Token(a), Token(b), ...)`, which doesn't compose with set algebra and can't be intersected with `TokenSet.Letters` or used as a `NoneOf` exclusion. The goal is to broaden the type so a single set can describe "this rune class plus these specific multi-rune graphemes" and still behave like a set. As part of the same change, rename `TokenSet` to `TokenSet` and `RuleStartRequirements.FirstConsumedTokens` to `FirstConsumedTokens`, since "rune" is no longer accurate for what the set holds and what a rule's lookahead is filtering against.
 
 ## The set-orientation challenge
 
@@ -156,4 +156,4 @@ Integration tests via OneOf and NoneOf:
 
 ScanWhile: a set with multi-rune entries scans across a string of mixed letters and emoji and stops at the first non-member. The rune-only fast path is exercised by the existing tests.
 
-End-to-end: pick one of the existing grapheme tests and rewrite a `FirstOf(Token(...), ...)` chain as a single `OneOf(TokenSet.Runes(...))` to confirm the new path produces the same parse result.
+End-to-end: pick one of the existing grapheme tests and rewrite a `Or(Token(...), ...)` chain as a single `OneOf(TokenSet.Runes(...))` to confirm the new path produces the same parse result.

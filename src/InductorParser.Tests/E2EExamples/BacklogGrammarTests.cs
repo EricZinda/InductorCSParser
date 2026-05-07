@@ -226,7 +226,7 @@ public class BacklogGrammarTests
     //   HrRun:      4-15x
     //   HrSpaced:   5-14x
     //   Paragraph: 12-34x
-    // First-char dispatch helps most when a FirstOf has many branches
+    // First-char dispatch helps most when a Or has many branches
     // with disjoint first-char sets. These rules are simpler (one OneOf
     // or one Token at the head), so composite transaction overhead on
     // the inner path dominates instead. Closing the gap needs work at

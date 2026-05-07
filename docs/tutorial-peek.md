@@ -45,13 +45,13 @@ ScanUntil(TokenSet.Range('0', '9'))
 But `ScanUntil` always succeeds, even if no digit is found (it just consumes to end-of-input in that case). So we also need to make sure it stopped because it *did* hit one of them. We can just check if the next token is one of those digits:
 
 ```CSharp
-AllOf(ScanUntil(TokenSet.Range('0', '9')), OneOf(TokenSet.Range('0', '9')))
+And(ScanUntil(TokenSet.Range('0', '9')), OneOf(TokenSet.Range('0', '9')))
 ```
-`AllOf` requires all of its rules to succeed, so this will only succeed if we found a string that has a digit in it. Since we'll be doing this a few times, we can make our own rule for it:
+`And` requires all of its rules to succeed, so this will only succeed if we found a string that has a digit in it. Since we'll be doing this a few times, we can make our own rule for it:
 
 ```CSharp
 Rule Contains(TokenSet options) =>
-    AllOf(ScanUntil(options), OneOf(options));
+    And(ScanUntil(options), OneOf(options));
 
 // Scan for one number
 Contains(TokenSet.Range('0', '9'))
@@ -71,14 +71,14 @@ The `Peek` rule is designed for just this case.  Like `Not` it checks if somethi
 
 ```CSharp
 Rule Contains(TokenSet options) =>
-    Peek(AllOf(ScanUntil(options), OneOf(options)));
+    Peek(And(ScanUntil(options), OneOf(options)));
 ```
 And then we have to make this real C# by combining them into a single rule:
 ```CSharp
 Rule Contains(TokenSet options) =>
-    Peek(AllOf(ScanUntil(options), OneOf(options)));
+    Peek(And(ScanUntil(options), OneOf(options)));
 
-var rule = AllOf(Contains(TokenSet.Range('0', '9')),
+var rule = And(Contains(TokenSet.Range('0', '9')),
                  Contains(TokenSet.Range('A', 'Z')),
                  Contains(TokenSet.Range('a', 'z')),
                  Contains(TokenSet.Runes("#?!")));
@@ -91,11 +91,11 @@ The next two aren't character based checks, they look for whole strings:
 
 ```CSharp
 Rule Contains(Rule rule) =>
-    Peek(AllOf(ScanUntil(rule), rule));
+    Peek(And(ScanUntil(rule), rule));
 
 var username = ... get username ...;
 var websitename = ... get website name ...;
-AllOf(
+And(
     Not(Contains(Literal(username))),
     Not(Contains(Literal("password"))),
     Not(Contains(Literal(websitename)))
@@ -105,19 +105,19 @@ The original spec said it also can't *be* the original password, which is less s
 
 ```CSharp
 var originalPassword = ... get original password ...;
-Not(AllOf(Literal(originalPassword), Eof()))
+Not(And(Literal(originalPassword), Eof()))
 ```
 Note that we have to consume the original password *and* `Eof` otherwise it would mean "starts with".  `Eof` guarantees we hit the end of the string.
 
 So now we have:
 ```CSharp
 Rule Contains(Rule rule) =>
-    Peek(AllOf(ScanUntil(rule), rule));
+    Peek(And(ScanUntil(rule), rule));
 
 Rule Contains(TokenSet options) =>
-    Peek(AllOf(ScanUntil(options), OneOf(options)));
+    Peek(And(ScanUntil(options), OneOf(options)));
 
-AllOf(
+And(
     Contains(TokenSet.Range('0', '9')),
     Contains(TokenSet.Range('A', 'Z')),
     Contains(TokenSet.Range('a', 'z')),
@@ -125,7 +125,7 @@ AllOf(
     Not(Contains(Literal(username))),
     Not(Contains(Literal("password"))),
     Not(Contains(Literal(websitename))),
-    Not(AllOf(Literal(originalPassword), Eof()))
+    Not(And(Literal(originalPassword), Eof()))
 );
 
 ```
@@ -138,13 +138,13 @@ var username = ... get username ...;
 var websitename = ... get websitename ...;
 
 Rule Contains(Rule rule) =>
-    Peek(AllOf(ScanUntil(rule), rule));
+    Peek(And(ScanUntil(rule), rule));
 
 Rule Contains(TokenSet options) =>
-    Peek(AllOf(ScanUntil(options), OneOf(options)));
+    Peek(And(ScanUntil(options), OneOf(options)));
 
 var pattern = 
-    AllOf(
+    And(
         Contains(TokenSet.Range('0', '9')),
         Contains(TokenSet.Range('A', 'Z')),
         Contains(TokenSet.Range('a', 'z')),
@@ -152,7 +152,7 @@ var pattern =
         Not(Contains(Literal(username))),
         Not(Contains(Literal("password"))),
         Not(Contains(Literal(websitename))),
-        Not(AllOf(Literal(originalPassword), Eof())),
+        Not(And(Literal(originalPassword), Eof())),
         AtLeast(8, AnyToken())
     );
 

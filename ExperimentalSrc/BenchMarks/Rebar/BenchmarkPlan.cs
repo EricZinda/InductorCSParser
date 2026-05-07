@@ -328,7 +328,12 @@ internal static class BenchmarkRegistry
     private static readonly TokenSet AwsKeyTail = AsciiUpper | TokenSet.Range('0', '7');
     private static readonly TokenSet AsciiRegexWhitespace = TokenSet.Runes(" \t\r\n\f\v");
     private static readonly TokenSet CodeSeparator = TokenSet.Runes(",") | AsciiRegexWhitespace;
-    private static readonly TokenSet NotNewline = ~TokenSet.Runes("\r\n");
+    // Construct from individual Single() runes rather than Runes("\r\n"):
+    // post-merge TokenSet.Runes walks by grapheme, so "\r\n" becomes
+    // a multi-rune cluster (CRLF), and ~ on a multi-rune set throws.
+    // We want ~{CR, LF} as rune-set, which the explicit construction
+    // gives.
+    private static readonly TokenSet NotNewline = ~(TokenSet.Single('\r') | TokenSet.Single('\n'));
     private static readonly TokenSet NotUppercase = ~AsciiUpper;
     private static readonly TokenSet NotSpace = ~TokenSet.Runes(" ");
     private static readonly TokenSet NotSemicolon = ~TokenSet.Runes(";");
@@ -452,7 +457,7 @@ internal static class BenchmarkRegistry
     private static BenchmarkPlan CompileScanner(PatternGrammar grammar, bool useStateMachine)
     {
         grammar.Match.As("match").Flatten(FlattenType.Preserve);
-        var scanner = ZeroOrMore(FirstOf(
+        var scanner = ZeroOrMore(Or(
             grammar.Match,
             AnyToken().Flatten(FlattenType.Delete)
         )).As("scan").Flatten(FlattenType.Preserve);
@@ -461,7 +466,7 @@ internal static class BenchmarkRegistry
         // Ask the match rule for a required literal that any successful
         // match must contain. When the analysis finds one (e.g. "# noqa"
         // for the ruff-noqa grammars, derived automatically from the
-        // AllOf(Literal("# "), OneOf("Nn"), OneOf("Oo"), ...) shape),
+        // And(Literal("# "), OneOf("Nn"), OneOf("Oo"), ...) shape),
         // the grep / grep-captures path uses one BCL substring search
         // across the haystack to skip lines that can't possibly match
         // before invoking the parser line by line. When no single
@@ -503,7 +508,7 @@ internal static class BenchmarkRegistry
     // Cap on the number of literals the multi-substring prefilter is
     // willing to scan with. Eight covers the biggest motivating case
     // (the AWS-keys full grammar's four prefixes, doubled if quotes
-    // ever get folded in) without letting a giant FirstOf-of-literals
+    // ever get folded in) without letting a giant Or-of-literals
     // (e.g. the 2000+ entry English dictionary) accidentally degrade
     // into 2000 string.Compare calls per IndexOfAny hit. Larger sets
     // are better served by leaving the prefilter off and letting the
@@ -515,7 +520,7 @@ internal static class BenchmarkRegistry
         new(MatchLiteral(literal, ignoreAsciiCase), Array.Empty<Rule>());
 
     private static PatternGrammar LiteralAlternates(IEnumerable<string> literals, bool ignoreAsciiCase) =>
-        new(FirstOf(literals.Select(literal => MatchLiteral(literal, ignoreAsciiCase)).ToArray()), Array.Empty<Rule>());
+        new(Or(literals.Select(literal => MatchLiteral(literal, ignoreAsciiCase)).ToArray()), Array.Empty<Rule>());
 
     private static Rule MatchLiteral(string literal, bool ignoreAsciiCase) =>
         (ignoreAsciiCase ? LiteralIgnoreAsciiCase(literal) : Literal(literal)).Flatten(FlattenType.Preserve);
@@ -529,17 +534,17 @@ internal static class BenchmarkRegistry
         // scanner's first-rune skip available because successful matches
         // always consume at least one word rune.
         Rule wordBody = P(ScanWhile(AsciiWord, minimumLength));
-        var word = AllOf(
+        var word = And(
             wordBody,
-            FirstOf(Peek(OneOf(~AsciiWord)), Eof())
+            Or(Peek(OneOf(~AsciiWord)), Eof())
         );
         return new PatternGrammar(word, Array.Empty<Rule>());
     }
 
     private static PatternGrammar AwsQuick()
     {
-        var key = AllOf(
-            FirstOf(
+        var key = And(
+            Or(
                 P(Literal("ASIA")),
                 P(Literal("AKIA")),
                 P(Literal("AROA")),
@@ -553,15 +558,15 @@ internal static class BenchmarkRegistry
     private static PatternGrammar RuffNoqaReal()
     {
         var leadingWhitespace = Capture(ZeroOrMore(P(OneOf(AsciiRegexWhitespace))), "capture1");
-        var codeItem = Capture(AllOf(
+        var codeItem = Capture(And(
             OneOrMore(P(OneOf(AsciiUpper))),
             OneOrMore(P(OneOf(TokenSet.Ascii.Digits))),
             Optional(OneOrMore(P(OneOf(CodeSeparator))))
         ), "capture4");
         var codeList = Capture(OneOrMore(codeItem), "capture3");
-        var noqa = Capture(AllOf(
+        var noqa = Capture(And(
             NoqaLiteral(),
-            Optional(AllOf(
+            Optional(And(
                 P(Token(':')),
                 Optional(P(OneOf(AsciiRegexWhitespace))),
                 codeList
@@ -569,21 +574,21 @@ internal static class BenchmarkRegistry
         ), "capture2");
 
         return new PatternGrammar(
-            AllOf(leadingWhitespace, noqa),
+            And(leadingWhitespace, noqa),
             new[] { leadingWhitespace, noqa, codeList, codeItem });
     }
 
     private static PatternGrammar RuffNoqaTweaked()
     {
-        var codeItem = Capture(AllOf(
+        var codeItem = Capture(And(
             OneOrMore(P(OneOf(AsciiUpper))),
             OneOrMore(P(OneOf(TokenSet.Ascii.Digits))),
             Optional(OneOrMore(P(OneOf(CodeSeparator))))
         ), "capture2");
         var codeList = Capture(OneOrMore(codeItem), "capture1");
-        var match = AllOf(
+        var match = And(
             NoqaLiteral(),
-            Optional(AllOf(
+            Optional(And(
                 P(Token(':')),
                 Optional(P(OneOf(AsciiRegexWhitespace))),
                 codeList
@@ -593,7 +598,7 @@ internal static class BenchmarkRegistry
         return new PatternGrammar(match, new[] { codeList, codeItem });
     }
 
-    private static Rule NoqaLiteral() => AllOf(
+    private static Rule NoqaLiteral() => And(
         P(Literal("# ")),
         P(OneOf("Nn")),
         P(OneOf("Oo")),
@@ -647,12 +652,12 @@ internal static class BenchmarkRegistry
         // the scanner falls through to `[A-Z]`). For the rebar
         // haystack of 'A' repeated, the first alternative always
         // fails and every match comes from the `[A-Z]` branch.
-        var firstAlternative = AllOf(
+        var firstAlternative = And(
             ScanUntil(NotUppercase | TokenSet.Runes("\r\n")),
             P(OneOf(NotUppercase))
         );
         var secondAlternative = P(OneOf(AsciiUpper));
-        var match = FirstOf(firstAlternative, secondAlternative);
+        var match = Or(firstAlternative, secondAlternative);
         return new PatternGrammar(match, Array.Empty<Rule>());
     }
 
@@ -666,7 +671,7 @@ internal static class BenchmarkRegistry
         // before `=` collapse to a single ScanUntil because they
         // describe the same thing in this haystack: any non-newline
         // runes up to the first `=`.
-        var match = AllOf(
+        var match = And(
             Optional(P(ScanUntil(TokenSet.Runes("=\r\n")))),
             P(Token('=')),
             ZeroOrMore(P(OneOf(NotNewline)))
@@ -684,7 +689,7 @@ internal static class BenchmarkRegistry
         // greedy any-run, then a nested .*=.*. As with the
         // simplified case, we use ScanUntil to find the `=` without
         // backtracking the two outer .* parts.
-        var prefixToken = FirstOf(
+        var prefixToken = Or(
             P(Token('"')),
             P(Token('\'')),
             P(Token(']')),
@@ -703,7 +708,7 @@ internal static class BenchmarkRegistry
             P(Token('-')),
             P(Token('+'))
         );
-        var noiseToken = FirstOf(
+        var noiseToken = Or(
             P(OneOf(AsciiRegexWhitespace)),
             P(Token('-')),
             P(Token('~')),
@@ -712,7 +717,7 @@ internal static class BenchmarkRegistry
             P(Literal("||")),
             P(Token('+'))
         );
-        var match = AllOf(
+        var match = And(
             OneOrMore(prefixToken),
             ZeroOrMore(P(Token(')'))),
             Optional(P(Token(';'))),
@@ -745,11 +750,11 @@ internal static class BenchmarkRegistry
         // ends the match earlier, leaves more haystack for the
         // scanner to re-enter, and overcounts (61 vs 53). To recover
         // greedy semantics without InductorParser-level backtracking,
-        // build a FirstOf chain that tries {100 anytokens, trailer}
+        // build a Or chain that tries {100 anytokens, trailer}
         // first, then {99, trailer}, ..., down to {0, trailer}. The
         // first alternative that fully matches wins, mirroring how
         // a regex backtracker would shrink the gap from 100 down.
-        var match = AllOf(
+        var match = And(
             Exactly(10, P(OneOf(AsciiAlpha))),
             OneOrMore(P(OneOf(AsciiRegexWhitespace))),
             GreedyBoundedGap(100, () => P(Literal("Result"))),
@@ -760,14 +765,14 @@ internal static class BenchmarkRegistry
         return new PatternGrammar(match, Array.Empty<Rule>());
     }
 
-    private static Rule BoundedContextTrailer() => AllOf(
+    private static Rule BoundedContextTrailer() => And(
         OneOrMore(P(OneOf(AsciiRegexWhitespace))),
         Exactly(10, P(OneOf(AsciiAlpha)))
     );
 
     private static Rule GreedyBoundedGap(int maximum, Func<Rule> followFactory)
     {
-        // Build FirstOf(<peek follow after maximum tokens>,
+        // Build Or(<peek follow after maximum tokens>,
         //               <peek follow after maximum-1 tokens>,
         //               ...
         //               <peek follow after 0 tokens>).
@@ -776,16 +781,16 @@ internal static class BenchmarkRegistry
         // can't be reused across construction sites without
         // surprising aliasing. Peek is used so the alternative
         // doesn't consume the follow rule's runes; the outer
-        // AllOf consumes them right after.
+        // And consumes them right after.
         var alternatives = new Rule[maximum + 1];
         for (int taken = maximum; taken >= 0; taken--)
         {
-            alternatives[maximum - taken] = AllOf(
+            alternatives[maximum - taken] = And(
                 Exactly(taken, P(AnyToken())),
                 Peek(followFactory())
             );
         }
-        return FirstOf(alternatives);
+        return Or(alternatives);
     }
 
     private static PatternGrammar BoundedCapitals()
@@ -793,7 +798,7 @@ internal static class BenchmarkRegistry
         // Regex `(?:[A-Z][a-z]+\s*){10,100}`. Each inner rep is one
         // capitalized word followed by optional whitespace, and the
         // outer count is between 10 and 100.
-        var capitalizedWord = AllOf(
+        var capitalizedWord = And(
             P(OneOf(AsciiUpper)),
             OneOrMore(P(OneOf(AsciiLower))),
             ZeroOrMore(P(OneOf(AsciiRegexWhitespace)))
@@ -808,7 +813,7 @@ internal static class BenchmarkRegistry
         // `(?:word1)|(?:word2)|...` (with `literal = true` regex-escaping
         // applied first, but no character in the length-15 English
         // dictionary needs escaping). Split the pattern back into the
-        // original literals and build FirstOf(Literal(...)) over them.
+        // original literals and build Or(Literal(...)) over them.
         var alternatives = pattern.Split('|');
         var literals = new Rule[alternatives.Length];
         for (int index = 0; index < alternatives.Length; index++)
@@ -818,7 +823,7 @@ internal static class BenchmarkRegistry
                 alternative = alternative.Substring(3, alternative.Length - 4);
             literals[index] = P(Literal(alternative));
         }
-        return new PatternGrammar(FirstOf(literals), Array.Empty<Rule>());
+        return new PatternGrammar(Or(literals), Array.Empty<Rule>());
     }
 
     private static PatternGrammar UnstructuredJson()
@@ -829,34 +834,34 @@ internal static class BenchmarkRegistry
         // Body is lazy `.*?` followed by ` {`, which we model as
         // ScanUntil(Literal(" {")) to find the closing brace cleanly
         // without backtracking through the body.
-        var timestamp = Capture(AllOf(
+        var timestamp = Capture(And(
             OneOrMore(P(OneOf(NotSpace))),
             P(Token(' ')),
             OneOrMore(P(OneOf(NotSpace)))
         ), "capture1");
-        // Wrap the single-rune OneOf in AllOf so Find by capture rule
+        // Wrap the single-rune OneOf in And so Find by capture rule
         // sees a Symbol with the rule's Id rather than the matched
         // rune's value (see the capture10 note in UcdParseLine).
-        var level = Capture(AllOf(P(OneOf(LevelChar))), "capture2");
-        var bracketContext = AllOf(
+        var level = Capture(And(P(OneOf(LevelChar))), "capture2");
+        var bracketContext = And(
             P(Token('[')),
             ZeroOrMore(P(OneOf(NotBracket))),
             P(Token(']'))
         );
-        var parenContext = AllOf(
+        var parenContext = And(
             P(Token('(')),
             ZeroOrMore(P(OneOf(NotParen))),
             P(Token(')'))
         );
-        var contextItem = AllOf(
-            FirstOf(bracketContext, parenContext),
+        var contextItem = And(
+            Or(bracketContext, parenContext),
             P(Token(':')),
             P(Token(' '))
         );
         var header = Capture(ZeroOrMore(contextItem), "capture3");
         var body = Capture(ScanUntil(P(Literal(" {"))), "capture4");
         var location = Capture(ZeroOrMore(P(OneOf(NotCurly))), "capture5");
-        var match = AllOf(
+        var match = And(
             timestamp,
             P(Token(' ')),
             level,
@@ -889,19 +894,19 @@ internal static class BenchmarkRegistry
         var capture7 = Capture(ZeroOrMore(P(OneOf(TokenSet.Ascii.Digits))), "capture7");
         var capture8 = Capture(ZeroOrMore(P(OneOf(TokenSet.Ascii.Digits))), "capture8");
         var capture9 = Capture(ZeroOrMore(P(OneOf(UcdField9))), "capture9");
-        // Wrap the single-rune OneOf in AllOf so the produced Symbol
+        // Wrap the single-rune OneOf in And so the produced Symbol
         // carries this capture's rule Id. A bare OneOfRule emits a
         // leaf Symbol whose Id is the matched rune value rather than
         // its rule's, which is fine for parsing but defeats Find by
         // capture rule (it sees a 'Y' or 'N' rune-id instead of the
         // capture's rule id and returns null).
-        var capture10 = Capture(AllOf(P(OneOf(YesNo))), "capture10");
+        var capture10 = Capture(And(P(OneOf(YesNo))), "capture10");
         var capture11 = Capture(ZeroOrMore(P(OneOf(NotSemicolon))), "capture11");
         var capture12 = Capture(ZeroOrMore(P(OneOf(NotSemicolon))), "capture12");
         var capture13 = Capture(ZeroOrMore(P(OneOf(NotSemicolon))), "capture13");
         var capture14 = Capture(ZeroOrMore(P(OneOf(NotSemicolon))), "capture14");
         var capture15 = Capture(ZeroOrMore(P(OneOf(NotSemicolon))), "capture15");
-        var match = AllOf(
+        var match = And(
             capture1, P(Token(';')),
             capture2, P(Token(';')),
             capture3, P(Token(';')),
@@ -940,13 +945,13 @@ internal static class BenchmarkRegistry
         // looser single-line match still returns 0. The compile
         // benchmark's canonical haystack is single-line and matches
         // once, satisfying the count=1 expectation there.
-        var match = FirstOf(QuotedAwsThenSecret(), QuotedSecretThenAws());
+        var match = Or(QuotedAwsThenSecret(), QuotedSecretThenAws());
         return new PatternGrammar(match, Array.Empty<Rule>());
     }
 
-    private static Rule QuotedAwsKey() => AllOf(
+    private static Rule QuotedAwsKey() => And(
         P(OneOf(Quote)),
-        FirstOf(
+        Or(
             P(Literal("ASIA")),
             P(Literal("AKIA")),
             P(Literal("AROA")),
@@ -956,13 +961,13 @@ internal static class BenchmarkRegistry
         P(OneOf(Quote))
     );
 
-    private static Rule QuotedSecret() => AllOf(
+    private static Rule QuotedSecret() => And(
         P(OneOf(Quote)),
         Exactly(40, P(OneOf(B64Char))),
         P(OneOf(Quote))
     );
 
-    private static Rule QuotedAwsThenSecret() => AllOf(
+    private static Rule QuotedAwsThenSecret() => And(
         QuotedAwsKey(),
         // Stop at the next quote so the greedy gap doesn't swallow
         // the secret's opening quote. Without this, ZeroOrMore would
@@ -972,7 +977,7 @@ internal static class BenchmarkRegistry
         QuotedSecret()
     );
 
-    private static Rule QuotedSecretThenAws() => AllOf(
+    private static Rule QuotedSecretThenAws() => And(
         QuotedSecret(),
         Optional(P(ScanUntil(Quote | TokenSet.Runes("\r\n")))),
         QuotedAwsKey()
@@ -988,13 +993,13 @@ internal static class BenchmarkRegistry
         // grammar that produces 5 matches on it is enough. We don't
         // attempt 03-date/ascii on the full rust-src-tools haystack;
         // that would need the real monster regex.
-        var year = AllOf(
-            FirstOf(P(Literal("19")), P(Literal("20"))),
+        var year = And(
+            Or(P(Literal("19")), P(Literal("20"))),
             Exactly(2, P(OneOf(TokenSet.Ascii.Digits)))
         );
         var number = OneOrMore(P(OneOf(TokenSet.Ascii.Digits)));
         var separator = OneOrMore(P(OneOf(DateSeparator)));
-        var match = FirstOf(year, number, separator);
+        var match = Or(year, number, separator);
         return new PatternGrammar(match, Array.Empty<Rule>());
     }
 

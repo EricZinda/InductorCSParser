@@ -107,4 +107,28 @@ public readonly ref struct Token
             return -1;
         }
     }
+
+    // FirstRune returns the first Unicode scalar of a multi-rune token,
+    // or the same value as RuneValue for a single-rune token. Returns
+    // -1 for EOF or when the token starts with a stray surrogate. Used
+    // by the lookahead shortcut: positive rules check whether the
+    // peek cluster's FIRST rune is in their FirstConsumedTokens, which
+    // covers WithinToken and other rules that match multi-rune
+    // clusters by walking their runes.
+    public int FirstRune
+    {
+        get
+        {
+            if (IsEof || Length == 0) return -1;
+            char c0 = Source[Offset];
+            if (char.IsHighSurrogate(c0))
+            {
+                if (Length >= 2 && char.IsLowSurrogate(Source[Offset + 1]))
+                    return char.ConvertToUtf32(c0, Source[Offset + 1]);
+                return -1;
+            }
+            if (char.IsSurrogate(c0)) return -1;
+            return c0;
+        }
+    }
 }

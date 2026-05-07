@@ -126,17 +126,13 @@ internal sealed class WithinTokenRule : Rule
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
 
-        // One leaf Symbol per token. Same Name-gated leaf-Id rule as
-        // OneOfRule / AnyTokenRule / NoneOfRule: an unnamed rule with a
-        // single-rune outer token uses the rune value as the leaf id
-        // (cheap rune-dispatch for tree consumers), and a named rule
-        // (.As("...")) or a multi-rune outer token uses the rule's own
-        // Id so Tree.Find / Tree.Is / NameOf resolve to the user's
-        // chosen name. The Memory points into the outer input, not the
-        // substring we passed to the sub-lexer, so callers that walk
-        // the tree get spans that reference the caller's original string.
-        int runeValue = token.RuneValue;
-        SymbolId leafId = (Name == null && runeValue >= 0) ? new SymbolId(runeValue) : Id;
+        // One leaf Symbol per token. See Rule.ResolveLeafId for the
+        // leaf-id rule shared across OneOfRule / NoneOfRule /
+        // AnyTokenRule / WithinTokenRule. The Memory points into the
+        // outer input, not the substring we passed to the sub-lexer, so
+        // callers that walk the tree get spans that reference the
+        // caller's original string.
+        SymbolId leafId = ResolveLeafId(token.RuneValue);
         var leafSymbol = new Symbol(leafId, FlattenType, token.Memory);
         if (effectiveFlattenType == FlattenType.Flatten)
         {
@@ -146,16 +142,13 @@ internal sealed class WithinTokenRule : Rule
         return leafSymbol;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart()
-    {
-        // We always consume exactly one outer token on success, so Advance
-        // is Always. The first rune of that token has to satisfy whatever
-        // the inner rule's first-rune requirement is, so we can propagate
-        // the inner's FirstConsumedTokens to the outer fast-fail path. That
-        // lets FirstOf(WithinToken(...), ...) skip this alternative without
-        // calling into it when the next token starts with a rune the
-        // inner rule can't accept.
-        var innerStart = _innerRule.ComputeRuleStart();
-        return new RuleStartRequirements(innerStart.FirstConsumedTokens, Advance.Always);
-    }
+    // WithinToken always consumes exactly one outer token (one grapheme
+    // cluster) on success, so Advance.Always. The first rune of that
+    // cluster has to satisfy whatever the inner rule requires, so the
+    // outer first-token shape forwards the inner's set and polarity.
+    // Calls _innerRule.ComputeRuleStart() rather than going through
+    // PassesThroughTo because the inner rule's compiled fields may not
+    // yet be populated at this point in the Compile walk.
+    internal override RuleStartRequirements ComputeRuleStart() =>
+        _innerRule.ComputeRuleStart().WithAdvance(Advance.Always);
 }

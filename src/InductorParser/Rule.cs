@@ -10,13 +10,13 @@ using InductorParser.Tracing;
 namespace InductorParser;
 
 // Rule is the base of everything in a grammar. A grammar is a tree of Rule
-// objects: composites like AllOf/FirstOf/OneOrMore wrap other Rules, leaves like
+// objects: composites like And/Or/OneOrMore wrap other Rules, leaves like
 // Token/OneOf sit at the bottom, and the root is whatever Rule you
 // hand to Parse(). Calling Parse on the root walks the tree and tries to
 // match the input.
 //
 // Rules are instances, not types.
-// In C# you build a Rule by calling factory functions (AllOf, FirstOf, Token, etc.)
+// In C# you build a Rule by calling factory functions (And, Or, Token, etc.)
 // that return Rule instances. The tree is built at runtime, compiled once,
 // and reused for every parse after that. A grammar can live anywhere a
 // reference can live: a local variable, a static field, an entry in a
@@ -37,7 +37,7 @@ namespace InductorParser;
 // shared across threads.
 //
 // Rule is abstract. The library's composite and leaf rules
-// (AllOfRule, FirstOfRule, GraphemeRule, etc.) subclass it. User code can subclass
+// (AndRule, OrRule, GraphemeRule, etc.) subclass it. User code can subclass
 // Rule too if it needs matching logic the built-in rules can't express.
 // See TryParseRule below for the full subclass contract.
 public abstract class Rule
@@ -45,6 +45,7 @@ public abstract class Rule
     // See below for description
     private bool _sealed;
     private bool _idAssigned;
+    private bool _idUserPinned;
     private string? _errorMessage;
 
     // Has this rule been compiled yet? External engines (the state-machine
@@ -75,26 +76,112 @@ public abstract class Rule
     // and tests can introspect a compiled grammar.
     public System.Text.NormalizationForm? NormalizationForm => _normalizationForm;
 
-    // FirstConsumedTokens and Advance drive the "can I skip this rule?"
-    // shortcut. See RuleStartRequirements for the full story. The type
-    // returned by ComputeRuleStart encapsulates these two. Populated at
-    // Compile time. The pessimistic defaults
-    // below (Universe, Sometimes) mean any user-defined Rule subclass that
-    // doesn't override ComputeRuleStart is safe and never gets shortcutted.
+    // FirstConsumedTokens, Advance, and Polarity drive the "can I skip this
+    // rule?" shortcut. See RuleStartRequirements for the full story. The
+    // type returned by ComputeRuleStart encapsulates these three.
+    // Populated at Compile time. The pessimistic defaults below (Universe,
+    // Sometimes, MustBeIn) mean any user-defined Rule subclass that doesn't
+    // override ComputeRuleStart is safe and never gets shortcutted.
     internal TokenSet FirstConsumedTokens { get; private set; } = TokenSet.Universe;
     internal Advance Advance { get; private set; } = Advance.Sometimes;
+    internal Polarity Polarity { get; private set; } = Polarity.MustBeIn;
+
+    // Process-wide kill switch for the lookahead shortcut. When true,
+    // CannotMatchLookahead always returns false (every alternative is
+    // attempted) and the SM Lowerer's CanSkipUnreachableAlt also bails,
+    // so neither engine emits or evaluates a pre-check. Used to A/B
+    // the optimization: any test failure outside trace output (which
+    // legitimately changes when SKIP lines disappear) under
+    // DisableLookaheadShortcut=true is a soundness bug in the
+    // shortcut path. Also useful for measuring the shortcut's
+    // performance contribution. Read by both engines; set once at
+    // process start (e.g. from a test fixture) before any Compile.
+    internal static bool DisableLookaheadShortcut;
 
     // The "can I skip this rule?" shortcut's consumer-facing API.
-    // See RuleStartRequirements for the full story.
+    // See RuleStartRequirements for the full story. peekToken is the
+    // next grapheme cluster's UTF-16 chars; peekFirstRune is its
+    // first rune (or -1 if the cluster starts with a stray surrogate
+    // or the cluster is empty/EOF).
+    //
+    // Polarity decides what membership question to ask.
+    //
+    // MustBeIn (positive rules): the rule might match a cluster
+    // starting with peekFirstRune iff that rune is in the rule's rune
+    // intervals (single-rune match path) OR the whole peek cluster is
+    // listed in the rule's multi-rune entries (multi-rune match path).
+    // The first-rune check covers two cases the strict ContainsToken
+    // would miss: (1) multi-rune clusters whose first rune is in the
+    // rule's set, where rules like WithinToken walk the cluster by
+    // rune and could match (Identifier on Devanagari, etc.); (2)
+    // multi-rune clusters whose first rune is in the set even if the
+    // rule itself only matches single-rune clusters (Token('a') on
+    // peek "á" - it fails at the runtime compare, but the
+    // shortcut conservatively doesn't skip).
+    //
+    // MustNotBeIn (negative rules like NoneOf): the rule will
+    // definitely fail on a peek that's strictly in its fail-set as a
+    // cluster. NoneOf's runtime check is `_set.ContainsToken(chars)`,
+    // so the shortcut mirrors that exactly. The first-rune-or-multi
+    // approximation isn't sound here: NoneOf({'a'}) accepts the
+    // multi-rune cluster "á" because the cluster isn't strictly
+    // in {'a'}, even though its first rune is.
+    // Emit a "this alt was shortcut-skipped at this peek" trace line
+    // under this rule's label. Without it, an alt that the Or /
+    // BetweenInclusive shortcut filtered out is invisible in the trace
+    // (the rule's TryParse never runs, so no SUCC/FAIL line fires),
+    // which can make a debugger wonder why the alternative wasn't
+    // tried. The line lands at Diagnostic level so it's gated by the
+    // same trace-volume knob as Lexer.Read. The cost is one
+    // IsTracing check on the cold path; the StringBuilder
+    // allocation only happens when tracing is on for this level.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal bool CannotMatchLookahead(int peekRune) =>
-        Advance == Advance.Always && !FirstConsumedTokens.Contains(peekRune);
+    internal void TraceShortcutSkip(Lexer lexer, ReadOnlySpan<char> peekToken)
+    {
+        if (!lexer.IsTracing(Tracing.TraceLevel.Diagnostic)) return;
+        string peekText = peekToken.IsEmpty ? "<EOF>" : peekToken.ToString();
+        string verb = Polarity == Polarity.MustBeIn ? "not in" : "in";
+        lexer.WriteTraceLine(
+            TraceLabel,
+            Tracing.TraceOutcome.Skipped,
+            $"shortcut: peek '{peekText}' {verb} '{FirstConsumedTokens}'");
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool CannotMatchLookahead(ReadOnlySpan<char> peekToken, int peekFirstRune)
+    {
+        if (DisableLookaheadShortcut) return false;
+        if (Advance != Advance.Always) return false;
+        if (Polarity == Polarity.MustBeIn)
+        {
+            // EOF: span is empty. An Always-consuming rule has no token
+            // to read, so it must fail. Skip it.
+            if (peekToken.Length == 0) return true;
+            // Lone surrogate (or any cluster whose first char doesn't
+            // decode as a valid Unicode scalar). The rune intervals
+            // can't filter on a non-rune, but wildcard rules like
+            // AnyToken can still match a lone-surrogate cluster as
+            // a one-char token. Conservatively don't skip and let the
+            // rule try.
+            if (peekFirstRune < 0) return false;
+            // Normal path: first-rune-in-intervals OR
+            // cluster-in-multi-rune-entries covers every shape a
+            // positive rule could match.
+            if (FirstConsumedTokens.Contains(peekFirstRune)) return false;
+            return !FirstConsumedTokens.ContainsToken(peekToken);
+        }
+        // MustNotBeIn: strict cluster check. EOF (empty span) returns
+        // false from ContainsToken, so we don't skip on EOF - that's
+        // correct because the rule still has to attempt and report
+        // its EOF failure.
+        return FirstConsumedTokens.ContainsToken(peekToken);
+    }
 
     // Lazily-built reverse index from SymbolId to human-readable name
     // for every rule reachable from this root. Populated on the first
     // NameOf call. Grammars that never ask never pay the allocation.
     // The IsUserSupplied flag distinguishes entries set by the user via
-    // .As("name") from the class-derived trace-name fallback (AllOf,
+    // .As("name") from the class-derived trace-name fallback (And,
     // OneOrMore, Token, etc.). NameOf uses the flag to decide whether
     // the entry should win over the rune-string default for ids that
     // happen to land in the Unicode scalar range.
@@ -117,8 +204,8 @@ public abstract class Rule
     }
 
     // Cached rule class name for trace output, derived from GetType().Name
-    // in the constructor. The "Rule" suffix is stripped so "AllOfRule"
-    // becomes "AllOf", "WithinTokenRule" becomes "WithinToken", matching the
+    // in the constructor. The "Rule" suffix is stripped so "AndRule"
+    // becomes "And", "WithinTokenRule" becomes "WithinToken", matching the
     // trace naming convention. Reading this is a field load which is cheaper
     // than calling GetType().Name on every trace output. Works under
     // IL2CPP because it's baked in at construction time, not looked
@@ -219,7 +306,7 @@ public abstract class Rule
     // Reusing this single pre-built instance skips that allocation.
     private static readonly IReadOnlyList<Rule> NoChildren = Array.Empty<Rule>();
 
-    // The child rules this rule is built from. Composites (AllOf, FirstOf, OneOrMore,
+    // The child rules this rule is built from. Composites (And, Or, OneOrMore,
     // etc.) pass their children to the base constructor and access them via
     // this property. Leaf rules (Token, OneOf, Eof) don't pass any children,
     // and the constructor below swaps in the shared empty list (NoChildren)
@@ -251,8 +338,8 @@ public abstract class Rule
     // here stays a one-time cost.
     protected void SetTraceName(string name) => _ruleTraceName = name;
 
-    // Strip the "Rule" suffix so the trace label reads "AllOf" instead
-    // of "AllOfRule". GetType() in a base constructor returns the
+    // Strip the "Rule" suffix so the trace label reads "And" instead
+    // of "AndRule". GetType() in a base constructor returns the
     // derived runtime type (C# guarantee), so this resolves correctly
     // for every subclass. Called once per rule instance in the ctor.
     // The result is cached in _ruleTraceName so trace output just
@@ -290,8 +377,40 @@ public abstract class Rule
         ThrowIfSealed();
         Id = id;
         _idAssigned = true;
+        _idUserPinned = true;
         return this;
     }
+
+    // Set by .As(SymbolId) and only by .As(SymbolId). Two consumers,
+    // both checking for "user explicitly identified this rule by id":
+    //   * Auto-pin sites (SetIdInternal callers like
+    //     GraphemeRule.CollectNormalizationOffenders) skip the auto-pin
+    //     so a user pin survives normalization.
+    //   * Leaf-emitting rules with the rune-as-leaf-id optimization
+    //     (OneOfRule / NoneOfRule / AnyTokenRule / WithinTokenRule, via
+    //     ResolveLeafId below) skip the optimization so leaves carry the
+    //     user's pinned id and Tree.Find / Tree.Is resolve through the
+    //     user's reference.
+    // Parallel to Name (set by .As(string)) for the second consumer:
+    // either user-identification path disables the rune-as-leaf-id
+    // shortcut.
+    internal bool IsUserSymbolIdPinned => _idUserPinned;
+
+    // The leaf-id rule for OneOfRule / NoneOfRule / AnyTokenRule /
+    // WithinTokenRule. A truly anonymous single-rune match carries the
+    // rune's code point as its leaf id, so tree consumers can dispatch
+    // on `leaf.Id == 'a'` without going through a synthetic per-rule id.
+    // A user-identified rule (`.As(string)` sets Name, `.As(SymbolId)`
+    // sets IsUserSymbolIdPinned) carries the rule's own Id so
+    // Tree.Find / Tree.Is / NameOf resolve through the user's reference.
+    // A multi-rune token has runeValue == -1 and falls through to Id
+    // either way, since one int can't hold a multi-rune code point.
+    // Centralized here so the four leaf-emitting rules can't drift on
+    // the gate.
+    protected SymbolId ResolveLeafId(int runeValue) =>
+        (Name == null && !IsUserSymbolIdPinned && runeValue >= 0)
+            ? new SymbolId(runeValue)
+            : Id;
 
     // Set the flatten policy (Preserve / Delete / Flatten) that controls
     // how this rule contributes to the parse tree on a successful match.
@@ -408,19 +527,19 @@ public abstract class Rule
         visited.Clear();
         ValidateAll(this, visited);
 
-        // Compute FirstConsumedTokens / Advance for every reachable rule (see
-        // RuleStartRequirements for the shortcut docs). Done after Validate so
-        // LateBoundRule's _target is guaranteed non-null by the time we walk
-        // its child.
-        var computing = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
-        visited.Clear();
-        ComputeRuleStartAll(this, visited, computing);
-
         // Validate every literal-bearing rule against the chosen normalization
         // form. Skipped when normalizeInput is null (the author opted out).
         // Throws one InvalidOperationException listing every offender so
         // grammar authors fix all mismatches in one pass instead of one at
-        // a time.
+        // a time. Runs BEFORE ComputeRuleStartAll so the cached
+        // FirstConsumedTokens reflects the post-normalization _set /
+        // _expected. The pass mutates literal-bearing rules' stored text
+        // (Token / Literal / LiteralIgnoreAsciiCase) and OneOf / NoneOf
+        // sets when the original entries aren't already in the chosen
+        // form. ComputeRuleStartAll then sees the rewritten data, so the
+        // first-rune the rule actually matches at parse time matches what
+        // OrRule / BetweenInclusiveRule's lookahead shortcut peeks
+        // for.
         if (normalizeInput.HasValue)
         {
             var offenders = new List<(Rule rule, string original, string normalized)>();
@@ -443,6 +562,16 @@ public abstract class Rule
                     inner);
             }
         }
+
+        // Compute FirstConsumedTokens / Advance for every reachable rule (see
+        // RuleStartRequirements for the shortcut docs). Done after Validate so
+        // LateBoundRule's _target is guaranteed non-null by the time we walk
+        // its child, and after the normalization-form pass so the cached
+        // FirstConsumedTokens reflects the post-normalization _set /
+        // _expected.
+        var computing = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
+        visited.Clear();
+        ComputeRuleStartAll(this, visited, computing);
 
         visited.Clear();
         SealAll(this, visited);
@@ -470,7 +599,7 @@ public abstract class Rule
     //   2. Per-grammar rule index: a lazily-built Dictionary<SymbolId, Rule>
     //      keyed on every rule reachable from this root. For a rule created
     //      with .As("foo"), returns "foo". For an unnamed rule, returns the
-    //      class-derived trace name ("AllOf", "OneOrMore", "Token",
+    //      class-derived trace name ("And", "OneOrMore", "Token",
     //      "BetweenInclusive[1..3]"). Returns null if the id isn't in the
     //      grammar.
     //
@@ -502,7 +631,7 @@ public abstract class Rule
             return Rune.IsValid(value) ? new Rune(value).ToString() : null;
 
         // Custom-range or built-in id with no user-supplied name: the
-        // class-derived trace name (AllOf, OneOrMore,
+        // class-derived trace name (And, OneOrMore,
         // BetweenInclusive[1..3]).
         return entry.Name;
     }
@@ -1145,17 +1274,17 @@ public abstract class Rule
     // Depth-first, post-order walk with cycle detection. A rule's
     // ComputeRuleStart reads its children's FirstConsumedTokens/Advance, so
     // children have to be computed first. When a cycle is found
-    // (LateBoundRule pointing back into a FirstOf that contains it, for
+    // (LateBoundRule pointing back into a Or that contains it, for
     // instance), the in-progress rule is left at its pessimistic default
     // (Universe, Advance.Sometimes) so the loop terminates.
-    // That's safe: FirstOfRule will always try
+    // That's safe: OrRule will always try
     // it, which is exactly the behavior before required-runes dispatch
     // existed.
     //
     // A smarter algorithm could repeat the walk until no
     // FirstConsumedTokens changes (each pass can only grow a FirstConsumedTokens, so this
     // terminates), which would tighten the result for self-referential
-    // grammars and let FirstOfRule skip more branches inside them. But the
+    // grammars and let OrRule skip more branches inside them. But the
     // common case (LateBoundRule target is reachable via a non-cyclic
     // path) converges correctly on the first visit, so the pessimistic
     // fallback is enough for now.
@@ -1170,15 +1299,27 @@ public abstract class Rule
         // FirstConsumedTokens must be Empty. Anything else is dead data
         // that would mislead a reader. Fail at Compile time so subclass
         // authors find out immediately instead of debugging a wrong
-        // AllOfRule union somewhere else.
+        // AndRule union somewhere else.
         if (start.Advance == Advance.Never && !start.FirstConsumedTokens.IsEmpty)
             throw new InvalidOperationException(
                 $"Rule '{r.GetType().Name}' returned Advance.Never with non-empty " +
                 $"FirstConsumedTokens. A rule that never advances can't have a set " +
-                $"of possible first-consumed runes. Use TokenSet.Empty for " +
+                $"of possible first-consumed tokens. Use TokenSet.Empty for " +
                 $"FirstConsumedTokens when Advance is Never.");
+        // MustNotBeIn means the FirstConsumedTokens set is the rule's
+        // FAIL set: peek-IS-in-set => skip. That logic is only sound
+        // when the rule definitely tries to consume on success, so
+        // Advance must be Always. A Sometimes rule with MustNotBeIn
+        // would have a fail-set the shortcut couldn't act on, and a
+        // Never rule with MustNotBeIn doesn't make sense at all.
+        if (start.Polarity == Polarity.MustNotBeIn && start.Advance != Advance.Always)
+            throw new InvalidOperationException(
+                $"Rule '{r.GetType().Name}' returned Polarity.MustNotBeIn with " +
+                $"Advance.{start.Advance}. MustNotBeIn semantics (peek IS in fail-set " +
+                $"=> skip) require Advance.Always. Use MustBeIn or Advance.Always.");
         r.FirstConsumedTokens = start.FirstConsumedTokens;
         r.Advance = start.Advance;
+        r.Polarity = start.Polarity;
         computing.Remove(r);
         visited.Add(r);
     }
