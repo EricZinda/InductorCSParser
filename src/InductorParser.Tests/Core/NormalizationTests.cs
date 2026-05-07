@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text;
 using NUnit.Framework;
 using InductorParser;
+using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
@@ -671,6 +672,24 @@ public class NormalizationTests
         rule.Compile();
         Assert.That(rule.Id.Value, Is.EqualTo(0x03A9),
             "Token Id repins to the converted rune value");
+    }
+
+    [Test]
+    public void Token_with_singleton_decomposable_rune_preserves_user_pinned_id()
+    {
+        // Sibling of Token_with_singleton_decomposable_rune_repins_id.
+        // The unnamed case re-pins Id to the post-normalization rune,
+        // which is desired (leaf-id consistency between Token('Ω') and
+        // Token('Ω').Compile(FormC)). But when the user pinned an
+        // explicit SymbolId via .As(new SymbolId(...)), Compile must NOT
+        // overwrite it. .As(SymbolId) is documented as the
+        // stable-numbering hook, useful for serialized parse trees, and
+        // a silent re-pin under normalization defeats that promise.
+        int pinned = SymbolRanges.CustomRangeStart + 0x100;
+        var rule = Token(OhmGrapheme).As(new SymbolId(pinned));
+        rule.Compile();
+        Assert.That(rule.Id.Value, Is.EqualTo(pinned),
+            "User-pinned SymbolId survives canonical-singleton normalization");
     }
 
     [Test]

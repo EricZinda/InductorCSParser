@@ -86,7 +86,9 @@ internal sealed class GraphemeRule : Rule
         }
 
         _expected = normalized;
-        if (TrySingleRuneValue(_expected, out int runeValue))
+        // Skip the rune re-pin when the user fixed an Id via .As(SymbolId);
+        // their pin is the stable-numbering contract.
+        if (!IsUserSymbolIdPinned && TrySingleRuneValue(_expected, out int runeValue))
             SetIdInternal(new SymbolId(runeValue));
     }
 

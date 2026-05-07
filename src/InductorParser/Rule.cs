@@ -45,6 +45,7 @@ public abstract class Rule
     // See below for description
     private bool _sealed;
     private bool _idAssigned;
+    private bool _idUserPinned;
     private string? _errorMessage;
 
     // Has this rule been compiled yet? External engines (the state-machine
@@ -290,8 +291,13 @@ public abstract class Rule
         ThrowIfSealed();
         Id = id;
         _idAssigned = true;
+        _idUserPinned = true;
         return this;
     }
+
+    // Set by .As(SymbolId) and only by .As(SymbolId). Auto-pin sites
+    // (SetIdInternal callers) check this so they don't override a user pin.
+    internal bool IsUserSymbolIdPinned => _idUserPinned;
 
     // Set the flatten policy (Preserve / Delete / Flatten) that controls
     // how this rule contributes to the parse tree on a successful match.
