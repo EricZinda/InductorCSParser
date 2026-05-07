@@ -1,2 +1,3 @@
-- LiteralIgnoreAsciiCase seems like it shouldn't allow non-ascii literals in it
+# LiteralIgnoreAsciiCase seems like it shouldn't allow non-ascii literals in it
+
 	

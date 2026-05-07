@@ -1,4 +1,5 @@
-- NoneOfRule.FirstConsumedTokens excludes runes that admitted multi-rune clusters could start with
+# NoneOfRule.FirstConsumedTokens excludes runes that admitted multi-rune clusters could start with
+
 
 `NoneOfRule.ComputeRuleStart` in [src/InductorParser/NoneOfRule.cs](../src/InductorParser/NoneOfRule.cs) returned `~_set.RunesOnlyPart` (with the rune-only-set complement when the set has no multi-rune entries). That set is the runes whose single-rune token would pass NoneOf, but it ignores that NoneOf also admits multi-rune clusters whose chars aren't in the set's multi-rune part. A multi-rune cluster like `"a" + combining acute` can start with any base rune, including runes that are in the rune-only part of the set. When NoneOf is wrapped in a rule that uses the `CannotMatchLookahead` shortcut (`BetweenInclusiveRule` and `FirstOfRule`), the shortcut peeks ONE rune off the input and skips the rule when that rune isn't in `Inner.FirstConsumedTokens`. With the old `~_set.RunesOnlyPart`, every rune in the rune-only part triggered the skip, even though NoneOf would have accepted a multi-rune cluster starting with that rune.
 

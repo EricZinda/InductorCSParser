@@ -1,4 +1,5 @@
-- WithinTokenRule records mid-grapheme-cluster failure position when inner rule consumes only a prefix of the outer token
+# WithinTokenRule records mid-grapheme-cluster failure position when inner rule consumes only a prefix of the outer token
+
 
 `WithinTokenRule.TryParseRule` runs its inner rule against a bounded one-rune-per-token sub-lexer over the runes of one outer grapheme cluster. When the inner rule succeeds on a prefix but doesn't consume the whole token, [src/InductorParser/WithinTokenRule.cs:99](../src/InductorParser/WithinTokenRule.cs#L99) records the failure at `subLexer.Position`. That position is in rune coordinates inside the outer token, so it lands MID-grapheme-cluster from the outer parser's view. The same shape exists at [src/InductorParser/WithinTokenRule.cs:87-89](../src/InductorParser/WithinTokenRule.cs#L87-L89) when an inner composite (e.g. `AllOf`) fails after one of its children advanced the sub-lexer past the first rune: `subLexer.DeepestFailure` carries that mid-cluster offset out into `outerLexer.RecordFailure`.
 

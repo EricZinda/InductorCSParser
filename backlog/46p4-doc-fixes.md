@@ -1,4 +1,5 @@
-- Doc fixes
+# Doc fixes
+
 ScanUntil needs different error messages for sub rules I think
     internal void AdvanceUntilRuneIn(RuneSet candidates, char[]? bmpCandidates)
     internal int AdvanceWhileRuneIn(RuneSet set)

@@ -1,4 +1,5 @@
-- EofRule trace renders lone surrogate or partial grapheme cluster for unconsumed token
+# EofRule trace renders lone surrogate or partial grapheme cluster for unconsumed token
+
 
 EofRule's failure trace at [src/InductorParser/EofRule.cs:19](../src/InductorParser/EofRule.cs#L19) writes `$"found {lexer.Input[lexer.Position]}"`, which indexes the input as one UTF-16 code unit. When the unconsumed character at the current lexer position is a supplementary-plane rune (one rune, two chars: every emoji past the BMP, the mathematical bold A `𝐀`, etc.) the indexer returns just the lone high surrogate, so the trace line reads `found ?` with the replacement glyph. Under `Compile(null)` an unconsumed multi-rune grapheme cluster (`e` + combining acute, the CRLF cluster, an emoji ZWJ sequence) returns just the first rune, so a parse failure trace shows `found e` for an input the user perceives as `é`.
 
