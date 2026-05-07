@@ -91,6 +91,20 @@ public abstract class Rule
     internal bool CannotMatchLookahead(int peekRune) =>
         Advance == Advance.Always && !FirstConsumedTokens.Contains(peekRune);
 
+    // True iff this rule, or any rule reachable from it, was given a
+    // .WithError(...) message. Composites consult this on a child before
+    // taking a shortcut that would skip Inner.TryParse outright: if any
+    // rule in Inner's subtree carries a WithError, the message belongs at
+    // the deepest-failure slot when the overall parse fails here, and
+    // shortcutting Inner would silently drop it. Populated by Compile in a
+    // post-order walk so a rule's value is the OR of its own ErrorMessage
+    // presence and every descendant's. The pessimistic default (true) is
+    // the safe answer for any user-defined Rule subclass that ends up not
+    // sealed: shortcuts that consult this stay disabled, which costs one
+    // extra TryParse on the failure path but never drops a WithError
+    // message.
+    internal bool HasErrorMessageInSubtree { get; private set; } = true;
+
     // Lazily-built reverse index from SymbolId to human-readable name
     // for every rule reachable from this root. Populated on the first
     // NameOf call. Grammars that never ask never pay the allocation.
@@ -448,6 +462,14 @@ public abstract class Rule
         var computing = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
         visited.Clear();
         ComputeRuleStartAll(this, visited, computing);
+
+        // Compute HasErrorMessageInSubtree for every reachable rule.
+        // Composite shortcut sites consult this on a child before bypassing
+        // its TryParse so a WithError on any descendant still gets a chance
+        // to record at the deepest-failure slot.
+        visited.Clear();
+        var computingErrors = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
+        ComputeHasErrorMessageInSubtreeAll(this, visited, computingErrors);
 
         // Validate every literal-bearing rule against the chosen normalization
         // form. Skipped when normalizeInput is null (the author opted out).
@@ -1222,6 +1244,27 @@ public abstract class Rule
         r._sealed = true;
         foreach (var child in r.Children)
             SealAll(child, visited);
+    }
+
+    // Depth-first, post-order walk that ORs each rule's own ErrorMessage
+    // with every descendant's HasErrorMessageInSubtree. Pessimistic-default
+    // friendly: a rule entered while still on the recursion stack (a
+    // cycle hit) keeps the field's initial true value, which keeps the
+    // shortcut disabled rather than silently dropping a deeper rule's
+    // message. Same shape as ComputeRuleStartAll.
+    private static void ComputeHasErrorMessageInSubtreeAll(Rule r, HashSet<Rule> visited, HashSet<Rule> computing)
+    {
+        if (visited.Contains(r)) return;
+        if (!computing.Add(r)) return; // cycle: leave at pessimistic default (true)
+        bool any = r._errorMessage != null;
+        foreach (var child in r.Children)
+        {
+            ComputeHasErrorMessageInSubtreeAll(child, visited, computing);
+            any |= child.HasErrorMessageInSubtree;
+        }
+        r.HasErrorMessageInSubtree = any;
+        computing.Remove(r);
+        visited.Add(r);
     }
 
     // Walk the rule graph and ask each rule to validate its own user-

@@ -473,6 +473,32 @@ public class StateMachineParserTests
         Assert.That(stateMachine.ErrorMessage, Is.EqualTo("expected a digit"));
     }
 
+    [Test]
+    public void Or_descendant_WithError_surfaces_when_per_alt_peek_skip_would_skip_composite()
+    {
+        // SM mirror of Or_descendant_WithError_surfaces_when_per_child_shortcut_would_skip_composite
+        // in OrRuleTests. The state-machine engine's Lowerer.CanSkipUnreachableAlt
+        // decides whether to emit a CheckPeekedRuneInSet ahead of an Or
+        // alternative. Pre-fix the gate was child.ErrorMessage != null,
+        // which let a composite child like Or(...) whose own ErrorMessage
+        // is null be skipped on a peeked-rune mismatch even when its
+        // subtree carried .WithError. The peek-skip would route past the
+        // PushBacktrack to the next alternative, so the descendant's
+        // RecordFailure call never ran and "want 'a'" never reached
+        // DeepestFailureMessage.
+        //
+        // The fix consults child.HasErrorMessageInSubtree, the same
+        // subtree-aware flag the recursive engine's OrRule uses. With the
+        // gate the inner Or runs, its own per-alt skip respects WithError
+        // on Token('a'), and "want 'a'" surfaces.
+        var rule = Or(Or(Token('a').WithError("want 'a'"), Token('b')), Token('c'));
+        var stateMachine = StateMachineParser.Parse(rule, "d", new ParseOptions());
+
+        Assert.That(stateMachine.Success, Is.False);
+        Assert.That(stateMachine.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(stateMachine.ErrorMessage, Is.EqualTo("want 'a'"));
+    }
+
     // ---- Bridge fallback (WithinGrapheme + custom subclasses) ----
 
     [Test]

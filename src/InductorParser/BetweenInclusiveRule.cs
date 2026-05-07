@@ -58,8 +58,19 @@ internal sealed class BetweenInclusiveRule : Rule
         var scannerSkip = TryCreateScannerSkip(lexer);
 
         // First try to shortcut and exit fast using the "Rule Skip" shortcut described
-        // on RuleStartRequirements
-        if (!lexer.PreserveAllSymbols && Inner.ErrorMessage == null)
+        // on RuleStartRequirements.
+        //
+        // Gated on !Inner.HasErrorMessageInSubtree, not just Inner.ErrorMessage == null.
+        // A descendant rule with .WithError has the same role as Inner's own .WithError:
+        // its message belongs at the deepest-failure slot when the overall parse fails
+        // here. Bypassing Inner.TryParse would skip past every RecordFailure call in
+        // Inner's subtree, so the descendant's message never reaches DeepestFailureMessage
+        // and the user sees the generic positional template instead of the grammar
+        // author's text. This is true on both paths: the failure path drops the message
+        // outright, and the success path (AtLeast == 0) silently swallows it because
+        // Inner is never entered and so no failure is ever recorded for the descendant
+        // to claim.
+        if (!lexer.PreserveAllSymbols && !Inner.HasErrorMessageInSubtree)
         {
             string input = lexer.Input;
             int pos = lexer.Position;
