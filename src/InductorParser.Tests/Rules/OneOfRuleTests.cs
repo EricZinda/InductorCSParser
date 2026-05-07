@@ -222,4 +222,27 @@ public class OneOfRuleTests
         Assert.That(namedRule.NameOf(namedResult.Tree!.Id), Is.EqualTo("flag"));
     }
 
+    [Test]
+    public void OneOf_in_OneOrMore_matches_after_FormC_canonical_singleton_substitution()
+    {
+        // U+212B ANGSTROM SIGN is a canonical singleton: under FormC it
+        // converts to U+00C5 LATIN CAPITAL LETTER A WITH RING ABOVE.
+        // OneOf(TokenSet.Single(0x212B)) compiled with FormC has its set
+        // re-projected at Compile time: _set becomes {0x00C5}. The lexer
+        // sees input runes in the same form (Parse normalizes the input
+        // first), so a token of U+00C5 should match the projected set.
+        //
+        // The bug: ComputeRuleStartAll runs BEFORE the normalization-form
+        // pass that mutates _set, so OneOfRule.FirstConsumedTokens stays
+        // pinned to the pre-projection set {0x212B}. OneOrMore's lookahead
+        // shortcut peeks the input's first rune (0x00C5), checks it
+        // against the cached {0x212B} (not Contains), concludes the inner
+        // can't match, and fails the OneOrMore at AtLeast=1. The inner
+        // OneOf would have matched if it had been called.
+        var rule = OneOrMore(OneOf(TokenSet.Single(0x212B)))
+            .Compile(System.Text.NormalizationForm.FormC);
+        var result = rule.Parse("Å");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
+
 }

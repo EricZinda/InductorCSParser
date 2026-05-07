@@ -348,4 +348,24 @@ public class GraphemeRuleTests
         Assert.That(rule.NameOf(result.Tree!.Id), Is.EqualTo("Token"));
         Assert.That(result.Tree!.PrintTree(rule), Is.EqualTo("Token: \"हि\"\n"));
     }
+
+    [Test]
+    public void Token_in_OneOrMore_matches_after_FormC_canonical_singleton_substitution()
+    {
+        // Same staleness shape as the OneOf test in OneOfRuleTests:
+        // GraphemeRule.ComputeRuleStart reads _expected and pins
+        // FirstConsumedTokens to the first rune of that text. The Compile
+        // pipeline then runs the normalization-form pass, which can
+        // rewrite _expected (U+212B ANGSTROM SIGN converts to U+00C5
+        // LATIN CAPITAL LETTER A WITH RING ABOVE under FormC). The
+        // cached FirstConsumedTokens stays {0x212B} even though the rule
+        // now matches a token of U+00C5. OneOrMore's lookahead shortcut
+        // peeks the input's first rune (also U+00C5 after Parse-time
+        // input normalization), checks against the stale set, and bails
+        // before calling the rule.
+        var rule = OneOrMore(Token("Å"))
+            .Compile(System.Text.NormalizationForm.FormC);
+        var result = rule.Parse("Å");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
 }
