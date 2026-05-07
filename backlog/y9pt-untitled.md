@@ -1,3 +1,5 @@
+# Untitled
+
 - Global NFD probe table for faster Compile under non-null normalization
 
 Compile under any non-null `NormalizationForm` walks every entry in every `OneOf` / `NoneOf` set to compute canonical equivalents, plus calls `Normalize(form)` on every literal in `Token` / `Literal` / `LiteralIgnoreAsciiCase`. For grammars that pull in large category sets the per-Compile cost adds up: `OneOf(TokenSet.Letters)` walks ~130K entries, `OneOf(TokenSet.Universe)` walks ~1M. Estimated 50-200ms for Letters-sized sets and 500ms-2s for Universe-sized ones, paid on every Compile.

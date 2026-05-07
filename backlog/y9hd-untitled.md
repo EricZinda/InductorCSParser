@@ -1,3 +1,5 @@
+# Untitled
+
 - Hardcoded NFD table for zero-cost Compile under non-null normalization
 
 Follow-on to the global NFD probe table backlog item. Once that ships, the first non-null Compile in a process still pays a 1-3 second one-time cost to build the table by walking the BCL across all valid runes. For applications that Compile many grammars (a regex/PEG playground, a language server, a code formatter), that first-call latency is visible.

@@ -1,3 +1,5 @@
+# Untitled
+
 - SM polarity-aware dispatch and token-peek opcodes (Phase 6 follow-up to the token-peek refactor)
 
 The recursive engine's lookahead shortcut now peeks the next TOKEN (one grapheme cluster) and dispatches on a polarity-tagged TokenSet (Polarity.MustBeIn or MustNotBeIn). NoneOf publishes its set as MustNotBeIn so the shortcut can precisely skip a NoneOf branch when the peek IS in the fail-set. The state-machine engine still dispatches via rune-peek opcodes (LoadPeekedRune, CheckPeekedRuneInSet, LoadPeekedRuneAndJumpAlt) and Lowerer.cs has two stopgaps:
