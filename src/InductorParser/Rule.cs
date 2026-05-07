@@ -76,20 +76,106 @@ public abstract class Rule
     // and tests can introspect a compiled grammar.
     public System.Text.NormalizationForm? NormalizationForm => _normalizationForm;
 
-    // FirstConsumedTokens and Advance drive the "can I skip this rule?"
-    // shortcut. See RuleStartRequirements for the full story. The type
-    // returned by ComputeRuleStart encapsulates these two. Populated at
-    // Compile time. The pessimistic defaults
-    // below (Universe, Sometimes) mean any user-defined Rule subclass that
-    // doesn't override ComputeRuleStart is safe and never gets shortcutted.
+    // FirstConsumedTokens, Advance, and Polarity drive the "can I skip this
+    // rule?" shortcut. See RuleStartRequirements for the full story. The
+    // type returned by ComputeRuleStart encapsulates these three.
+    // Populated at Compile time. The pessimistic defaults below (Universe,
+    // Sometimes, MustBeIn) mean any user-defined Rule subclass that doesn't
+    // override ComputeRuleStart is safe and never gets shortcutted.
     internal TokenSet FirstConsumedTokens { get; private set; } = TokenSet.Universe;
     internal Advance Advance { get; private set; } = Advance.Sometimes;
+    internal Polarity Polarity { get; private set; } = Polarity.MustBeIn;
+
+    // Process-wide kill switch for the lookahead shortcut. When true,
+    // CannotMatchLookahead always returns false (every alternative is
+    // attempted) and the SM Lowerer's CanSkipUnreachableAlt also bails,
+    // so neither engine emits or evaluates a pre-check. Used to A/B
+    // the optimization: any test failure outside trace output (which
+    // legitimately changes when SKIP lines disappear) under
+    // DisableLookaheadShortcut=true is a soundness bug in the
+    // shortcut path. Also useful for measuring the shortcut's
+    // performance contribution. Read by both engines; set once at
+    // process start (e.g. from a test fixture) before any Compile.
+    internal static bool DisableLookaheadShortcut;
 
     // The "can I skip this rule?" shortcut's consumer-facing API.
-    // See RuleStartRequirements for the full story.
+    // See RuleStartRequirements for the full story. peekToken is the
+    // next grapheme cluster's UTF-16 chars; peekFirstRune is its
+    // first rune (or -1 if the cluster starts with a stray surrogate
+    // or the cluster is empty/EOF).
+    //
+    // Polarity decides what membership question to ask.
+    //
+    // MustBeIn (positive rules): the rule might match a cluster
+    // starting with peekFirstRune iff that rune is in the rule's rune
+    // intervals (single-rune match path) OR the whole peek cluster is
+    // listed in the rule's multi-rune entries (multi-rune match path).
+    // The first-rune check covers two cases the strict ContainsToken
+    // would miss: (1) multi-rune clusters whose first rune is in the
+    // rule's set, where rules like WithinToken walk the cluster by
+    // rune and could match (Identifier on Devanagari, etc.); (2)
+    // multi-rune clusters whose first rune is in the set even if the
+    // rule itself only matches single-rune clusters (Token('a') on
+    // peek "á" - it fails at the runtime compare, but the
+    // shortcut conservatively doesn't skip).
+    //
+    // MustNotBeIn (negative rules like NoneOf): the rule will
+    // definitely fail on a peek that's strictly in its fail-set as a
+    // cluster. NoneOf's runtime check is `_set.ContainsToken(chars)`,
+    // so the shortcut mirrors that exactly. The first-rune-or-multi
+    // approximation isn't sound here: NoneOf({'a'}) accepts the
+    // multi-rune cluster "á" because the cluster isn't strictly
+    // in {'a'}, even though its first rune is.
+    // Emit a "this alt was shortcut-skipped at this peek" trace line
+    // under this rule's label. Without it, an alt that the Or /
+    // BetweenInclusive shortcut filtered out is invisible in the trace
+    // (the rule's TryParse never runs, so no SUCC/FAIL line fires),
+    // which can make a debugger wonder why the alternative wasn't
+    // tried. The line lands at Diagnostic level so it's gated by the
+    // same trace-volume knob as Lexer.Read. The cost is one
+    // IsTracing check on the cold path; the StringBuilder
+    // allocation only happens when tracing is on for this level.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal bool CannotMatchLookahead(int peekRune) =>
-        Advance == Advance.Always && !FirstConsumedTokens.Contains(peekRune);
+    internal void TraceShortcutSkip(Lexer lexer, ReadOnlySpan<char> peekToken)
+    {
+        if (!lexer.IsTracing(Tracing.TraceLevel.Diagnostic)) return;
+        string peekText = peekToken.IsEmpty ? "<EOF>" : peekToken.ToString();
+        string verb = Polarity == Polarity.MustBeIn ? "not in" : "in";
+        lexer.WriteTraceLine(
+            TraceLabel,
+            Tracing.TraceOutcome.Skipped,
+            $"shortcut: peek '{peekText}' {verb} '{FirstConsumedTokens}'");
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool CannotMatchLookahead(ReadOnlySpan<char> peekToken, int peekFirstRune)
+    {
+        if (DisableLookaheadShortcut) return false;
+        if (Advance != Advance.Always) return false;
+        if (Polarity == Polarity.MustBeIn)
+        {
+            // EOF: span is empty. An Always-consuming rule has no token
+            // to read, so it must fail. Skip it.
+            if (peekToken.Length == 0) return true;
+            // Lone surrogate (or any cluster whose first char doesn't
+            // decode as a valid Unicode scalar). The rune intervals
+            // can't filter on a non-rune, but wildcard rules like
+            // AnyToken can still match a lone-surrogate cluster as
+            // a one-char token. Conservatively don't skip and let the
+            // rule try.
+            if (peekFirstRune < 0) return false;
+            // Normal path: first-rune-in-intervals OR
+            // cluster-in-multi-rune-entries covers every shape a
+            // positive rule could match.
+            if (FirstConsumedTokens.Contains(peekFirstRune)) return false;
+            return !FirstConsumedTokens.ContainsToken(peekToken);
+        }
+        // MustNotBeIn: strict cluster check. EOF (empty span) returns
+        // false from ContainsToken, so we don't skip on EOF - that's
+        // correct because the rule still has to attempt and report
+        // its EOF failure.
+        return FirstConsumedTokens.ContainsToken(peekToken);
+    }
 
     // Lazily-built reverse index from SymbolId to human-readable name
     // for every rule reachable from this root. Populated on the first
@@ -1181,10 +1267,22 @@ public abstract class Rule
             throw new InvalidOperationException(
                 $"Rule '{r.GetType().Name}' returned Advance.Never with non-empty " +
                 $"FirstConsumedTokens. A rule that never advances can't have a set " +
-                $"of possible first-consumed runes. Use TokenSet.Empty for " +
+                $"of possible first-consumed tokens. Use TokenSet.Empty for " +
                 $"FirstConsumedTokens when Advance is Never.");
+        // MustNotBeIn means the FirstConsumedTokens set is the rule's
+        // FAIL set: peek-IS-in-set => skip. That logic is only sound
+        // when the rule definitely tries to consume on success, so
+        // Advance must be Always. A Sometimes rule with MustNotBeIn
+        // would have a fail-set the shortcut couldn't act on, and a
+        // Never rule with MustNotBeIn doesn't make sense at all.
+        if (start.Polarity == Polarity.MustNotBeIn && start.Advance != Advance.Always)
+            throw new InvalidOperationException(
+                $"Rule '{r.GetType().Name}' returned Polarity.MustNotBeIn with " +
+                $"Advance.{start.Advance}. MustNotBeIn semantics (peek IS in fail-set " +
+                $"=> skip) require Advance.Always. Use MustBeIn or Advance.Always.");
         r.FirstConsumedTokens = start.FirstConsumedTokens;
         r.Advance = start.Advance;
+        r.Polarity = start.Polarity;
         computing.Remove(r);
         visited.Add(r);
     }

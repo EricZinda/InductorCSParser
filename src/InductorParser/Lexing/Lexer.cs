@@ -252,6 +252,7 @@ public sealed partial class Lexer
         {
             case TraceOutcome.Success: _traceSink!.Write("SUCC | "); break;
             case TraceOutcome.Failure: _traceSink!.Write("FAIL | "); break;
+            case TraceOutcome.Skipped: _traceSink!.Write("SKIP | "); break;
         }
         _traceSink!.Write(label);
         if (message.Length > 0)
@@ -289,6 +290,35 @@ public sealed partial class Lexer
     {
         if (position >= _endPosition) return 0;
         return NextTokenLength(position);
+    }
+
+    // Peek the next token (one grapheme cluster, or one rune in the
+    // WithinToken sub-lexer mode) without advancing. Returns an EOF
+    // token when the lexer is at end-of-input. The returned Token's
+    // Chars span lives over the original input string and stays valid
+    // as long as the lexer's input does.
+    //
+    // Used by OrRule and BetweenInclusiveRule for the lookahead
+    // shortcut: peek one token, ask each child rule whether it could
+    // match this token. The shortcut runs at the lexer's current
+    // cursor position, which the GraphemeClusterIndex has already
+    // walked past (every committed Read calls LengthAt before
+    // advancing), so PeekToken is a cache-hit O(1) lookup in the
+    // common path.
+    //
+    // Why not BeginTransaction + Read + rollback? Read emits a trace
+    // line, mutates _position, bumps _transactionDepth, and rolls
+    // back through a using-block disposer. Correct, but too heavy
+    // for the per-Or-entry hot path and would clutter trace
+    // output with phantom Read lines. PeekToken is the side-effect-
+    // free, AggressiveInlining-friendly alternative.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal Token PeekToken()
+    {
+        if (_position >= _endPosition)
+            return new Token(_input, _position, 0, isEof: true);
+        int length = NextTokenLength(_position);
+        return new Token(_input, _position, length, isEof: false);
     }
 
     // Peek the rune at `pos` in `input` without advancing any lexer

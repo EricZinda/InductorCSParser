@@ -362,23 +362,6 @@ internal sealed class ScanUntilRule : Rule
         return leafSymbol;
     }
 
-    // Return the set of runes this rule might consume first (can be a superset)
-    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
-    // Then say whether the rule Always / Sometimes / Never consumes at least
-    // that first rune on success.
-    internal override RuleStartRequirements ComputeRuleStart()
-    {
-        // ScanUntil always succeeds (a zero-length body is legal),
-        // but it also consumes tokens when the input has matchable
-        // ones. That's Advance.Sometimes. Combined with Universe
-        // below, CannotMatchLookahead always returns false for this
-        // rule (the skip optimization needs Advance.Always to fire),
-        // so the FirstConsumedTokens value here doesn't actually
-        // change parser behavior. Universe is the honest answer:
-        // body consumes whole tokens (clusters), and a multi-rune
-        // body cluster can start with any rune at all, including a
-        // rune that's also a single-rune stopper-set entry (the
-        // cluster as a whole isn't the stopper, so it's body).
-        return new RuleStartRequirements(TokenSet.Universe, Advance.Sometimes);
-    }
+    internal override RuleStartRequirements ComputeRuleStart() =>
+        RuleStartRequirements.MayAdvanceByAnyTokens;
 }

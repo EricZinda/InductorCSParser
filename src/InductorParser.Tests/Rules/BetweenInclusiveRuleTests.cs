@@ -681,4 +681,39 @@ public class BetweenInclusiveRuleTests
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
+
+    // The inner-loop shortcut (peek before each iteration, take count==0
+    // fast-exit when inner can't match) is covered by ZeroOrMoreRuleTests.
+    // The tests below cover the OTHER direction: an enclosing Or
+    // skipping a BetweenInclusive whose AtLeast >= 1 (so its Advance is
+    // Always and the outer shortcut can fire).
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_OneOrMore_skips_when_peek_is_not_in_inner_set()
+    {
+        // OneOrMore(inner) forwards inner's first-set with Advance.Always
+        // (since AtLeast == 1). Peek 'x' isn't in {'a'}, so the outer
+        // Or skips OneOrMore.
+        var sink = NewSink();
+        var rule = Or(OneOrMore(Token('a')), Literal("x"));
+        var result = rule.Parse("x", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Contain("SKIP | OneOrMore:"));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_OneOrMore_runs_when_peek_is_in_inner_set()
+    {
+        // Peek 'a' is in {'a'}, so the outer Or doesn't skip
+        // OneOrMore. It runs and matches.
+        var sink = NewSink();
+        var rule = Or(OneOrMore(Token('a')), Literal("x"));
+        var result = rule.Parse("aaa", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | OneOrMore:"));
+    }
 }

@@ -328,7 +328,12 @@ internal static class BenchmarkRegistry
     private static readonly TokenSet AwsKeyTail = AsciiUpper | TokenSet.Range('0', '7');
     private static readonly TokenSet AsciiRegexWhitespace = TokenSet.Runes(" \t\r\n\f\v");
     private static readonly TokenSet CodeSeparator = TokenSet.Runes(",") | AsciiRegexWhitespace;
-    private static readonly TokenSet NotNewline = ~TokenSet.Runes("\r\n");
+    // Construct from individual Single() runes rather than Runes("\r\n"):
+    // post-merge TokenSet.Runes walks by grapheme, so "\r\n" becomes
+    // a multi-rune cluster (CRLF), and ~ on a multi-rune set throws.
+    // We want ~{CR, LF} as rune-set, which the explicit construction
+    // gives.
+    private static readonly TokenSet NotNewline = ~(TokenSet.Single('\r') | TokenSet.Single('\n'));
     private static readonly TokenSet NotUppercase = ~AsciiUpper;
     private static readonly TokenSet NotSpace = ~TokenSet.Runes(" ");
     private static readonly TokenSet NotSemicolon = ~TokenSet.Runes(";");

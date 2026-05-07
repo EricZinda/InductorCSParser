@@ -78,15 +78,6 @@ internal sealed class ScanWhileRule : Rule
         return leafSymbol;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart()
-    {
-        // minimumCount is guaranteed >= 1, so every successful match consumes
-        // a first rune from _set. That lets scanner-style outer loops skip
-        // straight to the next possible run start. For sets with multi-rune
-        // entries, the first rune of each multi-rune token is also a valid
-        // lookahead (the whole token comes from the lexer as one unit), so
-        // OneOfRule.LookaheadFirstRunes folds those first runes into the
-        // rune intervals.
-        return new RuleStartRequirements(OneOfRule.LookaheadFirstRunes(_set), Advance.Always);
-    }
+    internal override RuleStartRequirements ComputeRuleStart() =>
+        RuleStartRequirements.FirstTokenMustBeInSet(_set);
 }

@@ -118,10 +118,13 @@ public class CompileTests
 
         internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, System.Collections.Generic.List<Symbol>? outputSymbols) => null;
 
-        // Return the set of runes this rule might consume first (can be a superset)
-        // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
-        // Then say whether the rule Always / Sometimes / Never consumes at least
-        // that first rune on success.
+        // Return the set of tokens (grapheme clusters) this rule
+        // might consume as its first token (can be a superset).
+        // TokenSet.Empty when Advance.Never. TokenSet.Universe means
+        // "I don't know". Then say whether the rule Always / Sometimes
+        // / Never consumes at least that first token on success. See
+        // RuleStartRequirements for the full shortcut story including
+        // polarity composition.
         internal override RuleStartRequirements ComputeRuleStart()
             => new RuleStartRequirements(TokenSet.Single('x'), Advance.Never);
     }

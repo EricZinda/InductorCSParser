@@ -146,16 +146,13 @@ internal sealed class WithinTokenRule : Rule
         return leafSymbol;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart()
-    {
-        // We always consume exactly one outer token on success, so Advance
-        // is Always. The first rune of that token has to satisfy whatever
-        // the inner rule's first-rune requirement is, so we can propagate
-        // the inner's FirstConsumedTokens to the outer fast-fail path. That
-        // lets Or(WithinToken(...), ...) skip this alternative without
-        // calling into it when the next token starts with a rune the
-        // inner rule can't accept.
-        var innerStart = _innerRule.ComputeRuleStart();
-        return new RuleStartRequirements(innerStart.FirstConsumedTokens, Advance.Always);
-    }
+    // WithinToken always consumes exactly one outer token (one grapheme
+    // cluster) on success, so Advance.Always. The first rune of that
+    // cluster has to satisfy whatever the inner rule requires, so the
+    // outer first-token shape forwards the inner's set and polarity.
+    // Calls _innerRule.ComputeRuleStart() rather than going through
+    // PassesThroughTo because the inner rule's compiled fields may not
+    // yet be populated at this point in the Compile walk.
+    internal override RuleStartRequirements ComputeRuleStart() =>
+        _innerRule.ComputeRuleStart().WithAdvance(Advance.Always);
 }

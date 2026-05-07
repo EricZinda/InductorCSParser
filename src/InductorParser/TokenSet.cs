@@ -80,10 +80,45 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     internal TokenSet RunesOnlyPart =>
         HasMultiRuneGraphemes ? new TokenSet(_ranges) : this;
 
+    // A rune-only set covering every possible first rune of any member
+    // of this set. Single-rune members contribute themselves;
+    // multi-rune members contribute their first rune. Returns this
+    // unchanged when there are no multi-rune entries.
+    //
+    // Used by primitives that operate strictly on rune intervals and
+    // can't query multi-rune entries directly: the scanner-skip path
+    // (Lexer.AdvanceUntilRuneIn requires a rune-only set). CannotMatchLookahead does the
+    // equivalent first-rune-or-cluster check inline so it doesn't need
+    // the inflation.
+    internal TokenSet LookaheadFirstRunes
+    {
+        get
+        {
+            if (!HasMultiRuneGraphemes) return this;
+            var firstRunes = RunesOnlyPart;
+            foreach (string grapheme in MultiRuneGraphemes)
+            {
+                int firstRune;
+                if (grapheme.Length >= 2
+                    && char.IsHighSurrogate(grapheme[0])
+                    && char.IsLowSurrogate(grapheme[1]))
+                {
+                    firstRune = char.ConvertToUtf32(grapheme[0], grapheme[1]);
+                }
+                else
+                {
+                    firstRune = grapheme[0];
+                }
+                firstRunes = firstRunes | Single(firstRune);
+            }
+            return firstRunes;
+        }
+    }
+
     // Read-only view of the multi-rune graphemes, sorted ordinal. Used
-    // by rules that need to walk the grapheme entries (the lookahead
-    // first-rune helper in OneOfRule, for instance). Empty when the
-    // set has no multi-rune content.
+    // by rules that need to walk the grapheme entries (LookaheadFirstRunes
+    // above is the canonical caller). Empty when the set has no
+    // multi-rune content.
     internal ReadOnlySpan<string> MultiRuneGraphemes =>
         _multiRuneGraphemes ?? Array.Empty<string>();
 

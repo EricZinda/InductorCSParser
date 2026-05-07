@@ -20,6 +20,18 @@ internal static class Program
 
     public static int Main(string[] args)
     {
+        // Honor INDUCTOR_DISABLE_LOOKAHEAD_SHORTCUT for A/B-measuring the
+        // Or / BetweenInclusive lookahead-skip optimization in the
+        // rebar grammars. Set the env var to any non-empty, non-"0",
+        // non-"false" value to disable the shortcut for this run. Logged
+        // to stderr so the result CSV stays clean.
+        var disableShortcut = Environment.GetEnvironmentVariable("INDUCTOR_DISABLE_LOOKAHEAD_SHORTCUT");
+        InductorParser.Rule.DisableLookaheadShortcut = !string.IsNullOrEmpty(disableShortcut)
+            && !string.Equals(disableShortcut, "0", StringComparison.Ordinal)
+            && !string.Equals(disableShortcut, "false", StringComparison.OrdinalIgnoreCase);
+        if (InductorParser.Rule.DisableLookaheadShortcut)
+            Console.Error.WriteLine("InductorParser lookahead shortcut: DISABLED");
+
         try
         {
             if (args.Length != 1)
@@ -33,6 +45,9 @@ internal static class Program
 
             if (args[0] == "--self-test")
                 return SelfTest.Run();
+
+            if (args[0] == "--bench-shortcut")
+                return BenchShortcut.Run();
 
             bool useStateMachine = args[0] switch
             {
@@ -120,6 +135,155 @@ internal static class Program
     }
 
     private readonly record struct Sample(long DurationNanoseconds, long Count);
+
+    // Self-contained timing harness for A/B-comparing the lookahead
+    // shortcut on a few representative rebar-style grammars without
+    // needing the rebar binary or its haystack corpora. Synthesizes
+    // each haystack inline so the run is reproducible from this repo
+    // alone. Reports min/median/mean per case so noise vs. signal is
+    // visible.
+    private static class BenchShortcut
+    {
+        public static int Run()
+        {
+            var enabled = !InductorParser.Rule.DisableLookaheadShortcut;
+            Console.Out.WriteLine($"# Lookahead shortcut: {(enabled ? "ENABLED" : "DISABLED")}");
+            Console.Out.WriteLine("# columns: case, model, iterations, min_ns, median_ns, mean_ns, count");
+
+            BenchSafe("curated/01-literal/sherlock-en", "count",
+                pattern: "Sherlock Holmes",
+                haystack: SynthesizeSherlockHaystack(50_000));
+            BenchSafe("curated/02-literal-alternate/sherlock-en", "count",
+                pattern: "Sherlock Holmes|John Watson|Irene Adler|Inspector Lestrade|Professor Moriarty",
+                haystack: SynthesizeSherlockHaystack(50_000));
+            BenchSafe("curated/02-literal-alternate/sherlock-casei-en", "count",
+                pattern: "Sherlock Holmes|John Watson|Irene Adler|Inspector Lestrade|Professor Moriarty",
+                haystack: SynthesizeSherlockHaystack(50_000),
+                caseInsensitive: true);
+            BenchSafe("curated/04-ruff-noqa/real", "grep-captures",
+                pattern: @"(\s*)((?:# [Nn][Oo][Qq][Aa])(?::\s?(([A-Z]+[0-9]+(?:[,\s]+)?)+))?)",
+                haystack: SynthesizeRuffNoqaHaystack(40_000));
+            BenchSafe("curated/08-words/all-english", "count-spans",
+                pattern: @"\b[0-9A-Za-z_]+\b",
+                haystack: SynthesizeSherlockHaystack(20_000));
+            BenchSafe("curated/10-bounded-repeat/letters-en", "count",
+                pattern: @"[A-Za-z]{8,13}",
+                haystack: SynthesizeSherlockHaystack(20_000));
+
+            return 0;
+        }
+
+        private static void BenchSafe(string name, string model, string haystack,
+            string pattern, bool caseInsensitive = false, int iterations = 25)
+        {
+            try { BenchOne(name, model, haystack, pattern, caseInsensitive, iterations); }
+            catch (Exception ex)
+            {
+                var inner = ex;
+                while (inner.InnerException != null) inner = inner.InnerException;
+                Console.Out.WriteLine($"{name},{model},SKIP,{inner.GetType().Name}: {inner.Message.Replace('\n', ' ')}");
+                Console.Error.WriteLine($"=== {name} stack ===");
+                Console.Error.WriteLine(inner.StackTrace);
+            }
+        }
+
+        private static void BenchOne(string name, string model, string haystack,
+            string pattern, bool caseInsensitive = false, int iterations = 25)
+        {
+            var keyValues = new List<(string, string)>
+            {
+                ("name", name),
+                ("model", model),
+                ("haystack", haystack),
+                ("pattern", pattern),
+                ("max-iters", "1"),
+                ("max-warmup-iters", "0"),
+                ("max-time", "0"),
+                ("max-warmup-time", "0")
+            };
+            if (caseInsensitive) keyValues.Add(("case-insensitive", "true"));
+
+            var klv = new MemoryStream();
+            using (var writer = new StreamWriter(klv, new UTF8Encoding(false)))
+            {
+                foreach (var (k, v) in keyValues)
+                {
+                    int byteLen = Encoding.UTF8.GetByteCount(v);
+                    writer.Write($"{k}:{byteLen}:{v}\n");
+                }
+            }
+            var config = RebarConfig.Read(klv.ToArray());
+
+            // Warmup: 5 iterations. Lets the JIT settle and primes
+            // grammar caches.
+            var plan = BenchmarkRegistry.Build(config, useStateMachine: false);
+            for (int i = 0; i < 5; i++) plan.Count(config.Haystack, config.Model);
+
+            // Timed: build once, call N times. Measures the parse loop,
+            // not Compile.
+            var samples = new long[iterations];
+            long lastCount = 0;
+            for (int i = 0; i < iterations; i++)
+            {
+                long start = Stopwatch.GetTimestamp();
+                lastCount = plan.Count(config.Haystack, config.Model);
+                samples[i] = ElapsedNanoseconds(start);
+            }
+            Array.Sort(samples);
+            long min = samples[0];
+            long median = samples[iterations / 2];
+            long sum = 0;
+            foreach (var s in samples) sum += s;
+            long mean = sum / iterations;
+            Console.Out.WriteLine($"{name},{model},{iterations},{min},{median},{mean},{lastCount}");
+        }
+
+        // Build a haystack of approximately `targetBytes` bytes that
+        // contains a few thousand instances of common English words and
+        // a sprinkle of the Sherlock-cast names so the literal and
+        // literal-alternate cases have non-zero work to do.
+        private static string SynthesizeSherlockHaystack(int targetBytes)
+        {
+            var seed = "the quick brown fox jumps over the lazy dog. " +
+                       "Sherlock Holmes deduced the killer. John Watson took notes. " +
+                       "Irene Adler smiled. Inspector Lestrade arrived. Professor Moriarty escaped. " +
+                       "London nights are foggy. ";
+            var builder = new StringBuilder(targetBytes + seed.Length);
+            while (builder.Length < targetBytes)
+                builder.Append(seed);
+            return builder.ToString();
+        }
+
+        // Build a haystack that looks like Python source with periodic
+        // `# noqa` markers, both bare and with rule lists. Roughly
+        // matches the ruff regression input pattern.
+        private static string SynthesizeRuffNoqaHaystack(int targetBytes)
+        {
+            var lines = new[]
+            {
+                "import os",
+                "x = 1  # noqa",
+                "y = 2  # noqa: F401",
+                "z = 3  # noqa: F401, E501",
+                "def foo(a, b):",
+                "    return a + b  # noqa: ARG001",
+                "pass",
+                "if True:",
+                "    pass",
+                "    # noqa: E501",
+                "list_comprehension = [i for i in range(10) if i > 5]",
+                ""
+            };
+            var builder = new StringBuilder(targetBytes + 256);
+            int idx = 0;
+            while (builder.Length < targetBytes)
+            {
+                builder.Append(lines[idx % lines.Length]).Append('\n');
+                idx++;
+            }
+            return builder.ToString();
+        }
+    }
 
     private static class SelfTest
     {

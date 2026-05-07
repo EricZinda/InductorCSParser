@@ -115,46 +115,6 @@ internal sealed class OneOfRule : Rule
         return leafSymbol;
     }
 
-    // Return the set of runes this rule might consume first (can be a superset)
-    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
-    // Then say whether the rule Always / Sometimes / Never consumes at least
-    // that first rune on success.
-    internal override RuleStartRequirements ComputeRuleStart()
-    {
-        // The lookahead shortcut peeks ONE rune off the input. If the
-        // set has multi-rune entries, the first rune of each multi-rune
-        // grapheme is also a valid lookahead (the lexer might be about
-        // to hand us that whole grapheme as one token). Add those first
-        // runes to the rune intervals so CannotMatchLookahead doesn't
-        // wrongly skip OneOfRule when the input begins with a grapheme
-        // whose first rune isn't otherwise in the set.
-        return new RuleStartRequirements(LookaheadFirstRunes(_set), Advance.Always);
-    }
-
-    // Build a rune-only set covering every possible first rune of any
-    // member of `set`. Single-rune members contribute themselves;
-    // multi-rune members contribute their first rune. Used as the
-    // FirstConsumedTokens value for OneOf and ScanWhile when their set
-    // has multi-rune entries, so the lookahead shortcut stays sound.
-    internal static TokenSet LookaheadFirstRunes(TokenSet set)
-    {
-        if (!set.HasMultiRuneGraphemes) return set;
-        var firstRunes = set.RunesOnlyPart;
-        foreach (string grapheme in set.MultiRuneGraphemes)
-        {
-            int firstRune;
-            if (grapheme.Length >= 2
-                && char.IsHighSurrogate(grapheme[0])
-                && char.IsLowSurrogate(grapheme[1]))
-            {
-                firstRune = char.ConvertToUtf32(grapheme[0], grapheme[1]);
-            }
-            else
-            {
-                firstRune = grapheme[0];
-            }
-            firstRunes = firstRunes | TokenSet.Single(firstRune);
-        }
-        return firstRunes;
-    }
+    internal override RuleStartRequirements ComputeRuleStart() =>
+        RuleStartRequirements.FirstTokenMustBeInSet(_set);
 }

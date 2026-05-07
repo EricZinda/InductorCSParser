@@ -250,4 +250,65 @@ public class LiteralRuleTests
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_Literal_skips_when_peek_is_not_first_grapheme()
+    {
+        // Literal publishes (first-grapheme set, Always, MustBeIn). For
+        // Literal("hello") that's {'h'}. Peek 'x' isn't in {'h'}, so the
+        // shortcut skips Literal and the second alternative wins.
+        var sink = NewSink();
+        var rule = Or(Literal("hello"), Literal("xyz"));
+        var result = rule.Parse("xyz", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Contain("SKIP | Literal:"));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_Literal_runs_when_peek_is_first_grapheme()
+    {
+        // Peek 'h' is in {'h'}, so the shortcut doesn't skip. Literal
+        // runs and matches.
+        var sink = NewSink();
+        var rule = Or(Literal("hello"), Literal("xyz"));
+        var result = rule.Parse("hello", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | Literal:"));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_LiteralIgnoreAsciiCase_skips_when_peek_is_outside_case_folded_set()
+    {
+        // LiteralIgnoreAsciiCase("Select") publishes a first-grapheme
+        // set with both ASCII cases of 'S' (so {'S','s'}). Peek 'x'
+        // isn't in that set, so the shortcut skips and the second
+        // alternative wins.
+        var sink = NewSink();
+        var rule = Or(LiteralIgnoreAsciiCase("Select"), Literal("xxx"));
+        var result = rule.Parse("xxx", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Contain("SKIP | LiteralIgnoreAsciiCase:"));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_LiteralIgnoreAsciiCase_runs_when_peek_is_either_case()
+    {
+        // Both 'S' and 's' should pass the shortcut (the case-folded
+        // first-grapheme set covers both). Test the lower-case path
+        // explicitly so the case-fold logic is exercised, not just the
+        // exact-match path.
+        var sink = NewSink();
+        var rule = Or(LiteralIgnoreAsciiCase("Select"), Literal("xxx"));
+        var result = rule.Parse("select", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | LiteralIgnoreAsciiCase:"));
+    }
 }

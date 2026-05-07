@@ -43,18 +43,6 @@ internal sealed class EofRule : Rule
             : Symbol.Discarded;
     }
 
-    // Return the set of runes this rule might consume first (can be a superset)
-    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
-    // Then say whether the rule Always / Sometimes / Never consumes at least
-    // that first rune on success.
-    internal override RuleStartRequirements ComputeRuleStart()
-    {
-        // We need to return *all* runes that *might* be consumed as the first rune.
-        // Then, we need to say if the first rune will Always/Sometimes/Never be consumed.
-        // For Eof:
-        // Eof only matches at end-of-input and never advances, so Advance
-        // is Never. No rune satisfies it either (EOF isn't a rune), so
-        // FirstConsumedTokens is Empty.
-        return new RuleStartRequirements(TokenSet.Empty, Advance.Never);
-    }
+    internal override RuleStartRequirements ComputeRuleStart() =>
+        RuleStartRequirements.NeverAdvances;
 }

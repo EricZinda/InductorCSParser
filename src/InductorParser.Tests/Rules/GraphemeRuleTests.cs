@@ -348,4 +348,33 @@ public class GraphemeRuleTests
         Assert.That(rule.NameOf(result.Tree!.Id), Is.EqualTo("Token"));
         Assert.That(result.Tree!.PrintTree(rule), Is.EqualTo("Token: \"हि\"\n"));
     }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_Token_skips_when_peek_is_not_the_token()
+    {
+        // Token('a') publishes ({'a'}, Always, MustBeIn). Peek 'b' isn't
+        // in {'a'}, so the shortcut skips Token and the second branch
+        // wins. Token's trace label is "Token" (set in the constructor).
+        var sink = NewSink();
+        var rule = Or(Token('a'), Literal("b"));
+        var result = rule.Parse("b", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Contain("SKIP | Token:"));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_Token_runs_when_peek_is_the_token()
+    {
+        // Peek 'a' is in {'a'}, so the shortcut doesn't skip. Token
+        // runs and matches.
+        var sink = NewSink();
+        var rule = Or(Token('a'), Literal("b"));
+        var result = rule.Parse("a", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | Token:"));
+    }
 }
