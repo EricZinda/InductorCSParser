@@ -717,9 +717,17 @@ public abstract class Rule
         if (posInParseInput >= parseInput.Length)
             return FormatTemplate(options.EndOfInputErrorTemplate,
                 PositionPlaceholders(failurePos, input));
+        // Default path: the parse failed at a real character in the input.
+        // Render the positional template with the offending character and
+        // its position. {character} reads from the original input rather
+        // than parseInput so the message quotes what the user typed, even
+        // when normalization rewrote it (FormKC folds fullwidth, ligatures,
+        // and math letters to ASCII; the user is still looking at the
+        // unfolded form). The EOF guard above ensures failurePos is in
+        // range for the GetNextTextElement call.
         return FormatTemplate(options.PositionalErrorTemplate,
             PositionPlaceholders(failurePos, input),
-            ("character", () => StringInfo.GetNextTextElement(parseInput, posInParseInput)));
+            ("character", () => StringInfo.GetNextTextElement(input, failurePos)));
     }
 
     // The four position placeholders shared by every default template.
