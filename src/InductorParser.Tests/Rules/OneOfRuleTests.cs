@@ -245,4 +245,25 @@ public class OneOfRuleTests
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 
+    [Test]
+    public void OneOf_with_pinned_SymbolId_uses_pinned_id_for_single_rune_leaves()
+    {
+        // .As(SymbolId) is the user's "pin a stable id on this rule"
+        // signal, used for serialized parse trees and cross-version id
+        // stability. The leaf has to carry that pinned id so
+        // Tree.Find(rule), Tree.Is(rule), and any downstream lookup keyed
+        // off SymbolId resolve back to the user's pinned value. The same
+        // gate that respects .As("name") should respect .As(SymbolId)
+        // since both are explicit "find me by reference" signals.
+        var pinnedId = new SymbolId(SymbolRanges.CustomRangeStart + 100);
+        var rule = OneOf(TokenSet.Ascii.Letters).As(pinnedId);
+        var result = rule.Parse("a");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.Id, Is.EqualTo(pinnedId),
+            "leaf carries the user-pinned SymbolId, not the rune value");
+        Assert.That(result.Tree!.Is(rule), Is.True);
+        Assert.That(result.Tree!.Find(rule), Is.Not.Null);
+    }
+
 }
