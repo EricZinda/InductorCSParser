@@ -11,7 +11,7 @@ A simple email-ish validator. Feed it `"aaaaaaaaaaaaaaaaaaaaa!"` and .NET Regex 
 The Inductor Parser version avoids this and is more readable as well:
 
 ```csharp
-var validator = AllOf(
+var validator = And(
     OneOrMore(OneOf(TokenSet.Ascii.Letters | TokenSet.Ascii.Digits)),
     Literal("@example.com"),
     Eof()
@@ -23,7 +23,7 @@ var validator = AllOf(
 Even the textbook ReDos example `^(a+)+$` is safe using the Inductor Parser:
 
 ```csharp
-var pattern = AllOf(OneOrMore(OneOrMore(Token('a'))), Eof());
+var pattern = And(OneOrMore(OneOrMore(Token('a'))), Eof());
 ```
 
 Even written in this contrived shape with one composite rule wrapping another, it still runs in linear time. 
@@ -52,7 +52,7 @@ Unicode compatibility lookalikes are stylistic or formatting variants of the sam
 
 ```csharp
 // A rule that blocks all forms of "admin"
-var blocker = AllOf(Literal("admin"), Eof()).Compile(NormalizationForm.FormKC);
+var blocker = And(Literal("admin"), Eof()).Compile(NormalizationForm.FormKC);
 
 blocker.Parse("admin").Success;      // true
 blocker.Parse("𝐚dmin").Success;      // true: FormKC converts 𝐚 (math-bold) to plain a
@@ -62,7 +62,7 @@ blocker.Parse("ａｄｍｉｎ").Success;  // true: FormKC converts fullwidth le
 Cross-script homoglyphs look identical but aren't variants of the same base character. Latin `a` (`U+0061`) and Cyrillic `а` (`U+0430`) aren't the same letter that got styled differently. They're independently encoded letters from independently-developed alphabets that happen to share a glyph shape. Unicode considers them distinct because they mean different things in their respective scripts, so FormKC won't convert one into the other. No [normalization form](Primer3.md#compatibility-vs-canonical) will. The only defense is to refuse one of them at the grammar level. Anywhere your grammar accepts letters from arbitrary scripts (`Identifier()`, `OneOf(TokenSet.Letters)`, or any other rule that takes a broad letter set) an attacker can mix scripts. Restrict your grammar to one script's letters, use `TokenSet.Ascii.Letters` for ASCII-only, or build a custom set covering the script(s) you actually want to support:
 
 ```csharp
-var username = AllOf(OneOrMore(OneOf(TokenSet.Ascii.Letters)), Eof()).Compile();
+var username = And(OneOrMore(OneOf(TokenSet.Ascii.Letters)), Eof()).Compile();
 
 username.Parse("admin").Success;      // true
 username.Parse("аdmin").Success;      // false: Cyrillic 'а' (U+0430) isn't in the ASCII range
@@ -95,8 +95,8 @@ var result = blockedWords.Parse(StripInvisibles(userInput));
 The same `Invisibles` value plugs into a real grammar rule. An "allowed"-rule username that flat-out refuses any invisible in the input:
 
 ```csharp
-var safeUsername = AllOf(
-    OneOrMore(AllOf(NoneOf(Invisibles), AnyToken())),
+var safeUsername = And(
+    OneOrMore(And(NoneOf(Invisibles), AnyToken())),
     Eof()
 ).Compile();
 

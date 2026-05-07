@@ -41,13 +41,13 @@ var asciiOnlyLetter = WithinToken(OneOf(TokenSet.Ascii.Letters));
 
 // Emoji-with-modifier matcher: one base emoji rune optionally followed
 // by skin-tone / ZWJ runes, all as one grapheme.
-var emojiCluster = WithinToken(AllOf(
+var emojiCluster = WithinToken(And(
     OneOf(emojiBaseSet),
     ZeroOrMore(OneOf(skinToneOrZwjSet))
 ));
 
 // Hangul syllable expressed as jamo: leading + medial + optional trailing.
-var jamoCluster = WithinToken(AllOf(
+var jamoCluster = WithinToken(And(
     OneOf(leadingJamo),
     OneOf(medialJamo),
     Optional(OneOf(trailingJamo))
@@ -198,11 +198,11 @@ Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 ru
 - `OneOf(TokenSet.Runes("\n"))` matches when the next token is one of the runes in the set. The CRLF token has two runes, and `TokenSet.Runes("\n")` is rune-only, so the token isn't in the set. Adding `\r\n` to the set as a multi-rune entry doesn't help via `Runes(...)` either: `TokenSet.Runes("\r\n")` *does* register the CRLF cluster as one multi-rune entry, but the single-rune `\n` it builds from also lives in the set, and a grammar that wants "any line terminator" needs all of LF, CR, VT, FF, NEL, LS, PS *and* CRLF, which is what `EndOfLine()` is for.
 - `NoneOf(TokenSet.Runes("\n"))` is the dual: a multi-rune token isn't in any rune-only set, so a `NoneOf` over a rune-only set passes CRLF through. `ZeroOrMore(NoneOf(stopSet))` used to scan "everything up to a newline" will greedily swallow the terminating CRLF as body content instead of stopping at it, then the terminator fails because there is nothing left.
 
-**Fix.** Use the built-in `EndOfLine()` rule. It is `FirstOf(Literal("\r\n"), OneOf(TokenSet.LineTerminators))` under the hood, so the CRLF token is tried as a unit before the single-rune terminators (LF, CR, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR per UAX #18 Annex C). Pass `eofIsEol: true` for the "line terminator here, or end of input" case, and wrap with `Optional` for "line terminator here, or none at all". Anywhere a grammar cares about line breaks, use these instead of building one with `Token('\n')` or a `OneOf` over a rune set:
+**Fix.** Use the built-in `EndOfLine()` rule. It is `Or(Literal("\r\n"), OneOf(TokenSet.LineTerminators))` under the hood, so the CRLF token is tried as a unit before the single-rune terminators (LF, CR, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR per UAX #18 Annex C). Pass `eofIsEol: true` for the "line terminator here, or end of input" case, and wrap with `Optional` for "line terminator here, or none at all". Anywhere a grammar cares about line breaks, use these instead of building one with `Token('\n')` or a `OneOf` over a rune set:
 
 ```csharp
 // Match a Unicode line terminator (CRLF, LF, CR, NEL, LS, PS, VT, FF).
-AllOf(..., EndOfLine())
+And(..., EndOfLine())
 
 // Whitespace that includes newlines: AnyWhitespace() is the built-in
 // for this, and it composes EndOfLine() first so the CRLF pair commits
@@ -215,9 +215,9 @@ public static readonly Rule HorizontalSpace = Optional(InlineWhitespace());
 
 // Scanning "up to end of line": use a rule-based stop with Not(EndOfLine()).
 // NoneOf over a single-rune set would silently eat the CRLF token.
-public static readonly Rule LineComment = AllOf(
+public static readonly Rule LineComment = And(
     Token('%'),
-    ZeroOrMore(AllOf(Not(EndOfLine()), AnyToken())),
+    ZeroOrMore(And(Not(EndOfLine()), AnyToken())),
     EndOfLine(eofIsEol: true)
 );
 ```
@@ -226,7 +226,7 @@ The three anti-patterns to avoid in any line-based grammar:
 
 ```csharp
 // BROKEN on Windows line endings.
-AllOf(..., Token('\n'))                             // fails on CRLF input
+And(..., Token('\n'))                             // fails on CRLF input
 ZeroOrMore(NoneOf(TokenSet.Single('\n')))           // swallows the CRLF terminator
 ```
 

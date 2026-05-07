@@ -54,10 +54,10 @@ public class EndOfLineRuleTests
     [Test]
     public void Matches_crlf_as_one_terminator()
     {
-        // CRLF-first ordering in the FirstOf means both runes are consumed.
+        // CRLF-first ordering in the Or means both runes are consumed.
         // Follow EndOfLine with Eof() so any leftover lone LF after a
         // half-consumed CR would surface as a failure.
-        var rule = AllOf(EndOfLine(), Eof());
+        var rule = And(EndOfLine(), Eof());
         var result = rule.Parse(CRLF);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
@@ -134,7 +134,7 @@ public class EndOfLineRuleTests
     [Test]
     public void Optional_with_eofIsEol_succeeds_on_terminator()
     {
-        var result = AllOf(Optional(EndOfLine(eofIsEol: true)), Eof()).Parse(LF);
+        var result = And(Optional(EndOfLine(eofIsEol: true)), Eof()).Parse(LF);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 
@@ -143,7 +143,7 @@ public class EndOfLineRuleTests
     {
         // If the inner ordering leaked CR alone, Eof would find the LF
         // still sitting there and fail.
-        var result = AllOf(Optional(EndOfLine(eofIsEol: true)), Eof()).Parse(CRLF);
+        var result = And(Optional(EndOfLine(eofIsEol: true)), Eof()).Parse(CRLF);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 
@@ -157,7 +157,7 @@ public class EndOfLineRuleTests
     [Test]
     public void EndOfLine_with_eofIsEol_matches_terminator_then_reaches_eof()
     {
-        var result = AllOf(EndOfLine(eofIsEol: true), Eof()).Parse(LF);
+        var result = And(EndOfLine(eofIsEol: true), Eof()).Parse(LF);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 
@@ -245,8 +245,8 @@ public class EndOfLineRuleTests
         // by EndOfLine(eofIsEol: true). This shape handles multi-rune
         // graphemes like ZWJ emoji because AnyToken consumes whole
         // graphemes.
-        var lineWithoutHede = AllOf(
-            ZeroOrMore(AllOf(
+        var lineWithoutHede = And(
+            ZeroOrMore(And(
                 Not(Literal("hede")),
                 Not(EndOfLine()),
                 AnyToken()
@@ -261,8 +261,8 @@ public class EndOfLineRuleTests
     [Test]
     public void Line_without_hede_recipe_rejects_embedded_hede()
     {
-        var lineWithoutHede = AllOf(
-            ZeroOrMore(AllOf(
+        var lineWithoutHede = And(
+            ZeroOrMore(And(
                 Not(Literal("hede")),
                 Not(EndOfLine()),
                 AnyToken()

@@ -28,7 +28,7 @@ public class PassThroughTextTests
         // Literal("\r\n") as an explicit alternative on both the body
         // stop and the terminator. See docs/UnicodeGotchas.md § "CRLF
         // Line Endings" for the full pattern.
-        var lineComment = AllOf(
+        var lineComment = And(
             Token('/'),
             Token('/'),
             ZeroOrMore(NoneOf(TokenSet.Single('\n'))),
@@ -52,7 +52,7 @@ public class PassThroughTextTests
         // "any character except these" character class: a multi-rune
         // grapheme like 🎸 passes NoneOf because it isn't any single
         // rune in the stop set. The comment body scoops it up cleanly.
-        var lineComment = AllOf(
+        var lineComment = And(
             Token('/'),
             Token('/'),
             ZeroOrMore(NoneOf(TokenSet.Single('\n'))),
@@ -66,15 +66,15 @@ public class PassThroughTextTests
     [Test]
     public void Block_comment_grammar_stops_at_multi_character_terminator()
     {
-        // Rule-based stop: ZeroOrMore(AllOf(Not(stopRule), AnyToken())) is
+        // Rule-based stop: ZeroOrMore(And(Not(stopRule), AnyToken())) is
         // how you express "match until a multi-character terminator
         // would fire." A simple NoneOf can't express this because
         // the stop condition spans two characters.
-        var closeMarker = AllOf(Token('*'), Token('/'));
-        var blockComment = AllOf(
+        var closeMarker = And(Token('*'), Token('/'));
+        var blockComment = And(
             Token('/'),
             Token('*'),
-            ZeroOrMore(AllOf(Not(closeMarker), AnyToken())),
+            ZeroOrMore(And(Not(closeMarker), AnyToken())),
             closeMarker);
 
         var result = blockComment.Parse("/* body with * inside but not-the-end */",
@@ -92,12 +92,12 @@ public class PassThroughTextTests
         // committing to the disambiguated branch. Here "if" and "iffy"
         // share a prefix. Peek(Not(letter)) confirms the keyword really
         // ends after "if" before the caller commits.
-        var keywordIf = AllOf(
+        var keywordIf = And(
             Token('i'),
             Token('f'),
             Peek(Not(OneOf(TokenSet.Letters))));
 
-        var justIfResult = AllOf(keywordIf, ZeroOrMore(AnyToken())).Parse("if x");
+        var justIfResult = And(keywordIf, ZeroOrMore(AnyToken())).Parse("if x");
         Assert.That(justIfResult.Success, Is.True, justIfResult.ErrorMessage);
 
         var iffyResult = keywordIf.Parse("iffy");

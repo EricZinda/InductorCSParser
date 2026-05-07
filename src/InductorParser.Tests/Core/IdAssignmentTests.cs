@@ -60,7 +60,7 @@ public class IdAssignmentTests
     {
         var firstRule = OneOrMore(OneOf(TokenSet.Letters)).As("foo");
         var secondRule = OneOrMore(OneOf(TokenSet.Digits)).As("foo");
-        var doc = AllOf(firstRule, secondRule);
+        var doc = And(firstRule, secondRule);
 
         var exception = Assert.Throws<InvalidOperationException>(() => doc.Compile());
         Assert.That(exception!.Message, Does.Contain("foo"));
@@ -72,7 +72,7 @@ public class IdAssignmentTests
         // Reachability is per-rule, not per-edge. A single rule reached via
         // two parents is still one rule, so its name should not be flagged.
         var sharedRule = OneOrMore(OneOf(TokenSet.Letters)).As("shared");
-        var doc = AllOf(sharedRule, sharedRule);
+        var doc = And(sharedRule, sharedRule);
 
         Assert.DoesNotThrow(() => doc.Compile());
     }
@@ -83,7 +83,7 @@ public class IdAssignmentTests
         var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 1234);
         var firstRule = OneOrMore(OneOf(TokenSet.Letters)).As(pinned).As("first");
         var secondRule = OneOrMore(OneOf(TokenSet.Digits)).As(pinned).As("second");
-        var doc = AllOf(firstRule, secondRule);
+        var doc = And(firstRule, secondRule);
 
         var exception = Assert.Throws<InvalidOperationException>(() => doc.Compile());
         Assert.That(exception!.Message, Does.Contain(pinned.Value.ToString()));
@@ -98,7 +98,7 @@ public class IdAssignmentTests
         // two parents is still one rule, so its pin shouldn't be flagged.
         var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 4321);
         var sharedRule = OneOrMore(OneOf(TokenSet.Letters)).As(pinned);
-        var doc = AllOf(sharedRule, sharedRule);
+        var doc = And(sharedRule, sharedRule);
 
         Assert.DoesNotThrow(() => doc.Compile());
         Assert.That(sharedRule.Id, Is.EqualTo(pinned));
@@ -201,7 +201,7 @@ public class IdAssignmentTests
 
         var pinnedLeaf = OneOf(TokenSet.Letters).As(new SymbolId(slot));
         var namedLeaf = OneOf(TokenSet.Letters).As(name);
-        var grammar = AllOf(pinnedLeaf, namedLeaf);
+        var grammar = And(pinnedLeaf, namedLeaf);
         grammar.Compile();
 
         Assert.That(pinnedLeaf.Id.Value, Is.EqualTo(slot));
@@ -221,7 +221,7 @@ public class IdAssignmentTests
         var pin1 = OneOf(TokenSet.Letters).As(new SymbolId(slot + 1));
         var pin2 = OneOf(TokenSet.Letters).As(new SymbolId(slot + 2));
         var namedLeaf = OneOf(TokenSet.Letters).As(name);
-        var grammar = AllOf(pin0, pin1, pin2, namedLeaf);
+        var grammar = And(pin0, pin1, pin2, namedLeaf);
         grammar.Compile();
 
         Assert.That(namedLeaf.Id.Value, Is.EqualTo(slot + 3));
@@ -282,7 +282,7 @@ public class IdAssignmentTests
     // offsets are any subset of {0..5} relative to CustomRangeStart (64
     // subsets), named-rule count is 0, 1, or 2 drawn in order from
     // {alpha, beta}, and anonymous-rule count goes 0 through 4. The
-    // fully-empty case is skipped because AllOf rejects an empty child
+    // fully-empty case is skipped because And rejects an empty child
     // list.
     private static IEnumerable<TestCaseData> IdAssignmentSweepCases()
     {

@@ -21,7 +21,7 @@ namespace InductorParser.Benchmarks.Json.InductorParsers;
 // string-parsing hot path is apples-to-apples.
 //
 // Entry point is the bare value rule (no surrounding
-// AllOf(Optional(AnyWhitespace()), value, Optional(AnyWhitespace()), Eof)). The harness
+// And(Optional(AnyWhitespace()), value, Optional(AnyWhitespace()), Eof)). The harness
 // feeds clean input that starts and ends at the value, competitors
 // likewise skip a trailing-Eof wrapper, and adding one would spend
 // time on every parse that the bench isn't trying to measure.
@@ -37,14 +37,14 @@ public static class InductorJsonParser
     {
         var simpleEscapeEnd = OneOf(TokenSet.Runes("\"\\/bfnrt"));
         var hexDigit = OneOf(TokenSet.Ascii.HexDigits);
-        var unicodeEscapeEnd = AllOf(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
-        var escapeEnd = FirstOf(simpleEscapeEnd, unicodeEscapeEnd).Flatten(FlattenType.Delete);
+        var unicodeEscapeEnd = And(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
+        var escapeEnd = Or(simpleEscapeEnd, unicodeEscapeEnd).Flatten(FlattenType.Delete);
         var stringBody = ScanUntil(stopAt: TokenSet.Runes("\""), escapeStart: new Rune('\\'), escapeEnd: escapeEnd);
-        JsonStringRule = AllOf(Token('"'), stringBody, Token('"')).As("string").Preserve();
+        JsonStringRule = And(Token('"'), stringBody, Token('"')).As("string").Preserve();
 
         var value = new LateBoundRule("value");
 
-        JsonMemberRule = AllOf(
+        JsonMemberRule = And(
             JsonStringRule,
             Optional(AnyWhitespace()),
             Token(':'),
@@ -52,29 +52,29 @@ public static class InductorJsonParser
             value
         ).As("member");
 
-        JsonObjectRule = AllOf(
+        JsonObjectRule = And(
             Token('{'),
             Optional(AnyWhitespace()),
-            Optional(AllOf(
+            Optional(And(
                 JsonMemberRule,
-                ZeroOrMore(AllOf(Optional(AnyWhitespace()), Token(','), Optional(AnyWhitespace()), JsonMemberRule))
+                ZeroOrMore(And(Optional(AnyWhitespace()), Token(','), Optional(AnyWhitespace()), JsonMemberRule))
             )),
             Optional(AnyWhitespace()),
             Token('}')
         ).As("object").Preserve();
 
-        JsonArrayRule = AllOf(
+        JsonArrayRule = And(
             Token('['),
             Optional(AnyWhitespace()),
-            Optional(AllOf(
+            Optional(And(
                 value,
-                ZeroOrMore(AllOf(Optional(AnyWhitespace()), Token(','), Optional(AnyWhitespace()), value))
+                ZeroOrMore(And(Optional(AnyWhitespace()), Token(','), Optional(AnyWhitespace()), value))
             )),
             Optional(AnyWhitespace()),
             Token(']')
         ).As("array").Preserve();
 
-        var valueBody = FirstOf(JsonStringRule, JsonObjectRule, JsonArrayRule);
+        var valueBody = Or(JsonStringRule, JsonObjectRule, JsonArrayRule);
         value.Bind(valueBody);
 
         JsonRule = value;

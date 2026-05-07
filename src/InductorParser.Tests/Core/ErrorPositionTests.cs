@@ -56,7 +56,7 @@ public class ErrorPositionTests
     // out explicitly. Tests that need a non-'a' prefix char inline their
     // own grammar.
     private static Rule AtFailureRule() =>
-        AllOf(ZeroOrMore(OneOf(TokenSet.Single('a') | TokenSet.Single('\r') | TokenSet.Single('\n'))), Eof());
+        And(ZeroOrMore(OneOf(TokenSet.Single('a') | TokenSet.Single('\r') | TokenSet.Single('\n'))), Eof());
 
     private static ParseResult ParseAtFailure(string input)
     {
@@ -68,7 +68,7 @@ public class ErrorPositionTests
     [Test]
     public void Success_has_zero_positions_and_line_zero_column_zero()
     {
-        var rule = AllOf(Token('a'), Eof());
+        var rule = And(Token('a'), Eof());
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True);
@@ -121,7 +121,7 @@ public class ErrorPositionTests
         // lands on the first non-'a' char. Input "aa\n" fails at offset 2
         // (the '\n' itself). '\n' is the line terminator. The index that
         // lands ON it reports the line that just ended.
-        var rule = AllOf(OneOrMore(Token('a')), Eof());
+        var rule = And(OneOrMore(Token('a')), Eof());
         var result = rule.Parse("aa\n");
 
         Assert.That(result.Success, Is.False);
@@ -186,7 +186,7 @@ public class ErrorPositionTests
     public void Grapheme_index_collapses_supplementary_rune_to_one_Token()
     {
         // Guitar emoji is one grapheme and two UTF-16 chars.
-        var rule = AllOf(OneOrMore(Token(GuitarGrapheme)), Eof());
+        var rule = And(OneOrMore(Token(GuitarGrapheme)), Eof());
         var result = rule.Parse(GuitarGrapheme + "X");
 
         Assert.That(result.Success, Is.False);
@@ -208,7 +208,7 @@ public class ErrorPositionTests
         // lexer. The default NFC would compose to a one-char grapheme and
         // the char/grapheme counts the test is demonstrating wouldn't
         // diverge anymore.
-        var rule = AllOf(OneOrMore(Token(LatinEAcuteGrapheme)), Eof());
+        var rule = And(OneOrMore(Token(LatinEAcuteGrapheme)), Eof());
         rule.Compile(null);
         var result = rule.Parse(LatinEAcuteGrapheme + "X");
 
@@ -226,7 +226,7 @@ public class ErrorPositionTests
         // Input "aa\naa" is five chars, so the Token(';') at the end hits
         // EOF at position 5: on line 1 ("aa"), column 2 (one past the
         // last 'a' in 0-based terms).
-        var rule = AllOf(
+        var rule = And(
             Token('a'), Token('a'), Token('\n'),
             Token('a'), Token('a'),
             Token(';'));

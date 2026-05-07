@@ -117,10 +117,10 @@ public class LiteralRuleTests
     [Test]
     public void Literal_in_composite_reports_offender_in_context()
     {
-        // Prefix AllOf-member consumes "select " then Literal fails at offset 7.
+        // Prefix And-member consumes "select " then Literal fails at offset 7.
         // Confirms Literal's RecordFailure uses the token-local pre-read
         // position, not transaction.StartPosition of some outer frame.
-        var rule = AllOf(
+        var rule = And(
             Literal("select "),
             Literal("FROM").WithError("expected 'FROM'"));
         var result = rule.Parse("select XXXX");

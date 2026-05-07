@@ -5,11 +5,11 @@ using InductorParser.SyntaxTree;
 namespace InductorParser;
 
 // Matches a sequence of rules in order. Every child must match for the
-// AllOf to succeed. On any child's failure the whole AllOf fails and the
-// lexer rolls back to where the AllOf started.
-internal sealed class AllOfRule : Rule
+// And to succeed. On any child's failure the whole And fails and the
+// lexer rolls back to where the And started.
+internal sealed class AndRule : Rule
 {
-    public AllOfRule(Rule[] children) : base(FlattenType.Flatten, children) { }
+    public AndRule(Rule[] children) : base(FlattenType.Flatten, children) { }
 
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
@@ -51,8 +51,8 @@ internal sealed class AllOfRule : Rule
         // Furthermore, once we hit the first Always consumes a Rune, we can stop because at that
         // point the first rune in the parse is gone and that's all we're talking about.
         // 
-        // Then we can calculate AllOf's own Advance:
-        //   Always:    at least one child had Advance.Always so AllOf is guaranteed to consume too on success.
+        // Then we can calculate And's own Advance:
+        //   Always:    at least one child had Advance.Always so And is guaranteed to consume too on success.
         //   Never:     every child is Never.
         //   Sometimes: otherwise.
         TokenSet union = TokenSet.Empty;

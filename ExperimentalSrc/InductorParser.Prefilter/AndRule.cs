@@ -3,17 +3,17 @@ using System.Text;
 
 namespace InductorParser.Prefilter;
 
-// AllOf's contribution: every child must match in sequence, so any
-// single child's required literal is required by the AllOf. A run of
+// And's contribution: every child must match in sequence, so any
+// single child's required literal is required by the And. A run of
 // consecutive children that each have a fixed concatenable text
 // contributes a single longer literal (Literal("# ") followed by
 // OneOf("Nn") OneOf("Oo")... gives "# noqa" case-insensitive). The
 // walker picks the longest candidate seen across all runs and any
 // recursed sub-literals, mirroring what regex engines do when they
 // extract a "best literal" from a pattern.
-internal static class AllOfRulePrefilter
+internal static class AndRulePrefilter
 {
-    internal static (string Text, bool IgnoreCase)? ComputeRequiredLiteral(AllOfRule rule)
+    internal static (string Text, bool IgnoreCase)? ComputeRequiredLiteral(AndRule rule)
     {
         StringBuilder? run = null;
         bool runIgnoreCase = false;
@@ -45,15 +45,15 @@ internal static class AllOfRulePrefilter
     }
 
     // Surface a multi-literal alternative if any single child has one.
-    // The motivating shape is AllOf(FirstOf(L1, L2, L3, L4), other-stuff)
-    // where the FirstOf has all-literal branches: any successful match
-    // of the AllOf still passes through the FirstOf and so contains one
-    // of {L1, L2, L3, L4}. If the AllOf has a long single shared literal
-    // already (the AllOf's ComputeRequiredLiteral picks it up), callers
+    // The motivating shape is And(Or(L1, L2, L3, L4), other-stuff)
+    // where the Or has all-literal branches: any successful match
+    // of the And still passes through the Or and so contains one
+    // of {L1, L2, L3, L4}. If the And has a long single shared literal
+    // already (the And's ComputeRequiredLiteral picks it up), callers
     // typically prefer that and never reach this method; this is for
     // the cases where no single literal is derivable but a child's set
     // is.
-    internal static IReadOnlyList<(string Text, bool IgnoreCase)>? ComputeRequiredLiteralAlternatives(AllOfRule rule)
+    internal static IReadOnlyList<(string Text, bool IgnoreCase)>? ComputeRequiredLiteralAlternatives(AndRule rule)
     {
         foreach (var child in rule.Children)
         {
@@ -66,7 +66,7 @@ internal static class AllOfRulePrefilter
 
     // Only concatenable when every child is concatenable; otherwise
     // we can't promise a fixed-length contribution.
-    internal static (string Text, bool IgnoreCase)? ComputeConcatenableText(AllOfRule rule)
+    internal static (string Text, bool IgnoreCase)? ComputeConcatenableText(AndRule rule)
     {
         var builder = new StringBuilder();
         bool ignoreCase = false;

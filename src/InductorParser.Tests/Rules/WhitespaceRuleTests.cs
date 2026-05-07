@@ -105,7 +105,7 @@ public class WhitespaceRuleTests
     [Test]
     public void AnyWhitespace_matches_crlf_as_one_unit()
     {
-        // EndOfLine() comes first inside the FirstOf, so CRLF is
+        // EndOfLine() comes first inside the Or, so CRLF is
         // consumed as one terminator (the lexer treats CRLF as one
         // grapheme) rather than only matching the CR via the single-
         // rune side.

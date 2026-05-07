@@ -106,7 +106,7 @@ public class UnicodeGotchasExamples
     [Test]
     public void BOM_strip_recipe()
     {
-        var grammar = AllOf(Literal("function"), Eof()).Compile();
+        var grammar = And(Literal("function"), Eof()).Compile();
 
         const string bomPlusKeyword = "﻿function";
         Assert.That(grammar.Parse(bomPlusKeyword).Success, Is.False,
@@ -122,7 +122,7 @@ public class UnicodeGotchasExamples
     [Test]
     public void Invisible_format_character_strip_recipe()
     {
-        var grammar = AllOf(Literal("apple"), Eof()).Compile();
+        var grammar = And(Literal("apple"), Eof()).Compile();
 
         const string withSoftHyphen = "ap­ple";
         Assert.That(grammar.Parse(withSoftHyphen).Success, Is.False,
@@ -167,7 +167,7 @@ public class UnicodeGotchasExamples
         const string redHeart = "❤️"; // ❤️ (heart + VS-16)
         const string textHeart = "❤";       // ❤ (heart only)
 
-        var grammar = AllOf(Literal(textHeart), Eof()).Compile();
+        var grammar = And(Literal(textHeart), Eof()).Compile();
 
         Assert.That(grammar.Parse(redHeart).Success, Is.False,
             "VS-16 makes the input differ from the variation-free literal");
@@ -180,11 +180,11 @@ public class UnicodeGotchasExamples
     }
 
     // "CRLF Line Endings": doc claim: Token('\n') DOESN'T match
-    // a CRLF grapheme. Use FirstOf(Literal("\r\n"), OneOf(...)) instead.
+    // a CRLF grapheme. Use Or(Literal("\r\n"), OneOf(...)) instead.
     [Test]
     public void CRLF_token_lf_does_not_match()
     {
-        var lfOnly = AllOf(Literal("a"), Token('\n'), Literal("b"), Eof()).Compile();
+        var lfOnly = And(Literal("a"), Token('\n'), Literal("b"), Eof()).Compile();
         // CRLF input: the lexer reads "\r\n" as one grapheme, and
         // Token('\n') compares to a single-rune \n, so the grapheme
         // doesn't match.
@@ -197,11 +197,11 @@ public class UnicodeGotchasExamples
     [Test]
     public void CRLF_line_break_recipe_handles_all_three()
     {
-        var lineBreak = FirstOf(
+        var lineBreak = Or(
             Literal("\r\n"),
             OneOf(TokenSet.Single('\r') | TokenSet.Single('\n'))
         );
-        var grammar = AllOf(Literal("a"), lineBreak, Literal("b"), Eof()).Compile();
+        var grammar = And(Literal("a"), lineBreak, Literal("b"), Eof()).Compile();
 
         Assert.That(grammar.Parse("a\r\nb").Success, Is.True);
         Assert.That(grammar.Parse("a\nb").Success, Is.True);
@@ -209,21 +209,21 @@ public class UnicodeGotchasExamples
     }
 
     // "CRLF Line Endings" / line-comment recipe:
-    //   ZeroOrMore(AllOf(Not(LineBreak), AnyToken())) stops just before
+    //   ZeroOrMore(And(Not(LineBreak), AnyToken())) stops just before
     //   any LineBreak (including CRLF) and the trailing LineBreak/EOF
     //   completes the comment.
     [Test]
     public void CRLF_line_comment_recipe()
     {
-        var lineBreak = FirstOf(
+        var lineBreak = Or(
             Literal("\r\n"),
             OneOf(TokenSet.Single('\r') | TokenSet.Single('\n'))
         );
 
-        var lineComment = AllOf(
+        var lineComment = And(
             Token('%'),
-            ZeroOrMore(AllOf(Not(lineBreak), AnyToken())),
-            FirstOf(OneOrMore(lineBreak), Eof())
+            ZeroOrMore(And(Not(lineBreak), AnyToken())),
+            Or(OneOrMore(lineBreak), Eof())
         ).Compile();
 
         Assert.That(lineComment.Parse("% comment\r\n").Success, Is.True);

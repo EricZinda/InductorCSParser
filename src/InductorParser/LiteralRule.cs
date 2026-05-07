@@ -11,8 +11,8 @@ namespace InductorParser;
 // matches it as one read. LiteralRule stores any non-empty string and uses
 // the same lockstep compare loop.
 //
-// This is better than using AllOf(Token('m'), Token('a'), Token('j')) since each
-// Token rule opens its own transaction. A three-character AllOf of three Token rules
+// This is better than using And(Token('m'), Token('a'), Token('j')) since each
+// Token rule opens its own transaction. A three-character And of three Token rules
 // does three BeginTransaction/Commit cycles and three RecordFailure slots.
 // Literal("maj") does one. For keyword-heavy grammars (chord notation, SQL
 // keywords, HTTP methods) this is the difference between per-keyword O(N)

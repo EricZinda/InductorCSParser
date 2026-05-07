@@ -21,7 +21,7 @@ namespace InductorParser.Tests;
 // with RegexOptions.IgnoreCase.
 //
 // Inductor Parser vs regex: regex's (a|b) alternation is "eager but can
-// backtrack out," while Inductor Parser's FirstOf(a, b) commits to the
+// backtrack out," while Inductor Parser's Or(a, b) commits to the
 // first match that succeeds. In every alternation below, the branches
 // either have disjoint first characters (a/b/c/...) or are ordered
 // longest-first (maj before m, 11/13 before 1) so the commit happens on
@@ -49,12 +49,12 @@ public static class ChordGrammar
 
         // (maj|min|m|dim|°|o|aug|+|sus[24]?|5)?
         // Longest first so "maj" wins over "m", "min" wins over "m".
-        var quality1 = FirstOf(
+        var quality1 = Or(
             LiteralIgnoreAsciiCase("maj"),
             LiteralIgnoreAsciiCase("min"),
             LiteralIgnoreAsciiCase("dim"),
             LiteralIgnoreAsciiCase("aug"),
-            AllOf(LiteralIgnoreAsciiCase("sus"), Optional(OneOf("24"))),
+            And(LiteralIgnoreAsciiCase("sus"), Optional(OneOf("24"))),
             LiteralIgnoreAsciiCase("m"),
             LiteralIgnoreAsciiCase("o"),
             Token('°'),
@@ -63,7 +63,7 @@ public static class ChordGrammar
         );
 
         // (6|7|9|11|13)?
-        var ext1 = FirstOf(
+        var ext1 = Or(
             LiteralIgnoreAsciiCase("11"),
             LiteralIgnoreAsciiCase("13"),
             Token('6'),
@@ -73,7 +73,7 @@ public static class ChordGrammar
 
         // (maj|M|Δ|m|ø|°)?
         // IgnoreCase makes M and m equivalent, so LiteralIgnoreAsciiCase("m") covers both.
-        var quality2 = FirstOf(
+        var quality2 = Or(
             LiteralIgnoreAsciiCase("maj"),
             LiteralIgnoreAsciiCase("m"),
             Token('Δ'),
@@ -82,7 +82,7 @@ public static class ChordGrammar
         );
 
         // (7|9|11|13)?
-        var ext2 = FirstOf(
+        var ext2 = Or(
             LiteralIgnoreAsciiCase("11"),
             LiteralIgnoreAsciiCase("13"),
             Token('7'),
@@ -93,24 +93,24 @@ public static class ChordGrammar
         // Ordering: "add1" before "add" (longer prefix match for Inductor Parser). "#11"
         // before "#5"/"#9" (again, longer first). "b13" before "b5"/"b9".
         // "sus[24]?" matches "sus", "sus2", or "sus4".
-        var addMod = FirstOf(
-            AllOf(LiteralIgnoreAsciiCase("add1"), OneOf("13")),
-            AllOf(LiteralIgnoreAsciiCase("add"), OneOf("2469")),
+        var addMod = Or(
+            And(LiteralIgnoreAsciiCase("add1"), OneOf("13")),
+            And(LiteralIgnoreAsciiCase("add"), OneOf("2469")),
             LiteralIgnoreAsciiCase("b13"),
             LiteralIgnoreAsciiCase("#11"),
             LiteralIgnoreAsciiCase("b5"),
             LiteralIgnoreAsciiCase("b9"),
             LiteralIgnoreAsciiCase("#5"),
             LiteralIgnoreAsciiCase("#9"),
-            AllOf(LiteralIgnoreAsciiCase("no"), OneOf("357")),
-            AllOf(LiteralIgnoreAsciiCase("sus"), Optional(OneOf("24"))),
+            And(LiteralIgnoreAsciiCase("no"), OneOf("357")),
+            And(LiteralIgnoreAsciiCase("sus"), Optional(OneOf("24"))),
             LiteralIgnoreAsciiCase("alt")
         );
 
         // (\/[A-Ga-g][#b♯♭x]*)?
-        var slashBass = AllOf(Token('/'), root, ZeroOrMore(accidental));
+        var slashBass = And(Token('/'), root, ZeroOrMore(accidental));
 
-        return AllOf(
+        return And(
             root,
             ZeroOrMore(accidental),
             Optional(quality1),

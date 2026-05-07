@@ -24,7 +24,7 @@ The state machine is the answer to "we want this faster" without rewriting the r
 
 There are five stages between handing in a string and getting a tree back. Knowing them in order is most of the architecture.
 
-First, the user builds a Rule tree using the fluent factory functions (`AllOf`, `FirstOf`, `Token`, etc.). This is identical to the recursive path. The state machine does not have its own grammar surface.
+First, the user builds a Rule tree using the fluent factory functions (`And`, `Or`, `Token`, etc.). This is identical to the recursive path. The state machine does not have its own grammar surface.
 
 Second, on the first call to `StateMachineParser.Parse(rule, input)` for a given root rule, the compiler walks the tree and produces a `CompiledProgram`. The program is cached on the rule (in fact, in one of two caches keyed on PreserveAllSymbols, since that flag shapes which output states the lowerer skips). Subsequent parses on that same rule reuse the cached program.
 
@@ -54,7 +54,7 @@ The recursive evaluator backtracks the natural way: a `TryParseRule` that fails 
 
 The same stack carries the `BetweenInclusive` loop bookkeeping. A Between frame holds the iteration counter and the per-iteration position alongside the same restore data, so the loop can detect zero-width inner matches, decide whether the loop's exit is a success or failure, and unwind partial iterations on failure. This is why `BacktrackFrame` has a few extra fields that most frame uses leave at zero. One stack is cheaper than two.
 
-`FirstOf` is the most common backtrack producer: each alternative pushes a frame before trying, and pops it on success or restores from it on failure. The first-rune-skip optimization lets `FirstOf` peek one rune and jump straight to the alternative whose first-rune set matches, skipping the alternatives that cannot possibly accept that rune. This is the same optimization the recursive `FirstOfRule` does, just expressed as a couple of opcodes (`LoadPeekedRune`, `CheckPeekedRuneInSet`, and an ASCII jump-table variant `LoadPeekedRuneAndJumpAlt` for the dense case).
+`Or` is the most common backtrack producer: each alternative pushes a frame before trying, and pops it on success or restores from it on failure. The first-rune-skip optimization lets `Or` peek one rune and jump straight to the alternative whose first-rune set matches, skipping the alternatives that cannot possibly accept that rune. This is the same optimization the recursive `OrRule` does, just expressed as a couple of opcodes (`LoadPeekedRune`, `CheckPeekedRuneInSet`, and an ASCII jump-table variant `LoadPeekedRuneAndJumpAlt` for the dense case).
 
 ## Cyclic Rules Become Subprograms
 
@@ -84,7 +84,7 @@ The fused `Not(SimpleMatch)` opcodes (`PeekRejectOneOfRune`, `PeekRejectLiteralR
 
 The rule-stoppered `ScanUntilStopperEligibleRune` walks runes inline and only enters the stopper's full subprogram when the next rune is in the stopper's `FirstConsumedTokens` set. This is what makes paragraph terminators, CDATA's `]]>`, and Python triple-quotes fast even though their stopper is itself a rule.
 
-The `ScannerSkipAdvance` opcode handles the `ZeroOrMore(FirstOf(match..., AnyToken.Delete))` shape that any "scan a haystack for sparse matches" grammar reduces to. At the top of each iteration, instead of invoking the inner `FirstOf` at every rune (and falling through to the deleted `AnyToken` for non-matches), the opcode jumps the lexer straight to the next position where one of the candidate matches could plausibly start. For literal-only alternatives the prefilter is stronger still: the scanner walks straight to the next full-literal candidate via the BCL's optimized substring search. This is the same skip the recursive evaluator does in `BetweenInclusiveRule.TryCreateScannerSkip`, ported as one opcode plus a side table on the program.
+The `ScannerSkipAdvance` opcode handles the `ZeroOrMore(Or(match..., AnyToken.Delete))` shape that any "scan a haystack for sparse matches" grammar reduces to. At the top of each iteration, instead of invoking the inner `Or` at every rune (and falling through to the deleted `AnyToken` for non-matches), the opcode jumps the lexer straight to the next position where one of the candidate matches could plausibly start. For literal-only alternatives the prefilter is stronger still: the scanner walks straight to the next full-literal candidate via the BCL's optimized substring search. This is the same skip the recursive evaluator does in `BetweenInclusiveRule.TryCreateScannerSkip`, ported as one opcode plus a side table on the program.
 
 These fused opcodes are not magic. They are pattern matches in the compiler that recognize a shape we measured and decided was worth a dedicated opcode. Adding more is an open-ended project.
 

@@ -26,7 +26,7 @@ public class EofRuleTests
     {
         // Token('a') matches. Eof() runs at offset 1 and finds 'b' there,
         // records its WithError at the current position.
-        var rule = AllOf(Token('a').WithError("need an 'a'"),
+        var rule = And(Token('a').WithError("need an 'a'"),
                        Eof().WithError("expected end of input"));
 
         var result = rule.Parse("ab");
@@ -41,7 +41,7 @@ public class EofRuleTests
     {
         // No WithError anywhere. Eof records a null message at offset 1 and
         // BuildErrorMessage's positional fallback renders the message.
-        var rule = AllOf(Token('a'), Eof());
+        var rule = And(Token('a'), Eof());
 
         var result = rule.Parse("ab");
 
@@ -69,14 +69,14 @@ public class EofRuleTests
     [RecursiveEngineOnly]
     public void Eof_trace_failure_produces_expected_output()
     {
-        // Wrapped in AllOf so there's a transaction open when Eof fails,
+        // Wrapped in And so there's a transaction open when Eof fails,
         // giving us a non-trivial indentation to verify.
         var sink = NewSink();
-        AllOf(Eof()).Parse("x", new ParseOptions { TraceSink = sink });
+        And(Eof()).Parse("x", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "   FAIL | Eof: found x",
-            "   FAIL | AllOf: symbol #0"
+            "   FAIL | And: symbol #0"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
@@ -95,11 +95,11 @@ public class EofRuleTests
         // current token are the next instance documented in
         // PotentialBugSources.md "Char-unit rendering in user-facing strings."
         var sink = NewSink();
-        AllOf(Eof()).Parse(WavingHandGrapheme, new ParseOptions { TraceSink = sink });
+        And(Eof()).Parse(WavingHandGrapheme, new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "   FAIL | Eof: found " + WavingHandGrapheme,
-            "   FAIL | AllOf: symbol #0"
+            "   FAIL | And: symbol #0"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
@@ -114,13 +114,13 @@ public class EofRuleTests
         // the first rune. Without this, a parse failure trace shows "e"
         // for an input the user perceives as "é".
         var sink = NewSink();
-        var rule = AllOf(Eof());
+        var rule = And(Eof());
         rule.Compile(null);
         rule.Parse(LatinEAcuteGrapheme, new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
             "   FAIL | Eof: found " + LatinEAcuteGrapheme,
-            "   FAIL | AllOf: symbol #0"
+            "   FAIL | And: symbol #0"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }

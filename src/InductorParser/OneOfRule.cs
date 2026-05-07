@@ -67,7 +67,7 @@ internal sealed class OneOfRule : Rule
                 $"\"{normalized}\". OneOf / NoneOf match exactly one grapheme " +
                 $"per token, so no single input token can match. Use " +
                 $"Literal(\"{normalized}\") for the whole sequence, " +
-                $"AllOf(Token-per-grapheme) for token-by-token control, or call " +
+                $"And(Token-per-grapheme) for token-by-token control, or call " +
                 $"`set.WithCompatibilityEquivalents({form})` before OneOf / " +
                 $"NoneOf to expand into the grapheme pieces as separate " +
                 $"set members.>"));

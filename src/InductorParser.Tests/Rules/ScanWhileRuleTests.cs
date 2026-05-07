@@ -24,7 +24,7 @@ public class ScanWhileRuleTests
     [Test]
     public void ScanWhile_stops_before_first_rune_outside_the_set()
     {
-        var rule = AllOf(ScanWhile(TokenSet.Ascii.Letters), Token('!'));
+        var rule = And(ScanWhile(TokenSet.Ascii.Letters), Token('!'));
 
         var result = rule.Parse("abc!");
 

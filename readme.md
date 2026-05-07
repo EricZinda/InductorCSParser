@@ -30,7 +30,7 @@ Regex: ^\d+$
 ```CSharp
 Inductor Parser:
 
-var numbersOnly = AllOf(
+var numbersOnly = And(
     OneOrMore(OneOf(TokenSet.Digits)),
     Eof()
 );
@@ -45,8 +45,8 @@ Regex: ^((?!hede).)*$
 ```csharp
 Inductor Parser (actually matches all end of line variants which the OP probably really wanted):
 
-var lineWithoutHede = AllOf(
-    ZeroOrMore(AllOf(
+var lineWithoutHede = And(
+    ZeroOrMore(And(
         Not(Literal("hede")),
         Not(EndOfLine()),
         AnyToken()
@@ -75,13 +75,13 @@ Here's a grammar for reading a simple setting that only accepts strings:
 // Parse: Key = StringValue (e.g. Goo = 'some string')
 var settingName = Identifier().As("name");
 
-var quotedString = AllOf(
+var quotedString = And(
     Token("'"),
     ScanUntil(Token("'")),
     Token("'"))
     .As("value");
 
-var document = AllOf(
+var document = And(
     settingName,
     Optional(AnyWhitespace()),
     Token('='),
@@ -163,7 +163,7 @@ A simple email-ish validator. Feed it `"aaaaaaaaaaaaaaaaaaaaa!"` and .NET Regex 
 The Inductor Parser avoids this and is more readable as well:
 
 ```csharp
-var validator = AllOf(
+var validator = And(
     OneOrMore(OneOf(TokenSet.Ascii.Letters | TokenSet.Ascii.Digits)),
     Literal("@example.com"),
     Eof()

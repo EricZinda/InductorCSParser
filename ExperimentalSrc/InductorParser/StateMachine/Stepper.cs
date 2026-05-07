@@ -130,9 +130,9 @@ internal static class Stepper
         return state.OnSuccess;
     }
 
-    // Bulk-skip at the top of a ZeroOrMore(FirstOf(match..., AnyToken.Delete))
+    // Bulk-skip at the top of a ZeroOrMore(Or(match..., AnyToken.Delete))
     // scanner loop. Advances the lexer to the next position where one of
-    // the candidate matches could plausibly start, so the inner FirstOf
+    // the candidate matches could plausibly start, so the inner Or
     // doesn't waste an attempt + fail-over to AnyToken.Delete on every
     // non-candidate rune. Always succeeds (it just advances; never fails).
     // The actual scan logic lives in Lexer.AdvanceUntil*; we just feed it
@@ -416,7 +416,7 @@ internal static class Stepper
     }
 
     // Push a backtrack frame snapshotting lexer position, emit cursor,
-    // and call-stack height. Used as the per-alternative frame for FirstOf,
+    // and call-stack height. Used as the per-alternative frame for Or,
     // the per-iteration frame inside BetweenInclusive's loop, and the
     // wrapper frame for Not / Peek.
     //
@@ -739,7 +739,7 @@ internal static class Stepper
     }
 
     // CheckPeekedRuneInSet returns success iff the stashed PeekedRune
-    // is in the named TokenSet. Used by the FirstOf first-rune-skip lowering
+    // is in the named TokenSet. Used by the Or first-rune-skip lowering
     // to drop alternatives whose FirstConsumedTokens can't possibly
     // match the next input rune.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -752,7 +752,7 @@ internal static class Stepper
     }
 
     // LoadPeekedRuneAndJumpAlt fuses the LoadPeekedRune + leading
-    // CheckPeekedRuneInSet chain for a FirstOf. Decodes one rune at the
+    // CheckPeekedRuneInSet chain for a Or. Decodes one rune at the
     // current lexer position; for an ASCII rune jumps directly to the
     // table-determined alternative's PushBacktrack (or to the
     // all-alts-failed target). For non-ASCII or EOF stashes -1 / the

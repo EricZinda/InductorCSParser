@@ -30,10 +30,10 @@ public class ValidUnicodeTests
         string input = "a" + UnicodeExamples.EmojiVariationSelectorText + UnicodeExamples.EmojiVariationSelectorText;
 
         // AnyToken consumes the whole cluster.
-        Assert.That(AllOf(AnyToken(), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(AnyToken(), Eof()).Parse(input).Success, Is.True);
 
         // Targeting the multi-rune cluster as a single literal via
         // Token(string) also works.
-        Assert.That(AllOf(Token("a" + UnicodeExamples.EmojiVariationSelectorText + UnicodeExamples.EmojiVariationSelectorText), Eof()).Parse(input).Success, Is.True);
+        Assert.That(And(Token("a" + UnicodeExamples.EmojiVariationSelectorText + UnicodeExamples.EmojiVariationSelectorText), Eof()).Parse(input).Success, Is.True);
     }
 }

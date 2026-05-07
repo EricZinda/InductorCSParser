@@ -12,7 +12,7 @@ difference is which evaluator processes the parse.
 The earlier comparison (`statemachine-vs-recursive-summary-2026-04-28.md`)
 showed the state machine running 50-300x slower than the recursive
 evaluator on the literal-count benchmarks because the recursive
-evaluator had a `ZeroOrMore(FirstOf(match, AnyToken.Delete))`
+evaluator had a `ZeroOrMore(Or(match, AnyToken.Delete))`
 scanner-shape skip that the state machine lacked. That skip is now
 implemented as the `ScannerSkipAdvance` opcode in the state-machine
 path, with the same detection logic as
@@ -130,7 +130,7 @@ The port lives in three small pieces:
   the per-position substring-search cache.
 - `Lowerer.TryLowerBetweenScanner`: detection logic mirroring the
   recursive `TryCreateScannerSkip`. Same gating: AtLeast=0,
-  AtMost=int.MaxValue, Inner is `FirstOf` whose last alternative is a
+  AtMost=int.MaxValue, Inner is `Or` whose last alternative is a
   deleted `AnyToken`, candidate runes are non-empty and not
   `Universe`, no `WithError` on the bits we can't attribute.
 

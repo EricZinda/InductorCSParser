@@ -10,7 +10,7 @@ namespace InductorParser;
 // It's a specialized scanner for the "string body" grammar shape: scan
 // forward until a stopper is seen at the current lexer position, handling
 // escape sequences inline.
-// Collapses ZeroOrMore(FirstOf(bodyRune, AllOf(escapeStart, escapeEnd))) into one rule that
+// Collapses ZeroOrMore(Or(bodyRune, And(escapeStart, escapeEnd))) into one rule that
 // does the scan in a tight loop and returns one leaf Symbol
 // covering the matched section of input. One dispatch for the outer rule
 // and one Symbol allocation per matched run, however many runes the run

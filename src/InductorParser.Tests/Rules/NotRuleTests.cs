@@ -20,7 +20,7 @@ public class NotRuleTests
     {
         // Not(Token('a')) on "b": Token('a') fails, Not succeeds and leaves
         // the cursor at 0. The trailing Token('b') then consumes 'b'.
-        var rule = AllOf(Not(Token('a')), Token('b'));
+        var rule = And(Not(Token('a')), Token('b'));
         var result = rule.Parse("b", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -41,13 +41,13 @@ public class NotRuleTests
     [Test]
     public void Not_does_not_advance_the_cursor_even_when_inner_consumes_before_failing()
     {
-        // AllOf(Token('a'), Token('b')) would consume two chars before failing
+        // And(Token('a'), Token('b')) would consume two chars before failing
         // on "ax" (reads 'a', then fails on 'x'). Wrapping it in Not, the
         // outer cursor must still be 0 after Not succeeds. The trailing
         // Token('a') proves it: if Not had failed to roll back, Token('a')
         // would look at offset 2 ('<EOF>') or later.
-        var rule = AllOf(
-            Not(AllOf(Token('a'), Token('b'))),
+        var rule = And(
+            Not(And(Token('a'), Token('b'))),
             Token('a'));
 
         var result = rule.Parse("ax");
@@ -66,8 +66,8 @@ public class NotRuleTests
         // The rule-based pass-through idiom: consume any character that
         // isn't the start of the stop rule. Here the stop is '!'. The
         // body is arbitrary text up to (but not including) it.
-        var rule = AllOf(
-            ZeroOrMore(AllOf(Not(Token('!')), AnyToken())),
+        var rule = And(
+            ZeroOrMore(And(Not(Token('!')), AnyToken())),
             Token('!'));
 
         var result = rule.Parse("hello world!", Debug());
@@ -90,17 +90,17 @@ public class NotRuleTests
         // cursor says "if this looks like a variable, bail before the atom
         // branch commits,".
         var functor =
-            AllOf(
+            And(
                 //   variable (the thing we want to reject at this cursor):
                 //     upper letter, then any letters
-                Not(AllOf(OneOf(TokenSet.Range('A', 'Z')),
+                Not(And(OneOf(TokenSet.Range('A', 'Z')),
                         ZeroOrMore(OneOf(TokenSet.Ascii.Letters)))),
                 //   atom (deliberately case-insensitive, mirroring the
                 //   real Prolog atom rule's fall-through branch):
                 //     one or more letters of either case
                 OneOrMore(OneOf(TokenSet.Ascii.Letters)),
                 //   optional parenthesised single-letter argument
-                Optional( AllOf(Token('('),
+                Optional( And(Token('('),
                               OneOf(TokenSet.Ascii.Letters),
                               Token(')'))));
 

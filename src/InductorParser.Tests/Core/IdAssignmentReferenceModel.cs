@@ -46,7 +46,7 @@ public static class IdAssignmentReferenceModel
     {
         var result = new int[specs.Count];
 
-        // Record the AllOf root's pin as used. The passes below only
+        // Record the And root's pin as used. The passes below only
         // iterate the spec list, so they wouldn't see the root otherwise.
         var usedIds = new HashSet<int>
         {
@@ -123,9 +123,9 @@ public static class IdAssignmentReferenceModel
             leaves[i] = leaf;
         }
 
-        // Pin the AllOf root at RootPinOffset so it doesn't claim an
+        // Pin the And root at RootPinOffset so it doesn't claim an
         // anonymous id from the low end of the custom range and shift the
         // expected ids of every anonymous leaf below it.
-        return AllOf(leaves).As(new SymbolId(SymbolRanges.CustomRangeStart + RootPinOffset));
+        return And(leaves).As(new SymbolId(SymbolRanges.CustomRangeStart + RootPinOffset));
     }
 }

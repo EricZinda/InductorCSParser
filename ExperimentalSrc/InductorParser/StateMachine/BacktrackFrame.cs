@@ -12,7 +12,7 @@ internal struct BacktrackFrame
     public int CallStackHeight;
 
     // BetweenInclusive carries its loop counter and bounds on the same
-    // stack slot to avoid a second stack. Counter is unused by FirstOf /
+    // stack slot to avoid a second stack. Counter is unused by Or /
     // Optional / Not / Peek frames.
     public int Counter;
     public int AtLeast;

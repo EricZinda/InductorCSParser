@@ -23,14 +23,14 @@ rule must consume. It walks the rule tree:
 - `OneOf` with one BMP char → `(char, false)`
 - `OneOf` with two ASCII letters that fold (e.g. `"Nn"`) →
   `("n", true)` (case-insensitive)
-- `AllOf(...)` concatenates consecutive concatenable children (so
-  `AllOf(Literal("# "), OneOf("Nn"), OneOf("Oo"), OneOf("Qq"), OneOf("Aa"))`
+- `And(...)` concatenates consecutive concatenable children (so
+  `And(Literal("# "), OneOf("Nn"), OneOf("Oo"), OneOf("Qq"), OneOf("Aa"))`
   yields `("# noqa", true)`) and recurses into non-concatenable
   children for standalone candidates, picking the longest seen.
 - `BetweenInclusive[atLeast>=1]` propagates the inner's required
   literal; `Exactly(n, X)` repeats `X`'s concatenable text n times.
-- Other rules (FirstOf, ZeroOrMore, Optional, ScanUntil, Peek, Not)
-  return null. FirstOf could return a common-prefix literal across
+- Other rules (Or, ZeroOrMore, Optional, ScanUntil, Peek, Not)
+  return null. Or could return a common-prefix literal across
   alternatives but isn't worth the complexity for the supported
   rebar subset; multi-literal alternation is the SearchValues<string>
   / Aho-Corasick story.
@@ -61,11 +61,11 @@ baseline:
 - `01-literal/sherlock-casei-en` recursive 269.40us, state machine 193.00us
 
 For the AWS-keys row (`09-aws-keys/quick`), the `match` rule is
-`AllOf(FirstOf(Literal("ASIA"), Literal("AKIA"), Literal("AROA"),
+`And(Or(Literal("ASIA"), Literal("AKIA"), Literal("AROA"),
 Literal("AIDA")), Exactly(16, OneOf(AwsKeyTail)))`. The auto-
 derivation walks this:
 
-- `FirstOf(...)` → null (no common literal across alternatives)
+- `Or(...)` → null (no common literal across alternatives)
 - `Exactly(16, OneOf(AwsKeyTail))` → null (`OneOf` set is too broad
   to be a single concatenable char)
 

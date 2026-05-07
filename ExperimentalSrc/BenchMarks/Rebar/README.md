@@ -71,7 +71,7 @@ current hand-translated InductorParser subset is text-oriented.
 
 The runner doesn't compile regex strings. It can't, because InductorParser
 isn't a regex engine. It's a grammar API where you build `Rule` objects in C#
-out of combinators (`Literal`, `FirstOf`, `AllOf`, `ScanWhile`, and so on). For every
+out of combinators (`Literal`, `Or`, `And`, `ScanWhile`, and so on). For every
 rebar case the runner supports, somebody sat down and wrote a C# grammar that
 matches the same things the regex would match on the same haystack. That's
 what "hand translation" means here. The dispatcher is a `switch` on the rebar
@@ -247,7 +247,7 @@ Measured on 2026-04-24 with rebar `0.1.0 (rev 8e952148cc)` on Windows
 `win-arm64`, .NET SDK `10.0.202`, .NET host `10.0.6`. Lower medians are better.
 The run used `--max-time 1s --max-warmup-time 500ms`. These numbers include
 the parser core's automatic scanner-shape skip for
-`ZeroOrMore(FirstOf(match, AnyToken.Delete))`.
+`ZeroOrMore(Or(match, AnyToken.Delete))`.
 
 Result files under `results/` (newest first):
 
@@ -256,7 +256,7 @@ Result files under `results/` (newest first):
   hand-translated grammars across the bounded-repeat, ReDoS,
   cross-line-captures, large-alternation, and quadratic-regex
   groups, plus three runner adjustments needed to make their counts
-  match upstream (capture-by-presence, GreedyBoundedGap, AllOf
+  match upstream (capture-by-presence, GreedyBoundedGap, And
   wrapping for single-rune captures).
 - `required-literal-summary-2026-04-28.md` (CSV: `required-literal-2026-04-28.csv`):
   current baseline. Replaces the hand-tuned `"# noqa"` trigger from

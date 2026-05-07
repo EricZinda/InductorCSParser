@@ -14,7 +14,7 @@
 //
 // A call like
 //
-//     lexer.Trace(TraceLevel.Diagnostic, "AllOf", TraceOutcome.Success,
+//     lexer.Trace(TraceLevel.Diagnostic, "And", TraceOutcome.Success,
 //                 $"found {count}")
 //
 // gets rewritten to
@@ -33,7 +33,7 @@
 //         handler.AppendLiteral("found ");
 //         handler.AppendFormatted(count);
 //     }
-//     lexer.Trace(TraceLevel.Diagnostic, "AllOf", TraceOutcome.Success, handler);
+//     lexer.Trace(TraceLevel.Diagnostic, "And", TraceOutcome.Success, handler);
 //
 // The first two arguments (length of the literal pieces and number
 // of holes) are computed at compile time from the shape of the

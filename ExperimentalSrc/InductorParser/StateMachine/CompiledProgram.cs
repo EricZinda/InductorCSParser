@@ -34,7 +34,7 @@ internal sealed class CompiledProgram
     // tightest hot path because Call only fires at cyclic-rule entry,
     // not for inlined rules).
     public Dictionary<int, Rule> SubprogramRuleByEntry { get; }
-    // One 128-entry int[] per FirstOf that uses the
+    // One 128-entry int[] per Or that uses the
     // LoadPeekedRuneAndJumpAlt opcode. Entry r holds the state index
     // to dispatch to when the peeked rune equals r (0..127). Built
     // once at lowering time and read on the hot path with one
@@ -88,10 +88,10 @@ internal sealed class CompiledProgram
 }
 
 // Spec for ScannerSkipAdvance, the per-iteration bulk skip used at the
-// top of a ZeroOrMore(FirstOf(match..., AnyToken.Delete)) scanner loop.
+// top of a ZeroOrMore(Or(match..., AnyToken.Delete)) scanner loop.
 // At each iteration the opcode advances the lexer to the next position
 // where one of the candidate matches could plausibly start, so the
-// inner FirstOf doesn't waste an attempt + fail-over to the deleted
+// inner Or doesn't waste an attempt + fail-over to the deleted
 // AnyToken on every non-candidate rune. Mirrors the recursive
 // evaluator's ScannerSkip in BetweenInclusiveRule. Inert by
 // construction when the lowerer doesn't recognize the shape (the
@@ -138,7 +138,7 @@ internal readonly struct RuleStopperSpec
 }
 
 // Spec for ScanLiteralOneOfRune. Carries the literal index for the
-// AllOf's left child (Grapheme / Literal), the runeset index for the right
+// And's left child (Grapheme / Literal), the runeset index for the right
 // child (OneOf), the loop bounds, and an optional error-metadata
 // index. The fused opcode requires both children to be effectively
 // Delete (no leaves emitted per iteration), which is the common case

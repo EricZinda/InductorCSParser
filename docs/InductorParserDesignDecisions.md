@@ -29,8 +29,8 @@ Every concept from the original [GettingStarted.md](https://github.com/EricZinda
 
 | C++ concept                        | C# counterpart                                  |
 |------------------------------------|-------------------------------------------------|
-| `AndExpression<Args<...>>`         | `AllOf(...)` factory returning `Rule`             |
-| `OrExpression<Args<...>>`          | `FirstOf(...)` factory returning `Rule`              |
+| `AndExpression<Args<...>>`         | `And(...)` factory returning `Rule`             |
+| `OrExpression<Args<...>>`          | `Or(...)` factory returning `Rule`              |
 | `OneOrMoreExpression<T>`           | `OneOrMore(rule)`                               |
 | `ZeroOrMoreExpression<T>`          | `ZeroOrMore(rule)`                              |
 | `OptionalExpression<T>`            | `Optional(rule)`                                |
@@ -58,14 +58,14 @@ The mapping is nearly one-to-one at the concept level. What changes is the synta
 
 In the C++ library, a rule is a type. `NameValueRule` is a class, and when you write `NameValueRule::TryParse(...)` you're calling a static method on a type the compiler generated for you from a pile of templates. The rule tree exists at compile time, and the parser exists to walk it at runtime.
 
-In the C# library a rule is an instance. `var nameValueRule = AllOf(...)` builds a `Rule` object by calling factory functions that return `Rule` instances. Where the rule lives is up to you: a local variable in a method, a `static readonly` field on a class, an entry in a dictionary, an instance passed as an argument. The library doesn't require any particular grouping. The tree is built at runtime, compiled once (explicitly or on first parse), and reused for every parse after that.
+In the C# library a rule is an instance. `var nameValueRule = And(...)` builds a `Rule` object by calling factory functions that return `Rule` instances. Where the rule lives is up to you: a local variable in a method, a `static readonly` field on a class, an entry in a dictionary, an instance passed as an argument. The library doesn't require any particular grouping. The tree is built at runtime, compiled once (explicitly or on first parse), and reused for every parse after that.
 
 This is the single biggest shift in authoring style. Most other decisions in the design are consequences of it.
 
 It's built this way for three reasons:
 
 - C# generics don't accept non-type parameters. In C++ you can say `OneOrMoreExpression<CharacterSetSymbol<Chars>, FlattenType::None, MySymbolID::SettingName>` and pass an enum value and a number as template arguments. C# can't express this. The enum and the number have to live somewhere, and the natural place is the constructor of a `Rule` object.
-- C# doesn't have variadic generics. In C++ the `Args<...>` wrapper is already a workaround for the same missing feature. However, C# can use `params Rule[]`, and `AllOf(r1, r2, r3)` will work with any number of children.
+- C# doesn't have variadic generics. In C++ the `Args<...>` wrapper is already a workaround for the same missing feature. However, C# can use `params Rule[]`, and `And(r1, r2, r3)` will work with any number of children.
 - Rules-as-instances gives us things C++ rules-as-types can't. We can name rules dynamically for tracing. We can build rules in loops (a generated grammar from a config file, say). We can hold references to rules in collections. We can write tests that construct ad-hoc grammars inline. The C++ version can't do any of this without macro abuse.
 
 The cost is that grammar typos become runtime errors instead of compile errors. If you misspell a rule reference, C++ tells you at compile time (`undefined type NameValueRul`). C# tells you the first time the containing code runs, or worst case the first time you parse. The compile-time story is worse but after compile time is better.
@@ -201,7 +201,7 @@ Every built-in rule that looks at token content reduces to one of four operation
 - `OneOf(set)` succeeds when the lexer's next token is in the set.
 - `NoneOf(set)` succeeds when it isn't.
 
-For a single-rune token the test is "is the rune in any of the set's intervals?", which is a binary search over a small sorted list. For a multi-rune token the test is "is this exact grapheme in the set's multi-rune array?", which only fires when the set was given multi-rune content; rune-only sets short-circuit the multi-rune check entirely. The asymmetry that matters in practice: a multi-rune token like 👋🏽 fed to `OneOf(TokenSet.Letters)` doesn't match (Letters is rune-only and 👋🏽 isn't a single rune), but the same token fed to `NoneOf(TokenSet.Runes("\""))` does match (the closing-quote set has no multi-rune entries, so a multi-rune token can't be in it). This is what makes `OneOrMore(NoneOf(stopSet))` sweep up emoji correctly in the pass-through-text recipe, and what makes `OneOf(TokenSet.Letters | TokenSet.Runes(USFlagGrapheme))` accept letters and the US flag without needing a `FirstOf`.
+For a single-rune token the test is "is the rune in any of the set's intervals?", which is a binary search over a small sorted list. For a multi-rune token the test is "is this exact grapheme in the set's multi-rune array?", which only fires when the set was given multi-rune content; rune-only sets short-circuit the multi-rune check entirely. The asymmetry that matters in practice: a multi-rune token like 👋🏽 fed to `OneOf(TokenSet.Letters)` doesn't match (Letters is rune-only and 👋🏽 isn't a single rune), but the same token fed to `NoneOf(TokenSet.Runes("\""))` does match (the closing-quote set has no multi-rune entries, so a multi-rune token can't be in it). This is what makes `OneOrMore(NoneOf(stopSet))` sweep up emoji correctly in the pass-through-text recipe, and what makes `OneOf(TokenSet.Letters | TokenSet.Runes(USFlagGrapheme))` accept letters and the US flag without needing a `Or`.
 
 **`Literal(string s)`.** Generalizes `Token` to any non-empty string. It keeps the expected string and uses a lockstep loop: read a lexer token, compare it with the corresponding range of the expected text, and advance by `token.Length`. A literal containing a multi-rune grapheme compares that grapheme as one token, the same way `Token` does. The only difference is that a literal can hold a sequence of multiple tokens, where `Token` requires exactly one. `Literal("👨‍👩‍👧‍👦 and friends")` reads one family-emoji token and then twelve more tokens for the trailing text.
 
@@ -209,7 +209,7 @@ For a single-rune token the test is "is the rune in any of the set's intervals?"
 
 ### TokenSet: The Set Primitive
 
-`OneOf` and `NoneOf` take a `TokenSet`, a set of Unicode scalar values with the standard set operations via operators. Keeping the set type separate from the rule types means character-class expressions compose the way set expressions do in ordinary code instead of having to wrap every union inside an `FirstOf(...)`.
+`OneOf` and `NoneOf` take a `TokenSet`, a set of Unicode scalar values with the standard set operations via operators. Keeping the set type separate from the rule types means character-class expressions compose the way set expressions do in ordinary code instead of having to wrap every union inside an `Or(...)`.
 
 ```csharp
 public readonly struct TokenSet
@@ -293,7 +293,7 @@ Internally a `TokenSet` is a sorted list of rune ranges. Union, intersection, an
 A few more rule types exist but don't touch token content directly:
 
 - `Peek(rule)` and `Not(rule)` run their inner rule without committing the transaction. Whatever the inner rule would do with tokens, `Peek` and `Not` inherit from that behavior. No special handling at the token level.
-- `AllOf(...)`, `FirstOf(...)`, `OneOrMore(...)`, `ZeroOrMore(...)`, `Optional(...)` are composites. They never inspect tokens themselves. They just sequence or alternate other rules.
+- `And(...)`, `Or(...)`, `OneOrMore(...)`, `ZeroOrMore(...)`, `Optional(...)` are composites. They never inspect tokens themselves. They just sequence or alternate other rules.
 - `Eof()` matches iff the lexer is at the end of input. Doesn't read a token.
 
 Everything else (flatten policies, error messages, named symbols) is metadata on the resulting `Symbol` tree, not comparison logic.
@@ -365,12 +365,12 @@ What you *can't* do:
 
 ## Greedy Repetition, No Repetition Backtracking
 
-PEG parsers backtrack on alternatives (`FirstOf` tries each branch in order until one succeeds, rolls back between attempts), but they DON'T backtrack inside repetition. `OneOrMore`, `ZeroOrMore`, and `Optional` are greedy by construction: they grab as many matches as they can get and never give any back. This is inherited from the C++ library and it's a defining property of PEG, not a design choice unique to this port.
+PEG parsers backtrack on alternatives (`Or` tries each branch in order until one succeeds, rolls back between attempts), but they DON'T backtrack inside repetition. `OneOrMore`, `ZeroOrMore`, and `Optional` are greedy by construction: they grab as many matches as they can get and never give any back. This is inherited from the C++ library and it's a defining property of PEG, not a design choice unique to this port.
 
 The practical consequence is the most common trip-up when moving from regex to PEG. Consider:
 
 ```csharp
-var rule = AllOf(OneOrMore(OneOf(TokenSet.Letters)), Token('a'));
+var rule = And(OneOrMore(OneOf(TokenSet.Letters)), Token('a'));
 var result = rule.Parse("aaa");
 ```
 
@@ -380,7 +380,7 @@ A regex engine with greedy backtracking would:
 2. Then try to match the trailing `a` against EOF, fail.
 3. Back off the repetition to `"aa"`, try again, succeed on the trailing `a`.
 
-A PEG engine DOESN'T do step 3. Once `OneOrMore` matched `"aaa"`, those matches are committed. The outer `AllOf` then tries `Token('a')` at EOF, fails, and the whole parse fails. Our `BetweenInclusiveRule` (which `OneOrMore`, `ZeroOrMore`, and `Optional` all factory through) preserves this: the loop inside its `TryParse` commits each successful inner match as it goes, and the loop just stops when the inner fails on the next attempt. No rewind.
+A PEG engine DOESN'T do step 3. Once `OneOrMore` matched `"aaa"`, those matches are committed. The outer `And` then tries `Token('a')` at EOF, fails, and the whole parse fails. Our `BetweenInclusiveRule` (which `OneOrMore`, `ZeroOrMore`, and `Optional` all factory through) preserves this: the loop inside its `TryParse` commits each successful inner match as it goes, and the loop just stops when the inner fails on the next attempt. No rewind.
 
 This looks like a cost, and sometimes it's. Grammars that worked in regex need to be restructured, usually with `Not(...)` lookahead to stop repetition one step short, or by splitting the repeated rule into a less-greedy form. The benefit's unambiguity: given a grammar and an input, PEG returns exactly one parse (or a fail), and the parse is whichever answer the ordered choices and greedy matches produced. Regex engines without this property have decades of scars from ambiguous patterns and catastrophic backtracking (ReDoS).
 
@@ -442,7 +442,7 @@ A naive post-read implementation would record at 1 instead of 0, which equals `i
 
 **Multi-token leaves** (`LiteralRule`) read a sequence of tokens and fail when any one of them mismatches. The position is the start of the *specific* failing token, not the start of the whole attempt. A `Literal("abc")` that matches "ab" and fails on the third token reports offset 2, not offset 0. These rules track a per-iteration `tokenStart` local inside the loop.
 
-**Composite rules** (`AllOfRule`, `FirstOfRule`, `BetweenInclusiveRule`) don't introduce new positions of their own. They call `RecordFailure(lexer.Position, ...)` (the current lexer position after a child's transaction has rolled back), which equals where the child started trying. The child has already recorded at its own pre-read position (which is the same or deeper, depending on whether the child committed any sub-tokens before failing), so the composite's record either ties or is shallower, and deepest-failure-wins routes to the child's more-specific location. The composite still gets a chance to attach its `WithError` message via the equal-depth message-claim rule below.
+**Composite rules** (`AndRule`, `OrRule`, `BetweenInclusiveRule`) don't introduce new positions of their own. They call `RecordFailure(lexer.Position, ...)` (the current lexer position after a child's transaction has rolled back), which equals where the child started trying. The child has already recorded at its own pre-read position (which is the same or deeper, depending on whether the child committed any sub-tokens before failing), so the composite's record either ties or is shallower, and deepest-failure-wins routes to the child's more-specific location. The composite still gets a chance to attach its `WithError` message via the equal-depth message-claim rule below.
 
 ### Deepest Failure Wins
 
@@ -457,7 +457,7 @@ The equal-depth restriction matters: without it, a shallow rule's `WithError` co
 
 The deepest-failure-wins model works well in practice but has one characteristic quirk: `Optional(...)` rules whose inner gets deeper than the surrounding required path can "capture" the error message into a branch that was truly optional.
 
-Concrete case: `AllOf(Optional(Literal("abc")), Token('x')).Parse("abdy")`. The Optional's inner reads "ab" and fails on 'd' vs 'c' at offset 2. Optional catches the failure and succeeds with empty children, so the overall grammar proceeds. Then Token('x') tries at offset 0, fails on 'a'. Deepest-failure-wins picks offset 2 (the abandoned Optional attempt), not offset 0 (the actually-required rule's failure). The user sees "unexpected 'd'" pointing at content inside what was supposedly optional.
+Concrete case: `And(Optional(Literal("abc")), Token('x')).Parse("abdy")`. The Optional's inner reads "ab" and fails on 'd' vs 'c' at offset 2. Optional catches the failure and succeeds with empty children, so the overall grammar proceeds. Then Token('x') tries at offset 0, fails on 'a'. Deepest-failure-wins picks offset 2 (the abandoned Optional attempt), not offset 0 (the actually-required rule's failure). The user sees "unexpected 'd'" pointing at content inside what was supposedly optional.
 
 This isn't a bug. It's a property of the heuristic. Grammars that care about this can put `.WithError(...)` on the outer required rule, and the equal-depth message-claim rule will make that message appear even when the deepest position came from the optional branch. The full fix would require a different error model (something like tracking a separate "required-path failure" position alongside the deepest raw position), and no existing PEG library we've surveyed does that. The smallest core lives with the quirk and documents it.
 
@@ -544,7 +544,7 @@ A grammar-level `Cut()` rule is the PEG community's standard tool for preventing
 ```csharp
 // Conceptual sketch of the API if we added it
 public static readonly Rule FunctionDecl =
-    AllOf(
+    And(
         Literal("function"),
         Cut(),                              // past here, no backtracking
         Identifier,
@@ -573,7 +573,7 @@ Unicode-aware defaults. The lexer calls `StringInfo.GetNextTextElement` at the c
 
 Runtime defenses against catastrophic backtracking. The C++ version has no protection: a pathological input and a grammar with ambiguous alternatives can combine to spin for minutes. The C# port has three orthogonal budgets plus a `ParseCancellation` signal that can bridge from `CancellationToken`, with protective defaults on the two deterministic ones, and `ParseResult.Outcome` tells the caller which one tripped.
 
-Variadic rules without the `Args` wrapper. `AllOf(r1, r2, r3, r4)` beats `AndExpression<Args<r1, r2, r3, r4>>`.
+Variadic rules without the `Args` wrapper. `And(r1, r2, r3, r4)` beats `AndExpression<Args<r1, r2, r3, r4>>`.
 
 Composable character classes. `TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_-")` is worth the whole port by itself.
 
@@ -585,20 +585,20 @@ Two places where we lose something real.
 
 Compile-time errors become runtime errors. If you misspell a rule reference in C++, the compiler catches it. In C# it becomes a `NullReferenceException` the first time you hit that branch of the grammar. Writing a unit test that parses a known-good input against every grammar is the real fix, and that's fine.
 
-Rule graphs can have order-of-initialization traps. `static readonly Rule A = AllOf(B, C);` requires `B` and `C` to exist. If they're in the same file this is fine because C# initializes static fields top-to-bottom in declaration order. If they're in different files and there's a cycle, you can get a default-initialized `Rule` reference (`null`) where you expected a real rule. Mutually recursive grammars (expression grammars, for example) have to use a `LateBoundRule` forward-reference trick:
+Rule graphs can have order-of-initialization traps. `static readonly Rule A = And(B, C);` requires `B` and `C` to exist. If they're in the same file this is fine because C# initializes static fields top-to-bottom in declaration order. If they're in different files and there's a cycle, you can get a default-initialized `Rule` reference (`null`) where you expected a real rule. Mutually recursive grammars (expression grammars, for example) have to use a `LateBoundRule` forward-reference trick:
 
 ```csharp
 // Expression grammar with self-reference
 static readonly LateBoundRule Expression = new LateBoundRule();
 
 static readonly Rule Term =
-    FirstOf(
+    Or(
         Integer(),
-        AllOf(Token('('), Expression, Token(')'))    // refers to the not-yet-built expression
+        And(Token('('), Expression, Token(')'))    // refers to the not-yet-built expression
     );
 
 static readonly Rule Sum =
-    AllOf(Term, ZeroOrMore(AllOf(Token('+'), Term)));
+    And(Term, ZeroOrMore(And(Token('+'), Term)));
 
 static readonly Rule _init = Expression.Bind(Sum);   // wire up the late binding
 ```

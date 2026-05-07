@@ -25,7 +25,7 @@ public class OptionalRuleTests
         // Optional released control after one match rather than running
         // off the end.
         var sink = NewSink();
-        AllOf(Optional(Token('a')), Token('a'))
+        And(Optional(Token('a')), Token('a'))
             .Parse("aa", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
@@ -34,7 +34,7 @@ public class OptionalRuleTests
             "      SUCC | Optional: count= 1",
             "      Lexer.Read: 'a', Consumed: 2",
             "      SUCC | Token: found 'a'",
-            "   SUCC | AllOf: found 2"
+            "   SUCC | And: found 2"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
@@ -45,7 +45,7 @@ public class OptionalRuleTests
         // atLeast = 0: when the inner rule can't match, Optional still
         // succeeds with no consumption. This is what distinguishes
         // Optional from a Token('-') used directly.
-        var result = AllOf(Optional(Token('-')), Token('a')).Parse("a");
+        var result = And(Optional(Token('-')), Token('a')).Parse("a");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }

@@ -152,7 +152,7 @@ internal sealed class WithinTokenRule : Rule
         // is Always. The first rune of that token has to satisfy whatever
         // the inner rule's first-rune requirement is, so we can propagate
         // the inner's FirstConsumedTokens to the outer fast-fail path. That
-        // lets FirstOf(WithinToken(...), ...) skip this alternative without
+        // lets Or(WithinToken(...), ...) skip this alternative without
         // calling into it when the next token starts with a rune the
         // inner rule can't accept.
         var innerStart = _innerRule.ComputeRuleStart();

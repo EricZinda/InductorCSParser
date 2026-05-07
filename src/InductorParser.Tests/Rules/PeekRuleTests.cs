@@ -20,7 +20,7 @@ public class PeekRuleTests
     {
         // Peek(Token('a')) on "a": confirms 'a' is ahead without consuming
         // it. The trailing Token('a') then consumes it for real.
-        var rule = AllOf(Peek(Token('a')), Token('a'));
+        var rule = And(Peek(Token('a')), Token('a'));
         var result = rule.Parse("a", Debug());
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -42,10 +42,10 @@ public class PeekRuleTests
     public void Peek_does_not_advance_the_cursor_even_when_inner_consumes_multiple_tokens()
     {
         // Inner rule would consume two chars on success. Peek has to roll
-        // those back. The trailing AllOf(Token('a'), Token('b')) consumes them
+        // those back. The trailing And(Token('a'), Token('b')) consumes them
         // for real, proving the cursor is at 0 after Peek.
-        var rule = AllOf(
-            Peek(AllOf(Token('a'), Token('b'))),
+        var rule = And(
+            Peek(And(Token('a'), Token('b'))),
             Token('a'),
             Token('b'));
 
@@ -74,10 +74,10 @@ public class PeekRuleTests
         var keywordThen = Literal("then");
         var keywordElse = Literal("else");
 
-        var ifStatement = AllOf(
+        var ifStatement = And(
             keywordIf, Token(' '), AnyToken(), Token(' '),
             keywordThen, Token(' '), AnyToken(),
-            Optional(AllOf(
+            Optional(And(
                 Token(' '),
                 Peek(keywordElse),
                 keywordElse, Token(' '), AnyToken())));

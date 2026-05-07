@@ -68,8 +68,8 @@ public class BudgetTests
         // deep as the input is nested. Without a depth budget, a long
         // enough input would blow the .NET call stack.
         var nested = new LateBoundRule("nested");
-        nested.Bind(FirstOf(
-            AllOf(Token('('), nested, Token(')')),
+        nested.Bind(Or(
+            And(Token('('), nested, Token(')')),
             Token('x')));
 
         // 100 levels of nesting, far past the MaxDepth = 10 budget.
@@ -89,8 +89,8 @@ public class BudgetTests
         // completes (the input is short enough not to overflow the real
         // call stack).
         var nested = new LateBoundRule("nested");
-        nested.Bind(FirstOf(
-            AllOf(Token('('), nested, Token(')')),
+        nested.Bind(Or(
+            And(Token('('), nested, Token(')')),
             Token('x')));
 
         string input = new string('(', 50) + "x" + new string(')', 50);
@@ -218,7 +218,7 @@ public class BudgetTests
             optionalsAndAnyToken[index] = Optional(Token((char)('0' + index % 10)));
         optionalsAndAnyToken[40] = AnyToken();
 
-        var rule = OneOrMore(AllOf(optionalsAndAnyToken));
+        var rule = OneOrMore(And(optionalsAndAnyToken));
         var result = rule.Parse(new string('a', 350_000));
 
         Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.RuleCountLimitExceeded));
@@ -258,7 +258,7 @@ public class BudgetTests
         // iteration, so by the time the budget trips it's well above 0.
         // If Parse used lexer.Position here (pre-fix behavior), the
         // rolled-back value of 0 would make this assertion fail.
-        var rule = OneOrMore(FirstOf(Literal("ab"), Token('a')));
+        var rule = OneOrMore(Or(Literal("ab"), Token('a')));
         var input = new string('a', 5000);
         var options = new ParseOptions { RuleCountLimit = 100 };
         var result = rule.Parse(input, options);
@@ -266,7 +266,7 @@ public class BudgetTests
         Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.RuleCountLimitExceeded));
         // Bookkeeping at trip time:
         //   - Outer OneOrMore.TryParse is invocation 1.
-        //   - Each successful iter does 3 invocations: FirstOf, Literal
+        //   - Each successful iter does 3 invocations: Or, Literal
         //     (fails on the second token, records a failure at iter-start
         //     + 1), Token (succeeds, cursor advances by one).
         //   - The periodic budget check fires on multiples of 1024 (the

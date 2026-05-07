@@ -10,7 +10,7 @@ namespace InductorParser;
 // one whole user-visible character.
 //
 // This is the "match one token, regardless of what it is" leaf. Its
-// companion idiom is ZeroOrMore(AllOf(Not(stopRule), AnyToken())), which
+// companion idiom is ZeroOrMore(And(Not(stopRule), AnyToken())), which
 // consumes content until wherever stopRule would fire.
 internal sealed class AnyTokenRule : Rule
 {

@@ -74,7 +74,7 @@ public class OneOfRuleTests
         //
         // To make the test unambiguous we only put a WithError on Token(';')
         // so there's no contention.
-        var rule = AllOf(OneOrMore(OneOf(TokenSet.Letters)),
+        var rule = And(OneOrMore(OneOf(TokenSet.Letters)),
                        Token(';').WithError("expected ';'"));
 
         var result = rule.Parse("abc1");
