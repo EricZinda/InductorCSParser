@@ -1,0 +1,24 @@
+# XML doc comments on the public API for IntelliSense
+
+    - Current state: Public types and members have informative `//` prose comments explaining design rationale, but no `///` XML doc comments. That means nothing shows up in IntelliSense tooltips when a user types `rule.` or hovers over `RuneSet.Letters`. For a library that expects users to author grammars by composing factory calls, IntelliSense is the primary way they discover the API. Not having `///` means every first-time user has to read source files to find out what methods exist and what they do.
+    - Scope of what should get doc comments:
+        - `Rule` and every public method (As, Flatten, WithError, Compile, Parse, and the abstract Children property).
+        - `Symbol` and its public methods (Find, FindAll, Walk, FlattenInto, Flatten, ToString).
+        - `ParseResult`, `ParseOutcome`, `ParseOptions`, `InputUnit`.
+        - `SymbolId`, `FlattenType`, `SymbolRanges`.
+        - `RuneSet` and all its factories (Single, Range, Runes, Category, Letters, Digits, InlineWhitespace, LineTerminators, Ascii.*, operator |, Contains).
+        - `Lexer`, `Token`. Most of these are likely to stay internal-facing but still deserve tooltips for maintainers.
+        - The `Rules` static factory class, every factory method (Grapheme, OneOf, And, Or, OneOrMore, ZeroOrMore, Optional, Eof, Integer, Float, InlineWhitespace, AnyWhitespace, EndOfLine).
+        - `LateBoundRule` and its Bind method.
+        - `Interval` (private inside RuneSet), not externally visible, skip.
+    - What stays as `//` rather than `///`:
+        - Long design-rationale paragraphs (the Grapheme design block, the Symbol GC-rooting note, the pass-through-text discussion on Letters, the transaction-semantics block in Lexer). These are too discursive for IntelliSense tooltips and aren't what users want when hovering over a symbol name. They stay as `//` prose aimed at contributors.
+        - Implementation-detail comments inside method bodies.
+    - What goes in each `///`:
+        - `<summary>` one or two sentences describing what the member does.
+        - `<param>` for each parameter.
+        - `<returns>` for non-void methods.
+        - `<exception>` when the member throws documented exceptions (e.g., `ArgumentOutOfRangeException` on surrogate inputs).
+        - `<remarks>` for behavior worth knowing that doesn't fit the summary (the multi-rune matching story on Grapheme, the caching behavior on Category).
+    - Cost estimate: ~1-2 hours to do it well across the public surface. Mechanical but not trivial because the summaries need to be useful one-liners, not restatements of the method name.
+    - Done when: every public type and member in src/InductorParser/ has at least a `<summary>`; Visual Studio / Rider / VS Code IntelliSense shows meaningful hover tooltips for every Rules factory call; the build produces an InductorParser.xml file alongside the DLL (enabled via `<GenerateDocumentationFile>true</GenerateDocumentationFile>` in the csproj).

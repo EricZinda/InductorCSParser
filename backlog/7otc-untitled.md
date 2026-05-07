@@ -1,4 +1,3 @@
-- Untitled
-# Need to do proper case invariance
+# Untitled
 
-And update the regex tool to support it too
+- Untitled

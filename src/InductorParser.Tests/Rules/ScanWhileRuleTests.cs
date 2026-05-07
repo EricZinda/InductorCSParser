@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
@@ -214,5 +215,119 @@ public class ScanWhileRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(sink.ToString(), Does.Not.Contain("SKIP | ScanWhile:"));
+    }
+
+    // -----------------------------------------------------------------
+    // Compile-form normalization matrix
+    //
+    // See GraphemeRuleTests for the full matrix rationale. ScanWhile's
+    // matching data is the same TokenSet shape OneOf / NoneOf carry,
+    // and the same OneOfRule.NormalizeAndValidate helper handles the
+    // Compile-time projection. Default minimumCount=1 means the rule
+    // isn't zero-matchable, so a stale set surfaces as outright
+    // failure rather than a silent zero-length match.
+    // -----------------------------------------------------------------
+
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void ScanWhile_bare_matches_input_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        {
+            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            return;
+        }
+
+        var rule = ScanWhile(TokenSet.Runes(row.Source));
+
+        if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+        {
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True,
+            $"ScanWhile(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\")).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should succeed. Error was: {result.ErrorMessage}");
+    }
+
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void ScanWhile_in_OneOrMore_matches_input_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        {
+            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            return;
+        }
+
+        var rule = OneOrMore(ScanWhile(TokenSet.Runes(row.Source)));
+
+        if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+        {
+            // Multi-grapheme post-form: ScanWhile reports the entry as
+            // an offender via the same single-grapheme-per-token rule
+            // OneOf / NoneOf use, so Compile throws.
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True,
+            $"OneOrMore(ScanWhile(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\"))).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should succeed. Error was: {result.ErrorMessage}");
+    }
+
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void ScanWhile_in_Or_with_fallback_matches_scanwhile_branch_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+            return; // covered by ScanWhile_in_OneOrMore's TokenSet.Runes-throws path
+        if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+            return; // multi-grapheme post-form is covered by the ScanWhile_in_OneOrMore Compile-throws path
+
+        var scanWhileRule = ScanWhile(TokenSet.Runes(row.Source)).As("scanWhileBranch");
+        var fallback = AnyToken().As("fallbackBranch");
+        var rule = Or(scanWhileRule, fallback);
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.Find(scanWhileRule), Is.Not.Null,
+            $"Or(ScanWhile(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\")), AnyToken).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"matched the AnyToken fallback instead of the ScanWhile branch.");
+    }
+
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void ScanWhile_in_AllOf_with_Eof_matches_full_input_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        {
+            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            return;
+        }
+
+        var rule = And(ScanWhile(TokenSet.Runes(row.Source)), Eof());
+
+        if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+        {
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True,
+            $"And(ScanWhile(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\")), Eof()).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should succeed. Error was: {result.ErrorMessage}");
     }
 }

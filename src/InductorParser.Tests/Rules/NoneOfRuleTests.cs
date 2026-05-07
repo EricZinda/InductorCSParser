@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
@@ -296,5 +297,126 @@ public class NoneOfRuleTests
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
+
+    // -----------------------------------------------------------------
+    // Compile-form normalization matrix
+    //
+    // See GraphemeRuleTests for the full matrix rationale. NoneOf has
+    // the inverse polarity of OneOf: feeding the source through a rule
+    // that rejects exactly the source's runes should FAIL after a
+    // correct Compile (the post-form rune IS in the post-form stop
+    // set). The staleness bug surfaces as NoneOf wrongly succeeding
+    // because the cached set still holds the pre-form entry while the
+    // input arrives in the post-form shape.
+    // -----------------------------------------------------------------
+
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void NoneOf_bare_does_not_match_source_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        {
+            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            return;
+        }
+
+        var rule = NoneOf(TokenSet.Runes(row.Source));
+
+        if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+        {
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.False,
+            $"NoneOf(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\")).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should fail. A pass means the post-form rune isn't in the cached stop set.");
+    }
+
+    // OneOrMore wrapping also exercises the BetweenInclusive shortcut
+    // path on NoneOf's FirstConsumedTokens (the complement of the stop
+    // set, which has its own staleness bug shape).
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void NoneOf_in_OneOrMore_does_not_match_source_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        {
+            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            return;
+        }
+
+        var rule = OneOrMore(NoneOf(TokenSet.Runes(row.Source)));
+
+        if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+        {
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.False,
+            $"OneOrMore(NoneOf(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\"))).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should fail (input rune is in the stop set after normalization). " +
+            $"A pass here means NoneOf's _set is still in its pre-normalization shape.");
+    }
+
+    // NoneOf in Or with AnyToken fallback. Correct: NoneOf fails (input
+    // is in stop set), Or falls through to AnyToken which matches. The
+    // bug shape (stale _set) flips the outcome: NoneOf wrongly succeeds
+    // and the fallback never runs.
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void NoneOf_in_Or_with_fallback_takes_fallback_branch_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+            return; // covered by NoneOf_in_OneOrMore's TokenSet.Runes-throws path
+        if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+            return; // multi-grapheme post-form is covered by the NoneOf_in_OneOrMore Compile-throws path
+
+        var noneOfRule = NoneOf(TokenSet.Runes(row.Source)).As("noneOfBranch");
+        var fallback = AnyToken().As("fallbackBranch");
+        var rule = Or(noneOfRule, fallback);
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.Find(fallback), Is.Not.Null,
+            $"Or(NoneOf(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\")), AnyToken).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"didn't take the AnyToken fallback. NoneOf wrongly succeeded, " +
+            $"which means its _set didn't get rewritten under {form}.");
+    }
+
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void NoneOf_in_AllOf_with_Eof_does_not_match_source_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        {
+            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            return;
+        }
+
+        var rule = And(NoneOf(TokenSet.Runes(row.Source)), Eof());
+
+        if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+        {
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.False,
+            $"And(NoneOf(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\")), Eof()).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should fail. A pass means NoneOf's _set didn't get rewritten under {form}.");
     }
 }

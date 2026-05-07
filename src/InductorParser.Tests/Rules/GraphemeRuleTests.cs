@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
@@ -396,5 +397,126 @@ public class GraphemeRuleTests
             .Compile(System.Text.NormalizationForm.FormC);
         var result = rule.Parse("Å");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
+
+    // -----------------------------------------------------------------
+    // Compile-form normalization matrix
+    //
+    // Parameterized over NormalizationExamples.RowFormPairs so each row
+    // (a curated grapheme-behavior class) runs against each of the four
+    // NormalizationForm values. Four wrapping shapes per leaf rule:
+    // bare leaf (no shortcut), OneOrMore (BetweenInclusive shortcut),
+    // Or with fallback (OrRule shortcut), And with Eof (trailing-input
+    // check). The shortcut shapes are the ones the original
+    // FirstConsumedTokens-staleness bug surfaced under, but the bare
+    // and trailing-input shapes catch other staleness bug shapes the
+    // shortcut paths can't see.
+    //
+    // The matrix's expected outcome is computable from the row: under
+    // form F, the rule's expected text and the input both project to
+    // row[F]. If both end up matching the same lexer-produced token,
+    // the test asserts success. If row[F] is multi-grapheme (the
+    // compatibility-ligature row under FormKC), Token reports a
+    // Compile-time normalization offender. Lone surrogates can't go
+    // through string.Normalize at all, so Compile throws under every
+    // form for that row.
+    //
+    // See docs/TestArchitecture.md "Normalization-form behavior" and
+    // backlog/0p5x-untitled.md for the framework rationale.
+    // -----------------------------------------------------------------
+
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void Token_bare_matches_input_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        var rule = Token(row.Source);
+
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable
+            || !NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+        {
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True,
+            $"Token(\"{NormalizationExamples.Hex(row.Source)}\").Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should succeed. Error was: {result.ErrorMessage}");
+    }
+
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void Token_in_OneOrMore_matches_input_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        var rule = OneOrMore(Token(row.Source));
+
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable
+            || !NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+        {
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True,
+            $"OneOrMore(Token(\"{NormalizationExamples.Hex(row.Source)}\")).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should succeed. Error was: {result.ErrorMessage}");
+    }
+
+    // Or-wrapped Token with an AnyToken fallback. Exercises the
+    // OrRule.CannotMatchLookahead shortcut path (separate from
+    // BetweenInclusive's). Asserts the Token branch matched, not the
+    // fallback, by checking the symbol id of the leaf in the result.
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void Token_in_Or_with_fallback_matches_token_branch_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+            return; // covered by Token_in_OneOrMore's Compile-throws path
+        if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+            return; // multi-grapheme post-form is covered by the Token_in_OneOrMore Compile-throws path
+        var tokenRule = Token(row.Source).Preserve().As("tokenBranch");
+        var fallback = AnyToken().As("fallbackBranch");
+        var rule = Or(tokenRule, fallback);
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.Find(tokenRule), Is.Not.Null,
+            $"Or(Token(\"{NormalizationExamples.Hex(row.Source)}\"), AnyToken).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"matched the AnyToken fallback instead of the token branch. " +
+            $"FirstConsumedTokens computed against the pre-normalization _expected " +
+            $"would cause exactly this shape: the post-normalization first rune " +
+            $"isn't in the cached set, so Or's lookahead skips the token branch.");
+    }
+
+    // And(Token, Eof) requires Token to consume the entire input. If
+    // Compile failed to project _expected to the post-form text,
+    // Token's match would either fail outright (Eof never reached) or
+    // consume the wrong span and let Eof catch the leftover.
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void Token_in_AllOf_with_Eof_matches_full_input_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        var rule = And(Token(row.Source), Eof());
+
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable
+            || !NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+        {
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True,
+            $"And(Token(\"{NormalizationExamples.Hex(row.Source)}\"), Eof()).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should succeed. Error was: {result.ErrorMessage}");
     }
 }
