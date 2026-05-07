@@ -24,7 +24,7 @@ The Stopwatch loop takes min-of-N rounds with warmup. Not BenchmarkDotNet-qualit
 
 ## JSON results
 
-The state-machine rows below come from this project. The non-SM rows (`InductorParserGrapheme`, `SystemTextJson`, `Parlot`) are pulled from the main bench in [../../src/Benchmarks/README.md](../../src/Benchmarks/README.md) so the comparison reads end-to-end on one page. The grammar, lexer, and Symbol-tree output are identical to `InductorParserGrapheme`; only the evaluator differs.
+The state-machine rows below come from this project. The non-SM rows (`InductorParserToken`, `SystemTextJson`, `Parlot`) are pulled from the main bench in [../../src/Benchmarks/README.md](../../src/Benchmarks/README.md) so the comparison reads end-to-end on one page. The grammar, lexer, and Symbol-tree output are identical to `InductorParserToken`; only the evaluator differs.
 
 ```
 BenchmarkDotNet v0.14.0, Windows 11 (10.0.26200.8246)
@@ -34,31 +34,31 @@ Job=ShortRun  IterationCount=3  LaunchCount=1  WarmupCount=3
 
 | Method                              | Mean        | Ratio | Allocated  | Alloc Ratio |
 |------------------------------------ |------------:|------:|-----------:|------------:|
-| BigJson_SystemTextJson              |    25.51 μs |  1.00 |   24.12 KB |        1.00 |
-| BigJson_InductorParserStateMachine  |   217.10 μs |  8.51 |  264.11 KB |       10.95 |
-| BigJson_InductorParserGrapheme      |   363.27 μs | 14.24 |  369.85 KB |       15.34 |
+| BigJson_SystemTextJson              |    24.98 μs |  1.00 |   24.12 KB |        1.00 |
+| BigJson_InductorParserStateMachine  |   183.67 μs |  7.35 |  193.56 KB |        8.02 |
+| BigJson_InductorParserToken         |   239.49 μs |  9.59 |  197.50 KB |        8.19 |
 |                                     |             |       |            |             |
-| DeepJson_SystemTextJson             |    82.89 μs |  1.00 |   20.24 KB |        1.00 |
-| DeepJson_InductorParserStateMachine |   106.20 μs |  1.28 |  123.39 KB |        6.10 |
-| DeepJson_InductorParserGrapheme     |   188.88 μs |  2.28 |  149.48 KB |        7.38 |
+| DeepJson_SystemTextJson             |    82.12 μs |  1.00 |   20.24 KB |        1.00 |
+| DeepJson_InductorParserStateMachine |    94.69 μs |  1.15 |   86.48 KB |        4.27 |
+| DeepJson_InductorParserToken        |   147.70 μs |  1.80 |   88.45 KB |        4.37 |
 |                                     |             |       |            |             |
-| LongJson_SystemTextJson             |    18.86 μs |  1.00 |   24.12 KB |        1.00 |
-| LongJson_InductorParserStateMachine |   164.50 μs |  8.72 |  196.30 KB |        8.14 |
-| LongJson_InductorParserGrapheme     |   238.16 μs | 12.63 |  259.84 KB |       10.77 |
+| LongJson_SystemTextJson             |    18.48 μs |  1.00 |   24.12 KB |        1.00 |
+| LongJson_InductorParserStateMachine |   137.76 μs |  7.45 |  140.36 KB |        5.82 |
+| LongJson_InductorParserToken        |   169.28 μs |  9.16 |  143.90 KB |        5.97 |
 |                                     |             |       |            |             |
-| WideJson_SystemTextJson             |    12.44 μs |  1.00 |   16.12 KB |        1.00 |
-| WideJson_InductorParserStateMachine |   110.70 μs |  8.90 |  146.63 KB |        9.10 |
-| WideJson_InductorParserGrapheme     |   181.70 μs | 14.72 |  215.37 KB |       13.36 |
+| WideJson_SystemTextJson             |    11.55 μs |  1.00 |   16.12 KB |        1.00 |
+| WideJson_InductorParserStateMachine |    90.56 μs |  7.84 |  108.52 KB |        6.73 |
+| WideJson_InductorParserToken        |   117.56 μs | 10.18 |  111.29 KB |        6.90 |
 
 `Ratio` is relative to `SystemTextJson`. Same baseline framing as the main bench: STJ is the hand-written, allocation-aware JSON parser in the .NET BCL, so it's the reasonable "how fast can a .NET programmer actually get" reference point.
 
 ## What the numbers say
 
-On every shape the state machine runs about 1.45x to 1.79x faster than the recursive evaluator on the same grammar. Deep is the closest case: at 106 μs vs STJ's 83 μs, a grammar-based parser is within striking distance of the hand-written BCL JSON reference.
+On every shape the state machine runs about 1.23x to 1.56x faster than the recursive evaluator on the same grammar. Deep is the closest case: at 94.69 μs vs STJ's 82.12 μs (1.15x), a grammar-based parser is within striking distance of the hand-written BCL JSON reference.
 
 The win comes entirely from the evaluator. Lowering the grammar once to a flat opcode array means the inner loop is one indirect dispatch (a switch on a small enum that the JIT lowers to a jump table) per state transition, against the recursive evaluator's per-rule virtual `TryParseRule` call plus the per-rule transaction setup `Rule.TryParse` does on top. The state machine also pools its backtrack and output buffers across parses via thread-static slots, so back-to-back parses on the same thread allocate nothing for the evaluator's own bookkeeping. Per-iteration backtrack frames are dropped when the loop's inner rule is one of the always-advancing single-state matches (`Literal`, `Token`, `OneOf`), and `FirstOf` alternatives skip themselves on a peeked-rune mismatch the same way the recursive `FirstOfRule` does at runtime. See [../InductorParser/StateMachine/Lowerer.cs](../InductorParser/StateMachine/Lowerer.cs) for what each rule lowers to.
 
-Allocations drop 30-40% relative to the recursive evaluator: 264 / 123 / 196 / 147 KB on Big / Deep / Long / Wide, against 370 / 149 / 260 / 215 KB for `InductorParserGrapheme`. The savings come from the per-thread buffer pooling described above (the backtrack stack, call stack, and output list).
+Allocations are now essentially the same as the recursive evaluator: 194 / 86 / 140 / 109 KB on Big / Deep / Long / Wide, against 198 / 88 / 144 / 111 KB for `InductorParserToken` (about 2% less across the board). Earlier runs showed a 30-40% drop, but the recursive evaluator has since caught up on its own bookkeeping allocations, so the buffer-pooling advantage no longer shows up as a meaningful gap.
 
 ## Status
 

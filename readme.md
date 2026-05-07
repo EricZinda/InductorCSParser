@@ -190,6 +190,6 @@ To evaluate performance I used open source benchmarks built by others so that I 
 
 The [Parlot](https://github.com/sebastienros/parlot) project had a great benchmark of C# parser libraries that I forked into the src/Benchmarks folder. I added both InductorParser and Pegasus (another PEG-style parser) to the suite. You can read the details of the test, what I changed, etc [here](src/Benchmarks/README.md). It asks each parser library to build a Json parser and read 4 different documents that are different shapes. Real world and a nice benchmark. In addition to performance, it's illustrative to look a the grammars for each parser library and compare for readability and reviewability, they're [here](src/Benchmarks/Json).
 
-### Results from 04/24/2026
-[![alt text](src/Benchmarks/Benchmark04242026.jpg)](src/Benchmarks/Benchmark04242026.jpg)
+### Latest results
+The chart at [src/Benchmarks/performance-chart.html](src/Benchmarks/performance-chart.html) (open in a browser) plots the four shapes. The chart's title carries the run date, and the chart is regenerated automatically every time the bench runs, so what you see is always the most recent measurement on this branch. The full table with allocations and ratios is in [src/Benchmarks/README.md](src/Benchmarks/README.md).
 

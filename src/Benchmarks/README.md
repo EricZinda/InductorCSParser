@@ -46,7 +46,7 @@ BenchmarkDotNet writes full reports under `BenchmarkDotNet.Artifacts/results/` (
 These numbers are **not directly comparable** to Parlot's published benchmark results. We forked the harness and made deliberate changes for fairness and coverage. If you're reconciling against upstream Parlot, apply the deltas below.
 
 **New rows added to the table**
-- `*_InductorParserGrapheme`, `*_InductorParserTyped`: two variants of the InductorParser adapter, same grammar ([Json/InductorJsonParser.cs](Json/InductorJsonParser.cs)) but different output choices. Both use the same UAX #29 grapheme-cluster lexer (the library has only one lexer; combining marks and emoji ZWJ sequences get joined into a single read, which is strictly more Unicode work than competitors do, even though on the bench's ASCII input the unit size still coincides with one char). `Grapheme` produces the Symbol parse tree the parser builds natively. `Typed` additionally walks that Symbol tree into a typed `IJson` tree just like every competitor does via `.Select(...)` / grammar actions. **`Typed` is the apples-to-apples row for competitor comparisons.** `Grapheme` isolates the parse cost without the typed-output construction.
+- `*_InductorParserToken`, `*_InductorParserTyped`: two variants of the InductorParser adapter, same grammar ([Json/InductorJsonParser.cs](Json/InductorJsonParser.cs)) but different output choices. Both use the same UAX #29 grapheme-cluster lexer (the library has only one lexer; combining marks and emoji ZWJ sequences get joined into a single read, which is strictly more Unicode work than competitors do, even though on the bench's ASCII input the unit size still coincides with one char). `Token` produces the Symbol parse tree the parser builds natively. `Typed` additionally walks that Symbol tree into a typed `IJson` tree just like every competitor does via `.Select(...)` / grammar actions. **`Typed` is the apples-to-apples row for competitor comparisons.** `Token` isolates the parse cost without the typed-output construction.
 - `*_PegasusOptimized` and `*_PegasusWiki`: two adapters for the Pegasus PEG generator using the same library but different grammar styles. `*_PegasusOptimized` uses idiomatic Pegasus patterns (bulk `[^"\\]+` char-class runs, `<min,max,sep>` delimited repetition) lifted from Pegasus's own self-hosted `PegParser.peg`. `*_PegasusWiki` is the style shown in the Pegasus wiki JSON example (per-character `escape / literal` ordered choice, `first + rest*` with `new[] { first }.Concat(rest)`). Both rows are in the table so the "same library, different grammar style" gap is visible. See [Json/PegasusParsers/JsonOptimized.peg](Json/PegasusParsers/JsonOptimized.peg) and [Json/PegasusParsers/JsonWiki.peg](Json/PegasusParsers/JsonWiki.peg).
 
 **Baseline changed**
@@ -105,60 +105,60 @@ Job=ShortRun  IterationCount=3  LaunchCount=1  WarmupCount=3
 
 | Method                              | Mean        | Ratio | Allocated  | Alloc Ratio |
 |------------------------------------ |------------:|------:|-----------:|------------:|
-| BigJson_SystemTextJson              |    25.51 μs |  1.00 |   24.12 KB |        1.00 |
-| BigJson_ParlotCompiled              |    62.01 μs |  2.43 |   95.76 KB |        3.97 |
-| BigJson_Parlot                      |    62.24 μs |  2.44 |   95.76 KB |        3.97 |
-| BigJson_Pidgin                      |   317.71 μs | 12.46 |  200.53 KB |        8.31 |
-| BigJson_InductorParserGrapheme      |   363.27 μs | 14.24 |  369.85 KB |       15.34 |
-| BigJson_InductorParserTyped         |   402.01 μs | 15.76 |  457.07 KB |       18.95 |
-| BigJson_PegasusOptimized            |   660.33 μs | 25.89 | 3060.02 KB |      126.88 |
-| BigJson_PegasusWiki                 |   729.11 μs | 28.59 | 3384.39 KB |      140.33 |
-| BigJson_Superpower                  |   884.09 μs | 34.66 |  944.84 KB |       39.18 |
-| BigJson_Sprache                     | 1,698.35 μs | 66.59 | 6927.52 KB |      287.24 |
+| BigJson_SystemTextJson              |    24.98 μs |  1.00 |   24.12 KB |        1.00 |
+| BigJson_ParlotCompiled              |    60.37 μs |  2.42 |   95.76 KB |        3.97 |
+| BigJson_Parlot                      |    62.11 μs |  2.49 |   95.76 KB |        3.97 |
+| BigJson_InductorParserToken         |   239.49 μs |  9.59 |  197.50 KB |        8.19 |
+| BigJson_InductorParserTyped         |   284.24 μs | 11.38 |  284.72 KB |       11.81 |
+| BigJson_Pidgin                      |   323.58 μs | 12.95 |  200.53 KB |        8.31 |
+| BigJson_PegasusOptimized            |   657.62 μs | 26.32 | 3060.02 KB |      126.88 |
+| BigJson_PegasusWiki                 |   742.18 μs | 29.71 | 3384.39 KB |      140.33 |
+| BigJson_Superpower                  |   864.74 μs | 34.62 |  944.84 KB |       39.18 |
+| BigJson_Sprache                     | 1,716.48 μs | 68.71 | 6927.52 KB |      287.24 |
 |                                     |             |       |            |             |
-| DeepJson_Parlot                     |    41.43 μs |  0.50 |   99.33 KB |        4.91 |
-| DeepJson_ParlotCompiled             |    41.44 μs |  0.50 |   99.33 KB |        4.91 |
-| DeepJson_SystemTextJson             |    82.89 μs |  1.00 |   20.24 KB |        1.00 |
-| DeepJson_InductorParserGrapheme     |   188.88 μs |  2.28 |  149.48 KB |        7.38 |
-| DeepJson_InductorParserTyped        |   214.20 μs |  2.59 |  221.61 KB |       10.95 |
-| DeepJson_Pidgin                     |   305.14 μs |  3.68 |  186.23 KB |        9.20 |
-| DeepJson_PegasusOptimized           |   316.06 μs |  3.81 | 1297.48 KB |       64.09 |
-| DeepJson_PegasusWiki                |   322.60 μs |  3.89 | 1386.41 KB |       68.48 |
-| DeepJson_Sprache                    | 1,585.85 μs | 19.14 |  3412.1 KB |      168.55 |
+| DeepJson_Parlot                     |    41.32 μs |  0.50 |   99.33 KB |        4.91 |
+| DeepJson_ParlotCompiled             |    41.95 μs |  0.51 |   99.33 KB |        4.91 |
+| DeepJson_SystemTextJson             |    82.12 μs |  1.00 |   20.24 KB |        1.00 |
+| DeepJson_InductorParserToken        |   147.70 μs |  1.80 |   88.45 KB |        4.37 |
+| DeepJson_InductorParserTyped        |   158.36 μs |  1.93 |  160.59 KB |        7.93 |
+| DeepJson_Pidgin                     |   308.14 μs |  3.75 |  186.23 KB |        9.20 |
+| DeepJson_PegasusOptimized           |   324.17 μs |  3.95 | 1297.48 KB |       64.09 |
+| DeepJson_PegasusWiki                |   325.43 μs |  3.96 | 1386.41 KB |       68.48 |
+| DeepJson_Sprache                    | 1,495.05 μs | 18.21 |  3412.1 KB |      168.55 |
 | DeepJson_Superpower                 |   **CRASH** |     - |          - |           - |
 |                                     |             |       |            |             |
-| LongJson_SystemTextJson             |    18.86 μs |  1.00 |   24.12 KB |        1.00 |
-| LongJson_Parlot                     |    51.06 μs |  2.71 |  121.18 KB |        5.02 |
-| LongJson_ParlotCompiled             |    52.20 μs |  2.77 |  121.18 KB |        5.02 |
-| LongJson_InductorParserGrapheme     |   238.16 μs | 12.63 |  259.84 KB |       10.77 |
-| LongJson_Pidgin                     |   244.11 μs | 12.94 |  190.25 KB |        7.89 |
-| LongJson_InductorParserTyped        |   267.78 μs | 14.20 |   355.9 KB |       14.76 |
-| LongJson_PegasusOptimized           |   447.67 μs | 23.74 | 2254.15 KB |       93.47 |
-| LongJson_PegasusWiki                |   469.58 μs | 24.90 |  2433.8 KB |      100.92 |
-| LongJson_Superpower                 |   669.08 μs | 35.48 |  753.57 KB |       31.25 |
-| LongJson_Sprache                    | 1,316.84 μs | 69.82 | 5334.57 KB |      221.19 |
+| LongJson_SystemTextJson             |    18.48 μs |  1.00 |   24.12 KB |        1.00 |
+| LongJson_Parlot                     |    52.57 μs |  2.85 |  121.18 KB |        5.02 |
+| LongJson_ParlotCompiled             |    52.63 μs |  2.85 |  121.18 KB |        5.02 |
+| LongJson_InductorParserToken        |   169.28 μs |  9.16 |  143.90 KB |        5.97 |
+| LongJson_InductorParserTyped        |   191.47 μs | 10.36 |  239.96 KB |        9.95 |
+| LongJson_Pidgin                     |   246.19 μs | 13.32 |  190.25 KB |        7.89 |
+| LongJson_PegasusOptimized           |   451.13 μs | 24.42 | 2254.15 KB |       93.47 |
+| LongJson_PegasusWiki                |   472.77 μs | 25.59 |  2433.8 KB |      100.92 |
+| LongJson_Superpower                 |   677.79 μs | 36.68 |  753.57 KB |       31.25 |
+| LongJson_Sprache                    | 1,334.00 μs | 72.20 | 5334.57 KB |      221.19 |
 |                                     |             |       |            |             |
-| WideJson_SystemTextJson             |    12.44 μs |  1.00 |   16.12 KB |        1.00 |
-| WideJson_ParlotCompiled             |    28.75 μs |  2.33 |   43.37 KB |        2.69 |
-| WideJson_Parlot                     |    28.92 μs |  2.34 |   43.37 KB |        2.69 |
-| WideJson_Pidgin                     |   170.62 μs | 13.82 |  110.55 KB |        6.86 |
-| WideJson_InductorParserGrapheme     |   181.70 μs | 14.72 |  215.37 KB |       13.36 |
-| WideJson_InductorParserTyped        |   201.10 μs | 16.29 |   257.6 KB |       15.98 |
-| WideJson_PegasusOptimized           |   347.83 μs | 28.18 | 1816.38 KB |      112.70 |
-| WideJson_PegasusWiki                |   381.61 μs | 30.92 | 2023.66 KB |      125.56 |
-| WideJson_Superpower                 |   449.64 μs | 36.43 |  479.72 KB |       29.76 |
-| WideJson_Sprache                    |   727.93 μs | 58.98 | 3842.66 KB |      238.42 |
+| WideJson_SystemTextJson             |    11.55 μs |  1.00 |   16.12 KB |        1.00 |
+| WideJson_Parlot                     |    29.15 μs |  2.52 |   43.37 KB |        2.69 |
+| WideJson_ParlotCompiled             |    29.26 μs |  2.53 |   43.37 KB |        2.69 |
+| WideJson_InductorParserToken        |   117.56 μs | 10.18 |  111.29 KB |        6.90 |
+| WideJson_InductorParserTyped        |   142.09 μs | 12.30 |  153.52 KB |        9.53 |
+| WideJson_Pidgin                     |   176.14 μs | 15.25 |  110.55 KB |        6.86 |
+| WideJson_PegasusOptimized           |   346.96 μs | 30.04 | 1816.38 KB |      112.70 |
+| WideJson_PegasusWiki                |   385.20 μs | 33.35 | 2023.66 KB |      125.56 |
+| WideJson_Superpower                 |   436.07 μs | 37.76 |  479.72 KB |       29.76 |
+| WideJson_Sprache                    |   746.68 μs | 64.65 | 3842.66 KB |      238.42 |
 
 Reading the table: two InductorParser rows, same grammar and same lexer, different output choices.
 
-- `InductorParserGrapheme` is the recursive evaluator producing the native Symbol parse tree: what `Rule.Parse(input)` does today. Lands between 2.3x and 14.7x STJ depending on shape. This is the right row to cite when your consumer reads the Symbol tree directly. The `Grapheme` suffix is historical and will be dropped in a later refactor step.
-- `InductorParserTyped` is the apples-to-apples row vs. competitors, sitting at 2.6-16.3x STJ. Same recursive evaluator and same lexer as Grapheme, plus an additional walk over the Symbol tree to build a typed `IJson` tree, the same output shape every competitor library's adapter produces. Measured end-to-end cost is what a user writing a "parse and consume" loop against InductorParser would see.
+- `InductorParserToken` is the recursive evaluator producing the native Symbol parse tree: what `Rule.Parse(input)` does today. Lands between 1.8x and 10.2x STJ depending on shape. This is the right row to cite when your consumer reads the Symbol tree directly. The `Token` suffix names the token-based lexer the parser runs on (one token per UAX #29 grapheme cluster).
+- `InductorParserTyped` is the apples-to-apples row vs. competitors, sitting at 1.9-12.3x STJ. Same recursive evaluator and same lexer as Token, plus an additional walk over the Symbol tree to build a typed `IJson` tree, the same output shape every competitor library's adapter produces. Measured end-to-end cost is what a user writing a "parse and consume" loop against InductorParser would see.
 
-Typed runs about 1.10-1.15x slower than Grapheme. Typed does everything Grapheme does (parse to a Symbol tree), then walks that Symbol tree a second time and builds an IJson tree out of it: one `JsonString` / `JsonArray` / `JsonObject` class instance per value in the JSON, each with its own backing storage (a decoded C# string for JsonString, a `List<IJson>` for JsonArray, a `Dictionary<string, IJson>` for JsonObject). String values also get their escape sequences decoded into real characters during this pass (the parse left them as raw source text like the two chars `\` and `n` rather than the single newline). That second tree-walk plus the per-value class allocation is the 1.10-1.15x. It's also the exact work every competitor is already doing during their parse via `.Select` or grammar actions.
+Typed runs about 1.07-1.21x slower than Token. Typed does everything Token does (parse to a Symbol tree), then walks that Symbol tree a second time and builds an IJson tree out of it: one `JsonString` / `JsonArray` / `JsonObject` class instance per value in the JSON, each with its own backing storage (a decoded C# string for JsonString, a `List<IJson>` for JsonArray, a `Dictionary<string, IJson>` for JsonObject). String values also get their escape sequences decoded into real characters during this pass (the parse left them as raw source text like the two chars `\` and `n` rather than the single newline). That second tree-walk plus the per-value class allocation is the 1.07-1.21x. It's also the exact work every competitor is already doing during their parse via `.Select` or grammar actions.
 
-The escape-handling story is instructive even at 3% escape density. Three of the parsers in the table bake string-body scanning into a specialized bulk primitive: Parlot's `Terms.String`, InductorParser's `ScanUntil`, and Pidgin with `Token(pred).AtLeastOnceString()` wrapped in a chunk-level `.Or(escape).Many()`. Those three plus Parlot sit in the 2-15x STJ band. The two parsers still dispatching per character (Sprache at 63-73x, Superpower at 35-38x) land in the slow band. Pegasus sits in the middle (24-33x); its `[^"\\]+` char-class *is* a bulk primitive but its per-action machinery dominates regardless, as discussed in the Pegasus section below. The split isn't "combinators vs. generators" or "PEG vs. combinator", it's "does the library give you a specialized bulk-string primitive or not."
+The escape-handling story is instructive even at 3% escape density. Three of the parsers in the table bake string-body scanning into a specialized bulk primitive: Parlot's `Terms.String`, InductorParser's `ScanUntil`, and Pidgin with `Token(pred).AtLeastOnceString()` wrapped in a chunk-level `.Or(escape).Many()`. Those three plus Parlot sit in the 1.8-15x STJ band. The two parsers still dispatching per character (Sprache at 65-72x outside Deep, Superpower at 35-38x) land in the slow band. Pegasus sits in the middle (24-33x outside Deep); its `[^"\\]+` char-class *is* a bulk primitive but its per-action machinery dominates regardless, as discussed in the Pegasus section below. The split isn't "combinators vs. generators" or "PEG vs. combinator", it's "does the library give you a specialized bulk-string primitive or not."
 
-Allocations: InductorParserGrapheme allocates 7-15x STJ depending on shape (370 KB / 149 KB / 260 KB / 215 KB for Big / Deep / Long / Wide). That's well above Parlot, because every value rule keeps a `Preserve`-typed Symbol wrapper in the tree so consumers can dispatch on rule id, and the grapheme-cluster lexer's per-read segmentation enumerator allocates a state object per read. Typed adds another 1.10-1.50x for the IJson tree itself (one `JsonString`/`JsonArray`/`JsonObject` plus backing array/dictionary per JSON value). At the Typed rate InductorParser sits at 11-19x STJ for allocations, comparable to Pidgin (7-9x) and far ahead of Pegasus (64-140x) and Sprache (170-290x). STJ is the floor at 1x because it doesn't produce a tree at all: it stores offset pointers into the input. Pidgin's bulk-run pattern trades memory for speed: its allocations rose from ~4x to 7-9x STJ when we added the pattern, but its Mean dropped from ~25x to 12-15x STJ.
+Allocations: InductorParserToken allocates 4.4-8.2x STJ depending on shape (197 KB / 88 KB / 144 KB / 111 KB for Big / Deep / Long / Wide). That's still above Parlot, because every value rule keeps a `Preserve`-typed Symbol wrapper in the tree so consumers can dispatch on rule id, and the grapheme-cluster lexer's per-read segmentation enumerator allocates a state object per read. Typed adds another 1.4-1.8x for the IJson tree itself (one `JsonString`/`JsonArray`/`JsonObject` plus backing array/dictionary per JSON value). At the Typed rate InductorParser sits at 7.9-11.8x STJ for allocations, comparable to Pidgin (6.9-9.2x) and far ahead of Pegasus (64-140x) and Sprache (170-290x). STJ is the floor at 1x because it doesn't produce a tree at all: it stores offset pointers into the input. Pidgin's bulk-run pattern trades memory for speed: its allocations rose from ~4x to 7-9x STJ when we added the pattern, but its Mean dropped from ~25x to 12-15x STJ.
 
 ## Pegasus: optimized vs. wiki-style grammar
 
@@ -185,12 +185,12 @@ Both versions pass `--spot-check` (byte-for-byte round-trip on all four shapes).
 
 | Shape | Wiki (μs) | Optimized (μs) | Speedup | Alloc delta |
 |---|---:|---:|---:|---:|
-| Big  | 776.90 | 664.96 | 1.17x | -10% |
-| Long | 473.36 | 452.70 | 1.05x | -7% |
-| Wide | 385.24 | 346.43 | 1.11x | -10% |
-| Deep | 330.48 | 331.32 | 1.00x | -6% |
+| Big  | 742.18 | 657.62 | 1.13x | -10% |
+| Long | 472.77 | 451.13 | 1.05x | -7% |
+| Wide | 385.20 | 346.96 | 1.11x | -10% |
+| Deep | 325.43 | 324.17 | 1.00x | -6% |
 
-So the optimized grammar buys about 5-17% on shapes where string content matters, and essentially nothing on Deep (almost no string work). That's real but modest, not the order-of-magnitude swing you might expect from eliminating per-character rule dispatch.
+So the optimized grammar buys about 5-13% on shapes where string content matters, and essentially nothing on Deep (almost no string work). That's real but modest, not the order-of-magnitude swing you might expect from eliminating per-character rule dispatch.
 
 ## Are all the parsers doing the same work?
 
@@ -242,7 +242,7 @@ The shape of the output a parser hands back makes a big difference to timing, be
 
 | Parser | Output | What it takes to get useful JSON from it |
 |---|---|---|
-| InductorParserGrapheme | **Symbol parse tree** (one node per matched structural rule) | walk the tree, interpret rule IDs, reconstruct JSON |
+| InductorParserToken | **Symbol parse tree** (one node per matched structural rule) | walk the tree, interpret rule IDs, reconstruct JSON |
 | InductorParserTyped | IJson tree via a Symbol-tree walker | done |
 | Pegasus | IJson tree via grammar actions | done |
 | Parlot | IJson tree via `.Then` | done |
@@ -255,7 +255,7 @@ InductorParser builds a bigger data structure than the IJson-producing parsers. 
 
 The parse-time optimizations keep the overhead as low as it can be. The Delete filter removes `Optional(AnyWhitespace())` / delimiter nodes, the FirstOf-wrapper removal collapses every `FirstOf(...)` whose FlattenType is Flatten, the `ScanUntil` leaf produces one leaf Symbol for each string body instead of one per character, and the per-invocation `SuccessMode` routes each composite into either "merge my children into the caller's list" (no wrapper needed) or "wrap into a new Symbol" depending on what the FlattenType implies. What Typed adds on top is one IJson + backing per value, matching competitor libraries' output shape exactly.
 
-This is inherent to what InductorParser is for. The library trades some speed for a parse tree that carries position and rule-id metadata you need for things like syntax highlighting, error recovery, and LSP integrations, the same kind of output a compiler frontend wants. The Typed row shows that even on top of that richer tree, walking to an IJson output costs only about 1.1x extra over the Grapheme row. The Symbol tree isn't "wasted" work, it's a superset that carries metadata competitors throw away.
+This is inherent to what InductorParser is for. The library trades some speed for a parse tree that carries position and rule-id metadata you need for things like syntax highlighting, error recovery, and LSP integrations, the same kind of output a compiler frontend wants. The Typed row shows that even on top of that richer tree, walking to an IJson output costs only about 1.15x extra over the Token row. The Symbol tree isn't "wasted" work, it's a superset that carries metadata competitors throw away.
 
 STJ is at the other extreme: it allocates nothing per JSON value, just stores byte offsets into the input. Every other parser has to justify itself against that.
 
@@ -277,6 +277,6 @@ The grammars are directly comparable on the question they're answering: **"given
 
 Two InductorParser rows let readers pick the right comparison:
 
-- **`InductorParserGrapheme`** is the recursive evaluator on the parser's native grammar and lexer: what `Rule.Parse` does today, producing the Symbol parse tree. Lands at 2.3-14.7x STJ. Cite this row when your consumer reads the Symbol tree directly.
-- **`InductorParserTyped`** is the apples-to-apples row for comparing against IJson-building libraries. It does everything Grapheme does plus walks the Symbol tree into a typed `IJson` tree just like every competitor. Adds 1.10-1.15x over Grapheme.
+- **`InductorParserToken`** is the recursive evaluator on the parser's native grammar and lexer: what `Rule.Parse` does today, producing the Symbol parse tree. Lands at 1.8-10.2x STJ. Cite this row when your consumer reads the Symbol tree directly.
+- **`InductorParserTyped`** is the apples-to-apples row for comparing against IJson-building libraries. It does everything Token does plus walks the Symbol tree into a typed `IJson` tree just like every competitor. Adds 1.07-1.21x over Token.
 
