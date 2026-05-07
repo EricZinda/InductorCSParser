@@ -1,30 +1,46 @@
-- `NoneOf("é").Compile(FormD).Parse("é")` returns `Success = true` — the WRONG answer. The decomposed multi-rune token isn't in the set, the membership check returns false, NoneOf inverts that into a false-positive match.
+- `NoneOf("é").Compile(FormD).Parse("é")` returns `Success = true` — the WRONG answer. The decomposed multi-rune token isn't in the set, the membership probe returns false, NoneOf inverts that into a false-positive match.
 
-Root cause: a `TokenSet` stores rune intervals (single Unicode scalars) and multi-rune entries (specific cluster strings). When the lexer normalizes input to a different canonical form than how the entry was stored, the membership test sees a token shape the set doesn't have, even though the entry "is" the same character semantically.
+Singleton decompositions show the same shape: U+2126 OHM SIGN canonically decomposes to U+03A9 GREEK CAPITAL LETTER OMEGA (different single rune). Without a fix `OneOf("Ω").Compile().Parse("Ω")` silently fails.
 
-## Verify the Bug (Write Test First)
+Root cause: a `TokenSet` stores rune intervals (single Unicode scalars) and multi-rune entries (specific cluster strings). When the lexer normalizes input to a different canonical form than the user typed, the membership test sees a token shape the set doesn't have, even though the entry "is" the same character semantically.
 
-Add to `src/InductorParser.Tests/Core/UnexpectedUnicodeTests.cs`:
+## Bug 2: lone surrogates in user-typed rune intervals don't match
+
+`TokenSet.Range(0, 0x10FFFF)` is documented to include the surrogate gap as a legal interior of the interval. But `OneOf(TokenSet.Range(0, 0x10FFFF)).Compile(null).Parse("\uD800")` returns `Success = false` even though the surrogate IS in the set's `_ranges` and IS in the input. Same shape on `NoneOf`, where the bug inverts to a false-positive match.
+
+Root cause in [OneOfRule.TokenInSet](src/InductorParser/OneOfRule.cs):
 
 ```csharp
+int runeValue = token.RuneValue;
+if (runeValue >= 0) return _set.Contains(runeValue);   // skipped: RuneValue is -1 for surrogate tokens
+if (!_set.HasMultiRuneGraphemes) return false;          // returns here without consulting _ranges
+return _set.ContainsToken(token.Chars);
+```
+
+`Token.RuneValue` collapses three different cases into `-1`: EOF, multi-rune cluster, AND stray surrogate. The membership test doesn't disambiguate, so it never queries `_ranges` for a surrogate token even when the user explicitly put surrogates there. `NoneOfRule` has the same shape inline in `TryParseRule`.
+
+## Verify Both Bugs (Write Tests First)
+
+Add to [src/InductorParser.Tests/Core/UnexpectedUnicodeTests.cs](src/InductorParser.Tests/Core/UnexpectedUnicodeTests.cs):
+
+```csharp
+// --- canonical-equivalence (bug 1) ---
+
 [Test]
 public void OneOf_with_precomposed_entry_matches_decomposed_input_under_FormD()
 {
-    var rule = OneOf("é");
+    var rule = OneOf("é");  // U+00E9
     rule.Compile(System.Text.NormalizationForm.FormD);
 
-    var precomposed = rule.Parse("é");           // U+00E9
-    var decomposed = rule.Parse("é");      // 'e' + combining acute
-
-    Assert.That(precomposed.Success, Is.True, precomposed.ErrorMessage);
-    Assert.That(decomposed.Success, Is.True, decomposed.ErrorMessage);
+    Assert.That(rule.Parse("é").Success, Is.True);          // U+00E9
+    Assert.That(rule.Parse("é").Success, Is.True);    // 'e' + combining acute
 }
 
 [Test]
 public void OneOf_with_decomposed_entry_matches_precomposed_input_under_FormC()
 {
-    var rule = OneOf("é");
-    rule.Compile();
+    var rule = OneOf("é");  // 'e' + combining acute
+    rule.Compile();  // default FormC
 
     Assert.That(rule.Parse("é").Success, Is.True);
     Assert.That(rule.Parse("é").Success, Is.True);
@@ -44,71 +60,53 @@ public void NoneOf_with_precomposed_entry_rejects_decomposed_input_under_FormD()
 [Test]
 public void OneOf_with_singleton_decomposing_rune_matches_normalized_form()
 {
-    // U+2126 OHM SIGN canonically decomposes to U+03A9 GREEK CAPITAL OMEGA.
-    var rule = OneOf("Ω");  // U+2126
-    rule.Compile();
+    var rule = OneOf("Ω");  // U+2126 OHM SIGN
+    rule.Compile();  // default FormC; NFC of U+2126 is U+03A9
 
-    Assert.That(rule.Parse("Ω").Success, Is.True);  // U+2126 input
-    Assert.That(rule.Parse("Ω").Success, Is.True);  // U+03A9 input
+    Assert.That(rule.Parse("Ω").Success, Is.True);  // U+2126
+    Assert.That(rule.Parse("Ω").Success, Is.True);  // U+03A9
+}
+
+// --- lone surrogate (bug 2) ---
+
+[Test]
+public void OneOf_with_range_including_surrogates_matches_lone_high_surrogate()
+{
+    var rule = OneOf(TokenSet.Range(0, 0x10FFFF));
+    rule.Compile(null);
+
+    Assert.That(rule.Parse("\uD800").Success, Is.True);
+    Assert.That(rule.Parse("\uDFFF").Success, Is.True);
+    Assert.That(rule.Parse("a").Success, Is.True);
 }
 
 [Test]
-public void Compile_null_does_not_trigger_NFD_probe_build()
+public void NoneOf_with_range_including_surrogates_rejects_lone_surrogate()
 {
-    if (InductorParser.TokenSet.RuneNfdProbeIsBuilt)
-        Assert.Inconclusive("Probe was already built by an earlier test in this process.");
-
-    var rule = AllOf(OneOf("é"), Eof());
+    var rule = AllOf(NoneOf(TokenSet.Range(0, 0x10FFFF)), Eof());
     rule.Compile(null);
-    rule.Parse("é");
 
-    Assert.That(InductorParser.TokenSet.RuneNfdProbeIsBuilt, Is.False);
+    Assert.That(rule.Parse("\uD800").Success, Is.False);
+    Assert.That(rule.Parse("\uDFFF").Success, Is.False);
+}
+
+[Test]
+public void OneOf_with_range_excluding_surrogates_still_rejects_lone_surrogate()
+{
+    var rule = OneOf(TokenSet.Range('a', 'z'));
+    rule.Compile(null);
+
+    Assert.That(rule.Parse("\uD800").Success, Is.False);
+    Assert.That(rule.Parse("a").Success, Is.True);
 }
 ```
 
-Run with:
-
-```
-dotnet test src/InductorParser.Tests/InductorParser.Tests.csproj --filter "OneOf_with_precomposed_entry|OneOf_with_decomposed_entry|NoneOf_with_precomposed_entry|OneOf_with_singleton_decomposing|Compile_null_does_not_trigger" --nologo
-```
-
-Before the fix the first four tests fail (the rules report parse failures or false-positive successes). The Compile-null test is order-dependent and will be Inconclusive if other tests in the process have already warmed the probe.
+Before the fix, the canonical-equivalence tests fail (rules report parse failures or false-positive successes), and the surrogate-range tests show the same shape (Range that includes surrogates fails to match them; NoneOf inverts that into a false positive).
 
 ## Fix
 
-Compile-time canonical-equivalent augmentation, scoped to OneOf and NoneOf, paid for only by Compile(form) callers.
+**Bug 1 (canonical equivalence): construction-time augmentation in `Runes(string)` and `Single(int)`.** When the user types a literal character into a TokenSet via `Runes("é")` or `Single(0xE9)`, the factory walks the user's input grapheme-by-grapheme and adds each grapheme's canonical-equivalent NFD form alongside the original. Single-rune entries with multi-rune NFD forms get a multi-rune entry; entries with singleton-decomposable NFD forms get the other rune as a separate interval; multi-rune entries with single-rune NFC forms get the composed rune as an interval. The set ends up form-agnostic for canonical equivalence and matches whichever form the lexer produces under any non-null Compile.
 
-**1. Add a static lazy NFD probe table to `src/InductorParser/TokenSet.cs`.** Maps every rune whose NFD form differs from itself to that NFD form's string. Built once per process by walking 0..0x10FFFF with `IsNormalized(NormalizationForm.FormD)` as the fast path and `Normalize(...)` only on the unstable few-thousand. Wrap the per-rune normalize calls in a try/catch on `ArgumentException` to skip the 66 Unicode noncharacters (U+FDD0..U+FDEF and U+xFFFE/U+xFFFF on every plane) that .NET's normalization rejects.
+**Scope limited to user-typed entries (literals).** Category-derived sets like `TokenSet.Letters` are NOT augmented. The BCL's General_Category data already produces the precomposed (NFC) forms for most letters, so under FormC the typical category-set use case works. Augmenting categories would require walking 130K+ runes and probing the Unicode normalization tables on first access (~1-3 seconds startup), and would also surface latent bugs in rare characters (Tibetan U+0F52, Hebrew with niqqud, etc. — characters whose NFC form decomposes to multi-rune clusters) that no existing grammar trips. Filing those as a separate optimization backlog item if anyone needs them; for now, augmentation is restricted to the cases the user explicitly typed in source code.
 
-**2. Add `TokenSet.WithCanonicalEquivalents()`** that returns a new TokenSet augmented with each entry's canonical-equivalent form: for each single-rune interval entry, lookup in the probe and add the NFD form (single-rune as a new interval, multi-rune as a graphemes-list entry); for each multi-rune entry, compute its NFC and add as a single-rune interval if NFC is one rune. Idempotent — the dedupe step in the merged-graphemes builder folds out double-adds. Returns `this` unchanged when no augmentation applied.
-
-**3. Add `CollectNormalizationOffenders` overrides** on [src/InductorParser/OneOfRule.cs](src/InductorParser/OneOfRule.cs) and [src/InductorParser/NoneOfRule.cs](src/InductorParser/NoneOfRule.cs):
-
-```csharp
-internal override void CollectNormalizationOffenders(
-    NormalizationForm form,
-    List<(Rule rule, string original, string normalized)> offenders,
-    List<ArgumentException> failures)
-{
-    _set = _set.WithCanonicalEquivalents();
-}
-```
-
-`_set` drops `readonly` so this can replace it. The same field is read by `TryParseRule`, `ComputeRuleStart`, and `LoweringSet`, so the recursive engine, state-machine, and prefilter all see the augmented view consistently.
-
-**4. No residual validation of compatibility-fold cases.** `OneOf("ﬁ").Compile(FormKC)` is a real shape mismatch (ligature folds to two separate Latin-letter tokens, OneOf is single-token), but it surfaces as an ordinary parse failure when the user actually parses input containing 'ﬁ' — not a silent miss like the canonical-equivalence cases. Adding compile-time validation for compat folds also misfires on big category sets like `XidStart` that contain compat-folding code points alongside thousands of harmless ones, because the user's grammar is correct for the inputs they actually parse.
-
-## Verify the Fix
-
-Run the same five tests; they should now pass (with Compile-null possibly Inconclusive depending on test order). Also run the full suite to confirm no regression on the 1841 existing tests.
-
-```
-dotnet test src/InductorParser.Tests/InductorParser.Tests.csproj --nologo
-dotnet test ExperimentalSrc/InductorParser.Tests/InductorParser.StateMachine.Tests.csproj --nologo
-```
-
-Expected: 1845 + 1 inconclusive (or 1846 if the inconclusive resolves) in src; 94 in StateMachine.
-
-## Cost
-
-The NFD probe takes 1-3 seconds the first time any Compile(form) call hits a OneOf or NoneOf rule. After that it's cached; subsequent calls are O(set_size) hashmap lookups. Compile(null) callers never trigger the probe and pay nothing. If the 1-3 seconds first-touch is unacceptable for some application, a follow-up optimization is to ship a hardcoded table and skip the runtime walk; that's worth filing separately if measurements show the probe is on the critical path.
+Construction-time augmentation costs:
