@@ -223,4 +223,38 @@ public class NoneOfRuleTests
         Assert.That(namedResult.Tree!.Find(namedRule), Is.Not.Null);
         Assert.That(namedRule.NameOf(namedResult.Tree!.Id), Is.EqualTo("notDigit"));
     }
+
+    [Test]
+    public void OneOrMore_NoneOf_admits_multi_rune_cluster_starting_with_a_set_rune()
+    {
+        // BetweenInclusiveRule peeks the next rune and consults
+        // Inner.CannotMatchLookahead before iterating. The input here
+        // is one grapheme cluster (a + combining acute under
+        // Compile(null)). NoneOf admits it, because a multi-rune cluster
+        // is rejected only when its full chars are in the set's
+        // multi-rune part, and {'a'} has none. So the rune-set
+        // lookahead can't soundly exclude 'a' for NoneOf, even though
+        // 'a' alone would be rejected as a single-rune token.
+        var rule = OneOrMore(NoneOf(TokenSet.Single('a')));
+        rule.Compile(null);
+        var result = rule.Parse("a" + CombiningAcuteText);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("a" + CombiningAcuteText));
+    }
+
+    [Test]
+    public void FirstOf_NoneOf_admits_multi_rune_cluster_starting_with_a_set_rune()
+    {
+        // FirstOfRule has the same CannotMatchLookahead shortcut as
+        // BetweenInclusiveRule, so NoneOf has to admit any peeked first
+        // rune in this context too. The literal alternative is
+        // unreachable here: NoneOf has to be the one that matches.
+        var rule = FirstOf(NoneOf(TokenSet.Single('a')), Literal("zzzZZZ"));
+        rule.Compile(null);
+        var result = rule.Parse("a" + CombiningAcuteText);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("a" + CombiningAcuteText));
+    }
 }
