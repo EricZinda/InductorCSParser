@@ -295,9 +295,36 @@ public abstract class Rule
         return this;
     }
 
-    // Set by .As(SymbolId) and only by .As(SymbolId). Auto-pin sites
-    // (SetIdInternal callers) check this so they don't override a user pin.
+    // Set by .As(SymbolId) and only by .As(SymbolId). Two consumers,
+    // both checking for "user explicitly identified this rule by id":
+    //   * Auto-pin sites (SetIdInternal callers like
+    //     GraphemeRule.CollectNormalizationOffenders) skip the auto-pin
+    //     so a user pin survives normalization.
+    //   * Leaf-emitting rules with the rune-as-leaf-id optimization
+    //     (OneOfRule / NoneOfRule / AnyTokenRule / WithinTokenRule, via
+    //     ResolveLeafId below) skip the optimization so leaves carry the
+    //     user's pinned id and Tree.Find / Tree.Is resolve through the
+    //     user's reference.
+    // Parallel to Name (set by .As(string)) for the second consumer:
+    // either user-identification path disables the rune-as-leaf-id
+    // shortcut.
     internal bool IsUserSymbolIdPinned => _idUserPinned;
+
+    // The leaf-id rule for OneOfRule / NoneOfRule / AnyTokenRule /
+    // WithinTokenRule. A truly anonymous single-rune match carries the
+    // rune's code point as its leaf id, so tree consumers can dispatch
+    // on `leaf.Id == 'a'` without going through a synthetic per-rule id.
+    // A user-identified rule (`.As(string)` sets Name, `.As(SymbolId)`
+    // sets IsUserSymbolIdPinned) carries the rule's own Id so
+    // Tree.Find / Tree.Is / NameOf resolve through the user's reference.
+    // A multi-rune token has runeValue == -1 and falls through to Id
+    // either way, since one int can't hold a multi-rune code point.
+    // Centralized here so the four leaf-emitting rules can't drift on
+    // the gate.
+    protected SymbolId ResolveLeafId(int runeValue) =>
+        (Name == null && !IsUserSymbolIdPinned && runeValue >= 0)
+            ? new SymbolId(runeValue)
+            : Id;
 
     // Set the flatten policy (Preserve / Delete / Flatten) that controls
     // how this rule contributes to the parse tree on a successful match.
