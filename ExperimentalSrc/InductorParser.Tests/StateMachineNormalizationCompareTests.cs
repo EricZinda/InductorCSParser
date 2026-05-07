@@ -25,9 +25,10 @@ public class StateMachineNormalizationCompareTests
     private const string CafeDecomposed = "cafe" + CombiningAcuteText;
 
     // Grammar matches "café" in precomposed form. Without normalization
-    // it only accepts the precomposed input. With FormC normalization
-    // it accepts both renderings; with FormD it accepts neither, since
-    // the grammar's precomposed 'é' decomposes away under FormD.
+    // it only accepts the precomposed input. Under FormC and FormD
+    // Compile-time auto-conversion rewrites the grammar's 'é' into the
+    // form's canonical equivalent, so both forms accept both renderings
+    // of the input.
     private static Rule CafeRule() =>
         AllOf(Literal("café"), Eof());
 
@@ -42,16 +43,19 @@ public class StateMachineNormalizationCompareTests
         AssertEvaluatorsAgree(CafeRule(), input, NormalizationForm.FormC, expectSuccess);
     }
 
-    [TestCase(CafePrecomposed, false)]
-    [TestCase(CafeDecomposed, false)]
+    [TestCase(CafePrecomposed, true)]
+    [TestCase(CafeDecomposed, true)]
+    [TestCase(CafePrecomposed + "x", false)]
+    [TestCase(CafeDecomposed + "x", false)]
     [TestCase("cafX", false)]
     [TestCase("", false)]
     public void FormD_agrees_with_recursive_evaluator(string input, bool expectSuccess)
     {
-        // FormD decomposes the input. The grammar still spells 'é' in
-        // precomposed form, so both engines should reject under FormD.
-        // Including this case to verify position translation under the
-        // canonical-form lockstep walker on a different form.
+        // FormD decomposes the input. Under Option 1 Compile-time
+        // auto-conversion also decomposes the grammar's precomposed 'é'
+        // so the literal matches FormD-normalized input. Both engines
+        // should accept the same renderings, plus reject the trailing-x
+        // cases at the same position.
         AssertEvaluatorsAgree(CafeRule(), input, NormalizationForm.FormD, expectSuccess);
     }
 
@@ -66,24 +70,11 @@ public class StateMachineNormalizationCompareTests
 
     private static void AssertEvaluatorsAgree(Rule rule, string input, NormalizationForm? normalizationForm, bool expectSuccess)
     {
-        // Normalization is now committed at Compile time, not on
-        // ParseOptions. Compile the freshly-constructed rule with the
-        // form under test before each parse. A grammar whose literals
-        // aren't already in the chosen form throws here (Compile-time
-        // validation), which counts as the "this combination always
-        // rejects" outcome — every test case under FormD has
-        // expectSuccess == false, so the throw is the rejection.
-        try
-        {
-            rule.Compile(normalizationForm);
-        }
-        catch (System.InvalidOperationException) when (!expectSuccess)
-        {
-            // Compile-time rejection. Both engines would behave the
-            // same way (both go through Rule.Compile), so there's
-            // nothing more to compare.
-            return;
-        }
+        // Normalization is committed at Compile time. Under Option 1
+        // Compile auto-converts the grammar's literals to the chosen
+        // form, so any non-surrogate text compiles cleanly under any
+        // non-null form.
+        rule.Compile(normalizationForm);
         var options = new ParseOptions();
         var legacy = rule.ParseRecursive(input, options);
         var stateMachine = StateMachineParser.Parse(rule, input, options);

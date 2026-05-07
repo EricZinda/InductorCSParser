@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 
 namespace InductorParser;
@@ -115,14 +116,299 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     }
 
     // Span overload so rules can probe a token's Chars without building
-    // a string. Same semantics as Contains(string): single-rune spans
-    // hit the rune intervals, multi-rune spans hit the grapheme array.
+    // a string. Three token shapes:
+    //   * Single-rune span (1 char BMP, or surrogate-paired 2 chars):
+    //     hit the rune intervals via Contains(int).
+    //   * Lone-surrogate span (1 char that's a high or low surrogate
+    //     without its pair): hit the rune intervals using the surrogate's
+    //     UTF-16 code unit. A surrogate isn't a Unicode scalar value,
+    //     but a user-typed Range that covers the surrogate range under
+    //     an unnormalized Compile should still match it.
+    //   * Multi-rune span (2+ chars that aren't a surrogate pair):
+    //     binary search the multi-rune array. Sets with no multi-rune
+    //     entries skip the search entirely.
     internal bool ContainsToken(ReadOnlySpan<char> grapheme)
     {
         if (grapheme.Length == 0) return false;
+        if (grapheme.Length == 1 && char.IsSurrogate(grapheme[0]))
+            return Contains((int)grapheme[0]);
         if (TrySingleRune(grapheme, out int runeValue))
             return Contains(runeValue);
-        return BinarySearchMultiRune(grapheme) >= 0;
+        return _multiRuneGraphemes.Length > 0 && BinarySearchMultiRune(grapheme) >= 0;
+    }
+
+    // The MultiRuneGraphemes ReadOnlySpan accessor can't cross a yield
+    // boundary in a C# iterator. This list-shaped variant lets the
+    // OneOfRule / NoneOfRule Compile-time validation walk multi-rune
+    // entries via an index with no allocations other than the wrapping array
+    // (which is the existing _multiRuneGraphemes field).
+    internal IReadOnlyList<string> MultiRuneGraphemesAsList =>
+        _multiRuneGraphemes ?? Array.Empty<string>();
+
+    // Yield every rune in this set's _ranges (which are single-rune entries).
+    // Used by OneOfRule / NoneOfRule's Compile-time validation walks.
+    // Cost is O(total range size) — for big sets like Letters that's
+    // ~130K iterations.
+    //
+    // Skips the surrogate gap (U+D800..U+DFFF). Surrogates aren't
+    // runes — they're UTF-16 code units only, not Unicode scalar values.
+    internal IEnumerable<int> EnumerateRunes()
+    {
+        var ranges = _ranges;
+        if (ranges == null) yield break;
+        for (int index = 0; index < ranges.Length; index++)
+        {
+            int low = ranges[index].Low;
+            int high = ranges[index].High;
+            for (int rune = low; rune <= high; rune++)
+            {
+                if (rune >= 0xD800 && rune <= 0xDFFF) continue;
+                yield return rune;
+            }
+        }
+    }
+
+    // Form-project this TokenSet: every entry E becomes Normalize(E, form).
+    // Used by OneOfRule / NoneOfRule's Compile-time pipeline so the set's
+    // entries are in the same canonical (or compatibility) form the lexer
+    // will produce on match-time input. Under FormC the lexer emits NFC,
+    // so the set must contain NFC entries; under FormD it emits NFD, etc.
+    //
+    // The replacement is exact, not additive: an entry whose form-projection
+    // differs is REPLACED by the projection, not augmented. The original
+    // is unreachable under that form — the lexer never produces it — so
+    // keeping it would just be dead weight in the set.
+    //
+    // Maintains the TokenSet invariant that every entry is exactly one
+    // grapheme. If an entry's projection is multi-grapheme (a
+    // compatibility conversion like 'ﬁ' -> "fi" under FormKC, two
+    // graphemes), the entry is excluded from the result and recorded
+    // in `multiGraphemeConversions` for the caller to surface as an
+    // offender. The caller is OneOfRule / NoneOfRule, which match one
+    // grapheme per token — a multi-grapheme entry can never match
+    // anything in isolation, so dropping it and reporting via the
+    // offenders list gives users a clear Compile-time error pointing
+    // at the fix.
+    //
+    // Surrogate runes (U+D800..U+DFFF) pass through unchanged. Surrogates
+    // aren't runes — string.Normalize throws on them — and a normalized
+    // Compile won't see them in input, so leaving them in the set is
+    // harmless and preserves the unnormalized-Compile semantics that some
+    // grammars rely on.
+    //
+    // Entries whose Normalize call throws ArgumentException (the BCL's
+    // way of saying "I won't normalize this") are dropped silently. The
+    // exact set of rejected code points varies by runtime — Windows NLS
+    // and Linux ICU don't agree — so we don't catalog them here. Inputs
+    // the lexer can produce go through the same Normalize call and would
+    // hit the same rejection, so a dropped entry can't match anything
+    // the rule would otherwise have seen.
+    internal TokenSet NormalizedFor(NormalizationForm form, List<(string original, string normalized)>? multiGraphemeConversions = null)
+    {
+        bool changed = false;
+        var newIntervals = new List<Interval>();
+        var newGraphemes = new List<string>();
+
+        var ranges = _ranges;
+        if (ranges != null)
+        {
+            for (int index = 0; index < ranges.Length; index++)
+            {
+                int low = ranges[index].Low;
+                int high = ranges[index].High;
+                for (int rune = low; rune <= high; rune++)
+                {
+                    if (rune >= 0xD800 && rune <= 0xDFFF)
+                    {
+                        newIntervals.Add(new Interval(rune, rune));
+                        continue;
+                    }
+                    string runeString = char.ConvertFromUtf32(rune);
+                    string normalized;
+                    try
+                    {
+                        if (runeString.IsNormalized(form))
+                        {
+                            newIntervals.Add(new Interval(rune, rune));
+                            continue;
+                        }
+                        normalized = runeString.Normalize(form);
+                    }
+                    catch (ArgumentException)
+                    {
+                        changed = true;
+                        continue;
+                    }
+                    changed = true;
+                    AddProjectedEntry(runeString, normalized, newIntervals, newGraphemes, multiGraphemeConversions);
+                }
+            }
+        }
+
+        var multiRune = _multiRuneGraphemes;
+        if (multiRune != null)
+        {
+            foreach (var entry in multiRune)
+            {
+                string normalized;
+                try
+                {
+                    if (entry.IsNormalized(form))
+                    {
+                        newGraphemes.Add(entry);
+                        continue;
+                    }
+                    normalized = entry.Normalize(form);
+                }
+                catch (ArgumentException)
+                {
+                    changed = true;
+                    continue;
+                }
+                changed = true;
+                AddProjectedEntry(entry, normalized, newIntervals, newGraphemes, multiGraphemeConversions);
+            }
+        }
+
+        if (!changed) return this;
+        var graphemes = newGraphemes.Count == 0 ? null : NormalizeGraphemes(newGraphemes);
+        return new TokenSet(Normalize(newIntervals), graphemes);
+    }
+
+    // Helper: place `normalized` into the right bucket (intervals for
+    // single-rune, graphemes for multi-rune-but-single-grapheme), or report
+    // it as a multi-grapheme conversion and skip it.
+    private static void AddProjectedEntry(
+        string original, string normalized,
+        List<Interval> intervals, List<string> graphemes,
+        List<(string original, string normalized)>? multiGraphemeConversions)
+    {
+        if (TrySingleRune(normalized, out int newRune))
+        {
+            intervals.Add(new Interval(newRune, newRune));
+            return;
+        }
+        if (CountGraphemes(normalized) <= 1)
+        {
+            graphemes.Add(normalized);
+            return;
+        }
+        // Multi-grapheme conversion: drop from the projected set so the
+        // single-grapheme invariant holds, and report so the caller can
+        // surface a clear Compile-time error.
+        multiGraphemeConversions?.Add((original, normalized));
+    }
+
+    // Explicit opt-in for sets that contain entries whose Normalize(form)
+    // produces a multi-grapheme sequence (a compatibility conversion like
+    // 'ﬁ' -> "fi" under FormKC, where one source grapheme lexes as two
+    // output tokens). Replaces every such entry with its individual
+    // graphemes as separate set members. Single-grapheme entries are
+    // left alone for NormalizedFor to project at Compile time.
+    //
+    // Why opt-in instead of automatic: for a singleton set like
+    // OneOf("ﬁ"), expansion would silently change semantics ("match this
+    // ligature" becomes "match an 'f' or 'i' token"). The user has to
+    // ask for that. For a category set like OneOf(XidStart), the
+    // expansion adds 'f' and 'i' which were already members, so the
+    // result is functionally unchanged but the convertible original
+    // entries are removed from the set — making it Compile-safe under
+    // FormKC.
+    //
+    // Canonical forms (FormC, FormD) don't produce multi-grapheme results,
+    // so calling this with FormC or FormD is a no-op.
+    public TokenSet WithCompatibilityEquivalents(NormalizationForm form)
+    {
+        bool changed = false;
+        var newIntervals = new List<Interval>();
+        var newGraphemes = new List<string>();
+
+        var ranges = _ranges;
+        if (ranges != null)
+        {
+            for (int index = 0; index < ranges.Length; index++)
+            {
+                int low = ranges[index].Low;
+                int high = ranges[index].High;
+                for (int rune = low; rune <= high; rune++)
+                {
+                    if (rune >= 0xD800 && rune <= 0xDFFF)
+                    {
+                        newIntervals.Add(new Interval(rune, rune));
+                        continue;
+                    }
+                    if (!TryGetMultiGraphemeConversion(char.ConvertFromUtf32(rune), form, out string? converted))
+                    {
+                        newIntervals.Add(new Interval(rune, rune));
+                        continue;
+                    }
+                    AddGraphemePieces(converted, newIntervals, newGraphemes);
+                    changed = true;
+                }
+            }
+        }
+
+        var multiRune = _multiRuneGraphemes;
+        if (multiRune != null)
+        {
+            foreach (var entry in multiRune)
+            {
+                if (!TryGetMultiGraphemeConversion(entry, form, out string? converted))
+                {
+                    newGraphemes.Add(entry);
+                    continue;
+                }
+                AddGraphemePieces(converted, newIntervals, newGraphemes);
+                changed = true;
+            }
+        }
+
+        if (!changed) return this;
+        var graphemes = newGraphemes.Count == 0 ? null : NormalizeGraphemes(newGraphemes);
+        return new TokenSet(Normalize(newIntervals), graphemes);
+    }
+
+    // Returns true and sets `converted` if `entry`'s normalization
+    // under `form` is a multi-grapheme sequence. Returns false otherwise
+    // (entry is already form-stable, single-grapheme conversion, or
+    // noncharacter).
+    private static bool TryGetMultiGraphemeConversion(string entry, NormalizationForm form, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? converted)
+    {
+        converted = null;
+        try
+        {
+            if (entry.IsNormalized(form)) return false;
+            string normalized = entry.Normalize(form);
+            if (CountGraphemes(normalized) <= 1) return false;
+            converted = normalized;
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    private static void AddGraphemePieces(string text, List<Interval> intervals, List<string> graphemes)
+    {
+        var enumerator = StringInfo.GetTextElementEnumerator(text);
+        while (enumerator.MoveNext())
+        {
+            string grapheme = (string)enumerator.Current;
+            if (TrySingleRune(grapheme, out int rune))
+                intervals.Add(new Interval(rune, rune));
+            else
+                graphemes.Add(grapheme);
+        }
+    }
+
+    private static int CountGraphemes(string text)
+    {
+        if (text.Length == 0) return 0;
+        var enumerator = StringInfo.GetTextElementEnumerator(text);
+        int count = 0;
+        while (enumerator.MoveNext()) count++;
+        return count;
     }
 
     private static bool TrySingleRune(string grapheme, out int runeValue) =>

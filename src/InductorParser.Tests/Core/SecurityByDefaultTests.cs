@@ -109,7 +109,7 @@ public class SecurityByDefaultTests
         //     bad. An attacker's lookalike doesn't satisfy the
         //     rule either, so the block doesn't fire and the
         //     input gets through. Compile with FormKC instead.
-        //     That folds lookalikes to plain letters before the
+        //     That converts lookalikes to plain letters before the
         //     rule runs, so "ｓｅｌｅｃｔ" becomes "select" and
         //     your blocker catches it.
         var grammar = AllOf(Token('A'), Eof()).Compile();
@@ -133,7 +133,7 @@ public class SecurityByDefaultTests
         // because they're different code points, so the block
         // never fires and the bypass works.
         //
-        // FormKC fixes this. It folds the fullwidth letters to
+        // FormKC fixes this. It converts the fullwidth letters to
         // plain ASCII before the lexer runs, so Literal("select")
         // matches "ｓｅｌｅｃｔ" and the block catches the bypass.
 
@@ -150,7 +150,7 @@ public class SecurityByDefaultTests
         Assert.That(formKCRule.Parse("select").Success, Is.True,
             "plain 'select' still matches under FormKC");
         Assert.That(formKCRule.Parse("ｓｅｌｅｃｔ").Success, Is.True,
-            "fullwidth 'ｓｅｌｅｃｔ' now matches under FormKC: NFKC folds " +
+            "fullwidth 'ｓｅｌｅｃｔ' now matches under FormKC: NFKC converts " +
             "it to plain ASCII before the lexer runs, so the blocker fires");
     }
 

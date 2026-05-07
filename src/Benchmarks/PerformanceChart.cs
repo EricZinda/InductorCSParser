@@ -68,7 +68,7 @@ public static class PerformanceChart
             return;
         }
 
-        File.WriteAllText(chartPath, BuildHtml(parserOrder, shapeMeans));
+        File.WriteAllText(chartPath, BuildHtml(parserOrder, shapeMeans, DateTime.Now));
         Console.WriteLine($"Performance chart regenerated: {chartPath}");
     }
 
@@ -87,7 +87,8 @@ public static class PerformanceChart
 
     private static string BuildHtml(
         List<string> parserOrder,
-        Dictionary<string, Dictionary<string, double>> shapeMeans)
+        Dictionary<string, Dictionary<string, double>> shapeMeans,
+        DateTime runDate)
     {
         string DataArray(string shape) =>
             "[" + string.Join(", ", parserOrder.Select(p =>
@@ -98,12 +99,15 @@ public static class PerformanceChart
         var labels = "[\n  " + string.Join(",\n  ",
             parserOrder.Select(p => "\"" + p + "\"")) + "\n]";
 
+        var runDateText = runDate.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+
         return HtmlTemplate
             .Replace("__LABELS__", labels)
             .Replace("__BIG__", DataArray("Big"))
             .Replace("__DEEP__", DataArray("Deep"))
             .Replace("__LONG__", DataArray("Long"))
-            .Replace("__WIDE__", DataArray("Wide"));
+            .Replace("__WIDE__", DataArray("Wide"))
+            .Replace("__RUN_DATE__", runDateText);
     }
 
     private const string HtmlTemplate = """
@@ -126,7 +130,7 @@ public static class PerformanceChart
 <body>
 
 <h1>JSON parser performance by shape</h1>
-<div class="subtitle">Mean parse time in microseconds. Lower is better. BenchmarkDotNet ShortRun, .NET 8.0.25 on Arm64. Four lines, one per input shape (Big, Deep, Long, Wide). Regenerated automatically on every benchmark run.</div>
+<div class="subtitle">Mean parse time in microseconds. Lower is better. BenchmarkDotNet ShortRun, .NET 8.0.25 on Arm64. Four lines, one per input shape (Big, Deep, Long, Wide). Regenerated automatically on every benchmark run. <strong>Run: __RUN_DATE__</strong></div>
 
 <div class="chart-wrapper">
   <canvas id="chart"></canvas>
@@ -194,6 +198,7 @@ new Chart(document.getElementById("chart"), {
     maintainAspectRatio: false,
     interaction: { mode: "index", intersect: false },
     plugins: {
+      title: { display: true, text: "JSON parser performance — run __RUN_DATE__", font: { size: 14 }, padding: { top: 4, bottom: 12 } },
       legend: { position: "top", labels: { boxWidth: 14, padding: 14 } },
       tooltip: {
         callbacks: {

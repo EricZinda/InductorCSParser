@@ -17,12 +17,6 @@ namespace InductorParser;
 // rule via Rules.Identifier(), which wires these two sets into the
 // combinator (see Rules.cs).
 //
-// UAX #31 R4 (NFC equivalence) says two identifiers are equal if their
-// NFC normalizations are equal. That's handled elsewhere: ParseOptions
-// normalizes input to NFC by default before the lexer runs, so "café"
-// precomposed and "café" as e + combining acute produce the same
-// flattened string automatically. This file is only about R1.
-//
 // Why this file is split out from TokenSet.cs
 //
 // Most of XID comes from Unicode's General_Category property, which the
