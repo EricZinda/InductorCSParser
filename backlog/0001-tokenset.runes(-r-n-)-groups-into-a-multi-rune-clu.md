@@ -1,6 +1,4 @@
-# Untitled
-
-- TokenSet.Runes("\r\n") groups into a multi-rune cluster, breaks `~Runes("\r\n")` and the rebar BenchmarkRegistry static init
+# TokenSet.Runes("\r\n") groups into a multi-rune cluster, breaks `~Runes("\r\n")` and the rebar BenchmarkRegistry static init
 
 The post-pull "Feature: form-aware Compile auto-converts grammar literals" commit (`645deda`) reworked `TokenSet.Runes(string)` so it walks the input by grapheme cluster instead of by rune. Under UAX #29 the `\r\n` pair is one cluster (CRLF), so `TokenSet.Runes("\r\n")` now stores `"\r\n"` as a multi-rune entry rather than the two separate single-rune intervals it used to produce. That breaks the `~` complement: `TokenSet.operator ~` throws `InvalidOperationException` on any set with multi-rune entries, by design (the universe of grapheme clusters is unbounded).
 
