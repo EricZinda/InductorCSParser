@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Text;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
@@ -13,7 +15,7 @@ namespace InductorParser;
 // membership test (one token whose value ISN'T in the set).
 internal sealed class OneOfRule : Rule
 {
-    private readonly TokenSet _set;
+    private TokenSet _set;
 
     // Pre-rendered "[A-Z,a-z]" form of the set, computed once at
     // construction. Trace lines reference this instead of the TokenSet
@@ -29,15 +31,54 @@ internal sealed class OneOfRule : Rule
         _setRendered = runeSet.ToString();
     }
 
-    // Accessor for the state-machine evaluator's lowering pass and the
-    // prefilter analyzer (ExperimentalSrc/InductorParser.Prefilter/OneOfRule.cs).
+    // Read-only accessor for the post-Compile set, used by analyzers
+    // that need to inspect the rule's matchable tokens.
     internal TokenSet LoweringSet => _set;
+
+    // See Rule.CollectNormalizationOffenders for the contract. OneOf-
+    // specific: form-project the set and report any entry whose
+    // conversion is multi-grapheme as an offender, since OneOf matches
+    // exactly one grapheme per token. Shared with NoneOfRule via
+    // NormalizeAndValidate.
+    internal override void CollectNormalizationOffenders(
+        System.Text.NormalizationForm form,
+        List<(Rule rule, string original, string normalized)> offenders,
+        List<ArgumentException> failures)
+    {
+        NormalizeAndValidate(this, ref _set, form, offenders);
+    }
+
+    // Shared form-projection + validation between OneOfRule and NoneOfRule.
+    // NormalizedFor projects the set and reports any multi-grapheme
+    // conversion result via the out list (excluded from the projected
+    // set so the TokenSet single-grapheme invariant holds). For each
+    // report, contribute an offender so the user gets a clear Compile-
+    // time error pointing at the fix.
+    internal static void NormalizeAndValidate(
+        Rule rule, ref TokenSet set, NormalizationForm form,
+        List<(Rule rule, string original, string normalized)> offenders)
+    {
+        var multiGraphemeConversions = new List<(string original, string normalized)>();
+        set = set.NormalizedFor(form, multiGraphemeConversions);
+        foreach (var (original, normalized) in multiGraphemeConversions)
+        {
+            offenders.Add((rule, original,
+                $"<converts under {form} to multi-grapheme sequence " +
+                $"\"{normalized}\". OneOf / NoneOf match exactly one grapheme " +
+                $"per token, so no single input token can match. Use " +
+                $"Literal(\"{normalized}\") for the whole sequence, " +
+                $"AllOf(Token-per-grapheme) for token-by-token control, or call " +
+                $"`set.WithCompatibilityEquivalents({form})` before OneOf / " +
+                $"NoneOf to expand into the grapheme pieces as separate " +
+                $"set members.>"));
+        }
+    }
 
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         using var transaction = lexer.BeginTransaction();
         var token = lexer.Read();
-        if (token.IsEof || !TokenInSet(token))
+        if (token.IsEof || !_set.ContainsToken(token.Chars))
         {
             TraceFailure(lexer,
                 $"found '{(token.IsEof ? "<EOF>" : lexer.Input.Substring(token.Offset, token.Length))}', wanted one of '{_setRendered}'");
@@ -52,13 +93,19 @@ internal sealed class OneOfRule : Rule
         transaction.Commit();
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
-        // SymbolId wraps a single int. A single-rune token fits, so we
-        // pin its rune value into the id and tree consumers can branch
-        // on which rune matched. A multi-rune grapheme cluster is two
-        // or more code points, which won't fit in one int, so we fall
-        // back to the rule's own id.
+        // SymbolId wraps a single int. A single-rune token fits, so for
+        // an unnamed rule we use the rune value as the leaf id directly,
+        // letting tree consumers branch on which rune matched without
+        // going through a synthetic per-OneOf id. A multi-rune grapheme
+        // cluster (two or more code points) doesn't fit in one int, so
+        // it falls back to the rule's own id either way. When the user
+        // named the rule via .As("..."), that name is the user's
+        // explicit signal "find me by reference," so the rule's Id wins
+        // over the rune value: Tree.Find, Tree.Is, and NameOf all need
+        // leaf.Id == rule.Id for the named rule to be findable. Same
+        // gate applies in AnyTokenRule, NoneOfRule, and WithinTokenRule.
         int runeValue = token.RuneValue;
-        SymbolId leafId = runeValue >= 0 ? new SymbolId(runeValue) : Id;
+        SymbolId leafId = (Name == null && runeValue >= 0) ? new SymbolId(runeValue) : Id;
         var leafSymbol = new Symbol(leafId, FlattenType, token.Memory);
         if (effectiveFlattenType == FlattenType.Flatten)
         {
@@ -66,20 +113,6 @@ internal sealed class OneOfRule : Rule
             return Symbol.Discarded;
         }
         return leafSymbol;
-    }
-
-    // Membership test that handles both halves of the set. Single-rune
-    // tokens (RuneValue >= 0) hit the rune intervals via Contains(int).
-    // Multi-rune tokens (RuneValue == -1) probe the multi-rune array
-    // via the token's Chars span. Sets without any multi-rune entries
-    // short-circuit on the first branch and never touch the grapheme
-    // array.
-    private bool TokenInSet(Lexing.Token token)
-    {
-        int runeValue = token.RuneValue;
-        if (runeValue >= 0) return _set.Contains(runeValue);
-        if (!_set.HasMultiRuneGraphemes) return false;
-        return _set.ContainsToken(token.Chars);
     }
 
     // Return the set of runes this rule might consume first (can be a superset)

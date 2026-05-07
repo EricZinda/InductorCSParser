@@ -211,11 +211,11 @@ internal sealed class BetweenInclusiveRule : Rule
         switch (rule)
         {
             case LiteralRule literal:
-                candidates.Add(new LiteralScannerCandidate(literal.Expected, ignoreAsciiCase: false));
+                candidates.Add(new LiteralScannerCandidate(literal.ExpectedText!, ignoreAsciiCase: false));
                 return true;
 
             case LiteralIgnoreAsciiCaseRule literal:
-                candidates.Add(new LiteralScannerCandidate(literal.Expected, ignoreAsciiCase: true));
+                candidates.Add(new LiteralScannerCandidate(literal.ExpectedText!, ignoreAsciiCase: true));
                 return true;
 
             case FirstOfRule firstOfRule:

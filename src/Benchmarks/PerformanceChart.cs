@@ -57,10 +57,10 @@ public static class PerformanceChart
             .Select(kv => kv.Key)
             .ToList();
 
-        string chartPath;
+        string benchDirectory;
         try
         {
-            chartPath = GetChartPath();
+            benchDirectory = GetBenchDirectory();
         }
         catch (InvalidOperationException ex)
         {
@@ -68,26 +68,108 @@ public static class PerformanceChart
             return;
         }
 
-        File.WriteAllText(chartPath, BuildHtml(parserOrder, shapeMeans));
-        Console.WriteLine($"Performance chart regenerated: {chartPath}");
+        var runDate = DateTime.Now;
+        var htmlPath = Path.Combine(benchDirectory, "performance-chart.html");
+        var jpgPath = Path.Combine(benchDirectory, "performance-chart.jpg");
+
+        File.WriteAllText(htmlPath, BuildHtml(parserOrder, shapeMeans, runDate));
+        Console.WriteLine($"Performance chart regenerated: {htmlPath}");
+
+        try
+        {
+            SaveJpeg(parserOrder, shapeMeans, runDate, jpgPath);
+            Console.WriteLine($"Performance chart regenerated: {jpgPath}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"JPG chart not regenerated: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
-    private static string GetChartPath()
+    private static string GetBenchDirectory()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory != null)
         {
             if (directory.GetFiles("Benchmarks.csproj").Length > 0)
-                return Path.Combine(directory.FullName, "performance-chart.html");
+                return directory.FullName;
             directory = directory.Parent;
         }
         throw new InvalidOperationException(
             "Benchmarks.csproj not found walking up from " + AppContext.BaseDirectory);
     }
 
+    // The four per-shape line colors here are kept in sync with the same
+    // four hex codes in HtmlTemplate (Chart.js dataset borderColor) so the
+    // JPG and HTML render with identical series colors.
+    private static readonly (string Shape, ScottPlot.Color Color)[] ShapeColors =
+    [
+        ("Big",  ScottPlot.Color.FromHex("#1f77b4")),
+        ("Deep", ScottPlot.Color.FromHex("#ff7f0e")),
+        ("Long", ScottPlot.Color.FromHex("#2ca02c")),
+        ("Wide", ScottPlot.Color.FromHex("#d62728")),
+    ];
+
+    private static void SaveJpeg(
+        List<string> parserOrder,
+        Dictionary<string, Dictionary<string, double>> shapeMeans,
+        DateTime runDate,
+        string jpgPath)
+    {
+        var plot = new ScottPlot.Plot();
+
+        var xs = Enumerable.Range(0, parserOrder.Count).Select(i => (double)i).ToArray();
+
+        foreach (var (shape, color) in ShapeColors)
+        {
+            var ys = parserOrder
+                .Select(parser => shapeMeans[shape].TryGetValue(parser, out var mean) ? mean : double.NaN)
+                .ToArray();
+            var line = plot.Add.ScatterLine(xs, ys);
+            line.LegendText = shape;
+            line.LineColor = color;
+            line.MarkerStyle.FillColor = color;
+            line.MarkerStyle.LineColor = color;
+            line.MarkerSize = 6;
+            line.LineWidth = 2;
+        }
+
+        var ticks = parserOrder
+            .Select((parser, index) => new ScottPlot.Tick(index, parser))
+            .ToArray();
+        plot.Axes.Bottom.TickGenerator = new ScottPlot.TickGenerators.NumericManual(ticks);
+        // -45° rotation reads diagonally below the axis: the standard
+        // "tilted axis label" look. Alignment.MiddleRight anchors the
+        // right end of the text at the tick, so the label hangs to
+        // the lower-left, far enough below the next tick to avoid
+        // overlap on the long parser names.
+        plot.Axes.Bottom.TickLabelStyle.Rotation = -45;
+        plot.Axes.Bottom.TickLabelStyle.Alignment = ScottPlot.Alignment.MiddleRight;
+        plot.Axes.Bottom.TickLabelStyle.OffsetX = -3;
+        plot.Axes.Bottom.TickLabelStyle.OffsetY = 3;
+        // Reserve enough vertical space for the longest vertical label
+        // ("InductorParserToken" / "InductorParserTyped") plus the
+        // x-axis title.
+        plot.Axes.Bottom.MinimumSize = 170;
+        // Reserve enough horizontal space so the y-axis tick labels fit.
+        plot.Axes.Left.MinimumSize = 70;
+
+        var runDateText = runDate.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+        plot.Title($"JSON parser performance — run {runDateText}");
+        plot.XLabel("Parser (ordered by Big-shape time, fastest to slowest)");
+        plot.YLabel("Mean parse time (μs)");
+        plot.ShowLegend(ScottPlot.Edge.Top);
+
+        // A little extra margin around the data so markers near the edges
+        // aren't clipped by the axis frame.
+        plot.Axes.Margins(left: 0.04, right: 0.04, bottom: 0.05, top: 0.10);
+        plot.SaveJpeg(jpgPath, 1300, 700, 90);
+    }
+
     private static string BuildHtml(
         List<string> parserOrder,
-        Dictionary<string, Dictionary<string, double>> shapeMeans)
+        Dictionary<string, Dictionary<string, double>> shapeMeans,
+        DateTime runDate)
     {
         string DataArray(string shape) =>
             "[" + string.Join(", ", parserOrder.Select(p =>
@@ -98,12 +180,15 @@ public static class PerformanceChart
         var labels = "[\n  " + string.Join(",\n  ",
             parserOrder.Select(p => "\"" + p + "\"")) + "\n]";
 
+        var runDateText = runDate.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+
         return HtmlTemplate
             .Replace("__LABELS__", labels)
             .Replace("__BIG__", DataArray("Big"))
             .Replace("__DEEP__", DataArray("Deep"))
             .Replace("__LONG__", DataArray("Long"))
-            .Replace("__WIDE__", DataArray("Wide"));
+            .Replace("__WIDE__", DataArray("Wide"))
+            .Replace("__RUN_DATE__", runDateText);
     }
 
     private const string HtmlTemplate = """
@@ -126,7 +211,7 @@ public static class PerformanceChart
 <body>
 
 <h1>JSON parser performance by shape</h1>
-<div class="subtitle">Mean parse time in microseconds. Lower is better. BenchmarkDotNet ShortRun, .NET 8.0.25 on Arm64. Four lines, one per input shape (Big, Deep, Long, Wide). Regenerated automatically on every benchmark run.</div>
+<div class="subtitle">Mean parse time in microseconds. Lower is better. BenchmarkDotNet ShortRun, .NET 8.0.25 on Arm64. Four lines, one per input shape (Big, Deep, Long, Wide). Regenerated automatically on every benchmark run. <strong>Run: __RUN_DATE__</strong></div>
 
 <div class="chart-wrapper">
   <canvas id="chart"></canvas>
@@ -194,6 +279,7 @@ new Chart(document.getElementById("chart"), {
     maintainAspectRatio: false,
     interaction: { mode: "index", intersect: false },
     plugins: {
+      title: { display: true, text: "JSON parser performance — run __RUN_DATE__", font: { size: 14 }, padding: { top: 4, bottom: 12 } },
       legend: { position: "top", labels: { boxWidth: 14, padding: 14 } },
       tooltip: {
         callbacks: {

@@ -1,4 +1,5 @@
-- Regex → InductorCSParser grammar converter webpage
+# Regex → InductorCSParser grammar converter webpage
+
     - Current state: single-page static converter that takes a regex and emits the equivalent Rules.cs fluent expression. Blocked on a JavaScript port of InductorCSParser: the converter should parse the input regex using a regex grammar written in Rules.cs, not a hand-rolled JS parser.
     - Blocked on:
         - A JS port of InductorCSParser published in a way a plain <script> tag can consume (single inlined file, or ES module served alongside the page).

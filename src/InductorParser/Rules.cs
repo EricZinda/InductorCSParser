@@ -580,21 +580,30 @@ public static class Rules
         );
 
     /// <summary>
-    /// Match a simple decimal: an optional leading -, one or more
-    /// digits, a literal '.', and one or more digits. Default
-    /// <see cref="FlattenType"/>: <see cref="FlattenType.Flatten"/>
-    /// (from the composed outer <see cref="AllOf"/>).
+    /// Match a simple decimal: an optional leading <c>+</c> or
+    /// <c>-</c>, one or more digits, a literal <c>'.'</c>, and one
+    /// or more digits. Default <see cref="FlattenType"/>:
+    /// <see cref="FlattenType.Flatten"/> (from the composed outer
+    /// <see cref="AllOf"/>).
     /// </summary>
     /// <remarks>
-    /// Doesn't handle exponents, scientific notation, or leading
-    /// '+'. Grammars that need those compose their own.
+    /// The optional leading sign matches <see cref="Integer"/>'s
+    /// convention, so a grammar that uses
+    /// <c>FirstOf(Float(), Integer())</c> treats <c>+5</c> and
+    /// <c>+5.5</c> consistently. A sign is allowed only at the front:
+    /// the fractional part is digits-only, and inputs like
+    /// <c>3.+14</c> or <c>--3.14</c> don't match.
+    /// <para>
+    /// Doesn't handle exponents or scientific notation. Grammars
+    /// that need those compose their own.
+    /// </para>
     /// </remarks>
     public static Rule Float() =>
         AllOf(
-            Optional(Token('-').Flatten(FlattenType.Flatten)),
-            Integer(),
+            Optional(OneOf("+-").Flatten(FlattenType.Flatten)),
+            OneOrMore(OneOf(TokenSet.Digits)),
             Token('.').Flatten(FlattenType.Preserve),
-            Integer()
+            OneOrMore(OneOf(TokenSet.Digits))
         );
 
     /// <summary>
@@ -692,6 +701,17 @@ public static class Rules
     /// so the match appears in the tree as one named node whose
     /// children are the per-rune leaves.
     /// </summary>
+    /// <param name="form">
+    /// The normalization form the rule will be compiled under. Must
+    /// match the form passed to <c>Compile</c>. Default is
+    /// <see cref="NormalizationForm.FormC"/>, the same default Compile
+    /// uses. Pass <see cref="NormalizationForm.FormKC"/> /
+    /// <see cref="NormalizationForm.FormKD"/> for compatibility-form
+    /// identifiers (Python 3 / Rust style: fullwidth Latin and ligatures
+    /// match their plain ASCII equivalents). Pass <c>null</c> to opt out
+    /// of normalization at parse time, matching the unnormalized Compile
+    /// path.
+    /// </param>
     /// <param name="extraStartRunes">
     /// Runes to union into <see cref="TokenSet.XidStart"/> for the
     /// first character. UAX #31 calls this a "profile extension":
@@ -723,7 +743,7 @@ public static class Rules
     /// rule that also treats fullwidth <c>ｆｏｏ</c> and plain <c>foo</c>,
     /// or the ligature <c>ﬀ</c> and <c>ff</c>, as the same identifier.
     /// That's the Python 3 and Rust behavior. The stronger rule can,
-    /// however, collapse things you may want kept distinct. It folds
+    /// however, collapse things you may want kept distinct. It converts
     /// <c>ℓ</c> (script small L, used in physics) into <c>l</c>, and
     /// <c>Ⅷ</c> (Roman numeral) into <c>VIII</c>. A grammar that parses
     /// math or legal text probably wants those distinctions.
@@ -737,10 +757,26 @@ public static class Rules
     /// <c>Compile</c> time.
     /// </para>
     /// </remarks>
-    public static Rule Identifier(TokenSet extraStartRunes = default, TokenSet extraBodyRunes = default)
+    public static Rule Identifier(
+        NormalizationForm? form = NormalizationForm.FormC,
+        TokenSet extraStartRunes = default,
+        TokenSet extraBodyRunes = default)
     {
         var start = TokenSet.XidStart | extraStartRunes;
         var body = TokenSet.XidContinue | extraBodyRunes;
+        // Under FormKC / FormKD, XidStart and XidContinue contain entries
+        // (ligatures, fullwidth Latin, math-bold) whose compatibility
+        // conversion is a multi-grapheme sequence. A OneOf rule can't
+        // match a multi-grapheme entry as a single token, so Compile
+        // would throw. Pre-apply WithCompatibilityEquivalents to expand
+        // those entries into their grapheme pieces, which the rest of
+        // the rule structure (ZeroOrMore(OneOf(body))) consumes one at
+        // a time. Pass the same form to Compile afterward.
+        if (form == NormalizationForm.FormKC || form == NormalizationForm.FormKD)
+        {
+            start = start.WithCompatibilityEquivalents(form.Value);
+            body = body.WithCompatibilityEquivalents(form.Value);
+        }
         return AllOf(
             // First token: starts with a Start rune, rest of its runes
             // (if any) are Body runes. Handles precomposed "é", "ñ",

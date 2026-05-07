@@ -171,4 +171,55 @@ public class OneOfRuleTests
         Assert.That(rule.Parse("1").Success, Is.False);
     }
 
+    [Test]
+    public void Unnamed_OneOf_uses_the_rune_value_as_the_leaf_id_for_single_rune_tokens()
+    {
+        // The documented unnamed-OneOf optimization: tree consumers can
+        // switch on which rune matched without going through a synthetic
+        // per-OneOf id. An unnamed rule has Name == null, so the leaf
+        // carries the rune's code point directly.
+        var rule = OneOf(TokenSet.Ascii.Letters);
+        var result = rule.Parse("a");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.Id.Value, Is.EqualTo(0x61),
+            "unnamed OneOf: leaf carries the matched rune's code point");
+    }
+
+    [Test]
+    public void Named_OneOf_uses_rule_id_so_Find_resolves_the_named_rule()
+    {
+        // A named OneOf carries the rule's Id on every leaf. Tree.Find,
+        // Tree.Is, and NameOf all resolve through the rule reference.
+        var letter = OneOf(TokenSet.Ascii.Letters).As("letter");
+        var result = letter.Parse("a");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.Is(letter), Is.True);
+        Assert.That(result.Tree!.Find(letter), Is.Not.Null);
+    }
+
+    [Test]
+    public void OneOf_with_multi_rune_match_uses_rule_id_regardless_of_naming()
+    {
+        // For a multi-rune match (Token.RuneValue == -1), the leaf carries
+        // the rule's own Id either way: there's no rune code point that
+        // fits in one int, so the rune-as-leaf-id branch can't fire.
+        // Find and Is resolve through rule.Id for both unnamed and named
+        // shapes.
+        var unnamedRule = OneOf(TokenSet.Runes(USFlagGrapheme));
+        var unnamedResult = unnamedRule.Parse(USFlagGrapheme);
+        Assert.That(unnamedResult.Success, Is.True);
+        Assert.That(unnamedResult.Tree!.Id, Is.EqualTo(unnamedRule.Id));
+        Assert.That(unnamedResult.Tree!.Find(unnamedRule), Is.Not.Null);
+        Assert.That(unnamedRule.NameOf(unnamedResult.Tree!.Id), Is.EqualTo("OneOf"));
+
+        var namedRule = OneOf(TokenSet.Runes(USFlagGrapheme)).As("flag");
+        var namedResult = namedRule.Parse(USFlagGrapheme);
+        Assert.That(namedResult.Success, Is.True);
+        Assert.That(namedResult.Tree!.Id, Is.EqualTo(namedRule.Id));
+        Assert.That(namedResult.Tree!.Find(namedRule), Is.Not.Null);
+        Assert.That(namedRule.NameOf(namedResult.Tree!.Id), Is.EqualTo("flag"));
+    }
+
 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Text;
 using NUnit.Framework;
@@ -223,24 +223,24 @@ public class NormalizationTests
             "ErrorPosition bundle must agree with ErrorCharIndex");
     }
 
-    // Compatibility-form tests. FormKC and FormKD fold ligatures, circled
+    // Compatibility-form tests. FormKC and FormKD convert ligatures, circled
     // digits, fullwidth forms, superscripts, and similar cosmetic
-    // variations into their plain-text equivalents. The fold can expand
+    // variations into their plain-text equivalents. The conversion can expand
     // one grapheme into several ("\uFB01" → "fi", two graphemes), which
     // is why the translator uses a per-grapheme normalize walker for these
     // forms rather than the lockstep walker.
     //
-    // U+FB01 is LATIN SMALL LIGATURE FI, the textbook compatibility-fold
-    // example: one rune, one grapheme in the original. Normalizes to "fi"
-    // (two runes, two graphemes).
+    // U+FB01 is LATIN SMALL LIGATURE FI, the textbook compatibility-
+    // conversion example: one rune, one grapheme in the original.
+    // Normalizes to "fi" (two runes, two graphemes).
     private const string FiLigature = "\uFB01";
 
     [Test]
-    public void FormKC_folds_ligature_so_unfolded_grammar_matches_ligature_input()
+    public void FormKC_converts_ligature_so_plain_grammar_matches_ligature_input()
     {
         // Grammar spells "fish" in the plain ASCII form. Input uses the fi
         // ligature. Without normalization the Token('f') would see "\uFB01"
-        // and fail. FormKC folds the ligature to "fi" before the lexer
+        // and fail. FormKC converts the ligature to "fi" before the lexer
         // runs, so the grammar matches through.
         var rule = AllOf(Token('f'), Token('i'), Token('s'), Token('h'), Eof());
         rule.Compile(NormalizationForm.FormKC);
@@ -296,10 +296,10 @@ public class NormalizationTests
     }
 
     [Test]
-    public void FormKD_folds_ligature_and_ends_decomposed()
+    public void FormKD_converts_ligature_and_ends_decomposed()
     {
-        // FormKD does the same compatibility folding as FormKC but the
-        // output is decomposed. For a pure-ASCII fold target ("fi") there's
+        // FormKD does the same compatibility conversion as FormKC but the
+        // output is decomposed. For a pure-ASCII conversion target ("fi") there's
         // no canonical decomposition, so FormKD output matches FormKC
         // output here. This test verifies that the FormKD path through
         // the translator works end-to-end, not that the decomposed
@@ -334,19 +334,18 @@ public class NormalizationTests
     // bytes the lexer can't produce). Compile catches that at startup.
 
     [Test]
-    public void Compile_throws_when_literal_isnt_in_FormC()
+    public void Compile_auto_converts_literal_to_FormC()
     {
         // Build a rule whose Token literal is decomposed (e + combining
         // acute, two runes that render as one user-visible character).
         // Default Compile uses FormC, which composes the two runes into
         // U+00E9. The lexer would never produce a two-rune "e+acute" for
         // this rule to match. Compile catches that at grammar-build time.
-        var rule = Token(CafeDecomposed[3..]);  // "é", a one-grapheme decomposed form
-        var ex = Assert.Throws<InvalidOperationException>(() => rule.Compile());
-        Assert.That(ex!.Message, Does.Contain("FormC"));
-        Assert.That(ex.Message, Does.Contain("expected text that isn't in"));
+        var rule = Token(CafeDecomposed[3..]);  // a one-grapheme decomposed form
+        Assert.DoesNotThrow(() => rule.Compile());
+        Assert.That(rule.Parse(CafePrecomposed[3..]).Success, Is.True);
+        Assert.That(rule.Parse(CafeDecomposed[3..]).Success, Is.True);
     }
-
     [Test]
     public void Compile_null_skips_validation()
     {
@@ -369,33 +368,34 @@ public class NormalizationTests
     }
 
     [Test]
-    public void Compile_lists_all_offenders_in_one_exception()
+    public void Compile_auto_converts_two_bad_literals_in_one_grammar()
     {
-        // A grammar with two bad literals should produce one exception
-        // listing both. Authors fix every offender in a single pass
-        // instead of running build-fix-build-fix.
-        var firstBad = Literal("e" + CombiningAcuteText).As("firstBad");
-        var secondBad = Token(CafeDecomposed[3..]).As("secondBad");
-        var rule = AllOf(firstBad, secondBad);
+        // Both literals get auto-converted at Compile. The grammar
+        // compiles cleanly and parses correctly.
+        var firstLiteral = Literal("e" + CombiningAcuteText).As("first");
+        var secondLiteral = Token(CafeDecomposed[3..]).As("second");
+        var rule = AllOf(firstLiteral, secondLiteral);
 
-        var ex = Assert.Throws<InvalidOperationException>(() => rule.Compile());
-        Assert.That(ex!.Message, Does.Contain("firstBad"));
-        Assert.That(ex.Message, Does.Contain("secondBad"));
+        Assert.DoesNotThrow(() => rule.Compile());
+        // Parse a precomposed-form input — the auto-converted literals match.
+        Assert.That(rule.Parse(CafePrecomposed[3..] + CafePrecomposed[3..]).Success, Is.True);
     }
 
     [Test]
-    public void Compile_LiteralIgnoreAsciiCase_validates_non_ASCII_only()
+    public void Compile_LiteralIgnoreAsciiCase_auto_converts_non_ASCII()
     {
-        // Pure-ASCII LiteralIgnoreAsciiCase passes any normalization form
-        // because ASCII is invariant under all four NFC/NFD/NFKC/NFKD.
+        // Pure-ASCII LiteralIgnoreAsciiCase compiles fine under any
+        // form (ASCII is invariant under all four NFC/NFD/NFKC/NFKD).
         Assert.DoesNotThrow(() =>
             LiteralIgnoreAsciiCase("HELLO").Compile());
 
-        // Mixed ASCII + decomposed non-ASCII fails under FormC because
-        // the non-ASCII portion isn't already FormC-normalized.
-        var bad = LiteralIgnoreAsciiCase("caf" + "e" + CombiningAcuteText);
-        var ex = Assert.Throws<InvalidOperationException>(() => bad.Compile());
-        Assert.That(ex!.Message, Does.Contain("FormC"));
+        // Mixed ASCII + decomposed non-ASCII auto-converts to NFC
+        // under default Compile.
+        var rule = LiteralIgnoreAsciiCase("caf" + "e" + CombiningAcuteText);
+        Assert.DoesNotThrow(() => rule.Compile());
+        // Matches both forms via FormC input normalization.
+        Assert.That(rule.Parse(CafePrecomposed).Success, Is.True);
+        Assert.That(rule.Parse(CafeDecomposed).Success, Is.True);
     }
 
     [Test]
@@ -444,5 +444,606 @@ public class NormalizationTests
         var ruleKC = AllOf(Token('a'), Token('b'));
         ruleKC.Compile(NormalizationForm.FormKC);
         Assert.That(ruleKC.NormalizationForm, Is.EqualTo(NormalizationForm.FormKC));
+    }
+
+    // The same grammar source, compiled four ways, all matching their
+    // respective normalized inputs. This is the security-scanning use case
+    // for Compile's auto-conversion: instead of writing four separate
+    // grammars (one per form) to detect homoglyph and presentation-variant
+    // attacks across normalization boundaries, the author writes one
+    // identifier grammar and runs it under each form. A string that parses
+    // under FormC but fails under FormKC (or vice versa) is the attack
+    // signature.
+    [Test]
+    public void Same_identifier_grammar_compiles_under_all_four_forms_and_matches_appropriate_input()
+    {
+        // Grammar source: one identifier with EOF to anchor the match.
+        // Built fresh for each form so each rule has its own
+        // _set / _expected mutated by Compile.
+        static Rule BuildIdentifierGrammar(NormalizationForm? form) =>
+            AllOf(Identifier(form), Eof());
+
+        var ruleC = BuildIdentifierGrammar(NormalizationForm.FormC);
+        ruleC.Compile(NormalizationForm.FormC);
+        var ruleD = BuildIdentifierGrammar(NormalizationForm.FormD);
+        ruleD.Compile(NormalizationForm.FormD);
+        var ruleKC = BuildIdentifierGrammar(NormalizationForm.FormKC);
+        ruleKC.Compile(NormalizationForm.FormKC);
+        var ruleKD = BuildIdentifierGrammar(NormalizationForm.FormKD);
+        ruleKD.Compile(NormalizationForm.FormKD);
+
+        // Plain ASCII identifier matches under every form.
+        Assert.That(ruleC.Parse("foo").Success, Is.True, "FormC accepts plain ASCII");
+        Assert.That(ruleD.Parse("foo").Success, Is.True, "FormD accepts plain ASCII");
+        Assert.That(ruleKC.Parse("foo").Success, Is.True, "FormKC accepts plain ASCII");
+        Assert.That(ruleKD.Parse("foo").Success, Is.True, "FormKD accepts plain ASCII");
+
+        // "café" with precomposed é matches under both canonical forms.
+        // FormC sees U+00E9, FormD sees "e + combining acute" — both are
+        // canonically equivalent and both are valid identifiers.
+        Assert.That(ruleC.Parse(CafePrecomposed).Success, Is.True);
+        Assert.That(ruleD.Parse(CafePrecomposed).Success, Is.True);
+        Assert.That(ruleC.Parse(CafeDecomposed).Success, Is.True);
+        Assert.That(ruleD.Parse(CafeDecomposed).Success, Is.True);
+
+        // The homoglyph-detection pattern in practice: take a single
+        // input, parse it under each form's compiled grammar, and diff
+        // the resulting trees. If they match, the input has no
+        // presentation variants the chosen forms disagree on. If they
+        // diverge, the input is a candidate for review. The scanner
+        // doesn't need to know the input ahead of time; the divergence
+        // is the signal.
+        var asciiViaC = ruleC.Parse("foo");
+        var asciiViaKC = ruleKC.Parse("foo");
+        Assert.That(asciiViaC.Success && asciiViaKC.Success, Is.True);
+        Assert.That(asciiViaC.Tree!.ToString(), Is.EqualTo(asciiViaKC.Tree!.ToString()),
+            "plain ASCII input: same tree under FormC and FormKC, no signal");
+
+        // Same grammar, but the input has a presentation variant
+        // (fullwidth letters that NFKC collapses to ASCII). Both forms
+        // accept it as a valid identifier, but the tree text differs:
+        // FormC preserves the original code points, FormKC collapses
+        // them. That divergence is what a multi-form scanner flags.
+        var presentationVariantViaC = ruleC.Parse("ｆｏｏ");
+        var presentationVariantViaKC = ruleKC.Parse("ｆｏｏ");
+        Assert.That(presentationVariantViaC.Success && presentationVariantViaKC.Success, Is.True);
+        Assert.That(presentationVariantViaC.Tree!.ToString(),
+            Is.Not.EqualTo(presentationVariantViaKC.Tree!.ToString()),
+            "presentation-variant input: tree diverges between FormC and FormKC, " +
+            "which is the signal a homoglyph scanner watches for");
+    }
+
+    // ============================================================
+    // Set / token / literal auto-conversion across FormC, FormD,
+    // and FormKC. Compile rewrites the rule's literal into the
+    // chosen form so a grammar author who typed the "wrong" side
+    // (precomposed under FormD, decomposed under FormC, ligature
+    // under FormKC, etc.) gets a working grammar instead of a
+    // silent miss.
+    // ============================================================
+
+    [Test]
+    public void OneOf_with_precomposed_entry_matches_decomposed_input_under_FormD()
+    {
+        // OneOf with the precomposed U+00E9 stores it as a single-rune
+        // entry. Under FormD the lexer decomposes input to "e + combining
+        // acute" (multi-rune cluster), which a rune-only set can't
+        // represent. Compile-time set normalization (adding canonical
+        // equivalents to the set) adds the decomposed form as a multi-
+        // rune entry, so the rule matches both forms regardless of
+        // which canonical form the lexer produces.
+        var rule = OneOf(LatinEAcutePrecomposedGrapheme);
+        rule.Compile(System.Text.NormalizationForm.FormD);
+
+        var precomposed = rule.Parse(LatinEAcutePrecomposedGrapheme);
+        var decomposed = rule.Parse(LatinEAcuteGrapheme);
+
+        Assert.That(precomposed.Success, Is.True, precomposed.ErrorMessage);
+        Assert.That(decomposed.Success, Is.True, decomposed.ErrorMessage);
+    }
+
+    [Test]
+    public void OneOf_with_decomposed_entry_matches_precomposed_input_under_FormC()
+    {
+        // Symmetric direction: user types decomposed in source, FormC
+        // (the default) recomposes the input. Set normalization adds
+        // the composed single-rune form to the set so both inputs match.
+        var rule = OneOf(LatinEAcuteGrapheme);
+        rule.Compile();  // default FormC
+
+        var precomposed = rule.Parse(LatinEAcutePrecomposedGrapheme);
+        var decomposed = rule.Parse(LatinEAcuteGrapheme);
+
+        Assert.That(precomposed.Success, Is.True, precomposed.ErrorMessage);
+        Assert.That(decomposed.Success, Is.True, decomposed.ErrorMessage);
+    }
+
+    [Test]
+    public void NoneOf_with_precomposed_entry_rejects_decomposed_input_under_FormD()
+    {
+        // Without set normalization, NoneOf(precomposed-é).Parse(decomposed)
+        // under FormD would wrongly succeed: the decomposed multi-rune
+        // token isn't in the rune-only set, the membership test returns
+        // false, NoneOf inverts that into a false-positive match. Set
+        // normalization adds the decomposed cluster to the set so NoneOf
+        // correctly rejects both forms.
+        var rule = AllOf(NoneOf(LatinEAcutePrecomposedGrapheme), Eof());
+        rule.Compile(System.Text.NormalizationForm.FormD);
+
+        Assert.That(rule.Parse(LatinEAcutePrecomposedGrapheme).Success, Is.False);
+        Assert.That(rule.Parse(LatinEAcuteGrapheme).Success, Is.False);
+        // Sanity: a different character still passes through.
+        Assert.That(rule.Parse("a").Success, Is.True);
+    }
+
+    [Test]
+    public void OneOf_with_singleton_decomposing_rune_matches_normalized_form()
+    {
+        // U+2126 OHM SIGN canonically decomposes to U+03A9 GREEK CAPITAL
+        // LETTER OMEGA — both single runes. Under FormC the lexer
+        // produces U+03A9 from input U+2126. Without set normalization,
+        // OneOf(Ohm) wouldn't match because its set has only U+2126.
+        // Compile-time set normalization covers this case (entries
+        // where the decomposed form differs from the rune but is still
+        // single-rune) by adding U+03A9 to the rune intervals.
+        var rule = OneOf(OhmGrapheme);
+        rule.Compile();  // default FormC
+
+        Assert.That(rule.Parse(OhmGrapheme).Success, Is.True);
+        Assert.That(rule.Parse(GreekCapitalOmegaGrapheme).Success, Is.True);
+    }
+
+    [Test]
+    public void Token_with_decomposed_source_compiles_under_FormC_and_matches_input()
+    {
+        // User typed "e" + combining acute (decomposed) in the grammar
+        // source. Compile under FormC auto-converts the _expected text
+        // to the precomposed U+00E9 form. The rule then matches FormC-
+        // normalized input (also U+00E9).
+        var rule = Token(LatinEAcuteGrapheme);
+        Assert.DoesNotThrow(() => rule.Compile());
+        Assert.That(rule.Parse(LatinEAcutePrecomposedGrapheme).Success, Is.True);
+        Assert.That(rule.Parse(LatinEAcuteGrapheme).Success, Is.True);
+    }
+
+    [Test]
+    public void Token_with_precomposed_source_compiles_under_FormD_and_matches_input()
+    {
+        // Symmetric: user typed precomposed U+00E9. Compile under FormD
+        // auto-converts _expected to the decomposed two-rune form so the
+        // rule matches FormD-normalized input.
+        var rule = Token(LatinEAcutePrecomposedGrapheme);
+        Assert.DoesNotThrow(() => rule.Compile(NormalizationForm.FormD));
+        Assert.That(rule.Parse(LatinEAcutePrecomposedGrapheme).Success, Is.True);
+        Assert.That(rule.Parse(LatinEAcuteGrapheme).Success, Is.True);
+    }
+
+    [Test]
+    public void Literal_with_mixed_form_source_compiles_under_FormC_and_matches_input()
+    {
+        // "caf" + decomposed e-acute in source. Compile under FormC
+        // auto-converts _expected so it matches FormC-normalized input
+        // (precomposed U+00E9 at the end).
+        var rule = Literal("caf" + LatinEAcuteGrapheme);
+        Assert.DoesNotThrow(() => rule.Compile());
+        Assert.That(rule.Parse("caf" + LatinEAcutePrecomposedGrapheme).Success, Is.True);
+        Assert.That(rule.Parse("caf" + LatinEAcuteGrapheme).Success, Is.True);
+    }
+
+    [Test]
+    public void OneOf_letters_matches_tibetan_composite_letter_under_default_Compile()
+    {
+        // U+0F43 TIBETAN LETTER GHA is in TokenSet.Letters. It
+        // decomposes to U+0F42 + U+0FB7 (a multi-rune cluster) under
+        // both composed and decomposed forms. Under default FormC the
+        // lexer hands the rule that two-rune cluster.
+        // OneOf(TokenSet.Letters).Compile() must set-normalize the set
+        // (add the multi-rune composed equivalent) so the rule still matches.
+        var rule = AllOf(OneOf(TokenSet.Letters), Eof());
+        Assert.DoesNotThrow(() => rule.Compile());
+        Assert.That(rule.Parse("གྷ").Success, Is.True,
+            "single-rune tibetan letter still matches");
+        Assert.That(rule.Parse("གྷ").Success, Is.True,
+            "decomposed tibetan letter matches via set normalization");
+    }
+
+    [Test]
+    public void OneOf_TokenSet_Single_with_decomposable_rune_matches_under_FormD()
+    {
+        // OneOf(TokenSet.Single(0xE9)) goes through the TokenSet path,
+        // not the string path. Compile-time set normalization must
+        // still add the decomposed cluster so the rule matches both
+        // forms of input under FormD.
+        var rule = OneOf(TokenSet.Single(0x00E9));
+        Assert.DoesNotThrow(() => rule.Compile(NormalizationForm.FormD));
+        Assert.That(rule.Parse(LatinEAcutePrecomposedGrapheme).Success, Is.True);
+        Assert.That(rule.Parse(LatinEAcuteGrapheme).Success, Is.True);
+    }
+
+    [Test]
+    public void Token_with_singleton_decomposable_rune_repins_id()
+    {
+        // Token U+2126 OHM SIGN compiled under FormC auto-converts
+        // _expected to U+03A9 GREEK CAPITAL OMEGA. The rule's Id (which
+        // reflects the single-rune token value) should be re-pinned to
+        // 0x03A9, not stay as 0x2126.
+        var rule = Token(OhmGrapheme);
+        rule.Compile();
+        Assert.That(rule.Id.Value, Is.EqualTo(0x03A9),
+            "Token Id repins to the converted rune value");
+    }
+
+    [Test]
+    public void Compile_same_grammar_under_FormC_and_FormD_both_succeed()
+    {
+        // Locks in the security-scanning use case: write the grammar
+        // once, compile under multiple forms. Each Compile must succeed
+        // independently and match its form's normalized input.
+        var ruleC = Token(LatinEAcutePrecomposedGrapheme);
+        ruleC.Compile(NormalizationForm.FormC);
+        Assert.That(ruleC.Parse(LatinEAcutePrecomposedGrapheme).Success, Is.True);
+
+        var ruleD = Token(LatinEAcutePrecomposedGrapheme);
+        ruleD.Compile(NormalizationForm.FormD);
+        Assert.That(ruleD.Parse(LatinEAcuteGrapheme).Success, Is.True);
+    }
+
+    [Test]
+    public void Token_with_compatibility_conversion_to_multiple_graphemes_throws_clear_compile_error()
+    {
+        // U+FB01 LATIN SMALL LIGATURE FI converts under FormKC to "fi",
+        // two separate graphemes. Token matches exactly one grapheme,
+        // so no auto-conversion is possible. Compile must throw a clear
+        // error naming the multi-grapheme conversion and pointing the
+        // user at Literal or AllOf.
+        var rule = Token("ﬁ");
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => rule.Compile(NormalizationForm.FormKC));
+        Assert.That(exception!.Message, Does.Contain("fi"),
+            "error message shows the multi-grapheme conversion result");
+        Assert.That(exception.Message, Does.Contain("Literal").Or.Contain("AllOf"),
+            "error message suggests Literal or AllOf as the fix");
+    }
+
+    [Test]
+    public void OneOf_with_compatibility_conversion_to_multiple_graphemes_throws_clear_compile_error()
+    {
+        // Same character (U+FB01), same compatibility conversion ("fi").
+        // For OneOf the projected set drops U+FB01 because its conversion
+        // is multi-grapheme, and the offender mechanism reports it.
+        // Compile throws an aggregated InvalidOperationException.
+        var rule = OneOf("ﬁ");
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => rule.Compile(NormalizationForm.FormKC));
+        Assert.That(exception!.Message, Does.Contain("fi"),
+            "error message shows the multi-grapheme conversion result");
+    }
+
+    [Test]
+    public void Identifier_default_under_FormKC_throws_clear_compile_error()
+    {
+        // TokenSet.XidStart contains U+FB01 (LATIN SMALL LIGATURE FI)
+        // among many other compatibility-converting letters. Under
+        // FormKC U+FB01 converts to "fi" (multi-grapheme), which a
+        // OneOf rule can't match as a single token. Strict policy:
+        // throw, don't silently miss. The error names the
+        // WithCompatibilityEquivalents helper (and the form-aware
+        // Identifier overload, by extension) as the fix.
+        var rule = Identifier();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => rule.Compile(NormalizationForm.FormKC));
+        Assert.That(exception!.Message, Does.Contain("WithCompatibilityEquivalents"),
+            "error message points users at the helper that resolves multi-grapheme conversions");
+    }
+
+    [Test]
+    public void OneOf_compatibility_singleton_matches_under_FormKC()
+    {
+        // U+2102 DOUBLE-STRUCK CAPITAL C converts to plain 'C' (U+0043)
+        // under NFKC. That's a single-grapheme conversion, so
+        // NormalizedFor handles it automatically: U+2102 in the set
+        // gets replaced by 'C'. Lexer under FormKC produces 'C' from
+        // input U+2102, matches.
+        var rule = OneOf("ℂ");
+        rule.Compile(NormalizationForm.FormKC);
+        Assert.That(rule.Parse("ℂ").Success, Is.True,
+            "U+2102 input converts to 'C' which is now in the set");
+        Assert.That(rule.Parse("C").Success, Is.True,
+            "plain 'C' input matches directly");
+    }
+
+    [Test]
+    public void OneOf_with_partially_composed_multi_rune_matches_under_FormD()
+    {
+        // A multi-rune entry where NFC == entry but NFD differs:
+        // "é + combining macron" (precomposed é followed by another
+        // combining mark). NFC keeps it the same (no further composition).
+        // NFD decomposes the precomposed é: "e + combining acute +
+        // combining macron". Under FormD the lexer produces the 3-rune
+        // form, so the set must contain that. Form-projection replaces
+        // the 2-rune entry with the 3-rune form.
+        string partiallyComposed = "é̄";              // é + macron
+        string fullyDecomposed = "é̄";               // e + acute + macron
+        var rule = OneOf(TokenSet.Runes(partiallyComposed));
+        rule.Compile(NormalizationForm.FormD);
+        Assert.That(rule.Parse(fullyDecomposed).Success, Is.True,
+            "input gets decomposed to the 3-rune form; set was projected to match");
+    }
+
+    [Test]
+    public void OneOf_with_WithCompatibilityEquivalents_matches_ligature_pieces_under_FormKC()
+    {
+        // OneOf("ﬁ").Compile(FormKC) throws by default. With explicit
+        // opt-in via WithCompatibilityEquivalents the entry expands to
+        // 'f' and 'i' as separate set members, so the rule matches each
+        // grapheme the lexer produces from input 'ﬁ' as "fi".
+        var set = TokenSet.Runes("ﬁ").WithCompatibilityEquivalents(NormalizationForm.FormKC);
+        var singleGraphemeRule = AllOf(OneOf(set), Eof());
+        singleGraphemeRule.Compile(NormalizationForm.FormKC);
+        Assert.That(singleGraphemeRule.Parse("f").Success, Is.True);
+        Assert.That(singleGraphemeRule.Parse("i").Success, Is.True);
+
+        // Input 'ﬁ' converts to two tokens ('f' then 'i'), so a
+        // structurally-larger rule that consumes both graphemes now matches.
+        var bothGraphemesRule = AllOf(OneOf(set), OneOf(set), Eof());
+        bothGraphemesRule.Compile(NormalizationForm.FormKC);
+        Assert.That(bothGraphemesRule.Parse("ﬁ").Success, Is.True,
+            "input 'ﬁ' converts to 'f' + 'i', both graphemes match");
+        Assert.That(bothGraphemesRule.Parse("fi").Success, Is.True,
+            "plain 'fi' input matches the same way");
+    }
+
+    [Test]
+    public void Identifier_form_aware_overload_compiles_under_FormKC()
+    {
+        // The form-aware overload pre-applies WithCompatibilityEquivalents
+        // to XidStart and XidContinue, so multi-grapheme compatibility
+        // conversions get expanded into their grapheme pieces (which
+        // are already in the category sets anyway). Compile under FormKC
+        // succeeds, and matching works on fullwidth / ligature input.
+        var rule = Identifier(NormalizationForm.FormKC);
+
+        Assert.DoesNotThrow(() => rule.Compile(NormalizationForm.FormKC));
+        Assert.That(rule.Parse("ﬁoo").Success, Is.True,
+            "input 'ﬁ' converts to 'f' + 'i' under FormKC; rule matches as 'fioo'");
+    }
+
+    // ============================================================
+    // Form-aware Compile: auto-conversion of grammar literals.
+    // Combining-mark reordering, Hangul jamo composition, and the
+    // canonical / compatibility singletons (Angstrom, Ohm, Kelvin,
+    // angle bracket, double-struck C). The Compile validation pass
+    // rewrites a literal that doesn't match its own normalized form
+    // so the grammar still matches lexer-normalized input.
+    // ============================================================
+
+    [Test]
+    public void Multiple_combining_marks_get_canonicalized_under_FormC()
+    {
+        // Vietnamese a-circumflex-dot-below (U+1EAD) decomposes to
+        // a + dot-below (ccc=220) + circumflex (ccc=230). The marks
+        // have different combining classes, so NFC reorders them
+        // when they appear in non-canonical order. Token(U+1EAD)
+        // matches input regardless of which order the author used,
+        // because NFC composes both orderings to the same
+        // precomposed character. (Same-class marks like acute +
+        // circumflex are NOT reordered and would NOT have this
+        // property.)
+        var precomposedRule = AllOf(Token(UnicodeExamples.VietnameseACircumflexDotBelowRune), Eof());
+
+        // Canonical order (ccc 220 then 230): NFC composes directly.
+        Assert.That(precomposedRule.Parse(UnicodeExamples.VietnameseACircumflexDotBelowCanonicalText).Success,
+            Is.True, "canonical order");
+
+        // Reversed order (ccc 230 then 220): NFC reorders by class
+        // first, then composes. Same result.
+        Assert.That(precomposedRule.Parse(UnicodeExamples.VietnameseACircumflexDotBelowReorderedText).Success,
+            Is.True, "NFC reorders different-class marks before composing");
+    }
+
+    [Test]
+    public void Compile_auto_converts_non_canonical_combining_mark_order_under_FormC()
+    {
+        // The flip side of the test above: a grammar literal that
+        // uses non-canonical mark order would silently never match
+        // any input under FormC, because every input gets canonicalized
+        // before the lexer sees it. The Compile validation pass
+        // catches this and throws so the author fixes the literal at
+        // grammar-build time instead of debugging silent match
+        // failures.
+        var rule = Token(UnicodeExamples.VietnameseACircumflexDotBelowReorderedText);
+
+        // Compile auto-converts the non-canonical mark order to canonical order.
+        Assert.DoesNotThrow(() => rule.Compile());
+        Assert.That(rule.Parse(UnicodeExamples.VietnameseACircumflexDotBelowCanonicalText).Success, Is.True);
+        Assert.That(rule.Parse(UnicodeExamples.VietnameseACircumflexDotBelowReorderedText).Success, Is.True);
+    }
+
+    [Test]
+    public void Hangul_precomposed_and_decomposed_match_same_grammar_under_FormC()
+    {
+        // Hangul "han" U+D55C precomposed. Canonical decomposition
+        // is U+1112 + U+1161 + U+11AB (three jamo). NFC composes the
+        // jamo back to U+D55C, so a grammar with Token(precomposed)
+        // matches both forms. UAX #15 has special-case rules for
+        // Hangul composition.
+        var rule = AllOf(Token(UnicodeExamples.HangulHanGrapheme), Eof());
+
+        var precomposed = rule.Parse(UnicodeExamples.HangulHanGrapheme);
+        var decomposed = rule.Parse(UnicodeExamples.HangulHanDecomposedText);
+
+        Assert.That(precomposed.Success, Is.True, "precomposed");
+        Assert.That(decomposed.Success, Is.True,
+            "NFC composes the three jamo back to U+D55C");
+    }
+
+    [Test]
+    public void Compile_auto_converts_decomposed_Hangul_jamo_under_FormC()
+    {
+        // The flip side of the test above: a grammar literal in
+        // decomposed-jamo form would silently never match any input
+        // under FormC, because every input gets canonicalized
+        // (composed back to U+D55C) before the lexer sees it. The
+        // Compile validation pass catches this.
+        var rule = Token(UnicodeExamples.HangulHanDecomposedText);
+
+        // Compile auto-converts the decomposed jamo to its precomposed form.
+        Assert.DoesNotThrow(() => rule.Compile());
+        Assert.That(rule.Parse(UnicodeExamples.HangulHanGrapheme).Success, Is.True);
+        Assert.That(rule.Parse(UnicodeExamples.HangulHanDecomposedText).Success, Is.True);
+    }
+
+    [Test]
+    public void Compile_auto_converts_canonical_singleton_Angstrom()
+    {
+        // U+212B ANGSTROM SIGN canonically decomposes to U+00C5 LATIN
+        // CAPITAL LETTER A WITH RING ABOVE. NFC rewrites the Angstrom
+        // form to U+00C5 before the lexer sees the input. So a grammar
+        // with Token("Å") under FormC would silently never match.
+        // The new compile-time validation pass catches this and tells
+        // the author to use U+00C5 instead.
+        var rule = Token(UnicodeExamples.AngstromGrapheme);
+        // Compile auto-converts U+212B to U+00C5 at Compile.
+        Assert.DoesNotThrow(() => rule.Compile());
+        Assert.That(rule.Parse(UnicodeExamples.AngstromGrapheme).Success, Is.True);
+        Assert.That(rule.Parse(UnicodeExamples.LatinCapitalAWithRingAboveGrapheme).Success, Is.True);
+
+        // Positive case: a grammar with the canonical replacement
+        // (U+00C5) compiles fine and matches input typed as the
+        // singleton (U+212B), because NFC converts U+212B to U+00C5
+        // before the lexer runs.
+        var goodRule = AllOf(Token(UnicodeExamples.LatinCapitalAWithRingAboveGrapheme), Eof());
+        Assert.That(goodRule.Parse(UnicodeExamples.AngstromGrapheme).Success, Is.True,
+            "U+00C5 grammar matches U+212B input under FormC");
+    }
+
+    [Test]
+    public void Compile_auto_converts_Angstrom_singleton_under_FormD()
+    {
+        // Under FormD the Angstrom decomposes to A + combining ring,
+        // and the literal text U+212B matches its own FormD only by
+        // accident. Actually NFD of U+212B is "Å" (A + ring),
+        // so the literal does NOT match its own FormD. Lock in the
+        // Compile-time error here.
+        var rule = Token(UnicodeExamples.AngstromGrapheme);
+        // Compile auto-converts U+212B to its NFD form ("A" + combining ring).
+        Assert.DoesNotThrow(() => rule.Compile(NormalizationForm.FormD));
+        Assert.That(rule.Parse(UnicodeExamples.AngstromGrapheme).Success, Is.True);
+
+        // Positive case: a grammar with the FormD decomposed form
+        // ("A" + combining ring) compiles fine and matches input
+        // typed as the Angstrom singleton, because NFD decomposes
+        // U+212B to that exact two-rune sequence.
+        var goodRule = AllOf(Token(UnicodeExamples.LatinAWithRingAboveDecomposedText), Eof());
+        goodRule.Compile(NormalizationForm.FormD);
+        Assert.That(goodRule.Parse(UnicodeExamples.AngstromGrapheme).Success, Is.True,
+            "decomposed grammar matches U+212B input under FormD");
+    }
+
+    [Test]
+    public void Compile_auto_converts_canonical_singleton_Ohm_under_FormC()
+    {
+        // U+2126 OHM SIGN is a canonical singleton: it canonically
+        // decomposes to U+03A9 GREEK CAPITAL LETTER OMEGA. NFC
+        // rewrites U+2126 to U+03A9. A grammar with the Ohm form
+        // would silently never match.
+        var rule = Token(UnicodeExamples.OhmGrapheme);
+        // Compile auto-converts U+2126 to U+03A9 at Compile.
+        Assert.DoesNotThrow(() => rule.Compile());
+        Assert.That(rule.Parse(UnicodeExamples.OhmGrapheme).Success, Is.True);
+        Assert.That(rule.Parse(UnicodeExamples.GreekCapitalOmegaGrapheme).Success, Is.True);
+
+        // Positive case: a grammar with U+03A9 (Greek capital Omega)
+        // matches input typed as the Ohm singleton (U+2126), because
+        // NFC converts U+2126 to U+03A9 before the lexer runs.
+        var goodRule = AllOf(Token(UnicodeExamples.GreekCapitalOmegaGrapheme), Eof());
+        Assert.That(goodRule.Parse(UnicodeExamples.OhmGrapheme).Success, Is.True,
+            "U+03A9 grammar matches U+2126 input under FormC");
+    }
+
+    [Test]
+    public void Compile_auto_converts_canonical_singleton_Kelvin_under_FormC()
+    {
+        // U+212A KELVIN SIGN is a canonical singleton: it canonically
+        // decomposes to plain U+004B LATIN CAPITAL LETTER K. NFC
+        // rewrites U+212A to U+004B. The third member of the
+        // Angstrom / Ohm / Kelvin trio.
+        var rule = Token(UnicodeExamples.KelvinGrapheme);
+        // Compile auto-converts U+212A to U+004B at Compile.
+        Assert.DoesNotThrow(() => rule.Compile());
+        Assert.That(rule.Parse(UnicodeExamples.KelvinGrapheme).Success, Is.True);
+        Assert.That(rule.Parse(UnicodeExamples.AsciiCapitalKGrapheme).Success, Is.True);
+
+        // Positive case: a grammar with ASCII 'K' (U+004B) matches
+        // input typed as the Kelvin singleton (U+212A), because NFC
+        // converts U+212A to U+004B before the lexer runs.
+        var goodRule = AllOf(Token(UnicodeExamples.AsciiCapitalKGrapheme), Eof());
+        Assert.That(goodRule.Parse(UnicodeExamples.KelvinGrapheme).Success, Is.True,
+            "ASCII K grammar matches U+212A input under FormC");
+    }
+
+    [Test]
+    public void Compile_auto_converts_canonical_singleton_angle_bracket_under_FormC()
+    {
+        // U+2329 LEFT-POINTING ANGLE BRACKET is a canonical singleton:
+        // canonically decomposes to U+3008 LEFT ANGLE BRACKET (the
+        // CJK angle bracket). NFC rewrites U+2329 to U+3008. The
+        // less-famous canonical singleton; not a Latin/Greek
+        // duplicate but the same mechanism.
+        var rule = Token(UnicodeExamples.LeftPointingAngleBracketGrapheme);
+        // Compile auto-converts U+2329 to U+3008 at Compile.
+        Assert.DoesNotThrow(() => rule.Compile());
+        Assert.That(rule.Parse(UnicodeExamples.LeftPointingAngleBracketGrapheme).Success, Is.True);
+        Assert.That(rule.Parse(UnicodeExamples.CjkLeftAngleBracketGrapheme).Success, Is.True);
+
+        // Positive case: a grammar with U+3008 (CJK angle bracket)
+        // matches input typed as U+2329, because NFC converts U+2329
+        // to U+3008 before the lexer runs.
+        var goodRule = AllOf(Token(UnicodeExamples.CjkLeftAngleBracketGrapheme), Eof());
+        Assert.That(goodRule.Parse(UnicodeExamples.LeftPointingAngleBracketGrapheme).Success, Is.True,
+            "U+3008 grammar matches U+2329 input under FormC");
+    }
+
+    [Test]
+    public void Compile_accepts_compatibility_singleton_under_FormC()
+    {
+        // U+2102 DOUBLE-STRUCK CAPITAL C is a compatibility singleton:
+        // its compatibility decomposition is U+0043 plain C, but its
+        // canonical decomposition is itself. FormC only does canonical
+        // decompositions, so U+2102 passes through NFC unchanged.
+        // The grammar literal in the source character matches its own
+        // FormC, so Compile validation accepts it.
+        var rule = Token(UnicodeExamples.DoubleStruckCGrapheme);
+
+        Assert.DoesNotThrow(() => rule.Compile());
+    }
+
+    [Test]
+    public void Compile_auto_converts_compatibility_singleton_under_FormKC()
+    {
+        // Same character (U+2102 DOUBLE-STRUCK CAPITAL C). Under
+        // FormKC, NFKC also applies compatibility decompositions,
+        // so U+2102 normalizes to U+0043 plain C. A grammar literal
+        // in the source character would silently never match. The
+        // Compile validation pass catches this exactly the same way
+        // it catches canonical singletons under FormC.
+        var rule = Token(UnicodeExamples.DoubleStruckCGrapheme);
+        // Compile auto-converts U+2102 to U+0043 (the NFKC conversion) at Compile.
+        Assert.DoesNotThrow(() => rule.Compile(NormalizationForm.FormKC));
+        Assert.That(rule.Parse(UnicodeExamples.DoubleStruckCGrapheme).Success, Is.True);
+
+        // Positive case: a grammar with ASCII 'C' (U+0043) compiled
+        // for FormKC matches input typed as the double-struck C
+        // singleton (U+2102), because NFKC converts U+2102 to U+0043
+        // before the lexer runs. This is the matching-by-meaning
+        // path: the author opts into FormKC to treat presentation
+        // variants as equivalent to their plain forms.
+        var goodRule = AllOf(Token(UnicodeExamples.AsciiCapitalCGrapheme), Eof());
+        goodRule.Compile(NormalizationForm.FormKC);
+        Assert.That(goodRule.Parse(UnicodeExamples.DoubleStruckCGrapheme).Success, Is.True,
+            "ASCII C grammar matches U+2102 input under FormKC");
     }
 }

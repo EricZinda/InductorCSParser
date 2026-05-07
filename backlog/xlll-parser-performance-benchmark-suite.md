@@ -1,4 +1,5 @@
-- Parser performance benchmark suite
+# Parser performance benchmark suite
+
     - Current state: no perf tests anywhere. src/InductorParser.Tests/ is NUnit functional tests only. We don't know where InductorParser stands against other C# parsers, we have no way to detect future perf regressions, and we can't make credible performance claims.
     - Recommended path: fork Parlot's BenchmarkDotNet suite at https://github.com/sebastienros/parlot/tree/main/test/Parlot.Benchmarks (MIT-licensed). Its JsonBench.cs already compares Parlot compiled, Parlot non-compiled, Pidgin, Sprache, Superpower, Newtonsoft.Json, and System.Text.Json across four generated JSON shapes: Big (4x4x3 balanced), Long (256x1x1 wide-at-root), Deep (1x256x1 nested), Wide (1x1x256 many properties). Inputs are generated in GlobalSetup(), no files to check in.
     - Additions beyond the fork: adapters for InductorParser and Pegasus (https://github.com/otac0n/Pegasus, the only other PEG parser generator in the C# ecosystem). Pegasus is important because without it the benchmark answers "how do we compare to parser combinators" but not "is our PEG competitive." Final table has nine parsers: two hand-written baselines, five combinator rows, two PEG generators.

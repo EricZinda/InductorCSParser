@@ -32,7 +32,7 @@ namespace InductorParser;
 // from Compile's custom-range assignment.
 internal sealed class GraphemeRule : Rule
 {
-    private readonly string _expected;
+    private string _expected;
 
     public GraphemeRule(string expectedToken) : base(FlattenType.Delete)
     {
@@ -59,9 +59,45 @@ internal sealed class GraphemeRule : Rule
             SetIdInternal(new SymbolId(runeValue));
     }
 
-    // Accessor for the state-machine evaluator's lowering pass and the
-    // prefilter analyzer (ExperimentalSrc/InductorParser.Prefilter/GraphemeRule.cs).
-    internal string LoweringExpected => _expected;
+    internal override string? ExpectedText => _expected;
+
+    internal override void CollectNormalizationOffenders(
+        System.Text.NormalizationForm form,
+        List<(Rule rule, string original, string normalized)> offenders,
+        List<ArgumentException> failures)
+    {
+        // See Rule.CollectNormalizationOffenders for the contract.
+        // Token-specific: a multi-grapheme conversion (Token("ﬁ") under
+        // FormKC, where NFKC = "fi" is two graphemes) is reported as an
+        // offender, since Token matches exactly one grapheme by
+        // definition. Single-grapheme conversions update _expected and
+        // re-id (e.g., U+2126 -> U+03A9 changes the rune).
+        string? normalized = TryConvertToForm(this, _expected, form, offenders, failures);
+        if (normalized == null) return;
+        if (string.Equals(normalized, _expected, StringComparison.Ordinal)) return;
+
+        if (CountGraphemes(normalized) > 1)
+        {
+            offenders.Add((this, _expected,
+                $"<Token converts to multi-grapheme sequence \"{normalized}\" under {form}. " +
+                $"Token matches exactly one grapheme. Use Literal(\"{normalized}\") or " +
+                $"AllOf(Token-per-grapheme) instead.>"));
+            return;
+        }
+
+        _expected = normalized;
+        if (TrySingleRuneValue(_expected, out int runeValue))
+            SetIdInternal(new SymbolId(runeValue));
+    }
+
+    private static int CountGraphemes(string text)
+    {
+        if (text.Length == 0) return 0;
+        var enumerator = StringInfo.GetTextElementEnumerator(text);
+        int count = 0;
+        while (enumerator.MoveNext()) count++;
+        return count;
+    }
 
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {

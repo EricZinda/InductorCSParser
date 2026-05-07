@@ -16,9 +16,7 @@ namespace InductorParser;
 // for the longer explanation.
 internal sealed class LiteralIgnoreAsciiCaseRule : Rule
 {
-    private readonly string _expected;
-
-    internal string Expected => _expected;
+    private string _expected;
 
     public LiteralIgnoreAsciiCaseRule(string expected) : base(FlattenType.Delete)
     {
@@ -30,9 +28,21 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
         SetTraceName("LiteralIgnoreAsciiCase");
     }
 
-    // Accessor for the state-machine evaluator's lowering pass and the
-    // prefilter analyzer (ExperimentalSrc/InductorParser.Prefilter/LiteralIgnoreAsciiCaseRule.cs).
-    internal string LoweringExpected => _expected;
+    internal override string? ExpectedText => _expected;
+
+    internal override void CollectNormalizationOffenders(
+        System.Text.NormalizationForm form,
+        List<(Rule rule, string original, string normalized)> offenders,
+        List<ArgumentException> failures)
+    {
+        // See Rule.CollectNormalizationOffenders for the contract.
+        // Same shape as LiteralRule: replace _expected with the
+        // converted form.
+        string? normalized = TryConvertToForm(this, _expected, form, offenders, failures);
+        if (normalized == null) return;
+        if (string.Equals(normalized, _expected, StringComparison.Ordinal)) return;
+        _expected = normalized;
+    }
 
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {

@@ -1,4 +1,4 @@
-# Unicode Edge Cases
+# Unicode in the Inductor Parser
 When you build grammars in the Inductor Parser you don't need to worry about the encoding complexities of Unicode, you build rules around the characters you care about and the engine ensures that:
 
 1) The text stream is normalized into a form that is canonical. Invalid Unicode throws.
@@ -121,7 +121,33 @@ Korean characters are composable and decomposable just like `á` can be `á` (`U
 
 But Korean also has 2 *more* ways to write a character that is "equivalent", but not exactly the same. They exist for historical reasons and should normally be ignored: ["Note that (c) and (d) are present for compatibility with legacy code pages, and are not required for the representation of Korean."](https://www.unicode.org/faq/korean.html).  If you *do* want them, however, you can use `FormKC` when you compile. Which has other implications described above.
 
-Now lets look at how the grammar will behave on malformed Unicode input.
+## Error Index
+
+When a rule fails (or when you walk the parse tree on success) the parser tells you where in the *original input* things happened. 
+
+"Where" can mean two different things, because tokens are what the user sees as characters but the input is a .NET `string` of UTF-16 chars. The parser reports both. For plain ASCII the two are the same. Once the input contains a 2-char letter like `𠮷`, which is one character to a reader but two .NET `chars` or a 3-char letter like Devanagari `क्ष`, they aren't.
+
+```csharp
+var result = list.Parse("[top] 𠮷田 broke\nBAD");
+// First line parses. Second line should start with '[' but starts with 'B'.
+// ErrorCharIndex  = 16
+// ErrorTokenIndex = 15
+// (𠮷 is one token but two chars, so the indices differ from there on)
+```
+
+Every Symbol in a successful parse exposes the same pair through `SourceRange`:
+
+```csharp
+var result = list.Parse("[top] 𠮷田 fix\n");
+var range = result.Tree!.Find(itemText)!.SourceRange!.Value;
+// Width of the matched item text:
+//   range.End.CharIndex  - range.Start.CharIndex  == 7  // 𠮷 contributes 2 chars
+//   range.End.TokenIndex - range.Start.TokenIndex == 6  // 𠮷 contributes 1 token
+```
+
+Use whichever unit matches what your consumer counts in. Chars for `string.Substring` or an editor diagnostic. Tokens for a `^^^` underline a reader will scan with their eyes.
+
+Now lets look at how the grammar will behave on what might be unexpected Unicode input.
 
 ## Unexpected Unicode
 There are very few ways to write a truly "illegal" Unicode document. The parser actually throws an exception during normalization for those cases. However, there are many ways the text could be "unexpected", especially for someone new to Unicode. The parser is designed to keep grammars understandable and avoid pitfalls with those.
@@ -158,14 +184,4 @@ Just like ill-formed tokens above, the only way you can match these is by puttin
 - Replacement: a single character, `U+FFFD` (often shown as � or a question mark in a box), inserted by .NET decoders for bytes that weren't valid in the source encoding. Its presence means an upstream decoder swallowed something. The parser exposes `TokenSet.Replacement` to detect or reject these.
 
 ## Security-related Concerns
-Unicode opens up a few classic ways to attack a parser. The good news is that grammars written naturally already block most of them. The one to be aware of is whether your rule defines what's *allowed* (your rule must match for input to be accepted) or what's *blocked* (your rule must match for input to be rejected). The default behavior is right for "allowed" rules. For "blocked" rules, you sometimes need to do a little extra work.
-
-- Trojan Source: an attacker hides a bidi-direction character (like `U+202E`) in input so an editor renders the text in one order while the parser sees a different one. The same source code can look like one thing to a reviewer and mean another to a compiler. Your grammar isn't fooled because the parser doesn't reorder anything based on bidi controls. It just sees the raw character sequence in the input, in the actual logical order the attacker submitted. The visual rearrangement an editor would have shown to a human reviewer doesn't exist as far as the grammar is concerned.
-
-- Lookalike characters: some characters look almost identical to common letters but are different code points. `𝐀` (math-bold A), `Ａ` (fullwidth A), and hundreds of others all look like A but aren't. An attacker writes `ｓｅｌｅｃｔ` to slip past a SQL filter, or `𝐚dmin` to register an account that looks like admin. For "allowed" rules, the default `FormC` is good because the lookalike doesn't match. For "blocked" rules, compile with `FormKC` instead. It turns lookalikes into plain letters before the rule runs.
-
-- Invisible characters: zero-width spaces, soft hyphens, BOMs, and similar characters don't render but still take up a position in the text. An attacker writes `ki<ZWS>ll` to slip a banned word past a profanity filter, or registers a name that displays as `admin` but compares as different. For "allowed" rules, the default is good — the invisibles don't match. For "blocked" rules, no normalization form strips invisibles, so you have to filter them out yourself before parsing.
-
-- Homoglyphs (the one the parser does NOT defend against by default): Latin `a` (`U+0061`) and Cyrillic `а` (`U+0430`) look identical but are different code points from different scripts. Greek `α` and several other scripts do the same for various letters. Anywhere your grammar accepts letters from arbitrary scripts (`Identifier()`, `OneOf(TokenSet.Letters)`, or any other rule that takes a broad letter set) an attacker can mix scripts to make text that looks legitimate but compares as different. The fix: restrict your grammar to one script's letters, use `TokenSet.Ascii.Letters` for ASCII-only, or build a custom set covering the script(s) you actually want to support.
-
-For each of these, there's a focused test in `SecurityByDefaultTests.cs` showing the attack and how the parser handles it.
+Unicode opens up a few classic ways to attack a parser, see [primer 4](Primer4.md) for a walkthrough.

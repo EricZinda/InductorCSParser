@@ -297,4 +297,68 @@ public class WithinTokenRuleTests
         Assert.That(result.ErrorMessage,
             Is.EqualTo("Parse failed at offset 0: unexpected '" + LatinEAcuteGrapheme + "'."));
     }
+
+    [Test]
+    public void Named_rule_is_findable_in_tree_for_single_rune_match()
+    {
+        // A WithinToken rule named via .As("...") emits a leaf whose
+        // Id is the rule's own Id, regardless of the matched grapheme's
+        // rune count. Tree.Find(rule) and Tree.Is(rule) walk the tree
+        // comparing Symbol.Id against rule.Id, so the named rule is
+        // findable by reference for both single-rune and multi-rune
+        // matches.
+        var character = WithinToken(OneOf(TokenSet.Ascii.Letters)).As("character");
+
+        var asciiResult = character.Parse("a");
+        Assert.That(asciiResult.Success, Is.True);
+        Assert.That(asciiResult.Tree!.Is(character), Is.True,
+            "single-rune match: leaf should carry the rule's Id so Tree.Is(rule) succeeds");
+        Assert.That(asciiResult.Tree!.Find(character), Is.Not.Null,
+            "single-rune match: Tree.Find(rule) should locate the leaf");
+    }
+
+    [Test]
+    public void Named_rule_is_findable_for_both_single_and_multi_rune_inputs_consistently()
+    {
+        // Same rule, different inputs. The leaf carries the rule's own
+        // Id regardless of whether the matched grapheme is one rune
+        // (ASCII "a") or several (Devanagari "हि"), so Find resolves
+        // the same way in both cases.
+        var character = WithinToken(FirstOf(
+            AllOf(OneOf(TokenSet.XidStart), OneOf(TokenSet.XidContinue)),
+            OneOf(TokenSet.Ascii.Letters))).As("character");
+
+        var devResult = character.Parse("हि");
+        Assert.That(devResult.Success, Is.True);
+        Assert.That(devResult.Tree!.Id, Is.EqualTo(character.Id));
+        Assert.That(devResult.Tree!.Find(character), Is.Not.Null);
+
+        var asciiResult = character.Parse("a");
+        Assert.That(asciiResult.Success, Is.True);
+        Assert.That(asciiResult.Tree!.Id, Is.EqualTo(character.Id));
+        Assert.That(asciiResult.Tree!.Find(character), Is.Not.Null);
+    }
+
+    [Test]
+    public void WithinToken_with_multi_rune_match_uses_rule_id_regardless_of_naming()
+    {
+        // For a multi-rune outer token (Token.RuneValue == -1), the leaf
+        // carries the rule's own Id regardless of naming. Locks the
+        // multi-rune branch so Find resolves through rule.Id for unnamed
+        // rules too.
+        var unnamedRule = WithinToken(AllOf(OneOf(TokenSet.XidStart), OneOf(TokenSet.XidContinue)));
+        var unnamedResult = unnamedRule.Parse("हि");
+        Assert.That(unnamedResult.Success, Is.True);
+        Assert.That(unnamedResult.Tree!.Id, Is.EqualTo(unnamedRule.Id));
+        Assert.That(unnamedResult.Tree!.Find(unnamedRule), Is.Not.Null);
+        Assert.That(unnamedRule.NameOf(unnamedResult.Tree!.Id), Is.EqualTo("WithinToken"));
+
+        var namedRule = WithinToken(AllOf(OneOf(TokenSet.XidStart), OneOf(TokenSet.XidContinue)))
+            .As("character");
+        var namedResult = namedRule.Parse("हि");
+        Assert.That(namedResult.Success, Is.True);
+        Assert.That(namedResult.Tree!.Id, Is.EqualTo(namedRule.Id));
+        Assert.That(namedResult.Tree!.Find(namedRule), Is.Not.Null);
+        Assert.That(namedRule.NameOf(namedResult.Tree!.Id), Is.EqualTo("character"));
+    }
 }

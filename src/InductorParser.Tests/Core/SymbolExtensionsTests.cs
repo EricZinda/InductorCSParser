@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
@@ -69,5 +70,47 @@ public class SymbolExtensionsTests
             "    'd'\n";
 
         Assert.That(result.Tree!.PrintTree(pair), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void PrintTree_renders_named_single_rune_Token_with_user_supplied_name()
+    {
+        // A named single-rune Token has a leaf whose Id is in the
+        // character range (0..0x10FFFF) but whose user-supplied name
+        // differs from the rune's own text. PrintTree uses the long
+        // `<name>: "<text>"` form for character leaves whose NameOf
+        // returns something other than the rune text.
+        var aChar = Token('a').As("aChar").Preserve();
+        var result = aChar.Parse("a");
+        Assert.That(result.Success, Is.True);
+
+        Assert.That(result.Tree!.PrintTree(aChar), Is.EqualTo("aChar: \"a\"\n"));
+    }
+
+    [Test]
+    public void PrintTree_unnamed_single_rune_Token_keeps_compact_rune_form()
+    {
+        // The compact `'c'` form is the right shape for unnamed single-
+        // rune Tokens: the leaf's name and matched text are both the rune
+        // itself, so a separate `c: "c"` would be redundant.
+        var rule = Token('a').Preserve();
+        var result = rule.Parse("a");
+        Assert.That(result.Success, Is.True);
+
+        Assert.That(result.Tree!.PrintTree(rule), Is.EqualTo("'a'\n"));
+    }
+
+    [Test]
+    public void PrintTree_renders_invalid_scalar_id_as_U_FFFD()
+    {
+        // A leaf whose Id lands in the character range numerically but
+        // isn't a valid Unicode scalar (a surrogate half in 0xD800..
+        // 0xDFFF) renders as the Unicode replacement character. Locks
+        // the fallback against drift to a different placeholder.
+        var rule = Token('a').Preserve();
+        rule.Compile();
+        var staleLeaf = new Symbol(new SymbolId(0xD800), FlattenType.Preserve, "a".AsMemory());
+
+        Assert.That(staleLeaf.PrintTree(rule), Is.EqualTo("'�'\n"));
     }
 }

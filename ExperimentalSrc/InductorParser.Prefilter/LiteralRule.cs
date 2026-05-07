@@ -8,8 +8,8 @@ namespace InductorParser.Prefilter;
 internal static class LiteralRulePrefilter
 {
     internal static (string Text, bool IgnoreCase)? ComputeRequiredLiteral(LiteralRule rule) =>
-        (rule.Expected, false);
+        (rule.ExpectedText!, false);
 
     internal static (string Text, bool IgnoreCase)? ComputeConcatenableText(LiteralRule rule) =>
-        (rule.Expected, false);
+        (rule.ExpectedText!, false);
 }

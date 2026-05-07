@@ -14,9 +14,10 @@ public static class SymbolExtensions
     // its own line, indented two spaces per level. Character-leaf nodes
     // (ids in the Unicode scalar range) render as `'c'` because their
     // name and matched text are the same character and a separate
-    // `c: "c"` form would just be noise. Every other node renders as
-    // `<name>: "<text>"` where text is the concatenated matched input
-    // under that subtree.
+    // `c: "c"` form would just be noise. A character leaf whose rule
+    // was named via .As("...") falls through to the long
+    // `<name>: "<text>"` form so the user-supplied name is visible.
+    // Every non-character node renders in the long form regardless.
     //
     // Intended for grammar debugging on small inputs. The root's quoted
     // text is the entire matched input, so don't point this at a 100 MB
@@ -35,11 +36,28 @@ public static class SymbolExtensions
         int idValue = symbol.Id.Value;
         if (idValue >= 0 && idValue < SymbolRanges.CharacterRangeEnd)
         {
-            // Character leaf: id is the code point. Name and text are the
-            // same single character, so render as `'c'` rather than
-            // `c: "c"`. NameOf handles surrogate-half validation for us.
+            // Character leaf: id is the code point. NameOf returns either
+            // the user-supplied .As("...") name (when set) or the rune's
+            // own text (the default for unnamed character rules). When the
+            // returned name matches the rune text, the leaf is unnamed and
+            // we use the compact `'c'` form. Otherwise the user named it,
+            // so we fall through to the long form so the name is visible
+            // alongside the matched text.
             string? charName = rule.NameOf(symbol.Id);
-            builder.Append('\'').Append(charName ?? "?").Append('\'');
+            // Invalid scalar values (surrogate halves in the 0xD800..0xDFFF
+            // gap) aren't representable as a Rune. Render them as U+FFFD
+            // REPLACEMENT CHARACTER, the Unicode-designated marker for
+            // "this code point can't be encoded." Same character .NET's
+            // decoders use for ill-formed input.
+            string runeText = Rune.IsValid(idValue) ? new Rune(idValue).ToString() : "�";
+            if (charName != null && charName != runeText)
+            {
+                builder.Append(charName).Append(": \"").Append(symbol.ToString()).Append('"');
+            }
+            else
+            {
+                builder.Append('\'').Append(charName ?? "�").Append('\'');
+            }
         }
         else
         {
