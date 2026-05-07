@@ -116,7 +116,28 @@ public class ScanWhileRuleTests
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
 
-    // Multi-rune grapheme support -------------------------------------------
+    [Test]
+    public void ScanWhile_with_pinned_SymbolId_uses_pinned_id_for_run_leaf()
+    {
+        // Sibling of the OneOf / NoneOf / AnyToken / WithinToken pinned-
+        // SymbolId tests added in p1nd. ScanWhile emits one leaf per
+        // matched run with the rule's Id directly (no rune-as-leaf-id
+        // shortcut, since a run of multiple tokens doesn't have one
+        // distinguished rune to carry). .As(SymbolId) writes the user's
+        // pinned value into Id, so the leaf carries it by construction.
+        // Test locks in the matrix so a future leaf-id refactor that
+        // routes ScanWhile through ResolveLeafId or a similar helper has
+        // to keep .As(SymbolId) honored.
+        var pinnedId = new SymbolId(SymbolRanges.CustomRangeStart + 104);
+        var rule = ScanWhile(TokenSet.Ascii.Letters).As(pinnedId);
+        var result = rule.Parse("abc");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.Id, Is.EqualTo(pinnedId),
+            "leaf carries the user-pinned SymbolId");
+        Assert.That(result.Tree!.Is(rule), Is.True);
+        Assert.That(result.Tree!.Find(rule), Is.Not.Null);
+    }
 
     [Test]
     public void ScanWhile_with_multi_rune_set_consumes_a_run_of_graphemes()
@@ -129,6 +150,23 @@ public class ScanWhileRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo(USFlagGrapheme + WomanShruggingGrapheme));
+    }
+
+    [Test]
+    public void ScanWhile_with_precomposed_set_entry_matches_decomposed_input_under_FormD()
+    {
+        // Set: precomposed U+00E9. Under FormD the lexer feeds the rule
+        // "e + combining acute" as one two-rune cluster. Without compile-
+        // time set projection, the rune-only set has only U+00E9 and the
+        // cluster fails the rune-fast-path's tokenLength == runeLen check.
+        // OneOf with the same set / same input matches, so the asymmetry
+        // is the bug.
+        var rule = ScanWhile(TokenSet.Runes(LatinEAcutePrecomposedGrapheme));
+        rule.Compile(System.Text.NormalizationForm.FormD);
+
+        var result = rule.Parse(LatinEAcutePrecomposedGrapheme);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 
     [Test]
@@ -146,5 +184,35 @@ public class ScanWhileRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("abc" + USFlagGrapheme + "d"));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_ScanWhile_skips_when_peek_is_outside_set()
+    {
+        // ScanWhile(set) publishes (set, Always, MustBeIn). minimumCount
+        // is at least 1 so a successful match always consumes at least
+        // one token. Peek '1' isn't in {a..z}, so the shortcut skips
+        // ScanWhile and the literal "1" branch wins.
+        var sink = NewSink();
+        var rule = Or(ScanWhile(TokenSet.Ascii.Letters), Literal("1"));
+        var result = rule.Parse("1", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Contain("SKIP | ScanWhile:"));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_ScanWhile_runs_when_peek_is_in_set()
+    {
+        // Peek 'a' is in {a..z}, so the shortcut doesn't skip and
+        // ScanWhile runs.
+        var sink = NewSink();
+        var rule = Or(ScanWhile(TokenSet.Ascii.Letters), Literal("1"));
+        var result = rule.Parse("abc", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | ScanWhile:"));
     }
 }

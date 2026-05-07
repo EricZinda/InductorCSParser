@@ -72,12 +72,10 @@ internal sealed class BetweenInclusiveRule : Rule
         // to claim.
         if (!lexer.PreserveAllSymbols && !Inner.HasErrorMessageInSubtree)
         {
-            string input = lexer.Input;
-            int pos = lexer.Position;
-            if (pos < input.Length
-                && Lexer.TryPeekRune(input, pos, out int peekValue, out _)
-                && Inner.CannotMatchLookahead(peekValue))
+            var peekToken = lexer.PeekToken();
+            if (Inner.CannotMatchLookahead(peekToken.Chars, peekToken.FirstRune))
             {
+                Inner.TraceShortcutSkip(lexer, peekToken.Chars);
                 if (AtLeast == 0)
                 {
                     TraceSuccess(lexer, $"count= 0");
@@ -158,7 +156,13 @@ internal sealed class BetweenInclusiveRule : Rule
             Rule alternative = alternatives[index];
             if (alternative.ErrorMessage != null || alternative.Advance != Advance.Always)
                 return null;
-            candidates |= alternative.FirstConsumedTokens;
+            // AdvanceUntilRuneIn requires a rune-only candidate set
+            // (multi-rune entries are silently invisible to its
+            // IndexOfAny / Contains paths). Flatten via the
+            // TokenSet.LookaheadFirstRunes view so each multi-rune
+            // entry's first rune still pulls the scanner to a real
+            // candidate position.
+            candidates |= alternative.FirstConsumedTokens.LookaheadFirstRunes;
 
             // Optional stronger prefilter: if the real alternatives are all
             // literals, the scanner can skip false first-rune hits too. This
@@ -261,26 +265,16 @@ internal sealed class BetweenInclusiveRule : Rule
         }
     }
 
-    // Return the set of runes this rule might consume first (can be a superset)
-    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
-    // Then say whether the rule Always / Sometimes / Never consumes at least
-    // that first rune on success.
     internal override RuleStartRequirements ComputeRuleStart()
     {
-        // We need to return *all* runes that *might* be consumed as the first rune.
-        // Then, we need to say if the first rune will Always/Sometimes/Never be consumed.
-        //
-        // For BetweenInclusive:
-        // The set of runes is defined by Inner, so we just return those.
-        // Inner defines whether the initial token is Always/Sometimes/Never consumed so we use that
-        // *except* if atLeast is zero, because then we can
-        // succeed and not advance. In that case, we're *at best* sometimes, but it depends on what inner
-        // does. If they're Never, we'll never advance. If they're Sometimes, we're sometimes.
-        Advance advance;
-        if (AtLeast == 0)
-            advance = Inner.Advance == Advance.Never ? Advance.Never : Advance.Sometimes;
-        else
-            advance = Inner.Advance;
-        return new RuleStartRequirements(Inner.FirstConsumedTokens, advance);
+        // Inner defines the first-token set. Advance follows Inner's,
+        // except AtLeast == 0 (Optional / ZeroOrMore) lets us succeed
+        // without advancing, downgrading Inner.Always to Sometimes. An
+        // Inner.Never stays Never since zero matches plus a non-
+        // advancing inner still consumes nothing.
+        Advance advance = AtLeast == 0
+            ? (Inner.Advance == Advance.Never ? Advance.Never : Advance.Sometimes)
+            : Inner.Advance;
+        return RuleStartRequirements.PassesThroughTo(Inner).WithAdvance(advance);
     }
 }

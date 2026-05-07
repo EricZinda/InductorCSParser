@@ -458,7 +458,16 @@ internal sealed class LoweringContext
             int altStart = pushIdx;
             if (skipEligible)
             {
-                int tokenSetIdx = InternTokenSet(child.FirstConsumedTokens);
+                // The SM's CheckPeekedRuneInSet test is rune-only
+                // (machine.PeekedRune is one rune). Flatten multi-rune
+                // entries' first runes into the rune intervals so a
+                // peek of the cluster's first rune still passes the
+                // check when the rule matches a multi-rune cluster.
+                // The recursive engine's CannotMatchLookahead does the
+                // same thing implicitly via its first-rune-or-cluster
+                // membership test.
+                TokenSet smSet = child.FirstConsumedTokens.LookaheadFirstRunes;
+                int tokenSetIdx = InternTokenSet(smSet);
                 altStart = AddState(LoweredOpCode.CheckPeekedRuneInSet, tokenSetIdx, pushIdx, nextAltStartWithoutPop);
             }
 
@@ -527,12 +536,23 @@ internal sealed class LoweringContext
     // as OrRule's runtime guard.
     private static bool CanSkipUnreachableAlt(Rule child)
     {
+        if (Rule.DisableLookaheadShortcut) return false;
         if (child.Advance != Advance.Always) return false;
         if (child.HasErrorMessageInSubtree) return false;
         // FirstConsumedTokens equality with Universe means the set
         // accepts any rune, so the peek check would never skip. Avoid
         // the wasted state.
         if (child.FirstConsumedTokens.Equals(TokenSet.Universe)) return false;
+        // MustNotBeIn polarity inverts the membership test: peek IN
+        // set => rule definitely fails. The SM's CheckPeekedRuneInSet
+        // opcode tests the positive direction (peek IN set => alt is
+        // eligible), so a MustNotBeIn alt would be lowered with
+        // inverted semantics. Until the SM gets polarity-aware opcodes
+        // (CheckPeekedRuneNotInSet etc.), let MustNotBeIn alts go
+        // through the general PushBacktrack path so they get tried
+        // without the peek pre-check. See backlog for the SM
+        // polarity-aware dispatch follow-up.
+        if (child.Polarity == Polarity.MustNotBeIn) return false;
         return true;
     }
 
@@ -554,6 +574,19 @@ internal sealed class LoweringContext
         for (int rune = 0; rune < 128; rune++)
             table[rune] = onFailure;
 
+        // Pre-flatten each skip-eligible child's FirstConsumedTokens
+        // into a rune-only set for the ASCII jump table. The flattening
+        // mirrors what CheckPeekedRuneInSet uses (multi-rune entries'
+        // first runes folded into the rune intervals) so a multi-rune
+        // cluster whose first rune lands in the ASCII range still
+        // jumps to the right alt.
+        var flattenedSets = new TokenSet[altRecords.Count];
+        for (int i = 0; i < altRecords.Count; i++)
+        {
+            flattenedSets[i] = altRecords[i].skipEligible
+                ? altRecords[i].child.FirstConsumedTokens.LookaheadFirstRunes
+                : default;
+        }
         // altRecords is reverse-priority. Walk forward through indices
         // count-1 down to 0 so we visit alts in priority order.
         for (int rune = 0; rune < 128; rune++)
@@ -563,7 +596,7 @@ internal sealed class LoweringContext
                 var record = altRecords[recordIndex];
                 if (record.skipEligible)
                 {
-                    if (record.child.FirstConsumedTokens.Contains(rune))
+                    if (flattenedSets[recordIndex].Contains(rune))
                     {
                         table[rune] = record.pushIdx;
                         break;
@@ -821,7 +854,13 @@ internal sealed class LoweringContext
             Rule alternative = orRule.Children[index];
             if (alternative.ErrorMessage != null || alternative.Advance != Advance.Always)
                 return false;
-            candidates |= alternative.FirstConsumedTokens;
+            // Flatten multi-rune entries' first runes into the rune
+            // intervals so AdvanceUntilRuneIn (rune-only) and the
+            // BMP IndexOfAny fast path still pull the scanner to
+            // candidate positions for multi-rune-cluster matches.
+            // See the recursive engine's TryCreateScannerSkip for the
+            // sibling shape.
+            candidates |= alternative.FirstConsumedTokens.LookaheadFirstRunes;
 
             if (allCandidatesAreLiterals
                 && !TryCollectScannerLiteralCandidates(alternative, literalCandidates))

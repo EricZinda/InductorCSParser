@@ -46,6 +46,12 @@
          (Rule.ExpectedText, OneOfRule.LoweringSet, etc.) and to
          TokenSet's HasMultiRuneGraphemes / TryGetBmpChars helpers. -->
     <InternalsVisibleTo Include="InductorParser.Prefilter" />
+    <!-- The benchmarks project (assembly name: Benchmarks) needs
+         access to Rule.DisableLookaheadShortcut so a benchmark run
+         can flip the lookahead-shortcut on or off via env var to
+         A/B-measure the optimization. -->
+    <InternalsVisibleTo Include="Benchmarks" />
+    <InternalsVisibleTo Include="InductorParser.RebarRunner" />
   </ItemGroup>
 
   <!-- After building the netstandard2.1 DLL (the one Unity's IL2CPP

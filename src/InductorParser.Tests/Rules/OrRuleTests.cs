@@ -107,7 +107,13 @@ public class OrRuleTests
         var sink = NewSink();
         Or(Token('a'), Token('b'), Token('c')).Parse("c", new ParseOptions { TraceSink = sink });
 
+        // The shortcut rules out Token('a') and Token('b') on the 'c'
+        // peek before either alt's transaction opens, emitting a SKIP
+        // line per skipped child so the trace shows what Or
+        // considered. Token('c') then runs and matches.
         string expected = Lines(
+            "SKIP | Token: shortcut: peek 'c' not in '[a]'",
+            "SKIP | Token: shortcut: peek 'c' not in '[b]'",
             "      Lexer.Read: 'c', Consumed: 1",
             "      SUCC | Token: found 'c'",
             "   SUCC | Or: symbol #2"
@@ -120,14 +126,17 @@ public class OrRuleTests
     public void Or_trace_failure_produces_expected_output()
     {
         // Required-runes dispatch rules out both Token('a') and Token('b') on
-        // lookahead 'z', so no child transaction ever opens. By the time
-        // Or emits its FAIL line after the loop, no transaction is open
-        // and the line carries no indentation. Empty detail message means
-        // there's no ": {detail}" tail, so the line reads "FAIL | Or".
+        // lookahead 'z', so no child transaction ever opens. Each skip emits
+        // a SKIP trace line under the child's label, then Or emits its
+        // own FAIL line after the loop. No transaction is open by then so
+        // the FAIL line carries no indentation, and an empty detail means
+        // no ": {detail}" tail - the line reads "FAIL | Or".
         var sink = NewSink();
         Or(Token('a'), Token('b')).Parse("z", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
+            "SKIP | Token: shortcut: peek 'z' not in '[a]'",
+            "SKIP | Token: shortcut: peek 'z' not in '[b]'",
             "FAIL | Or"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));

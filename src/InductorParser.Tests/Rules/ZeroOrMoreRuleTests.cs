@@ -26,7 +26,11 @@ public class ZeroOrMoreRuleTests
         var sink = NewSink();
         ZeroOrMore(Token('a')).Parse("z", new ParseOptions { TraceSink = sink });
 
+        // The SKIP line shows the inner Token('a') was shortcut-out
+        // by BetweenInclusive's lookahead check (peek 'z' not in '[a]').
+        // The ZeroOrMore then takes its count==0 success branch.
         string expected = Lines(
+            "   SKIP | Token: shortcut: peek 'z' not in '[a]'",
             "   SUCC | ZeroOrMore: count= 0"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));

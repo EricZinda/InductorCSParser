@@ -3,6 +3,7 @@ using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
+using static InductorParser.Tests.TraceTestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
 
 namespace InductorParser.Tests;
@@ -378,5 +379,36 @@ public class WithinTokenRuleTests
         Assert.That(namedResult.Tree!.Id, Is.EqualTo(namedRule.Id));
         Assert.That(namedResult.Tree!.Find(namedRule), Is.Not.Null);
         Assert.That(namedRule.NameOf(namedResult.Tree!.Id), Is.EqualTo("character"));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_WithinToken_skips_when_peek_first_rune_is_outside_inner_set()
+    {
+        // WithinToken forwards the inner rule's first-token set with
+        // Advance.Always. The inner OneOf({a..z}) gives a first-rune set
+        // covering ASCII lowercase. Peek '1' isn't in that set, so the
+        // shortcut skips WithinToken and the second branch wins.
+        var sink = NewSink();
+        var rule = Or(WithinToken(OneOf(TokenSet.Ascii.Letters)), Literal("1"));
+        var result = rule.Parse("1", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Contain("SKIP | WithinToken:"));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_WithinToken_runs_when_peek_first_rune_is_in_inner_set()
+    {
+        // Peek 'a' is in the inner's first-rune set, so the shortcut
+        // doesn't skip. WithinToken runs and the inner rule consumes
+        // the cluster.
+        var sink = NewSink();
+        var rule = Or(WithinToken(OneOf(TokenSet.Ascii.Letters)), Literal("1"));
+        var result = rule.Parse("a", new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | WithinToken:"));
     }
 }

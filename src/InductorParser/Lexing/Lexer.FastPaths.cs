@@ -36,14 +36,14 @@ public sealed partial class Lexer
         // entries (like the CRLF cluster) are silently invisible to
         // both the bmpCandidates IndexOfAny path and the slow path's
         // candidates.Contains(runeValue) check, so a caller that
-        // forgets to flatten its set via OneOfRule.LookaheadFirstRunes
+        // forgets to flatten its set via TokenSet.LookaheadFirstRunes
         // would see the scanner-skip step right past the multi-rune
         // entries it was supposed to stop at.
         if (candidates.HasMultiRuneGraphemes)
             throw new InvalidOperationException(
                 "Internal: AdvanceUntilRuneIn requires a rune-only candidate set. " +
                 "Multi-rune cluster entries are not searched and would be silently " +
-                "skipped past. Flatten via OneOfRule.LookaheadFirstRunes first.");
+                "skipped past. Flatten via TokenSet.LookaheadFirstRunes first.");
         if (IsEof) return;
 
         // Fast path for the common case: the candidate set is small

@@ -39,35 +39,6 @@ internal sealed class AndRule : Rule
             : Symbol.Discarded;
     }
 
-    // Return the set of runes this rule might consume first (can be a superset)
-    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
-    // Then say whether the rule Always / Sometimes / Never consumes at least
-    // that first rune on success.
-    internal override RuleStartRequirements ComputeRuleStart()
-    {
-        // We need to return the set of Runes that are necessary, but not sufficent for success.
-        // The initial runes from any child that Always or sometimes consumes Runes must 
-        // therefore be included, never can be ignored.
-        // Furthermore, once we hit the first Always consumes a Rune, we can stop because at that
-        // point the first rune in the parse is gone and that's all we're talking about.
-        // 
-        // Then we can calculate And's own Advance:
-        //   Always:    at least one child had Advance.Always so And is guaranteed to consume too on success.
-        //   Never:     every child is Never.
-        //   Sometimes: otherwise.
-        TokenSet union = TokenSet.Empty;
-        bool anyMightConsume = false;
-        foreach (var child in Children)
-        {
-            if (child.Advance != Advance.Never)
-            {
-                union |= child.FirstConsumedTokens;
-                anyMightConsume = true;
-            }
-            if (child.Advance == Advance.Always)
-                return new RuleStartRequirements(union, Advance.Always);
-        }
-        return new RuleStartRequirements(union, anyMightConsume ? Advance.Sometimes : Advance.Never);
-    }
-
+    internal override RuleStartRequirements ComputeRuleStart() =>
+        RuleStartRequirements.MatchesAllOf(Children);
 }

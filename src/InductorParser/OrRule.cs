@@ -15,22 +15,13 @@ internal sealed class OrRule : Rule
 
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        string input = lexer.Input;
-        int pos = lexer.Position;
-        // Peek the next rune once for the skip shortcut. Two cases get the
-        // peekValue = -1 marker: EOF (no rune to read) and a lone surrogate
-        // (TryPeekRune returns false because a surrogate half isn't a valid
-        // scalar). The shortcut is sound for EOF: an Always child there has
-        // nothing to read and is correctly skipped. It is NOT sound for a
-        // lone surrogate, which is still a one-char token a wildcard child
-        // like AnyToken can match. Track which case we're in so the shortcut
-        // applies at EOF or on a real rune but not on a lone surrogate.
-        // Mirrors BetweenInclusiveRule, which short-circuits on the same
-        // TryPeekRune bool return.
-        int peekValue = -1;
-        bool loneSurrogate = false;
-        if (pos < input.Length)
-            loneSurrogate = !Lexer.TryPeekRune(input, pos, out peekValue, out _);
+        // Peek the next token (one grapheme cluster, or one rune in
+        // WithinToken sub-lexer mode) for the skip shortcut. peekFirstRune
+        // is -1 at EOF (empty Chars) or when the cluster starts with a
+        // stray surrogate; CannotMatchLookahead handles both.
+        var peekToken = lexer.PeekToken();
+        var peekChars = peekToken.Chars;
+        int peekFirstRune = peekToken.FirstRune;
 
         // If we're preserving this node, create a new list to capture its outputSymbols
         if (effectiveFlattenType == FlattenType.Preserve)
@@ -48,8 +39,9 @@ internal sealed class OrRule : Rule
             // a composite child whose own ErrorMessage is null even when a
             // deeper rule in its subtree carries the user's message, dropping
             // the message on the floor.
-            if (!loneSurrogate && child.CannotMatchLookahead(peekValue) && !child.HasErrorMessageInSubtree)
+            if (child.CannotMatchLookahead(peekChars, peekFirstRune) && !child.HasErrorMessageInSubtree)
             {
+                child.TraceShortcutSkip(lexer, peekChars);
                 continue;
             }
 
@@ -72,32 +64,6 @@ internal sealed class OrRule : Rule
         return null;
     }
 
-    // Return the set of runes this rule might consume first (can be a superset)
-    // (TokenSet.Empty when Advance.Never. TokenSet.Universe means "I don't know").
-    // Then say whether the rule Always / Sometimes / Never consumes at least
-    // that first rune on success.
-    internal override RuleStartRequirements ComputeRuleStart()
-    {
-        // Or matches any of its children, so its FirstConsumedTokens is the
-        // union of children's FirstConsumedTokens.
-        //
-        // Advance:
-        //   Always:    If every child advances then Or always advances too
-        //   Never:     If no child advances then Or never advances
-        //   Sometimes: If mixed (Or matches are in different classes) then Or
-        //               might or might not advance depending on branch.
-        TokenSet union = TokenSet.Empty;
-        bool allAlways = Children.Count > 0;
-        bool allNever = Children.Count > 0;
-        foreach (var child in Children)
-        {
-            union |= child.FirstConsumedTokens;
-            if (child.Advance != Advance.Always) allAlways = false;
-            if (child.Advance != Advance.Never) allNever = false;
-        }
-        Advance advance = allAlways
-            ? Advance.Always
-            : allNever ? Advance.Never : Advance.Sometimes;
-        return new RuleStartRequirements(union, advance);
-    }
+    internal override RuleStartRequirements ComputeRuleStart() =>
+        RuleStartRequirements.MatchesAnyOf(Children);
 }
