@@ -153,6 +153,30 @@ public class NoneOfRuleTests
     // Multi-rune grapheme support -------------------------------------------
 
     [Test]
+    public void NoneOf_with_TokenSet_Empty_admits_a_multi_rune_grapheme_without_NRE()
+    {
+        // Programmatically-constructed sets sometimes wind up empty (a
+        // conditional stop list that nothing got added to, an
+        // intersection that came out empty, etc.). NoneOf(TokenSet.Empty)
+        // is then the "match any token" rule. TokenSet.Empty is the
+        // public name for default(TokenSet), whose internal
+        // _multiRuneGraphemes field is null because nothing ever ran
+        // the constructor that coalesces null to Array.Empty<string>().
+        // ContainsToken's multi-rune branch reads _multiRuneGraphemes
+        // .Length directly, so a multi-rune grapheme arriving as the
+        // next token throws NullReferenceException instead of returning
+        // false. Compile(null) keeps the decomposed grapheme out of NFC
+        // composition so the lexer hands the rule a true two-char token.
+        var rule = NoneOf(TokenSet.Empty);
+        rule.Compile(null);
+
+        var result = rule.Parse(LatinEAcuteGrapheme);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(LatinEAcuteGrapheme));
+    }
+
+    [Test]
     public void NoneOf_with_multi_rune_set_rejects_the_listed_Token()
     {
         // A multi-rune set as the exclude list. The flag arrives as

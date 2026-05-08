@@ -169,7 +169,11 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             return Contains((int)grapheme[0]);
         if (TrySingleRune(grapheme, out int runeValue))
             return Contains(runeValue);
-        return _multiRuneGraphemes.Length > 0 && BinarySearchMultiRune(grapheme) >= 0;
+        // Cache to local + null-check, matching the Contains(int) shape.
+        // default(TokenSet) (= TokenSet.Empty) leaves _multiRuneGraphemes
+        // null because the field-coalescing constructor never ran on it.
+        var multi = _multiRuneGraphemes;
+        return multi != null && multi.Length > 0 && BinarySearchMultiRune(grapheme) >= 0;
     }
 
     // The MultiRuneGraphemes ReadOnlySpan accessor can't cross a yield
