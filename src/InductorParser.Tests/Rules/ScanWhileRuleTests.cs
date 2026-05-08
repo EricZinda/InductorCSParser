@@ -330,4 +330,18 @@ public class ScanWhileRuleTests
             $"And(ScanWhile(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\")), Eof()).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
             $"should succeed. Error was: {result.ErrorMessage}");
     }
+
+    // Matrix-driven SourceRange test. See docs/TestArchitecture.md
+    // "Per-rule SourceRange-matrix tests live in each rule's own
+    // test file." Shared scaffold lives in SourceRangeMatrixHelper.
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void SourceRange_for_ScanWhile_target_after_normalized_Literal_prefix_uses_original_coords(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        SourceRangeMatrixHelper.AssertTargetAfterLiteralPrefix(
+            row, form,
+            target: ScanWhile(TokenSet.Ascii.Letters).As("run").Preserve(),
+            targetText: "XYZ");
+    }
 }
