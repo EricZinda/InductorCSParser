@@ -1,1 +1,0 @@
-- Drop the `child.Polarity == MustNotBeIn` short-circuit in CanSkipUnreachableAlt; let MustNotBeIn alts use the new CheckPeekedTokenNotInSet path.
