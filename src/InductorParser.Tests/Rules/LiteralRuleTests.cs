@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
@@ -310,5 +311,98 @@ public class LiteralRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(sink.ToString(), Does.Not.Contain("SKIP | LiteralIgnoreAsciiCase:"));
+    }
+
+    // -----------------------------------------------------------------
+    // Compile-form normalization matrix
+    //
+    // See GraphemeRuleTests for the full matrix rationale. Literal
+    // accepts multi-grapheme expected text by design (unlike Token),
+    // so the only Compile-throws case is the lone surrogate where
+    // string.Normalize itself throws.
+    // -----------------------------------------------------------------
+
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void Literal_bare_matches_input_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        var rule = Literal(row.Source);
+
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        {
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True,
+            $"Literal(\"{NormalizationExamples.Hex(row.Source)}\").Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should succeed. Error was: {result.ErrorMessage}");
+    }
+
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void Literal_in_OneOrMore_matches_input_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        var rule = OneOrMore(Literal(row.Source));
+
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        {
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True,
+            $"OneOrMore(Literal(\"{NormalizationExamples.Hex(row.Source)}\")).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should succeed. Error was: {result.ErrorMessage}");
+    }
+
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void Literal_in_Or_with_fallback_matches_literal_branch_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+            return; // covered by Literal_in_OneOrMore's Compile-throws path
+
+        var literalRule = Literal(row.Source).Preserve().As("literalBranch");
+        var fallback = AnyToken().As("fallbackBranch");
+        var rule = Or(literalRule, fallback);
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.Find(literalRule), Is.Not.Null,
+            $"Or(Literal(\"{NormalizationExamples.Hex(row.Source)}\"), AnyToken).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"matched the AnyToken fallback instead of the Literal branch.");
+    }
+
+    // And(Literal, Eof). Catches a Literal whose _expected was projected
+    // to a different length under the form (e.g., compatibility ligature
+    // ﬁ -> "fi" doubles the consumed characters under FormKC). Eof
+    // verifies the lexer consumed exactly the post-form-projected source.
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void Literal_in_AllOf_with_Eof_matches_full_input_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        var rule = And(Literal(row.Source), Eof());
+
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        {
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True,
+            $"And(Literal(\"{NormalizationExamples.Hex(row.Source)}\"), Eof()).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should succeed. Error was: {result.ErrorMessage}");
     }
 }

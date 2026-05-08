@@ -11,7 +11,7 @@ namespace InductorParser.Tests;
 // that's still in the user-supplied form (or any cache derived from it)
 // is stale by the time matching happens. Rather than hand-writing a
 // one-off Unicode example per test, the parameterized fixtures in
-// CompileNormalizationTests pull from this table so every interesting
+// per-rule test fixture pulls from this table so every interesting
 // (rule × form × grapheme) combination gets exercised once and benefits
 // every leaf rule uniformly.
 //
@@ -456,10 +456,10 @@ public static class NormalizationExamples
     private static readonly string StreamSafeBoundaryLongSequence =
         "a" + new string((char)0x0316, 31);
 
-    // The full table. The TableSelfCheck test in
-    // CompileNormalizationTests asserts each column equals
-    // string.Normalize(Source, form), so a typo here gets caught at test
-    // time rather than producing a passing-but-wrong assertion downstream.
+    // The full table. The NormalizationExamplesSelfCheck fixture below
+    // asserts each column equals string.Normalize(Source, form), so a
+    // typo here gets caught at test time rather than producing a
+    // passing-but-wrong assertion downstream.
     public static IReadOnlyList<NormalizationCase> All { get; } = new[]
     {
         new NormalizationCase(

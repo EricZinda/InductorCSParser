@@ -549,4 +549,116 @@ public class ScanUntilRuleTests
         Assert.That(flagCase.Success, Is.True, flagCase.ErrorMessage);
         Assert.That(flagCase.Tree!.ToString(), Is.EqualTo("hello"));
     }
+
+    // -----------------------------------------------------------------
+    // Compile-form normalization matrix
+    //
+    // See GraphemeRuleTests for the full matrix rationale. ScanUntil's
+    // _stopperSet routes through the same OneOfRule.NormalizeAndValidate
+    // helper as OneOf / NoneOf / ScanWhile.
+    //
+    // ScanUntil always succeeds (no minimum count), so the bare-leaf and
+    // Or-with-fallback shapes can't distinguish the stale-set bug from
+    // correct behavior via Success alone. The three shapes that DO
+    // surface the bug all involve a follow-up consumer that depends on
+    // ScanUntil stopping at the right place:
+    //   * And(ScanUntil, Token(source)): assert success. ScanUntil
+    //     should stop at offset 0 (input starts with stopper) so the
+    //     trailing Token can consume the source. Stale set means
+    //     ScanUntil eats everything and Token sees EOF.
+    //   * OneOrMore(ScanUntil): assert FAILURE. ScanUntil makes 0
+    //     progress so OneOrMore can't get its minimum count. Stale set
+    //     means ScanUntil consumes everything in one round, OneOrMore
+    //     wrongly succeeds.
+    //   * And(ScanUntil, Eof()): assert FAILURE. ScanUntil should stop
+    //     at offset 0 leaving the source for Eof to fail on. Stale set
+    //     means ScanUntil eats everything and Eof wrongly succeeds.
+    // -----------------------------------------------------------------
+
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void ScanUntil_in_AllOf_with_trailing_token_matches_input_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        {
+            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            return;
+        }
+
+        var rule = And(ScanUntil(TokenSet.Runes(row.Source)), Token(row.Source));
+
+        if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+        {
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        Assert.That(result.Success, Is.True,
+            $"And(ScanUntil(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\")), Token(...)).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should succeed. Error was: {result.ErrorMessage}");
+    }
+
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void ScanUntil_in_OneOrMore_does_not_match_source_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        {
+            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            return;
+        }
+
+        var rule = OneOrMore(ScanUntil(TokenSet.Runes(row.Source)));
+
+        if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+        {
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        // ScanUntil sees the stopper at offset 0, consumes 0 chars,
+        // and succeeds. OneOrMore can't get its minimum count off a
+        // zero-progress inner match and fails. A stale stopper-set
+        // would let ScanUntil consume the whole source in round 1
+        // and OneOrMore would wrongly succeed.
+        Assert.That(result.Success, Is.False,
+            $"OneOrMore(ScanUntil(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\"))).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should fail. A pass means ScanUntil's stopper-set didn't get rewritten under {form}.");
+    }
+
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void ScanUntil_in_AllOf_with_Eof_does_not_match_source_under_form(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        {
+            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            return;
+        }
+
+        var rule = And(ScanUntil(TokenSet.Runes(row.Source)), Eof());
+
+        if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
+        {
+            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            return;
+        }
+
+        rule.Compile(form);
+        var result = rule.Parse(row.Source);
+        // ScanUntil sees the stopper at offset 0 and consumes 0 chars.
+        // Eof then sees the source still there and fails. A stale
+        // stopper-set would let ScanUntil consume everything and Eof
+        // would wrongly succeed.
+        Assert.That(result.Success, Is.False,
+            $"And(ScanUntil(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\")), Eof()).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
+            $"should fail. A pass means ScanUntil's stopper-set didn't get rewritten under {form}.");
+    }
 }

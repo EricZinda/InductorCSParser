@@ -31,10 +31,15 @@ internal sealed class OrRule : Rule
         {
             var child = Children[symbolIndex];
             // Skip children the shortcut proves can't match at this lookahead.
-            // The ErrorMessage == null guard preserves WithError message
-            // surfacing: a child with a friendly message still gets attempted
-            // so its failure can reach DeepestFailureMessage.
-            if (child.CannotMatchLookahead(peekChars, peekFirstRune) && child.ErrorMessage == null)
+            // The HasErrorMessageInSubtree guard preserves WithError message
+            // surfacing: a child whose own .WithError or any descendant's
+            // .WithError would belong at the deepest-failure slot still gets
+            // attempted so its failure chain can reach DeepestFailureMessage.
+            // ErrorMessage == null alone would be a half-check: it would skip
+            // a composite child whose own ErrorMessage is null even when a
+            // deeper rule in its subtree carries the user's message, dropping
+            // the message on the floor.
+            if (child.CannotMatchLookahead(peekChars, peekFirstRune) && !child.HasErrorMessageInSubtree)
             {
                 child.TraceShortcutSkip(lexer, peekChars);
                 continue;

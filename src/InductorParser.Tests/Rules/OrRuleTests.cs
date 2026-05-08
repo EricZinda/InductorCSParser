@@ -56,6 +56,28 @@ public class OrRuleTests
     }
 
     [Test]
+    public void Or_descendant_WithError_surfaces_when_per_child_shortcut_would_skip_composite()
+    {
+        // Or(Or(Token('a').WithError("want 'a'"), Token('b')), Token('c')) against "d".
+        //
+        // The outer Or's per-child shortcut consults each child's
+        // HasErrorMessageInSubtree gate. The inner Or itself has no .WithError,
+        // but Token('a').WithError lives in its subtree, so the gate is true
+        // and the shortcut is bypassed for that child. The inner Or runs;
+        // its own per-child shortcut tries Token('a').WithError and skips
+        // Token('b'). "want 'a'" lands at the deepest-failure slot for
+        // offset 0 and surfaces as ErrorMessage. Pre-fix the gate was
+        // child.ErrorMessage == null, which silently skipped the inner Or
+        // and dropped its descendant's message.
+        var rule = Or(Or(Token('a').WithError("want 'a'"), Token('b')), Token('c'));
+        var result = rule.Parse("d");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a'"));
+    }
+
+    [Test]
     public void Or_child_that_consumes_deeper_wins_the_position_and_message()
     {
         // First branch matches "ab" then fails on 'x' at offset 2, recording

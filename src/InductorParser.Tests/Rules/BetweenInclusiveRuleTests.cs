@@ -206,6 +206,94 @@ public class BetweenInclusiveRuleTests
     }
 
     [Test]
+    public void BetweenInclusive_descendant_WithError_surfaces_when_lookahead_shortcut_would_fire()
+    {
+        // OneOrMore(Or(Token('a').WithError("want 'a'"), Token('b'))) against "c".
+        //
+        // The Or itself has no WithError, but one of its children does. The
+        // BetweenInclusive shortcut sees Or.ErrorMessage == null and (since
+        // both Or children are Always-advance with FirstConsumedTokens
+        // {'a','b'}) Or.CannotMatchLookahead('c') == true. The pre-fix gate
+        // fired the failure-path shortcut without entering the Or, so
+        // Token('a').WithError never got a chance to record "want 'a'" at
+        // offset 0. The user saw the generic positional message.
+        //
+        // The fix gates the shortcut on Inner.HasErrorMessageInSubtree,
+        // which is true here because Token('a').WithError is reachable
+        // from the Or. The shortcut is bypassed. The loop runs the Or
+        // once; the Or's own per-child shortcut skips Token('b') (no
+        // WithError) but tries Token('a').WithError because its WithError
+        // gates the per-child skip. "want 'a'" lands at the deepest-
+        // failure slot for offset 0 and surfaces as ErrorMessage.
+        var rule = OneOrMore(Or(Token('a').WithError("want 'a'"), Token('b')));
+        var result = rule.Parse("c");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a'"));
+    }
+
+    [Test]
+    public void BetweenInclusive_descendant_WithError_surfaces_when_zero_or_more_shortcut_would_fire()
+    {
+        // Sibling of the OneOrMore case but for ZeroOrMore (AtLeast == 0).
+        // The ZeroOrMore returns success with count=0, so the failure-path
+        // shortcut isn't the issue here. The problem is the success-path
+        // shortcut: ZeroOrMore commits empty without entering Inner, and
+        // every RecordFailure call inside Inner's subtree is silently
+        // skipped. When the outer And then fails on Token('z') at offset 0,
+        // the deepest-failure message is null (no descendant got a chance
+        // to write) and the user sees the generic positional template.
+        //
+        // The fix gates BOTH shortcut paths on Inner.HasErrorMessageInSubtree.
+        // With the gate, ZeroOrMore enters its loop, the Or's per-child
+        // shortcut tries Token('a').WithError, "want 'a'" records at 0,
+        // count stays 0, ZeroOrMore returns success, and the outer And's
+        // Token('z') failure at 0 lets "want 'a'" win the deepest-failure
+        // slot via equal-depth claim.
+        var rule = And(
+            ZeroOrMore(Or(Token('a').WithError("want 'a'"), Token('b'))),
+            Token('z'));
+        var result = rule.Parse("c");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a'"));
+    }
+
+    [Test]
+    public void BetweenInclusive_descendant_WithError_surfaces_under_scanner_skip_pattern()
+    {
+        // ZeroOrMore(Or(realMatch, AnyToken.Delete)) is the recognized
+        // shape for the scanner-skip optimization in TryCreateScannerSkip.
+        // The scanner advances the lexer past non-candidate runes to the
+        // next candidate or EOF, then Inner.TryParse runs at that landing
+        // position. Without the OrRule per-child shortcut consulting
+        // HasErrorMessageInSubtree, the per-child skip at the EOF landing
+        // would drop the And alternative whose subtree carries
+        // Token('a').WithError ("want 'a'"). The descendant message
+        // would never record and the user would see the generic template.
+        //
+        // The fix is the OrRule per-child shortcut consulting
+        // HasErrorMessageInSubtree (not just `child.ErrorMessage == null`).
+        // The scanner-skip code itself doesn't need a separate gate: the
+        // landing positions (candidates and EOF) are the same positions
+        // the regular per-token loop would reach, and at those positions
+        // the OrRule's per-child shortcut now correctly tries the And.
+        // Token('a').WithError records at the EOF landing and wins the
+        // deepest-failure slot for the offset where the outer And's
+        // required Token('z') ultimately fails.
+        var realMatch = And(Token('a').WithError("want 'a'"), Token('b'));
+        var rule = And(
+            ZeroOrMore(Or(realMatch, AnyToken().Flatten(FlattenType.Delete))),
+            Token('z'));
+        var result = rule.Parse("y");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a'"));
+    }
+
+    [Test]
     public void BetweenInclusive_inner_failure_still_contributes_to_deepest_failure()
     {
         // Known PEG heuristic quirk: a BetweenInclusive whose lower bound
