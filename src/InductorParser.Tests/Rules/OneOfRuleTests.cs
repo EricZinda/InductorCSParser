@@ -140,6 +140,23 @@ public class OneOfRuleTests
     // Multi-rune grapheme support -------------------------------------------
 
     [Test]
+    public void OneOf_with_TokenSet_Empty_rejects_a_multi_rune_grapheme_without_NRE()
+    {
+        // OneOf(TokenSet.Empty) is the "match nothing" rule, which is
+        // what a programmatically-built set lands on when nothing got
+        // added. The cluster doesn't match (the set is empty), but the
+        // membership probe must return false instead of NRE'ing on
+        // _multiRuneGraphemes.Length when the underlying TokenSet is
+        // default(TokenSet) (the public TokenSet.Empty alias).
+        var rule = OneOf(TokenSet.Empty);
+        rule.Compile(null);
+
+        var result = rule.Parse(LatinEAcuteGrapheme);
+
+        Assert.That(result.Success, Is.False);
+    }
+
+    [Test]
     public void OneOf_matches_a_multi_rune_grapheme_under_grapheme_lexer()
     {
         // OneOf(set) where set has multi-rune entries: the lexer
