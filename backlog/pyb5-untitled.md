@@ -1,3 +1,0 @@
-# Untitled
-
-- `OneOf("é").Compile(NormalizationForm.FormD).Parse("é")` returns `Success = false`. The set has U+00E9 stored as a single-rune entry; the lexer normalizes input "é" to "é" (multi-rune cluster); the rune-only set can't match a multi-rune token.

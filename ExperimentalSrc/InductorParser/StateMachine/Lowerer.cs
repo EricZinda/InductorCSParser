@@ -526,14 +526,19 @@ internal sealed class LoweringContext
     // mismatch. Mirrors OrRule's runtime guard: only skip when the
     // child Always advances (so its first rune is guaranteed to be
     // consumed) AND has a strictly tighter FirstConsumedTokens than the
-    // universe. Custom WithError alternatives are NOT skipped because
-    // the existing code lets them run so their error message can reach
-    // DeepestFailureMessage on a parse failure.
+    // universe. Alternatives whose subtree carries any .WithError are NOT
+    // skipped, because the existing code lets them run so the message
+    // can reach DeepestFailureMessage on a parse failure.
+    // HasErrorMessageInSubtree is the subtree-aware check; the immediate-
+    // only `child.ErrorMessage == null` would be a half-check that would
+    // skip a composite child whose own ErrorMessage is null even when a
+    // deeper rule in its subtree carries the user's message. Same shape
+    // as OrRule's runtime guard.
     private static bool CanSkipUnreachableAlt(Rule child)
     {
         if (Rule.DisableLookaheadShortcut) return false;
         if (child.Advance != Advance.Always) return false;
-        if (child.ErrorMessage != null) return false;
+        if (child.HasErrorMessageInSubtree) return false;
         // FirstConsumedTokens equality with Universe means the set
         // accepts any rune, so the peek check would never skip. Avoid
         // the wasted state.

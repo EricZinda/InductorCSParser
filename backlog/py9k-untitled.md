@@ -1,3 +1,0 @@
-# Untitled
-
-- `Runes("hello")`: 5 graphemes, all NFD-stable, no allocations. Microseconds.
