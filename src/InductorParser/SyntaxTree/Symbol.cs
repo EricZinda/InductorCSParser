@@ -182,58 +182,39 @@ public sealed class Symbol
                 yield return descendant;
     }
 
-    // The span in the original input string that this Symbol consumed,
-    // expressed as a SourceRange. Returns null when the Symbol has no
-    // associated text (an empty composite, or a composite whose leaves
-    // have all been Delete-flattened away). Both Start and End come
-    // back as full SourcePositions, so the caller can read line/column,
-    // grapheme index, etc. without a separate conversion call.
+    // Recover parseInput-relative bounds for this Symbol's matched
+    // span. Walks to the leftmost and rightmost leaves and reads each
+    // leaf's underlying string + offset via MemoryMarshal.TryGetString.
+    // ParseResult.SourceRangeOf consumes these and translates the
+    // offsets to the caller's original-input coordinates.
     //
-    // Implementation: leaves carry a ReadOnlyMemory<char> that points
-    // into the original input string. MemoryMarshal.TryGetString
-    // recovers the underlying string and the leaf's offset. For a
-    // composite, walk to the leftmost and rightmost leaves and stitch
-    // the start of one to the end of the other.
-    public SourceRange? SourceRange
+    // Returns false when no leaf is reachable (empty composite), when
+    // the leaf memory isn't string-backed (a hand-built Symbol from a
+    // char[]), or when leaves from two different parses ended up in
+    // the same tree (the ReferenceEquals check).
+    internal bool TryGetCharSpan(out string parseInput, out int start, out int endExclusive)
     {
-        get
-        {
-            // Range is leftmost-leaf's-start to rightmost-leaf's-end. Any
-            // leaf counts, even a zero-width one (ScanUntil with the
-            // stopper at the cursor produces one): the leaf's memory
-            // still carries its source string and offset, so its
-            // position is well-defined. Returns null only when the tree
-            // has no leaf at all (an empty composite, or a composite
-            // whose every descendant is itself an empty composite, or a
-            // composite whose leaves were all Delete-flattened away
-            // before reaching the tree).
-            Symbol? firstLeaf = FindFirstLeaf(this);
-            if (firstLeaf == null) return null;
-            // FindLastLeaf can't return null when FindFirstLeaf didn't:
-            // both walk the same tree looking for any leaf, just from
-            // opposite ends. If a leaf exists, both find one.
-            Symbol lastLeaf = FindLastLeaf(this)!;
+        parseInput = null!;
+        start = 0;
+        endExclusive = 0;
 
-            // Defensive: parser-produced leaves are always backed by the
-            // input string the caller passed to Parse (every rule builds
-            // its leaf from lexer.Input.AsMemory(...) or token.Memory,
-            // which is the same string). TryGetString can only fail if
-            // someone hand-constructed a Symbol whose leaf memory came
-            // from a char[] or other non-string source, and the
-            // ReferenceEquals check below can only fail if leaves from
-            // two different parses ended up in the same tree. Both
-            // shapes are "user built something weird" cases, not
-            // anything the parser produces.
-            if (!MemoryMarshal.TryGetString(firstLeaf._leafChars, out string? firstInput, out int firstStart, out _))
-                return null;
-            if (!MemoryMarshal.TryGetString(lastLeaf._leafChars, out string? lastInput, out int lastStart, out int lastLength))
-                return null;
-            if (!ReferenceEquals(firstInput, lastInput)) return null;
+        Symbol? firstLeaf = FindFirstLeaf(this);
+        if (firstLeaf == null) return false;
+        // FindLastLeaf can't return null when FindFirstLeaf didn't:
+        // both walk the same tree looking for any leaf, just from
+        // opposite ends. If a leaf exists, both find one.
+        Symbol lastLeaf = FindLastLeaf(this)!;
 
-            return new SourceRange(
-                SourcePosition.From(firstInput, firstStart),
-                SourcePosition.From(firstInput, lastStart + lastLength));
-        }
+        if (!MemoryMarshal.TryGetString(firstLeaf._leafChars, out string? firstInput, out int firstStart, out _))
+            return false;
+        if (!MemoryMarshal.TryGetString(lastLeaf._leafChars, out string? lastInput, out int lastStart, out int lastLength))
+            return false;
+        if (!ReferenceEquals(firstInput, lastInput)) return false;
+
+        parseInput = firstInput;
+        start = firstStart;
+        endExclusive = lastStart + lastLength;
+        return true;
     }
 
     private static Symbol? FindFirstLeaf(Symbol symbol)

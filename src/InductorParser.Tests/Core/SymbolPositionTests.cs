@@ -1,3 +1,4 @@
+using System.Text;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
@@ -6,11 +7,12 @@ using static InductorParser.Tests.UnicodeExamples;
 
 namespace InductorParser.Tests;
 
-// Tests for Symbol.SourceRange. The conversion math (char to rune /
-// grapheme / line / column) is shared with ParseResult and covered by
-// ErrorPositionTests; this fixture verifies that a Symbol's start and
-// end char indices are correctly recovered from its leaves' captured
-// memory and stitched into a SourceRange.
+// Tests for ParseResult.SourceRangeOf. The conversion math (char to
+// rune / grapheme / line / column) is shared with ParseResult.Error*
+// and covered by ErrorPositionTests; this fixture verifies that a
+// Symbol's start and end char indices are correctly recovered from
+// its leaves' captured memory and stitched into a SourceRange in the
+// caller's original-input coordinates.
 [TestFixture]
 public class SymbolPositionTests
 {
@@ -21,7 +23,7 @@ public class SymbolPositionTests
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True);
-        var range = result.Tree!.SourceRange;
+        var range = result.SourceRangeOf(result.Tree!);
         Assert.That(range, Is.Not.Null);
         Assert.That(range!.Value.Start.CharIndex, Is.EqualTo(0));
         Assert.That(range.Value.End.CharIndex, Is.EqualTo(1));
@@ -33,7 +35,7 @@ public class SymbolPositionTests
         var rule = Literal("hello").Preserve();
         var result = rule.Parse("hello");
 
-        var range = result.Tree!.SourceRange!.Value;
+        var range = result.SourceRangeOf(result.Tree!)!.Value;
         Assert.That(range.Start.CharIndex, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(5));
     }
@@ -50,7 +52,7 @@ public class SymbolPositionTests
             .As("triple").Preserve();
         var result = rule.Parse("abc");
 
-        var range = result.Tree!.SourceRange!.Value;
+        var range = result.SourceRangeOf(result.Tree!)!.Value;
         Assert.That(range.Start.CharIndex, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(3));
     }
@@ -66,7 +68,7 @@ public class SymbolPositionTests
 
         var innerSymbol = result.Tree!.Find(inner);
         Assert.That(innerSymbol, Is.Not.Null);
-        var range = innerSymbol!.SourceRange!.Value;
+        var range = result.SourceRangeOf(innerSymbol!)!.Value;
         Assert.That(range.Start.CharIndex, Is.EqualTo(2));
         Assert.That(range.End.CharIndex, Is.EqualTo(5));
     }
@@ -77,7 +79,7 @@ public class SymbolPositionTests
         var rule = Literal("hello").Preserve();
         var result = rule.Parse("hello");
 
-        var range = result.Tree!.SourceRange!.Value;
+        var range = result.SourceRangeOf(result.Tree!)!.Value;
         Assert.That(range.End.CharIndex - range.Start.CharIndex, Is.EqualTo(5));
     }
 
@@ -95,7 +97,7 @@ public class SymbolPositionTests
 
         var symbol = result.Tree!.Find(literal);
         Assert.That(symbol, Is.Not.Null);
-        var range = symbol!.SourceRange!.Value;
+        var range = result.SourceRangeOf(symbol!)!.Value;
 
         // "first\n" = 6 chars, "second\n" = 7 chars. So target starts
         // at char 13, line 2, column 0.
@@ -122,7 +124,7 @@ public class SymbolPositionTests
         var result = rule.Parse(FamilyEmoji + "ab");
 
         var symbol = result.Tree!.Find(target);
-        var range = symbol!.SourceRange!.Value;
+        var range = result.SourceRangeOf(symbol!)!.Value;
 
         // Start: family emoji = 8 chars / 1 grapheme.
         Assert.That(range.Start.CharIndex, Is.EqualTo(8));
@@ -175,7 +177,7 @@ public class SymbolPositionTests
         var result = rule.Parse("abcd");
 
         Assert.That(result.Success, Is.True);
-        var range = result.Tree!.SourceRange!.Value;
+        var range = result.SourceRangeOf(result.Tree!)!.Value;
         Assert.That(range.Start.CharIndex, Is.EqualTo(2));
         Assert.That(range.End.CharIndex, Is.EqualTo(4));
     }
@@ -189,7 +191,7 @@ public class SymbolPositionTests
         var rule = And(Literal("ab").Preserve(), Literal("cd")).As("composite").Preserve();
         var result = rule.Parse("abcd");
 
-        var range = result.Tree!.SourceRange!.Value;
+        var range = result.SourceRangeOf(result.Tree!)!.Value;
         Assert.That(range.Start.CharIndex, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(2));
     }
@@ -207,7 +209,7 @@ public class SymbolPositionTests
             Literal("ef").Preserve()).As("composite").Preserve();
         var result = rule.Parse("abcdef");
 
-        var range = result.Tree!.SourceRange!.Value;
+        var range = result.SourceRangeOf(result.Tree!)!.Value;
         Assert.That(range.Start.CharIndex, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(6));
     }
@@ -223,7 +225,7 @@ public class SymbolPositionTests
         var result = rule.Parse("abc");
 
         Assert.That(result.Success, Is.True);
-        Assert.That(result.Tree!.SourceRange, Is.Null);
+        Assert.That(result.SourceRangeOf(result.Tree!), Is.Null);
     }
 
     [Test]
@@ -239,7 +241,7 @@ public class SymbolPositionTests
         Assert.That(result.Success, Is.True);
         var optionalSymbol = result.Tree!.Find(optional);
         Assert.That(optionalSymbol, Is.Not.Null);
-        Assert.That(optionalSymbol!.SourceRange, Is.Null);
+        Assert.That(result.SourceRangeOf(optionalSymbol!), Is.Null);
     }
 
     [Test]
@@ -256,7 +258,7 @@ public class SymbolPositionTests
         Assert.That(result.Success, Is.True);
         var peekSymbol = result.Tree!.Find(peek);
         Assert.That(peekSymbol, Is.Not.Null);
-        Assert.That(peekSymbol!.SourceRange, Is.Null);
+        Assert.That(result.SourceRangeOf(peekSymbol!), Is.Null);
     }
 
     [Test]
@@ -279,7 +281,7 @@ public class SymbolPositionTests
         Assert.That(result.Tree, Is.Not.Null);
         Assert.That(result.Tree!.ToString(), Is.EqualTo(""));
 
-        var range = result.Tree!.SourceRange;
+        var range = result.SourceRangeOf(result.Tree!);
         Assert.That(range, Is.Not.Null,
             "standalone empty leaf should still report a position");
         Assert.That(range!.Value.Start.CharIndex, Is.EqualTo(0));
@@ -304,7 +306,7 @@ public class SymbolPositionTests
         Assert.That(bodySymbol, Is.Not.Null);
         Assert.That(bodySymbol!.ToString(), Is.EqualTo(""));
 
-        var range = bodySymbol.SourceRange;
+        var range = result.SourceRangeOf(bodySymbol);
         Assert.That(range, Is.Not.Null,
             "empty body should report its position between the quotes");
         Assert.That(range!.Value.Start.CharIndex, Is.EqualTo(1));
@@ -326,7 +328,7 @@ public class SymbolPositionTests
             Literal("b").Preserve()).As("composite").Preserve();
         var result = rule.Parse("ab");
 
-        var range = result.Tree!.SourceRange!.Value;
+        var range = result.SourceRangeOf(result.Tree!)!.Value;
         Assert.That(range.Start.CharIndex, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(2));
     }
@@ -345,7 +347,7 @@ public class SymbolPositionTests
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True);
-        var range = result.Tree!.SourceRange!.Value;
+        var range = result.SourceRangeOf(result.Tree!)!.Value;
         Assert.That(range.Start.CharIndex, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(1));
     }
@@ -366,7 +368,7 @@ public class SymbolPositionTests
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True);
-        var range = result.Tree!.SourceRange;
+        var range = result.SourceRangeOf(result.Tree!);
         Assert.That(range, Is.Not.Null,
             "composite with only empty leaves should still report a position");
         Assert.That(range!.Value.Start.CharIndex, Is.EqualTo(0));
@@ -387,7 +389,7 @@ public class SymbolPositionTests
 
         Assert.That(result.Success, Is.True);
 
-        var outerRange = result.Tree!.SourceRange;
+        var outerRange = result.SourceRangeOf(result.Tree!);
         Assert.That(outerRange, Is.Not.Null,
             "outer composite should walk through inner to find the empty leaf");
         Assert.That(outerRange!.Value.Start.CharIndex, Is.EqualTo(0));
@@ -395,7 +397,7 @@ public class SymbolPositionTests
 
         var innerSymbol = result.Tree!.Find(inner);
         Assert.That(innerSymbol, Is.Not.Null);
-        var innerRange = innerSymbol!.SourceRange;
+        var innerRange = result.SourceRangeOf(innerSymbol!);
         Assert.That(innerRange, Is.Not.Null,
             "inner composite should report the empty leaf's position");
         Assert.That(innerRange!.Value.Start.CharIndex, Is.EqualTo(0));
@@ -416,7 +418,7 @@ public class SymbolPositionTests
             ScanUntil(TokenSet.Runes("z")).Preserve()).As("composite").Preserve();
         var result = rule.Parse("ab");
 
-        var range = result.Tree!.SourceRange!.Value;
+        var range = result.SourceRangeOf(result.Tree!)!.Value;
         Assert.That(range.Start.CharIndex, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(2));
     }
@@ -431,7 +433,7 @@ public class SymbolPositionTests
         var rule = Literal("ab\ncd").Preserve();
         var result = rule.Parse("ab\ncd");
 
-        var range = result.Tree!.SourceRange!.Value;
+        var range = result.SourceRangeOf(result.Tree!)!.Value;
         Assert.That(range.Start.Line, Is.EqualTo(0));
         Assert.That(range.Start.Column, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(5));
@@ -448,7 +450,7 @@ public class SymbolPositionTests
         var rule = Literal("ab\r\ncd").Preserve();
         var result = rule.Parse("ab\r\ncd");
 
-        var range = result.Tree!.SourceRange!.Value;
+        var range = result.SourceRangeOf(result.Tree!)!.Value;
         Assert.That(range.End.CharIndex, Is.EqualTo(6));
         Assert.That(range.End.Line, Is.EqualTo(1));
         Assert.That(range.End.Column, Is.EqualTo(2));
@@ -464,7 +466,7 @@ public class SymbolPositionTests
         var rule = Literal("ab\r").Preserve();
         var result = rule.Parse("ab\r");
 
-        var range = result.Tree!.SourceRange!.Value;
+        var range = result.SourceRangeOf(result.Tree!)!.Value;
         Assert.That(range.End.CharIndex, Is.EqualTo(3));
         Assert.That(range.End.Line, Is.EqualTo(1));
         Assert.That(range.End.Column, Is.EqualTo(0));
@@ -481,7 +483,7 @@ public class SymbolPositionTests
         var rule = OneOrMore(Literal("abc").Preserve()).As("repeat").Preserve();
         var result = rule.Parse("abcabcabc");
 
-        var range = result.Tree!.SourceRange!.Value;
+        var range = result.SourceRangeOf(result.Tree!)!.Value;
         Assert.That(range.Start.CharIndex, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(9));
         Assert.That(range.End.Column, Is.EqualTo(9));
@@ -504,7 +506,7 @@ public class SymbolPositionTests
         var result = rule.Parse(Input);
 
         Assert.That(result.Success, Is.True);
-        var range = result.Tree!.SourceRange!.Value;
+        var range = result.SourceRangeOf(result.Tree!)!.Value;
         Assert.That(range.Start.CharIndex, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(4));
         Assert.That(range.End.TokenIndex, Is.EqualTo(3));
@@ -520,7 +522,7 @@ public class SymbolPositionTests
         var rule = Literal(Input).Preserve();
         var result = rule.Parse(Input);
 
-        var range = result.Tree!.SourceRange!.Value;
+        var range = result.SourceRangeOf(result.Tree!)!.Value;
         Assert.That(range.End.CharIndex, Is.EqualTo(4));
         Assert.That(range.End.TokenIndex, Is.EqualTo(2));
     }
@@ -537,12 +539,12 @@ public class SymbolPositionTests
         var outer = And(Literal("ab").Preserve(), inner, Literal("cd").Preserve()).As("outer").Preserve();
         var result = outer.Parse("abxycd");
 
-        var outerRange = result.Tree!.SourceRange!.Value;
+        var outerRange = result.SourceRangeOf(result.Tree!)!.Value;
         Assert.That(outerRange.Start.CharIndex, Is.EqualTo(0));
         Assert.That(outerRange.End.CharIndex, Is.EqualTo(6));
 
-        var innerSymbol = result.Tree.Find(inner);
-        var innerRange = innerSymbol!.SourceRange!.Value;
+        var innerSymbol = result.Tree!.Find(inner);
+        var innerRange = result.SourceRangeOf(innerSymbol!)!.Value;
         Assert.That(innerRange.Start.CharIndex, Is.EqualTo(2));
         Assert.That(innerRange.End.CharIndex, Is.EqualTo(4));
     }
@@ -557,7 +559,7 @@ public class SymbolPositionTests
         var rule = And(Literal("xx").Preserve(), Literal("yy").Preserve()).As("composite").Preserve();
         var result = rule.Parse("xxyy");
 
-        var range = result.Tree!.SourceRange!.Value;
+        var range = result.SourceRangeOf(result.Tree!)!.Value;
         Assert.That(range.End.CharIndex, Is.EqualTo(4));
         Assert.That(range.End.TokenIndex, Is.EqualTo(4));
         Assert.That(range.End.Line, Is.EqualTo(0));
@@ -577,7 +579,7 @@ public class SymbolPositionTests
         var rule = And(deletedPrefix, Literal("cc").Preserve()).As("composite").Preserve();
         var result = rule.Parse("aabbcc");
 
-        var range = result.Tree!.SourceRange!.Value;
+        var range = result.SourceRangeOf(result.Tree!)!.Value;
         Assert.That(range.Start.CharIndex, Is.EqualTo(4));
         Assert.That(range.End.CharIndex, Is.EqualTo(6));
     }
@@ -594,7 +596,7 @@ public class SymbolPositionTests
         var result = rule.Parse("first\nsecond\n  hi");
 
         var symbol = result.Tree!.Find(target);
-        var range = symbol!.SourceRange!.Value;
+        var range = result.SourceRangeOf(symbol!)!.Value;
         // "first\n" = 6 chars, "second\n" = 7 chars, "  " = 2 chars.
         // target starts at char 15.
         Assert.That(range.Start.CharIndex, Is.EqualTo(15));
@@ -602,5 +604,112 @@ public class SymbolPositionTests
         Assert.That(range.Start.Column, Is.EqualTo(2));
         Assert.That(range.End.Line, Is.EqualTo(2));
         Assert.That(range.End.Column, Is.EqualTo(4));
+    }
+
+    // -------------------------------------------------------------
+    // Cross-cutting SourceRange-under-normalization tests.
+    //
+    // Per-rule SourceRange-matrix tests (one [TestCaseSource]
+    // parameterized over NormalizationExamples.RowFormPairs per leaf
+    // rule) live in each rule's own file under
+    // src/InductorParser.Tests/Rules/. See docs/TestArchitecture.md
+    // "Per-rule SourceRange-matrix tests live in each rule's own
+    // test file."
+    //
+    // The tests below exercise the ParseResult.SourceRangeOf
+    // machinery itself — FindFirstLeaf / FindLastLeaf walker
+    // stitching both endpoints, position-unit derivation through the
+    // translator, and the FormKC per-grapheme-expansion edge case
+    // where one source cluster spawns multiple parseInput leaves —
+    // without focusing on any one rule type. Keeping them centralized
+    // here means a regression in the translator surfaces in one
+    // place rather than scattered across nine per-rule files.
+    // -------------------------------------------------------------
+
+    // Decomposed "café" is 5 chars (c, a, f, e, U+0301). Under the
+    // default FormC compile, it normalizes to precomposed "café"
+    // which is 4 chars. Anything after the prefix sits one char
+    // further along in the original input than in parseInput.
+    private const string DecomposedCafePrefix = "café";
+
+    // Composite range: leftmost (FindFirstLeaf) and rightmost
+    // (FindLastLeaf) leaves both sit after the rewrite, so a fix that
+    // translated only one endpoint would slip past the per-leaf tests
+    // but break here.
+    [Test]
+    public void SourceRange_for_composite_under_FormC_translates_both_endpoints()
+    {
+        string input = DecomposedCafePrefix + "XYZ";
+        var first = Token('X').As("first").Preserve();
+        var last = Token('Z').As("last").Preserve();
+        var composite = And(first, Token('Y').Preserve(), last).As("composite").Preserve();
+        var rule = And(Literal("café"), composite);
+        var result = rule.Parse(input);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        var range = result.SourceRangeOf(result.Tree!.Find(composite)!)!.Value;
+        Assert.That(range.Start.CharIndex, Is.EqualTo(5));
+        Assert.That(range.End.CharIndex, Is.EqualTo(8));
+    }
+
+    // Position units beyond CharIndex. Column for the FormC + decomposed
+    // case differs by one (parseInput is one char shorter than original
+    // on the same line). TokenIndex differs only when graphemes are
+    // ADDED or REMOVED by normalization — covered by the FormKC ligature
+    // test below. Line never differs (canonical / compatibility
+    // normalization doesn't add or drop line break characters).
+    [Test]
+    public void SourceRange_under_FormC_Column_uses_original_input_coords()
+    {
+        string input = DecomposedCafePrefix + "X";
+        var target = Token('X').As("x").Preserve();
+        var rule = And(Literal("café"), target);
+        var result = rule.Parse(input);
+
+        var range = result.SourceRangeOf(result.Tree!.Find(target)!)!.Value;
+        Assert.That(range.Start.Column, Is.EqualTo(5),
+            "Column at the X should reflect original-input position (5), not parseInput position (4).");
+        Assert.That(range.End.Column, Is.EqualTo(6));
+    }
+
+    // FormKC compatibility-form expansion. The ligature U+FB01 is one
+    // grapheme in original (1 char) but expands to "fi" (2 chars / 2
+    // graphemes) under FormKC. Two parse-time leaves come from one
+    // source cluster, both should map back into the original ligature
+    // span [0, 1). NormalizedPositionMap's per-grapheme walker maps
+    // any parseInput offset INSIDE the rewritten run back to the
+    // start of the original cluster, and the offset just PAST the
+    // run to one past it; the natural per-endpoint translation gives
+    // leaf 'f' [0, 0) (zero-width inside the cluster) and leaf 'i'
+    // [0, 1) (full cluster span). 'X' lands cleanly one cluster past
+    // the ligature.
+    [Test]
+    public void SourceRange_under_FormKC_ligature_expansion_maps_two_leaves_into_original_cluster()
+    {
+        string input = "ﬁX";
+        var fLeaf = Token('f').As("f").Preserve();
+        var iLeaf = Token('i').As("i").Preserve();
+        var xLeaf = Token('X').As("x").Preserve();
+        var rule = And(fLeaf, iLeaf, xLeaf).As("root").Preserve();
+        rule.Compile(NormalizationForm.FormKC);
+        var result = rule.Parse(input);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        var fRange = result.SourceRangeOf(result.Tree!.Find(fLeaf)!)!.Value;
+        var iRange = result.SourceRangeOf(result.Tree!.Find(iLeaf)!)!.Value;
+        var xRange = result.SourceRangeOf(result.Tree!.Find(xLeaf)!)!.Value;
+
+        // Both ligature pieces map inside the original ligature cluster.
+        Assert.That(fRange.Start.CharIndex, Is.GreaterThanOrEqualTo(0));
+        Assert.That(fRange.End.CharIndex, Is.LessThanOrEqualTo(1));
+        Assert.That(iRange.Start.CharIndex, Is.GreaterThanOrEqualTo(0));
+        Assert.That(iRange.End.CharIndex, Is.LessThanOrEqualTo(1));
+
+        // X follows at original offset 1.
+        Assert.That(xRange.Start.CharIndex, Is.EqualTo(1));
+        Assert.That(xRange.End.CharIndex, Is.EqualTo(2));
+        Assert.That(xRange.Start.TokenIndex, Is.EqualTo(1),
+            "X TokenIndex should be 1 (1 original grapheme before it: ﬁ), not 2 (2 parseInput graphemes before it: f, i).");
+        Assert.That(xRange.End.TokenIndex, Is.EqualTo(2));
     }
 }

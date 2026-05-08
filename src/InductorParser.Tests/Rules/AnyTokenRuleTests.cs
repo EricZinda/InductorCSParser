@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
@@ -177,5 +178,19 @@ public class AnyTokenRuleTests
         Assert.That(namedResult.Tree!.Id, Is.EqualTo(namedRule.Id));
         Assert.That(namedResult.Tree!.Find(namedRule), Is.Not.Null);
         Assert.That(namedRule.NameOf(namedResult.Tree!.Id), Is.EqualTo("anyChar"));
+    }
+
+    // Matrix-driven SourceRange test. See docs/TestArchitecture.md
+    // "Per-rule SourceRange-matrix tests live in each rule's own
+    // test file." Shared scaffold lives in SourceRangeMatrixHelper.
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void SourceRange_for_AnyToken_target_after_normalized_Literal_prefix_uses_original_coords(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        SourceRangeMatrixHelper.AssertTargetAfterLiteralPrefix(
+            row, form,
+            target: AnyToken().As("any").Preserve(),
+            targetText: "X");
     }
 }
