@@ -19,22 +19,22 @@ public class RecipesExamples
     {
         var formatting = TokenSet.Runes("*_#`[]()\\");
         var textChar = NoneOf(formatting);
-        var text = OneOrMore(textChar).As("text").Preserve();
+        var text = OneOrMore(textChar).As("text");
 
         var bold = And(
             Literal("**"),
             OneOrMore(NoneOf(TokenSet.Runes("*"))),
             Literal("**")
-        ).As("bold").Preserve();
+        ).As("bold");
 
         var code = And(
             Token('`'),
             OneOrMore(NoneOf(TokenSet.Runes("`"))),
             Token('`')
-        ).As("code").Preserve();
+        ).As("code");
 
         var inline = Or(bold, code, text);
-        var paragraph = OneOrMore(inline).As("paragraph").Preserve();
+        var paragraph = OneOrMore(inline).As("paragraph");
 
         const string input = "Hello 🎸 **world** 你好 `code` done";
         var result = paragraph.Parse(input);
