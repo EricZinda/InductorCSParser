@@ -412,10 +412,13 @@ public class SymbolPositionTests
         // leaf, not from the empty trailing leaf's offset+length (which
         // would happen to give the same answer here, but the test pins
         // that lastLength==0 doesn't accidentally produce End at the
-        // empty leaf's position).
+        // empty leaf's position). eofIsTerminator: true so the inner
+        // scan succeeds with an empty leaf instead of failing at EOF
+        // (the test is about the composite range, not the strict-stopper
+        // check).
         var rule = And(
             Literal("ab").Preserve(),
-            ScanUntil(TokenSet.Runes("z")).Preserve()).As("composite").Preserve();
+            ScanUntil(TokenSet.Runes("z"), eofIsTerminator: true).Preserve()).As("composite").Preserve();
         var result = rule.Parse("ab");
 
         var range = result.SourceRangeOf(result.Tree!)!.Value;

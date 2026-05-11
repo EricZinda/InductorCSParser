@@ -140,10 +140,9 @@ of things "real-world parser rewrite" rounds are meant to surface.
   `BreakingMarker = Token('!').As("breaking")` and expecting `Find`
   to confirm the marker matched. See
   [backlog/4hwn-find-only-works-on-preserve-rules.md](../../backlog/4hwn-find-only-works-on-preserve-rules.md).
-- **`ScanUntil(TokenSet.Empty)` for "match rest of input"**. The
-  Subject grammar wants "consume everything to end of input." The
-  natural way is `ScanUntil(emptyStopperSet)`, which works because
-  `ScanUntil` falls out at EOF, but reading the rule it's not obvious
-  that an empty stop-set means "scan to EOF." A `ScanToEof()` /
-  `RestOfInput()` factory would document the intent better.
-  See [backlog/m9k4-scantoeof-factory-missing.md](../../backlog/m9k4-scantoeof-factory-missing.md).
+- **`ScanUntilEof()` for "match rest of input"**. The Subject grammar
+  wants "consume everything to end of input," and the dedicated factory
+  documents that intent at the call site. Before the factory landed,
+  the workaround was `ScanUntil(TokenSet.Empty)`, which worked because
+  the old default succeeded at EOF but was opaque to readers; the
+  current strict-default `ScanUntil` would actively fail that shape.
