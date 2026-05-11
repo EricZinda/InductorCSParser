@@ -26,8 +26,14 @@ namespace InductorParser;
 // .Flatten(type) return the same Rule so it can read as a chain:
 //
 //     var settingName = OneOrMore(OneOf(TokenSet.Letters))
-//         .As(nameof(settingName))
-//         .Flatten(FlattenType.Preserve);
+//         .As(nameof(settingName));
+//
+// .As(name) silently flips the rule's FlattenType to Preserve if it
+// hasn't been set explicitly, so a named rule is findable by Tree.Find
+// without the caller adding .Preserve() by hand. .Flatten(non-Preserve)
+// after .As (or .As after .Flatten(non-Preserve)) throws, since the two
+// requests contradict each other: a non-Preserve rule's wrapper Symbol
+// doesn't reach the tree, so naming it for Find is meaningless.
 //
 // Rules are effectively immutable. Before Compile runs, you can call the
 // modifier methods. After Compile runs (either explicitly via .Compile()
@@ -373,26 +379,62 @@ public abstract class Rule
 
     // Attach a debug/trace name. Returns the same Rule for fluent chaining.
     // Throws InvalidOperationException if the Rule has already been compiled.
-    // Virtual so subclasses (LateBoundRule) can forbid it where naming would
-    // be a bug.
+    //
+    // Identifying a rule with .As(name) means the caller wants to find it
+    // later by name (Tree.Find, ParseResult lookups). For that to work the
+    // rule's wrapper Symbol has to appear in the parse tree, which only
+    // happens under FlattenType.Preserve. Two paths:
+    //   * If the flatten policy is still the rule's class default
+    //     (e.g. Token defaults to Delete, And defaults to Flatten), .As
+    //     silently flips it to Preserve so the named rule is findable
+    //     without the caller having to add .Preserve() by hand.
+    //   * If the caller already set the policy explicitly to a non-Preserve
+    //     value via .Flatten(...) / .Delete() / .Flatten(), .As throws.
+    //     Honoring the explicit choice and silently overriding it would
+    //     both be wrong: the caller's two requests contradict each other.
+    // Virtual so subclasses (LateBoundRule) can forbid it where naming
+    // would be a bug.
     public virtual Rule As(string name)
     {
         ThrowIfSealed();
+        ApplyIdentificationFlattenPolicy(nameof(As), name);
         Name = name;
         return this;
     }
 
     // Pin an explicit SymbolId on this Rule (for stable numbering across
     // versions, useful when serializing parse trees). Returns the same
-    // Rule for fluent chaining. Throws if already compiled. Virtual for
-    // the same reason As(string) is.
+    // Rule for fluent chaining. Throws if already compiled. Same
+    // identify-implies-Preserve story as As(string): a pinned id is only
+    // useful if the rule's wrapper Symbol reaches the tree to carry it.
+    // Virtual for the same reason As(string) is.
     public virtual Rule As(SymbolId id)
     {
         ThrowIfSealed();
+        ApplyIdentificationFlattenPolicy(nameof(As), id.ToString());
         Id = id;
         _idAssigned = true;
         _idUserPinned = true;
         return this;
+    }
+
+    // Shared path for both .As(string) and .As(SymbolId): the caller is
+    // identifying this rule so it can be found later. Either auto-flip a
+    // default flatten policy to Preserve, or fail if the caller already
+    // pinned a contradicting non-Preserve policy.
+    private void ApplyIdentificationFlattenPolicy(string callerMethod, string identifier)
+    {
+        if (FlattenType == FlattenType.Preserve) return;
+        if (_flattenPolicyExplicitlySet)
+        {
+            throw new InvalidOperationException(
+                $".{callerMethod}(\"{identifier}\") can't be applied to this rule: " +
+                $"its flatten policy was explicitly set to FlattenType.{FlattenType}, " +
+                $"so its wrapper Symbol won't appear in the parse tree and Tree.Find " +
+                $"can't reach it. Set the flatten policy to FlattenType.Preserve, or " +
+                $"remove the .{callerMethod}(...) call.");
+        }
+        FlattenType = FlattenType.Preserve;
     }
 
     // Set by .As(SymbolId) and only by .As(SymbolId). Two consumers,
@@ -432,12 +474,38 @@ public abstract class Rule
     // Rule for fluent chaining. Throws if already compiled. Virtual so
     // LateBoundRule can forbid it (a FlattenType set on a transparent
     // forwarding rule is never consulted and would silently do nothing).
+    //
+    // Setting a non-Preserve policy on a rule that's already been
+    // identified with .As(name) or .As(SymbolId) throws: identification
+    // and "this rule's wrapper Symbol is absent from the tree" contradict
+    // each other, since the whole point of .As is to make the wrapper
+    // findable. Setting Preserve, or any policy on an unidentified rule,
+    // is fine.
     public virtual Rule Flatten(FlattenType type)
     {
         ThrowIfSealed();
+        if (type != FlattenType.Preserve && (Name != null || IsUserSymbolIdPinned))
+        {
+            string identifier = Name != null
+                ? $".As(\"{Name}\")"
+                : $".As(SymbolId {Id})";
+            throw new InvalidOperationException(
+                $".Flatten(FlattenType.{type}) can't be applied to this rule: " +
+                $"it was already identified with {identifier}, so its wrapper Symbol " +
+                $"must appear in the parse tree (Preserve) for Tree.Find to reach it. " +
+                $"Keep the flatten policy at FlattenType.Preserve, or remove the .As(...) call.");
+        }
         FlattenType = type;
+        _flattenPolicyExplicitlySet = true;
         return this;
     }
+
+    // True once the caller has called .Flatten(...), .Preserve(), .Delete(),
+    // or .Flatten(). Stays false while the rule still carries its class
+    // default. .As(name) checks this to decide whether to silently flip
+    // FlattenType to Preserve (default still in place) or throw (caller
+    // already pinned a contradicting non-Preserve policy).
+    private bool _flattenPolicyExplicitlySet;
 
     // Convenience shortcuts for the three FlattenType values. These read
     // better than .Flatten(FlattenType.X) at calls that otherwise

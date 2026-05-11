@@ -26,36 +26,32 @@ public class Primer2Examples
         // so unioning with lineEndRunes restores "any whitespace rune."
         var anySpaceRunes = TokenSet.InlineWhitespace | lineEndRunes;
 
-        var name = OneOrMore(NoneOf(TokenSet.Runes("]") | anySpaceRunes))
-            .As("name").Preserve();
-        var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes))
-            .As("key").Preserve();
+        var name = OneOrMore(NoneOf(TokenSet.Runes("]") | anySpaceRunes)).As("name");
+        var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes)).As("key");
 
         var section = And(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
-            .As("section").Preserve();
+            .As("section");
 
         var quotedString = And(
             Token('"'),
             ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
-            Token('"')).As("quotedString").Preserve();
+            Token('"')).As("quotedString");
 
-        var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\"")))
-            .As("bareWord").Preserve();
+        var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\""))).As("bareWord");
 
-        var floatValue = Float().As("float").Preserve();
-        var integerValue = Integer().As("integer").Preserve();
+        var floatValue = Float().As("float");
+        var integerValue = Integer().As("integer");
 
-        var value = Or(floatValue, integerValue, quotedString, bareWord)
-            .As("value").Preserve();
+        var value = Or(floatValue, integerValue, quotedString, bareWord).As("value");
 
         var keyValue = And(key, Optional(InlineWhitespace()), Token('='), Optional(InlineWhitespace()),
                              value, Optional(InlineWhitespace()), EndOfLine())
-            .As("keyValue").Preserve();
+            .As("keyValue");
 
         var blankLine = And(Optional(InlineWhitespace()), EndOfLine());
 
         var line = Or(section, keyValue, blankLine);
-        var config = And(ZeroOrMore(line), Eof()).As("config").Preserve();
+        var config = And(ZeroOrMore(line), Eof()).As("config");
 
         return (config, section, keyValue, key, value, integerValue);
     }
@@ -185,27 +181,24 @@ public class Primer2Examples
         var lineEndRunes = TokenSet.LineTerminators;
         var anySpaceRunes = TokenSet.InlineWhitespace | lineEndRunes;
 
-        var name = OneOrMore(NoneOf(TokenSet.Runes("]") | anySpaceRunes))
-            .As("name").Preserve();
-        var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes))
-            .As("key").Preserve();
+        var name = OneOrMore(NoneOf(TokenSet.Runes("]") | anySpaceRunes)).As("name");
+        var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes)).As("key");
 
         var section = And(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
-            .As("section").Preserve();
+            .As("section");
 
         var quotedString = And(
             Token('"'),
             ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
-            Token('"')).As("quotedString").Preserve();
+            Token('"')).As("quotedString");
 
-        var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\"")))
-            .As("bareWord").Preserve();
+        var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\""))).As("bareWord");
 
         var value = Or(
-            Float().As("float").Preserve(),
-            Integer().As("integer").Preserve(),
+            Float().As("float"),
+            Integer().As("integer"),
             quotedString,
-            bareWord).As("value").Preserve();
+            bareWord).As("value");
 
         var keyValue = And(
             key,
@@ -215,11 +208,11 @@ public class Primer2Examples
             value,
             Optional(InlineWhitespace()),
             EndOfLine())
-            .As("keyValue").Preserve();
+            .As("keyValue");
 
         var blankLine = And(Optional(InlineWhitespace()), EndOfLine());
         var line = Or(section, keyValue, blankLine);
-        var config = And(ZeroOrMore(line), Eof()).As("config").Preserve();
+        var config = And(ZeroOrMore(line), Eof()).As("config");
 
         var result = config.Parse("[server]\nport oops\n");
 

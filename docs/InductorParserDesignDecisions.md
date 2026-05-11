@@ -45,8 +45,8 @@ Every concept from the original [GettingStarted.md](https://github.com/EricZinda
 | `PeekExpression<T>`                | `Peek(rule)`                                    |
 | `NotPeekExpression<T>`             | `Not(rule)`                                     |
 | `EofSymbol`                        | `Eof()`                                         |
-| `FlattenType::None/Delete/Flatten` | `FlattenType.Preserve/Delete/Flatten`, set via `.Flatten(FlattenType.Preserve)` |
-| `MySymbolID::SettingName`          | `.As(nameof(SettingName))`, optional            |
+| `FlattenType::None/Delete/Flatten` | `FlattenType.Preserve/Delete/Flatten`, set via `.Flatten(FlattenType.Preserve)` (implicit when the rule is also `.As(...)`-named) |
+| `MySymbolID::SettingName`          | `.As(nameof(SettingName))`, optional. Also flips the rule's flatten policy to `Preserve` so `Tree.Find` can locate it |
 | `tree->FlattenInto(vector)`        | `tree.FlattenInto(list)` (same semantics)       |
 | `Compiler<T>::ProcessAst`          | plain function, or your own base class (Recipes)|
 | `staticErrorMessage`               | `.WithError("...")`                             |
