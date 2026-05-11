@@ -165,4 +165,38 @@ public class OrRuleTests
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
+
+    [Test]
+    public void Or_shortcut_doesnt_skip_And_with_optional_NoneOf_prefix()
+    {
+        // This pins the lookahead-shortcut soundness story for an And
+        // whose first child is Optional(NoneOf(...)). The Optional can
+        // either match zero (so the next sibling sees the lookahead) or
+        // match a single token NOT in the NoneOf's set, so the And's
+        // true first-token set is "anything in {a,b,c} OR anything not
+        // in {x,y}" = anything except {x,y} \ {a,b,c} = anything except
+        // nothing-here = Universe.
+        //
+        // The And's published RuleStartRequirements is derived by
+        // running Optional through WithAdvance(Sometimes) (because the
+        // outer BetweenInclusive's atLeast-zero downgrades Inner.Advance)
+        // and then composing with OneOf("abc") in MatchesAllOf. WithAdvance
+        // forces polarity to MustBeIn but keeps the original set, so the
+        // composition treats {x,y} (the NoneOf's fail-set) as a
+        // MustBeIn-style consume-set. Combined with OneOf's {a,b,c} the
+        // And publishes ({x,y,a,b,c}, Always, MustBeIn).
+        //
+        // Inside the outer Or, that triple makes CannotMatchLookahead
+        // skip the And on peek 'z'. The Or commits to the Token('z')
+        // alternative, which only consumes 'z', and the parse fails on
+        // the trailing 'b' instead of the And consuming both characters
+        // and the parse succeeding.
+        var rule = Or(
+            And(Optional(NoneOf("xy")), OneOf("abc")),
+            Token('z'));
+
+        var result = rule.Parse("zb");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
 }

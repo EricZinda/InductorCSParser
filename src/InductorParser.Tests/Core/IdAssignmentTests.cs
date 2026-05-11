@@ -104,6 +104,61 @@ public class IdAssignmentTests
         Assert.That(sharedRule.Id, Is.EqualTo(pinned));
     }
 
+    [Test]
+    public void As_SymbolId_rejects_pins_below_the_custom_range()
+    {
+        // The rune range (0..0x10FFFF) and built-in range
+        // (0x110000..0x1FFFFF) are reserved. Pinning a rule into either
+        // would silently collide with Token('a')-style rune leaves or
+        // future built-in ids, and the Compile-time duplicate-pin check
+        // can only catch user pins, not auto-pins from constructors. As
+        // throws at the call site so the bad pin never reaches the
+        // grammar.
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
+
+        // Rune-range pin: collides with Token('a') if both are in the
+        // same grammar.
+        Assert.Throws<ArgumentOutOfRangeException>(() => rule.As(new SymbolId(0x61)));
+
+        // Built-in gap pin.
+        Assert.Throws<ArgumentOutOfRangeException>(() => rule.As(new SymbolId(0x110000)));
+
+        // Negative pin: no meaningful identity.
+        Assert.Throws<ArgumentOutOfRangeException>(() => rule.As(new SymbolId(-1)));
+
+        // The boundary value (CustomRangeStart itself) is the first
+        // legal pin.
+        Assert.DoesNotThrow(() => rule.As(new SymbolId(SymbolRanges.CustomRangeStart)));
+    }
+
+    [Test]
+    public void Pre_compiled_sub_rule_pin_collides_with_unsealed_sibling_pin()
+    {
+        // Two distinct reachable rules in the same grammar both pin the
+        // same custom-range SymbolId. One was compiled standalone first,
+        // so it's already sealed by the time the larger grammar reaches
+        // it. The second was pinned but isn't sealed yet. Compile of the
+        // larger grammar should catch this just like the all-unsealed
+        // version (Two_reachable_rules_pinned_to_the_same_SymbolId_fail_to_compile),
+        // because the second rule's pin would otherwise silently shadow
+        // the first one's: Tree.Find against either rule reference would
+        // return the same nodes regardless of which rule actually
+        // matched. Pre-compiling one branch is a real pattern when a
+        // shared identifier rule lives in a library and gets reused
+        // across multiple grammars.
+        var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 5678);
+        var preCompiled = OneOrMore(OneOf(TokenSet.Letters)).As(pinned).As("first");
+        preCompiled.Compile();
+
+        var unsealed = OneOrMore(OneOf(TokenSet.Digits)).As(pinned).As("second");
+        var doc = And(preCompiled, unsealed);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => doc.Compile());
+        Assert.That(exception!.Message, Does.Contain(pinned.Value.ToString()));
+        Assert.That(exception.Message, Does.Contain("first"));
+        Assert.That(exception.Message, Does.Contain("second"));
+    }
+
     // Each test below builds a small grammar with a specific arrangement
     // of pinned, named, and anonymous leaves, compiles it, and asserts
     // the exact id every leaf comes out with. The model-based sweep at
