@@ -386,9 +386,26 @@ public abstract class Rule
     // versions, useful when serializing parse trees). Returns the same
     // Rule for fluent chaining. Throws if already compiled. Virtual for
     // the same reason As(string) is.
+    //
+    // The pinned value must land in the custom range (>= CustomRangeStart).
+    // Values below that are reserved: 0..0x10FFFF for Unicode rune leaves
+    // (Token('a') already carries id 0x61 by construction) and
+    // 0x110000..0x1FFFFF for built-in expression ids. Pinning a rule into
+    // either reserved range produces silent identity collisions with rune
+    // leaves or built-ins, since Tree.Find / Tree.Is / NameOf disambiguate
+    // by integer id only.
     public virtual Rule As(SymbolId id)
     {
         ThrowIfSealed();
+        if (id.Value < SymbolRanges.CustomRangeStart)
+            throw new ArgumentOutOfRangeException(
+                nameof(id),
+                id.Value,
+                $"User SymbolId pins must land in the custom range " +
+                $"(>= 0x{SymbolRanges.CustomRangeStart:X} / " +
+                $"{SymbolRanges.CustomRangeStart}). Lower values are reserved " +
+                $"for Unicode runes (0..0x10FFFF) and built-in expression " +
+                $"ids (0x110000..0x1FFFFF). See SymbolRanges.");
         Id = id;
         _idAssigned = true;
         _idUserPinned = true;
@@ -1142,44 +1159,42 @@ public abstract class Rule
         _idAssigned = true;
     }
 
-    // Pass 1. Walk the graph and stash any explicitly-pinned ids so the
-    // later passes know which slots are off limits. Reject two reachable
-    // rules whose user-supplied .As(SymbolId) pins land on the same
-    // custom-range id with a compile-time error that names both rules.
-    // Allowing custom-range duplicate user pins would break parse-tree
-    // lookups by raw SymbolId and let NameOf return whichever rule the
-    // graph walk happened to visit second.
+    // Pass 1. Walk the graph and stash any user-pinned ids so the later
+    // passes know which slots are off limits, and reject two reachable
+    // rules whose .As(SymbolId) pins land on the same id with a compile-
+    // time error that names both rules.
     //
-    // Two ids are out of scope for this check:
+    // The gate is `_idUserPinned`, set only by `.As(SymbolId)` (and
+    // persisting through sealing). `As(SymbolId)` itself enforces that
+    // user pins land in the custom range, so reaching this method with
+    // `_idUserPinned=true` already implies a custom-range id. Two kinds
+    // of assigned ids correctly fall through to just reserving the slot
+    // in `usedIds`:
     //
-    //   * Pre-pinned ids in the rune range (every single-rune Token has
-    //     its code point pinned at construction time). A grammar that
-    //     mentions Token('a') twice has two rules sharing id 97 by design,
-    //     NameOf short-circuits the rune range to the rune string, and
-    //     there's no rule-name ambiguity to resolve.
+    //   * Rune-range pre-pins. Every single-rune Token has its code
+    //     point pinned in its constructor, not by the user. A grammar
+    //     that mentions Token('a') twice has two rules sharing id 97 by
+    //     design; NameOf short-circuits the rune range to the rune
+    //     string and there's no name ambiguity to resolve.
     //
-    //   * Ids stamped by a prior Compile on a sub-rule. If the caller
-    //     compiled a sub-grammar and is now compiling a larger grammar
-    //     that reaches it, those ids look pinned but weren't chosen by
-    //     the user. A user pin via .As(SymbolId) always happens before
-    //     Compile (As throws on a sealed rule), so a rule whose id is
-    //     assigned but isn't yet sealed is the user-pinned shape we
-    //     care about here.
+    //   * Custom-range ids stamped by the anonymous pass. A sub-rule
+    //     that was compiled standalone and is now reached from a larger
+    //     grammar has `_idAssigned=true` but `_idUserPinned=false`, so
+    //     it doesn't compete for the conflict slot.
     private static void CollectPinnedIds(Rule r, HashSet<Rule> visited, HashSet<int> usedIds, Dictionary<int, Rule> pinnedRules)
     {
         if (!visited.Add(r)) return;
         if (r._idAssigned)
         {
             int idValue = r.Id.Value;
-            bool isUserPinnedCustom = !r._sealed && idValue >= SymbolRanges.CustomRangeStart;
-            if (isUserPinnedCustom && pinnedRules.TryGetValue(idValue, out var existing))
+            if (r._idUserPinned && pinnedRules.TryGetValue(idValue, out var existing))
             {
                 throw new InvalidOperationException(
                     $"Two reachable rules pin SymbolId({idValue}): " +
                     $"'{DescribePinnedRule(existing)}' and '{DescribePinnedRule(r)}'. " +
                     $"Each .As(new SymbolId(...)) pin must be unique within a grammar.");
             }
-            if (isUserPinnedCustom)
+            if (r._idUserPinned)
                 pinnedRules[idValue] = r;
             usedIds.Add(idValue);
         }
