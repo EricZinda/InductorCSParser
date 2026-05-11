@@ -135,7 +135,8 @@ public static class TomlGrammar
         var nonAsciiBody =
             TokenSet.Range(0x80, 0xD7FF) | TokenSet.Range(0xE000, 0x10FFFF);
         var nonEndOfLine = TokenSet.Single('\t') | TokenSet.Range(0x20, 0x7F) | nonAsciiBody;
-        var comment = And(Token('#'), ScanUntil(TokenSet.LineTerminators).As("commentBody"))
+        var comment = And(Token('#'),
+                ScanUntil(TokenSet.LineTerminators, eofIsTerminator: true).As("commentBody"))
             .As("comment").Preserve();
 
         // ws-comment-newline: any mix of inline whitespace, comments, and

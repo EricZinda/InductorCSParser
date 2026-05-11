@@ -43,9 +43,9 @@ public static class ConventionalCommitParserRewrite
         .Flatten(FlattenType.Preserve);
 
     // Header is a single line by the time we parse it (we split on newlines
-    // first, matching the upstream parser's behavior). ScanUntil with an
-    // empty stop set runs to EOF, capturing the whole rest of the input.
-    public static readonly Rule Subject = ScanUntil(TokenSet.Empty)
+    // first, matching the upstream parser's behavior). ScanUntilEof captures
+    // the whole rest of the input as one leaf.
+    public static readonly Rule Subject = ScanUntilEof()
         .As("subject");
 
     // Preserve so result.Tree returns the single root wrapper Symbol that

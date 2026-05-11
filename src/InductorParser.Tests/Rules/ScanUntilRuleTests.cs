@@ -14,16 +14,27 @@ public class ScanUntilRuleTests
     // "Scan until pipe": the simplest stopper-style setup. Body is
     // any rune other than '|'. Scan stops at the first '|' without
     // consuming it. Mirrors the common "scan until the delimiter"
-    // idiom that the stopper-based API is designed for.
+    // idiom that the stopper-based API is designed for. Strict by
+    // default: fails if EOF is reached without a '|' in the input.
     private static Rule StopOnPipe() => ScanUntil(TokenSet.Runes("|"));
+
+    // Tolerant sibling: EOF is also a valid end of the scan. Used by
+    // tests that intentionally scan inputs containing no '|', where
+    // the assertion is about the body content (escape handling, lone
+    // surrogates, leaf shape) rather than the stopper requirement.
+    private static Rule StopOnPipeOrEof() => ScanUntil(TokenSet.Runes("|"), eofIsTerminator: true);
 
     // A ScanUntil with the JSON-style shape: stop at ", escape start
     // \, escape end is one of "/\bfnrt. Matches the grammar the
     // benchmark uses in InductorJsonParser, minus the delimiters.
+    // eofIsTerminator: true so these tests can drive bodies that don't
+    // include the closing quote; the focus is the escape handling and
+    // body composition, not the stopper-required check (which has its
+    // own dedicated tests).
     private static Rule JsonLike()
     {
         var escapeEnd = OneOf(TokenSet.Runes("\"\\/bfnrt"));
-        return ScanUntil(TokenSet.Runes("\""), new Rune('\\'), escapeEnd);
+        return ScanUntil(TokenSet.Runes("\""), new Rune('\\'), escapeEnd, eofIsTerminator: true);
     }
 
     [Test]
@@ -51,13 +62,43 @@ public class ScanUntilRuleTests
     [Test]
     public void ScanUntil_matches_a_run_of_body_chars_into_one_leaf()
     {
-        // "abcXYZ" has no '|' anywhere, so the whole input is body.
-        var result = StopOnPipe().Parse("abcXYZ");
+        // "abcXYZ|" scans the whole "abcXYZ" run as body up to the
+        // stopper. The trailing '|' is required because StopOnPipe is
+        // strict and would otherwise fail at EOF.
+        var rule = InductorParser.Rules.And(StopOnPipe(), Token('|'));
+        var result = rule.Parse("abcXYZ|");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("abcXYZ"));
         // One leaf Symbol for the whole run, not one per character. The
-        // whole point of this rule.
+        // whole point of this rule. The Token('|') is Delete so it does
+        // not add children either.
+        Assert.That(result.Tree!.Children.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ScanUntil_strict_fails_when_EOF_reached_without_stopper()
+    {
+        // Strict default: a scan that runs off the end without matching
+        // the stopper fails the rule, with the failure recorded at the
+        // EOF position.
+        var result = StopOnPipe().Parse("abcXYZ");
+
+        Assert.That(result.Success, Is.False,
+            "strict ScanUntil should fail when no '|' appears in the input");
+        Assert.That(result.ErrorCharIndex, Is.EqualTo("abcXYZ".Length),
+            "failure should be recorded at the EOF position the scan reached");
+    }
+
+    [Test]
+    public void ScanUntil_tolerant_succeeds_at_EOF_without_stopper()
+    {
+        // eofIsTerminator: true admits EOF as a valid end of the scan.
+        // The whole input becomes the body leaf.
+        var result = StopOnPipeOrEof().Parse("abcXYZ");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("abcXYZ"));
         Assert.That(result.Tree!.Children.Count, Is.EqualTo(0));
     }
 
@@ -189,7 +230,7 @@ public class ScanUntilRuleTests
         // user-perceived character that isn't equal to '"' alone, so
         // ScanUntil(Runes("\"")) treats it as body and keeps scanning,
         // matching how OneOf("\"") refuses the same cluster.
-        var rule = ScanUntil(TokenSet.Runes("\""));
+        var rule = ScanUntil(TokenSet.Runes("\""), eofIsTerminator: true);
         var result = rule.Parse("ab\"́cd");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -202,8 +243,10 @@ public class ScanUntilRuleTests
     public void ScanUntil_body_consumes_backslash_when_no_escape_configured()
     {
         // No-escape form, stopper is '|'. A '\' isn't a stopper and
-        // there's no escape path, so it's consumed as body.
-        var result = StopOnPipe().Parse(@"abc\");
+        // there's no escape path, so it's consumed as body. The input
+        // has no '|', so the tolerant variant runs the whole body to
+        // EOF.
+        var result = StopOnPipeOrEof().Parse(@"abc\");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo(@"abc\"));
@@ -222,7 +265,7 @@ public class ScanUntilRuleTests
         // routes ScanUntil through ResolveLeafId or a similar helper has
         // to keep .As(SymbolId) honored.
         var pinnedId = new SymbolId(SymbolRanges.CustomRangeStart + 105);
-        var rule = ScanUntil(TokenSet.Runes("|")).As(pinnedId);
+        var rule = ScanUntil(TokenSet.Runes("|"), eofIsTerminator: true).As(pinnedId);
         var result = rule.Parse("abc");
 
         Assert.That(result.Success, Is.True);
@@ -238,8 +281,10 @@ public class ScanUntilRuleTests
         // Tree shape matters because the performance win of this
         // primitive is "one Symbol per run, not one per rune." Lock
         // in the shape so a future change that accidentally splits
-        // the leaf back into per-rune pieces fails loudly.
-        var result = StopOnPipe().Parse("hello");
+        // the leaf back into per-rune pieces fails loudly. Tolerant
+        // variant so the no-pipe input still parses; the leaf shape
+        // is the same under either eofIsTerminator setting.
+        var result = StopOnPipeOrEof().Parse("hello");
         Assert.That(result.Success, Is.True);
 
         Symbol tree = result.Tree!;
@@ -251,10 +296,13 @@ public class ScanUntilRuleTests
     public void ScanUntil_multi_rune_start_triggers_escape_end()
     {
         // Start is the two-rune sequence "$$". Stopper is '|'. End
-        // is one letter. Matches "abc$$X" up through the end.
+        // is one letter. Matches "abc$$X" up through the end. The
+        // input has no '|' so eofIsTerminator: true lets the body run
+        // to EOF; this test exercises escape behavior, not the
+        // stopper-required check.
         var start = Literal("$$");
         var end = OneOf(TokenSet.Ascii.Letters);
-        var rule = ScanUntil(TokenSet.Runes("|"), start, end);
+        var rule = ScanUntil(TokenSet.Runes("|"), start, end, eofIsTerminator: true);
 
         var result = rule.Parse("abc$$X");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -327,9 +375,11 @@ public class ScanUntilRuleTests
     {
         // Starts are '$' OR '?'. Stopper is '|'. Demonstrates that
         // escapeStart can be a sub-rule, not just a fixed literal.
+        // Tolerant variant because the inputs run past the escape end
+        // to EOF without ever encountering '|'.
         var start = Or(Token('$'), Token('?'));
         var end = OneOf(TokenSet.Ascii.Letters);
-        var rule = ScanUntil(TokenSet.Runes("|"), start, end);
+        var rule = ScanUntil(TokenSet.Runes("|"), start, end, eofIsTerminator: true);
 
         var r1 = rule.Parse("abc$X");
         Assert.That(r1.Success, Is.True, r1.ErrorMessage);
@@ -440,9 +490,10 @@ public class ScanUntilRuleTests
     {
         // Surrogate at the very end of input, nothing to pair with.
         // ScanUntil consumes 'a', 'b', 'c', then the lone surrogate
-        // as body, then hits EOF and exits the loop normally.
+        // as body, then hits EOF. With eofIsTerminator: true the
+        // tolerant variant succeeds with the whole input as the leaf.
         string input = "abc" + new string((char)0xD800, 1);
-        var rule = StopOnPipe();
+        var rule = StopOnPipeOrEof();
         rule.Compile(null);
 
         var result = rule.Parse(input);
@@ -557,15 +608,17 @@ public class ScanUntilRuleTests
     // _stopperSet routes through the same OneOfRule.NormalizeAndValidate
     // helper as OneOf / NoneOf / ScanWhile.
     //
-    // ScanUntil always succeeds (no minimum count), so the bare-leaf and
-    // Or-with-fallback shapes can't distinguish the stale-set bug from
-    // correct behavior via Success alone. The three shapes that DO
-    // surface the bug all involve a follow-up consumer that depends on
-    // ScanUntil stopping at the right place:
+    // ScanUntil has no minimum count, so the bare-leaf and Or-with-
+    // fallback shapes can't distinguish the stale-set bug from correct
+    // behavior via Success alone. The three shapes that DO surface the
+    // bug all involve a follow-up consumer that depends on ScanUntil
+    // stopping at the right place:
     //   * And(ScanUntil, Token(source)): assert success. ScanUntil
     //     should stop at offset 0 (input starts with stopper) so the
     //     trailing Token can consume the source. Stale set means
-    //     ScanUntil eats everything and Token sees EOF.
+    //     ScanUntil eats everything and either runs off the end
+    //     (strict ScanUntil fails on EOF) or hands an empty residue to
+    //     Token, which fails. Either way the And fails.
     //   * OneOrMore(ScanUntil): assert FAILURE. ScanUntil makes 0
     //     progress so OneOrMore can't get its minimum count. Stale set
     //     means ScanUntil consumes everything in one round, OneOrMore
@@ -676,5 +729,112 @@ public class ScanUntilRuleTests
             targetText: "XYZ",
             extraInput: "!",
             afterTarget: Token('!'));
+    }
+
+    // -----------------------------------------------------------------
+    // Strict-vs-tolerant EOF and ScanUntilEof
+    // -----------------------------------------------------------------
+
+    [Test]
+    public void ScanUntil_strict_with_rule_stopper_fails_on_EOF()
+    {
+        // Rule-stopper overload: the close marker "]]>" is never
+        // present in the input. Strict semantics fail the rule at EOF.
+        var rule = ScanUntil(Literal("]]>"));
+        var result = rule.Parse("plain text");
+
+        Assert.That(result.Success, Is.False,
+            "strict ScanUntil(Rule) should fail when the stopper never matches");
+        Assert.That(result.ErrorCharIndex, Is.EqualTo("plain text".Length));
+    }
+
+    [Test]
+    public void ScanUntil_strict_inside_outer_And_attributes_failure_to_inner_scan()
+    {
+        // Unterminated string body: an outer And(Token('"'), ScanUntil('"'),
+        // Token('"')) fails on input '"hello'. Under strict ScanUntil
+        // the inner scan fails at EOF (offset 6), so the deepest failure
+        // recorded is the body's, not the missing close quote's. The
+        // recursive engine records lexer.Position (= input.Length) at
+        // the body, which is the same depth the outer Token('"') would
+        // have hit, but the message comes from the inner rule.
+        var body = ScanUntil(TokenSet.Runes("\""));
+        var rule = InductorParser.Rules.And(Token('"'), body, Token('"'));
+
+        var result = rule.Parse("\"hello");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo("\"hello".Length),
+            "failure depth should be at EOF, where the body ran out without finding the closer");
+    }
+
+    [Test]
+    public void ScanUntil_strict_with_WithError_surfaces_custom_message_at_EOF()
+    {
+        var rule = ScanUntil(TokenSet.Runes("|")).WithError("expected pipe before end");
+        var result = rule.Parse("abc");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Does.Contain("expected pipe before end"));
+    }
+
+    [Test]
+    public void ScanUntil_strict_fails_on_EOF_even_with_escape_support()
+    {
+        // Escape-having variant: even when escapes are configured, a
+        // scan that runs off the end without matching the stopper has
+        // to fail under strict semantics. The escape path doesn't
+        // accidentally consume the EOF branch.
+        var escapeEnd = OneOf(TokenSet.Runes("nrt\\\""));
+        var rule = ScanUntil(TokenSet.Runes("\""), new Rune('\\'), escapeEnd);
+
+        var result = rule.Parse("abc");
+
+        Assert.That(result.Success, Is.False,
+            "strict ScanUntil with escape support should still fail when EOF is reached without the stopper");
+        Assert.That(result.ErrorCharIndex, Is.EqualTo("abc".Length));
+    }
+
+    [Test]
+    public void ScanUntilEof_consumes_remainder_in_a_single_leaf()
+    {
+        var rule = ScanUntilEof().As("rest");
+        rule.Compile();
+
+        var result = rule.Parse("hello world");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("hello world"));
+        Assert.That(result.Tree!.Children.Count, Is.EqualTo(0),
+            "ScanUntilEof should emit one leaf, same as ScanUntil");
+    }
+
+    [Test]
+    public void ScanUntilEof_succeeds_on_empty_input()
+    {
+        var rule = ScanUntilEof();
+        rule.Compile();
+
+        var result = rule.Parse("");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(""));
+    }
+
+    [Test]
+    public void ScanUntilEof_round_trips_lone_surrogate_at_end_of_input()
+    {
+        // The whole-input-as-one-leaf path needs to carry through
+        // unpaired surrogates the same way the stoppered variant does
+        // (matches the round-trip property already verified for
+        // StopOnPipe with a trailing surrogate).
+        string input = "abc" + new string((char)0xD83D, 1);
+        var rule = ScanUntilEof();
+        rule.Compile(null);
+
+        var result = rule.Parse(input);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(input));
     }
 }

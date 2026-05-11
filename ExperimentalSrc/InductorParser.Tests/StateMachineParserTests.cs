@@ -381,6 +381,92 @@ public class StateMachineParserTests
         Assert.That(stateMachine.ToString(), Is.EqualTo("hello"));
     }
 
+    [Test]
+    public void ScanUntil_strict_fails_on_EOF_without_stopper_in_both_engines()
+    {
+        // Strict default: no '|' in the input means the scan runs off
+        // the end. Both the recursive evaluator and the state-machine
+        // ScanUntilFast opcode have to fail here, and at the same
+        // depth, so AssertSameOutcome compares both Success and the
+        // recorded failure position.
+        var rule = ScanUntil(TokenSet.Runes("|"));
+        AssertSameOutcome(rule, "abc", expectSuccess: false);
+        AssertSameOutcome(rule, "", expectSuccess: false);
+    }
+
+    [Test]
+    public void ScanUntil_tolerant_succeeds_at_EOF_in_both_engines()
+    {
+        // eofIsTerminator: true: the Stepper's pos >= inputLen branch
+        // takes state.OnSuccess instead of spec.OnEofFailState, so
+        // both engines succeed with the whole input as the body.
+        // Wrap in And(..., Eof()) so the test doesn't trip on the
+        // default Parse "no trailing input" rule when a stopper exists
+        // mid-input; we want to compare engine outcomes, not parse
+        // options.
+        var bare = ScanUntil(TokenSet.Runes("|"), eofIsTerminator: true);
+        AssertSameOutcome(bare, "abc", expectSuccess: true);
+        AssertSameOutcome(bare, "", expectSuccess: true);
+
+        // Mid-input stopper: scan stops at '|', outer Token consumes it.
+        var withTrailer = And(
+            ScanUntil(TokenSet.Runes("|"), eofIsTerminator: true),
+            Token('|'),
+            Eof());
+        AssertSameOutcome(withTrailer, "ab|", expectSuccess: true);
+    }
+
+    [Test]
+    public void ScanUntilEof_succeeds_in_both_engines()
+    {
+        // ScanUntilEof forwards to ScanUntilRule(TokenSet.Empty,
+        // eofIsTerminator: true), so it shares the same lowered shape
+        // as the tolerant case and just always runs to EOF.
+        var rule = ScanUntilEof();
+        AssertSameOutcome(rule, "hello world", expectSuccess: true);
+        AssertSameOutcome(rule, "", expectSuccess: true);
+    }
+
+    [Test]
+    public void ScanUntil_state_machine_strict_fails_on_stray_surrogate_halt()
+    {
+        // Step_ScanUntilFast has a second exit besides pos >= inputLen:
+        // a lone surrogate halts the scan because no rune can be
+        // decoded. Before strict semantics, that halt always routed to
+        // state.OnSuccess (succeed with whatever body had accumulated).
+        // Now it dispatches on spec.EofIsTerminator the same way the
+        // real-EOF branch does, so under strict the halt fails the
+        // rule. The recursive evaluator handles lone surrogates
+        // differently (it flows them through as body and only halts at
+        // real EOF), so this test pins only the state-machine side of
+        // the new strict surrogate-halt behavior; the recursive side's
+        // surrogate-as-body behavior is verified in
+        // ScanUntilRuleTests.cs.
+        //
+        // Compile with null so string.Normalize doesn't reject the
+        // malformed UTF-16 before ScanUntil ever sees it.
+        string input = "abc" + new string((char)0xD800, 1);
+
+        var strict = ScanUntil(TokenSet.Runes("|"));
+        strict.Compile(null);
+        var strictStateMachine = StateMachineParser.Parse(strict, input, new ParseOptions());
+        Assert.That(strictStateMachine.Success, Is.False,
+            "strict ScanUntil in the state-machine engine should fail when the stray surrogate halts the scan with no stopper match");
+
+        // Sanity-check the tolerant variant: same input but with
+        // eofIsTerminator: true. The Stepper's surrogate-halt branch
+        // returns state.OnSuccess in tolerant mode, so the ScanUntil
+        // rule itself succeeds with a leaf over "abc". The surrogate
+        // remains unconsumed in the input; the rule succeeds at the
+        // ScanUntil level even if an outer Eof() would then refuse it.
+        var tolerant = ScanUntil(TokenSet.Runes("|"), eofIsTerminator: true);
+        tolerant.Compile(null);
+        var tolerantStateMachine = StateMachineParser.Parse(tolerant,
+            input,
+            new ParseOptions { AllowTrailingInput = true });
+        Assert.That(tolerantStateMachine.Success, Is.True, tolerantStateMachine.ErrorMessage);
+    }
+
     // ---- AnyToken ----
 
     [Test]
