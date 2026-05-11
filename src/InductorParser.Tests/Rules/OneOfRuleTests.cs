@@ -140,6 +140,23 @@ public class OneOfRuleTests
     // Multi-rune grapheme support -------------------------------------------
 
     [Test]
+    public void OneOf_with_TokenSet_Empty_rejects_a_multi_rune_grapheme_without_NRE()
+    {
+        // OneOf(TokenSet.Empty) is the "match nothing" rule, which is
+        // what a programmatically-built set lands on when nothing got
+        // added. The cluster doesn't match (the set is empty), but the
+        // membership probe must return false instead of NRE'ing on
+        // _multiRuneGraphemes.Length when the underlying TokenSet is
+        // default(TokenSet) (the public TokenSet.Empty alias).
+        var rule = OneOf(TokenSet.Empty);
+        rule.Compile(null);
+
+        var result = rule.Parse(LatinEAcuteGrapheme);
+
+        Assert.That(result.Success, Is.False);
+    }
+
+    [Test]
     public void OneOf_matches_a_multi_rune_grapheme_under_grapheme_lexer()
     {
         // OneOf(set) where set has multi-rune entries: the lexer
@@ -410,5 +427,19 @@ public class OneOfRuleTests
         Assert.That(result.Success, Is.True,
             $"And(OneOf(TokenSet.Runes(\"{NormalizationExamples.Hex(row.Source)}\")), Eof()).Compile({form}).Parse(\"{NormalizationExamples.Hex(row.Source)}\") " +
             $"should succeed. Error was: {result.ErrorMessage}");
+    }
+
+    // Matrix-driven SourceRange test. See docs/TestArchitecture.md
+    // "Per-rule SourceRange-matrix tests live in each rule's own
+    // test file." Shared scaffold lives in SourceRangeMatrixHelper.
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void SourceRange_for_OneOf_target_after_normalized_Literal_prefix_uses_original_coords(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        SourceRangeMatrixHelper.AssertTargetAfterLiteralPrefix(
+            row, form,
+            target: OneOf(TokenSet.Single('X')).As("xOne").Preserve(),
+            targetText: "X");
     }
 }

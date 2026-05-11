@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
@@ -410,5 +411,19 @@ public class WithinTokenRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(sink.ToString(), Does.Not.Contain("SKIP | WithinToken:"));
+    }
+
+    // Matrix-driven SourceRange test. See docs/TestArchitecture.md
+    // "Per-rule SourceRange-matrix tests live in each rule's own
+    // test file." Shared scaffold lives in SourceRangeMatrixHelper.
+    [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
+    public void SourceRange_for_WithinToken_target_after_normalized_Literal_prefix_uses_original_coords(
+        NormalizationExamples.NormalizationCase row,
+        NormalizationForm form)
+    {
+        SourceRangeMatrixHelper.AssertTargetAfterLiteralPrefix(
+            row, form,
+            target: WithinToken(OneOf("X")).As("checked").Preserve(),
+            targetText: "X");
     }
 }

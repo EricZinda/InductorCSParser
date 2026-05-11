@@ -302,7 +302,7 @@ public class Primer2Examples
 
         Assert.That(offending, Is.Not.Null);
         // "Line 4" in the doc's 1-based human form is line 3 in 0-based LSP.
-        int humanLine = offending!.SourceRange!.Value.Start.Line + 1;
+        int humanLine = result.SourceRangeOf(offending!)!.Value.Start.Line + 1;
         Assert.That(humanLine, Is.EqualTo(4));
     }
 }
