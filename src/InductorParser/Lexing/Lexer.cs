@@ -425,8 +425,25 @@ public sealed partial class Lexer
     // recorded the same depth with a null message. The restriction to
     // equal-depth avoids shallow rules stealing the message slot from
     // unrelated deeper failures.
-    public void RecordFailure(int position, string? errorMessage = null)
+    //
+    // `force` is the override for failing lookaheads (PeekRule / NotRule
+    // with a user-supplied WithError). The default deepest-wins logic
+    // suppresses a shallower record, which is what makes the heuristic
+    // work for sequential parses, but it's wrong for a lookahead whose
+    // inner is conceptually rolled back along with the lexer position.
+    // The lookahead's user-supplied message belongs at the lookahead's
+    // position. Setting `force: true`
+    // unconditionally replaces both the position and the message slot
+    // so the WithError surfaces at the more shallow position.
+    public void RecordFailure(int position, string? errorMessage = null, bool force = false)
     {
+        if (force)
+        {
+            _deepestFailure = position;
+            _deepestFailureMessage = errorMessage;
+            Trace(TraceLevel.Diagnostic, "Lexer.RecordFailure", TraceOutcome.Info, $"forced deepest failure to char {position}");
+            return;
+        }
         if (position > _deepestFailure)
         {
             _deepestFailure = position;

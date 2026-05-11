@@ -1,0 +1,541 @@
+using System.Text;
+using InductorParser;
+using InductorParser.SyntaxTree;
+using static InductorParser.Rules;
+
+namespace InductorParser.E2ESamples.Toml.Rewrite;
+
+// InductorParser grammar for TOML 1.0 (https://toml.io/en/v1.0.0).
+// The named rules below mirror the production names in the TOML ABNF
+// (Original/toml-1.0.0.abnf). Rules that produce values for the AST
+// consumer use .As("name").Preserve() so they survive flattening as
+// dispatchable nodes; structural noise (whitespace, separators,
+// brackets) keeps the default Delete / Flatten behavior and never
+// appears in the tree.
+//
+// Side-by-side: how TOML's ABNF translates to InductorParser. The
+// left column is verbatim from Original/toml-1.0.0.abnf; the right
+// column is the shape this file uses.
+//
+//   ABNF                                                   InductorParser
+//   -----------------------------------------------------  --------------------------------------------------------------------------
+//   wschar = %x20 / %x09                                   whitespaceChar = TokenSet.Runes(" \t")
+//   ws = *wschar                                           whitespace = ZeroOrMore(OneOf(whitespaceChar)).Flatten(Delete)
+//   newline = %x0A / %x0D.0A                               EndOfLine()
+//   comment = "#" *non-eol                                 And(Token('#'), ScanUntil(TokenSet.LineTerminators))
+//   unquoted-key = 1*(ALPHA / DIGIT / "-" / "_")           ScanWhile(Letters | Digits | Runes("-_"))
+//   keyval = key keyval-sep val                            And(Key, whitespace, Token('='), whitespace, valueLateBound)
+//   key = simple-key / dotted-key                          Or(DottedKey, SimpleKey)  // dotted first so a.b.c isn't truncated
+//   dotted-key = simple-key 1*(dot-sep simple-key)         And(SimpleKey, OneOrMore(And(dotSeparator, SimpleKey)))
+//   basic-string = quotation-mark *basic-char "            And(Token('"'), basicStringBody, Token('"').WithError(...))
+//   basic-char = basic-unescaped / escaped                 Or(ScanWhile(basicUnescaped), basicEscape)
+//   escaped = escape escape-seq-char                       And(Token('\\').Preserve(), Or(simpleEscapeChar, ...))
+//   ml-basic-string-delim = 3quotation-mark                Literal("\"\"\"")
+//   hex-int = "0x" HEXDIG *(HEXDIG / "_" HEXDIG)           And(Literal("0x"), hexadecimalDigit, ZeroOrMore(...))
+//   special-float = [sign] (inf / nan)                     And(Optional(sign), Or(Literal("inf").Preserve(), ...))
+//   array = "[" [array-values] ws-comment-newline "]"      And(Token('['), Optional(arrayValues), whitespaceCommentNewline, Token(']'))
+//   std-table = "[" ws key ws "]"                          And(Token('['), whitespace, Key, whitespace, Token(']').WithError(...))
+//   array-table = "[[" ws key ws "]]"                      And(Literal("[["), whitespace, Key, whitespace, Literal("]]").WithError(...))
+//   toml = expression *(newline expression)                And(expression, ZeroOrMore(And(EndOfLine(), expression)), Eof())
+//
+// Patterns the table demonstrates:
+//   * Sequence in ABNF (juxtaposition) becomes And(...).
+//   * Alternation (/) becomes Or(...) — but ordered, not first-match-of-equal-alternatives.
+//   * Repetition: *X is ZeroOrMore(X), 1*X is OneOrMore(X), nX is Exactly(n, X).
+//   * Optional [X] is Optional(X).
+//   * Character class %x20-7E / non-ascii becomes a TokenSet built with operators (| union, & intersect, ~ complement).
+//   * Multi-char terminals like "0x" become Literal("0x"); single-char terminals are Token('x').
+//   * The dispatch-name + visibility-in-tree story (".As().Preserve()") has no ABNF analog; it's how the consumer-side
+//     code finds nodes after the parse runs. ABNF productions get .As("name") whenever the AST consumer needs to
+//     dispatch on "this Symbol came from the X production"; structural rules don't.
+//
+// A few places where we deviate from the ABNF for InductorParser-friendly
+// shapes:
+//   * Strings use OneOrMore(OneOf(...)) over the unescaped character class
+//     instead of ScanUntil. The ABNF defines the allowed body as a strict
+//     character class (basic-unescaped / mlb-unescaped) and using OneOf
+//     against that class rejects control characters at parse time, which
+//     ScanUntil(TokenSet.Runes("\"\\")) would silently let through.
+//   * The val ordered choice arranges the alternatives by decreasing
+//     specificity so date-time wins over integer ("1979-05-27") and float
+//     wins over integer ("3.14"), matching how the spec prose talks about
+//     "longest valid match wins".
+//   * Comment / blank-line handling at the top level happens through the
+//     three forms of `expression` from the ABNF. The Or order is
+//     keyval-line, table-line, blank-or-comment-line so the grammar
+//     commits to a value early and only falls through to the noise case.
+public static class TomlGrammar
+{
+    // The compiled root.
+    public static readonly Rule TomlDocument;
+
+    // Keys. Named so the AST consumer can read "this part of the parse is
+    // the key half of a keyval, not the value half".
+    public static readonly Rule UnquotedKey;
+    public static readonly Rule QuotedKey;
+    public static readonly Rule SimpleKey;
+    public static readonly Rule DottedKey;
+    public static readonly Rule Key;
+
+    // Top-level structural pieces.
+    public static readonly Rule KeyValue;
+    public static readonly Rule StandardTable;
+    public static readonly Rule ArrayTable;
+    public static readonly Rule Table;
+
+    // String values.
+    public static readonly Rule BasicString;
+    public static readonly Rule LiteralString;
+    public static readonly Rule MultiLineBasicString;
+    public static readonly Rule MultiLineLiteralString;
+
+    // Boolean values.
+    public static readonly Rule TomlTrue;
+    public static readonly Rule TomlFalse;
+
+    // Numeric values.
+    public static readonly Rule HexadecimalInteger;
+    public static readonly Rule OctalInteger;
+    public static readonly Rule BinaryInteger;
+    public static readonly Rule DecimalInteger;
+    public static readonly Rule TomlFloat;
+    public static readonly Rule SpecialFloat;
+
+    // Date-time values.
+    public static readonly Rule OffsetDateTime;
+    public static readonly Rule LocalDateTime;
+    public static readonly Rule LocalDate;
+    public static readonly Rule LocalTime;
+
+    // Composite values.
+    public static readonly Rule TomlArray;
+    public static readonly Rule InlineTable;
+    public static readonly Rule InlineTableKeyValue;
+
+    // The value Or branch, exposed so a consumer can dispatch on
+    // "this Symbol was produced as a TOML value of some kind".
+    public static readonly Rule Value;
+
+    static TomlGrammar()
+    {
+        // ---------------------------------------------------------
+        // Whitespace, newlines, and comments
+        // ---------------------------------------------------------
+        // ABNF: wschar = SP / HT
+        // ABNF: ws = *wschar
+        // ABNF: newline = LF / CRLF
+        // The factory EndOfLine() already covers LF / CR / CRLF (and a
+        // few extras like NEL); TOML only allows LF and CRLF strictly,
+        // but accepting bare CR is harmless for round 1.
+        var whitespaceChar = TokenSet.Runes(" \t");
+        var whitespace = ZeroOrMore(OneOf(whitespaceChar)).Flatten(FlattenType.Delete);
+
+        // Comment body excludes line terminators. The ABNF allows HT,
+        // %x20-7E, and non-ASCII (excluding the surrogate range).
+        var nonAsciiBody =
+            TokenSet.Range(0x80, 0xD7FF) | TokenSet.Range(0xE000, 0x10FFFF);
+        var nonEndOfLine = TokenSet.Single('\t') | TokenSet.Range(0x20, 0x7F) | nonAsciiBody;
+        var comment = And(Token('#'), ScanUntil(TokenSet.LineTerminators).As("commentBody"))
+            .As("comment").Preserve();
+
+        // ws-comment-newline: any mix of inline whitespace, comments, and
+        // newlines. Used inside arrays where line breaks are legal mid-value.
+        var whitespaceCommentNewline = ZeroOrMore(Or(
+            OneOf(whitespaceChar),
+            And(Optional(comment), EndOfLine())
+        )).Flatten(FlattenType.Delete);
+
+        // ---------------------------------------------------------
+        // Keys
+        // ---------------------------------------------------------
+        // unquoted-key = 1*( ALPHA / DIGIT / "-" / "_" )
+        var unquotedKeyChars = TokenSet.Ascii.Letters | TokenSet.Ascii.Digits | TokenSet.Runes("-_");
+        UnquotedKey = ScanWhile(unquotedKeyChars).As("unquotedKey").Preserve();
+
+        // quoted-key = basic-string / literal-string
+        // Forward-declare; the actual string rules are defined below.
+        var basicStringLateBound = new LateBoundRule("basicString");
+        var literalStringLateBound = new LateBoundRule("literalString");
+        QuotedKey = Or(basicStringLateBound, literalStringLateBound).As("quotedKey").Preserve();
+
+        // simple-key = quoted-key / unquoted-key
+        SimpleKey = Or(QuotedKey, UnquotedKey).As("simpleKey").Preserve();
+
+        // dot-sep = ws "." ws
+        var dotSeparator = And(whitespace, Token('.'), whitespace);
+
+        // dotted-key = simple-key 1*( dot-sep simple-key )
+        DottedKey = And(
+            SimpleKey,
+            OneOrMore(And(dotSeparator, SimpleKey))
+        ).As("dottedKey").Preserve();
+
+        // key = dotted-key / simple-key  (try dotted first so a key like
+        // "a.b.c" doesn't get truncated to just "a")
+        Key = Or(DottedKey, SimpleKey).As("key").Preserve();
+
+        // ---------------------------------------------------------
+        // String values
+        // ---------------------------------------------------------
+        // basic-unescaped = wschar / %x21 / %x23-5B / %x5D-7E / non-ascii
+        // (i.e. printable ASCII minus '"' and '\', plus tab/space and
+        // most non-ASCII Unicode)
+        var basicUnescaped =
+            TokenSet.Runes(" \t")
+            | TokenSet.Single(0x21)
+            | TokenSet.Range(0x23, 0x5B)
+            | TokenSet.Range(0x5D, 0x7E)
+            | nonAsciiBody;
+
+        // escape-seq-char = " | \ | b | f | n | r | t | uXXXX | UXXXXXXXX
+        var hexadecimalDigit = OneOf(TokenSet.Ascii.HexDigits);
+        var simpleEscapeChar = OneOf(TokenSet.Runes("\"\\bfnrt"));
+        var unicodeShortEscape = And(Token('u'), hexadecimalDigit, hexadecimalDigit, hexadecimalDigit, hexadecimalDigit);
+        var unicodeLongEscape = And(Token('U'),
+            hexadecimalDigit, hexadecimalDigit, hexadecimalDigit, hexadecimalDigit,
+            hexadecimalDigit, hexadecimalDigit, hexadecimalDigit, hexadecimalDigit);
+        // Preserve the leading backslash so the basicStringBody's text
+        // contains the raw escape sequence ('\"', '\\', '\n', etc.).
+        // The DecodeEscapeSequences consumer walks the raw text and
+        // depends on every escape opening with a backslash. If the
+        // grammar drops the backslash here (Token('\\').Delete is the
+        // default), then '\\' renders as just '\' in the body, and the
+        // consumer's next-char lookup misreads the following character
+        // as an escape start (e.g. 'U' from '\\Users' is treated as a
+        // Unicode-escape kickoff and crashes on the missing 8 hex digits).
+        var basicEscape = And(
+            Token('\\').Preserve(),
+            Or(simpleEscapeChar, unicodeShortEscape, unicodeLongEscape)
+        );
+
+        // basic-string = " *basic-char " — body is OneOrMore so the empty
+        // string is handled by the surrounding Optional.
+        var basicStringBody = ZeroOrMore(Or(
+            ScanWhile(basicUnescaped),
+            basicEscape
+        )).As("basicStringBody").Preserve();
+        BasicString = And(Token('"'), basicStringBody, Token('"').WithError("Expected closing '\"' to end basic string"))
+            .As("basicString").Preserve();
+        basicStringLateBound.Bind(BasicString);
+
+        // literal-string = ' *literal-char '
+        // literal-char = HT / %x20-26 / %x28-7E / non-ascii  (anything
+        // except ' and most control chars)
+        var literalChar =
+            TokenSet.Single('\t')
+            | TokenSet.Range(0x20, 0x26)
+            | TokenSet.Range(0x28, 0x7E)
+            | nonAsciiBody;
+        // ScanWhile rejects minimumCount: 0 at construction, so we wrap a
+        // min-1 ScanWhile in Optional. The literal-string-body Symbol is
+        // therefore absent (rather than empty-text) for the empty-string
+        // case '' — TomlAst handles that branch.
+        var literalStringBody = Optional(ScanWhile(literalChar)
+            .As("literalStringBody").Preserve());
+        LiteralString = And(Token('\''), literalStringBody, Token('\'').WithError("Expected closing \"'\" to end literal string"))
+            .As("literalString").Preserve();
+        literalStringLateBound.Bind(LiteralString);
+
+        // ml-basic-string body: any mix of allowed chars, escapes,
+        // newlines, and "line-ending backslash" continuations. The
+        // delimiter is """ but up to two trailing quotes inside the body
+        // are allowed (mlb-quotes) before the final delim. We use a
+        // Not-lookahead to stop the body at the first occurrence of three
+        // consecutive quotes.
+        //
+        // mlb-escaped-nl = "\" ws newline *( wschar / newline )
+        // (a backslash at the end of a line, possibly followed by trailing
+        // whitespace, eats the newline and following blank lines)
+        var multiLineBasicEscapedNewline = And(
+            Token('\\'),
+            whitespace,
+            EndOfLine(),
+            ZeroOrMore(Or(OneOf(whitespaceChar), EndOfLine()))
+        );
+
+        // For multiline body chars we need to allow newlines, but not have
+        // ScanWhile cross a """ boundary. The simplest correct shape:
+        // ZeroOrMore(Not("""), mlb-content). EndOfLine is Delete by
+        // factory; we override to Preserve so newlines survive into the
+        // body's ToString text where the consumer needs them.
+        var threeQuotes = Literal("\"\"\"");
+        var multiLineBasicBodyChar = And(
+            Not(threeQuotes),
+            Or(
+                multiLineBasicEscapedNewline,
+                basicEscape,
+                EndOfLine().Flatten(FlattenType.Preserve),
+                OneOf(basicUnescaped | TokenSet.Single('"'))
+            )
+        );
+        var multiLineBasicStringBody = ZeroOrMore(multiLineBasicBodyChar)
+            .As("multiLineBasicStringBody").Preserve();
+        MultiLineBasicString = And(
+            threeQuotes,
+            Optional(EndOfLine()),
+            multiLineBasicStringBody,
+            threeQuotes.WithError("Expected closing '\"\"\"' to end multi-line basic string")
+        ).As("multiLineBasicString").Preserve();
+
+        // ml-literal-string: same shape, single-quote delim, no escapes.
+        var threeApostrophes = Literal("'''");
+        var multiLineLiteralBodyChar = And(
+            Not(threeApostrophes),
+            Or(
+                EndOfLine().Flatten(FlattenType.Preserve),
+                OneOf(literalChar | TokenSet.Single('\''))
+            )
+        );
+        var multiLineLiteralStringBody = ZeroOrMore(multiLineLiteralBodyChar)
+            .As("multiLineLiteralStringBody").Preserve();
+        MultiLineLiteralString = And(
+            threeApostrophes,
+            Optional(EndOfLine()),
+            multiLineLiteralStringBody,
+            threeApostrophes.WithError("Expected closing \"'''\" to end multi-line literal string")
+        ).As("multiLineLiteralString").Preserve();
+
+        // ---------------------------------------------------------
+        // Boolean values
+        // ---------------------------------------------------------
+        TomlTrue = Literal("true").As("true").Preserve();
+        TomlFalse = Literal("false").As("false").Preserve();
+
+        // ---------------------------------------------------------
+        // Integer values
+        // ---------------------------------------------------------
+        var sign = OneOf("+-").Preserve();
+
+        // unsigned-dec-int: one digit, OR a 1-9 digit followed by
+        // (digit | underscore-digit) repeats. Underscores can't be
+        // adjacent and can't be leading or trailing.
+        var digit = OneOf(TokenSet.Ascii.Digits);
+        var digitOneToNine = OneOf(TokenSet.Range('1', '9'));
+        var underscoreDigit = And(Token('_'), digit);
+        var unsignedDecimalInteger = Or(
+            And(digitOneToNine, OneOrMore(Or(digit, underscoreDigit))),
+            digit
+        );
+        DecimalInteger = And(Optional(sign), unsignedDecimalInteger).As("decimalInteger").Preserve();
+
+        // hex-int = "0x" HEXDIG *( HEXDIG / "_" HEXDIG )
+        var hexadecimalUnderscore = And(Token('_'), hexadecimalDigit);
+        HexadecimalInteger = And(Literal("0x"), hexadecimalDigit, ZeroOrMore(Or(hexadecimalDigit, hexadecimalUnderscore)))
+            .As("hexadecimalInteger").Preserve();
+
+        var octalDigit = OneOf(TokenSet.Range('0', '7'));
+        var octalUnderscore = And(Token('_'), octalDigit);
+        OctalInteger = And(Literal("0o"), octalDigit, ZeroOrMore(Or(octalDigit, octalUnderscore)))
+            .As("octalInteger").Preserve();
+
+        var binaryDigit = OneOf(TokenSet.Runes("01"));
+        var binaryUnderscore = And(Token('_'), binaryDigit);
+        BinaryInteger = And(Literal("0b"), binaryDigit, ZeroOrMore(Or(binaryDigit, binaryUnderscore)))
+            .As("binaryInteger").Preserve();
+
+        // ---------------------------------------------------------
+        // Float values
+        // ---------------------------------------------------------
+        // zero-prefixable-int = DIGIT *( DIGIT / "_" DIGIT )
+        // Punctuation tokens (the leading dot of fraction, the 'e' of
+        // exponent, the underscore separators) are Delete by factory,
+        // which means ToString() on the float Symbol would lose them and
+        // fail to round-trip through double.Parse. Mark each Preserve so
+        // the raw text survives.
+        var zeroPrefixableInteger = And(digit, ZeroOrMore(Or(digit, underscoreDigit)));
+        var fraction = And(Token('.').Preserve(), zeroPrefixableInteger);
+        var floatExponentPart = And(Optional(sign), zeroPrefixableInteger);
+        var exponent = And(OneOf("eE"), floatExponentPart);
+
+        // float = float-int-part ( exp / frac [ exp ] )
+        // i.e. a sign+integer-part followed by EITHER an exponent, OR a
+        // fraction (with optional exponent). At least one of fraction /
+        // exponent is required to distinguish from a plain integer.
+        var floatIntegerPart = And(Optional(sign), unsignedDecimalInteger);
+        var ordinaryFloat = And(
+            floatIntegerPart,
+            Or(
+                And(fraction, Optional(exponent)),
+                exponent
+            )
+        );
+
+        // special-float = [sign] (inf | nan). Literal is Delete by
+        // factory, but the Float consumer dispatches on the rendered
+        // text to choose between +inf / -inf / +nan / -nan so the
+        // mnemonic has to survive into ToString.
+        var infinityOrNan = Or(Literal("inf").Preserve(), Literal("nan").Preserve());
+        SpecialFloat = And(Optional(sign), infinityOrNan).As("specialFloat").Preserve();
+
+        TomlFloat = Or(SpecialFloat, ordinaryFloat.As("ordinaryFloat").Preserve())
+            .As("float").Preserve();
+
+        // ---------------------------------------------------------
+        // Date-time values
+        // ---------------------------------------------------------
+        // Per RFC 3339 and TOML 1.0. Mirror the float case: the
+        // structural punctuation (-, :, .) is Delete by factory and
+        // would be stripped from ToString(), so preserve each one so
+        // the consumer can round-trip the text through DateTime.Parse.
+        var dash = Token('-').Preserve();
+        var colon = Token(':').Preserve();
+        var twoDigit = And(digit, digit);
+        var fourDigit = And(digit, digit, digit, digit);
+        var fullDate = And(fourDigit, dash, twoDigit, dash, twoDigit);
+        var timeSecondFraction = And(Token('.').Preserve(), OneOrMore(digit));
+        var partialTime = And(twoDigit, colon, twoDigit, colon, twoDigit, Optional(timeSecondFraction));
+        var timeNumericOffset = And(OneOf("+-"), twoDigit, colon, twoDigit);
+        var timeOffset = Or(OneOf("Zz"), timeNumericOffset);
+        var timeDelimiter = OneOf("Tt ");
+
+        OffsetDateTime = And(fullDate, timeDelimiter, partialTime, timeOffset)
+            .As("offsetDateTime").Preserve();
+        LocalDateTime = And(fullDate, timeDelimiter, partialTime)
+            .As("localDateTime").Preserve();
+        LocalDate = fullDate.As("localDate").Preserve();
+        LocalTime = partialTime.As("localTime").Preserve();
+
+        // ---------------------------------------------------------
+        // Composite values: array, inline-table
+        // ---------------------------------------------------------
+        // val needs to be late-bound because arrays and inline tables
+        // contain values, which can be arrays / inline tables, etc.
+        var valueLateBound = new LateBoundRule("value");
+
+        // array = "[" [ array-values ] ws-comment-newline "]"
+        // array-values =  ws-comment-newline val ws-comment-newline ","
+        //                 array-values
+        //              /  ws-comment-newline val ws-comment-newline [ "," ]
+        // (i.e. comma-separated values with optional trailing comma, with
+        // newlines and comments allowed between everything)
+        var arrayValues = And(
+            whitespaceCommentNewline,
+            valueLateBound,
+            ZeroOrMore(And(
+                whitespaceCommentNewline,
+                Token(','),
+                whitespaceCommentNewline,
+                valueLateBound
+            )),
+            Optional(And(whitespaceCommentNewline, Token(',')))
+        );
+        TomlArray = And(
+            Token('['),
+            Optional(arrayValues),
+            whitespaceCommentNewline,
+            Token(']').WithError("Expected ',' or ']' inside array")
+        ).As("array").Preserve();
+
+        // inline-table = "{" [ inline-table-keyvals ] "}"
+        // inline-table-sep = ws "," ws  (note: no newlines allowed inside
+        // inline tables per TOML 1.0)
+        // inline-table-keyvals = keyval [ inline-table-sep inline-table-keyvals ]
+        var keyValueLateBound = new LateBoundRule("keyValue");
+        InlineTableKeyValue = keyValueLateBound;
+        var inlineTableKeyValues = And(
+            keyValueLateBound,
+            ZeroOrMore(And(whitespace, Token(','), whitespace, keyValueLateBound))
+        );
+        InlineTable = And(
+            Token('{'),
+            whitespace,
+            Optional(inlineTableKeyValues),
+            whitespace,
+            Token('}').WithError("Expected ',' or '}' inside inline table")
+        ).As("inlineTable").Preserve();
+
+        // ---------------------------------------------------------
+        // Value choice — order matters
+        // ---------------------------------------------------------
+        // Strings first (delim-based, no ambiguity with the rest).
+        // Then booleans (literal "true"/"false").
+        // Then array / inline-table (delim-based).
+        // Then date-time before float before integer because they share
+        // digit prefixes.
+        Value = Or(
+            MultiLineBasicString,
+            BasicString,
+            MultiLineLiteralString,
+            LiteralString,
+            TomlTrue,
+            TomlFalse,
+            TomlArray,
+            InlineTable,
+            // Order within date-times: most-specific first.
+            // (4-digit-year + delim + time + offset)  before  (4-digit-year + delim + time)
+            // before  (4-digit-year alone)  before  (2-digit hours + ":" + ...).
+            OffsetDateTime,
+            LocalDateTime,
+            LocalDate,
+            LocalTime,
+            TomlFloat,
+            // Integer last; non-decimal forms before decimal so "0x..." doesn't
+            // get truncated to integer 0.
+            HexadecimalInteger,
+            OctalInteger,
+            BinaryInteger,
+            DecimalInteger
+        ).As("value").Preserve();
+        valueLateBound.Bind(Value);
+
+        // ---------------------------------------------------------
+        // Key / value pair
+        // ---------------------------------------------------------
+        // keyval = key keyval-sep val
+        // keyval-sep = ws "=" ws
+        KeyValue = And(
+            Key,
+            whitespace,
+            Token('=').WithError("Expected '=' after key"),
+            whitespace,
+            valueLateBound
+        ).As("keyValue").Preserve();
+        keyValueLateBound.Bind(KeyValue);
+
+        // ---------------------------------------------------------
+        // Table headers
+        // ---------------------------------------------------------
+        // std-table = "[" ws key ws "]"
+        StandardTable = And(
+            Token('['),
+            whitespace,
+            Key,
+            whitespace,
+            Token(']').WithError("Expected ']' to close table header")
+        ).As("standardTable").Preserve();
+
+        // array-table = "[[" ws key ws "]]"
+        ArrayTable = And(
+            Literal("[["),
+            whitespace,
+            Key,
+            whitespace,
+            Literal("]]").WithError("Expected ']]' to close array-of-tables header")
+        ).As("arrayTable").Preserve();
+
+        // table = array-table / std-table
+        // (Try array-table first because "[[" must win over "[")
+        Table = Or(ArrayTable, StandardTable).As("table").Preserve();
+
+        // ---------------------------------------------------------
+        // Top-level expression and document
+        // ---------------------------------------------------------
+        // expression =  ws [ comment ]
+        // expression =/ ws keyval ws [ comment ]
+        // expression =/ ws table ws [ comment ]
+        var expression = Or(
+            And(whitespace, KeyValue, whitespace, Optional(comment)),
+            And(whitespace, Table, whitespace, Optional(comment)),
+            And(whitespace, Optional(comment))
+        );
+
+        // toml = expression *( newline expression )
+        TomlDocument = And(
+            expression,
+            ZeroOrMore(And(EndOfLine(), expression)),
+            Optional(EndOfLine(eofIsEol: true)),
+            Eof()
+        );
+        TomlDocument.Compile();
+    }
+}
