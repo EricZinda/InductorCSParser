@@ -39,6 +39,17 @@ namespace InductorParser;
 /// default. Override on any rule with
 /// <see cref="Rule.Flatten(FlattenType)"/> to change it for a
 /// specific use site.
+///
+/// Calling <see cref="Rule.As(string)"/> or
+/// <see cref="Rule.As(SymbolId)"/> on a rule whose default
+/// <see cref="FlattenType"/> isn't Preserve silently flips it
+/// to Preserve. Identification implies findability, and a
+/// non-Preserve rule's wrapper Symbol doesn't reach the tree
+/// for Tree.Find to locate. Calling .As after the caller has
+/// explicitly set a non-Preserve policy via .Flatten / .Delete /
+/// .Flatten() throws, and so does setting a non-Preserve policy
+/// on a rule that's already been named. See <see cref="Rule.As(string)"/>
+/// for the full story.
 /// </remarks>
 public static class Rules
 {

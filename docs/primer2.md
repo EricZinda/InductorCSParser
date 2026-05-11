@@ -42,48 +42,44 @@ var anySpaceRunes = TokenSet.InlineWhitespace | lineEndRunes;
 
 // Section names and keys: one or more non-whitespace runes, stopping
 // at the relevant terminator (']' for a name, '=' for a key).
-var name = OneOrMore(NoneOf(TokenSet.Runes("]") | anySpaceRunes))
-    .As("name").Preserve();
-var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes))
-    .As("key").Preserve();
+var name = OneOrMore(NoneOf(TokenSet.Runes("]") | anySpaceRunes)).As("name");
+var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes)).As("key");
 
 var section = And(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
-    .As("section").Preserve();
+    .As("section");
 
-// Typed values. Each alternative is .As(name).Preserve() so the
-// matching one survives flattening as a discoverable child of value.
-// Order matters in Or: Float before Integer because "3.14" would
-// otherwise commit to Integer on the leading "3" and stall.
+// Typed values. Each alternative is .As(name) so the matching one
+// survives flattening as a discoverable child of value. Order matters
+// in Or: Float before Integer because "3.14" would otherwise commit
+// to Integer on the leading "3" and stall.
 var quotedString = And(
     Token('"'),
     ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
-    Token('"')).As("quotedString").Preserve();
+    Token('"')).As("quotedString");
 
-var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\"")))
-    .As("bareWord").Preserve();
+var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\""))).As("bareWord");
 
-var floatValue = Float().As("float").Preserve();
-var integerValue = Integer().As("integer").Preserve();
+var floatValue = Float().As("float");
+var integerValue = Integer().As("integer");
 
-var value = Or(floatValue, integerValue, quotedString, bareWord)
-    .As("value").Preserve();
+var value = Or(floatValue, integerValue, quotedString, bareWord).As("value");
 
 var keyValue = And(key, Optional(InlineWhitespace()), Token('='), Optional(InlineWhitespace()), value, Optional(InlineWhitespace()), EndOfLine())
-    .As("keyValue").Preserve();
+    .As("keyValue");
 
 var blankLine = And(Optional(InlineWhitespace()), EndOfLine());
 
 var line = Or(section, keyValue, blankLine);
-var config = And(ZeroOrMore(line), Eof()).As("config").Preserve();
+var config = And(ZeroOrMore(line), Eof()).As("config");
 ```
 
 `name` and `key` are the same shape: one or more tokens that aren't whitespace and aren't the stop character (`]` for names, `=` for keys). `NoneOf(set)` matches a token when that token isn't in the set, and `|` is set union.
 
-`value` is where typing happens. Each alternative is `.As(name).Preserve()` so the matching one lands in the tree as a typed child. `Float()` and `Integer()` are built-in rules, `quotedString` is the standard open-quote/body/close-quote shape and `bareWord` catches everything else. Order in `Or` matters because it stops at the first match: `Float` is before `Integer` so `3.14` doesn't commit to `3` and leave `.14` for the next rule to choke on.
+`value` is where typing happens. Each alternative is `.As(name)` so the matching one lands in the tree as a typed child. `Float()` and `Integer()` are built-in rules, `quotedString` is the standard open-quote/body/close-quote shape and `bareWord` catches everything else. Order in `Or` matters because it stops at the first match: `Float` is before `Integer` so `3.14` doesn't commit to `3` and leave `.14` for the next rule to choke on.
 
 `EndOfLine()` accepts CRLF as a unit plus any of the seven Unicode single-rune line terminators. `Token('\n')` only handles LF and would silently cause a bug on a CRLF Windows file or anything using NEL, LINE SEPARATOR, or PARAGRAPH SEPARATOR.
 
-`.As(name).Preserve()` is the same pattern as primer1: name the rule so you can find it later, keep its wrapper in the tree so there's something to find.
+`.As(name)` does two things at once: it attaches a name so you can find the rule later, and (when the rule's `FlattenType` is still its class default) it flips the policy to `FlattenType.Preserve` so the rule's wrapper survives flattening and is something to find. Without that flip, naming a rule whose default is `FlattenType.Flatten` (every `And`, `Or`, `OneOrMore`, etc.) or `FlattenType.Delete` (every `Token`, `Literal`) would compile fine but `Tree.Find(rule)` would silently return null. If you really want a non-`Preserve` policy on a named rule, `.As` will throw rather than silently override an explicit `.Flatten(...)` / `.Delete()` decision in either order.
 
 # What the tree looks like
 
@@ -219,7 +215,7 @@ var keyValue = And(
     value,
     Optional(InlineWhitespace()),
     EndOfLine())
-    .As("keyValue").Preserve();
+    .As("keyValue");
 ```
 
 If `Token('=')` is the deepest failure when a parse fails (the rule that got furthest before giving up), `result.ErrorMessage` will be your custom string instead of the default. Re-running the same `[server]\nport oops\n` input now reports:

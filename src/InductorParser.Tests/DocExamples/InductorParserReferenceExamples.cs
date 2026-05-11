@@ -133,7 +133,7 @@ public class InductorParserReferenceExamples
             Float().Flatten(FlattenType.Flatten),
             Integer().Flatten(FlattenType.Flatten),
             Identifier()
-        ).As("settingValue").Preserve();
+        ).As("settingValue");
 
         var document = And(
             Optional(AnyWhitespace()),
@@ -146,7 +146,7 @@ public class InductorParserReferenceExamples
             Token(';'),
             Optional(AnyWhitespace()),
             Eof()
-        ).As("document").Preserve().Compile();
+        ).As("document").Compile();
 
         return (document, settingName, settingValue);
     }
@@ -206,7 +206,7 @@ public class InductorParserReferenceExamples
                     valueAtom
                 )
             )
-        ).As("values").Preserve();
+        ).As("values");
 
         var pair = And(
             key,
@@ -216,7 +216,7 @@ public class InductorParserReferenceExamples
             values,
             Optional(AnyWhitespace()),
             Token(';')
-        ).As("pair").Preserve();
+        ).As("pair");
 
         var document = And(
             Optional(AnyWhitespace()),
@@ -224,7 +224,7 @@ public class InductorParserReferenceExamples
                 And(pair, Optional(AnyWhitespace()))
             ),
             Eof()
-        ).As("document").Preserve().Compile();
+        ).As("document").Compile();
 
         const string input =
             "colors = red, green, blue;\n" +
