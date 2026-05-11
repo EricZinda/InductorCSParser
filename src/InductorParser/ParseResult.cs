@@ -58,6 +58,13 @@ public readonly struct ParseResult
     // FlattenType.Preserve (the common case for named grammars) can
     // keep using this. For grammars whose root produces multiple
     // top-level Symbols, use Symbols directly.
+    //
+    // Note that this returns null when the root rule's FlattenType is
+    // Flatten (the default for And, Or, and the count rules), because
+    // those rules lift their children into the top-level Symbols list
+    // rather than producing a single wrapper. If you just want to look
+    // up a named child by rule, use Find / FindAll, which walk every
+    // top-level Symbol and don't care which shape the root produced.
     public Symbol? Tree =>
         _symbols != null && _symbols.Count == 1 ? _symbols[0] : null;
 
@@ -114,6 +121,46 @@ public readonly struct ParseResult
     // Most callers check this first and only inspect Tree / Symbols
     // when it's true.
     public bool Success => Outcome == ParseOutcome.Success;
+
+    // Depth-first search across every top-level Symbol for the first
+    // node whose Id matches the rule. Returns null if no match.
+    //
+    // Symbol.Find requires a single-root tree, but the natural root for
+    // most composite rules (And, Or, count rules) defaults to
+    // FlattenType.Flatten and lifts its children into the top-level
+    // Symbols list, so result.Tree is null and result.Tree.Find blows
+    // up with a NullReferenceException. This walks every top-level
+    // Symbol in turn, so it works regardless of whether the root
+    // preserved itself or flattened its children up. Grammar authors
+    // who just want "find the node with this rule's id in the result"
+    // can use this without first figuring out which shape their root
+    // produced.
+    public Symbol? Find(Rule rule) => Find(rule.Id);
+
+    public Symbol? Find(SymbolId id)
+    {
+        if (_symbols == null) return null;
+        foreach (var symbol in _symbols)
+        {
+            var found = symbol.Find(id);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    // Depth-first search across every top-level Symbol that yields every
+    // matching node. Use when the rule can appear multiple times. Like
+    // Find, this works regardless of whether the root preserved itself
+    // or flattened its children into the top-level Symbols list.
+    public IEnumerable<Symbol> FindAll(Rule rule) => FindAll(rule.Id);
+
+    public IEnumerable<Symbol> FindAll(SymbolId id)
+    {
+        if (_symbols == null) yield break;
+        foreach (var symbol in _symbols)
+            foreach (var found in symbol.FindAll(id))
+                yield return found;
+    }
 
     // Looks up the human-readable name of a SymbolId in the grammar
     // that produced this result. Returns null if the id isn't known
