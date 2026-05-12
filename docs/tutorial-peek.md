@@ -42,7 +42,7 @@ To do this in Inductor Parser, we can start by thinking about how to scan a stri
 ```CSharp
 ScanUntil(TokenSet.Range('0', '9'))
 ```
-`ScanUntil` fails if it reaches end-of-input without ever matching its stopper, so on its own it already answers "did the input contain a digit?" — success means yes, failure means no. Since we'll be doing this check a few times, we can wrap it in our own rule:
+`ScanUntil` fails if it reaches end-of-input without ever matching its stopper, so on its own it already answers "did the input contain a digit?" — success means yes, failure means no. To make it more readable for how we're using it, we can wrap it in our own rule:
 
 ```CSharp
 Rule Contains(TokenSet options) =>

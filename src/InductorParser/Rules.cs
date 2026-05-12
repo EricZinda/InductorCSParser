@@ -263,9 +263,22 @@ public static class Rules
     /// the run's character class is the natural way to describe the body
     /// (identifiers, words, numbers), and <see cref="ScanUntil(TokenSet, bool)"/>
     /// when only the boundary is namable (string bodies, comment bodies).
+    ///
+    /// <paramref name="minimumCount"/> is the minimum number of tokens the
+    /// run must contain to succeed. The default of 1 keeps the rule in
+    /// the "always advances on success" lane, which lets enclosing rules
+    /// use the LL(1) lookahead shortcut to skip it when the peek isn't
+    /// in <paramref name="set"/>. Passing 0 makes the run optional: the
+    /// rule always succeeds and emits a single leaf Symbol whose text is
+    /// the matched run (possibly empty). The cost of 0 is that
+    /// the lookahead shortcut can no longer skip the rule, since a
+    /// zero-width match can succeed on any input. Use 0 for grammars
+    /// where an empty run is legal (string bodies that may be empty,
+    /// optional text fields) and the cleaner tree shape (always one
+    /// leaf) is worth more than the skip.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="minimumCount"/> is less than 1.
+    /// <paramref name="minimumCount"/> is negative.
     /// </exception>
     public static Rule ScanWhile(TokenSet set, int minimumCount = 1) =>
         new ScanWhileRule(set, minimumCount);
