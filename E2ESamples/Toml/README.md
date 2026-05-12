@@ -145,9 +145,6 @@ These would each be follow-up rounds.
 Each piece of friction encountered during this port became a separate
 backlog item under `backlog/`:
 
-- `swm0-scanwhile-rejects-minimumcount-zero-forces-opti.md` —
-  ScanWhile(set, minimumCount: 0) throws at construction; forces an
-  Optional(ScanWhile(...)) wrap with a different tree shape.
 - `srct-symbol-needs-raw-source-text-accessor-that-byp.md` — Token /
   Literal / EndOfLine factories default to FlattenType.Delete, which
   silently strips chars from `symbol.ToString()` of containing rules.

@@ -227,12 +227,13 @@ public static class TomlGrammar
             | TokenSet.Range(0x20, 0x26)
             | TokenSet.Range(0x28, 0x7E)
             | nonAsciiBody;
-        // ScanWhile rejects minimumCount: 0 at construction, so we wrap a
-        // min-1 ScanWhile in Optional. The literal-string-body Symbol is
-        // therefore absent (rather than empty-text) for the empty-string
-        // case '' — TomlAst handles that branch.
-        var literalStringBody = Optional(ScanWhile(literalChar)
-            .As("literalStringBody").Preserve());
+        // *literal-char: zero or more body chars. ScanWhile with
+        // minimumCount: 0 always emits one leaf, so the empty-string
+        // case '' gives a zero-width body leaf rather than a missing
+        // child, and the consumer can read Children[0].ToString()
+        // unconditionally.
+        var literalStringBody = ScanWhile(literalChar, minimumCount: 0)
+            .As("literalStringBody").Preserve();
         LiteralString = And(Token('\''), literalStringBody, Token('\'').WithError("Expected closing \"'\" to end literal string"))
             .As("literalString").Preserve();
         literalStringLateBound.Bind(LiteralString);
