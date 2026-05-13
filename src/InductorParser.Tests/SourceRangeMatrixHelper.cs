@@ -28,7 +28,7 @@ public static class SourceRangeMatrixHelper
     // the Symbol-level translation through `NormalizedPositionMap`.
     //
     // `target` must reach the parse tree as a findable Symbol
-    // (typically `.As(name).Preserve()`). `targetText` is the text
+    // (typically `.As(name)`). `targetText` is the text
     // the target captures. `extraInput` and `afterTarget` cover
     // shapes like `ScanUntil(TokenSet.Runes("!"))` where the target
     // matches a body and a stopper has to be consumed by something

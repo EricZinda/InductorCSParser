@@ -169,7 +169,7 @@ public class StateMachineParserTests
     [Test]
     public void BetweenInclusive_collects_children_into_preserve_wrapper()
     {
-        var letters = OneOrMore(OneOf(TokenSet.Ascii.Letters)).As("letters").Preserve();
+        var letters = OneOrMore(OneOf(TokenSet.Ascii.Letters)).As("letters");
         var rooted = And(letters, Eof());
 
         var stateMachine = StateMachineParser.Parse(rooted, "abc");
@@ -298,7 +298,7 @@ public class StateMachineParserTests
     {
         // Token defaults to Delete: keywords and punctuation don't
         // appear in the tree under the default path.
-        var named = And(Token('('), OneOrMore(OneOf(TokenSet.Ascii.Letters)), Token(')')).As("group").Preserve();
+        var named = And(Token('('), OneOrMore(OneOf(TokenSet.Ascii.Letters)), Token(')')).As("group");
         var rooted = And(named, Eof());
 
         var stateMachine = StateMachineParser.Parse(rooted, "(abc)");

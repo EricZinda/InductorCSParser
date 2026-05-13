@@ -33,10 +33,10 @@ public static class ArithmeticGrammar
     static ArithmeticGrammar()
     {
         Number = OneOrMore(OneOf(TokenSet.Ascii.Digits))
-            .As("number").Preserve();
+            .As("number");
 
-        AddOp = OneOf("+-").As("addOp").Preserve();
-        MulOp = OneOf("*/").As("mulOp").Preserve();
+        AddOp = OneOf("+-").As("addOp");
+        MulOp = OneOf("*/").As("mulOp");
 
         var exprForward = new LateBoundRule("expr");
 
@@ -59,7 +59,7 @@ public static class ArithmeticGrammar
                 Optional(AnyWhitespace()),
                 factor
             ))
-        ).As("term").Preserve();
+        ).As("term");
 
         Expr = And(
             Term,
@@ -69,7 +69,7 @@ public static class ArithmeticGrammar
                 Optional(AnyWhitespace()),
                 Term
             ))
-        ).As("expr").Preserve();
+        ).As("expr");
 
         exprForward.Bind(Expr);
 

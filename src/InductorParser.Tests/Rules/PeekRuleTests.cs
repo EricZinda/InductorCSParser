@@ -183,7 +183,7 @@ public class PeekRuleTests
         // there. SourceText is empty. Consumers can highlight "the
         // parser looked ahead here" without falsely claiming the
         // lookahead content was consumed.
-        var peek = Peek(Literal("X")).As("peek").Preserve();
+        var peek = Peek(Literal("X")).As("peek");
         var rule = And(Literal("ab"), peek, Literal("X").Preserve()).Preserve();
         var result = rule.Parse("abX");
 

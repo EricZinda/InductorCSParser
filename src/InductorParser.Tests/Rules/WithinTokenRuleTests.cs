@@ -431,7 +431,7 @@ public class WithinTokenRuleTests
     {
         SourceRangeMatrixHelper.AssertTargetAfterLiteralPrefix(
             row, form,
-            target: WithinToken(OneOf("X")).As("checked").Preserve(),
+            target: WithinToken(OneOf("X")).As("checked"),
             targetText: "X");
     }
 

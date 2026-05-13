@@ -80,7 +80,7 @@ public class SymbolExtensionsTests
         // differs from the rune's own text. PrintTree uses the long
         // `<name>: "<text>"` form for character leaves whose NameOf
         // returns something other than the rune text.
-        var aChar = Token('a').As("aChar").Preserve();
+        var aChar = Token('a').As("aChar");
         var result = aChar.Parse("a");
         Assert.That(result.Success, Is.True);
 

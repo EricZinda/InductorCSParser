@@ -48,7 +48,7 @@ public static class SemVerGrammar
                 Not(And(Token('0'), OneOf(TokenSet.Ascii.Digits)))
                     .WithError($"{name} version must not have leading zeros"),
                 OneOrMore(OneOf(TokenSet.Ascii.Digits))
-            ).As(name).Preserve();
+            ).As(name);
 
         MajorVersion = NumericCore("major");
         MinorVersion = NumericCore("minor");
@@ -56,23 +56,23 @@ public static class SemVerGrammar
 
         var identRune = TokenSet.Ascii.Digits | TokenSet.Ascii.Letters | TokenSet.Runes("-");
         PreReleaseIdent = ScanWhile(identRune, minimumCount: 1)
-            .As("preReleaseIdent").Preserve()
+            .As("preReleaseIdent")
             .WithError("Pre-release identifier expected");
         BuildMetadataIdent = ScanWhile(identRune, minimumCount: 1)
-            .As("buildIdent").Preserve()
+            .As("buildIdent")
             .WithError("Build metadata identifier expected");
 
         PreReleaseSection = And(
             Token('-'),
             PreReleaseIdent,
             ZeroOrMore(And(Token('.'), PreReleaseIdent))
-        ).As("preRelease").Preserve();
+        ).As("preRelease");
 
         BuildMetadataSection = And(
             Token('+'),
             BuildMetadataIdent,
             ZeroOrMore(And(Token('.'), BuildMetadataIdent))
-        ).As("buildMetadata").Preserve();
+        ).As("buildMetadata");
 
         SemVer = And(
             MajorVersion,
@@ -83,7 +83,7 @@ public static class SemVerGrammar
             Optional(PreReleaseSection),
             Optional(BuildMetadataSection),
             Eof().WithError("Unexpected text after version")
-        ).As("semver").Preserve();
+        ).As("semver");
 
         SemVer.Compile();
     }

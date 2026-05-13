@@ -211,7 +211,7 @@ public class NotRuleTests
         // zero-width range there, SourceText is empty. Consumers can
         // highlight "the parser asserted X is not here" at the right
         // offset without claiming any text was matched.
-        var notRule = Not(Literal("Z")).As("guard").Preserve();
+        var notRule = Not(Literal("Z")).As("guard");
         var rule = And(Literal("ab"), notRule, Literal("X").Preserve()).Preserve();
         var result = rule.Parse("abX");
 

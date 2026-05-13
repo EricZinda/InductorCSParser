@@ -46,7 +46,7 @@ public static class KoreanNumberGrammar
         var hangulDigit = TokenSet.Runes("일이삼사오육칠팔구");
         var anyDigit = TokenSet.Ascii.Digits | hangulDigit;
         Digits = ScanWhile(anyDigit, minimumCount: 1)
-            .As("digits").Preserve();
+            .As("digits");
 
         // Scale alternatives in size-descending order to keep the
         // tree readable: a reader walking left-to-right sees 만 dominate
@@ -61,10 +61,10 @@ public static class KoreanNumberGrammar
             Token('천'),
             Token('백'),
             Token('십')
-        ).As("scale").Preserve()
+        ).As("scale")
          .WithError("expected one of: 만, 억, 천, 백, 십");
 
-        ScaledTerm = And(Optional(Digits), Scale).As("scaledTerm").Preserve();
+        ScaledTerm = And(Optional(Digits), Scale).As("scaledTerm");
 
         // The top-level Or tries ScaledTerm first so a "digits then scale"
         // run is consumed as one term. If ScaledTerm fails (no scale
@@ -76,7 +76,7 @@ public static class KoreanNumberGrammar
             OneOrMore(Or(ScaledTerm, Digits))
                 .WithError("expected a digit (0-9 or 일이삼사오육칠팔구) or a scale (만 억 천 백 십)"),
             Eof()
-        ).As("koreanNumber").Preserve();
+        ).As("koreanNumber");
 
         KoreanNumber.Compile();
     }

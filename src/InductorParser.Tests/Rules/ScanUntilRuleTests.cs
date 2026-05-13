@@ -725,7 +725,7 @@ public class ScanUntilRuleTests
     {
         SourceRangeMatrixHelper.AssertTargetAfterLiteralPrefix(
             row, form,
-            target: ScanUntil(TokenSet.Runes("!")).As("body").Preserve(),
+            target: ScanUntil(TokenSet.Runes("!")).As("body"),
             targetText: "XYZ",
             extraInput: "!",
             afterTarget: Token('!'));
@@ -773,7 +773,7 @@ public class ScanUntilRuleTests
         // delimiters means the body is zero-width AT offset 1.
         // Consumers that highlight bodies or read offsets need a
         // position even when the body is empty.
-        var body = ScanUntil(TokenSet.Runes("\"")).As("body").Preserve();
+        var body = ScanUntil(TokenSet.Runes("\"")).As("body");
         var rule = And(Token('"'), body, Token('"'));
         var result = rule.Parse("\"\"");
 
