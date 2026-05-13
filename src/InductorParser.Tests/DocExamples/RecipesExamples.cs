@@ -251,4 +251,104 @@ public class RecipesExamples
         Assert.That(ok, Is.False);
         Assert.That(error, Does.StartWith("Line "));
     }
+
+    // "Numbers with no leading zeros": the natural Or(Token('0'), ...)
+    // translation positions the error one column past the actual
+    // problem on bad input like "01.2.3". The Or commits to Token('0'),
+    // the outer And then fails on Token('.') at offset 1.
+    //
+    // The test pins this ordered-choice trap so the recipe's claim
+    // ("the error message points one column past the actual problem")
+    // doesn't drift if the parser ever changes default messages.
+    [Test]
+    public void No_leading_zero_natural_translation_positions_error_one_column_past_the_problem()
+    {
+        var naturalCore = Or(
+            Token('0'),
+            And(OneOf(TokenSet.Range('1', '9')), ZeroOrMore(OneOf(TokenSet.Ascii.Digits)))
+        );
+        var grammar = And(
+            naturalCore.As("major"), Token('.'),
+            naturalCore.As("minor"), Token('.'),
+            naturalCore.As("patch"), Eof());
+
+        var result = grammar.Parse("01.2.3");
+        Assert.That(result.Success, Is.False);
+        // The actual leading-zero problem is at column 0. The reported
+        // column is 1, the '1' that follows the committed-to '0'.
+        Assert.That(result.ErrorColumn, Is.EqualTo(1));
+    }
+
+    // "Numbers with no leading zeros": the tempting "fix" puts a Not
+    // inside the first Or branch (only accept '0' if not followed by
+    // another digit). It does not currently fix the position because
+    // the Not's internal probe leaves a high-water mark that outpoints
+    // the Or's WithError. See
+    // docs/PotentialBugSources/00001-lookahead-internal-failures-leaking-into-deepest-failure.md.
+    //
+    // The test pins the current broken behavior. When the leak is
+    // fixed, this test will fail (the column should drop to 0 and the
+    // WithError message should appear). At that point update the recipe
+    // to recommend this shape and delete or invert this test.
+    [Test]
+    public void No_leading_zero_lookahead_inside_or_does_not_yet_fix_position_due_to_known_leak()
+    {
+        var peekCore = Or(
+            And(Token('0'), Not(OneOf(TokenSet.Ascii.Digits))),
+            And(OneOf(TokenSet.Range('1', '9')), ZeroOrMore(OneOf(TokenSet.Ascii.Digits)))
+        ).WithError("Number with no leading zeros expected");
+        var grammar = And(
+            peekCore.As("major"), Token('.'),
+            peekCore.As("minor"), Token('.'),
+            peekCore.As("patch"), Eof());
+
+        var result = grammar.Parse("01.2.3");
+        Assert.That(result.Success, Is.False);
+        // Bug: still reports column 1, not 0. WithError message dropped.
+        Assert.That(result.ErrorColumn, Is.EqualTo(1));
+        Assert.That(result.ErrorMessage,
+            Does.Not.Contain("Number with no leading zeros"),
+            "the Or's WithError gets dropped by the deeper Not-internal failure");
+    }
+
+    // "Numbers with no leading zeros": the reject-first pattern puts
+    // the Not before any consumption, so the Not's inner succeeds on
+    // bad input (consumed "01" internally) and no failures get
+    // recorded inside it. The outer And's WithError on the Not fires
+    // at the rule's start position.
+    //
+    // This is the working approach the recipe recommends.
+    [Test]
+    public void No_leading_zero_reject_first_pattern_positions_error_at_the_bad_digit()
+    {
+        static Rule NumericCore() => And(
+            Not(And(Token('0'), OneOf(TokenSet.Ascii.Digits)))
+                .WithError("Number with no leading zeros expected"),
+            OneOrMore(OneOf(TokenSet.Ascii.Digits))
+        );
+
+        var grammar = And(
+            NumericCore().As("major"), Token('.'),
+            NumericCore().As("minor"), Token('.'),
+            NumericCore().As("patch"), Eof());
+
+        var leadingZeroOnMajor = grammar.Parse("01.2.3");
+        Assert.That(leadingZeroOnMajor.Success, Is.False);
+        Assert.That(leadingZeroOnMajor.ErrorColumn, Is.EqualTo(0));
+        Assert.That(leadingZeroOnMajor.ErrorMessage,
+            Does.Contain("no leading zeros"));
+
+        var leadingZeroOnMinor = grammar.Parse("1.02.3");
+        Assert.That(leadingZeroOnMinor.Success, Is.False);
+        Assert.That(leadingZeroOnMinor.ErrorColumn, Is.EqualTo(2));
+
+        var leadingZeroOnPatch = grammar.Parse("1.2.03");
+        Assert.That(leadingZeroOnPatch.Success, Is.False);
+        Assert.That(leadingZeroOnPatch.ErrorColumn, Is.EqualTo(4));
+
+        // Bare 0 is fine (the spec allows it), and "10.20.30" is fine
+        // because the reject-first probe rejects only "0[digit]".
+        Assert.That(grammar.Parse("0.0.0").Success, Is.True);
+        Assert.That(grammar.Parse("10.20.30").Success, Is.True);
+    }
 }

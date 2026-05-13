@@ -14,6 +14,53 @@ namespace InductorParser.Tests;
 public class ValidUnicodeTests
 {
     [Test]
+    public void Family_ZWJ_sequence_is_one_token()
+    {
+        // Man + ZWJ + woman + ZWJ + boy. UAX #29 GB11 keeps an
+        // emoji + ZWJ + emoji chain as one cluster, with the rule
+        // re-firing at every joiner along the chain. Five runes,
+        // 8 UTF-16 chars, one token.
+        string input = UnicodeExamples.FamilyManWomanBoyGrapheme;
+
+        // AnyToken consumes the whole cluster.
+        Assert.That(And(AnyToken(), Eof()).Parse(input).Success, Is.True);
+
+        // Targeting the multi-rune cluster as a single literal via
+        // Token(string) also works.
+        Assert.That(And(Token(UnicodeExamples.FamilyManWomanBoyGrapheme), Eof()).Parse(input).Success, Is.True);
+    }
+
+    [Test]
+    public void Profession_ZWJ_sequence_is_one_token()
+    {
+        // Woman + ZWJ + briefcase = woman office worker. Three runes,
+        // 5 UTF-16 chars, one cluster. Different shape from the family
+        // sequence above (one ZWJ link, not two) and from the woman-
+        // shrugging case (no variation selector).
+        string input = UnicodeExamples.WomanOfficeWorkerGrapheme;
+
+        Assert.That(And(AnyToken(), Eof()).Parse(input).Success, Is.True);
+
+        Assert.That(And(Token(UnicodeExamples.WomanOfficeWorkerGrapheme), Eof()).Parse(input).Success, Is.True);
+    }
+
+    [Test]
+    public void Keycap_sequence_is_one_token()
+    {
+        // 1 + VS16 + COMBINING ENCLOSING KEYCAP. Canonical keycap
+        // sequence: an ASCII digit followed by the emoji variation
+        // selector to pick emoji presentation and the combining
+        // enclosing keycap to wrap a box around it. UAX #29 GB9 / GB9a
+        // glue the two Extend characters to the digit base, so the
+        // whole three-rune sequence is one cluster.
+        string input = UnicodeExamples.DigitOneKeycapGrapheme;
+
+        Assert.That(And(AnyToken(), Eof()).Parse(input).Success, Is.True);
+
+        Assert.That(And(Token(UnicodeExamples.DigitOneKeycapGrapheme), Eof()).Parse(input).Success, Is.True);
+    }
+
+    [Test]
     public void Multiple_variation_selectors_stacked_form_one_token()
     {
         // Letter 'a' followed by two emoji variation selectors. The chars
