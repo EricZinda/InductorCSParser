@@ -69,7 +69,8 @@ public class InductorParserReferenceExamples
 
     // "Naming Rules" / ".As(SymbolId)" pinned numeric ids. Doc claim: a
     // pinned SymbolId stays put across compiles, and a separate .As
-    // attaches a debug name.
+    // attaches a debug name. The two overloads write different fields
+    // (Id and Name) so they compose cleanly on a single instance.
     [Test]
     public void Pinned_SymbolId_stays_put()
     {
