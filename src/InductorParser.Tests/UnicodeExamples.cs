@@ -74,6 +74,68 @@ internal static class UnicodeExamples
     public const int ManEmojiRune = 0x1F468;
     public const string ManEmojiGrapheme = "\uD83D\uDC68"; // looks like man emoji
 
+    // \uD83D\uDC69 woman. One rune, one grapheme. Paired with ManEmoji and
+    // BoyEmoji to build the family ZWJ sequence below, and with
+    // Briefcase to build the woman-office-worker profession ZWJ.
+    public const int WomanEmojiRune = 0x1F469;
+    public const string WomanEmojiGrapheme = "\uD83D\uDC69"; // looks like woman emoji
+
+    // \uD83D\uDC66 boy. One rune, one grapheme. Used as the third element of the
+    // family ZWJ sequence below.
+    public const int BoyEmojiRune = 0x1F466;
+    public const string BoyEmojiGrapheme = "\uD83D\uDC66"; // looks like boy emoji
+
+    // Family ZWJ sequence: man + ZWJ + woman + ZWJ + boy. UAX #29 GB11
+    // keeps an emoji + ZWJ + emoji chain as a single cluster. Five
+    // runes (man, ZWJ, woman, ZWJ, boy), 8 UTF-16 chars. Distinct from
+    // the woman-shrugging sequence because the joins are between three
+    // base emoji rather than base + sign + variation selector. Locks
+    // in that the multi-link ZWJ rule fires at every joiner along the
+    // chain, not just the first one.
+    public const string FamilyManWomanBoyGrapheme =
+        ManEmojiGrapheme + ZeroWidthJoinerText
+        + WomanEmojiGrapheme + ZeroWidthJoinerText
+        + BoyEmojiGrapheme; // looks like family man+woman+boy emoji
+
+    // \uD83D\uDCBC briefcase. One rune, one grapheme. The profession-tag emoji
+    // for "office worker." Paired with WomanEmoji via ZWJ to form
+    // woman-office-worker.
+    public const int BriefcaseRune = 0x1F4BC;
+    public const string BriefcaseGrapheme = "\uD83D\uDCBC"; // looks like briefcase emoji
+
+    // Profession ZWJ sequence: base human emoji + ZWJ + profession-tag
+    // emoji. Three runes (woman, ZWJ, briefcase), 5 UTF-16 chars.
+    // Different shape from the family sequence (one ZWJ link, not
+    // two) and from woman-shrugging (no variation selector). Lock-in
+    // case for the base-emoji-joins-profession-tag pattern that
+    // Unicode 13+ uses for the gendered profession emoji set.
+    public const string WomanOfficeWorkerGrapheme =
+        WomanEmojiGrapheme + ZeroWidthJoinerText + BriefcaseGrapheme; // looks like woman office worker
+
+    // U+20E3 COMBINING ENCLOSING KEYCAP. Combining mark that wraps a
+    // square box around the preceding base. UAX #29 GCB=Extend.
+    public const string CombiningEnclosingKeycapText = "\u20E3"; // looks like a keycap box wrapping the preceding base
+
+    // 1\uFE0F\u20E3 keycap digit one. Three runes (DIGIT ONE + emoji variation
+    // selector + COMBINING ENCLOSING KEYCAP), one grapheme. The
+    // canonical keycap sequence: a base character followed by VS16 to
+    // select emoji presentation and the combining enclosing keycap to
+    // wrap it. UAX #29 GB9 / GB9a keep the Extend characters glued to
+    // the base. Distinct from the family ZWJ sequence (which uses
+    // emoji + ZWJ + emoji links) so the test covers the
+    // base + variation-selector + combining-mark shape.
+    public const string DigitOneKeycapGrapheme =
+        "1" + EmojiVariationSelectorText + CombiningEnclosingKeycapText; // looks like 1\uFE0F\u20E3 keycap digit one
+
+    // U+00A0 NO-BREAK SPACE. Renders as a space, but classified by
+    // .NET as Unicode category Zs (Space_Separator), same as ordinary
+    // space. UAX #29 treats it as GCB=Other so it breaks on both
+    // sides; it surfaces as its own one-character token between
+    // adjacent letters. Distinct from U+0020 SPACE because it isn't a
+    // word-wrap opportunity. Common in copy-pasted text from word
+    // processors and Wikipedia.
+    public const string NoBreakSpaceText = "\u00A0"; // looks like a space (no-break, doesn't word-wrap)
+
     // 🇺 REGIONAL INDICATOR SYMBOL LETTER U. One half of a flag emoji
     // pair (two regional indicators in a row form a country flag). UAX #29 pairs
     // two of these into one cluster; a single one stands alone.
