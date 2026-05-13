@@ -22,7 +22,7 @@ public class OneOfRulePrefilterTests
         // contract says every successful match contains the returned
         // literal as a substring, so an "a"-bearing answer would
         // break the contract.
-        var set = TokenSet.Single('a') | TokenSet.Runes("\r\n");
+        var set = TokenSet.Single('a') | TokenSet.Graphemes("\r\n");
         var rule = OneOf(set);
         rule.Compile(null);
 

@@ -164,7 +164,7 @@ public class OneOfRuleTests
         // == -1, and OneOf uses the multi-rune-array path to match it.
         // NormalizeInput stays default; the test inputs aren't
         // affected by NFC.
-        var rule = OneOf(TokenSet.Runes(USFlagGrapheme + WomanShruggingGrapheme));
+        var rule = OneOf(TokenSet.Graphemes(USFlagGrapheme, WomanShruggingGrapheme));
 
         Assert.That(rule.Parse(USFlagGrapheme).Success, Is.True);
         Assert.That(rule.Parse(WomanShruggingGrapheme).Success, Is.True);
@@ -181,7 +181,7 @@ public class OneOfRuleTests
         // big rune-only class plus a single multi-rune entry. OneOf
         // uses the rune intervals for letter tokens and the
         // multi-rune array for the flag token.
-        var rule = OneOf(TokenSet.Letters | TokenSet.Runes(USFlagGrapheme));
+        var rule = OneOf(TokenSet.Letters | TokenSet.Graphemes(USFlagGrapheme));
 
         Assert.That(rule.Parse("a").Success, Is.True);
         Assert.That(rule.Parse(USFlagGrapheme).Success, Is.True);
@@ -225,14 +225,14 @@ public class OneOfRuleTests
         // fits in one int, so the rune-as-leaf-id branch can't fire.
         // Find and Is resolve through rule.Id for both unnamed and named
         // shapes.
-        var unnamedRule = OneOf(TokenSet.Runes(USFlagGrapheme));
+        var unnamedRule = OneOf(TokenSet.Graphemes(USFlagGrapheme));
         var unnamedResult = unnamedRule.Parse(USFlagGrapheme);
         Assert.That(unnamedResult.Success, Is.True);
         Assert.That(unnamedResult.Tree!.Id, Is.EqualTo(unnamedRule.Id));
         Assert.That(unnamedResult.Tree!.Find(unnamedRule), Is.Not.Null);
         Assert.That(unnamedRule.NameOf(unnamedResult.Tree!.Id), Is.EqualTo("OneOf"));
 
-        var namedRule = OneOf(TokenSet.Runes(USFlagGrapheme)).As("flag");
+        var namedRule = OneOf(TokenSet.Graphemes(USFlagGrapheme)).As("flag");
         var namedResult = namedRule.Parse(USFlagGrapheme);
         Assert.That(namedResult.Success, Is.True);
         Assert.That(namedResult.Tree!.Id, Is.EqualTo(namedRule.Id));
@@ -330,11 +330,11 @@ public class OneOfRuleTests
     {
         if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
         {
-            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(row.Source));
             return;
         }
 
-        var rule = OneOf(TokenSet.Runes(row.Source));
+        var rule = OneOf(TokenSet.Graphemes(row.Source));
 
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
         {
@@ -360,11 +360,11 @@ public class OneOfRuleTests
             // rejects lone surrogates before any rule wraps it. The
             // form parameter is irrelevant; the throw is from
             // TokenSet.Runes itself.
-            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(row.Source));
             return;
         }
 
-        var rule = OneOrMore(OneOf(TokenSet.Runes(row.Source)));
+        var rule = OneOrMore(OneOf(TokenSet.Graphemes(row.Source)));
 
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
         {
@@ -391,7 +391,7 @@ public class OneOfRuleTests
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
             return; // multi-grapheme post-form is covered by the OneOf_in_OneOrMore Compile-throws path
 
-        var oneOfRule = OneOf(TokenSet.Runes(row.Source)).As("oneOfBranch");
+        var oneOfRule = OneOf(TokenSet.Graphemes(row.Source)).As("oneOfBranch");
         var fallback = AnyToken().As("fallbackBranch");
         var rule = Or(oneOfRule, fallback);
 
@@ -410,11 +410,11 @@ public class OneOfRuleTests
     {
         if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
         {
-            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(row.Source));
             return;
         }
 
-        var rule = And(OneOf(TokenSet.Runes(row.Source)), Eof());
+        var rule = And(OneOf(TokenSet.Graphemes(row.Source)), Eof());
 
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
         {
@@ -441,5 +441,14 @@ public class OneOfRuleTests
             row, form,
             target: OneOf(TokenSet.Single('X')).As("xOne").Preserve(),
             targetText: "X");
+    }
+
+    [Test]
+    public void SourceText_on_OneOf_returns_matched_text_under_every_FlattenType()
+    {
+        SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
+            ruleBuilder: () => OneOf(TokenSet.Runes("abc")),
+            input: "a",
+            expectedSourceText: "a");
     }
 }

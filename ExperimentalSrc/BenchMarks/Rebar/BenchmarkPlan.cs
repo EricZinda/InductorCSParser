@@ -326,13 +326,11 @@ internal static class BenchmarkRegistry
     private static readonly TokenSet AsciiAlpha = AsciiUpper | AsciiLower;
     private static readonly TokenSet AsciiWord = AsciiAlpha | TokenSet.Ascii.Digits | TokenSet.Runes("_");
     private static readonly TokenSet AwsKeyTail = AsciiUpper | TokenSet.Range('0', '7');
-    private static readonly TokenSet AsciiRegexWhitespace = TokenSet.Runes(" \t\r\n\f\v");
+    // Whitespace set written with \f between \r and \n so the input
+    // to Runes() doesn't contain the adjacent CR+LF that would form
+    // the CRLF cluster and throw. Set membership is order-independent.
+    private static readonly TokenSet AsciiRegexWhitespace = TokenSet.Runes(" \t\r\f\n\v");
     private static readonly TokenSet CodeSeparator = TokenSet.Runes(",") | AsciiRegexWhitespace;
-    // Construct from individual Single() runes rather than Runes("\r\n"):
-    // post-merge TokenSet.Runes walks by grapheme, so "\r\n" becomes
-    // a multi-rune cluster (CRLF), and ~ on a multi-rune set throws.
-    // We want ~{CR, LF} as rune-set, which the explicit construction
-    // gives.
     private static readonly TokenSet NotNewline = ~(TokenSet.Single('\r') | TokenSet.Single('\n'));
     private static readonly TokenSet NotUppercase = ~AsciiUpper;
     private static readonly TokenSet NotSpace = ~TokenSet.Runes(" ");
@@ -345,7 +343,8 @@ internal static class BenchmarkRegistry
     private static readonly TokenSet LevelChar = TokenSet.Runes("DIWEF");
     private static readonly TokenSet OneToFour = TokenSet.Runes("1234");
     private static readonly TokenSet YesNo = TokenSet.Runes("YN");
-    private static readonly TokenSet DateSeparator = TokenSet.Runes("/:-,. \t\r\n_+@");
+    // Same trick as AsciiRegexWhitespace: _ between \r and \n.
+    private static readonly TokenSet DateSeparator = TokenSet.Runes("/:-,. \t\r_\n+@");
     private static readonly TokenSet Quote = TokenSet.Runes("'\"");
 
     public static BenchmarkPlan Build(RebarConfig config, bool useStateMachine = false)
@@ -653,7 +652,7 @@ internal static class BenchmarkRegistry
         // haystack of 'A' repeated, the first alternative always
         // fails and every match comes from the `[A-Z]` branch.
         var firstAlternative = And(
-            ScanUntil(NotUppercase | TokenSet.Runes("\r\n")),
+            ScanUntil(NotUppercase | (TokenSet.Single('\r') | TokenSet.Single('\n'))),
             P(OneOf(NotUppercase))
         );
         var secondAlternative = P(OneOf(AsciiUpper));
@@ -672,7 +671,7 @@ internal static class BenchmarkRegistry
         // describe the same thing in this haystack: any non-newline
         // runes up to the first `=`.
         var match = And(
-            Optional(P(ScanUntil(TokenSet.Runes("=\r\n"), eofIsTerminator: true))),
+            Optional(P(ScanUntil(TokenSet.Runes("\r=\n"), eofIsTerminator: true))),
             P(Token('=')),
             ZeroOrMore(P(OneOf(NotNewline)))
         );
@@ -722,7 +721,7 @@ internal static class BenchmarkRegistry
             ZeroOrMore(P(Token(')'))),
             Optional(P(Token(';'))),
             ZeroOrMore(noiseToken),
-            Optional(P(ScanUntil(TokenSet.Runes("=\r\n"), eofIsTerminator: true))),
+            Optional(P(ScanUntil(TokenSet.Runes("\r=\n"), eofIsTerminator: true))),
             P(Token('=')),
             ZeroOrMore(P(OneOf(NotNewline)))
         );
@@ -973,13 +972,13 @@ internal static class BenchmarkRegistry
         // the secret's opening quote. Without this, ZeroOrMore would
         // run to end-of-line and the secret rule would have nothing
         // left to match.
-        Optional(P(ScanUntil(Quote | TokenSet.Runes("\r\n"), eofIsTerminator: true))),
+        Optional(P(ScanUntil(Quote | TokenSet.Single('\r') | TokenSet.Single('\n'), eofIsTerminator: true))),
         QuotedSecret()
     );
 
     private static Rule QuotedSecretThenAws() => And(
         QuotedSecret(),
-        Optional(P(ScanUntil(Quote | TokenSet.Runes("\r\n"), eofIsTerminator: true))),
+        Optional(P(ScanUntil(Quote | TokenSet.Single('\r') | TokenSet.Single('\n'), eofIsTerminator: true))),
         QuotedAwsKey()
     );
 

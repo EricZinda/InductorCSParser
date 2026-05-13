@@ -394,9 +394,34 @@ public abstract class Rule
     //     both be wrong: the caller's two requests contradict each other.
     // Virtual so subclasses (LateBoundRule) can forbid it where naming
     // would be a bug.
+    //
+    // Set-once on Name: a rule that already has a name from a prior
+    // .As(string) call can't be renamed. The fluent API encourages
+    // chaining (.As("foo").Preserve().WithError("...")), and chaining
+    // looks like it's building a new rule each time. But .As(name)
+    // mutates the rule instance in place and returns it, so calling
+    // .As(string) twice with different names against the same rule
+    // instance silently makes the last call win. The bug surfaces only
+    // when consumers try to dispatch by Tree.Find / Tree.Is on which
+    // name matched, by which point the user has built more grammar on
+    // top. A second .As(string) call throws instead.
+    //
+    // .As(SymbolId) writes a different field (Id, not Name) and composes
+    // with .As(string): a pinned-id rule can still pick up a name and a
+    // named rule can still pick up an explicit pin. Only same-overload
+    // repeats are bugs, since those overwrite the field the previous
+    // call set.
     public virtual Rule As(string name)
     {
         ThrowIfSealed();
+        if (Name != null)
+            throw new InvalidOperationException(
+                $".As(\"{name}\") can't be applied to this rule: it was already " +
+                $"named \"{Name}\". .As(string) is set-once. To reuse this rule " +
+                $"shape under different names, build a factory function that " +
+                $"returns a fresh rule each call (e.g. `static Rule NumericCore" +
+                $"(string name) => OneOrMore(OneOf(TokenSet.Digits)).As(name)" +
+                $".Preserve();`).");
         ApplyIdentificationFlattenPolicy(nameof(As), name);
         Name = name;
         return this;
@@ -429,6 +454,12 @@ public abstract class Rule
                 $"{SymbolRanges.CustomRangeStart}). Lower values are reserved " +
                 $"for Unicode runes (0..0x10FFFF) and built-in expression " +
                 $"ids (0x110000..0x1FFFFF). See SymbolRanges.");
+        if (IsUserSymbolIdPinned)
+            throw new InvalidOperationException(
+                $".As(SymbolId {id.Value}) can't be applied to this rule: it " +
+                $"was already pinned to SymbolId {Id.Value}. .As(SymbolId) is " +
+                $"set-once. To reuse this rule shape under different pinned ids, " +
+                $"build a factory function that returns a fresh rule each call.");
         ApplyIdentificationFlattenPolicy(nameof(As), id.ToString());
         Id = id;
         _idAssigned = true;
@@ -546,6 +577,13 @@ public abstract class Rule
     public virtual Rule WithError(string errorMessage)
     {
         ThrowIfSealed();
+        if (_errorMessage != null)
+            throw new InvalidOperationException(
+                $".WithError(\"{errorMessage}\") can't be applied to this rule: " +
+                $"it already has the error message \"{_errorMessage}\". " +
+                $".WithError(...) is set-once. To reuse this rule shape with a " +
+                $"different error message, build a factory function that returns " +
+                $"a fresh rule each call.");
         _errorMessage = errorMessage;
         return this;
     }
@@ -829,7 +867,13 @@ public abstract class Rule
             ? input.Normalize(normalizeInput.Value)
             : input;
 
-        Lexer lexer = new Lexer(parseInput, options.TraceSink, options.TraceLevel);
+        // Per-parse context every Symbol the engine builds will hold
+        // a reference to. Lets Symbol.SourceRange / Symbol.SourceText
+        // translate parseInput offsets back to original-input
+        // coordinates without the consumer having to thread the
+        // ParseResult.
+        var parseContext = new ParseContext(input, parseInput, normalizeInput);
+        Lexer lexer = new Lexer(parseInput, parseContext, options.TraceSink, options.TraceLevel);
         lexer.ConfigureBudgets(options);
         Symbol? result;
         // Pre-allocate a root list so a root with FlattenType.Flatten

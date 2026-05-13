@@ -8,6 +8,12 @@ namespace InductorParser.SyntaxTree;
 // by editor diagnostics: zero-based, with line breaks at "\n", "\r\n"
 // (one break, not two), and lone "\r". Column is in chars, same unit
 // as CharIndex.
+//
+// Input is the string the position is into. Always the user's original
+// input. When a grammar normalizes (FormC by default), the parser
+// translates parseInput coordinates back to original-input coordinates
+// before constructing the SourcePosition, so the value here is in the
+// frame the user typed in. 
 public readonly struct SourcePosition
 {
     // UTF-16 code units, what string.Substring / Span<char>.Slice / LSP use.
@@ -29,8 +35,15 @@ public readonly struct SourcePosition
     // same unit as CharIndex.
     public int Column { get; }
 
-    internal SourcePosition(int charIndex, int tokenIndex, int line, int column)
+    // The source string CharIndex is an offset into. Always the user's
+    // original input, even for parses that normalized the input under
+    // the hood. Never null; a SourcePosition built from a null input
+    // stores string.Empty.
+    public string Input { get; }
+
+    internal SourcePosition(string input, int charIndex, int tokenIndex, int line, int column)
     {
+        Input = input ?? string.Empty;
         CharIndex = charIndex;
         TokenIndex = tokenIndex;
         Line = line;
@@ -50,6 +63,6 @@ public readonly struct SourcePosition
 
         int tokenIndex = SourcePositionConverter.ToTokenIndex(input, limit);
         SourcePositionConverter.ToLineColumn(input, limit, out int line, out int column);
-        return new SourcePosition(limit, tokenIndex, line, column);
+        return new SourcePosition(input, limit, tokenIndex, line, column);
     }
 }

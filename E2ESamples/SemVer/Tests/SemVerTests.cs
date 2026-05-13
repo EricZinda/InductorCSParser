@@ -173,6 +173,28 @@ public class SemVerErrorPositionTests
     }
 
     [Test]
+    public void Leading_zero_on_minor_is_pointed_at_the_minor_position()
+    {
+        // "1.02.3" -> minor "02" starts at offset 2 (the '0' after the first '.').
+        SemVerParser.TryParse("1.02.3", out _, out var error);
+        Assert.That(error, Is.Not.Null);
+        Assert.That(error!.Column, Is.EqualTo(2));
+        Assert.That(error.Message, Does.Contain("leading zero").IgnoreCase);
+        Assert.That(error.Message, Does.Contain("minor").IgnoreCase);
+    }
+
+    [Test]
+    public void Leading_zero_on_patch_is_pointed_at_the_patch_position()
+    {
+        // "1.2.03" -> patch "03" starts at offset 4.
+        SemVerParser.TryParse("1.2.03", out _, out var error);
+        Assert.That(error, Is.Not.Null);
+        Assert.That(error!.Column, Is.EqualTo(4));
+        Assert.That(error.Message, Does.Contain("leading zero").IgnoreCase);
+        Assert.That(error.Message, Does.Contain("patch").IgnoreCase);
+    }
+
+    [Test]
     public void Empty_pre_release_after_dash_is_pointed_at_the_dash_position()
     {
         // "1.2.3-" -> the deepest the parser got is offset 6 (just past

@@ -7,10 +7,14 @@
 //   <build>           ::= <buildIdent> ('.' <buildIdent>)*
 //   <buildIdent>      ::= [0-9A-Za-z-]+
 //
-// The numeric core and the numeric-pre-release shape both have a
-// no-leading-zero rule. Both are accepted as any digit run here and
-// validated post-parse in SemVerParser.cs (see backlog/z0aa for the
-// diagnostics-vs-grammar trade-off).
+// The major/minor/patch positions express the no-leading-zero rule
+// directly in the grammar using the reject-first pattern from
+// docs/Recipes.md: a Not(...) probe in front of any consumption
+// rejects the bad "0[digit]" prefix and positions the error at the
+// start of the bad token. The numeric pre-release ident still goes
+// through post-parse validation in SemVerParser.cs because its rule
+// mixes numeric and alphanumeric shapes and the per-field message
+// is easier to express that way.
 
 using InductorParser;
 using static InductorParser.Rules;
@@ -33,10 +37,18 @@ public static class SemVerGrammar
         // Each named position needs its own rule instance; a shared
         // variable plus three .As(name) calls would silently rename
         // them all to the last name. See backlog/z0ab.
+        //
+        // The Not(...) probe rejects the "0[digit]" prefix. Its
+        // .WithError fires only on the leading-zero case, so other
+        // failures (a non-digit first character like the 'v' in
+        // "v1.2.3") fall through to the default unexpected-token
+        // message from the OneOrMore.
         static Rule NumericCore(string name) =>
-            OneOrMore(OneOf(TokenSet.Ascii.Digits))
-                .As(name).Preserve()
-                .WithError($"Expected {name} version (digits 0-9)");
+            And(
+                Not(And(Token('0'), OneOf(TokenSet.Ascii.Digits)))
+                    .WithError($"{name} version must not have leading zeros"),
+                OneOrMore(OneOf(TokenSet.Ascii.Digits))
+            ).As(name).Preserve();
 
         MajorVersion = NumericCore("major");
         MinorVersion = NumericCore("minor");

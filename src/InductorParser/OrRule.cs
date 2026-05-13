@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
@@ -50,12 +51,14 @@ internal sealed class OrRule : Rule
             if (symbol != null)
             {
                 TraceSuccess(lexer, $"symbol #{symbolIndex}");
+                int matchStart = transaction.StartPosition;
+                int matchLength = lexer.Position - matchStart;
                 transaction.Commit();
                 // Don't add child symbols if they're discarded
                 if (outputSymbols != null && !ReferenceEquals(symbol, Symbol.Discarded))
                     outputSymbols.Add(symbol);
                 return effectiveFlattenType == FlattenType.Preserve
-                    ? new Symbol(Id, FlattenType, outputSymbols)
+                    ? new Symbol(Id, FlattenType, outputSymbols, lexer.Input.AsMemory(matchStart, matchLength), lexer.Context)
                     : Symbol.Discarded;
             }
         }

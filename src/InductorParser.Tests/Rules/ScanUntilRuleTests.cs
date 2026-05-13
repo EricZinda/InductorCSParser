@@ -49,7 +49,7 @@ public class ScanUntilRuleTests
         // expected. OneOf with the same set / same input matches the
         // cluster, so the asymmetry is the bug.
         var rule = InductorParser.Rules.And(
-            ScanUntil(TokenSet.Runes(LatinEAcutePrecomposedGrapheme)),
+            ScanUntil(TokenSet.Graphemes(LatinEAcutePrecomposedGrapheme)),
             Token(LatinEAcutePrecomposedGrapheme));
         rule.Compile(System.Text.NormalizationForm.FormD);
 
@@ -570,8 +570,8 @@ public class ScanUntilRuleTests
         // any single-rune token plus any non-USFlag grapheme. Scan
         // should consume "ab" + WomanShrugging and stop at the
         // following USFlag without consuming it.
-        var stopOnFlag = ScanUntil(TokenSet.Runes(USFlagGrapheme));
-        var rule = And(stopOnFlag, OneOf(TokenSet.Runes(USFlagGrapheme)));
+        var stopOnFlag = ScanUntil(TokenSet.Graphemes(USFlagGrapheme));
+        var rule = And(stopOnFlag, OneOf(TokenSet.Graphemes(USFlagGrapheme)));
 
         var input = "ab" + WomanShruggingGrapheme + USFlagGrapheme;
         var result = rule.Parse(input,
@@ -589,7 +589,7 @@ public class ScanUntilRuleTests
         // newline rune or the flag grapheme. Use AllowTrailingInput
         // because ScanUntil doesn't consume the stopper, so the parse
         // wouldn't reach EOF on its own.
-        var stopper = TokenSet.Single('\n') | TokenSet.Runes(USFlagGrapheme);
+        var stopper = TokenSet.Single('\n') | TokenSet.Graphemes(USFlagGrapheme);
         var rule = ScanUntil(stopper);
 
         var newlineCase = rule.Parse("hello\nrest", new ParseOptions { AllowTrailingInput = true });
@@ -635,11 +635,11 @@ public class ScanUntilRuleTests
     {
         if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
         {
-            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(row.Source));
             return;
         }
 
-        var rule = And(ScanUntil(TokenSet.Runes(row.Source)), Token(row.Source));
+        var rule = And(ScanUntil(TokenSet.Graphemes(row.Source)), Token(row.Source));
 
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
         {
@@ -661,11 +661,11 @@ public class ScanUntilRuleTests
     {
         if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
         {
-            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(row.Source));
             return;
         }
 
-        var rule = OneOrMore(ScanUntil(TokenSet.Runes(row.Source)));
+        var rule = OneOrMore(ScanUntil(TokenSet.Graphemes(row.Source)));
 
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
         {
@@ -692,11 +692,11 @@ public class ScanUntilRuleTests
     {
         if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
         {
-            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(row.Source));
             return;
         }
 
-        var rule = And(ScanUntil(TokenSet.Runes(row.Source)), Eof());
+        var rule = And(ScanUntil(TokenSet.Graphemes(row.Source)), Eof());
 
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
         {
@@ -729,6 +729,60 @@ public class ScanUntilRuleTests
             targetText: "XYZ",
             extraInput: "!",
             afterTarget: Token('!'));
+    }
+
+    [Test]
+    public void SourceText_on_ScanUntil_returns_matched_text_under_every_FlattenType()
+    {
+        // ScanUntilEof matches the whole input as a single leaf. Use
+        // that rather than ScanUntil + stopper because strict-default
+        // ScanUntil fails when no stopper is found in the input, and
+        // we want the test to be about the SourceText invariant, not
+        // about stopper search.
+        SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
+            ruleBuilder: () => ScanUntilEof(),
+            input: "XYZ",
+            expectedSourceText: "XYZ");
+    }
+
+    [Test]
+    public void ScanUntil_standalone_zero_width_match_reports_position_via_SourceRange()
+    {
+        // ScanUntil whose stopper sits at the cursor matches a
+        // zero-width body and emits a leaf Symbol with empty memory.
+        // The leaf still has a well-defined position (the offset where
+        // the stopper sat). SourceRange reports a zero-width range at
+        // that position, not null. AllowTrailingInput lets the parse
+        // succeed with the trailing 'X' unconsumed.
+        var rule = ScanUntil(TokenSet.Runes("X")).Preserve();
+        var options = new ParseOptions { AllowTrailingInput = true };
+        var result = rule.Parse("X", options);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(""));
+        var range = result.Tree!.SourceRange!.Value;
+        Assert.That(range.Start.CharIndex, Is.EqualTo(0));
+        Assert.That(range.End.CharIndex, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ScanUntil_empty_string_body_in_composite_reports_position_between_delimiters()
+    {
+        // The user-visible canonical case: a JSON-style string grammar
+        // with ScanUntil for the body. Empty input "" between the
+        // delimiters means the body is zero-width AT offset 1.
+        // Consumers that highlight bodies or read offsets need a
+        // position even when the body is empty.
+        var body = ScanUntil(TokenSet.Runes("\"")).As("body").Preserve();
+        var rule = And(Token('"'), body, Token('"'));
+        var result = rule.Parse("\"\"");
+
+        Assert.That(result.Success, Is.True);
+        var bodySymbol = result.Tree!.Find(body)!;
+        Assert.That(bodySymbol.ToString(), Is.EqualTo(""));
+        var range = bodySymbol.SourceRange!.Value;
+        Assert.That(range.Start.CharIndex, Is.EqualTo(1));
+        Assert.That(range.End.CharIndex, Is.EqualTo(1));
     }
 
     // -----------------------------------------------------------------

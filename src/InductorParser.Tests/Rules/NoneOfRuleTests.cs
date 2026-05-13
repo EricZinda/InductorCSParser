@@ -182,7 +182,7 @@ public class NoneOfRuleTests
         // A multi-rune set as the exclude list. The flag arrives as
         // one token and NoneOf finds it in the multi-rune array, so
         // it fails. Other multi-rune graphemes pass.
-        var rule = NoneOf(TokenSet.Runes(USFlagGrapheme));
+        var rule = NoneOf(TokenSet.Graphemes(USFlagGrapheme));
 
         Assert.That(rule.Parse(USFlagGrapheme).Success, Is.False);
         Assert.That(rule.Parse(WomanShruggingGrapheme).Success, Is.True);
@@ -196,7 +196,7 @@ public class NoneOfRuleTests
         // The mixed-set version of the previous test: include a
         // letter range and a multi-rune entry. Tokens that hit
         // either get rejected.
-        var rule = NoneOf(TokenSet.Ascii.Letters | TokenSet.Runes(USFlagGrapheme));
+        var rule = NoneOf(TokenSet.Ascii.Letters | TokenSet.Graphemes(USFlagGrapheme));
 
         Assert.That(rule.Parse("a").Success, Is.False, "letters are rejected");
         Assert.That(rule.Parse(USFlagGrapheme).Success, Is.False, "the flag grapheme is rejected");
@@ -342,11 +342,11 @@ public class NoneOfRuleTests
     {
         if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
         {
-            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(row.Source));
             return;
         }
 
-        var rule = NoneOf(TokenSet.Runes(row.Source));
+        var rule = NoneOf(TokenSet.Graphemes(row.Source));
 
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
         {
@@ -371,11 +371,11 @@ public class NoneOfRuleTests
     {
         if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
         {
-            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(row.Source));
             return;
         }
 
-        var rule = OneOrMore(NoneOf(TokenSet.Runes(row.Source)));
+        var rule = OneOrMore(NoneOf(TokenSet.Graphemes(row.Source)));
 
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
         {
@@ -405,7 +405,7 @@ public class NoneOfRuleTests
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
             return; // multi-grapheme post-form is covered by the NoneOf_in_OneOrMore Compile-throws path
 
-        var noneOfRule = NoneOf(TokenSet.Runes(row.Source)).As("noneOfBranch");
+        var noneOfRule = NoneOf(TokenSet.Graphemes(row.Source)).As("noneOfBranch");
         var fallback = AnyToken().As("fallbackBranch");
         var rule = Or(noneOfRule, fallback);
 
@@ -425,11 +425,11 @@ public class NoneOfRuleTests
     {
         if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
         {
-            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(row.Source));
             return;
         }
 
-        var rule = And(NoneOf(TokenSet.Runes(row.Source)), Eof());
+        var rule = And(NoneOf(TokenSet.Graphemes(row.Source)), Eof());
 
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
         {
@@ -456,5 +456,14 @@ public class NoneOfRuleTests
             row, form,
             target: NoneOf("Y").As("notY").Preserve(),
             targetText: "X");
+    }
+
+    [Test]
+    public void SourceText_on_NoneOf_returns_matched_text_under_every_FlattenType()
+    {
+        SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
+            ruleBuilder: () => NoneOf("Y"),
+            input: "X",
+            expectedSourceText: "X");
     }
 }

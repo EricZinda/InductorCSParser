@@ -148,4 +148,38 @@ public class EofRuleTests
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
+
+    [Test]
+    public void SourceRange_on_Eof_reports_zero_width_at_input_end()
+    {
+        // Eof matches at end-of-input. The Preserve'd composite records
+        // a zero-length consumed span at lexer.Position (which is at
+        // input.Length on success), so SourceRange reports a zero-width
+        // range at input.Length and SourceText is empty. Consumers
+        // that highlight "input ended here" need a position even
+        // though no chars were consumed.
+        var eof = Eof().As("end").Preserve();
+        var rule = And(Literal("abc").Preserve(), eof).Preserve();
+        var result = rule.Parse("abc");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        var eofSymbol = result.Tree!.Find(eof)!;
+        Assert.That(eofSymbol.SourceText, Is.EqualTo(string.Empty));
+        var range = eofSymbol.SourceRange!.Value;
+        Assert.That(range.Start.CharIndex, Is.EqualTo(3));
+        Assert.That(range.End.CharIndex, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void SourceText_on_Eof_returns_empty_under_every_FlattenType()
+    {
+        // Eof is zero-width: it succeeds only at end-of-input and
+        // consumes nothing. SourceText is empty regardless of
+        // FlattenType. Parse against empty input — Eof immediately
+        // succeeds, wrapper consumes nothing.
+        SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
+            ruleBuilder: () => Eof(),
+            input: "",
+            expectedSourceText: "");
+    }
 }

@@ -16,12 +16,10 @@ public static class PrologGrammar
 {
     // Character classes from Parser.cpp / PrologParser.cpp.
     private static readonly TokenSet WhitespaceChars = TokenSet.Ascii.AnyWhitespace;
-    // Built rune-by-rune because Runes("\r\n") would store CRLF as one
-    // multi-rune grapheme entry (the general rule for multi-rune
-    // graphemes) rather than as the two separate scalars CR and LF.
-    // The line-break rule below specifically wants either CR or LF
-    // to match as a single-rune token, so they belong in the rune
-    // intervals.
+    // CR and LF as two separate scalars (not the CRLF grapheme
+    // cluster). The line-break rule below wants either rune to match
+    // on its own. Built from Singles because Runes("\r\n") would
+    // throw — adjacent CR+LF form the CRLF cluster under UAX #29.
     private static readonly TokenSet CrlfChars = TokenSet.Single('\r') | TokenSet.Single('\n');
     private static readonly TokenSet LetterChars = TokenSet.Ascii.Letters;
     private static readonly TokenSet CapitalChars = TokenSet.Range('A', 'Z');

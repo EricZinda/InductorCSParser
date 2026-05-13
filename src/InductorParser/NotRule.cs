@@ -58,8 +58,11 @@ internal sealed class NotRule : Rule
             return null;
         }
         TraceSuccess(lexer, $"inner didn't match");
+        // Not is zero-width: inner failed and the lexer rolled back to
+        // transaction.StartPosition. Record a zero-length consumed
+        // span at that anchor for the Symbol's bounds.
         return effectiveFlattenType == FlattenType.Preserve
-            ? new Symbol(Id, FlattenType, Array.Empty<Symbol>())
+            ? new Symbol(Id, FlattenType, Array.Empty<Symbol>(), lexer.Input.AsMemory(transaction.StartPosition, 0), lexer.Context)
             : Symbol.Discarded;
     }
 

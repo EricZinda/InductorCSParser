@@ -201,4 +201,39 @@ public class NotRuleTests
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
+
+    [Test]
+    public void SourceRange_on_Not_reports_zero_width_at_its_anchor()
+    {
+        // Not succeeds when inner FAILS — consumes nothing either way.
+        // The Preserve'd composite records a zero-length consumed span
+        // at the negative-lookahead's anchor. SourceRange reports a
+        // zero-width range there, SourceText is empty. Consumers can
+        // highlight "the parser asserted X is not here" at the right
+        // offset without claiming any text was matched.
+        var notRule = Not(Literal("Z")).As("guard").Preserve();
+        var rule = And(Literal("ab"), notRule, Literal("X").Preserve()).Preserve();
+        var result = rule.Parse("abX");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        var notSymbol = result.Tree!.Find(notRule)!;
+        Assert.That(notSymbol.SourceText, Is.EqualTo(string.Empty));
+        var range = notSymbol.SourceRange!.Value;
+        Assert.That(range.Start.CharIndex, Is.EqualTo(2));
+        Assert.That(range.End.CharIndex, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void SourceText_on_Not_returns_empty_under_every_FlattenType()
+    {
+        // Not is zero-width: it succeeds when its inner rule FAILS and
+        // contributes no characters either way. SourceText is empty
+        // regardless of FlattenType. Use Not(Literal("X")) against
+        // empty input — inner fails, Not succeeds, wrapper consumes
+        // nothing, parse finishes cleanly.
+        SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
+            ruleBuilder: () => Not(Literal("X")),
+            input: "",
+            expectedSourceText: "");
+    }
 }

@@ -159,6 +159,69 @@ public class IdAssignmentTests
         Assert.That(exception.Message, Does.Contain("second"));
     }
 
+    // .As(string) and .As(SymbolId) each write a different field (Name and
+    // Id), so they compose on a single instance: a rule can be both pinned
+    // and named without conflict. But each overload is set-once against
+    // itself, because a second call to the same overload overwrites the
+    // field the previous call set. The SemVer case was the motivating bug:
+    // a shared OneOrMore(OneOf(digits)) rule chained .As("major") /
+    // .As("minor") / .As("patch") across three positions, and all three
+    // references ended up pointing at the same instance with Name="patch"
+    // (last call wins). Tree.Find against any of the three then returned
+    // the same node. The Compile-time duplicate-name check would catch the
+    // collision when two reachable rules share a name, but only if the
+    // user wrote two rule instances with the same name. Reusing one
+    // instance hid the collision entirely.
+
+    [Test]
+    public void As_string_after_As_string_throws()
+    {
+        var rule = OneOrMore(OneOf(TokenSet.Digits)).As("major");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => rule.As("minor"));
+        Assert.That(exception!.Message, Does.Contain("\"minor\""));
+        Assert.That(exception.Message, Does.Contain("\"major\""));
+        Assert.That(exception.Message, Does.Contain("set-once"));
+    }
+
+    [Test]
+    public void As_SymbolId_after_As_SymbolId_throws()
+    {
+        var firstPin = new SymbolId(SymbolRanges.CustomRangeStart + 100);
+        var secondPin = new SymbolId(SymbolRanges.CustomRangeStart + 200);
+        var rule = OneOrMore(OneOf(TokenSet.Digits)).As(firstPin);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => rule.As(secondPin));
+        Assert.That(exception!.Message, Does.Contain(secondPin.Value.ToString()));
+        Assert.That(exception.Message, Does.Contain(firstPin.Value.ToString()));
+        Assert.That(exception.Message, Does.Contain("set-once"));
+    }
+
+    [Test]
+    public void Cross_overload_As_calls_compose_on_a_single_instance()
+    {
+        // .As(SymbolId) writes Id, .As(string) writes Name. Each field is
+        // set-once but the two are independent. Calling one of each (in
+        // either order) on the same rule produces a rule with both a
+        // pinned id and a debug name, with no silent overwrite.
+        var pin = new SymbolId(SymbolRanges.CustomRangeStart + 300);
+
+        Assert.DoesNotThrow(() =>
+        {
+            var pinThenName = OneOrMore(OneOf(TokenSet.Digits)).As(pin).As("number");
+            Assert.That(pinThenName.Id, Is.EqualTo(pin));
+            Assert.That(pinThenName.Name, Is.EqualTo("number"));
+        });
+
+        var otherPin = new SymbolId(SymbolRanges.CustomRangeStart + 301);
+        Assert.DoesNotThrow(() =>
+        {
+            var nameThenPin = OneOrMore(OneOf(TokenSet.Digits)).As("count").As(otherPin);
+            Assert.That(nameThenPin.Id, Is.EqualTo(otherPin));
+            Assert.That(nameThenPin.Name, Is.EqualTo("count"));
+        });
+    }
+
     // Each test below builds a small grammar with a specific arrangement
     // of pinned, named, and anonymous leaves, compiles it, and asserts
     // the exact id every leaf comes out with. The model-based sweep at

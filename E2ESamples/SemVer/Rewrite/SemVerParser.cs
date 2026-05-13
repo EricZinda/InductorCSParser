@@ -5,9 +5,13 @@
 //   Error message     "not a valid semver"   names the rule and value
 //   AST               four capture groups    walkable parse tree
 //
-// No-leading-zero rules on the four numeric positions run as post-parse
-// checks (better diagnostics than the grammar-layer version). See
-// backlog/z0aa.
+// Major/minor/patch leading-zero checks run in the grammar via the
+// reject-first pattern (see SemVerGrammar.cs and docs/Recipes.md), so
+// only the Int32 range check stays here for those positions. The
+// numeric pre-release ident leading-zero check still runs as a
+// post-parse check because the pre-release ident rule mixes numeric
+// and alphanumeric shapes and per-field diagnostics are easier to
+// express that way.
 
 using System.Collections.Generic;
 using System.Globalization;
@@ -77,14 +81,9 @@ public static class SemVerParser
             string text = node.ToString();
             string label = positions[positionIndex].Label;
 
-            if (text.Length > 1 && text[0] == '0')
-            {
-                error = ErrorAt(result, node, $"{label} version '{text}' must not have leading zeros");
-                return false;
-            }
             if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out values[positionIndex]))
             {
-                error = ErrorAt(result, node, $"{label} version '{text}' is out of range for Int32");
+                error = ErrorAt(node, $"{label} version '{text}' is out of range for Int32");
                 return false;
             }
         }
@@ -99,7 +98,7 @@ public static class SemVerParser
                 bool isNumeric = text.All(char.IsAsciiDigit);
                 if (isNumeric && text.Length > 1 && text[0] == '0')
                 {
-                    error = ErrorAt(result, node, $"Numeric pre-release identifier '{text}' must not have leading zeros");
+                    error = ErrorAt(node, $"Numeric pre-release identifier '{text}' must not have leading zeros");
                     return false;
                 }
                 preRelease.Add(new RewritePreReleaseIdentifier(text, isNumeric));
@@ -117,9 +116,9 @@ public static class SemVerParser
         return true;
     }
 
-    private static SemVerParseError ErrorAt(ParseResult result, Symbol node, string message)
+    private static SemVerParseError ErrorAt(Symbol node, string message)
     {
-        var range = result.SourceRangeOf(node);
+        var range = node.SourceRange;
         return new SemVerParseError(message,
             range?.Start.CharIndex ?? 0,
             range?.Start.Line ?? 0,

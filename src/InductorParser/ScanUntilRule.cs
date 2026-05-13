@@ -416,7 +416,7 @@ internal sealed class ScanUntilRule : Rule
         TraceSuccess(lexer, $"{length} chars, stopper '{_stopperRendered}'");
         transaction.Commit();
         if (effectiveFlattenType == FlattenType.Delete) return Symbol.Discarded;
-        var leafSymbol = new Symbol(Id, FlattenType, input.AsMemory(startPosition, length));
+        var leafSymbol = new Symbol(Id, FlattenType, input.AsMemory(startPosition, length), lexer.Context);
         if (effectiveFlattenType == FlattenType.Flatten)
         {
             outputSymbols!.Add(leafSymbol);

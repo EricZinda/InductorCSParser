@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
@@ -33,9 +34,11 @@ internal sealed class AndRule : Rule
                 outputSymbols.Add(symbol);
         }
         TraceSuccess(lexer, $"found {Children.Count}");
+        int matchStart = transaction.StartPosition;
+        int matchLength = lexer.Position - matchStart;
         transaction.Commit();
         return effectiveFlattenType == FlattenType.Preserve
-            ? new Symbol(Id, FlattenType, outputSymbols)
+            ? new Symbol(Id, FlattenType, outputSymbols, lexer.Input.AsMemory(matchStart, matchLength), lexer.Context)
             : Symbol.Discarded;
     }
 
