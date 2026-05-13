@@ -793,8 +793,11 @@ internal static class Stepper
     // until one of three exits:
     //   * Stopper rune found: returns OnSuccess (loop done, ready to
     //     emit the leaf).
-    //   * EOF or malformed surrogate: same as stopper; the leaf
-    //     covers everything scanned so far.
+    //   * EOF or malformed surrogate: returns OnSuccess when the spec
+    //     says eofIsTerminator is true (the tolerant and ScanUntilEof
+    //     cases). Otherwise returns spec.OnEofFailState (the outerFail
+    //     state the lowerer wires up), failing the rule as
+    //     "unterminated body."
     //   * Escape-start rune found: consumes the start rune and returns
     //     OnFailure. The lowerer wires OnFailure to a Call(escapeEnd)
     //     state whose OnSuccess routes back to this scan state, so the
@@ -815,7 +818,8 @@ internal static class Stepper
         {
             lexer.TickPeriodicBudget();
             int pos = lexer.Position;
-            if (pos >= inputLen) return state.OnSuccess;
+            if (pos >= inputLen)
+                return spec.EofIsTerminator ? state.OnSuccess : spec.OnEofFailState;
 
             char first = input[pos];
             int runeValue;
@@ -829,10 +833,10 @@ internal static class Stepper
             }
             else if (char.IsSurrogate(first))
             {
-                // Stray surrogate halves can't form a rune. Stop the
-                // scan and let the surrounding grammar decide what to
-                // do with the input.
-                return state.OnSuccess;
+                // Stray surrogate halves can't form a rune. Halting
+                // here means we never found the stopper, so the
+                // success / fail decision matches real EOF.
+                return spec.EofIsTerminator ? state.OnSuccess : spec.OnEofFailState;
             }
             else
             {

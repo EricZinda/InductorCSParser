@@ -198,12 +198,27 @@ internal readonly struct ScanUntilSpec
     public readonly bool HasEscape;
     public readonly int EscapeEndEntry;
 
-    public ScanUntilSpec(int stopperSetIndex, int escapeStartRune, bool hasEscape, int escapeEndEntry)
+    // When false (strict), the scan opcode dispatches EOF / stray-surrogate
+    // exits to OnEofFailState. When true, those same exits go to the
+    // state's OnSuccess (the leaf-emit path). Strict matches the
+    // recursive evaluator's new default behavior.
+    public readonly bool EofIsTerminator;
+
+    // State index to jump to when the scan reaches EOF (or a stray
+    // surrogate) without ever matching the stopper, when
+    // EofIsTerminator is false. The lowerer wires this to the
+    // ScanUntil rule's outerFail state, which restores the lexer and
+    // propagates failure to the surrounding context.
+    public readonly int OnEofFailState;
+
+    public ScanUntilSpec(int stopperSetIndex, int escapeStartRune, bool hasEscape, int escapeEndEntry, bool eofIsTerminator, int onEofFailState)
     {
         StopperSetIndex = stopperSetIndex;
         EscapeStartRune = escapeStartRune;
         HasEscape = hasEscape;
         EscapeEndEntry = escapeEndEntry;
+        EofIsTerminator = eofIsTerminator;
+        OnEofFailState = onEofFailState;
     }
 }
 

@@ -42,16 +42,11 @@ To do this in Inductor Parser, we can start by thinking about how to scan a stri
 ```CSharp
 ScanUntil(TokenSet.Range('0', '9'))
 ```
-But `ScanUntil` always succeeds, even if no digit is found (it just consumes to end-of-input in that case). So we also need to make sure it stopped because it *did* hit one of them. We can just check if the next token is one of those digits:
-
-```CSharp
-And(ScanUntil(TokenSet.Range('0', '9')), OneOf(TokenSet.Range('0', '9')))
-```
-`And` requires all of its rules to succeed, so this will only succeed if we found a string that has a digit in it. Since we'll be doing this a few times, we can make our own rule for it:
+`ScanUntil` fails if it reaches end-of-input without ever matching its stopper, so on its own it already answers "did the input contain a digit?" — success means yes, failure means no. To make it more readable for how we're using it, we can wrap it in our own rule:
 
 ```CSharp
 Rule Contains(TokenSet options) =>
-    And(ScanUntil(options), OneOf(options));
+    ScanUntil(options);
 
 // Scan for one number
 Contains(TokenSet.Range('0', '9'))
@@ -65,18 +60,18 @@ Contains(TokenSet.Range('a', 'z'))
 // Scan for one special character
 Contains(TokenSet.Runes("#?!"))
 ```
-Those rules succeed if they find at least one of the characters we specify, but they also *consume* them as they go. So running them one after the other wouldn't check the whole password each time, only what is left after the previous rule succeeded.
+Those rules succeed if they find at least one of the characters we specify, but they also *consume* the body up to that character as they go. So running them one after the other wouldn't check the whole password each time, only what's left after the previous rule succeeded.
 
-The `Peek` rule is designed for just this case.  Like `Not` it checks if something is upcoming, but doesn't *consume* it. So, we can simply `Peek` at each rule so they each get to look at the entire password:
+The `Peek` rule is designed for just this case. Like `Not` it checks if something is upcoming, but doesn't *consume* it. So, we can simply `Peek` at each rule so they each get to look at the entire password:
 
 ```CSharp
 Rule Contains(TokenSet options) =>
-    Peek(And(ScanUntil(options), OneOf(options)));
+    Peek(ScanUntil(options));
 ```
 And then we have to make this real C# by combining them into a single rule:
 ```CSharp
 Rule Contains(TokenSet options) =>
-    Peek(And(ScanUntil(options), OneOf(options)));
+    Peek(ScanUntil(options));
 
 var rule = And(Contains(TokenSet.Range('0', '9')),
                  Contains(TokenSet.Range('A', 'Z')),
@@ -91,7 +86,7 @@ The next two aren't character based checks, they look for whole strings:
 
 ```CSharp
 Rule Contains(Rule rule) =>
-    Peek(And(ScanUntil(rule), rule));
+    Peek(ScanUntil(rule));
 
 var username = ... get username ...;
 var websitename = ... get website name ...;
@@ -112,10 +107,10 @@ Note that we have to consume the original password *and* `Eof` otherwise it woul
 So now we have:
 ```CSharp
 Rule Contains(Rule rule) =>
-    Peek(And(ScanUntil(rule), rule));
+    Peek(ScanUntil(rule));
 
 Rule Contains(TokenSet options) =>
-    Peek(And(ScanUntil(options), OneOf(options)));
+    Peek(ScanUntil(options));
 
 And(
     Contains(TokenSet.Range('0', '9')),
@@ -138,10 +133,10 @@ var username = ... get username ...;
 var websitename = ... get websitename ...;
 
 Rule Contains(Rule rule) =>
-    Peek(And(ScanUntil(rule), rule));
+    Peek(ScanUntil(rule));
 
 Rule Contains(TokenSet options) =>
-    Peek(And(ScanUntil(options), OneOf(options)));
+    Peek(ScanUntil(options));
 
 var pattern = 
     And(
