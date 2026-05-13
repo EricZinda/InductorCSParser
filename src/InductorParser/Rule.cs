@@ -207,6 +207,15 @@ public abstract class Rule
     // happen to land in the Unicode scalar range.
     private Dictionary<SymbolId, (string Name, bool IsUserSupplied)>? _nameIndex;
 
+    // Lazily-built forward index from a user-supplied .As(name) string
+    // back to the SymbolId the engine assigned to it during Compile.
+    // Used by IdOf for callers who want to look up a rule's id at
+    // grammar-construction time without holding a reference to the
+    // Rule object. Populated on the first IdOf call. Only user-named
+    // entries are indexed; the class-derived trace-name fallbacks
+    // (And, OneOrMore, Token, ...) aren't, because they're not unique.
+    private Dictionary<string, SymbolId>? _idByNameIndex;
+
     public SymbolId Id { get; private set; }
     public string? Name { get; private set; }
     public FlattenType FlattenType { get; private set; }
@@ -790,6 +799,58 @@ public abstract class Rule
         return map;
     }
 
+    // Inverse of NameOf: takes the string the rule was constructed with
+    // via .As("name") and returns the SymbolId the engine assigned.
+    // Returns null if no reachable rule has that name. Auto-compiles
+    // the grammar (ids aren't stable until Compile runs) so callers
+    // can cache the id at static-init time without worrying about
+    // ordering relative to the first Parse.
+    //
+    // Typed-AST projections use this to dispatch by name without
+    // having to expose one public static Rule field per named
+    // production on the grammar class:
+    //
+    //     private static readonly SymbolId NumberId =
+    //         MyGrammar.Root.IdOf("number")!.Value;
+    //     ...
+    //     if (child.Id == NumberId) ProjectNumber(...);
+    //
+    // Equivalent to Symbol.Is(string), but faster on the hot path of
+    // a tree walker (SymbolId compare is an int compare, no string
+    // intern lookup per node). Use IdOf when you'll dispatch on the
+    // same name in a loop; use Symbol.Is(string) when readability
+    // matters more.
+    public SymbolId? IdOf(string ruleName)
+    {
+        if (ruleName == null) return null;
+        if (!_sealed) Compile();
+        _idByNameIndex ??= BuildIdByNameIndex();
+        return _idByNameIndex.TryGetValue(ruleName, out var id) ? id : null;
+    }
+
+    private Dictionary<string, SymbolId> BuildIdByNameIndex()
+    {
+        var map = new Dictionary<string, SymbolId>();
+        var visited = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
+        CollectIdsByName(this, visited, map);
+        return map;
+    }
+
+    // Forward-index counterpart to CollectNames. Only user-supplied
+    // names go in; class-derived trace names are skipped because they
+    // aren't unique (many rules surface as just "And" / "OneOrMore"
+    // and we'd lose the round-trip property). The duplicate-name check
+    // that runs during Compile guarantees user names are unique per
+    // grammar, so a single map slot per name is sufficient.
+    private static void CollectIdsByName(Rule r, HashSet<Rule> visited, Dictionary<string, SymbolId> map)
+    {
+        if (!visited.Add(r)) return;
+        if (r.Name != null)
+            map[r.Name] = r.Id;
+        foreach (var child in r.Children)
+            CollectIdsByName(child, visited, map);
+    }
+
     // Populate the reverse index by walking the sealed rule graph once.
     // Each entry tracks both the resolved name (the user-supplied .As
     // name when set, otherwise the class-derived trace name) and whether
@@ -872,7 +933,7 @@ public abstract class Rule
         // translate parseInput offsets back to original-input
         // coordinates without the consumer having to thread the
         // ParseResult.
-        var parseContext = new ParseContext(input, parseInput, normalizeInput);
+        var parseContext = new ParseContext(input, parseInput, normalizeInput, this);
         Lexer lexer = new Lexer(parseInput, parseContext, options.TraceSink, options.TraceLevel);
         lexer.ConfigureBudgets(options);
         Symbol? result;
