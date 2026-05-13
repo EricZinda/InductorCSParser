@@ -1,10 +1,10 @@
-# Rewrite a real-world GitHub parser using InductorParser (add new backlog items before this, after the find-a-new-bug item moves)
+# Rewrite a real-world GitHub parser using InductorParser (add new backlog items at the top)
 
 **Read this first:** every path you touch as part of this task must be under the worktree root you started in. Backlog item, the new sample directory, any new tests, source fixes, scratch notes. All of it. Details in the "All edits stay inside the worktree you are running in" section below.
 
 This is a real backlog item, if you reach it, do it!
 
-This item should always be the second-to-last item in the backlog, sitting right before the find-a-new-bug item. Add new backlog items before this one, not after. Both this item and find-a-new-bug stay permanently. Don't delete either when you finish a round.
+This item should always be the second-to-last item in the backlog, sitting right before the find-a-new-bug item. New backlog items spun off from this work go at the **top** of the backlog with the smallest alpha prefix (e.g. `0001-` or `0a00-`), not somewhere alphabetically before this one. Putting new items at the top keeps the most recent work visible and matches the newest-on-top layout already used by `docs/BugSearchLog/` and `docs/PotentialBugSources/`. The VS Code backlog viewer renumbers on next open if you pick a prefix that needs adjusting. Both this item and find-a-new-bug stay permanently. Don't delete either when you finish a round.
 
 ## All edits stay inside the worktree you are running in
 
@@ -100,7 +100,7 @@ Things to watch for and write up:
 - A piece of the docs where we expected an example and didn't find one. (Doc gap with a concrete example to add.)
 - Anything where we had to read the source of `src/InductorParser/` to figure out how to do something a regular user shouldn't need to.
 
-For each one, drop a new `.md` in `backlog/` following the existing format. One issue per backlog item. Title clearly, describe the friction concretely (use the sample's code as the example), and propose what would have made it easy. If you can sketch the API change in three or four lines, do it.
+For each one, drop a new `.md` in `backlog/` following the existing format. One issue per backlog item. Title clearly, describe the friction concretely (use the sample's code as the example), and propose what would have made it easy. If you can sketch the API change in three or four lines, do it. Name the file with a prefix that sorts at the **top** of the backlog (smaller than the current top entry's prefix); `0001-` or `0a00-` is fine for the first ones.
 
 If you spot a real bug (not just friction) you can fix it on the spot in `src/InductorParser/`, add a regression test, and reference the fix from the sample's README. That's a strictly better outcome than just filing a backlog item.
 
