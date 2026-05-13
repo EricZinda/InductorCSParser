@@ -122,4 +122,17 @@ public class LiteralIgnoreAsciiCaseRuleTests
             target: LiteralIgnoreAsciiCase("xyz").As("ci").Preserve(),
             targetText: "XYZ");
     }
+
+    [Test]
+    public void SourceText_on_LiteralIgnoreAsciiCase_returns_matched_text_under_every_FlattenType()
+    {
+        // Input "XYZ" matches the rule "xyz" case-insensitively. The
+        // matched text is whatever the input contained ("XYZ"), not
+        // the rule's spelling ("xyz"). SourceText preserves the input
+        // form.
+        SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
+            ruleBuilder: () => LiteralIgnoreAsciiCase("xyz"),
+            input: "XYZ",
+            expectedSourceText: "XYZ");
+    }
 }

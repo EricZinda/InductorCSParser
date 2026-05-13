@@ -20,6 +20,11 @@ namespace InductorParser.E2ESamples.Toml.Rewrite;
 // parsing) lives here, not in the grammar. The grammar produces named
 // leaves; this consumer dispatches on the rule each leaf was produced
 // by.
+//
+// Static helpers, no per-projection state: every Symbol the engine
+// builds already carries a ParseContext reference, so Symbol.SourceText
+// returns the verbatim original-input text without the helpers needing
+// the ParseResult in scope.
 public static class TomlParser
 {
     // Parse a TOML document and return the typed root table.
@@ -237,7 +242,7 @@ public static class TomlParser
         if (inner.Is(LocalDate))               return ProjectLocalDate(inner);
         if (inner.Is(LocalTime))               return ProjectLocalTime(inner);
         if (inner.Is(TomlGrammar.TomlFloat))   return ProjectFloat(inner);
-        // The hex/oct/bin prefix Literals are Delete by factory, so
+        // The hex/oct/bin prefix Literals are Delete by default, so
         // ToString() on the integer Symbol returns just the digits with
         // any underscore separators preserved by their OneOf rule.
         if (inner.Is(HexadecimalInteger)) return new TomlInteger(ParseInteger(inner.ToString().Replace("_", ""), 16), TomlIntegerBase.Hexadecimal);
@@ -258,14 +263,20 @@ public static class TomlParser
         var inner = floatNode.Children[0];
         if (inner.Is(SpecialFloat))
         {
-            // SpecialFloat text is "[+-]?(inf|nan)".
-            var text = inner.ToString();
+            // SpecialFloat text is "[+-]?(inf|nan)". The Literal("inf") /
+            // Literal("nan") are Delete by default, so the verbatim
+            // mnemonic only survives through Symbol.SourceText, not
+            // ToString.
+            var text = inner.SourceText;
             if (text.EndsWith("inf"))
                 return new TomlFloat(text.StartsWith("-") ? double.NegativeInfinity : double.PositiveInfinity);
             return new TomlFloat(double.NaN);
         }
-        // OrdinaryFloat: just parse the text after stripping underscores.
-        var floatText = inner.ToString().Replace("_", "");
+        // OrdinaryFloat: the fraction's Token('.') and the exponent's
+        // Token('e' | 'E') are Delete by default. ToString would lose
+        // them; SourceText gives the verbatim text. Strip underscores
+        // before handing to double.Parse.
+        var floatText = inner.SourceText.Replace("_", "");
         return new TomlFloat(double.Parse(floatText, CultureInfo.InvariantCulture));
     }
 
@@ -294,33 +305,43 @@ public static class TomlParser
     // ---------------------------------------------------------
     // Date-time projection
     // ---------------------------------------------------------
+    // Date-time grammar uses Token('-'), Token(':'), and Token('.')
+    // which are Delete by default. ToString would render
+    // "19790527T073200Z" instead of "1979-05-27T07:32:00Z" and
+    // DateTimeOffset.Parse would reject the compacted form, so we
+    // recover the verbatim text via Symbol.SourceText.
     private static TomlValue ProjectOffsetDateTime(Symbol node)
     {
-        var text = node.ToString().Replace('t', 'T').Replace('z', 'Z');
+        var text = node.SourceText.Replace('t', 'T').Replace('z', 'Z');
         // ISO 8601 / RFC 3339 round-trip.
         return new TomlOffsetDateTime(DateTimeOffset.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal));
     }
 
     private static TomlValue ProjectLocalDateTime(Symbol node)
     {
-        var text = node.ToString().Replace('t', 'T');
+        var text = node.SourceText.Replace('t', 'T');
         return new TomlLocalDateTime(DateTime.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal));
     }
 
     private static TomlValue ProjectLocalDate(Symbol node) =>
-        new TomlLocalDate(DateOnly.Parse(node.ToString(), CultureInfo.InvariantCulture));
+        new TomlLocalDate(DateOnly.Parse(node.SourceText, CultureInfo.InvariantCulture));
 
     private static TomlValue ProjectLocalTime(Symbol node) =>
-        new TomlLocalTime(TimeOnly.Parse(node.ToString(), CultureInfo.InvariantCulture));
+        new TomlLocalTime(TimeOnly.Parse(node.SourceText, CultureInfo.InvariantCulture));
 
     // ---------------------------------------------------------
     // String body decoding
     // ---------------------------------------------------------
     private static string DecodeBasicStringBody(Symbol stringNode)
     {
-        // BasicString = ['"', basicStringBody, '"']
+        // BasicString = ['"', basicStringBody, '"']. The body's
+        // backslash-escape Token('\\') is Delete by default: ToString
+        // would drop it and the consumer's escape decoder would misread
+        // the next char ('\\Users' rendered as '\Users', then the
+        // decoder treats 'U' as a Unicode-escape kickoff). Symbol.SourceText
+        // returns the verbatim body text with backslashes intact.
         var bodyNode = stringNode.Children[0];
-        var rawText = bodyNode.ToString();
+        var rawText = bodyNode.SourceText;
         return DecodeEscapeSequences(rawText, multiLine: false);
     }
 
@@ -329,6 +350,8 @@ public static class TomlParser
         // LiteralString -> Optional(literalStringBody). When the body
         // matched, the Symbol has a single child (the body leaf). When
         // the body was empty (input ''), there are no children.
+        // Literal strings have no escapes and can't span newlines, so
+        // the body's ToString gives the verbatim text directly.
         if (stringNode.Children.Count == 0) return "";
         return stringNode.Children[0].ToString();
     }
@@ -341,7 +364,11 @@ public static class TomlParser
         // it has content. For an empty multi-line string """""", there
         // are no children.
         if (stringNode.Children.Count == 0) return "";
-        var rawText = stringNode.Children[0].ToString();
+        // The body's EndOfLine leaves are Delete by default and the
+        // basic-escape's leading backslash is also Delete. Recover the
+        // verbatim text so newlines survive into the rendered string
+        // and the escape decoder sees its backslashes.
+        var rawText = stringNode.Children[0].SourceText;
         // Per spec: a newline immediately after the opening delimiter is
         // trimmed. Our grammar's Optional(EOL) ate it before the body
         // started, so rawText is already trimmed.
@@ -351,7 +378,9 @@ public static class TomlParser
     private static string ExtractMultiLineLiteralStringBody(Symbol stringNode)
     {
         if (stringNode.Children.Count == 0) return "";
-        return stringNode.Children[0].ToString();
+        // EndOfLine inside the body is Delete by default: without
+        // Symbol.SourceText, embedded newlines would be lost.
+        return stringNode.Children[0].SourceText;
     }
 
     // Decode TOML basic-string escape sequences. Used for both basic

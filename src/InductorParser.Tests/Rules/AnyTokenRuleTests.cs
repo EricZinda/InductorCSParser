@@ -193,4 +193,13 @@ public class AnyTokenRuleTests
             target: AnyToken().As("any").Preserve(),
             targetText: "X");
     }
+
+    [Test]
+    public void SourceText_on_AnyToken_returns_matched_text_under_every_FlattenType()
+    {
+        SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
+            ruleBuilder: () => AnyToken(),
+            input: "X",
+            expectedSourceText: "X");
+    }
 }

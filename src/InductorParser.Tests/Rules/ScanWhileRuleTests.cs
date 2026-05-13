@@ -344,4 +344,13 @@ public class ScanWhileRuleTests
             target: ScanWhile(TokenSet.Ascii.Letters).As("run").Preserve(),
             targetText: "XYZ");
     }
+
+    [Test]
+    public void SourceText_on_ScanWhile_returns_matched_text_under_every_FlattenType()
+    {
+        SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
+            ruleBuilder: () => ScanWhile(TokenSet.Ascii.Letters),
+            input: "XYZ",
+            expectedSourceText: "XYZ");
+    }
 }

@@ -457,4 +457,13 @@ public class NoneOfRuleTests
             target: NoneOf("Y").As("notY").Preserve(),
             targetText: "X");
     }
+
+    [Test]
+    public void SourceText_on_NoneOf_returns_matched_text_under_every_FlattenType()
+    {
+        SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
+            ruleBuilder: () => NoneOf("Y"),
+            input: "X",
+            expectedSourceText: "X");
+    }
 }

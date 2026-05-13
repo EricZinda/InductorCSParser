@@ -173,4 +173,41 @@ public class PeekRuleTests
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
+
+    [Test]
+    public void SourceRange_on_Peek_reports_zero_width_at_its_anchor()
+    {
+        // Peek matches but consumes nothing. The Preserve'd composite's
+        // recorded span is a zero-length memory at the lookahead's
+        // anchor offset, so SourceRange reports a zero-width range
+        // there. SourceText is empty. Consumers can highlight "the
+        // parser looked ahead here" without falsely claiming the
+        // lookahead content was consumed.
+        var peek = Peek(Literal("X")).As("peek").Preserve();
+        var rule = And(Literal("ab"), peek, Literal("X").Preserve()).Preserve();
+        var result = rule.Parse("abX");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        var peekSymbol = result.Tree!.Find(peek)!;
+        Assert.That(peekSymbol.SourceText, Is.EqualTo(string.Empty));
+        var range = peekSymbol.SourceRange!.Value;
+        // Anchor sits at offset 2, right after the "ab" prefix the
+        // outer And consumed before Peek ran.
+        Assert.That(range.Start.CharIndex, Is.EqualTo(2));
+        Assert.That(range.End.CharIndex, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void SourceText_on_Peek_returns_empty_under_every_FlattenType()
+    {
+        // Peek's consumed span is always zero-width: it's a lookahead
+        // and contributes no characters. SourceText is empty regardless
+        // of FlattenType. Use Peek(Eof()) so the inner succeeds against
+        // empty input — the wrapper consumes nothing and the parse
+        // finishes without trailing input.
+        SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
+            ruleBuilder: () => Peek(Eof()),
+            input: "",
+            expectedSourceText: "");
+    }
 }

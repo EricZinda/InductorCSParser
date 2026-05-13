@@ -426,4 +426,13 @@ public class WithinTokenRuleTests
             target: WithinToken(OneOf("X")).As("checked").Preserve(),
             targetText: "X");
     }
+
+    [Test]
+    public void SourceText_on_WithinToken_returns_matched_text_under_every_FlattenType()
+    {
+        SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
+            ruleBuilder: () => WithinToken(OneOf("X")),
+            input: "X",
+            expectedSourceText: "X");
+    }
 }

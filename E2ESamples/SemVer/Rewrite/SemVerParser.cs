@@ -79,12 +79,12 @@ public static class SemVerParser
 
             if (text.Length > 1 && text[0] == '0')
             {
-                error = ErrorAt(result, node, $"{label} version '{text}' must not have leading zeros");
+                error = ErrorAt(node, $"{label} version '{text}' must not have leading zeros");
                 return false;
             }
             if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out values[positionIndex]))
             {
-                error = ErrorAt(result, node, $"{label} version '{text}' is out of range for Int32");
+                error = ErrorAt(node, $"{label} version '{text}' is out of range for Int32");
                 return false;
             }
         }
@@ -99,7 +99,7 @@ public static class SemVerParser
                 bool isNumeric = text.All(char.IsAsciiDigit);
                 if (isNumeric && text.Length > 1 && text[0] == '0')
                 {
-                    error = ErrorAt(result, node, $"Numeric pre-release identifier '{text}' must not have leading zeros");
+                    error = ErrorAt(node, $"Numeric pre-release identifier '{text}' must not have leading zeros");
                     return false;
                 }
                 preRelease.Add(new RewritePreReleaseIdentifier(text, isNumeric));
@@ -117,9 +117,9 @@ public static class SemVerParser
         return true;
     }
 
-    private static SemVerParseError ErrorAt(ParseResult result, Symbol node, string message)
+    private static SemVerParseError ErrorAt(Symbol node, string message)
     {
-        var range = result.SourceRangeOf(node);
+        var range = node.SourceRange;
         return new SemVerParseError(message,
             range?.Start.CharIndex ?? 0,
             range?.Start.Line ?? 0,

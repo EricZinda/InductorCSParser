@@ -442,4 +442,13 @@ public class OneOfRuleTests
             target: OneOf(TokenSet.Single('X')).As("xOne").Preserve(),
             targetText: "X");
     }
+
+    [Test]
+    public void SourceText_on_OneOf_returns_matched_text_under_every_FlattenType()
+    {
+        SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
+            ruleBuilder: () => OneOf(TokenSet.Runes("abc")),
+            input: "a",
+            expectedSourceText: "a");
+    }
 }

@@ -29,10 +29,10 @@ namespace InductorParser.E2ESamples.Toml.Rewrite;
 //   dotted-key = simple-key 1*(dot-sep simple-key)         And(SimpleKey, OneOrMore(And(dotSeparator, SimpleKey)))
 //   basic-string = quotation-mark *basic-char "            And(Token('"'), basicStringBody, Token('"').WithError(...))
 //   basic-char = basic-unescaped / escaped                 Or(ScanWhile(basicUnescaped), basicEscape)
-//   escaped = escape escape-seq-char                       And(Token('\\').Preserve(), Or(simpleEscapeChar, ...))
+//   escaped = escape escape-seq-char                       And(Token('\\'), Or(simpleEscapeChar, ...))
 //   ml-basic-string-delim = 3quotation-mark                Literal("\"\"\"")
 //   hex-int = "0x" HEXDIG *(HEXDIG / "_" HEXDIG)           And(Literal("0x"), hexadecimalDigit, ZeroOrMore(...))
-//   special-float = [sign] (inf / nan)                     And(Optional(sign), Or(Literal("inf").Preserve(), ...))
+//   special-float = [sign] (inf / nan)                     And(Optional(sign), Or(Literal("inf"), Literal("nan")))
 //   array = "[" [array-values] ws-comment-newline "]"      And(Token('['), Optional(arrayValues), whitespaceCommentNewline, Token(']'))
 //   std-table = "[" ws key ws "]"                          And(Token('['), whitespace, Key, whitespace, Token(']').WithError(...))
 //   array-table = "[[" ws key ws "]]"                      And(Literal("[["), whitespace, Key, whitespace, Literal("]]").WithError(...))
@@ -194,17 +194,13 @@ public static class TomlGrammar
         var unicodeLongEscape = And(Token('U'),
             hexadecimalDigit, hexadecimalDigit, hexadecimalDigit, hexadecimalDigit,
             hexadecimalDigit, hexadecimalDigit, hexadecimalDigit, hexadecimalDigit);
-        // Preserve the leading backslash so the basicStringBody's text
-        // contains the raw escape sequence ('\"', '\\', '\n', etc.).
-        // The DecodeEscapeSequences consumer walks the raw text and
-        // depends on every escape opening with a backslash. If the
-        // grammar drops the backslash here (Token('\\').Delete is the
-        // default), then '\\' renders as just '\' in the body, and the
-        // consumer's next-char lookup misreads the following character
-        // as an escape start (e.g. 'U' from '\\Users' is treated as a
-        // Unicode-escape kickoff and crashes on the missing 8 hex digits).
+        // Token('\\') is Delete by default. That's fine here: the
+        // basicStringBody consumer (DecodeBasicStringBody) recovers
+        // the verbatim body text via ParseResult.RawSourceTextOf, which
+        // includes the backslash because it's a section of the original
+        // input — independent of which children survived flattening.
         var basicEscape = And(
-            Token('\\').Preserve(),
+            Token('\\'),
             Or(simpleEscapeChar, unicodeShortEscape, unicodeLongEscape)
         );
 
@@ -256,15 +252,15 @@ public static class TomlGrammar
         // For multiline body chars we need to allow newlines, but not have
         // ScanWhile cross a """ boundary. The simplest correct shape:
         // ZeroOrMore(Not("""), mlb-content). EndOfLine is Delete by
-        // factory; we override to Preserve so newlines survive into the
-        // body's ToString text where the consumer needs them.
+        // factory; the body consumer recovers the verbatim text
+        // (newlines included) via ParseResult.RawSourceTextOf.
         var threeQuotes = Literal("\"\"\"");
         var multiLineBasicBodyChar = And(
             Not(threeQuotes),
             Or(
                 multiLineBasicEscapedNewline,
                 basicEscape,
-                EndOfLine().Flatten(FlattenType.Preserve),
+                EndOfLine(),
                 OneOf(basicUnescaped | TokenSet.Single('"'))
             )
         );
@@ -282,7 +278,7 @@ public static class TomlGrammar
         var multiLineLiteralBodyChar = And(
             Not(threeApostrophes),
             Or(
-                EndOfLine().Flatten(FlattenType.Preserve),
+                EndOfLine(),
                 OneOf(literalChar | TokenSet.Single('\''))
             )
         );
@@ -338,12 +334,13 @@ public static class TomlGrammar
         // ---------------------------------------------------------
         // zero-prefixable-int = DIGIT *( DIGIT / "_" DIGIT )
         // Punctuation tokens (the leading dot of fraction, the 'e' of
-        // exponent, the underscore separators) are Delete by factory,
-        // which means ToString() on the float Symbol would lose them and
-        // fail to round-trip through double.Parse. Mark each Preserve so
-        // the raw text survives.
+        // exponent, the underscore separators) are Delete by default.
+        // ProjectFloat recovers the verbatim float text via
+        // ParseResult.RawSourceTextOf and hands it to double.Parse, so
+        // we don't need to .Preserve() the punctuation here just to
+        // keep it visible in ToString.
         var zeroPrefixableInteger = And(digit, ZeroOrMore(Or(digit, underscoreDigit)));
-        var fraction = And(Token('.').Preserve(), zeroPrefixableInteger);
+        var fraction = And(Token('.'), zeroPrefixableInteger);
         var floatExponentPart = And(Optional(sign), zeroPrefixableInteger);
         var exponent = And(OneOf("eE"), floatExponentPart);
 
@@ -361,10 +358,11 @@ public static class TomlGrammar
         );
 
         // special-float = [sign] (inf | nan). Literal is Delete by
-        // factory, but the Float consumer dispatches on the rendered
-        // text to choose between +inf / -inf / +nan / -nan so the
-        // mnemonic has to survive into ToString.
-        var infinityOrNan = Or(Literal("inf").Preserve(), Literal("nan").Preserve());
+        // factory; ProjectFloat dispatches on the SpecialFloat node's
+        // RawSourceTextOf (which includes the "inf"/"nan" mnemonic
+        // because it's a section of the original input) so we don't
+        // need to .Preserve() the keyword here.
+        var infinityOrNan = Or(Literal("inf"), Literal("nan"));
         SpecialFloat = And(Optional(sign), infinityOrNan).As("specialFloat").Preserve();
 
         TomlFloat = Or(SpecialFloat, ordinaryFloat.As("ordinaryFloat").Preserve())
@@ -373,16 +371,18 @@ public static class TomlGrammar
         // ---------------------------------------------------------
         // Date-time values
         // ---------------------------------------------------------
-        // Per RFC 3339 and TOML 1.0. Mirror the float case: the
-        // structural punctuation (-, :, .) is Delete by factory and
-        // would be stripped from ToString(), so preserve each one so
-        // the consumer can round-trip the text through DateTime.Parse.
-        var dash = Token('-').Preserve();
-        var colon = Token(':').Preserve();
+        // Per RFC 3339 and TOML 1.0. The structural punctuation
+        // (-, :, .) is Delete by default; the four date/time
+        // projection helpers in TomlParser recover the verbatim text
+        // via RawSourceTextOf and hand it to DateTimeOffset.Parse /
+        // DateTime.Parse / etc., so the punctuation doesn't need to
+        // appear in ToString.
+        var dash = Token('-');
+        var colon = Token(':');
         var twoDigit = And(digit, digit);
         var fourDigit = And(digit, digit, digit, digit);
         var fullDate = And(fourDigit, dash, twoDigit, dash, twoDigit);
-        var timeSecondFraction = And(Token('.').Preserve(), OneOrMore(digit));
+        var timeSecondFraction = And(Token('.'), OneOrMore(digit));
         var partialTime = And(twoDigit, colon, twoDigit, colon, twoDigit, Optional(timeSecondFraction));
         var timeNumericOffset = And(OneOf("+-"), twoDigit, colon, twoDigit);
         var timeOffset = Or(OneOf("Zz"), timeNumericOffset);
