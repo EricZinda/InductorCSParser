@@ -6,7 +6,7 @@ using static InductorParser.Rules;
 
 namespace InductorParser.Tests;
 
-// Scaffold for the per-rule SourceRange matrix tests in
+// Scaffold for the per-rule SourceRange / SourceText matrix tests in
 // `Rules/*Tests.cs`. Each per-rule test parameterizes
 // AssertTargetAfterLiteralPrefix below over
 // NormalizationExamples.RowFormPairs and supplies its own target
@@ -18,12 +18,14 @@ public static class SourceRangeMatrixHelper
 {
     // Build `And(Literal(row.Source), target [, afterTarget])`,
     // compile under `form`, parse `row.Source + targetText + extraInput`,
-    // and assert that `result.SourceRangeOf(targetSymbol)` reports
-    // the original-input span where `targetText` sits — same
-    // contract ParseResult.ErrorCharIndex honors. Slices the original
-    // by the translated range and checks the chars equal
-    // `targetText` so a translator that produces correct offsets at
-    // wrong bytes still fails.
+    // and assert that `targetSymbol.SourceRange` reports the
+    // original-input span where `targetText` sits and that
+    // `targetSymbol.SourceText` returns `targetText` verbatim. Both
+    // verify the parseInput-to-original translation: the leaf's memory
+    // points into parseInput (the lexer's normalized form), and any
+    // (form, grapheme behavior) pair where Normalize changes the
+    // input length would silently leak parseInput coordinates without
+    // the Symbol-level translation through `NormalizedPositionMap`.
     //
     // `target` must reach the parse tree as a findable Symbol
     // (typically `.As(name).Preserve()`). `targetText` is the text
@@ -63,7 +65,7 @@ public static class SourceRangeMatrixHelper
         Assert.That(symbol, Is.Not.Null,
             $"{row.Description} | {form}: target leaf not found in parse tree.");
 
-        var range = result.SourceRangeOf(symbol!)!.Value;
+        var range = symbol!.SourceRange!.Value;
         Assert.That(range.Start.CharIndex, Is.EqualTo(row.Source.Length),
             $"{row.Description} | {form}: target should start at original-input offset " +
             $"{row.Source.Length}.");
@@ -74,5 +76,8 @@ public static class SourceRangeMatrixHelper
             Is.EqualTo(targetText),
             $"{row.Description} | {form}: original-input substring at the translated range " +
             $"should equal \"{targetText}\".");
+        Assert.That(symbol.SourceText, Is.EqualTo(targetText),
+            $"{row.Description} | {form}: Symbol.SourceText should return the original (pre-normalization) text " +
+            $"\"{targetText}\", not the normalized form.");
     }
 }

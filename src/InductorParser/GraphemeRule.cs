@@ -154,7 +154,7 @@ internal sealed class GraphemeRule : Rule
         // on the Token rule.
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
-        var leafSymbol = new Symbol(Id, FlattenType, lexer.Input.AsMemory(transaction.StartPosition, consumed));
+        var leafSymbol = new Symbol(Id, FlattenType, lexer.Input.AsMemory(transaction.StartPosition, consumed), lexer.Context);
         if (effectiveFlattenType == FlattenType.Flatten)
         {
             outputSymbols!.Add(leafSymbol);

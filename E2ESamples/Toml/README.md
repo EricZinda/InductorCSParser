@@ -105,9 +105,8 @@ Five test fixtures, 62 tests total:
    same bad inputs. 8 tests.
 5. UnicodeTests — control-character rejection in basic and literal
    strings, surrogate / out-of-range rejection in `\uXXXX` and
-   `\UXXXXXXXX` escapes, and a pin on the parser's NFC-normalization
-   behavior for keys (which diverges from Tomlyn; see
-   `backlog/nfcd-...`). 23 tests.
+   `\UXXXXXXXX` escapes, byte-fidelity for NFC vs NFD keys (matches
+   Tomlyn), and CRLF / bare-CR line-terminator handling. 23 tests.
 
 What's NOT covered:
 

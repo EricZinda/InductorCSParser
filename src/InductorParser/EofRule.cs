@@ -37,9 +37,11 @@ internal sealed class EofRule : Rule
         TraceSuccess(lexer, $"");
         // Zero-width: no children to merge. Delete and Flatten both
         // return Discarded (nothing to add anywhere). Only Preserve
-        // builds the empty-children marker Symbol.
+        // builds the empty-children marker Symbol, anchored at
+        // lexer.Position so the consumed span has a position even
+        // though it has zero length.
         return effectiveFlattenType == FlattenType.Preserve
-            ? new Symbol(Id, FlattenType, Array.Empty<Symbol>())
+            ? new Symbol(Id, FlattenType, Array.Empty<Symbol>(), lexer.Input.AsMemory(lexer.Position, 0), lexer.Context)
             : Symbol.Discarded;
     }
 

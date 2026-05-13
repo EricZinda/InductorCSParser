@@ -214,11 +214,11 @@ public class UnicodeTests
     // ---------------------------------------------------------
 
     [Test]
-    public void NfdInput_IsNormalizedToNfc_BeforeConsumerSeesIt()
+    public void NfdInput_PreservesByteFidelity_DistinctFromNfc()
     {
-        // The scanner normalizes input to NFC per grapheme, so a key
-        // written as "a" + U+0300 (combining grave) arrives at the
-        // consumer as U+00E0. The two forms produce the same key.
+        // Each parse stores its key exactly as the source bytes wrote
+        // it: NFC stays NFC, NFD stays NFD. The two forms are distinct
+        // keys, matching Tomlyn's behavior.
         var nfc = char.ConvertFromUtf32(0x00E0);
         var nfd = "a" + char.ConvertFromUtf32(0x0300);
         var inputNfc = $"\"{nfc}\" = 1\n";
@@ -228,27 +228,30 @@ public class UnicodeTests
         var rootNfd = TomlParser.Parse(inputNfd);
 
         Assert.That(rootNfc.OrderedKeys.Single(), Is.EqualTo(nfc));
-        Assert.That(rootNfd.OrderedKeys.Single(), Is.EqualTo(nfc));
+        Assert.That(rootNfd.OrderedKeys.Single(), Is.EqualTo(nfd));
 
-        // A document with both forms in succession is therefore a
-        // duplicate-key document.
+        // A document with both forms in succession parses as two
+        // distinct keys, not a duplicate.
         var bothForms = inputNfc + inputNfd;
-        var ex = Assert.Throws<TomlParseException>(() => TomlParser.Parse(bothForms));
-        Assert.That(ex!.Message, Does.Contain("Duplicate key"));
+        var root = TomlParser.Parse(bothForms);
+        Assert.That(root.OrderedKeys.Count, Is.EqualTo(2));
+        Assert.That((long)root[nfc], Is.EqualTo(1));
+        Assert.That((long)root[nfd], Is.EqualTo(2));
     }
 
     [Test]
-    public void NfdInput_DivergesFromTomlyn_OnSameDocument()
+    public void NfdInput_AgreesWithTomlyn_OnSameDocument()
     {
-        // Tomlyn keeps NFC and NFD as separate keys. The
-        // InductorParser-based parser collapses them.
+        // Cross-check: Tomlyn keeps NFC and NFD as separate keys, and
+        // so do we.
         var nfc = char.ConvertFromUtf32(0x00E0);
         var nfd = "a" + char.ConvertFromUtf32(0x0300);
         var input = $"\"{nfc}\" = 1\n\"{nfd}\" = 2\n";
 
-        Assert.Throws<TomlParseException>(() => TomlParser.Parse(input));
-
+        var ours = TomlParser.Parse(input);
         var theirs = Tomlyn.Toml.ToModel(input);
+
+        Assert.That(ours.OrderedKeys.Count, Is.EqualTo(2));
         Assert.That(theirs.Count, Is.EqualTo(2));
     }
 

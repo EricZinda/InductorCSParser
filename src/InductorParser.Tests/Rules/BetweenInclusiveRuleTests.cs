@@ -804,4 +804,91 @@ public class BetweenInclusiveRuleTests
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(sink.ToString(), Does.Not.Contain("SKIP | OneOrMore:"));
     }
+
+    [Test]
+    public void SourceText_on_zero_match_shortcut_is_empty_at_anchor()
+    {
+        // atLeast = 0 with inner that can't match at this position
+        // (Inner.CannotMatchLookahead returns true). The engine's
+        // empty-match shortcut fires and returns a Preserve composite
+        // with a zero-length consumed span at lexer.Position. SourceText
+        // is empty, SourceRange is zero-width at that offset.
+        var counted = ZeroOrMore(Literal("X")).As("count").Preserve();
+        var rule = And(Literal("ab"), counted, Literal("Y").Preserve()).Preserve();
+        var result = rule.Parse("abY");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        var countSymbol = result.Tree!.Find(counted)!;
+        Assert.That(countSymbol.SourceText, Is.EqualTo(string.Empty));
+        var range = countSymbol.SourceRange!.Value;
+        Assert.That(range.Start.CharIndex, Is.EqualTo(2));
+        Assert.That(range.End.CharIndex, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void SourceText_on_single_match_returns_inner_text()
+    {
+        // Counted loop ran the inner once and stopped. The composite's
+        // consumed span covers exactly what inner matched, so SourceText
+        // returns "X" regardless of inner's FlattenType.
+        var counted = ZeroOrMore(Literal("X")).As("count").Preserve();
+        var rule = And(counted, Literal("Y").Preserve()).Preserve();
+        var result = rule.Parse("XY");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        var countSymbol = result.Tree!.Find(counted)!;
+        Assert.That(countSymbol.SourceText, Is.EqualTo("X"));
+    }
+
+    [Test]
+    public void SourceText_on_many_matches_covers_the_whole_iteration_run()
+    {
+        // Counted loop ran the inner three times. The composite's
+        // consumed span covers all three iterations, even when the
+        // inner leaf is Delete-default and contributes nothing to
+        // Children. ToString returns "" because no children survived.
+        var counted = OneOrMore(Literal("X")).As("count").Preserve();
+        var rule = And(counted, Literal("Y").Preserve()).Preserve();
+        var result = rule.Parse("XXXY");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        var countSymbol = result.Tree!.Find(counted)!;
+        Assert.That(countSymbol.ToString(), Is.EqualTo(""),
+            "Sanity check: inner is Delete, no surviving children.");
+        Assert.That(countSymbol.SourceText, Is.EqualTo("XXX"));
+        var range = countSymbol.SourceRange!.Value;
+        Assert.That(range.Start.CharIndex, Is.EqualTo(0));
+        Assert.That(range.End.CharIndex, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void SourceText_on_BetweenInclusive_returns_matched_text_under_every_FlattenType()
+    {
+        // BetweenInclusive(1, 3, inner) matched against "ab" — inner
+        // ran twice (atLeast=1 ≤ count=2 ≤ atMost=3). The shared body
+        // is the same machinery OneOrMore / ZeroOrMore / Optional /
+        // AtLeast / AtMost / Exactly all run, so one matrix test
+        // covers them all.
+        SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
+            ruleBuilder: () => OneOrMore(OneOf("abc")),
+            input: "ab",
+            expectedSourceText: "ab");
+    }
+
+    [Test]
+    public void OneOrMore_SourceRange_spans_all_matched_iterations()
+    {
+        // Three iterations of "abc". The composite range covers the
+        // first 'a' through the last 'c', not just the most recent
+        // iteration. Pins that the engine records the consumed span
+        // once at parse end, not piecewise per-iteration (a buggy
+        // implementation might overwrite Start/End each iteration).
+        var rule = OneOrMore(Literal("abc").Preserve()).As("repeat").Preserve();
+        var result = rule.Parse("abcabcabc");
+
+        var range = result.Tree!.SourceRange!.Value;
+        Assert.That(range.Start.CharIndex, Is.EqualTo(0));
+        Assert.That(range.End.CharIndex, Is.EqualTo(9));
+        Assert.That(range.End.Column, Is.EqualTo(9));
+    }
 }

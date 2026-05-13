@@ -133,7 +133,7 @@ internal sealed class WithinTokenRule : Rule
         // callers that walk the tree get spans that reference the
         // caller's original string.
         SymbolId leafId = ResolveLeafId(token.RuneValue);
-        var leafSymbol = new Symbol(leafId, FlattenType, token.Memory);
+        var leafSymbol = new Symbol(leafId, FlattenType, token.Memory, outerLexer.Context);
         if (effectiveFlattenType == FlattenType.Flatten)
         {
             outputSymbols!.Add(leafSymbol);

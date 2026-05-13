@@ -99,7 +99,7 @@ internal sealed class OneOfRule : Rule
         // the user identified the rule via .As(string) / .As(SymbolId)
         // or the token is multi-rune.
         SymbolId leafId = ResolveLeafId(token.RuneValue);
-        var leafSymbol = new Symbol(leafId, FlattenType, token.Memory);
+        var leafSymbol = new Symbol(leafId, FlattenType, token.Memory, lexer.Context);
         if (effectiveFlattenType == FlattenType.Flatten)
         {
             outputSymbols!.Add(leafSymbol);

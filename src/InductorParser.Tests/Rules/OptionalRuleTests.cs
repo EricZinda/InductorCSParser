@@ -49,4 +49,44 @@ public class OptionalRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
+
+    [Test]
+    public void Optional_that_matched_zero_times_has_empty_SourceText()
+    {
+        // Optional matched zero times — the inner rule wasn't entered.
+        // The preserved Optional Symbol records a zero-width consumed
+        // span at its anchor offset, so SourceText is the empty string
+        // and SourceRange is a zero-width range. Consumers that
+        // highlight the position of an absent optional still get a
+        // usable position from SourceRange.
+        var optional = Optional(Literal("X").Preserve()).As("opt").Preserve();
+        var rule = And(optional, Literal("Y").Preserve()).Preserve();
+        var result = rule.Parse("Y");
+
+        var optionalSymbol = result.Tree!.Find(optional)!;
+        Assert.That(optionalSymbol.SourceText, Is.EqualTo(string.Empty));
+        var range = optionalSymbol.SourceRange!.Value;
+        Assert.That(range.Start.CharIndex, Is.EqualTo(0));
+        Assert.That(range.End.CharIndex, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Optional_that_matched_once_returns_the_matched_SourceText()
+    {
+        // Optional matched once — the inner rule produced a leaf. The
+        // Optional composite's consumed span covers what the inner
+        // consumed ("X"), so SourceText returns "X" and SourceRange
+        // spans [0, 1). Inner doesn't need .Preserve() — even with
+        // Literal's Delete-by-factory default the wrapper still
+        // recovers the matched text.
+        var optional = Optional(Literal("X")).As("opt").Preserve();
+        var rule = And(optional, Literal("Y").Preserve()).Preserve();
+        var result = rule.Parse("XY");
+
+        var optionalSymbol = result.Tree!.Find(optional)!;
+        Assert.That(optionalSymbol.SourceText, Is.EqualTo("X"));
+        var range = optionalSymbol.SourceRange!.Value;
+        Assert.That(range.Start.CharIndex, Is.EqualTo(0));
+        Assert.That(range.End.CharIndex, Is.EqualTo(1));
+    }
 }

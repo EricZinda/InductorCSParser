@@ -99,7 +99,7 @@ internal sealed class ScanWhileRule : Rule
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
 
-        var leafSymbol = new Symbol(Id, FlattenType, lexer.Input.AsMemory(startPosition, length));
+        var leafSymbol = new Symbol(Id, FlattenType, lexer.Input.AsMemory(startPosition, length), lexer.Context);
         if (effectiveFlattenType == FlattenType.Flatten)
         {
             outputSymbols!.Add(leafSymbol);

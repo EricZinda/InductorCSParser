@@ -419,4 +419,48 @@ public class LiteralRuleTests
             target: Literal("XYZ").As("xyzLiteral").Preserve(),
             targetText: "XYZ");
     }
+
+    // FlattenType-matrix SourceText test. Verifies the SourceText
+    // invariant: a Literal Symbol's SourceText is the matched text
+    // regardless of whether the rule was Delete, Flatten, or Preserve.
+    // See docs/TestArchitecture.md "Per-rule SourceText / SourceRange
+    // behavior tests live in each rule's own test file."
+    [Test]
+    public void SourceText_on_Literal_returns_matched_text_under_every_FlattenType()
+    {
+        SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
+            ruleBuilder: () => Literal("hello"),
+            input: "hello",
+            expectedSourceText: "hello");
+    }
+
+    [Test]
+    public void Literal_SourceRange_spans_the_matched_text()
+    {
+        var rule = Literal("hello").Preserve();
+        var result = rule.Parse("hello");
+
+        var range = result.Tree!.SourceRange!.Value;
+        Assert.That(range.Start.CharIndex, Is.EqualTo(0));
+        Assert.That(range.End.CharIndex, Is.EqualTo(5));
+        Assert.That(range.End.CharIndex - range.Start.CharIndex, Is.EqualTo(5),
+            "End - Start should equal the matched-text length.");
+    }
+
+    [Test]
+    public void Literal_SourceRange_spans_multiple_lines_when_match_crosses_newline()
+    {
+        // Literal whose body straddles "\n". Start at line 0 col 0,
+        // End at line 1 col 2. Verifies SourcePosition line/column
+        // derivation across the newline at the End position.
+        var rule = Literal("ab\ncd").Preserve();
+        var result = rule.Parse("ab\ncd");
+
+        var range = result.Tree!.SourceRange!.Value;
+        Assert.That(range.Start.Line, Is.EqualTo(0));
+        Assert.That(range.Start.Column, Is.EqualTo(0));
+        Assert.That(range.End.CharIndex, Is.EqualTo(5));
+        Assert.That(range.End.Line, Is.EqualTo(1));
+        Assert.That(range.End.Column, Is.EqualTo(2));
+    }
 }

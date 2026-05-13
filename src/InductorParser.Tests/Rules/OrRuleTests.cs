@@ -199,4 +199,33 @@ public class OrRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
+
+    [Test]
+    public void SourceText_on_Or_returns_the_winning_alternative_text()
+    {
+        // Or is Flatten by default; wrapping with .As("choice").Preserve()
+        // gives it a surviving composite Symbol. The composite's
+        // consumed span covers what the winning alternative matched
+        // (here "second"), and SourceText returns that verbatim regardless
+        // of whether the alternative's leaf was Preserve or Delete.
+        var rule = Or(Literal("first"), Literal("second"), Literal("third"))
+            .As("choice").Preserve();
+        var result = rule.Parse("second");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.SourceText, Is.EqualTo("second"),
+            "SourceText should return the winning alternative's match, not the first or last.");
+        var range = result.Tree!.SourceRange!.Value;
+        Assert.That(range.Start.CharIndex, Is.EqualTo(0));
+        Assert.That(range.End.CharIndex, Is.EqualTo("second".Length));
+    }
+
+    [Test]
+    public void SourceText_on_Or_returns_matched_text_under_every_FlattenType()
+    {
+        SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
+            ruleBuilder: () => Or(Literal("a"), Literal("b")),
+            input: "b",
+            expectedSourceText: "b");
+    }
 }

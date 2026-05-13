@@ -37,7 +37,7 @@ internal sealed class AnyTokenRule : Rule
         // See Rule.ResolveLeafId for the leaf-id rule shared across
         // OneOfRule / NoneOfRule / AnyTokenRule / WithinTokenRule.
         SymbolId leafId = ResolveLeafId(token.RuneValue);
-        var leafSymbol = new Symbol(leafId, FlattenType, token.Memory);
+        var leafSymbol = new Symbol(leafId, FlattenType, token.Memory, lexer.Context);
         if (effectiveFlattenType == FlattenType.Flatten)
         {
             outputSymbols!.Add(leafSymbol);

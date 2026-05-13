@@ -79,9 +79,10 @@ internal sealed class BetweenInclusiveRule : Rule
                 if (AtLeast == 0)
                 {
                     TraceSuccess(lexer, $"count= 0");
+                    int emptyStart = transaction.StartPosition;
                     transaction.Commit();
                     return effectiveFlattenType == FlattenType.Preserve
-                        ? new Symbol(Id, FlattenType, Array.Empty<Symbol>())
+                        ? new Symbol(Id, FlattenType, Array.Empty<Symbol>(), lexer.Input.AsMemory(emptyStart, 0), lexer.Context)
                         : Symbol.Discarded;
                 }
                 TraceFailure(lexer, $"count= 0");
@@ -119,9 +120,11 @@ internal sealed class BetweenInclusiveRule : Rule
             return null;
         }
         TraceSuccess(lexer, $"count= {count}");
+        int matchStart = transaction.StartPosition;
+        int matchLength = lexer.Position - matchStart;
         transaction.Commit();
         return effectiveFlattenType == FlattenType.Preserve
-            ? new Symbol(Id, FlattenType, outputSymbols)
+            ? new Symbol(Id, FlattenType, outputSymbols, lexer.Input.AsMemory(matchStart, matchLength), lexer.Context)
             : Symbol.Discarded;
     }
 
