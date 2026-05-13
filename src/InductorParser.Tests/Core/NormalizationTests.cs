@@ -1,8 +1,10 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using NUnit.Framework;
 using InductorParser;
+using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TestHelpers;
@@ -1065,4 +1067,206 @@ public class NormalizationTests
         Assert.That(goodRule.Parse(UnicodeExamples.DoubleStruckCGrapheme).Success, Is.True,
             "ASCII C grammar matches U+2102 input under FormKC");
     }
+
+    // ============================================================
+    // Position-translation tests for compatibility forms. Verify
+    // TranslateToOriginal returns the same answer as a whole-string
+    // prefix walk over every position in the normalized string, for
+    // the inputs the doc identifies as interesting:
+    //
+    //   - defective combining sequences (lone mark at start, lone
+    //     mark after a control character, expanding mark, two
+    //     marks at start)
+    //   - Korean compatibility jamo (the canonical case where two
+    //     original graphemes collapse to one normalized character
+    //     under FormKC)
+    //
+    // See docs/MappingPositionsAfterNormalization.md for the algorithm and
+    // UAX #29 citations.
+    // ============================================================
+
+    [Test]
+    public void Translator_agrees_with_whole_string_for_leading_defective_combining_mark()
+    {
+        // Lone combining acute (no base) at the very start, then Z.
+        AssertTranslatorAgreesWithWholeString("́Z", NormalizationForm.FormKC);
+        AssertTranslatorAgreesWithWholeString("́Z", NormalizationForm.FormKD);
+    }
+
+    [Test]
+    public void Translator_agrees_with_whole_string_for_defective_combining_mark_after_control()
+    {
+        // X, newline, defective acute (alone because UAX #29 GB5
+        // breaks after Control), then Y.
+        AssertTranslatorAgreesWithWholeString("X\ńY", NormalizationForm.FormKC);
+        AssertTranslatorAgreesWithWholeString("X\ńY", NormalizationForm.FormKD);
+    }
+
+    [Test]
+    public void Translator_agrees_with_whole_string_for_leading_expanding_defective_mark()
+    {
+        // U+0344 COMBINING GREEK DIALYTIKA TONOS canonically
+        // decomposes to two combining marks (U+0308 + U+0301), so
+        // normalization actually changes string length here. The
+        // defective mark sits at index 0, so this is the exact
+        // case the comment is worried about.
+        AssertTranslatorAgreesWithWholeString("̈́Z", NormalizationForm.FormKC);
+        AssertTranslatorAgreesWithWholeString("̈́Z", NormalizationForm.FormKD);
+    }
+
+    [Test]
+    public void Translator_agrees_with_whole_string_for_two_defective_marks_at_start()
+    {
+        // Two combining marks at the start (no base). UAX #29 GB9
+        // keeps them in ONE grapheme cluster (no break before
+        // Extend), so per-grapheme normalization runs on the
+        // whole "̣́" sequence at once. Whole-string
+        // normalization reorders by combining class (ccc 230 then
+        // 220 becomes 220 then 230).
+        AssertTranslatorAgreesWithWholeString("̣́Z", NormalizationForm.FormKC);
+        AssertTranslatorAgreesWithWholeString("̣́Z", NormalizationForm.FormKD);
+    }
+
+    [Test]
+    public void ErrorCharIndex_for_parse_failure_after_expanding_defective_mark_FormKC()
+    {
+        // End-to-end check on a real parse: the U+0344 dialytika
+        // tonos sits alone at index 0, expanding under FormKC to
+        // two combining marks (U+0308 + U+0301). The grammar
+        // matches that single grapheme via Token, then expects Y
+        // and sees Z. ErrorCharIndex must point at the Z in the
+        // ORIGINAL input, which is index 1 (the two-char expansion
+        // lives only in the normalized form).
+        string original = "̈́Z";
+        var rule = And(Token("̈́"), Token('Y'));
+        rule.Compile(NormalizationForm.FormKC);
+        var result = rule.Parse(original);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(1),
+            "Z sits at char 1 in the original, even though the failure " +
+            "is at normalized-index 2 (after the two-char expansion of U+0344)");
+        Assert.That(original[result.ErrorCharIndex], Is.EqualTo('Z'));
+    }
+
+    [Test]
+    public void Translator_agrees_with_whole_string_for_Korean_compatibility_jamo()
+    {
+        // U+3131 + U+314F (Korean compatibility jamo "ㄱㅏ") compose
+        // to one syllable U+AC00 (가) under FormKC. Compatibility
+        // decomposition produces conjoining jamo (U+1100 L + U+1161
+        // V) which then canonically compose to one syllable. Two
+        // original graphemes (both gcb=Other) collapse to one
+        // normalized character. This is the canonical example the
+        // doc walks through. Under FormKD the conjoining jamo don't
+        // compose, so the normalized form has two chars (L + V).
+        AssertTranslatorAgreesWithWholeString("ㄱㅏ", NormalizationForm.FormKC);
+        AssertTranslatorAgreesWithWholeString("ㄱㅏ", NormalizationForm.FormKD);
+    }
+
+    [Test]
+    public void Translator_agrees_with_whole_string_for_Korean_compatibility_jamo_with_surrounding_chars()
+    {
+        // Same compatibility jamo with chars on either side, so the
+        // walker has more positions to map. Exercises the lookup at
+        // multiple normalized indices including the boundaries
+        // between the surrounding chars and the multi-grapheme
+        // region.
+        AssertTranslatorAgreesWithWholeString("AㄱㅏZ", NormalizationForm.FormKC);
+        AssertTranslatorAgreesWithWholeString("AㄱㅏZ", NormalizationForm.FormKD);
+    }
+
+    [Test]
+    public void ErrorCharIndex_for_parse_failure_after_Korean_compatibility_jamo_FormKC()
+    {
+        // End-to-end check on a real parse: U+3131 + U+314F (two
+        // Korean compatibility-jamo chars) compose to U+AC00 (one
+        // syllable) under FormKC. Original has 2 chars for the
+        // jamo, normalized has 1 char for the syllable. The grammar
+        // matches the syllable then expects 'Y' and sees 'Z'.
+        // ErrorCharIndex must point at the 'Z' in the ORIGINAL
+        // (index 2, after both compatibility-jamo chars), not at
+        // the failure position in normalized space (index 1, right
+        // after the single syllable).
+        string original = "ㄱㅏZ";
+        var rule = And(Token("가"), Token('Y'));
+        rule.Compile(NormalizationForm.FormKC);
+        var result = rule.Parse(original);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(2),
+            "Z sits at char 2 in the original (after the two compatibility-jamo chars), " +
+            "even though the failure is at normalized-index 1 (after the single syllable)");
+        Assert.That(original[result.ErrorCharIndex], Is.EqualTo('Z'));
+    }
+
+    // Iterate every position in the normalized string and compare
+    // TranslateToOriginal's per-grapheme answer against the spec-
+    // blessed whole-string prefix walk. The normalized form is
+    // re-allocated with new string(...) so the ReferenceEquals
+    // fast path inside TranslateToOriginal doesn't short-circuit
+    // before the per-grapheme walker runs (which would happen for
+    // inputs whose normalized form is content-identical to the
+    // original).
+    private static void AssertTranslatorAgreesWithWholeString(
+        string original, NormalizationForm form)
+    {
+        string normalized = new string(original.Normalize(form).ToCharArray());
+        for (int i = 0; i <= normalized.Length; i++)
+        {
+            int translatorAnswer = NormalizedPositionMap.TranslateToOriginal(
+                original, normalized, i, form);
+            int wholeStringAnswer = WholeStringPositionMap(original, i, form);
+            Assert.That(translatorAnswer, Is.EqualTo(wholeStringAnswer),
+                $"position translation drifted at normalizedIndex={i}, form={form}");
+        }
+    }
+
+    // Brute-force reference: walk the original grapheme by grapheme
+    // and explicitly check at each boundary whether normalizing the
+    // PREFIX of the original up to that boundary produces a prefix
+    // of the full normalized string. That's the safe-boundary
+    // condition the doc spells out. Return the largest safe
+    // boundary at or before normalizedIndex.
+    //
+    // The brute force re-normalizes the full prefix every iteration
+    // (no chunk-since-last-verified optimization), which makes the
+    // implementation obviously correct at the cost of being O(N²).
+    // It's only used as a reference in tests; the walker in
+    // NormalizedPositionMap has the linear-amortized version.
+    private static int WholeStringPositionMap(string original, int normalizedIndex, NormalizationForm form)
+    {
+        string normalized = original.Normalize(form);
+        if (normalizedIndex <= 0) return 0;
+        if (normalizedIndex >= normalized.Length) return original.Length;
+
+        int bestSafeOrigPos = 0;
+        int origPos = 0;
+        while (origPos < original.Length)
+        {
+            int step = StringInfo.GetNextTextElement(original, origPos).Length;
+            if (step <= 0) step = 1;
+            origPos += step;
+
+            string prefixNormalized = original[..origPos].Normalize(form);
+
+            // Safe boundary check: prefixNormalized must be an actual
+            // prefix of the full normalized string (not just length-
+            // compatible).
+            bool isSafe = prefixNormalized.Length <= normalized.Length
+                && string.CompareOrdinal(normalized, 0, prefixNormalized, 0, prefixNormalized.Length) == 0;
+
+            if (isSafe)
+            {
+                if (prefixNormalized.Length > normalizedIndex)
+                    return bestSafeOrigPos;
+                if (prefixNormalized.Length == normalizedIndex)
+                    return origPos;
+                bestSafeOrigPos = origPos;
+            }
+        }
+
+        return original.Length;
+    }
+
 }

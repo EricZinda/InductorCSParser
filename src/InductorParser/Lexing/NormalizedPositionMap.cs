@@ -1,53 +1,36 @@
+using System;
 using System.Globalization;
 using System.Text;
 
 namespace InductorParser.Lexing;
 
 // Maps a char index for a normalized string back to a char index for
-// the caller's original (un-normalized) string, so ParseResult can report
-// failure positions in the coordinate system the caller passed in rather
-// than the internal normalized one. See Rule.Compile(NormalizationForm?)
-// for the wider picture.
-//
-// Cost: a no-op reference check when normalization returned the original
-// string reference. When normalization rewrote the input, or when the
-// runtime returned a distinct but equivalent string, one O(normalizedIndex)
-// walk per parse failure. Not paid on the success path.
+// the caller's original (un-normalized) string, so ParseResult can
+// report failure positions in the coordinate system the caller passed
+// in rather than the internal normalized one. See
+// Rule.Compile(NormalizationForm?) for the wider picture.
 //
 // Two walker shapes, one picked by the form:
 //
-//   * Canonical forms (FormC, FormD) don't change how many visible
-//     characters a string has. They may swap one representation of "é"
-//     (two UTF-16 chars: "e" plus a combining accent) for another (one
-//     UTF-16 char: precomposed "é"), but either way it still counts as
-//     one visible character. Walking both strings in lockstep, one
-//     visible character per step on each side, stays in sync.
-//     Cheapest path.
+//   * Canonical forms (FormC, FormD): lockstep walk, one grapheme
+//     per step on each side. UAX #29 §3 guarantees grapheme
+//     boundaries don't change under canonical normalization, so the
+//     two sides stay in sync.
 //
-//   * Compatibility forms (FormKC, FormKD) CAN change the visible-
-//     character count: the "fi" ligature is one visible character
-//     that becomes two ("f" + "i") after normalization. Similarly
-//     "①" → "1", fullwidth "Ａ" → "A". The lockstep walk would drift
-//     out of sync every time that happens, because one step on the
-//     original corresponds to a different number of steps on the
-//     normalized side. Instead we walk the original one visible
-//     character at a time, and for each one we call String.Normalize
-//     to see how many characters it covers on the normalized side,
-//     summing as we go. More expensive (one allocation per step)
-//     but correct when rewrites change character counts.
+//   * Compatibility forms (FormKC, FormKD): walk the original
+//     grapheme by grapheme, verify at each boundary that normalizing
+//     the chunk-since-the-last-verified-boundary matches the next
+//     portion of the normalized string. When the check fails (Korean
+//     compatibility jamo is the known case), the chunk absorbs the
+//     next grapheme and the check is tried again.
 //
-// Semantics: when the failure lands inside a character sequence that got
-// rewritten (a combining sequence composed, or a ligature converted), the
-// returned position is the start of that sequence in the original string.
-// Editors want to highlight the whole bad grapheme or ligature anyway, so
-// this matches what a diagnostic consumer expects to see.
+// When the failure position lands inside a grapheme (or multi-grapheme
+// region) that got rewritten, the walker snaps back to the start of
+// that region so editor highlighting covers the whole offending text.
+// Only runs on parse failure, off the hot path.
 //
-// Token segmentation tracks whatever the .NET runtime the parser is
-// running on provides: UAX #29 compliant on .NET 5 and later,
-// slightly-off on legacy runtimes (a handful of real grapheme clusters
-// segment incorrectly). The translator uses the same primitive the
-// lexer does, so whatever the lexer saw, the translator sees
-// too.
+// See docs/MappingPositionsAfterNormalization.md for the full argument and
+// the UAX #29 citations.
 internal static class NormalizedPositionMap
 {
     public static int TranslateToOriginal(string original, string normalized, int normalizedIndex, NormalizationForm? form)
@@ -63,7 +46,7 @@ internal static class NormalizedPositionMap
             return original.Length;
 
         if (form == NormalizationForm.FormKC || form == NormalizationForm.FormKD)
-            return TranslateViaPerGraphemeNormalize(original, normalizedIndex, form.Value);
+            return TranslateViaPerGraphemeNormalize(original, normalized, normalizedIndex, form.Value);
 
         return TranslateViaLockstep(original, normalized, normalizedIndex);
     }
@@ -76,11 +59,18 @@ internal static class NormalizedPositionMap
         int normPos = 0;
         while (normPos < normalized.Length && origPos < original.Length)
         {
+            // Defensive: GetNextTextElement should always return at least one
+            // char at a valid in-bounds position. Throw rather than fall back
+            // to a step of 1, which would spin forever if step ever came back 0.
             int normStep = StringInfo.GetNextTextElement(normalized, normPos).Length;
-            if (normStep <= 0) normStep = 1;
+            if (normStep <= 0)
+                throw new InvalidOperationException(
+                    "StringInfo.GetNextTextElement returned an empty element on the normalized string");
 
             int origStep = StringInfo.GetNextTextElement(original, origPos).Length;
-            if (origStep <= 0) origStep = 1;
+            if (origStep <= 0)
+                throw new InvalidOperationException(
+                    "StringInfo.GetNextTextElement returned an empty element on the original string");
 
             int normNext = normPos + normStep;
             if (normNext > normalizedIndex)
@@ -97,69 +87,50 @@ internal static class NormalizedPositionMap
         return origPos <= original.Length ? origPos : original.Length;
     }
 
-    // Per-grapheme walker for compatibility forms. Normalize each original
-    // grapheme on its own and advance the normalized side by however many
-    // chars that grapheme turned into. One original grapheme can cover
-    // multiple normalized chars (ligature "ﬁ" turns into "f" + "i"), and
-    // we move a hit anywhere inside that range back to the start of the
-    // original grapheme.
+    // Walker for compatibility forms (FormKC, FormKD). Walks the
+    // original grapheme by grapheme, verifying at each boundary that
+    // normalizing the chunk-since-the-last-verified-boundary matches
+    // the next portion of the normalized string. When the check
+    // fails (Korean compatibility jamo is the known example), the
+    // chunk absorbs the next grapheme and the check is tried again.
+    // When the failure position lands inside such a region, the
+    // walker snaps back to the start of the region.
     //
-    // Why this isn't perfect and why it still works:
-    //
-    // Normalization does two things. Step one is a fixed lookup: each
-    // rune gets swapped for its decomposed form from UnicodeData.txt.
-    // That step doesn't care about context. Step two sorts adjacent
-    // combining marks into a canonical order, and that step IS
-    // context-sensitive: two marks next to each other might swap based on
-    // their combining classes. Because of step two, Unicode says
-    // normalization is "not closed under concatenation" (UAX #15 section
-    // 1.4, "accents are canonically ordered, and may rearrange around
-    // the point where the strings are joined"). You can't just split
-    // a string at an arbitrary point, normalize the pieces separately,
-    // and stitch them back together and trust the result.
-    //
-    // The spec's "safe to split here" positions have a name: stable
-    // code points (UAX #15 section 9.1). Token boundaries (UAX #29
-    // grapheme cluster boundaries) aren't the same thing. So splitting
-    // by token is an engineering shortcut, not the spec-blessed operation.
-    //
-    // The shortcut is safe for real text because UAX #29 rule GB9 keeps
-    // combining marks glued to their base character inside the same
-    // grapheme cluster. The step-two reordering problem needs combining
-    // marks on both sides of the split to bite. GB9 says there are never
-    // any on the "next grapheme" side. So for any text that follows the
-    // normal convention of combining marks following their base,
-    // per-grapheme normalization gives the same answer as whole-string
-    // normalization.
-    //
-    // The edge case that falls outside this argument: a combining mark
-    // sitting on its own with no preceding base (at the very start of the
-    // input, or immediately after a control character). The mark forms
-    // its own "defective" grapheme, and per-grapheme normalization can
-    // differ from whole-string normalization by one grapheme's worth of
-    // char offset. ErrorCharIndex stays a valid index into the original
-    // input. It just lands at an adjacent grapheme boundary instead of
-    // the exact one. No editor highlight will notice the difference.
-    private static int TranslateViaPerGraphemeNormalize(string original, int normalizedIndex, NormalizationForm form)
+    // See docs/MappingPositionsAfterNormalization.md for the full argument
+    // and the UAX #29 citation.
+    private static int TranslateViaPerGraphemeNormalize(string original, string normalized, int normalizedIndex, NormalizationForm form)
     {
         int origPos = 0;
         int normPos = 0;
+        int lastSafeOrigPos = 0;
+
         while (origPos < original.Length)
         {
-            string origGrapheme = StringInfo.GetNextTextElement(original, origPos);
-            int origStep = origGrapheme.Length;
-            if (origStep <= 0) origStep = 1;
+            // Defensive: GetNextTextElement should always return at least one
+            // char at a valid in-bounds position. Throw rather than fall back
+            // to a step of 1, which would spin forever if length ever came back 0.
+            string grapheme = StringInfo.GetNextTextElement(original, origPos);
+            int graphemeLength = grapheme.Length;
+            if (graphemeLength <= 0)
+                throw new InvalidOperationException(
+                    "StringInfo.GetNextTextElement returned an empty element on the original string");
+            origPos += graphemeLength;
 
-            int normStep = origGrapheme.Normalize(form).Length;
-            int normNext = normPos + normStep;
+            string chunk = original[lastSafeOrigPos..origPos];
+            string chunkNormalized = chunk.Normalize(form);
 
-            if (normNext > normalizedIndex)
-                return origPos;
-            if (normNext == normalizedIndex)
-                return origPos + origStep;
-
-            origPos += origStep;
-            normPos = normNext;
+            if (normPos + chunkNormalized.Length <= normalized.Length
+                && string.CompareOrdinal(normalized, normPos, chunkNormalized, 0, chunkNormalized.Length) == 0)
+            {
+                int newNormPos = normPos + chunkNormalized.Length;
+                if (newNormPos > normalizedIndex)
+                    return lastSafeOrigPos;
+                if (newNormPos == normalizedIndex)
+                    return origPos;
+                normPos = newNormPos;
+                lastSafeOrigPos = origPos;
+            }
+            // else: chunk grows on the next iteration (lastSafeOrigPos unchanged)
         }
 
         return original.Length;
