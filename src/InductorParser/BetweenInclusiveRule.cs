@@ -159,6 +159,20 @@ internal sealed class BetweenInclusiveRule : Rule
             Rule alternative = alternatives[index];
             if (alternative.ErrorMessage != null || alternative.Advance != Advance.Always)
                 return null;
+            // MustNotBeIn polarity inverts the meaning of
+            // FirstConsumedTokens: the published set is the rule's
+            // FAIL-set, not its match-set. Unioning it into `candidates`
+            // would direct the scanner to FAIL positions and silently
+            // skip past every match position (e.g.
+            // `Or(NoneOf("xy"), AnyToken().Delete())` would have the
+            // scanner jump to 'x' / 'y' and the AnyToken fallback consume
+            // them, while the runes the user wanted captured by NoneOf
+            // are never read). Bail out so the slow path runs. Building
+            // a sound candidate set under MustNotBeIn would need the
+            // complement of the fail-set, which under grapheme
+            // tokenization is unbounded.
+            if (alternative.Polarity != Polarity.MustBeIn)
+                return null;
             // AdvanceUntilRuneIn requires a rune-only candidate set
             // (multi-rune entries are silently invisible to its
             // IndexOfAny / Contains paths). Flatten via the

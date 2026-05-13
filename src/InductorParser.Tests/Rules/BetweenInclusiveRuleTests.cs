@@ -500,6 +500,32 @@ public class BetweenInclusiveRuleTests
         Assert.That(result.Tree!.ToString(), Is.EqualTo("xxS"));
     }
 
+    [Test]
+    public void BetweenInclusive_scanner_skip_does_not_skip_NoneOf_alternative_matches()
+    {
+        // TryCreateScannerSkip unions every non-fallback alternative's
+        // FirstConsumedTokens.LookaheadFirstRunes into the candidate set
+        // without considering Polarity. For a MustNotBeIn alternative
+        // like NoneOf(stopSet), FirstConsumedTokens is the rule's
+        // FAIL-set, not its match-set. Including it directs the
+        // scanner to advance to positions where NoneOf will FAIL (and
+        // fall through to AnyToken().Delete()), silently skipping past
+        // every position where NoneOf would have MATCHED.
+        var stopSet = TokenSet.Runes("xy");
+        var scanner = BetweenInclusive(0, int.MaxValue, Or(
+            NoneOf(stopSet),
+            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
+        ));
+
+        var result = scanner.Parse("abxcyd");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        // NoneOf(stopSet) matches 'a','b','c','d' as Preserve leaves;
+        // 'x' and 'y' fall to AnyToken().Delete() and contribute
+        // nothing. The concatenated matched text must be "abcd".
+        Assert.That(result.ToString(), Is.EqualTo("abcd"));
+    }
+
     // ----- Scanner-skip optimization: CRLF mid-cluster regression tests -----
     //
     // CRLF is one grapheme cluster (UAX #29 GB3). The scanner-skip fast paths

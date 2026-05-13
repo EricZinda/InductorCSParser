@@ -633,11 +633,16 @@ public static class Rules
     /// (from the composed outer <see cref="And"/>).
     /// </summary>
     /// <remarks>
-    /// Pre-built because every grammar ends up wanting it.
+    /// Pre-built because every grammar ends up wanting it. The leading
+    /// sign is matched as <c>OneOf("+-").Flatten(FlattenType.Flatten)</c>
+    /// so the sign rune bubbles into the parent tree: a named
+    /// <c>Integer().As(...)</c> renders its full matched text via
+    /// <c>ToString()</c>, including the sign. <see cref="Float"/> uses
+    /// the same shape for the same reason.
     /// </remarks>
     public static Rule Integer() =>
         And(
-            Optional(Or(Token('+'), Token('-'))),
+            Optional(OneOf("+-").Flatten(FlattenType.Flatten)),
             OneOrMore(OneOf(TokenSet.Digits))
         );
 
