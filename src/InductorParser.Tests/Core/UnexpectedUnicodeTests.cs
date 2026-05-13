@@ -243,13 +243,18 @@ public class UnexpectedUnicodeTests
     }
 
     [Test]
-    public void LiteralIgnoreAsciiCase_with_stray_surrogate_under_default_Compile_throws_clear_error()
+    public void LiteralIgnoreAsciiCase_with_stray_surrogate_throws_at_construction()
     {
-        var rule = LiteralIgnoreAsciiCase(UnicodeExamples.HighSurrogateMinText + "x");
-
-        var exception = Assert.Throws<InvalidOperationException>(() => rule.Compile());
-        Assert.That(exception!.Message, Does.Contain("surrogate"));
-        Assert.That(exception.InnerException, Is.InstanceOf<AggregateException>());
+        // Surrogate halves are outside the ASCII range (0xD800..0xDFFF
+        // > 0x7F), so LiteralIgnoreAsciiCase rejects them at construction
+        // before the form-validation pass ever runs. Token and Literal
+        // still defer to the form-validation pass, which is the right
+        // shape for them: they accept any string content, and the
+        // string.Normalize call inside Compile is what trips on the
+        // surrogate.
+        var exception = Assert.Throws<ArgumentException>(() =>
+            LiteralIgnoreAsciiCase(UnicodeExamples.HighSurrogateMinText + "x"));
+        Assert.That(exception!.Message, Does.Contain("ASCII-only"));
     }
 
     [Test]
@@ -259,15 +264,16 @@ public class UnexpectedUnicodeTests
         // one ArgumentException to the AggregateException. The grammar author
         // sees a single multi-rule message in InvalidOperationException.Message
         // and can walk InnerExceptions for the per-rule runtime cause.
+        // LiteralIgnoreAsciiCase isn't part of this aggregate because it
+        // rejects non-ASCII at construction, before Compile runs.
         var rule = And(
             Token(UnicodeExamples.HighSurrogateMinText),
-            Literal(UnicodeExamples.HighSurrogateMinText + "X"),
-            LiteralIgnoreAsciiCase(UnicodeExamples.HighSurrogateMinText + "y"));
+            Literal(UnicodeExamples.HighSurrogateMinText + "X"));
 
         var exception = Assert.Throws<InvalidOperationException>(() => rule.Compile());
         Assert.That(exception!.InnerException, Is.InstanceOf<AggregateException>());
         var aggregate = (AggregateException)exception.InnerException!;
-        Assert.That(aggregate.InnerExceptions, Has.Count.EqualTo(3));
+        Assert.That(aggregate.InnerExceptions, Has.Count.EqualTo(2));
         Assert.That(aggregate.InnerExceptions, Has.All.InstanceOf<ArgumentException>());
     }
 
@@ -289,18 +295,18 @@ public class UnexpectedUnicodeTests
     }
 
     [Test]
-    public void LiteralIgnoreAsciiCase_with_lone_surrogate_first_char_compiles_under_null_normalization()
+    public void LiteralIgnoreAsciiCase_with_lone_surrogate_first_char_throws_at_construction()
     {
-        // Same shape as the Literal regression: surrogate-prefixed literal
-        // text with ASCII-ignore-case applied to the rest. The ignore-case
-        // path runs through a different ComputeRuleStart but the bug was
-        // the same (TryPeekRune false return ignored, -1 fed to
-        // TokenSet.Single).
-        string input = UnicodeExamples.HighSurrogateMinText + "x";
-        var rule = LiteralIgnoreAsciiCase(UnicodeExamples.HighSurrogateMinText + "X");
-
-        Assert.DoesNotThrow(() => rule.Compile(null));
-        Assert.That(rule.Parse(input).Success, Is.True);
+        // The pattern restriction is on the pattern itself, regardless
+        // of which normalization form Compile would later use. Surrogate
+        // halves are outside the ASCII range, so LiteralIgnoreAsciiCase
+        // rejects them up front even when the caller would have compiled
+        // with Compile(null) to skip the form-validation pass entirely.
+        // Grammars that want surrogate-prefixed match-as-written
+        // behavior should use Literal(...) (still works under
+        // Compile(null), as the Literal test above shows).
+        Assert.Throws<ArgumentException>(() =>
+            LiteralIgnoreAsciiCase(UnicodeExamples.HighSurrogateMinText + "X"));
     }
 
     [Test]

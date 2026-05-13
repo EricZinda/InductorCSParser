@@ -155,24 +155,29 @@ public static class Rules
     public static Rule Literal(string value) => new LiteralRule(value);
 
     /// <summary>
-    /// ASCII-case-insensitive variant of <see cref="Literal"/>.
-    /// Default <see cref="FlattenType"/>:
+    /// ASCII-case-insensitive variant of <see cref="Literal"/>. The
+    /// pattern must be ASCII-only; construction throws on any char
+    /// outside <c>0x00..0x7F</c>. Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Delete"/>.
     /// </summary>
     /// <remarks>
-    /// The pattern string can contain any characters, including
-    /// non-ASCII ones. ASCII letters (A-Z, a-z) in the pattern
-    /// match either case in the input. Everything else (digits,
-    /// punctuation, non-ASCII characters) compares bit-exact, so
-    /// the pattern "café" matches input "café" and "CAFé" (c/a/f
-    /// are ASCII letters and match case-insensitively, é matches
-    /// itself) but not "CAFÉ" (because é is non-ASCII and doesn't
-    /// match É under ASCII case-insensitive rules).
-    ///
-    /// The ASCII in the name is critical: full Unicode
-    /// case-insensitive matching is locale- and script-dependent
-    /// and this leaf doesn't attempt it. 
+    /// ASCII letters (A-Z, a-z) in the pattern match either case in
+    /// the input. ASCII non-letters (digits, punctuation, controls)
+    /// compare bit-exact. ASCII in the name is the rule: full Unicode
+    /// case-insensitive matching is locale- and script-dependent and
+    /// this leaf doesn't attempt it.
+    /// <para>
+    /// For a pattern with non-ASCII content (a keyword with an accented
+    /// letter, a CJK identifier, etc.), use <see cref="Literal"/>
+    /// instead. To mix the two ("case-insensitive ASCII prefix followed
+    /// by an exact non-ASCII char"), compose with <see cref="And"/>:
+    /// <c>And(LiteralIgnoreAsciiCase("caf"), Token('é'))</c>.
+    /// </para>
     /// </remarks>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="value"/> contains any char outside the ASCII
+    /// range (<c>0x00..0x7F</c>).
+    /// </exception>
     public static Rule LiteralIgnoreAsciiCase(string value) => new LiteralIgnoreAsciiCaseRule(value);
 
     /// <summary>
@@ -628,11 +633,16 @@ public static class Rules
     /// (from the composed outer <see cref="And"/>).
     /// </summary>
     /// <remarks>
-    /// Pre-built because every grammar ends up wanting it.
+    /// Pre-built because every grammar ends up wanting it. The leading
+    /// sign is matched as <c>OneOf("+-").Flatten(FlattenType.Flatten)</c>
+    /// so the sign rune bubbles into the parent tree: a named
+    /// <c>Integer().As(...)</c> renders its full matched text via
+    /// <c>ToString()</c>, including the sign. <see cref="Float"/> uses
+    /// the same shape for the same reason.
     /// </remarks>
     public static Rule Integer() =>
         And(
-            Optional(Or(Token('+'), Token('-'))),
+            Optional(OneOf("+-").Flatten(FlattenType.Flatten)),
             OneOrMore(OneOf(TokenSet.Digits))
         );
 

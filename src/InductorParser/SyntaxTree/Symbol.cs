@@ -120,6 +120,40 @@ public sealed class Symbol
     // code. Unlike Find, this is a single-node check, no tree walk.
     public bool Is(Rule rule) => Id == rule.Id;
 
+    // String-named variant of Is, for tree walkers that prefer to
+    // dispatch on the name the grammar gave the rule via .As("name")
+    // rather than hold a reference to the Rule object. Resolves the
+    // Symbol's id through the grammar reachable from the parse's
+    // ParseContext, so it works only on Symbols that came out of a
+    // real Rule.Parse call. Hand-built Symbols (no context) and
+    // Symbols whose id maps to an unnamed rule both return false.
+    //
+    // Use this when you want a typed-AST projection that doesn't
+    // require one public static Rule field per named production on
+    // the grammar class. The lookup walks a per-grammar name index
+    // built lazily on first call to Rule.NameOf / Rule.IdOf, so it's
+    // an O(1) string compare per call after the first.
+    public bool Is(string ruleName)
+    {
+        if (ruleName == null) return false;
+        string? actual = Name;
+        return actual != null && actual == ruleName;
+    }
+
+    // The grammar-supplied name of the rule that produced this Symbol
+    // — that is, the string the rule was constructed with via
+    // .As("name"). Returns null when:
+    //
+    //   * the Symbol was hand-built with no ParseContext, or
+    //   * the rule has no .As(string) name (anonymous composites
+    //     like an inline And(...) inside another rule).
+    //
+    // For rune-leaf Symbols (the Id is a Unicode scalar value), the
+    // name is the rune's text by default — Token('a').As("aChar") on
+    // an 'a' leaf returns "aChar"; an anonymous Token('a') leaf
+    // returns "a".
+    public string? Name => _context?.GrammarRoot?.NameOf(Id);
+
     // Depth-first search for the first Symbol whose Id matches. Returns
     // null if nothing matches. Use when you expect exactly one match
     // (e.g. a named rule that appears once at a known position in the
