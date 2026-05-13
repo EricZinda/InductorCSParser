@@ -65,7 +65,7 @@ public static class PrologGrammar
     public static readonly Rule Comment = Or(
         And(
             Token('%'),
-            ScanUntil(LineBreak),
+            ScanUntil(LineBreak, eofIsTerminator: true),
             Or(
                 OneOrMore(LineBreak),
                 Eof()

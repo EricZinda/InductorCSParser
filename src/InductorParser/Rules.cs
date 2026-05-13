@@ -39,6 +39,17 @@ namespace InductorParser;
 /// default. Override on any rule with
 /// <see cref="Rule.Flatten(FlattenType)"/> to change it for a
 /// specific use site.
+///
+/// Calling <see cref="Rule.As(string)"/> or
+/// <see cref="Rule.As(SymbolId)"/> on a rule whose default
+/// <see cref="FlattenType"/> isn't Preserve silently flips it
+/// to Preserve. Identification implies findability, and a
+/// non-Preserve rule's wrapper Symbol doesn't reach the tree
+/// for Tree.Find to locate. Calling .As after the caller has
+/// explicitly set a non-Preserve policy via .Flatten / .Delete /
+/// .Flatten() throws, and so does setting a non-Preserve policy
+/// on a rule that's already been named. See <see cref="Rule.As(string)"/>
+/// for the full story.
 /// </remarks>
 public static class Rules
 {
@@ -251,15 +262,28 @@ public static class Rules
     /// the scanner-skip optimization need to recognize a run as a single
     /// match span.
     ///
-    /// The exact converse of <see cref="ScanUntil(TokenSet)"/>: ScanUntil
+    /// The exact converse of <see cref="ScanUntil(TokenSet, bool)"/>: ScanUntil
     /// stops when the next token is in its stop set, ScanWhile stops when
     /// the next token is outside its match set. Use <c>ScanWhile</c> when
     /// the run's character class is the natural way to describe the body
-    /// (identifiers, words, numbers), and <see cref="ScanUntil(TokenSet)"/>
+    /// (identifiers, words, numbers), and <see cref="ScanUntil(TokenSet, bool)"/>
     /// when only the boundary is namable (string bodies, comment bodies).
+    ///
+    /// <paramref name="minimumCount"/> is the minimum number of tokens the
+    /// run must contain to succeed. The default of 1 keeps the rule in
+    /// the "always advances on success" lane, which lets enclosing rules
+    /// use the LL(1) lookahead shortcut to skip it when the peek isn't
+    /// in <paramref name="set"/>. Passing 0 makes the run optional: the
+    /// rule always succeeds and emits a single leaf Symbol whose text is
+    /// the matched run (possibly empty). The cost of 0 is that
+    /// the lookahead shortcut can no longer skip the rule, since a
+    /// zero-width match can succeed on any input. Use 0 for grammars
+    /// where an empty run is legal (string bodies that may be empty,
+    /// optional text fields) and the cleaner tree shape (always one
+    /// leaf) is worth more than the skip.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="minimumCount"/> is less than 1.
+    /// <paramref name="minimumCount"/> is negative.
     /// </exception>
     public static Rule ScanWhile(TokenSet set, int minimumCount = 1) =>
         new ScanWhileRule(set, minimumCount);
@@ -270,10 +294,12 @@ public static class Rules
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
-    /// Succeeds with a possibly empty body: if the stopper is already
-    /// next, the matched text is empty. One leaf scans chars directly,
-    /// which is a meaningful speedup over
-    /// <c>ZeroOrMore(NoneOf(stopAt))</c> for long strings.
+    /// Succeeds with a possibly empty body when the stopper matches
+    /// (if the stopper is already next, the matched text is empty).
+    /// Fails if end-of-input is reached without ever matching the
+    /// stopper, unless <paramref name="eofIsTerminator"/> is true.
+    /// One leaf scans chars directly, which is a meaningful speedup
+    /// over <c>ZeroOrMore(NoneOf(stopAt))</c> for long strings.
     /// <para>
     /// Stopper membership is checked against the next whole token (one
     /// user-perceived character / grapheme cluster), the same way
@@ -285,20 +311,27 @@ public static class Rules
     /// the <c>CRLF</c> cluster, and <c>TokenSet.Runes("...")</c> adds a
     /// custom multi-rune cluster.
     /// </para>
+    /// <para>
+    /// Pass <paramref name="eofIsTerminator"/> = <c>true</c> for
+    /// grammars where the body legitimately ends at the stopper OR at
+    /// EOF (line comments that may close with a newline or with the
+    /// end of file, for example). For "match the rest of the input,"
+    /// use <see cref="ScanUntilEof"/> instead.
+    /// </para>
     /// <code>
-    /// // CSV field body: scan until the next comma or LF
+    /// // CSV field body: scan until the next comma or LF (strict)
     /// var field = ScanUntil(TokenSet.Runes(",\n"));
     ///
-    /// // Line comment body: stops at any UAX #18 line terminator,
-    /// // including the CRLF cluster as one stop unit
-    /// var lineCommentBody = ScanUntil(TokenSet.LineTerminators);
+    /// // Line comment body: stops at any UAX #18 line terminator OR EOF
+    /// var lineCommentBody = ScanUntil(TokenSet.LineTerminators,
+    ///                                 eofIsTerminator: true);
     /// </code>
     /// </remarks>
-    public static Rule ScanUntil(TokenSet stopAt) =>
-        new ScanUntilRule(stopAt);
+    public static Rule ScanUntil(TokenSet stopAt, bool eofIsTerminator = false) =>
+        new ScanUntilRule(stopAt, eofIsTerminator);
 
     /// <summary>
-    /// <see cref="ScanUntil(TokenSet)"/> with escape sequences.
+    /// <see cref="ScanUntil(TokenSet, bool)"/> with escape sequences.
     /// Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
@@ -316,8 +349,8 @@ public static class Rules
     ///     OneOf("ntr\"\\"));
     /// </code>
     /// </remarks>
-    public static Rule ScanUntil(TokenSet stopAt, Rune escapeStart, Rule escapeEnd) =>
-        new ScanUntilRule(stopAt, escapeStart, escapeEnd);
+    public static Rule ScanUntil(TokenSet stopAt, Rune escapeStart, Rule escapeEnd, bool eofIsTerminator = false) =>
+        new ScanUntilRule(stopAt, escapeStart, escapeEnd, eofIsTerminator);
 
     /// <summary>
     /// Same as the Rune-valued escape-start overload, with a
@@ -337,11 +370,11 @@ public static class Rules
     ///     And(OneOrMore(NoneOf("}")), Token('}')));
     /// </code>
     /// </remarks>
-    public static Rule ScanUntil(TokenSet stopAt, Rule escapeStart, Rule escapeEnd) =>
-        new ScanUntilRule(stopAt, escapeStart, escapeEnd);
+    public static Rule ScanUntil(TokenSet stopAt, Rule escapeStart, Rule escapeEnd, bool eofIsTerminator = false) =>
+        new ScanUntilRule(stopAt, escapeStart, escapeEnd, eofIsTerminator);
 
     /// <summary>
-    /// <see cref="ScanUntil(TokenSet)"/> with a rule-valued stop
+    /// <see cref="ScanUntil(TokenSet, bool)"/> with a rule-valued stop
     /// condition. Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
@@ -357,8 +390,8 @@ public static class Rules
     /// var blockCommentBody = ScanUntil(Literal("*/"));
     /// </code>
     /// </remarks>
-    public static Rule ScanUntil(Rule stopAt) =>
-        new ScanUntilRule(stopAt);
+    public static Rule ScanUntil(Rule stopAt, bool eofIsTerminator = false) =>
+        new ScanUntilRule(stopAt, eofIsTerminator);
 
     /// <summary>
     /// Rule-stopper ScanUntil with escape sequences. Default
@@ -375,8 +408,27 @@ public static class Rules
     ///     OneOf("\"\\"));
     /// </code>
     /// </remarks>
-    public static Rule ScanUntil(Rule stopAt, Rune escapeStart, Rule escapeEnd) =>
-        new ScanUntilRule(stopAt, escapeStart, escapeEnd);
+    public static Rule ScanUntil(Rule stopAt, Rune escapeStart, Rule escapeEnd, bool eofIsTerminator = false) =>
+        new ScanUntilRule(stopAt, escapeStart, escapeEnd, eofIsTerminator);
+
+    /// <summary>
+    /// Match every remaining token to end-of-input as one leaf. Always
+    /// succeeds, including on empty input (with a zero-width leaf).
+    /// Default <see cref="FlattenType"/>:
+    /// <see cref="FlattenType.Preserve"/>.
+    /// </summary>
+    /// <remarks>
+    /// For grammars whose final element is "the rest of the input."
+    /// Implemented as <c>ScanUntil(TokenSet.Empty, eofIsTerminator: true)</c>:
+    /// no stopper ever matches, the scan runs to EOF, and the tolerant
+    /// branch returns one leaf over the whole remaining span.
+    /// <code>
+    /// // Conventional-commit subject: everything after the header marker
+    /// var subject = ScanUntilEof().As("subject");
+    /// </code>
+    /// </remarks>
+    public static Rule ScanUntilEof() =>
+        new ScanUntilRule(TokenSet.Empty, eofIsTerminator: true);
 
     /// <summary>
     /// Match any one token (one character as the user sees it).

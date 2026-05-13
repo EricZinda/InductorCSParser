@@ -104,6 +104,124 @@ public class IdAssignmentTests
         Assert.That(sharedRule.Id, Is.EqualTo(pinned));
     }
 
+    [Test]
+    public void As_SymbolId_rejects_pins_below_the_custom_range()
+    {
+        // The rune range (0..0x10FFFF) and built-in range
+        // (0x110000..0x1FFFFF) are reserved. Pinning a rule into either
+        // would silently collide with Token('a')-style rune leaves or
+        // future built-in ids, and the Compile-time duplicate-pin check
+        // can only catch user pins, not auto-pins from constructors. As
+        // throws at the call site so the bad pin never reaches the
+        // grammar.
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
+
+        // Rune-range pin: collides with Token('a') if both are in the
+        // same grammar.
+        Assert.Throws<ArgumentOutOfRangeException>(() => rule.As(new SymbolId(0x61)));
+
+        // Built-in gap pin.
+        Assert.Throws<ArgumentOutOfRangeException>(() => rule.As(new SymbolId(0x110000)));
+
+        // Negative pin: no meaningful identity.
+        Assert.Throws<ArgumentOutOfRangeException>(() => rule.As(new SymbolId(-1)));
+
+        // The boundary value (CustomRangeStart itself) is the first
+        // legal pin.
+        Assert.DoesNotThrow(() => rule.As(new SymbolId(SymbolRanges.CustomRangeStart)));
+    }
+
+    [Test]
+    public void Pre_compiled_sub_rule_pin_collides_with_unsealed_sibling_pin()
+    {
+        // Two distinct reachable rules in the same grammar both pin the
+        // same custom-range SymbolId. One was compiled standalone first,
+        // so it's already sealed by the time the larger grammar reaches
+        // it. The second was pinned but isn't sealed yet. Compile of the
+        // larger grammar should catch this just like the all-unsealed
+        // version (Two_reachable_rules_pinned_to_the_same_SymbolId_fail_to_compile),
+        // because the second rule's pin would otherwise silently shadow
+        // the first one's: Tree.Find against either rule reference would
+        // return the same nodes regardless of which rule actually
+        // matched. Pre-compiling one branch is a real pattern when a
+        // shared identifier rule lives in a library and gets reused
+        // across multiple grammars.
+        var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 5678);
+        var preCompiled = OneOrMore(OneOf(TokenSet.Letters)).As(pinned).As("first");
+        preCompiled.Compile();
+
+        var unsealed = OneOrMore(OneOf(TokenSet.Digits)).As(pinned).As("second");
+        var doc = And(preCompiled, unsealed);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => doc.Compile());
+        Assert.That(exception!.Message, Does.Contain(pinned.Value.ToString()));
+        Assert.That(exception.Message, Does.Contain("first"));
+        Assert.That(exception.Message, Does.Contain("second"));
+    }
+
+    // .As(string) and .As(SymbolId) each write a different field (Name and
+    // Id), so they compose on a single instance: a rule can be both pinned
+    // and named without conflict. But each overload is set-once against
+    // itself, because a second call to the same overload overwrites the
+    // field the previous call set. The SemVer case was the motivating bug:
+    // a shared OneOrMore(OneOf(digits)) rule chained .As("major") /
+    // .As("minor") / .As("patch") across three positions, and all three
+    // references ended up pointing at the same instance with Name="patch"
+    // (last call wins). Tree.Find against any of the three then returned
+    // the same node. The Compile-time duplicate-name check would catch the
+    // collision when two reachable rules share a name, but only if the
+    // user wrote two rule instances with the same name. Reusing one
+    // instance hid the collision entirely.
+
+    [Test]
+    public void As_string_after_As_string_throws()
+    {
+        var rule = OneOrMore(OneOf(TokenSet.Digits)).As("major");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => rule.As("minor"));
+        Assert.That(exception!.Message, Does.Contain("\"minor\""));
+        Assert.That(exception.Message, Does.Contain("\"major\""));
+        Assert.That(exception.Message, Does.Contain("set-once"));
+    }
+
+    [Test]
+    public void As_SymbolId_after_As_SymbolId_throws()
+    {
+        var firstPin = new SymbolId(SymbolRanges.CustomRangeStart + 100);
+        var secondPin = new SymbolId(SymbolRanges.CustomRangeStart + 200);
+        var rule = OneOrMore(OneOf(TokenSet.Digits)).As(firstPin);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => rule.As(secondPin));
+        Assert.That(exception!.Message, Does.Contain(secondPin.Value.ToString()));
+        Assert.That(exception.Message, Does.Contain(firstPin.Value.ToString()));
+        Assert.That(exception.Message, Does.Contain("set-once"));
+    }
+
+    [Test]
+    public void Cross_overload_As_calls_compose_on_a_single_instance()
+    {
+        // .As(SymbolId) writes Id, .As(string) writes Name. Each field is
+        // set-once but the two are independent. Calling one of each (in
+        // either order) on the same rule produces a rule with both a
+        // pinned id and a debug name, with no silent overwrite.
+        var pin = new SymbolId(SymbolRanges.CustomRangeStart + 300);
+
+        Assert.DoesNotThrow(() =>
+        {
+            var pinThenName = OneOrMore(OneOf(TokenSet.Digits)).As(pin).As("number");
+            Assert.That(pinThenName.Id, Is.EqualTo(pin));
+            Assert.That(pinThenName.Name, Is.EqualTo("number"));
+        });
+
+        var otherPin = new SymbolId(SymbolRanges.CustomRangeStart + 301);
+        Assert.DoesNotThrow(() =>
+        {
+            var nameThenPin = OneOrMore(OneOf(TokenSet.Digits)).As("count").As(otherPin);
+            Assert.That(nameThenPin.Id, Is.EqualTo(otherPin));
+            Assert.That(nameThenPin.Name, Is.EqualTo("count"));
+        });
+    }
+
     // Each test below builds a small grammar with a specific arrangement
     // of pinned, named, and anonymous leaves, compiles it, and asserts
     // the exact id every leaf comes out with. The model-based sweep at

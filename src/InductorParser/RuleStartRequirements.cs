@@ -198,17 +198,33 @@ internal readonly record struct RuleStartRequirements(
     public static RuleStartRequirements PassesThroughTo(Rule source) =>
         new(source.FirstConsumedTokens, source.Advance, source.Polarity);
 
-    // Builder-style modifier: "...with [this] Advance instead." Drops
-    // polarity to MustBeIn when newAdvance becomes non-Always
-    // (MustNotBeIn requires Always per the invariant — a Sometimes/
-    // Never rule with a fail-set doesn't make sense, see
-    // ComputeRuleStartAll). Reads as a continuation of
-    // PassesThroughTo: "my rule passes through to inner, with this
-    // advance."
+    // Builder-style modifier: "...with [this] Advance instead." Reads
+    // as a continuation of PassesThroughTo: "my rule passes through to
+    // inner, with this advance."
+    //
+    // Three cases, picked by the two ifs:
+    //
+    //   * newAdvance is Always: keep the original set and polarity.
+    //     MustNotBeIn-Always rules stay MustNotBeIn-Always; MustBeIn
+    //     rules stay MustBeIn.
+    //
+    //   * newAdvance is non-Always and the original was MustNotBeIn:
+    //     MustNotBeIn requires Always (ComputeRuleStartAll rejects any
+    //     other combination), so polarity drops to MustBeIn. The
+    //     original set was a fail-set and can't carry over under that
+    //     polarity. Use Universe (the noncommittal "no constraint on
+    //     first token") instead.
+    //
+    //   * newAdvance is non-Always and the original was MustBeIn:
+    //     keep the original set, with polarity already MustBeIn. The
+    //     set keeps the same meaning ("might consume on first").
     public RuleStartRequirements WithAdvance(Advance newAdvance)
     {
-        var polarity = newAdvance == Advance.Always ? Polarity : Polarity.MustBeIn;
-        return new RuleStartRequirements(FirstConsumedTokens, newAdvance, polarity);
+        if (newAdvance == Advance.Always)
+            return new RuleStartRequirements(FirstConsumedTokens, newAdvance, Polarity);
+        if (Polarity == Polarity.MustNotBeIn)
+            return new RuleStartRequirements(TokenSet.Universe, newAdvance, Polarity.MustBeIn);
+        return new RuleStartRequirements(FirstConsumedTokens, newAdvance, Polarity.MustBeIn);
     }
 
     // These two map directly to the two core composition
@@ -251,7 +267,7 @@ internal readonly record struct RuleStartRequirements(
             ? Advance.Always
             : allNever ? Advance.Never : Advance.Sometimes;
         if (advance != Advance.Always && runningPolarity == Polarity.MustNotBeIn)
-            return new RuleStartRequirements(TokenSet.Empty, advance, Polarity.MustBeIn);
+            return new RuleStartRequirements(TokenSet.Universe, advance, Polarity.MustBeIn);
         return new RuleStartRequirements(runningSet, advance, runningPolarity);
     }
 
@@ -293,7 +309,7 @@ internal readonly record struct RuleStartRequirements(
         }
         Advance advance = anyMightConsume ? Advance.Sometimes : Advance.Never;
         if (advance != Advance.Always && runningPolarity == Polarity.MustNotBeIn)
-            return new RuleStartRequirements(TokenSet.Empty, advance, Polarity.MustBeIn);
+            return new RuleStartRequirements(TokenSet.Universe, advance, Polarity.MustBeIn);
         return new RuleStartRequirements(runningSet, advance, runningPolarity);
     }
 

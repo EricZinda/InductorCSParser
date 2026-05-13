@@ -206,8 +206,14 @@ public class RuleStartRequirementsTests
     {
         // Mix one Always-MustNotBeIn child and one Sometimes child. The
         // composite Advance becomes Sometimes (not all Always), and the
-        // running polarity is MustNotBeIn — but MustNotBeIn requires
-        // Advance.Always, so the helper falls back to (Empty, MustBeIn).
+        // running polarity is MustNotBeIn. Since MustNotBeIn requires
+        // Advance.Always, the helper falls back to MustBeIn. The set
+        // becomes Universe rather than the original fail-set: under
+        // MustBeIn semantics the set means "tokens this rule might
+        // consume first," so the original MustNotBeIn fail-set would
+        // mean exactly the opposite of the rule's actual behavior.
+        // Universe is the noncommittal fallback that keeps parent
+        // composition sound.
         var children = new[]
         {
             Compiled(NoneOf(TokenSet.Runes("ab"))),
@@ -216,7 +222,7 @@ public class RuleStartRequirementsTests
         var requirements = RuleStartRequirements.MatchesAnyOf(children);
         Assert.That(requirements.Advance, Is.EqualTo(Advance.Sometimes));
         Assert.That(requirements.Polarity, Is.EqualTo(Polarity.MustBeIn));
-        Assert.That(requirements.FirstConsumedTokens, Is.EqualTo(TokenSet.Empty));
+        Assert.That(requirements.FirstConsumedTokens, Is.EqualTo(TokenSet.Universe));
     }
 
     [Test]

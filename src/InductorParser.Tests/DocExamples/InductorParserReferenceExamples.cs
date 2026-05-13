@@ -69,7 +69,8 @@ public class InductorParserReferenceExamples
 
     // "Naming Rules" / ".As(SymbolId)" pinned numeric ids. Doc claim: a
     // pinned SymbolId stays put across compiles, and a separate .As
-    // attaches a debug name.
+    // attaches a debug name. The two overloads write different fields
+    // (Id and Name) so they compose cleanly on a single instance.
     [Test]
     public void Pinned_SymbolId_stays_put()
     {
@@ -133,7 +134,7 @@ public class InductorParserReferenceExamples
             Float().Flatten(FlattenType.Flatten),
             Integer().Flatten(FlattenType.Flatten),
             Identifier()
-        ).As("settingValue").Preserve();
+        ).As("settingValue");
 
         var document = And(
             Optional(AnyWhitespace()),
@@ -146,7 +147,7 @@ public class InductorParserReferenceExamples
             Token(';'),
             Optional(AnyWhitespace()),
             Eof()
-        ).As("document").Preserve().Compile();
+        ).As("document").Compile();
 
         return (document, settingName, settingValue);
     }
@@ -206,7 +207,7 @@ public class InductorParserReferenceExamples
                     valueAtom
                 )
             )
-        ).As("values").Preserve();
+        ).As("values");
 
         var pair = And(
             key,
@@ -216,7 +217,7 @@ public class InductorParserReferenceExamples
             values,
             Optional(AnyWhitespace()),
             Token(';')
-        ).As("pair").Preserve();
+        ).As("pair");
 
         var document = And(
             Optional(AnyWhitespace()),
@@ -224,7 +225,7 @@ public class InductorParserReferenceExamples
                 And(pair, Optional(AnyWhitespace()))
             ),
             Eof()
-        ).As("document").Preserve().Compile();
+        ).As("document").Compile();
 
         const string input =
             "colors = red, green, blue;\n" +

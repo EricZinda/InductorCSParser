@@ -39,6 +39,38 @@ public class NotRuleTests
     }
 
     [Test]
+    public void Not_WithError_surfaces_at_lookahead_anchor_when_inner_Or_records_a_deeper_orphan_failure()
+    {
+        // Inner is Or(Literal("ab"), Literal("a")). On input "a":
+        //   * Or first tries Literal("ab"). It reads 'a' (advance to 1),
+        //     then tries to read at 1 and hits EOF. Records failure at 1
+        //     with a null message.
+        //   * Or rolls that child back and tries Literal("a"). Matches 'a'
+        //     and Or returns success.
+        //
+        // Inner overall succeeded, so Not fails. The deepest recorded
+        // failure (1, null) is from Or's non-taken alternative -- orphan
+        // information about a path the parser deliberately abandoned.
+        // Not's failure is anchored at offset 0 (where Not was called),
+        // so Not rolls the deepest-failure marker back to its snapshot
+        // before recording its own failure with the user's WithError.
+        //
+        // Without the fix the orphan record at offset 1 survived Not's
+        // rollback, Not's RecordFailure at offset 0 was shallower than
+        // that orphan, the user's WithError was suppressed, and the
+        // reported position pointed at end-of-input ('a' was consumed
+        // exploring inner) instead of at the anchor where Not's friendly
+        // message belongs.
+        var inner = Or(Literal("ab"), Literal("a"));
+        var rule = Not(inner).WithError("did not want 'a' or 'ab' here");
+        var result = rule.Parse("a");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorMessage, Is.EqualTo("did not want 'a' or 'ab' here"));
+    }
+
+    [Test]
     public void Not_does_not_advance_the_cursor_even_when_inner_consumes_before_failing()
     {
         // And(Token('a'), Token('b')) would consume two chars before failing

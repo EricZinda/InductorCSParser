@@ -671,7 +671,7 @@ internal static class BenchmarkRegistry
         // describe the same thing in this haystack: any non-newline
         // runes up to the first `=`.
         var match = And(
-            Optional(P(ScanUntil(TokenSet.Runes("\r=\n")))),
+            Optional(P(ScanUntil(TokenSet.Runes("\r=\n"), eofIsTerminator: true))),
             P(Token('=')),
             ZeroOrMore(P(OneOf(NotNewline)))
         );
@@ -721,7 +721,7 @@ internal static class BenchmarkRegistry
             ZeroOrMore(P(Token(')'))),
             Optional(P(Token(';'))),
             ZeroOrMore(noiseToken),
-            Optional(P(ScanUntil(TokenSet.Runes("\r=\n")))),
+            Optional(P(ScanUntil(TokenSet.Runes("\r=\n"), eofIsTerminator: true))),
             P(Token('=')),
             ZeroOrMore(P(OneOf(NotNewline)))
         );
@@ -972,13 +972,13 @@ internal static class BenchmarkRegistry
         // the secret's opening quote. Without this, ZeroOrMore would
         // run to end-of-line and the secret rule would have nothing
         // left to match.
-        Optional(P(ScanUntil(Quote | (TokenSet.Single('\r') | TokenSet.Single('\n'))))),
+        Optional(P(ScanUntil(Quote | TokenSet.Single('\r') | TokenSet.Single('\n'), eofIsTerminator: true))),
         QuotedSecret()
     );
 
     private static Rule QuotedSecretThenAws() => And(
         QuotedSecret(),
-        Optional(P(ScanUntil(Quote | (TokenSet.Single('\r') | TokenSet.Single('\n'))))),
+        Optional(P(ScanUntil(Quote | TokenSet.Single('\r') | TokenSet.Single('\n'), eofIsTerminator: true))),
         QuotedAwsKey()
     );
 

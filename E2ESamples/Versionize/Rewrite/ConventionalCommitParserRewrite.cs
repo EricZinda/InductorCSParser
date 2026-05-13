@@ -27,25 +27,20 @@ public static class ConventionalCommitParserRewrite
     private static readonly TokenSet WordChars =
         TokenSet.Ascii.Letters | TokenSet.Ascii.Digits | TokenSet.Single('_');
 
-    // Each named rule is FlattenType.Preserve so Tree.Find can locate it
-    // by reference after the parse. Without Preserve a Flatten / Delete
-    // rule's Symbol disappears during tree assembly and Find returns null
-    // even though the rule matched.
-    public static readonly Rule Type = ZeroOrMore(OneOf(WordChars))
-        .As("type")
-        .Flatten(FlattenType.Preserve);
+    // Each named rule has FlattenType.Preserve so Tree.Find can locate
+    // it by reference after the parse. .As(name) auto-flips the default
+    // policy to Preserve, so no explicit .Flatten is needed here even
+    // though Token / ZeroOrMore default to Delete / Flatten.
+    public static readonly Rule Type = ZeroOrMore(OneOf(WordChars)).As("type");
 
-    public static readonly Rule Scope = ScanUntil(TokenSet.Single(')'))
-        .As("scope");
+    public static readonly Rule Scope = ScanUntil(TokenSet.Single(')')).As("scope");
 
-    public static readonly Rule BreakingMarker = Token('!')
-        .As("breaking")
-        .Flatten(FlattenType.Preserve);
+    public static readonly Rule BreakingMarker = Token('!').As("breaking");
 
     // Header is a single line by the time we parse it (we split on newlines
-    // first, matching the upstream parser's behavior). ScanUntil with an
-    // empty stop set runs to EOF, capturing the whole rest of the input.
-    public static readonly Rule Subject = ScanUntil(TokenSet.Empty)
+    // first, matching the upstream parser's behavior). ScanUntilEof captures
+    // the whole rest of the input as one leaf.
+    public static readonly Rule Subject = ScanUntilEof()
         .As("subject");
 
     // Preserve so result.Tree returns the single root wrapper Symbol that
@@ -68,9 +63,7 @@ public static class ConventionalCommitParserRewrite
     public static readonly Rule IssueId = ScanWhile(TokenSet.Ascii.Digits)
         .As("issueId");
 
-    public static readonly Rule IssueRef = And(Token('#'), IssueId)
-        .As("issueRef")
-        .Flatten(FlattenType.Preserve);
+    public static readonly Rule IssueRef = And(Token('#'), IssueId).As("issueRef");
 
     public static readonly Rule IssueScanner = And(
         ZeroOrMore(Or(IssueRef, AnyToken().Flatten(FlattenType.Delete))),

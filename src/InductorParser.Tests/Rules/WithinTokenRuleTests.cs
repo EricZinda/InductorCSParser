@@ -217,7 +217,11 @@ public class WithinTokenRuleTests
         // rule fails to make progress. The Task.Wait is the external
         // catch: a regression that breaks the sub-lexer's end-of-input
         // bound shows up as a wait timeout, not a hung test runner.
-        var rule = WithinToken(ScanUntil(TokenSet.Runes("?")));
+        // Inside WithinToken, the sub-lexer's end-of-bound is conceptually
+        // the inner rule's EOF, and the inner ScanUntil should succeed
+        // there (otherwise the sub-token's run-to-end has no way to
+        // complete). eofIsTerminator: true gives it that semantics.
+        var rule = WithinToken(ScanUntil(TokenSet.Runes("?"), eofIsTerminator: true));
         var options = new ParseOptions { AllowTrailingInput = true };
 
         var task = System.Threading.Tasks.Task.Run(() => rule.Parse("aX", options));
@@ -235,7 +239,11 @@ public class WithinTokenRuleTests
         // Compile(null) so the decomposed e + combining acute survives
         // to the lexer as one two-rune cluster instead of being
         // precomposed away by NFC.
-        var rule = WithinToken(ScanUntil(TokenSet.Runes("?")));
+        // Inside WithinToken, the sub-lexer's end-of-bound is conceptually
+        // the inner rule's EOF, and the inner ScanUntil should succeed
+        // there (otherwise the sub-token's run-to-end has no way to
+        // complete). eofIsTerminator: true gives it that semantics.
+        var rule = WithinToken(ScanUntil(TokenSet.Runes("?"), eofIsTerminator: true));
         rule.Compile(null);
         var options = new ParseOptions { AllowTrailingInput = true };
 

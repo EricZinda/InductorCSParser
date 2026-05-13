@@ -13,6 +13,7 @@ Primers:
 - [Primer 3: Unicode in the Inductor Parser](Primer3.md): how the parser handles Unicode normalization, error positions, ill-formed input, and unexpected characters.
 - [Primer 4: Security-Related Concerns](Primer4.md): parser defenses against pathological input (ReDoS, recursion limits) and Unicode-based attacks (Trojan Source, lookalikes, homoglyphs, invisible characters).
 - [Tutorial: Peek](tutorial-peek.md): a password-validation regex translated into the parser, using `Peek` for non-consuming lookahead.
+- [Recipes](Recipes.md): small patterns that come up often when writing grammars. Each recipe shows the natural-but-wrong translation and walks through what actually works.
 
 Related docs:
 
@@ -75,7 +76,7 @@ Two things happen automatically in this example but are worth knowing about for 
 
 Most rules don't need a name. `Find(someRule)` matches on the rule object itself, so as long as you have a reference to the rule you want to locate, you can find its nodes in the tree.
 
-One caveat: `Find(rule)` only hits rules with `FlattenType.Preserve`. Rules with the default `FlattenType.Flatten` (every `And`, `Or`, `OneOrMore`, `ZeroOrMore`, `Optional`, `BetweenInclusive`) have their children lifted up into the parent and their own wrapper removed from `ParseResult.Tree`, so Find can't locate them. If you want to `Find(someRule)` and have it hit, set `FlattenType.Preserve` on the rule to keep its wrapper (or use the `.Preserve()` shortcut). For debugging, `ParseOptions.PreserveAllSymbols` turns the lift-up off globally so the tree matches the grammar one-to-one.
+One caveat: `Find(rule)` only hits rules with `FlattenType.Preserve`. Rules with the default `FlattenType.Flatten` (every `And`, `Or`, `OneOrMore`, `ZeroOrMore`, `Optional`, `BetweenInclusive`) or `FlattenType.Delete` (every `Token`, `Literal`, `Eof`, `Not`, `Peek`) have their wrapper removed from `ParseResult.Tree`, so Find can't locate them. The fix is one of two things: name the rule with `.As(...)` (which automatically flips an unset policy to `Preserve` for exactly this reason), or set `FlattenType.Preserve` directly on an unnamed rule with the `.Preserve()` shortcut. For debugging, `ParseOptions.PreserveAllSymbols` turns the lift-up off globally so the tree matches the grammar one-to-one.
 
 Sometimes names do matter though: trace output, error messages, serialization. Trace output prints rule names to show which rule was tried at each position. Error messages quote the "deepest rule" that failed. Without an explicit name, these fall back to a class-derived label like `And`, `OneOrMore`, or `BetweenInclusive[1..3]`, which tells you the rule's shape but not what it represents in your grammar.
 
@@ -110,8 +111,9 @@ And(
 
 This is just the first form with a literal string instead of a `nameof`. The tradeoff is that a string literal doesn't update when you rename anything nearby, but there's usually nothing *to* rename for an inline rule.
 
-**`.As(new SymbolId(SymbolRanges.CustomRangeStart + 42))` for pinned numeric ids.** If a grammar needs stable numeric ids across versions for serialization or cross-version debugging, pass a `SymbolId` directly instead of a string. The number stays fixed no matter how you refactor the code. The name lives on the rule, not on the id, so chain a separate `.As("Thing")` call to attach a debug name (the two `.As` overloads compose).
+**`.As(new SymbolId(SymbolRanges.CustomRangeStart + 42))` for pinned numeric ids.** If a grammar needs stable numeric ids across versions for serialization or cross-version debugging, pass a `SymbolId` directly instead of a string. The number stays fixed no matter how you refactor the code. The name lives on the rule, not on the id, so chain a separate `.As("Thing")` call to attach a debug name (the two `.As` overloads write different fields, so they compose).
 
+Naming a rule with `.As(...)` also flips its `FlattenType` to `Preserve` if the policy is still the rule's class default. Identification implies findability: a named rule is one the caller wants to locate later with `Tree.Find` or `result.FindFirst`, and that only works when the rule's wrapper Symbol reaches the parse tree. So `Token('!').As("breaking")` quietly upgrades from the default `FlattenType.Delete` to `Preserve`, and `ZeroOrMore(letter).As("word")` upgrades from the default `FlattenType.Flatten` to `Preserve`, without the caller having to chain an explicit `.Preserve()`. If `.Flatten(...)` (or `.Delete()` / `.Flatten()`) was already called with a non-Preserve value, `.As` throws instead of overriding the caller's explicit choice. The reverse direction throws too: setting a non-Preserve policy on a rule that's already been named would silently break `Tree.Find` for that rule, so it fails loudly at grammar-build time. `.Preserve()` (or `.Flatten(FlattenType.Preserve)`) is always safe to chain with `.As` in either order.
 
 ### What `Compile` Actually Does
 
@@ -247,15 +249,16 @@ Chaining is how you get the equivalent of the C++ trailing template args:
 ```csharp
 var settingName = Identifier()
     .As(nameof(settingName))
-    .Flatten(FlattenType.Preserve)
     .WithError("Expected a setting name");
 ```
 
+`.As` flips the rule's `FlattenType` to `Preserve` automatically when the rule's policy is still its class default, so chaining `.Flatten(FlattenType.Preserve)` after `.As` is redundant. The reverse pair throws: setting a non-Preserve policy on a rule that's already been named (or naming a rule whose policy was already set to non-Preserve) raises `InvalidOperationException`, since `Tree.Find` would silently return null otherwise.
+
 `.Compile()` walks the rule graph, stamps ids, resolves `LateBoundRule`s, freezes the graph, and returns the same rule for chaining. `.Parse(...)` auto-compiles on first call, so you don't need to call `.Compile()` yourself unless you want grammar-construction errors to surface at startup rather than at first parse. `.Compile()` doesn't assign names: a rule's user-supplied name comes from an explicit `.As(...)` call, and unnamed rules already carry a class-derived trace label like `And` or `OneOrMore` from their constructor that trace output and error messages fall back to.
 
-Rules are mutable up until `Compile` runs and then sealed. `.As(...)`, `.Flatten(...)`, `.WithError(...)` mutate the rule in place and return the same rule for chaining, so `var rule = Identifier(); rule.Flatten(FlattenType.Preserve);` and `var rule = Identifier().Flatten(FlattenType.Preserve);` produce the same end state on the same object. The practical consequence: if you keep a reference to a rule and reuse it in multiple places, calling `.Flatten(...)` on one of those references changes the policy at every other use site too. To get two flatten policies for the same shape, build two separate rule instances. After `Compile` returns the rule graph is sealed: calling `.As(...)`, `.Flatten(...)`, or any other mutation method on a sealed rule throws `InvalidOperationException`.
+Rules are mutable up until `Compile` runs and then sealed. `.As(...)`, `.Flatten(...)`, `.WithError(...)` mutate the rule in place and return the same rule for chaining, so `var rule = Identifier(); rule.Flatten(FlattenType.Preserve);` and `var rule = Identifier().Flatten(FlattenType.Preserve);` produce the same end state on the same object. The practical consequence: if you keep a reference to a rule and reuse it in multiple places, calling `.Flatten(...)` on one of those references changes the policy at every other use site too. To get two flatten policies for the same shape, build two separate rule instances. `.As(string)`, `.As(SymbolId)`, and `.WithError(...)` are each set-once against themselves: calling the same overload a second time on the same rule instance throws, since a silent overwrite on a shared rule is almost always a bug (the same numeric core chained under `.As("major")` / `.As("minor")` / `.As("patch")` actually mutates one rule three times, last call wins). The two `.As` overloads write different fields and still compose on a single instance, so `.As(pinned).As("name")` is fine. Use a factory function that returns a fresh rule each call when you want the same shape under different names, ids, or error messages. After `Compile` returns the rule graph is sealed: calling `.As(...)`, `.Flatten(...)`, or any other mutation method on a sealed rule throws `InvalidOperationException`.
 
-Default values for `Flatten`, error messages, and so on mostly match the C++ defaults from the original source. `InlineWhitespace()` and `AnyWhitespace()` default to `FlattenType.Delete`. `Token('=')` defaults to `FlattenType.Delete`. `And(...)` defaults to `FlattenType.Flatten`. `Integer()` and `Float()` are compositions whose outer rule also defaults to `FlattenType.Flatten`; call `.Preserve()` when you want to find them as wrapper nodes. `Parse` applies these types to the tree before returning: `Delete` nodes are dropped, `Flatten` wrappers have their children lifted into the parent, and `Preserve` wrappers survive. `ParseOptions.PreserveAllSymbols` turns the whole pass off and gives you back a grammar-shaped debug tree with every wrapper in place.
+Default values for `Flatten`, error messages, and so on mostly match the C++ defaults from the original source. `InlineWhitespace()` and `AnyWhitespace()` default to `FlattenType.Delete`. `Token('=')` defaults to `FlattenType.Delete`. `And(...)` defaults to `FlattenType.Flatten`. `Integer()` and `Float()` are compositions whose outer rule also defaults to `FlattenType.Flatten`; either chain `.As(name)` (which upgrades the default to `Preserve`) or call `.Preserve()` directly when you want to find them as wrapper nodes. `Parse` applies these types to the tree before returning: `Delete` nodes are dropped, `Flatten` wrappers have their children lifted into the parent, and `Preserve` wrappers survive. `ParseOptions.PreserveAllSymbols` turns the whole pass off and gives you back a grammar-shaped debug tree with every wrapper in place.
 
 ### User-Defined Rules
 
@@ -366,6 +369,8 @@ symbol.FindAll(settingName).Select(s => s.ToString())
 symbol.FlattenInto().OfType<Symbol>()
 ```
 
+Picking between these comes up most often for "a list of named items" grammars (domain labels, JSON members, function parameters, file-path components, ...). A rule shaped like `And(Label, ZeroOrMore(And(Separator, Label)), Eof())` lifts every `Label` up to the wrapping `And` because the inner `And` defaults to `Flatten` and `Separator` / `Eof` default to `Delete`, so `tree.Children` is already the list of Labels. That works as long as you know the FlattenType layout, but it ties the consumer to it: a later grammar change that preserves a new sibling under the wrapper will silently mix the sibling into the list. `symbol.Children.Where(c => c.Is(label))` is the defensive form and reads no worse. When the items can sit anywhere in the subtree instead of only as direct children, use `symbol.FindAll(label)` and the walk recurses for you.
+
 `Symbol` itself deliberately does *not* implement `IEnumerable<Symbol>`. It would be a two-line change to forward to `Children.GetEnumerator()`, and the tradeoff isn't worth it. Iterating a tree node silently means picking one of children, descendants-pre-order, descendants-post-order, siblings, and tokens, and the four other choices then become second-class. `System.Xml.Linq` and Roslyn both refuse to implement `IEnumerable` on their node types for exactly this reason. The parser port takes the same stance.
 
 ## A Walkthrough With a Compiler Function
@@ -381,7 +386,7 @@ var settingValue = Or(
     Float().Flatten(FlattenType.Flatten),
     Integer().Flatten(FlattenType.Flatten),
     Identifier()
-).As("settingValue").Preserve();
+).As("settingValue");
 
 var document = And(
     Optional(AnyWhitespace()),
@@ -394,7 +399,7 @@ var document = And(
     Token(';'),
     Optional(AnyWhitespace()),
     Eof()
-).As("document").Preserve().Compile();
+).As("document").Compile();
 
 static (Setting? result, string? error) CompileSetting(Rule root, Rule name, Rule value, string input)
 {
@@ -454,7 +459,7 @@ var values = And(
             valueAtom
         )
     )
-).As("values").Preserve();
+).As("values");
 
 var pair = And(
     key,
@@ -464,7 +469,7 @@ var pair = And(
     values,
     Optional(AnyWhitespace()),
     Token(';')
-).As("pair").Preserve();
+).As("pair");
 
 var document = And(
     Optional(AnyWhitespace()),
@@ -472,10 +477,10 @@ var document = And(
         And(pair, Optional(AnyWhitespace()))
     ),
     Eof()
-).As("document").Preserve().Compile();
+).As("document").Compile();
 ```
 
-The names here are string literals because these are local variables. For grammars organized as a class with rule fields, swap each `.As("key")` for `.As(nameof(Key))` so an IDE rename keeps the names in sync. The `.Preserve()` on the root keeps the whole document under one wrapper so `result.Tree.FindAll(pair)` works against it.
+The names here are string literals because these are local variables. For grammars organized as a class with rule fields, swap each `.As("key")` for `.As(nameof(Key))` so an IDE rename keeps the names in sync. `.As(...)` on each rule keeps the whole document under one wrapper so `result.Tree.FindAll(pair)` works against it (the names auto-flip the default `FlattenType.Flatten` on the `And` rules to `Preserve`).
 
 Parses input like:
 

@@ -39,6 +39,32 @@ public class PeekRuleTests
     }
 
     [Test]
+    public void Peek_WithError_surfaces_at_lookahead_anchor_when_inner_records_a_deeper_failure()
+    {
+        // Inner is Literal("ab") which on input "ax" reads 'a' (position
+        // advances to 1), then reads 'x' and mismatches against 'b'. Literal
+        // records its failure at position 1 with a null message. The Peek
+        // wrapper rolls the lexer position back to 0 and rolls the deepest-
+        // failure marker back the same way, then records its own failure
+        // at the lookahead anchor (position 0) with the user's WithError.
+        //
+        // Without the fix, Peek's deepest-marker rollback didn't happen.
+        // Literal's offset-1 record survived Peek's transaction rollback,
+        // Peek's RecordFailure at offset 0 was shallower and got ignored,
+        // and the user saw the generic positional template pointing at the
+        // 'x' past the lookahead's anchor.
+        var rule = Peek(Literal("ab")).WithError("expected 'ab' ahead");
+        var result = rule.Parse("ax");
+
+        Assert.That(result.Success, Is.False);
+        // Both ErrorCharIndex and ErrorMessage match the lookahead's view:
+        // anchored at 0, with the user-supplied friendly message. Anything
+        // else means the inner's exploration leaked past Peek's rollback.
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'ab' ahead"));
+    }
+
+    [Test]
     public void Peek_does_not_advance_the_cursor_even_when_inner_consumes_multiple_tokens()
     {
         // Inner rule would consume two chars on success. Peek has to roll

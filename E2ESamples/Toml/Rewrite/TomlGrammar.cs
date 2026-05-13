@@ -141,12 +141,14 @@ public static class TomlGrammar
         // %x20-7E, and non-ASCII (excluding the surrogate range).
         var nonAsciiBody =
             TokenSet.Range(0x80, 0xD7FF) | TokenSet.Range(0xE000, 0x10FFFF);
-        // Stop set for the comment body: only CR and LF. TokenSet.Runes
-        // walks by grapheme, and "\r\n" is one grapheme per UAX #29, so
-        // build the set from singles to keep CR and LF as separate stop
-        // chars.
+        // Stop set for the comment body: only CR and LF. TOML's ABNF
+        // doesn't accept NEL/LS/PS or bare VT/FF as line terminators,
+        // so this set is narrower than TokenSet.LineTerminators.
+        // eofIsTerminator: true lets a final comment without a
+        // trailing newline still terminate cleanly.
         var tomlLineTerminator = TokenSet.Single('\r') | TokenSet.Single('\n');
-        var comment = And(Token('#'), ScanUntil(tomlLineTerminator).As("commentBody"))
+        var comment = And(Token('#'),
+                ScanUntil(tomlLineTerminator, eofIsTerminator: true).As("commentBody"))
             .As("comment").Preserve();
 
         // ws-comment-newline: any mix of inline whitespace, comments, and
@@ -242,12 +244,13 @@ public static class TomlGrammar
             | TokenSet.Range(0x20, 0x26)
             | TokenSet.Range(0x28, 0x7E)
             | nonAsciiBody;
-        // ScanWhile rejects minimumCount: 0 at construction, so we wrap a
-        // min-1 ScanWhile in Optional. The literal-string-body Symbol is
-        // therefore absent (rather than empty-text) for the empty-string
-        // case '' — TomlAst handles that branch.
-        var literalStringBody = Optional(ScanWhile(literalChar)
-            .As("literalStringBody").Preserve());
+        // *literal-char: zero or more body chars. ScanWhile with
+        // minimumCount: 0 always emits one leaf, so the empty-string
+        // case '' gives a zero-width body leaf rather than a missing
+        // child, and the consumer can read Children[0].ToString()
+        // unconditionally.
+        var literalStringBody = ScanWhile(literalChar, minimumCount: 0)
+            .As("literalStringBody").Preserve();
         LiteralString = And(Token('\''), literalStringBody, Token('\'').WithError("Expected closing \"'\" to end literal string"))
             .As("literalString").Preserve();
         literalStringLateBound.Bind(LiteralString);
