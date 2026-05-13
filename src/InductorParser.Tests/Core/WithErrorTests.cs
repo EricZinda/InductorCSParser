@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 using InductorParser;
 using static InductorParser.Rules;
@@ -61,5 +62,23 @@ public class WithErrorTests
         // digits OneOf records at pre-read offset 3 (start of 'x').
         // OneOrMore claims the message slot there with "need digits".
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void WithError_is_set_once()
+    {
+        // The fluent API encourages chaining, and a second .WithError on the
+        // same shared rule looks like it's tagging a different position. But
+        // .WithError mutates in place, so the second call silently overwrites
+        // the first message on every shared use site. The set-once gate
+        // catches that at the call rather than letting the wrong message
+        // surface in parse failures.
+        var rule = OneOrMore(OneOf(TokenSet.Letters)).WithError("need letters");
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => rule.WithError("need an identifier"));
+        Assert.That(exception!.Message, Does.Contain("need an identifier"));
+        Assert.That(exception.Message, Does.Contain("need letters"));
+        Assert.That(exception.Message, Does.Contain("set-once"));
     }
 }
