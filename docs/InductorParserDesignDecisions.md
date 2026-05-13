@@ -229,7 +229,7 @@ public readonly struct TokenSet
         public static readonly TokenSet Digits           = Range('0','9');
         public static readonly TokenSet HexDigits        = Digits | Range('a','f') | Range('A','F');
         public static readonly TokenSet InlineWhitespace = Runes(" \t");
-        public static readonly TokenSet AnyWhitespace    = Runes(" \t\r\n");
+        public static readonly TokenSet AnyWhitespace    = InlineWhitespace | Single('\r') | Single('\n') | Graphemes("\r\n");
         public static readonly TokenSet Identifier       = Letters | Digits | Runes("_");
     }
 
@@ -237,7 +237,8 @@ public readonly struct TokenSet
     public static TokenSet Single(Rune r);
     public static TokenSet Range(char low, char high);
     public static TokenSet Range(Rune low, Rune high);
-    public static TokenSet Runes(string characters);
+    public static TokenSet Runes(string text);                  // one element per Unicode scalar
+    public static TokenSet Graphemes(params string[] clusters);      // one element per grapheme cluster
     public static TokenSet Category(UnicodeCategory c);
 
     public static TokenSet operator |(TokenSet a, TokenSet b);   // union

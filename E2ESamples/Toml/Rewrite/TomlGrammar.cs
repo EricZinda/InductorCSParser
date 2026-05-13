@@ -21,7 +21,7 @@ namespace InductorParser.E2ESamples.Toml.Rewrite;
 //   -----------------------------------------------------  --------------------------------------------------------------------------
 //   wschar = %x20 / %x09                                   whitespaceChar = TokenSet.Runes(" \t")
 //   ws = *wschar                                           whitespace = ZeroOrMore(OneOf(whitespaceChar)).Flatten(Delete)
-//   newline = %x0A / %x0D.0A                               EndOfLine()
+//   newline = %x0A / %x0D.0A                               Or(Literal("\r\n"), Token('\n'))
 //   comment = "#" *non-eol                                 And(Token('#'), ScanUntil(TokenSet.LineTerminators))
 //   unquoted-key = 1*(ALPHA / DIGIT / "-" / "_")           ScanWhile(Letters | Digits | Runes("-_"))
 //   keyval = key keyval-sep val                            And(Key, whitespace, Token('='), whitespace, valueLateBound)
@@ -36,7 +36,7 @@ namespace InductorParser.E2ESamples.Toml.Rewrite;
 //   array = "[" [array-values] ws-comment-newline "]"      And(Token('['), Optional(arrayValues), whitespaceCommentNewline, Token(']'))
 //   std-table = "[" ws key ws "]"                          And(Token('['), whitespace, Key, whitespace, Token(']').WithError(...))
 //   array-table = "[[" ws key ws "]]"                      And(Literal("[["), whitespace, Key, whitespace, Literal("]]").WithError(...))
-//   toml = expression *(newline expression)                And(expression, ZeroOrMore(And(EndOfLine(), expression)), Eof())
+//   toml = expression *(newline expression)                And(expression, ZeroOrMore(And(newline, expression)), Eof())
 //
 // Patterns the table demonstrates:
 //   * Sequence in ABNF (juxtaposition) becomes And(...).
@@ -124,25 +124,36 @@ public static class TomlGrammar
         // ABNF: wschar = SP / HT
         // ABNF: ws = *wschar
         // ABNF: newline = LF / CRLF
-        // The factory EndOfLine() already covers LF / CR / CRLF (and a
-        // few extras like NEL); TOML only allows LF and CRLF strictly,
-        // but accepting bare CR is harmless for round 1.
+        // The built-in EndOfLine() factory also accepts bare CR, NEL,
+        // LS, PS; TOML's ABNF allows only LF and CRLF, so define a
+        // strict newline locally and use it everywhere a line break is
+        // required.
         var whitespaceChar = TokenSet.Runes(" \t");
         var whitespace = ZeroOrMore(OneOf(whitespaceChar)).Flatten(FlattenType.Delete);
+        var newline = Or(Literal("\r\n"), Token('\n')).Flatten(FlattenType.Delete);
+        // Token('\n') and Literal("\r\n") are both Delete by factory, so
+        // wrapping the Or in Preserve doesn't bring the matched newline
+        // text along. Preserve each branch so the body's ToString text
+        // keeps the line break.
+        var newlinePreserved = Or(Literal("\r\n").Preserve(), Token('\n').Preserve());
 
         // Comment body excludes line terminators. The ABNF allows HT,
         // %x20-7E, and non-ASCII (excluding the surrogate range).
         var nonAsciiBody =
             TokenSet.Range(0x80, 0xD7FF) | TokenSet.Range(0xE000, 0x10FFFF);
-        var nonEndOfLine = TokenSet.Single('\t') | TokenSet.Range(0x20, 0x7F) | nonAsciiBody;
-        var comment = And(Token('#'), ScanUntil(TokenSet.LineTerminators).As("commentBody"))
+        // Stop set for the comment body: only CR and LF. TokenSet.Runes
+        // walks by grapheme, and "\r\n" is one grapheme per UAX #29, so
+        // build the set from singles to keep CR and LF as separate stop
+        // chars.
+        var tomlLineTerminator = TokenSet.Single('\r') | TokenSet.Single('\n');
+        var comment = And(Token('#'), ScanUntil(tomlLineTerminator).As("commentBody"))
             .As("comment").Preserve();
 
         // ws-comment-newline: any mix of inline whitespace, comments, and
         // newlines. Used inside arrays where line breaks are legal mid-value.
         var whitespaceCommentNewline = ZeroOrMore(Or(
             OneOf(whitespaceChar),
-            And(Optional(comment), EndOfLine())
+            And(Optional(comment), newline)
         )).Flatten(FlattenType.Delete);
 
         // ---------------------------------------------------------
@@ -190,8 +201,13 @@ public static class TomlGrammar
         // escape-seq-char = " | \ | b | f | n | r | t | uXXXX | UXXXXXXXX
         var hexadecimalDigit = OneOf(TokenSet.Ascii.HexDigits);
         var simpleEscapeChar = OneOf(TokenSet.Runes("\"\\bfnrt"));
-        var unicodeShortEscape = And(Token('u'), hexadecimalDigit, hexadecimalDigit, hexadecimalDigit, hexadecimalDigit);
-        var unicodeLongEscape = And(Token('U'),
+        // Preserve the 'u' / 'U' marker so the body text contains the
+        // full "\uXXXX" / "\UXXXXXXXX" sequence. DecodeEscapeSequences
+        // dispatches on the character after the backslash; Token(c) is
+        // Delete by factory, so without .Preserve() the marker is gone
+        // and the decoder reads the first hex digit as the escape kind.
+        var unicodeShortEscape = And(Token('u').Preserve(), hexadecimalDigit, hexadecimalDigit, hexadecimalDigit, hexadecimalDigit);
+        var unicodeLongEscape = And(Token('U').Preserve(),
             hexadecimalDigit, hexadecimalDigit, hexadecimalDigit, hexadecimalDigit,
             hexadecimalDigit, hexadecimalDigit, hexadecimalDigit, hexadecimalDigit);
         // Preserve the leading backslash so the basicStringBody's text
@@ -249,22 +265,22 @@ public static class TomlGrammar
         var multiLineBasicEscapedNewline = And(
             Token('\\'),
             whitespace,
-            EndOfLine(),
-            ZeroOrMore(Or(OneOf(whitespaceChar), EndOfLine()))
+            newline,
+            ZeroOrMore(Or(OneOf(whitespaceChar), newline))
         );
 
         // For multiline body chars we need to allow newlines, but not have
         // ScanWhile cross a """ boundary. The simplest correct shape:
-        // ZeroOrMore(Not("""), mlb-content). EndOfLine is Delete by
-        // factory; we override to Preserve so newlines survive into the
-        // body's ToString text where the consumer needs them.
+        // ZeroOrMore(Not("""), mlb-content). newlinePreserved keeps the
+        // line break in the body's ToString text where the consumer
+        // needs it.
         var threeQuotes = Literal("\"\"\"");
         var multiLineBasicBodyChar = And(
             Not(threeQuotes),
             Or(
                 multiLineBasicEscapedNewline,
                 basicEscape,
-                EndOfLine().Flatten(FlattenType.Preserve),
+                newlinePreserved,
                 OneOf(basicUnescaped | TokenSet.Single('"'))
             )
         );
@@ -272,7 +288,7 @@ public static class TomlGrammar
             .As("multiLineBasicStringBody").Preserve();
         MultiLineBasicString = And(
             threeQuotes,
-            Optional(EndOfLine()),
+            Optional(newline),
             multiLineBasicStringBody,
             threeQuotes.WithError("Expected closing '\"\"\"' to end multi-line basic string")
         ).As("multiLineBasicString").Preserve();
@@ -282,7 +298,7 @@ public static class TomlGrammar
         var multiLineLiteralBodyChar = And(
             Not(threeApostrophes),
             Or(
-                EndOfLine().Flatten(FlattenType.Preserve),
+                newlinePreserved,
                 OneOf(literalChar | TokenSet.Single('\''))
             )
         );
@@ -290,7 +306,7 @@ public static class TomlGrammar
             .As("multiLineLiteralStringBody").Preserve();
         MultiLineLiteralString = And(
             threeApostrophes,
-            Optional(EndOfLine()),
+            Optional(newline),
             multiLineLiteralStringBody,
             threeApostrophes.WithError("Expected closing \"'''\" to end multi-line literal string")
         ).As("multiLineLiteralString").Preserve();
@@ -532,8 +548,8 @@ public static class TomlGrammar
         // toml = expression *( newline expression )
         TomlDocument = And(
             expression,
-            ZeroOrMore(And(EndOfLine(), expression)),
-            Optional(EndOfLine(eofIsEol: true)),
+            ZeroOrMore(And(newline, expression)),
+            Optional(newline),
             Eof()
         );
         TomlDocument.Compile();

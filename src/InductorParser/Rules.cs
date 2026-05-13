@@ -191,14 +191,19 @@ public static class Rules
     public static Rule OneOf(TokenSet set) => new OneOfRule(set);
 
     /// <summary>
-    /// Shortcut for the common "one of these literal runes" case.
-    /// Default <see cref="FlattenType"/>:
-    /// <see cref="FlattenType.Preserve"/>.
+    /// Shortcut for the common "one of these literal runes" case. The
+    /// input is walked rune by rune; each scalar becomes a set member.
+    /// Throws at construction if any two consecutive runes in the input
+    /// form one grapheme cluster (CRLF, NFD accent, ZWJ emoji, etc.) —
+    /// for cluster-shaped sets, build the <see cref="TokenSet"/> with
+    /// <see cref="TokenSet.Graphemes(string[])"/> and pass it to the
+    /// <see cref="OneOf(TokenSet)"/> overload. Default
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>.
     /// </summary>
     /// <remarks>
-    /// Equivalent to <c>OneOf(TokenSet.Runes(runes))</c>. When you
-    /// need ranges, category unions, or complements, use 
-    /// <see cref="TokenSet"/> directly and pass it to the
+    /// Equivalent to <c>OneOf(TokenSet.Runes(runes))</c>.
+    /// When you need ranges, category unions, complements, or grapheme
+    /// clusters, use <see cref="TokenSet"/> directly and pass it to the
     /// <see cref="OneOf(TokenSet)"/> overload.
     /// </remarks>
     public static Rule OneOf(string runes) => new OneOfRule(TokenSet.Runes(runes));

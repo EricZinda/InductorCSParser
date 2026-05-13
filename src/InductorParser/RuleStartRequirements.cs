@@ -182,7 +182,7 @@ internal readonly record struct RuleStartRequirements(
         {
             string first = StringInfo.GetNextTextElement(expected, 0);
             if (first.Length == 0) return AlwaysAdvancesByOneToken;
-            return FirstTokenMustBeInSet(TokenSet.Runes(first));
+            return FirstTokenMustBeInSet(TokenSet.Graphemes(first));
         }
         catch (ArgumentException)
         {

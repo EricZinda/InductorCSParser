@@ -533,7 +533,7 @@ public class NormalizationTests
         // equivalents to the set) adds the decomposed form as a multi-
         // rune entry, so the rule matches both forms regardless of
         // which canonical form the lexer produces.
-        var rule = OneOf(LatinEAcutePrecomposedGrapheme);
+        var rule = OneOf(TokenSet.Graphemes(LatinEAcutePrecomposedGrapheme));
         rule.Compile(System.Text.NormalizationForm.FormD);
 
         var precomposed = rule.Parse(LatinEAcutePrecomposedGrapheme);
@@ -549,7 +549,7 @@ public class NormalizationTests
         // Symmetric direction: user types decomposed in source, FormC
         // (the default) recomposes the input. Set normalization adds
         // the composed single-rune form to the set so both inputs match.
-        var rule = OneOf(LatinEAcuteGrapheme);
+        var rule = OneOf(TokenSet.Graphemes(LatinEAcuteGrapheme));
         rule.Compile();  // default FormC
 
         var precomposed = rule.Parse(LatinEAcutePrecomposedGrapheme);
@@ -568,7 +568,7 @@ public class NormalizationTests
         // false, NoneOf inverts that into a false-positive match. Set
         // normalization adds the decomposed cluster to the set so NoneOf
         // correctly rejects both forms.
-        var rule = And(NoneOf(LatinEAcutePrecomposedGrapheme), Eof());
+        var rule = And(NoneOf(TokenSet.Graphemes(LatinEAcutePrecomposedGrapheme)), Eof());
         rule.Compile(System.Text.NormalizationForm.FormD);
 
         Assert.That(rule.Parse(LatinEAcutePrecomposedGrapheme).Success, Is.False);
@@ -786,7 +786,7 @@ public class NormalizationTests
         // the 2-rune entry with the 3-rune form.
         string partiallyComposed = "é̄";              // é + macron
         string fullyDecomposed = "é̄";               // e + acute + macron
-        var rule = OneOf(TokenSet.Runes(partiallyComposed));
+        var rule = OneOf(TokenSet.Graphemes(partiallyComposed));
         rule.Compile(NormalizationForm.FormD);
         Assert.That(rule.Parse(fullyDecomposed).Success, Is.True,
             "input gets decomposed to the 3-rune form; set was projected to match");

@@ -88,7 +88,7 @@ public class TokenSetTests
     public void Runes_with_valid_surrogate_pair_works()
     {
         // Guitar as a surrogate pair. Treated as one codepoint.
-        var set = TokenSet.Runes(GuitarGrapheme);
+        var set = TokenSet.Graphemes(GuitarGrapheme);
 
         Assert.That(set.Contains(GuitarRune), Is.True);
     }
@@ -599,7 +599,7 @@ public class TokenSetTests
         // matches the whole grapheme as a unit, and Contains(int)
         // doesn't match either of the constituent runes by themselves.
         var thumbsUpSkinTone = "\U0001F44D\U0001F3FD";
-        var set = TokenSet.Runes(thumbsUpSkinTone);
+        var set = TokenSet.Graphemes(thumbsUpSkinTone);
 
         Assert.That(set.Contains(thumbsUpSkinTone), Is.True);
         Assert.That(set.Contains(0x1F44D), Is.False, "the base rune isn't a member on its own");
@@ -616,7 +616,7 @@ public class TokenSetTests
         // U+00E9.
         var decomposedE = "é";
 
-        var set = TokenSet.Runes(decomposedE);
+        var set = TokenSet.Graphemes(decomposedE);
 
         Assert.That(set.Contains(decomposedE), Is.True);
         Assert.That(set.Contains('e'), Is.False);
@@ -630,21 +630,19 @@ public class TokenSetTests
         // plane. One rune, one grapheme. The validation should let
         // this through and build a one-element set.
         var grinningFace = "\U0001F600";
-        var set = TokenSet.Runes(grinningFace);
+        var set = TokenSet.Graphemes(grinningFace);
 
         Assert.That(set.Contains(0x1F600), Is.True);
         Assert.That(set.Contains('A'), Is.False);
     }
 
     [Test]
-    public void Runes_with_crlf_stores_it_as_one_multi_rune_entry()
+    public void Graphemes_with_crlf_stores_it_as_one_multi_rune_entry()
     {
-        // CRLF is one grapheme per UAX #29. After dropping the CRLF
-        // special case in Runes(), it now lands in the multi-rune
-        // array like any other multi-rune grapheme. Callers that
-        // wanted "{CR, LF} as separate runes" build the set with
-        // Single('\r') | Single('\n') instead.
-        var set = TokenSet.Runes("\r\n");
+        // CRLF is one grapheme per UAX #29. Graphemes("\r\n") stores
+        // it as a single cluster, so Contains("\r\n") hits but
+        // Contains('\r') and Contains('\n') don't.
+        var set = TokenSet.Graphemes("\r\n");
 
         Assert.That(set.Contains("\r\n"), Is.True);
         Assert.That(set.Contains('\r'), Is.False);
@@ -652,14 +650,47 @@ public class TokenSetTests
     }
 
     [Test]
+    public void Runes_with_crlf_throws_to_force_explicit_intent()
+    {
+        // "\r\n" is one grapheme cluster, so Runes(string) rejects it.
+        // Callers who wanted {CR, LF} as two scalars build the set
+        // explicitly with Single. Callers who wanted the CRLF cluster
+        // use Graphemes.
+        var ex = Assert.Throws<ArgumentException>(() => TokenSet.Runes("\r\n"));
+        Assert.That(ex!.Message, Does.Contain("multi-rune grapheme cluster"));
+    }
+
+    [Test]
+    public void Runes_with_non_adjacent_cr_and_lf_works()
+    {
+        // Same scalars as the CRLF case, but separated by anything in
+        // between, so neither CR nor LF is part of a multi-rune
+        // cluster. Set semantics are order-independent.
+        var set = TokenSet.Runes("\r\t\n");
+
+        Assert.That(set.Contains('\r'), Is.True);
+        Assert.That(set.Contains('\n'), Is.True);
+        Assert.That(set.Contains('\t'), Is.True);
+        Assert.That(set.Contains("\r\n"), Is.False);
+    }
+
+    [Test]
+    public void Graphemes_rejects_multi_cluster_element()
+    {
+        // Each Graphemes element must be exactly one cluster. Passing
+        // "ab" (two clusters) throws because the caller almost
+        // certainly meant Runes("ab") instead.
+        Assert.Throws<ArgumentException>(() => TokenSet.Graphemes("ab"));
+    }
+
+    [Test]
     public void OneOf_with_multi_rune_grapheme_builds_a_multi_rune_rule()
     {
-        // OneOf(string) delegates to TokenSet.Runes, which accepts
-        // multi-rune graphemes and stores them in the multi-rune
-        // array. The resulting rule matches that grapheme as a unit
-        // when the lexer reads it as a single token.
+        // Cluster-shaped OneOf goes through TokenSet.Graphemes
+        // explicitly. The resulting rule matches the cluster as a
+        // single token when the lexer reads it as one grapheme.
         var thumbsUpSkinTone = "\U0001F44D\U0001F3FD";
-        var rule = Rules.OneOf(thumbsUpSkinTone);
+        var rule = Rules.OneOf(TokenSet.Graphemes(thumbsUpSkinTone));
 
         var result = rule.Parse(thumbsUpSkinTone);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -1070,7 +1101,7 @@ public class TokenSetTests
         // (another interval add). Verify all four show up by their
         // appropriate Contains overloads, and the ones that aren't
         // members don't accidentally match.
-        var set = TokenSet.Runes("a" + USFlagGrapheme + SkinTonedWaveGrapheme + "z");
+        var set = TokenSet.Runes("az") | TokenSet.Graphemes(USFlagGrapheme, SkinTonedWaveGrapheme);
 
         Assert.That(set.Contains('a'), Is.True);
         Assert.That(set.Contains('z'), Is.True);
@@ -1086,7 +1117,7 @@ public class TokenSetTests
     [Test]
     public void Contains_string_on_empty_input_returns_false()
     {
-        var set = TokenSet.Runes("a") | TokenSet.Runes(USFlagGrapheme);
+        var set = TokenSet.Runes("a") | TokenSet.Graphemes(USFlagGrapheme);
 
         Assert.That(set.Contains(""), Is.False);
     }
@@ -1097,7 +1128,7 @@ public class TokenSetTests
         // A single-rune string is just shorthand for the rune-Contains
         // path. Build the set as multi-rune-only and verify a
         // single-rune Contains(string) doesn't hit it.
-        var set = TokenSet.Runes(USFlagGrapheme);
+        var set = TokenSet.Graphemes(USFlagGrapheme);
 
         Assert.That(set.Contains("a"), Is.False);
         Assert.That(set.Contains(USFlagGrapheme), Is.True);
@@ -1109,7 +1140,7 @@ public class TokenSetTests
         // Letters is a large rune-only set. USFlag is a multi-rune entry
         // built via Runes. Their union should contain every letter and
         // also match the flag grapheme.
-        var mixed = TokenSet.Letters | TokenSet.Runes(USFlagGrapheme);
+        var mixed = TokenSet.Letters | TokenSet.Graphemes(USFlagGrapheme);
 
         Assert.That(mixed.Contains('a'), Is.True);
         Assert.That(mixed.Contains('Z'), Is.True);
@@ -1123,8 +1154,8 @@ public class TokenSetTests
         // Build two mixed sets with overlapping rune intervals and
         // disjoint multi-rune entries. The union should contain every
         // rune from both sides and both multi-rune entries.
-        var left = TokenSet.Runes("ab" + USFlagGrapheme);
-        var right = TokenSet.Runes("bc" + SkinTonedWaveGrapheme);
+        var left = TokenSet.Runes("ab") | TokenSet.Graphemes(USFlagGrapheme);
+        var right = TokenSet.Runes("bc") | TokenSet.Graphemes(SkinTonedWaveGrapheme);
         var combined = left | right;
 
         Assert.That(combined.Contains('a'), Is.True);
@@ -1134,16 +1165,17 @@ public class TokenSetTests
         Assert.That(combined.Contains(SkinTonedWaveGrapheme), Is.True);
         // Same multi-rune entry on both sides shouldn't double-count or
         // produce a non-canonical array.
-        var withDup = TokenSet.Runes("a" + USFlagGrapheme) | TokenSet.Runes("b" + USFlagGrapheme);
-        AssertEqual(withDup, TokenSet.Runes("ab" + USFlagGrapheme));
+        var withDup = (TokenSet.Runes("a") | TokenSet.Graphemes(USFlagGrapheme))
+                    | (TokenSet.Runes("b") | TokenSet.Graphemes(USFlagGrapheme));
+        AssertEqual(withDup, TokenSet.Runes("ab") | TokenSet.Graphemes(USFlagGrapheme));
     }
 
     [Test]
     public void Intersection_of_two_mixed_sets_keeps_common_members()
     {
         // Both sides contain USFlag and 'a'. Only those should survive.
-        var left = TokenSet.Runes("ab" + USFlagGrapheme + SkinTonedWaveGrapheme);
-        var right = TokenSet.Runes("ac" + USFlagGrapheme);
+        var left = TokenSet.Runes("ab") | TokenSet.Graphemes(USFlagGrapheme, SkinTonedWaveGrapheme);
+        var right = TokenSet.Runes("ac") | TokenSet.Graphemes(USFlagGrapheme);
         var intersected = left & right;
 
         Assert.That(intersected.Contains('a'), Is.True);
@@ -1160,7 +1192,7 @@ public class TokenSetTests
         // multi-rune side. Letters & (Letters | USFlag) is just the
         // letters.
         var rune = TokenSet.Runes("ab");
-        var mixed = TokenSet.Runes("ab" + USFlagGrapheme);
+        var mixed = TokenSet.Runes("ab") | TokenSet.Graphemes(USFlagGrapheme);
 
         AssertEqual(rune & mixed, TokenSet.Runes("ab"));
     }
@@ -1168,7 +1200,7 @@ public class TokenSetTests
     [Test]
     public void Complement_of_mixed_set_throws_with_documented_message()
     {
-        var mixed = TokenSet.Runes("a" + USFlagGrapheme);
+        var mixed = TokenSet.Runes("a") | TokenSet.Graphemes(USFlagGrapheme);
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
         {
@@ -1200,7 +1232,7 @@ public class TokenSetTests
         // the rune-only part, complement that, then union the
         // multi-rune part back in.
         var withoutVowelsKeepingFlag =
-            (letters & ~TokenSet.Runes("aeiou")) | TokenSet.Runes(USFlagGrapheme);
+            (letters & ~TokenSet.Runes("aeiou")) | TokenSet.Graphemes(USFlagGrapheme);
         Assert.That(withoutVowelsKeepingFlag.Contains(USFlagGrapheme), Is.True);
         Assert.That(withoutVowelsKeepingFlag.Contains('a'), Is.False);
     }
@@ -1210,11 +1242,11 @@ public class TokenSetTests
     {
         // Same logical content, different construction paths. Equals
         // and GetHashCode should both agree. AssertEqual checks both.
-        var sequential = TokenSet.Runes("a" + USFlagGrapheme + SkinTonedWaveGrapheme);
+        var sequential = TokenSet.Runes("a") | TokenSet.Graphemes(USFlagGrapheme, SkinTonedWaveGrapheme);
         var unioned =
             TokenSet.Runes("a")
-            | TokenSet.Runes(USFlagGrapheme)
-            | TokenSet.Runes(SkinTonedWaveGrapheme);
+            | TokenSet.Graphemes(USFlagGrapheme)
+            | TokenSet.Graphemes(SkinTonedWaveGrapheme);
 
         AssertEqual(sequential, unioned);
     }
@@ -1224,8 +1256,8 @@ public class TokenSetTests
     {
         // Same rune intervals, different multi-rune content. Equals
         // must report them unequal.
-        var withFlag = TokenSet.Runes("a" + USFlagGrapheme);
-        var withWave = TokenSet.Runes("a" + SkinTonedWaveGrapheme);
+        var withFlag = TokenSet.Runes("a") | TokenSet.Graphemes(USFlagGrapheme);
+        var withWave = TokenSet.Runes("a") | TokenSet.Graphemes(SkinTonedWaveGrapheme);
 
         Assert.That(withFlag, Is.Not.EqualTo(withWave));
     }
@@ -1235,8 +1267,8 @@ public class TokenSetTests
     {
         // Multi-rune array dedupe + sort means the order Runes() sees
         // graphemes shouldn't affect the hash.
-        var ab = TokenSet.Runes(USFlagGrapheme) | TokenSet.Runes(SkinTonedWaveGrapheme);
-        var ba = TokenSet.Runes(SkinTonedWaveGrapheme) | TokenSet.Runes(USFlagGrapheme);
+        var ab = TokenSet.Graphemes(USFlagGrapheme) | TokenSet.Graphemes(SkinTonedWaveGrapheme);
+        var ba = TokenSet.Graphemes(SkinTonedWaveGrapheme) | TokenSet.Graphemes(USFlagGrapheme);
 
         AssertEqual(ab, ba);
     }
@@ -1247,7 +1279,7 @@ public class TokenSetTests
         // Ranges first, then multi-rune entries, separated by commas
         // inside the brackets. Multi-rune entries render as the user-
         // perceived characters themselves.
-        var set = TokenSet.Range('a', 'z') | TokenSet.Runes(USFlagGrapheme);
+        var set = TokenSet.Range('a', 'z') | TokenSet.Graphemes(USFlagGrapheme);
 
         Assert.That(set.ToString(), Is.EqualTo("[a-z," + USFlagGrapheme + "]"));
     }
@@ -1260,8 +1292,8 @@ public class TokenSetTests
         // Multi-rune entries land at the end of the entry list, so
         // the truncation falls on one of them.
         var set = TokenSet.Runes("acegikm")
-            | TokenSet.Runes(USFlagGrapheme)
-            | TokenSet.Runes(SkinTonedWaveGrapheme);
+            | TokenSet.Graphemes(USFlagGrapheme)
+            | TokenSet.Graphemes(SkinTonedWaveGrapheme);
 
         Assert.That(set.ToString(), Does.Contain("+1 more"));
     }
@@ -1277,7 +1309,7 @@ public class TokenSetTests
     [Test]
     public void HasMultiRuneGraphemes_is_true_after_adding_multi_rune_entry()
     {
-        Assert.That(TokenSet.Runes(USFlagGrapheme).HasMultiRuneGraphemes, Is.True);
-        Assert.That((TokenSet.Letters | TokenSet.Runes(USFlagGrapheme)).HasMultiRuneGraphemes, Is.True);
+        Assert.That(TokenSet.Graphemes(USFlagGrapheme).HasMultiRuneGraphemes, Is.True);
+        Assert.That((TokenSet.Letters | TokenSet.Graphemes(USFlagGrapheme)).HasMultiRuneGraphemes, Is.True);
     }
 }

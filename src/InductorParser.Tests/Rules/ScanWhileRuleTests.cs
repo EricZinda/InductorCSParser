@@ -145,7 +145,7 @@ public class ScanWhileRuleTests
     {
         // Set: { USFlag, WomanShrugging }. Input: USFlag + WomanShrugging.
         // ScanWhile should consume both emoji graphemes as one leaf.
-        var rule = ScanWhile(TokenSet.Runes(USFlagGrapheme + WomanShruggingGrapheme));
+        var rule = ScanWhile(TokenSet.Graphemes(USFlagGrapheme, WomanShruggingGrapheme));
 
         var result = rule.Parse(USFlagGrapheme + WomanShruggingGrapheme);
 
@@ -162,7 +162,7 @@ public class ScanWhileRuleTests
         // cluster fails the rune-fast-path's tokenLength == runeLen check.
         // OneOf with the same set / same input matches, so the asymmetry
         // is the bug.
-        var rule = ScanWhile(TokenSet.Runes(LatinEAcutePrecomposedGrapheme));
+        var rule = ScanWhile(TokenSet.Graphemes(LatinEAcutePrecomposedGrapheme));
         rule.Compile(System.Text.NormalizationForm.FormD);
 
         var result = rule.Parse(LatinEAcutePrecomposedGrapheme);
@@ -178,7 +178,7 @@ public class ScanWhileRuleTests
         // at the first token that's neither. AllowTrailingInput lets
         // the parse succeed even though ScanWhile doesn't consume the
         // trailing WomanShrugging that stopped it.
-        var rule = ScanWhile(TokenSet.Ascii.Letters | TokenSet.Runes(USFlagGrapheme));
+        var rule = ScanWhile(TokenSet.Ascii.Letters | TokenSet.Graphemes(USFlagGrapheme));
         var input = "abc" + USFlagGrapheme + "d" + WomanShruggingGrapheme;
 
         var result = rule.Parse(input, new ParseOptions { AllowTrailingInput = true });
@@ -235,11 +235,11 @@ public class ScanWhileRuleTests
     {
         if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
         {
-            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(row.Source));
             return;
         }
 
-        var rule = ScanWhile(TokenSet.Runes(row.Source));
+        var rule = ScanWhile(TokenSet.Graphemes(row.Source));
 
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
         {
@@ -261,11 +261,11 @@ public class ScanWhileRuleTests
     {
         if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
         {
-            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(row.Source));
             return;
         }
 
-        var rule = OneOrMore(ScanWhile(TokenSet.Runes(row.Source)));
+        var rule = OneOrMore(ScanWhile(TokenSet.Graphemes(row.Source)));
 
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
         {
@@ -293,7 +293,7 @@ public class ScanWhileRuleTests
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
             return; // multi-grapheme post-form is covered by the ScanWhile_in_OneOrMore Compile-throws path
 
-        var scanWhileRule = ScanWhile(TokenSet.Runes(row.Source)).As("scanWhileBranch");
+        var scanWhileRule = ScanWhile(TokenSet.Graphemes(row.Source)).As("scanWhileBranch");
         var fallback = AnyToken().As("fallbackBranch");
         var rule = Or(scanWhileRule, fallback);
 
@@ -312,11 +312,11 @@ public class ScanWhileRuleTests
     {
         if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
         {
-            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(row.Source));
             return;
         }
 
-        var rule = And(ScanWhile(TokenSet.Runes(row.Source)), Eof());
+        var rule = And(ScanWhile(TokenSet.Graphemes(row.Source)), Eof());
 
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
         {
