@@ -110,20 +110,33 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
 
     internal override RuleStartRequirements ComputeRuleStart()
     {
-        // Same first-grapheme extraction as LiteralRule, but when the
-        // first cluster is one ASCII letter we admit both cases so input
-        // in either case can pass the lookahead check (AsciiCaseEquals is
-        // the runtime equivalent). Multi-rune clusters and non-letters
-        // go through the standard FirstTokenMustBeFirstGraphemeOf path.
+        // Same first-grapheme extraction as LiteralRule. When the first
+        // grapheme starts with an ASCII letter, both cases of that letter
+        // belong in the first-token set: AsciiCaseEquals admits either
+        // case at parse time, and the lookahead shortcut has to admit
+        // the peek with the opposite ASCII case or it skips a rule that
+        // would have matched.
+        //
+        // Two shapes share the same case-folded admission: a one-char
+        // ASCII-letter grapheme like 'a' / "X", and a multi-rune cluster
+        // whose first rune is an ASCII letter like "é" (e + combining
+        // acute, after FormD decomposes "é"). Both cases have to admit
+        // a peek whose first rune is the opposite ASCII case. The
+        // multi-rune-cluster case also keeps the original cluster as a
+        // multi-rune entry so the strict ContainsToken path still
+        // matches it.
         try
         {
             string firstElement = System.Globalization.StringInfo.GetNextTextElement(_expected, 0);
-            if (firstElement.Length == 1 && IsAsciiLetter(firstElement[0]))
+            if (firstElement.Length >= 1 && IsAsciiLetter(firstElement[0]))
             {
                 int lower = firstElement[0] | 0x20;
                 int upper = lower & ~0x20;
+                TokenSet caseSet = TokenSet.Single(lower) | TokenSet.Single(upper);
+                if (firstElement.Length == 1)
+                    return RuleStartRequirements.FirstTokenMustBeInSet(caseSet);
                 return RuleStartRequirements.FirstTokenMustBeInSet(
-                    TokenSet.Single(lower) | TokenSet.Single(upper));
+                    caseSet | TokenSet.Graphemes(firstElement));
             }
         }
         catch (ArgumentException)

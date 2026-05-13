@@ -135,4 +135,46 @@ public class LiteralIgnoreAsciiCaseRuleTests
             input: "XYZ",
             expectedSourceText: "XYZ");
     }
+
+    [Test]
+    public void Or_admits_case_variant_when_first_grapheme_is_multi_rune_under_FormD()
+    {
+        // FormD decomposes a precomposed letter+accent like 'é' (U+00E9)
+        // into the two-rune cluster "é" (e + combining acute).
+        // LiteralIgnoreAsciiCase("éclair").Compile(FormD) rewrites the
+        // rule's stored text to "éclair", so its first grapheme
+        // becomes a multi-rune cluster whose first rune is the ASCII
+        // letter 'e'. The parse-time AsciiCaseEquals compare admits the
+        // opposite-case input "Éclair" (decomposed "Éclair"),
+        // because the e/E pair case-folds the same way 'e'/'E' would
+        // standalone. The Or lookahead shortcut has to agree, or it
+        // skips the case-insensitive branch on a peek whose first rune
+        // is the opposite ASCII case.
+        var literalBranch = LiteralIgnoreAsciiCase("éclair").As("literalBranch");
+        var fallback = AnyToken().As("fallback");
+        var rule = Or(literalBranch, fallback);
+
+        rule.Compile(NormalizationForm.FormD);
+        var result = rule.Parse("Éclair");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Find(literalBranch), Is.Not.Null,
+            "Or should have committed to the LiteralIgnoreAsciiCase branch " +
+            "instead of skipping it via the lookahead shortcut.");
+    }
+
+    [Test]
+    public void OneOrMore_admits_case_variant_when_first_grapheme_is_multi_rune_under_FormD()
+    {
+        // Same shape as the Or test, but via BetweenInclusiveRule's
+        // own lookahead shortcut on Inner. With Inner.AtLeast >= 1,
+        // an incorrect skip turns into a "count=0" failure for the
+        // whole repetition.
+        var rule = OneOrMore(LiteralIgnoreAsciiCase("éclair"));
+
+        rule.Compile(NormalizationForm.FormD);
+        var result = rule.Parse("Éclair");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
 }
