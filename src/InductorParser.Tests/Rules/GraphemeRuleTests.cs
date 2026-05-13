@@ -533,4 +533,25 @@ public class GraphemeRuleTests
             target: Token('X').As("xMarker").Preserve(),
             targetText: "X");
     }
+
+    [Test]
+    public void SourceText_on_Token_returns_matched_text_under_every_FlattenType()
+    {
+        SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
+            ruleBuilder: () => Token('X'),
+            input: "X",
+            expectedSourceText: "X");
+    }
+
+    [Test]
+    public void Token_SourceRange_points_at_its_char_in_input()
+    {
+        var rule = Token('a').Preserve();
+        var result = rule.Parse("a");
+
+        Assert.That(result.Success, Is.True);
+        var range = result.Tree!.SourceRange!.Value;
+        Assert.That(range.Start.CharIndex, Is.EqualTo(0));
+        Assert.That(range.End.CharIndex, Is.EqualTo(1));
+    }
 }

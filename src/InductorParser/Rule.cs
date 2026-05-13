@@ -867,7 +867,13 @@ public abstract class Rule
             ? input.Normalize(normalizeInput.Value)
             : input;
 
-        Lexer lexer = new Lexer(parseInput, options.TraceSink, options.TraceLevel);
+        // Per-parse context every Symbol the engine builds will hold
+        // a reference to. Lets Symbol.SourceRange / Symbol.SourceText
+        // translate parseInput offsets back to original-input
+        // coordinates without the consumer having to thread the
+        // ParseResult.
+        var parseContext = new ParseContext(input, parseInput, normalizeInput);
+        Lexer lexer = new Lexer(parseInput, parseContext, options.TraceSink, options.TraceLevel);
         lexer.ConfigureBudgets(options);
         Symbol? result;
         // Pre-allocate a root list so a root with FlattenType.Flatten

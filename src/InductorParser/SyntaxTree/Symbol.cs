@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 using InductorParser;
+using InductorParser.Lexing;
 
 namespace InductorParser.SyntaxTree;
 
@@ -59,6 +60,11 @@ public sealed class Symbol
     // detach from the original input.
     private readonly ReadOnlyMemory<char> _leafChars;
     private readonly bool _isLeaf;
+    // Per-parse context the engine stamps onto every Symbol it builds.
+    // Carries (originalInput, parseInput, normalizationForm) so Symbol
+    // can translate its parseInput-relative _leafChars span back to
+    // original-input coordinates for SourceRange / SourceText. 
+    private readonly ParseContext? _context;
 
     // Engine-internal accessor used by alternative-evaluator
     // implementations to recover a leaf symbol's bounds inside a match
@@ -72,7 +78,17 @@ public sealed class Symbol
     public FlattenType FlattenType { get; }
     public IReadOnlyList<Symbol> Children { get; }
 
-    public Symbol(SymbolId id, FlattenType flattenType, IReadOnlyList<Symbol>? children)
+    // Composite constructor. consumedSpan covers the section of
+    // parseInput the rule matched, *including* any FlattenType.Delete
+    // leading or trailing children that get filtered out of Children
+    // before the Symbol is observed (example: And(Token('-').Preserve(),
+    // Literal("inf")) parsed against "-inf" has only the "-" leaf in
+    // Children, but the recorded span covers all 4 chars so SourceRange
+    // / SourceText report the full match). For zero-width composites
+    // (Peek, Not, Eof, an Optional that matched zero times via the
+    // empty-match shortcut), pass a zero-length memory at the rule's
+    // anchor offset so callers still get a position.
+    public Symbol(SymbolId id, FlattenType flattenType, IReadOnlyList<Symbol>? children, ReadOnlyMemory<char> consumedSpan = default, ParseContext? context = null)
     {
         Id = id;
         FlattenType = flattenType;
@@ -81,57 +97,20 @@ public sealed class Symbol
         // allocated eagerly that ended up empty. The tree stores only the
         // singleton in either case.
         Children = (children == null || children.Count == 0) ? EmptyChildren : children;
-        _leafChars = ReadOnlyMemory<char>.Empty;
+        _leafChars = consumedSpan;
         _isLeaf = false;
+        _context = context;
     }
 
-    public Symbol(SymbolId id, FlattenType flattenType, ReadOnlyMemory<char> leafChars)
+    // Leaf overload
+    public Symbol(SymbolId id, FlattenType flattenType, ReadOnlyMemory<char> leafChars, ParseContext? context = null)
     {
         Id = id;
         FlattenType = flattenType;
         Children = EmptyChildren;
         _leafChars = leafChars;
         _isLeaf = true;
-    }
-
-    // ToString renders the text actually present in the tree: for leaves,
-    // the captured text, and for composites, the concatenated text of their
-    // children. On the default parse path, FlattenType.Delete rules
-    // are gone (filtered during parse) and FlattenType.Flatten
-    // wrappers have had their children lifted into the parent, so
-    // their own wrapper doesn't appear in the tree shape. The
-    // characters under them do, through their surviving
-    // FlattenType.Preserve or leaf descendants. Callers who want to
-    // rebuild the exact input verbatim should either keep the string
-    // they passed to Parse, or enable ParseOptions.PreserveAllSymbols
-    // to keep every grammar node (including FlattenType.Delete ones)
-    // in the tree.
-    public override string ToString()
-    {
-        if (_isLeaf) return _leafChars.ToString();
-        var builder = new StringBuilder();
-        AppendTo(builder);
-        return builder.ToString();
-    }
-
-    private void AppendTo(StringBuilder builder)
-    {
-        if (_isLeaf) { builder.Append(_leafChars.Span); return; }
-        foreach (var child in Children) child.AppendTo(builder);
-    }
-
-    /// <summary>
-    /// Return the UTF-8 byte length of this symbol's rendered text without
-    /// materializing that text as an intermediate string.
-    /// </summary>
-    public long GetUtf8ByteCount()
-    {
-        if (_isLeaf) return Encoding.UTF8.GetByteCount(_leafChars.Span);
-
-        long total = 0;
-        foreach (var child in Children)
-            total += child.GetUtf8ByteCount();
-        return total;
+        _context = context;
     }
 
     // Does this specific Symbol correspond to the given rule? The common
@@ -182,61 +161,137 @@ public sealed class Symbol
                 yield return descendant;
     }
 
+    // ToString renders the text actually present in the tree: for leaves,
+    // the captured text, and for composites, the concatenated text of their
+    // children. On the default parse path, FlattenType.Delete rules
+    // are gone (filtered during parse) and FlattenType.Flatten
+    // wrappers have had their children lifted into the parent, so
+    // their own wrapper doesn't appear in the tree shape. The
+    // characters under them do, through their surviving
+    // FlattenType.Preserve or leaf descendants. Callers who want to
+    // rebuild the exact input verbatim should either keep the string
+    // they passed to Parse, or enable ParseOptions.PreserveAllSymbols
+    // to keep every grammar node (including FlattenType.Delete ones)
+    // in the tree.
+    public override string ToString()
+    {
+        if (_isLeaf) return _leafChars.ToString();
+        var builder = new StringBuilder();
+        AppendTo(builder);
+        return builder.ToString();
+    }
+
+    private void AppendTo(StringBuilder builder)
+    {
+        if (_isLeaf) { builder.Append(_leafChars.Span); return; }
+        foreach (var child in Children) child.AppendTo(builder);
+    }
+
+    /// <summary>
+    /// Return the UTF-8 byte length of this symbol's rendered text without
+    /// materializing that text as an intermediate string.
+    /// </summary>
+    public long GetUtf8ByteCount()
+    {
+        if (_isLeaf) return Encoding.UTF8.GetByteCount(_leafChars.Span);
+
+        long total = 0;
+        foreach (var child in Children)
+            total += child.GetUtf8ByteCount();
+        return total;
+    }
+
     // Recover parseInput-relative bounds for this Symbol's matched
-    // span. Walks to the leftmost and rightmost leaves and reads each
-    // leaf's underlying string + offset via MemoryMarshal.TryGetString.
-    // ParseResult.SourceRangeOf consumes these and translates the
-    // offsets to the caller's original-input coordinates.
+    // span. Both leaves and composites store the bounds in _leafChars
     //
-    // Returns false when no leaf is reachable (empty composite), when
-    // the leaf memory isn't string-backed (a hand-built Symbol from a
-    // char[]), or when leaves from two different parses ended up in
-    // the same tree (the ReferenceEquals check).
+    // Returns false for any Symbol without a populated _leafChars:
+    // a hand-built composite from external code (e.g. a test fixture
+    // that wired children together for a post-hoc-flatten check)
+
+    // SourceRange / SourceText consume these and translate the
+    // offsets to the caller's original-input coordinates.
     internal bool TryGetCharSpan(out string parseInput, out int start, out int endExclusive)
     {
         parseInput = null!;
         start = 0;
         endExclusive = 0;
 
-        Symbol? firstLeaf = FindFirstLeaf(this);
-        if (firstLeaf == null) return false;
-        // FindLastLeaf can't return null when FindFirstLeaf didn't:
-        // both walk the same tree looking for any leaf, just from
-        // opposite ends. If a leaf exists, both find one.
-        Symbol lastLeaf = FindLastLeaf(this)!;
-
-        if (!MemoryMarshal.TryGetString(firstLeaf._leafChars, out string? firstInput, out int firstStart, out _))
+        if (!MemoryMarshal.TryGetString(_leafChars, out string? input, out int inputStart, out int inputLength)
+            || input == null)
             return false;
-        if (!MemoryMarshal.TryGetString(lastLeaf._leafChars, out string? lastInput, out int lastStart, out int lastLength))
-            return false;
-        if (!ReferenceEquals(firstInput, lastInput)) return false;
 
-        parseInput = firstInput;
-        start = firstStart;
-        endExclusive = lastStart + lastLength;
+        parseInput = input;
+        start = inputStart;
+        endExclusive = inputStart + inputLength;
         return true;
     }
 
-    private static Symbol? FindFirstLeaf(Symbol symbol)
+    // The user's original-input range this Symbol's match covers.
+    // Returns null when the Symbol has no associated text (an empty
+    // composite, one whose children's leaves don't trace back to a
+    // string-backed source, or a default-constructed Symbol).
+    //
+    // Under FormC/FormKC/etc normalization, the engine scanned a
+    // rewritten parseInput while the user typed the original input.
+    // This property translates parseInput offsets back to original-
+    // input offsets via NormalizedPositionMap so the returned positions
+    // line up with what the user typed. For grammars without
+    // normalization (or hand-built Symbols with no ParseContext), the
+    // _leafChars backing string is treated as both parseInput and
+    // originalInput.
+    public SourceRange? SourceRange
     {
-        if (symbol._isLeaf) return symbol;
-        foreach (var child in symbol.Children)
+        get
         {
-            var leaf = FindFirstLeaf(child);
-            if (leaf != null) return leaf;
+            if (!TryGetCharSpan(out string parseInput, out int start, out int endExclusive))
+                return null;
+
+            string originalInput = _context?.OriginalInput ?? parseInput;
+            if (_context == null || ReferenceEquals(originalInput, parseInput))
+            {
+                // No need to map through normalization, input and parseinput are the same
+                return new SourceRange(
+                    SourcePosition.From(originalInput, start),
+                    SourcePosition.From(originalInput, endExclusive));
+            }
+
+            var form = _context.NormalizationForm;
+            int translatedStart = NormalizedPositionMap.TranslateToOriginal(originalInput, parseInput, start, form);
+            int translatedEnd = NormalizedPositionMap.TranslateToOriginal(originalInput, parseInput, endExclusive, form);
+            return new SourceRange(
+                SourcePosition.From(originalInput, translatedStart),
+                SourcePosition.From(originalInput, translatedEnd));
         }
-        return null;
     }
 
-    private static Symbol? FindLastLeaf(Symbol symbol)
+    // The substring of the user's original input this Symbol's match
+    // covers. Returned verbatim — bypasses the per-child flatten-then-
+    // render walk that ToString does, so it includes characters
+    // matched by FlattenType.Delete leaves (the default for Token,
+    // Literal, EndOfLine) that ToString would drop.
+    //
+    // Returns the empty string when the Symbol has no associated text
+    // (an empty composite, or one whose leaves don't trace back to a
+    // string-backed source). The non-empty result is always a section
+    // of the user's original input, even when the grammar normalized
+    // it: the parseInput offsets are translated back to the original
+    // before slicing.
+    public string SourceText
     {
-        if (symbol._isLeaf) return symbol;
-        for (int i = symbol.Children.Count - 1; i >= 0; i--)
+        get
         {
-            var leaf = FindLastLeaf(symbol.Children[i]);
-            if (leaf != null) return leaf;
+            if (!TryGetCharSpan(out string parseInput, out int start, out int endExclusive))
+                return string.Empty;
+
+            string originalInput = _context?.OriginalInput ?? parseInput;
+            if (_context == null || ReferenceEquals(originalInput, parseInput))
+                return originalInput.Substring(start, endExclusive - start);
+
+            var form = _context.NormalizationForm;
+            int translatedStart = NormalizedPositionMap.TranslateToOriginal(originalInput, parseInput, start, form);
+            int translatedEnd = NormalizedPositionMap.TranslateToOriginal(originalInput, parseInput, endExclusive, form);
+            return originalInput.Substring(translatedStart, translatedEnd - translatedStart);
         }
-        return null;
     }
 
     public void FlattenInto(List<Symbol> result)
@@ -277,7 +332,12 @@ public sealed class Symbol
                     result.Add(this);
                     return;
                 }
-                result.Add(new Symbol(Id, FlattenType.Preserve, keptChildren));
+                // The rebuild covers the same input section as the original
+                // composite — flattening changes which children appear in
+                // the tree, not what the parser consumed. Pass the
+                // recorded span AND the context through so SourceRange /
+                // SourceText still work on the rebuilt Symbol.
+                result.Add(new Symbol(Id, FlattenType.Preserve, keptChildren, _leafChars, _context));
                 return;
         }
     }

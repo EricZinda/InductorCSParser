@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
 namespace InductorParser;
@@ -170,67 +169,6 @@ public readonly struct ParseResult
     // Convenience form of NameOf that takes a Symbol directly.
     // Returns null if the symbol is null.
     public string? Name(Symbol symbol) => symbol == null ? null : NameOf(symbol.Id);
-
-    // The span in the caller's original input string that `symbol`
-    // consumed, expressed as a SourceRange. Returns null when the
-    // Symbol has no associated text (an empty composite, or one
-    // whose leaves were all Delete-flattened away), or when its
-    // leaves don't trace back to a string-backed source. Both Start
-    // and End are full SourcePositions, so the caller can read
-    // line/column, grapheme index, etc. without a separate conversion
-    // call.
-    //
-    // FormKC / FormKD note: one original cluster can spawn multiple
-    // parseInput leaves (the ligature ﬁ becomes 'f' + 'i' under
-    // FormKC). Each leaf's range maps back to a position inside the
-    // original cluster, so the first leaf gets [0, 0) (zero-width)
-    // and the second gets [0, 1) (full cluster span). Both came from
-    // the same source grapheme. Callers that need per-leaf distinction
-    // will see overlapping or zero-width ranges here.
-    public SourceRange? SourceRangeOf(Symbol symbol)
-    {
-        if (symbol == null) throw new ArgumentNullException(nameof(symbol));
-        if (!symbol.TryGetCharSpan(out string parseInput, out int start, out int endExclusive))
-            return null;
-
-        // No ParseResult-level input means this is a default-constructed
-        // result (or one where the user hand-built it without an
-        // associated input). Fall back to parseInput coords; that's
-        // what the leaf memory naturally points at.
-        string? originalInput = _input;
-        if (originalInput == null)
-        {
-            return new SourceRange(
-                SourcePosition.From(parseInput, start),
-                SourcePosition.From(parseInput, endExclusive));
-        }
-
-        // Identity case: parseInput IS the caller's input (Normalize
-        // returned the same reference because input was already in
-        // the target form, or NormalizationForm was null). No
-        // translation needed; parseInput coords coincide with original
-        // coords.
-        if (ReferenceEquals(originalInput, parseInput))
-        {
-            return new SourceRange(
-                SourcePosition.From(originalInput, start),
-                SourcePosition.From(originalInput, endExclusive));
-        }
-
-        // Non-identity case: Normalize rewrote the input, so leaf
-        // offsets are in parseInput coords. Translate each endpoint
-        // back to the caller's original input through the same
-        // NormalizedPositionMap routine ParseResult.ErrorCharIndex
-        // uses on the failure path. The grammar's NormalizationForm is
-        // what was used at Compile time; by definition it's whatever
-        // produced parseInput from input.
-        var form = _grammar?.NormalizationForm;
-        int translatedStart = NormalizedPositionMap.TranslateToOriginal(originalInput, parseInput, start, form);
-        int translatedEnd = NormalizedPositionMap.TranslateToOriginal(originalInput, parseInput, endExclusive, form);
-        return new SourceRange(
-            SourcePosition.From(originalInput, translatedStart),
-            SourcePosition.From(originalInput, translatedEnd));
-    }
 
     // Render the tree to a string for debug output. If Symbols has
     // one element, prints that. Otherwise prints each top-level

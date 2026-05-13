@@ -9,7 +9,7 @@ namespace InductorParser.Prefilter;
 // first-rune skip.
 //
 // Multi-rune set entries are NOT analyzable by this static analysis.
-// A set like Single('a') | Runes("\r\n") can match either the rune 'a'
+// A set like Single('a') | Graphemes("\r\n") can match either the rune 'a'
 // or the CRLF cluster, and the CRLF match's consumed text contains no
 // 'a'. Returning the rune-only chars as a required literal would break
 // the "every match contains this literal" contract for multi-rune

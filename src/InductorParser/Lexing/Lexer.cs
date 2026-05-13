@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Runtime.CompilerServices;
+using InductorParser.SyntaxTree;
 using InductorParser.Tracing;
 using Stopwatch = System.Diagnostics.Stopwatch;
 
@@ -88,6 +89,16 @@ public sealed partial class Lexer
     private const int BudgetCheckInterval = 1024;
     private const int BudgetCheckMask = BudgetCheckInterval - 1;
 
+    // Per-parse context the parse driver supplies so every Symbol the
+    // engine builds can resolve original-input positions / text. Null
+    // for sub-lexers (WithinTokenRule), pooled-Lexer reuse before
+    // ResetForReuse re-binds it. Has constructors that don't take a
+    // context (callers that build a Lexer directly and don't need
+    // Symbol-level position recovery).
+    private ParseContext? _context;
+
+    public ParseContext? Context => _context;
+
     public Lexer(string input)
         : this(input, traceSink: null, traceLevel: TraceLevel.Normal)
     {
@@ -96,6 +107,15 @@ public sealed partial class Lexer
     public Lexer(string input, TextWriter? traceSink, TraceLevel traceLevel)
         : this(input, startPosition: 0, endPosition: (input ?? throw new ArgumentNullException(nameof(input))).Length, traceSink, traceLevel, oneRunePerToken: false)
     {
+    }
+
+    // Construct a top-level Lexer with a ParseContext so every Symbol
+    // produced during this parse can resolve original-input positions
+    // via Symbol.SourceRange and Symbol.SourceText. 
+    public Lexer(string input, ParseContext? context, TextWriter? traceSink, TraceLevel traceLevel)
+        : this(input, traceSink, traceLevel)
+    {
+        _context = context;
     }
 
     // Bounded-range constructor used to build sub-lexers that read a
@@ -156,6 +176,7 @@ public sealed partial class Lexer
     {
         if (input == null) throw new ArgumentNullException(nameof(input));
         BindInput(input, startPosition: 0, endPosition: input.Length, traceSink, traceLevel);
+        _context = null;
         _deepestFailure = 0;
         _deepestFailureMessage = null;
         _transactionDepth = 0;

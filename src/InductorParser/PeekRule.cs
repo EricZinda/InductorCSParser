@@ -47,8 +47,13 @@ internal sealed class PeekRule : Rule
             return null;
         }
         TraceSuccess(lexer, $"inner matched");
+        // Peek is zero-width: the using transaction will roll the lexer
+        // back to transaction.StartPosition on dispose. Record a
+        // zero-length consumed span at that anchor so the Symbol's
+        // bounds reflect the lookahead's position, not where inner
+        // advanced to before rollback.
         return effectiveFlattenType == FlattenType.Preserve
-            ? new Symbol(Id, FlattenType, Array.Empty<Symbol>())
+            ? new Symbol(Id, FlattenType, Array.Empty<Symbol>(), lexer.Input.AsMemory(transaction.StartPosition, 0), lexer.Context)
             : Symbol.Discarded;
     }
 
