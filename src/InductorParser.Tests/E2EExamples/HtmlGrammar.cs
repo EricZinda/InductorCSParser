@@ -63,7 +63,7 @@ public static class HtmlGrammar
     // rules in the spec aren't enforced here (the C++ parser doesn't
     // enforce them either). The visible ASCII excludes are what matters.
     public static readonly Rule AttributeName =
-        OneOrMore(NoneOf("\r\n\t \"'>/="));
+        OneOrMore(NoneOf("\r\t\n \"'>/="));
 
     // Empty attribute: just the name, no "=value".
     public static readonly Rule EmptyAttribute = AttributeName;
@@ -75,7 +75,7 @@ public static class HtmlGrammar
         OptionalWs,
         Token('='),
         OptionalWs,
-        OneOrMore(NoneOf("\r\n\t \"'<>/=`"))
+        OneOrMore(NoneOf("\r\t\n \"'<>/=`"))
     );
 
     public static readonly Rule SingleQuotedAttributeValueAttribute = And(

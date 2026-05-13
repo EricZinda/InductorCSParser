@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -24,7 +24,7 @@ namespace InductorParser;
 //     var unicodeIdentifier = TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_");
 //     var asciiConsonants   = TokenSet.Ascii.Letters & ~TokenSet.Runes("aeiouAEIOU");
 //     var cyrillicLetters   = TokenSet.Letters & TokenSet.Range(0x0400, 0x04FF);
-//     var emojiOrLetters    = TokenSet.Letters | TokenSet.Runes(USFlagGrapheme);
+//     var emojiOrLetters    = TokenSet.Letters | TokenSet.Graphemes(USFlagGrapheme);
 //
 // Internally a TokenSet keeps two pieces. _ranges is a sorted, non-overlapping,
 // non-adjacent array of code-point runs that holds every single-rune member.
@@ -147,7 +147,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         if (grapheme.Length == 0) return false;
         if (TrySingleRune(grapheme, out int runeValue))
             return Contains(runeValue);
-        return BinarySearchMultiRune(grapheme.AsSpan()) >= 0;
+        return BinarySearchMultiRuneGrapheme(grapheme.AsSpan()) >= 0;
     }
 
     // Span overload so rules can probe a token's Chars without building
@@ -173,7 +173,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         // default(TokenSet) (= TokenSet.Empty) leaves _multiRuneGraphemes
         // null because the field-coalescing constructor never ran on it.
         var multi = _multiRuneGraphemes;
-        return multi != null && multi.Length > 0 && BinarySearchMultiRune(grapheme) >= 0;
+        return multi != null && multi.Length > 0 && BinarySearchMultiRuneGrapheme(grapheme) >= 0;
     }
 
     // The MultiRuneGraphemes ReadOnlySpan accessor can't cross a yield
@@ -186,11 +186,11 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     // Yield every rune in this set's _ranges (which are single-rune entries).
     // Used by OneOfRule / NoneOfRule's Compile-time validation walks.
-    // Cost is O(total range size) — for big sets like Letters that's
+    // Cost is O(total range size) � for big sets like Letters that's
     // ~130K iterations.
     //
     // Skips the surrogate gap (U+D800..U+DFFF). Surrogates aren't
-    // runes — they're UTF-16 code units only, not Unicode scalar values.
+    // runes � they're UTF-16 code units only, not Unicode scalar values.
     internal IEnumerable<int> EnumerateRunes()
     {
         var ranges = _ranges;
@@ -215,30 +215,30 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     //
     // The replacement is exact, not additive: an entry whose form-projection
     // differs is REPLACED by the projection, not augmented. The original
-    // is unreachable under that form — the lexer never produces it — so
+    // is unreachable under that form � the lexer never produces it � so
     // keeping it would just be dead weight in the set.
     //
     // Maintains the TokenSet invariant that every entry is exactly one
     // grapheme. If an entry's projection is multi-grapheme (a
-    // compatibility conversion like 'ﬁ' -> "fi" under FormKC, two
+    // compatibility conversion like '?' -> "fi" under FormKC, two
     // graphemes), the entry is excluded from the result and recorded
     // in `multiGraphemeConversions` for the caller to surface as an
     // offender. The caller is OneOfRule / NoneOfRule, which match one
-    // grapheme per token — a multi-grapheme entry can never match
+    // grapheme per token � a multi-grapheme entry can never match
     // anything in isolation, so dropping it and reporting via the
     // offenders list gives users a clear Compile-time error pointing
     // at the fix.
     //
     // Surrogate runes (U+D800..U+DFFF) pass through unchanged. Surrogates
-    // aren't runes — string.Normalize throws on them — and a normalized
+    // aren't runes � string.Normalize throws on them � and a normalized
     // Compile won't see them in input, so leaving them in the set is
     // harmless and preserves the unnormalized-Compile semantics that some
     // grammars rely on.
     //
     // Entries whose Normalize call throws ArgumentException (the BCL's
     // way of saying "I won't normalize this") are dropped silently. The
-    // exact set of rejected code points varies by runtime — Windows NLS
-    // and Linux ICU don't agree — so we don't catalog them here. Inputs
+    // exact set of rejected code points varies by runtime � Windows NLS
+    // and Linux ICU don't agree � so we don't catalog them here. Inputs
     // the lexer can produce go through the same Normalize call and would
     // hit the same rejection, so a dropped entry can't match anything
     // the rule would otherwise have seen.
@@ -340,18 +340,18 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     // Explicit opt-in for sets that contain entries whose Normalize(form)
     // produces a multi-grapheme sequence (a compatibility conversion like
-    // 'ﬁ' -> "fi" under FormKC, where one source grapheme lexes as two
+    // '?' -> "fi" under FormKC, where one source grapheme lexes as two
     // output tokens). Replaces every such entry with its individual
     // graphemes as separate set members. Single-grapheme entries are
     // left alone for NormalizedFor to project at Compile time.
     //
     // Why opt-in instead of automatic: for a singleton set like
-    // OneOf("ﬁ"), expansion would silently change semantics ("match this
+    // OneOf("?"), expansion would silently change semantics ("match this
     // ligature" becomes "match an 'f' or 'i' token"). The user has to
     // ask for that. For a category set like OneOf(XidStart), the
     // expansion adds 'f' and 'i' which were already members, so the
     // result is functionally unchanged but the convertible original
-    // entries are removed from the set — making it Compile-safe under
+    // entries are removed from the set � making it Compile-safe under
     // FormKC.
     //
     // Canonical forms (FormC, FormD) don't produce multi-grapheme results,
@@ -478,7 +478,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // (the standard Array.BinarySearch convention so callers like the
     // sorted-merge in operator| can reuse this). MemoryExtensions.
     // SequenceCompareTo does the ordinal comparison without allocating.
-    private int BinarySearchMultiRune(ReadOnlySpan<char> target)
+    private int BinarySearchMultiRuneGrapheme(ReadOnlySpan<char> target)
     {
         var array = _multiRuneGraphemes;
         if (array == null || array.Length == 0) return ~0;
@@ -610,7 +610,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // rendered as low-high. Printable ASCII code points render as the
     // literal character, everything else renders as U+XXXX. Multi-rune
     // graphemes render as the user-perceived character itself, no
-    // special quoting (e.g. `[a-z,👋🏽,🇺🇸]`). Classes with more
+    // special quoting (e.g. `[a-z,????,????]`). Classes with more
     // than MaxRenderedEntries entries are truncated with a "+N more"
     // tail. Keeps trace lines legible without dragging in the entire
     // Unicode database.
@@ -724,65 +724,134 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return new TokenSet(Normalize(list));
     }
 
-    public static TokenSet Runes(string characters)
+    /// <summary>
+    /// Build a set whose members are the runes (Unicode scalar values)
+    /// in <paramref name="text"/>. Each rune of the input becomes one
+    /// set element. The input is walked grapheme by grapheme, and a
+    /// grapheme that spans more than one rune throws: the caller
+    /// passing <c>"\r\n"</c> or NFD <c>"e + U+0301"</c> almost
+    /// certainly wanted either the cluster (use
+    /// <see cref="Graphemes(string[])"/>) or the scalars built
+    /// explicitly (<c>Single(c1) | Single(c2)</c>), not whatever a
+    /// silent rune-walk would have produced. Use this when you want
+    /// "the set of these N characters" from a string of ASCII or
+    /// otherwise non-combining scalars.
+    /// </summary>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="text"/> contains a multi-rune grapheme cluster
+    /// (CRLF, NFD accent, ZWJ emoji, skin-toned face, regional flag,
+    /// or similar) or a lone surrogate half.
+    /// </exception>
+    public static TokenSet Runes(string text)
     {
-        if (characters == null) throw new ArgumentNullException(nameof(characters));
+        if (text == null) throw new ArgumentNullException(nameof(text));
         var intervals = new List<Interval>();
-        List<string>? graphemes = null;
-        // Walk the string one grapheme at a time. A single-rune text
-        // element joins the rune intervals; a multi-rune grapheme
-        // (skin-toned emoji, ZWJ family, regional-indicator pair,
-        // decomposed accent, even CRLF) joins the multi-rune array.
-        // GetNextTextElement is the same API the lexer uses, so what
-        // gets stored agrees with what the lexer will hand back at
-        // parse time.
         int index = 0;
-        while (index < characters.Length)
+        while (index < text.Length)
         {
-            string grapheme = StringInfo.GetNextTextElement(characters, index);
-            int graphemeStart = index;
-            int graphemeLength = grapheme.Length;
-            // First rune of the grapheme. Used both for the single-rune
-            // case (interval add) and to detect lone surrogate halves
-            // before the multi-rune branch can swallow them.
-            int firstRuneLength;
-            int firstRune;
-            if (char.IsHighSurrogate(characters[index])
-                && index + 1 < characters.Length
-                && char.IsLowSurrogate(characters[index + 1]))
+            string grapheme = StringInfo.GetNextTextElement(text, index);
+            int rune;
+            int consumed;
+            if (char.IsHighSurrogate(text[index])
+                && index + 1 < text.Length
+                && char.IsLowSurrogate(text[index + 1]))
             {
-                firstRune = char.ConvertToUtf32(characters[index], characters[index + 1]);
+                rune = char.ConvertToUtf32(text[index], text[index + 1]);
+                consumed = 2;
+            }
+            else
+            {
+                rune = text[index];
+                consumed = 1;
+            }
+            if (grapheme.Length != consumed)
+                throw new ArgumentException(
+                    $"Runes(string) input \"{text}\" contains a multi-rune grapheme cluster (\"{grapheme}\") at UTF-16 offset {index}. " +
+                    "Runes(string) walks rune by rune and rejects inputs where consecutive runes form one cluster. " +
+                    "If you want a set of grapheme clusters, use Graphemes(string[]). " +
+                    "If you want separate scalars that visually combine, build the set explicitly with Single(c1) | Single(c2).",
+                    nameof(text));
+            if (!Rune.IsValid(rune))
+                throw new ArgumentException(
+                    $"Runes(string) encountered an invalid Unicode scalar value (0x{rune:X4}) at UTF-16 offset {index}. " +
+                    "Lone surrogate halves aren't valid scalars.",
+                    nameof(text));
+            intervals.Add(new Interval(rune, rune));
+            index += consumed;
+        }
+        return new TokenSet(Normalize(intervals));
+    }
+
+    /// <summary>
+    /// Build a set whose members are one or more grapheme clusters.
+    /// Each array element must be exactly one cluster (one full UAX #29
+    /// text element); passing a string with multiple clusters throws.
+    /// Use this when the set members are clusters: CRLF, NFD
+    /// <c>a + U+0301</c>, ZWJ emoji, skin-toned faces,
+    /// regional-indicator flags. For sets of runes (the common ASCII
+    /// case), use <see cref="Runes(string)"/>.
+    /// </summary>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="clusters"/> contains a null element, an empty
+    /// element, an element that parses as more than one grapheme
+    /// cluster, or an element containing a lone surrogate half.
+    /// </exception>
+    public static TokenSet Graphemes(params string[] clusters)
+    {
+        if (clusters == null) throw new ArgumentNullException(nameof(clusters));
+        var intervals = new List<Interval>();
+        List<string>? multiRuneGraphemes = null;
+        for (int clusterIndex = 0; clusterIndex < clusters.Length; clusterIndex++)
+        {
+            string cluster = clusters[clusterIndex];
+            if (cluster == null)
+                throw new ArgumentException(
+                    $"Graphemes element at index {clusterIndex} is null.",
+                    nameof(clusters));
+            if (cluster.Length == 0)
+                throw new ArgumentException(
+                    $"Graphemes element at index {clusterIndex} is empty. Each element must be exactly one grapheme cluster.",
+                    nameof(clusters));
+            string firstCluster = StringInfo.GetNextTextElement(cluster, 0);
+            if (firstCluster.Length != cluster.Length)
+                throw new ArgumentException(
+                    $"Graphemes element at index {clusterIndex} (\"{cluster}\") contains more than one grapheme cluster. " +
+                    "Each element must be exactly one cluster. " +
+                    "If you want a set of runes, use Runes(string).",
+                    nameof(clusters));
+
+            int firstRune;
+            int firstRuneLength;
+            if (char.IsHighSurrogate(cluster[0])
+                && cluster.Length >= 2
+                && char.IsLowSurrogate(cluster[1]))
+            {
+                firstRune = char.ConvertToUtf32(cluster[0], cluster[1]);
                 firstRuneLength = 2;
             }
             else
             {
-                firstRune = characters[index];
+                firstRune = cluster[0];
                 firstRuneLength = 1;
             }
-            // Catches lone surrogate halves in the input string. A
-            // well-formed UTF-16 string shouldn't contain them, but
-            // we can't trust every caller's string to be well-formed.
             if (!Rune.IsValid(firstRune))
                 throw new ArgumentException(
-                    $"Runes(string) encountered an invalid Unicode scalar value (0x{firstRune:X4}) at UTF-16 offset {graphemeStart}. " +
-                    "Lone surrogate halves aren't valid runes.",
-                    nameof(characters));
+                    $"Graphemes element at index {clusterIndex} starts with an invalid Unicode scalar (0x{firstRune:X4}). " +
+                    "Lone surrogate halves aren't valid scalars.",
+                    nameof(clusters));
 
-            if (graphemeLength == firstRuneLength)
+            if (cluster.Length == firstRuneLength)
             {
                 intervals.Add(new Interval(firstRune, firstRune));
             }
             else
             {
-                // Multi-rune grapheme. Validate every rune in it so we
-                // catch lone surrogate halves past the first rune too.
-                ValidateGraphemeRunes(grapheme, graphemeStart);
-                graphemes ??= new List<string>();
-                graphemes.Add(grapheme);
+                ValidateGraphemeRunes(cluster, 0);
+                multiRuneGraphemes ??= new List<string>();
+                multiRuneGraphemes.Add(cluster);
             }
-            index += graphemeLength;
         }
-        return new TokenSet(Normalize(intervals), NormalizeGraphemes(graphemes));
+        return new TokenSet(Normalize(intervals), NormalizeGraphemes(multiRuneGraphemes));
     }
 
     // Walks a grapheme's runes by hand and throws on any lone surrogate
@@ -807,9 +876,8 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             }
             if (!Rune.IsValid(runeCodepoint))
                 throw new ArgumentException(
-                    $"Runes(string) encountered an invalid Unicode scalar value (0x{runeCodepoint:X4}) " +
-                    $"inside the grapheme at UTF-16 offset {graphemeStart}. " +
-                    "Lone surrogate halves aren't valid runes.",
+                    $"Graphemes element at UTF-16 offset {graphemeStart} contains an invalid Unicode scalar value (0x{runeCodepoint:X4}). " +
+                    "Lone surrogate halves aren't valid scalars.",
                     nameof(grapheme));
         }
     }
@@ -848,7 +916,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         var combined = new List<Interval>();
         if (a._ranges != null) combined.AddRange(a._ranges);
         if (b._ranges != null) combined.AddRange(b._ranges);
-        var mergedGraphemes = MergeMultiRuneUnion(a._multiRuneGraphemes, b._multiRuneGraphemes);
+        var mergedGraphemes = MergeMultiRuneGraphemeUnion(a._multiRuneGraphemes, b._multiRuneGraphemes);
         return new TokenSet(Normalize(combined), mergedGraphemes);
     }
 
@@ -863,7 +931,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     {
         var aRanges = a._ranges;
         var bRanges = b._ranges;
-        var mergedGraphemes = MergeMultiRuneIntersect(a._multiRuneGraphemes, b._multiRuneGraphemes);
+        var mergedGraphemes = MergeMultiRuneGraphemeIntersect(a._multiRuneGraphemes, b._multiRuneGraphemes);
         if (aRanges == null || bRanges == null || aRanges.Length == 0 || bRanges.Length == 0)
             return new TokenSet(Array.Empty<Interval>(), mergedGraphemes);
 
@@ -927,7 +995,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // in the sum of the two array lengths. Skips duplicates so the
     // result stays canonical. Fast-paths when either side is empty so
     // rune-only sets pay no allocation past the empty-array sentinel.
-    private static string[] MergeMultiRuneUnion(string[]? a, string[]? b)
+    private static string[] MergeMultiRuneGraphemeUnion(string[]? a, string[]? b)
     {
         int aLength = a?.Length ?? 0;
         int bLength = b?.Length ?? 0;
@@ -963,7 +1031,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // Sorted-merge intersection of two sorted-ordinal grapheme arrays.
     // Returns the empty sentinel when either side is empty so a
     // rune-only side erases the other's multi-rune content under &.
-    private static string[] MergeMultiRuneIntersect(string[]? a, string[]? b)
+    private static string[] MergeMultiRuneGraphemeIntersect(string[]? a, string[]? b)
     {
         int aLength = a?.Length ?? 0;
         int bLength = b?.Length ?? 0;
@@ -1088,7 +1156,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     //
     // Use this for things that are literally letters: identifier characters
     // in a name, keyword text inside an alphabetic token, a rule that
-    // accepts 'a' through 'z' plus 'é' and '漢' and 'ж'.
+    // accepts 'a' through 'z' plus '�' and '?' and '?'.
     //
     // DON'T use this as a way to match "any character" or "any content." It
     // rejects digits, whitespace, punctuation, symbols, and any multi-rune
@@ -1119,8 +1187,8 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         | Single(0x000D)   // CR
         | Single(0x0085)   // NEL
         | Single(0x2028)   // LS
-        | Single(0x2029)   // PS
-        | Runes("\r\n");   // CRLF cluster
+        | Single(0x2029)     // PS
+        | Graphemes("\r\n"); // CRLF cluster
 
     // Full-Unicode intra-line whitespace plus every UAX #18 line
     // terminator (the seven single-rune terminators and the CRLF
@@ -1159,7 +1227,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         // OneOf / NoneOf / ScanUntil match each consistently: an input
         // CRLF cluster is the multi-rune entry, a bare CR or LF is the
         // matching single-rune entry.
-        public static readonly TokenSet AnyWhitespace = InlineWhitespace | Single('\r') | Single('\n') | Runes("\r\n");
+        public static readonly TokenSet AnyWhitespace = InlineWhitespace | Single('\r') | Single('\n') | Graphemes("\r\n");
         public static readonly TokenSet HexDigits = Digits | Range('a', 'f') | Range('A', 'F');
     }
 

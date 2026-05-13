@@ -49,7 +49,7 @@ public class ScanUntilRuleTests
         // expected. OneOf with the same set / same input matches the
         // cluster, so the asymmetry is the bug.
         var rule = InductorParser.Rules.And(
-            ScanUntil(TokenSet.Runes(LatinEAcutePrecomposedGrapheme)),
+            ScanUntil(TokenSet.Graphemes(LatinEAcutePrecomposedGrapheme)),
             Token(LatinEAcutePrecomposedGrapheme));
         rule.Compile(System.Text.NormalizationForm.FormD);
 
@@ -570,8 +570,8 @@ public class ScanUntilRuleTests
         // any single-rune token plus any non-USFlag grapheme. Scan
         // should consume "ab" + WomanShrugging and stop at the
         // following USFlag without consuming it.
-        var stopOnFlag = ScanUntil(TokenSet.Runes(USFlagGrapheme));
-        var rule = And(stopOnFlag, OneOf(TokenSet.Runes(USFlagGrapheme)));
+        var stopOnFlag = ScanUntil(TokenSet.Graphemes(USFlagGrapheme));
+        var rule = And(stopOnFlag, OneOf(TokenSet.Graphemes(USFlagGrapheme)));
 
         var input = "ab" + WomanShruggingGrapheme + USFlagGrapheme;
         var result = rule.Parse(input,
@@ -589,7 +589,7 @@ public class ScanUntilRuleTests
         // newline rune or the flag grapheme. Use AllowTrailingInput
         // because ScanUntil doesn't consume the stopper, so the parse
         // wouldn't reach EOF on its own.
-        var stopper = TokenSet.Single('\n') | TokenSet.Runes(USFlagGrapheme);
+        var stopper = TokenSet.Single('\n') | TokenSet.Graphemes(USFlagGrapheme);
         var rule = ScanUntil(stopper);
 
         var newlineCase = rule.Parse("hello\nrest", new ParseOptions { AllowTrailingInput = true });
@@ -635,11 +635,11 @@ public class ScanUntilRuleTests
     {
         if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
         {
-            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(row.Source));
             return;
         }
 
-        var rule = And(ScanUntil(TokenSet.Runes(row.Source)), Token(row.Source));
+        var rule = And(ScanUntil(TokenSet.Graphemes(row.Source)), Token(row.Source));
 
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
         {
@@ -661,11 +661,11 @@ public class ScanUntilRuleTests
     {
         if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
         {
-            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(row.Source));
             return;
         }
 
-        var rule = OneOrMore(ScanUntil(TokenSet.Runes(row.Source)));
+        var rule = OneOrMore(ScanUntil(TokenSet.Graphemes(row.Source)));
 
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
         {
@@ -692,11 +692,11 @@ public class ScanUntilRuleTests
     {
         if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
         {
-            Assert.Throws<ArgumentException>(() => TokenSet.Runes(row.Source));
+            Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(row.Source));
             return;
         }
 
-        var rule = And(ScanUntil(TokenSet.Runes(row.Source)), Eof());
+        var rule = And(ScanUntil(TokenSet.Graphemes(row.Source)), Eof());
 
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
         {

@@ -417,17 +417,34 @@ public static class TomlParser
                 case 't':  output.Append('\t'); index += 2; break;
                 case 'u':
                 {
+                    // \uXXXX: 4 hex digits. The spec requires the
+                    // result to be a valid Unicode scalar, so reject
+                    // the surrogate range U+D800..U+DFFF.
                     var hex = raw.Substring(index + 2, 4);
                     int codepoint = int.Parse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                    if (codepoint >= 0xD800 && codepoint <= 0xDFFF)
+                        throw new TomlParseException(
+                            $"Invalid Unicode escape '\\u{hex}': U+{codepoint:X4} is in the surrogate range (U+D800..U+DFFF) and is not a valid Unicode scalar value.");
                     output.Append((char)codepoint);
                     index += 6;
                     break;
                 }
                 case 'U':
                 {
+                    // \UXXXXXXXX: 8 hex digits. Reject surrogates and
+                    // values above U+10FFFF. uint.Parse so an
+                    // 8-hex-digit input with the high bit set doesn't
+                    // sign-extend to a negative int and slip past the
+                    // > 0x10FFFF check.
                     var hex = raw.Substring(index + 2, 8);
-                    int codepoint = int.Parse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-                    output.Append(char.ConvertFromUtf32(codepoint));
+                    uint codepoint = uint.Parse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                    if (codepoint >= 0xD800 && codepoint <= 0xDFFF)
+                        throw new TomlParseException(
+                            $"Invalid Unicode escape '\\U{hex}': U+{codepoint:X8} is in the surrogate range (U+D800..U+DFFF) and is not a valid Unicode scalar value.");
+                    if (codepoint > 0x10FFFF)
+                        throw new TomlParseException(
+                            $"Invalid Unicode escape '\\U{hex}': U+{codepoint:X8} is above U+10FFFF, the maximum Unicode code point.");
+                    output.Append(char.ConvertFromUtf32((int)codepoint));
                     index += 10;
                     break;
                 }
