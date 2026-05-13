@@ -335,10 +335,13 @@ public class AndRuleTests
         // ScanUntil at end-of-input returns a zero-width leaf. The
         // composite's End comes from the engine's recorded consumed
         // span (which ended at 2 chars), not from the trailing empty
-        // leaf's offset.
+        // leaf's offset. eofIsTerminator: true so the inner scan
+        // succeeds with an empty leaf instead of failing at EOF (the
+        // test is about the composite range, not the strict-stopper
+        // check).
         var rule = And(
             Literal("ab").Preserve(),
-            ScanUntil(TokenSet.Runes("z")).Preserve()).As("composite").Preserve();
+            ScanUntil(TokenSet.Runes("z"), eofIsTerminator: true).Preserve()).As("composite").Preserve();
         var result = rule.Parse("ab");
 
         var range = result.Tree!.SourceRange!.Value;

@@ -15,6 +15,16 @@ namespace InductorParser;
 // inner loop, and emits one leaf Symbol over the whole matched span.
 // On the word-scan benchmarks that's a 2x speedup.
 //
+// minimumCount is the minimum number of tokens the run must contain
+// to succeed. The default of 1 keeps every successful match consuming
+// at least one first-set token, which lets ComputeRuleStart publish
+// Advance.Always and lets enclosing rules use the LL(1) lookahead
+// shortcut. Passing 0 makes the rule always succeed: an empty run
+// produces a zero-width leaf at the current position. The zero-min
+// case publishes Advance.Sometimes so the shortcut stays sound, the
+// same downgrade BetweenInclusiveRule does for AtLeast == 0
+// (Optional / ZeroOrMore).
+//
 // Pairs with ScanUntilRule, which is the inverse stop condition: scan
 // while tokens are NOT a stopper. Both are leaf-shaped scanners that
 // produce one Symbol per matched run.
@@ -27,9 +37,9 @@ internal sealed class ScanWhileRule : Rule
     public ScanWhileRule(TokenSet set, int minimumCount)
         : base(FlattenType.Preserve)
     {
-        if (minimumCount < 1)
+        if (minimumCount < 0)
             throw new ArgumentOutOfRangeException(nameof(minimumCount), minimumCount,
-                "minimumCount must be at least 1.");
+                "minimumCount must be at least 0.");
 
         _set = set;
         _minimumCount = minimumCount;
@@ -83,7 +93,7 @@ internal sealed class ScanWhileRule : Rule
         }
 
         int length = lexer.Position - startPosition;
-        TraceSuccess(lexer, $"count= {count}, {length} chars, wanted one or more of '{_setRendered}'");
+        TraceSuccess(lexer, $"count= {count}, {length} chars, wanted at least {_minimumCount} of '{_setRendered}'");
         transaction.Commit();
 
         if (effectiveFlattenType == FlattenType.Delete)
@@ -99,5 +109,20 @@ internal sealed class ScanWhileRule : Rule
     }
 
     internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.FirstTokenMustBeInSet(_set);
+        // minimumCount >= 1: every successful match consumes at least
+        // one token from _set, so Advance.Always is sound and the
+        // lookahead shortcut can skip this rule when the peek is
+        // outside the set.
+        //
+        // minimumCount == 0: the rule can succeed with a zero-width
+        // match at the current position, so Advance has to drop to
+        // Sometimes. Same shape Optional(ScanWhile(set, 1)) would
+        // publish via BetweenInclusiveRule's AtLeast==0 downgrade.
+        // _set stays as the first-token set (it's still the set of
+        // tokens we'd consume on a non-zero match), but the shortcut
+        // ignores it under Sometimes per the rules in
+        // RuleStartRequirements.
+        _minimumCount == 0
+            ? new RuleStartRequirements(_set, Advance.Sometimes, Polarity.MustBeIn)
+            : RuleStartRequirements.FirstTokenMustBeInSet(_set);
 }

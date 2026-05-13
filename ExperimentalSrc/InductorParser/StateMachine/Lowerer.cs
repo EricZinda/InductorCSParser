@@ -1087,18 +1087,21 @@ internal sealed class LoweringContext
         if (rule.LoweringHasEscape)
             escapeEndEntry = GetOrCreateSubprogram(rule.LoweringEscapeEnd!);
 
-        int specIdx = AddScanUntilSpec(stopperSetIdx, escapeStartRune, rule.LoweringHasEscape, escapeEndEntry);
-
         // The leaf-emit / no-emit decision lives inline in the lowering
-        // path. Delete-effective ScanUntil bypasses both the metadata
-        // entry and the EmitScanUntilLeaf state.
+        // path. Delete-effective ScanUntil bypasses the EmitScanUntilLeaf
+        // state, but the metadata entry is still allocated when strict
+        // mode is in play: the EOF-fail path uses metadata.ErrorMessage
+        // to surface a useful diagnostic. A spare metadata slot is
+        // cheap.
         var effective = ResolveEffective(rule.FlattenType);
         bool emitLeaf = effective != FlattenType.Delete;
+        int metadataIndex = (emitLeaf || !rule.LoweringEofIsTerminator)
+            ? AddSymbolMetadata(rule)
+            : -1;
 
         int afterScan;
         if (emitLeaf)
         {
-            int metadataIndex = AddSymbolMetadata(rule);
             int popOk = AddState(LoweredOpCode.PopBacktrack, 0, onSuccess, onSuccess);
             afterScan = AddState(LoweredOpCode.EmitScanUntilLeaf, metadataIndex, popOk, popOk);
         }
@@ -1108,10 +1111,25 @@ internal sealed class LoweringContext
         }
 
         // Outer fail handler: rolls back lexer and emit cursor to entry
-        // and propagates failure. Only triggered when escape-end fails.
-        // (The scan loop itself never fails — empty body is legal, and
-        // EOF / surrogate halt count as successful exit.)
+        // and propagates failure. Triggered when escape-end fails, and
+        // (for strict ScanUntil) when the scan reaches EOF without ever
+        // matching the stopper. Tolerant ScanUntil (eofIsTerminator =
+        // true) sends EOF through afterScan instead, bypassing this.
         int outerFail = AddState(LoweredOpCode.FailRestore, 0, onFailure, onFailure);
+
+        // For strict ScanUntil, the EOF exit threads through a
+        // RecordRuleFailure state that stamps the rule's ErrorMessage
+        // at the EOF position before the outerFail rollback. Mirrors
+        // the recursive evaluator's lexer.RecordFailure(lexer.Position,
+        // ErrorMessage) call so the deepest-failure heuristic surfaces
+        // the right message. For tolerant ScanUntil, the EOF exit goes
+        // to OnSuccess inside the opcode and never visits this path.
+        int onEofFailState = rule.LoweringEofIsTerminator
+            ? outerFail
+            : AddState(LoweredOpCode.RecordRuleFailure, metadataIndex, outerFail, outerFail);
+
+        int specIdx = AddScanUntilSpec(stopperSetIdx, escapeStartRune, rule.LoweringHasEscape, escapeEndEntry,
+            rule.LoweringEofIsTerminator, onEofFailState);
 
         // The scan state. OnFailure points to the escape-call setup,
         // which is wired below.
@@ -1178,10 +1196,12 @@ internal sealed class LoweringContext
         return subprogramEntry;
     }
 
-    private int AddScanUntilSpec(int stopperSetIndex, int escapeStartRune, bool hasEscape, int escapeEndEntry)
+    private int AddScanUntilSpec(int stopperSetIndex, int escapeStartRune, bool hasEscape, int escapeEndEntry,
+        bool eofIsTerminator, int onEofFailState)
     {
         int newIndex = ScanUntilSpecs.Count;
-        ScanUntilSpecs.Add(new ScanUntilSpec(stopperSetIndex, escapeStartRune, hasEscape, escapeEndEntry));
+        ScanUntilSpecs.Add(new ScanUntilSpec(stopperSetIndex, escapeStartRune, hasEscape, escapeEndEntry,
+            eofIsTerminator, onEofFailState));
         return newIndex;
     }
 

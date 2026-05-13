@@ -48,4 +48,12 @@
     <None Include="E2EExamples\PrologFixtures\*.htn;E2EExamples\PrologFixtures\*.pl" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- Official Unicode conformance test files (verbatim from
+       unicode.org/Public). Copied to the test output directory so the
+       conformance fixtures can read them as plain files at run time.
+       See GraphemeBreakConformanceTests.cs for the UAX #29 suite. -->
+  <ItemGroup>
+    <None Include="Lexing\UnicodeConformance\*.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

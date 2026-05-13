@@ -347,12 +347,12 @@ public static class TomlParser
 
     private static string ExtractLiteralStringBody(Symbol stringNode)
     {
-        // LiteralString -> Optional(literalStringBody). When the body
-        // matched, the Symbol has a single child (the body leaf). When
-        // the body was empty (input ''), there are no children.
-        // Literal strings have no escapes and can't span newlines, so
-        // the body's ToString gives the verbatim text directly.
-        if (stringNode.Children.Count == 0) return "";
+        // LiteralString -> [literalStringBody]. The body uses
+        // ScanWhile(literalChar, minimumCount: 0), which always emits
+        // one leaf — possibly zero-width for the empty-string case ''
+        // — so the body is always Children[0]. Literal strings have no
+        // escapes and can't span newlines, so the body's ToString gives
+        // the verbatim text directly.
         return stringNode.Children[0].ToString();
     }
 

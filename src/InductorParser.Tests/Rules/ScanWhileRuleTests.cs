@@ -58,11 +58,87 @@ public class ScanWhileRuleTests
     }
 
     [Test]
-    public void ScanWhile_rejects_zero_minimum_count()
+    public void ScanWhile_rejects_negative_minimum_count()
     {
         Assert.That(
-            () => ScanWhile(TokenSet.Ascii.Letters, minimumCount: 0),
+            () => ScanWhile(TokenSet.Ascii.Letters, minimumCount: -1),
             Throws.TypeOf<System.ArgumentOutOfRangeException>());
+    }
+
+    [Test]
+    public void ScanWhile_with_minimumCount_zero_succeeds_on_empty_run()
+    {
+        // minimumCount: 0 makes the rule always succeed. With no
+        // matching tokens at the current position, the leaf is
+        // zero-width and ToString() is the empty string. This is the
+        // shape grammars want for "optional run of body chars" (TOML
+        // literal-string body, optional text fields): one leaf always
+        // emitted, no Optional wrapper that changes the parent's
+        // child count.
+        var rule = ScanWhile(TokenSet.Ascii.Letters, minimumCount: 0);
+        var result = rule.Parse("", new ParseOptions { AllowTrailingInput = true });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(""));
+        Assert.That(result.Tree!.Children.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ScanWhile_with_minimumCount_zero_succeeds_when_first_token_is_outside_set()
+    {
+        // Same zero-min shape, but with a non-empty input whose first
+        // token is outside the set. The rule still succeeds, emits a
+        // zero-width leaf, and leaves the cursor at the unmatched
+        // input for the outer rule to deal with. The And then consumes
+        // the '!' and the whole parse succeeds.
+        var rule = And(
+            ScanWhile(TokenSet.Ascii.Letters, minimumCount: 0),
+            Token('!'));
+
+        var result = rule.Parse("!");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(""));
+    }
+
+    [Test]
+    public void ScanWhile_with_minimumCount_zero_consumes_full_run_when_present()
+    {
+        // Zero-min doesn't disable greedy scanning. When matching
+        // tokens are present, the leaf covers the whole run.
+        var rule = ScanWhile(TokenSet.Ascii.Letters, minimumCount: 0);
+        var result = rule.Parse("abcXYZ");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("abcXYZ"));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Or_ScanWhile_with_minimumCount_zero_does_not_skip_on_outside_peek()
+    {
+        // minimumCount: 0 makes the rule zero-matchable, so
+        // ComputeRuleStart publishes Advance.Sometimes (the same
+        // shape Optional / ZeroOrMore publish). The lookahead
+        // shortcut requires Advance.Always to fire, so this
+        // ScanWhile must run regardless of what the peek is. Without
+        // the downgrade, an outer Or would skip this rule on '1' and
+        // the literal "1" branch would win for the wrong reason
+        // (the ScanWhile would never get a chance to match its empty
+        // run, and a different grammar shape might see the wrong tree).
+        var sink = NewSink();
+        var rule = Or(
+            ScanWhile(TokenSet.Ascii.Letters, minimumCount: 0),
+            Literal("1"));
+        var result = rule.Parse("1",
+            new ParseOptions
+            {
+                TraceSink = sink,
+                AllowTrailingInput = true
+            });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | ScanWhile"));
     }
 
     [Test]
@@ -88,7 +164,7 @@ public class ScanWhileRuleTests
             "   Lexer.AdvanceWhileRuneIn: 'a', Consumed: 1",
             "   Lexer.AdvanceWhileRuneIn: 'b', Consumed: 2",
             "   Lexer.AdvanceWhileRuneIn: 'c', Consumed: 3",
-            "   SUCC | ScanWhile: count= 3, 3 chars, wanted one or more of '[A-Z,a-z]'"
+            "   SUCC | ScanWhile: count= 3, 3 chars, wanted at least 1 of '[A-Z,a-z]'"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
@@ -191,10 +267,13 @@ public class ScanWhileRuleTests
     [RecursiveEngineOnly]
     public void Or_ScanWhile_skips_when_peek_is_outside_set()
     {
-        // ScanWhile(set) publishes (set, Always, MustBeIn). minimumCount
-        // is at least 1 so a successful match always consumes at least
-        // one token. Peek '1' isn't in {a..z}, so the shortcut skips
-        // ScanWhile and the literal "1" branch wins.
+        // The default minimumCount is 1, so ScanWhile(set) publishes
+        // (set, Always, MustBeIn): every successful match consumes at
+        // least one token from set. Peek '1' isn't in {a..z}, so the
+        // shortcut skips ScanWhile and the literal "1" branch wins.
+        // (Contrast with Or_ScanWhile_with_minimumCount_zero_does_not_skip
+        // for the minimumCount: 0 case, which publishes Advance.Sometimes
+        // and can't be skipped.)
         var sink = NewSink();
         var rule = Or(ScanWhile(TokenSet.Ascii.Letters), Literal("1"));
         var result = rule.Parse("1", new ParseOptions { TraceSink = sink });

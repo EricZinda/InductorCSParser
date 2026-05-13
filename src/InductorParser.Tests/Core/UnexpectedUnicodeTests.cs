@@ -795,6 +795,33 @@ public class UnexpectedUnicodeTests
     }
 
     [Test]
+    public void No_break_space_between_letters_is_separate_token()
+    {
+        // U+00A0 NO-BREAK SPACE renders as a space but is its own code
+        // point. UAX #29 classifies it as GCB=Other so it breaks on
+        // both sides; .NET's Unicode category is Zs (Space_Separator),
+        // the same as U+0020. The lexer sees three tokens
+        // (a, NBSP, b), so a grammar matching "ab" with no NBSP
+        // accommodation fails at the NBSP. Common gotcha when input is
+        // pasted from a word processor or scraped from HTML where
+        // ordinary spaces have been replaced with NBSP for layout
+        // reasons.
+        string input = "a" + UnicodeExamples.NoBreakSpaceText + "b";
+
+        // (1) Strict a-b grammar fails at the NBSP.
+        Assert.That(And(Token('a'), Token('b'), Eof()).Parse(input).Success, Is.False);
+
+        // (2) AnyToken consumes the NBSP as a wildcard.
+        Assert.That(And(Token('a'), AnyToken(), Token('b'), Eof()).Parse(input).Success, Is.True);
+
+        // (3) Targeting the NBSP via Token(...) makes the same input
+        // parse successfully. OneOf(TokenSet.Whitespace) would also
+        // match it: NBSP is in the Zs category, which the .NET-derived
+        // whitespace classification covers.
+        Assert.That(And(Token('a'), Token(UnicodeExamples.NoBreakSpaceText), Token('b'), Eof()).Parse(input).Success, Is.True);
+    }
+
+    [Test]
     public void Zero_width_space_between_letters_is_separate_token()
     {
         // U+200B ZERO WIDTH SPACE is classified by UAX #29 as a

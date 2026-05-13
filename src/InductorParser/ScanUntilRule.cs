@@ -71,6 +71,16 @@ internal sealed class ScanUntilRule : Rule
     private readonly Rule? _stopperRule;
     private readonly string _stopperRendered;
 
+    // When false (strict, the default), reaching end-of-input without
+    // matching the stopper fails the rule. When true, EOF is itself a
+    // valid stopping condition and the rule succeeds with whatever it
+    // scanned. Strict matches the plain reading of "scan until X":
+    // running off the end means the body never terminated. Tolerant is
+    // for grammars where the body legitimately admits two ends, like a
+    // line comment that may close with a newline OR EOF, and for the
+    // ScanUntilEof() helper (TokenSet.Empty + eofIsTerminator: true).
+    private readonly bool _eofIsTerminator;
+
     // Escape discrimination. Three modes:
     //   _hasEscape == false: no escape support.
     //   _hasEscape == true, _escapeStartRune != -1, _escapeStartRule == null:
@@ -107,7 +117,7 @@ internal sealed class ScanUntilRule : Rule
     private readonly Rule? _escapeEnd;
 
     // FAST PATH, no escape. Per rune: one TokenSet.Contains.
-    public ScanUntilRule(TokenSet stopAt)
+    public ScanUntilRule(TokenSet stopAt, bool eofIsTerminator = false)
         : base(FlattenType.Preserve)
     {
         _stopperSet = stopAt;
@@ -117,6 +127,7 @@ internal sealed class ScanUntilRule : Rule
         _hasEscape = false;
         _escapeStartRune = -1;
         _escapeStartRule = null;
+        _eofIsTerminator = eofIsTerminator;
     }
 
     // Accessors for the state-machine lowering pass (StateMachine/Lowerer.cs).
@@ -129,11 +140,12 @@ internal sealed class ScanUntilRule : Rule
     internal int LoweringEscapeStartRune => _escapeStartRune;
     internal Rule? LoweringEscapeStartRule => _escapeStartRule;
     internal Rule? LoweringEscapeEnd => _escapeEnd;
+    internal bool LoweringEofIsTerminator => _eofIsTerminator;
 
     // FAST PATH, single-rune escape start. Per rune: one
     // TokenSet.Contains plus one int equality on non-stopper runes.
     // Covers JSON, C, C++ regular, Python single-line.
-    public ScanUntilRule(TokenSet stopAt, Rune escapeStart, Rule escapeEnd)
+    public ScanUntilRule(TokenSet stopAt, Rune escapeStart, Rule escapeEnd, bool eofIsTerminator = false)
         : base(FlattenType.Preserve, escapeEnd)
     {
         if (escapeEnd == null)
@@ -145,12 +157,13 @@ internal sealed class ScanUntilRule : Rule
         _hasEscape = true;
         _escapeStartRune = escapeStart.Value;
         _escapeStartRule = null;
+        _eofIsTerminator = eofIsTerminator;
     }
 
     // General escape start. Adds one Rule.TryParse on non-stopper
     // runes only. Use for multi-rune starts like $$ or a choice
     // across several starts.
-    public ScanUntilRule(TokenSet stopAt, Rule escapeStart, Rule escapeEnd)
+    public ScanUntilRule(TokenSet stopAt, Rule escapeStart, Rule escapeEnd, bool eofIsTerminator = false)
         : base(FlattenType.Preserve, escapeStart, escapeEnd)
     {
         if (escapeStart == null)
@@ -164,12 +177,13 @@ internal sealed class ScanUntilRule : Rule
         _hasEscape = true;
         _escapeStartRune = -1;
         _escapeStartRule = escapeStart;
+        _eofIsTerminator = eofIsTerminator;
     }
 
     // General stopper, no escape. Per rune: one Rule.TryParse for
     // the stopper (peek transaction, never consumed). Use for
     // multi-rune boundaries like C++ raw strings.
-    public ScanUntilRule(Rule stopAt)
+    public ScanUntilRule(Rule stopAt, bool eofIsTerminator = false)
         : base(FlattenType.Preserve, stopAt)
     {
         if (stopAt == null)
@@ -181,11 +195,12 @@ internal sealed class ScanUntilRule : Rule
         _hasEscape = false;
         _escapeStartRune = -1;
         _escapeStartRule = null;
+        _eofIsTerminator = eofIsTerminator;
     }
 
     // General stopper with single-rune escape start. Canonical use:
     // Python triple-quote """...""" with backslash escapes.
-    public ScanUntilRule(Rule stopAt, Rune escapeStart, Rule escapeEnd)
+    public ScanUntilRule(Rule stopAt, Rune escapeStart, Rule escapeEnd, bool eofIsTerminator = false)
         : base(FlattenType.Preserve, stopAt, escapeEnd)
     {
         if (stopAt == null)
@@ -199,6 +214,7 @@ internal sealed class ScanUntilRule : Rule
         _hasEscape = true;
         _escapeStartRune = escapeStart.Value;
         _escapeStartRule = null;
+        _eofIsTerminator = eofIsTerminator;
     }
 
     internal override void CollectNormalizationOffenders(
@@ -231,8 +247,13 @@ internal sealed class ScanUntilRule : Rule
         // Scan forward one token (one user-perceived character) at a
         // time: a token is one grapheme cluster. The loop
         // has two ways out: end-of-input (the while condition) or a
-        // stopper match. Each iteration consumes one token as body
-        // or one escape sequence.
+        // stopper match. Which one happened decides the post-loop
+        // path: stopper match always succeeds; EOF succeeds only if
+        // _eofIsTerminator is true (the tolerant and ScanUntilEof
+        // cases), and otherwise fails with "unterminated body". The
+        // local `stopperMatched` flag carries that decision out of
+        // the loop. Each iteration consumes one token as body or one
+        // escape sequence.
         //
         // The loop bound is `!lexer.IsEof`, which is `_position <
         // _endPosition` for a sub-lexer (the one WithinToken hands us
@@ -257,6 +278,7 @@ internal sealed class ScanUntilRule : Rule
         // Lone surrogates only reach this rule under Compile(null),
         // because string.Normalize rejects malformed UTF-16 with
         // ArgumentException out of Parse() under any other form.
+        bool stopperMatched = false;
         while (!lexer.IsEof)
         {
             int pos = lexer.Position;
@@ -285,7 +307,10 @@ internal sealed class ScanUntilRule : Rule
             {
                 if (pos + tokenLen <= inputLen
                     && _stopperSet.ContainsToken(input.AsSpan(pos, tokenLen)))
+                {
+                    stopperMatched = true;
                     break;
+                }
             }
             else
             {
@@ -294,7 +319,11 @@ internal sealed class ScanUntilRule : Rule
                 // No Commit: the `using` disposes the transaction and
                 // rolls the position back regardless of what the
                 // stopper rule consumed.
-                if (stopMatch != null) break;
+                if (stopMatch != null)
+                {
+                    stopperMatched = true;
+                    break;
+                }
             }
 
             // Escape-start check. Single-rune and Rule forms are
@@ -367,6 +396,20 @@ internal sealed class ScanUntilRule : Rule
             // the parser sees.
             if (pos + tokenLen > inputLen) break;
             lexer.SetPositionUnchecked(pos + tokenLen);
+        }
+
+        if (!stopperMatched && !_eofIsTerminator)
+        {
+            // Strict: the loop ran off the end without ever matching
+            // the stopper. Record failure at lexer.Position, which is
+            // input.Length under top-level Parse and is the sub-lexer
+            // end under WithinToken. That's the deepest position the
+            // rule reached, so the deepest-failure heuristic surfaces
+            // this message ahead of competing shallower failures from
+            // outer rules that retry from earlier in the input.
+            TraceFailure(lexer, $"unterminated body, expected stopper '{_stopperRendered}'");
+            lexer.RecordFailure(lexer.Position, ErrorMessage);
+            return null;
         }
 
         int length = lexer.Position - startPosition;

@@ -145,20 +145,18 @@ These would each be follow-up rounds.
 Each piece of friction encountered during this port became a separate
 backlog item under `backlog/`:
 
-- `swm0-scanwhile-rejects-minimumcount-zero-forces-opti.md` —
-  ScanWhile(set, minimumCount: 0) throws at construction; forces an
-  Optional(ScanWhile(...)) wrap with a different tree shape.
-- Closed: `ParseResult.RawSourceTextOf(symbol)`. Token / Literal /
-  EndOfLine factories default to FlattenType.Delete, which silently
-  strips chars from `symbol.ToString()` of containing rules. Bit the
-  port on date-time punctuation, float decimal point, basic-string
-  escape backslash, multi-line string newlines, and special-float
-  inf/nan mnemonics — five separate decoding bugs from one underlying
-  default. Fixed by recording the parser's actual consumed span on
-  every Preserve composite and adding `ParseResult.RawSourceTextOf`,
-  which slices the original input by that span. The TomlGrammar
-  punctuation rules now use the factory defaults and TomlParser uses
-  the new accessor instead of `.ToString()` for round-trip text.
+- Closed: `Symbol.SourceText` / `Symbol.SourceRange`. Token / Literal /
+  EndOfLine default to FlattenType.Delete, which silently strips
+  chars from `symbol.ToString()` of containing rules. Bit the port on
+  date-time punctuation, float decimal point, basic-string escape
+  backslash, multi-line string newlines, and special-float inf/nan
+  mnemonics — five separate decoding bugs from one underlying default.
+  Fixed by recording the parser's actual consumed span on every
+  Preserve composite at construction time and exposing
+  `Symbol.SourceText` / `Symbol.SourceRange` on the Symbol itself,
+  which slice the original input by that span. The TomlGrammar
+  punctuation rules now use the defaults and TomlParser helpers call
+  `symbol.SourceText` directly instead of threading a ParseResult.
 - `prwr-or-preserve-wrapper-vs-inner-rule-dispatch-doc.md` — when an
   Or is wrapped with `.As(name).Preserve()`, `symbol.Is(InnerRule)`
   returns false on the wrapper; consumer code has to drill into
