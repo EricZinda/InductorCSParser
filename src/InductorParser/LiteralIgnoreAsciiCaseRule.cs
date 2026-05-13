@@ -5,15 +5,14 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
-// Case-insensitive literal match, ASCII letters only. Same single-transaction
+// Case-insensitive literal match, ASCII only. Same single-transaction
 // shape as LiteralRule. The only difference is the compare treats ASCII
-// letters case-insensitively. Non-ASCII code units compare bit-exact, so
-// Turkish dotless-I, German sharp-s, Greek sigma variants, etc. DON'T
-// match their upper/lower counterparts. That tradeoff is on purpose: full
-// Unicode case-insensitive matching is locale-dependent and grammar-breaking,
-// and the keyword-heavy grammars that want this leaf (SQL, HTTP methods,
-// chord notation) only ever need ASCII in practice. See docs/UnicodeGotchas.md
-// for the longer explanation.
+// letters case-insensitively. The pattern itself is restricted to ASCII
+// (every char in 0x00..0x7F) and the constructor throws on any non-ASCII
+// char. Non-ASCII code points in the pattern would be confusing: ASCII
+// case-folding doesn't apply to them, so a non-ASCII letter in a pattern
+// labeled "IgnoreAsciiCase" gives the reader the wrong mental model.
+// Grammars that want a non-ASCII keyword should use Literal(...). 
 internal sealed class LiteralIgnoreAsciiCaseRule : Rule
 {
     private string _expected;
@@ -24,6 +23,15 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
             throw new ArgumentNullException(nameof(expected));
         if (expected.Length == 0)
             throw new ArgumentException("LiteralIgnoreAsciiCase requires a non-empty string.", nameof(expected));
+        for (int charIndex = 0; charIndex < expected.Length; charIndex++)
+        {
+            char c = expected[charIndex];
+            if (c > 0x7F)
+                throw new ArgumentException(
+                    $"LiteralIgnoreAsciiCase requires an ASCII-only pattern. " +
+                    $"Char at index {charIndex} is U+{(int)c:X4} (outside 0x00..0x7F).",
+                    nameof(expected));
+        }
         _expected = expected;
         SetTraceName("LiteralIgnoreAsciiCase");
     }
@@ -110,38 +118,20 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
 
     internal override RuleStartRequirements ComputeRuleStart()
     {
-        // Same first-grapheme extraction as LiteralRule. When the first
-        // grapheme starts with an ASCII letter, both cases of that letter
-        // belong in the first-token set: AsciiCaseEquals admits either
-        // case at parse time, and the lookahead shortcut has to admit
-        // the peek with the opposite ASCII case or it skips a rule that
-        // would have matched.
-        //
-        // Two shapes share the same case-folded admission: a one-char
-        // ASCII-letter grapheme like 'a' / "X", and a multi-rune cluster
-        // whose first rune is an ASCII letter like "é" (e + combining
-        // acute, after FormD decomposes "é"). Both cases have to admit
-        // a peek whose first rune is the opposite ASCII case. The
-        // multi-rune-cluster case also keeps the original cluster as a
-        // multi-rune entry so the strict ContainsToken path still
-        // matches it.
-        try
+        // ASCII-only patterns can't form multi-rune clusters that start
+        // with an ASCII letter (combining marks are non-ASCII), so the
+        // case-fold first-grapheme is always one char. The only ASCII
+        // multi-char cluster is CRLF (UAX #29 GB3), which starts with
+        // '\r' (not an ASCII letter) and goes through the standard
+        // first-grapheme path below. StringInfo.GetNextTextElement
+        // can't throw on ASCII input, so no try/catch is needed.
+        string firstElement = System.Globalization.StringInfo.GetNextTextElement(_expected, 0);
+        if (firstElement.Length == 1 && IsAsciiLetter(firstElement[0]))
         {
-            string firstElement = System.Globalization.StringInfo.GetNextTextElement(_expected, 0);
-            if (firstElement.Length >= 1 && IsAsciiLetter(firstElement[0]))
-            {
-                int lower = firstElement[0] | 0x20;
-                int upper = lower & ~0x20;
-                TokenSet caseSet = TokenSet.Single(lower) | TokenSet.Single(upper);
-                if (firstElement.Length == 1)
-                    return RuleStartRequirements.FirstTokenMustBeInSet(caseSet);
-                return RuleStartRequirements.FirstTokenMustBeInSet(
-                    caseSet | TokenSet.Graphemes(firstElement));
-            }
-        }
-        catch (ArgumentException)
-        {
-            return RuleStartRequirements.AlwaysAdvancesByOneToken;
+            int lower = firstElement[0] | 0x20;
+            int upper = lower & ~0x20;
+            return RuleStartRequirements.FirstTokenMustBeInSet(
+                TokenSet.Single(lower) | TokenSet.Single(upper));
         }
         return RuleStartRequirements.FirstTokenMustBeFirstGraphemeOf(_expected);
     }
