@@ -385,20 +385,27 @@ public class NormalizationTests
     }
 
     [Test]
-    public void Compile_LiteralIgnoreAsciiCase_auto_converts_non_ASCII()
+    public void Compile_LiteralIgnoreAsciiCase_rejects_non_ASCII_pattern_at_construction()
     {
         // Pure-ASCII LiteralIgnoreAsciiCase compiles fine under any
         // form (ASCII is invariant under all four NFC/NFD/NFKC/NFKD).
         Assert.DoesNotThrow(() =>
             LiteralIgnoreAsciiCase("HELLO").Compile());
 
-        // Mixed ASCII + decomposed non-ASCII auto-converts to NFC
-        // under default Compile.
-        var rule = LiteralIgnoreAsciiCase("caf" + "e" + CombiningAcuteText);
-        Assert.DoesNotThrow(() => rule.Compile());
-        // Matches both forms via FormC input normalization.
-        Assert.That(rule.Parse(CafePrecomposed).Success, Is.True);
-        Assert.That(rule.Parse(CafeDecomposed).Success, Is.True);
+        // Mixed ASCII + non-ASCII patterns throw at construction.
+        // ASCII case-folding doesn't apply to non-ASCII code points,
+        // so a non-ASCII char in a LiteralIgnoreAsciiCase pattern would
+        // silently behave as a bit-exact compare and mislead the reader.
+        // Grammars that want a non-ASCII keyword should use Literal(...).
+        Assert.Throws<ArgumentException>(() =>
+            LiteralIgnoreAsciiCase("caf" + "e" + CombiningAcuteText));
+        // Literal accepts non-ASCII content, including decomposed
+        // combining-mark sequences. Compile then auto-converts under
+        // the chosen form.
+        var literalRule = Literal("caf" + "e" + CombiningAcuteText);
+        Assert.DoesNotThrow(() => literalRule.Compile());
+        Assert.That(literalRule.Parse(CafePrecomposed).Success, Is.True);
+        Assert.That(literalRule.Parse(CafeDecomposed).Success, Is.True);
     }
 
     [Test]

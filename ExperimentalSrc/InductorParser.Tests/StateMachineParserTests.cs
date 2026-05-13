@@ -182,6 +182,30 @@ public class StateMachineParserTests
         Assert.That(found!.Children.Count, Is.EqualTo(3));
     }
 
+    [Test]
+    public void ZeroOrMore_scanner_skip_does_not_skip_NoneOf_alternative_matches()
+    {
+        // TryLowerBetweenScanner unions every non-fallback alternative's
+        // FirstConsumedTokens.LookaheadFirstRunes into the candidate set
+        // without considering Polarity. For a MustNotBeIn alternative
+        // like NoneOf(stopSet), FirstConsumedTokens is the rule's
+        // FAIL-set, not its match-set. Including it directs the
+        // scanner to advance to positions where NoneOf will FAIL (and
+        // fall through to AnyToken().Delete()), silently skipping past
+        // every position where NoneOf would have MATCHED. Mirrors the
+        // recursive engine's BetweenInclusive_scanner_skip_does_not_skip_NoneOf_alternative_matches.
+        var stopSet = TokenSet.Runes("xy");
+        var rule = BetweenInclusive(0, int.MaxValue, Or(
+            NoneOf(stopSet),
+            AnyToken().Flatten(FlattenType.Delete)
+        ));
+
+        var stateMachine = StateMachineParser.Parse(rule, "abxcyd");
+
+        Assert.That(stateMachine.Success, Is.True, stateMachine.ErrorMessage);
+        Assert.That(stateMachine.ToString(), Is.EqualTo("abcd"));
+    }
+
     // ---- Not ----
 
     [Test]
