@@ -854,6 +854,19 @@ internal sealed class LoweringContext
             Rule alternative = orRule.Children[index];
             if (alternative.ErrorMessage != null || alternative.Advance != Advance.Always)
                 return false;
+            // MustNotBeIn polarity inverts the meaning of
+            // FirstConsumedTokens: the published set is the rule's
+            // FAIL-set, not its match-set. Unioning it into `candidates`
+            // would direct the scanner to FAIL positions and silently
+            // skip past every match position (e.g.
+            // `Or(NoneOf("xy"), AnyToken().Delete())` would have the
+            // scanner jump to 'x' / 'y' and the AnyToken fallback consume
+            // them, while the runes the user wanted captured by NoneOf
+            // are never read). Bail out so the per-iteration path runs.
+            // Mirrors the recursive engine's TryCreateScannerSkip
+            // polarity gate.
+            if (alternative.Polarity != Polarity.MustBeIn)
+                return false;
             // Flatten multi-rune entries' first runes into the rune
             // intervals so AdvanceUntilRuneIn (rune-only) and the
             // BMP IndexOfAny fast path still pull the scanner to
