@@ -218,7 +218,7 @@ public class NameOfTests
         // rule's own Id at construction time. For Token('a').As("aChar"),
         // rule.Id is 0x61 (in the Unicode scalar range) and Name is
         // "aChar". NameOf returns the user-supplied name.
-        var aChar = Token('a').As("aChar").Preserve();
+        var aChar = Token('a').As("aChar");
         aChar.Compile();
 
         Assert.That(aChar.NameOf(aChar.Id), Is.EqualTo("aChar"));
@@ -241,7 +241,7 @@ public class NameOfTests
     {
         // Same shape as Named_single_rune_Token with a supplementary-
         // plane rune (id past 0xFFFF but still in the character range).
-        var guitar = Token(UnicodeExamples.GuitarGrapheme).As("guitar").Preserve();
+        var guitar = Token(UnicodeExamples.GuitarGrapheme).As("guitar");
         guitar.Compile();
 
         Assert.That(guitar.NameOf(guitar.Id), Is.EqualTo("guitar"));

@@ -190,7 +190,7 @@ public class AnyTokenRuleTests
     {
         SourceRangeMatrixHelper.AssertTargetAfterLiteralPrefix(
             row, form,
-            target: AnyToken().As("any").Preserve(),
+            target: AnyToken().As("any"),
             targetText: "X");
     }
 

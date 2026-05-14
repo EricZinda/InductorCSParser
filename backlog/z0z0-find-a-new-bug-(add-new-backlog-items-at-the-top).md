@@ -1,10 +1,10 @@
-# Find a new bug (add new backlog items before this)
+# Find a new bug (add new backlog items at the top)
 
 **Read this first:** every path you touch as part of this task must be under the worktree root you started in. Backlog item, search log, pattern doc, failing test, source fix, scratch notes — all of it. Details in the "All edits stay inside the worktree you are running in" section below.
 
 This is a real backlog item, if you reach it, do it!
 
-This item should always be the last item in the backlog. Add new backlog items before it, not after.
+This item should always be the last item in the backlog. New backlog items go at the **top** of the backlog with the smallest alpha prefix (e.g. `0001-` or `0a00-`), not somewhere alphabetically before this one. Putting new items at the top keeps the most recent work visible and matches the newest-on-top layout already used by `docs/BugSearchLog/` and `docs/PotentialBugSources/`. The VS Code backlog viewer renumbers on next open if you pick a prefix that needs adjusting.
 
 ## All edits stay inside the worktree you are running in
 
@@ -43,7 +43,7 @@ Create a new `.md` file in `backlog/` following the same pattern as the other it
 4. **Fix**: concrete instructions for what to change in the source
 5. **Verify the Fix**: run the same tests, expect them to pass
 
-The filename should follow the `NNN-slug.md` pattern where NNN is the next available alphanumeric.
+The filename should follow the `<prefix>-<slug>.md` pattern where the prefix sorts at the top of the backlog (smaller than the current top entry's prefix). `0001-` or `0a00-` is fine for the first ones; pick a prefix slightly smaller than the current top entry for subsequent ones.
 
 ## Update the bug-hunt docs
 

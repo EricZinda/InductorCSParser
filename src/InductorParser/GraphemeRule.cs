@@ -86,9 +86,12 @@ internal sealed class GraphemeRule : Rule
         }
 
         _expected = normalized;
-        // Skip the rune re-pin when the user fixed an Id via .As(SymbolId);
-        // their pin is the stable-numbering contract.
-        if (!IsUserSymbolIdPinned && TrySingleRuneValue(_expected, out int runeValue))
+        // Skip the rune re-pin when the user fixed an Id via .As(SymbolId)
+        // or named the rule via .As(string): their pinned or name-hashed
+        // id is the stable-numbering contract, and re-pinning to the new
+        // rune would clobber the custom-range id AssignNamedIds gave a
+        // named rule.
+        if (!IsUserSymbolIdPinned && Name == null && TrySingleRuneValue(_expected, out int runeValue))
             SetIdInternal(new SymbolId(runeValue));
     }
 

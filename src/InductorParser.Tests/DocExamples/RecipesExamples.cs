@@ -264,14 +264,16 @@ public class RecipesExamples
     [Test]
     public void No_leading_zero_natural_translation_positions_error_one_column_past_the_problem()
     {
-        static Rule NaturalCore(string name) => Or(
+        // Factory function so each call site gets a fresh rule and .As
+        // can name it without colliding with a previous name.
+        static Rule NaturalCore() => Or(
             Token('0'),
             And(OneOf(TokenSet.Range('1', '9')), ZeroOrMore(OneOf(TokenSet.Ascii.Digits)))
-        ).As(name);
+        );
         var grammar = And(
-            NaturalCore("major"), Token('.'),
-            NaturalCore("minor"), Token('.'),
-            NaturalCore("patch"), Eof());
+            NaturalCore().As("major"), Token('.'),
+            NaturalCore().As("minor"), Token('.'),
+            NaturalCore().As("patch"), Eof());
 
         var result = grammar.Parse("01.2.3");
         Assert.That(result.Success, Is.False);
@@ -294,14 +296,16 @@ public class RecipesExamples
     [Test]
     public void No_leading_zero_lookahead_inside_or_does_not_yet_fix_position_due_to_known_leak()
     {
-        static Rule PeekCore(string name) => Or(
+        // Factory function so each call site gets a fresh rule and .As
+        // can name it without colliding with a previous name.
+        static Rule PeekCore() => Or(
             And(Token('0'), Not(OneOf(TokenSet.Ascii.Digits))),
             And(OneOf(TokenSet.Range('1', '9')), ZeroOrMore(OneOf(TokenSet.Ascii.Digits)))
-        ).WithError("Number with no leading zeros expected").As(name);
+        ).WithError("Number with no leading zeros expected");
         var grammar = And(
-            PeekCore("major"), Token('.'),
-            PeekCore("minor"), Token('.'),
-            PeekCore("patch"), Eof());
+            PeekCore().As("major"), Token('.'),
+            PeekCore().As("minor"), Token('.'),
+            PeekCore().As("patch"), Eof());
 
         var result = grammar.Parse("01.2.3");
         Assert.That(result.Success, Is.False);

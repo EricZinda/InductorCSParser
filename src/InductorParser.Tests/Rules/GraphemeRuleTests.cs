@@ -308,7 +308,7 @@ public class GraphemeRuleTests
         // point at construction (Token('a').Id == 0x61). Tree.Find still
         // resolves through rule.Id, NameOf returns the user-supplied name
         // for the user-named case, and PrintTree shows the long form.
-        var aChar = Token('a').As("aChar").Preserve();
+        var aChar = Token('a').As("aChar");
         var result = aChar.Parse("a");
 
         Assert.That(result.Success, Is.True);
@@ -326,8 +326,8 @@ public class GraphemeRuleTests
         // construction-time rune-Id assignment only fires for single-rune
         // expected text. NameOf returns the user-supplied name and
         // PrintTree shows the long form.
-        var devChar = Token(Canary("हि", "devanagari letter ha + devanagari vowel sign i", 0x0939, 0x093F)).As("devChar").Preserve();
-        var result = devChar.Parse(Canary("हि", "devanagari letter ha + devanagari vowel sign i", 0x0939, 0x093F));
+        var devChar = Token(UnicodeExamples.DevanagariHiGrapheme).As("devChar");
+        var result = devChar.Parse(UnicodeExamples.DevanagariHiGrapheme);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Tree!.Is(devChar), Is.True);
@@ -481,7 +481,7 @@ public class GraphemeRuleTests
             return; // covered by Token_in_OneOrMore's Compile-throws path
         if (!NormalizationExamples.PostFormIsSingleGrapheme(row, form))
             return; // multi-grapheme post-form is covered by the Token_in_OneOrMore Compile-throws path
-        var tokenRule = Token(row.Source).Preserve().As("tokenBranch");
+        var tokenRule = Token(row.Source).As("tokenBranch");
         var fallback = AnyToken().As("fallbackBranch");
         var rule = Or(tokenRule, fallback);
 
@@ -531,7 +531,7 @@ public class GraphemeRuleTests
     {
         SourceRangeMatrixHelper.AssertTargetAfterLiteralPrefix(
             row, form,
-            target: Token('X').As("xMarker").Preserve(),
+            target: Token('X').As("xMarker"),
             targetText: "X");
     }
 

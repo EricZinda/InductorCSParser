@@ -9,24 +9,27 @@ namespace InductorParser.Tests;
 
 // LiteralIgnoreAsciiCase shares LiteralRule's match shape: a single-
 // transaction multi-token compare against a stored _expected string.
-// The only difference is ASCII letters compare case-insensitively.
-// Compile-time normalization rewrites _expected through TryConvertToForm
-// the same way LiteralRule does, so the same staleness bug surface
-// applies and the same matrix coverage applies.
+// The only difference is ASCII letters compare case-insensitively, and
+// the pattern is restricted to ASCII-only at construction. Non-ASCII
+// patterns throw ArgumentException up front because ASCII case-folding
+// doesn't apply to them and admitting them would mislead the reader.
 [TestFixture]
 public class LiteralIgnoreAsciiCaseRuleTests
 {
     // -----------------------------------------------------------------
     // Compile-form normalization matrix
     //
-    // See GraphemeRuleTests for the full matrix rationale.
-    // LiteralIgnoreAsciiCase accepts multi-grapheme expected text by
-    // design (same as LiteralRule), so the only Compile-throws case is
-    // the lone surrogate where string.Normalize itself throws. The
-    // ASCII case-folding behavior is orthogonal to normalization (it
-    // only changes the runtime compare, not the cached _expected
-    // string), so the matrix doesn't need separate upper/lower
-    // variants per row.
+    // LiteralIgnoreAsciiCase's pattern is restricted to ASCII, so the
+    // matrix splits into two branches per row:
+    //   * Pure-ASCII row: the pattern constructs, compiles, and parses.
+    //   * Non-ASCII row: the pattern is rejected at construction, before
+    //     Compile or Parse ever run.
+    // The "AlreadyNormalized" category is the only one that holds pure
+    // ASCII content ("a"); every other row's Source contains at least
+    // one non-ASCII char by design (the matrix was built to exercise
+    // Unicode normalization behavior). The branching below keeps both
+    // halves under the same parameterized fixture so a future row that
+    // adds an ASCII variant gets covered automatically.
     // -----------------------------------------------------------------
 
     [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
@@ -34,14 +37,13 @@ public class LiteralIgnoreAsciiCaseRuleTests
         NormalizationExamples.NormalizationCase row,
         NormalizationForm form)
     {
-        var rule = LiteralIgnoreAsciiCase(row.Source);
-
-        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        if (!IsAsciiOnly(row.Source))
         {
-            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            Assert.Throws<ArgumentException>(() => LiteralIgnoreAsciiCase(row.Source));
             return;
         }
 
+        var rule = LiteralIgnoreAsciiCase(row.Source);
         rule.Compile(form);
         var result = rule.Parse(row.Source);
         Assert.That(result.Success, Is.True,
@@ -54,14 +56,13 @@ public class LiteralIgnoreAsciiCaseRuleTests
         NormalizationExamples.NormalizationCase row,
         NormalizationForm form)
     {
-        var rule = OneOrMore(LiteralIgnoreAsciiCase(row.Source));
-
-        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        if (!IsAsciiOnly(row.Source))
         {
-            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            Assert.Throws<ArgumentException>(() => LiteralIgnoreAsciiCase(row.Source));
             return;
         }
 
+        var rule = OneOrMore(LiteralIgnoreAsciiCase(row.Source));
         rule.Compile(form);
         var result = rule.Parse(row.Source);
         Assert.That(result.Success, Is.True,
@@ -74,10 +75,13 @@ public class LiteralIgnoreAsciiCaseRuleTests
         NormalizationExamples.NormalizationCase row,
         NormalizationForm form)
     {
-        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
-            return; // covered by LiteralIgnoreAsciiCase_in_OneOrMore's Compile-throws path
+        if (!IsAsciiOnly(row.Source))
+        {
+            Assert.Throws<ArgumentException>(() => LiteralIgnoreAsciiCase(row.Source));
+            return;
+        }
 
-        var literalRule = LiteralIgnoreAsciiCase(row.Source).Preserve().As("literalBranch");
+        var literalRule = LiteralIgnoreAsciiCase(row.Source).As("literalBranch");
         var fallback = AnyToken().As("fallbackBranch");
         var rule = Or(literalRule, fallback);
 
@@ -94,14 +98,13 @@ public class LiteralIgnoreAsciiCaseRuleTests
         NormalizationExamples.NormalizationCase row,
         NormalizationForm form)
     {
-        var rule = And(LiteralIgnoreAsciiCase(row.Source), Eof());
-
-        if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+        if (!IsAsciiOnly(row.Source))
         {
-            Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+            Assert.Throws<ArgumentException>(() => LiteralIgnoreAsciiCase(row.Source));
             return;
         }
 
+        var rule = And(LiteralIgnoreAsciiCase(row.Source), Eof());
         rule.Compile(form);
         var result = rule.Parse(row.Source);
         Assert.That(result.Success, Is.True,
@@ -112,6 +115,9 @@ public class LiteralIgnoreAsciiCaseRuleTests
     // Matrix-driven SourceRange test. See docs/TestArchitecture.md
     // "Per-rule SourceRange-matrix tests live in each rule's own
     // test file." Shared scaffold lives in SourceRangeMatrixHelper.
+    // The target is a fixed ASCII literal ("xyz"), so this row's
+    // ASCII-pattern restriction is satisfied independently of
+    // row.Source (which is the prefix the helper splices in front).
     [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
     public void SourceRange_for_LiteralIgnoreAsciiCase_target_after_normalized_Literal_prefix_uses_original_coords(
         NormalizationExamples.NormalizationCase row,
@@ -119,7 +125,7 @@ public class LiteralIgnoreAsciiCaseRuleTests
     {
         SourceRangeMatrixHelper.AssertTargetAfterLiteralPrefix(
             row, form,
-            target: LiteralIgnoreAsciiCase("xyz").As("ci").Preserve(),
+            target: LiteralIgnoreAsciiCase("xyz").As("ci"),
             targetText: "XYZ");
     }
 
@@ -134,5 +140,58 @@ public class LiteralIgnoreAsciiCaseRuleTests
             ruleBuilder: () => LiteralIgnoreAsciiCase("xyz"),
             input: "XYZ",
             expectedSourceText: "XYZ");
+    }
+
+    // Construction rejects any char outside 0x00..0x7F. Three shapes:
+    // a non-ASCII letter (German sharp-s), a combining mark with an
+    // ASCII base, and a lone high surrogate. All three are common
+    // failure modes for grammars that reach for LiteralIgnoreAsciiCase
+    // when they actually want Literal.
+    [Test]
+    public void LiteralIgnoreAsciiCase_rejects_non_ascii_letter_at_construction()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => LiteralIgnoreAsciiCase($"stra{UnicodeExamples.LatinSmallSharpSGrapheme}e"));
+        Assert.That(exception!.Message, Does.Contain("ASCII-only"));
+        Assert.That(exception.Message, Does.Contain("U+00DF"));
+        Assert.That(exception.Message, Does.Contain("index 4"));
+    }
+
+    [Test]
+    public void LiteralIgnoreAsciiCase_rejects_combining_mark_at_construction()
+    {
+        string decomposed = "a" + (char)0x0301;
+        var exception = Assert.Throws<ArgumentException>(() => LiteralIgnoreAsciiCase(decomposed));
+        Assert.That(exception!.Message, Does.Contain("ASCII-only"));
+        Assert.That(exception.Message, Does.Contain("U+0301"));
+        Assert.That(exception.Message, Does.Contain("index 1"));
+    }
+
+    [Test]
+    public void LiteralIgnoreAsciiCase_rejects_surrogate_at_construction()
+    {
+        string surrogatePrefix = "\uD800X";
+        var exception = Assert.Throws<ArgumentException>(() => LiteralIgnoreAsciiCase(surrogatePrefix));
+        Assert.That(exception!.Message, Does.Contain("ASCII-only"));
+        Assert.That(exception.Message, Does.Contain("U+D800"));
+    }
+
+    [Test]
+    public void LiteralIgnoreAsciiCase_accepts_ascii_control_characters_at_construction()
+    {
+        // 0x00..0x1F and 0x7F are inside the ASCII range and don't
+        // trip the ASCII validator. They're not ASCII letters, so they
+        // go through the bit-exact compare path at parse time.
+        Assert.DoesNotThrow(() => LiteralIgnoreAsciiCase("a"));
+        Assert.DoesNotThrow(() => LiteralIgnoreAsciiCase(" abc"));
+        var rule = LiteralIgnoreAsciiCase("\r\n");
+        Assert.That(rule.Parse("\r\n").Success, Is.True);
+    }
+
+    private static bool IsAsciiOnly(string text)
+    {
+        for (int index = 0; index < text.Length; index++)
+            if (text[index] > 0x7F)
+                return false;
+        return true;
     }
 }

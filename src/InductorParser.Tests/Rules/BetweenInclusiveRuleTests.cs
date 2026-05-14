@@ -501,6 +501,32 @@ public class BetweenInclusiveRuleTests
         Assert.That(result.Tree!.ToString(), Is.EqualTo("xxS"));
     }
 
+    [Test]
+    public void BetweenInclusive_scanner_skip_does_not_skip_NoneOf_alternative_matches()
+    {
+        // TryCreateScannerSkip unions every non-fallback alternative's
+        // FirstConsumedTokens.LookaheadFirstRunes into the candidate set
+        // without considering Polarity. For a MustNotBeIn alternative
+        // like NoneOf(stopSet), FirstConsumedTokens is the rule's
+        // FAIL-set, not its match-set. Including it directs the
+        // scanner to advance to positions where NoneOf will FAIL (and
+        // fall through to AnyToken().Delete()), silently skipping past
+        // every position where NoneOf would have MATCHED.
+        var stopSet = TokenSet.Runes("xy");
+        var scanner = BetweenInclusive(0, int.MaxValue, Or(
+            NoneOf(stopSet),
+            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
+        ));
+
+        var result = scanner.Parse("abxcyd");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        // NoneOf(stopSet) matches 'a','b','c','d' as Preserve leaves;
+        // 'x' and 'y' fall to AnyToken().Delete() and contribute
+        // nothing. The concatenated matched text must be "abcd".
+        Assert.That(result.ToString(), Is.EqualTo("abcd"));
+    }
+
     // ----- Scanner-skip optimization: CRLF mid-cluster regression tests -----
     //
     // CRLF is one grapheme cluster (UAX #29 GB3). The scanner-skip fast paths
@@ -806,7 +832,7 @@ public class BetweenInclusiveRuleTests
         // empty-match shortcut fires and returns a Preserve composite
         // with a zero-length consumed span at lexer.Position. SourceText
         // is empty, SourceRange is zero-width at that offset.
-        var counted = ZeroOrMore(Literal("X")).As("count").Preserve();
+        var counted = ZeroOrMore(Literal("X")).As("count");
         var rule = And(Literal("ab"), counted, Literal("Y").Preserve()).Preserve();
         var result = rule.Parse("abY");
 
@@ -824,7 +850,7 @@ public class BetweenInclusiveRuleTests
         // Counted loop ran the inner once and stopped. The composite's
         // consumed span covers exactly what inner matched, so SourceText
         // returns "X" regardless of inner's FlattenType.
-        var counted = ZeroOrMore(Literal("X")).As("count").Preserve();
+        var counted = ZeroOrMore(Literal("X")).As("count");
         var rule = And(counted, Literal("Y").Preserve()).Preserve();
         var result = rule.Parse("XY");
 
@@ -840,7 +866,7 @@ public class BetweenInclusiveRuleTests
         // consumed span covers all three iterations, even when the
         // inner leaf is Delete-default and contributes nothing to
         // Children. ToString returns "" because no children survived.
-        var counted = OneOrMore(Literal("X")).As("count").Preserve();
+        var counted = OneOrMore(Literal("X")).As("count");
         var rule = And(counted, Literal("Y").Preserve()).Preserve();
         var result = rule.Parse("XXXY");
 
@@ -876,7 +902,7 @@ public class BetweenInclusiveRuleTests
         // iteration. Pins that the engine records the consumed span
         // once at parse end, not piecewise per-iteration (a buggy
         // implementation might overwrite Start/End each iteration).
-        var rule = OneOrMore(Literal("abc").Preserve()).As("repeat").Preserve();
+        var rule = OneOrMore(Literal("abc").Preserve()).As("repeat");
         var result = rule.Parse("abcabcabc");
 
         var range = result.Tree!.SourceRange!.Value;

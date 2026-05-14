@@ -55,7 +55,7 @@ static Rule NumericCore(string name) => And(
     Not(And(Token('0'), OneOf(TokenSet.Ascii.Digits)))
         .WithError($"{name} version must not have leading zeros"),
     OneOrMore(OneOf(TokenSet.Ascii.Digits))
-).As(name).Preserve();
+).As(name);
 
 var semver = And(
     NumericCore("major"),
@@ -86,7 +86,7 @@ The working SemVer sample under [E2ESamples/SemVer/Rewrite/SemVerGrammar.cs](../
 Sometimes the no-leading-zero check is one of several things to validate on a number. SemVer is a good example. The spec also requires major, minor, and patch to fit in a 32-bit integer, which isn't a syntactic property at all. In that case it's cleaner to accept any digit run in the grammar and do all the validation in the consumer:
 
 ```csharp
-var numericCore = OneOrMore(OneOf(TokenSet.Ascii.Digits)).As("major").Preserve();
+var numericCore = OneOrMore(OneOf(TokenSet.Ascii.Digits)).As("major");
 ```
 
 After parsing, walk to the node and check it yourself. `result.SourceRangeOf(node)` gives the column of the original text, so the error message can point at the right place:

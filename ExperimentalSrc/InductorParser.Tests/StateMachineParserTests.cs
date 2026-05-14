@@ -169,7 +169,7 @@ public class StateMachineParserTests
     [Test]
     public void BetweenInclusive_collects_children_into_preserve_wrapper()
     {
-        var letters = OneOrMore(OneOf(TokenSet.Ascii.Letters)).As("letters").Preserve();
+        var letters = OneOrMore(OneOf(TokenSet.Ascii.Letters)).As("letters");
         var rooted = And(letters, Eof());
 
         var stateMachine = StateMachineParser.Parse(rooted, "abc");
@@ -180,6 +180,30 @@ public class StateMachineParserTests
         var found = stateMachine.Tree?.Find(letters) ?? stateMachine.Symbols.FirstOrDefault(s => s.Id == letters.Id);
         Assert.That(found, Is.Not.Null);
         Assert.That(found!.Children.Count, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void ZeroOrMore_scanner_skip_does_not_skip_NoneOf_alternative_matches()
+    {
+        // TryLowerBetweenScanner unions every non-fallback alternative's
+        // FirstConsumedTokens.LookaheadFirstRunes into the candidate set
+        // without considering Polarity. For a MustNotBeIn alternative
+        // like NoneOf(stopSet), FirstConsumedTokens is the rule's
+        // FAIL-set, not its match-set. Including it directs the
+        // scanner to advance to positions where NoneOf will FAIL (and
+        // fall through to AnyToken().Delete()), silently skipping past
+        // every position where NoneOf would have MATCHED. Mirrors the
+        // recursive engine's BetweenInclusive_scanner_skip_does_not_skip_NoneOf_alternative_matches.
+        var stopSet = TokenSet.Runes("xy");
+        var rule = BetweenInclusive(0, int.MaxValue, Or(
+            NoneOf(stopSet),
+            AnyToken().Flatten(FlattenType.Delete)
+        ));
+
+        var stateMachine = StateMachineParser.Parse(rule, "abxcyd");
+
+        Assert.That(stateMachine.Success, Is.True, stateMachine.ErrorMessage);
+        Assert.That(stateMachine.ToString(), Is.EqualTo("abcd"));
     }
 
     // ---- Not ----
@@ -274,7 +298,7 @@ public class StateMachineParserTests
     {
         // Token defaults to Delete: keywords and punctuation don't
         // appear in the tree under the default path.
-        var named = And(Token('('), OneOrMore(OneOf(TokenSet.Ascii.Letters)), Token(')')).As("group").Preserve();
+        var named = And(Token('('), OneOrMore(OneOf(TokenSet.Ascii.Letters)), Token(')')).As("group");
         var rooted = And(named, Eof());
 
         var stateMachine = StateMachineParser.Parse(rooted, "(abc)");

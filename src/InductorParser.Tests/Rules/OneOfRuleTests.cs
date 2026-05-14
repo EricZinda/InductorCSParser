@@ -440,7 +440,7 @@ public class OneOfRuleTests
     {
         SourceRangeMatrixHelper.AssertTargetAfterLiteralPrefix(
             row, form,
-            target: OneOf(TokenSet.Single('X')).As("xOne").Preserve(),
+            target: OneOf(TokenSet.Single('X')).As("xOne"),
             targetText: "X");
     }
 

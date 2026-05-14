@@ -101,16 +101,24 @@ internal sealed class BetweenInclusiveRule : Rule
             int positionBefore = lexer.Position;
             var nextSymbol = ParseChild(Inner, lexer, outputSymbols);
             if (nextSymbol == null) break;
+            bool zeroWidthMatch = lexer.Position == positionBefore;
+            // Add the matched child to outputSymbols before deciding
+            // whether to continue. Zero-width Inner that returns a real
+            // wrapper Symbol (e.g. Not(X).Preserve() succeeding when X
+            // fails, or any Preserve'd lookahead) would otherwise have
+            // its wrapper silently dropped: the wrapper sits in
+            // nextSymbol but never reaches the parent's children list.
+            // AndRule adds children unconditionally for the same reason;
+            // BetweenInclusive matches that behavior here.
+            if (outputSymbols != null && !ReferenceEquals(nextSymbol, Symbol.Discarded))
+                outputSymbols.Add(nextSymbol);
             // Zero-width-match guard. Inner succeeded but didn't advance the
             // lexer (e.g. Optional, Peek, Not, or any composite of zero-width
             // children). Without this break the loop would spin forever on
             // ZeroOrMore(Optional(X)) and friends, incrementing count without
             // making progress. Exit with whatever count we have. The AtLeast
             // check below decides if that's enough to call the rule a success.
-            if (lexer.Position == positionBefore) break;
-            // Don't add child symbols if they're discarded
-            if (outputSymbols != null && !ReferenceEquals(nextSymbol, Symbol.Discarded))
-                outputSymbols.Add(nextSymbol);
+            if (zeroWidthMatch) break;
             count++;
         }
         if (count < AtLeast)
@@ -158,6 +166,20 @@ internal sealed class BetweenInclusiveRule : Rule
         {
             Rule alternative = alternatives[index];
             if (alternative.ErrorMessage != null || alternative.Advance != Advance.Always)
+                return null;
+            // MustNotBeIn polarity inverts the meaning of
+            // FirstConsumedTokens: the published set is the rule's
+            // FAIL-set, not its match-set. Unioning it into `candidates`
+            // would direct the scanner to FAIL positions and silently
+            // skip past every match position (e.g.
+            // `Or(NoneOf("xy"), AnyToken().Delete())` would have the
+            // scanner jump to 'x' / 'y' and the AnyToken fallback consume
+            // them, while the runes the user wanted captured by NoneOf
+            // are never read). Bail out so the slow path runs. Building
+            // a sound candidate set under MustNotBeIn would need the
+            // complement of the fail-set, which under grapheme
+            // tokenization is unbounded.
+            if (alternative.Polarity != Polarity.MustBeIn)
                 return null;
             // AdvanceUntilRuneIn requires a rune-only candidate set
             // (multi-rune entries are silently invisible to its

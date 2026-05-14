@@ -193,13 +193,19 @@ public class LiteralRuleTests
     }
 
     [Test]
-    public void LiteralIgnoreAsciiCase_rejects_non_ascii_case_variant()
+    public void LiteralIgnoreAsciiCase_rejects_non_ascii_pattern_at_construction()
     {
-        // German sharp s DOESN'T match SS under this primitive (that
-        // would require full Unicode case-insensitive matching, which
-        // we deliberately don't do). Document the behavior by verifying it.
-        var rule = LiteralIgnoreAsciiCase($"stra{UnicodeExamples.LatinSmallSharpSGrapheme}e");
-        Assert.That(rule.Parse("STRASSE").Success, Is.False);
+        // Patterns must be ASCII-only. German sharp s in the pattern
+        // would never participate in case-folding (the rule is named
+        // LiteralIgnoreAsciiCase, and ASCII case-folding doesn't reach
+        // U+00DF), so admitting it at construction would mislead the
+        // reader. Construction throws instead, pointing at the offending
+        // char. Grammars that want a non-ASCII keyword should use
+        // Literal("straße") directly.
+        var exception = Assert.Throws<ArgumentException>(
+            () => LiteralIgnoreAsciiCase($"stra{UnicodeExamples.LatinSmallSharpSGrapheme}e"));
+        Assert.That(exception!.Message, Does.Contain("ASCII-only"));
+        Assert.That(exception.Message, Does.Contain("U+00DF"));
     }
 
     [Test]
@@ -371,7 +377,7 @@ public class LiteralRuleTests
         if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
             return; // covered by Literal_in_OneOrMore's Compile-throws path
 
-        var literalRule = Literal(row.Source).Preserve().As("literalBranch");
+        var literalRule = Literal(row.Source).As("literalBranch");
         var fallback = AnyToken().As("fallbackBranch");
         var rule = Or(literalRule, fallback);
 
@@ -417,7 +423,7 @@ public class LiteralRuleTests
     {
         SourceRangeMatrixHelper.AssertTargetAfterLiteralPrefix(
             row, form,
-            target: Literal("XYZ").As("xyzLiteral").Preserve(),
+            target: Literal("XYZ").As("xyzLiteral"),
             targetText: "XYZ");
     }
 

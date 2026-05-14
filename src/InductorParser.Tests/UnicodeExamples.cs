@@ -238,6 +238,10 @@ internal static class UnicodeExamples
     // conjunct sequence used in Indic shaping tests.
     public static readonly string DevanagariSsaGrapheme = Canary("ष", "Devanagari letter ssa", 0x0937);
 
+    // U+0939 + U+093F: Devanagari "hi" (HA + I VOWEL SIGN). The lexer
+    // bundles these into a single multi-rune grapheme cluster.
+    public static readonly string DevanagariHiGrapheme = Canary("हि", "Devanagari ha + i vowel sign", 0x0939, 0x093F);
+
     // U+E0001 LANGUAGE TAG. Used inside emoji tag sequences for subdivision
     // flags. UAX #29 GCB=Extend.
     public const int LanguageTagRune = 0xE0001;
