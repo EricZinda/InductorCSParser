@@ -454,7 +454,7 @@ public class NoneOfRuleTests
     {
         SourceRangeMatrixHelper.AssertTargetAfterLiteralPrefix(
             row, form,
-            target: NoneOf("Y").As("notY").Preserve(),
+            target: NoneOf("Y").As("notY"),
             targetText: "X");
     }
 

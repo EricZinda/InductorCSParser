@@ -56,7 +56,7 @@ public class RawSourceTextTests
             Literal("32").Preserve(),
             Token(':'),
             Literal("00").Preserve(),
-            Token('Z').Preserve()).As("dateTime").Preserve();
+            Token('Z').Preserve()).As("dateTime");
         const string Input = "1979-05-27T07:32:00Z";
         var result = rule.Parse(Input);
 
@@ -73,7 +73,7 @@ public class RawSourceTextTests
         // Delete, so ToString of "3.14" gives "314". SourceText gives
         // "3.14".
         var rule = And(Literal("3").Preserve(), Token('.'), Literal("14").Preserve())
-            .As("float").Preserve();
+            .As("float");
         var result = rule.Parse("3.14");
 
         Assert.That(result.Tree!.ToString(), Is.EqualTo("314"));
@@ -87,7 +87,7 @@ public class RawSourceTextTests
         // factory, so ToString of a "-inf" composite gives just "-".
         // SourceText gives "-inf".
         var rule = And(Token('-').Preserve(), Literal("inf"))
-            .As("specialFloat").Preserve();
+            .As("specialFloat");
         var result = rule.Parse("-inf");
 
         Assert.That(result.Tree!.ToString(), Is.EqualTo("-"));
@@ -97,7 +97,7 @@ public class RawSourceTextTests
     [Test]
     public void Returns_text_for_named_subrule_starting_after_leading_input()
     {
-        var inner = Literal("XYZ").As("inner").Preserve();
+        var inner = Literal("XYZ").As("inner");
         var rule = And(Literal("ab"), inner);
         var result = rule.Parse("abXYZ");
 
@@ -116,7 +116,7 @@ public class RawSourceTextTests
         var rule = And(
             Literal("line1").Preserve(),
             EndOfLine(),
-            Literal("line2").Preserve()).As("body").Preserve();
+            Literal("line2").Preserve()).As("body");
         var result = rule.Parse("line1\nline2");
 
         Assert.That(result.Tree!.ToString(), Is.EqualTo("line1line2"));
@@ -136,7 +136,7 @@ public class RawSourceTextTests
         // original (decomposed) string by reference so consumers
         // substringing Input get the user's typed bytes back.
         const string DecomposedCafe = "café";
-        var rule = Literal("café").As("cafe").Preserve();
+        var rule = Literal("café").As("cafe");
         rule.Compile(System.Text.NormalizationForm.FormC);
         var result = rule.Parse(DecomposedCafe);
 

@@ -375,7 +375,7 @@ public class LiteralRuleTests
         if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
             return; // covered by Literal_in_OneOrMore's Compile-throws path
 
-        var literalRule = Literal(row.Source).Preserve().As("literalBranch");
+        var literalRule = Literal(row.Source).As("literalBranch");
         var fallback = AnyToken().As("fallbackBranch");
         var rule = Or(literalRule, fallback);
 
@@ -421,7 +421,7 @@ public class LiteralRuleTests
     {
         SourceRangeMatrixHelper.AssertTargetAfterLiteralPrefix(
             row, form,
-            target: Literal("XYZ").As("xyzLiteral").Preserve(),
+            target: Literal("XYZ").As("xyzLiteral"),
             targetText: "XYZ");
     }
 

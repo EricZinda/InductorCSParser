@@ -81,7 +81,7 @@ public class LiteralIgnoreAsciiCaseRuleTests
             return;
         }
 
-        var literalRule = LiteralIgnoreAsciiCase(row.Source).Preserve().As("literalBranch");
+        var literalRule = LiteralIgnoreAsciiCase(row.Source).As("literalBranch");
         var fallback = AnyToken().As("fallbackBranch");
         var rule = Or(literalRule, fallback);
 
@@ -125,7 +125,7 @@ public class LiteralIgnoreAsciiCaseRuleTests
     {
         SourceRangeMatrixHelper.AssertTargetAfterLiteralPrefix(
             row, form,
-            target: LiteralIgnoreAsciiCase("xyz").As("ci").Preserve(),
+            target: LiteralIgnoreAsciiCase("xyz").As("ci"),
             targetText: "XYZ");
     }
 

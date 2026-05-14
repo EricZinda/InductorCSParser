@@ -50,10 +50,21 @@ public sealed class LateBoundRule : Rule
     // Attach the real target. Returns this LateBoundRule so callers can
     // write `static readonly Rule _init = Expression.Bind(Sum);` as a
     // one-liner that fires at type-init time. Throws if the graph has
-    // already been compiled.
+    // already been compiled, and throws on a second call against the
+    // same instance: .Bind is set-once, matching .As(string) /
+    // .As(SymbolId) / .WithError. A double-Bind silently swaps the
+    // target with no error pointing at the duplicate call, and the
+    // grammar then runs against whichever target initialized last.
     public LateBoundRule Bind(Rule target)
     {
         if (target == null) throw new ArgumentNullException(nameof(target));
+        if (_target != null)
+            throw new InvalidOperationException(
+                $".Bind(...) can't be applied to this rule: it was already " +
+                $"bound to '{_target.Name ?? _target.GetType().Name}'. " +
+                $".Bind is set-once. To reuse a LateBoundRule under a " +
+                $"different target, build a factory function that returns " +
+                $"a fresh LateBoundRule each call.");
         _target = target;
         SetChildren(target);
         return this;

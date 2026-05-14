@@ -59,7 +59,7 @@ public class OptionalRuleTests
         // and SourceRange is a zero-width range. Consumers that
         // highlight the position of an absent optional still get a
         // usable position from SourceRange.
-        var optional = Optional(Literal("X").Preserve()).As("opt").Preserve();
+        var optional = Optional(Literal("X").Preserve()).As("opt");
         var rule = And(optional, Literal("Y").Preserve()).Preserve();
         var result = rule.Parse("Y");
 
@@ -79,7 +79,7 @@ public class OptionalRuleTests
         // spans [0, 1). Inner doesn't need .Preserve() — even with
         // Literal's Delete-by-factory default the wrapper still
         // recovers the matched text.
-        var optional = Optional(Literal("X")).As("opt").Preserve();
+        var optional = Optional(Literal("X")).As("opt");
         var rule = And(optional, Literal("Y").Preserve()).Preserve();
         var result = rule.Parse("XY");
 

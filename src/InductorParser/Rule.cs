@@ -406,9 +406,9 @@ public abstract class Rule
     //
     // Set-once on Name: a rule that already has a name from a prior
     // .As(string) call can't be renamed. The fluent API encourages
-    // chaining (.As("foo").Preserve().WithError("...")), and chaining
-    // looks like it's building a new rule each time. But .As(name)
-    // mutates the rule instance in place and returns it, so calling
+    // chaining (.As("foo").WithError("...")), and chaining looks
+    // like it's building a new rule each time. But .As(name) mutates
+    // the rule instance in place and returns it, so calling
     // .As(string) twice with different names against the same rule
     // instance silently makes the last call win. The bug surfaces only
     // when consumers try to dispatch by Tree.Find / Tree.Is on which
@@ -429,8 +429,7 @@ public abstract class Rule
                 $"named \"{Name}\". .As(string) is set-once. To reuse this rule " +
                 $"shape under different names, build a factory function that " +
                 $"returns a fresh rule each call (e.g. `static Rule NumericCore" +
-                $"(string name) => OneOrMore(OneOf(TokenSet.Digits)).As(name)" +
-                $".Preserve();`).");
+                $"(string name) => OneOrMore(OneOf(TokenSet.Digits)).As(name);`).");
         ApplyIdentificationFlattenPolicy(nameof(As), name);
         Name = name;
         return this;
@@ -567,10 +566,11 @@ public abstract class Rule
 
     // Convenience shortcuts for the three FlattenType values. These read
     // better than .Flatten(FlattenType.X) at calls that otherwise
-    // chain several modifiers, e.g. .As("number").Preserve() vs
-    // .As("number").Flatten(FlattenType.Preserve). All three forward to
-    // Flatten(FlattenType), so LateBoundRule's override that forbids
-    // setting a flatten policy still fires here.
+    // chain several modifiers, e.g. Literal("abc").Preserve() vs
+    // Literal("abc").Flatten(FlattenType.Preserve) for a literal whose
+    // default policy is Delete. All three forward to Flatten(FlattenType),
+    // so LateBoundRule's override that forbids setting a flatten policy
+    // still fires here.
     public Rule Preserve() => Flatten(FlattenType.Preserve);
     public Rule Delete() => Flatten(FlattenType.Delete);
     public Rule Flatten() => Flatten(FlattenType.Flatten);
