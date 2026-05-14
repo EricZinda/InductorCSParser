@@ -89,4 +89,31 @@ public class OptionalRuleTests
         Assert.That(range.Start.CharIndex, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(1));
     }
+
+    [Test]
+    public void Optional_wrapping_a_zero_width_Preserve_Not_keeps_the_inner_wrapper_in_the_tree()
+    {
+        // A Preserve'd zero-width inner (Not / Peek / Eof, or any composite
+        // that succeeds without consuming) returns a real wrapper Symbol the
+        // parent is supposed to put in the tree. Without Optional, the And
+        // path already does that: see NotRuleTests.SourceRange_on_Not_reports_
+        // zero_width_at_its_anchor. With Optional in the way, the inner
+        // wrapper went missing because BetweenInclusive's zero-width-match
+        // guard broke out of the loop before adding the child to its
+        // outputSymbols. Find(guard) returned null even though Not's
+        // assertion held, so a grammar that uses Optional(Not(X).Preserve())
+        // as an "if this is not X, mark it" idiom couldn't find the mark.
+        var guard = Not(Literal("Z")).As("guard").Preserve();
+        var rule = And(Literal("ab"), Optional(guard), Literal("X").Preserve()).Preserve();
+        var result = rule.Parse("abX");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        var guardSymbol = result.Tree!.Find(guard);
+        Assert.That(guardSymbol, Is.Not.Null,
+            "Optional wrapping a Preserve'd zero-width rule should still place its wrapper in the parent's tree");
+        Assert.That(guardSymbol!.SourceText, Is.EqualTo(string.Empty));
+        var range = guardSymbol.SourceRange!.Value;
+        Assert.That(range.Start.CharIndex, Is.EqualTo(2));
+        Assert.That(range.End.CharIndex, Is.EqualTo(2));
+    }
 }
