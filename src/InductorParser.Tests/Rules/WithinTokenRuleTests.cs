@@ -7,6 +7,7 @@ using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 // Tests for Rules.WithinToken, the combinator that runs an inner rule
@@ -126,7 +127,7 @@ public class WithinTokenRuleTests
         asciiOnlyNoNorm.Compile(null);
 
         Assert.That(asciiOnly.Parse("a").Success, Is.True);
-        Assert.That(asciiOnly.Parse("é").Success, Is.False);  // é isn't ASCII
+        Assert.That(asciiOnly.Parse(UnicodeExamples.LatinEAcutePrecomposedGrapheme).Success, Is.False);  // é isn't ASCII
         Assert.That(asciiOnlyNoNorm.Parse(LatinEAcuteGrapheme).Success,
             Is.False);  // two runes
     }
@@ -147,10 +148,10 @@ public class WithinTokenRuleTests
         var rule = WithinToken(And(
             OneOf(TokenSet.XidStart),
             OneOf(TokenSet.XidContinue)));
-        var result = rule.Parse("हि");
+        var result = rule.Parse(Canary("हि", "devanagari letter ha + devanagari vowel sign i", 0x0939, 0x093F));
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("हि"));
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(Canary("हि", "devanagari letter ha + devanagari vowel sign i", 0x0939, 0x093F)));
     }
 
     [Test]
@@ -163,10 +164,10 @@ public class WithinTokenRuleTests
         var rule = WithinToken(And(
             OneOf(TokenSet.XidStart),
             OneOf(TokenSet.XidContinue)));
-        var result = rule.Parse("กำ");
+        var result = rule.Parse(UnicodeExamples.ThaiKamGrapheme);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("กำ"));
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(UnicodeExamples.ThaiKamGrapheme));
     }
 
     [Test]
@@ -179,10 +180,10 @@ public class WithinTokenRuleTests
         var rule = WithinToken(And(
             OneOf(TokenSet.XidStart),
             OneOf(TokenSet.XidContinue)));
-        var result = rule.Parse("كَ");
+        var result = rule.Parse(Canary("كَ", "arabic letter kaf + arabic fatha", 0x0643, 0x064E));
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("كَ"));
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(Canary("كَ", "arabic letter kaf + arabic fatha", 0x0643, 0x064E)));
     }
 
     [Test]
@@ -338,7 +339,7 @@ public class WithinTokenRuleTests
             And(OneOf(TokenSet.XidStart), OneOf(TokenSet.XidContinue)),
             OneOf(TokenSet.Ascii.Letters))).As("character");
 
-        var devResult = character.Parse("हि");
+        var devResult = character.Parse(Canary("हि", "devanagari letter ha + devanagari vowel sign i", 0x0939, 0x093F));
         Assert.That(devResult.Success, Is.True);
         Assert.That(devResult.Tree!.Id, Is.EqualTo(character.Id));
         Assert.That(devResult.Tree!.Find(character), Is.Not.Null);
@@ -375,7 +376,7 @@ public class WithinTokenRuleTests
         // multi-rune branch so Find resolves through rule.Id for unnamed
         // rules too.
         var unnamedRule = WithinToken(And(OneOf(TokenSet.XidStart), OneOf(TokenSet.XidContinue)));
-        var unnamedResult = unnamedRule.Parse("हि");
+        var unnamedResult = unnamedRule.Parse(Canary("हि", "devanagari letter ha + devanagari vowel sign i", 0x0939, 0x093F));
         Assert.That(unnamedResult.Success, Is.True);
         Assert.That(unnamedResult.Tree!.Id, Is.EqualTo(unnamedRule.Id));
         Assert.That(unnamedResult.Tree!.Find(unnamedRule), Is.Not.Null);
@@ -383,7 +384,7 @@ public class WithinTokenRuleTests
 
         var namedRule = WithinToken(And(OneOf(TokenSet.XidStart), OneOf(TokenSet.XidContinue)))
             .As("character");
-        var namedResult = namedRule.Parse("हि");
+        var namedResult = namedRule.Parse(Canary("हि", "devanagari letter ha + devanagari vowel sign i", 0x0939, 0x093F));
         Assert.That(namedResult.Success, Is.True);
         Assert.That(namedResult.Tree!.Id, Is.EqualTo(namedRule.Id));
         Assert.That(namedResult.Tree!.Find(namedRule), Is.Not.Null);

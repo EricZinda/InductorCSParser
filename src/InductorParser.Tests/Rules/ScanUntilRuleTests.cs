@@ -6,6 +6,7 @@ using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.UnicodeExamples;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 [TestFixture]
@@ -213,10 +214,10 @@ public class ScanUntilRuleTests
         // to body and is consumed wholesale. The remaining 'n' is also
         // body. The parse succeeds with the whole input as the body.
         var rule = JsonLike();
-        var result = rule.Parse("\\́n");
+        var result = rule.Parse(Canary("\\́n", "reverse solidus + combining acute accent + latin small letter n", 0x005C, 0x0301, 0x006E));
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("\\́n"),
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(Canary("\\́n", "reverse solidus + combining acute accent + latin small letter n", 0x005C, 0x0301, 0x006E)),
             "the cluster '\\<U+0301>' is not the single-rune escape '\\', so it's body, " +
             "matching how Token('\\\\') and OneOf(\"\\\\\") would treat the same cluster.");
     }
@@ -231,10 +232,10 @@ public class ScanUntilRuleTests
         // ScanUntil(Runes("\"")) treats it as body and keeps scanning,
         // matching how OneOf("\"") refuses the same cluster.
         var rule = ScanUntil(TokenSet.Runes("\""), eofIsTerminator: true);
-        var result = rule.Parse("ab\"́cd");
+        var result = rule.Parse($"ab\"{UnicodeExamples.CombiningAcuteText}cd");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("ab\"́cd"),
+        Assert.That(result.Tree!.ToString(), Is.EqualTo($"ab\"{UnicodeExamples.CombiningAcuteText}cd"),
             "the '\"<U+0301>' cluster is not the single-rune stopper '\"', " +
             "so the scan continues past it as body.");
     }
@@ -462,10 +463,10 @@ public class ScanUntilRuleTests
     // ZeroOrMore(NoneOf(stopAt)) would. See UnexpectedUnicodeTests
     // for the parser-wide story on lone surrogates.
 
-    [TestCase((char)0xD800, TestName = "lone high surrogate (first)")]
-    [TestCase((char)0xDBFF, TestName = "lone high surrogate (last)")]
-    [TestCase((char)0xDC00, TestName = "lone low surrogate (first)")]
-    [TestCase((char)0xDFFF, TestName = "lone low surrogate (last)")]
+    [TestCase((char)UnicodeExamples.HighSurrogateMinRune, TestName = "lone high surrogate (first)")]
+    [TestCase((char)UnicodeExamples.HighSurrogateMaxRune, TestName = "lone high surrogate (last)")]
+    [TestCase((char)UnicodeExamples.LowSurrogateMinRune, TestName = "lone low surrogate (first)")]
+    [TestCase((char)UnicodeExamples.LowSurrogateMaxRune, TestName = "lone low surrogate (last)")]
     public void ScanUntil_consumes_isolated_surrogate_half_as_body(char loneSurrogate)
     {
         // "abc" + <surrogate> + "xyz|"
@@ -492,7 +493,7 @@ public class ScanUntilRuleTests
         // ScanUntil consumes 'a', 'b', 'c', then the lone surrogate
         // as body, then hits EOF. With eofIsTerminator: true the
         // tolerant variant succeeds with the whole input as the leaf.
-        string input = "abc" + new string((char)0xD800, 1);
+        string input = "abc" + UnicodeExamples.HighSurrogateMinText;
         var rule = StopOnPipeOrEof();
         rule.Compile(null);
 
@@ -514,7 +515,7 @@ public class ScanUntilRuleTests
         // well-formedness validation). UnexpectedUnicodeTests pins the
         // same property for AnyToken / Token(string) / OneOf / etc.;
         // this test pins it for ScanUntil specifically.
-        string input = "before" + new string((char)0xD83D, 1) + "after|";
+        string input = "before" + UnicodeExamples.EmojiStartHighSurrogateText + "after|";
         // ScanUntil doesn't consume the stopper, so the parse leaves
         // trailing '|' input. AllowTrailingInput keeps Parse from
         // failing on the unconsumed pipe.
@@ -527,12 +528,12 @@ public class ScanUntilRuleTests
         string body = result.Tree!.ToString();
 
         // Round-trip: ToString() reproduces the input slice exactly.
-        Assert.That(body, Is.EqualTo("before" + new string((char)0xD83D, 1) + "after"));
+        Assert.That(body, Is.EqualTo("before" + UnicodeExamples.EmojiStartHighSurrogateText + "after"));
         // Length and the specific code unit at each position survive
         // unchanged. The lone-surrogate code unit at position 6 still
         // reads as 0xD83D.
         Assert.That(body.Length, Is.EqualTo(12));
-        Assert.That(body[6], Is.EqualTo((char)0xD83D));
+        Assert.That(body[6], Is.EqualTo((char)UnicodeExamples.EmojiStartHighSurrogateRune));
         // Reading back into the original input produces the same chars.
         Assert.That(body, Is.EqualTo(input.Substring(0, body.Length)));
     }
@@ -882,7 +883,7 @@ public class ScanUntilRuleTests
         // unpaired surrogates the same way the stoppered variant does
         // (matches the round-trip property already verified for
         // StopOnPipe with a trailing surrogate).
-        string input = "abc" + new string((char)0xD83D, 1);
+        string input = "abc" + UnicodeExamples.EmojiStartHighSurrogateText;
         var rule = ScanUntilEof();
         rule.Compile(null);
 

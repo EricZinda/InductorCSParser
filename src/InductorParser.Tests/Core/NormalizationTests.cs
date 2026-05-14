@@ -10,6 +10,7 @@ using static InductorParser.Rules;
 using static InductorParser.Tests.TestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 // Tests for Rule.Compile(NormalizationForm?). Two promises the feature has to keep:
@@ -37,15 +38,15 @@ namespace InductorParser.Tests;
 public class NormalizationTests
 {
     // "café" with precomposed é (U+00E9). Each char is one grapheme.
-    private const string CafePrecomposed = "caf\u00E9";
+    private static readonly string CafePrecomposed = UnicodeExamples.CafePrecomposedGrapheme;
     // "cafe\u0301": same rendered text, decomposed. Five chars, four graphemes
     // (the fourth is "e" + combining acute).
-    private const string CafeDecomposed = "cafe" + CombiningAcuteText;
+    private static readonly string CafeDecomposed = "cafe" + CombiningAcuteText;
 
     // Grammar for "café" spelled in the precomposed form that most grammar
     // authors write. Four Token rules in sequence.
     private static Rule CafeRule() =>
-        And(Token('c'), Token('a'), Token('f'), Token("\u00E9"));
+        And(Token('c'), Token('a'), Token('f'), Token(UnicodeExamples.LatinEAcutePrecomposedGrapheme));
 
     [Test]
     public void Default_NFC_matches_precomposed_input_against_precomposed_grammar()
@@ -236,7 +237,6 @@ public class NormalizationTests
     // U+FB01 is LATIN SMALL LIGATURE FI, the textbook compatibility-
     // conversion example: one rune, one grapheme in the original.
     // Normalizes to "fi" (two runes, two graphemes).
-    private const string FiLigature = "\uFB01";
 
     [Test]
     public void FormKC_converts_ligature_so_plain_grammar_matches_ligature_input()
@@ -247,7 +247,7 @@ public class NormalizationTests
         // runs, so the grammar matches through.
         var rule = And(Token('f'), Token('i'), Token('s'), Token('h'), Eof());
         rule.Compile(NormalizationForm.FormKC);
-        var result = rule.Parse(FiLigature + "sh");
+        var result = rule.Parse(UnicodeExamples.FiLigatureGrapheme + "sh");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
@@ -260,7 +260,7 @@ public class NormalizationTests
         // f, i, then expects 'X' and sees 's'. Failure in NORMALIZED
         // coordinates is at index 2 (the 's'). In ORIGINAL coordinates
         // 's' sits at index 1, right after the 1-char ligature.
-        string input = FiLigature + "sh";
+        string input = UnicodeExamples.FiLigatureGrapheme + "sh";
         var rule = And(Token('f'), Token('i'), Token('X'));
         rule.Compile(NormalizationForm.FormKC);
         var result = rule.Parse(input);
@@ -284,7 +284,7 @@ public class NormalizationTests
         // INSIDE the ligature's expansion (the original ligature has no
         // index 1). The translator has to snap back to the start of the
         // ligature grapheme at index 0.
-        string input = FiLigature;
+        string input = UnicodeExamples.FiLigatureGrapheme;
         var rule = And(Token('f'), Token('X'));
         rule.Compile(NormalizationForm.FormKC);
         var result = rule.Parse(input);
@@ -309,7 +309,7 @@ public class NormalizationTests
         // endpoint differs for this particular input.
         var rule = And(Token('f'), Token('i'), Token('s'), Token('h'), Eof());
         rule.Compile(NormalizationForm.FormKD);
-        var result = rule.Parse(FiLigature + "sh");
+        var result = rule.Parse(UnicodeExamples.FiLigatureGrapheme + "sh");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
@@ -319,7 +319,7 @@ public class NormalizationTests
     {
         // Same position-snap case as the FormKC test above, but through
         // FormKD to prove the compatibility-form dispatch catches both.
-        string input = FiLigature;
+        string input = UnicodeExamples.FiLigatureGrapheme;
         var rule = And(Token('f'), Token('X'));
         rule.Compile(NormalizationForm.FormKD);
         var result = rule.Parse(input);
@@ -507,8 +507,8 @@ public class NormalizationTests
         // accept it as a valid identifier, but the tree text differs:
         // FormC preserves the original code points, FormKC collapses
         // them. That divergence is what a multi-form scanner flags.
-        var presentationVariantViaC = ruleC.Parse("ｆｏｏ");
-        var presentationVariantViaKC = ruleKC.Parse("ｆｏｏ");
+        var presentationVariantViaC = ruleC.Parse(UnicodeExamples.FullwidthFooGrapheme);
+        var presentationVariantViaKC = ruleKC.Parse(UnicodeExamples.FullwidthFooGrapheme);
         Assert.That(presentationVariantViaC.Success && presentationVariantViaKC.Success, Is.True);
         Assert.That(presentationVariantViaC.Tree!.ToString(),
             Is.Not.EqualTo(presentationVariantViaKC.Tree!.ToString()),
@@ -644,9 +644,9 @@ public class NormalizationTests
         // (add the multi-rune composed equivalent) so the rule still matches.
         var rule = And(OneOf(TokenSet.Letters), Eof());
         Assert.DoesNotThrow(() => rule.Compile());
-        Assert.That(rule.Parse("གྷ").Success, Is.True,
+        Assert.That(rule.Parse(Canary("གྷ", "tibetan letter ga + tibetan subjoined letter ha", 0x0F42, 0x0FB7)).Success, Is.True,
             "single-rune tibetan letter still matches");
-        Assert.That(rule.Parse("གྷ").Success, Is.True,
+        Assert.That(rule.Parse(Canary("གྷ", "tibetan letter ga + tibetan subjoined letter ha", 0x0F42, 0x0FB7)).Success, Is.True,
             "decomposed tibetan letter matches via set normalization");
     }
 
@@ -657,7 +657,7 @@ public class NormalizationTests
         // not the string path. Compile-time set normalization must
         // still add the decomposed cluster so the rule matches both
         // forms of input under FormD.
-        var rule = OneOf(TokenSet.Single(0x00E9));
+        var rule = OneOf(TokenSet.Single(UnicodeExamples.LatinEAcuteRune));
         Assert.DoesNotThrow(() => rule.Compile(NormalizationForm.FormD));
         Assert.That(rule.Parse(LatinEAcutePrecomposedGrapheme).Success, Is.True);
         Assert.That(rule.Parse(LatinEAcuteGrapheme).Success, Is.True);
@@ -717,7 +717,7 @@ public class NormalizationTests
         // so no auto-conversion is possible. Compile must throw a clear
         // error naming the multi-grapheme conversion and pointing the
         // user at Literal or And.
-        var rule = Token("ﬁ");
+        var rule = Token(UnicodeExamples.FiLigatureGrapheme);
 
         var exception = Assert.Throws<InvalidOperationException>(
             () => rule.Compile(NormalizationForm.FormKC));
@@ -734,7 +734,7 @@ public class NormalizationTests
         // For OneOf the projected set drops U+FB01 because its conversion
         // is multi-grapheme, and the offender mechanism reports it.
         // Compile throws an aggregated InvalidOperationException.
-        var rule = OneOf("ﬁ");
+        var rule = OneOf(UnicodeExamples.FiLigatureGrapheme);
 
         var exception = Assert.Throws<InvalidOperationException>(
             () => rule.Compile(NormalizationForm.FormKC));
@@ -768,9 +768,9 @@ public class NormalizationTests
         // NormalizedFor handles it automatically: U+2102 in the set
         // gets replaced by 'C'. Lexer under FormKC produces 'C' from
         // input U+2102, matches.
-        var rule = OneOf("ℂ");
+        var rule = OneOf(UnicodeExamples.DoubleStruckCGrapheme);
         rule.Compile(NormalizationForm.FormKC);
-        Assert.That(rule.Parse("ℂ").Success, Is.True,
+        Assert.That(rule.Parse(UnicodeExamples.DoubleStruckCGrapheme).Success, Is.True,
             "U+2102 input converts to 'C' which is now in the set");
         Assert.That(rule.Parse("C").Success, Is.True,
             "plain 'C' input matches directly");
@@ -786,8 +786,8 @@ public class NormalizationTests
         // combining macron". Under FormD the lexer produces the 3-rune
         // form, so the set must contain that. Form-projection replaces
         // the 2-rune entry with the 3-rune form.
-        string partiallyComposed = "é̄";              // é + macron
-        string fullyDecomposed = "é̄";               // e + acute + macron
+        string partiallyComposed = Canary("é̄", "latin small letter e with acute + combining macron", 0x00E9, 0x0304);              // é + macron
+        string fullyDecomposed = Canary("é̄", "latin small letter e with acute + combining macron", 0x00E9, 0x0304);               // e + acute + macron
         var rule = OneOf(TokenSet.Graphemes(partiallyComposed));
         rule.Compile(NormalizationForm.FormD);
         Assert.That(rule.Parse(fullyDecomposed).Success, Is.True,
@@ -801,7 +801,7 @@ public class NormalizationTests
         // opt-in via WithCompatibilityEquivalents the entry expands to
         // 'f' and 'i' as separate set members, so the rule matches each
         // grapheme the lexer produces from input 'ﬁ' as "fi".
-        var set = TokenSet.Runes("ﬁ").WithCompatibilityEquivalents(NormalizationForm.FormKC);
+        var set = TokenSet.Runes(UnicodeExamples.FiLigatureGrapheme).WithCompatibilityEquivalents(NormalizationForm.FormKC);
         var singleGraphemeRule = And(OneOf(set), Eof());
         singleGraphemeRule.Compile(NormalizationForm.FormKC);
         Assert.That(singleGraphemeRule.Parse("f").Success, Is.True);
@@ -811,8 +811,8 @@ public class NormalizationTests
         // structurally-larger rule that consumes both graphemes now matches.
         var bothGraphemesRule = And(OneOf(set), OneOf(set), Eof());
         bothGraphemesRule.Compile(NormalizationForm.FormKC);
-        Assert.That(bothGraphemesRule.Parse("ﬁ").Success, Is.True,
-            "input 'ﬁ' converts to 'f' + 'i', both graphemes match");
+        Assert.That(bothGraphemesRule.Parse(UnicodeExamples.FiLigatureGrapheme).Success, Is.True,
+            $"input '{UnicodeExamples.FiLigatureGrapheme}' converts to 'f' + 'i', both graphemes match");
         Assert.That(bothGraphemesRule.Parse("fi").Success, Is.True,
             "plain 'fi' input matches the same way");
     }
@@ -828,8 +828,8 @@ public class NormalizationTests
         var rule = Identifier(NormalizationForm.FormKC);
 
         Assert.DoesNotThrow(() => rule.Compile(NormalizationForm.FormKC));
-        Assert.That(rule.Parse("ﬁoo").Success, Is.True,
-            "input 'ﬁ' converts to 'f' + 'i' under FormKC; rule matches as 'fioo'");
+        Assert.That(rule.Parse(UnicodeExamples.FiLigaturePlusOoText).Success, Is.True,
+            $"input '{UnicodeExamples.FiLigatureGrapheme}' converts to 'f' + 'i' under FormKC; rule matches as 'fioo'");
     }
 
     // ============================================================
@@ -1089,8 +1089,8 @@ public class NormalizationTests
     public void Translator_agrees_with_whole_string_for_leading_defective_combining_mark()
     {
         // Lone combining acute (no base) at the very start, then Z.
-        AssertTranslatorAgreesWithWholeString("́Z", NormalizationForm.FormKC);
-        AssertTranslatorAgreesWithWholeString("́Z", NormalizationForm.FormKD);
+        AssertTranslatorAgreesWithWholeString(Canary("́Z", "combining acute accent + latin capital letter z", 0x0301, 0x005A), NormalizationForm.FormKC);
+        AssertTranslatorAgreesWithWholeString(Canary("́Z", "combining acute accent + latin capital letter z", 0x0301, 0x005A), NormalizationForm.FormKD);
     }
 
     [Test]
@@ -1098,8 +1098,8 @@ public class NormalizationTests
     {
         // X, newline, defective acute (alone because UAX #29 GB5
         // breaks after Control), then Y.
-        AssertTranslatorAgreesWithWholeString("X\ńY", NormalizationForm.FormKC);
-        AssertTranslatorAgreesWithWholeString("X\ńY", NormalizationForm.FormKD);
+        AssertTranslatorAgreesWithWholeString(Canary("X\ńY", "latin capital letter x + u+000a + combining acute accent + latin capital letter y", 0x0058, 0x000A, 0x0301, 0x0059), NormalizationForm.FormKC);
+        AssertTranslatorAgreesWithWholeString(Canary("X\ńY", "latin capital letter x + u+000a + combining acute accent + latin capital letter y", 0x0058, 0x000A, 0x0301, 0x0059), NormalizationForm.FormKD);
     }
 
     [Test]
@@ -1110,8 +1110,8 @@ public class NormalizationTests
         // normalization actually changes string length here. The
         // defective mark sits at index 0, so this is the exact
         // case the comment is worried about.
-        AssertTranslatorAgreesWithWholeString("̈́Z", NormalizationForm.FormKC);
-        AssertTranslatorAgreesWithWholeString("̈́Z", NormalizationForm.FormKD);
+        AssertTranslatorAgreesWithWholeString(Canary("̈́Z", "combining greek dialytika tonos + latin capital letter z", 0x0344, 0x005A), NormalizationForm.FormKC);
+        AssertTranslatorAgreesWithWholeString(Canary("̈́Z", "combining greek dialytika tonos + latin capital letter z", 0x0344, 0x005A), NormalizationForm.FormKD);
     }
 
     [Test]
@@ -1123,8 +1123,8 @@ public class NormalizationTests
         // whole "̣́" sequence at once. Whole-string
         // normalization reorders by combining class (ccc 230 then
         // 220 becomes 220 then 230).
-        AssertTranslatorAgreesWithWholeString("̣́Z", NormalizationForm.FormKC);
-        AssertTranslatorAgreesWithWholeString("̣́Z", NormalizationForm.FormKD);
+        AssertTranslatorAgreesWithWholeString(Canary("̣́Z", "combining acute accent + combining dot below + latin capital letter z", 0x0301, 0x0323, 0x005A), NormalizationForm.FormKC);
+        AssertTranslatorAgreesWithWholeString(Canary("̣́Z", "combining acute accent + combining dot below + latin capital letter z", 0x0301, 0x0323, 0x005A), NormalizationForm.FormKD);
     }
 
     [Test]
@@ -1137,8 +1137,8 @@ public class NormalizationTests
         // and sees Z. ErrorCharIndex must point at the Z in the
         // ORIGINAL input, which is index 1 (the two-char expansion
         // lives only in the normalized form).
-        string original = "̈́Z";
-        var rule = And(Token("̈́"), Token('Y'));
+        string original = Canary("̈́Z", "combining greek dialytika tonos + latin capital letter z", 0x0344, 0x005A);
+        var rule = And(Token(UnicodeExamples.DialytikaTonosPrecomposedGrapheme), Token('Y'));
         rule.Compile(NormalizationForm.FormKC);
         var result = rule.Parse(original);
 
@@ -1160,8 +1160,8 @@ public class NormalizationTests
         // normalized character. This is the canonical example the
         // doc walks through. Under FormKD the conjoining jamo don't
         // compose, so the normalized form has two chars (L + V).
-        AssertTranslatorAgreesWithWholeString("ㄱㅏ", NormalizationForm.FormKC);
-        AssertTranslatorAgreesWithWholeString("ㄱㅏ", NormalizationForm.FormKD);
+        AssertTranslatorAgreesWithWholeString(Canary("ㄱㅏ", "hangul letter kiyeok + hangul letter a", 0x3131, 0x314F), NormalizationForm.FormKC);
+        AssertTranslatorAgreesWithWholeString(Canary("ㄱㅏ", "hangul letter kiyeok + hangul letter a", 0x3131, 0x314F), NormalizationForm.FormKD);
     }
 
     [Test]
@@ -1172,8 +1172,8 @@ public class NormalizationTests
         // multiple normalized indices including the boundaries
         // between the surrounding chars and the multi-grapheme
         // region.
-        AssertTranslatorAgreesWithWholeString("AㄱㅏZ", NormalizationForm.FormKC);
-        AssertTranslatorAgreesWithWholeString("AㄱㅏZ", NormalizationForm.FormKD);
+        AssertTranslatorAgreesWithWholeString(Canary("AㄱㅏZ", "latin capital letter a + hangul letter kiyeok + hangul letter a + latin capital letter z", 0x0041, 0x3131, 0x314F, 0x005A), NormalizationForm.FormKC);
+        AssertTranslatorAgreesWithWholeString(Canary("AㄱㅏZ", "latin capital letter a + hangul letter kiyeok + hangul letter a + latin capital letter z", 0x0041, 0x3131, 0x314F, 0x005A), NormalizationForm.FormKD);
     }
 
     [Test]
@@ -1188,8 +1188,8 @@ public class NormalizationTests
         // (index 2, after both compatibility-jamo chars), not at
         // the failure position in normalized space (index 1, right
         // after the single syllable).
-        string original = "ㄱㅏZ";
-        var rule = And(Token("가"), Token('Y'));
+        string original = Canary("ㄱㅏZ", "original", 0x3131, 0x314F, 0x005A);
+        var rule = And(Token(UnicodeExamples.HangulGaPrecomposedGrapheme), Token('Y'));
         rule.Compile(NormalizationForm.FormKC);
         var result = rule.Parse(original);
 

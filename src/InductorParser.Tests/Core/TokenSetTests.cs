@@ -5,6 +5,7 @@ using NUnit.Framework;
 using InductorParser;
 using static InductorParser.Tests.UnicodeExamples;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 [TestFixture]
@@ -27,8 +28,8 @@ public class TokenSetTests
     public void Single_int_with_surrogate_throws()
     {
         // 0xD800..0xDFFF are surrogate code points, not valid Unicode scalar values.
-        Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Single(0xD800));
-        Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Single(0xDFFF));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Single(UnicodeExamples.HighSurrogateMinRune));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Single(UnicodeExamples.LowSurrogateMaxRune));
     }
 
     [Test]
@@ -80,7 +81,7 @@ public class TokenSetTests
         // character and the test never exercises the surrogate path.
         // Runtime-constructed strings preserve the char value the caller
         // passed, which is what we want to verify here.
-        var loneSurrogate = new string((char)0xD800, 1);
+        var loneSurrogate = UnicodeExamples.HighSurrogateMinText;
         Assert.Throws<ArgumentException>(() => TokenSet.Runes(loneSurrogate));
     }
 
@@ -104,16 +105,16 @@ public class TokenSetTests
         Assert.That(uppercaseLetters.Contains('1'), Is.False);
 
         // Non-ASCII BMP uppercase letters (Greek Alpha, Cyrillic Zhe).
-        Assert.That(uppercaseLetters.Contains('Α'), Is.True);
-        Assert.That(uppercaseLetters.Contains('Ж'), Is.True);
+        Assert.That(uppercaseLetters.Contains('\u0391'), Is.True);
+        Assert.That(uppercaseLetters.Contains('\u0416'), Is.True);
 
         // Supplementary-plane uppercase letter (Mathematical Bold Capital A,
         // U+1D400). Verifies the category scan reaches past the surrogate gap.
         Assert.That(uppercaseLetters.Contains(0x1D400), Is.True);
 
-        // Titlecase letter U+01F2 'ǲ' is category TitlecaseLetter, not
+        // Titlecase letter U+01F2 '\u01F2' is category TitlecaseLetter, not
         // UppercaseLetter. Easy bug to make if someone conflates the two.
-        Assert.That(uppercaseLetters.Contains('ǲ'), Is.False);
+        Assert.That(uppercaseLetters.Contains('\u01F2'), Is.False);
     }
 
     [Test]
@@ -459,7 +460,7 @@ public class TokenSetTests
         // 0 and 0x10FFFF are valid scalar values. Make sure the boundary
         // codepoints don't get accidentally excluded.
         var zero = TokenSet.Single(0);
-        var max = TokenSet.Single(0x10FFFF);
+        var max = TokenSet.Single(UnicodeExamples.MaximumCodePointRune);
 
         Assert.That(zero.Contains(0), Is.True);
         Assert.That(zero.Contains(1), Is.False);
@@ -566,7 +567,7 @@ public class TokenSetTests
         // Low surrogate not preceded by a high surrogate. Built at runtime
         // for the same IL2CPP-literal-sanitization reason as the lone-high
         // test: "\uDC00" in a string constant becomes U+FFFD under IL2CPP.
-        var loneLow = new string((char)0xDC00, 1);
+        var loneLow = UnicodeExamples.LowSurrogateMinText;
 
         Assert.Throws<ArgumentException>(() => TokenSet.Runes(loneLow));
     }
@@ -576,7 +577,7 @@ public class TokenSetTests
     {
         // High surrogate at the end of the string with no low surrogate to
         // pair with. 
-        var trailing = "a" + new string((char)0xD800, 1);
+        var trailing = "a" + UnicodeExamples.HighSurrogateMinText;
 
         Assert.Throws<ArgumentException>(() => TokenSet.Runes(trailing));
     }
@@ -585,7 +586,7 @@ public class TokenSetTests
     public void Runes_with_high_surrogate_not_followed_by_low_throws()
     {
         // High surrogate followed by a non-surrogate char is invalid.
-        var malformed = new string((char)0xD800, 1) + "a";
+        var malformed = UnicodeExamples.HighSurrogateMinText + "a";
 
         Assert.Throws<ArgumentException>(() => TokenSet.Runes(malformed));
     }
@@ -598,7 +599,7 @@ public class TokenSetTests
         // entry, not as two separate rune adds. Contains(string)
         // matches the whole grapheme as a unit, and Contains(int)
         // doesn't match either of the constituent runes by themselves.
-        var thumbsUpSkinTone = "\U0001F44D\U0001F3FD";
+        var thumbsUpSkinTone = Canary("👍🏽", "thumbs up + medium skin tone", 0x1F44D, 0x1F3FD);
         var set = TokenSet.Graphemes(thumbsUpSkinTone);
 
         Assert.That(set.Contains(thumbsUpSkinTone), Is.True);
@@ -614,7 +615,7 @@ public class TokenSetTests
         // source file's encoding or an editor's normalization can't
         // silently rewrite it to the precomposed single-rune form
         // U+00E9.
-        var decomposedE = "é";
+        var decomposedE = UnicodeExamples.LatinEAcuteGrapheme;
 
         var set = TokenSet.Graphemes(decomposedE);
 
@@ -629,7 +630,7 @@ public class TokenSetTests
         // 😀 is U+1F600, a single Unicode scalar in the supplementary
         // plane. One rune, one grapheme. The validation should let
         // this through and build a one-element set.
-        var grinningFace = "\U0001F600";
+        var grinningFace = UnicodeExamples.GrinningFaceEmojiGrapheme;
         var set = TokenSet.Graphemes(grinningFace);
 
         Assert.That(set.Contains(0x1F600), Is.True);
@@ -689,7 +690,7 @@ public class TokenSetTests
         // Cluster-shaped OneOf goes through TokenSet.Graphemes
         // explicitly. The resulting rule matches the cluster as a
         // single token when the lexer reads it as one grapheme.
-        var thumbsUpSkinTone = "\U0001F44D\U0001F3FD";
+        var thumbsUpSkinTone = Canary("👍🏽", "thumbs up + medium skin tone", 0x1F44D, 0x1F3FD);
         var rule = Rules.OneOf(TokenSet.Graphemes(thumbsUpSkinTone));
 
         var result = rule.Parse(thumbsUpSkinTone);

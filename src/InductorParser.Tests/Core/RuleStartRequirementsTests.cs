@@ -2,6 +2,7 @@ using NUnit.Framework;
 using InductorParser;
 using static InductorParser.Rules;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 // Unit tests for the RuleStartRequirements helpers
@@ -89,7 +90,7 @@ public class RuleStartRequirementsTests
         // "éllo" — first grapheme is "e" + combining acute (two runes,
         // one user-visible character). Should land in the set as a multi-rune
         // entry, not as the rune 'e'.
-        var requirements = RuleStartRequirements.FirstTokenMustBeFirstGraphemeOf("éllo");
+        var requirements = RuleStartRequirements.FirstTokenMustBeFirstGraphemeOf($"e{UnicodeExamples.CombiningAcuteText}llo");
         Assert.That(requirements.Advance, Is.EqualTo(Advance.Always));
         Assert.That(requirements.Polarity, Is.EqualTo(Polarity.MustBeIn));
         Assert.That(requirements.FirstConsumedTokens.HasMultiRuneGraphemes, Is.True);
@@ -101,7 +102,7 @@ public class RuleStartRequirementsTests
         // A bare high surrogate isn't a valid grapheme. Grapheme/Literal
         // factories handle this case by treating the input as "I don't know
         // what the first token is" — same fallback as an empty string.
-        string unpairedHighSurrogate = "\uD800";
+        string unpairedHighSurrogate = UnicodeExamples.HighSurrogateMinText;
         var requirements =
             RuleStartRequirements.FirstTokenMustBeFirstGraphemeOf(unpairedHighSurrogate);
         Assert.That(requirements, Is.EqualTo(RuleStartRequirements.AlwaysAdvancesByOneToken));

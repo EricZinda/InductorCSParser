@@ -4,6 +4,7 @@ using NUnit.Framework;
 using InductorParser;
 using static InductorParser.Rules;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 // Probes parser behavior on Unicode inputs that are either technically
@@ -398,9 +399,9 @@ public class UnexpectedUnicodeTests
         var rule = OneOf(TokenSet.Range(0, 0x10FFFF));
         rule.Compile(null);
 
-        Assert.That(rule.Parse("\uD800").Success, Is.True,
+        Assert.That(rule.Parse(UnicodeExamples.HighSurrogateMinText).Success, Is.True,
             "Range(0, 0x10FFFF) includes the high surrogate min; should match it.");
-        Assert.That(rule.Parse("\uDFFF").Success, Is.True,
+        Assert.That(rule.Parse(UnicodeExamples.LowSurrogateMaxText).Success, Is.True,
             "Range(0, 0x10FFFF) includes the low surrogate max; should match it.");
         Assert.That(rule.Parse("a").Success, Is.True,
             "Range(0, 0x10FFFF) still matches ordinary scalars.");
@@ -419,9 +420,9 @@ public class UnexpectedUnicodeTests
         var rule = And(NoneOf(TokenSet.Range(0, 0x10FFFF)), Eof());
         rule.Compile(null);
 
-        Assert.That(rule.Parse("\uD800").Success, Is.False,
+        Assert.That(rule.Parse(UnicodeExamples.HighSurrogateMinText).Success, Is.False,
             "NoneOf(range that includes surrogates) should reject a high surrogate.");
-        Assert.That(rule.Parse("\uDFFF").Success, Is.False,
+        Assert.That(rule.Parse(UnicodeExamples.LowSurrogateMaxText).Success, Is.False,
             "NoneOf(range that includes surrogates) should reject a low surrogate.");
         Assert.That(rule.Parse("a").Success, Is.False,
             "NoneOf(Range(0, 0x10FFFF)) covers everything; rejects ASCII too.");
@@ -438,7 +439,7 @@ public class UnexpectedUnicodeTests
         var rule = OneOf(TokenSet.Range('a', 'z'));
         rule.Compile(null);
 
-        Assert.That(rule.Parse("\uD800").Success, Is.False);
+        Assert.That(rule.Parse(UnicodeExamples.HighSurrogateMinText).Success, Is.False);
         Assert.That(rule.Parse("a").Success, Is.True);
     }
 
@@ -1116,7 +1117,7 @@ public class UnexpectedUnicodeTests
         // so the decoder substitutes U+FFFD for it.
         byte[] illFormedUtf8 = [0x68, 0x65, 0xFF, 0x6C, 0x6C, 0x6F];
         string fromUtf8 = Encoding.UTF8.GetString(illFormedUtf8);
-        Assert.That(fromUtf8, Does.Contain("�"),
+        Assert.That(fromUtf8, Does.Contain(UnicodeExamples.ReplacementCharacterText),
             "UTF-8 decoder should substitute U+FFFD for the ill-formed 0xFF byte");
 
         // Ill-formed UTF-16 LE: an odd byte count leaves a
@@ -1124,7 +1125,7 @@ public class UnexpectedUnicodeTests
         // unit. The decoder substitutes U+FFFD for the orphan.
         byte[] illFormedUtf16 = [0x68, 0x00, 0x65, 0x00, 0xFF];
         string fromUtf16 = Encoding.Unicode.GetString(illFormedUtf16);
-        Assert.That(fromUtf16, Does.Contain("�"),
+        Assert.That(fromUtf16, Does.Contain(UnicodeExamples.ReplacementCharacterText),
             "UTF-16 decoder should substitute U+FFFD for the dangling byte");
 
         // Grammar: scan past any non-replacement tokens, match

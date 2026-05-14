@@ -7,6 +7,7 @@ using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 [TestFixture]
@@ -197,7 +198,7 @@ public class LiteralRuleTests
         // German sharp s DOESN'T match SS under this primitive (that
         // would require full Unicode case-insensitive matching, which
         // we deliberately don't do). Document the behavior by verifying it.
-        var rule = LiteralIgnoreAsciiCase("straße");
+        var rule = LiteralIgnoreAsciiCase($"stra{UnicodeExamples.LatinSmallSharpSGrapheme}e");
         Assert.That(rule.Parse("STRASSE").Success, Is.False);
     }
 

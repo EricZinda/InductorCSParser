@@ -7,6 +7,7 @@ using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 [TestFixture]
@@ -276,7 +277,7 @@ public class OneOfRuleTests
     {
         // U+212B ANGSTROM SIGN is a canonical singleton: under FormC it
         // converts to U+00C5 LATIN CAPITAL LETTER A WITH RING ABOVE.
-        // OneOf(TokenSet.Single(0x212B)) compiled with FormC has its set
+        // OneOf(TokenSet.Single(UnicodeExamples.AngstromRune)) compiled with FormC has its set
         // re-projected at Compile time: _set becomes {0x00C5}. The lexer
         // sees input runes in the same form (Parse normalizes the input
         // first), so a token of U+00C5 should match the projected set.
@@ -288,9 +289,9 @@ public class OneOfRuleTests
         // against the cached {0x212B} (not Contains), concludes the inner
         // can't match, and fails the OneOrMore at AtLeast=1. The inner
         // OneOf would have matched if it had been called.
-        var rule = OneOrMore(OneOf(TokenSet.Single(0x212B)))
+        var rule = OneOrMore(OneOf(TokenSet.Single(UnicodeExamples.AngstromRune)))
             .Compile(System.Text.NormalizationForm.FormC);
-        var result = rule.Parse("Å");
+        var result = rule.Parse(UnicodeExamples.AngstromGrapheme);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 

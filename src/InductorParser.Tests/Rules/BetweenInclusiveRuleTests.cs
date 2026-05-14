@@ -4,6 +4,7 @@ using InductorParser;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
+using static InductorParser.Tests.CanaryHelper;
 
 namespace InductorParser.Tests;
 
@@ -627,26 +628,18 @@ public class BetweenInclusiveRuleTests
     // tests becomes a matter of reading the constant names rather
     // than peering at lookalike whitespace.
 
-    private const string CombiningAcute = "\u0301";       // combining acute accent
-    private const string ZeroWidthJoiner = "\u200D";      // ZWJ
-    private const string VariationSelector16 = "\uFE0F";  // emoji-presentation selector
-    private const string ManEmoji = "\U0001F468";         // surrogate pair in UTF-16
-    private const string WomanEmoji = "\U0001F469";       // surrogate pair in UTF-16
-    private const string DevanagariKa = "\u0915";         // क
-    private const string DevanagariVirama = "\u094D";     // ्
-    private const string DevanagariSsa = "\u0937";        // ष
 
     [Test]
     public void BetweenInclusive_scanner_shape_does_not_split_combining_mark_cluster()
     {
         // U+0301 (combining acute) attaches to the previous base under
         // UAX #29 GB9, so "e" + acute is one cluster. A grammar that
-        // looks for OneOf(CombiningAcute) expects the standalone
+        // looks for OneOf(UnicodeExamples.CombiningAcuteText) expects the standalone
         // combining mark, so the cluster must be rejected as multi-rune.
         const string baseChar = "e";
-        string clusterInput = baseChar + CombiningAcute;
+        string clusterInput = baseChar + UnicodeExamples.CombiningAcuteText;
 
-        var match = OneOf(CombiningAcute).Flatten(SyntaxTree.FlattenType.Preserve);
+        var match = OneOf(UnicodeExamples.CombiningAcuteText).Flatten(SyntaxTree.FlattenType.Preserve);
         var scanner = BetweenInclusive(0, int.MaxValue, Or(
             match,
             AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
@@ -665,11 +658,11 @@ public class BetweenInclusiveRuleTests
     {
         // ZWJ glues Extended_Pictographic chars into one cluster under
         // UAX #29 GB11. man + ZWJ + woman is one cluster.
-        // OneOf(ZeroWidthJoiner) should reject the cluster because the
+        // OneOf(UnicodeExamples.ZeroWidthJoinerText) should reject the cluster because the
         // cluster is multi-rune, not a standalone ZWJ.
-        string zwjSequenceInput = ManEmoji + ZeroWidthJoiner + WomanEmoji;
+        string zwjSequenceInput = UnicodeExamples.ManEmojiGrapheme + UnicodeExamples.ZeroWidthJoinerText + UnicodeExamples.WomanEmojiGrapheme;
 
-        var match = OneOf(ZeroWidthJoiner).Flatten(SyntaxTree.FlattenType.Preserve);
+        var match = OneOf(UnicodeExamples.ZeroWidthJoinerText).Flatten(SyntaxTree.FlattenType.Preserve);
         var scanner = BetweenInclusive(0, int.MaxValue, Or(
             match,
             AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
@@ -688,12 +681,12 @@ public class BetweenInclusiveRuleTests
     {
         // Variation Selector 16 attaches to the previous base under
         // UAX #29 GB9 (it's in the Extend set). "#" + VS-16 is one
-        // cluster (the keycap base). OneOf(VariationSelector16) should
+        // cluster (the keycap base). OneOf(UnicodeExamples.EmojiVariationSelectorText) should
         // reject the cluster.
         const string baseChar = "#";
-        string clusterInput = baseChar + VariationSelector16;
+        string clusterInput = baseChar + UnicodeExamples.EmojiVariationSelectorText;
 
-        var match = OneOf(VariationSelector16).Flatten(SyntaxTree.FlattenType.Preserve);
+        var match = OneOf(UnicodeExamples.EmojiVariationSelectorText).Flatten(SyntaxTree.FlattenType.Preserve);
         var scanner = BetweenInclusive(0, int.MaxValue, Or(
             match,
             AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
@@ -721,9 +714,9 @@ public class BetweenInclusiveRuleTests
         // number of matches. If a future runtime upgrade implements
         // GB9c, both numbers will change in lockstep and the assertion
         // still holds.
-        string conjunctInput = DevanagariKa + DevanagariVirama + DevanagariSsa;
+        string conjunctInput = UnicodeExamples.DevanagariKaGrapheme + UnicodeExamples.DevanagariViramaText + UnicodeExamples.DevanagariSsaGrapheme;
 
-        var fastMatch = OneOf(DevanagariSsa).Flatten(SyntaxTree.FlattenType.Preserve);
+        var fastMatch = OneOf(UnicodeExamples.DevanagariSsaGrapheme).Flatten(SyntaxTree.FlattenType.Preserve);
         var fastScanner = BetweenInclusive(0, int.MaxValue, Or(
             fastMatch,
             AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
@@ -731,7 +724,7 @@ public class BetweenInclusiveRuleTests
         fastScanner.Compile(null);
         var fastResult = fastScanner.Parse(conjunctInput);
 
-        var slowMatch = OneOf(DevanagariSsa).Flatten(SyntaxTree.FlattenType.Preserve);
+        var slowMatch = OneOf(UnicodeExamples.DevanagariSsaGrapheme).Flatten(SyntaxTree.FlattenType.Preserve);
         var slowScanner = BetweenInclusive(1, int.MaxValue, Or(
             slowMatch,
             AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
