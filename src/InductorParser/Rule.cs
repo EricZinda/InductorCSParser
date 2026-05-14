@@ -51,6 +51,13 @@ public abstract class Rule
     // See below for description
     private bool _sealed;
     private bool _idAssigned;
+    // True iff the user explicitly chose this rule's SymbolId via .As(SymbolId).
+    // Distinct from _idAssigned (also set by GraphemeRule's constructor auto-pin
+    // and by Compile's named / anonymous id passes). Gates the duplicate-pin
+    // conflict check in CollectPinnedIds, the leaf-id shortcut in ResolveLeafId,
+    // GraphemeRule's post-normalization re-pin, and .As(string)'s auto-pin reset.
+    // Not set by .As(string), which only writes Name and lets Compile derive
+    // an Id from the name hash.
     private bool _idUserPinned;
     private string? _errorMessage;
 
@@ -424,6 +431,16 @@ public abstract class Rule
                 $".Preserve();`).");
         ApplyIdentificationFlattenPolicy(nameof(As), name);
         Name = name;
+        // Clear an auto-pinned id so Compile's AssignNamedIds pass gives
+        // this rule a fresh custom-range id derived from the name hash.
+        // The only auto-pin path is GraphemeRule pinning a single-rune
+        // Token to its code point in the constructor; two distinct
+        // Token('a').As(...) rules would otherwise silently share the
+        // rune id and Tree.Find / NameOf couldn't distinguish them.
+        // A user pin via .As(SymbolId) is explicit and stays put: that's
+        // what _idUserPinned guards.
+        if (_idAssigned && !_idUserPinned)
+            _idAssigned = false;
         return this;
     }
 

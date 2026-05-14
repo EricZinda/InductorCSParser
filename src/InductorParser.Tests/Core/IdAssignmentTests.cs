@@ -92,6 +92,56 @@ public class IdAssignmentTests
     }
 
     [Test]
+    public void Two_named_single_rune_Tokens_of_the_same_rune_get_distinct_ids()
+    {
+        // Token('a') auto-pins its Id to the rune's code point in the
+        // GraphemeRule constructor (Id == 0x61). Adding .As("first") /
+        // .As("second") names each rule but used to leave the auto-pin
+        // in place, so both rules silently shared SymbolId(0x61). Two
+        // user-pinned rules that share an id throw at compile, but the
+        // auto-pin path bypassed that check. Tree.Find against either
+        // rule reference then returned the same node regardless of which
+        // one actually matched, and NameOf could only report one of the
+        // two names back. Naming a single-rune Token should give it a
+        // fresh custom-range id so each named rule is uniquely findable.
+        var firstA = Token('a').As("first");
+        var secondA = Token('a').As("second");
+        var doc = And(firstA, secondA);
+
+        doc.Compile();
+
+        Assert.That(firstA.Id, Is.Not.EqualTo(secondA.Id),
+            "Two named Token('a') rules must get distinct ids so Tree.Find can disambiguate them.");
+        Assert.That(firstA.Id.Value, Is.GreaterThanOrEqualTo(SymbolRanges.CustomRangeStart),
+            "A named Token should land in the custom range, not the rune range.");
+        Assert.That(secondA.Id.Value, Is.GreaterThanOrEqualTo(SymbolRanges.CustomRangeStart),
+            "A named Token should land in the custom range, not the rune range.");
+    }
+
+    [Test]
+    public void Named_Token_leaves_carry_the_rule_id_not_the_rune_id()
+    {
+        // Companion to Two_named_single_rune_Tokens_of_the_same_rune_get_distinct_ids.
+        // The parse-tree leaf a named single-rune Token emits has to
+        // carry the rule's (new custom-range) id, otherwise Tree.Find
+        // against the rule wouldn't reach it. The leaf id is what tree
+        // walkers compare against, so the rule.Id == leaf.Id symmetry
+        // is what makes the distinct-id fix observable.
+        var firstA = Token('a').As("first");
+        var secondA = Token('a').As("second");
+        var doc = And(firstA, secondA);
+        var result = doc.Parse("aa");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        var foundFirst = result.Find(firstA);
+        var foundSecond = result.Find(secondA);
+        Assert.That(foundFirst, Is.Not.Null);
+        Assert.That(foundSecond, Is.Not.Null);
+        Assert.That(ReferenceEquals(foundFirst, foundSecond), Is.False,
+            "Tree.Find(firstA) and Tree.Find(secondA) must return different leaves.");
+    }
+
+    [Test]
     public void Same_pinned_rule_referenced_twice_in_a_grammar_compiles()
     {
         // Reachability is per-rule, not per-edge. A single rule reached via
