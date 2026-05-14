@@ -54,7 +54,7 @@ public static class FilterGrammar
 
         var attributeChar = TokenSet.Ascii.Letters | TokenSet.Ascii.Digits | TokenSet.Runes("_-.");
         AttributeName = ScanWhile(attributeChar, minimumCount: 1)
-            .As("attribute").Preserve()
+            .As("attribute")
             .WithError("expected attribute name");
 
         ComparisonOperator = Or(
@@ -70,15 +70,15 @@ public static class FilterGrammar
             Token('<'),
             Token('>'),
             Token('#')
-        ).As("operator").Preserve()
+        ).As("operator")
          .WithError("expected one of: =~, ==, =, !~, !=, <=, >=, <, >, between, #, !#");
 
         NumberLiteral = And(
             Optional(Token('-')),
             ScanWhile(TokenSet.Ascii.Digits, minimumCount: 1)
-        ).As("number").Preserve();
+        ).As("number");
 
-        RangeLiteral = And(NumberLiteral, Token(':'), NumberLiteral).As("range").Preserve();
+        RangeLiteral = And(NumberLiteral, Token(':'), NumberLiteral).As("range");
 
         // stopAt is just the closing quote. The backslash is the
         // escape-start, but ScanUntil checks the stopper FIRST and only
@@ -91,13 +91,13 @@ public static class FilterGrammar
         ).As("quotedStringBody");
 
         QuotedStringLiteral = And(Token('"'), QuotedStringBody, Token('"'))
-            .As("quotedString").Preserve();
+            .As("quotedString");
 
         // Range tries before Number because both start with -? digit;
         // committing to Number first would leave the ":15:30" tail
         // dangling on inputs like "AAAA between 0:15:30".
         ComparisonValue = Or(QuotedStringLiteral, RangeLiteral, NumberLiteral)
-            .As("value").Preserve()
+            .As("value")
             .WithError("expected one of: quoted string, range, number");
 
         Comparison = And(
@@ -106,15 +106,15 @@ public static class FilterGrammar
             ComparisonOperator,
             optionalSpaces,
             ComparisonValue
-        ).As("comparison").Preserve();
+        ).As("comparison");
 
         // `and` / `or` must be followed by whitespace or `(`, otherwise
         // an attribute starting with those letters would be eaten as a
         // logop. Peek consumes nothing, so the spaces / paren stay for
         // the next rule to handle.
         var logopFollower = Peek(Or(space, Token('(')));
-        AndKeyword = And(Literal("and"), logopFollower).As("and").Preserve();
-        OrKeyword = And(Literal("or"), logopFollower).As("or").Preserve();
+        AndKeyword = And(Literal("and"), logopFollower).As("and");
+        OrKeyword = And(Literal("or"), logopFollower).As("or");
         var logop = Or(AndKeyword, OrKeyword);
 
         var expression = new LateBoundRule("expression");
@@ -124,7 +124,7 @@ public static class FilterGrammar
             expression,
             optionalSpaces,
             Token(')').WithError("expected ')'")
-        ).As("group").Preserve();
+        ).As("group");
         var primary = Or(Group, Comparison);
 
         // Right-associative chain. The optional tail makes a single
@@ -146,7 +146,7 @@ public static class FilterGrammar
             expression,
             optionalSpaces,
             Eof()
-        ).As("filter").Preserve();
+        ).As("filter");
 
         Filter.Compile();
     }

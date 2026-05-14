@@ -40,7 +40,7 @@ public static class InductorJsonParser
         var unicodeEscapeEnd = And(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
         var escapeEnd = Or(simpleEscapeEnd, unicodeEscapeEnd).Flatten(FlattenType.Delete);
         var stringBody = ScanUntil(stopAt: TokenSet.Runes("\""), escapeStart: new Rune('\\'), escapeEnd: escapeEnd);
-        JsonStringRule = And(Token('"'), stringBody, Token('"')).As("string").Preserve();
+        JsonStringRule = And(Token('"'), stringBody, Token('"')).As("string");
 
         var value = new LateBoundRule("value");
 
@@ -61,7 +61,7 @@ public static class InductorJsonParser
             )),
             Optional(AnyWhitespace()),
             Token('}')
-        ).As("object").Preserve();
+        ).As("object");
 
         JsonArrayRule = And(
             Token('['),
@@ -72,7 +72,7 @@ public static class InductorJsonParser
             )),
             Optional(AnyWhitespace()),
             Token(']')
-        ).As("array").Preserve();
+        ).As("array");
 
         var valueBody = Or(JsonStringRule, JsonObjectRule, JsonArrayRule);
         value.Bind(valueBody);

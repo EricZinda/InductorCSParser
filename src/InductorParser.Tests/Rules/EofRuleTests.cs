@@ -158,7 +158,7 @@ public class EofRuleTests
         // range at input.Length and SourceText is empty. Consumers
         // that highlight "input ended here" need a position even
         // though no chars were consumed.
-        var eof = Eof().As("end").Preserve();
+        var eof = Eof().As("end");
         var rule = And(Literal("abc").Preserve(), eof).Preserve();
         var result = rule.Parse("abc");
 

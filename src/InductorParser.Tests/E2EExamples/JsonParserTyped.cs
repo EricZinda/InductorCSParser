@@ -113,16 +113,16 @@ public static class JsonParserTyped
     // named pieces (LiteralChunk for runs of unescaped characters plus
     // one rule per escape kind). DecodeEscapes re-parses the raw body
     // through that grammar and concatenates each piece's decoded form.
-    private static readonly Rule LiteralChunk = OneOrMore(NoneOf("\\")).As("literalChunk").Preserve();
+    private static readonly Rule LiteralChunk = OneOrMore(NoneOf("\\")).As("literalChunk");
 
-    private static readonly Rule EscapeQuote = Literal("\\\"").As("escapeQuote").Preserve();
-    private static readonly Rule EscapeBackslash = Literal("\\\\").As("escapeBackslash").Preserve();
-    private static readonly Rule EscapeSlash = Literal("\\/").As("escapeSlash").Preserve();
-    private static readonly Rule EscapeBackspace = Literal("\\b").As("escapeBackspace").Preserve();
-    private static readonly Rule EscapeFormfeed = Literal("\\f").As("escapeFormfeed").Preserve();
-    private static readonly Rule EscapeNewline = Literal("\\n").As("escapeNewline").Preserve();
-    private static readonly Rule EscapeReturn = Literal("\\r").As("escapeReturn").Preserve();
-    private static readonly Rule EscapeTab = Literal("\\t").As("escapeTab").Preserve();
+    private static readonly Rule EscapeQuote = Literal("\\\"").As("escapeQuote");
+    private static readonly Rule EscapeBackslash = Literal("\\\\").As("escapeBackslash");
+    private static readonly Rule EscapeSlash = Literal("\\/").As("escapeSlash");
+    private static readonly Rule EscapeBackspace = Literal("\\b").As("escapeBackspace");
+    private static readonly Rule EscapeFormfeed = Literal("\\f").As("escapeFormfeed");
+    private static readonly Rule EscapeNewline = Literal("\\n").As("escapeNewline");
+    private static readonly Rule EscapeReturn = Literal("\\r").As("escapeReturn");
+    private static readonly Rule EscapeTab = Literal("\\t").As("escapeTab");
 
     // Literal("\\u") is FlattenType.Delete by default, so the "\u"
     // prefix never reaches the tree. The four hex digits survive as
@@ -130,7 +130,7 @@ public static class JsonParserTyped
     // digits and int.Parse can consume them directly.
     private static readonly Rule HexDigit = OneOf(TokenSet.Ascii.HexDigits);
     private static readonly Rule EscapeUnicode = And(Literal("\\u"), HexDigit, HexDigit, HexDigit, HexDigit)
-        .As("escapeUnicode").Preserve();
+        .As("escapeUnicode");
 
     private static readonly Rule StringParser = And(
         ZeroOrMore(Or(

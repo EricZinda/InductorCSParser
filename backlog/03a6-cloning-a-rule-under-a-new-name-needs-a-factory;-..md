@@ -1,0 +1,12 @@
+# Cloning a rule under a new name needs a factory; .As(name) is set-once with no rename-clone shortcut
+
+- Where this came up: the Korean numbers sample (`E2ESamples/KoreanNumbers/Rewrite/KoreanNumberGrammar.cs`) has a `Digits` rule that we wanted to reuse in two contexts: inside `ScaledTerm` (as the digit prefix before a scale character), and at the top level of `KoreanNumber` (as a trailing bare-digits term, like the `일` in `만일`). We wanted the parse tree to clearly distinguish the two uses, so we tried `BareDigits = Digits.As("bareDigits").Preserve();` to clone-and-rename. That throws:
+
+  `InvalidOperationException: .As("bareDigits") can't be applied to this rule: it was already named "digits". .As(string) is set-once. To reuse this rule shape under different names, build a factory function that returns a fresh rule each call (e.g. static Rule NumericCore(string name) => OneOrMore(OneOf(TokenSet.Digits)).As(name).Preserve();).`
+
+- The error message is excellent: it explains the constraint and gives the exact workaround. We followed it, dropped the wrapper, and relied on parent context at parse-tree walk time (a top-level `Digits` child means a bare run because `Digits` inside a `ScaledTerm` never reaches the top level). That works, but the tree is slightly less self-describing than it could be: a reader has to know the convention "look at the parent" rather than reading the node name.
+- What might be friendlier: a `Rule.WithName(string)` method that returns a renamed clone of the rule (a fresh rule with the same shape and a new id). Same one-name-per-rule invariant, but the renaming case becomes a one-liner instead of a factory function. Concretely:
+  - Current: `static Rule MakeDigits(string name) => ScanWhile(anyDigit, minimumCount: 1).As(name).Preserve();` then call it twice.
+  - Proposed: `Digits = ScanWhile(anyDigit, minimumCount: 1).As("digits").Preserve();` then `BareDigits = Digits.WithName("bareDigits");`.
+- The factory pattern works fine for new grammars. The clone-and-rename pattern is friendlier when the user *already has* a named rule and wants to reuse its shape under a different tag, which is the case here.
+- Done when: there's a way to materialize a renamed clone of an already-named rule without a wrapper factory function. The Korean numbers sample's `KoreanNumberGrammar.cs` could then express the `BareDigits` distinction without losing the top-level-vs-nested context check.

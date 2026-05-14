@@ -36,7 +36,7 @@ public class SymbolPositionTests
         // Match a literal on line 2 (zero-based). Verifies that
         // SourcePosition.From walks newlines correctly to produce the
         // line/column derivation at both endpoints of the range.
-        var literal = Literal("target").As("target").Preserve();
+        var literal = Literal("target").As("target");
         var rule = And(
             Literal("first\n"),
             Literal("second\n"),
@@ -65,7 +65,7 @@ public class SymbolPositionTests
         // The named rule's first preserved leaf sits on line 2. Verify
         // Start carries the right line and a line-relative column even
         // though the outer parse started at line 0.
-        var target = Literal("hi").As("target").Preserve();
+        var target = Literal("hi").As("target");
         var rule = And(Literal("first\nsecond\n  "), target);
         var result = rule.Parse("first\nsecond\n  hi");
 
@@ -118,7 +118,7 @@ public class SymbolPositionTests
         // index) divergence on multi-rune graphemes.
         // Man + ZWJ + Woman + ZWJ + Girl. 8 chars, 5 runes, 1 grapheme.
         const string FamilyEmoji = "\U0001F468‍\U0001F469‍\U0001F467";
-        var target = Literal("ab").As("target").Preserve();
+        var target = Literal("ab").As("target");
         var rule = And(Literal(FamilyEmoji), target);
         var result = rule.Parse(FamilyEmoji + "ab");
 
@@ -233,9 +233,9 @@ public class SymbolPositionTests
         // only one of (Start, End) would slip past the per-leaf tests
         // but break here.
         string input = DecomposedCafePrefix + "XYZ";
-        var first = Token('X').As("first").Preserve();
-        var last = Token('Z').As("last").Preserve();
-        var composite = And(first, Token('Y').Preserve(), last).As("composite").Preserve();
+        var first = Token('X').As("first");
+        var last = Token('Z').As("last");
+        var composite = And(first, Token('Y').Preserve(), last).As("composite");
         var rule = And(Literal("café"), composite);
         var result = rule.Parse(input);
 
@@ -254,7 +254,7 @@ public class SymbolPositionTests
         // REMOVED — covered by the FormKC ligature test below. Line
         // never differs.
         string input = DecomposedCafePrefix + "X";
-        var target = Token('X').As("x").Preserve();
+        var target = Token('X').As("x");
         var rule = And(Literal("café"), target);
         var result = rule.Parse(input);
 
@@ -278,10 +278,10 @@ public class SymbolPositionTests
         // the cluster) and leaf 'i' at [0, 1) (full cluster span). 'X'
         // lands cleanly one cluster past the ligature.
         string input = "ﬁX";
-        var fLeaf = Token('f').As("f").Preserve();
-        var iLeaf = Token('i').As("i").Preserve();
-        var xLeaf = Token('X').As("x").Preserve();
-        var rule = And(fLeaf, iLeaf, xLeaf).As("root").Preserve();
+        var fLeaf = Token('f').As("f");
+        var iLeaf = Token('i').As("i");
+        var xLeaf = Token('X').As("x");
+        var rule = And(fLeaf, iLeaf, xLeaf).As("root");
         rule.Compile(NormalizationForm.FormKC);
         var result = rule.Parse(input);
 

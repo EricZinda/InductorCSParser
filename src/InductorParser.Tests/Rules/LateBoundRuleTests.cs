@@ -113,6 +113,25 @@ public class LateBoundRuleTests
     }
 
     [Test]
+    public void Bind_throws_on_second_call_before_compile()
+    {
+        // .As(string), .As(SymbolId), and .WithError(...) are all
+        // set-once on a Rule and throw on a second call to the same
+        // instance. .Bind on a LateBoundRule should be too: a second
+        // Bind before Compile silently swaps the target, so an
+        // accidental double-bind (a copy-pasted Bind line, a factory
+        // function called twice on the same instance, two static-init
+        // sites for the same LateBoundRule) is impossible to diagnose
+        // from the parse output. The grammar then runs against
+        // whichever target initialized last, with no error pointing at
+        // the duplicate Bind call.
+        var expression = new LateBoundRule();
+        expression.Bind(Integer());
+
+        Assert.Throws<InvalidOperationException>(() => expression.Bind(Token('a')));
+    }
+
+    [Test]
     public void LateBoundRule_keeps_Preserve_target_symbol_in_parent_children()
     {
         // Regression: LateBoundRule's own FlattenType is Flatten, but when

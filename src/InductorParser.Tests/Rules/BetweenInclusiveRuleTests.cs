@@ -839,7 +839,7 @@ public class BetweenInclusiveRuleTests
         // empty-match shortcut fires and returns a Preserve composite
         // with a zero-length consumed span at lexer.Position. SourceText
         // is empty, SourceRange is zero-width at that offset.
-        var counted = ZeroOrMore(Literal("X")).As("count").Preserve();
+        var counted = ZeroOrMore(Literal("X")).As("count");
         var rule = And(Literal("ab"), counted, Literal("Y").Preserve()).Preserve();
         var result = rule.Parse("abY");
 
@@ -857,7 +857,7 @@ public class BetweenInclusiveRuleTests
         // Counted loop ran the inner once and stopped. The composite's
         // consumed span covers exactly what inner matched, so SourceText
         // returns "X" regardless of inner's FlattenType.
-        var counted = ZeroOrMore(Literal("X")).As("count").Preserve();
+        var counted = ZeroOrMore(Literal("X")).As("count");
         var rule = And(counted, Literal("Y").Preserve()).Preserve();
         var result = rule.Parse("XY");
 
@@ -873,7 +873,7 @@ public class BetweenInclusiveRuleTests
         // consumed span covers all three iterations, even when the
         // inner leaf is Delete-default and contributes nothing to
         // Children. ToString returns "" because no children survived.
-        var counted = OneOrMore(Literal("X")).As("count").Preserve();
+        var counted = OneOrMore(Literal("X")).As("count");
         var rule = And(counted, Literal("Y").Preserve()).Preserve();
         var result = rule.Parse("XXXY");
 
@@ -909,7 +909,7 @@ public class BetweenInclusiveRuleTests
         // iteration. Pins that the engine records the consumed span
         // once at parse end, not piecewise per-iteration (a buggy
         // implementation might overwrite Start/End each iteration).
-        var rule = OneOrMore(Literal("abc").Preserve()).As("repeat").Preserve();
+        var rule = OneOrMore(Literal("abc").Preserve()).As("repeat");
         var result = rule.Parse("abcabcabc");
 
         var range = result.Tree!.SourceRange!.Value;

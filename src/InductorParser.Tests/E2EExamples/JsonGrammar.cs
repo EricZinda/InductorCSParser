@@ -12,7 +12,7 @@ namespace InductorParser.Tests;
 //
 // The point is to show how grammar-author flatten choices shape the
 // consumer: every rule we want to dispatch on in the parser gets
-// .As("name").Preserve() so it survives flattening as a
+// .As("name") so it survives flattening as a
 // named, identifiable node. Rules that are structural noise (whitespace,
 // quotes, commas, colons, braces, brackets) keep their default
 // FlattenType.Delete and never appear in the tree.
@@ -53,7 +53,7 @@ public static class JsonGrammar
                 escapeEnd: Or(simpleEscapeEnd, unicodeEscapeEnd).Delete())
             .As("stringBody");
         JsonString = And(Token('"'), JsonScanUntil, Token('"'))
-            .As("string").Preserve();
+            .As("string");
 
         var digits = OneOrMore(OneOf(TokenSet.Ascii.Digits));
         var decimalPoint = Token('.').Preserve(); // default FlattenType is Delete, but we want this in final string
@@ -65,13 +65,13 @@ public static class JsonGrammar
             digits,
             Optional(fraction),
             Optional(exponent)
-        ).As("number").Preserve();
+        ).As("number");
 
         // Literal is FlattenType.Delete by default, 
         // but we want to keep these in the final string
-        JsonTrue = Literal("true").As("true").Preserve();
-        JsonFalse = Literal("false").As("false").Preserve();
-        JsonNull = Literal("null").As("null").Preserve();
+        JsonTrue = Literal("true").As("true");
+        JsonFalse = Literal("false").As("false");
+        JsonNull = Literal("null").As("null");
 
         var value = new LateBoundRule("value");
 
@@ -81,7 +81,7 @@ public static class JsonGrammar
             Token(':'),
             Optional(AnyWhitespace()),
             value
-        ).As("member").Preserve();
+        ).As("member");
 
         JsonObject = And(
             Token('{'),
@@ -97,7 +97,7 @@ public static class JsonGrammar
             )),
             Optional(AnyWhitespace()),
             Token('}')
-        ).As("object").Preserve();
+        ).As("object");
 
         JsonArray = And(
             Token('['),
@@ -113,7 +113,7 @@ public static class JsonGrammar
             )),
             Optional(AnyWhitespace()),
             Token(']')
-        ).As("array").Preserve();
+        ).As("array");
 
         value.Bind(Or(JsonString, JsonNumber, JsonObject, JsonArray, JsonTrue, JsonFalse, JsonNull));
 
