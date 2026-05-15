@@ -5,6 +5,7 @@ using NUnit.Framework;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests.DocExamples;
 
 // Verifies the runnable code examples in docs/primer2.md (the INI-style
@@ -232,15 +233,15 @@ public class Primer2Examples
 
         var options = new ParseOptions
         {
-            PositionalErrorTemplate = "Erreur à la position {charIndex}: caractère '{character}' inattendu.",
-            EndOfInputErrorTemplate = "Fin d'entrée inattendue.",
+            PositionalErrorTemplate = $"Erreur {UnicodeExamples.LatinSmallAWithGraveGrapheme} la position {{charIndex}}: caract{UnicodeExamples.LatinSmallEWithGraveGrapheme}re '{{character}}' inattendu.",
+            EndOfInputErrorTemplate = $"Fin d'entr{UnicodeExamples.LatinEAcutePrecomposedGrapheme}e inattendue.",
         };
 
         var result = config.Parse("[server]\nport oops\n", options);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage,
-            Is.EqualTo("Erreur à la position 14: caractère 'o' inattendu."));
+            Is.EqualTo($"Erreur {UnicodeExamples.LatinSmallAWithGraveGrapheme} la position 14: caract{UnicodeExamples.LatinSmallEWithGraveGrapheme}re 'o' inattendu."));
     }
 
     // primer2.md "Unicode and where the error actually is". The doc claims
@@ -257,7 +258,7 @@ public class Primer2Examples
 
         // 👨‍👩‍👧 is U+1F468 ZWJ U+1F469 ZWJ U+1F467: 5 runes, 8 UTF-16 chars,
         // 1 grapheme. The full input is "[" + family + "]\nport oops\n".
-        const string family = "\U0001F468‍\U0001F469‍\U0001F467";
+        string family = UnicodeExamples.FamilyManWomanGirlGrapheme;
         string input = "[" + family + "]\nport oops\n";
 
         var result = config.Parse(input);

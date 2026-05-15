@@ -10,6 +10,7 @@ using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests.Lexing.UnicodeConformance;
 
 // UAX #29 grapheme cluster boundary conformance against the official
@@ -86,13 +87,13 @@ public class GraphemeBreakConformanceTests
     // digits. Preserve()d so the parsed Symbol survives flattening and
     // its raw text is available for int.Parse.
     private static readonly Rule HexCodepointRule =
-        OneOrMore(OneOf(TokenSet.Ascii.HexDigits)).As("codepoint").Preserve();
+        OneOrMore(OneOf(TokenSet.Ascii.HexDigits)).As("codepoint");
 
     // The two break markers in the spec format. Distinguished by name
     // so the tree walk can tell "boundary here" from "no boundary here"
     // without inspecting the matched text.
-    private static readonly Rule BreakRule = Token('÷').As("break").Preserve();
-    private static readonly Rule NoBreakRule = Token('×').As("nobreak").Preserve();
+    private static readonly Rule BreakRule = Token('\u00F7').As("break");
+    private static readonly Rule NoBreakRule = Token('\u00D7').As("nobreak");
     private static readonly Rule MarkerRule = Or(BreakRule, NoBreakRule);
     private static readonly Rule InlineWhitespace =
         OneOrMore(OneOf(TokenSet.Ascii.InlineWhitespace));
@@ -157,7 +158,7 @@ public class GraphemeBreakConformanceTests
             {
                 if (pendingCodepoint == null)
                 {
-                    error = "× marker with no preceding code point";
+                    error = $"{UnicodeExamples.MultiplicationSignGrapheme} marker with no preceding code point";
                     return false;
                 }
                 int codepoint = int.Parse(pendingCodepoint.ToString(),

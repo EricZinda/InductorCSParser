@@ -6,6 +6,7 @@ using NUnit.Framework;
 using InductorParser;
 using static InductorParser.Rules;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 // Demonstrates that grammars written naturally are protected
@@ -57,7 +58,7 @@ public class SecurityByDefaultTests
         // grammar — the rule just doesn't match.
         var grammar = And(Identifier(), Eof()).Compile();
 
-        string trojanInput = "ab‮cd";  // logical order: a, b, RLO, c, d
+        string trojanInput = $"ab{UnicodeExamples.RightToLeftOverrideText}cd";  // logical order: a, b, RLO, c, d
         Assert.That(grammar.Parse(trojanInput).Success, Is.False,
             "Identifier() rejects bidi controls: U+202E breaks the " +
             "identifier match because it's not an XID_Continue character " +
@@ -116,10 +117,10 @@ public class SecurityByDefaultTests
 
         Assert.That(grammar.Parse("A").Success, Is.True,
             "plain A matches plain A");
-        Assert.That(grammar.Parse("𝐀").Success, Is.False,
-            "math-bold 𝐀 (U+1D400) is distinct from A under FormC");
-        Assert.That(grammar.Parse("Ａ").Success, Is.False,
-            "fullwidth Ａ (U+FF21) is distinct from A under FormC");
+        Assert.That(grammar.Parse(UnicodeExamples.MathematicalBoldCapitalAGrapheme).Success, Is.False,
+            $"math-bold {UnicodeExamples.MathematicalBoldCapitalAGrapheme} (U+1D400) is distinct from A under FormC");
+        Assert.That(grammar.Parse(UnicodeExamples.FullwidthAGrapheme).Success, Is.False,
+            $"fullwidth {UnicodeExamples.FullwidthAGrapheme} (U+FF21) is distinct from A under FormC");
     }
 
     [Test]
@@ -141,16 +142,16 @@ public class SecurityByDefaultTests
         var defaultRule = And(Literal("select"), Eof()).Compile();
         Assert.That(defaultRule.Parse("select").Success, Is.True,
             "plain 'select' matches as expected");
-        Assert.That(defaultRule.Parse("ｓｅｌｅｃｔ").Success, Is.False,
-            "fullwidth 'ｓｅｌｅｃｔ' SLIPS PAST the blocker under default " +
-            "FormC — this is the bypass to fix");
+        Assert.That(defaultRule.Parse(UnicodeExamples.FullwidthSelectIdentifier).Success, Is.False,
+            $"fullwidth '{UnicodeExamples.FullwidthSelectIdentifier}' SLIPS PAST the blocker under default " +
+            $"FormC {UnicodeExamples.EmDashGrapheme} this is the bypass to fix");
 
         // FormKC: the blocker catches the lookalike.
         var formKCRule = And(Literal("select"), Eof()).Compile(NormalizationForm.FormKC);
         Assert.That(formKCRule.Parse("select").Success, Is.True,
             "plain 'select' still matches under FormKC");
-        Assert.That(formKCRule.Parse("ｓｅｌｅｃｔ").Success, Is.True,
-            "fullwidth 'ｓｅｌｅｃｔ' now matches under FormKC: NFKC converts " +
+        Assert.That(formKCRule.Parse(UnicodeExamples.FullwidthSelectIdentifier).Success, Is.True,
+            $"fullwidth '{UnicodeExamples.FullwidthSelectIdentifier}' now matches under FormKC: NFKC converts " +
             "it to plain ASCII before the lexer runs, so the blocker fires");
     }
 
@@ -209,11 +210,11 @@ public class SecurityByDefaultTests
 
         Assert.That(grammar.Parse("apple").Success, Is.True,
             "clean 'apple' matches");
-        Assert.That(grammar.Parse("ap​ple").Success, Is.False,
+        Assert.That(grammar.Parse($"ap{UnicodeExamples.ZeroWidthSpaceText}ple").Success, Is.False,
             "ZWS (U+200B) hidden between p and p breaks the literal match");
-        Assert.That(grammar.Parse("ap­ple").Success, Is.False,
+        Assert.That(grammar.Parse($"ap{UnicodeExamples.SoftHyphenText}ple").Success, Is.False,
             "soft hyphen (U+00AD) breaks the match the same way");
-        Assert.That(grammar.Parse("﻿apple").Success, Is.False,
+        Assert.That(grammar.Parse($"{UnicodeExamples.ByteOrderMarkText}apple").Success, Is.False,
             "BOM (U+FEFF) at the start is also a real token, not a no-op");
     }
 
@@ -239,9 +240,9 @@ public class SecurityByDefaultTests
         // version.
         Assert.That(blocker.Parse("apple").Success, Is.True,
             "plain 'apple' matches as expected");
-        Assert.That(blocker.Parse("ap​ple").Success, Is.False,
+        Assert.That(blocker.Parse($"ap{UnicodeExamples.ZeroWidthSpaceText}ple").Success, Is.False,
             "invisible-laden 'ap<ZWS>ple' SLIPS PAST the blocker " +
-            "— no normalization form strips invisibles");
+            $"{UnicodeExamples.EmDashGrapheme} no normalization form strips invisibles");
 
         // Pre-strip the invisibles, then the blocker catches
         // it. This is what the recipe in UnicodeGotchasExamples
@@ -254,7 +255,7 @@ public class SecurityByDefaultTests
             0x00AD,  // soft hyphen
             0xFEFF,  // BOM
         };
-        string smuggled = "ap​ple";
+        string smuggled = $"ap{UnicodeExamples.ZeroWidthSpaceText}ple";
         string stripped = string.Concat(smuggled.EnumerateRunes()
             .Where(r => !invisibles.Contains(r.Value)));
         Assert.That(blocker.Parse(stripped).Success, Is.True,
@@ -321,7 +322,7 @@ public class SecurityByDefaultTests
         // the structure is fine. The defense is one TokenSet away.
         byte[] tamperedBytes = [0x68, 0xFF, 0x69]; // 'h', invalid lead 0xFF, 'i'
         string tampered = Encoding.UTF8.GetString(tamperedBytes);
-        Assert.That(tampered, Does.Contain("�"),
+        Assert.That(tampered, Does.Contain(UnicodeExamples.ReplacementCharacterText),
             "the .NET UTF-8 decoder substituted U+FFFD for the invalid byte");
 
         // A grammar that refuses ANY input that's been through a
@@ -372,7 +373,7 @@ public class SecurityByDefaultTests
         // author has to think about it.
         var grammar = And(Identifier(), Eof()).Compile();
 
-        string homoglyphInput = "aаmin";  // Latin a + Cyrillic а + 'min'
+        string homoglyphInput = $"a{UnicodeExamples.CyrillicSmallAGrapheme}min";  // Latin a + Cyrillic а + 'min'
         Assert.That(grammar.Parse(homoglyphInput).Success, Is.True,
             "default Identifier() accepts mixed scripts. This is the main " +
             "classic Unicode-security issue the parser does NOT defend " +

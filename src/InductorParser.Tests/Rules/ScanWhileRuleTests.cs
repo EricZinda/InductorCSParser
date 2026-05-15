@@ -423,7 +423,7 @@ public class ScanWhileRuleTests
     {
         SourceRangeMatrixHelper.AssertTargetAfterLiteralPrefix(
             row, form,
-            target: ScanWhile(TokenSet.Ascii.Letters).As("run").Preserve(),
+            target: ScanWhile(TokenSet.Ascii.Letters).As("run"),
             targetText: "XYZ");
     }
 

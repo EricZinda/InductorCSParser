@@ -26,8 +26,8 @@ public class SymbolNameAndIdOfTests
     // composite and a named leaf to interrogate.
     private static Rule BuildLetterAndWordGrammar(out Rule letter, out Rule word)
     {
-        letter = OneOf(TokenSet.Letters).As("letter").Preserve();
-        word = OneOrMore(letter).As("word").Preserve();
+        letter = OneOf(TokenSet.Letters).As("letter");
+        word = OneOrMore(letter).As("word");
         return word;
     }
 

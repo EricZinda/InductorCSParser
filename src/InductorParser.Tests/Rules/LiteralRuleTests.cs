@@ -7,6 +7,7 @@ using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 [TestFixture]
@@ -201,7 +202,8 @@ public class LiteralRuleTests
         // reader. Construction throws instead, pointing at the offending
         // char. Grammars that want a non-ASCII keyword should use
         // Literal("straße") directly.
-        var exception = Assert.Throws<ArgumentException>(() => LiteralIgnoreAsciiCase("straße"));
+        var exception = Assert.Throws<ArgumentException>(
+            () => LiteralIgnoreAsciiCase($"stra{UnicodeExamples.LatinSmallSharpSGrapheme}e"));
         Assert.That(exception!.Message, Does.Contain("ASCII-only"));
         Assert.That(exception.Message, Does.Contain("U+00DF"));
     }
@@ -375,7 +377,7 @@ public class LiteralRuleTests
         if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
             return; // covered by Literal_in_OneOrMore's Compile-throws path
 
-        var literalRule = Literal(row.Source).Preserve().As("literalBranch");
+        var literalRule = Literal(row.Source).As("literalBranch");
         var fallback = AnyToken().As("fallbackBranch");
         var rule = Or(literalRule, fallback);
 
@@ -421,7 +423,7 @@ public class LiteralRuleTests
     {
         SourceRangeMatrixHelper.AssertTargetAfterLiteralPrefix(
             row, form,
-            target: Literal("XYZ").As("xyzLiteral").Preserve(),
+            target: Literal("XYZ").As("xyzLiteral"),
             targetText: "XYZ");
     }
 

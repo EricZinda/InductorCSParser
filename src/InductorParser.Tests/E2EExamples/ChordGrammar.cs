@@ -1,6 +1,7 @@
 using InductorParser;
 using static InductorParser.Rules;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 // Chord grammar: the Inductor Parser replacement for the chord-detection
@@ -45,7 +46,7 @@ public static class ChordGrammar
         // IgnoreCase: B is legal after the root via the case-insensitive
         // match, same for X). Rare in real input but we have to mirror
         // regex behavior.
-        var accidental = OneOf("#bB♯♭xX");
+        var accidental = OneOf($"#bB{Canary("♯♭", "music sharp sign + music flat sign", 0x266F, 0x266D)}xX");
 
         // (maj|min|m|dim|°|o|aug|+|sus[24]?|5)?
         // Longest first so "maj" wins over "m", "min" wins over "m".
@@ -57,7 +58,7 @@ public static class ChordGrammar
             And(LiteralIgnoreAsciiCase("sus"), Optional(OneOf("24"))),
             LiteralIgnoreAsciiCase("m"),
             LiteralIgnoreAsciiCase("o"),
-            Token('°'),
+            Token('\u00B0'),
             Token('+'),
             Token('5')
         );
@@ -76,9 +77,9 @@ public static class ChordGrammar
         var quality2 = Or(
             LiteralIgnoreAsciiCase("maj"),
             LiteralIgnoreAsciiCase("m"),
-            Token('Δ'),
-            Token('ø'),
-            Token('°')
+            Token('\u0394'),
+            Token('\u00F8'),
+            Token('\u00B0')
         );
 
         // (7|9|11|13)?

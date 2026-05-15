@@ -4,6 +4,7 @@ using InductorParser;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 // Tests for Symbol.PrintTree, the extension that renders a raw
@@ -80,7 +81,7 @@ public class SymbolExtensionsTests
         // differs from the rune's own text. PrintTree uses the long
         // `<name>: "<text>"` form for character leaves whose NameOf
         // returns something other than the rune text.
-        var aChar = Token('a').As("aChar").Preserve();
+        var aChar = Token('a').As("aChar");
         var result = aChar.Parse("a");
         Assert.That(result.Success, Is.True);
 
@@ -111,6 +112,6 @@ public class SymbolExtensionsTests
         rule.Compile();
         var staleLeaf = new Symbol(new SymbolId(0xD800), FlattenType.Preserve, "a".AsMemory());
 
-        Assert.That(staleLeaf.PrintTree(rule), Is.EqualTo("'�'\n"));
+        Assert.That(staleLeaf.PrintTree(rule), Is.EqualTo($"'{UnicodeExamples.ReplacementCharacterText}'\n"));
     }
 }

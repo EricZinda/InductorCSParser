@@ -202,13 +202,13 @@ public class OrRuleTests
     [Test]
     public void SourceText_on_Or_returns_the_winning_alternative_text()
     {
-        // Or is Flatten by default; wrapping with .As("choice").Preserve()
+        // Or is Flatten by default; wrapping with .As("choice")
         // gives it a surviving composite Symbol. The composite's
         // consumed span covers what the winning alternative matched
         // (here "second"), and SourceText returns that verbatim regardless
         // of whether the alternative's leaf was Preserve or Delete.
         var rule = Or(Literal("first"), Literal("second"), Literal("third"))
-            .As("choice").Preserve();
+            .As("choice");
         var result = rule.Parse("second");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);

@@ -8,7 +8,7 @@ namespace InductorParser.E2ESamples.Toml.Rewrite;
 // InductorParser grammar for TOML 1.0 (https://toml.io/en/v1.0.0).
 // The named rules below mirror the production names in the TOML ABNF
 // (Original/toml-1.0.0.abnf). Rules that produce values for the AST
-// consumer use .As("name").Preserve() so they survive flattening as
+// consumer use .As("name") so they survive flattening as
 // dispatchable nodes; structural noise (whitespace, separators,
 // brackets) keeps the default Delete / Flatten behavior and never
 // appears in the tree.
@@ -45,9 +45,10 @@ namespace InductorParser.E2ESamples.Toml.Rewrite;
 //   * Optional [X] is Optional(X).
 //   * Character class %x20-7E / non-ascii becomes a TokenSet built with operators (| union, & intersect, ~ complement).
 //   * Multi-char terminals like "0x" become Literal("0x"); single-char terminals are Token('x').
-//   * The dispatch-name + visibility-in-tree story (".As().Preserve()") has no ABNF analog; it's how the consumer-side
-//     code finds nodes after the parse runs. ABNF productions get .As("name") whenever the AST consumer needs to
-//     dispatch on "this Symbol came from the X production"; structural rules don't.
+//   * The dispatch-name + visibility-in-tree story (".As(name)" auto-flips the default flatten policy to Preserve)
+//     has no ABNF analog; it's how the consumer-side code finds nodes after the parse runs. ABNF productions get
+//     .As("name") whenever the AST consumer needs to dispatch on "this Symbol came from the X production";
+//     structural rules don't.
 //
 // A few places where we deviate from the ABNF for InductorParser-friendly
 // shapes:
@@ -144,7 +145,7 @@ public static class TomlGrammar
         var tomlLineTerminator = TokenSet.Single('\r') | TokenSet.Single('\n');
         var comment = And(Token('#'),
                 ScanUntil(tomlLineTerminator, eofIsTerminator: true).As("commentBody"))
-            .As("comment").Preserve();
+            .As("comment");
 
         // ws-comment-newline: any mix of inline whitespace, comments, and
         // newlines. Used inside arrays where line breaks are legal mid-value.
@@ -158,16 +159,16 @@ public static class TomlGrammar
         // ---------------------------------------------------------
         // unquoted-key = 1*( ALPHA / DIGIT / "-" / "_" )
         var unquotedKeyChars = TokenSet.Ascii.Letters | TokenSet.Ascii.Digits | TokenSet.Runes("-_");
-        UnquotedKey = ScanWhile(unquotedKeyChars).As("unquotedKey").Preserve();
+        UnquotedKey = ScanWhile(unquotedKeyChars).As("unquotedKey");
 
         // quoted-key = basic-string / literal-string
         // Forward-declare; the actual string rules are defined below.
         var basicStringLateBound = new LateBoundRule("basicString");
         var literalStringLateBound = new LateBoundRule("literalString");
-        QuotedKey = Or(basicStringLateBound, literalStringLateBound).As("quotedKey").Preserve();
+        QuotedKey = Or(basicStringLateBound, literalStringLateBound).As("quotedKey");
 
         // simple-key = quoted-key / unquoted-key
-        SimpleKey = Or(QuotedKey, UnquotedKey).As("simpleKey").Preserve();
+        SimpleKey = Or(QuotedKey, UnquotedKey).As("simpleKey");
 
         // dot-sep = ws "." ws
         var dotSeparator = And(whitespace, Token('.'), whitespace);
@@ -176,11 +177,11 @@ public static class TomlGrammar
         DottedKey = And(
             SimpleKey,
             OneOrMore(And(dotSeparator, SimpleKey))
-        ).As("dottedKey").Preserve();
+        ).As("dottedKey");
 
         // key = dotted-key / simple-key  (try dotted first so a key like
         // "a.b.c" doesn't get truncated to just "a")
-        Key = Or(DottedKey, SimpleKey).As("key").Preserve();
+        Key = Or(DottedKey, SimpleKey).As("key");
 
         // ---------------------------------------------------------
         // String values
@@ -217,9 +218,9 @@ public static class TomlGrammar
         var basicStringBody = ZeroOrMore(Or(
             ScanWhile(basicUnescaped),
             basicEscape
-        )).As("basicStringBody").Preserve();
+        )).As("basicStringBody");
         BasicString = And(Token('"'), basicStringBody, Token('"').WithError("Expected closing '\"' to end basic string"))
-            .As("basicString").Preserve();
+            .As("basicString");
         basicStringLateBound.Bind(BasicString);
 
         // literal-string = ' *literal-char '
@@ -236,9 +237,9 @@ public static class TomlGrammar
         // child, and the consumer can read Children[0].ToString()
         // unconditionally.
         var literalStringBody = ScanWhile(literalChar, minimumCount: 0)
-            .As("literalStringBody").Preserve();
+            .As("literalStringBody");
         LiteralString = And(Token('\''), literalStringBody, Token('\'').WithError("Expected closing \"'\" to end literal string"))
-            .As("literalString").Preserve();
+            .As("literalString");
         literalStringLateBound.Bind(LiteralString);
 
         // ml-basic-string body: any mix of allowed chars, escapes,
@@ -275,13 +276,13 @@ public static class TomlGrammar
             )
         );
         var multiLineBasicStringBody = ZeroOrMore(multiLineBasicBodyChar)
-            .As("multiLineBasicStringBody").Preserve();
+            .As("multiLineBasicStringBody");
         MultiLineBasicString = And(
             threeQuotes,
             Optional(newline),
             multiLineBasicStringBody,
             threeQuotes.WithError("Expected closing '\"\"\"' to end multi-line basic string")
-        ).As("multiLineBasicString").Preserve();
+        ).As("multiLineBasicString");
 
         // ml-literal-string: same shape, single-quote delim, no escapes.
         var threeApostrophes = Literal("'''");
@@ -293,19 +294,19 @@ public static class TomlGrammar
             )
         );
         var multiLineLiteralStringBody = ZeroOrMore(multiLineLiteralBodyChar)
-            .As("multiLineLiteralStringBody").Preserve();
+            .As("multiLineLiteralStringBody");
         MultiLineLiteralString = And(
             threeApostrophes,
             Optional(newline),
             multiLineLiteralStringBody,
             threeApostrophes.WithError("Expected closing \"'''\" to end multi-line literal string")
-        ).As("multiLineLiteralString").Preserve();
+        ).As("multiLineLiteralString");
 
         // ---------------------------------------------------------
         // Boolean values
         // ---------------------------------------------------------
-        TomlTrue = Literal("true").As("true").Preserve();
-        TomlFalse = Literal("false").As("false").Preserve();
+        TomlTrue = Literal("true").As("true");
+        TomlFalse = Literal("false").As("false");
 
         // ---------------------------------------------------------
         // Integer values
@@ -322,22 +323,22 @@ public static class TomlGrammar
             And(digitOneToNine, OneOrMore(Or(digit, underscoreDigit))),
             digit
         );
-        DecimalInteger = And(Optional(sign), unsignedDecimalInteger).As("decimalInteger").Preserve();
+        DecimalInteger = And(Optional(sign), unsignedDecimalInteger).As("decimalInteger");
 
         // hex-int = "0x" HEXDIG *( HEXDIG / "_" HEXDIG )
         var hexadecimalUnderscore = And(Token('_'), hexadecimalDigit);
         HexadecimalInteger = And(Literal("0x"), hexadecimalDigit, ZeroOrMore(Or(hexadecimalDigit, hexadecimalUnderscore)))
-            .As("hexadecimalInteger").Preserve();
+            .As("hexadecimalInteger");
 
         var octalDigit = OneOf(TokenSet.Range('0', '7'));
         var octalUnderscore = And(Token('_'), octalDigit);
         OctalInteger = And(Literal("0o"), octalDigit, ZeroOrMore(Or(octalDigit, octalUnderscore)))
-            .As("octalInteger").Preserve();
+            .As("octalInteger");
 
         var binaryDigit = OneOf(TokenSet.Runes("01"));
         var binaryUnderscore = And(Token('_'), binaryDigit);
         BinaryInteger = And(Literal("0b"), binaryDigit, ZeroOrMore(Or(binaryDigit, binaryUnderscore)))
-            .As("binaryInteger").Preserve();
+            .As("binaryInteger");
 
         // ---------------------------------------------------------
         // Float values
@@ -373,10 +374,10 @@ public static class TomlGrammar
         // because it's a section of the original input) so we don't
         // need to .Preserve() the keyword here.
         var infinityOrNan = Or(Literal("inf"), Literal("nan"));
-        SpecialFloat = And(Optional(sign), infinityOrNan).As("specialFloat").Preserve();
+        SpecialFloat = And(Optional(sign), infinityOrNan).As("specialFloat");
 
-        TomlFloat = Or(SpecialFloat, ordinaryFloat.As("ordinaryFloat").Preserve())
-            .As("float").Preserve();
+        TomlFloat = Or(SpecialFloat, ordinaryFloat.As("ordinaryFloat"))
+            .As("float");
 
         // ---------------------------------------------------------
         // Date-time values
@@ -399,11 +400,11 @@ public static class TomlGrammar
         var timeDelimiter = OneOf("Tt ");
 
         OffsetDateTime = And(fullDate, timeDelimiter, partialTime, timeOffset)
-            .As("offsetDateTime").Preserve();
+            .As("offsetDateTime");
         LocalDateTime = And(fullDate, timeDelimiter, partialTime)
-            .As("localDateTime").Preserve();
-        LocalDate = fullDate.As("localDate").Preserve();
-        LocalTime = partialTime.As("localTime").Preserve();
+            .As("localDateTime");
+        LocalDate = fullDate.As("localDate");
+        LocalTime = partialTime.As("localTime");
 
         // ---------------------------------------------------------
         // Composite values: array, inline-table
@@ -434,7 +435,7 @@ public static class TomlGrammar
             Optional(arrayValues),
             whitespaceCommentNewline,
             Token(']').WithError("Expected ',' or ']' inside array")
-        ).As("array").Preserve();
+        ).As("array");
 
         // inline-table = "{" [ inline-table-keyvals ] "}"
         // inline-table-sep = ws "," ws  (note: no newlines allowed inside
@@ -452,7 +453,7 @@ public static class TomlGrammar
             Optional(inlineTableKeyValues),
             whitespace,
             Token('}').WithError("Expected ',' or '}' inside inline table")
-        ).As("inlineTable").Preserve();
+        ).As("inlineTable");
 
         // ---------------------------------------------------------
         // Value choice — order matters
@@ -485,7 +486,7 @@ public static class TomlGrammar
             OctalInteger,
             BinaryInteger,
             DecimalInteger
-        ).As("value").Preserve();
+        ).As("value");
         valueLateBound.Bind(Value);
 
         // ---------------------------------------------------------
@@ -499,7 +500,7 @@ public static class TomlGrammar
             Token('=').WithError("Expected '=' after key"),
             whitespace,
             valueLateBound
-        ).As("keyValue").Preserve();
+        ).As("keyValue");
         keyValueLateBound.Bind(KeyValue);
 
         // ---------------------------------------------------------
@@ -512,7 +513,7 @@ public static class TomlGrammar
             Key,
             whitespace,
             Token(']').WithError("Expected ']' to close table header")
-        ).As("standardTable").Preserve();
+        ).As("standardTable");
 
         // array-table = "[[" ws key ws "]]"
         ArrayTable = And(
@@ -521,11 +522,11 @@ public static class TomlGrammar
             Key,
             whitespace,
             Literal("]]").WithError("Expected ']]' to close array-of-tables header")
-        ).As("arrayTable").Preserve();
+        ).As("arrayTable");
 
         // table = array-table / std-table
         // (Try array-table first because "[[" must win over "[")
-        Table = Or(ArrayTable, StandardTable).As("table").Preserve();
+        Table = Or(ArrayTable, StandardTable).As("table");
 
         // ---------------------------------------------------------
         // Top-level expression and document

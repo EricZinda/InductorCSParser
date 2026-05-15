@@ -173,7 +173,7 @@ public class AndRuleTests
         // single most important SourceText invariant: a Preserve
         // composite's SourceText covers what the rule ACTUALLY
         // consumed, not just the surviving children's text.
-        var rule = And(Literal("a"), Literal("b"), Literal("c")).As("composite").Preserve();
+        var rule = And(Literal("a"), Literal("b"), Literal("c")).As("composite");
         var result = rule.Parse("abc");
 
         Assert.That(result.Success, Is.True);
@@ -195,12 +195,12 @@ public class AndRuleTests
         // trailing Preserve flipped, to show the symmetry — leading
         // Delete content doesn't push the start past offset 0, and
         // trailing Delete content does extend the end.
-        var trailingDelete = And(Literal("ab").Preserve(), Literal("cd")).As("trail").Preserve();
+        var trailingDelete = And(Literal("ab").Preserve(), Literal("cd")).As("trail");
         var trailingResult = trailingDelete.Parse("abcd");
         Assert.That(trailingResult.Tree!.ToString(), Is.EqualTo("ab"));
         Assert.That(trailingResult.Tree!.SourceText, Is.EqualTo("abcd"));
 
-        var leadingDelete = And(Literal("ab"), Literal("cd").Preserve()).As("lead").Preserve();
+        var leadingDelete = And(Literal("ab"), Literal("cd").Preserve()).As("lead");
         var leadingResult = leadingDelete.Parse("abcd");
         Assert.That(leadingResult.Tree!.ToString(), Is.EqualTo("cd"));
         Assert.That(leadingResult.Tree!.SourceText, Is.EqualTo("abcd"));
@@ -220,7 +220,7 @@ public class AndRuleTests
     {
         // The And consumed all three tokens. SourceRange covers [0, 3).
         var rule = And(Token('a').Preserve(), Token('b').Preserve(), Token('c').Preserve())
-            .As("triple").Preserve();
+            .As("triple");
         var result = rule.Parse("abc");
 
         var range = result.Tree!.SourceRange!.Value;
@@ -234,7 +234,7 @@ public class AndRuleTests
         // The inner named rule sits after a 2-char prefix the outer And
         // consumed. Find(inner) + SourceRange should report a range
         // starting at offset 2, not 0.
-        var inner = Literal("XYZ").As("inner").Preserve();
+        var inner = Literal("XYZ").As("inner");
         var rule = And(Literal("ab"), inner);
         var result = rule.Parse("abXYZ");
 
@@ -252,7 +252,7 @@ public class AndRuleTests
         // rule consumed, including the leading Delete'd "ab". To
         // recover just the preserved tail, name that child and call
         // SourceRange on the subsymbol.
-        var rule = And(Literal("ab"), Literal("cd").Preserve()).As("composite").Preserve();
+        var rule = And(Literal("ab"), Literal("cd").Preserve()).As("composite");
         var result = rule.Parse("abcd");
 
         var range = result.Tree!.SourceRange!.Value;
@@ -268,7 +268,7 @@ public class AndRuleTests
         // chars. This is the TOML "Token('-').Preserve() + Literal('inf')"
         // shape with inf Delete — recovers the full "-inf" span instead
         // of just the "-" the surviving leaf points at.
-        var rule = And(Literal("ab").Preserve(), Literal("cd")).As("composite").Preserve();
+        var rule = And(Literal("ab").Preserve(), Literal("cd")).As("composite");
         var result = rule.Parse("abcd");
 
         var range = result.Tree!.SourceRange!.Value;
@@ -285,7 +285,7 @@ public class AndRuleTests
         var rule = And(
             Literal("ab").Preserve(),
             Literal("cd"),
-            Literal("ef").Preserve()).As("composite").Preserve();
+            Literal("ef").Preserve()).As("composite");
         var result = rule.Parse("abcdef");
 
         var range = result.Tree!.SourceRange!.Value;
@@ -304,7 +304,7 @@ public class AndRuleTests
         var rule = And(
             Literal("a").Preserve(),
             ScanUntil(TokenSet.Runes("b")).Preserve(),
-            Literal("b").Preserve()).As("composite").Preserve();
+            Literal("b").Preserve()).As("composite");
         var result = rule.Parse("ab");
 
         var range = result.Tree!.SourceRange!.Value;
@@ -321,7 +321,7 @@ public class AndRuleTests
         // Literal("a") follows. Range is [0, 1).
         var rule = And(
             ScanUntil(TokenSet.Runes("a")).Preserve(),
-            Literal("a").Preserve()).As("composite").Preserve();
+            Literal("a").Preserve()).As("composite");
         var result = rule.Parse("a");
 
         var range = result.Tree!.SourceRange!.Value;
@@ -341,7 +341,7 @@ public class AndRuleTests
         // check).
         var rule = And(
             Literal("ab").Preserve(),
-            ScanUntil(TokenSet.Runes("z"), eofIsTerminator: true).Preserve()).As("composite").Preserve();
+            ScanUntil(TokenSet.Runes("z"), eofIsTerminator: true).Preserve()).As("composite");
         var result = rule.Parse("ab");
 
         var range = result.Tree!.SourceRange!.Value;
@@ -359,7 +359,7 @@ public class AndRuleTests
         var rule = And(
             ScanUntil(TokenSet.Runes("a")).Preserve(),
             ScanUntil(TokenSet.Runes("a")).Preserve(),
-            Token('a')).As("composite").Preserve();
+            Token('a')).As("composite");
         var result = rule.Parse("a");
 
         var range = result.Tree!.SourceRange!.Value;
@@ -374,8 +374,8 @@ public class AndRuleTests
         // the span IT consumed, not the union of preserved leaves below
         // it. Inner consumed 0 chars; outer consumed 1 (inner's 0 +
         // Token('a')'s 1).
-        var inner = And(ScanUntil(TokenSet.Runes("a")).Preserve()).As("inner").Preserve();
-        var rule = And(inner, Token('a')).As("outer").Preserve();
+        var inner = And(ScanUntil(TokenSet.Runes("a")).Preserve()).As("inner");
+        var rule = And(inner, Token('a')).As("outer");
         var result = rule.Parse("a");
 
         var outerRange = result.Tree!.SourceRange!.Value;
@@ -394,8 +394,8 @@ public class AndRuleTests
         // range spans the whole match; the inner's range spans only
         // its own children. Verifies Find + SourceRange together don't
         // leak the outer range.
-        var inner = And(Token('x').Preserve(), Token('y').Preserve()).As("inner").Preserve();
-        var outer = And(Literal("ab").Preserve(), inner, Literal("cd").Preserve()).As("outer").Preserve();
+        var inner = And(Token('x').Preserve(), Token('y').Preserve()).As("inner");
+        var outer = And(Literal("ab").Preserve(), inner, Literal("cd").Preserve()).As("outer");
         var result = outer.Parse("abxycd");
 
         var outerRange = result.Tree!.SourceRange!.Value;
@@ -414,7 +414,7 @@ public class AndRuleTests
         // TokenIndex, and Column should all report the same value (no
         // off-by-one at the boundary). Line stays at 0 since the input
         // has no line breaks.
-        var rule = And(Literal("xx").Preserve(), Literal("yy").Preserve()).As("composite").Preserve();
+        var rule = And(Literal("xx").Preserve(), Literal("yy").Preserve()).As("composite");
         var result = rule.Parse("xxyy");
 
         var range = result.Tree!.SourceRange!.Value;
@@ -433,7 +433,7 @@ public class AndRuleTests
         // plus the 2-char preserved tail. The outer's recorded span
         // covers the full consumption.
         var deletedPrefix = And(Literal("aa"), Literal("bb"));
-        var rule = And(deletedPrefix, Literal("cc").Preserve()).As("composite").Preserve();
+        var rule = And(deletedPrefix, Literal("cc").Preserve()).As("composite");
         var result = rule.Parse("aabbcc");
 
         var range = result.Tree!.SourceRange!.Value;

@@ -3,6 +3,7 @@ using NUnit.Framework;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests.DocExamples;
 
 // Runnable recipe-style examples kept under test so they can be copied into
@@ -36,7 +37,7 @@ public class RecipesExamples
         var inline = Or(bold, code, text);
         var paragraph = OneOrMore(inline).As("paragraph");
 
-        const string input = "Hello 🎸 **world** 你好 `code` done";
+        string input = $"Hello {UnicodeExamples.GuitarGrapheme} **world** {Canary("你好", "cjk unified ideograph-4f60 + cjk unified ideograph-597d", 0x4F60, 0x597D)} `code` done";
         var result = paragraph.Parse(input);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -46,9 +47,9 @@ public class RecipesExamples
         // claims "ToString() reassembles each node losslessly," meaning
         // each text/bold/code wrapper carries its content back as text.
         var texts = result.Tree!.FindAll(text).Select(t => t.ToString()).ToList();
-        Assert.That(texts.Any(t => t.Contains("🎸")), Is.True,
+        Assert.That(texts.Any(t => t.Contains(UnicodeExamples.GuitarGrapheme)), Is.True,
             "guitar emoji lives in some text node");
-        Assert.That(texts.Any(t => t.Contains("你好")), Is.True,
+        Assert.That(texts.Any(t => t.Contains(Canary("你好", "cjk unified ideograph-4f60 + cjk unified ideograph-597d", 0x4F60, 0x597D))), Is.True,
             "CJK lives in some text node");
 
         // bold and code each fire once and their body text round-trips
@@ -90,10 +91,10 @@ public class RecipesExamples
         var identifier = Identifier().Compile();
 
         Assert.That(identifier.Parse("foo").Success, Is.True);
-        Assert.That(identifier.Parse("café").Success, Is.True);
-        Assert.That(identifier.Parse("καλημέρα").Success, Is.True);
-        Assert.That(identifier.Parse("हिन्दी").Success, Is.True, "Devanagari");
-        Assert.That(identifier.Parse("กำ").Success, Is.True, "Thai with SARA AM");
+        Assert.That(identifier.Parse(UnicodeExamples.CafePrecomposedGrapheme).Success, Is.True);
+        Assert.That(identifier.Parse(UnicodeExamples.GreekKalimeraIdentifier).Success, Is.True);
+        Assert.That(identifier.Parse(UnicodeExamples.DevanagariHindiIdentifier).Success, Is.True, "Devanagari");
+        Assert.That(identifier.Parse(UnicodeExamples.ThaiKamGrapheme).Success, Is.True, "Thai with SARA AM");
 
         // Doesn't accept things that aren't identifiers under strict UAX #31.
         Assert.That(identifier.Parse("2foo").Success, Is.False, "starts with digit");
@@ -137,12 +138,12 @@ public class RecipesExamples
 
         // With default FormC, fullwidth ｆｏｏ is its own valid identifier
         // (still letters, just different code points than ASCII foo).
-        Assert.That(identifierFormC.Parse("ｆｏｏ").Success, Is.True);
+        Assert.That(identifierFormC.Parse(UnicodeExamples.FullwidthFooGrapheme).Success, Is.True);
 
         // With FormKC, fullwidth normalizes to ASCII, so the matched
         // text after the parser sees is "foo". The critical claim is
         // that it parses successfully under FormKC.
-        var result = identifierFormKC.Parse("ｆｏｏ");
+        var result = identifierFormKC.Parse(UnicodeExamples.FullwidthFooGrapheme);
         Assert.That(result.Success, Is.True);
     }
 

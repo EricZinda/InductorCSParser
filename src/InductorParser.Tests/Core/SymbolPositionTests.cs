@@ -5,6 +5,7 @@ using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.UnicodeExamples;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 // Framework-level / cross-cutting tests for Symbol.SourceRange and
@@ -36,7 +37,7 @@ public class SymbolPositionTests
         // Match a literal on line 2 (zero-based). Verifies that
         // SourcePosition.From walks newlines correctly to produce the
         // line/column derivation at both endpoints of the range.
-        var literal = Literal("target").As("target").Preserve();
+        var literal = Literal("target").As("target");
         var rule = And(
             Literal("first\n"),
             Literal("second\n"),
@@ -65,7 +66,7 @@ public class SymbolPositionTests
         // The named rule's first preserved leaf sits on line 2. Verify
         // Start carries the right line and a line-relative column even
         // though the outer parse started at line 0.
-        var target = Literal("hi").As("target").Preserve();
+        var target = Literal("hi").As("target");
         var rule = And(Literal("first\nsecond\n  "), target);
         var result = rule.Parse("first\nsecond\n  hi");
 
@@ -117,8 +118,8 @@ public class SymbolPositionTests
         // preceding it. Verifies CharIndex vs TokenIndex (grapheme
         // index) divergence on multi-rune graphemes.
         // Man + ZWJ + Woman + ZWJ + Girl. 8 chars, 5 runes, 1 grapheme.
-        const string FamilyEmoji = "\U0001F468‍\U0001F469‍\U0001F467";
-        var target = Literal("ab").As("target").Preserve();
+        string FamilyEmoji = UnicodeExamples.FamilyManWomanGirlGrapheme;
+        var target = Literal("ab").As("target");
         var rule = And(Literal(FamilyEmoji), target);
         var result = rule.Parse(FamilyEmoji + "ab");
 
@@ -140,7 +141,7 @@ public class SymbolPositionTests
         // Two waving-hand emojis (each 2 chars / 1 grapheme). End at
         // char 4, grapheme 2. Catches a bug where the End walks treat
         // surrogate pairs as two graphemes.
-        const string Input = WavingHandGrapheme + WavingHandGrapheme;
+        string Input = WavingHandGrapheme + WavingHandGrapheme;
         var rule = Literal(Input).Preserve();
         var result = rule.Parse(Input);
 
@@ -158,7 +159,7 @@ public class SymbolPositionTests
         // chars), Identifier consumes all of it via WithinToken
         // leaves. The composite range reports End.CharIndex = 4 but
         // End.TokenIndex = 3.
-        const string Input = "re" + CombiningAcuteText + "x";
+        string Input = "re" + CombiningAcuteText + "x";
         var rule = Identifier();
         rule.Compile(null);
         var result = rule.Parse(Input);
@@ -224,7 +225,7 @@ public class SymbolPositionTests
     // doesn't decide whether the constant is decomposed or precomposed.
     // Many editors / save pipelines silently normalize source bytes
     // to NFC.
-    private const string DecomposedCafePrefix = "café";
+    private static readonly string DecomposedCafePrefix = $"cafe{UnicodeExamples.CombiningAcuteText}";
 
     [Test]
     public void SourceRange_for_composite_under_FormC_translates_both_endpoints()
@@ -233,10 +234,10 @@ public class SymbolPositionTests
         // only one of (Start, End) would slip past the per-leaf tests
         // but break here.
         string input = DecomposedCafePrefix + "XYZ";
-        var first = Token('X').As("first").Preserve();
-        var last = Token('Z').As("last").Preserve();
-        var composite = And(first, Token('Y').Preserve(), last).As("composite").Preserve();
-        var rule = And(Literal("café"), composite);
+        var first = Token('X').As("first");
+        var last = Token('Z').As("last");
+        var composite = And(first, Token('Y').Preserve(), last).As("composite");
+        var rule = And(Literal(UnicodeExamples.CafePrecomposedGrapheme), composite);
         var result = rule.Parse(input);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -254,8 +255,8 @@ public class SymbolPositionTests
         // REMOVED — covered by the FormKC ligature test below. Line
         // never differs.
         string input = DecomposedCafePrefix + "X";
-        var target = Token('X').As("x").Preserve();
-        var rule = And(Literal("café"), target);
+        var target = Token('X').As("x");
+        var rule = And(Literal(UnicodeExamples.CafePrecomposedGrapheme), target);
         var result = rule.Parse(input);
 
         var range = result.Tree!.Find(target)!.SourceRange!.Value;
@@ -277,11 +278,11 @@ public class SymbolPositionTests
         // one past it. So leaf 'f' lands at [0, 0) (zero-width inside
         // the cluster) and leaf 'i' at [0, 1) (full cluster span). 'X'
         // lands cleanly one cluster past the ligature.
-        string input = "ﬁX";
-        var fLeaf = Token('f').As("f").Preserve();
-        var iLeaf = Token('i').As("i").Preserve();
-        var xLeaf = Token('X').As("x").Preserve();
-        var rule = And(fLeaf, iLeaf, xLeaf).As("root").Preserve();
+        string input = $"{UnicodeExamples.FiLigatureGrapheme}X";
+        var fLeaf = Token('f').As("f");
+        var iLeaf = Token('i').As("i");
+        var xLeaf = Token('X').As("x");
+        var rule = And(fLeaf, iLeaf, xLeaf).As("root");
         rule.Compile(NormalizationForm.FormKC);
         var result = rule.Parse(input);
 
@@ -300,7 +301,7 @@ public class SymbolPositionTests
         Assert.That(xRange.Start.CharIndex, Is.EqualTo(1));
         Assert.That(xRange.End.CharIndex, Is.EqualTo(2));
         Assert.That(xRange.Start.TokenIndex, Is.EqualTo(1),
-            "X TokenIndex should be 1 (1 original grapheme before it: ﬁ), not 2 (2 parseInput graphemes before it: f, i).");
+            $"X TokenIndex should be 1 (1 original grapheme before it: {UnicodeExamples.FiLigatureGrapheme}), not 2 (2 parseInput graphemes before it: f, i).");
         Assert.That(xRange.End.TokenIndex, Is.EqualTo(2));
     }
 }

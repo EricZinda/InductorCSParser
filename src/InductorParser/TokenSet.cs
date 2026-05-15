@@ -244,6 +244,28 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // the rule would otherwise have seen.
     internal TokenSet NormalizedFor(NormalizationForm form, List<(string original, string normalized)>? multiGraphemeConversions = null)
     {
+        // The body walks every rune in every range and P/Invokes
+        // IsNormalized per rune. On a built-in the size of TokenSet.Letters
+        // (~tens of thousands of code points across Lu/Ll/Lt/Lm/Lo) that's
+        // ~10-20ms per call. Without this cache, every Compile of a
+        // grammar with N OneOf(TokenSet.Letters) leaves repeats the same
+        // walk N times for the same (set, form) pair, since TokenSet is
+        // immutable and the projection is a pure function of its inputs.
+        // 960 IdAssignment sweep cases with 11 leaves each was paying
+        // ~150s in tests for an answer that's the same every time.
+        var key = (this, form);
+        if (_normalizedCache.TryGetValue(key, out var hit))
+        {
+            if (multiGraphemeConversions != null && hit.Conversions.Count > 0)
+                multiGraphemeConversions.AddRange(hit.Conversions);
+            return hit.Result;
+        }
+
+        // Collect conversions into a local list (not the caller's,
+        // possibly-null one) so the cache entry holds the conversions
+        // alongside the projected set. A cache hit replays the
+        // conversions into whatever list the caller passed.
+        var localConversions = new List<(string original, string normalized)>();
         bool changed = false;
         var newIntervals = new List<Interval>();
         var newGraphemes = new List<string>();
@@ -279,7 +301,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                         continue;
                     }
                     changed = true;
-                    AddProjectedEntry(runeString, normalized, newIntervals, newGraphemes, multiGraphemeConversions);
+                    AddProjectedEntry(runeString, normalized, newIntervals, newGraphemes, localConversions);
                 }
             }
         }
@@ -305,14 +327,46 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                     continue;
                 }
                 changed = true;
-                AddProjectedEntry(entry, normalized, newIntervals, newGraphemes, multiGraphemeConversions);
+                AddProjectedEntry(entry, normalized, newIntervals, newGraphemes, localConversions);
             }
         }
 
-        if (!changed) return this;
-        var graphemes = newGraphemes.Count == 0 ? null : NormalizeGraphemes(newGraphemes);
-        return new TokenSet(Normalize(newIntervals), graphemes);
+        TokenSet result;
+        if (!changed)
+        {
+            result = this;
+        }
+        else
+        {
+            var graphemes = newGraphemes.Count == 0 ? null : NormalizeGraphemes(newGraphemes);
+            result = new TokenSet(Normalize(newIntervals), graphemes);
+        }
+
+        IReadOnlyList<(string Original, string Normalized)> cachedConversions =
+            localConversions.Count == 0
+                ? Array.Empty<(string, string)>()
+                : localConversions.ConvertAll(c => (c.original, c.normalized));
+        _normalizedCache.TryAdd(key, new CachedProjection(result, cachedConversions));
+
+        if (multiGraphemeConversions != null && localConversions.Count > 0)
+            multiGraphemeConversions.AddRange(localConversions);
+
+        return result;
     }
+
+    // The (input set, form) pair determines the projected set and the
+    // conversions emitted, so caching on the pair is safe. Concurrent
+    // because nothing else in TokenSet holds a lock and built-ins like
+    // TokenSet.Letters can be touched by multiple threads racing on
+    // first Compile. TokenSet has value-based Equals / GetHashCode, so
+    // two sets built through different code paths that hold the same
+    // tokens share an entry.
+    private sealed record CachedProjection(
+        TokenSet Result,
+        IReadOnlyList<(string Original, string Normalized)> Conversions);
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<
+        (TokenSet Source, NormalizationForm Form), CachedProjection> _normalizedCache = new();
 
     // Helper: place `normalized` into the right bucket (intervals for
     // single-rune, graphemes for multi-rune-but-single-grapheme), or report
