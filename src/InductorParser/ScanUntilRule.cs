@@ -37,7 +37,14 @@ namespace InductorParser;
 //   * Rule escapeStart: general sub-rule escape trigger for multi-rune
 //     starts like $$ / ??.
 //
-// The order of checks is: stopper first, then escape start.
+// The order of checks is: escape start first, then stopper. The escape
+// runs first so a grammar whose escape-start shares a prefix with a
+// stopper still works. ScanUntil(stopAt: "\"$", escapeStart: Literal("${"),
+// ...) treats "${" as an interpolation escape and a bare '$' as a
+// stopper: at a '$' the escape Literal("${") is tried, and only when it
+// fails to match does the scan fall through to the '$' stopper. With the
+// stopper checked first the '$' would terminate the body before "${" was
+// ever tried, leaving the escape unreachable.
 //
 // The resulting Symbol carries a ReadOnlyMemory<char> over the
 // original input, same shape as OneOfRule's Symbol. ToString() returns
@@ -294,48 +301,25 @@ internal sealed class ScanUntilRule : Rule
             // escape-start rune anyway, so no further guard is needed.
             Lexer.TryPeekRune(input, pos, out int runeValue, out int runeLen);
 
-            // Stopper check. The TokenSet path is the fast case. The
-            // Rule path opens a peek transaction that always rolls
-            // back, so the stopper itself is never consumed by this
-            // rule. ContainsToken handles both halves of the set
-            // (single-rune intervals and multi-rune entries) against
-            // the next full token, so a stopper of '"' doesn't match
-            // a '"<combining-mark>' cluster — the same answer
-            // OneOf("\"") would give on the same input.
+            // tokenLen is the next whole token's length (one grapheme
+            // cluster). The escape-start fast path and the stopper check
+            // below both need it.
             int tokenLen = lexer.PeekTokenLength(pos);
-            if (_stopperRule == null)
-            {
-                if (pos + tokenLen <= inputLen
-                    && _stopperSet.ContainsToken(input.AsSpan(pos, tokenLen)))
-                {
-                    stopperMatched = true;
-                    break;
-                }
-            }
-            else
-            {
-                using var peek = lexer.BeginTransaction();
-                var stopMatch = _stopperRule.TryParse(lexer, outputSymbols: null);
-                // No Commit: the `using` disposes the transaction and
-                // rolls the position back regardless of what the
-                // stopper rule consumed.
-                if (stopMatch != null)
-                {
-                    stopperMatched = true;
-                    break;
-                }
-            }
 
-            // Escape-start check. Single-rune and Rule forms are
-            // mutually exclusive. The constructor picks one.
+            // Escape-start check, BEFORE the stopper check (see the
+            // header comment for why the escape wins when its start
+            // shares a prefix with a stopper). Single-rune and Rule
+            // forms are mutually exclusive; the constructor picks one.
+            // When the escape-start doesn't match here, the scan falls
+            // through to the stopper check below.
             if (_hasEscape)
             {
                 if (_escapeStartRule != null)
                 {
                     // General start path. TryParse opens its own
                     // transaction, so a start mismatch rolls the
-                    // position back to `pos` and we fall through to
-                    // consume the token as body.
+                    // position back to `pos` and we fall through to the
+                    // stopper check (and then the body fall-through).
                     var start = _escapeStartRule.TryParse(lexer, outputSymbols: null);
                     if (start != null)
                     {
@@ -365,7 +349,7 @@ internal sealed class ScanUntilRule : Rule
                         if (lexer.Position == pos) break;
                         continue;
                     }
-                    // Start didn't match: fall through to consume as body.
+                    // Start didn't match: fall through to the stopper check.
                 }
                 else if (tokenLen == runeLen && runeValue == _escapeStartRune)
                 {
@@ -389,6 +373,37 @@ internal sealed class ScanUntilRule : Rule
                         return null;
                     }
                     continue;
+                }
+            }
+
+            // Stopper check. The TokenSet path is the fast case. The
+            // Rule path opens a peek transaction that always rolls
+            // back, so the stopper itself is never consumed by this
+            // rule. ContainsToken handles both halves of the set
+            // (single-rune intervals and multi-rune entries) against
+            // the next full token, so a stopper of '"' doesn't match
+            // a '"<combining-mark>' cluster — the same answer
+            // OneOf("\"") would give on the same input.
+            if (_stopperRule == null)
+            {
+                if (pos + tokenLen <= inputLen
+                    && _stopperSet.ContainsToken(input.AsSpan(pos, tokenLen)))
+                {
+                    stopperMatched = true;
+                    break;
+                }
+            }
+            else
+            {
+                using var peek = lexer.BeginTransaction();
+                var stopMatch = _stopperRule.TryParse(lexer, outputSymbols: null);
+                // No Commit: the `using` disposes the transaction and
+                // rolls the position back regardless of what the
+                // stopper rule consumed.
+                if (stopMatch != null)
+                {
+                    stopperMatched = true;
+                    break;
                 }
             }
 
