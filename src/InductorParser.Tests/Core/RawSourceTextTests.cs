@@ -3,6 +3,7 @@ using InductorParser;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 // Framework-level and TOML-integration tests for Symbol.SourceText.
@@ -135,8 +136,8 @@ public class RawSourceTextTests
         // normalize. SourceRange's endpoints should also point at the
         // original (decomposed) string by reference so consumers
         // substringing Input get the user's typed bytes back.
-        const string DecomposedCafe = "café";
-        var rule = Literal("café").As("cafe");
+        string DecomposedCafe = UnicodeExamples.CafePrecomposedGrapheme;
+        var rule = Literal(UnicodeExamples.CafePrecomposedGrapheme).As("cafe");
         rule.Compile(System.Text.NormalizationForm.FormC);
         var result = rule.Parse(DecomposedCafe);
 

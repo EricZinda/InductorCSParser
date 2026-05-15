@@ -403,8 +403,15 @@ public static class TomlGrammar
             .As("offsetDateTime");
         LocalDateTime = And(fullDate, timeDelimiter, partialTime)
             .As("localDateTime");
-        LocalDate = fullDate.As("localDate");
-        LocalTime = partialTime.As("localTime");
+        // fullDate and partialTime are reused inside OffsetDateTime and
+        // LocalDateTime. AliasedAs wraps the shared shape with a new
+        // identity that only carries the "localDate" / "localTime" name
+        // at the standalone-value position. The inner shape stays
+        // anonymous everywhere else, so FindAll("localDate") on a tree
+        // containing OffsetDateTime nodes doesn't return false-positive
+        // date subtrees.
+        LocalDate = fullDate.AliasedAs("localDate");
+        LocalTime = partialTime.AliasedAs("localTime");
 
         // ---------------------------------------------------------
         // Composite values: array, inline-table
@@ -534,10 +541,24 @@ public static class TomlGrammar
         // expression =  ws [ comment ]
         // expression =/ ws keyval ws [ comment ]
         // expression =/ ws table ws [ comment ]
+        //
+        // Each branch ends with a Peek that the next character is a
+        // line break or EOF. This forces every branch to consume the
+        // whole logical line, so the third (whitespace + optional
+        // comment) branch can't silently absorb a malformed line that
+        // a more-specific branch tried and rejected. Without this
+        // anchor, the third branch matches with zero consumption on
+        // any input (its Optional bodies always succeed), and Or's
+        // commit-clears wipes the more-specific branches' WithError
+        // records. With the anchor, branches fail when the line has
+        // trailing garbage, the deeper WithError survives, and the
+        // user sees the helpful message. See
+        // docs/ErrorArchitecture.md.
+        var endOfLogicalLine = Or(Peek(newline), Peek(Eof()));
         var expression = Or(
-            And(whitespace, KeyValue, whitespace, Optional(comment)),
-            And(whitespace, Table, whitespace, Optional(comment)),
-            And(whitespace, Optional(comment))
+            And(whitespace, KeyValue, whitespace, Optional(comment), endOfLogicalLine),
+            And(whitespace, Table, whitespace, Optional(comment), endOfLogicalLine),
+            And(whitespace, Optional(comment), endOfLogicalLine)
         );
 
         // toml = expression *( newline expression )

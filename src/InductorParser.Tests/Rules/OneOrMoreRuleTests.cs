@@ -48,4 +48,21 @@ public class OneOrMoreRuleTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
     }
+
+    [Test]
+    public void OneOrMore_named_WithError_beats_deeper_mechanical_inner()
+    {
+        // Inner And(Letter, Letter) consumes the first letter then fails
+        // on the second, leaving a mechanical record at position 1.
+        // OneOrMore's named WithError beats it regardless of depth.
+        // See docs/ErrorArchitecture.md.
+        var letter = OneOf(TokenSet.Letters);
+        var rule = OneOrMore(And(letter, letter)).WithError("expected letter pairs");
+
+        var result = rule.Parse("a1");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected letter pairs"));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
+    }
 }

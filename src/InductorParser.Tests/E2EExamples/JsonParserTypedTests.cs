@@ -1,6 +1,7 @@
 using System;
 using NUnit.Framework;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 // Parallel to JsonParserTests. Covers the same grammar behaviors via
@@ -78,7 +79,7 @@ public class JsonParserTypedTests
         Assert.That(JsonParserTyped.Project("\"say \\\"hi\\\"\""),
             Is.EqualTo(new JsonStringValue("say \"hi\"")));
         Assert.That(JsonParserTyped.Project("\"\\u00e9\""),
-            Is.EqualTo(new JsonStringValue("é")));
+            Is.EqualTo(new JsonStringValue(UnicodeExamples.LatinEAcutePrecomposedGrapheme)));
     }
 
     [Test]

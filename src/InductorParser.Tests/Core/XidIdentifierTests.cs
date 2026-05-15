@@ -3,6 +3,7 @@ using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
+using static InductorParser.Tests.CanaryHelper;
 
 namespace InductorParser.Tests;
 
@@ -71,34 +72,38 @@ public class XidIdentifierTests
     public void Greek_identifier_matches_whole_word()
     {
         // All runes are Ll (Letter, Lowercase), so pure XID_Start territory
-        // after the first character. One precomposed "έ" (U+03AD) in the middle.
-        var result = Identifier().Parse("καλημέρα");
+        // after the first character. One precomposed e-acute (U+03AD) in the middle.
+        var word = UnicodeExamples.GreekKalimeraIdentifier;
+        var result = Identifier().Parse(word);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("καλημέρα"));
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(word));
     }
 
     [Test]
     public void Devanagari_identifier_with_combining_marks_matches()
     {
-        // "हिन्दी" is six runes: ह (Lo), ि (Mc), न (Lo), ् (Mn), द (Lo), ी (Mc).
+        // Devanagari 'hindi' is six runes: ha (Lo), i-vowel (Mc), na (Lo),
+        // virama (Mn), da (Lo), ii-vowel (Mc).
         // The lexer composes these into three multi-rune graphemes.
         // Identifier uses WithinToken internally, which walks each
         // grapheme's runes and checks them against the identifier rules,
         // so the whole word matches.
-        var result = Identifier().Parse("हिन्दी");
+        var word = UnicodeExamples.DevanagariHindiIdentifier;
+        var result = Identifier().Parse(word);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("हिन्दी"));
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(word));
     }
 
     [Test]
     public void Thai_identifier_with_sara_am_matches()
     {
-        // "กำ" is ก (Lo) + ำ (Mc SARA AM), which the lexer bundles into
-        // a single two-rune grapheme. Identifier accepts ก as Start and
-        // ำ as Continue inside the same grapheme.
-        var result = Identifier().Parse("กำ");
+        // Thai 'kam' is KO KAI (Lo) + SARA AM (Mc), which the lexer bundles
+        // into a single two-rune grapheme. Identifier accepts KO KAI as
+        // Start and SARA AM as Continue inside the same grapheme.
+        var word = UnicodeExamples.ThaiKamGrapheme;
+        var result = Identifier().Parse(word);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("กำ"));
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(word));
     }
 
     [Test]
@@ -107,8 +112,10 @@ public class XidIdentifierTests
         // R4: NFC equivalence is a free consequence of ParseOptions
         // defaulting to NormalizationForm.FormC. Two inputs that differ
         // only by NFC decomposition produce the same match text.
-        var precomposed = Identifier().Parse("café");        // café
-        var decomposed = Identifier().Parse("café");         // cafe + combining acute
+        var precomposedInput = UnicodeExamples.CafePrecomposedGrapheme;
+        var decomposedInput = UnicodeExamples.CafeDecomposedText;
+        var precomposed = Identifier().Parse(precomposedInput);
+        var decomposed = Identifier().Parse(decomposedInput);
 
         Assert.That(precomposed.Success, Is.True, precomposed.ErrorMessage);
         Assert.That(decomposed.Success, Is.True, decomposed.ErrorMessage);
@@ -119,15 +126,16 @@ public class XidIdentifierTests
     public void Nfkc_collapses_fullwidth_latin_to_plain_ascii()
     {
         // The XML doc on Identifier promises that FormKC makes fullwidth
-        // "ｆｏｏ" (U+FF46, U+FF4F, U+FF4F) match plain ASCII "foo". Verifies
+        // "foo" (U+FF46, U+FF4F, U+FF4F) match plain ASCII "foo". Verifies
         // that promise: under NFKC the fullwidth letters decompose to
         // ASCII before the lexer runs, so both inputs produce the same
         // flattened match text.
+        var fullwidthInput = UnicodeExamples.FullwidthFooGrapheme;
         var fullwidthRule = Identifier(System.Text.NormalizationForm.FormKC);
         fullwidthRule.Compile(System.Text.NormalizationForm.FormKC);
         var plainRule = Identifier(System.Text.NormalizationForm.FormKC);
         plainRule.Compile(System.Text.NormalizationForm.FormKC);
-        var fullwidth = fullwidthRule.Parse("ｆｏｏ");
+        var fullwidth = fullwidthRule.Parse(fullwidthInput);
         var plain = plainRule.Parse("foo");
 
         Assert.That(fullwidth.Success, Is.True, fullwidth.ErrorMessage);
@@ -142,11 +150,12 @@ public class XidIdentifierTests
         // U+FB00 LATIN SMALL LIGATURE FF. NFKC decomposes it to "ff".
         // Same promise: the ligatured and un-ligatured inputs match the
         // same identifier under FormKC.
+        var ligatureInput = UnicodeExamples.FfLigaturePlusOoText;
         var ligatureRule = Identifier(System.Text.NormalizationForm.FormKC);
         ligatureRule.Compile(System.Text.NormalizationForm.FormKC);
         var plainRule = Identifier(System.Text.NormalizationForm.FormKC);
         plainRule.Compile(System.Text.NormalizationForm.FormKC);
-        var ligature = ligatureRule.Parse("ﬀoo");
+        var ligature = ligatureRule.Parse(ligatureInput);
         var plain = plainRule.Parse("ffoo");
 
         Assert.That(ligature.Success, Is.True, ligature.ErrorMessage);
@@ -160,12 +169,13 @@ public class XidIdentifierTests
     {
         // Mathematical Bold letters (U+1D400..U+1D433 for bold A..z, etc.)
         // are supplementary-plane code points NFKC-equivalent to plain
-        // ASCII. This is the case that catches "𝐟𝐨𝐨" vs "foo" spoofing.
+        // ASCII. This is the case that catches math-bold 'foo' vs 'foo' spoofing.
+        var mathBoldInput = UnicodeExamples.MathBoldFooIdentifier;
         var mathBoldRule = Identifier(System.Text.NormalizationForm.FormKC);
         mathBoldRule.Compile(System.Text.NormalizationForm.FormKC);
         var plainRule = Identifier(System.Text.NormalizationForm.FormKC);
         plainRule.Compile(System.Text.NormalizationForm.FormKC);
-        var mathBold = mathBoldRule.Parse("𝐟𝐨𝐨");
+        var mathBold = mathBoldRule.Parse(mathBoldInput);
         var plain = plainRule.Parse("foo");
 
         Assert.That(mathBold.Success, Is.True, mathBold.ErrorMessage);
@@ -178,11 +188,12 @@ public class XidIdentifierTests
     public void Nfc_default_does_not_collapse_fullwidth_latin()
     {
         // Counter-test: under the default NFC (not NFKC), fullwidth
-        // "ｆｏｏ" stays fullwidth and produces a different match text
+        // 'foo' stays fullwidth and produces a different match text
         // than plain "foo", even though both parse successfully. This
         // verifies that the NFKC collapses above are coming from the
         // normalization form choice, not the rule.
-        var fullwidth = Identifier().Parse("ｆｏｏ");
+        var fullwidthInput = UnicodeExamples.FullwidthFooGrapheme;
+        var fullwidth = Identifier().Parse(fullwidthInput);
         var plain = Identifier().Parse("foo");
 
         Assert.That(fullwidth.Success, Is.True, fullwidth.ErrorMessage);
@@ -198,12 +209,14 @@ public class XidIdentifierTests
         // XID_Continue) but the match text differs between the two
         // inputs. Proves the equivalence in the previous test comes from
         // normalization, not the rule.
+        var precomposedInput = UnicodeExamples.CafePrecomposedGrapheme;
+        var decomposedInput = UnicodeExamples.CafeDecomposedText;
         var precomposedRule = Identifier();
         precomposedRule.Compile(null);
         var decomposedRule = Identifier();
         decomposedRule.Compile(null);
-        var precomposed = precomposedRule.Parse("café");
-        var decomposed = decomposedRule.Parse("café");
+        var precomposed = precomposedRule.Parse(precomposedInput);
+        var decomposed = decomposedRule.Parse(decomposedInput);
 
         Assert.That(precomposed.Success, Is.True, precomposed.ErrorMessage);
         Assert.That(decomposed.Success, Is.True, decomposed.ErrorMessage);
@@ -229,11 +242,15 @@ public class XidIdentifierTests
     [Test]
     public void Emoji_is_not_a_continue_character()
     {
-        // 😀 (U+1F600) is So (Symbol, Other). Not in XID_Continue.
+        // U+1F600 GRINNING FACE is So (Symbol, Other). Not in XID_Continue.
         // Identifier matches "a", then Rule.Parse sees more input and fails
         // the overall parse. ErrorCharIndex points at the first unconsumed
         // char, which is the start of the emoji.
-        var result = Identifier().Parse("a😀b");
+        var input = Canary(
+            "a😀b",
+            "a + grinning face emoji + b",
+            0x0061, 0x1F600, 0x0062);
+        var result = Identifier().Parse(input);
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     }
@@ -249,7 +266,8 @@ public class XidIdentifierTests
         // This is the regression test for XidStartExclusions. If someone
         // drops the exclusion table and uses a General_Category
         // approximation, this test flips to success.
-        var result = Identifier().Parse("ﷺ");
+        var input = UnicodeExamples.ArabicLigatureSallallahouGrapheme;
+        var result = Identifier().Parse(input);
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
     }
@@ -257,13 +275,14 @@ public class XidIdentifierTests
     [Test]
     public void Script_capital_P_2118_is_added_to_start()
     {
-        // U+2118 (SCRIPT CAPITAL P, ℘) is Sm by General_Category, so a
+        // U+2118 SCRIPT CAPITAL P is Sm by General_Category, so a
         // L-only check would reject it. UAX #31 adds it to XID_Start via
         // Other_ID_Start. This is the regression test for XidStartAdds: an
         // approximation that dropped the adds table would fail this.
-        var result = Identifier().Parse("℘");
+        var input = UnicodeExamples.ScriptCapitalPGrapheme;
+        var result = Identifier().Parse(input);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("℘"));
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(input));
     }
 
     [Test]
@@ -275,9 +294,10 @@ public class XidIdentifierTests
         // (PropList.txt: 309B..309C, in the property since Unicode 5.1).
         // The XidStartAdds table has to list this range explicitly because
         // the BCL's category lookup won't add it.
-        var result = Identifier().Parse("゛");
+        var input = UnicodeExamples.KatakanaHiraganaVoicedSoundMarkGrapheme;
+        var result = Identifier().Parse(input);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("゛"));
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(input));
     }
 
     [Test]
@@ -287,9 +307,10 @@ public class XidIdentifierTests
         // of the same Sk range covered by 309B's regression test. Tests the
         // upper endpoint so a future fat-fingered range like (0x309B, 0x309B)
         // would also fail this test.
-        var result = Identifier().Parse("゜");
+        var input = UnicodeExamples.KatakanaHiraganaSemiVoicedSoundMarkGrapheme;
+        var result = Identifier().Parse(input);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("゜"));
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(input));
     }
 
     [Test]
@@ -301,9 +322,10 @@ public class XidIdentifierTests
         // continue-position table specifically; if XidStartAdds were
         // fixed but XidContinueAdds were not, the start-position test
         // above would pass while this one would fail.
-        var result = Identifier().Parse("か゛");
+        var input = Canary("か゛", "hiragana ka + katakana-hiragana voiced sound mark (U+309B)", 0x304B, 0x309B);
+        var result = Identifier().Parse(input);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("か゛"));
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(input));
     }
 
     [Test]
@@ -312,8 +334,9 @@ public class XidIdentifierTests
         // Upper endpoint of the Sk range in continue position. Same shape
         // as the 309B continue-position test, locking in coverage of both
         // ends of the (0x309B, 0x309C) range in XidContinueAdds.
-        var result = Identifier().Parse("か゜");
+        var input = Canary("か゜", "hiragana ka + katakana-hiragana semi-voiced sound mark (U+309C)", 0x304B, 0x309C);
+        var result = Identifier().Parse(input);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("か゜"));
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(input));
     }
 }

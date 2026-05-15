@@ -6,6 +6,7 @@ using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.UnicodeExamples;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 [TestFixture]
@@ -81,7 +82,8 @@ public class ScanUntilRuleTests
     {
         // Strict default: a scan that runs off the end without matching
         // the stopper fails the rule, with the failure recorded at the
-        // EOF position.
+        // EOF position the scan reached. No WithError on ScanUntil here,
+        // so the mechanical record lands where the scan got stuck.
         var result = StopOnPipe().Parse("abcXYZ");
 
         Assert.That(result.Success, Is.False,
@@ -213,10 +215,10 @@ public class ScanUntilRuleTests
         // to body and is consumed wholesale. The remaining 'n' is also
         // body. The parse succeeds with the whole input as the body.
         var rule = JsonLike();
-        var result = rule.Parse("\\́n");
+        var result = rule.Parse(Canary("\\́n", "reverse solidus + combining acute accent + latin small letter n", 0x005C, 0x0301, 0x006E));
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("\\́n"),
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(Canary("\\́n", "reverse solidus + combining acute accent + latin small letter n", 0x005C, 0x0301, 0x006E)),
             "the cluster '\\<U+0301>' is not the single-rune escape '\\', so it's body, " +
             "matching how Token('\\\\') and OneOf(\"\\\\\") would treat the same cluster.");
     }
@@ -231,10 +233,10 @@ public class ScanUntilRuleTests
         // ScanUntil(Runes("\"")) treats it as body and keeps scanning,
         // matching how OneOf("\"") refuses the same cluster.
         var rule = ScanUntil(TokenSet.Runes("\""), eofIsTerminator: true);
-        var result = rule.Parse("ab\"́cd");
+        var result = rule.Parse($"ab\"{UnicodeExamples.CombiningAcuteText}cd");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("ab\"́cd"),
+        Assert.That(result.Tree!.ToString(), Is.EqualTo($"ab\"{UnicodeExamples.CombiningAcuteText}cd"),
             "the '\"<U+0301>' cluster is not the single-rune stopper '\"', " +
             "so the scan continues past it as body.");
     }
@@ -462,10 +464,10 @@ public class ScanUntilRuleTests
     // ZeroOrMore(NoneOf(stopAt)) would. See UnexpectedUnicodeTests
     // for the parser-wide story on lone surrogates.
 
-    [TestCase((char)0xD800, TestName = "lone high surrogate (first)")]
-    [TestCase((char)0xDBFF, TestName = "lone high surrogate (last)")]
-    [TestCase((char)0xDC00, TestName = "lone low surrogate (first)")]
-    [TestCase((char)0xDFFF, TestName = "lone low surrogate (last)")]
+    [TestCase((char)UnicodeExamples.HighSurrogateMinRune, TestName = "lone high surrogate (first)")]
+    [TestCase((char)UnicodeExamples.HighSurrogateMaxRune, TestName = "lone high surrogate (last)")]
+    [TestCase((char)UnicodeExamples.LowSurrogateMinRune, TestName = "lone low surrogate (first)")]
+    [TestCase((char)UnicodeExamples.LowSurrogateMaxRune, TestName = "lone low surrogate (last)")]
     public void ScanUntil_consumes_isolated_surrogate_half_as_body(char loneSurrogate)
     {
         // "abc" + <surrogate> + "xyz|"
@@ -492,7 +494,7 @@ public class ScanUntilRuleTests
         // ScanUntil consumes 'a', 'b', 'c', then the lone surrogate
         // as body, then hits EOF. With eofIsTerminator: true the
         // tolerant variant succeeds with the whole input as the leaf.
-        string input = "abc" + new string((char)0xD800, 1);
+        string input = "abc" + UnicodeExamples.HighSurrogateMinText;
         var rule = StopOnPipeOrEof();
         rule.Compile(null);
 
@@ -514,7 +516,7 @@ public class ScanUntilRuleTests
         // well-formedness validation). UnexpectedUnicodeTests pins the
         // same property for AnyToken / Token(string) / OneOf / etc.;
         // this test pins it for ScanUntil specifically.
-        string input = "before" + new string((char)0xD83D, 1) + "after|";
+        string input = "before" + UnicodeExamples.EmojiStartHighSurrogateText + "after|";
         // ScanUntil doesn't consume the stopper, so the parse leaves
         // trailing '|' input. AllowTrailingInput keeps Parse from
         // failing on the unconsumed pipe.
@@ -527,12 +529,12 @@ public class ScanUntilRuleTests
         string body = result.Tree!.ToString();
 
         // Round-trip: ToString() reproduces the input slice exactly.
-        Assert.That(body, Is.EqualTo("before" + new string((char)0xD83D, 1) + "after"));
+        Assert.That(body, Is.EqualTo("before" + UnicodeExamples.EmojiStartHighSurrogateText + "after"));
         // Length and the specific code unit at each position survive
         // unchanged. The lone-surrogate code unit at position 6 still
         // reads as 0xD83D.
         Assert.That(body.Length, Is.EqualTo(12));
-        Assert.That(body[6], Is.EqualTo((char)0xD83D));
+        Assert.That(body[6], Is.EqualTo((char)UnicodeExamples.EmojiStartHighSurrogateRune));
         // Reading back into the original input produces the same chars.
         Assert.That(body, Is.EqualTo(input.Substring(0, body.Length)));
     }
@@ -792,8 +794,10 @@ public class ScanUntilRuleTests
     [Test]
     public void ScanUntil_strict_with_rule_stopper_fails_on_EOF()
     {
-        // Rule-stopper overload: the close marker "]]>" is never
-        // present in the input. Strict semantics fail the rule at EOF.
+        // Rule-stopper overload: the close marker "]]>" is never present
+        // in the input. Strict semantics fail the rule at EOF. No
+        // WithError on ScanUntil, so it records at the EOF position the
+        // scan reached.
         var rule = ScanUntil(Literal("]]>"));
         var result = rule.Parse("plain text");
 
@@ -806,12 +810,9 @@ public class ScanUntilRuleTests
     public void ScanUntil_strict_inside_outer_And_attributes_failure_to_inner_scan()
     {
         // Unterminated string body: an outer And(Token('"'), ScanUntil('"'),
-        // Token('"')) fails on input '"hello'. Under strict ScanUntil
-        // the inner scan fails at EOF (offset 6), so the deepest failure
-        // recorded is the body's, not the missing close quote's. The
-        // recursive engine records lexer.Position (= input.Length) at
-        // the body, which is the same depth the outer Token('"') would
-        // have hit, but the message comes from the inner rule.
+        // Token('"')) fails on input '"hello'. Under strict ScanUntil the
+        // inner scan fails at EOF (offset 6), so the deepest failure
+        // recorded is the body's, not the missing close quote's.
         var body = ScanUntil(TokenSet.Runes("\""));
         var rule = InductorParser.Rules.And(Token('"'), body, Token('"'));
 
@@ -833,12 +834,32 @@ public class ScanUntilRuleTests
     }
 
     [Test]
+    public void ScanUntil_inner_escapeEnd_WithError_surfaces_when_ScanUntil_fails()
+    {
+        // ScanUntil doesn't clear inner records on success — and when
+        // it fails on a bad escape end, the inner escapeEnd rule's
+        // failure record survives (rollback keeps). If escapeEnd has
+        // a .WithError and ScanUntil doesn't, the inner WithError is
+        // what the user sees. Pins that ScanUntil doesn't accidentally
+        // scrub inner records.
+        var escapeEnd = OneOf(TokenSet.Runes("nrt\\\""))
+            .WithError("invalid escape character");
+        var rule = ScanUntil(TokenSet.Runes("\""), new Rune('\\'), escapeEnd);
+        var result = rule.Parse("\\x\"");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("invalid escape character"));
+    }
+
+    [Test]
     public void ScanUntil_strict_fails_on_EOF_even_with_escape_support()
     {
         // Escape-having variant: even when escapes are configured, a
         // scan that runs off the end without matching the stopper has
         // to fail under strict semantics. The escape path doesn't
-        // accidentally consume the EOF branch.
+        // accidentally consume the EOF branch. No WithError on
+        // ScanUntil, so the mechanical record lands at the EOF position
+        // the scan reached.
         var escapeEnd = OneOf(TokenSet.Runes("nrt\\\""));
         var rule = ScanUntil(TokenSet.Runes("\""), new Rune('\\'), escapeEnd);
 
@@ -882,7 +903,7 @@ public class ScanUntilRuleTests
         // unpaired surrogates the same way the stoppered variant does
         // (matches the round-trip property already verified for
         // StopOnPipe with a trailing surrogate).
-        string input = "abc" + new string((char)0xD83D, 1);
+        string input = "abc" + UnicodeExamples.EmojiStartHighSurrogateText;
         var rule = ScanUntilEof();
         rule.Compile(null);
 
@@ -890,5 +911,99 @@ public class ScanUntilRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo(input));
+    }
+
+    // Escape start vs. stopper ordering ------------------------------------
+
+    [Test]
+    public void ScanUntil_single_rune_escape_fires_when_the_escape_rune_is_also_a_stopper()
+    {
+        // Regression: ScanUntil used to check the stopper set before the
+        // escape start. When the escape-start rune is also a member of
+        // the stopper set, that ordering made the escape unreachable —
+        // the scan terminated at the escape character instead of
+        // consuming the escape sequence. This is the exact grammar shape
+        // the Rules.cs XML-doc example for the single-rune-escape
+        // ScanUntil overload shows (the escape rune '\' listed in the
+        // stopAt set alongside the closing quote).
+        var body = ScanUntil(
+            stopAt: TokenSet.Runes("\"\\"),
+            escapeStart: new Rune('\\'),
+            escapeEnd: OneOf("ntr\"\\"));
+
+        // One escape sequence \n, then the closing quote. The body has
+        // to consume \n as an escape and stop at the quote, leaving the
+        // unconsumed quote for AllowTrailingInput to tolerate.
+        var result = body.Parse("\\n\"", new ParseOptions { AllowTrailingInput = true });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("\\n"),
+            "the '\\' must trigger the escape, not terminate the body at offset 0");
+    }
+
+    [Test]
+    public void ScanUntil_rule_escape_start_fires_when_its_first_rune_is_also_a_stopper()
+    {
+        // The Rules.cs XML-doc example for the rule-valued-escape-start
+        // ScanUntil overload: a shell-style string body that stops at "
+        // or $, where "${...}" is an interpolation escape and a bare '$'
+        // (not followed by '{') is a stopper. The escape start
+        // Literal("${") shares its first rune '$' with the '$' stopper,
+        // so the escape has to be tried before the stopper.
+        var body = ScanUntil(
+            stopAt: TokenSet.Runes("\"$"),
+            escapeStart: Literal("${"),
+            escapeEnd: And(OneOrMore(NoneOf("}")), Token('}')));
+
+        // "${name}" is consumed as an escape; the body runs to the quote.
+        var withInterpolation = body.Parse("ab${name}cd\"",
+            new ParseOptions { AllowTrailingInput = true });
+        Assert.That(withInterpolation.Success, Is.True, withInterpolation.ErrorMessage);
+        Assert.That(withInterpolation.Tree!.ToString(), Is.EqualTo("ab${name}cd"),
+            "${name} must be consumed as an escape, not stop the body at the '$'");
+
+        // A bare '$' not followed by '{' still stops: the escape
+        // Literal("${") fails to match, so the scan falls through to the
+        // '$' stopper. This is the "bare $ falls through" behavior the
+        // doc example promises.
+        var bareDollar = body.Parse("ab$cd\"",
+            new ParseOptions { AllowTrailingInput = true });
+        Assert.That(bareDollar.Success, Is.True, bareDollar.ErrorMessage);
+        Assert.That(bareDollar.Tree!.ToString(), Is.EqualTo("ab"),
+            "a bare '$' falls through to the stopper and ends the body");
+    }
+
+    [Test]
+    public void ScanUntil_with_Eof_rule_stopper_stops_at_end_of_input()
+    {
+        // ScanUntil(Eof()) reads as "scan until end of input": Eof() is
+        // a rule that matches only at EOF, so ScanUntil should stop the
+        // body there and match the whole input, exactly like the
+        // library's own ScanUntilEof() helper. The Rule-stopper loop
+        // only tests the stopper at non-EOF positions, so a stopper
+        // that matches at EOF is never recognised and the rule fails.
+        var rule = ScanUntil(Eof());
+
+        var result = rule.Parse("abc");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("abc"));
+    }
+
+    [Test]
+    public void ScanUntil_with_rule_stopper_that_admits_Eof_stops_when_input_runs_out()
+    {
+        // Or(Literal("END"), Eof()) is the natural way to write
+        // "stop at END or at end of input." On input with no "END",
+        // the body should run to EOF where the Eof() alternative
+        // matches. Instead ScanUntil fails because the stopper rule
+        // is never tried at the EOF position.
+        var stopper = Or(Literal("END"), Eof());
+        var rule = ScanUntil(stopper);
+
+        var result = rule.Parse("abc");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("abc"));
     }
 }

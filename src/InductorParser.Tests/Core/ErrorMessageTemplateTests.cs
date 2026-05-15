@@ -3,6 +3,7 @@ using NUnit.Framework;
 using InductorParser;
 using static InductorParser.Rules;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 // Templates on ParseOptions let callers swap out the parser's default error
@@ -146,7 +147,7 @@ public class ErrorMessageTemplateTests
             PositionalErrorTemplate =
                 "char={charIndex} grapheme={tokenIndex} line={line} col={column}",
         };
-        var result = rule.Parse(char.ConvertFromUtf32(0x1D400) + "\nbx", options);
+        var result = rule.Parse(UnicodeExamples.MathematicalBoldCapitalAGrapheme + "\nbx", options);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage, Is.EqualTo("char=4 grapheme=3 line=1 col=1"));
@@ -217,7 +218,7 @@ public class ErrorMessageTemplateTests
         // parseInput[pos] it grabs a lone surrogate half, which is
         // malformed Unicode that displays as garbage. The right answer
         // is the full rune, "𝐀".
-        string boldA = char.ConvertFromUtf32(0x1D400);
+        string boldA = UnicodeExamples.MathematicalBoldCapitalAGrapheme;
         var rule = Token('a');
         var result = rule.Parse(boldA);
 
@@ -234,7 +235,7 @@ public class ErrorMessageTemplateTests
         // as two chars / one grapheme cluster. The user perceives one
         // character ("é") and the {character} placeholder should match
         // what they see, not the bare 'e' before the combining mark.
-        string eAcute = "é";
+        string eAcute = UnicodeExamples.LatinEAcuteGrapheme;
         var rule = Token('a');
         rule.Compile(null);
         var result = rule.Parse(eAcute);
@@ -292,11 +293,11 @@ public class ErrorMessageTemplateTests
         // the user is looking at.
         var rule = Token('x');
         rule.Compile(System.Text.NormalizationForm.FormKC);
-        var result = rule.Parse("１");
+        var result = rule.Parse(UnicodeExamples.FullwidthDigitOneGrapheme);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage,
-            Is.EqualTo("Parse failed at offset 0: unexpected '１'."));
+            Is.EqualTo($"Parse failed at offset 0: unexpected '{UnicodeExamples.FullwidthDigitOneGrapheme}'."));
     }
 
     [Test]
@@ -308,10 +309,10 @@ public class ErrorMessageTemplateTests
         // "f" the parser saw internally.
         var rule = Token('a');
         rule.Compile(System.Text.NormalizationForm.FormKC);
-        var result = rule.Parse("ﬁoo");
+        var result = rule.Parse(UnicodeExamples.FiLigaturePlusOoText);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage,
-            Is.EqualTo("Parse failed at offset 0: unexpected 'ﬁ'."));
+            Is.EqualTo($"Parse failed at offset 0: unexpected '{UnicodeExamples.FiLigatureGrapheme}'."));
     }
 }

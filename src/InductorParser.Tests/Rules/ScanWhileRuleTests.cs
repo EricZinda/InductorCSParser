@@ -53,6 +53,9 @@ public class ScanWhileRuleTests
             .Parse("abc!");
 
         Assert.That(result.Success, Is.False);
+        // ScanWhile records at the position where the scan got stuck
+        // (position 3, the '!'), independent of whether .WithError is
+        // attached. See ErrorArchitecture.md.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorMessage, Is.EqualTo("need four letters"));
     }

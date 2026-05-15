@@ -3,6 +3,7 @@ using System.Globalization;
 using NUnit.Framework;
 using InductorParser.Lexing;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests.Lexing;
 
 // Direct unit tests for GraphemeClusterIndex. Each fixture builds a
@@ -80,7 +81,7 @@ public class GraphemeClusterIndexTests
     public void Surrogate_pair_emoji_is_one_two_char_cluster()
     {
         // U+1F600 grinning face = "😀" in UTF-16.
-        AssertMatchesReference("😀");
+        AssertMatchesReference(UnicodeExamples.GrinningFaceEmojiGrapheme);
     }
 
     [Test]
@@ -93,28 +94,28 @@ public class GraphemeClusterIndexTests
     public void Combining_mark_glues_to_base()
     {
         // e + U+0301 (combining acute accent) = é
-        AssertMatchesReference("é");
+        AssertMatchesReference(UnicodeExamples.LatinEAcuteGrapheme);
     }
 
     [Test]
     public void Stacked_combining_marks_glue_to_base()
     {
         // c + U+0301 + U+0302 = c with acute and circumflex stacked.
-        AssertMatchesReference("ć̂");
+        AssertMatchesReference(Canary("ć̂", "latin small letter c + combining acute accent + combining circumflex accent", 0x0063, 0x0301, 0x0302));
     }
 
     [Test]
     public void Emoji_ZWJ_sequence_is_one_cluster()
     {
         // Man + ZWJ + Woman = one cluster under GB11 on .NET 5+.
-        AssertMatchesReference("👨‍👩");
+        AssertMatchesReference(Canary("👨‍👩", "man + zero width joiner + woman", 0x1F468, 0x200D, 0x1F469));
     }
 
     [Test]
     public void Variation_selector_glues_to_base()
     {
         // # + U+FE0F (VS16) = keycap base
-        AssertMatchesReference("#️");
+        AssertMatchesReference(Canary("#️", "number sign + variation selector-16", 0x0023, 0xFE0F));
     }
 
     [Test]
@@ -125,13 +126,13 @@ public class GraphemeClusterIndexTests
         // consonant. Either way the index agrees with StringInfo,
         // because both walk the same enumerator. This test pins that
         // agreement on whichever runtime is hosting the suite.
-        AssertMatchesReference("क्ष");
+        AssertMatchesReference(Canary("क्ष", "devanagari letter ka + devanagari sign virama + devanagari letter ssa", 0x0915, 0x094D, 0x0937));
     }
 
     [Test]
     public void Mixed_input_with_multiple_cluster_shapes()
     {
-        AssertMatchesReference("ab\r\nćd😀e");
+        AssertMatchesReference($"ab\r\nc{UnicodeExamples.CombiningAcuteText}d{UnicodeExamples.GrinningFaceEmojiGrapheme}e");
     }
 
     [Test]
@@ -180,7 +181,7 @@ public class GraphemeClusterIndexTests
         // "a\r\nb́c": 0=a, 1=\r, 2=\n, 3=b, 4=́, 5=c.
         // Clusters: [a], [\r\n], [b́], [c]; boundaries at
         // 0, 1, 3, 5, 6.
-        string input = "a\r\nb́c";
+        string input = $"a\r\nb{UnicodeExamples.CombiningAcuteText}c";
         var index = GraphemeClusterIndex.For(input);
         Assert.That(index.IsClusterStart(input.Length), Is.True, "EOF");
         Assert.That(index.IsClusterStart(0), Is.True, "a");

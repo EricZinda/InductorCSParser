@@ -4,6 +4,7 @@ using InductorParser;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 // Scaffold for the per-rule SourceText FlattenType-matrix tests in
@@ -64,7 +65,7 @@ public static class SourceTextFlattenTypeMatrixHelper
                 $"FlattenType.{flattenType}: target Symbol should carry the declared FlattenType.");
             Assert.That(symbol.SourceText, Is.EqualTo(expectedSourceText),
                 $"FlattenType.{flattenType}: SourceText should be \"{expectedSourceText}\" " +
-                $"regardless of FlattenType — FlattenType controls visibility in the tree, " +
+                $"regardless of FlattenType {UnicodeExamples.EmDashGrapheme} FlattenType controls visibility in the tree, " +
                 $"not the matched-text content.");
         }
     }

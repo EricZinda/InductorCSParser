@@ -85,10 +85,9 @@ internal sealed class ScanWhileRule : Rule
         if (count < _minimumCount)
         {
             TraceFailure(lexer, $"count= {count}, wanted at least {_minimumCount} of '{_setRendered}'");
-            // If we consumed a short run, report the failure where the
-            // shortfall became known, matching AtLeast(OneOf(...)) error
-            // positioning. The transaction rolls the actual cursor back.
-            lexer.RecordFailure(lexer.Position, ErrorMessage);
+            // Record at the position where the scan got stuck.
+            // See docs/ErrorArchitecture.md.
+            lexer.RecordFailure(lexer.Position, ErrorMessage, ErrorForced);
             return null;
         }
 

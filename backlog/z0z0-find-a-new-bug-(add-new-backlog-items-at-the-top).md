@@ -45,6 +45,14 @@ Create a new `.md` file in `backlog/` following the same pattern as the other it
 
 The filename should follow the `<prefix>-<slug>.md` pattern where the prefix sorts at the top of the backlog (smaller than the current top entry's prefix). `0001-` or `0a00-` is fine for the first ones; pick a prefix slightly smaller than the current top entry for subsequent ones.
 
+## Remove the backlog item once its fix lands
+
+The backlog item you just wrote is the runbook for the fix, not a permanent record. The find-a-bug flow is find, fix, verify, *then delete the backlog item you created*. By the time you finish, the bug is already resolved in the tree (steps 4 and 5 above), so leaving its backlog entry behind just clutters the list with an already-done to-do. Delete the backlog item file as the last step of the fix, in the same commit as the source change.
+
+The lasting record of the hunt is the `docs/BugSearchLog/` entry (next section). That is why the search-log entry is required and the backlog item is not. A backlog item only stays in `backlog/` if it documents a bug you filed but could not fix in the same pass.
+
+The same rule applies to existing items: a backlog item whose bug is already fixed in the tree should be removed.
+
 ## Update the bug-hunt docs
 
 Two updates, one in each folder. Both folders use the per-item-per-file layout: each entry is a separate `.md` file in the folder, named `<prefix>-<slug>.md`. The prefix is alphanumeric and the entries sort newest-on-top, so a new entry needs a prefix that sorts before the current top entry's. `1000-` or `0001-` is fine. The VS Code backlog viewer renumbers on next open if you pick something that needs adjusting. The body of each entry follows the bullet format the existing entries use: a top-level `- Title` line, then sub-bullet lines indented under it.
@@ -54,4 +62,4 @@ Two updates, one in each folder. Both folders use the per-item-per-file layout: 
 
 ## Important
 
-Do NOT delete this backlog item when you're done. It stays in the backlog permanently so we keep finding new bugs.
+Do NOT delete *this* backlog item (the find-a-bug item itself) when you're done. It stays in the backlog permanently so we keep finding new bugs. This is the one exception: the per-bug item you create for each hunt does get deleted once its fix lands, as described under "Remove the backlog item once its fix lands" above.

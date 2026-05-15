@@ -30,8 +30,8 @@ namespace InductorParser.Tests;
 // tests can assert the right outcome.
 //
 // Convention: every Unicode value is built from explicit hex codepoints
-// — either `(char)0xHHHH` casts concatenated into a string, or `\uHHHH`
-// escapes for surrogates — with a same-line "// looks like X" comment
+//, either `(char)0xHHHH` casts concatenated into a string, or `\uHHHH`
+// escapes for surrogates, with a same-line "// looks like X" comment
 // showing the rendered character. The hex form pins the bytes regardless
 // of editor or text-processing layer behavior, and the comment tells a
 // reader what they're looking at without having to decode the codepoints
@@ -279,26 +279,26 @@ public static class NormalizationExamples
         //
         // What works for matching a lone surrogate (Compile(null)):
         //
-        //   Token("\uD800")     — Token(string) goes through StringInfo
+        //   Token("\uD800")    , Token(string) goes through StringInfo
         //                          and treats the surrogate as one text
         //                          element. (Token(char) refuses
         //                          surrogates at the factory.)
-        //   Literal("a\uD800b") — bit-exact char-by-char compare, no
+        //   Literal("a\uD800b"), bit-exact char-by-char compare, no
         //                          rune validation.
-        //   AnyToken()          — matches any cluster including a lone
+        //   AnyToken()         , matches any cluster including a lone
         //                          surrogate.
-        //   ScanUntil(...)      — surrogates flow through the body
+        //   ScanUntil(...)     , surrogates flow through the body
         //                          (the stopper set is validated, but
         //                          body content isn't).
         //
         // What doesn't work (rejects lone surrogates at construction
         // time, before any compile):
         //
-        //   Token('\uD800')                — the char factory refuses
+        //   Token('\uD800')               , the char factory refuses
         //                                     surrogates explicitly.
-        //   OneOf(TokenSet.Runes("\uD800")) — TokenSet.Runes validates
+        //   OneOf(TokenSet.Runes("\uD800")), TokenSet.Runes validates
         //                                     each rune.
-        //   OneOf(TokenSet.Single(0xD800)) — TokenSet.Single validates
+        //   OneOf(TokenSet.Single(0xD800)), TokenSet.Single validates
         //                                     the codepoint.
         //
         // The matrix exercises each rule type's "throws under every
@@ -398,52 +398,17 @@ public static class NormalizationExamples
     // (char) cast on the explicit hex codepoint. Concatenated with the
     // empty string so the result is a string for the rest of the
     // pipeline.
-    private static readonly string EAcutePrecomposed = "" + (char)0x00E9;                    // looks like é
-    private static readonly string ARingPrecomposed = "" + (char)0x00C5;                     // looks like Å (LATIN A WITH RING)
-    private static readonly string AngstromSign = "" + (char)0x212B;                         // looks like Å (canonical singleton — substitutes to U+00C5)
-    private static readonly string OhmSign = "" + (char)0x2126;                              // looks like Ω (canonical singleton — substitutes to U+03A9)
-    private static readonly string GreekCapitalOmega = "" + (char)0x03A9;                    // looks like Ω
-    private static readonly string KelvinSign = "" + (char)0x212A;                           // looks like K (canonical singleton — substitutes to ASCII K)
-    private static readonly string DoubleStruckC = "" + (char)0x2102;                        // looks like ℂ (compatibility singleton — substitutes to ASCII C under FormKC)
-    private static readonly string FiLigature = "" + (char)0xFB01;                           // looks like ﬁ (compatibility ligature — expands to "fi" under FormKC)
-    private static readonly string RomanNumeralEight = "" + (char)0x2167;                    // looks like Ⅷ (compatibility — expands to "VIII" under FormKC)
-    private static readonly string FullwidthA = "" + (char)0xFF21;                           // looks like Ａ (fullwidth — substitutes to ASCII A under FormKC)
-    private static readonly string DevanagariQaPrecomposed = "" + (char)0x0958;              // looks like क़ (Devanagari letter QA — composition exclusion)
-    private static readonly string HangulGaPrecomposed = "" + (char)0xAC00;                  // looks like 가 (HANGUL SYLLABLE GA, 2-jamo)
-    private static readonly string HangulGagPrecomposed = "" + (char)0xAC01;                 // looks like 각 (HANGUL SYLLABLE GAG, 3-jamo)
-    private static readonly string VietnameseAcircumflexDotBelowPrecomposed = "" + (char)0x1EAD;  // looks like ậ
-    private static readonly string DialytikaTonosPrecomposed = "" + (char)0x0344;            // looks like ̈́ (combining dialytika-tonos, defective)
-    private static readonly string LoneCombiningGrave = "" + (char)0x0300;                   // looks like ̀ (lone combining grave, defective)
-    private static readonly string FullwidthGaPrecomposed = "" + (char)0x30AC;               // looks like ガ (KATAKANA LETTER GA, precomposed)
 
     // Multi-rune values built by concatenating (char) casts. Splitting
     // ensures no editor or text-processing layer can NFC-fold the
     // sequence back into a precomposed character.
-    private static readonly string EAcuteDecomposed = "e" + (char)0x0301;                    // looks like é (e + combining acute)
-    private static readonly string ARingDecomposed = "A" + (char)0x030A;                     // looks like Å (A + combining ring above)
-    private static readonly string GaTwoJamoDecomposed = "" + (char)0x1100 + (char)0x1161;   // looks like 가 (CHOSEONG KIYEOK + JUNGSEONG A)
-    private static readonly string GagThreeJamoDecomposed = "" + (char)0x1100 + (char)0x1161 + (char)0x11A8;  // looks like 각 (CHOSEONG KIYEOK + JUNGSEONG A + JONGSEONG KIYEOK)
-    private static readonly string DevanagariKaNuktaDecomposed = "" + (char)0x0915 + (char)0x093C;            // looks like क़ (KA + NUKTA — composition exclusion, doesn't recompose)
-    private static readonly string VietnameseAReorderedSource = "a" + (char)0x0302 + (char)0x0323;            // looks like ậ (a + circumflex CCC=230 + dot-below CCC=220, non-canonical)
-    private static readonly string VietnameseACanonicalDecomposed = "a" + (char)0x0323 + (char)0x0302;        // looks like ậ (a + dot-below + circumflex, canonical order)
-    private static readonly string QDotsNonCanonicalOrder = "q" + (char)0x0307 + (char)0x0323;                // looks like q̣̇ (q + dot-above + dot-below, non-canonical)
-    private static readonly string QDotsCanonicalOrder = "q" + (char)0x0323 + (char)0x0307;                   // looks like q̣̇ (q + dot-below + dot-above, canonical order)
-    private static readonly string DWithDotAboveAndDotBelowSource = "" + (char)0x1E0A + (char)0x0323;         // looks like Ḍ̇ (Ḋ + dot-below)
-    private static readonly string DWithDotBelowAndDotAboveFormC = "" + (char)0x1E0C + (char)0x0307;          // looks like Ḍ̇ (Ḍ + dot-above — composite shifted)
-    private static readonly string DWithBothDotsFullyDecomposed = "D" + (char)0x0323 + (char)0x0307;          // looks like Ḍ̇ (D + dot-below + dot-above, fully decomposed)
-    private static readonly string DialytikaTonosDecomposed = "" + (char)0x0308 + (char)0x0301;               // looks like ̈́ (diaeresis + acute, two defective combining marks)
-    private static readonly string HalfwidthKaWithVoicingSource = "" + (char)0xFF76 + (char)0xFF9E;           // looks like ｶﾞ (halfwidth KA + halfwidth voicing)
-    private static readonly string KatakanaKaPlusCombiningVoicing = "" + (char)0x30AB + (char)0x3099;         // looks like ガ (KA + COMBINING KATAKANA-HIRAGANA VOICED SOUND MARK)
 
     // Lone surrogate. \u escape works here because invalid scalar values
     // can't be normalized into actual chars by any text-processing layer.
-    private const string LoneHighSurrogate = "\uD800";                                       // U+D800 lone high surrogate (no rendering — invalid scalar)
 
     // Supplementary-plane sequences. Each rune is a UTF-16 surrogate pair;
     // \u escapes for the surrogates themselves survive the tooling pipeline
     // and the C# compiler reassembles them into the real codepoint.
-    private const string UsFlag = "🇺🇸";                                // looks like 🇺🇸 (regional indicator U + S)
-    private const string FamilyZwjEmoji = "👨‍👩‍👧"; // looks like 👨‍👩‍👧 (man + ZWJ + woman + ZWJ + girl)
 
     // Base "a" followed by 31 copies of U+0316 COMBINING GRAVE ACCENT
     // BELOW. U+0316 has no precomposed form with any letter, so NFC
@@ -454,7 +419,7 @@ public static class NormalizationExamples
     // long sequence stays the same length under all four normalization
     // forms, and the lexer sees it as one grapheme cluster of 32 runes.
     private static readonly string StreamSafeBoundaryLongSequence =
-        "a" + new string((char)0x0316, 31);
+        "a" + new string((char)UnicodeExamples.CombiningGraveBelowRune, 31);
 
     // The full table. The NormalizationExamplesSelfCheck fixture below
     // asserts each column equals string.Normalize(Source, form), so a
@@ -466,106 +431,106 @@ public static class NormalizationExamples
             Source: "a",
             FormC: "a", FormD: "a", FormKC: "a", FormKD: "a",
             Category: NormalizationCategory.AlreadyNormalized,
-            Description: "ASCII letter — identity under every form"),
+            Description: "ASCII letter, identity under every form"),
 
         new NormalizationCase(
-            Source: EAcutePrecomposed,                          // looks like é (precomposed)
-            FormC: EAcutePrecomposed,
-            FormD: EAcuteDecomposed,                            // looks like é (decomposed)
-            FormKC: EAcutePrecomposed,
-            FormKD: EAcuteDecomposed,
+            Source: UnicodeExamples.LatinEAcutePrecomposedGrapheme,                          // looks like é (precomposed)
+            FormC: UnicodeExamples.LatinEAcutePrecomposedGrapheme,
+            FormD: UnicodeExamples.LatinEAcuteGrapheme,                            // looks like é (decomposed)
+            FormKC: UnicodeExamples.LatinEAcutePrecomposedGrapheme,
+            FormKD: UnicodeExamples.LatinEAcuteGrapheme,
             Category: NormalizationCategory.PrecomposedDecomposesUnderD,
-            Description: "U+00E9 é precomposed — decomposes under D/KD"),
+            Description: "U+00E9 e-acute precomposed, decomposes under D/KD"),
 
         new NormalizationCase(
-            Source: EAcuteDecomposed,                           // looks like é (decomposed)
-            FormC: EAcutePrecomposed,                           // looks like é (composes under C)
-            FormD: EAcuteDecomposed,
-            FormKC: EAcutePrecomposed,
-            FormKD: EAcuteDecomposed,
+            Source: UnicodeExamples.LatinEAcuteGrapheme,                           // looks like é (decomposed)
+            FormC: UnicodeExamples.LatinEAcutePrecomposedGrapheme,                           // looks like é (composes under C)
+            FormD: UnicodeExamples.LatinEAcuteGrapheme,
+            FormKC: UnicodeExamples.LatinEAcutePrecomposedGrapheme,
+            FormKD: UnicodeExamples.LatinEAcuteGrapheme,
             Category: NormalizationCategory.DecomposedComposesUnderC,
-            Description: "e + combining acute — composes under C/KC"),
+            Description: "e + combining acute, composes under C/KC"),
 
         new NormalizationCase(
-            Source: AngstromSign,                               // looks like Å (U+212B Angstrom)
-            FormC: ARingPrecomposed,                            // looks like Å (U+00C5 LATIN A WITH RING)
-            FormD: ARingDecomposed,                             // looks like Å (A + combining ring)
-            FormKC: ARingPrecomposed,
-            FormKD: ARingDecomposed,
+            Source: UnicodeExamples.AngstromGrapheme,                               // looks like Å (U+212B Angstrom)
+            FormC: UnicodeExamples.LatinCapitalAWithRingAboveGrapheme,                            // looks like Å (U+00C5 LATIN A WITH RING)
+            FormD: UnicodeExamples.LatinAWithRingAboveDecomposedText,                             // looks like Å (A + combining ring)
+            FormKC: UnicodeExamples.LatinCapitalAWithRingAboveGrapheme,
+            FormKD: UnicodeExamples.LatinAWithRingAboveDecomposedText,
             Category: NormalizationCategory.CanonicalSingletonToDecomposableRune,
-            Description: "U+212B ANGSTROM — singleton to U+00C5, which itself decomposes under FormD"),
+            Description: "U+212B ANGSTROM, singleton to U+00C5, which itself decomposes under FormD"),
 
         new NormalizationCase(
-            Source: OhmSign,                                    // looks like Ω (U+2126 OHM)
-            FormC: GreekCapitalOmega,                           // looks like Ω (U+03A9 Greek capital omega)
-            FormD: GreekCapitalOmega,
-            FormKC: GreekCapitalOmega,
-            FormKD: GreekCapitalOmega,
+            Source: UnicodeExamples.OhmGrapheme,                                    // looks like Ω (U+2126 OHM)
+            FormC: UnicodeExamples.GreekCapitalOmegaGrapheme,                           // looks like Ω (U+03A9 Greek capital omega)
+            FormD: UnicodeExamples.GreekCapitalOmegaGrapheme,
+            FormKC: UnicodeExamples.GreekCapitalOmegaGrapheme,
+            FormKD: UnicodeExamples.GreekCapitalOmegaGrapheme,
             Category: NormalizationCategory.CanonicalSingletonToStableRune,
-            Description: "U+2126 OHM — singleton to U+03A9, target rune is stable"),
+            Description: "U+2126 OHM, singleton to U+03A9, target rune is stable"),
 
         new NormalizationCase(
-            Source: KelvinSign,                                 // looks like K (U+212A KELVIN, NOT ASCII K)
+            Source: UnicodeExamples.KelvinGrapheme,                                 // looks like K (U+212A KELVIN, NOT ASCII K)
             FormC: "K",                                         // ASCII K (U+004B)
             FormD: "K",
             FormKC: "K",
             FormKD: "K",
             Category: NormalizationCategory.CanonicalSingletonToStableRune,
-            Description: "U+212A KELVIN — singleton to ASCII K, target rune is stable"),
+            Description: "U+212A KELVIN, singleton to ASCII K, target rune is stable"),
 
         new NormalizationCase(
-            Source: DoubleStruckC,                              // looks like ℂ (U+2102)
-            FormC: DoubleStruckC,
-            FormD: DoubleStruckC,
+            Source: UnicodeExamples.DoubleStruckCGrapheme,                              // looks like ℂ (U+2102)
+            FormC: UnicodeExamples.DoubleStruckCGrapheme,
+            FormD: UnicodeExamples.DoubleStruckCGrapheme,
             FormKC: "C",                                        // ASCII C
             FormKD: "C",
             Category: NormalizationCategory.CompatibilitySingletonRune,
-            Description: "U+2102 DOUBLE-STRUCK C — compatibility singleton to ASCII C"),
+            Description: "U+2102 DOUBLE-STRUCK C, compatibility singleton to ASCII C"),
 
         new NormalizationCase(
-            Source: FiLigature,                                 // looks like ﬁ (U+FB01)
-            FormC: FiLigature,
-            FormD: FiLigature,
+            Source: UnicodeExamples.FiLigatureGrapheme,                                 // looks like ﬁ (U+FB01)
+            FormC: UnicodeExamples.FiLigatureGrapheme,
+            FormD: UnicodeExamples.FiLigatureGrapheme,
             FormKC: "fi",                                       // two graphemes after KC
             FormKD: "fi",
             Category: NormalizationCategory.CompatibilityMultiGraphemeExpansion,
-            Description: "U+FB01 ﬁ ligature — KC/KD expand to two graphemes"),
+            Description: "U+FB01 fi-ligature, KC/KD expand to two graphemes"),
 
         new NormalizationCase(
-            Source: RomanNumeralEight,                          // looks like Ⅷ (U+2167)
-            FormC: RomanNumeralEight,
-            FormD: RomanNumeralEight,
+            Source: UnicodeExamples.RomanNumeralEightGrapheme,                          // looks like Ⅷ (U+2167)
+            FormC: UnicodeExamples.RomanNumeralEightGrapheme,
+            FormD: UnicodeExamples.RomanNumeralEightGrapheme,
             FormKC: "VIII",                                     // four graphemes after KC
             FormKD: "VIII",
             Category: NormalizationCategory.CompatibilityMultiGraphemeExpansion,
-            Description: "U+2167 ROMAN NUMERAL EIGHT — KC/KD expand to four graphemes"),
+            Description: "U+2167 ROMAN NUMERAL EIGHT, KC/KD expand to four graphemes"),
 
         new NormalizationCase(
-            Source: FullwidthA,                                 // looks like Ａ (U+FF21)
-            FormC: FullwidthA,
-            FormD: FullwidthA,
+            Source: UnicodeExamples.FullwidthAGrapheme,                                 // looks like Ａ (U+FF21)
+            FormC: UnicodeExamples.FullwidthAGrapheme,
+            FormD: UnicodeExamples.FullwidthAGrapheme,
             FormKC: "A",                                        // ASCII A
             FormKD: "A",
             Category: NormalizationCategory.FullwidthToHalfwidth,
-            Description: "U+FF21 FULLWIDTH A — KC/KD to ASCII A"),
+            Description: "U+FF21 FULLWIDTH A, KC/KD to ASCII A"),
 
         new NormalizationCase(
-            Source: VietnameseAReorderedSource,                 // looks like ậ (a + circumflex + dot-below, non-canonical)
-            FormC: VietnameseAcircumflexDotBelowPrecomposed,    // looks like ậ (U+1EAD precomposed)
-            FormD: VietnameseACanonicalDecomposed,              // looks like ậ (a + dot-below + circumflex, canonical)
-            FormKC: VietnameseAcircumflexDotBelowPrecomposed,
-            FormKD: VietnameseACanonicalDecomposed,
+            Source: UnicodeExamples.VietnameseACircumflexDotBelowReorderedText,                 // looks like ậ (a + circumflex + dot-below, non-canonical)
+            FormC: UnicodeExamples.VietnameseACircumflexDotBelowGrapheme,    // looks like ậ (U+1EAD precomposed)
+            FormD: UnicodeExamples.VietnameseACircumflexDotBelowCanonicalText,              // looks like ậ (a + dot-below + circumflex, canonical)
+            FormKC: UnicodeExamples.VietnameseACircumflexDotBelowGrapheme,
+            FormKD: UnicodeExamples.VietnameseACircumflexDotBelowCanonicalText,
             Category: NormalizationCategory.NonCanonicalCombiningMarkOrderReordersUnderD,
-            Description: "Vietnamese ậ in non-canonical mark order — reorders under D/KD, composes under C/KC"),
+            Description: "Vietnamese a-circumflex-dot-below in non-canonical mark order, reorders under D/KD, composes under C/KC"),
 
         new NormalizationCase(
-            Source: DevanagariQaPrecomposed,                    // looks like क़ (U+0958 precomposed)
-            FormC: DevanagariKaNuktaDecomposed,                 // looks like क़ (KA + NUKTA — composition exclusion)
-            FormD: DevanagariKaNuktaDecomposed,
-            FormKC: DevanagariKaNuktaDecomposed,
-            FormKD: DevanagariKaNuktaDecomposed,
+            Source: UnicodeExamples.DevanagariQaPrecomposedGrapheme,                    // looks like क़ (U+0958 precomposed)
+            FormC: UnicodeExamples.DevanagariKaNuktaDecomposedText,                 // looks like क़ (KA + NUKTA, composition exclusion)
+            FormD: UnicodeExamples.DevanagariKaNuktaDecomposedText,
+            FormKC: UnicodeExamples.DevanagariKaNuktaDecomposedText,
+            FormKD: UnicodeExamples.DevanagariKaNuktaDecomposedText,
             Category: NormalizationCategory.CompositionExcludedDecomposesUnderBoth,
-            Description: "U+0958 क़ DEVANAGARI QA — composition exclusion, NFC produces decomposed form"),
+            Description: "U+0958 DEVANAGARI QA, composition exclusion, NFC produces decomposed form"),
 
         new NormalizationCase(
             Source: StreamSafeBoundaryLongSequence,             // base + 31 combining grave-below marks
@@ -574,97 +539,97 @@ public static class NormalizationExamples
             FormKC: StreamSafeBoundaryLongSequence,
             FormKD: StreamSafeBoundaryLongSequence,
             Category: NormalizationCategory.StreamSafeBoundaryLongCombinerSequence,
-            Description: "base + 31 combining grave-below marks — exceeds Stream-Safe 30-non-starter limit, identity any form"),
+            Description: "base + 31 combining grave-below marks, exceeds Stream-Safe 30-non-starter limit, identity any form"),
 
         new NormalizationCase(
-            Source: LoneCombiningGrave,                         // looks like ̀ (U+0300 alone, defective)
-            FormC: LoneCombiningGrave,
-            FormD: LoneCombiningGrave,
-            FormKC: LoneCombiningGrave,
-            FormKD: LoneCombiningGrave,
+            Source: UnicodeExamples.LoneCombiningGraveText,                         // looks like ̀ (U+0300 alone, defective)
+            FormC: UnicodeExamples.LoneCombiningGraveText,
+            FormD: UnicodeExamples.LoneCombiningGraveText,
+            FormKC: UnicodeExamples.LoneCombiningGraveText,
+            FormKD: UnicodeExamples.LoneCombiningGraveText,
             Category: NormalizationCategory.DefectiveCombiningMarkAlone,
-            Description: "lone U+0300 combining grave — defective combining sequence, identity any form"),
+            Description: "lone U+0300 combining grave, defective combining sequence, identity any form"),
 
         new NormalizationCase(
-            Source: LoneHighSurrogate,                          // U+D800 lone high surrogate
-            FormC: LoneHighSurrogate,                           // (column values aren't reachable: string.Normalize throws)
-            FormD: LoneHighSurrogate,
-            FormKC: LoneHighSurrogate,
-            FormKD: LoneHighSurrogate,
+            Source: UnicodeExamples.HighSurrogateMinText,                          // U+D800 lone high surrogate
+            FormC: UnicodeExamples.HighSurrogateMinText,                           // (column values aren't reachable: string.Normalize throws)
+            FormD: UnicodeExamples.HighSurrogateMinText,
+            FormKC: UnicodeExamples.HighSurrogateMinText,
+            FormKD: UnicodeExamples.HighSurrogateMinText,
             Category: NormalizationCategory.LoneSurrogateNotNormalizable,
-            Description: "U+D800 lone high surrogate — string.Normalize throws under every form"),
+            Description: "U+D800 lone high surrogate, string.Normalize throws under every form"),
 
         new NormalizationCase(
-            Source: QDotsNonCanonicalOrder,                     // looks like q̣̇ (q + dot-above + dot-below)
-            FormC: QDotsCanonicalOrder,                         // looks like q̣̇ (q + dot-below + dot-above, no compose target)
-            FormD: QDotsCanonicalOrder,
-            FormKC: QDotsCanonicalOrder,
-            FormKD: QDotsCanonicalOrder,
+            Source: UnicodeExamples.QWithDotAboveDotBelowNonCanonicalText,                     // looks like q̣̇ (q + dot-above + dot-below)
+            FormC: UnicodeExamples.QWithDotBelowDotAboveCanonicalText,                         // looks like q̣̇ (q + dot-below + dot-above, no compose target)
+            FormD: UnicodeExamples.QWithDotBelowDotAboveCanonicalText,
+            FormKC: UnicodeExamples.QWithDotBelowDotAboveCanonicalText,
+            FormKD: UnicodeExamples.QWithDotBelowDotAboveCanonicalText,
             Category: NormalizationCategory.CombiningMarksReorderWithoutComposing,
-            Description: "q + dot-above + dot-below — reorders without composing under any form"),
+            Description: "q + dot-above + dot-below, reorders without composing under any form"),
 
         new NormalizationCase(
-            Source: DWithDotAboveAndDotBelowSource,             // looks like Ḍ̇ (Ḋ + dot below)
-            FormC: DWithDotBelowAndDotAboveFormC,               // looks like Ḍ̇ (Ḍ + dot above — composite shifted)
-            FormD: DWithBothDotsFullyDecomposed,                // looks like Ḍ̇ (D + dot-below + dot-above, fully decomposed)
-            FormKC: DWithDotBelowAndDotAboveFormC,
-            FormKD: DWithBothDotsFullyDecomposed,
+            Source: UnicodeExamples.DWithDotAboveAndDotBelowSourceText,             // looks like Ḍ̇ (Ḋ + dot below)
+            FormC: UnicodeExamples.DWithDotBelowAndDotAboveFormCText,               // looks like Ḍ̇ (Ḍ + dot above, composite shifted)
+            FormD: UnicodeExamples.DWithBothDotsFullyDecomposedText,                // looks like Ḍ̇ (D + dot-below + dot-above, fully decomposed)
+            FormKC: UnicodeExamples.DWithDotBelowAndDotAboveFormCText,
+            FormKD: UnicodeExamples.DWithBothDotsFullyDecomposedText,
             Category: NormalizationCategory.CanonicalCompositeShiftsUnderRecomposition,
-            Description: "U+1E0A + U+0323 — FormC recomposes to U+1E0C + U+0307 (composite shifted)"),
+            Description: "U+1E0A + U+0323, FormC recomposes to U+1E0C + U+0307 (composite shifted)"),
 
         new NormalizationCase(
-            Source: DialytikaTonosPrecomposed,                  // looks like ̈́ (U+0344)
-            FormC: DialytikaTonosDecomposed,                    // looks like ̈́ (U+0308 + U+0301)
-            FormD: DialytikaTonosDecomposed,
-            FormKC: DialytikaTonosDecomposed,
-            FormKD: DialytikaTonosDecomposed,
+            Source: UnicodeExamples.DialytikaTonosPrecomposedGrapheme,                  // looks like ̈́ (U+0344)
+            FormC: UnicodeExamples.DialytikaTonosDecomposedText,                    // looks like ̈́ (U+0308 + U+0301)
+            FormD: UnicodeExamples.DialytikaTonosDecomposedText,
+            FormKC: UnicodeExamples.DialytikaTonosDecomposedText,
+            FormKD: UnicodeExamples.DialytikaTonosDecomposedText,
             Category: NormalizationCategory.NonStarterDecomposesToNonStarters,
-            Description: "U+0344 dialytika-tonos — single non-starter decomposes to two non-starters under every form"),
+            Description: "U+0344 dialytika-tonos, single non-starter decomposes to two non-starters under every form"),
 
         new NormalizationCase(
-            Source: HalfwidthKaWithVoicingSource,               // looks like ｶﾞ (halfwidth KA + voicing)
-            FormC: HalfwidthKaWithVoicingSource,                // identity under C
-            FormD: HalfwidthKaWithVoicingSource,
-            FormKC: FullwidthGaPrecomposed,                     // looks like ガ (U+30AC GA precomposed)
-            FormKD: KatakanaKaPlusCombiningVoicing,             // looks like ガ (U+30AB + U+3099)
+            Source: UnicodeExamples.HalfwidthKaWithVoicingSourceText,               // looks like ｶﾞ (halfwidth KA + voicing)
+            FormC: UnicodeExamples.HalfwidthKaWithVoicingSourceText,                // identity under C
+            FormD: UnicodeExamples.HalfwidthKaWithVoicingSourceText,
+            FormKC: UnicodeExamples.FullwidthKatakanaGaPrecomposedGrapheme,                     // looks like ガ (U+30AC GA precomposed)
+            FormKD: UnicodeExamples.KatakanaKaPlusCombiningVoicingText,             // looks like ガ (U+30AB + U+3099)
             Category: NormalizationCategory.HalfwidthKatakanaComposesUnderKForms,
-            Description: "halfwidth カ + voicing — identity under C/D, KC composes to U+30AC, KD splits to U+30AB + U+3099"),
+            Description: "halfwidth KA + voicing, identity under C/D, KC composes to U+30AC, KD splits to U+30AB + U+3099"),
 
         new NormalizationCase(
-            Source: HangulGaPrecomposed,                        // looks like 가 (U+AC00)
-            FormC: HangulGaPrecomposed,
-            FormD: GaTwoJamoDecomposed,                         // looks like 가 (CHOSEONG KIYEOK + JUNGSEONG A)
-            FormKC: HangulGaPrecomposed,
-            FormKD: GaTwoJamoDecomposed,
+            Source: UnicodeExamples.HangulGaPrecomposedGrapheme,                        // looks like 가 (U+AC00)
+            FormC: UnicodeExamples.HangulGaPrecomposedGrapheme,
+            FormD: UnicodeExamples.HangulGaTwoJamoDecomposedText,                         // looks like 가 (CHOSEONG KIYEOK + JUNGSEONG A)
+            FormKC: UnicodeExamples.HangulGaPrecomposedGrapheme,
+            FormKD: UnicodeExamples.HangulGaTwoJamoDecomposedText,
             Category: NormalizationCategory.HangulSyllableDecomposesUnderD,
-            Description: "U+AC00 — 2-jamo Hangul syllable, FormD decomposes into initial + vowel"),
+            Description: "U+AC00,2-jamo Hangul syllable, FormD decomposes into initial + vowel"),
 
         new NormalizationCase(
-            Source: HangulGagPrecomposed,                       // looks like 각 (U+AC01)
-            FormC: HangulGagPrecomposed,
-            FormD: GagThreeJamoDecomposed,                      // looks like 각 (initial + vowel + final jamo)
-            FormKC: HangulGagPrecomposed,
-            FormKD: GagThreeJamoDecomposed,
+            Source: UnicodeExamples.HangulGagPrecomposedGrapheme,                       // looks like 각 (U+AC01)
+            FormC: UnicodeExamples.HangulGagPrecomposedGrapheme,
+            FormD: UnicodeExamples.HangulGagThreeJamoDecomposedText,                      // looks like 각 (initial + vowel + final jamo)
+            FormKC: UnicodeExamples.HangulGagPrecomposedGrapheme,
+            FormKD: UnicodeExamples.HangulGagThreeJamoDecomposedText,
             Category: NormalizationCategory.HangulSyllableDecomposesUnderD,
-            Description: "U+AC01 — 3-jamo Hangul syllable, FormD decomposes into initial + vowel + final"),
+            Description: "U+AC01,3-jamo Hangul syllable, FormD decomposes into initial + vowel + final"),
 
         new NormalizationCase(
-            Source: UsFlag,                                     // looks like 🇺🇸 (regional indicator pair)
-            FormC: UsFlag,
-            FormD: UsFlag,
-            FormKC: UsFlag,
-            FormKD: UsFlag,
+            Source: UnicodeExamples.USFlagGrapheme,                                     // looks like 🇺🇸 (regional indicator pair)
+            FormC: UnicodeExamples.USFlagGrapheme,
+            FormD: UnicodeExamples.USFlagGrapheme,
+            FormKC: UnicodeExamples.USFlagGrapheme,
+            FormKD: UnicodeExamples.USFlagGrapheme,
             Category: NormalizationCategory.MultiRuneClusterStaysAnyForm,
-            Description: "US flag regional-indicator pair — stays under every form"),
+            Description: "US flag regional-indicator pair, stays under every form"),
 
         new NormalizationCase(
-            Source: FamilyZwjEmoji,                             // looks like 👨‍👩‍👧 (man + ZWJ + woman + ZWJ + girl)
-            FormC: FamilyZwjEmoji,
-            FormD: FamilyZwjEmoji,
-            FormKC: FamilyZwjEmoji,
-            FormKD: FamilyZwjEmoji,
+            Source: UnicodeExamples.FamilyManWomanGirlGrapheme,                             // looks like 👨‍👩‍👧 (man + ZWJ + woman + ZWJ + girl)
+            FormC: UnicodeExamples.FamilyManWomanGirlGrapheme,
+            FormD: UnicodeExamples.FamilyManWomanGirlGrapheme,
+            FormKC: UnicodeExamples.FamilyManWomanGirlGrapheme,
+            FormKD: UnicodeExamples.FamilyManWomanGirlGrapheme,
             Category: NormalizationCategory.MultiRuneClusterStaysAnyForm,
-            Description: "family emoji (zero-width-joiner sequence) — multi-rune cluster, identity any form"),
+            Description: "family emoji (zero-width-joiner sequence), multi-rune cluster, identity any form"),
 
         new NormalizationCase(
             Source: "\r\n",                                     // looks like CR+LF
@@ -673,7 +638,7 @@ public static class NormalizationExamples
             FormKC: "\r\n",
             FormKD: "\r\n",
             Category: NormalizationCategory.CarriageReturnLineFeedCluster,
-            Description: "carriage return + line feed — single grapheme, identity any form"),
+            Description: "carriage return + line feed, single grapheme, identity any form"),
     };
 }
 

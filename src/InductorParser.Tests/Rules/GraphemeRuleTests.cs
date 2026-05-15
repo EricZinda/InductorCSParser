@@ -7,6 +7,7 @@ using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 [TestFixture]
@@ -325,14 +326,14 @@ public class GraphemeRuleTests
         // construction-time rune-Id assignment only fires for single-rune
         // expected text. NameOf returns the user-supplied name and
         // PrintTree shows the long form.
-        var devChar = Token("हि").As("devChar");
-        var result = devChar.Parse("हि");
+        var devChar = Token(UnicodeExamples.DevanagariHiGrapheme).As("devChar");
+        var result = devChar.Parse(UnicodeExamples.DevanagariHiGrapheme);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Tree!.Is(devChar), Is.True);
         Assert.That(result.Tree!.Find(devChar), Is.Not.Null);
         Assert.That(devChar.NameOf(result.Tree!.Id), Is.EqualTo("devChar"));
-        Assert.That(result.Tree!.PrintTree(devChar), Is.EqualTo("devChar: \"हि\"\n"));
+        Assert.That(result.Tree!.PrintTree(devChar), Is.EqualTo($"devChar: \"{Canary("हि", "devanagari letter ha + devanagari vowel sign i", 0x0939, 0x093F)}\"\n"));
     }
 
     [Test]
@@ -341,13 +342,13 @@ public class GraphemeRuleTests
         // An unnamed multi-rune Token has rule.Id in the custom range and
         // Name == null. NameOf returns the class-derived trace name
         // ("Token") and PrintTree uses the long form.
-        var rule = Token("हि").Preserve();
-        var result = rule.Parse("हि");
+        var rule = Token(Canary("हि", "devanagari letter ha + devanagari vowel sign i", 0x0939, 0x093F)).Preserve();
+        var result = rule.Parse(Canary("हि", "devanagari letter ha + devanagari vowel sign i", 0x0939, 0x093F));
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Tree!.Is(rule), Is.True);
         Assert.That(rule.NameOf(result.Tree!.Id), Is.EqualTo("Token"));
-        Assert.That(result.Tree!.PrintTree(rule), Is.EqualTo("Token: \"हि\"\n"));
+        Assert.That(result.Tree!.PrintTree(rule), Is.EqualTo($"Token: \"{Canary("हि", "devanagari letter ha + devanagari vowel sign i", 0x0939, 0x093F)}\"\n"));
     }
 
     [Test]
@@ -393,9 +394,9 @@ public class GraphemeRuleTests
         // peeks the input's first rune (also U+00C5 after Parse-time
         // input normalization), checks against the stale set, and bails
         // before calling the rule.
-        var rule = OneOrMore(Token("Å"))
+        var rule = OneOrMore(Token(UnicodeExamples.AngstromGrapheme))
             .Compile(System.Text.NormalizationForm.FormC);
-        var result = rule.Parse("Å");
+        var result = rule.Parse(UnicodeExamples.AngstromGrapheme);
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
 

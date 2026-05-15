@@ -5,6 +5,7 @@ using NUnit.Framework;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests.DocExamples;
 
 // Verifies the runnable code examples in docs/UnicodeGotchas.md.
@@ -20,15 +21,15 @@ public class UnicodeGotchasExamples
         var name = Identifier().As("name").Compile();
 
         Assert.That(name.Parse("foo").Success, Is.True);
-        Assert.That(name.Parse("café").Success, Is.True);
-        Assert.That(name.Parse("καλημέρα").Success, Is.True);
-        Assert.That(name.Parse("ℼ").Success, Is.True,
+        Assert.That(name.Parse(UnicodeExamples.CafePrecomposedGrapheme).Success, Is.True);
+        Assert.That(name.Parse(UnicodeExamples.GreekKalimeraIdentifier).Success, Is.True);
+        Assert.That(name.Parse(UnicodeExamples.DoubleStruckSmallPiGrapheme).Success, Is.True,
             "U+2118 / nearby script-letter additions per UAX #31");
 
         Assert.That(name.Parse("2foo").Success, Is.False);
         Assert.That(name.Parse("_foo").Success, Is.False,
             "underscore isn't in strict XID_Start");
-        Assert.That(name.Parse("ﷺ").Success, Is.False,
+        Assert.That(name.Parse(UnicodeExamples.ArabicLigatureSallallahouGrapheme).Success, Is.False,
             "Arabic ligature U+FDFA, NFKC-unstable exclusion");
     }
 
@@ -40,8 +41,8 @@ public class UnicodeGotchasExamples
     {
         var name = Identifier().Compile();
 
-        const string precomposed = "café";   // single rune é
-        const string decomposed = "café"; // e + combining acute
+        string precomposed = UnicodeExamples.CafePrecomposedGrapheme;   // single rune é
+        string decomposed = $"cafe{UnicodeExamples.CombiningAcuteText}"; // e + combining acute
 
         Assert.That(name.Parse(precomposed).Success, Is.True);
         Assert.That(name.Parse(decomposed).Success, Is.True);
@@ -54,9 +55,9 @@ public class UnicodeGotchasExamples
     {
         var name = Identifier().Compile();
 
-        Assert.That(name.Parse("हिन्दी").Success, Is.True, "Devanagari");
-        Assert.That(name.Parse("กำ").Success, Is.True, "Thai with SARA AM");
-        Assert.That(name.Parse("καλημέρα").Success, Is.True, "Greek");
+        Assert.That(name.Parse(UnicodeExamples.DevanagariHindiIdentifier).Success, Is.True, "Devanagari");
+        Assert.That(name.Parse(UnicodeExamples.ThaiKamGrapheme).Success, Is.True, "Thai with SARA AM");
+        Assert.That(name.Parse(UnicodeExamples.GreekKalimeraIdentifier).Success, Is.True, "Greek");
     }
 
     // "WithinToken: general-purpose sub-grapheme matching": the
@@ -71,8 +72,8 @@ public class UnicodeGotchasExamples
 
         Assert.That(asciiOnlyLetter.Parse("a").Success, Is.True);
         Assert.That(asciiOnlyLetter.Parse("Z").Success, Is.True);
-        Assert.That(asciiOnlyLetter.Parse("é").Success, Is.False,
-            "precomposed é isn't ASCII");
+        Assert.That(asciiOnlyLetter.Parse(UnicodeExamples.LatinEAcutePrecomposedGrapheme).Success, Is.False,
+            $"precomposed {UnicodeExamples.LatinEAcutePrecomposedGrapheme} isn't ASCII");
     }
 
     // "Matching specific languages" / "Python 3 identifiers" recipe.
@@ -108,11 +109,11 @@ public class UnicodeGotchasExamples
     {
         var grammar = And(Literal("function"), Eof()).Compile();
 
-        const string bomPlusKeyword = "﻿function";
+        string bomPlusKeyword = $"{UnicodeExamples.ByteOrderMarkText}function";
         Assert.That(grammar.Parse(bomPlusKeyword).Success, Is.False,
             "BOM at start blocks the keyword match");
 
-        var cleaned = bomPlusKeyword.TrimStart('﻿');
+        var cleaned = bomPlusKeyword.TrimStart('\uFEFF');
         Assert.That(grammar.Parse(cleaned).Success, Is.True);
     }
 
@@ -124,7 +125,7 @@ public class UnicodeGotchasExamples
     {
         var grammar = And(Literal("apple"), Eof()).Compile();
 
-        const string withSoftHyphen = "ap­ple";
+        string withSoftHyphen = $"ap{UnicodeExamples.SoftHyphenText}ple";
         Assert.That(grammar.Parse(withSoftHyphen).Success, Is.False,
             "soft hyphen breaks the literal match");
 
@@ -154,8 +155,8 @@ public class UnicodeGotchasExamples
         var rule = OneOrMore(OneOf(latinLetters)).Compile();
 
         Assert.That(rule.Parse("apple").Success, Is.True);
-        Assert.That(rule.Parse("Cyrillicа").Success, Is.False,
-            "U+0430 Cyrillic 'а' is rejected by LatinLetters");
+        Assert.That(rule.Parse($"Cyrillic{UnicodeExamples.CyrillicSmallAGrapheme}").Success, Is.False,
+            $"U+0430 Cyrillic '{UnicodeExamples.CyrillicSmallAGrapheme}' is rejected by LatinLetters");
     }
 
     // "Variation Selectors": stripping U+FE00..U+FE0F before parsing
@@ -164,8 +165,8 @@ public class UnicodeGotchasExamples
     [Test]
     public void Variation_selector_strip_recipe()
     {
-        const string redHeart = "❤️"; // ❤️ (heart + VS-16)
-        const string textHeart = "❤";       // ❤ (heart only)
+        string redHeart = Canary("❤️", "heavy black heart + variation selector-16", 0x2764, 0xFE0F); // ❤️ (heart + VS-16)
+        string textHeart = UnicodeExamples.HeavyBlackHeartGrapheme;       // ❤ (heart only)
 
         var grammar = And(Literal(textHeart), Eof()).Compile();
 

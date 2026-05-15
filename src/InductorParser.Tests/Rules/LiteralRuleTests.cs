@@ -7,6 +7,7 @@ using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 [TestFixture]
@@ -201,7 +202,8 @@ public class LiteralRuleTests
         // reader. Construction throws instead, pointing at the offending
         // char. Grammars that want a non-ASCII keyword should use
         // Literal("straße") directly.
-        var exception = Assert.Throws<ArgumentException>(() => LiteralIgnoreAsciiCase("straße"));
+        var exception = Assert.Throws<ArgumentException>(
+            () => LiteralIgnoreAsciiCase($"stra{UnicodeExamples.LatinSmallSharpSGrapheme}e"));
         Assert.That(exception!.Message, Does.Contain("ASCII-only"));
         Assert.That(exception.Message, Does.Contain("U+00DF"));
     }

@@ -39,8 +39,8 @@ public sealed partial class Lexer
     // works without translation.
     private int _endPosition;
     private int _position;
-    private int _deepestFailure;
-    private string? _deepestFailureMessage;
+    // Three-tier failure tracking. See docs/ErrorArchitecture.md.
+    private FailureStateSnapshot _failureState;
 
     // Sub-lexer mode: when true, Read advances one rune at a time
     // instead of one grapheme cluster. Set only by the internal
@@ -151,7 +151,15 @@ public sealed partial class Lexer
     // readable range and Input.Length are always the same string.
     public string Input => _input;
     public int Position => _position;
-    public int DeepestFailure => _deepestFailure;
+
+    // The position of the failure that would be reported if the parse
+    // ended now. Picks the highest non-empty tier (forced > named) and
+    // returns its position; falls back to the mechanical high-water mark
+    // when no named or forced message has been recorded.
+    public int DeepestFailure =>
+        _failureState.ForcedMessage != null ? _failureState.ForcedPosition
+        : _failureState.NamedMessage != null ? _failureState.NamedPosition
+        : _failureState.MechanicalPosition;
 
     // Direct write-access to the read cursor for alternative
     // evaluator's backtrack-rollback path. For the recursive evaluator,
@@ -177,8 +185,7 @@ public sealed partial class Lexer
         if (input == null) throw new ArgumentNullException(nameof(input));
         BindInput(input, startPosition: 0, endPosition: input.Length, traceSink, traceLevel);
         _context = null;
-        _deepestFailure = 0;
-        _deepestFailureMessage = null;
+        _failureState = default;
         _transactionDepth = 0;
         _ruleInvocations = 0;
         _ruleDepth = 0;
@@ -208,9 +215,13 @@ public sealed partial class Lexer
         _graphemeIndex = GraphemeClusterIndex.For(input);
     }
 
-    // The error message associated with the deepest failure seen so far
-    // if one was set.
-    public string? DeepestFailureMessage => _deepestFailureMessage;
+    // The error message that would be reported if the parse ended now.
+    // Returns the forced-tier message if any rule fired a forced WithError;
+    // otherwise the deepest named WithError message; null when no rule
+    // attached a message and the report should fall back to the generic
+    // positional template.
+    public string? DeepestFailureMessage =>
+        _failureState.ForcedMessage ?? _failureState.NamedMessage;
 
     public bool IsEof => _position >= _endPosition;
 
@@ -427,56 +438,72 @@ public sealed partial class Lexer
         return t;
     }
 
-    // Record that a rule just failed at the given input position. The
-    // callers' responsibility is to pass the position of the offending
-    // input: the *start* of the specific read that couldn't match, not the
-    // post-read lexer position. That way `input[ErrorCharIndex]` gives the
-    // actual wrong character on user-facing error reports.
-    //
-    // "Deepest failure wins" across competing records:
-    //   1. If the caller's position is strictly past the current deepest,
-    //      move the deepest marker there and take this caller's message
-    //      (which may be null).
-    //   2. If the caller's position equals the current deepest AND has a
-    //      non-null message AND nobody has claimed the message slot yet,
-    //      they claim it.
-    //
-    // Rule 2 is what lets a composite like OneOrMore(...).WithError(...)
-    // contribute its message even though its inner leaf already
-    // recorded the same depth with a null message. The restriction to
-    // equal-depth avoids shallow rules stealing the message slot from
-    // unrelated deeper failures.
-    //
-    // `force` is the override for failing lookaheads (PeekRule / NotRule
-    // with a user-supplied WithError). The default deepest-wins logic
-    // suppresses a shallower record, which is what makes the heuristic
-    // work for sequential parses, but it's wrong for a lookahead whose
-    // inner is conceptually rolled back along with the lexer position.
-    // The lookahead's user-supplied message belongs at the lookahead's
-    // position. Setting `force: true`
-    // unconditionally replaces both the position and the message slot
-    // so the WithError surfaces at the more shallow position.
-    public void RecordFailure(int position, string? errorMessage = null, bool force = false)
+    // Three-tier failure-tracker state. See docs/ErrorArchitecture.md.
+    // Mutable struct: the Lexer holds one of these as `_failureState` and
+    // mutates its fields in place. SaveFailureState returns a value copy
+    // (struct semantics) that callers stash and pass back to
+    // RestoreFailureState when they want to roll the tracker back.
+    internal struct FailureStateSnapshot
     {
-        if (force)
+        public int MechanicalPosition;
+        public int NamedPosition;
+        public string? NamedMessage;
+        public int ForcedPosition;
+        public string? ForcedMessage;
+    }
+
+    internal FailureStateSnapshot SaveFailureState() => _failureState;
+
+    internal void RestoreFailureState(FailureStateSnapshot snapshot) => _failureState = snapshot;
+
+    // Record that a rule just failed at the given input position. The
+    // caller's responsibility is to pass the position of the offending
+    // input: the *start* of the specific read that couldn't match, not
+    // the post-read lexer position. The tier system and resolution rules
+    // are described in docs/ErrorArchitecture.md.
+    public void RecordFailure(int position, string? errorMessage = null, bool forced = false)
+    {
+        if (errorMessage == null)
         {
-            _deepestFailure = position;
-            _deepestFailureMessage = errorMessage;
-            Trace(TraceLevel.Diagnostic, "Lexer.RecordFailure", TraceOutcome.Info, $"forced deepest failure to char {position}");
+            if (position > _failureState.MechanicalPosition)
+            {
+                _failureState.MechanicalPosition = position;
+                Trace(TraceLevel.Diagnostic, "Lexer.RecordFailure", TraceOutcome.Info,
+                      $"new deepest failure at char {position}");
+            }
             return;
         }
-        if (position > _deepestFailure)
+        if (forced)
         {
-            _deepestFailure = position;
-            _deepestFailureMessage = errorMessage;
-            Trace(TraceLevel.Diagnostic, "Lexer.RecordFailure", TraceOutcome.Info, $"new deepest failure at char {position}");
+            bool moved = position > _failureState.ForcedPosition;
+            if (moved || _failureState.ForcedMessage == null)
+            {
+                _failureState.ForcedPosition = position;
+                _failureState.ForcedMessage = errorMessage;
+                // Trace only when position strictly increases. Silent
+                // slot-fills at the initial position match the historical
+                // trace shape (the Rule-2-style equal-depth message claim
+                // never emitted a trace line).
+                if (moved)
+                {
+                    Trace(TraceLevel.Diagnostic, "Lexer.RecordFailure", TraceOutcome.Info,
+                          $"forced deepest failure to char {position}");
+                }
+            }
             return;
         }
-        if (position == _deepestFailure
-            && errorMessage != null
-            && _deepestFailureMessage == null)
         {
-            _deepestFailureMessage = errorMessage;
+            bool moved = position > _failureState.NamedPosition;
+            if (moved || _failureState.NamedMessage == null)
+            {
+                _failureState.NamedPosition = position;
+                _failureState.NamedMessage = errorMessage;
+                if (moved)
+                {
+                    Trace(TraceLevel.Diagnostic, "Lexer.RecordFailure", TraceOutcome.Info,
+                          $"new deepest failure at char {position}");
+                }
+            }
         }
     }
 
@@ -629,6 +656,7 @@ public sealed partial class Lexer
     {
         private readonly Lexer _lexer;
         private readonly int _savedPosition;
+        private readonly FailureStateSnapshot _failureSnapshot;
         private bool _settled;
         private bool _depthPopped;
 
@@ -636,6 +664,7 @@ public sealed partial class Lexer
         {
             _lexer = lexer;
             _savedPosition = savedPosition;
+            _failureSnapshot = lexer.SaveFailureState();
             _settled = false;
             _depthPopped = false;
         }
@@ -646,7 +675,30 @@ public sealed partial class Lexer
         // duplicate this state.
         public int StartPosition => _savedPosition;
 
-        public void Commit() => _settled = true;
+        // Commit succeeds the transaction. By default only the lexer
+        // position is committed (the natural meaning of a successful
+        // parse step). Pass clearFailureRecords: true to also restore
+        // the failure tracker to its state at transaction open — that
+        // discards any records added during this transaction's run.
+        //
+        // Or and Not pass clearFailureRecords: true: their success
+        // semantics imply that records added during the run came from
+        // a path the rule isn't committing to (Or: rejected branches;
+        // Not: inner failure was the EXPECTED outcome). Count rules
+        // (BetweenInclusive / ZeroOrMore / OneOrMore / ...) and the
+        // structural composites (And, WithinToken) leave the default
+        // false: a failed sub-iteration carries real information about
+        // why the input couldn't be consumed further, and that
+        // information shouldn't disappear just because the outer rule
+        // succeeded with the iterations it did get. See
+        // docs/ErrorArchitecture.md.
+        public void Commit(bool clearFailureRecords = false)
+        {
+            if (_settled) return;
+            _settled = true;
+            if (clearFailureRecords)
+                _lexer.RestoreFailureState(_failureSnapshot);
+        }
 
         public void Rollback()
         {

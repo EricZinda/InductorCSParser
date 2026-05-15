@@ -3,6 +3,7 @@ using NUnit.Framework;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests.DocExamples;
 
 // Runnable recipe-style examples kept under test so they can be copied into
@@ -36,7 +37,7 @@ public class RecipesExamples
         var inline = Or(bold, code, text);
         var paragraph = OneOrMore(inline).As("paragraph");
 
-        const string input = "Hello 🎸 **world** 你好 `code` done";
+        string input = $"Hello {UnicodeExamples.GuitarGrapheme} **world** {Canary("你好", "cjk unified ideograph-4f60 + cjk unified ideograph-597d", 0x4F60, 0x597D)} `code` done";
         var result = paragraph.Parse(input);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
@@ -46,9 +47,9 @@ public class RecipesExamples
         // claims "ToString() reassembles each node losslessly," meaning
         // each text/bold/code wrapper carries its content back as text.
         var texts = result.Tree!.FindAll(text).Select(t => t.ToString()).ToList();
-        Assert.That(texts.Any(t => t.Contains("🎸")), Is.True,
+        Assert.That(texts.Any(t => t.Contains(UnicodeExamples.GuitarGrapheme)), Is.True,
             "guitar emoji lives in some text node");
-        Assert.That(texts.Any(t => t.Contains("你好")), Is.True,
+        Assert.That(texts.Any(t => t.Contains(Canary("你好", "cjk unified ideograph-4f60 + cjk unified ideograph-597d", 0x4F60, 0x597D))), Is.True,
             "CJK lives in some text node");
 
         // bold and code each fire once and their body text round-trips
@@ -90,10 +91,10 @@ public class RecipesExamples
         var identifier = Identifier().Compile();
 
         Assert.That(identifier.Parse("foo").Success, Is.True);
-        Assert.That(identifier.Parse("café").Success, Is.True);
-        Assert.That(identifier.Parse("καλημέρα").Success, Is.True);
-        Assert.That(identifier.Parse("हिन्दी").Success, Is.True, "Devanagari");
-        Assert.That(identifier.Parse("กำ").Success, Is.True, "Thai with SARA AM");
+        Assert.That(identifier.Parse(UnicodeExamples.CafePrecomposedGrapheme).Success, Is.True);
+        Assert.That(identifier.Parse(UnicodeExamples.GreekKalimeraIdentifier).Success, Is.True);
+        Assert.That(identifier.Parse(UnicodeExamples.DevanagariHindiIdentifier).Success, Is.True, "Devanagari");
+        Assert.That(identifier.Parse(UnicodeExamples.ThaiKamGrapheme).Success, Is.True, "Thai with SARA AM");
 
         // Doesn't accept things that aren't identifiers under strict UAX #31.
         Assert.That(identifier.Parse("2foo").Success, Is.False, "starts with digit");
@@ -137,12 +138,12 @@ public class RecipesExamples
 
         // With default FormC, fullwidth ｆｏｏ is its own valid identifier
         // (still letters, just different code points than ASCII foo).
-        Assert.That(identifierFormC.Parse("ｆｏｏ").Success, Is.True);
+        Assert.That(identifierFormC.Parse(UnicodeExamples.FullwidthFooGrapheme).Success, Is.True);
 
         // With FormKC, fullwidth normalizes to ASCII, so the matched
         // text after the parser sees is "foo". The critical claim is
         // that it parses successfully under FormKC.
-        var result = identifierFormKC.Parse("ｆｏｏ");
+        var result = identifierFormKC.Parse(UnicodeExamples.FullwidthFooGrapheme);
         Assert.That(result.Success, Is.True);
     }
 
@@ -281,38 +282,35 @@ public class RecipesExamples
         Assert.That(result.ErrorColumn, Is.EqualTo(1));
     }
 
-    // "Numbers with no leading zeros": the tempting "fix" puts a Not
-    // inside the first Or branch (only accept '0' if not followed by
-    // another digit). It does not currently fix the position because
-    // the Not's internal probe leaves a high-water mark that outpoints
-    // the Or's WithError. See
-    // docs/PotentialBugSources/00001-lookahead-internal-failures-leaking-into-deepest-failure.md.
-    //
-    // The test pins the current broken behavior. When the leak is
-    // fixed, this test will fail (the column should drop to 0 and the
-    // WithError message should appear). At that point update the recipe
-    // to recommend this shape and delete or invert this test.
+    // "Numbers with no leading zeros": the lookahead-inside-Or pattern
+    // (only accept '0' if not followed by another digit). Under the
+    // three-tier error model, the outer Or's WithError lands in the
+    // named tier and beats the mechanical records the Not's internal
+    // probe leaves behind — so the error reports at the Or's start with
+    // the named message. Previously this case was bugged: the inner
+    // probe's mechanical record at depth outvoted the shallower named
+    // outer. Fixed by the three-tier resolution rule.
     [Test]
-    public void No_leading_zero_lookahead_inside_or_does_not_yet_fix_position_due_to_known_leak()
+    public void No_leading_zero_lookahead_inside_or_reports_outer_WithError_at_its_start()
     {
         // Factory function so each call site gets a fresh rule and .As
         // can name it without colliding with a previous name.
-        static Rule PeekCore() => Or(
+        static Rule Number() => Or(
             And(Token('0'), Not(OneOf(TokenSet.Ascii.Digits))),
             And(OneOf(TokenSet.Range('1', '9')), ZeroOrMore(OneOf(TokenSet.Ascii.Digits)))
         ).WithError("Number with no leading zeros expected");
         var grammar = And(
-            PeekCore().As("major"), Token('.'),
-            PeekCore().As("minor"), Token('.'),
-            PeekCore().As("patch"), Eof());
+            Number().As("major"), Token('.'),
+            Number().As("minor"), Token('.'),
+            Number().As("patch"), Eof());
 
         var result = grammar.Parse("01.2.3");
         Assert.That(result.Success, Is.False);
-        // Bug: still reports column 1, not 0. WithError message dropped.
-        Assert.That(result.ErrorColumn, Is.EqualTo(1));
+        Assert.That(result.ErrorColumn, Is.EqualTo(0),
+            "the Or's WithError now lands at the Or's start column");
         Assert.That(result.ErrorMessage,
-            Does.Not.Contain("Number with no leading zeros"),
-            "the Or's WithError gets dropped by the deeper Not-internal failure");
+            Does.Contain("Number with no leading zeros"),
+            "the Or's named WithError beats the Not's mechanical inner record");
     }
 
     // "Numbers with no leading zeros": the reject-first pattern puts

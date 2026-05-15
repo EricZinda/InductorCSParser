@@ -4,6 +4,7 @@ using InductorParser;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 // Tests for Symbol.PrintTree, the extension that renders a raw
@@ -111,6 +112,6 @@ public class SymbolExtensionsTests
         rule.Compile();
         var staleLeaf = new Symbol(new SymbolId(0xD800), FlattenType.Preserve, "a".AsMemory());
 
-        Assert.That(staleLeaf.PrintTree(rule), Is.EqualTo("'�'\n"));
+        Assert.That(staleLeaf.PrintTree(rule), Is.EqualTo($"'{UnicodeExamples.ReplacementCharacterText}'\n"));
     }
 }

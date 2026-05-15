@@ -150,7 +150,7 @@ public class LiteralIgnoreAsciiCaseRuleTests
     [Test]
     public void LiteralIgnoreAsciiCase_rejects_non_ascii_letter_at_construction()
     {
-        var exception = Assert.Throws<ArgumentException>(() => LiteralIgnoreAsciiCase("straße"));
+        var exception = Assert.Throws<ArgumentException>(() => LiteralIgnoreAsciiCase($"stra{UnicodeExamples.LatinSmallSharpSGrapheme}e"));
         Assert.That(exception!.Message, Does.Contain("ASCII-only"));
         Assert.That(exception.Message, Does.Contain("U+00DF"));
         Assert.That(exception.Message, Does.Contain("index 4"));

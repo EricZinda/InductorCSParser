@@ -216,25 +216,18 @@ public class FilterErrorPositionTests
     }
 
     [Test]
-    public void Bad_operator_after_attribute_points_near_the_operator_position()
+    public void Bad_operator_after_attribute_points_at_the_operator_position()
     {
         // "a !! \"b\"" -> upstream nom port says AtPos(2, Operators).
-        // InductorParser's deepest-failure tracker reports position 3,
-        // because branches `!~` and `!=` consumed the leading `!` before
-        // failing on the trailing char. Position 3 is the deeper "got
-        // furthest" point, position 2 is the start-of-operator point.
-        // Both are sensible; we assert the range covers either.
-        //
-        // The message check is tolerant: the WithError(...) we attached
-        // to ComparisonOperator names the expected operators, but
-        // Inductor's deepest-failure picker can hand back an inner
-        // branch's error message when that branch consumed further
-        // before failing. So we just check that some reasonable error
-        // text comes back.
+        // Under the three-tier error model, ComparisonOperator's named
+        // WithError ("expected one of: =~, ==, ...") wins over the inner
+        // branches' mechanical records at the deeper mid-`!!` position,
+        // and the position lands at the Or's start (where the operator
+        // was expected to begin) — matching upstream nom exactly.
         FilterParser.TryParse("a !! \"b\"", out _, out var rewriteError);
         Assert.That(rewriteError, Is.Not.Null);
-        Assert.That(rewriteError!.CharIndex, Is.InRange(2, 3));
-        Assert.That(rewriteError.Message, Is.Not.Empty);
+        Assert.That(rewriteError!.CharIndex, Is.EqualTo(2));
+        Assert.That(rewriteError.Message, Does.Contain("expected one of"));
     }
 
     [Test]

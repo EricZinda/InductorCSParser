@@ -7,6 +7,7 @@ using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 // Tests for Rules.WithinToken, the combinator that runs an inner rule
@@ -80,6 +81,21 @@ public class WithinTokenRuleTests
     }
 
     [Test]
+    public void Inner_WithError_surfaces_when_WithinToken_fails_without_its_own_WithError()
+    {
+        // WithinToken doesn't clear inner records on success — and when
+        // it fails (inner sub-rule failed inside the token), the inner's
+        // failure record survives. Pins that the inner sub-rule's
+        // WithError is what the user sees if WithinToken itself has no
+        // WithError.
+        var rule = WithinToken(Literal("ab").WithError("inner literal failed"));
+        var result = rule.Parse("c");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("inner literal failed"));
+    }
+
+    [Test]
     public void Composes_into_zero_or_more_for_multi_grapheme_sequences()
     {
         // ZeroOrMore(WithinToken(letter)) walks a sequence of single-
@@ -126,7 +142,7 @@ public class WithinTokenRuleTests
         asciiOnlyNoNorm.Compile(null);
 
         Assert.That(asciiOnly.Parse("a").Success, Is.True);
-        Assert.That(asciiOnly.Parse("é").Success, Is.False);  // é isn't ASCII
+        Assert.That(asciiOnly.Parse(UnicodeExamples.LatinEAcutePrecomposedGrapheme).Success, Is.False);  // é isn't ASCII
         Assert.That(asciiOnlyNoNorm.Parse(LatinEAcuteGrapheme).Success,
             Is.False);  // two runes
     }
@@ -147,10 +163,10 @@ public class WithinTokenRuleTests
         var rule = WithinToken(And(
             OneOf(TokenSet.XidStart),
             OneOf(TokenSet.XidContinue)));
-        var result = rule.Parse("हि");
+        var result = rule.Parse(Canary("हि", "devanagari letter ha + devanagari vowel sign i", 0x0939, 0x093F));
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("हि"));
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(Canary("हि", "devanagari letter ha + devanagari vowel sign i", 0x0939, 0x093F)));
     }
 
     [Test]
@@ -163,10 +179,10 @@ public class WithinTokenRuleTests
         var rule = WithinToken(And(
             OneOf(TokenSet.XidStart),
             OneOf(TokenSet.XidContinue)));
-        var result = rule.Parse("กำ");
+        var result = rule.Parse(UnicodeExamples.ThaiKamGrapheme);
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("กำ"));
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(UnicodeExamples.ThaiKamGrapheme));
     }
 
     [Test]
@@ -179,10 +195,10 @@ public class WithinTokenRuleTests
         var rule = WithinToken(And(
             OneOf(TokenSet.XidStart),
             OneOf(TokenSet.XidContinue)));
-        var result = rule.Parse("كَ");
+        var result = rule.Parse(Canary("كَ", "arabic letter kaf + arabic fatha", 0x0643, 0x064E));
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("كَ"));
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(Canary("كَ", "arabic letter kaf + arabic fatha", 0x0643, 0x064E)));
     }
 
     [Test]
@@ -338,7 +354,7 @@ public class WithinTokenRuleTests
             And(OneOf(TokenSet.XidStart), OneOf(TokenSet.XidContinue)),
             OneOf(TokenSet.Ascii.Letters))).As("character");
 
-        var devResult = character.Parse("हि");
+        var devResult = character.Parse(Canary("हि", "devanagari letter ha + devanagari vowel sign i", 0x0939, 0x093F));
         Assert.That(devResult.Success, Is.True);
         Assert.That(devResult.Tree!.Id, Is.EqualTo(character.Id));
         Assert.That(devResult.Tree!.Find(character), Is.Not.Null);
@@ -375,7 +391,7 @@ public class WithinTokenRuleTests
         // multi-rune branch so Find resolves through rule.Id for unnamed
         // rules too.
         var unnamedRule = WithinToken(And(OneOf(TokenSet.XidStart), OneOf(TokenSet.XidContinue)));
-        var unnamedResult = unnamedRule.Parse("हि");
+        var unnamedResult = unnamedRule.Parse(Canary("हि", "devanagari letter ha + devanagari vowel sign i", 0x0939, 0x093F));
         Assert.That(unnamedResult.Success, Is.True);
         Assert.That(unnamedResult.Tree!.Id, Is.EqualTo(unnamedRule.Id));
         Assert.That(unnamedResult.Tree!.Find(unnamedRule), Is.Not.Null);
@@ -383,7 +399,7 @@ public class WithinTokenRuleTests
 
         var namedRule = WithinToken(And(OneOf(TokenSet.XidStart), OneOf(TokenSet.XidContinue)))
             .As("character");
-        var namedResult = namedRule.Parse("हि");
+        var namedResult = namedRule.Parse(Canary("हि", "devanagari letter ha + devanagari vowel sign i", 0x0939, 0x093F));
         Assert.That(namedResult.Success, Is.True);
         Assert.That(namedResult.Tree!.Id, Is.EqualTo(namedRule.Id));
         Assert.That(namedResult.Tree!.Find(namedRule), Is.Not.Null);
@@ -442,5 +458,33 @@ public class WithinTokenRuleTests
             ruleBuilder: () => WithinToken(OneOf("X")),
             input: "X",
             expectedSourceText: "X");
+    }
+
+    [Test]
+    public void WithinToken_WithError_surfaces_over_deeper_orphan_from_abandoned_Or_alternative()
+    {
+        // Or's first alternative reads three tokens before failing at offset 3
+        // with its own WithError. The parser abandons that alternative by
+        // committing to alt 2 (Token('a').Delete() at offset 0). Then
+        // WithinToken at offset 1 fails because the next token isn't 'b'.
+        //
+        // WithinToken records its failure at the outer cluster boundary
+        // (offset 1), which is shallower than the orphan record alt 1 left at
+        // offset 3. A user-supplied WithError on WithinToken still wins the
+        // message slot at the cluster boundary where the real failure
+        // happened, rather than the orphan's "expected z at end" surfacing at
+        // offset 3 — a position the parser already gave up on.
+        var rule = And(
+            Or(
+                And(AnyToken(), AnyToken(), AnyToken(), Token('z').WithError("expected z at end")),
+                Token('a').Delete()
+            ),
+            WithinToken(Token('b')).WithError("expected b in WithinToken")
+        );
+        var result = rule.Parse("axyw");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected b in WithinToken"));
     }
 }

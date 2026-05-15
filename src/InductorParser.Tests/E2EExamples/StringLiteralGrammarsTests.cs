@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using InductorParser;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 // End-to-end tests for StringLiteralGrammars. Each inner class
@@ -21,8 +22,8 @@ public class StringLiteralGrammarsTests
 
         [TestCase("\"\"",                      "",                  TestName = "empty body")]
         [TestCase("\"hello\"",                 "hello",             TestName = "plain ASCII body")]
-        [TestCase("\"café\"",                  "café",              TestName = "non-ASCII body (U+00E9)")]
-        [TestCase("\"hi 🎸\"",                  "hi 🎸",              TestName = "supplementary-plane rune in body")]
+        [TestCase("\"caf\u00E9\"",                  "caf\u00E9",              TestName = "non-ASCII body (U+00E9)")]
+        [TestCase("\"hi \U0001F3B8\"",                  "hi \U0001F3B8",              TestName = "supplementary-plane rune in body")]
         [TestCase("\"a\\nb\"",                 "a\\nb",             TestName = "one simple escape (\\n)")]
         [TestCase("\"\\\"\\\\\\/\\b\\f\\n\\r\\t\"", "\\\"\\\\\\/\\b\\f\\n\\r\\t", TestName = "all eight simple escapes")]
         [TestCase("\"\\u00E9\"",               "\\u00E9",           TestName = "unicode escape")]
@@ -76,7 +77,7 @@ public class StringLiteralGrammarsTests
         [TestCase("\"\\u00e9\"",         "\\u00e9",         TestName = "4-hex unicode \\uNNNN (lowercase)")]
         [TestCase("\"\\U0001F3B8\"",     "\\U0001F3B8",     TestName = "8-hex unicode \\UNNNNNNNN")]
         [TestCase("\"\\N{LATIN SMALL LETTER E}\"", "\\N{LATIN SMALL LETTER E}", TestName = "named escape \\N{name}")]
-        [TestCase("\"café\"",            "café",            TestName = "unicode content in body")]
+        [TestCase("\"caf\u00E9\"",            "caf\u00E9",            TestName = "unicode content in body")]
         public void Accepts(string input, string expectedBody)
         {
             var result = Rule.Parse(input);
@@ -113,7 +114,7 @@ public class StringLiteralGrammarsTests
         [TestCase("\"\"\"a\"\"b\"\"\"",               "a\"\"b",           TestName = "two \"\" in body (still not the terminator)")]
         [TestCase("\"\"\"escape \\n here\"\"\"",      "escape \\n here",  TestName = "escape processing still active")]
         [TestCase("\"\"\"line1\nline2\nline3\"\"\"",  "line1\nline2\nline3", TestName = "multi-line body")]
-        [TestCase("\"\"\"🎸 and \\u00e9\"\"\"",       "🎸 and \\u00e9",   TestName = "unicode and escape in body")]
+        [TestCase("\"\"\"\U0001F3B8 and \\u00e9\"\"\"",       "\U0001F3B8 and \\u00e9",   TestName = "unicode and escape in body")]
         public void Accepts(string input, string expectedBody)
         {
             var result = Rule.Parse(input);
@@ -154,8 +155,8 @@ public class StringLiteralGrammarsTests
         [TestCase("r\"\\n\"",       "\\n",      TestName = "backslash-n is two literal chars")]
         [TestCase("r\"\\\\\"",      "\\\\",     TestName = "two backslashes are two literal chars")]
         [TestCase("r\"a\\qb\"",     "a\\qb",    TestName = "no escape processing (\\q is literal)")]
-        [TestCase("r\"café\"",      "café",     TestName = "unicode content")]
-        [TestCase("r\"🎸\"",        "🎸",       TestName = "supplementary-plane rune")]
+        [TestCase("r\"caf\u00E9\"",      "caf\u00E9",     TestName = "unicode content")]
+        [TestCase("r\"\U0001F3B8\"",        "\U0001F3B8",       TestName = "supplementary-plane rune")]
         public void Accepts(string input, string expectedBody)
         {
             var result = Rule.Parse(input);

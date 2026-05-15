@@ -4,6 +4,7 @@ using InductorParser;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 // Tests for Rule.NameOf(SymbolId), the reverse lookup from a SymbolId
@@ -240,7 +241,7 @@ public class NameOfTests
     {
         // Same shape as Named_single_rune_Token with a supplementary-
         // plane rune (id past 0xFFFF but still in the character range).
-        var guitar = Token("🎸").As("guitar");
+        var guitar = Token(UnicodeExamples.GuitarGrapheme).As("guitar");
         guitar.Compile();
 
         Assert.That(guitar.NameOf(guitar.Id), Is.EqualTo("guitar"));

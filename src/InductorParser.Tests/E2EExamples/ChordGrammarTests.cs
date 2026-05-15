@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
 
+using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
 // Pairs the chord-detection regex from UnityTabs (a private
@@ -27,7 +28,7 @@ public class ChordGrammarTests
     // src/TabParser/Parsing/Parser.cs line 18-20. This is the reference
     // implementation we're gating against.
     private static readonly Regex ChordRegex = new Regex(
-        @"^[A-Ga-g][#b♯♭x]*(maj|min|m|dim|°|o|aug|\+|sus[24]?|5)?(6|7|9|11|13)?(maj|M|Δ|m|ø|°)?(7|9|11|13)?(add[2469]|add1[13]|b5|#5|b9|#9|#11|b13|no[357]|sus[24]?|alt)*(\/[A-Ga-g][#b♯♭x]*)?$",
+        $@"^[A-Ga-g][#b{UnicodeExamples.MusicSharpSignGrapheme}{UnicodeExamples.MusicFlatSignGrapheme}x]*(maj|min|m|dim|{UnicodeExamples.DegreeSignGrapheme}|o|aug|\+|sus[24]?|5)?(6|7|9|11|13)?(maj|M|{UnicodeExamples.GreekCapitalDeltaGrapheme}|m|{UnicodeExamples.LatinSmallOWithStrokeGrapheme}|{UnicodeExamples.DegreeSignGrapheme})?(7|9|11|13)?(add[2469]|add1[13]|b5|#5|b9|#9|#11|b13|no[357]|sus[24]?|alt)*(\/[A-Ga-g][#b{UnicodeExamples.MusicSharpSignGrapheme}{UnicodeExamples.MusicFlatSignGrapheme}x]*)?$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     // Positive corpus. Covers every branch of the regex:
@@ -48,14 +49,14 @@ public class ChordGrammarTests
 
         // Accidentals
         "C#", "Db", "F#", "Bb", "G#", "Ab",
-        "C♯", "D♭", "F♯", "B♭",
+        $"C{UnicodeExamples.MusicSharpSignGrapheme}", $"D{UnicodeExamples.MusicFlatSignGrapheme}", $"F{UnicodeExamples.MusicSharpSignGrapheme}", $"B{UnicodeExamples.MusicFlatSignGrapheme}",
         "Cx", "Dx",
         "Cbb", "D##",
 
         // Quality1 simple
         "Am", "Bm", "Cm", "Dm", "Em", "Fm", "Gm",
         "Cmaj", "Cmin", "Cdim", "Caug",
-        "C°", "Co", "C+", "C5",
+        $"C{UnicodeExamples.DegreeSignGrapheme}", "Co", "C+", "C5",
         "Csus", "Csus2", "Csus4",
 
         // Extensions only
@@ -68,8 +69,8 @@ public class ChordGrammarTests
         "Cdim7", "Caug7",
 
         // Quality2 (the weird "two quality" chords)
-        "Cmaj7", "C7M", "C7Δ",
-        "Cm7M", "C7°",
+        "Cmaj7", "C7M", $"C7{UnicodeExamples.GreekCapitalDeltaGrapheme}",
+        "Cm7M", $"C7{UnicodeExamples.DegreeSignGrapheme}",
 
         // Addmods
         "Cadd2", "Cadd4", "Cadd6", "Cadd9",
@@ -94,11 +95,11 @@ public class ChordGrammarTests
         "Bm", "F#7", "A", "E", "G", "D", "Em",
 
         // Unicode accidentals in slash bass (regex allows it via [#b♯♭x])
-        "C♯m", "D♭maj7",
-        "C/G♭",
+        $"C{UnicodeExamples.MusicSharpSignGrapheme}m", $"D{UnicodeExamples.MusicFlatSignGrapheme}maj7",
+        $"C/G{UnicodeExamples.MusicFlatSignGrapheme}",
 
         // ø half-diminished
-        "Bø", "Bø7", "Cm7ø",
+        $"B{UnicodeExamples.LatinSmallOWithStrokeGrapheme}", $"B{UnicodeExamples.LatinSmallOWithStrokeGrapheme}7", $"Cm7{UnicodeExamples.LatinSmallOWithStrokeGrapheme}",
     };
 
     // Negative corpus. Things that look chord-adjacent but aren't, plus real
