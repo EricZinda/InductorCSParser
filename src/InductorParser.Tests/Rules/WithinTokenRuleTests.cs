@@ -437,6 +437,36 @@ public class WithinTokenRuleTests
         Assert.That(sink.ToString(), Does.Not.Contain("SKIP | WithinToken:"));
     }
 
+    [Test]
+    public void Or_WithinToken_does_not_skip_when_inner_negative_rule_walks_a_multi_rune_cluster()
+    {
+        // A TokenSet whose only member is the CRLF grapheme cluster. \r
+        // and \n are NOT members on their own — only the two-rune "\r\n"
+        // cluster is.
+        var crlfCluster = TokenSet.Graphemes("\r\n");
+
+        // WithinToken runs OneOrMore(NoneOf(...)) against the runes
+        // inside one outer token. On the "\r\n" cluster the inner rule
+        // sees \r and \n one rune at a time; neither is a member of
+        // crlfCluster, so the inner NoneOf accepts both and WithinToken
+        // consumes the whole cluster. Standalone, it matches:
+        var standalone = WithinToken(OneOrMore(NoneOf(crlfCluster)));
+        Assert.That(standalone.Parse("\r\n").Success, Is.True,
+            "WithinToken(OneOrMore(NoneOf(crlfCluster))) should consume the CRLF cluster rune by rune");
+
+        // The same WithinToken as an Or branch must still match. The
+        // Or's lookahead shortcut peeks the whole "\r\n" cluster and asks
+        // the WithinToken's published first-token requirement whether
+        // the branch can match. WithinToken forwards the inner NoneOf's
+        // MustNotBeIn fail-set { "\r\n" } unchanged, so the shortcut sees
+        // the peek cluster IS in the fail-set and skips the branch — even
+        // though the branch would have matched.
+        var rule = Or(WithinToken(OneOrMore(NoneOf(crlfCluster))), Literal("ZZ"));
+        var result = rule.Parse("\r\n");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
+
     // Matrix-driven SourceRange test. See docs/TestArchitecture.md
     // "Per-rule SourceRange-matrix tests live in each rule's own
     // test file." Shared scaffold lives in SourceRangeMatrixHelper.

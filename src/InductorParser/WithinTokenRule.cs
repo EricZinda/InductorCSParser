@@ -143,12 +143,43 @@ internal sealed class WithinTokenRule : Rule
     }
 
     // WithinToken always consumes exactly one outer token (one grapheme
-    // cluster) on success, so Advance.Always. The first rune of that
-    // cluster has to satisfy whatever the inner rule requires, so the
-    // outer first-token shape forwards the inner's set and polarity.
-    // Calls _innerRule.ComputeRuleStart() rather than going through
-    // PassesThroughTo because the inner rule's compiled fields may not
-    // yet be populated at this point in the Compile walk.
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        _innerRule.ComputeRuleStart().WithAdvance(Advance.Always);
+    // cluster) on success, so Advance.Always. The inner rule runs on a
+    // one-rune-per-token sub-lexer, so the set it publishes describes
+    // runes, while the enclosing rule's lookahead shortcut peeks a whole
+    // grapheme cluster. PassesThroughTo reads the inner rule's compiled
+    // fields, which Compile's post-order ComputeRuleStartAll walk has
+    // already populated by the time this composite's ComputeRuleStart
+    // runs (the inner rule is this rule's only child).
+    //
+    // For a MustBeIn inner rule the two coordinate systems line up:
+    // CannotMatchLookahead's MustBeIn path tests the peek cluster's
+    // first rune against the set, which is exactly the rune the inner
+    // rule reads first, so the set forwards unchanged.
+    //
+    // For a MustNotBeIn inner rule (NoneOf and negative composites)
+    // they don't: CannotMatchLookahead's MustNotBeIn path only tests
+    // the whole peek cluster against the fail-set. A multi-rune
+    // grapheme that is a member of that fail-set would skip the
+    // WithinToken, but the inner rule walks that cluster one rune at a
+    // time and never sees it as a unit, so it can still match every
+    // rune (none of which is in the fail-set on its own). Drop the
+    // multi-rune entries: the rune-only fail-set only triggers a skip
+    // on a single-rune peek cluster, where the cluster's one rune IS
+    // the rune the inner rule checks first. A subset of the fail-set is
+    // sound under MustNotBeIn (it just skips fewer peeks); the
+    // multi-rune entries are the unsound part.
+    internal override RuleStartRequirements ComputeRuleStart()
+    {
+        var innerStart = RuleStartRequirements.PassesThroughTo(_innerRule)
+            .WithAdvance(Advance.Always);
+        if (innerStart.Polarity == Polarity.MustNotBeIn
+            && innerStart.FirstConsumedTokens.HasMultiRuneGraphemes)
+        {
+            return new RuleStartRequirements(
+                innerStart.FirstConsumedTokens.RunesOnlyPart,
+                Advance.Always,
+                Polarity.MustNotBeIn);
+        }
+        return innerStart;
+    }
 }
