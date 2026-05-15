@@ -28,18 +28,7 @@ public class UnicodeLiteralCanaryTests
     [Test]
     public void AllNonAsciiStringLiteralsAreWrappedInCanary()
     {
-        // This file lives at <test-project-root>/Core/UnicodeLiteralCanaryTests.cs.
-        // Two parents up is the test project root.
-        var testProjectRoot = Path.GetDirectoryName(Path.GetDirectoryName(ThisFilePath))!;
-
-        var violations = new List<Violation>();
-        foreach (var sourceFile in Directory.EnumerateFiles(testProjectRoot, "*.cs", SearchOption.AllDirectories))
-        {
-            if (IsExcludedPath(sourceFile)) continue;
-            var bytes = File.ReadAllBytes(sourceFile);
-            ScanFile(sourceFile, bytes, violations);
-        }
-
+        var violations = ScanAll().NonAscii;
         if (violations.Count == 0) return;
 
         var report = new StringBuilder();
@@ -55,6 +44,54 @@ public class UnicodeLiteralCanaryTests
                   .Append('\n');
         }
         Assert.Fail(report.ToString());
+    }
+
+    // Bans a newline byte inside a raw or verbatim string literal. Such
+    // a newline is a real source byte, so git's autocrlf rewrites it:
+    // the same literal is LF on a Linux checkout and CRLF on a Windows
+    // one, and a test built on it silently exercises a different input
+    // per platform. A multi-line test input must be built from
+    // single-line literals plus an explicit line break — see
+    // TestHelpers.Lines — so the fixture is identical on every checkout.
+    [Test]
+    public void NoCrossLineStringLiterals()
+    {
+        var violations = ScanAll().CrossLine;
+        if (violations.Count == 0) return;
+
+        var report = new StringBuilder();
+        report.Append("Found ").Append(violations.Count).Append(" newline byte(s) inside raw or verbatim string literals.\n");
+        report.Append("A literal that crosses lines has platform-dependent newlines (git autocrlf), so a\n");
+        report.Append("test built on it isn't deterministic. Build multi-line input with TestHelpers.Lines\n");
+        report.Append("(LineBreak, ...) from single-line literals instead.\n\n");
+        foreach (var violation in violations)
+        {
+            report.Append("  ").Append(violation.File)
+                  .Append(':').Append(violation.Line)
+                  .Append(':').Append(violation.Column)
+                  .Append('\n');
+        }
+        Assert.Fail(report.ToString());
+    }
+
+    // Walk every .cs file in the test project once, collecting both the
+    // non-ASCII-outside-Canary violations and the cross-line-literal
+    // violations so the two tests above share a single pass.
+    private static (List<Violation> NonAscii, List<Violation> CrossLine) ScanAll()
+    {
+        // This file lives at <test-project-root>/Core/UnicodeLiteralCanaryTests.cs.
+        // Two parents up is the test project root.
+        var testProjectRoot = Path.GetDirectoryName(Path.GetDirectoryName(ThisFilePath))!;
+
+        var nonAscii = new List<Violation>();
+        var crossLine = new List<Violation>();
+        foreach (var sourceFile in Directory.EnumerateFiles(testProjectRoot, "*.cs", SearchOption.AllDirectories))
+        {
+            if (IsExcludedPath(sourceFile)) continue;
+            var bytes = File.ReadAllBytes(sourceFile);
+            ScanFile(sourceFile, bytes, nonAscii, crossLine);
+        }
+        return (nonAscii, crossLine);
     }
 
     private static bool IsExcludedPath(string sourceFile)
@@ -79,7 +116,7 @@ public class UnicodeLiteralCanaryTests
         CharLiteral,
     }
 
-    private static void ScanFile(string path, byte[] bytes, List<Violation> violations)
+    private static void ScanFile(string path, byte[] bytes, List<Violation> violations, List<Violation> crossLineViolations)
     {
         var state = ScanState.Code;
         int line = 1;
@@ -250,6 +287,10 @@ public class UnicodeLiteralCanaryTests
                         index += 1;
                         continue;
                     }
+                    if (current == (byte)'\n')
+                    {
+                        crossLineViolations.Add(new Violation(path, line, column, current));
+                    }
                     if (current >= 0x80 && canaryParenDepth == 0)
                     {
                         violations.Add(new Violation(path, line, column, current));
@@ -283,6 +324,10 @@ public class UnicodeLiteralCanaryTests
                         AdvanceColumn(ref column, quoteRun);
                         index += quoteRun;
                         continue;
+                    }
+                    if (current == (byte)'\n')
+                    {
+                        crossLineViolations.Add(new Violation(path, line, column, current));
                     }
                     if (current >= 0x80 && canaryParenDepth == 0)
                     {
