@@ -77,25 +77,53 @@ public sealed class AliasRule : Rule
             return null;
         }
 
-        // Rebadge: when the inner is Preserve it returned its own Symbol
-        // carrying its Id. Drop that Symbol and lift its children into our
-        // list, so the parse tree shows the alias's identity in place of the
-        // inner's. ParseChild already wrote the inner's content into our list
-        // when the inner was Flatten (in which case innerSymbol is Discarded),
+        // Rebadge: when the inner is Preserve it returns its own Symbol
+        // carrying its Id. We drop that Symbol so the parse tree shows the
+        // alias's identity in place of the inner's. How we drop it depends
+        // on the inner's shape:
+        //
+        //   * Composite inner: lift its children into our list. The alias's
+        //     own Symbol then wraps those children directly.
+        //   * Leaf inner: a leaf carries its match as text, not as child
+        //     Symbols, so there is nothing to lift. Iterating its (empty)
+        //     Children would drop the matched text from the tree shape:
+        //     ToString on the alias would render "" even though the inner
+        //     matched real text. The alias takes the text onto its own
+        //     Symbol instead, emitted as a leaf in Preserve mode (so
+        //     ToString renders it) or bubbled up as the inner leaf itself
+        //     in Flatten mode.
+        //
+        // ParseChild already wrote the inner's content into our list when
+        // the inner was Flatten (in which case innerSymbol is Discarded),
         // so we only handle the non-Discarded return here.
+        bool aliasIsLeaf = false;
         if (!ReferenceEquals(innerSymbol, Symbol.Discarded) && outputSymbols != null)
         {
-            foreach (var child in innerSymbol.Children)
-                outputSymbols.Add(child);
+            if (innerSymbol.IsLeaf)
+            {
+                if (effectiveFlattenType == FlattenType.Preserve)
+                    aliasIsLeaf = true;
+                else
+                    outputSymbols.Add(innerSymbol);
+            }
+            else
+            {
+                foreach (var child in innerSymbol.Children)
+                    outputSymbols.Add(child);
+            }
         }
 
         TraceSuccess(lexer, $"inner matched");
         int matchLength = lexer.Position - matchStart;
         transaction.Commit();
 
-        return effectiveFlattenType == FlattenType.Preserve
-            ? new Symbol(Id, FlattenType, outputSymbols, lexer.Input.AsMemory(matchStart, matchLength), lexer.Context)
-            : Symbol.Discarded;
+        if (effectiveFlattenType != FlattenType.Preserve)
+            return Symbol.Discarded;
+
+        var matchedSpan = lexer.Input.AsMemory(matchStart, matchLength);
+        return aliasIsLeaf
+            ? new Symbol(Id, FlattenType, matchedSpan, lexer.Context)
+            : new Symbol(Id, FlattenType, outputSymbols, matchedSpan, lexer.Context);
     }
 
     internal override RuleStartRequirements ComputeRuleStart() =>

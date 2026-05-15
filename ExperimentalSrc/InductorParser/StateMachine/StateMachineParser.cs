@@ -447,6 +447,13 @@ public static class StateMachineParser
 
     private static void UpdateBoundsFromSymbol(Symbol symbol, ref int matchStart, ref int matchEnd)
     {
+        // "Has children", not "is a composite": recurse into the children
+        // when there are any, otherwise this node's bounds come from its
+        // own recorded span. A leaf keeps its text in LeafMemory; a
+        // childless composite keeps its consumedSpan there too, so the
+        // LeafMemory read below covers both childless shapes. Switching
+        // this to IsLeaf would skip that read for a childless composite
+        // and lose its span.
         if (symbol.Children.Count > 0)
         {
             foreach (var child in symbol.Children)
