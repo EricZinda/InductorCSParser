@@ -74,6 +74,15 @@ public sealed class Symbol
     // Empty for composite symbols.
     internal ReadOnlyMemory<char> LeafMemory => _leafChars;
 
+    // True when this Symbol is a leaf (carries text in _leafChars) rather
+    // than a composite (carries child Symbols). A composite with an empty
+    // Children list still reports false: zero children is not the same
+    // shape as a leaf, and ToString / FlattenInto treat the two
+    // differently. Used by composites that lift a child's content to tell
+    // "lift the child's children" (composite) apart from "the child is
+    // itself the content" (leaf).
+    internal bool IsLeaf => _isLeaf;
+
     public SymbolId Id { get; }
     public FlattenType FlattenType { get; }
     public IReadOnlyList<Symbol> Children { get; }

@@ -14,6 +14,11 @@ BenchmarkDotNet.Artifacts/
 .rustup-home/
 .tools/
 
+# C# Dev Kit language-service cache. Regenerated automatically by the
+# VS Code extension; not source. Lands in the project folder when the
+# "dotnet.projectsystem.cacheInProjectFolder" setting is on.
+*.lscache
+
 # Build artifact: dropped here by the CopyToUnity MSBuild target in
 # src/InductorParser/InductorParser.csproj after every netstandard2.1
 # build. runil2cpptest.sh runs the dotnet build first, so the IL2CPP
