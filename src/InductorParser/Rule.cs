@@ -60,6 +60,7 @@ public abstract class Rule
     // an Id from the name hash.
     private bool _idUserPinned;
     private string? _errorMessage;
+    private bool _errorForced;
 
     // Has this rule been compiled yet? External engines (the state-machine
     // lowerer, alternative evaluators) check this before calling Compile()
@@ -229,8 +230,13 @@ public abstract class Rule
 
     // The static error message set via .WithError("..."), or null if none.
     // Subclasses pass this to lexer.RecordFailure on the failure path so
-    // the "deepest failure wins" heuristic can surface it.
+    // the tier-based resolution (mechanical / named / forced) can surface it.
     protected internal string? ErrorMessage => _errorMessage;
+
+    // True when the message was set via .WithError("...", forced: true). Promotes
+    // the named record to the forced tier, which beats other named records at
+    // any depth (but loses to deeper forced records).
+    protected internal bool ErrorForced => _errorForced;
 
     protected Rule(FlattenType defaultFlatten, params Rule[] children)
     {
@@ -623,15 +629,26 @@ public abstract class Rule
     public Rule Delete() => Flatten(FlattenType.Delete);
     public Rule Flatten() => Flatten(FlattenType.Flatten);
 
-    // Attach a static error message. If this rule is the "deepest failure"
-    // when a parse fails, ParseResult.ErrorMessage will be this string
-    // instead of the generic "unexpected 'x'" fallback. Useful for giving
-    // user-friendly messages like "Expected a setting name" at the spots
-    // most likely to be where the author went wrong. Returns the same Rule
-    // for fluent chaining. Throws if already compiled. Virtual so
-    // LateBoundRule can forbid it (a WithError set on a transparent
-    // forwarding rule is never consulted and would silently do nothing).
-    public virtual Rule WithError(string errorMessage)
+    // Attach a static error message. If this rule's message wins the
+    // tier-based resolution when a parse fails, ParseResult.ErrorMessage
+    // will be this string instead of the generic "unexpected 'x'"
+    // fallback. Useful for giving user-friendly messages like "Expected a
+    // setting name" at the spots most likely to be where the author went
+    // wrong.
+    //
+    // Three tiers, in order of priority at error-report time:
+    //   1. mechanical fallback (rules with no .WithError)
+    //   2. named (.WithError("msg"))
+    //   3. forced (.WithError("msg", forced: true))
+    //
+    // A higher tier always wins regardless of position. Within a tier,
+    // the record at the deepest input position wins.
+    //
+    // Returns the same Rule for fluent chaining. Throws if already
+    // compiled. Virtual so LateBoundRule can forbid it (a WithError set
+    // on a transparent forwarding rule is never consulted and would
+    // silently do nothing).
+    public virtual Rule WithError(string errorMessage, bool forced = false)
     {
         ThrowIfSealed();
         if (_errorMessage != null)
@@ -642,6 +659,7 @@ public abstract class Rule
                 $"different error message, build a factory function that returns " +
                 $"a fresh rule each call.");
         _errorMessage = errorMessage;
+        _errorForced = forced;
         return this;
     }
 

@@ -55,7 +55,7 @@ internal sealed class WithinTokenRule : Rule
         if (token.IsEof)
         {
             TraceFailure(outerLexer, $"found '<EOF>'");
-            outerLexer.RecordFailure(outerTransaction.StartPosition, ErrorMessage);
+            outerLexer.RecordFailure(outerTransaction.StartPosition, ErrorMessage, ErrorForced);
             return null;
         }
 
@@ -102,7 +102,7 @@ internal sealed class WithinTokenRule : Rule
             // debug.
             int innerFailurePos = Math.Max(subLexer.DeepestFailure, subLexer.Position);
             TraceFailure(outerLexer, $"inner rule failed at token rune offset {innerFailurePos}");
-            outerLexer.RecordFailure(outerTransaction.StartPosition, subLexer.DeepestFailureMessage ?? ErrorMessage);
+            outerLexer.RecordFailure(outerTransaction.StartPosition, subLexer.DeepestFailureMessage ?? ErrorMessage, ErrorForced);
             return null;
         }
 
@@ -116,7 +116,7 @@ internal sealed class WithinTokenRule : Rule
             // the substring, so it's the consumed rune count directly.
             int consumed = subLexer.Position;
             TraceFailure(outerLexer, $"inner rule consumed only {consumed}/{token.Length} of the token");
-            outerLexer.RecordFailure(outerTransaction.StartPosition, ErrorMessage);
+            outerLexer.RecordFailure(outerTransaction.StartPosition, ErrorMessage, ErrorForced);
             return null;
         }
 

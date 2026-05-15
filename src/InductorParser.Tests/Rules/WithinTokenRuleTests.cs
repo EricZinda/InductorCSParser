@@ -81,6 +81,21 @@ public class WithinTokenRuleTests
     }
 
     [Test]
+    public void Inner_WithError_surfaces_when_WithinToken_fails_without_its_own_WithError()
+    {
+        // WithinToken doesn't clear inner records on success — and when
+        // it fails (inner sub-rule failed inside the token), the inner's
+        // failure record survives. Pins that the inner sub-rule's
+        // WithError is what the user sees if WithinToken itself has no
+        // WithError.
+        var rule = WithinToken(Literal("ab").WithError("inner literal failed"));
+        var result = rule.Parse("c");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("inner literal failed"));
+    }
+
+    [Test]
     public void Composes_into_zero_or_more_for_multi_grapheme_sequences()
     {
         // ZeroOrMore(WithinToken(letter)) walks a sequence of single-

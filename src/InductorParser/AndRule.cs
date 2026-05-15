@@ -26,7 +26,13 @@ internal sealed class AndRule : Rule
             if (symbol == null)
             {
                 TraceFailure(lexer, $"symbol #{symbolIndex}");
-                lexer.RecordFailure(lexer.Position, ErrorMessage);
+                // Record at the failing child's start position (lexer
+                // is at that position because the child's own
+                // transaction rolled back there). That puts the
+                // cursor at where the user needs to fix the input,
+                // not at the And's overall start. See
+                // docs/ErrorArchitecture.md.
+                lexer.RecordFailure(lexer.Position, ErrorMessage, ErrorForced);
                 return null;
             }
             // Don't add child symbols if they're discarded

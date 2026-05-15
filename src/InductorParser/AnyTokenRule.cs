@@ -27,7 +27,7 @@ internal sealed class AnyTokenRule : Rule
         if (token.IsEof)
         {
             TraceFailure(lexer, $"found '<EOF>'");
-            lexer.RecordFailure(transaction.StartPosition, ErrorMessage);
+            lexer.RecordFailure(transaction.StartPosition, ErrorMessage, ErrorForced);
             return null;
         }
         TraceSuccess(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}'");

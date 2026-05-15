@@ -86,7 +86,11 @@ internal sealed class BetweenInclusiveRule : Rule
                         : Symbol.Discarded;
                 }
                 TraceFailure(lexer, $"count= 0");
-                lexer.RecordFailure(lexer.Position, ErrorMessage);
+                // Shortcut path: we never advanced, so lexer.Position
+                // equals transaction.StartPosition. Record at lexer.Position
+                // so the cursor lands where the user needs to fix the input.
+                // See docs/ErrorArchitecture.md.
+                lexer.RecordFailure(lexer.Position, ErrorMessage, ErrorForced);
                 return null;
             }
         }
@@ -124,7 +128,12 @@ internal sealed class BetweenInclusiveRule : Rule
         if (count < AtLeast)
         {
             TraceFailure(lexer, $"count= {count}");
-            lexer.RecordFailure(lexer.Position, ErrorMessage);
+            // Record at the failing iteration's start position (lexer is
+            // at that position because the child's own transaction rolled
+            // back there). That puts the cursor at where the user needs
+            // to fix the input, not at the rule's overall start. See
+            // docs/ErrorArchitecture.md.
+            lexer.RecordFailure(lexer.Position, ErrorMessage, ErrorForced);
             return null;
         }
         TraceSuccess(lexer, $"count= {count}");

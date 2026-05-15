@@ -42,25 +42,17 @@ internal sealed class NotRule : Rule
         if (innerResult != null)
         {
             TraceFailure(lexer, $"inner matched");
-            // Inner's contribution to the deepest marker -- including
-            // orphan records from non-taken Or alternatives explored
-            // before a later alternative succeeded -- is from a path
-            // the lookahead never committed to, so it shouldn't outvote
-            // the anchored WithError. force: true unconditionally pins
-            // the deepest position to Not's anchor and the user's
-            // message into the message slot. Without it, an Or whose
-            // first alternative consumes some input before failing
-            // leaves the deepest at the orphan position and the user's
-            // "did not want X here" is silently dropped, with the
-            // reported position pointing somewhere inside the X that
-            // inner went hunting for.
-            lexer.RecordFailure(transaction.StartPosition, ErrorMessage, force: ErrorMessage != null);
+            // Record Not's own failure at the lookahead anchor.
+            // See docs/ErrorArchitecture.md.
+            lexer.RecordFailure(transaction.StartPosition, ErrorMessage, ErrorForced);
             return null;
         }
         TraceSuccess(lexer, $"inner didn't match");
-        // Not is zero-width: inner failed and the lexer rolled back to
-        // transaction.StartPosition. Record a zero-length consumed
-        // span at that anchor for the Symbol's bounds.
+        // Commit Not's transaction and clear inner's failure records.
+        // Inner's failure was the EXPECTED outcome (that's what Not
+        // succeeding means), so its records would be noise rather
+        // than diagnostic. See docs/ErrorArchitecture.md.
+        transaction.Commit(clearFailureRecords: true);
         return effectiveFlattenType == FlattenType.Preserve
             ? new Symbol(Id, FlattenType, Array.Empty<Symbol>(), lexer.Input.AsMemory(transaction.StartPosition, 0), lexer.Context)
             : Symbol.Discarded;

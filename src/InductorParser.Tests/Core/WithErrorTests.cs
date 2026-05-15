@@ -5,6 +5,10 @@ using static InductorParser.Rules;
 
 namespace InductorParser.Tests;
 
+// Cross-cutting tests for the three-tier error-resolution system and the
+// success-clears-errors rule. Tests that exercise a specific rule's
+// WithError behavior (Or, And, OneOrMore, Not, ScanWhile, ...) live in
+// that rule's own test file. See docs/ErrorArchitecture.md for the spec.
 [TestFixture]
 public class WithErrorTests
 {
@@ -22,9 +26,6 @@ public class WithErrorTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage, Is.EqualTo("Expected a setting name"));
-        // OneOf records at pre-read offset 0 with null message. OneOrMore
-        // then claims the slot with "Expected a setting name" via the
-        // equal-depth rule.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
     }
 
@@ -59,9 +60,72 @@ public class WithErrorTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage, Is.EqualTo("need digits"));
-        // digits OneOf records at pre-read offset 3 (start of 'x').
-        // OneOrMore claims the message slot there with "need digits".
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void Deeper_named_inner_wins_over_shallower_named_outer()
+    {
+        // Inner Token has its own .WithError ("unterminated string") at
+        // a deeper position (the EOF after consuming "\"hello"). The
+        // outer Or also has .WithError at its shallower start. Named-vs-
+        // named is deepest-wins, so the more specific inner message wins.
+        var quoted = And(
+            Token('"'),
+            ZeroOrMore(NoneOf(TokenSet.Runes("\""))),
+            Token('"').WithError("unterminated string"));
+        var rule = Or(quoted, Token('x'))
+            .WithError("expected one of: string, x");
+
+        var result = rule.Parse("\"hello");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("unterminated string"));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo("\"hello".Length));
+    }
+
+    [Test]
+    public void Forced_outer_overrides_deeper_named_inner()
+    {
+        // Same grammar shape as the previous test, but the outer Or is
+        // marked forced: true. Tier 3 beats tier 2 regardless of depth,
+        // so the outer's summary message wins despite the inner being
+        // deeper. The escape hatch for authors who want a top-level
+        // message to suppress inner specifics.
+        var quoted = And(
+            Token('"'),
+            ZeroOrMore(NoneOf(TokenSet.Runes("\""))),
+            Token('"').WithError("unterminated string"));
+        var rule = Or(quoted, Token('x'))
+            .WithError("expected one of: string, x", forced: true);
+
+        var result = rule.Parse("\"hello");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected one of: string, x"));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Forced_inner_beats_shallower_forced_outer()
+    {
+        // Two forced WithErrors. Tier 3 vs tier 3 falls back to
+        // deepest-wins, so the deeper inner forced message wins.
+        var inner = And(
+            Token('y'),
+            OneOrMore(OneOf(TokenSet.Digits))
+                .WithError("forced inner", forced: true));
+        var rule = And(Token('x'), inner).WithError("forced outer", forced: true);
+
+        var result = rule.Parse("xyz");
+
+        Assert.That(result.Success, Is.False);
+        // Inner OneOrMore records "forced inner" at the digit-attempt
+        // position (2, where 'z' is). Outer And's WithError records at
+        // the failing child's start (1, where the inner And began).
+        // Inner is deeper, inner wins.
+        Assert.That(result.ErrorMessage, Is.EqualTo("forced inner"));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
     }
 
     [Test]
