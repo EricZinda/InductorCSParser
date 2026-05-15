@@ -683,10 +683,12 @@ public static class Rules
     /// <remarks>
     /// Matches the common "skip whitespace without storing it"
     /// case, so the factory pre-applies
-    /// <c>.Flatten(FlattenType.Delete)</c>: the match contributes
+    /// <c>.FlattenByDefault(FlattenType.Delete)</c>: the match contributes
     /// nothing to the tree. Without the override the underlying
     /// <see cref="OneOrMore"/> would default to
-    /// <see cref="FlattenType.Flatten"/>.
+    /// <see cref="FlattenType.Flatten"/>. <c>.FlattenByDefault</c> rather
+    /// than <c>.Flatten</c> so a caller can still <c>.As(...)</c> the
+    /// result or override the policy.
     /// For the "skip any whitespace here, including none" shape
     /// (between tokens that don't require a separator), wrap it as
     /// <c>Optional(InlineWhitespace())</c>.
@@ -694,7 +696,8 @@ public static class Rules
     /// "either intra-line whitespace or a line terminator" use
     /// <see cref="AnyWhitespace"/>.
     /// </remarks>
-    public static Rule InlineWhitespace() => OneOrMore(OneOf(TokenSet.InlineWhitespace)).Flatten(FlattenType.Delete);
+    public static Rule InlineWhitespace() =>
+        OneOrMore(OneOf(TokenSet.InlineWhitespace)).FlattenByDefault(FlattenType.Delete);
 
     /// <summary>
     /// Match one or more whitespace tokens, where each token is either
@@ -719,7 +722,7 @@ public static class Rules
     /// </para>
     /// </remarks>
     public static Rule AnyWhitespace() =>
-        OneOrMore(Or(EndOfLine(), OneOf(TokenSet.InlineWhitespace))).Flatten(FlattenType.Delete);
+        OneOrMore(Or(EndOfLine(), OneOf(TokenSet.InlineWhitespace))).FlattenByDefault(FlattenType.Delete);
 
     /// <summary>
     /// Match one Unicode line terminator per UAX #18 Annex C. When
@@ -757,7 +760,7 @@ public static class Rules
         var alternatives = eofIsEol
             ? new Rule[] { Literal("\r\n"), OneOf(TokenSet.LineTerminators), Eof() }
             : new Rule[] { Literal("\r\n"), OneOf(TokenSet.LineTerminators) };
-        return Or(alternatives).Flatten(FlattenType.Delete);
+        return Or(alternatives).FlattenByDefault(FlattenType.Delete);
     }
 
     /// <summary>
@@ -852,7 +855,7 @@ public static class Rules
             WithinToken(And(OneOf(start), ZeroOrMore(OneOf(body)))),
             // Subsequent tokens: every rune must be a Body rune.
             ZeroOrMore(WithinToken(OneOrMore(OneOf(body))))
-        ).Flatten(FlattenType.Preserve);
+        ).FlattenByDefault(FlattenType.Preserve);
     }
 
     /// <summary>

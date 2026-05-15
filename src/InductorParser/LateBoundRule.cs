@@ -91,6 +91,12 @@ public sealed class LateBoundRule : Rule
         "LateBoundRule.Flatten(...) isn't supported: the rule is transparent at parse " +
         "time, so its FlattenType is never consulted. Set .Flatten(...) on the bound target instead.");
 
+    // Same story as Flatten: a FlattenType (default or explicit) set on a
+    // transparent forwarding rule is never consulted.
+    public override Rule FlattenByDefault(FlattenType type) => throw new InvalidOperationException(
+        "LateBoundRule.FlattenByDefault(...) isn't supported: the rule is transparent at parse " +
+        "time, so its FlattenType is never consulted. Set the flatten policy on the bound target instead.");
+
     // WithError on LateBoundRule would set an error message that's never
     // consulted: TryParse just forwards to the target, which runs its own
     // RecordFailure on failure using the target's ErrorMessage. Set
