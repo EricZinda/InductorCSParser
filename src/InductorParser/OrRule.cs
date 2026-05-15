@@ -5,17 +5,24 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
-// Matches the first child that succeeds. Tries
-// children left-to-right, committing to whichever one matches first.
-// If none match, the Or fails. Each child attempt runs in its own
-// transaction so a failed alternative leaves the lexer where it was
-// before Or was called.
+// Matches the first child that succeeds. Tries children left-to-right,
+// committing to whichever one matches first. If none match, the Or fails.
+// Each child rule manages its own lexer rollback (per the TryParseRule
+// contract), so a failed alternative naturally leaves the lexer where it
+// was before Or called it.
 internal sealed class OrRule : Rule
 {
     public OrRule(Rule[] children) : base(FlattenType.Flatten, children) { }
 
     internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
+        // Outer transaction wraps every branch attempt. On success it
+        // commits, clearing the rejected branches' records. On failure
+        // it rolls back, keeping all records (so the Or's own failure
+        // and each branch's records survive). See docs/ErrorArchitecture.md.
+        using var outerTransaction = lexer.BeginTransaction();
+        int startPosition = outerTransaction.StartPosition;
+
         // Peek the next token (one grapheme cluster, or one rune in
         // WithinToken sub-lexer mode) for the skip shortcut. peekFirstRune
         // is -1 at EOF (empty Chars) or when the cluster starts with a
@@ -46,14 +53,16 @@ internal sealed class OrRule : Rule
                 continue;
             }
 
-            using var transaction = lexer.BeginTransaction();
+            int matchStart = lexer.Position;
             var symbol = ParseChild(child, lexer, outputSymbols);
             if (symbol != null)
             {
                 TraceSuccess(lexer, $"symbol #{symbolIndex}");
-                int matchStart = transaction.StartPosition;
                 int matchLength = lexer.Position - matchStart;
-                transaction.Commit();
+                // Or's commit clears records added during its run so
+                // rejected branches' failures don't haunt later
+                // failures. See docs/ErrorArchitecture.md.
+                outerTransaction.Commit(clearFailureRecords: true);
                 // Don't add child symbols if they're discarded
                 if (outputSymbols != null && !ReferenceEquals(symbol, Symbol.Discarded))
                     outputSymbols.Add(symbol);
@@ -63,7 +72,7 @@ internal sealed class OrRule : Rule
             }
         }
         TraceFailure(lexer, $"");
-        lexer.RecordFailure(lexer.Position, ErrorMessage);
+        lexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);
         return null;
     }
 

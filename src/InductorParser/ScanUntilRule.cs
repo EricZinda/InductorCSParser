@@ -346,12 +346,13 @@ internal sealed class ScanUntilRule : Rule
                         if (end == null)
                         {
                             TraceFailure(lexer, $"bad escape end at offset {lexer.Position}");
-                            // Error Positioning: lexer.Position after
-                            // the end's rollback sits at the offset
-                            // where the end started trying (just past
-                            // the start). Point user-facing errors
-                            // there, not at the string opener.
-                            lexer.RecordFailure(lexer.Position, ErrorMessage);
+                            // Asymmetric position by tier: WithError lands
+                            // at the rule's own start (the message anchor),
+                            // mechanical lands at the bad-end position so
+                            // the user sees where the parser actually got
+                            // stuck. See docs/ErrorArchitecture.md.
+                            int recordPosition = ErrorMessage != null ? startPosition : lexer.Position;
+                            lexer.RecordFailure(recordPosition, ErrorMessage, ErrorForced);
                             return null;
                         }
                         // Zero-width guard: if both the start and end
@@ -382,7 +383,9 @@ internal sealed class ScanUntilRule : Rule
                     if (end == null)
                     {
                         TraceFailure(lexer, $"bad escape end at offset {pos + tokenLen}");
-                        lexer.RecordFailure(pos + tokenLen, ErrorMessage);
+                        // Same asymmetry as the rule-form path above.
+                        int recordPosition = ErrorMessage != null ? startPosition : pos + tokenLen;
+                        lexer.RecordFailure(recordPosition, ErrorMessage, ErrorForced);
                         return null;
                     }
                     continue;
@@ -419,14 +422,12 @@ internal sealed class ScanUntilRule : Rule
         if (!stopperMatched && !_eofIsTerminator)
         {
             // Strict: the loop ran off the end without ever matching
-            // the stopper. Record failure at lexer.Position, which is
-            // input.Length under top-level Parse and is the sub-lexer
-            // end under WithinToken. That's the deepest position the
-            // rule reached, so the deepest-failure heuristic surfaces
-            // this message ahead of competing shallower failures from
-            // outer rules that retry from earlier in the input.
+            // the stopper. Asymmetric position: WithError lands at the
+            // rule's start (message anchor), mechanical lands at the
+            // EOF position the scan reached. See docs/ErrorArchitecture.md.
             TraceFailure(lexer, $"unterminated body, expected stopper '{_stopperRendered}'");
-            lexer.RecordFailure(lexer.Position, ErrorMessage);
+            int recordPosition = ErrorMessage != null ? startPosition : lexer.Position;
+            lexer.RecordFailure(recordPosition, ErrorMessage, ErrorForced);
             return null;
         }
 

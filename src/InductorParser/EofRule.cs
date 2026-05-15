@@ -31,7 +31,7 @@ internal sealed class EofRule : Rule
             // doesn't read anything. It just checks whether we've reached
             // end-of-input. When the check fails, lexer.Position is
             // pointing straight at the stuff that shouldn't be here.
-            lexer.RecordFailure(lexer.Position, ErrorMessage);
+            lexer.RecordFailure(lexer.Position, ErrorMessage, ErrorForced);
             return null;
         }
         TraceSuccess(lexer, $"");

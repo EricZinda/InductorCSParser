@@ -82,7 +82,8 @@ public class ScanUntilRuleTests
     {
         // Strict default: a scan that runs off the end without matching
         // the stopper fails the rule, with the failure recorded at the
-        // EOF position.
+        // EOF position the scan reached. No WithError on ScanUntil here,
+        // so the mechanical record lands where the scan got stuck.
         var result = StopOnPipe().Parse("abcXYZ");
 
         Assert.That(result.Success, Is.False,
@@ -793,8 +794,10 @@ public class ScanUntilRuleTests
     [Test]
     public void ScanUntil_strict_with_rule_stopper_fails_on_EOF()
     {
-        // Rule-stopper overload: the close marker "]]>" is never
-        // present in the input. Strict semantics fail the rule at EOF.
+        // Rule-stopper overload: the close marker "]]>" is never present
+        // in the input. Strict semantics fail the rule at EOF. No
+        // WithError on ScanUntil, so it records at the EOF position the
+        // scan reached.
         var rule = ScanUntil(Literal("]]>"));
         var result = rule.Parse("plain text");
 
@@ -807,12 +810,9 @@ public class ScanUntilRuleTests
     public void ScanUntil_strict_inside_outer_And_attributes_failure_to_inner_scan()
     {
         // Unterminated string body: an outer And(Token('"'), ScanUntil('"'),
-        // Token('"')) fails on input '"hello'. Under strict ScanUntil
-        // the inner scan fails at EOF (offset 6), so the deepest failure
-        // recorded is the body's, not the missing close quote's. The
-        // recursive engine records lexer.Position (= input.Length) at
-        // the body, which is the same depth the outer Token('"') would
-        // have hit, but the message comes from the inner rule.
+        // Token('"')) fails on input '"hello'. Under strict ScanUntil the
+        // inner scan fails at EOF (offset 6), so the deepest failure
+        // recorded is the body's, not the missing close quote's.
         var body = ScanUntil(TokenSet.Runes("\""));
         var rule = InductorParser.Rules.And(Token('"'), body, Token('"'));
 
@@ -834,12 +834,32 @@ public class ScanUntilRuleTests
     }
 
     [Test]
+    public void ScanUntil_inner_escapeEnd_WithError_surfaces_when_ScanUntil_fails()
+    {
+        // ScanUntil doesn't clear inner records on success — and when
+        // it fails on a bad escape end, the inner escapeEnd rule's
+        // failure record survives (rollback keeps). If escapeEnd has
+        // a .WithError and ScanUntil doesn't, the inner WithError is
+        // what the user sees. Pins that ScanUntil doesn't accidentally
+        // scrub inner records.
+        var escapeEnd = OneOf(TokenSet.Runes("nrt\\\""))
+            .WithError("invalid escape character");
+        var rule = ScanUntil(TokenSet.Runes("\""), new Rune('\\'), escapeEnd);
+        var result = rule.Parse("\\x\"");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("invalid escape character"));
+    }
+
+    [Test]
     public void ScanUntil_strict_fails_on_EOF_even_with_escape_support()
     {
         // Escape-having variant: even when escapes are configured, a
         // scan that runs off the end without matching the stopper has
         // to fail under strict semantics. The escape path doesn't
-        // accidentally consume the EOF branch.
+        // accidentally consume the EOF branch. No WithError on
+        // ScanUntil, so the mechanical record lands at the EOF position
+        // the scan reached.
         var escapeEnd = OneOf(TokenSet.Runes("nrt\\\""));
         var rule = ScanUntil(TokenSet.Runes("\""), new Rune('\\'), escapeEnd);
 

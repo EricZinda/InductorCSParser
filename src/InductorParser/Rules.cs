@@ -473,6 +473,42 @@ public static class Rules
     public static Rule Peek(Rule inner) => new PeekRule(inner);
 
     /// <summary>
+    /// Wrap <paramref name="inner"/> in an alias that can be given its
+    /// own name via <c>.As(string)</c> or <c>.As(SymbolId)</c>. The
+    /// alias parses by forwarding to <paramref name="inner"/> and
+    /// produces a Symbol carrying the alias's own Id, with the inner's
+    /// matched content as that Symbol's children. If
+    /// <paramref name="inner"/> is itself a Preserve rule (the default
+    /// for any named rule), aliasing replaces the inner's Symbol with
+    /// the alias's Symbol rather than nesting them: the inner's
+    /// identity is hidden when accessed through this alias. Default
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Flatten"/>,
+    /// which auto-flips to <see cref="FlattenType.Preserve"/> when
+    /// <c>.As(...)</c> is applied.
+    /// </summary>
+    /// <remarks>
+    /// Use when one rule shape needs to appear in a grammar under
+    /// multiple names, instead of building a factory function that
+    /// returns a fresh rule each call:
+    /// <code>
+    /// var digitSequence = OneOrMore(OneOf(TokenSet.Digits));
+    /// var year  = Alias(digitSequence).As("year");
+    /// var month = Alias(digitSequence).As("month");
+    /// </code>
+    /// The fluent equivalent is <see cref="Rule.AliasedAs(string)"/>.
+    /// <para>
+    /// Errors: the rebadge is success-only, so it doesn't affect error
+    /// attribution. A <c>.WithError</c> on <paramref name="inner"/>
+    /// still fires from inside the inner exactly as it would without
+    /// an alias around it. A <c>.WithError</c> on the alias itself
+    /// fires when the inner fails to match anywhere within it. If both
+    /// are set, the standard deepest-failure tie-breaking decides
+    /// which message surfaces.
+    /// </para>
+    /// </remarks>
+    public static Rule Alias(Rule inner) => new AliasRule(inner);
+
+    /// <summary>
     /// Sequence: match every child in order. Default
     /// <see cref="FlattenType"/>: <see cref="FlattenType.Flatten"/>.
     /// </summary>

@@ -147,6 +147,11 @@ public class BetweenInclusiveRuleTests
         var result = rule.Parse("ab");
 
         Assert.That(result.Success, Is.False);
+        // BetweenInclusive's WithError reports at the failing iteration's
+        // start position (1, where Token('a') tried 'b' and failed). The
+        // first 'a' matched and advanced the lexer; the failure point is
+        // the position the user needs to fix, not the rule's overall start.
+        // See docs/ErrorArchitecture.md.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
         Assert.That(result.ErrorMessage, Is.EqualTo("need 2 to 4 a's"));
     }
@@ -238,20 +243,12 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_descendant_WithError_surfaces_when_zero_or_more_shortcut_would_fire()
     {
         // Sibling of the OneOrMore case but for ZeroOrMore (AtLeast == 0).
-        // The ZeroOrMore returns success with count=0, so the failure-path
-        // shortcut isn't the issue here. The problem is the success-path
-        // shortcut: ZeroOrMore commits empty without entering Inner, and
-        // every RecordFailure call inside Inner's subtree is silently
-        // skipped. When the outer And then fails on Token('z') at offset 0,
-        // the deepest-failure message is null (no descendant got a chance
-        // to write) and the user sees the generic positional template.
-        //
-        // The fix gates BOTH shortcut paths on Inner.HasErrorMessageInSubtree.
-        // With the gate, ZeroOrMore enters its loop, the Or's per-child
-        // shortcut tries Token('a').WithError, "want 'a'" records at 0,
-        // count stays 0, ZeroOrMore returns success, and the outer And's
-        // Token('z') failure at 0 lets "want 'a'" win the deepest-failure
-        // slot via equal-depth claim.
+        // ZeroOrMore catches inner failures and succeeds with count=0,
+        // but its commit does NOT clear inner failure records (count
+        // rules preserve records about real input failures; see
+        // docs/ErrorArchitecture.md). So the descendant Token('a')'s
+        // .WithError("want 'a'") survives and is reported when the
+        // outer And's Token('z') subsequently fails at the same offset.
         var rule = And(
             ZeroOrMore(Or(Token('a').WithError("want 'a'"), Token('b'))),
             Token('z'));
@@ -265,25 +262,12 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_descendant_WithError_surfaces_under_scanner_skip_pattern()
     {
-        // ZeroOrMore(Or(realMatch, AnyToken.Delete)) is the recognized
-        // shape for the scanner-skip optimization in TryCreateScannerSkip.
-        // The scanner advances the lexer past non-candidate runes to the
-        // next candidate or EOF, then Inner.TryParse runs at that landing
-        // position. Without the OrRule per-child shortcut consulting
-        // HasErrorMessageInSubtree, the per-child skip at the EOF landing
-        // would drop the And alternative whose subtree carries
-        // Token('a').WithError ("want 'a'"). The descendant message
-        // would never record and the user would see the generic template.
-        //
-        // The fix is the OrRule per-child shortcut consulting
-        // HasErrorMessageInSubtree (not just `child.ErrorMessage == null`).
-        // The scanner-skip code itself doesn't need a separate gate: the
-        // landing positions (candidates and EOF) are the same positions
-        // the regular per-token loop would reach, and at those positions
-        // the OrRule's per-child shortcut now correctly tries the And.
-        // Token('a').WithError records at the EOF landing and wins the
-        // deepest-failure slot for the offset where the outer And's
-        // required Token('z') ultimately fails.
+        // ZeroOrMore(Or(realMatch, AnyToken.Delete)) is the scanner-skip
+        // shape. The descendant Token('a').WithError("want 'a'") inside
+        // the realMatch alternative records its failure at the EOF
+        // landing, and ZeroOrMore's commit preserves the record (count
+        // rules don't clear). The outer And's Token('z') failure at the
+        // same depth lets "want 'a'" win the tier resolution.
         var realMatch = And(Token('a').WithError("want 'a'"), Token('b'));
         var rule = And(
             ZeroOrMore(Or(realMatch, AnyToken().Flatten(FlattenType.Delete))),
@@ -297,18 +281,20 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_inner_failure_still_contributes_to_deepest_failure()
     {
-        // Known PEG heuristic quirk: a BetweenInclusive whose lower bound
-        // is 0 and whose inner fails deeper than the required path can
-        // still win the error message via deepest-failure-wins.
+        // BetweenInclusive(0, 1, inner) is a count rule: its commit on
+        // success doesn't clear inner failure records, so a deeper
+        // inner WithError survives the success and wins the tier
+        // resolution even when the outer rule succeeds with zero
+        // matches.
         //
         // Grammar: And(BetweenInclusive(0, 1, And(a, b, c-with-message)),
         //                x-with-message)
         // Input:   "abdy"
         //
-        // The (0, 1) rule's inner reads "ab" then 'c' fails at offset 2,
-        // recording "need 'c'". The outer rule catches and succeeds with
-        // empty (lower bound 0). Token('x') then fails at offset 0 with
-        // its own "need 'x'". Deepest-wins picks offset 2: user sees
+        // The (0, 1) inner reads "ab" then 'c' fails at offset 2,
+        // recording "need 'c'". The outer rule catches and succeeds
+        // with empty (lower bound 0). Token('x') then fails at offset 0
+        // with its own "need 'x'". Deepest named wins: offset 2 with
         // "need 'c'", pointing inside what was supposedly optional.
         var rule = And(
             BetweenInclusive(0, 1,
@@ -504,7 +490,8 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_scanner_skip_does_not_skip_NoneOf_alternative_matches()
     {
-        // TryCreateScannerSkip unions every non-fallback alternative's
+        // Regression Test: TryCreateScannerSkip used to union 
+        // every non-fallback alternative's
         // FirstConsumedTokens.LookaheadFirstRunes into the candidate set
         // without considering Polarity. For a MustNotBeIn alternative
         // like NoneOf(stopSet), FirstConsumedTokens is the rule's
