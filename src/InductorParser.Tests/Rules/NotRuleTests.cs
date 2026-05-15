@@ -236,4 +236,24 @@ public class NotRuleTests
             input: "",
             expectedSourceText: "");
     }
+
+    [Test]
+    public void Not_success_clears_inner_failure_record()
+    {
+        // Not succeeds when its inner fails. Inner's failure record is
+        // EXPECTED (Not wanted the inner not to match), so it should
+        // not surface as a parse error. The success-clears-errors rule
+        // wipes it on Not's commit. See docs/ErrorArchitecture.md.
+        var notForbidden = Not(Literal("forbidden").WithError("inner literal not satisfied"));
+        var rule = And(notForbidden, Literal("xyz"));
+
+        // Input "abc": Not succeeds (inner fails), then Literal("xyz")
+        // fails at position 0 with a mechanical record. The inner
+        // WithError record has been scrubbed by Not's commit.
+        var result = rule.Parse("abc");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Does.Not.Contain("inner literal"));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
+    }
 }

@@ -30,20 +30,9 @@ internal sealed class PeekRule : Rule
         if (innerResult == null)
         {
             TraceFailure(lexer, $"inner didn't match");
-            // The lexer position rolls back via the `using` transaction,
-            // but the deepest-failure marker normally survives rule
-            // rollback (Or's failed alternatives contribute to it on
-            // purpose). Inner is conceptually rolled back along with
-            // the lexer, so its contribution should not outvote the
-            // anchored WithError. force: true unconditionally pins the
-            // deepest position to our anchor and the user's message into
-            // the message slot, regardless of how far inner ran or what
-            // it recorded. Without it, a multi-token inner like
-            // Literal("ab") leaves the deepest at offset 1 and the
-            // user's "expected 'ab' ahead" is silently dropped, with
-            // the reported position pointing past where the lookahead
-            // was anchored.
-            lexer.RecordFailure(transaction.StartPosition, ErrorMessage, force: ErrorMessage != null);
+            // Record Peek's own failure at the lookahead anchor.
+            // See docs/ErrorArchitecture.md.
+            lexer.RecordFailure(transaction.StartPosition, ErrorMessage, ErrorForced);
             return null;
         }
         TraceSuccess(lexer, $"inner matched");

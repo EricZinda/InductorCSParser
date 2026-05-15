@@ -440,4 +440,38 @@ public class AndRuleTests
         Assert.That(range.Start.CharIndex, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(6));
     }
+
+    [Test]
+    public void And_named_WithError_beats_deeper_mechanical_inner()
+    {
+        // Literal("ab") reads 'a' then fails on second char, recording
+        // a mechanical failure at position 1. And records its named
+        // WithError at the failing child's start (0, where Literal began).
+        // Named beats mechanical regardless of depth.
+        // See docs/ErrorArchitecture.md.
+        var rule = And(Literal("ab"), Token('!')).WithError("expected ab!");
+
+        var result = rule.Parse("axyz");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected ab!"));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void And_named_WithError_position_is_the_failing_child_start()
+    {
+        // The position attached to And's WithError points at the failing
+        // child's start (1, where Token('!') began trying after Literal
+        // ate the leading 'a'), not at the And's overall start (0). That
+        // puts the cursor where the user needs to fix the input, not
+        // inside input the parser already accepted.
+        // See docs/ErrorArchitecture.md.
+        var rule = And(Literal("a"), Token('!')).WithError("compound msg");
+
+        var result = rule.Parse("axyz");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
+    }
 }

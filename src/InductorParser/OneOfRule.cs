@@ -86,7 +86,7 @@ internal sealed class OneOfRule : Rule
             // OneOfRule does exactly one Read, so the transaction's saved start
             // position is exactly where that token sits in the input (or
             // equals input.Length on EOF).
-            lexer.RecordFailure(transaction.StartPosition, ErrorMessage);
+            lexer.RecordFailure(transaction.StartPosition, ErrorMessage, ErrorForced);
             return null;
         }
         TraceSuccess(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted one of '{_setRendered}'");

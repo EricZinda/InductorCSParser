@@ -84,7 +84,7 @@ public sealed class LateBoundRule : Rule
     // consulted: TryParse just forwards to the target, which runs its own
     // RecordFailure on failure using the target's ErrorMessage. Set
     // .WithError(...) on the target rule instead.
-    public override Rule WithError(string errorMessage) => throw new InvalidOperationException(
+    public override Rule WithError(string errorMessage, bool forced = false) => throw new InvalidOperationException(
         "LateBoundRule.WithError(...) isn't supported: the rule is transparent at parse " +
         "time, so its ErrorMessage is never consulted. Set .WithError(...) on the bound target instead.");
 

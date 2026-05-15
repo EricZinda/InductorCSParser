@@ -155,8 +155,8 @@ public class Primer2Examples
     // primer2.md "When the parse fails": the doc claims that
     //   config.Parse("[server]\nport oops\n")
     // fails at "line 1, column 5" with an error message that surfaces
-    // somewhere in the parse. (LSP: 0-based line means line 1 in the doc
-    // corresponds to ErrorLine == 1.)
+    // somewhere in the parse. (LSP: 0-based line means line 1 in the
+    // doc corresponds to ErrorLine == 1.)
     [Test]
     public void Parse_failure_reports_line_and_column()
     {

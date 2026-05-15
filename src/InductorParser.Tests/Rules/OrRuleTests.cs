@@ -102,18 +102,17 @@ public class OrRuleTests
         // Third alternative wins. Required-runes dispatch skips Token('a') and
         // Token('b') on lookahead 'c' (their FirstConsumedTokens don't contain 'c'
         // and neither is empty-capable), so only the matching Token('c')
-        // branch opens a transaction and emits trace lines. The
-        // nesting remains depth 2 (Or's transaction + Token's transaction).
+        // branch emits trace lines. Nesting is depth 2 (Or's outer
+        // transaction + Token's own transaction).
         var sink = NewSink();
         Or(Token('a'), Token('b'), Token('c')).Parse("c", new ParseOptions { TraceSink = sink });
 
         // The shortcut rules out Token('a') and Token('b') on the 'c'
-        // peek before either alt's transaction opens, emitting a SKIP
-        // line per skipped child so the trace shows what Or
-        // considered. Token('c') then runs and matches.
+        // peek, emitting a SKIP line per skipped child (depth 1 under
+        // Or's outer transaction). Token('c') then runs and matches.
         string expected = Lines(
-            "SKIP | Token: shortcut: peek 'c' not in '[a]'",
-            "SKIP | Token: shortcut: peek 'c' not in '[b]'",
+            "   SKIP | Token: shortcut: peek 'c' not in '[a]'",
+            "   SKIP | Token: shortcut: peek 'c' not in '[b]'",
             "      Lexer.Read: 'c', Consumed: 1",
             "      SUCC | Token: found 'c'",
             "   SUCC | Or: symbol #2"
@@ -127,17 +126,17 @@ public class OrRuleTests
     {
         // Required-runes dispatch rules out both Token('a') and Token('b') on
         // lookahead 'z', so no child transaction ever opens. Each skip emits
-        // a SKIP trace line under the child's label, then Or emits its
-        // own FAIL line after the loop. No transaction is open by then so
-        // the FAIL line carries no indentation, and an empty detail means
-        // no ": {detail}" tail - the line reads "FAIL | Or".
+        // a SKIP trace line at depth 1 (under Or's outer transaction).
+        // Or's FAIL line also fires at depth 1 since the outer transaction
+        // is still open when TraceFailure runs. The empty detail means no
+        // ": {detail}" tail - the line reads "FAIL | Or".
         var sink = NewSink();
         Or(Token('a'), Token('b')).Parse("z", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
-            "SKIP | Token: shortcut: peek 'z' not in '[a]'",
-            "SKIP | Token: shortcut: peek 'z' not in '[b]'",
-            "FAIL | Or"
+            "   SKIP | Token: shortcut: peek 'z' not in '[a]'",
+            "   SKIP | Token: shortcut: peek 'z' not in '[b]'",
+            "   FAIL | Or"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
@@ -227,5 +226,47 @@ public class OrRuleTests
             ruleBuilder: () => Or(Literal("a"), Literal("b")),
             input: "b",
             expectedSourceText: "b");
+    }
+
+    [Test]
+    public void Or_named_WithError_beats_deeper_mechanical_inner()
+    {
+        // Branches share the leading '!' prefix and each Literal records
+        // a mechanical failure at the mid-read position (1). Or itself
+        // records a named WithError at its start (0). Named beats
+        // mechanical regardless of depth, so the Or's message surfaces
+        // at position 0. (Newsboat operator case from
+        // docs/ErrorArchitecture.md case 2.)
+        var rule = Or(Literal("!~"), Literal("!=")).WithError("expected operator");
+
+        var result = rule.Parse("!!");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected operator"));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Or_rejected_branch_WithError_is_cleared_when_another_branch_commits()
+    {
+        // The email-domain shape from docs/ErrorArchitecture.md case 4.
+        // The first Or branch matches part of the input then fails with
+        // a WithError record. The second branch succeeds and the Or
+        // commits. The outer commit scrubs the rejected branch's
+        // record so it doesn't haunt later failures.
+        var letters = OneOf(TokenSet.Letters);
+        var email = And(
+            OneOrMore(letters),
+            Token('@'),
+            OneOrMore(letters).WithError("expected domain after '@'"));
+        var username = OneOrMore(letters);
+        var identifier = Or(email, username);
+        var document = And(identifier, Literal("."));
+
+        var result = document.Parse("alice@");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Does.Not.Contain("expected domain after '@'"));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(5));
     }
 }

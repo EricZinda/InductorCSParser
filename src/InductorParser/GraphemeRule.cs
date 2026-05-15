@@ -132,14 +132,14 @@ internal sealed class GraphemeRule : Rule
             if (token.IsEof)
             {
                 TraceFailure(lexer, $"found '<EOF>', wanted '{_expected}'");
-                lexer.RecordFailure(tokenStart, ErrorMessage);
+                lexer.RecordFailure(tokenStart, ErrorMessage, ErrorForced);
                 return null;
             }
             if (consumed + token.Length > _expected.Length
                 || !token.Chars.SequenceEqual(_expected.AsSpan(consumed, token.Length)))
             {
                 TraceFailure(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted '{_expected}'");
-                lexer.RecordFailure(tokenStart, ErrorMessage);
+                lexer.RecordFailure(tokenStart, ErrorMessage, ErrorForced);
                 return null;
             }
             consumed += token.Length;

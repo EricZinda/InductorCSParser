@@ -64,14 +64,14 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
             if (token.IsEof)
             {
                 TraceFailure(lexer, $"found '<EOF>', wanted '{_expected}' (case-insensitive)");
-                lexer.RecordFailure(tokenStart, ErrorMessage);
+                lexer.RecordFailure(tokenStart, ErrorMessage, ErrorForced);
                 return null;
             }
             if (consumed + token.Length > _expected.Length
                 || !AsciiCaseEquals(token.Chars, _expected.AsSpan(consumed, token.Length)))
             {
                 TraceFailure(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted '{_expected}' (case-insensitive)");
-                lexer.RecordFailure(tokenStart, ErrorMessage);
+                lexer.RecordFailure(tokenStart, ErrorMessage, ErrorForced);
                 return null;
             }
             consumed += token.Length;

@@ -281,38 +281,35 @@ public class RecipesExamples
         Assert.That(result.ErrorColumn, Is.EqualTo(1));
     }
 
-    // "Numbers with no leading zeros": the tempting "fix" puts a Not
-    // inside the first Or branch (only accept '0' if not followed by
-    // another digit). It does not currently fix the position because
-    // the Not's internal probe leaves a high-water mark that outpoints
-    // the Or's WithError. See
-    // docs/PotentialBugSources/00001-lookahead-internal-failures-leaking-into-deepest-failure.md.
-    //
-    // The test pins the current broken behavior. When the leak is
-    // fixed, this test will fail (the column should drop to 0 and the
-    // WithError message should appear). At that point update the recipe
-    // to recommend this shape and delete or invert this test.
+    // "Numbers with no leading zeros": the lookahead-inside-Or pattern
+    // (only accept '0' if not followed by another digit). Under the
+    // three-tier error model, the outer Or's WithError lands in the
+    // named tier and beats the mechanical records the Not's internal
+    // probe leaves behind — so the error reports at the Or's start with
+    // the named message. Previously this case was bugged: the inner
+    // probe's mechanical record at depth outvoted the shallower named
+    // outer. Fixed by the three-tier resolution rule.
     [Test]
-    public void No_leading_zero_lookahead_inside_or_does_not_yet_fix_position_due_to_known_leak()
+    public void No_leading_zero_lookahead_inside_or_reports_outer_WithError_at_its_start()
     {
         // Factory function so each call site gets a fresh rule and .As
         // can name it without colliding with a previous name.
-        static Rule PeekCore() => Or(
+        static Rule Number() => Or(
             And(Token('0'), Not(OneOf(TokenSet.Ascii.Digits))),
             And(OneOf(TokenSet.Range('1', '9')), ZeroOrMore(OneOf(TokenSet.Ascii.Digits)))
         ).WithError("Number with no leading zeros expected");
         var grammar = And(
-            PeekCore().As("major"), Token('.'),
-            PeekCore().As("minor"), Token('.'),
-            PeekCore().As("patch"), Eof());
+            Number().As("major"), Token('.'),
+            Number().As("minor"), Token('.'),
+            Number().As("patch"), Eof());
 
         var result = grammar.Parse("01.2.3");
         Assert.That(result.Success, Is.False);
-        // Bug: still reports column 1, not 0. WithError message dropped.
-        Assert.That(result.ErrorColumn, Is.EqualTo(1));
+        Assert.That(result.ErrorColumn, Is.EqualTo(0),
+            "the Or's WithError now lands at the Or's start column");
         Assert.That(result.ErrorMessage,
-            Does.Not.Contain("Number with no leading zeros"),
-            "the Or's WithError gets dropped by the deeper Not-internal failure");
+            Does.Contain("Number with no leading zeros"),
+            "the Or's named WithError beats the Not's mechanical inner record");
     }
 
     // "Numbers with no leading zeros": the reject-first pattern puts

@@ -65,6 +65,24 @@ public class PeekRuleTests
     }
 
     [Test]
+    public void Peek_without_WithError_surfaces_inner_WithError_when_Peek_fails()
+    {
+        // Peek doesn't clear inner records on success (inner already
+        // cleared its own via inner's commit), and when Peek FAILS
+        // (inner failed), inner's failure record survives Peek's
+        // rollback. So if the inner has a .WithError and Peek doesn't,
+        // the inner's WithError is what the user sees. Pins that
+        // Peek doesn't accidentally scrub inner records.
+        var rule = And(
+            Peek(Token('a').WithError("expected 'a' ahead")),
+            Token('b'));
+        var result = rule.Parse("x");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'a' ahead"));
+    }
+
+    [Test]
     public void Peek_does_not_advance_the_cursor_even_when_inner_consumes_multiple_tokens()
     {
         // Inner rule would consume two chars on success. Peek has to roll
