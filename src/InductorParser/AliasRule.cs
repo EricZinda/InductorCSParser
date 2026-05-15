@@ -36,11 +36,9 @@ namespace InductorParser;
 // (see TryParseRule below), so the base implementations apply unchanged
 // and no override is needed.
 //
-// Corner case: aliasing a LateBoundRule whose target is itself Preserve
-// shows the target as a layer under the alias, because LateBoundRule's
-// transparent forwarding writes the target's Symbol into the parent's
-// collection list before AliasRule sees it. Aliasing the target rule
-// directly avoids the extra layer.
+// Aliasing a LateBoundRule needs no special handling: the LateBoundRule
+// reports its bound target's FlattenType, so `lateBound.AliasedAs("x")`
+// builds the same tree as aliasing the target rule directly.
 public sealed class AliasRule : Rule
 {
     private readonly Rule _inner;
@@ -101,7 +99,9 @@ public sealed class AliasRule : Rule
         //
         // ParseChild already wrote the inner's content into our list when
         // the inner was Flatten (in which case innerSymbol is Discarded),
-        // so we only handle the non-Discarded return here.
+        // so we only handle the non-Discarded return here. A LateBoundRule
+        // inner needs no special case: it reports its target's FlattenType,
+        // so it arrives here looking exactly like the target rule would.
         bool aliasIsLeaf = false;
         if (!ReferenceEquals(innerSymbol, Symbol.Discarded) && outputSymbols != null)
         {

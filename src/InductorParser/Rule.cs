@@ -226,7 +226,14 @@ public abstract class Rule
 
     public SymbolId Id { get; private set; }
     public string? Name { get; private set; }
-    public FlattenType FlattenType { get; private set; }
+
+    // Virtual so LateBoundRule can override the getter to report its
+    // bound target's FlattenType. A LateBoundRule has no flatten policy
+    // of its own; see LateBoundRule.FlattenType. The private setter stays
+    // non-virtual: only the base's own constructor / .As(...) / .Flatten(...)
+    // use it, and none of those run on a LateBoundRule (it overrides .As
+    // and .Flatten to throw).
+    public virtual FlattenType FlattenType { get; private set; }
 
     // The static error message set via .WithError("..."), or null if none.
     // Subclasses pass this to lexer.RecordFailure on the failure path so
