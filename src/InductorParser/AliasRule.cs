@@ -28,7 +28,13 @@ namespace InductorParser;
 // the inner's content directly.
 //
 // AliasRule supports the standard .As(string) / .As(SymbolId) / .Flatten
-// / .WithError modifiers via the base implementation.
+// / .FlattenByDefault / .WithError modifiers via the base implementation.
+// LateBoundRule forbids those modifiers because it's transparent at parse
+// time: it forwards straight to its target, so its own FlattenType / Id /
+// ErrorMessage are never consulted. AliasRule is the opposite. It emits
+// its own Symbol carrying its own Id and branches on its own FlattenType
+// (see TryParseRule below), so the base implementations apply unchanged
+// and no override is needed.
 //
 // Corner case: aliasing a LateBoundRule whose target is itself Preserve
 // shows the target as a layer under the alias, because LateBoundRule's
