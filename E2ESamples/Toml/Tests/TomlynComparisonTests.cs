@@ -3,6 +3,7 @@ using System.Linq;
 using NUnit.Framework;
 using TomlynModel = Tomlyn.Model;
 using InductorParser.E2ESamples.Toml.Rewrite;
+using static InductorParser.E2ESamples.Toml.Tests.TestSupport;
 
 namespace InductorParser.E2ESamples.Toml.Tests;
 
@@ -22,16 +23,16 @@ public class TomlynComparisonTests
         return (ours, theirs);
     }
 
-    [Test]
-    public void StringsAndScalars_BothPartiesAgree()
+    [TestCase(LineBreak.Lf)]
+    [TestCase(LineBreak.Crlf)]
+    public void StringsAndScalars_BothPartiesAgree(LineBreak lineBreak)
     {
-        var input = """
-                    title = "TOML Example"
-                    enabled = true
-                    port = 8080
-                    pi = 3.14159
-                    sci = 1.5e3
-                    """;
+        var input = Lines(lineBreak,
+            "title = \"TOML Example\"",
+            "enabled = true",
+            "port = 8080",
+            "pi = 3.14159",
+            "sci = 1.5e3");
         var (ours, theirs) = ParseBoth(input);
 
         Assert.That((string)ours["title"], Is.EqualTo((string)theirs["title"]!));
@@ -41,20 +42,20 @@ public class TomlynComparisonTests
         Assert.That((double)ours["sci"], Is.EqualTo((double)theirs["sci"]!).Within(1e-9));
     }
 
-    [Test]
-    public void NestedTables_BothPartiesAgree()
+    [TestCase(LineBreak.Lf)]
+    [TestCase(LineBreak.Crlf)]
+    public void NestedTables_BothPartiesAgree(LineBreak lineBreak)
     {
-        var input = """
-                    [database]
-                    server = "192.168.1.1"
-                    enabled = true
-
-                    [servers.alpha]
-                    ip = "10.0.0.1"
-
-                    [servers.beta]
-                    ip = "10.0.0.2"
-                    """;
+        var input = Lines(lineBreak,
+            "[database]",
+            "server = \"192.168.1.1\"",
+            "enabled = true",
+            "",
+            "[servers.alpha]",
+            "ip = \"10.0.0.1\"",
+            "",
+            "[servers.beta]",
+            "ip = \"10.0.0.2\"");
         var (ours, theirs) = ParseBoth(input);
 
         Assert.That((string)ours["database"]["server"],
@@ -65,13 +66,13 @@ public class TomlynComparisonTests
         Assert.That((string)ourAlpha["ip"], Is.EqualTo((string)theirAlpha["ip"]!));
     }
 
-    [Test]
-    public void Arrays_BothPartiesAgree()
+    [TestCase(LineBreak.Lf)]
+    [TestCase(LineBreak.Crlf)]
+    public void Arrays_BothPartiesAgree(LineBreak lineBreak)
     {
-        var input = """
-                    integers = [ 1, 2, 3 ]
-                    colors = [ "red", "yellow", "green" ]
-                    """;
+        var input = Lines(lineBreak,
+            "integers = [ 1, 2, 3 ]",
+            "colors = [ \"red\", \"yellow\", \"green\" ]");
         var (ours, theirs) = ParseBoth(input);
 
         var ourIntegers = (TomlArray)ours["integers"];
@@ -87,19 +88,19 @@ public class TomlynComparisonTests
         Assert.That(ourStrings, Is.EqualTo(theirStrings));
     }
 
-    [Test]
-    public void ArrayOfTables_BothPartiesAgree()
+    [TestCase(LineBreak.Lf)]
+    [TestCase(LineBreak.Crlf)]
+    public void ArrayOfTables_BothPartiesAgree(LineBreak lineBreak)
     {
-        var input = """
-                    [[products]]
-                    name = "Hammer"
-                    sku = 738594937
-
-                    [[products]]
-                    name = "Nail"
-                    sku = 284758393
-                    color = "gray"
-                    """;
+        var input = Lines(lineBreak,
+            "[[products]]",
+            "name = \"Hammer\"",
+            "sku = 738594937",
+            "",
+            "[[products]]",
+            "name = \"Nail\"",
+            "sku = 284758393",
+            "color = \"gray\"");
         var (ours, theirs) = ParseBoth(input);
 
         var ourProducts = (TomlArray)ours["products"];

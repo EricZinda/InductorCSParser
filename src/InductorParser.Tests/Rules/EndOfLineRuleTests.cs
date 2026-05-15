@@ -273,4 +273,51 @@ public class EndOfLineRuleTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(5));
     }
+
+    // -----------------------------------------------------------------
+    // Naming and flatten policy on factory-built EndOfLine rules.
+
+    // EndOfLine().As(name) names the rule, and the named wrapper is
+    // findable in the parse tree.
+    [Test]
+    public void EndOfLine_factory_supports_As_for_tree_find()
+    {
+        var lineBreak = EndOfLine().As("lineBreak");
+        var rule = And(Token('a'), lineBreak, Token('b'));
+        rule.Compile();
+        var result = rule.Parse("a" + LF + "b");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Find(lineBreak), Is.Not.Null,
+            "EndOfLine().As(...) should produce a findable wrapper.");
+    }
+
+    // .Flatten(...) on a factory-built EndOfLine rule overrides the
+    // factory's default flatten policy.
+    [Test]
+    public void EndOfLine_factory_default_flatten_is_overridable()
+    {
+        var preserved = EndOfLine().Flatten(FlattenType.Preserve);
+        Assert.That(preserved.FlattenType, Is.EqualTo(FlattenType.Preserve));
+    }
+
+    // A user-written factory that sets its flatten policy with
+    // FlattenByDefault can still be named with .As(name) by its caller,
+    // and the named wrapper is findable.
+    [Test]
+    public void User_factory_using_FlattenByDefault_stays_nameable()
+    {
+        // A user-written "match a line break, drop it from the tree by
+        // default" factory built on the public FlattenByDefault method.
+        static Rule Newline() =>
+            Or(Literal("\r\n"), OneOf(TokenSet.LineTerminators))
+                .FlattenByDefault(FlattenType.Delete);
+
+        var named = Newline().As("nl");
+        var rule = And(Token('a'), named, Token('b'));
+        rule.Compile();
+        var result = rule.Parse("a" + LF + "b");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Find(named), Is.Not.Null,
+            "a factory built on FlattenByDefault should still be nameable by its caller.");
+    }
 }
