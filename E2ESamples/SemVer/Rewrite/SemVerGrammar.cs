@@ -34,9 +34,13 @@ public static class SemVerGrammar
 
     static SemVerGrammar()
     {
-        // Each named position needs its own rule instance; a shared
-        // variable plus three .As(name) calls would silently rename
-        // them all to the last name. See backlog/z0ab.
+        // A factory rather than AliasedAs because each position needs
+        // its own per-name WithError text ("major version must not have
+        // leading zeros", "minor version ...", etc). AliasedAs shares
+        // the inner shape, which would force a single generic message,
+        // and the Not's force-true error path means a per-alias
+        // WithError on the outer wrapper can't override the shared inner
+        // message. See backlog/z0ab.
         //
         // The Not(...) probe rejects the "0[digit]" prefix. Its
         // .WithError fires only on the leading-zero case, so other

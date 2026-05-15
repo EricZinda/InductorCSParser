@@ -434,9 +434,11 @@ public abstract class Rule
             throw new InvalidOperationException(
                 $".As(\"{name}\") can't be applied to this rule: it was already " +
                 $"named \"{Name}\". .As(string) is set-once. To reuse this rule " +
-                $"shape under different names, build a factory function that " +
-                $"returns a fresh rule each call (e.g. `static Rule NumericCore" +
-                $"(string name) => OneOrMore(OneOf(TokenSet.Digits)).As(name);`).");
+                $"shape under a different name, call .AliasedAs(\"{name}\") to get " +
+                $"an alias with its own identity, or build a factory function " +
+                $"that returns a fresh rule each call (e.g. `static Rule " +
+                $"NumericCore(string name) => OneOrMore(OneOf(TokenSet.Digits))" +
+                $".As(name);`).");
         ApplyIdentificationFlattenPolicy(nameof(As), name);
         Name = name;
         // Clear an auto-pinned id so Compile's AssignNamedIds pass gives
@@ -483,14 +485,43 @@ public abstract class Rule
             throw new InvalidOperationException(
                 $".As(SymbolId {id.Value}) can't be applied to this rule: it " +
                 $"was already pinned to SymbolId {Id.Value}. .As(SymbolId) is " +
-                $"set-once. To reuse this rule shape under different pinned ids, " +
-                $"build a factory function that returns a fresh rule each call.");
+                $"set-once. To reuse this rule shape under a different pinned id, " +
+                $"call .AliasedAs(new SymbolId(...)) to get an alias wrapper with " +
+                $"its own identity, or build a factory function that returns a " +
+                $"fresh rule each call.");
         ApplyIdentificationFlattenPolicy(nameof(As), id.ToString());
         Id = id;
         _idAssigned = true;
         _idUserPinned = true;
         return this;
     }
+
+    // Wrap this rule in an alias that can be given its own name. The
+    // alias parses by forwarding to this rule and produces a Symbol
+    // carrying the alias's own Id, with this rule's matched content as
+    // that Symbol's children. Use to reuse one rule shape under several
+    // names without building a factory function for each:
+    //
+    //     var digitSequence = OneOrMore(OneOf(TokenSet.Digits));
+    //     var year  = digitSequence.AliasedAs("year");
+    //     var month = digitSequence.AliasedAs("month");
+    //
+    // If this rule is itself Preserve (the default for any named rule),
+    // aliasing replaces this rule's Symbol with the alias's Symbol
+    // rather than nesting them: this rule's identity is hidden when
+    // accessed through this alias path. From other parts of the grammar
+    // that use this rule directly, Tree.Find on its name still works.
+    //
+    // Errors: the rebadge is success-only, so it doesn't change error
+    // attribution. A .WithError on this rule still fires from inside
+    // it. A .WithError on the alias fires when this rule fails to match
+    // anywhere within it. If both are set, the standard deepest-failure
+    // tie-breaking picks the surfaced message.
+    public Rule AliasedAs(string name) => new AliasRule(this).As(name);
+
+    // Pin-by-SymbolId variant of AliasedAs(string). Same semantic: a
+    // fresh AliasRule wrapping this one, with the pinned id on the alias.
+    public Rule AliasedAs(SymbolId id) => new AliasRule(this).As(id);
 
     // Shared path for both .As(string) and .As(SymbolId): the caller is
     // identifying this rule so it can be found later. Either auto-flip a

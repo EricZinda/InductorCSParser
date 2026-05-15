@@ -504,7 +504,8 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_scanner_skip_does_not_skip_NoneOf_alternative_matches()
     {
-        // TryCreateScannerSkip unions every non-fallback alternative's
+        // Regression Test: TryCreateScannerSkip used to union 
+        // every non-fallback alternative's
         // FirstConsumedTokens.LookaheadFirstRunes into the candidate set
         // without considering Polarity. For a MustNotBeIn alternative
         // like NoneOf(stopSet), FirstConsumedTokens is the rule's

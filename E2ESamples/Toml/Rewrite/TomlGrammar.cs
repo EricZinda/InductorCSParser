@@ -403,8 +403,15 @@ public static class TomlGrammar
             .As("offsetDateTime");
         LocalDateTime = And(fullDate, timeDelimiter, partialTime)
             .As("localDateTime");
-        LocalDate = fullDate.As("localDate");
-        LocalTime = partialTime.As("localTime");
+        // fullDate and partialTime are reused inside OffsetDateTime and
+        // LocalDateTime. AliasedAs wraps the shared shape with a new
+        // identity that only carries the "localDate" / "localTime" name
+        // at the standalone-value position. The inner shape stays
+        // anonymous everywhere else, so FindAll("localDate") on a tree
+        // containing OffsetDateTime nodes doesn't return false-positive
+        // date subtrees.
+        LocalDate = fullDate.AliasedAs("localDate");
+        LocalTime = partialTime.AliasedAs("localTime");
 
         // ---------------------------------------------------------
         // Composite values: array, inline-table
