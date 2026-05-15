@@ -892,4 +892,38 @@ public class ScanUntilRuleTests
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo(input));
     }
+
+    [Test]
+    public void ScanUntil_with_Eof_rule_stopper_stops_at_end_of_input()
+    {
+        // ScanUntil(Eof()) reads as "scan until end of input": Eof() is
+        // a rule that matches only at EOF, so ScanUntil should stop the
+        // body there and match the whole input, exactly like the
+        // library's own ScanUntilEof() helper. The Rule-stopper loop
+        // only tests the stopper at non-EOF positions, so a stopper
+        // that matches at EOF is never recognised and the rule fails.
+        var rule = ScanUntil(Eof());
+
+        var result = rule.Parse("abc");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("abc"));
+    }
+
+    [Test]
+    public void ScanUntil_with_rule_stopper_that_admits_Eof_stops_when_input_runs_out()
+    {
+        // Or(Literal("END"), Eof()) is the natural way to write
+        // "stop at END or at end of input." On input with no "END",
+        // the body should run to EOF where the Eof() alternative
+        // matches. Instead ScanUntil fails because the stopper rule
+        // is never tried at the EOF position.
+        var stopper = Or(Literal("END"), Eof());
+        var rule = ScanUntil(stopper);
+
+        var result = rule.Parse("abc");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("abc"));
+    }
 }
