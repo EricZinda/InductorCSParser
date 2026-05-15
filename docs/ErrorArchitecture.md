@@ -107,7 +107,9 @@ The flip case (Newsboat operators) doesn't have this conflict: the inner branche
 
 ## Where a compound's message lands
 
-When a compound rule's `.WithError` is the winner (its message lands in tier 2 or tier 3 and wins), the position reported depends on the compound's shape. For `Or`, `WithinToken`, `ScanUntil`, `Peek`, and `Not`, the position is the rule's own start — the position where the rule began trying. For `And` and `BetweenInclusive`, the position is the start of the failing child rather than the compound's own start, so the cursor lands where the user needs to fix the input instead of at the boundary of a partial match that already succeeded.
+When a compound rule's `.WithError` is the winner (its message lands in tier 2 or tier 3 and wins), the position reported depends on the compound's shape. For `Or`, `Alias`, `WithinToken`, `ScanUntil`, `Peek`, and `Not`, the position is the rule's own start — the position where the rule began trying. For `And` and `BetweenInclusive`, the position is the start of the failing child rather than the compound's own start, so the cursor lands where the user needs to fix the input instead of at the boundary of a partial match that already succeeded.
+
+`Alias` is the rule where the own-start and failing-child categories collapse into one. `Alias` runs a single child as the first and only thing it does, so the alias's start, the child's start, and the position the child rolls back to on failure are all the same offset. There is no shifting attempt position the way `And` has, so the alias isn't picking a category — both categories name the same position. The alias's `.WithError` lands there no matter which way you reason about it.
 
 The difference is whether the compound has a uniform attempt position or a shifting one. `Or` tries every branch from the same starting position, so "where Or began trying" is unambiguous and is also where the user has to change something. The same is true for the other rules that record at their own start. `And` and `BetweenInclusive` work differently: their failures happen partway through a sequence of children that have already succeeded, and reporting at the rule's overall start would point at input the parser was happy with. `And(Literal("ab"), Token('!')).WithError("expected ab!")` on input `axyz` records at position 1 (where `Literal("ab")` failed mid-read), not position 0. For `OneOrMore(Letter).WithError("expected letters")` on input `abc1`, the rule records at position 3 (where the failing iteration started), not position 0.
 
@@ -117,7 +119,7 @@ For leaf rules and scanner-style rules (ScanWhile, ScanUntil), the position they
 
 ## Success clears records (Or and Not only)
 
-When `Or` succeeds via one of its branches, every failure record contributed by the rejected branches is cleared. When `Not` succeeds (its inner failed), every failure record the inner left behind is cleared. Other rules — `And`, `BetweenInclusive` / `OneOrMore` / `ZeroOrMore` / `Optional`, `Peek`, `WithinToken`, `ScanUntil`, `ScanWhile`, leaf rules — do NOT clear records on success. Their inner failure records survive their commits.
+When `Or` succeeds via one of its branches, every failure record contributed by the rejected branches is cleared. When `Not` succeeds (its inner failed), every failure record the inner left behind is cleared. Other rules — `And`, `Alias`, `BetweenInclusive` / `OneOrMore` / `ZeroOrMore` / `Optional`, `Peek`, `WithinToken`, `ScanUntil`, `ScanWhile`, leaf rules — do NOT clear records on success. Their inner failure records survive their commits.
 
 The principle: records from a path the parser explicitly rejected are pollution; records from a path the parser tried and couldn't make work are evidence.
 
@@ -127,7 +129,7 @@ The principle: records from a path the parser explicitly rejected are pollution;
 
 **Count rules preserve failure records.** `ZeroOrMore`, `OneOrMore`, `Optional`, and the rest of the `BetweenInclusive` family succeed by stopping their loop when an iteration fails. That failed iteration represents real input the parser couldn't consume, not a rejected alternative. Keeping the record lets inner WithErrors on the failed iteration surface as the parse error. This is what makes the common "multi-line config grammar with helpful WithError" shape produce useful messages.
 
-**Structural composites have nothing to clear.** `And`, `WithinToken`, `ScanUntil`: when they succeed, every inner rule on the success path either committed (and managed its own records) or rolled back without commits the composite would clear. There's no rejected-alternatives or expected-failures shape for the composite itself to scrub.
+**Structural composites have nothing to clear.** `And`, `Alias`, `WithinToken`, `ScanUntil`: when they succeed, every inner rule on the success path either committed (and managed its own records) or rolled back without commits the composite would clear. There's no rejected-alternatives or expected-failures shape for the composite itself to scrub. `Alias` is a transparent naming wrapper: the rebadge that hides the inner's identity is a success-path tree-shape operation only, and it touches no failure records.
 
 **Peek doesn't need to clear either.** When Peek succeeds, inner committed; inner's own commit handled inner's internal records. When Peek fails, inner failed; inner's records survive its rollback. Peek's own commit on the success path doesn't have anything additional to clear.
 
@@ -137,7 +139,7 @@ The principle: records from a path the parser explicitly rejected are pollution;
 
 Rules fall into two groups based on whether they have child rules, and the two groups record at different positions:
 
-**Composites** have child rules they call into during their own execution. `Or`, `And`, `BetweenInclusive`, `WithinToken`, `Peek`, `Not`, and `ScanUntil` (whose stopper, escape start, or escape end can be child rules). The reported error comes from the deepest failing child rule, unless the composite itself has a `.WithError` that overrides them via tier resolution.
+**Composites** have child rules they call into during their own execution. `Or`, `And`, `Alias`, `BetweenInclusive`, `WithinToken`, `Peek`, `Not`, and `ScanUntil` (whose stopper, escape start, or escape end can be child rules). The reported error comes from the deepest failing child rule, unless the composite itself has a `.WithError` that overrides them via tier resolution.
 
 **Leaves** have no child rules. `Literal`, `Grapheme`, `LiteralIgnoreAsciiCase`, `OneOf`, `NoneOf`, `AnyToken`, `Eof`, and `ScanWhile` (which uses a lexer primitive rather than a child rule). They record at the specific position where reading hit the problem — the first mismatched token for the multi-token reads, the token's own position for single-token reads, or the position the scan got stuck at for `ScanWhile`.
 
@@ -156,6 +158,7 @@ The "deeper" intuition has one edge case worth noting: when an inner rule fails 
 | `ScanUntil`\*                                                              | Rule's own `transaction.StartPosition`    | A failing inner stopper at EOF in strict mode or escapeEnd rule at EOF (if either is configured), otherwise itself, unless this rule's WithError dominates |
 | `Peek`                                                                     | Rule's own `transaction.StartPosition`    | A failing inner rule, unless this rule's WithError dominates    |
 | `Not`                                                                      | Rule's own `transaction.StartPosition`    | Itself (when Not fails, inner had succeeded and inner's commit already cleared its records) |
+| `Alias`                                                                    | Rule's own `transaction.StartPosition`    | A failing inner rule, unless this rule's WithError dominates    |
 
 ### Leaves
 
@@ -177,6 +180,14 @@ The "WithError Records Error At" column says where ScanUntil records its WithErr
 If ScanUntil has a `.WithError`, all three cases instead record at the rule's `transaction.StartPosition` — the message anchor for the named tier. The asymmetry: WithError lands at the rule boundary the user sees in the message; mechanical lands at the actual stuck position.
 
 This is the same asymmetry ScanWhile has, just expressed differently — ScanWhile always records at where the scan got stuck (its WithError column reads "Position where the scan got stuck") because there's no distinction worth tracking. ScanUntil's WithError column reads "Rule's own start" because the WithError typically describes the body as a whole, not the failure point.
+
+## Alias and error attribution
+
+`Alias` wraps one inner rule and gives it a fresh name (see `AliasRule`). On success it rebadges: the alias's Symbol stands in for the inner's in the parse tree, hiding the inner's identity along that path. That rebadge is a success-path tree-shape operation and has no effect on error reporting.
+
+On failure, `Alias` records like any other single-child composite. If the alias has a `.WithError`, the message goes into the named tier (or the forced tier, when `forced: true` was passed) at the alias's own start. If it doesn't, the alias records a mechanical fallback there. Either way the inner's own records — including a `.WithError` the inner carries — are left untouched: `Alias` never clears them, and tier resolution picks the winner between the inner's records and the alias's exactly as it would if no alias were in the picture.
+
+The consequence: a `.WithError` keeps surfacing whether or not its rule is reached through an alias, because error attribution follows the `.WithError` text, not the rebadged tree identity. To attach a message to the aliased view specifically, put `.WithError` on the alias.
 
 ## Worked example: the Newsboat operator case
 
@@ -265,7 +276,7 @@ Three things matter at the source-code level:
 
 `.WithError("msg", forced: true)` is the override. Use it when you specifically want a top-level message to win over inner WithErrors. Avoid otherwise.
 
-Position semantics: when a compound's `.WithError` wins, `Or` / `WithinToken` / `ScanUntil` / `Peek` / `Not` report at the rule's own start, while `And` and `BetweenInclusive` report at the failing child's start. The "rule's own start" cases want a message phrased in terms of that anchor: "Expected an operator here" reads correctly when "here" is where the operator was supposed to start. For `And` and `BetweenInclusive`, the position will land on whatever the parser was trying to read when the sequence (or the next iteration) gave up, so messages like "expected a closing tag" or "expected more digits" read naturally — they describe the thing the failing child wanted to find at that spot.
+Position semantics: when a compound's `.WithError` wins, `Or` / `Alias` / `WithinToken` / `ScanUntil` / `Peek` / `Not` report at the rule's own start, while `And` and `BetweenInclusive` report at the failing child's start. The "rule's own start" cases want a message phrased in terms of that anchor: "Expected an operator here" reads correctly when "here" is where the operator was supposed to start. For `And` and `BetweenInclusive`, the position will land on whatever the parser was trying to read when the sequence (or the next iteration) gave up, so messages like "expected a closing tag" or "expected more digits" read naturally — they describe the thing the failing child wanted to find at that spot.
 
 ## Limits and pitfalls
 
