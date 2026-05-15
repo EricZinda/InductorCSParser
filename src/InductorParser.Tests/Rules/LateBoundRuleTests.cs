@@ -185,4 +185,188 @@ public class LateBoundRuleTests
         Assert.That(expressionSymbols, Is.EqualTo(2),
             "Expected outer and inner expression wrappers to both survive flattening.");
     }
+
+    // --- LateBound bound to LateBound -------------------------------------
+
+    [Test]
+    public void Chain_of_LateBoundRules_forwards_to_the_real_target()
+    {
+        // outer -> middle -> Integer(). Every LateBoundRule is transparent
+        // at parse time, so a multi-link chain should forward straight
+        // through to the real rule with no trace of the placeholders.
+        var outer = new LateBoundRule("outer");
+        var middle = new LateBoundRule("middle");
+        outer.Bind(middle);
+        middle.Bind(Integer());
+
+        var result = outer.Parse("42", Debug());
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("42"));
+    }
+
+    [Test]
+    public void Chain_works_when_the_tail_is_bound_before_the_head()
+    {
+        // Binding order between the two placeholders shouldn't matter.
+        // Here `middle` is bound to its real target first, then `outer` is
+        // bound to `middle`. The chain still resolves the same way as the
+        // head-first order above.
+        var outer = new LateBoundRule("outer");
+        var middle = new LateBoundRule("middle");
+        middle.Bind(Integer());
+        outer.Bind(middle);
+
+        var result = outer.Parse("99", Debug());
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("99"));
+    }
+
+    [Test]
+    public void Chain_of_LateBoundRules_forwards_a_Preserve_target_to_the_parent()
+    {
+        // Same regression as LateBoundRule_keeps_Preserve_target_symbol_in_
+        // parent_children, but the Preserve target sits behind TWO
+        // LateBoundRule layers. Each layer's transparent forwarding has to
+        // re-add the target's wrapper to the parent list, or the wrapper
+        // is lost somewhere in the chain.
+        var named = And(Token('1'), Token('2')).As("named").Flatten(FlattenType.Preserve);
+        var middle = new LateBoundRule("middle");
+        var outer = new LateBoundRule("outer");
+        outer.Bind(middle);
+        middle.Bind(named);
+        var grammar = And(Token('a'), outer, Token('b'));
+
+        var result = grammar.Parse("a12b");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Symbols.Count, Is.EqualTo(1));
+        Assert.That(result.Symbols[0].Id, Is.EqualTo(named.Id));
+    }
+
+    [Test]
+    public void Recursive_grammar_routes_recursion_through_two_LateBoundRules()
+    {
+        // The expression grammar from BuildExpressionGrammar, but `term`
+        // is also a LateBoundRule. The recursion cycle now passes through
+        // two placeholders: expression -> term -> expression. Both have to
+        // be bound and both have to forward correctly for the cycle to
+        // parse.
+        var expression = new LateBoundRule("expression");
+        var term = new LateBoundRule("term");
+
+        var termDef = Or(Integer(), And(Token('('), expression, Token(')')));
+        var expressionDef = And(term, ZeroOrMore(And(Token('+'), term)));
+
+        term.Bind(termDef);
+        expression.Bind(expressionDef);
+
+        var result = expressionDef.Parse("((1+2)+3)+4", Debug());
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("((1+2)+3)+4"));
+    }
+
+    [Test]
+    public void Compile_throws_when_a_chained_LateBoundRule_tail_is_unbound()
+    {
+        // `outer` is bound (to `middle`), but `middle` is never bound.
+        // Compile's validation walk reaches `middle` through `outer` and
+        // must report `middle` by name. `outer`'s own "I'm bound" state
+        // can't mask an unbound rule deeper in the chain.
+        var outer = new LateBoundRule("outer");
+        var middle = new LateBoundRule("middle");
+        outer.Bind(middle);
+        // middle.Bind(...) deliberately missing.
+
+        var ex = Assert.Throws<InvalidOperationException>(() => outer.Compile());
+        Assert.That(ex!.Message, Does.Contain("middle"));
+        Assert.That(ex.Message, Does.Contain("never bound"));
+    }
+
+    [Test]
+    public void Self_bound_LateBoundRule_is_rejected_at_compile()
+    {
+        // A LateBoundRule bound directly to itself is a broken grammar:
+        // the .Bind chain loops with no concrete rule, so it has no
+        // FlattenType and can never match input. Compile resolves each
+        // LateBoundRule's FlattenType by walking its .Bind chain, detects
+        // the loop, and throws a clear error. (Without that walk, the
+        // first FlattenType read at parse time would recurse forever into
+        // an uncatchable StackOverflowException.)
+        var self = new LateBoundRule("self");
+        self.Bind(self);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => self.Parse("x"));
+        Assert.That(ex!.Message, Does.Contain("loop"));
+    }
+
+    [Test]
+    public void Two_LateBoundRules_in_a_base_caseless_cycle_are_rejected_at_compile()
+    {
+        // outer -> inner -> outer, all LateBoundRules, nothing concrete in
+        // the loop. Same broken shape as the self-bind above, split across
+        // two placeholders. Compile's FlattenType resolution walks the
+        // .Bind chain, detects the loop, and throws.
+        var outer = new LateBoundRule("outer");
+        var inner = new LateBoundRule("inner");
+        outer.Bind(inner);
+        inner.Bind(outer);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => outer.Parse("x"));
+        Assert.That(ex!.Message, Does.Contain("loop"));
+    }
+
+    // --- FlattenType forwarding ------------------------------------------
+
+    [Test]
+    public void LateBoundRule_reports_its_bound_targets_FlattenType()
+    {
+        // A LateBoundRule has no FlattenType of its own; after Compile it
+        // reports the bound target's. This is what lets a LateBoundRule
+        // compose into And / Or / Alias exactly as the target rule would.
+        var preserveTarget = And(Token('1'), Token('2')).As("named");   // .As flips to Preserve
+        var flattenTarget = Or(Token('a'), Token('b'));                 // Or defaults to Flatten
+
+        var toPreserve = new LateBoundRule("toPreserve");
+        toPreserve.Bind(preserveTarget);
+        var toFlatten = new LateBoundRule("toFlatten");
+        toFlatten.Bind(flattenTarget);
+
+        // Compile so ValidateCompiled resolves each placeholder's FlattenType.
+        And(toPreserve, toFlatten).Compile();
+
+        Assert.That(toPreserve.FlattenType, Is.EqualTo(FlattenType.Preserve));
+        Assert.That(toFlatten.FlattenType, Is.EqualTo(FlattenType.Flatten));
+    }
+
+    [Test]
+    public void LateBoundRule_FlattenType_resolves_through_a_chain_to_the_concrete_rule()
+    {
+        // outer -> middle -> a Preserve rule. FlattenType resolution walks
+        // the whole chain of LateBoundRules to the first concrete rule.
+        var concrete = OneOrMore(OneOf(TokenSet.Digits)).As("digits");  // Preserve
+        var middle = new LateBoundRule("middle");
+        var outer = new LateBoundRule("outer");
+        outer.Bind(middle);
+        middle.Bind(concrete);
+
+        outer.Compile();
+
+        Assert.That(middle.FlattenType, Is.EqualTo(FlattenType.Preserve));
+        Assert.That(outer.FlattenType, Is.EqualTo(FlattenType.Preserve));
+    }
+
+    [Test]
+    public void LateBoundRule_FlattenType_read_before_Compile_throws()
+    {
+        // The FlattenType is resolved during Compile. Reading it earlier
+        // has no answer, so it throws rather than returning a guess that
+        // a later Compile would contradict.
+        var lateBound = new LateBoundRule("placeholder");
+        lateBound.Bind(Or(Token('a'), Token('b')));
+
+        Assert.Throws<InvalidOperationException>(() => { var _ = lateBound.FlattenType; });
+    }
 }

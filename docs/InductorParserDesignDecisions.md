@@ -605,3 +605,5 @@ static readonly Rule _init = Expression.Bind(Sum);   // wire up the late binding
 ```
 
 `LateBoundRule` is a rule that forwards to a target set later. It's the C# answer to C++'s ability to reference a class name before it's fully defined. The `_init` field is a static initializer trick to run the `.Bind(...)` call at type init time.
+
+A `LateBoundRule` is fully transparent. It produces no parse-tree node of its own (the Symbol that flows up carries the target's id), and it takes its `FlattenType` from whatever it's bound to rather than having a policy of its own. So a grammar reads the same whether you reference a late-bound rule or splice its target in directly: `Alias(expression)` and `And(x, expression, y)` behave exactly as if `expression`'s target were written in place. The one structural error this can't paper over is a `.Bind(...)` chain that loops through `LateBoundRule`s without ever reaching a concrete rule. That grammar can never match anything, so `Compile` rejects it instead of letting a parse spin.
