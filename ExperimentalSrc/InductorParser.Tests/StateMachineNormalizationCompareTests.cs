@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text;
 using NUnit.Framework;
 using InductorParser;
@@ -22,7 +23,12 @@ namespace InductorParser.Tests.StateMachine;
 public class StateMachineNormalizationCompareTests
 {
     private const string CafePrecomposed = "café";
-    private const string CafeDecomposed = "cafe" + CombiningAcuteText;
+    // Not const: CombiningAcuteText is a static readonly field in
+    // UnicodeExamples, so a string built from it can't be a compile-time
+    // constant. That's why the test methods below take their inputs from
+    // [TestCaseSource] providers rather than [TestCase] attributes, which
+    // require constant arguments.
+    private static readonly string CafeDecomposed = "cafe" + CombiningAcuteText;
 
     // Grammar matches "café" in precomposed form. Without normalization
     // it only accepts the precomposed input. Under FormC and FormD
@@ -32,23 +38,37 @@ public class StateMachineNormalizationCompareTests
     private static Rule CafeRule() =>
         And(Literal("café"), Eof());
 
-    [TestCase(CafePrecomposed, true)]
-    [TestCase(CafeDecomposed, true)]
-    [TestCase(CafePrecomposed + "x", false)]
-    [TestCase(CafeDecomposed + "x", false)]
-    [TestCase("cafX", false)]
-    [TestCase("", false)]
+    // FormC and FormD accept the same set of renderings: both forms
+    // auto-convert the grammar's precomposed 'é' at Compile time, so
+    // precomposed and decomposed input both match. Shared by both
+    // normalizing-form fixtures below.
+    private static IEnumerable<TestCaseData> NormalizingFormCases()
+    {
+        yield return new TestCaseData(CafePrecomposed, true);
+        yield return new TestCaseData(CafeDecomposed, true);
+        yield return new TestCaseData(CafePrecomposed + "x", false);
+        yield return new TestCaseData(CafeDecomposed + "x", false);
+        yield return new TestCaseData("cafX", false);
+        yield return new TestCaseData("", false);
+    }
+
+    // With normalization opted out, only the precomposed rendering
+    // matches the precomposed grammar; the decomposed input fails.
+    private static IEnumerable<TestCaseData> NoNormalizationCases()
+    {
+        yield return new TestCaseData(CafePrecomposed, true);
+        yield return new TestCaseData(CafeDecomposed, false);
+        yield return new TestCaseData(CafePrecomposed + "x", false);
+        yield return new TestCaseData("cafX", false);
+    }
+
+    [TestCaseSource(nameof(NormalizingFormCases))]
     public void FormC_agrees_with_recursive_evaluator(string input, bool expectSuccess)
     {
         AssertEvaluatorsAgree(CafeRule(), input, NormalizationForm.FormC, expectSuccess);
     }
 
-    [TestCase(CafePrecomposed, true)]
-    [TestCase(CafeDecomposed, true)]
-    [TestCase(CafePrecomposed + "x", false)]
-    [TestCase(CafeDecomposed + "x", false)]
-    [TestCase("cafX", false)]
-    [TestCase("", false)]
+    [TestCaseSource(nameof(NormalizingFormCases))]
     public void FormD_agrees_with_recursive_evaluator(string input, bool expectSuccess)
     {
         // FormD decomposes the input. Under Option 1 Compile-time
@@ -59,10 +79,7 @@ public class StateMachineNormalizationCompareTests
         AssertEvaluatorsAgree(CafeRule(), input, NormalizationForm.FormD, expectSuccess);
     }
 
-    [TestCase(CafePrecomposed, true)]
-    [TestCase(CafeDecomposed, false)]
-    [TestCase(CafePrecomposed + "x", false)]
-    [TestCase("cafX", false)]
+    [TestCaseSource(nameof(NoNormalizationCases))]
     public void NoNormalization_agrees_with_recursive_evaluator(string input, bool expectSuccess)
     {
         AssertEvaluatorsAgree(CafeRule(), input, normalizationForm: null, expectSuccess);
