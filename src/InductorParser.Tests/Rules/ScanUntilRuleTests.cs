@@ -912,4 +912,98 @@ public class ScanUntilRuleTests
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo(input));
     }
+
+    // Escape start vs. stopper ordering ------------------------------------
+
+    [Test]
+    public void ScanUntil_single_rune_escape_fires_when_the_escape_rune_is_also_a_stopper()
+    {
+        // Regression: ScanUntil used to check the stopper set before the
+        // escape start. When the escape-start rune is also a member of
+        // the stopper set, that ordering made the escape unreachable —
+        // the scan terminated at the escape character instead of
+        // consuming the escape sequence. This is the exact grammar shape
+        // the Rules.cs XML-doc example for the single-rune-escape
+        // ScanUntil overload shows (the escape rune '\' listed in the
+        // stopAt set alongside the closing quote).
+        var body = ScanUntil(
+            stopAt: TokenSet.Runes("\"\\"),
+            escapeStart: new Rune('\\'),
+            escapeEnd: OneOf("ntr\"\\"));
+
+        // One escape sequence \n, then the closing quote. The body has
+        // to consume \n as an escape and stop at the quote, leaving the
+        // unconsumed quote for AllowTrailingInput to tolerate.
+        var result = body.Parse("\\n\"", new ParseOptions { AllowTrailingInput = true });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("\\n"),
+            "the '\\' must trigger the escape, not terminate the body at offset 0");
+    }
+
+    [Test]
+    public void ScanUntil_rule_escape_start_fires_when_its_first_rune_is_also_a_stopper()
+    {
+        // The Rules.cs XML-doc example for the rule-valued-escape-start
+        // ScanUntil overload: a shell-style string body that stops at "
+        // or $, where "${...}" is an interpolation escape and a bare '$'
+        // (not followed by '{') is a stopper. The escape start
+        // Literal("${") shares its first rune '$' with the '$' stopper,
+        // so the escape has to be tried before the stopper.
+        var body = ScanUntil(
+            stopAt: TokenSet.Runes("\"$"),
+            escapeStart: Literal("${"),
+            escapeEnd: And(OneOrMore(NoneOf("}")), Token('}')));
+
+        // "${name}" is consumed as an escape; the body runs to the quote.
+        var withInterpolation = body.Parse("ab${name}cd\"",
+            new ParseOptions { AllowTrailingInput = true });
+        Assert.That(withInterpolation.Success, Is.True, withInterpolation.ErrorMessage);
+        Assert.That(withInterpolation.Tree!.ToString(), Is.EqualTo("ab${name}cd"),
+            "${name} must be consumed as an escape, not stop the body at the '$'");
+
+        // A bare '$' not followed by '{' still stops: the escape
+        // Literal("${") fails to match, so the scan falls through to the
+        // '$' stopper. This is the "bare $ falls through" behavior the
+        // doc example promises.
+        var bareDollar = body.Parse("ab$cd\"",
+            new ParseOptions { AllowTrailingInput = true });
+        Assert.That(bareDollar.Success, Is.True, bareDollar.ErrorMessage);
+        Assert.That(bareDollar.Tree!.ToString(), Is.EqualTo("ab"),
+            "a bare '$' falls through to the stopper and ends the body");
+    }
+
+    [Test]
+    public void ScanUntil_with_Eof_rule_stopper_stops_at_end_of_input()
+    {
+        // ScanUntil(Eof()) reads as "scan until end of input": Eof() is
+        // a rule that matches only at EOF, so ScanUntil should stop the
+        // body there and match the whole input, exactly like the
+        // library's own ScanUntilEof() helper. The Rule-stopper loop
+        // only tests the stopper at non-EOF positions, so a stopper
+        // that matches at EOF is never recognised and the rule fails.
+        var rule = ScanUntil(Eof());
+
+        var result = rule.Parse("abc");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("abc"));
+    }
+
+    [Test]
+    public void ScanUntil_with_rule_stopper_that_admits_Eof_stops_when_input_runs_out()
+    {
+        // Or(Literal("END"), Eof()) is the natural way to write
+        // "stop at END or at end of input." On input with no "END",
+        // the body should run to EOF where the Eof() alternative
+        // matches. Instead ScanUntil fails because the stopper rule
+        // is never tried at the EOF position.
+        var stopper = Or(Literal("END"), Eof());
+        var rule = ScanUntil(stopper);
+
+        var result = rule.Parse("abc");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("abc"));
+    }
 }

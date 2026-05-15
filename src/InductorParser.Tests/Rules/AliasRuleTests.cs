@@ -631,6 +631,29 @@ public class AliasRuleTests
     }
 
     [Test]
+    public void Alias_of_a_Preserve_leaf_inner_renders_the_matched_text_in_ToString()
+    {
+        // Aliasing a Preserve leaf rule. A leaf (Literal here) carries its
+        // match as text rather than as child Symbols, so the alias rebadges
+        // the leaf directly: its node takes over the matched text under the
+        // alias's own identity. SourceText and ToString both render that
+        // text, and the inner leaf's identity is hidden under the alias
+        // path, the same as when the inner is a composite.
+        var inner = Literal("abc").Preserve();
+        var alias = inner.AliasedAs("word");
+
+        var result = alias.Parse("abc");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.SourceText, Is.EqualTo("abc"));
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("abc"),
+            "ToString() on the alias node should render the matched text, " +
+            "the same as the inner leaf rendered directly.");
+        Assert.That(result.Tree!.Find(inner), Is.Null,
+            "Rebadge still hides the inner leaf's identity under the alias.");
+    }
+
+    [Test]
     public void SourceRange_on_Alias_spans_the_inner_match_after_a_prefix()
     {
         // The alias's Symbol span covers exactly the inner's match. After

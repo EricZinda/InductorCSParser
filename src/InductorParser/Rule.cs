@@ -601,6 +601,18 @@ public abstract class Rule
     // is fine.
     public virtual Rule Flatten(FlattenType type)
     {
+        CheckFlattenChangeAllowed(type, nameof(Flatten));
+        FlattenType = type;
+        _flattenPolicyExplicitlySet = true;
+        return this;
+    }
+
+    // Shared precondition for Flatten and FlattenByDefault: a rule
+    // identified with .As(name) / .As(SymbolId) can only be Preserve.
+    // Flatten or Delete drops its node from the parse tree, leaving
+    // nothing for Tree.Find to return.
+    private void CheckFlattenChangeAllowed(FlattenType type, string callerMethod)
+    {
         ThrowIfSealed();
         if (type != FlattenType.Preserve && (Name != null || IsUserSymbolIdPinned))
         {
@@ -608,14 +620,11 @@ public abstract class Rule
                 ? $".As(\"{Name}\")"
                 : $".As(SymbolId {Id})";
             throw new InvalidOperationException(
-                $".Flatten(FlattenType.{type}) can't be applied to this rule: " +
+                $".{callerMethod}(FlattenType.{type}) can't be applied to this rule: " +
                 $"it was already identified with {identifier}, so its wrapper Symbol " +
                 $"must appear in the parse tree (Preserve) for Tree.Find to reach it. " +
                 $"Keep the flatten policy at FlattenType.Preserve, or remove the .As(...) call.");
         }
-        FlattenType = type;
-        _flattenPolicyExplicitlySet = true;
-        return this;
     }
 
     // True once the caller has called .Flatten(...), .Preserve(), .Delete(),
@@ -635,6 +644,32 @@ public abstract class Rule
     public Rule Preserve() => Flatten(FlattenType.Preserve);
     public Rule Delete() => Flatten(FlattenType.Delete);
     public Rule Flatten() => Flatten(FlattenType.Flatten);
+
+    // Set the FlattenType as an overridable default rather than an
+    // explicit, locked-in choice. The method exists for writing
+    // composing factories: a factory that wraps Or / And / OneOrMore
+    // (whose class default is FlattenType.Flatten) but wants its result
+    // to default to Delete should call FlattenByDefault(FlattenType.Delete)
+    // rather than Flatten(FlattenType.Delete).
+    //
+    // The difference is what happens to the factory's caller. .Flatten(...)
+    // records the policy as user-explicit, so a later .As(name) on the
+    // returned rule throws ("flatten policy was explicitly set..."). The
+    // factory's caller never wrote .Flatten / .Delete and can't anticipate
+    // that. FlattenByDefault sets the same FlattenType value but leaves the
+    // policy overridable, so .As(name) and a later .Flatten(...) behave
+    // exactly as they would on a rule still carrying its class default.
+    //
+    // The built-in composing factories (Rules.EndOfLine, InlineWhitespace,
+    // AnyWhitespace) use this; user-written factories that compose rules
+    // and want a non-default flatten policy should use it for the same
+    // reason. Virtual so LateBoundRule can forbid it, matching .Flatten.
+    public virtual Rule FlattenByDefault(FlattenType type)
+    {
+        CheckFlattenChangeAllowed(type, nameof(FlattenByDefault));
+        FlattenType = type;
+        return this;
+    }
 
     // Attach a static error message. If this rule's message wins the
     // tier-based resolution when a parse fails, ParseResult.ErrorMessage

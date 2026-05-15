@@ -142,7 +142,20 @@ public static class TomlGrammar
         // so this set is narrower than TokenSet.LineTerminators.
         // eofIsTerminator: true lets a final comment without a
         // trailing newline still terminate cleanly.
-        var tomlLineTerminator = TokenSet.Single('\r') | TokenSet.Single('\n');
+        //
+        // The CRLF cluster has to be a member as well, not just the
+        // bare CR and LF runes. UAX #29 GB3 keeps CR followed by LF
+        // glued into one grapheme cluster, and ScanUntil tests its
+        // stop set against the next whole token (cluster). A set with
+        // only the single runes never matches the two-char "\r\n"
+        // token, so on a CRLF-terminated document the comment body
+        // would scan straight past every line ending and swallow the
+        // rest of the file. Graphemes("\r\n") adds the cluster so the
+        // scan stops at the line ending whether the input uses LF or
+        // CRLF. The bare CR and LF runes still cover a lone CR and a
+        // lone LF.
+        var tomlLineTerminator =
+            TokenSet.Single('\r') | TokenSet.Single('\n') | TokenSet.Graphemes("\r\n");
         var comment = And(Token('#'),
                 ScanUntil(tomlLineTerminator, eofIsTerminator: true).As("commentBody"))
             .As("comment");
