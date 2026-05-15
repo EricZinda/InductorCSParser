@@ -416,6 +416,24 @@ internal sealed class ScanUntilRule : Rule
             lexer.SetPositionUnchecked(pos + tokenLen);
         }
 
+        // Tests the Rule-stopper at the EOF position. The scan loop
+        // above runs the stopper at each token position; this covers
+        // end of input, where an EOF-sensitive stopper rule (Eof(),
+        // Not(AnyToken()), Or(..., Eof())) can match. A match here ends
+        // the body at EOF, the same as a match mid-input. Strict mode
+        // only: _eofIsTerminator already stops at EOF on its own.
+        // TokenSet stoppers skip this — a TokenSet is tested against a
+        // real token, and EOF produces none.
+        if (!stopperMatched && !_eofIsTerminator && _stopperRule != null && lexer.IsEof)
+        {
+            using var peek = lexer.BeginTransaction();
+            // No Commit: the `using` rolls the position back, same as
+            // the in-loop Rule-stopper check, so the stopper is never
+            // consumed by ScanUntil.
+            if (_stopperRule.TryParse(lexer, outputSymbols: null) != null)
+                stopperMatched = true;
+        }
+
         if (!stopperMatched && !_eofIsTerminator)
         {
             // Strict: the loop ran off the end without ever matching
