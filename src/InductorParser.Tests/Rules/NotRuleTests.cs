@@ -55,7 +55,7 @@ public class NotRuleTests
         // so Not rolls the deepest-failure marker back to its snapshot
         // before recording its own failure with the user's WithError.
         //
-        // Without the fix the orphan record at offset 1 survived Not's
+        // Without the fix the orphan failure at offset 1 survived Not's
         // rollback, Not's RecordFailure at offset 0 was shallower than
         // that orphan, the user's WithError was suppressed, and the
         // reported position pointed at end-of-input ('a' was consumed
@@ -68,6 +68,30 @@ public class NotRuleTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
         Assert.That(result.ErrorMessage, Is.EqualTo("did not want 'a' or 'ab' here"));
+    }
+
+    [Test]
+    public void Not_failure_anchors_at_its_own_start_after_a_consumed_prefix()
+    {
+        // The other failure tests run Not as the top-level rule, so its
+        // anchor is offset 0. A Not that hard-coded 0, or that reported
+        // wherever its inner probe left the cursor, would still pass
+        // them. Putting Not after a consumed prefix gives it a non-zero
+        // start that's distinct from both.
+        //
+        // On "abcxy": Literal("abc") consumes 0..2, leaving the cursor at
+        // 3. Not's inner Literal("xy") probes 'x' and 'y' and matches, so
+        // the inner succeeded and Not fails. Not anchors its failure at
+        // its own start, offset 3, not at input start (0), and not at
+        // offset 5 where the probe left off.
+        var rule = And(
+            Literal("abc"),
+            Not(Literal("xy")).WithError("expected no 'xy' after 'abc'"));
+        var result = rule.Parse("abcxy");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected no 'xy' after 'abc'"));
     }
 
     [Test]
@@ -238,18 +262,20 @@ public class NotRuleTests
     }
 
     [Test]
-    public void Not_success_clears_inner_failure_record()
+    public void Not_discards_inner_lookahead_failures_on_success()
     {
-        // Not succeeds when its inner fails. Inner's failure record is
-        // EXPECTED (Not wanted the inner not to match), so it should
-        // not surface as a parse error. The success-clears-errors rule
-        // wipes it on Not's commit. See docs/ErrorArchitecture.md.
+        // Not is lookahead: it runs its inner as a throwaway probe. When
+        // Not succeeds (the inner failed, which is what Not wanted), the
+        // failures the probe produced are discarded. They sit at a
+        // position the parser only probed, never consumed. So the inner's
+        // .WithError doesn't surface. See docs/ErrorArchitecture.md,
+        // "Lookahead failures are discarded".
         var notForbidden = Not(Literal("forbidden").WithError("inner literal not satisfied"));
         var rule = And(notForbidden, Literal("xyz"));
 
         // Input "abc": Not succeeds (inner fails), then Literal("xyz")
-        // fails at position 0 with a mechanical record. The inner
-        // WithError record has been scrubbed by Not's commit.
+        // fails at position 0 with a mechanical failure. The inner
+        // WithError failure was discarded when the Not probe finished.
         var result = rule.Parse("abc");
 
         Assert.That(result.Success, Is.False);

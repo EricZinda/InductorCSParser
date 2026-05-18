@@ -284,7 +284,7 @@ public class OneOfRuleTests
         //
         // The bug: ComputeRuleStartAll runs BEFORE the normalization-form
         // pass that mutates _set, so OneOfRule.FirstConsumedTokens stays
-        // pinned to the pre-projection set {0x212B}. OneOrMore's lookahead
+        // fixed to the pre-projection set {0x212B}. OneOrMore's lookahead
         // shortcut peeks the input's first rune (0x00C5), checks it
         // against the cached {0x212B} (not Contains), concludes the inner
         // can't match, and fails the OneOrMore at AtLeast=1. The inner
@@ -296,22 +296,22 @@ public class OneOfRuleTests
     }
 
     [Test]
-    public void OneOf_with_pinned_SymbolId_uses_pinned_id_for_single_rune_leaves()
+    public void OneOf_with_explicit_SymbolId_uses_explicit_id_for_single_rune_leaves()
     {
-        // .As(SymbolId) is the user's "pin a stable id on this rule"
+        // .As(SymbolId) is the user's "set a stable id on this rule"
         // signal, used for serialized parse trees and cross-version id
-        // stability. The leaf has to carry that pinned id so
+        // stability. The leaf has to carry that explicit id so
         // Tree.Find(rule), Tree.Is(rule), and any downstream lookup keyed
-        // off SymbolId resolve back to the user's pinned value. The same
+        // off SymbolId resolve back to the user's explicit value. The same
         // gate that respects .As("name") should respect .As(SymbolId)
         // since both are explicit "find me by reference" signals.
-        var pinnedId = new SymbolId(SymbolRanges.CustomRangeStart + 100);
-        var rule = OneOf(TokenSet.Ascii.Letters).As(pinnedId);
+        var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 100);
+        var rule = OneOf(TokenSet.Ascii.Letters).As(explicitId);
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True);
-        Assert.That(result.Tree!.Id, Is.EqualTo(pinnedId),
-            "leaf carries the user-pinned SymbolId, not the rune value");
+        Assert.That(result.Tree!.Id, Is.EqualTo(explicitId),
+            "leaf carries the user's explicit SymbolId, not the rune value");
         Assert.That(result.Tree!.Is(rule), Is.True);
         Assert.That(result.Tree!.Find(rule), Is.Not.Null);
     }

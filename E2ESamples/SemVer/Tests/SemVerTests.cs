@@ -195,6 +195,23 @@ public class SemVerErrorPositionTests
     }
 
     [Test]
+    public void Non_digit_first_character_is_not_mislabeled_as_a_leading_zero()
+    {
+        // "v1.2.3" fails at the major position because 'v' is not a
+        // digit, not because of a leading zero. The leading-zero
+        // WithError sits on the Not probe, which fails only on the
+        // "0[digit]" shape; on 'v' the Not succeeds and the failure is
+        // the OneOrMore's generic one. This is why the WithError is on
+        // the Not and not on the major/minor/patch rule as a whole:
+        // moving it outward (onto an alias wrapping the whole number,
+        // say) would fire it on every failure and mislabel this 'v'.
+        SemVerParser.TryParse("v1.2.3", out _, out var error);
+        Assert.That(error, Is.Not.Null);
+        Assert.That(error!.Column, Is.EqualTo(0));
+        Assert.That(error.Message, Does.Not.Contain("leading zero").IgnoreCase);
+    }
+
+    [Test]
     public void Empty_pre_release_after_dash_is_pointed_at_the_dash_position()
     {
         // "1.2.3-" -> the deepest the parser got is offset 6 (just past

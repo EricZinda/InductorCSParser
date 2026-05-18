@@ -219,14 +219,16 @@ public class FilterErrorPositionTests
     public void Bad_operator_after_attribute_points_at_the_operator_position()
     {
         // "a !! \"b\"" -> upstream nom port says AtPos(2, Operators).
-        // Under the three-tier error model, ComparisonOperator's named
-        // WithError ("expected one of: =~, ==, ...") wins over the inner
-        // branches' mechanical records at the deeper mid-`!!` position,
-        // and the position lands at the Or's start (where the operator
-        // was expected to begin) — matching upstream nom exactly.
+        // Under depth-primary ranking the caret lands at 3, not 2: the
+        // operator branches Literal("!~") / Literal("!=") consume the
+        // leading '!' and fail on the trailing '!' at position 3, and
+        // ComparisonOperator's named WithError ("expected one of: =~, ==,
+        // ...") anchors there too and wins the named-beats-mechanical
+        // tie. Position 3 is the '!!' the user has to fix. (The worked
+        // example in docs/ErrorArchitecture.md.)
         FilterParser.TryParse("a !! \"b\"", out _, out var rewriteError);
         Assert.That(rewriteError, Is.Not.Null);
-        Assert.That(rewriteError!.CharIndex, Is.EqualTo(2));
+        Assert.That(rewriteError!.CharIndex, Is.EqualTo(3));
         Assert.That(rewriteError.Message, Does.Contain("expected one of"));
     }
 
@@ -307,7 +309,7 @@ public class FilterErrorPositionTests
 [TestFixture]
 public class FilterSourceRangeTests
 {
-    // Pins the source-range-per-comparison feature the rewrite adds.
+    // Verifies the source-range-per-comparison feature the rewrite adds.
     // The Original parser carries no source spans, so a downstream UI
     // (highlighter, query builder, refactoring tool) would have to re-
     // parse to find them.

@@ -442,12 +442,13 @@ public class AndRuleTests
     }
 
     [Test]
-    public void And_named_WithError_beats_deeper_mechanical_inner()
+    public void And_named_WithError_anchors_at_deepest_child_failure()
     {
-        // Literal("ab") reads 'a' then fails on second char, recording
-        // a mechanical failure at position 1. And records its named
-        // WithError at the failing child's start (0, where Literal began).
-        // Named beats mechanical regardless of depth.
+        // Literal("ab") reads 'a' then mismatches the second char,
+        // recording a mechanical failure at position 1. The And carries a
+        // named WithError; composite anchoring records it at the deepest
+        // position its subtree reached (1), where it ties the mechanical
+        // failure on depth and wins the named-beats-mechanical tie-break.
         // See docs/ErrorArchitecture.md.
         var rule = And(Literal("ab"), Token('!')).WithError("expected ab!");
 
@@ -455,7 +456,7 @@ public class AndRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage, Is.EqualTo("expected ab!"));
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     }
 
     [Test]

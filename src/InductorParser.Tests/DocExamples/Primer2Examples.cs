@@ -224,7 +224,7 @@ public class Primer2Examples
 
     // primer2.md "ParseOptions carries a set of templates with {name}-
     // style placeholders". The doc swaps the catch-all default messages
-    // for French versions and shows the resulting ErrorMessage. Pins
+    // for French versions and shows the resulting ErrorMessage. Verifies
     // both the rendered output and the placeholder substitution.
     [Test]
     public void Templates_render_French_default_message()

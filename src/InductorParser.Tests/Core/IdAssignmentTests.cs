@@ -32,13 +32,13 @@ public class IdAssignmentTests
     }
 
     [Test]
-    public void Pinned_id_survives_compile()
+    public void Explicit_id_survives_compile()
     {
-        var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 9999);
-        var rule = OneOrMore(OneOf(TokenSet.Letters)).As(pinned);
+        var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 9999);
+        var rule = OneOrMore(OneOf(TokenSet.Letters)).As(explicitId);
         rule.Compile();
 
-        Assert.That(rule.Id, Is.EqualTo(pinned));
+        Assert.That(rule.Id, Is.EqualTo(explicitId));
     }
 
     [Test]
@@ -78,15 +78,15 @@ public class IdAssignmentTests
     }
 
     [Test]
-    public void Two_reachable_rules_pinned_to_the_same_SymbolId_fail_to_compile()
+    public void Two_reachable_rules_given_the_same_explicit_SymbolId_fail_to_compile()
     {
-        var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 1234);
-        var firstRule = OneOrMore(OneOf(TokenSet.Letters)).As(pinned).As("first");
-        var secondRule = OneOrMore(OneOf(TokenSet.Digits)).As(pinned).As("second");
+        var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 1234);
+        var firstRule = OneOrMore(OneOf(TokenSet.Letters)).As(explicitId).As("first");
+        var secondRule = OneOrMore(OneOf(TokenSet.Digits)).As(explicitId).As("second");
         var doc = And(firstRule, secondRule);
 
         var exception = Assert.Throws<InvalidOperationException>(() => doc.Compile());
-        Assert.That(exception!.Message, Does.Contain(pinned.Value.ToString()));
+        Assert.That(exception!.Message, Does.Contain(explicitId.Value.ToString()));
         Assert.That(exception.Message, Does.Contain("first"));
         Assert.That(exception.Message, Does.Contain("second"));
     }
@@ -94,12 +94,13 @@ public class IdAssignmentTests
     [Test]
     public void Two_named_single_rune_Tokens_of_the_same_rune_get_distinct_ids()
     {
-        // Token('a') auto-pins its Id to the rune's code point in the
+        // Token('a') auto-assigns its Id to the rune's code point in the
         // GraphemeRule constructor (Id == 0x61). Adding .As("first") /
-        // .As("second") names each rule but used to leave the auto-pin
-        // in place, so both rules silently shared SymbolId(0x61). Two
-        // user-pinned rules that share an id throw at compile, but the
-        // auto-pin path bypassed that check. Tree.Find against either
+        // .As("second") names each rule but used to leave that
+        // auto-assigned id in place, so both rules silently shared
+        // SymbolId(0x61). Two rules given the same explicit id throw at
+        // compile, but the auto-assignment path bypassed that check.
+        // Tree.Find against either
         // rule reference then returned the same node regardless of which
         // one actually matched, and NameOf could only report one of the
         // two names back. Naming a single-rune Token should give it a
@@ -142,76 +143,78 @@ public class IdAssignmentTests
     }
 
     [Test]
-    public void Same_pinned_rule_referenced_twice_in_a_grammar_compiles()
+    public void Same_explicit_id_rule_referenced_twice_in_a_grammar_compiles()
     {
         // Reachability is per-rule, not per-edge. A single rule reached via
-        // two parents is still one rule, so its pin shouldn't be flagged.
-        var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 4321);
-        var sharedRule = OneOrMore(OneOf(TokenSet.Letters)).As(pinned);
+        // two parents is still one rule, so its explicit id shouldn't be
+        // flagged.
+        var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 4321);
+        var sharedRule = OneOrMore(OneOf(TokenSet.Letters)).As(explicitId);
         var doc = And(sharedRule, sharedRule);
 
         Assert.DoesNotThrow(() => doc.Compile());
-        Assert.That(sharedRule.Id, Is.EqualTo(pinned));
+        Assert.That(sharedRule.Id, Is.EqualTo(explicitId));
     }
 
     [Test]
-    public void As_SymbolId_rejects_pins_below_the_custom_range()
+    public void As_SymbolId_rejects_explicit_ids_below_the_custom_range()
     {
         // The rune range (0..0x10FFFF) and built-in range
-        // (0x110000..0x1FFFFF) are reserved. Pinning a rule into either
-        // would silently collide with Token('a')-style rune leaves or
-        // future built-in ids, and the Compile-time duplicate-pin check
-        // can only catch user pins, not auto-pins from constructors. As
-        // throws at the call site so the bad pin never reaches the
-        // grammar.
+        // (0x110000..0x1FFFFF) are reserved. Setting an explicit id into
+        // either would silently collide with Token('a')-style rune leaves
+        // or future built-in ids, and the Compile-time duplicate-id check
+        // can only catch the user's explicit ids, not the ids
+        // auto-assigned by constructors. As throws at the call so the bad
+        // id never reaches the grammar.
         var rule = OneOrMore(OneOf(TokenSet.Letters));
 
-        // Rune-range pin: collides with Token('a') if both are in the
+        // Rune-range id: collides with Token('a') if both are in the
         // same grammar.
         Assert.Throws<ArgumentOutOfRangeException>(() => rule.As(new SymbolId(0x61)));
 
-        // Built-in gap pin.
+        // Built-in gap id.
         Assert.Throws<ArgumentOutOfRangeException>(() => rule.As(new SymbolId(0x110000)));
 
-        // Negative pin: no meaningful identity.
+        // Negative id: no meaningful identity.
         Assert.Throws<ArgumentOutOfRangeException>(() => rule.As(new SymbolId(-1)));
 
         // The boundary value (CustomRangeStart itself) is the first
-        // legal pin.
+        // legal explicit id.
         Assert.DoesNotThrow(() => rule.As(new SymbolId(SymbolRanges.CustomRangeStart)));
     }
 
     [Test]
-    public void Pre_compiled_sub_rule_pin_collides_with_unsealed_sibling_pin()
+    public void Pre_compiled_sub_rule_explicit_id_collides_with_unsealed_sibling()
     {
-        // Two distinct reachable rules in the same grammar both pin the
-        // same custom-range SymbolId. One was compiled standalone first,
-        // so it's already sealed by the time the larger grammar reaches
-        // it. The second was pinned but isn't sealed yet. Compile of the
-        // larger grammar should catch this just like the all-unsealed
-        // version (Two_reachable_rules_pinned_to_the_same_SymbolId_fail_to_compile),
-        // because the second rule's pin would otherwise silently shadow
+        // Two distinct reachable rules in the same grammar both set the
+        // same custom-range SymbolId explicitly. One was compiled
+        // standalone first, so it's already sealed by the time the larger
+        // grammar reaches it. The second got its explicit id but isn't
+        // sealed yet. Compile of the larger grammar should catch this just
+        // like the all-unsealed version
+        // (Two_reachable_rules_given_the_same_explicit_SymbolId_fail_to_compile),
+        // because the second rule's id would otherwise silently shadow
         // the first one's: Tree.Find against either rule reference would
         // return the same nodes regardless of which rule actually
         // matched. Pre-compiling one branch is a real pattern when a
         // shared identifier rule lives in a library and gets reused
         // across multiple grammars.
-        var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 5678);
-        var preCompiled = OneOrMore(OneOf(TokenSet.Letters)).As(pinned).As("first");
+        var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 5678);
+        var preCompiled = OneOrMore(OneOf(TokenSet.Letters)).As(explicitId).As("first");
         preCompiled.Compile();
 
-        var unsealed = OneOrMore(OneOf(TokenSet.Digits)).As(pinned).As("second");
+        var unsealed = OneOrMore(OneOf(TokenSet.Digits)).As(explicitId).As("second");
         var doc = And(preCompiled, unsealed);
 
         var exception = Assert.Throws<InvalidOperationException>(() => doc.Compile());
-        Assert.That(exception!.Message, Does.Contain(pinned.Value.ToString()));
+        Assert.That(exception!.Message, Does.Contain(explicitId.Value.ToString()));
         Assert.That(exception.Message, Does.Contain("first"));
         Assert.That(exception.Message, Does.Contain("second"));
     }
 
     // .As(string) and .As(SymbolId) each write a different field (Name and
-    // Id), so they compose on a single instance: a rule can be both pinned
-    // and named without conflict. But each overload is set-once against
+    // Id), so they compose on a single instance: a rule can have both an
+    // explicit id and a name without conflict. But each overload is set-once against
     // itself, because a second call to the same overload overwrites the
     // field the previous call set. The SemVer case was the motivating bug:
     // a shared OneOrMore(OneOf(digits)) rule chained .As("major") /
@@ -252,46 +255,47 @@ public class IdAssignmentTests
     {
         // .As(SymbolId) writes Id, .As(string) writes Name. Each field is
         // set-once but the two are independent. Calling one of each (in
-        // either order) on the same rule produces a rule with both a
-        // pinned id and a debug name, with no silent overwrite.
-        var pin = new SymbolId(SymbolRanges.CustomRangeStart + 300);
+        // either order) on the same rule produces a rule with both an
+        // explicit id and a debug name, with no silent overwrite.
+        var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 300);
 
         Assert.DoesNotThrow(() =>
         {
-            var pinThenName = OneOrMore(OneOf(TokenSet.Digits)).As(pin).As("number");
-            Assert.That(pinThenName.Id, Is.EqualTo(pin));
-            Assert.That(pinThenName.Name, Is.EqualTo("number"));
+            var idThenName = OneOrMore(OneOf(TokenSet.Digits)).As(explicitId).As("number");
+            Assert.That(idThenName.Id, Is.EqualTo(explicitId));
+            Assert.That(idThenName.Name, Is.EqualTo("number"));
         });
 
-        var otherPin = new SymbolId(SymbolRanges.CustomRangeStart + 301);
+        var otherExplicitId = new SymbolId(SymbolRanges.CustomRangeStart + 301);
         Assert.DoesNotThrow(() =>
         {
-            var nameThenPin = OneOrMore(OneOf(TokenSet.Digits)).As("count").As(otherPin);
-            Assert.That(nameThenPin.Id, Is.EqualTo(otherPin));
-            Assert.That(nameThenPin.Name, Is.EqualTo("count"));
+            var nameThenId = OneOrMore(OneOf(TokenSet.Digits)).As("count").As(otherExplicitId);
+            Assert.That(nameThenId.Id, Is.EqualTo(otherExplicitId));
+            Assert.That(nameThenId.Name, Is.EqualTo("count"));
         });
     }
 
     // Each test below builds a small grammar with a specific arrangement
-    // of pinned, named, and anonymous leaves, compiles it, and asserts
+    // of explicit-id, named, and anonymous leaves, compiles it, and asserts
     // the exact id every leaf comes out with. The model-based sweep at
     // the bottom of the file covers the same algorithm across a generated
     // parameter space. These explicit cases exist as readable
     // documentation of the corners the algorithm has to handle.
 
     [Test]
-    public void Anonymous_ids_fill_lowest_unclaimed_slots_above_a_dense_pin_block()
+    public void Anonymous_ids_fill_lowest_unclaimed_slots_above_a_dense_explicit_id_block()
     {
-        // Pin the four bottom slots of the custom range (+0 through +3),
-        // then add three anonymous leaves. Compile's anonymous pass has
-        // to probe past the whole pin block to find ids for them, so the
-        // anonymous leaves should land at +4, +5, +6.
+        // Give explicit ids to the four bottom slots of the custom range
+        // (+0 through +3), then add three anonymous leaves. Compile's
+        // anonymous pass has to probe past the whole explicit-id block to
+        // find ids for them, so the anonymous leaves should land at +4,
+        // +5, +6.
         var specs = new[]
         {
-            RuleSpec.PinnedLeaf(0),
-            RuleSpec.PinnedLeaf(1),
-            RuleSpec.PinnedLeaf(2),
-            RuleSpec.PinnedLeaf(3),
+            RuleSpec.ExplicitLeaf(0),
+            RuleSpec.ExplicitLeaf(1),
+            RuleSpec.ExplicitLeaf(2),
+            RuleSpec.ExplicitLeaf(3),
             RuleSpec.AnonymousLeaf(),
             RuleSpec.AnonymousLeaf(),
             RuleSpec.AnonymousLeaf(),
@@ -306,16 +310,16 @@ public class IdAssignmentTests
     }
 
     [Test]
-    public void Anonymous_ids_fill_gaps_between_pinned_slots()
+    public void Anonymous_ids_fill_gaps_between_explicit_id_slots()
     {
-        // Pin two leaves at +0 and +2, leaving a gap at +1, then add
-        // three anonymous leaves. The first anonymous leaf should slot
-        // into the gap at +1, and the next two should probe past +2 to
-        // land at +3 and +4.
+        // Give explicit ids to two leaves at +0 and +2, leaving a gap at
+        // +1, then add three anonymous leaves. The first anonymous leaf
+        // should slot into the gap at +1, and the next two should probe
+        // past +2 to land at +3 and +4.
         var specs = new[]
         {
-            RuleSpec.PinnedLeaf(0),
-            RuleSpec.PinnedLeaf(2),
+            RuleSpec.ExplicitLeaf(0),
+            RuleSpec.ExplicitLeaf(2),
             RuleSpec.AnonymousLeaf(),
             RuleSpec.AnonymousLeaf(),
             RuleSpec.AnonymousLeaf(),
@@ -330,15 +334,15 @@ public class IdAssignmentTests
     }
 
     [Test]
-    public void Anonymous_ids_skip_a_pin_at_a_high_offset()
+    public void Anonymous_ids_skip_an_explicit_id_at_a_high_offset()
     {
-        // Pin one leaf far above the bottom of the range, at +10, and
-        // follow it with twelve anonymous leaves. The anonymous pass
-        // should fill +0 through +9 sequentially, hit the +10 pin, skip
-        // it, and continue at +11 and +12. The point of the test is that
-        // the anonymous counter is shared across all leaves rather than
-        // restarting from the bottom for each one.
-        var specs = new List<RuleSpec> { RuleSpec.PinnedLeaf(10) };
+        // Give an explicit id to one leaf far above the bottom of the
+        // range, at +10, and follow it with twelve anonymous leaves. The
+        // anonymous pass should fill +0 through +9 sequentially, hit the
+        // +10 slot, skip it, and continue at +11 and +12. The point of
+        // the test is that the anonymous counter is shared across all
+        // leaves rather than restarting from the bottom for each one.
+        var specs = new List<RuleSpec> { RuleSpec.ExplicitLeaf(10) };
         for (int i = 0; i < 12; i++) specs.Add(RuleSpec.AnonymousLeaf());
 
         var grammar = IdAssignmentReferenceModel.BuildGrammar(specs, out var leaves);
@@ -357,39 +361,40 @@ public class IdAssignmentTests
     }
 
     [Test]
-    public void Named_rule_probes_past_one_pin_at_its_hash_slot()
+    public void Named_rule_probes_past_one_explicit_id_at_its_hash_slot()
     {
         // First, compute the slot the name "collisionTest" hashes to.
-        // Pin one leaf there, then add a second leaf named
-        // "collisionTest". Pass 1 claims the slot for the pinned leaf,
-        // so when pass 2 tries to place the named leaf at the same slot
-        // it finds the slot already taken and probes upward to slot+1.
+        // Give one leaf an explicit id there, then add a second leaf named
+        // "collisionTest". Pass 1 claims the slot for the explicit-id
+        // leaf, so when pass 2 tries to place the named leaf at the same
+        // slot it finds the slot already taken and probes upward to
+        // slot+1.
         const string name = "collisionTest";
         int slot = Rule.HashNameToCustomRange(name);
 
-        var pinnedLeaf = OneOf(TokenSet.Letters).As(new SymbolId(slot));
+        var explicitIdLeaf = OneOf(TokenSet.Letters).As(new SymbolId(slot));
         var namedLeaf = OneOf(TokenSet.Letters).As(name);
-        var grammar = And(pinnedLeaf, namedLeaf);
+        var grammar = And(explicitIdLeaf, namedLeaf);
         grammar.Compile();
 
-        Assert.That(pinnedLeaf.Id.Value, Is.EqualTo(slot));
+        Assert.That(explicitIdLeaf.Id.Value, Is.EqualTo(slot));
         Assert.That(namedLeaf.Id.Value, Is.EqualTo(slot + 1));
     }
 
     [Test]
-    public void Named_rule_probes_past_a_run_of_pins_at_its_hash_slot()
+    public void Named_rule_probes_past_a_run_of_explicit_ids_at_its_hash_slot()
     {
-        // Same idea as the previous test, but pin three leaves
-        // contiguously starting at the named rule's hash slot. The named
-        // leaf has to probe past all three pins to land at slot+3.
+        // Same idea as the previous test, but give explicit ids to three
+        // leaves contiguously starting at the named rule's hash slot. The
+        // named leaf has to probe past all three to land at slot+3.
         const string name = "collisionTest";
         int slot = Rule.HashNameToCustomRange(name);
 
-        var pin0 = OneOf(TokenSet.Letters).As(new SymbolId(slot));
-        var pin1 = OneOf(TokenSet.Letters).As(new SymbolId(slot + 1));
-        var pin2 = OneOf(TokenSet.Letters).As(new SymbolId(slot + 2));
+        var explicitLeaf0 = OneOf(TokenSet.Letters).As(new SymbolId(slot));
+        var explicitLeaf1 = OneOf(TokenSet.Letters).As(new SymbolId(slot + 1));
+        var explicitLeaf2 = OneOf(TokenSet.Letters).As(new SymbolId(slot + 2));
         var namedLeaf = OneOf(TokenSet.Letters).As(name);
-        var grammar = And(pin0, pin1, pin2, namedLeaf);
+        var grammar = And(explicitLeaf0, explicitLeaf1, explicitLeaf2, namedLeaf);
         grammar.Compile();
 
         Assert.That(namedLeaf.Id.Value, Is.EqualTo(slot + 3));
@@ -432,51 +437,51 @@ public class IdAssignmentTests
                 $"Case '{label}': leaf {i} id below custom range");
         }
 
-        // Pinned rules keep their pin.
+        // Explicit-id rules keep their explicit id.
         for (int i = 0; i < specs.Length; i++)
         {
-            if (specs[i].Role == RuleRole.Pinned)
+            if (specs[i].Role == RuleRole.Explicit)
             {
-                int expectedPin = SymbolRanges.CustomRangeStart + specs[i].PinOffsetFromCustomStart!.Value;
+                int expectedId = SymbolRanges.CustomRangeStart + specs[i].ExplicitOffsetFromCustomStart!.Value;
                 Assert.That(
                     leaves[i].Id.Value,
-                    Is.EqualTo(expectedPin),
-                    $"Case '{label}': pinned leaf {i} drifted off its pin");
+                    Is.EqualTo(expectedId),
+                    $"Case '{label}': explicit-id leaf {i} drifted off its id");
             }
         }
     }
 
-    // Generates every combination over a small parameter space: pin
-    // offsets are any subset of {0..5} relative to CustomRangeStart (64
-    // subsets), named-rule count is 0, 1, or 2 drawn in order from
-    // {alpha, beta}, and anonymous-rule count goes 0 through 4. The
-    // fully-empty case is skipped because And rejects an empty child
-    // list.
+    // Generates every combination over a small parameter space:
+    // explicit-id offsets are any subset of {0..5} relative to
+    // CustomRangeStart (64 subsets), named-rule count is 0, 1, or 2 drawn
+    // in order from {alpha, beta}, and anonymous-rule count goes 0 through
+    // 4. The fully-empty case is skipped because And rejects an empty
+    // child list.
     private static IEnumerable<TestCaseData> IdAssignmentSweepCases()
     {
-        int[] pinOffsets = { 0, 1, 2, 3, 4, 5 };
+        int[] explicitOffsets = { 0, 1, 2, 3, 4, 5 };
         string[] namePool = { "alpha", "beta" };
 
-        for (int pinMask = 0; pinMask < (1 << pinOffsets.Length); pinMask++)
+        for (int explicitMask = 0; explicitMask < (1 << explicitOffsets.Length); explicitMask++)
         {
             for (int namedCount = 0; namedCount <= namePool.Length; namedCount++)
             {
                 for (int anonymousCount = 0; anonymousCount <= 4; anonymousCount++)
                 {
-                    if (pinMask == 0 && namedCount == 0 && anonymousCount == 0) continue;
+                    if (explicitMask == 0 && namedCount == 0 && anonymousCount == 0) continue;
 
                     var specs = new List<RuleSpec>();
-                    for (int bit = 0; bit < pinOffsets.Length; bit++)
+                    for (int bit = 0; bit < explicitOffsets.Length; bit++)
                     {
-                        if ((pinMask & (1 << bit)) != 0)
-                            specs.Add(RuleSpec.PinnedLeaf(pinOffsets[bit]));
+                        if ((explicitMask & (1 << bit)) != 0)
+                            specs.Add(RuleSpec.ExplicitLeaf(explicitOffsets[bit]));
                     }
                     for (int n = 0; n < namedCount; n++)
                         specs.Add(RuleSpec.NamedLeaf(namePool[n]));
                     for (int a = 0; a < anonymousCount; a++)
                         specs.Add(RuleSpec.AnonymousLeaf());
 
-                    string label = $"pins=0x{pinMask:X2} named={namedCount} anon={anonymousCount}";
+                    string label = $"explicit=0x{explicitMask:X2} named={namedCount} anon={anonymousCount}";
                     yield return new TestCaseData(label, specs.ToArray()).SetName(label);
                 }
             }

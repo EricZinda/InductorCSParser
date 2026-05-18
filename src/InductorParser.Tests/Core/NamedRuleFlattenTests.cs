@@ -81,14 +81,14 @@ public class NamedRuleFlattenTests
     public void As_SymbolId_on_Token_flips_default_Delete_to_Preserve()
     {
         // The SymbolId overload of .As has the same identify-implies-
-        // Preserve story as the string overload: a pinned id is only
+        // Preserve story as the string overload: an explicit id is only
         // useful if the rule's wrapper Symbol reaches the tree to
         // carry it.
-        var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 42);
-        var marker = Token('!').As(pinned);
+        var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 42);
+        var marker = Token('!').As(explicitId);
 
         Assert.That(marker.FlattenType, Is.EqualTo(FlattenType.Preserve));
-        Assert.That(marker.Id, Is.EqualTo(pinned));
+        Assert.That(marker.Id, Is.EqualTo(explicitId));
     }
 
     // -----------------------------------------------------------------
@@ -151,7 +151,7 @@ public class NamedRuleFlattenTests
     [Test]
     public void As_string_after_explicit_Flatten_throws()
     {
-        // Same story for the Flatten-shortcut: the caller pinned a
+        // Same story for the Flatten-shortcut: the caller set a
         // non-Preserve policy explicitly, so .As refuses to undo it.
         var rule = And(Token('a'), Token('b')).Flatten();
 
@@ -176,10 +176,10 @@ public class NamedRuleFlattenTests
     {
         // Same identify-implies-Preserve gate for the SymbolId overload.
         var marker = Token('!').Delete();
-        var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 42);
+        var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 42);
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => marker.As(pinned));
+            () => marker.As(explicitId));
         Assert.That(exception!.Message, Does.Contain("FlattenType.Delete"));
     }
 
@@ -239,8 +239,8 @@ public class NamedRuleFlattenTests
     [Test]
     public void Flatten_Delete_after_As_SymbolId_throws()
     {
-        var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 42);
-        var marker = Token('!').As(pinned);
+        var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 42);
+        var marker = Token('!').As(explicitId);
 
         var exception = Assert.Throws<InvalidOperationException>(
             () => marker.Flatten(FlattenType.Delete));

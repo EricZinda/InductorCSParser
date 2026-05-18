@@ -229,19 +229,19 @@ public class NoneOfRuleTests
     }
 
     [Test]
-    public void NoneOf_with_pinned_SymbolId_uses_pinned_id_for_single_rune_leaves()
+    public void NoneOf_with_explicit_SymbolId_uses_explicit_id_for_single_rune_leaves()
     {
-        // .As(SymbolId) is the user's "pin a stable id" signal, parallel
+        // .As(SymbolId) is the user's "set a stable id" signal, parallel
         // to .As("name") for findability. The leaf has to carry the
-        // pinned id so Tree.Find / Tree.Is resolve through the user's
-        // pinned reference. Same shape as the OneOf pinned-id test.
-        var pinnedId = new SymbolId(SymbolRanges.CustomRangeStart + 101);
-        var rule = NoneOf(TokenSet.Ascii.Digits).As(pinnedId);
+        // explicit id so Tree.Find / Tree.Is resolve through the user's
+        // explicit reference. Same shape as the OneOf explicit-id test.
+        var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 101);
+        var rule = NoneOf(TokenSet.Ascii.Digits).As(explicitId);
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True);
-        Assert.That(result.Tree!.Id, Is.EqualTo(pinnedId),
-            "leaf carries the user-pinned SymbolId, not the rune value");
+        Assert.That(result.Tree!.Id, Is.EqualTo(explicitId),
+            "leaf carries the user's explicit SymbolId, not the rune value");
         Assert.That(result.Tree!.Is(rule), Is.True);
         Assert.That(result.Tree!.Find(rule), Is.Not.Null);
     }

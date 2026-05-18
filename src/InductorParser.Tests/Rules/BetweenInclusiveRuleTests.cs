@@ -244,8 +244,8 @@ public class BetweenInclusiveRuleTests
     {
         // Sibling of the OneOrMore case but for ZeroOrMore (AtLeast == 0).
         // ZeroOrMore catches inner failures and succeeds with count=0,
-        // but its commit does NOT clear inner failure records (count
-        // rules preserve records about real input failures; see
+        // but its commit doesn't clear inner failures (count
+        // rules preserve failures about real input; see
         // docs/ErrorArchitecture.md). So the descendant Token('a')'s
         // .WithError("want 'a'") survives and is reported when the
         // outer And's Token('z') subsequently fails at the same offset.
@@ -265,9 +265,10 @@ public class BetweenInclusiveRuleTests
         // ZeroOrMore(Or(realMatch, AnyToken.Delete)) is the scanner-skip
         // shape. The descendant Token('a').WithError("want 'a'") inside
         // the realMatch alternative records its failure at the EOF
-        // landing, and ZeroOrMore's commit preserves the record (count
+        // landing, and ZeroOrMore's commit preserves the failure (count
         // rules don't clear). The outer And's Token('z') failure at the
-        // same depth lets "want 'a'" win the tier resolution.
+        // same depth lets "want 'a'", a named failure, win the
+        // named-beats-mechanical tie.
         var realMatch = And(Token('a').WithError("want 'a'"), Token('b'));
         var rule = And(
             ZeroOrMore(Or(realMatch, AnyToken().Flatten(FlattenType.Delete))),
@@ -282,8 +283,8 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_inner_failure_still_contributes_to_deepest_failure()
     {
         // BetweenInclusive(0, 1, inner) is a count rule: its commit on
-        // success doesn't clear inner failure records, so a deeper
-        // inner WithError survives the success and wins the tier
+        // success doesn't clear inner failures, so a deeper
+        // inner WithError survives the success and wins the depth-primary
         // resolution even when the outer rule succeeds with zero
         // matches.
         //
@@ -547,7 +548,7 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_unoptimized_path_does_not_match_lf_inside_crlf()
     {
         // Control: AtLeast=1 disables the scanner-skip optimization, so the
-        // loop walks one grapheme at a time. This pins the slow-path
+        // loop walks one grapheme at a time. This verifies the slow-path
         // behavior (CRLF cluster swallowed whole) as the source of truth.
         var match = OneOf("\n").Flatten(SyntaxTree.FlattenType.Preserve);
         var scanner = BetweenInclusive(1, int.MaxValue, 
@@ -721,7 +722,7 @@ public class BetweenInclusiveRuleTests
         // break before the trailing consonant. .NET 8's StringInfo
         // currently uses the older rules, so the slow path treats this
         // as two clusters and OneOf(ssa) matches at the trailing
-        // consonant. What this test pins is that the scanner-skip fast
+        // consonant. What this test verifies is that the scanner-skip fast
         // path agrees with the slow path on whichever runtime is
         // hosting the suite: AtLeast=0 and AtLeast=1 produce the same
         // number of matches. If a future runtime upgrade implements
@@ -886,7 +887,7 @@ public class BetweenInclusiveRuleTests
     {
         // Three iterations of "abc". The composite range covers the
         // first 'a' through the last 'c', not just the most recent
-        // iteration. Pins that the engine records the consumed span
+        // iteration. Verifies the engine records the consumed span
         // once at parse end, not piecewise per-iteration (a buggy
         // implementation might overwrite Start/End each iteration).
         var rule = OneOrMore(Literal("abc").Preserve()).As("repeat");
