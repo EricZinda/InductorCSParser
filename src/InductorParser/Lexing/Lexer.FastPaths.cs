@@ -148,30 +148,40 @@ public sealed partial class Lexer
 
         int count = 0;
 
-        // A Run-based rule matches only when
-        // the whole token is exactly one rune in the set. A multi-rune
-        // grapheme whose first rune happens to be in the set isn't
-        // part of the run. Under the WithinToken sub-lexer mode
-        // every token is one rune, so  tokenLength == runeLen
-        // still works.
         while (_position < _endPosition)
         {
             int tokenLength = NextTokenLength(_position);
-            if (tokenLength <= 0)
+            // Sub-lexer edge case: a stray surrogate in the outer input
+            // makes the outer cluster one char long, so the sub-lexer's
+            // _endPosition can sit between the two halves of a surrogate
+            // pair in the underlying string. NextTokenLength reads ahead
+            // and reports 2, which would walk past the sub-lexer's
+            // bound; stop here.
+            if (tokenLength <= 0 || _position + tokenLength > _endPosition)
                 break;
-            if (!TryPeekRune(_input, _position, out int runeValue, out int runeLen)
-                // Sub-lexer edge case: a stray surrogate in the outer
-                // input makes the outer cluster one char long, so the
-                // sub-lexer's _endPosition can sit between the two
-                // halves of a surrogate pair in the underlying string.
-                // NextTokenLength reads ahead and reports 2, which
-                // would walk past the sub-lexer's bound; stop here.
-                || _position + tokenLength > _endPosition
-                || tokenLength != runeLen
-                || !set.Contains(runeValue))
+
+            bool inSet;
+            if (TryPeekRune(_input, _position, out int runeValue, out int runeLen))
             {
-                break;
+                // A Run-based rule matches only when the whole token is
+                // exactly one rune in the set. A multi-rune grapheme
+                // whose first rune happens to be in the set isn't part
+                // of the run. Under the WithinToken sub-lexer mode every
+                // token is one rune, so tokenLength == runeLen still works.
+                inSet = tokenLength == runeLen && set.Contains(runeValue);
             }
+            else
+            {
+                // Lone surrogate: a one-char token that isn't a valid
+                // Unicode scalar. OneOf matches it against the rune
+                // intervals by its UTF-16 code unit under an unnormalized
+                // Compile (see TokenSet.ContainsToken's lone-surrogate
+                // branch), so the run scanner has to agree to stay
+                // equivalent to AtLeast(n, OneOf(set)).
+                inSet = tokenLength == 1 && set.Contains((int)_input[_position]);
+            }
+            if (!inSet)
+                break;
 
             int consumedFrom = _position;
             _position += tokenLength;
