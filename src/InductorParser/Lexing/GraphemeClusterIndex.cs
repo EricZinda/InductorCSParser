@@ -103,14 +103,24 @@ internal sealed class GraphemeClusterIndex
     }
 
     // Count of grapheme clusters fully contained in [0, charIndex).
-    // Used by SourcePositionConverter.ToTokenIndex.
+    // Used by SourcePositionConverter.ToTokenIndex to map a char index
+    // to the index of the token it sits in.
+    //
+    // A cluster counts only once its end boundary is at or before
+    // charIndex. Those end boundaries are the cluster starts past
+    // position 0 plus the always-marked input.Length boundary, so the
+    // walk is _isStart over [1, charIndex], not the cluster starts over
+    // [0, charIndex). The two agree when charIndex is a cluster boundary.
+    // They differ inside a multi-char cluster, where counting starts
+    // would also count the containing cluster and ToTokenIndex would name
+    // the following token instead of the one the char is in.
     public int CountClustersUpTo(int charIndex)
     {
         if (charIndex <= 0) return 0;
         if (charIndex > _input.Length) charIndex = _input.Length;
         EnsureWalkedTo(charIndex);
         int count = 0;
-        for (int i = 0; i < charIndex; i++)
+        for (int i = 1; i <= charIndex; i++)
             if (_isStart[i]) count++;
         return count;
     }

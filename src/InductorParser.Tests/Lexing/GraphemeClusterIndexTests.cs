@@ -52,10 +52,17 @@ public class GraphemeClusterIndexTests
 
         for (int i = 0; i <= input.Length; i++)
         {
+            // CountClustersUpTo(i) is the count of clusters FULLY
+            // contained in [0, i): a cluster counts only once its end
+            // boundary is at or before i. The cluster ends are the
+            // reference boundaries other than the leading 0.
             int expected = 0;
             foreach (int b in reference)
-                if (b < i) expected++;
+            {
+                if (b == 0) continue;
+                if (b <= i) expected++;
                 else break;
+            }
             Assert.That(index.CountClustersUpTo(i), Is.EqualTo(expected),
                 $"CountClustersUpTo({i})");
         }
