@@ -197,24 +197,24 @@ public class ScanWhileRuleTests
     }
 
     [Test]
-    public void ScanWhile_with_pinned_SymbolId_uses_pinned_id_for_run_leaf()
+    public void ScanWhile_with_explicit_SymbolId_uses_explicit_id_for_run_leaf()
     {
-        // Sibling of the OneOf / NoneOf / AnyToken / WithinToken pinned-
+        // Sibling of the OneOf / NoneOf / AnyToken / WithinToken explicit-
         // SymbolId tests added in p1nd. ScanWhile emits one leaf per
         // matched run with the rule's Id directly (no rune-as-leaf-id
         // shortcut, since a run of multiple tokens doesn't have one
         // distinguished rune to carry). .As(SymbolId) writes the user's
-        // pinned value into Id, so the leaf carries it by construction.
+        // explicit value into Id, so the leaf carries it by construction.
         // Test locks in the matrix so a future leaf-id refactor that
         // routes ScanWhile through ResolveLeafId or a similar helper has
         // to keep .As(SymbolId) honored.
-        var pinnedId = new SymbolId(SymbolRanges.CustomRangeStart + 104);
-        var rule = ScanWhile(TokenSet.Ascii.Letters).As(pinnedId);
+        var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 104);
+        var rule = ScanWhile(TokenSet.Ascii.Letters).As(explicitId);
         var result = rule.Parse("abc");
 
         Assert.That(result.Success, Is.True);
-        Assert.That(result.Tree!.Id, Is.EqualTo(pinnedId),
-            "leaf carries the user-pinned SymbolId");
+        Assert.That(result.Tree!.Id, Is.EqualTo(explicitId),
+            "leaf carries the user's explicit SymbolId");
         Assert.That(result.Tree!.Is(rule), Is.True);
         Assert.That(result.Tree!.Find(rule), Is.Not.Null);
     }

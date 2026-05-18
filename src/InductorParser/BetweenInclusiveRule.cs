@@ -128,12 +128,15 @@ internal sealed class BetweenInclusiveRule : Rule
         if (count < AtLeast)
         {
             TraceFailure(lexer, $"count= {count}");
-            // Record at the failing iteration's start position (lexer is
-            // at that position because the child's own transaction rolled
-            // back there). That puts the cursor at where the user needs
-            // to fix the input, not at the rule's overall start. See
+            // Anchor a .WithError on this rule at the deepest position
+            // its subtree reached. lexer.Position is the failing
+            // iteration's start (the matched iterations advanced the
+            // cursor, the failing one rolled back there) and is the
+            // floor; an iteration that probed deeper before failing
+            // pushes SubtreeDeepestFailure past it. See
             // docs/ErrorArchitecture.md.
-            lexer.RecordFailure(lexer.Position, ErrorMessage, ErrorForced);
+            int anchor = Math.Max(lexer.SubtreeDeepestFailure, lexer.Position);
+            lexer.RecordFailure(anchor, ErrorMessage, ErrorForced);
             return null;
         }
         TraceSuccess(lexer, $"count= {count}");

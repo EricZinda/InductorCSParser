@@ -52,13 +52,14 @@ public abstract class Rule
     private bool _sealed;
     private bool _idAssigned;
     // True iff the user explicitly chose this rule's SymbolId via .As(SymbolId).
-    // Distinct from _idAssigned (also set by GraphemeRule's constructor auto-pin
-    // and by Compile's named / anonymous id passes). Gates the duplicate-pin
-    // conflict check in CollectPinnedIds, the leaf-id shortcut in ResolveLeafId,
-    // GraphemeRule's post-normalization re-pin, and .As(string)'s auto-pin reset.
-    // Not set by .As(string), which only writes Name and lets Compile derive
-    // an Id from the name hash.
-    private bool _idUserPinned;
+    // Distinct from _idAssigned (also set by GraphemeRule's constructor when it
+    // auto-assigns a single-rune Token its code point, and by Compile's named /
+    // anonymous id passes). Gates the duplicate-id conflict check in
+    // CollectExplicitIds, the leaf-id shortcut in ResolveLeafId, GraphemeRule's
+    // post-normalization id re-assignment, and .As(string)'s auto-assigned-id
+    // reset. Not set by .As(string), which only writes Name and lets Compile
+    // derive an Id from the name hash.
+    private bool _idUserExplicit;
     private string? _errorMessage;
     private bool _errorForced;
 
@@ -230,12 +231,13 @@ public abstract class Rule
 
     // The static error message set via .WithError("..."), or null if none.
     // Subclasses pass this to lexer.RecordFailure on the failure path so
-    // the tier-based resolution (mechanical / named / forced) can surface it.
+    // the depth-primary resolution can surface it: a failure with a message
+    // is "named", one without is "mechanical".
     protected internal string? ErrorMessage => _errorMessage;
 
-    // True when the message was set via .WithError("...", forced: true). Promotes
-    // the named record to the forced tier, which beats other named records at
-    // any depth (but loses to deeper forced records).
+    // True when the message was set via .WithError("...", forced: true). A
+    // forced failure is a hard override: it beats every non-forced failure at
+    // any depth (and loses only to a deeper forced failure).
     protected internal bool ErrorForced => _errorForced;
 
     protected Rule(FlattenType defaultFlatten, params Rule[] children)
@@ -429,10 +431,10 @@ public abstract class Rule
     // top. A second .As(string) call throws instead.
     //
     // .As(SymbolId) writes a different field (Id, not Name) and composes
-    // with .As(string): a pinned-id rule can still pick up a name and a
-    // named rule can still pick up an explicit pin. Only same-overload
-    // repeats are bugs, since those overwrite the field the previous
-    // call set.
+    // with .As(string): a rule with an explicit id can still pick up a
+    // name and a named rule can still pick up an explicit id. Only
+    // same-overload repeats are bugs, since those overwrite the field the
+    // previous call set.
     public virtual Rule As(string name)
     {
         ThrowIfSealed();
@@ -447,34 +449,34 @@ public abstract class Rule
                 $".As(name);`).");
         ApplyIdentificationFlattenPolicy(nameof(As), name);
         Name = name;
-        // Clear an auto-pinned id so Compile's AssignNamedIds pass gives
+        // Clear an auto-assigned id so Compile's AssignNamedIds pass gives
         // this rule a fresh custom-range id derived from the name hash.
-        // The only auto-pin path is GraphemeRule pinning a single-rune
-        // Token to its code point in the constructor; two distinct
-        // Token('a').As(...) rules would otherwise silently share the
-        // rune id and Tree.Find / NameOf couldn't distinguish them.
-        // A user pin via .As(SymbolId) is explicit and stays put: that's
-        // what _idUserPinned guards.
-        if (_idAssigned && !_idUserPinned)
+        // The only auto-assignment path is GraphemeRule giving a
+        // single-rune Token its code point in the constructor; two
+        // distinct Token('a').As(...) rules would otherwise silently share
+        // the rune id and Tree.Find / NameOf couldn't distinguish them.
+        // A user's explicit id via .As(SymbolId) stays put: that's what
+        // _idUserExplicit checks for.
+        if (_idAssigned && !_idUserExplicit)
             _idAssigned = false;
         return this;
     }
 
-    // Pin an explicit SymbolId on this Rule (for stable numbering across
+    // Set an explicit SymbolId on this Rule (for stable numbering across
     // versions, useful when serializing parse trees). Returns the same
     // Rule for fluent chaining. Throws if already compiled. Same
-    // identify-implies-Preserve story as As(string): a pinned id is only
-    // useful if the rule's wrapper Symbol reaches the tree to carry it,
-    // so the flatten-policy auto-flip / contradiction-throw applies here
-    // too. Virtual for the same reason As(string) is.
+    // identify-implies-Preserve story as As(string): an explicit id is
+    // only useful if the rule's Symbol reaches the tree to carry
+    // it, so the flatten-policy auto-flip / contradiction-throw applies
+    // here too. Virtual for the same reason As(string) is.
     //
-    // The pinned value must land in the custom range (>= CustomRangeStart).
+    // The explicit value must land in the custom range (>= CustomRangeStart).
     // Values below that are reserved: 0..0x10FFFF for Unicode rune leaves
     // (Token('a') already carries id 0x61 by construction) and
-    // 0x110000..0x1FFFFF for built-in expression ids. Pinning a rule into
-    // either reserved range produces silent identity collisions with rune
-    // leaves or built-ins, since Tree.Find / Tree.Is / NameOf disambiguate
-    // by integer id only.
+    // 0x110000..0x1FFFFF for built-in expression ids. Giving a rule an id
+    // in either reserved range produces silent identity collisions with
+    // rune leaves or built-ins, since Tree.Find / Tree.Is / NameOf
+    // disambiguate by integer id only.
     public virtual Rule As(SymbolId id)
     {
         ThrowIfSealed();
@@ -482,23 +484,23 @@ public abstract class Rule
             throw new ArgumentOutOfRangeException(
                 nameof(id),
                 id.Value,
-                $"User SymbolId pins must land in the custom range " +
+                $"An explicit SymbolId must land in the custom range " +
                 $"(>= 0x{SymbolRanges.CustomRangeStart:X} / " +
                 $"{SymbolRanges.CustomRangeStart}). Lower values are reserved " +
                 $"for Unicode runes (0..0x10FFFF) and built-in expression " +
                 $"ids (0x110000..0x1FFFFF). See SymbolRanges.");
-        if (IsUserSymbolIdPinned)
+        if (IsUserSymbolIdExplicit)
             throw new InvalidOperationException(
                 $".As(SymbolId {id.Value}) can't be applied to this rule: it " +
-                $"was already pinned to SymbolId {Id.Value}. .As(SymbolId) is " +
-                $"set-once. To reuse this rule shape under a different pinned id, " +
+                $"was already set to the explicit SymbolId {Id.Value}. .As(SymbolId) is " +
+                $"set-once. To reuse this rule shape under a different explicit id, " +
                 $"call .AliasedAs(new SymbolId(...)) to get an alias wrapper with " +
                 $"its own identity, or build a factory function that returns a " +
                 $"fresh rule each call.");
         ApplyIdentificationFlattenPolicy(nameof(As), id.ToString());
         Id = id;
         _idAssigned = true;
-        _idUserPinned = true;
+        _idUserExplicit = true;
         return this;
     }
 
@@ -525,14 +527,14 @@ public abstract class Rule
     // tie-breaking picks the surfaced message.
     public Rule AliasedAs(string name) => new AliasRule(this).As(name);
 
-    // Pin-by-SymbolId variant of AliasedAs(string). Same semantic: a
-    // fresh AliasRule wrapping this one, with the pinned id on the alias.
+    // Explicit-SymbolId variant of AliasedAs(string). Same semantic: a
+    // fresh AliasRule wrapping this one, with the explicit id on the alias.
     public Rule AliasedAs(SymbolId id) => new AliasRule(this).As(id);
 
     // Shared path for both .As(string) and .As(SymbolId): the caller is
     // identifying this rule so it can be found later. Either auto-flip a
     // default flatten policy to Preserve, or fail if the caller already
-    // pinned a contradicting non-Preserve policy.
+    // set a contradicting non-Preserve policy.
     private void ApplyIdentificationFlattenPolicy(string callerMethod, string identifier)
     {
         if (FlattenType == FlattenType.Preserve) return;
@@ -550,32 +552,32 @@ public abstract class Rule
 
     // Set by .As(SymbolId) and only by .As(SymbolId). Two consumers,
     // both checking for "user explicitly identified this rule by id":
-    //   * Auto-pin sites (SetIdInternal callers like
-    //     GraphemeRule.CollectNormalizationOffenders) skip the auto-pin
-    //     so a user pin survives normalization.
+    //   * Auto-assignment sites (SetIdInternal callers like
+    //     GraphemeRule.CollectNormalizationOffenders) skip the
+    //     auto-assignment so a user's explicit id survives normalization.
     //   * Leaf-emitting rules with the rune-as-leaf-id optimization
     //     (OneOfRule / NoneOfRule / AnyTokenRule / WithinTokenRule, via
     //     ResolveLeafId below) skip the optimization so leaves carry the
-    //     user's pinned id and Tree.Find / Tree.Is resolve through the
+    //     user's explicit id and Tree.Find / Tree.Is resolve through the
     //     user's reference.
     // Parallel to Name (set by .As(string)) for the second consumer:
     // either user-identification path disables the rune-as-leaf-id
     // shortcut.
-    internal bool IsUserSymbolIdPinned => _idUserPinned;
+    internal bool IsUserSymbolIdExplicit => _idUserExplicit;
 
     // The leaf-id rule for OneOfRule / NoneOfRule / AnyTokenRule /
     // WithinTokenRule. A truly anonymous single-rune match carries the
     // rune's code point as its leaf id, so tree consumers can dispatch
     // on `leaf.Id == 'a'` without going through a synthetic per-rule id.
     // A user-identified rule (`.As(string)` sets Name, `.As(SymbolId)`
-    // sets IsUserSymbolIdPinned) carries the rule's own Id so
+    // sets IsUserSymbolIdExplicit) carries the rule's own Id so
     // Tree.Find / Tree.Is / NameOf resolve through the user's reference.
     // A multi-rune token has runeValue == -1 and falls through to Id
     // either way, since one int can't hold a multi-rune code point.
     // Centralized here so the four leaf-emitting rules can't drift on
     // the gate.
     protected SymbolId ResolveLeafId(int runeValue) =>
-        (Name == null && !IsUserSymbolIdPinned && runeValue >= 0)
+        (Name == null && !IsUserSymbolIdExplicit && runeValue >= 0)
             ? new SymbolId(runeValue)
             : Id;
 
@@ -595,7 +597,7 @@ public abstract class Rule
     public virtual Rule Flatten(FlattenType type)
     {
         ThrowIfSealed();
-        if (type != FlattenType.Preserve && (Name != null || IsUserSymbolIdPinned))
+        if (type != FlattenType.Preserve && (Name != null || IsUserSymbolIdExplicit))
         {
             string identifier = Name != null
                 ? $".As(\"{Name}\")"
@@ -615,7 +617,7 @@ public abstract class Rule
     // or .Flatten(). Stays false while the rule still carries its class
     // default. .As(name) checks this to decide whether to silently flip
     // FlattenType to Preserve (default still in place) or throw (caller
-    // already pinned a contradicting non-Preserve policy).
+    // already set a contradicting non-Preserve policy).
     private bool _flattenPolicyExplicitlySet;
 
     // Convenience shortcuts for the three FlattenType values. These read
@@ -630,19 +632,23 @@ public abstract class Rule
     public Rule Flatten() => Flatten(FlattenType.Flatten);
 
     // Attach a static error message. If this rule's message wins the
-    // tier-based resolution when a parse fails, ParseResult.ErrorMessage
+    // depth-primary resolution when a parse fails, ParseResult.ErrorMessage
     // will be this string instead of the generic "unexpected 'x'"
     // fallback. Useful for giving user-friendly messages like "Expected a
     // setting name" at the spots most likely to be where the author went
     // wrong.
     //
-    // Three tiers, in order of priority at error-report time:
-    //   1. mechanical fallback (rules with no .WithError)
-    //   2. named (.WithError("msg"))
-    //   3. forced (.WithError("msg", forced: true))
+    // A rule with no .WithError produces a "mechanical" failure (position
+    // only). .WithError("msg") produces a "named" failure. .WithError("msg",
+    // forced: true) produces a "forced" failure. At error-report time:
+    //   1. A forced failure overrides everything, at any depth.
+    //   2. Otherwise the deepest failure wins, named and mechanical alike.
+    //   3. At an exact-depth tie a named failure beats a mechanical one;
+    //      a same-kind tie goes to the first recorded.
     //
-    // A higher tier always wins regardless of position. Within a tier,
-    // the record at the deepest input position wins.
+    // So .WithError chooses the words and tips an exact-depth tie, but it
+    // never pulls the reported position off the parser's deepest failure.
+    // See docs/ErrorArchitecture.md.
     //
     // Returns the same Rule for fluent chaining. Throws if already
     // compiled. Virtual so LateBoundRule can forbid it (a WithError set
@@ -673,14 +679,14 @@ public abstract class Rule
     // rather than at first parse.
     //
     // Id assignment runs in three passes:
-    //   1. Pinned ids first. Rules that called .As(SymbolId) keep the id
+    //   1. Explicit ids first. Rules that called .As(SymbolId) keep the id
     //      they were given, and that id is reserved against later passes.
-    //      Two reachable rules pinned to the same SymbolId are rejected
-    //      here with a clear error, since downstream lookups by raw
-    //      SymbolId (parse-tree walking, NameOf) can't disambiguate
+    //      Two reachable rules given the same explicit SymbolId are
+    //      rejected here with a clear error, since downstream lookups by
+    //      raw SymbolId (parse-tree walking, NameOf) can't disambiguate
     //      duplicate ids.
     //   2. Named rules get a hash-of-name id in the custom range. If the
-    //      hash slot is already taken (by a pinned id or an earlier named
+    //      hash slot is already taken (by an explicit id or an earlier named
     //      rule), the id linear-probes upward until it finds an empty
     //      slot. Same name produces the same hash slot every run, so a
     //      rule's id is stable across program executions in the absence
@@ -721,11 +727,11 @@ public abstract class Rule
         }
 
         var usedIds = new HashSet<int>();
-        var pinnedRules = new Dictionary<int, Rule>();
+        var explicitRules = new Dictionary<int, Rule>();
         var namedRules = new Dictionary<string, Rule>();
 
         var visited = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
-        CollectPinnedIds(this, visited, usedIds, pinnedRules);
+        CollectExplicitIds(this, visited, usedIds, explicitRules);
 
         visited.Clear();
         CheckNameUniqueness(this, visited, namedRules);
@@ -1399,56 +1405,56 @@ public abstract class Rule
         _idAssigned = true;
     }
 
-    // Pass 1. Walk the graph and stash any user-pinned ids so the later
-    // passes know which slots are off limits, and reject two reachable
-    // rules whose .As(SymbolId) pins land on the same id with a compile-
-    // time error that names both rules.
+    // Pass 1. Walk the graph and stash any user-set explicit ids so the
+    // later passes know which slots are off limits, and reject two
+    // reachable rules whose .As(SymbolId) explicit ids land on the same id
+    // with a compile-time error that names both rules.
     //
-    // The gate is `_idUserPinned`, set only by `.As(SymbolId)` (and
+    // The gate is `_idUserExplicit`, set only by `.As(SymbolId)` (and
     // persisting through sealing). `As(SymbolId)` itself enforces that
-    // user pins land in the custom range, so reaching this method with
-    // `_idUserPinned=true` already implies a custom-range id. Two kinds
+    // explicit ids land in the custom range, so reaching this method with
+    // `_idUserExplicit=true` already implies a custom-range id. Two kinds
     // of assigned ids correctly fall through to just reserving the slot
     // in `usedIds`:
     //
-    //   * Rune-range pre-pins. Every single-rune Token has its code
-    //     point pinned in its constructor, not by the user. A grammar
-    //     that mentions Token('a') twice has two rules sharing id 97 by
-    //     design; NameOf short-circuits the rune range to the rune
+    //   * Rune-range pre-assigned ids. Every single-rune Token has its
+    //     code point assigned in its constructor, not by the user. A
+    //     grammar that mentions Token('a') twice has two rules sharing id
+    //     97 by design; NameOf short-circuits the rune range to the rune
     //     string and there's no name ambiguity to resolve.
     //
     //   * Custom-range ids stamped by the anonymous pass. A sub-rule
     //     that was compiled standalone and is now reached from a larger
-    //     grammar has `_idAssigned=true` but `_idUserPinned=false`, so
+    //     grammar has `_idAssigned=true` but `_idUserExplicit=false`, so
     //     it doesn't compete for the conflict slot.
-    private static void CollectPinnedIds(Rule r, HashSet<Rule> visited, HashSet<int> usedIds, Dictionary<int, Rule> pinnedRules)
+    private static void CollectExplicitIds(Rule r, HashSet<Rule> visited, HashSet<int> usedIds, Dictionary<int, Rule> explicitRules)
     {
         if (!visited.Add(r)) return;
         if (r._idAssigned)
         {
             int idValue = r.Id.Value;
-            if (r._idUserPinned && pinnedRules.TryGetValue(idValue, out var existing))
+            if (r._idUserExplicit && explicitRules.TryGetValue(idValue, out var existing))
             {
                 throw new InvalidOperationException(
-                    $"Two reachable rules pin SymbolId({idValue}): " +
-                    $"'{DescribePinnedRule(existing)}' and '{DescribePinnedRule(r)}'. " +
-                    $"Each .As(new SymbolId(...)) pin must be unique within a grammar.");
+                    $"Two reachable rules use the explicit SymbolId({idValue}): " +
+                    $"'{DescribeExplicitRule(existing)}' and '{DescribeExplicitRule(r)}'. " +
+                    $"Each .As(new SymbolId(...)) explicit id must be unique within a grammar.");
             }
-            if (r._idUserPinned)
-                pinnedRules[idValue] = r;
+            if (r._idUserExplicit)
+                explicitRules[idValue] = r;
             usedIds.Add(idValue);
         }
         foreach (var child in r.Children)
-            CollectPinnedIds(child, visited, usedIds, pinnedRules);
+            CollectExplicitIds(child, visited, usedIds, explicitRules);
     }
 
-    private static string DescribePinnedRule(Rule r) => r.Name ?? r._ruleTraceName;
+    private static string DescribeExplicitRule(Rule r) => r.Name ?? r._ruleTraceName;
 
     // Reject grammars where two distinct reachable rules share an .As(string)
     // name. A name is meant to identify a single rule in NameOf, parse-tree
     // lookups, and trace output, so duplicates would silently make those
-    // resolutions ambiguous. This is the parallel of the pin-collision check
-    // in CollectPinnedIds, just for names instead of SymbolIds.
+    // resolutions ambiguous. This is the parallel of the explicit-id
+    // collision check in CollectExplicitIds, just for names instead of SymbolIds.
     //
     // The visited set guarantees we walk each rule once, so the dictionary
     // only ever sees the second instance under a given name.

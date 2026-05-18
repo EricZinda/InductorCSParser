@@ -26,13 +26,17 @@ internal sealed class AndRule : Rule
             if (symbol == null)
             {
                 TraceFailure(lexer, $"symbol #{symbolIndex}");
-                // Record at the failing child's start position (lexer
-                // is at that position because the child's own
-                // transaction rolled back there). That puts the
-                // cursor at where the user needs to fix the input,
-                // not at the And's overall start. See
+                // Anchor a .WithError on the And at the deepest position
+                // its subtree reached. lexer.Position is the failing
+                // child's start (its transaction rolled back there) and
+                // is the floor; a descendant that probed deeper before
+                // failing pushes SubtreeDeepestFailure past it. Recording
+                // at the deeper of the two keeps the And's named failure
+                // level with its deepest child failure so depth-primary
+                // ranking compares them fairly. See
                 // docs/ErrorArchitecture.md.
-                lexer.RecordFailure(lexer.Position, ErrorMessage, ErrorForced);
+                int anchor = Math.Max(lexer.SubtreeDeepestFailure, lexer.Position);
+                lexer.RecordFailure(anchor, ErrorMessage, ErrorForced);
                 return null;
             }
             // Don't add child symbols if they're discarded

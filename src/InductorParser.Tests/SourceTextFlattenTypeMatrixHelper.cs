@@ -17,7 +17,7 @@ namespace InductorParser.Tests;
 // stays in the tree regardless of FlattenType, and asserts
 // `target.SourceText` returns the expected text.
 //
-// The invariant being pinned: a Symbol's SourceText is the section of
+// The invariant being verified: a Symbol's SourceText is the section of
 // the user's original input the rule matched, regardless of the
 // rule's FlattenType. FlattenType affects whether and how the Symbol
 // appears in the surrounding tree shape, not the matched-text content.

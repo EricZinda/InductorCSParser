@@ -65,21 +65,49 @@ public class PeekRuleTests
     }
 
     [Test]
-    public void Peek_without_WithError_surfaces_inner_WithError_when_Peek_fails()
+    public void Peek_failure_anchors_at_its_own_start_after_a_consumed_prefix()
     {
-        // Peek doesn't clear inner records on success (inner already
-        // cleared its own via inner's commit), and when Peek FAILS
-        // (inner failed), inner's failure record survives Peek's
-        // rollback. So if the inner has a .WithError and Peek doesn't,
-        // the inner's WithError is what the user sees. Pins that
-        // Peek doesn't accidentally scrub inner records.
+        // The other failure tests run Peek as the top-level rule, so
+        // its anchor is offset 0. A Peek that hard-coded 0, or that
+        // reported wherever its inner probe left the cursor, would
+        // still pass them. Putting Peek after a consumed prefix gives
+        // it a non-zero start that's distinct from both.
+        //
+        // On "abcxz": Literal("abc") consumes 0..2, leaving the cursor
+        // at 3. Peek's inner Literal("xy") reads 'x', then mismatches
+        // 'z' against 'y' at offset 4, so the inner failed and Peek
+        // fails. Peek anchors its failure at its own start, offset 3,
+        // not at input start (0), and not at offset 4 where the probe
+        // got stuck.
+        var rule = And(
+            Literal("abc"),
+            Peek(Literal("xy")).WithError("expected 'xy' after 'abc'"));
+        var result = rule.Parse("abcxz");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'xy' after 'abc'"));
+    }
+
+    [Test]
+    public void Peek_discards_inner_WithError_because_lookahead_failures_are_dropped()
+    {
+        // Peek runs its inner as a throwaway probe. When the probe fails,
+        // the failures it produced (including a .WithError the
+        // inner carries) are discarded: they sit at a position the
+        // parser only probed, never consumed. With no WithError of its
+        // own, Peek records a bare mechanical failure at its anchor, so the
+        // user sees the generic positional template, not the inner's
+        // message. See docs/ErrorArchitecture.md, "Lookahead failures are
+        // discarded".
         var rule = And(
             Peek(Token('a').WithError("expected 'a' ahead")),
             Token('b'));
         var result = rule.Parse("x");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'a' ahead"));
+        Assert.That(result.ErrorMessage, Does.Not.Contain("expected 'a' ahead"));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
     }
 
     [Test]

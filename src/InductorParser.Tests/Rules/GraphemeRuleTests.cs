@@ -304,8 +304,8 @@ public class GraphemeRuleTests
     [Test]
     public void Named_single_rune_Token_is_findable_via_Find_and_renders_with_user_name()
     {
-        // A single-rune Token has its rule Id pinned to the rune's code
-        // point at construction (Token('a').Id == 0x61). Tree.Find still
+        // A single-rune Token has its rule Id auto-assigned to the rune's
+        // code point at construction (Token('a').Id == 0x61). Tree.Find still
         // resolves through rule.Id, NameOf returns the user-supplied name
         // for the user-named case, and PrintTree shows the long form.
         var aChar = Token('a').As("aChar");
@@ -384,7 +384,7 @@ public class GraphemeRuleTests
     public void Token_in_OneOrMore_matches_after_FormC_canonical_singleton_substitution()
     {
         // Same staleness shape as the OneOf test in OneOfRuleTests:
-        // GraphemeRule.ComputeRuleStart reads _expected and pins
+        // GraphemeRule.ComputeRuleStart reads _expected and assigns
         // FirstConsumedTokens to the first rune of that text. The Compile
         // pipeline then runs the normalization-form pass, which can
         // rewrite _expected (U+212B ANGSTROM SIGN converts to U+00C5

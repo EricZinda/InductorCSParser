@@ -61,8 +61,8 @@ public class InductorParserDesignDecisionsExamples
     // Optional inner reads "ab" and fails on 'd' vs 'c' at offset 2.
     // Optional catches and succeeds with empty children. Token('x')
     // tries at offset 0, fails on 'a'. Count rules (Optional /
-    // ZeroOrMore / ...) don't clear inner records on commit, so the
-    // inner's deeper failure record survives and surfaces.
+    // ZeroOrMore / ...) don't clear inner failures on commit, so the
+    // inner's deeper failure survives and surfaces.
     [Test]
     public void Optional_can_capture_error_position_via_deepest_failure_wins()
     {
@@ -71,7 +71,7 @@ public class InductorParserDesignDecisionsExamples
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2),
-            "Optional's inner attempt at offset 2 wins because count rules don't clear inner records on commit");
+            "Optional's inner attempt at offset 2 wins because count rules don't clear inner failures on commit");
     }
 
     // "Things That Got Worse" / "Rule graphs can have order-of-init traps":

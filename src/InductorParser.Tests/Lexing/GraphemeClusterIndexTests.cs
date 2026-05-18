@@ -124,7 +124,7 @@ public class GraphemeClusterIndexTests
         // क + virama + ष. UAX #29 rev. 39 (GB9c) keeps these glued as
         // one cluster; earlier revisions break before the trailing
         // consonant. Either way the index agrees with StringInfo,
-        // because both walk the same enumerator. This test pins that
+        // because both walk the same enumerator. This test verifies that
         // agreement on whichever runtime is hosting the suite.
         AssertMatchesReference(Canary("क्ष", "devanagari letter ka + devanagari sign virama + devanagari letter ssa", 0x0915, 0x094D, 0x0937));
     }

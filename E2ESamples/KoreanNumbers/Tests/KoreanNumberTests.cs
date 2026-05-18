@@ -12,7 +12,7 @@
 //    Original cannot. This is the "errors are useful" check.
 //
 // 3. AST shape: the Rewrite exposes a walkable tree with SourceRange
-//    on every term. A handful of inputs are pinned to specific tree
+//    on every term. A handful of inputs are locked to specific tree
 //    shapes so future grammar changes can't silently regress this.
 
 using System.Linq;
@@ -105,7 +105,7 @@ public class KoreanNumberParseCountTests
     // implementations. The grammar isn't involved (count words like
     // 하나, 다섯, 열셋 use a totally different vocabulary than the
     // Sino-Korean digit system the grammar handles). Kept here as a
-    // pinning regression so a future refactor that drops the count
+    // regression test so a future refactor that drops the count
     // map gets caught.
     public static readonly object[] CountCases =
     {
@@ -199,7 +199,7 @@ public class KoreanNumberRejectTests
 public class KoreanNumberErrorPositionTests
 {
     // Side-by-side: input, expected position the Rewrite should report.
-    // The Original returns 0 with no position, so these checks pin the
+    // The Original returns 0 with no position, so these checks verify the
     // rewrite's behavior only. The "expected position" is the char
     // index at which the parser gave up.
 

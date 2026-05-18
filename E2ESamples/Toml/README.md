@@ -8,7 +8,7 @@ booleans, four date-time flavors, comments. Full spec, not a subset.
 `Original/` holds the spec's formal ABNF grammar plus its license. The
 test project pulls in Tomlyn (https://www.nuget.org/packages/Tomlyn,
 BSD-2-Clause) via NuGet for behavioral comparison; Tomlyn's source is
-not copied into this tree, the version is pinned in `Toml.csproj`.
+not copied into this tree, the version is fixed in `Toml.csproj`.
 
 ## Layout
 
@@ -94,16 +94,16 @@ Or as part of the full solution:
 
 Five test fixtures, 62 tests total:
 
-1. SmokeTests — accept/reject sanity. 8 tests.
-2. AstTests — input to typed AST projection, drawn from the spec's
+1. SmokeTests: accept/reject sanity. 8 tests.
+2. AstTests: input to typed AST projection, drawn from the spec's
    worked examples. 18 tests covering dotted keys, nested tables,
    arrays of tables, every value kind.
-3. ErrorPositionTests — pin the line/column of the deepest failure
+3. ErrorPositionTests: verify the line/column of the deepest failure
    for four malformed inputs. 5 tests.
-4. TomlynComparisonTests — round-trip inputs through Tomlyn and
+4. TomlynComparisonTests: round-trip inputs through Tomlyn and
    assert equivalent typed values; assert both parsers reject the
    same bad inputs. 8 tests.
-5. UnicodeTests — control-character rejection in basic and literal
+5. UnicodeTests: control-character rejection in basic and literal
    strings, surrogate / out-of-range rejection in `\uXXXX` and
    `\UXXXXXXXX` escapes, byte-fidelity for NFC vs NFD keys (matches
    Tomlyn), and CRLF / bare-CR line-terminator handling. 23 tests.

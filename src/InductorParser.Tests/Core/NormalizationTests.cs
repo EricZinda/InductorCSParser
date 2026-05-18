@@ -671,34 +671,34 @@ public class NormalizationTests
     }
 
     [Test]
-    public void Token_with_singleton_decomposable_rune_repins_id()
+    public void Token_with_singleton_decomposable_rune_reassigns_id()
     {
         // Token U+2126 OHM SIGN compiled under FormC auto-converts
         // _expected to U+03A9 GREEK CAPITAL OMEGA. The rule's Id (which
-        // reflects the single-rune token value) should be re-pinned to
+        // reflects the single-rune token value) should be re-assigned to
         // 0x03A9, not stay as 0x2126.
         var rule = Token(OhmGrapheme);
         rule.Compile();
         Assert.That(rule.Id.Value, Is.EqualTo(0x03A9),
-            "Token Id repins to the converted rune value");
+            "Token Id is re-assigned to the converted rune value");
     }
 
     [Test]
-    public void Token_with_singleton_decomposable_rune_preserves_user_pinned_id()
+    public void Token_with_singleton_decomposable_rune_preserves_user_explicit_id()
     {
-        // Sibling of Token_with_singleton_decomposable_rune_repins_id.
-        // The unnamed case re-pins Id to the post-normalization rune,
+        // Sibling of Token_with_singleton_decomposable_rune_reassigns_id.
+        // The unnamed case re-assigns Id to the post-normalization rune,
         // which is desired (leaf-id consistency between Token('Ω') and
-        // Token('Ω').Compile(FormC)). But when the user pinned an
+        // Token('Ω').Compile(FormC)). But when the user set an
         // explicit SymbolId via .As(new SymbolId(...)), Compile must NOT
         // overwrite it. .As(SymbolId) is documented as the
         // stable-numbering hook, useful for serialized parse trees, and
-        // a silent re-pin under normalization defeats that promise.
-        int pinned = SymbolRanges.CustomRangeStart + 0x100;
-        var rule = Token(OhmGrapheme).As(new SymbolId(pinned));
+        // a silent re-assignment under normalization defeats that promise.
+        int explicitId = SymbolRanges.CustomRangeStart + 0x100;
+        var rule = Token(OhmGrapheme).As(new SymbolId(explicitId));
         rule.Compile();
-        Assert.That(rule.Id.Value, Is.EqualTo(pinned),
-            "User-pinned SymbolId survives canonical-singleton normalization");
+        Assert.That(rule.Id.Value, Is.EqualTo(explicitId),
+            "User's explicit SymbolId survives canonical-singleton normalization");
     }
 
     [Test]

@@ -32,7 +32,7 @@ namespace InductorParser.Tests;
 // Convention: every Unicode value is built from explicit hex codepoints
 //, either `(char)0xHHHH` casts concatenated into a string, or `\uHHHH`
 // escapes for surrogates, with a same-line "// looks like X" comment
-// showing the rendered character. The hex form pins the bytes regardless
+// showing the rendered character. The hex form fixes the bytes regardless
 // of editor or text-processing layer behavior, and the comment tells a
 // reader what they're looking at without having to decode the codepoints
 // by eye. Single ASCII characters ("a", "K", "fi") stay as plain string

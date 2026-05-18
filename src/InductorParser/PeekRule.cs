@@ -26,12 +26,24 @@ internal sealed class PeekRule : Rule
     {
         // Lookahead only: inner's result is thrown away.
         using var transaction = lexer.BeginTransaction();
+        var failureSnapshot = lexer.SaveFailureState();
         var innerResult = Inner.TryParse(lexer, outputSymbols: null);
+        // Inner ran as a throwaway probe. Discard the failures and
+        // the subtree extent it produced, succeed or fail: those
+        // positions were only probed, never consumed, and keeping them
+        // would let a probe's deep excursion outrank the real parse's
+        // failures. See docs/ErrorArchitecture.md, "Lookahead failures are
+        // discarded".
+        lexer.RestoreFailureState(failureSnapshot);
+        lexer.DiscardSubtreeExtent();
         if (innerResult == null)
         {
             TraceFailure(lexer, $"inner didn't match");
-            // Record Peek's own failure at the lookahead anchor.
-            // See docs/ErrorArchitecture.md.
+            // Peek records one failure of its own, at the lookahead anchor
+            // (its own start, where the user has to change something),
+            // carrying its .WithError if it has one. This is the
+            // exception to composite anchoring: there is no surviving
+            // descendant failure to anchor to. See docs/ErrorArchitecture.md.
             lexer.RecordFailure(transaction.StartPosition, ErrorMessage, ErrorForced);
             return null;
         }

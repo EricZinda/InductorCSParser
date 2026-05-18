@@ -79,7 +79,7 @@ reports failure at offset 5: that's the position of the `f` in `foo`,
 where `Literal(": ")` had read the `:` and then expected a space. The
 original swallows that case as "subject = `feat:foo`."
 
-`Tests/ErrorMessageComparisonTests.cs` pins this difference for three
+`Tests/ErrorMessageComparisonTests.cs` verifies this difference for three
 malformed inputs.
 
 ## Worked example
@@ -117,7 +117,7 @@ dotnet test E2ESamples/Versionize/Versionize.E2ESample.csproj
 
 32 tests, no skips. The OriginalParserTests fixture exercises the upstream
 parser, RewriteParserTests exercises the rewrite against the same shapes,
-and ErrorMessageComparisonTests pins the diagnostic improvement.
+and ErrorMessageComparisonTests verifies the diagnostic improvement.
 
 ## Friction surfaced during the rewrite
 

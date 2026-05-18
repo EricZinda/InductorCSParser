@@ -798,7 +798,7 @@ public static class Rules
 
     /// <summary>
     /// Encodes a UAX #31-style "programming language identifier" using
-    /// runtime-backed XID tables plus the pinned exception tables in
+    /// runtime-backed XID tables plus the built-in exception tables in
     /// <see cref="TokenSet"/>. Default
     /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>,
     /// so the match appears in the tree as one named node whose

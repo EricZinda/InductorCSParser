@@ -5,7 +5,7 @@
 // almost-but-not-quite right. The InductorParser rewrite exposes a
 // ParseHeader entry point that returns a ParseResult with a position and
 // (optionally) a WithError-driven message, which is the diagnostic
-// improvement the rewrite buys us. These tests pin a few representative
+// improvement the rewrite buys us. These tests verify a few representative
 // malformed inputs and the position the rewrite reports for each.
 
 using NUnit.Framework;

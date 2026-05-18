@@ -258,22 +258,24 @@ public class RecipesExamples
     // problem on bad input like "01.2.3". The Or commits to Token('0'),
     // the outer And then fails on Token('.') at offset 1.
     //
-    // The test pins this ordered-choice trap so the recipe's claim
+    // The test verifies this ordered-choice trap so the recipe's claim
     // ("the error message points one column past the actual problem")
     // doesn't drift if the parser ever changes default messages.
     [Test]
     public void No_leading_zero_natural_translation_positions_error_one_column_past_the_problem()
     {
-        // Factory function so each call site gets a fresh rule and .As
-        // can name it without colliding with a previous name.
-        static Rule NaturalCore() => Or(
+        // Build the Or shape once, then give each position its own
+        // identity with AliasedAs. .As is set-once, so naming the same
+        // instance three times would throw; AliasedAs wraps the shared
+        // shape in a fresh alias on each call, so no factory is needed.
+        var numericCore = Or(
             Token('0'),
             And(OneOf(TokenSet.Range('1', '9')), ZeroOrMore(OneOf(TokenSet.Ascii.Digits)))
         );
         var grammar = And(
-            NaturalCore().As("major"), Token('.'),
-            NaturalCore().As("minor"), Token('.'),
-            NaturalCore().As("patch"), Eof());
+            numericCore.AliasedAs("major"), Token('.'),
+            numericCore.AliasedAs("minor"), Token('.'),
+            numericCore.AliasedAs("patch"), Eof());
 
         var result = grammar.Parse("01.2.3");
         Assert.That(result.Success, Is.False);
@@ -283,34 +285,35 @@ public class RecipesExamples
     }
 
     // "Numbers with no leading zeros": the lookahead-inside-Or pattern
-    // (only accept '0' if not followed by another digit). Under the
-    // three-tier error model, the outer Or's WithError lands in the
-    // named tier and beats the mechanical records the Not's internal
-    // probe leaves behind — so the error reports at the Or's start with
-    // the named message. Previously this case was bugged: the inner
-    // probe's mechanical record at depth outvoted the shallower named
-    // outer. Fixed by the three-tier resolution rule.
+    // (only accept '0' if not followed by another digit). Under
+    // depth-primary ranking, the outer Or's named WithError anchors at
+    // the deepest position its branches reached (column 1, the digit
+    // after the committed-to '0', where the Not's lookahead got stuck),
+    // and wins the named-beats-mechanical tie there. The author's
+    // message surfaces, at the spot the parse actually stalled.
     [Test]
-    public void No_leading_zero_lookahead_inside_or_reports_outer_WithError_at_its_start()
+    public void No_leading_zero_lookahead_inside_or_reports_outer_WithError_at_the_stuck_digit()
     {
-        // Factory function so each call site gets a fresh rule and .As
-        // can name it without colliding with a previous name.
-        static Rule Number() => Or(
+        // Build the Or shape once, then give each position its own
+        // identity with AliasedAs, no factory needed. The WithError
+        // sits on the shared Or, and since every position wants the
+        // same message, sharing that one shape is exactly right.
+        var number = Or(
             And(Token('0'), Not(OneOf(TokenSet.Ascii.Digits))),
             And(OneOf(TokenSet.Range('1', '9')), ZeroOrMore(OneOf(TokenSet.Ascii.Digits)))
         ).WithError("Number with no leading zeros expected");
         var grammar = And(
-            Number().As("major"), Token('.'),
-            Number().As("minor"), Token('.'),
-            Number().As("patch"), Eof());
+            number.AliasedAs("major"), Token('.'),
+            number.AliasedAs("minor"), Token('.'),
+            number.AliasedAs("patch"), Eof());
 
         var result = grammar.Parse("01.2.3");
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorColumn, Is.EqualTo(0),
-            "the Or's WithError now lands at the Or's start column");
+        Assert.That(result.ErrorColumn, Is.EqualTo(1),
+            "the Or's WithError anchors at the deepest position its branches reached");
         Assert.That(result.ErrorMessage,
             Does.Contain("Number with no leading zeros"),
-            "the Or's named WithError beats the Not's mechanical inner record");
+            "the Or's named WithError wins the named-beats-mechanical tie at that depth");
     }
 
     // "Numbers with no leading zeros": the reject-first pattern puts
@@ -323,16 +326,20 @@ public class RecipesExamples
     [Test]
     public void No_leading_zero_reject_first_pattern_positions_error_at_the_bad_digit()
     {
-        static Rule NumericCore() => And(
+        // Build the reject-first shape once and alias it under three
+        // names. The WithError here is generic, so the shared shape
+        // works. When each position needs its own message text, a
+        // factory parameterized by name is the way (see the SemVer
+        // sample under E2ESamples/SemVer/Rewrite).
+        var numericCore = And(
             Not(And(Token('0'), OneOf(TokenSet.Ascii.Digits)))
                 .WithError("Number with no leading zeros expected"),
-            OneOrMore(OneOf(TokenSet.Ascii.Digits))
-        );
+            OneOrMore(OneOf(TokenSet.Ascii.Digits)));
 
         var grammar = And(
-            NumericCore().As("major"), Token('.'),
-            NumericCore().As("minor"), Token('.'),
-            NumericCore().As("patch"), Eof());
+            numericCore.AliasedAs("major"), Token('.'),
+            numericCore.AliasedAs("minor"), Token('.'),
+            numericCore.AliasedAs("patch"), Eof());
 
         var leadingZeroOnMajor = grammar.Parse("01.2.3");
         Assert.That(leadingZeroOnMajor.Success, Is.False);

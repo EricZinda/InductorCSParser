@@ -83,9 +83,9 @@ public class WithinTokenRuleTests
     [Test]
     public void Inner_WithError_surfaces_when_WithinToken_fails_without_its_own_WithError()
     {
-        // WithinToken doesn't clear inner records on success — and when
+        // WithinToken doesn't clear inner failures on success, and when
         // it fails (inner sub-rule failed inside the token), the inner's
-        // failure record survives. Pins that the inner sub-rule's
+        // failure survives. Verifies the inner sub-rule's
         // WithError is what the user sees if WithinToken itself has no
         // WithError.
         var rule = WithinToken(Literal("ab").WithError("inner literal failed"));
@@ -366,19 +366,19 @@ public class WithinTokenRuleTests
     }
 
     [Test]
-    public void WithinToken_with_pinned_SymbolId_uses_pinned_id_for_single_rune_outer_token()
+    public void WithinToken_with_explicit_SymbolId_uses_explicit_id_for_single_rune_outer_token()
     {
-        // .As(SymbolId) is the user's "pin a stable id" signal, parallel
+        // .As(SymbolId) is the user's "set a stable id" signal, parallel
         // to .As("name") for findability. The leaf has to carry the
-        // pinned id so Tree.Find / Tree.Is resolve through the user's
-        // pinned reference. Same shape as the OneOf pinned-id test.
-        var pinnedId = new SymbolId(SymbolRanges.CustomRangeStart + 103);
-        var rule = WithinToken(OneOf(TokenSet.Ascii.Letters)).As(pinnedId);
+        // explicit id so Tree.Find / Tree.Is resolve through the user's
+        // explicit reference. Same shape as the OneOf explicit-id test.
+        var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 103);
+        var rule = WithinToken(OneOf(TokenSet.Ascii.Letters)).As(explicitId);
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True);
-        Assert.That(result.Tree!.Id, Is.EqualTo(pinnedId),
-            "leaf carries the user-pinned SymbolId, not the rune value");
+        Assert.That(result.Tree!.Id, Is.EqualTo(explicitId),
+            "leaf carries the user's explicit SymbolId, not the rune value");
         Assert.That(result.Tree!.Is(rule), Is.True);
         Assert.That(result.Tree!.Find(rule), Is.Not.Null);
     }

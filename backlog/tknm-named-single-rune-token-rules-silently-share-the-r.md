@@ -12,7 +12,7 @@ The asymmetric `.As(SymbolId)` overload already rejects user pins into the rune 
 
 ## Verify the Bug (Write Test First)
 
-Two tests in `src/InductorParser.Tests/Core/IdAssignmentTests.cs`. The first asserts the rules get distinct ids; the second asserts `Tree.Find` resolves to different leaves.
+Two tests in `src/InductorParser.Tests/Core/IdAssignmentTests.cs`. The first asserts the rules get distinct ids. The second asserts `Tree.Find` resolves to different leaves.
 
 ```csharp
 [Test]
@@ -60,7 +60,7 @@ Two changes:
 
 1. In [Rule.cs:414](src/InductorParser/Rule.cs#L414) (`Rule.As(string)`), after writing `Name`, clear `_idAssigned` when the rule's id was auto-pinned (the `!_idUserPinned` check). That lets `Compile`'s `AssignNamedIds` give it a fresh name-hashed custom-range id. A user-pinned id (`.As(SymbolId)`) stays put because `_idUserPinned` is true.
 
-2. In [GraphemeRule.cs:91](src/InductorParser/GraphemeRule.cs#L91) (`CollectNormalizationOffenders`), the post-normalization rune re-pin already skips when the user pinned a SymbolId. Extend the guard to also skip when the rule has a `Name`, so the custom-range id `AssignNamedIds` assigned to a named Token doesn't get clobbered by a `SetIdInternal` call when normalization changes the expected rune (e.g., OHM SIGN U+2126 to GREEK CAPITAL LETTER OMEGA U+03A9 under FormC).
+2. In [GraphemeRule.cs:91](src/InductorParser/GraphemeRule.cs#L91) (`CollectNormalizationOffenders`), the post-normalization rune re-pin already skips when the user pinned a SymbolId. Extend the check to also skip when the rule has a `Name`, so the custom-range id `AssignNamedIds` assigned to a named Token doesn't get clobbered by a `SetIdInternal` call when normalization changes the expected rune (e.g., OHM SIGN U+2126 to GREEK CAPITAL LETTER OMEGA U+03A9 under FormC).
 
 The fix doesn't change anonymous-Token behavior. `Token('a')` (no `.As`) still auto-pins to 0x61, and its leaf still carries SymbolId(0x61) so tree walkers can dispatch on `leaf.Id == 'a'`.
 

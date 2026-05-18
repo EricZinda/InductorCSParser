@@ -62,18 +62,16 @@ public sealed class AliasRule : Rule
         if (innerSymbol == null)
         {
             TraceFailure(lexer, $"inner failed");
-            // Record Alias's own failure. The single child runs as the
-            // first and only thing Alias does, so the child starts where
-            // Alias starts: lexer.Position, transaction.StartPosition, and
-            // the failing child's start are all the same offset here. The
-            // "rule's own start" vs "failing child's start" choice that
-            // And and BetweenInclusive have to make (because earlier
-            // children already moved the cursor) doesn't arise for a
-            // single-child rule. The inner's own records stand untouched;
-            // this call only adds Alias's own .WithError (via ErrorMessage
-            // / ErrorForced) so it can compete in the tier system. See
-            // docs/ErrorArchitecture.md.
-            lexer.RecordFailure(transaction.StartPosition, ErrorMessage, ErrorForced);
+            // Anchor a .WithError on the alias at the deepest position
+            // the inner reached. The inner rolled back to the alias's
+            // start, so transaction.StartPosition is the floor; the
+            // inner's subtree pushes SubtreeDeepestFailure past it when
+            // it probed deeper before failing. The inner's own failures
+            // (including a .WithError the inner carries) stand untouched;
+            // depth-primary ranking picks the winner between them and the
+            // alias's failure. See docs/ErrorArchitecture.md.
+            int anchor = Math.Max(lexer.SubtreeDeepestFailure, transaction.StartPosition);
+            lexer.RecordFailure(anchor, ErrorMessage, ErrorForced);
             return null;
         }
 
