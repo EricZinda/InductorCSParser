@@ -371,6 +371,211 @@ public class AliasRuleTests
     }
 
     [Test]
+    public void LateBound_bound_to_an_Alias_forwards_and_keeps_the_alias_identity()
+    {
+        // The mirror of the test above: instead of an alias wrapping a
+        // LateBoundRule, here a LateBoundRule's target IS an AliasRule.
+        // The LateBoundRule forwards transparently, so the alias's Symbol
+        // and its name survive into the tree.
+        var alias = OneOrMore(OneOf(TokenSet.Digits)).AliasedAs("digits");
+        var lateBound = new LateBoundRule("placeholder");
+        lateBound.Bind(alias);
+
+        var result = lateBound.Parse("123");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        // Check the tree's shape, not just that an alias Symbol exists
+        // somewhere: result.Find searches recursively, so it would pass
+        // even if a stray layer wrapped the alias. The LateBoundRule is
+        // transparent, so the alias's Symbol must be the single top-level
+        // Symbol, with nothing above it.
+        Assert.That(result.Symbols.Count, Is.EqualTo(1));
+        Assert.That(result.Symbols[0].Is(alias), Is.True,
+            "The alias's Symbol should be the top node; the LateBoundRule adds no layer.");
+        Assert.That(result.Symbols[0].ToString(), Is.EqualTo("123"));
+    }
+
+    [Test]
+    public void Alias_wrapping_a_chain_of_LateBoundRules_is_findable()
+    {
+        // The alias wraps `outer`, a LateBoundRule bound to `inner`,
+        // another LateBoundRule, bound to the real rule. The alias names
+        // the whole two-link chain, and the chain forwards through to the
+        // digits.
+        var inner = new LateBoundRule("inner");
+        var outer = new LateBoundRule("outer");
+        var alias = outer.AliasedAs("number");
+        outer.Bind(inner);
+        inner.Bind(OneOrMore(OneOf(TokenSet.Digits)));
+
+        var result = alias.Parse("2026");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        // The alias is the root rule, and the two-link LateBoundRule chain
+        // it wraps is transparent, so the alias's Symbol is the tree's top
+        // node directly. result.Tree.Is(alias) verifies that shape;
+        // result.Find(alias) would only prove an alias Symbol exists
+        // somewhere in the tree.
+        Assert.That(result.Tree, Is.Not.Null);
+        Assert.That(result.Tree!.Is(alias), Is.True,
+            "The alias's Symbol should be the top node of the tree.");
+        Assert.That(result.Tree.ToString(), Is.EqualTo("2026"));
+    }
+
+    [Test]
+    public void LateBound_bound_to_an_Alias_that_wraps_another_LateBound()
+    {
+        // A mixed chain: outerLate -> alias -> innerLate -> real rule.
+        // The AliasRule sits between two LateBoundRule layers. The outer
+        // LateBoundRule forwards into the alias, the alias rebadges, and
+        // the inner LateBoundRule forwards into the real digits rule.
+        var innerLate = new LateBoundRule("innerLate");
+        var alias = innerLate.AliasedAs("aliasLayer");
+        var outerLate = new LateBoundRule("outerLate");
+        outerLate.Bind(alias);
+        innerLate.Bind(OneOrMore(OneOf(TokenSet.Digits)));
+
+        var result = outerLate.Parse("777");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        // outerLate and innerLate are both transparent, so the alias is
+        // the single top-level Symbol: no LateBoundRule layer above it and
+        // none below it. result.Symbols verifies that shape; result.Find
+        // would only prove an alias Symbol exists at some depth.
+        Assert.That(result.Symbols.Count, Is.EqualTo(1));
+        Assert.That(result.Symbols[0].Is(alias), Is.True,
+            "The alias's Symbol should be the single top node of the tree.");
+        Assert.That(result.Symbols[0].ToString(), Is.EqualTo("777"));
+    }
+
+    [Test]
+    public void Alias_of_a_LateBound_rebadges_the_target_like_aliasing_it_directly()
+    {
+        // A LateBoundRule reports its target's FlattenType, so it's fully
+        // transparent: Alias(lateBound) behaves exactly like Alias(target).
+        // When the target is Preserve, the alias rebadges it, so the
+        // target's Symbol is replaced by the alias's, not kept as a layer.
+        // (This used to be a documented corner case where the target
+        // survived as an extra layer, back when a LateBoundRule was always
+        // FlattenType.Flatten instead of reporting its target's.)
+        var target = And(Token('1'), Token('2')).As("target").Flatten(FlattenType.Preserve);
+        var lateBound = new LateBoundRule("placeholder");
+        lateBound.Bind(target);
+        var alias = lateBound.AliasedAs("aliasName");
+
+        var result = alias.Parse("12");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+
+        Assert.That(result.Tree!.Is(alias), Is.True,
+            "The alias's Symbol is the top node.");
+        Assert.That(result.Tree!.Find(target), Is.Null,
+            "The target is rebadged away, exactly as when aliasing it directly.");
+    }
+
+    [Test]
+    public void Alias_of_a_LateBound_rebadges_consistently_in_normal_and_PreserveAllSymbols_mode()
+    {
+        // PreserveAllSymbols is a debug mode that turns every rule Preserve;
+        // it must agree with normal parsing about structure (only adding
+        // Delete leaves, never moving or dropping nodes). A LateBoundRule
+        // reporting its target's FlattenType makes the alias rebadge the
+        // target away identically in both modes. Before the fix the modes
+        // disagreed: normal mode kept the target as a layer, PreserveAll
+        // dropped it.
+        var target = And(Token('1'), Token('2')).As("target").Flatten(FlattenType.Preserve);
+        var lateBound = new LateBoundRule("placeholder");
+        lateBound.Bind(target);
+        var alias = lateBound.AliasedAs("aliasName");
+
+        var normal = alias.Parse("12");
+        var debug = alias.Parse("12", new ParseOptions { PreserveAllSymbols = true });
+
+        Assert.That(normal.Success, Is.True, normal.ErrorMessage);
+        Assert.That(debug.Success, Is.True, debug.ErrorMessage);
+        Assert.That(normal.Tree!.Find(target), Is.Null,
+            "normal mode rebadges the target away");
+        Assert.That(debug.Tree!.Find(target), Is.Null,
+            "PreserveAllSymbols rebadges it the same way, so the two modes agree");
+    }
+
+    [Test]
+    public void Alias_wrapping_a_LateBound_bound_back_to_the_alias_aborts_with_DepthLimitExceeded()
+    {
+        // The alias analog of the self-bound LateBoundRule test: the alias
+        // wraps a LateBoundRule that is bound straight back to the alias,
+        // so alias -> lateBound -> alias is a cycle with no base case.
+        // Parsing recurses forever; the depth budget has to catch it and
+        // fail gracefully rather than overflow the .NET call stack.
+        var lateBound = new LateBoundRule("placeholder");
+        var alias = lateBound.AliasedAs("self");
+        lateBound.Bind(alias);
+
+        var result = alias.Parse("x");
+
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.DepthLimitExceeded));
+    }
+
+    [Test]
+    public void Recursion_routed_through_an_alias_wrapping_a_LateBoundRule_parses()
+    {
+        // The recursion cycle runs through an AliasRule: the alias wraps a
+        // LateBoundRule whose target references the alias again. Both the
+        // alias's and the LateBoundRule's ComputeRuleStart pass through to
+        // a child that's part of the cycle, so Compile's cycle detection
+        // has to settle them without looping.
+        var lateBound = new LateBoundRule("expr");
+        var alias = lateBound.AliasedAs("expr");
+        lateBound.Bind(Or(Integer(), And(Token('('), alias, Token(')'))));
+
+        foreach (var input in new[] { "42", "(42)", "((42))", "(((7)))" })
+        {
+            var result = alias.Parse(input);
+            Assert.That(result.Success, Is.True, $"{input}: {result.ErrorMessage}");
+        }
+    }
+
+    [Test]
+    public void Aliased_LateBoundRule_as_an_Or_alternative_is_not_skipped_in_a_cycle()
+    {
+        // The alias is a direct Or alternative, so the Or's lookahead
+        // shortcut consults the alias's first-token set via
+        // CannotMatchLookahead. The alias passes through to a LateBoundRule
+        // in a cycle: if the cycle left the alias with a wrong, too-narrow
+        // first-token set, the shortcut would skip the alias and the nested
+        // inputs would fail to parse. A cycle has to leave it at the safe
+        // pessimistic default instead.
+        var lateBound = new LateBoundRule("nested");
+        var alias = lateBound.AliasedAs("nested");
+        lateBound.Bind(And(Token('['), Or(alias, OneOrMore(OneOf(TokenSet.Digits))), Token(']')));
+
+        foreach (var input in new[] { "[5]", "[[5]]", "[[[9]]]" })
+        {
+            var result = alias.Parse(input);
+            Assert.That(result.Success, Is.True, $"{input}: {result.ErrorMessage}");
+        }
+    }
+
+    [Test]
+    public void Alias_of_a_Preserve_target_directly_rebadges_without_the_extra_layer()
+    {
+        // Contrast with the test above. Aliasing the Preserve target
+        // DIRECTLY, with no LateBoundRule in between, rebadges it: the
+        // alias's Symbol replaces the target's, so the target is no longer
+        // a findable layer. This is the "aliasing the target rule directly
+        // avoids the extra layer" advice from the AliasRule.cs comment.
+        var target = And(Token('1'), Token('2')).As("target").Flatten(FlattenType.Preserve);
+        var alias = target.AliasedAs("aliasName");
+
+        var result = alias.Parse("12");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+
+        Assert.That(result.Tree!.Find(alias), Is.Not.Null);
+        Assert.That(result.Tree!.Find(target), Is.Null,
+            "Aliasing the Preserve target directly rebadges it, so the target " +
+            "is replaced by the alias, not kept as a layer.");
+    }
+
+    [Test]
     public void End_to_end_date_grammar_with_two_aliases_of_same_shape()
     {
         // The motivating use case: build one rule shape, give it three
@@ -460,6 +665,29 @@ public class AliasRuleTests
             ruleBuilder: () => Alias(Literal("abc")),
             input: "abc",
             expectedSourceText: "abc");
+    }
+
+    [Test]
+    public void Alias_of_a_Preserve_leaf_inner_renders_the_matched_text_in_ToString()
+    {
+        // Aliasing a Preserve leaf rule. A leaf (Literal here) carries its
+        // match as text rather than as child Symbols, so the alias rebadges
+        // the leaf directly: its node takes over the matched text under the
+        // alias's own identity. SourceText and ToString both render that
+        // text, and the inner leaf's identity is hidden under the alias
+        // path, the same as when the inner is a composite.
+        var inner = Literal("abc").Preserve();
+        var alias = inner.AliasedAs("word");
+
+        var result = alias.Parse("abc");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.SourceText, Is.EqualTo("abc"));
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("abc"),
+            "ToString() on the alias node should render the matched text, " +
+            "the same as the inner leaf rendered directly.");
+        Assert.That(result.Tree!.Find(inner), Is.Null,
+            "Rebadge still hides the inner leaf's identity under the alias.");
     }
 
     [Test]

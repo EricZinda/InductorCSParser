@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using NUnit.Framework;
 using InductorParser.E2ESamples.Toml.Rewrite;
+using static InductorParser.E2ESamples.Toml.Tests.TestSupport;
 
 namespace InductorParser.E2ESamples.Toml.Tests;
 
@@ -9,18 +10,26 @@ namespace InductorParser.E2ESamples.Toml.Tests;
 // tree matches expectations. The test inputs are drawn directly from
 // the worked examples in https://toml.io/en/v1.0.0 so each test name
 // names the spec section it covers.
+//
+// Multi-line inputs go through Lines(lineBreak, ...) rather than a raw
+// string literal: a raw string's embedded newlines are real source
+// bytes that git autocrlf rewrites per platform, so the fixture would
+// silently differ between a Linux and a Windows checkout. Building the
+// input from single-line literals plus an explicit LineBreak keeps it
+// identical everywhere, and the [TestCase(LineBreak.Lf/Crlf)] pair
+// runs every multi-line fixture under both line endings from one body.
 [TestFixture]
 public class AstTests
 {
-    [Test]
-    public void KeyValue_BasicTypes_ProjectToTypedValues()
+    [TestCase(LineBreak.Lf)]
+    [TestCase(LineBreak.Crlf)]
+    public void KeyValue_BasicTypes_ProjectToTypedValues(LineBreak lineBreak)
     {
-        var input = """
-                    title = "TOML Example"
-                    enabled = true
-                    port = 8080
-                    pi = 3.14159
-                    """;
+        var input = Lines(lineBreak,
+            "title = \"TOML Example\"",
+            "enabled = true",
+            "port = 8080",
+            "pi = 3.14159");
         var root = TomlParser.Parse(input);
 
         Assert.That((string)root["title"], Is.EqualTo("TOML Example"));
@@ -29,15 +38,15 @@ public class AstTests
         Assert.That((double)root["pi"], Is.EqualTo(3.14159).Within(1e-9));
     }
 
-    [Test]
-    public void BasicString_DecodesEscapeSequences()
+    [TestCase(LineBreak.Lf)]
+    [TestCase(LineBreak.Crlf)]
+    public void BasicString_DecodesEscapeSequences(LineBreak lineBreak)
     {
-        var input = """
-                    quote = "She said \"hi\""
-                    backslash = "C:\\Users"
-                    newline = "line1\nline2"
-                    unicode = "smile ☺"
-                    """;
+        var input = Lines(lineBreak,
+            "quote = \"She said \\\"hi\\\"\"",
+            "backslash = \"C:\\\\Users\"",
+            "newline = \"line1\\nline2\"",
+            "unicode = \"smile ☺\"");
         var root = TomlParser.Parse(input);
 
         Assert.That((string)root["quote"], Is.EqualTo("She said \"hi\""));
@@ -46,43 +55,43 @@ public class AstTests
         Assert.That((string)root["unicode"], Is.EqualTo("smile ☺"));
     }
 
-    [Test]
-    public void LiteralString_KeepsBackslashesLiteral()
+    [TestCase(LineBreak.Lf)]
+    [TestCase(LineBreak.Crlf)]
+    public void LiteralString_KeepsBackslashesLiteral(LineBreak lineBreak)
     {
         // From the spec: literal strings have NO escape processing.
-        var input = """
-                    winpath = 'C:\Users\nodejs\templates'
-                    regex = '<\i\c*\s*>'
-                    """;
+        var input = Lines(lineBreak,
+            "winpath = 'C:\\Users\\nodejs\\templates'",
+            "regex = '<\\i\\c*\\s*>'");
         var root = TomlParser.Parse(input);
 
         Assert.That((string)root["winpath"], Is.EqualTo(@"C:\Users\nodejs\templates"));
         Assert.That((string)root["regex"], Is.EqualTo(@"<\i\c*\s*>"));
     }
 
-    [Test]
-    public void EmptyString_BothQuoteStyles_Parse()
+    [TestCase(LineBreak.Lf)]
+    [TestCase(LineBreak.Crlf)]
+    public void EmptyString_BothQuoteStyles_Parse(LineBreak lineBreak)
     {
-        var input = """
-                    a = ""
-                    b = ''
-                    """;
+        var input = Lines(lineBreak,
+            "a = \"\"",
+            "b = ''");
         var root = TomlParser.Parse(input);
 
         Assert.That((string)root["a"], Is.EqualTo(""));
         Assert.That((string)root["b"], Is.EqualTo(""));
     }
 
-    [Test]
-    public void Integer_AllBases_DecodeToLong()
+    [TestCase(LineBreak.Lf)]
+    [TestCase(LineBreak.Crlf)]
+    public void Integer_AllBases_DecodeToLong(LineBreak lineBreak)
     {
-        var input = """
-                    dec = 1_234_567
-                    hex = 0xDEAD_BEEF
-                    oct = 0o755
-                    bin = 0b1010_1010
-                    negative = -42
-                    """;
+        var input = Lines(lineBreak,
+            "dec = 1_234_567",
+            "hex = 0xDEAD_BEEF",
+            "oct = 0o755",
+            "bin = 0b1010_1010",
+            "negative = -42");
         var root = TomlParser.Parse(input);
 
         Assert.That((long)root["dec"], Is.EqualTo(1234567));
@@ -92,17 +101,17 @@ public class AstTests
         Assert.That((long)root["negative"], Is.EqualTo(-42));
     }
 
-    [Test]
-    public void Float_RegularAndSpecial_Parse()
+    [TestCase(LineBreak.Lf)]
+    [TestCase(LineBreak.Crlf)]
+    public void Float_RegularAndSpecial_Parse(LineBreak lineBreak)
     {
-        var input = """
-                    pi = 3.14_15
-                    sci = 1e10
-                    neg_sci = -2.5E-3
-                    inf = inf
-                    neg_inf = -inf
-                    nan_value = nan
-                    """;
+        var input = Lines(lineBreak,
+            "pi = 3.14_15",
+            "sci = 1e10",
+            "neg_sci = -2.5E-3",
+            "inf = inf",
+            "neg_inf = -inf",
+            "nan_value = nan");
         var root = TomlParser.Parse(input);
 
         Assert.That((double)root["pi"], Is.EqualTo(3.1415).Within(1e-9));
@@ -113,14 +122,14 @@ public class AstTests
         Assert.That(double.IsNaN((double)root["nan_value"]), Is.True);
     }
 
-    [Test]
-    public void DottedKey_BuildsNestedTables()
+    [TestCase(LineBreak.Lf)]
+    [TestCase(LineBreak.Crlf)]
+    public void DottedKey_BuildsNestedTables(LineBreak lineBreak)
     {
-        var input = """
-                    physical.color = "orange"
-                    physical.shape = "round"
-                    site."google.com" = true
-                    """;
+        var input = Lines(lineBreak,
+            "physical.color = \"orange\"",
+            "physical.shape = \"round\"",
+            "site.\"google.com\" = true");
         var root = TomlParser.Parse(input);
 
         Assert.That((string)root["physical"]["color"], Is.EqualTo("orange"));
@@ -128,23 +137,23 @@ public class AstTests
         Assert.That((bool)root["site"]["google.com"], Is.True);
     }
 
-    [Test]
-    public void StdTable_GroupsKeysUnderHeader()
+    [TestCase(LineBreak.Lf)]
+    [TestCase(LineBreak.Crlf)]
+    public void StdTable_GroupsKeysUnderHeader(LineBreak lineBreak)
     {
-        var input = """
-                    title = "TOML Example"
-
-                    [database]
-                    server = "192.168.1.1"
-                    ports = [ 8001, 8001, 8002 ]
-                    enabled = true
-
-                    [servers.alpha]
-                    ip = "10.0.0.1"
-
-                    [servers.beta]
-                    ip = "10.0.0.2"
-                    """;
+        var input = Lines(lineBreak,
+            "title = \"TOML Example\"",
+            "",
+            "[database]",
+            "server = \"192.168.1.1\"",
+            "ports = [ 8001, 8001, 8002 ]",
+            "enabled = true",
+            "",
+            "[servers.alpha]",
+            "ip = \"10.0.0.1\"",
+            "",
+            "[servers.beta]",
+            "ip = \"10.0.0.2\"");
         var root = TomlParser.Parse(input);
 
         Assert.That((string)root["title"], Is.EqualTo("TOML Example"));
@@ -154,18 +163,18 @@ public class AstTests
         Assert.That((string)root["servers"]["beta"]["ip"], Is.EqualTo("10.0.0.2"));
     }
 
-    [Test]
-    public void Array_HeterogeneousNumbersAndStrings()
+    [TestCase(LineBreak.Lf)]
+    [TestCase(LineBreak.Crlf)]
+    public void Array_HeterogeneousNumbersAndStrings(LineBreak lineBreak)
     {
-        var input = """
-                    integers = [ 1, 2, 3 ]
-                    colors = [ "red", "yellow", "green" ]
-                    mixed_with_newlines = [
-                        "alpha",
-                        "beta",  # trailing comment
-                        "gamma",
-                    ]
-                    """;
+        var input = Lines(lineBreak,
+            "integers = [ 1, 2, 3 ]",
+            "colors = [ \"red\", \"yellow\", \"green\" ]",
+            "mixed_with_newlines = [",
+            "    \"alpha\",",
+            "    \"beta\",  # trailing comment",
+            "    \"gamma\",",
+            "]");
         var root = TomlParser.Parse(input);
 
         var integers = (TomlArray)root["integers"];
@@ -180,13 +189,13 @@ public class AstTests
         Assert.That((string)mixed.Items[1], Is.EqualTo("beta"));
     }
 
-    [Test]
-    public void InlineTable_ParsesFlatKeyVals()
+    [TestCase(LineBreak.Lf)]
+    [TestCase(LineBreak.Crlf)]
+    public void InlineTable_ParsesFlatKeyVals(LineBreak lineBreak)
     {
-        var input = """
-                    name = { first = "Tom", last = "Preston-Werner" }
-                    point = { x = 1, y = 2 }
-                    """;
+        var input = Lines(lineBreak,
+            "name = { first = \"Tom\", last = \"Preston-Werner\" }",
+            "point = { x = 1, y = 2 }");
         var root = TomlParser.Parse(input);
 
         Assert.That((string)root["name"]["first"], Is.EqualTo("Tom"));
@@ -195,21 +204,21 @@ public class AstTests
         Assert.That((long)root["point"]["y"], Is.EqualTo(2));
     }
 
-    [Test]
-    public void ArrayOfTables_AppendsEntries()
+    [TestCase(LineBreak.Lf)]
+    [TestCase(LineBreak.Crlf)]
+    public void ArrayOfTables_AppendsEntries(LineBreak lineBreak)
     {
-        var input = """
-                    [[products]]
-                    name = "Hammer"
-                    sku = 738594937
-
-                    [[products]]  # empty entry
-
-                    [[products]]
-                    name = "Nail"
-                    sku = 284758393
-                    color = "gray"
-                    """;
+        var input = Lines(lineBreak,
+            "[[products]]",
+            "name = \"Hammer\"",
+            "sku = 738594937",
+            "",
+            "[[products]]  # empty entry",
+            "",
+            "[[products]]",
+            "name = \"Nail\"",
+            "sku = 284758393",
+            "color = \"gray\"");
         var root = TomlParser.Parse(input);
 
         var products = (TomlArray)root["products"];
@@ -250,16 +259,16 @@ public class AstTests
         Assert.That(t.Value, Is.EqualTo(new TimeOnly(7, 32, 0)));
     }
 
-    [Test]
-    public void Comments_AreIgnored()
+    [TestCase(LineBreak.Lf)]
+    [TestCase(LineBreak.Crlf)]
+    public void Comments_AreIgnored(LineBreak lineBreak)
     {
-        var input = """
-                    # This is a full-line comment
-                    key = "value"  # this is a same-line comment
-
-                    [section]  # comment after a table header
-                    inner = 1
-                    """;
+        var input = Lines(lineBreak,
+            "# This is a full-line comment",
+            "key = \"value\"  # this is a same-line comment",
+            "",
+            "[section]  # comment after a table header",
+            "inner = 1");
         var root = TomlParser.Parse(input);
 
         Assert.That((string)root["key"], Is.EqualTo("value"));
@@ -285,13 +294,13 @@ public class AstTests
         Assert.That((string)root["regex"], Is.EqualTo("I [dw]on't need \\d{2} apples"));
     }
 
-    [Test]
-    public void DuplicateKey_AtSameTableLevel_Throws()
+    [TestCase(LineBreak.Lf)]
+    [TestCase(LineBreak.Crlf)]
+    public void DuplicateKey_AtSameTableLevel_Throws(LineBreak lineBreak)
     {
-        var input = """
-                    name = "Tom"
-                    name = "Pradyun"
-                    """;
+        var input = Lines(lineBreak,
+            "name = \"Tom\"",
+            "name = \"Pradyun\"");
         var ex = Assert.Throws<TomlParseException>(() => TomlParser.Parse(input));
         Assert.That(ex!.Message, Does.Contain("Duplicate key 'name'"));
     }

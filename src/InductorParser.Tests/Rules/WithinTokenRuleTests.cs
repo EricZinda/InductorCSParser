@@ -437,6 +437,36 @@ public class WithinTokenRuleTests
         Assert.That(sink.ToString(), Does.Not.Contain("SKIP | WithinToken:"));
     }
 
+    [Test]
+    public void Or_WithinToken_does_not_skip_when_inner_negative_rule_walks_a_multi_rune_cluster()
+    {
+        // A TokenSet whose only member is the CRLF grapheme cluster. \r
+        // and \n are NOT members on their own — only the two-rune "\r\n"
+        // cluster is.
+        var crlfCluster = TokenSet.Graphemes("\r\n");
+
+        // WithinToken runs OneOrMore(NoneOf(...)) against the runes
+        // inside one outer token. On the "\r\n" cluster the inner rule
+        // sees \r and \n one rune at a time; neither is a member of
+        // crlfCluster, so the inner NoneOf accepts both and WithinToken
+        // consumes the whole cluster. Standalone, it matches:
+        var standalone = WithinToken(OneOrMore(NoneOf(crlfCluster)));
+        Assert.That(standalone.Parse("\r\n").Success, Is.True,
+            "WithinToken(OneOrMore(NoneOf(crlfCluster))) should consume the CRLF cluster rune by rune");
+
+        // The same WithinToken as an Or branch must still match. The
+        // Or's lookahead shortcut peeks the whole "\r\n" cluster and asks
+        // the WithinToken's published first-token requirement whether
+        // the branch can match. WithinToken forwards the inner NoneOf's
+        // MustNotBeIn fail-set { "\r\n" } unchanged, so the shortcut sees
+        // the peek cluster IS in the fail-set and skips the branch — even
+        // though the branch would have matched.
+        var rule = Or(WithinToken(OneOrMore(NoneOf(crlfCluster))), Literal("ZZ"));
+        var result = rule.Parse("\r\n");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
+
     // Matrix-driven SourceRange test. See docs/TestArchitecture.md
     // "Per-rule SourceRange-matrix tests live in each rule's own
     // test file." Shared scaffold lives in SourceRangeMatrixHelper.
@@ -458,5 +488,33 @@ public class WithinTokenRuleTests
             ruleBuilder: () => WithinToken(OneOf("X")),
             input: "X",
             expectedSourceText: "X");
+    }
+
+    [Test]
+    public void WithinToken_WithError_surfaces_over_deeper_orphan_from_abandoned_Or_alternative()
+    {
+        // Or's first alternative reads three tokens before failing at offset 3
+        // with its own WithError. The parser abandons that alternative by
+        // committing to alt 2 (Token('a').Delete() at offset 0). Then
+        // WithinToken at offset 1 fails because the next token isn't 'b'.
+        //
+        // WithinToken records its failure at the outer cluster boundary
+        // (offset 1), which is shallower than the orphan record alt 1 left at
+        // offset 3. A user-supplied WithError on WithinToken still wins the
+        // message slot at the cluster boundary where the real failure
+        // happened, rather than the orphan's "expected z at end" surfacing at
+        // offset 3 — a position the parser already gave up on.
+        var rule = And(
+            Or(
+                And(AnyToken(), AnyToken(), AnyToken(), Token('z').WithError("expected z at end")),
+                Token('a').Delete()
+            ),
+            WithinToken(Token('b')).WithError("expected b in WithinToken")
+        );
+        var result = rule.Parse("axyw");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected b in WithinToken"));
     }
 }
