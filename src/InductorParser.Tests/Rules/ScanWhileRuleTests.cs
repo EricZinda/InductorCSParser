@@ -435,4 +435,33 @@ public class ScanWhileRuleTests
             input: "XYZ",
             expectedSourceText: "XYZ");
     }
+
+    [Test]
+    public void ScanWhile_consumes_a_lone_surrogate_that_a_covering_range_accepts()
+    {
+        // Range validates only its endpoints, so Range(0, 0x10FFFF)
+        // spans the surrogate block 0xD800..0xDFFF as interior slots.
+        // Under Compile(null) the lexer surfaces a lone surrogate as a
+        // one-char token, and OneOf(thatRange) matches it via
+        // TokenSet.ContainsToken's lone-surrogate branch. ScanWhile is
+        // documented as the optimized equivalent of
+        // AtLeast(n, OneOf(set)) producing the same matched text, so its
+        // run has to include the lone surrogate too.
+        var set = TokenSet.Range(0, 0x10FFFF);
+        string input = "a\uD800b"; // letter, lone high surrogate, letter
+
+        // Reference: OneOf(set) matches the lone-surrogate token, so the
+        // greedy OneOf form consumes all three tokens up to Eof.
+        var oneOfForm = And(OneOrMore(OneOf(set)), Eof());
+        oneOfForm.Compile(null);
+        var oneOfResult = oneOfForm.Parse(input);
+        Assert.That(oneOfResult.Success, Is.True, oneOfResult.ErrorMessage);
+
+        // ScanWhile must match the same run.
+        var rule = ScanWhile(set);
+        rule.Compile(null);
+        var result = rule.Parse(input, new ParseOptions { AllowTrailingInput = true });
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(input));
+    }
 }
