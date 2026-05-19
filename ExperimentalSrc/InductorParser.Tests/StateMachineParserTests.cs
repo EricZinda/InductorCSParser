@@ -666,6 +666,54 @@ public class StateMachineParserTests
         Assert.That(stateMachine.Success, Is.True);
     }
 
+    // ---- ParseContext-dependent Symbol APIs ----
+
+    [Test]
+    public void Symbol_DisplayName_resolves_through_the_grammar_on_a_state_machine_parse()
+    {
+        // TreeBuilder used to build Symbols without a ParseContext.
+        // Symbol.DisplayName resolves the id through
+        // ParseContext.GrammarRoot, so without the context every node in
+        // a state-machine-parsed tree reported a null DisplayName even
+        // when the rule was .As(...)-named.
+        var letter = OneOf(TokenSet.Letters).As("letter");
+        var word = OneOrMore(letter).As("word");
+
+        var stateMachine = StateMachineParser.Parse(word, "hi");
+        Assert.That(stateMachine.Success, Is.True, stateMachine.ErrorMessage);
+
+        Assert.That(stateMachine.Symbols[0].DisplayName, Is.EqualTo("word"));
+        Assert.That(stateMachine.Symbols[0].Is("word"), Is.True);
+    }
+
+    [Test]
+    public void SourceRange_reports_original_input_coordinates_under_normalization()
+    {
+        // Under FormC the lexer scans precomposed "café" (4 chars) while
+        // the user typed the decomposed form (5 chars), so everything
+        // after the prefix sits one char further along in the original
+        // input than in parseInput. Symbol.SourceRange translates
+        // parseInput offsets back to original-input coordinates through
+        // the ParseContext. With no context TreeBuilder left the X leaf
+        // reporting parseInput offset 4 instead of original offset 5.
+        string decomposedCafe = "caféX"; // c a f e U+0301 X
+        var x = Token('X').As("x");
+        var rule = And(Literal("café"), x).As("root"); // literal precomposed café
+        rule.Compile(System.Text.NormalizationForm.FormC);
+
+        var stateMachine = StateMachineParser.Parse(rule, decomposedCafe);
+        Assert.That(stateMachine.Success, Is.True, stateMachine.ErrorMessage);
+
+        var xSymbol = stateMachine.Tree!.Find(rule.IdOf("x")!.Value)!;
+        var range = xSymbol.SourceRange;
+        Assert.That(range, Is.Not.Null);
+        Assert.That(range!.Value.Start.CharIndex, Is.EqualTo(5),
+            "X is at original-input char 5 (decomposed café is 5 chars), not parseInput char 4.");
+        Assert.That(range.Value.End.CharIndex, Is.EqualTo(6));
+        Assert.That(range.Value.Start.Input, Is.SameAs(decomposedCafe),
+            "SourceRange endpoints should point into the user's original input string.");
+    }
+
     // ---- Helpers ----
 
     // Assert the state-machine evaluator and the existing recursive
