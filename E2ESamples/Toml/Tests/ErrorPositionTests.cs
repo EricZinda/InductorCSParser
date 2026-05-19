@@ -7,7 +7,7 @@ namespace InductorParser.E2ESamples.Toml.Tests;
 // The README's headline claim about this port is "errors come back with
 // usable positions". These tests pick a handful of malformed inputs,
 // assert that the InductorParser-based TOML rewrite rejects them, and
-// pin the line/column the error points at. Tomlyn rejects the same
+// verify the line/column the error points at. Tomlyn rejects the same
 // inputs (verified in TomlynComparisonTests) so the rewrite's behavior
 // is consistent with the reference implementation, even if the exact
 // message wording differs.

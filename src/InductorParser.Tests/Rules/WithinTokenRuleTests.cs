@@ -83,9 +83,9 @@ public class WithinTokenRuleTests
     [Test]
     public void Inner_WithError_surfaces_when_WithinToken_fails_without_its_own_WithError()
     {
-        // WithinToken doesn't clear inner records on success — and when
+        // WithinToken doesn't clear inner failures on success, and when
         // it fails (inner sub-rule failed inside the token), the inner's
-        // failure record survives. Pins that the inner sub-rule's
+        // failure survives. Verifies the inner sub-rule's
         // WithError is what the user sees if WithinToken itself has no
         // WithError.
         var rule = WithinToken(Literal("ab").WithError("inner literal failed"));
@@ -366,19 +366,19 @@ public class WithinTokenRuleTests
     }
 
     [Test]
-    public void WithinToken_with_pinned_SymbolId_uses_pinned_id_for_single_rune_outer_token()
+    public void WithinToken_with_explicit_SymbolId_uses_explicit_id_for_single_rune_outer_token()
     {
-        // .As(SymbolId) is the user's "pin a stable id" signal, parallel
+        // .As(SymbolId) is the user's "set a stable id" signal, parallel
         // to .As("name") for findability. The leaf has to carry the
-        // pinned id so Tree.Find / Tree.Is resolve through the user's
-        // pinned reference. Same shape as the OneOf pinned-id test.
-        var pinnedId = new SymbolId(SymbolRanges.CustomRangeStart + 103);
-        var rule = WithinToken(OneOf(TokenSet.Ascii.Letters)).As(pinnedId);
+        // explicit id so Tree.Find / Tree.Is resolve through the user's
+        // explicit reference. Same shape as the OneOf explicit-id test.
+        var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 103);
+        var rule = WithinToken(OneOf(TokenSet.Ascii.Letters)).As(explicitId);
         var result = rule.Parse("a");
 
         Assert.That(result.Success, Is.True);
-        Assert.That(result.Tree!.Id, Is.EqualTo(pinnedId),
-            "leaf carries the user-pinned SymbolId, not the rune value");
+        Assert.That(result.Tree!.Id, Is.EqualTo(explicitId),
+            "leaf carries the user's explicit SymbolId, not the rune value");
         Assert.That(result.Tree!.Is(rule), Is.True);
         Assert.That(result.Tree!.Find(rule), Is.Not.Null);
     }
@@ -491,19 +491,21 @@ public class WithinTokenRuleTests
     }
 
     [Test]
-    public void WithinToken_WithError_surfaces_over_deeper_orphan_from_abandoned_Or_alternative()
+    public void WithinToken_WithError_is_shadowed_by_a_deeper_orphan_from_an_abandoned_Or_alternative()
     {
         // Or's first alternative reads three tokens before failing at offset 3
-        // with its own WithError. The parser abandons that alternative by
-        // committing to alt 2 (Token('a').Delete() at offset 0). Then
-        // WithinToken at offset 1 fails because the next token isn't 'b'.
+        // with its own WithError ("expected z at end"). The parser abandons
+        // that alternative and commits to alternative 2 (Token('a').Delete()
+        // at offset 0). WithinToken then runs at offset 1, fails because the
+        // next token isn't 'b', and records its own WithError at the outer
+        // cluster boundary, offset 1.
         //
-        // WithinToken records its failure at the outer cluster boundary
-        // (offset 1), which is shallower than the orphan record alt 1 left at
-        // offset 3. A user-supplied WithError on WithinToken still wins the
-        // message slot at the cluster boundary where the real failure
-        // happened, rather than the orphan's "expected z at end" surfacing at
-        // offset 3 — a position the parser already gave up on.
+        // Depth ranks first (docs/ErrorArchitecture.md, Case 4): a rejected
+        // Or branch keeps its failure, and offset 3 is deeper than offset 1,
+        // so the abandoned branch's "expected z at end" is the reported
+        // error. WithinToken's shallower WithError is correctly shadowed by
+        // the deeper near-miss. A grammar author who wants the WithinToken
+        // message to win regardless of depth marks it forced.
         var rule = And(
             Or(
                 And(AnyToken(), AnyToken(), AnyToken(), Token('z').WithError("expected z at end")),
@@ -514,7 +516,77 @@ public class WithinTokenRuleTests
         var result = rule.Parse("axyw");
 
         Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected z at end"));
+    }
+
+    // --- Forced .WithError carried across the WithinToken boundary -------
+    //
+    // A skin-tone-modified emoji is one grapheme cluster: a base emoji
+    // rune followed by a modifier rune. A grammar that validates such a
+    // "reaction" has to look inside the cluster with WithinToken. These
+    // code points drive the reaction-parsing tests below.
+    private const int ThumbsUp = 0x1F44D;
+    private const int ThumbsDown = 0x1F44E;
+    private static readonly TokenSet SkinToneModifiers = TokenSet.Range(0x1F3FB, 0x1F3FF);
+
+    [Test]
+    public void Forced_inner_WithError_surfaces_when_WithinToken_fails()
+    {
+        // A reaction is a thumbs-up emoji, optionally skin-toned. The
+        // inner check carries a forced .WithError, so a wrong emoji is
+        // reported with that message rather than a rune-level default.
+        var reaction = WithinToken(
+            And(Token(ThumbsUp), Optional(OneOf(SkinToneModifiers)))
+                .WithError("a reaction must be a thumbs-up emoji", forced: true));
+
+        var result = reaction.Parse(char.ConvertFromUtf32(ThumbsDown));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("a reaction must be a thumbs-up emoji"));
+    }
+
+    [Test]
+    public void Forced_WithError_inside_WithinToken_keeps_its_forced_flag()
+    {
+        // A message is an emoji reaction (a '+' then the emoji) or a
+        // slash-command. Each form carries a forced .WithError summary.
+        // On a '+' followed by the wrong emoji, the reaction branch
+        // consumes the '+' and fails at offset 1, the command branch at
+        // offset 0. Forced failures rank by depth, so the deeper one (the
+        // reaction's, at offset 1) wins, as long as WithinToken keeps the
+        // inner .WithError forced when it surfaces it.
+        var reaction = And(
+            Token('+'),
+            WithinToken(
+                And(Token(ThumbsUp), Optional(OneOf(SkinToneModifiers)))
+                    .WithError("a reaction must be a thumbs-up emoji", forced: true)));
+        var command = And(Token('/'), OneOrMore(OneOf(TokenSet.Ascii.Letters)))
+            .WithError("a command must start with '/'", forced: true);
+
+        var result = Or(reaction, command).Parse("+" + char.ConvertFromUtf32(ThumbsDown));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("a reaction must be a thumbs-up emoji"));
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected b in WithinToken"));
+    }
+
+    [Test]
+    public void WithinToken_own_forced_WithError_outranks_an_inner_named_hint()
+    {
+        // The inner emoji check carries a plain (named) .WithError hint.
+        // The WithinToken carries a forced summary. A forced failure
+        // outranks a named one, so the summary is what surfaces.
+        // WithinToken has to record its own .WithError for ranking to
+        // pick it over the inner hint.
+        var reaction = WithinToken(
+            And(Token(ThumbsUp).WithError("expected a thumbs-up"),
+                Optional(OneOf(SkinToneModifiers))))
+            .WithError("not a recognized reaction", forced: true);
+
+        var result = reaction.Parse(char.ConvertFromUtf32(ThumbsDown));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("not a recognized reaction"));
     }
 }

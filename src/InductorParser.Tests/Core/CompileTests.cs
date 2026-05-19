@@ -15,7 +15,7 @@ namespace InductorParser.Tests;
 //     src/InductorParser.Tests/Rules/<RuleName>Tests.cs verify that
 //     Flatten / WithError / As all throw on each rule after Compile
 //     (universal requirement #5).
-//   - Id assignment (pinned / named-hash / anonymous): IdAssignmentTests.
+//   - Id assignment (explicit / named-hash / anonymous): IdAssignmentTests.
 //   - NameOf auto-compile: NameOfTests.NameOf_auto_compiles_when_called_before_compile.
 //   - LateBoundRule auto-compile through Parse, plus a regression that
 //     ValidateAll walks nested rules: LateBoundRuleTests
@@ -54,7 +54,7 @@ public class CompileTests
         // Compile is documented to do nothing on the second call. The
         // seal flag is the implementation, but several pieces of state
         // would become wrong if it ever re-ran: named-hash ids depend on
-        // linear-probe order and could shift if pinned ids were
+        // linear-probe order and could shift if explicit ids were
         // re-collected against a clean usedIds set, FirstConsumedTokens
         // and Advance are computed bottom-up and could drift, and
         // ValidateAll could throw on a graph that's already settled.
@@ -63,14 +63,14 @@ public class CompileTests
         // name, flatten policy, FirstConsumedTokens, Advance) and verify
         // the second Compile is a true no-op against the full grammar
         // shape, not just the few ids the test happened to remember.
-        // A grammar with a pinned id, a named rule, and anonymous rules
+        // A grammar with an explicit id, a named rule, and anonymous rules
         // exercises all three id-assignment passes plus the bottom-up
         // RuleStartRequirements walk.
-        var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 9999);
+        var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 9999);
         var named = OneOrMore(OneOf(TokenSet.Letters)).As("settingName");
-        var pinnedRule = OneOrMore(OneOf(TokenSet.Digits)).As(pinned);
+        var explicitRule = OneOrMore(OneOf(TokenSet.Digits)).As(explicitId);
         var anonymous = ZeroOrMore(Token('!'));
-        var root = And(named, pinnedRule, anonymous);
+        var root = And(named, explicitRule, anonymous);
 
         root.Compile();
         string firstSnapshot = SnapshotGrammar(root);

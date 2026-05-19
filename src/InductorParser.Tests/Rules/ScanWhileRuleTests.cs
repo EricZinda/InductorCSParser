@@ -197,24 +197,24 @@ public class ScanWhileRuleTests
     }
 
     [Test]
-    public void ScanWhile_with_pinned_SymbolId_uses_pinned_id_for_run_leaf()
+    public void ScanWhile_with_explicit_SymbolId_uses_explicit_id_for_run_leaf()
     {
-        // Sibling of the OneOf / NoneOf / AnyToken / WithinToken pinned-
+        // Sibling of the OneOf / NoneOf / AnyToken / WithinToken explicit-
         // SymbolId tests added in p1nd. ScanWhile emits one leaf per
         // matched run with the rule's Id directly (no rune-as-leaf-id
         // shortcut, since a run of multiple tokens doesn't have one
         // distinguished rune to carry). .As(SymbolId) writes the user's
-        // pinned value into Id, so the leaf carries it by construction.
+        // explicit value into Id, so the leaf carries it by construction.
         // Test locks in the matrix so a future leaf-id refactor that
         // routes ScanWhile through ResolveLeafId or a similar helper has
         // to keep .As(SymbolId) honored.
-        var pinnedId = new SymbolId(SymbolRanges.CustomRangeStart + 104);
-        var rule = ScanWhile(TokenSet.Ascii.Letters).As(pinnedId);
+        var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 104);
+        var rule = ScanWhile(TokenSet.Ascii.Letters).As(explicitId);
         var result = rule.Parse("abc");
 
         Assert.That(result.Success, Is.True);
-        Assert.That(result.Tree!.Id, Is.EqualTo(pinnedId),
-            "leaf carries the user-pinned SymbolId");
+        Assert.That(result.Tree!.Id, Is.EqualTo(explicitId),
+            "leaf carries the user's explicit SymbolId");
         Assert.That(result.Tree!.Is(rule), Is.True);
         Assert.That(result.Tree!.Find(rule), Is.Not.Null);
     }
@@ -434,5 +434,34 @@ public class ScanWhileRuleTests
             ruleBuilder: () => ScanWhile(TokenSet.Ascii.Letters),
             input: "XYZ",
             expectedSourceText: "XYZ");
+    }
+
+    [Test]
+    public void ScanWhile_consumes_a_lone_surrogate_that_a_covering_range_accepts()
+    {
+        // Range validates only its endpoints, so Range(0, 0x10FFFF)
+        // spans the surrogate block 0xD800..0xDFFF as interior slots.
+        // Under Compile(null) the lexer surfaces a lone surrogate as a
+        // one-char token, and OneOf(thatRange) matches it via
+        // TokenSet.ContainsToken's lone-surrogate branch. ScanWhile is
+        // documented as the optimized equivalent of
+        // AtLeast(n, OneOf(set)) producing the same matched text, so its
+        // run has to include the lone surrogate too.
+        var set = TokenSet.Range(0, 0x10FFFF);
+        string input = "a\uD800b"; // letter, lone high surrogate, letter
+
+        // Reference: OneOf(set) matches the lone-surrogate token, so the
+        // greedy OneOf form consumes all three tokens up to Eof.
+        var oneOfForm = And(OneOrMore(OneOf(set)), Eof());
+        oneOfForm.Compile(null);
+        var oneOfResult = oneOfForm.Parse(input);
+        Assert.That(oneOfResult.Success, Is.True, oneOfResult.ErrorMessage);
+
+        // ScanWhile must match the same run.
+        var rule = ScanWhile(set);
+        rule.Compile(null);
+        var result = rule.Parse(input, new ParseOptions { AllowTrailingInput = true });
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(input));
     }
 }

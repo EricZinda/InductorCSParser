@@ -39,8 +39,19 @@ public sealed partial class Lexer
     // works without translation.
     private int _endPosition;
     private int _position;
-    // Three-tier failure tracking. See docs/ErrorArchitecture.md.
+    // Three-slot failure tracking (mechanical / named / forced). See
+    // docs/ErrorArchitecture.md.
     private FailureStateSnapshot _failureState;
+
+    // High-water mark of the deepest input position any RecordFailure
+    // call has reported within the current transaction's window. Every
+    // BeginTransaction saves and zeroes this, and the matching Dispose
+    // merges it back into the enclosing window with Math.Max. A composite
+    // rule reads it through SubtreeDeepestFailure once its children have
+    // run, so a .WithError it carries anchors at the deepest position its
+    // subtree reached rather than at the composite's own start. See
+    // docs/ErrorArchitecture.md, "Where each rule records its failure".
+    private int _subtreeDeepestFailure;
 
     // Sub-lexer mode: when true, Read advances one rune at a time
     // instead of one grapheme cluster. Set only by the internal
@@ -153,13 +164,18 @@ public sealed partial class Lexer
     public int Position => _position;
 
     // The position of the failure that would be reported if the parse
-    // ended now. Picks the highest non-empty tier (forced > named) and
-    // returns its position; falls back to the mechanical high-water mark
-    // when no named or forced message has been recorded.
+    // ended now. Depth-primary resolution: a forced failure is a hard
+    // override and wins outright. Otherwise the deepest failure wins,
+    // named and mechanical alike, comparing the two high-water marks by
+    // position. A named failure takes an exact-depth tie, which is what
+    // NamedPosition >= MechanicalPosition encodes. See
+    // docs/ErrorArchitecture.md.
     public int DeepestFailure =>
         _failureState.ForcedMessage != null ? _failureState.ForcedPosition
-        : _failureState.NamedMessage != null ? _failureState.NamedPosition
-        : _failureState.MechanicalPosition;
+        : _failureState.NamedMessage != null
+            && _failureState.NamedPosition >= _failureState.MechanicalPosition
+          ? _failureState.NamedPosition
+          : _failureState.MechanicalPosition;
 
     // Direct write-access to the read cursor for alternative
     // evaluator's backtrack-rollback path. For the recursive evaluator,
@@ -186,6 +202,7 @@ public sealed partial class Lexer
         BindInput(input, startPosition: 0, endPosition: input.Length, traceSink, traceLevel);
         _context = null;
         _failureState = default;
+        _subtreeDeepestFailure = 0;
         _transactionDepth = 0;
         _ruleInvocations = 0;
         _ruleDepth = 0;
@@ -215,13 +232,18 @@ public sealed partial class Lexer
         _graphemeIndex = GraphemeClusterIndex.For(input);
     }
 
-    // The error message that would be reported if the parse ended now.
-    // Returns the forced-tier message if any rule fired a forced WithError;
-    // otherwise the deepest named WithError message; null when no rule
-    // attached a message and the report should fall back to the generic
-    // positional template.
+    // The error message that would be reported if the parse ended now:
+    // the message carried by whichever failure DeepestFailure picks. A
+    // forced WithError message overrides everything. Otherwise the named
+    // message surfaces only when the named failure is the deepest, or ties
+    // for deepest; when a mechanical failure is strictly deeper this is
+    // null and the report falls back to the generic positional template.
     public string? DeepestFailureMessage =>
-        _failureState.ForcedMessage ?? _failureState.NamedMessage;
+        _failureState.ForcedMessage != null ? _failureState.ForcedMessage
+        : _failureState.NamedMessage != null
+            && _failureState.NamedPosition >= _failureState.MechanicalPosition
+          ? _failureState.NamedMessage
+          : null;
 
     public bool IsEof => _position >= _endPosition;
 
@@ -438,7 +460,8 @@ public sealed partial class Lexer
         return t;
     }
 
-    // Three-tier failure-tracker state. See docs/ErrorArchitecture.md.
+    // Three-slot failure-tracker state (mechanical / named / forced). See
+    // docs/ErrorArchitecture.md.
     // Mutable struct: the Lexer holds one of these as `_failureState` and
     // mutates its fields in place. SaveFailureState returns a value copy
     // (struct semantics) that callers stash and pass back to
@@ -456,13 +479,34 @@ public sealed partial class Lexer
 
     internal void RestoreFailureState(FailureStateSnapshot snapshot) => _failureState = snapshot;
 
+    // The deepest input position any failure has been recorded at since
+    // the current rule's transaction opened, the extent of this rule's
+    // subtree. A composite consults this on the failure path to anchor
+    // its own .WithError failure at the deepest position its children
+    // reached, instead of at the composite's own (shallower) start.
+    internal int SubtreeDeepestFailure => _subtreeDeepestFailure;
+
+    // Drop the subtree-extent high-water mark accumulated so far in the
+    // current transaction's window. Peek and Not call this after their
+    // inner probe runs: the probe's excursion is off the real parse
+    // path, so the depth it reached doesn't belong in an enclosing
+    // composite's anchor. See docs/ErrorArchitecture.md, "Lookahead
+    // failures are discarded".
+    internal void DiscardSubtreeExtent() => _subtreeDeepestFailure = 0;
+
     // Record that a rule just failed at the given input position. The
     // caller's responsibility is to pass the position of the offending
     // input: the *start* of the specific read that couldn't match, not
-    // the post-read lexer position. The tier system and resolution rules
-    // are described in docs/ErrorArchitecture.md.
+    // the post-read lexer position. The three-slot tracker and the
+    // depth-primary resolution rules are described in
+    // docs/ErrorArchitecture.md.
     public void RecordFailure(int position, string? errorMessage = null, bool forced = false)
     {
+        // Every failure, whatever its slot, advances the subtree-extent
+        // high-water mark so an enclosing composite can anchor its own
+        // .WithError at the deepest position its subtree reached.
+        if (position > _subtreeDeepestFailure)
+            _subtreeDeepestFailure = position;
         if (errorMessage == null)
         {
             if (position > _failureState.MechanicalPosition)
@@ -480,10 +524,9 @@ public sealed partial class Lexer
             {
                 _failureState.ForcedPosition = position;
                 _failureState.ForcedMessage = errorMessage;
-                // Trace only when position strictly increases. Silent
-                // slot-fills at the initial position match the historical
-                // trace shape (the Rule-2-style equal-depth message claim
-                // never emitted a trace line).
+                // Trace only when position strictly increases. A silent
+                // slot-fill at the initial position (first writer claims
+                // an empty slot without moving it) emits no trace line.
                 if (moved)
                 {
                     Trace(TraceLevel.Diagnostic, "Lexer.RecordFailure", TraceOutcome.Info,
@@ -532,8 +575,9 @@ public sealed partial class Lexer
     // Transaction is a struct (not a class) because every rule
     // invocation opens one, and allocating a new GC object each time
     // would dominate parse time. As a struct it lives inline in the
-    // caller's stack frame. Constructing one is two field writes,
-    // disposing one is a flag read plus possibly one field write.
+    // caller's stack frame. Constructing one is a handful of field
+    // writes, disposing one is a flag read plus a couple of field
+    // writes.
     //
     // Transaction is nested inside Lexer on purpose: the rollback logic
     // touches Lexer's private _position field, and nesting keeps that
@@ -656,7 +700,11 @@ public sealed partial class Lexer
     {
         private readonly Lexer _lexer;
         private readonly int _savedPosition;
-        private readonly FailureStateSnapshot _failureSnapshot;
+        // The enclosing transaction's subtree-extent high-water mark,
+        // saved here while this transaction zeroes the lexer's so the
+        // window covers only this rule's subtree. Dispose merges the two
+        // back together.
+        private readonly int _savedSubtreeExtent;
         private bool _settled;
         private bool _depthPopped;
 
@@ -664,7 +712,8 @@ public sealed partial class Lexer
         {
             _lexer = lexer;
             _savedPosition = savedPosition;
-            _failureSnapshot = lexer.SaveFailureState();
+            _savedSubtreeExtent = lexer._subtreeDeepestFailure;
+            lexer._subtreeDeepestFailure = 0;
             _settled = false;
             _depthPopped = false;
         }
@@ -675,29 +724,20 @@ public sealed partial class Lexer
         // duplicate this state.
         public int StartPosition => _savedPosition;
 
-        // Commit succeeds the transaction. By default only the lexer
-        // position is committed (the natural meaning of a successful
-        // parse step). Pass clearFailureRecords: true to also restore
-        // the failure tracker to its state at transaction open — that
-        // discards any records added during this transaction's run.
+        // Commit succeeds the transaction: the lexer keeps the position
+        // its children advanced it to, and Dispose won't roll it back.
         //
-        // Or and Not pass clearFailureRecords: true: their success
-        // semantics imply that records added during the run came from
-        // a path the rule isn't committing to (Or: rejected branches;
-        // Not: inner failure was the EXPECTED outcome). Count rules
-        // (BetweenInclusive / ZeroOrMore / OneOrMore / ...) and the
-        // structural composites (And, WithinToken) leave the default
-        // false: a failed sub-iteration carries real information about
-        // why the input couldn't be consumed further, and that
-        // information shouldn't disappear just because the outer rule
-        // succeeded with the iterations it did get. See
-        // docs/ErrorArchitecture.md.
-        public void Commit(bool clearFailureRecords = false)
+        // Commit does nothing to the failure tracker. Failures
+        // survive both commit and rollback. A rejected Or branch or a
+        // count rule's stopped iteration is real evidence about the
+        // input and is kept, ranked by depth like any other failure. The
+        // one exception is lookahead: Peek and Not discard the failures
+        // their inner probe produced by calling RestoreFailureState /
+        // DiscardSubtreeExtent directly. See docs/ErrorArchitecture.md.
+        public void Commit()
         {
             if (_settled) return;
             _settled = true;
-            if (clearFailureRecords)
-                _lexer.RestoreFailureState(_failureSnapshot);
         }
 
         public void Rollback()
@@ -708,7 +748,7 @@ public sealed partial class Lexer
         }
 
         // Dispose runs on every exit path (commit, rollback, normal return,
-        // exception). It does two things, each guarded by its own flag so
+        // exception). It does three things, each behind its own flag check so
         // the combination of explicit Commit()/Rollback() followed by
         // implicit Dispose stays balanced:
         //   * Restore the lexer position if the transaction wasn't settled.
@@ -716,6 +756,12 @@ public sealed partial class Lexer
         //     indentation mirrors the transaction nesting. The depth pop
         //     has to happen regardless of commit vs. rollback, because the
         //     rule that opened this transaction is unwinding either way.
+        //   * Merge this transaction's subtree-extent window back into the
+        //     enclosing one with Math.Max. The deepest failure this rule's
+        //     subtree reached is part of the parent's subtree too, so the
+        //     parent's window has to absorb it. Done in the same once-only
+        //     block as the depth pop, for the same "unwinding either way"
+        //     reason.
         public void Dispose()
         {
             if (!_settled)
@@ -726,6 +772,8 @@ public sealed partial class Lexer
             if (!_depthPopped)
             {
                 _lexer._transactionDepth--;
+                if (_lexer._subtreeDeepestFailure < _savedSubtreeExtent)
+                    _lexer._subtreeDeepestFailure = _savedSubtreeExtent;
                 _depthPopped = true;
             }
         }

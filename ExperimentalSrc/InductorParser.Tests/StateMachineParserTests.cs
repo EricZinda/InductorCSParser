@@ -462,7 +462,7 @@ public class StateMachineParserTests
         // real-EOF branch does, so under strict the halt fails the
         // rule. The recursive evaluator handles lone surrogates
         // differently (it flows them through as body and only halts at
-        // real EOF), so this test pins only the state-machine side of
+        // real EOF), so this test verifies only the state-machine side of
         // the new strict surrogate-halt behavior; the recursive side's
         // surrogate-as-body behavior is verified in
         // ScanUntilRuleTests.cs.

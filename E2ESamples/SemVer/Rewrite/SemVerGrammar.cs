@@ -34,19 +34,20 @@ public static class SemVerGrammar
 
     static SemVerGrammar()
     {
-        // A factory rather than AliasedAs because each position needs
-        // its own per-name WithError text ("major version must not have
-        // leading zeros", "minor version ...", etc). AliasedAs shares
-        // the inner shape, which would force a single generic message,
-        // and the Not's force-true error path means a per-alias
-        // WithError on the outer wrapper can't override the shared inner
-        // message. See backlog/z0ab.
-        //
-        // The Not(...) probe rejects the "0[digit]" prefix. Its
-        // .WithError fires only on the leading-zero case, so other
+        // A factory rather than AliasedAs because the per-name
+        // WithError has to sit on the Not. The Not is the leading-zero
+        // probe: it fails ONLY on the "0[digit]" shape, so a WithError
+        // there surfaces only for an actual leading zero. Other
         // failures (a non-digit first character like the 'v' in
-        // "v1.2.3") fall through to the default unexpected-token
-        // message from the OneOrMore.
+        // "v1.2.3") leave the Not succeeding and fall through to the
+        // OneOrMore's generic unexpected-token message.
+        //
+        // AliasedAs can't reproduce that: an alias wraps the whole
+        // number rule, so an alias-level WithError fires on every
+        // failure of the number, not just the leading-zero one, and
+        // would mislabel the 'v' in "v1.2.3" as a leading zero.
+        // Keeping the message selective means keeping it on the Not,
+        // and a per-name Not means a factory.
         static Rule NumericCore(string name) =>
             And(
                 Not(And(Token('0'), OneOf(TokenSet.Ascii.Digits)))

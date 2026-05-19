@@ -157,7 +157,7 @@ public class RawSourceTextTests
     {
         // A composite constructed without a ParseContext and without a
         // consumed span has no _leafChars to decode, so SourceText
-        // returns the empty string. Pinning the documented "no
+        // returns the empty string. Verifies the documented "no
         // associated text" behavior.
         var composite = new Symbol(new SymbolId(1), FlattenType.Preserve, new Symbol[0]);
         Assert.That(composite.SourceText, Is.EqualTo(string.Empty));

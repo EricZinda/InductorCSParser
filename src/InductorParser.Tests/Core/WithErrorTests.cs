@@ -5,10 +5,10 @@ using static InductorParser.Rules;
 
 namespace InductorParser.Tests;
 
-// Cross-cutting tests for the three-tier error-resolution system and the
-// success-clears-errors rule. Tests that exercise a specific rule's
-// WithError behavior (Or, And, OneOrMore, Not, ScanWhile, ...) live in
-// that rule's own test file. See docs/ErrorArchitecture.md for the spec.
+// Cross-cutting tests for the depth-primary error-resolution model.
+// Tests that exercise a specific rule's WithError behavior (Or, And,
+// OneOrMore, Not, ScanWhile, ...) live in that rule's own test file.
+// See docs/ErrorArchitecture.md for the spec.
 [TestFixture]
 public class WithErrorTests
 {
@@ -47,29 +47,44 @@ public class WithErrorTests
     [Test]
     public void Deepest_failure_wins_across_multiple_WithError_rules()
     {
-        // Two rules with different WithError messages. The one whose failure
-        // is deepest in the input should be the one the user sees.
-        var name = OneOrMore(OneOf(TokenSet.Letters)).WithError("need letters");
-        var digits = OneOrMore(OneOf(TokenSet.Digits)).WithError("need digits");
-        var doc = And(name, Token('='), digits);
+        // Two rules with different WithError messages. For "deepest wins"
+        // to mean anything, both rules have to actually fail and record a
+        // named failure. An And won't do that: if the first rule fails the
+        // And short-circuits and the second never runs, so only one named
+        // failure ever exists. An Or runs both branches from the same
+        // start, and a rejected Or branch keeps its failure (Case 4 in
+        // docs/ErrorArchitecture.md), so both named failures survive to be
+        // ranked against each other.
+        var letters = OneOrMore(OneOf(TokenSet.Letters))
+            .WithError("need letters");
+        var digits = And(
+            Token('#'),
+            OneOrMore(OneOf(TokenSet.Digits)).WithError("need digits"));
+        var rule = Or(letters, digits);
 
-        // "ab=x" reaches the digits rule before failing (x isn't a digit).
-        // "need digits" should win over "need letters" because the digit
-        // failure is at a deeper position.
-        var result = doc.Parse("ab=x");
+        // On "#x": the letters branch fails immediately at offset 0 ('#'
+        // is not a letter), recording "need letters" there. The digits
+        // branch consumes the '#', then OneOrMore(Digits) fails at offset
+        // 1 ('x' is not a digit), recording "need digits" there. Both
+        // named failures survive the failed Or. Offset 1 is deeper than
+        // offset 0, so "need digits" wins. If ranking ignored depth and
+        // took the first failure written, "need letters" would surface.
+        var result = rule.Parse("#x");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage, Is.EqualTo("need digits"));
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     }
 
     [Test]
     public void Deeper_named_inner_wins_over_shallower_named_outer()
     {
-        // Inner Token has its own .WithError ("unterminated string") at
-        // a deeper position (the EOF after consuming "\"hello"). The
-        // outer Or also has .WithError at its shallower start. Named-vs-
-        // named is deepest-wins, so the more specific inner message wins.
+        // Inner Token has its own .WithError ("unterminated string"),
+        // recorded at the EOF after consuming "\"hello". The outer Or
+        // carries .WithError too; composite anchoring records it at the
+        // same deepest position its branches reached. Two named failures
+        // at the same depth: the first one recorded wins, and the inner
+        // Token recorded before the outer Or, so its message surfaces.
         var quoted = And(
             Token('"'),
             ZeroOrMore(NoneOf(TokenSet.Runes("\""))),
@@ -88,10 +103,14 @@ public class WithErrorTests
     public void Forced_outer_overrides_deeper_named_inner()
     {
         // Same grammar shape as the previous test, but the outer Or is
-        // marked forced: true. Tier 3 beats tier 2 regardless of depth,
-        // so the outer's summary message wins despite the inner being
-        // deeper. The escape hatch for authors who want a top-level
-        // message to suppress inner specifics.
+        // marked forced: true. A forced failure is a hard override and
+        // wins over every non-forced failure at any depth, so the outer's
+        // summary message wins over the inner Token's named failure. The
+        // escape hatch for authors who want a top-level message to
+        // suppress inner specifics. forced overrides the message choice,
+        // not the position: the failure still anchors where composite
+        // anchoring puts it, the deepest position the Or's branches
+        // reached (the EOF after "\"hello").
         var quoted = And(
             Token('"'),
             ZeroOrMore(NoneOf(TokenSet.Runes("\""))),
@@ -103,14 +122,14 @@ public class WithErrorTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage, Is.EqualTo("expected one of: string, x"));
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo("\"hello".Length));
     }
 
     [Test]
     public void Forced_inner_beats_shallower_forced_outer()
     {
-        // Two forced WithErrors. Tier 3 vs tier 3 falls back to
-        // deepest-wins, so the deeper inner forced message wins.
+        // Two forced WithErrors. Forced beats forced on depth, so the
+        // deeper inner forced message wins.
         var inner = And(
             Token('y'),
             OneOrMore(OneOf(TokenSet.Digits))
@@ -121,9 +140,10 @@ public class WithErrorTests
 
         Assert.That(result.Success, Is.False);
         // Inner OneOrMore records "forced inner" at the digit-attempt
-        // position (2, where 'z' is). Outer And's WithError records at
-        // the failing child's start (1, where the inner And began).
-        // Inner is deeper, inner wins.
+        // position (2, where 'z' is). The outer And's forced WithError
+        // anchors at the deepest position its subtree reached, also 2.
+        // Two forced failures at the same depth: the first one recorded
+        // wins, and the inner recorded before the outer.
         Assert.That(result.ErrorMessage, Is.EqualTo("forced inner"));
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
     }

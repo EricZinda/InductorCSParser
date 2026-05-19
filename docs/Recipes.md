@@ -17,20 +17,20 @@ Drop that into a SemVer-shaped grammar and feed it the bad input `01.2.3`:
 
 ```csharp
 var semver = And(
-    numericCore.As("major"),
+    numericCore.AliasedAs("major"),
     Token('.'),
-    numericCore.As("minor"),
+    numericCore.AliasedAs("minor"),
     Token('.'),
-    numericCore.As("patch")
+    numericCore.AliasedAs("patch")
 );
 
 // Result on "01.2.3":
-//   fail at column 2: Parse failed at offset 1: unexpected '1'.
+//   fail at column 1: Parse failed at offset 1: unexpected '1'.
 ```
 
-The position is wrong. The actual problem is the leading zero at column 1 (the `0`), but the parser reports a missing `.` at column 2 (the `1`). The reason is how `Or` works. It tries `Token('0')` first, that succeeds on the lone `0`, and the parser commits to it. The outer `And` then tries `Token('.')`, sees `1`, and fails there. Once an `Or` branch matches, the parser doesn't go back and try the others later. Committed is committed.
+The position is wrong. The actual problem is the leading zero at column 0 (the `0`), but the parser reports a missing `.` at column 1 (the `1`). The reason is how `Or` works. It tries `Token('0')` first, that succeeds on the lone `0`, and the parser commits to it. The outer `And` then tries `Token('.')`, sees `1`, and fails there. Once an `Or` branch matches, the parser doesn't go back and try the others later. Committed is committed.
 
-### Tempting fix that doesn't work yet
+### Fix that gets the message: a lookahead inside the Or
 
 The shape that looks right is a negative lookahead inside the first branch: only accept the `0` if it isn't followed by another digit.
 
@@ -41,12 +41,12 @@ var peekCore = Or(
 ).WithError("Number with no leading zeros expected");
 
 // Result on "01.2.3":
-//   fail at column 2: Parse failed at offset 1: unexpected '1'.
+//   fail at column 1: Number with no leading zeros expected
 ```
 
-Same wrong column. Same wrong message (the `WithError` is dropped). This trips a known bug: when the `Not` inside the first branch fails, its probe position leaks into the parser's deepest-failure tracker and outpoints the `Or`'s own `WithError` at the start of the rule. See `docs/PotentialBugSources/00001-lookahead-internal-failures-leaking-into-deepest-failure.md` for the full story. Until that's fixed, this shape doesn't actually help.
+This gets the friendly message. The caret lands at column 1, the digit *after* the `0`: that's the spot the `Not` lookahead got stuck, where it found a digit it didn't want. Depth-primary ranking anchors the `Or`'s `WithError` at the deepest position its branches reached, and that's it. The message is right and the caret points one past the zero. If you want the caret *on* the zero, use the next pattern.
 
-### Fix that works: reject the bad prefix first
+### Fix that puts the caret on the zero: reject the bad prefix first
 
 Put the lookahead before any consumption, as a "reject this prefix" check, and then accept any digit run. Putting `WithError` on the `Not` (instead of on the outer `And`) means the leading-zero message fires only when the leading-zero case is what tripped the parse. Other failures (a non-digit first character like the `v` in `v1.2.3`) fall through to the default unexpected-token message from the `OneOrMore`.
 
@@ -73,13 +73,13 @@ var semver = And(
 // Result on "10.20.30":   success
 ```
 
-Why this version doesn't trip the leak: the `Not`'s inner runs at the same offset the outer rule starts at, and on a bad input the inner *succeeds* (it consumed `0` followed by a digit). When the inner of `Not` succeeds, no failures get recorded inside it, so there's no probe position to leak. `Not` then registers its own failure at the start of the rule, with the `WithError` message attached.
+Why this version puts the caret on the zero: the `Not` is the first thing the rule does, so it runs at the offset the rule starts at. On a bad input the inner *succeeds* (it consumed `0` followed by a digit), which means `Not` fails, and `Not` records its failure at its own start, the rule's start, with the `WithError` message attached. So the caret lands on the `0` itself rather than one past it.
 
 The grammar accepts a touch more than the spec (a single `0` could in principle match the `OneOrMore(Digit)` branch followed by anything), but the `Not` prefix rejects exactly the bad shape `0` + digit, so the net set of accepted strings matches the spec.
 
 The cost: one extra two-token lookahead at each numeric position. `Not` consumes nothing, so for typical inputs this is cheap. The grammar is a hair more verbose than the natural translation, but it's still self-contained and the spec rule is visible on the page.
 
-The working SemVer sample under [E2ESamples/SemVer/Rewrite/SemVerGrammar.cs](../E2ESamples/SemVer/Rewrite/SemVerGrammar.cs) uses exactly this pattern for major, minor, and patch. The pinned-behavior tests live in [RecipesExamples.cs](../src/InductorParser.Tests/DocExamples/RecipesExamples.cs) ("No_leading_zero_..." tests) and [SemVerTests.cs](../E2ESamples/SemVer/Tests/SemVerTests.cs) (the per-position tests in `SemVerErrorPositionTests`).
+The working SemVer sample under [E2ESamples/SemVer/Rewrite/SemVerGrammar.cs](../E2ESamples/SemVer/Rewrite/SemVerGrammar.cs) uses exactly this pattern for major, minor, and patch. The regression tests live in [RecipesExamples.cs](../src/InductorParser.Tests/DocExamples/RecipesExamples.cs) ("No_leading_zero_..." tests) and [SemVerTests.cs](../E2ESamples/SemVer/Tests/SemVerTests.cs) (the per-position tests in `SemVerErrorPositionTests`).
 
 ### Alternative: validate after parsing
 

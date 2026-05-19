@@ -38,21 +38,28 @@ internal sealed class NotRule : Rule
         // list), Rule.TryParse gives it a throwaway list that nobody
         // reads.
         using var transaction = lexer.BeginTransaction();
+        var failureSnapshot = lexer.SaveFailureState();
         var innerResult = Inner.TryParse(lexer, outputSymbols: null);
+        // Inner ran as a throwaway probe. Discard the failures and
+        // the subtree extent it produced, succeed or fail: those
+        // positions were only probed, never consumed. Keeping them would
+        // let a probe's deep excursion outrank the real parse's failures.
+        // See docs/ErrorArchitecture.md, "Lookahead failures are discarded".
+        lexer.RestoreFailureState(failureSnapshot);
+        lexer.DiscardSubtreeExtent();
         if (innerResult != null)
         {
             TraceFailure(lexer, $"inner matched");
-            // Record Not's own failure at the lookahead anchor.
-            // See docs/ErrorArchitecture.md.
+            // Not records one failure of its own, at the lookahead anchor
+            // (its own start, where the user has to change something),
+            // carrying its .WithError if it has one. This is the
+            // exception to composite anchoring: there is no surviving
+            // descendant failure to anchor to. See docs/ErrorArchitecture.md.
             lexer.RecordFailure(transaction.StartPosition, ErrorMessage, ErrorForced);
             return null;
         }
         TraceSuccess(lexer, $"inner didn't match");
-        // Commit Not's transaction and clear inner's failure records.
-        // Inner's failure was the EXPECTED outcome (that's what Not
-        // succeeding means), so its records would be noise rather
-        // than diagnostic. See docs/ErrorArchitecture.md.
-        transaction.Commit(clearFailureRecords: true);
+        transaction.Commit();
         return effectiveFlattenType == FlattenType.Preserve
             ? new Symbol(Id, FlattenType, Array.Empty<Symbol>(), lexer.Input.AsMemory(transaction.StartPosition, 0), lexer.Context)
             : Symbol.Discarded;

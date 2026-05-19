@@ -50,12 +50,14 @@ public class OneOrMoreRuleTests
     }
 
     [Test]
-    public void OneOrMore_named_WithError_beats_deeper_mechanical_inner()
+    public void OneOrMore_named_WithError_anchors_at_deepest_descendant_failure()
     {
         // Inner And(Letter, Letter) consumes the first letter then fails
-        // on the second, leaving a mechanical record at position 1.
-        // OneOrMore's named WithError beats it regardless of depth.
-        // See docs/ErrorArchitecture.md.
+        // on the second, recording a mechanical failure at position 1.
+        // OneOrMore carries a named WithError; composite anchoring records
+        // it at the deepest position its subtree reached (1), where it
+        // ties the mechanical failure on depth and wins the named-beats-
+        // mechanical tie-break. See docs/ErrorArchitecture.md.
         var letter = OneOf(TokenSet.Letters);
         var rule = OneOrMore(And(letter, letter)).WithError("expected letter pairs");
 
@@ -63,6 +65,6 @@ public class OneOrMoreRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage, Is.EqualTo("expected letter pairs"));
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     }
 }

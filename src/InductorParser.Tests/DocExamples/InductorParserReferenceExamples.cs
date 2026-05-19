@@ -67,19 +67,19 @@ public class InductorParserReferenceExamples
                     Is.EqualTo("SettingName"));
     }
 
-    // "Naming Rules" / ".As(SymbolId)" pinned numeric ids. Doc claim: a
-    // pinned SymbolId stays put across compiles, and a separate .As
+    // "Naming Rules" / ".As(SymbolId)" explicit numeric ids. Doc claim: an
+    // explicit SymbolId stays put across compiles, and a separate .As
     // attaches a debug name. The two overloads write different fields
     // (Id and Name) so they compose cleanly on a single instance.
     [Test]
-    public void Pinned_SymbolId_stays_put()
+    public void Explicit_SymbolId_stays_put()
     {
-        var pinned = new SymbolId(SymbolRanges.CustomRangeStart + 42);
-        var thing = Identifier().As(pinned).As("Thing");
+        var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 42);
+        var thing = Identifier().As(explicitId).As("Thing");
         var document = And(thing, Eof()).Compile();
 
-        Assert.That(thing.Id, Is.EqualTo(pinned));
-        Assert.That(document.NameOf(pinned), Is.EqualTo("Thing"));
+        Assert.That(thing.Id, Is.EqualTo(explicitId));
+        Assert.That(document.NameOf(explicitId), Is.EqualTo("Thing"));
     }
 
     // "What Compile Actually Does" / "Freeze the rule graph": after

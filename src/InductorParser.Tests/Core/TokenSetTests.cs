@@ -1090,7 +1090,7 @@ public class TokenSetTests
     // Below this point: tests that exercise the multi-rune side of the
     // TokenSet (graphemes that occupy two or more runes). The rune fast
     // path stays unchanged, so the rune-only tests above are still the
-    // bulk of the coverage. These pin down the new capability: storage,
+    // bulk of the coverage. These verify the new capability: storage,
     // membership, set algebra, the documented complement-throws rule,
     // equality, and ToString.
 

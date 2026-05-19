@@ -168,7 +168,7 @@ public class OrRuleTests
     [Test]
     public void Or_shortcut_doesnt_skip_And_with_optional_NoneOf_prefix()
     {
-        // This pins the lookahead-shortcut soundness story for an And
+        // This verifies the lookahead-shortcut soundness story for an And
         // whose first child is Optional(NoneOf(...)). The Optional can
         // either match zero (so the next sibling sees the lookahead) or
         // match a single token NOT in the NoneOf's set, so the And's
@@ -229,31 +229,64 @@ public class OrRuleTests
     }
 
     [Test]
-    public void Or_named_WithError_beats_deeper_mechanical_inner()
+    public void Or_named_WithError_beats_same_depth_mechanical_branch_failures()
     {
         // Branches share the leading '!' prefix and each Literal records
-        // a mechanical failure at the mid-read position (1). Or itself
-        // records a named WithError at its start (0). Named beats
-        // mechanical regardless of depth, so the Or's message surfaces
-        // at position 0. (Newsboat operator case from
-        // docs/ErrorArchitecture.md case 2.)
+        // a mechanical failure at the mid-read position (1). The Or
+        // carries a named WithError; composite anchoring records it at
+        // the position its branches reached (1), where it ties the
+        // mechanical failures on depth and wins the named-beats-
+        // mechanical tie-break. (The Newsboat operator case from
+        // docs/ErrorArchitecture.md.)
+        //
+        // Both branches fail at the same offset, so this verifies the
+        // equal-depth tie-break only. The pick-the-deepest behavior is
+        // covered by the sibling test below, where the branches fail at
+        // different offsets.
         var rule = Or(Literal("!~"), Literal("!=")).WithError("expected operator");
 
         var result = rule.Parse("!!");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage, Is.EqualTo("expected operator"));
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     }
 
     [Test]
-    public void Or_rejected_branch_WithError_is_cleared_when_another_branch_commits()
+    public void Or_named_WithError_anchors_at_the_deepest_branch_when_branches_fail_at_different_depths()
     {
-        // The email-domain shape from docs/ErrorArchitecture.md case 4.
-        // The first Or branch matches part of the input then fails with
-        // a WithError record. The second branch succeeds and the Or
-        // commits. The outer commit scrubs the rejected branch's
-        // record so it doesn't haunt later failures.
+        // The sibling test above has every branch fail at the same
+        // offset, so it can't tell "deepest" apart from "first" or
+        // "last". Here the three branches fail at different offsets.
+        // On "abcX":
+        //   Literal("aZ")   fails at 1 ('Z' vs 'b')
+        //   Literal("abcZ") fails at 3 ('Z' vs 'X')   <- deepest
+        //   Literal("aQ")   fails at 1 ('Q' vs 'b')
+        // The deepest branch is the middle one, so a correct anchor
+        // can't be the first branch's depth, the last branch's, or the
+        // shallowest. Only the maximum. Composite anchoring records the
+        // Or's named WithError at offset 3, where it beats the middle
+        // branch's mechanical failure on the named-vs-mechanical tie.
+        var rule = Or(Literal("aZ"), Literal("abcZ"), Literal("aQ"))
+            .WithError("expected one of the three forms");
+
+        var result = rule.Parse("abcX");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected one of the three forms"));
+    }
+
+    [Test]
+    public void Or_rejected_branch_WithError_is_kept_as_a_near_miss()
+    {
+        // The email-domain shape from docs/ErrorArchitecture.md, Case 4.
+        // The email branch matches "alice@" then fails wanting a domain,
+        // recording its WithError at position 6 (EOF). The username
+        // branch succeeds and the Or commits to it. The rejected email
+        // branch's failure is NOT cleared: it is a real near-miss, and at
+        // position 6 it is deeper than the eventual failure of the
+        // trailing '.' (position 5), so depth-primary ranking surfaces it.
         var letters = OneOf(TokenSet.Letters);
         var email = And(
             OneOrMore(letters),
@@ -266,7 +299,7 @@ public class OrRuleTests
         var result = document.Parse("alice@");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Does.Not.Contain("expected domain after '@'"));
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(5));
+        Assert.That(result.ErrorMessage, Does.Contain("expected domain after '@'"));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(6));
     }
 }

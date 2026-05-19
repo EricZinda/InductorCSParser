@@ -27,7 +27,7 @@ namespace InductorParser;
 //
 // If the expected token is exactly one rune (the common case for
 // ASCII, emoji that fit in a single code point, CJK, etc.), the Id is
-// pinned to that code point so Symbol leaves produced by this rule
+// set to that code point so Symbol leaves produced by this rule
 // carry the "id == rune" shape. For multi-rune tokens the Id comes
 // from Compile's custom-range assignment.
 internal sealed class GraphemeRule : Rule
@@ -52,7 +52,7 @@ internal sealed class GraphemeRule : Rule
 
         _expected = expectedToken;
 
-        // Single-rune tokens get their code point pinned as the rule's
+        // Single-rune tokens get their code point assigned as the rule's
         // Id, matching C++ character-symbol numbering. Multi-rune
         // tokens fall through to Compile's custom-range assignment.
         if (TrySingleRuneValue(expectedToken, out int runeValue))
@@ -86,12 +86,12 @@ internal sealed class GraphemeRule : Rule
         }
 
         _expected = normalized;
-        // Skip the rune re-pin when the user fixed an Id via .As(SymbolId)
-        // or named the rule via .As(string): their pinned or name-hashed
-        // id is the stable-numbering contract, and re-pinning to the new
-        // rune would clobber the custom-range id AssignNamedIds gave a
-        // named rule.
-        if (!IsUserSymbolIdPinned && Name == null && TrySingleRuneValue(_expected, out int runeValue))
+        // Skip the rune re-assignment when the user set an explicit Id via
+        // .As(SymbolId) or named the rule via .As(string): their explicit
+        // or name-hashed id is what keeps numbering stable, and
+        // re-assigning to the new rune would clobber the custom-range id
+        // AssignNamedIds gave a named rule.
+        if (!IsUserSymbolIdExplicit && Name == null && TrySingleRuneValue(_expected, out int runeValue))
             SetIdInternal(new SymbolId(runeValue));
     }
 

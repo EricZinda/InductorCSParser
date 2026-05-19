@@ -83,7 +83,7 @@ public class ScanUntilRuleTests
         // Strict default: a scan that runs off the end without matching
         // the stopper fails the rule, with the failure recorded at the
         // EOF position the scan reached. No WithError on ScanUntil here,
-        // so the mechanical record lands where the scan got stuck.
+        // so the mechanical failure lands where the scan got stuck.
         var result = StopOnPipe().Parse("abcXYZ");
 
         Assert.That(result.Success, Is.False,
@@ -255,24 +255,24 @@ public class ScanUntilRuleTests
     }
 
     [Test]
-    public void ScanUntil_with_pinned_SymbolId_uses_pinned_id_for_body_leaf()
+    public void ScanUntil_with_explicit_SymbolId_uses_explicit_id_for_body_leaf()
     {
-        // Sibling of the OneOf / NoneOf / AnyToken / WithinToken pinned-
+        // Sibling of the OneOf / NoneOf / AnyToken / WithinToken explicit-
         // SymbolId tests added in p1nd. ScanUntil emits one leaf per
         // body run with the rule's Id directly (no rune-as-leaf-id
         // shortcut, since a body of multiple tokens doesn't have one
         // distinguished rune to carry). .As(SymbolId) writes the user's
-        // pinned value into Id, so the leaf carries it by construction.
+        // explicit value into Id, so the leaf carries it by construction.
         // Test locks in the matrix so a future leaf-id refactor that
         // routes ScanUntil through ResolveLeafId or a similar helper has
         // to keep .As(SymbolId) honored.
-        var pinnedId = new SymbolId(SymbolRanges.CustomRangeStart + 105);
-        var rule = ScanUntil(TokenSet.Runes("|"), eofIsTerminator: true).As(pinnedId);
+        var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 105);
+        var rule = ScanUntil(TokenSet.Runes("|"), eofIsTerminator: true).As(explicitId);
         var result = rule.Parse("abc");
 
         Assert.That(result.Success, Is.True);
-        Assert.That(result.Tree!.Id, Is.EqualTo(pinnedId),
-            "leaf carries the user-pinned SymbolId");
+        Assert.That(result.Tree!.Id, Is.EqualTo(explicitId),
+            "leaf carries the user's explicit SymbolId");
         Assert.That(result.Tree!.Is(rule), Is.True);
         Assert.That(result.Tree!.Find(rule), Is.Not.Null);
     }
@@ -513,9 +513,9 @@ public class ScanUntilRuleTests
         // the input come out of ToString() unchanged. This includes
         // unpaired surrogate halves, which .NET's System.String holds
         // verbatim (a String is any sequence of UTF-16 code units, no
-        // well-formedness validation). UnexpectedUnicodeTests pins the
-        // same property for AnyToken / Token(string) / OneOf / etc.;
-        // this test pins it for ScanUntil specifically.
+        // well-formedness validation). UnexpectedUnicodeTests verifies
+        // the same property for AnyToken / Token(string) / OneOf / etc.
+        // This test verifies it for ScanUntil specifically.
         string input = "before" + UnicodeExamples.EmojiStartHighSurrogateText + "after|";
         // ScanUntil doesn't consume the stopper, so the parse leaves
         // trailing '|' input. AllowTrailingInput keeps Parse from
@@ -836,12 +836,12 @@ public class ScanUntilRuleTests
     [Test]
     public void ScanUntil_inner_escapeEnd_WithError_surfaces_when_ScanUntil_fails()
     {
-        // ScanUntil doesn't clear inner records on success — and when
+        // ScanUntil doesn't clear inner failures on success, and when
         // it fails on a bad escape end, the inner escapeEnd rule's
-        // failure record survives (rollback keeps). If escapeEnd has
+        // failure survives (rollback keeps). If escapeEnd has
         // a .WithError and ScanUntil doesn't, the inner WithError is
-        // what the user sees. Pins that ScanUntil doesn't accidentally
-        // scrub inner records.
+        // what the user sees. Verifies ScanUntil doesn't accidentally
+        // scrub inner failures.
         var escapeEnd = OneOf(TokenSet.Runes("nrt\\\""))
             .WithError("invalid escape character");
         var rule = ScanUntil(TokenSet.Runes("\""), new Rune('\\'), escapeEnd);
@@ -858,7 +858,7 @@ public class ScanUntilRuleTests
         // scan that runs off the end without matching the stopper has
         // to fail under strict semantics. The escape path doesn't
         // accidentally consume the EOF branch. No WithError on
-        // ScanUntil, so the mechanical record lands at the EOF position
+        // ScanUntil, so the mechanical failure lands at the EOF position
         // the scan reached.
         var escapeEnd = OneOf(TokenSet.Runes("nrt\\\""));
         var rule = ScanUntil(TokenSet.Runes("\""), new Rune('\\'), escapeEnd);

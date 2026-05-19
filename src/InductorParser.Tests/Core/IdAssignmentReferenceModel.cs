@@ -5,18 +5,18 @@ using static InductorParser.Rules;
 
 namespace InductorParser.Tests;
 
-// A leaf is Pinned (.As(SymbolId)), Named (.As(string)), or Anonymous
+// A leaf is Explicit (.As(SymbolId)), Named (.As(string)), or Anonymous
 // (no .As call, picks up an id from pass 3).
-public enum RuleRole { Pinned, Named, Anonymous }
+public enum RuleRole { Explicit, Named, Anonymous }
 
-// Describes one leaf in a generated test grammar. Pin offsets are stored
-// relative to SymbolRanges.CustomRangeStart so test cases read clearly:
-// PinnedLeaf(0) means "first slot in the custom range" instead of a giant
-// absolute number that depends on what CustomRangeStart happens to equal.
-public sealed record RuleSpec(RuleRole Role, int? PinOffsetFromCustomStart, string? Name)
+// Describes one leaf in a generated test grammar. Explicit-id offsets are
+// stored relative to SymbolRanges.CustomRangeStart so test cases read
+// clearly: ExplicitLeaf(0) means "first slot in the custom range" instead
+// of a giant absolute number that depends on what CustomRangeStart equals.
+public sealed record RuleSpec(RuleRole Role, int? ExplicitOffsetFromCustomStart, string? Name)
 {
-    public static RuleSpec PinnedLeaf(int offsetFromCustomStart) =>
-        new(RuleRole.Pinned, offsetFromCustomStart, null);
+    public static RuleSpec ExplicitLeaf(int offsetFromCustomStart) =>
+        new(RuleRole.Explicit, offsetFromCustomStart, null);
 
     public static RuleSpec NamedLeaf(string name) =>
         new(RuleRole.Named, null, name);
@@ -34,11 +34,11 @@ public sealed record RuleSpec(RuleRole Role, int? PinOffsetFromCustomStart, stri
 // need to update this model to match.
 public static class IdAssignmentReferenceModel
 {
-    // Far enough above the sweep's pin offsets (0..5) and the named-rule
-    // hash slots that it never collides with anything the sweep cares
-    // about. The actual value doesn't matter as long as it's well outside
-    // the test's working range.
-    public const int RootPinOffset = 999_999;
+    // Far enough above the sweep's explicit-id offsets (0..5) and the
+    // named-rule hash slots that it never collides with anything the
+    // sweep cares about. The actual value doesn't matter as long as it's
+    // well outside the test's working range.
+    public const int RootExplicitOffset = 999_999;
 
     // Compute the id Rule.Compile should assign to each spec, in the same
     // order the spec list is in.
@@ -46,20 +46,20 @@ public static class IdAssignmentReferenceModel
     {
         var result = new int[specs.Count];
 
-        // Record the And root's pin as used. The passes below only
+        // Record the And root's explicit id as used. The passes below only
         // iterate the spec list, so they wouldn't see the root otherwise.
         var usedIds = new HashSet<int>
         {
-            SymbolRanges.CustomRangeStart + RootPinOffset
+            SymbolRanges.CustomRangeStart + RootExplicitOffset
         };
 
-        // Pass 1: claim every pinned id up front so passes 2 and 3 will
+        // Pass 1: claim every explicit id up front so passes 2 and 3 will
         // probe past them.
         for (int i = 0; i < specs.Count; i++)
         {
-            if (specs[i].Role == RuleRole.Pinned)
+            if (specs[i].Role == RuleRole.Explicit)
             {
-                int id = SymbolRanges.CustomRangeStart + specs[i].PinOffsetFromCustomStart!.Value;
+                int id = SymbolRanges.CustomRangeStart + specs[i].ExplicitOffsetFromCustomStart!.Value;
                 result[i] = id;
                 usedIds.Add(id);
             }
@@ -113,8 +113,8 @@ public static class IdAssignmentReferenceModel
             Rule leaf = OneOf(TokenSet.Letters);
             switch (specs[i].Role)
             {
-                case RuleRole.Pinned:
-                    leaf = leaf.As(new SymbolId(SymbolRanges.CustomRangeStart + specs[i].PinOffsetFromCustomStart!.Value));
+                case RuleRole.Explicit:
+                    leaf = leaf.As(new SymbolId(SymbolRanges.CustomRangeStart + specs[i].ExplicitOffsetFromCustomStart!.Value));
                     break;
                 case RuleRole.Named:
                     leaf = leaf.As(specs[i].Name!);
@@ -123,9 +123,9 @@ public static class IdAssignmentReferenceModel
             leaves[i] = leaf;
         }
 
-        // Pin the And root at RootPinOffset so it doesn't claim an
-        // anonymous id from the low end of the custom range and shift the
-        // expected ids of every anonymous leaf below it.
-        return And(leaves).As(new SymbolId(SymbolRanges.CustomRangeStart + RootPinOffset));
+        // Give the And root an explicit id at RootExplicitOffset so it
+        // doesn't claim an anonymous id from the low end of the custom
+        // range and shift the expected ids of every anonymous leaf below it.
+        return And(leaves).As(new SymbolId(SymbolRanges.CustomRangeStart + RootExplicitOffset));
     }
 }

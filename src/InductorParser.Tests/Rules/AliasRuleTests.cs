@@ -14,7 +14,7 @@ namespace InductorParser.Tests;
 // Preserve, the alias rebadges — its Symbol replaces the inner's rather
 // than nesting it. Error behavior follows docs/ErrorArchitecture.md: the
 // alias records at its own start (the Or / Peek / Not category), the
-// rebadge is success-only and never touches failure records.
+// rebadge is success-only and never touches failures.
 [TestFixture]
 public class AliasRuleTests
 {
@@ -216,18 +216,19 @@ public class AliasRuleTests
     }
 
     [Test]
-    public void Alias_named_WithError_beats_deeper_mechanical_inner()
+    public void Alias_named_WithError_anchors_at_deepest_inner_failure()
     {
         // Literal("abc") on "abZ" reads 'a','b', then mismatches 'Z' at
-        // offset 2 and records a mechanical (tier-1) failure there. The
-        // alias records its named (tier-2) WithError at its own start,
-        // offset 0. The named tier beats the mechanical tier regardless
-        // of depth, so the alias's message wins at offset 0.
+        // offset 2 and records a mechanical failure there. The alias
+        // carries a named WithError; composite anchoring records it at
+        // the deepest position the inner reached (offset 2), where it
+        // ties the mechanical failure on depth and wins the named-beats-
+        // mechanical tie-break. See docs/ErrorArchitecture.md.
         var alias = Alias(Literal("abc")).As("word").WithError("expected the word");
         var result = alias.Parse("abZ");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
         Assert.That(result.ErrorMessage, Is.EqualTo("expected the word"));
     }
 
@@ -235,8 +236,8 @@ public class AliasRuleTests
     public void Alias_without_WithError_surfaces_inner_WithError()
     {
         // The inner carries a WithError; the alias does not. The inner's
-        // named record must survive the alias's failure path — the alias
-        // is a structural composite and never clears records. The inner's
+        // named failure must survive the alias's failure path. The alias
+        // is a structural composite and never clears failures. The inner's
         // message surfaces, anchored where the inner recorded it.
         var inner = Literal("abc").WithError("expected abc here");
         var alias = Alias(inner).As("word");
@@ -248,20 +249,56 @@ public class AliasRuleTests
     }
 
     [Test]
-    public void Alias_WithError_position_is_the_alias_start_not_the_inner_failure_point()
+    public void Alias_WithError_anchors_at_the_inner_failure_point_not_the_alias_start()
     {
         // "XX" is consumed first, so the alias begins at offset 2. Inside
         // it, Literal("abc") on "abZ" mismatches at offset 4. The alias's
-        // WithError records at the alias's own start (offset 2), per the
-        // Or / Peek / Not position category in docs/ErrorArchitecture.md,
-        // not at the inner's offset-4 failure point.
+        // WithError anchors at the deepest position the inner reached
+        // (offset 4), the inner's failure point, not at the alias's own
+        // start (offset 2). See docs/ErrorArchitecture.md, "Where each
+        // rule records its failure".
         var alias = Alias(Literal("abc")).As("word").WithError("expected the word");
         var rule = And(Literal("XX").Preserve(), alias);
         var result = rule.Parse("XXabZ");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(4));
         Assert.That(result.ErrorMessage, Is.EqualTo("expected the word"));
+    }
+
+    [Test]
+    public void Alias_plain_WithError_does_not_override_an_inner_WithError()
+    {
+        // Both the inner rule and the alias carry a .WithError. The inner
+        // records its message at the spot it got stuck (offset 2), and
+        // the alias records its own at the deepest position the inner
+        // reached, the same offset 2. An exact-depth tie goes to the
+        // first writer, and the inner records before the alias, so the
+        // inner's message wins. A plain .WithError on the alias can't
+        // override an inner one. See docs/ErrorArchitecture.md.
+        var inner = Literal("abc").WithError("inner: expected abc");
+        var alias = Alias(inner).As("word").WithError("alias: expected a word");
+        var result = alias.Parse("abZ");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
+        Assert.That(result.ErrorMessage, Is.EqualTo("inner: expected abc"));
+    }
+
+    [Test]
+    public void Alias_forced_WithError_overrides_an_inner_WithError()
+    {
+        // To override an inner .WithError from the alias, mark the
+        // alias's .WithError forced. A forced failure beats every
+        // non-forced failure at any depth, so the alias's message wins
+        // over the inner's. See docs/ErrorArchitecture.md.
+        var inner = Literal("abc").WithError("inner: expected abc");
+        var alias = Alias(inner).As("word").WithError("alias: expected a word", forced: true);
+        var result = alias.Parse("abZ");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
+        Assert.That(result.ErrorMessage, Is.EqualTo("alias: expected a word"));
     }
 
     // --- Identity --------------------------------------------------------
@@ -294,19 +331,19 @@ public class AliasRuleTests
     }
 
     [Test]
-    public void AliasedAs_SymbolId_pins_alias_id()
+    public void AliasedAs_SymbolId_sets_explicit_alias_id()
     {
-        var pinnedId = new SymbolId(SymbolRanges.CustomRangeStart + 42);
-        var alias = OneOrMore(OneOf(TokenSet.Digits)).AliasedAs(pinnedId);
+        var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 42);
+        var alias = OneOrMore(OneOf(TokenSet.Digits)).AliasedAs(explicitId);
 
         alias.Compile();
-        Assert.That(alias.Id, Is.EqualTo(pinnedId));
+        Assert.That(alias.Id, Is.EqualTo(explicitId));
     }
 
     [Test]
     public void AliasedAs_with_explicit_Delete_then_As_throws_the_flatten_contradiction()
     {
-        // .Delete() on the alias pins a non-Preserve policy explicitly.
+        // .Delete() on the alias sets a non-Preserve policy explicitly.
         // A later .As(...) needs Preserve so the alias's Symbol reaches
         // the tree, so the two requests contradict and .As throws. This
         // is the standard base-class guardrail, inherited unchanged.
@@ -329,8 +366,15 @@ public class AliasRuleTests
 
         var result = alias.Parse("123");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.Find(alias), Is.Not.Null,
-            "Alias around a LateBoundRule should be findable by the alias's name.");
+        // The alias is the root rule and the LateBoundRule it wraps is
+        // transparent, so the alias's Symbol must be the tree's top node
+        // directly. Tree.Is(alias) verifies that shape. Tree.Find(alias)
+        // would only prove an alias Symbol exists somewhere in the tree
+        // and would still pass if a stray layer wrapped it.
+        Assert.That(result.Tree, Is.Not.Null);
+        Assert.That(result.Tree!.Is(alias), Is.True,
+            "The alias's Symbol should be the top node of the tree.");
+        Assert.That(result.Tree.ToString(), Is.EqualTo("123"));
     }
 
     [Test]
