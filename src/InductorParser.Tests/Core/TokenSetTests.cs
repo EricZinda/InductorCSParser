@@ -43,8 +43,9 @@ public class TokenSetTests
     [Test]
     public void Single_char_with_surrogate_throws()
     {
-        // (int)'\uD800' == 0xD800, delegates through Single(int) which throws.
-        Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Single('\uD800'));
+        // (int)(char)HighSurrogateMinRune == 0xD800, delegates through
+        // Single(int) which throws.
+        Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Single((char)UnicodeExamples.HighSurrogateMinRune));
     }
 
     [Test]
