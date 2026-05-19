@@ -17,7 +17,7 @@ namespace InductorParser.SyntaxTree;
 //                       offsets back to original-input offsets. Null
 //                       when no normalization was configured.
 //   GrammarRoot       — the Rule the parse was launched against. Used
-//                       by Symbol.Name to resolve a Symbol's SymbolId
+//                       by Symbol.DisplayName to resolve a Symbol's SymbolId
 //                       back to the rule name the grammar gave it,
 //                       without forcing the consumer to thread the
 //                       grammar through to every tree-walker. Null on
@@ -27,7 +27,7 @@ namespace InductorParser.SyntaxTree;
 // One instance per Rule.Parse call. Hand-built Symbols (test fixtures
 // constructing trees by hand) can pass null instead, in which case
 // Symbol.SourceRange falls back to treating the leaf's backing string
-// as both parseInput and originalInput, and Symbol.Name returns null.
+// as both parseInput and originalInput, and Symbol.DisplayName returns null.
 public sealed class ParseContext
 {
     public string OriginalInput { get; }

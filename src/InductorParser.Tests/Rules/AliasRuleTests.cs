@@ -69,7 +69,7 @@ public class AliasRuleTests
         var aliasNode = result.Tree!.Find(alias);
         Assert.That(aliasNode, Is.Not.Null,
             "Find(aliasRule) should locate the alias's Symbol in the tree.");
-        Assert.That(aliasNode!.Name, Is.EqualTo("year"));
+        Assert.That(aliasNode!.DisplayName, Is.EqualTo("year"));
         Assert.That(aliasNode.ToString(), Is.EqualTo("1234"));
     }
 

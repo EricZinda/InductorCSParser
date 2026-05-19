@@ -218,9 +218,9 @@ public static class TomlGrammar
             hexadecimalDigit, hexadecimalDigit, hexadecimalDigit, hexadecimalDigit);
         // Token('\\') is Delete by default. That's fine here: the
         // basicStringBody consumer (DecodeBasicStringBody) recovers
-        // the verbatim body text via ParseResult.RawSourceTextOf, which
+        // the verbatim body text via Symbol.SourceText, which
         // includes the backslash because it's a section of the original
-        // input — independent of which children survived flattening.
+        // input, independent of which children survived flattening.
         var basicEscape = And(
             Token('\\'),
             Or(simpleEscapeChar, unicodeShortEscape, unicodeLongEscape)
@@ -360,7 +360,7 @@ public static class TomlGrammar
         // Punctuation tokens (the leading dot of fraction, the 'e' of
         // exponent, the underscore separators) are Delete by default.
         // ProjectFloat recovers the verbatim float text via
-        // ParseResult.RawSourceTextOf and hands it to double.Parse, so
+        // Symbol.SourceText and hands it to double.Parse, so
         // we don't need to .Preserve() the punctuation here just to
         // keep it visible in ToString.
         var zeroPrefixableInteger = And(digit, ZeroOrMore(Or(digit, underscoreDigit)));
@@ -382,8 +382,8 @@ public static class TomlGrammar
         );
 
         // special-float = [sign] (inf | nan). Literal is Delete by
-        // factory; ProjectFloat dispatches on the SpecialFloat node's
-        // RawSourceTextOf (which includes the "inf"/"nan" mnemonic
+        // default. ProjectFloat dispatches on the SpecialFloat node's
+        // SourceText (which includes the "inf"/"nan" mnemonic
         // because it's a section of the original input) so we don't
         // need to .Preserve() the keyword here.
         var infinityOrNan = Or(Literal("inf"), Literal("nan"));
@@ -396,9 +396,9 @@ public static class TomlGrammar
         // Date-time values
         // ---------------------------------------------------------
         // Per RFC 3339 and TOML 1.0. The structural punctuation
-        // (-, :, .) is Delete by default; the four date/time
+        // (-, :, .) is Delete by default. The four date/time
         // projection helpers in TomlParser recover the verbatim text
-        // via RawSourceTextOf and hand it to DateTimeOffset.Parse /
+        // via Symbol.SourceText and hand it to DateTimeOffset.Parse /
         // DateTime.Parse / etc., so the punctuation doesn't need to
         // appear in ToString.
         var dash = Token('-');
