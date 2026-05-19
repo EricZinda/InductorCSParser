@@ -519,4 +519,74 @@ public class WithinTokenRuleTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorMessage, Is.EqualTo("expected z at end"));
     }
+
+    // --- Forced .WithError carried across the WithinToken boundary -------
+    //
+    // A skin-tone-modified emoji is one grapheme cluster: a base emoji
+    // rune followed by a modifier rune. A grammar that validates such a
+    // "reaction" has to look inside the cluster with WithinToken. These
+    // code points drive the reaction-parsing tests below.
+    private const int ThumbsUp = 0x1F44D;
+    private const int ThumbsDown = 0x1F44E;
+    private static readonly TokenSet SkinToneModifiers = TokenSet.Range(0x1F3FB, 0x1F3FF);
+
+    [Test]
+    public void Forced_inner_WithError_surfaces_when_WithinToken_fails()
+    {
+        // A reaction is a thumbs-up emoji, optionally skin-toned. The
+        // inner check carries a forced .WithError, so a wrong emoji is
+        // reported with that message rather than a rune-level default.
+        var reaction = WithinToken(
+            And(Token(ThumbsUp), Optional(OneOf(SkinToneModifiers)))
+                .WithError("a reaction must be a thumbs-up emoji", forced: true));
+
+        var result = reaction.Parse(char.ConvertFromUtf32(ThumbsDown));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("a reaction must be a thumbs-up emoji"));
+    }
+
+    [Test]
+    public void Forced_WithError_inside_WithinToken_keeps_its_forced_flag()
+    {
+        // A message is an emoji reaction (a '+' then the emoji) or a
+        // slash-command. Each form carries a forced .WithError summary.
+        // On a '+' followed by the wrong emoji, the reaction branch
+        // consumes the '+' and fails at offset 1, the command branch at
+        // offset 0. Forced failures rank by depth, so the deeper one (the
+        // reaction's, at offset 1) wins, as long as WithinToken keeps the
+        // inner .WithError forced when it surfaces it.
+        var reaction = And(
+            Token('+'),
+            WithinToken(
+                And(Token(ThumbsUp), Optional(OneOf(SkinToneModifiers)))
+                    .WithError("a reaction must be a thumbs-up emoji", forced: true)));
+        var command = And(Token('/'), OneOrMore(OneOf(TokenSet.Ascii.Letters)))
+            .WithError("a command must start with '/'", forced: true);
+
+        var result = Or(reaction, command).Parse("+" + char.ConvertFromUtf32(ThumbsDown));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("a reaction must be a thumbs-up emoji"));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void WithinToken_own_forced_WithError_outranks_an_inner_named_hint()
+    {
+        // The inner emoji check carries a plain (named) .WithError hint.
+        // The WithinToken carries a forced summary. A forced failure
+        // outranks a named one, so the summary is what surfaces.
+        // WithinToken has to record its own .WithError for ranking to
+        // pick it over the inner hint.
+        var reaction = WithinToken(
+            And(Token(ThumbsUp).WithError("expected a thumbs-up"),
+                Optional(OneOf(SkinToneModifiers))))
+            .WithError("not a recognized reaction", forced: true);
+
+        var result = reaction.Parse(char.ConvertFromUtf32(ThumbsDown));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("not a recognized reaction"));
+    }
 }
