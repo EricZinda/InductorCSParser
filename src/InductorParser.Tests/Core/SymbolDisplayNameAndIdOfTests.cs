@@ -7,7 +7,7 @@ namespace InductorParser.Tests;
 
 // Tests for the typed-AST-projection-friendly accessors:
 //
-//   * Symbol.Name      — the .As(string) name the rule was given, resolved
+//   * Symbol.DisplayName: a human-readable label for the rule, resolved
 //                        through the parse-time ParseContext.
 //   * Symbol.Is(string) — the string-keyed variant of Symbol.Is(Rule).
 //   * Rule.IdOf(string) — name-to-SymbolId reverse lookup so a projection
@@ -19,7 +19,7 @@ namespace InductorParser.Tests;
 // rules, runes vs. composites, hand-built Symbols (no context), and the
 // IdOf round-trip with NameOf.
 [TestFixture]
-public class SymbolNameAndIdOfTests
+public class SymbolDisplayNameAndIdOfTests
 {
     // A small grammar reused by most cases. "letter" matches one letter;
     // "word" wraps OneOrMore(letter) so the parse tree has both a named
@@ -32,16 +32,16 @@ public class SymbolNameAndIdOfTests
     }
 
     [Test]
-    public void Symbol_Name_returns_user_supplied_name_on_named_rule()
+    public void Symbol_DisplayName_returns_user_supplied_name_on_named_rule()
     {
         BuildLetterAndWordGrammar(out _, out var word);
         var result = word.Parse("hi");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
 
         var root = result.Symbols[0];
-        Assert.That(root.Name, Is.EqualTo("word"));
+        Assert.That(root.DisplayName, Is.EqualTo("word"));
         // First child is the first "letter" leaf.
-        Assert.That(root.Children[0].Name, Is.EqualTo("letter"));
+        Assert.That(root.Children[0].DisplayName, Is.EqualTo("letter"));
     }
 
     [Test]
@@ -83,39 +83,57 @@ public class SymbolNameAndIdOfTests
     }
 
     [Test]
-    public void Symbol_Name_returns_rune_text_on_anonymous_rune_leaf()
+    public void Symbol_DisplayName_returns_rune_text_on_anonymous_rune_leaf()
     {
         // Token('a') with no .As(...) — the leaf's Id is the rune code
-        // point. Per NameOf's fallback, the name should render as the
+        // point. Per NameOf's fallback, the label should render as the
         // rune's text ("a").
         var rule = OneOrMore(Token('a').Preserve());
         var result = rule.Parse("aaa");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
 
         var firstLeaf = result.Symbols[0];
-        Assert.That(firstLeaf.Name, Is.EqualTo("a"));
+        Assert.That(firstLeaf.DisplayName, Is.EqualTo("a"));
     }
 
     [Test]
-    public void Symbol_Name_returns_class_derived_name_on_unnamed_composite()
+    public void Symbol_DisplayName_returns_class_derived_name_on_unnamed_composite()
     {
         // An And() with no .As(...) surfaces as the trace label "And"
-        // through NameOf, so Symbol.Name on it should be "And" too.
+        // through NameOf, so Symbol.DisplayName on it should be "And" too.
         var rule = And(OneOf(TokenSet.Letters), OneOf(TokenSet.Digits)).Preserve();
         var result = rule.Parse("a1");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
 
-        Assert.That(result.Symbols[0].Name, Is.EqualTo("And"));
+        Assert.That(result.Symbols[0].DisplayName, Is.EqualTo("And"));
     }
 
     [Test]
-    public void Symbol_Name_returns_null_on_hand_built_symbol_with_no_context()
+    public void Symbol_Is_with_string_does_not_match_class_derived_trace_name()
+    {
+        // Is(string) matches a Symbol only against names a grammar
+        // author gave a rule via .As(...). An anonymous And() has no
+        // such name, so Is("And") is false even though "And" is the
+        // trace label the rule reports as its DisplayName. IdOf resolves
+        // the same names, so IdOf("And") is null too.
+        var rule = And(OneOf(TokenSet.Letters), OneOf(TokenSet.Digits)).Preserve();
+        var result = rule.Parse("a1");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+
+        var root = result.Symbols[0];
+        Assert.That(rule.IdOf("And"), Is.Null, "trace labels aren't .As(...) names");
+        Assert.That(root.Is("And"), Is.False,
+            "Is(string) must not match the class-derived trace label of an unnamed rule");
+    }
+
+    [Test]
+    public void Symbol_DisplayName_returns_null_on_hand_built_symbol_with_no_context()
     {
         // Symbols constructed by hand (test fixtures, mock trees) carry
         // no ParseContext, so there's no grammar to resolve the id
-        // against. Symbol.Name returns null rather than throwing.
+        // against. Symbol.DisplayName returns null rather than throwing.
         var orphan = new Symbol(new SymbolId(0x100000), FlattenType.Preserve, children: null);
-        Assert.That(orphan.Name, Is.Null);
+        Assert.That(orphan.DisplayName, Is.Null);
     }
 
     [Test]

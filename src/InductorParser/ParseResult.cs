@@ -161,14 +161,17 @@ public readonly struct ParseResult
                 yield return found;
     }
 
-    // Looks up the human-readable name of a SymbolId in the grammar
-    // that produced this result. Returns null if the id isn't known
-    // or this is an empty default ParseResult.
-    public string? NameOf(SymbolId id) => _grammar?.NameOf(id);
+    // Looks up the human-readable display label of a SymbolId in the
+    // grammar that produced this result. Returns null if the id isn't
+    // known or this is an empty default ParseResult. This is the
+    // ParseResult-level mirror of Symbol.DisplayName: same fallback
+    // chain (.As(...) name, else class-derived trace label, else rune
+    // text), so it's a display label, not a dispatch key.
+    public string? DisplayNameOf(SymbolId id) => _grammar?.NameOf(id);
 
-    // Convenience form of NameOf that takes a Symbol directly.
+    // Convenience form of DisplayNameOf that takes a Symbol directly.
     // Returns null if the symbol is null.
-    public string? Name(Symbol symbol) => symbol == null ? null : NameOf(symbol.Id);
+    public string? DisplayName(Symbol symbol) => symbol == null ? null : DisplayNameOf(symbol.Id);
 
     // Render the tree to a string for debug output. If Symbols has
     // one element, prints that. Otherwise prints each top-level

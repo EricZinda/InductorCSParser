@@ -102,7 +102,20 @@ internal sealed class WithinTokenRule : Rule
             // debug.
             int innerFailurePos = Math.Max(subLexer.DeepestFailure, subLexer.Position);
             TraceFailure(outerLexer, $"inner rule failed at token rune offset {innerFailurePos}");
-            outerLexer.RecordFailure(outerTransaction.StartPosition, subLexer.DeepestFailureMessage ?? ErrorMessage, ErrorForced);
+            // The inner rule ran on the sub-lexer, so its deepest failure
+            // is recorded there. Surface it on the outer lexer keeping the
+            // inner's forced flag (the deepest message is the forced one
+            // exactly when ForcedMessage is set), so a forced inner
+            // .WithError stays forced. Then record WithinToken's own
+            // .WithError so ranking picks between the two. Both land at the
+            // outer cluster's start, the position WithinToken reports for
+            // any inner failure.
+            var innerFailureState = subLexer.SaveFailureState();
+            string? innerMessage = subLexer.DeepestFailureMessage;
+            if (innerMessage != null)
+                outerLexer.RecordFailure(outerTransaction.StartPosition, innerMessage,
+                    forced: innerFailureState.ForcedMessage != null);
+            outerLexer.RecordFailure(outerTransaction.StartPosition, ErrorMessage, ErrorForced);
             return null;
         }
 
