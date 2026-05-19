@@ -366,8 +366,15 @@ public class AliasRuleTests
 
         var result = alias.Parse("123");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.Find(alias), Is.Not.Null,
-            "Alias around a LateBoundRule should be findable by the alias's name.");
+        // The alias is the root rule and the LateBoundRule it wraps is
+        // transparent, so the alias's Symbol must be the tree's top node
+        // directly. Tree.Is(alias) verifies that shape. Tree.Find(alias)
+        // would only prove an alias Symbol exists somewhere in the tree
+        // and would still pass if a stray layer wrapped it.
+        Assert.That(result.Tree, Is.Not.Null);
+        Assert.That(result.Tree!.Is(alias), Is.True,
+            "The alias's Symbol should be the top node of the tree.");
+        Assert.That(result.Tree.ToString(), Is.EqualTo("123"));
     }
 
     [Test]
