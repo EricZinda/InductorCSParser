@@ -491,19 +491,21 @@ public class WithinTokenRuleTests
     }
 
     [Test]
-    public void WithinToken_WithError_surfaces_over_deeper_orphan_from_abandoned_Or_alternative()
+    public void Deeper_orphan_from_abandoned_Or_alternative_outranks_shallower_committed_path_WithError()
     {
         // Or's first alternative reads three tokens before failing at offset 3
         // with its own WithError. The parser abandons that alternative by
         // committing to alt 2 (Token('a').Delete() at offset 0). Then
-        // WithinToken at offset 1 fails because the next token isn't 'b'.
+        // WithinToken at offset 1 fails because the next token isn't 'b' and
+        // records its own WithError there.
         //
-        // WithinToken records its failure at the outer cluster boundary
-        // (offset 1), which is shallower than the orphan record alt 1 left at
-        // offset 3. A user-supplied WithError on WithinToken still wins the
-        // message slot at the cluster boundary where the real failure
-        // happened, rather than the orphan's "expected z at end" surfacing at
-        // offset 3 — a position the parser already gave up on.
+        // Depth ranks first (see docs/ErrorArchitecture.md): the parser reports
+        // the deepest failure, the furthest it got before giving up, no matter
+        // which path produced it. Alt 1 reached offset 3 before it failed,
+        // which is further into the input than WithinToken's offset-1 failure
+        // on the committed path. So the offset-3 failure wins even though it
+        // came from an Or alternative the parser ultimately abandoned, and the
+        // shallower committed-path WithError is shadowed by it.
         var rule = And(
             Or(
                 And(AnyToken(), AnyToken(), AnyToken(), Token('z').WithError("expected z at end")),
@@ -514,8 +516,8 @@ public class WithinTokenRuleTests
         var result = rule.Parse("axyw");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected b in WithinToken"));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected z at end"));
     }
 
     // --- Forced .WithError carried across the WithinToken boundary -------
