@@ -448,7 +448,7 @@ public class ScanWhileRuleTests
         // AtLeast(n, OneOf(set)) producing the same matched text, so its
         // run has to include the lone surrogate too.
         var set = TokenSet.Range(0, 0x10FFFF);
-        string input = "a\uD800b"; // letter, lone high surrogate, letter
+        string input = "a" + UnicodeExamples.HighSurrogateMinText + "b";
 
         // Reference: OneOf(set) matches the lone-surrogate token, so the
         // greedy OneOf form consumes all three tokens up to Eof.

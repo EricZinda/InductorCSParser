@@ -30,6 +30,26 @@ public sealed partial class Lexer
     // is either at a real cluster boundary where a candidate sits, or at end-of-input
     // if no such place exists. Used by the scanner-skip optimization to leap past long
     // stretches of input that can't possibly start an inner-rule match.
+    //
+    // The two parameters carry the SAME candidate set in two forms, not
+    // two different sets, and not a set plus a subset:
+    //
+    //   * `candidates` is authoritative: the complete, rune-only set of
+    //     first-runes an inner rule could start with. The slow path
+    //     tests membership against it directly. Always required.
+    //
+    //   * `bmpCandidates` is an optional char[] rendering of that exact
+    //     same set, pre-built by the caller via TokenSet.TryGetBmpChars
+    //     so the fast path can hand it straight to string.IndexOfAny
+    //     (which only accepts char[]). It is all-or-nothing: non-null
+    //     only when EVERY member of `candidates` is a single BMP
+    //     non-surrogate char and the set is small (<= 256 chars). If
+    //     even one candidate is non-BMP or a surrogate code unit, the
+    //     caller passes null and the whole set goes through the slow
+    //     loop. It is never the BMP-only portion of a larger set.
+    //
+    // So exactly one path runs, over the full `candidates` set either
+    // way. A non-null `bmpCandidates` just selects the vectorized one.
     internal void AdvanceUntilRuneIn(TokenSet candidates, char[]? bmpCandidates)
     {
         // candidates must be rune-only. Multi-rune
@@ -100,15 +120,44 @@ public sealed partial class Lexer
             }
         }
 
-        // Now scan again, from the beginning, to see if
-        // we can find any characters that can't be on the fast path
+        // Slow path: walk one cluster at a time, stopping at the first
+        // cluster whose leading rune is a candidate. Handles the non-BMP
+        // candidates the IndexOfAny path above can't search for.
         while (_position < _endPosition)
         {
-            if (TryPeekRune(_input, _position, out int runeValue, out _) && candidates.Contains(runeValue))
+            int len = NextTokenLength(_position);
+            // defensive: NextTokenLength returns 0 only past end-of-input,
+            // which the loop's bound check excludes. Force >= 1 to advance.
+            if (len <= 0) len = 1;
+
+            bool inSet;
+            if (TryPeekRune(_input, _position, out int runeValue, out _))
+            {
+                inSet = candidates.Contains(runeValue);
+            }
+            else
+            {
+                // Lone surrogate at _position: not a valid scalar, so
+                // TryPeekRune can't decode it. Test the cluster's
+                // leading char by its UTF-16 code unit, the way OneOf /
+                // WithinToken / TokenSet.ContainsToken match a token
+                // that begins with one under an unnormalized Compile.
+                //
+                // No token-length gate here. This is a lookahead
+                // scanner: it stops wherever the cluster's leading char
+                // is a candidate, exactly as the TryPeekRune branch
+                // above stops on a leading rune without checking that
+                // the cluster is a single rune. A `len == 1` gate would
+                // skip a multi-char cluster a WithinToken alternative
+                // could still match. A lone surrogate with a combining
+                // mark glued on (UAX #29 GB9) is one such cluster. That
+                // gate belongs in AdvanceWhileRuneIn, which is a
+                // consume scanner and rejects multi-rune clusters.
+                inSet = candidates.Contains((int)_input[_position]);
+            }
+            if (inSet)
                 return;
 
-            int len = NextTokenLength(_position);
-            if (len <= 0) len = 1;
             _position = Math.Min(_position + len, _endPosition);
         }
     }
@@ -292,6 +341,8 @@ public sealed partial class Lexer
                     return;
 
                 int len = NextTokenLength(_position);
+                // defensive: NextTokenLength returns 0 only past end-of-input,
+                // which the loop's bound check excludes. Force >= 1 to advance.
                 if (len <= 0) len = 1;
                 _position = Math.Min(_position + len, _endPosition);
             }
@@ -324,6 +375,8 @@ public sealed partial class Lexer
                     return;
 
                 int len = NextTokenLength(_position);
+                // defensive: NextTokenLength returns 0 only past end-of-input,
+                // which the loop's bound check excludes. Force >= 1 to advance.
                 if (len <= 0) len = 1;
                 _position = Math.Min(_position + len, _endPosition);
             }
@@ -344,6 +397,8 @@ public sealed partial class Lexer
             // grapheme cluster. A full literal match is only useful at
             // positions where the outer parser could legally start.
             int len = NextTokenLength(_position);
+            // defensive: NextTokenLength returns 0 only past end-of-input,
+            // which the loop's bound check excludes. Force >= 1 to advance.
             if (len <= 0) len = 1;
             _position = Math.Min(_position + len, _endPosition);
         }

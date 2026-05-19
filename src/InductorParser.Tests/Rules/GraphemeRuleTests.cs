@@ -101,7 +101,7 @@ public class GraphemeRuleTests
     [Test]
     public void Grapheme_char_with_surrogate_throws()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => Token('\uD800'));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Token((char)UnicodeExamples.HighSurrogateMinRune));
     }
 
     [Test]
