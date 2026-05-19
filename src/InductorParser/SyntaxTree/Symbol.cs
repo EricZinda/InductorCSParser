@@ -250,20 +250,6 @@ public sealed class Symbol
         foreach (var child in Children) child.AppendTo(builder);
     }
 
-    /// <summary>
-    /// Return the UTF-8 byte length of this symbol's rendered text without
-    /// materializing that text as an intermediate string.
-    /// </summary>
-    public long GetUtf8ByteCount()
-    {
-        if (_isLeaf) return Encoding.UTF8.GetByteCount(_leafChars.Span);
-
-        long total = 0;
-        foreach (var child in Children)
-            total += child.GetUtf8ByteCount();
-        return total;
-    }
-
     // Recover parseInput-relative bounds for this Symbol's matched
     // span. Both leaves and composites store the bounds in _leafChars
     //

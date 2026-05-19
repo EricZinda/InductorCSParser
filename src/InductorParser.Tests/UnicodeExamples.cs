@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using static InductorParser.Tests.CanaryHelper;
 
 namespace InductorParser.Tests;
@@ -14,37 +18,63 @@ namespace InductorParser.Tests;
 // Every string constant goes through Canary(literal, description, codepoints)
 // so an editor or tool silently rewriting a literal produces a runtime
 // failure that names what was supposed to be there. See Canary.cs.
+//
+// One rule keeps the two field types from being a coin toss: every
+// example has a string constant (XxxGrapheme or XxxText). That is the
+// canonical form and the whole corpus, the thing AllStringConstants()
+// returns. An XxxRune int constant is an optional sibling, added only
+// when a caller needs the codepoint as an int (Token(int),
+// TokenSet.Single(int), a [TestCase] / [TestCase((char)...)] argument,
+// none of which can take a runtime string). A Rune int is never the
+// only form of an example, so adding one is never how a new example
+// enters the corpus: add the string constant, then add the int sibling
+// too if a caller needs it.
+// When both forms exist, the string's Canary call takes the XxxRune
+// constant as its code-point argument, so the code point is written in
+// one place and the int and string forms can't drift apart.
 internal static class UnicodeExamples
 {
+    // Every string constant declared below, paired with its field name,
+    // gathered by reflection. Lets a fixture run the whole corpus through
+    // one uniform check without re-listing the constants, and means a
+    // constant added below is picked up with no further edit.
+    // Ordered by field name so test discovery is reproducible run to run.
+    public static IEnumerable<(string Name, string Value)> AllStringConstants() =>
+        typeof(UnicodeExamples)
+            .GetFields(BindingFlags.Public | BindingFlags.Static)
+            .Where(field => field.FieldType == typeof(string))
+            .OrderBy(field => field.Name, StringComparer.Ordinal)
+            .Select(field => (field.Name, (string)field.GetValue(null)!));
+
     // Waving hand. Supplementary-plane rune (needs a surrogate pair in
     // UTF-16). One rune, one grapheme on its own.
     public const int WavingHandRune = 0x1F44B;
     public static readonly string WavingHandGrapheme = Canary(
-        "👋", "waving hand emoji", 0x1F44B);
+        "👋", "waving hand emoji", WavingHandRune);
 
     // Medium skin tone modifier. Combining modifier rune that attaches to a
     // base character to form a multi-rune grapheme. Not typically rendered
     // standalone.
     public const int MediumSkinToneRune = 0x1F3FD;
     public static readonly string MediumSkinToneText = Canary(
-        "🏽", "medium skin tone modifier", 0x1F3FD);
+        "🏽", "medium skin tone modifier", MediumSkinToneRune);
 
     // Waving hand + medium skin tone. ONE grapheme made of TWO runes
     // (4 UTF-16 chars total). The lexer reads the whole sequence as a
     // single token.
     public static readonly string SkinTonedWaveGrapheme = Canary("👋🏽", "medium-skin-tone waving hand",
-        0x1F44B, 0x1F3FD);
+        WavingHandRune, MediumSkinToneRune);
 
     // Guitar. One rune, one grapheme.
     public const int GuitarRune = 0x1F3B8;
     public static readonly string GuitarGrapheme = Canary(
-        "🎸", "guitar emoji", 0x1F3B8);
+        "🎸", "guitar emoji", GuitarRune);
 
     // Musical keyboard. One rune, one grapheme. Used alongside Guitar
     // as a "different emoji, same shape" mismatch example.
     public const int MusicalKeyboardRune = 0x1F3B9;
     public static readonly string MusicalKeyboardGrapheme = Canary(
-        "🎹", "musical keyboard emoji", 0x1F3B9);
+        "🎹", "musical keyboard emoji", MusicalKeyboardRune);
 
     // U+0301 combining acute. Combining mark that attaches to a base character
     // to form a multi-rune grapheme. Not a standalone grapheme.
@@ -61,7 +91,7 @@ internal static class UnicodeExamples
     // é as the single precomposed rune U+00E9 (LATIN SMALL LETTER E WITH
     // ACUTE). One rune, one grapheme. Pair with LatinEAcuteGrapheme when
     // a test wants to be explicit about which form it's using.
-    public static readonly string LatinEAcutePrecomposedGrapheme = Canary("é", "latin small letter e with acute (precomposed)", 0x00E9);
+    public static readonly string LatinEAcutePrecomposedGrapheme = Canary("é", "latin small letter e with acute (precomposed)", LatinEAcuteRune);
 
     // Woman shrugging. ZWJ emoji sequence: base shrug rune + ZWJ +
     // female sign + emoji variation selector. UAX #29 sees ONE grapheme.
@@ -74,7 +104,7 @@ internal static class UnicodeExamples
     // US flag. Two regional indicator code points (U + S). UAX #29 sees
     // ONE grapheme. Legacy StringInfo splits it. Use this to test the
     // regional-indicator pairing rule.
-    public static readonly string USFlagGrapheme = Canary("🇺🇸", "us flag emoji (regional indicator pair)", 0x1F1FA, 0x1F1F8);
+    public static readonly string USFlagGrapheme = Canary("🇺🇸", "us flag emoji (regional indicator pair)", RegionalIndicatorURune, 0x1F1F8);
 
     // Thai "kam". SARA AM is the canonical extended-grapheme-cluster
     // case (a vowel sign that visually composes with the preceding consonant).
@@ -86,20 +116,20 @@ internal static class UnicodeExamples
     // in malformed-Unicode and joiner tests.
     public const int ManEmojiRune = 0x1F468;
     public static readonly string ManEmojiGrapheme = Canary(
-        "👨", "man emoji", 0x1F468);
+        "👨", "man emoji", ManEmojiRune);
 
     // Woman. One rune, one grapheme. Paired with ManEmoji and
     // BoyEmoji to build the family ZWJ sequence below, and with
     // Briefcase to build the woman-office-worker profession ZWJ.
     public const int WomanEmojiRune = 0x1F469;
     public static readonly string WomanEmojiGrapheme = Canary(
-        "👩", "woman emoji", 0x1F469);
+        "👩", "woman emoji", WomanEmojiRune);
 
     // Boy. One rune, one grapheme. Used as the third element of the
     // family ZWJ sequence below.
     public const int BoyEmojiRune = 0x1F466;
     public static readonly string BoyEmojiGrapheme = Canary(
-        "👦", "boy emoji", 0x1F466);
+        "👦", "boy emoji", BoyEmojiRune);
 
     // Family ZWJ sequence: man + ZWJ + woman + ZWJ + boy. UAX #29 GB11
     // keeps an emoji + ZWJ + emoji chain as a single cluster. Five
@@ -109,14 +139,14 @@ internal static class UnicodeExamples
     // in that the multi-link ZWJ rule fires at every joiner along the
     // chain, not just the first one.
     public static readonly string FamilyManWomanBoyGrapheme = Canary("👨‍👩‍👦", "family man + ZWJ + woman + ZWJ + boy emoji",
-        0x1F468, 0x200D, 0x1F469, 0x200D, 0x1F466);
+        ManEmojiRune, 0x200D, WomanEmojiRune, 0x200D, BoyEmojiRune);
 
     // Briefcase. One rune, one grapheme. The profession-tag emoji
     // for "office worker." Paired with WomanEmoji via ZWJ to form
     // woman-office-worker.
     public const int BriefcaseRune = 0x1F4BC;
     public static readonly string BriefcaseGrapheme = Canary(
-        "💼", "briefcase emoji", 0x1F4BC);
+        "💼", "briefcase emoji", BriefcaseRune);
 
     // Profession ZWJ sequence: base human emoji + ZWJ + profession-tag
     // emoji. Three runes (woman, ZWJ, briefcase), 5 UTF-16 chars.
@@ -125,7 +155,7 @@ internal static class UnicodeExamples
     // case for the base-emoji-joins-profession-tag pattern that
     // Unicode 13+ uses for the gendered profession emoji set.
     public static readonly string WomanOfficeWorkerGrapheme = Canary("👩‍💼", "woman office worker emoji (woman + ZWJ + briefcase)",
-        0x1F469, 0x200D, 0x1F4BC);
+        WomanEmojiRune, 0x200D, BriefcaseRune);
 
     // U+20E3 COMBINING ENCLOSING KEYCAP. Combining mark that wraps a
     // square box around the preceding base. UAX #29 GCB=Extend.
@@ -154,12 +184,12 @@ internal static class UnicodeExamples
     // pair (two regional indicators in a row form a country flag). UAX #29
     // pairs two of these into one cluster. A single one stands alone.
     public const int RegionalIndicatorURune = 0x1F1FA;
-    public static readonly string RegionalIndicatorUText = Canary("🇺", "regional indicator letter u (one half of a flag pair)", 0x1F1FA);
+    public static readonly string RegionalIndicatorUText = Canary("🇺", "regional indicator letter u (one half of a flag pair)", RegionalIndicatorURune);
 
     // U+10FFFF maximum Unicode scalar value. Encoded as the surrogate pair
     // (U+DBFF, U+DFFF) in UTF-16. Boundary case for rune decoding.
     public const int MaximumCodePointRune = 0x10FFFF;
-    public static readonly string MaximumCodePointGrapheme = Canary("􏿿", "maximum Unicode scalar value", 0x10FFFF);
+    public static readonly string MaximumCodePointGrapheme = Canary("􏿿", "maximum Unicode scalar value", MaximumCodePointRune);
 
     // === Lone surrogate halves (not valid scalars on their own) ===
     // UTF-16 encodes supplementary-plane scalars as a HIGH-then-LOW
@@ -168,18 +198,28 @@ internal static class UnicodeExamples
     // can still hold one. Useful for the malformed-input tests.
 
     // U+D800: lowest high-surrogate code unit. "Min" of the high range.
-    public static readonly string HighSurrogateMinText = Canary("\uD800", "lone high surrogate (min, invalid scalar)", 0xD800);
+    public static readonly string HighSurrogateMinText = Canary("\uD800", "lone high surrogate (min, invalid scalar)", HighSurrogateMinRune);
+
+    // U+DBFF: highest high-surrogate code unit. "Max" of the high range.
+    public static readonly string HighSurrogateMaxText = Canary("\uDBFF", "lone high surrogate (max, invalid scalar)", HighSurrogateMaxRune);
 
     // U+DC00: lowest low-surrogate code unit. "Min" of the low range.
-    public static readonly string LowSurrogateMinText = Canary("\uDC00", "lone low surrogate (min, invalid scalar)", 0xDC00);
+    public static readonly string LowSurrogateMinText = Canary("\uDC00", "lone low surrogate (min, invalid scalar)", LowSurrogateMinRune);
 
     // U+DFFF: highest low-surrogate code unit. "Max" of the low range.
-    public static readonly string LowSurrogateMaxText = Canary("\uDFFF", "lone low surrogate (max, invalid scalar)", 0xDFFF);
+    public static readonly string LowSurrogateMaxText = Canary("\uDFFF", "lone low surrogate (max, invalid scalar)", LowSurrogateMaxRune);
 
     // U+D83D: high-surrogate code unit that starts most common emoji
     // surrogate pairs (waving hand, woman, man, etc.). Used standalone for
     // malformed-emoji tests where the low-half partner is missing.
-    public static readonly string EmojiStartHighSurrogateText = Canary("\uD83D", "lone high surrogate U+D83D (emoji start half, invalid scalar)", 0xD83D);
+    public static readonly string EmojiStartHighSurrogateText = Canary("\uD83D", "lone high surrogate U+D83D (emoji start half, invalid scalar)", EmojiStartHighSurrogateRune);
+
+    // U+DC00 then U+D800: a low surrogate followed by a high surrogate.
+    // Pair-shaped but in the wrong order (UTF-16 pairs are high-then-low),
+    // so the two never combine into a supplementary scalar and stay two
+    // separate ill-formed code units. WTF-8 (Simon Sapin) discusses this
+    // exact pattern.
+    public static readonly string ReversedSurrogatePairText = Canary("\uDC00\uD800", "reversed surrogate pair (low then high, invalid)", LowSurrogateMinRune, HighSurrogateMinRune);
 
     // === Format / control characters that don't render as a glyph ===
     // The names exist so test source stays readable. Inline literals like
@@ -228,7 +268,7 @@ internal static class UnicodeExamples
     // precomposed form for any letter, so NFC never composes it away.
     // Used to build long non-starter sequences for Stream-Safe tests.
     public const int CombiningGraveBelowRune = 0x0316;
-    public static readonly string CombiningGraveBelowText = Canary("̖", "combining grave accent below", 0x0316);
+    public static readonly string CombiningGraveBelowText = Canary("̖", "combining grave accent below", CombiningGraveBelowRune);
 
     // U+0915 DEVANAGARI LETTER KA. Base consonant for conjunct-formation
     // and nukta tests. Lo category.
@@ -245,7 +285,7 @@ internal static class UnicodeExamples
     // U+E0001 LANGUAGE TAG. Used inside emoji tag sequences for subdivision
     // flags. UAX #29 GCB=Extend.
     public const int LanguageTagRune = 0xE0001;
-    public static readonly string LanguageTagText = Canary("󠀁", "language tag (emoji subdivision flag base)", 0xE0001);
+    public static readonly string LanguageTagText = Canary("󠀁", "language tag (emoji subdivision flag base)", LanguageTagRune);
 
     // U+180E MONGOLIAN VOWEL SEPARATOR. Property has shifted across Unicode
     // versions (Cf, then Whitespace, now Cf again depending on the runtime's
@@ -293,7 +333,7 @@ internal static class UnicodeExamples
     // different classes". Same-class marks (e.g. acute+circumflex,
     // both ccc=230) are NOT reordered, so input order matters there.
     public const int VietnameseACircumflexDotBelowRune = 0x1EAD;
-    public static readonly string VietnameseACircumflexDotBelowGrapheme = Canary("ậ", "Latin a with circumflex and dot-below (precomposed)", 0x1EAD);
+    public static readonly string VietnameseACircumflexDotBelowGrapheme = Canary("ậ", "Latin a with circumflex and dot-below (precomposed)", VietnameseACircumflexDotBelowRune);
 
     // a + dot-below + circumflex, already in canonical order
     // (ccc 220 then 230). NFC composes directly to U+1EAD.
@@ -321,7 +361,7 @@ internal static class UnicodeExamples
 
     // U+212B ANGSTROM SIGN. Canonical singleton; NFC converts to U+00C5.
     // Renders identically to U+00C5 LATIN CAPITAL LETTER A WITH RING ABOVE.
-    public static readonly string AngstromGrapheme = Canary("Å", "Angstrom sign (canonical singleton to U+00C5)", 0x212B);
+    public static readonly string AngstromGrapheme = Canary("Å", "Angstrom sign (canonical singleton to U+00C5)", AngstromRune);
 
     // U+00C5 LATIN CAPITAL LETTER A WITH RING ABOVE. The canonical
     // replacement that NFC produces from the Angstrom singleton.
@@ -477,7 +517,7 @@ internal static class UnicodeExamples
     // Family man + ZWJ + woman + ZWJ + girl. Distinct from
     // FamilyManWomanBoyGrapheme by ending with girl (U+1F467)
     // instead of boy (U+1F466).
-    public static readonly string FamilyManWomanGirlGrapheme = Canary("👨‍👩‍👧", "family man + ZWJ + woman + ZWJ + girl emoji", 0x1F468, 0x200D, 0x1F469, 0x200D, 0x1F467);
+    public static readonly string FamilyManWomanGirlGrapheme = Canary("👨‍👩‍👧", "family man + ZWJ + woman + ZWJ + girl emoji", ManEmojiRune, 0x200D, WomanEmojiRune, 0x200D, 0x1F467);
 
 
 
@@ -570,7 +610,7 @@ internal static class UnicodeExamples
 
     // "café" with precomposed U+00E9 LATIN SMALL LETTER E WITH
     // ACUTE. Four codepoints, four graphemes.
-    public static readonly string CafePrecomposedGrapheme = Canary("café", "cafe with precomposed e-acute", 0x0063, 0x0061, 0x0066, 0x00E9);
+    public static readonly string CafePrecomposedGrapheme = Canary("café", "cafe with precomposed e-acute", 0x0063, 0x0061, 0x0066, LatinEAcuteRune);
 
     // "café" with decomposed e + combining acute. Five codepoints,
     // four graphemes. NFC composes to CafePrecomposedGrapheme.
@@ -639,6 +679,4 @@ internal static class UnicodeExamples
 
     // U+D83D: high-surrogate code unit that starts common emoji pairs.
     public const int EmojiStartHighSurrogateRune = 0xD83D;
-
-
 }

@@ -515,6 +515,79 @@ public class BetweenInclusiveRuleTests
         Assert.That(result.ToString(), Is.EqualTo("abcd"));
     }
 
+    [Test]
+    public void BetweenInclusive_scanner_skip_admits_a_lone_surrogate_a_covering_range_accepts()
+    {
+        // Range only validates its endpoints, so Range(0, 0xE000)
+        // spans the surrogate block 0xD800..0xDFFF. Under Compile(null)
+        // a lone surrogate is a one-char token that OneOf matches by
+        // its code unit. The scanner-skip slow path (AdvanceUntilRuneIn)
+        // must stop at such a token, so the optimized parse keeps every
+        // surrogate the plain parse keeps.
+        var set = TokenSet.Range(0, 0xE000);
+        string input = "a" + UnicodeExamples.HighSurrogateMinText + "b";
+
+        // Reference: OneOf(set) matches the lone-surrogate token, so the
+        // greedy OneOf form consumes all three tokens and its matched
+        // text is the whole input.
+        var reference = OneOrMore(OneOf(set));
+        reference.Compile(null);
+        var referenceResult = reference.Parse(input);
+        Assert.That(referenceResult.Success, Is.True, referenceResult.ErrorMessage);
+        Assert.That(referenceResult.ToString(), Is.EqualTo(input));
+
+        // ZeroOrMore(Or(OneOf(set), AnyToken.Delete)) is the scanner-skip
+        // shape. It must match the same text: the lone surrogate is a
+        // OneOf hit, not deleted fallback.
+        var scanner = BetweenInclusive(0, int.MaxValue, Or(
+            OneOf(set),
+            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)));
+        scanner.Compile(null);
+        var result = scanner.Parse(input);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.ToString(), Is.EqualTo(input));
+    }
+
+    [Test]
+    public void BetweenInclusive_scanner_skip_stops_at_a_multi_char_cluster_starting_with_a_lone_surrogate()
+    {
+        // A lone surrogate with a combining mark glued onto it (UAX #29
+        // GB9 keeps Extend with the preceding char) is ONE grapheme
+        // cluster, two chars wide. WithinToken matches that whole
+        // cluster by walking its runes, and both runes sit inside
+        // Range(0, 0xE000).
+        //
+        // The scanner-skip slow path keys off the cluster's leading
+        // char. AdvanceUntilRuneIn is a lookahead scanner, so it stops
+        // wherever that leading char is a candidate. A token-length
+        // gate on the lone-surrogate branch would refuse the two-char
+        // cluster and skip a match WithinToken makes.
+        var set = TokenSet.Range(0, 0xE000);
+        // 'a', then a lone high surrogate with a combining acute glued
+        // onto it (one grapheme cluster, two chars wide), then 'b'.
+        string input = "a" + UnicodeExamples.HighSurrogateMinText
+            + UnicodeExamples.CombiningAcuteText + "b";
+
+        // Reference: WithinToken matches every cluster (each cluster's
+        // runes are all inside the range), so the greedy form's matched
+        // text is the whole input. OneOrMore is not the scanner-skip
+        // shape, so this runs the unoptimized per-token parse.
+        var reference = OneOrMore(WithinToken(OneOrMore(OneOf(set))));
+        reference.Compile(null);
+        var referenceResult = reference.Parse(input);
+        Assert.That(referenceResult.Success, Is.True, referenceResult.ErrorMessage);
+        Assert.That(referenceResult.ToString(), Is.EqualTo(input));
+
+        // Scanner-skip shape must match the same text.
+        var scanner = BetweenInclusive(0, int.MaxValue, Or(
+            WithinToken(OneOrMore(OneOf(set))),
+            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)));
+        scanner.Compile(null);
+        var result = scanner.Parse(input);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.ToString(), Is.EqualTo(input));
+    }
+
     // ----- Scanner-skip optimization: CRLF mid-cluster regression tests -----
     //
     // CRLF is one grapheme cluster (UAX #29 GB3). The scanner-skip fast paths
@@ -898,4 +971,5 @@ public class BetweenInclusiveRuleTests
         Assert.That(range.End.CharIndex, Is.EqualTo(9));
         Assert.That(range.End.Column, Is.EqualTo(9));
     }
+
 }
