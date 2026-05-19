@@ -172,6 +172,23 @@ public class SymbolPositionTests
     }
 
     [Test]
+    public void SourcePosition_From_mid_cluster_char_index_lands_on_the_containing_token()
+    {
+        // The grinning-face emoji (U+1F600) is one grapheme cluster that
+        // occupies two UTF-16 chars, [0,2); 'x' is the next token at
+        // char 2. Char index 1 is the emoji's low surrogate, a position
+        // INSIDE token 0. Converting that char index to a token index
+        // has to report token 0, the cluster that contains it. Reporting
+        // 1 (the 'x' token) points at a token the char index isn't
+        // anywhere near.
+        var position = SourcePosition.From(GrinningFaceEmojiGrapheme + "x", 1);
+
+        Assert.That(position.CharIndex, Is.EqualTo(1));
+        Assert.That(position.TokenIndex, Is.EqualTo(0),
+            "char index 1 is inside the emoji cluster (token 0), so TokenIndex must be 0");
+    }
+
+    [Test]
     public void ErrorPosition_returns_null_on_success()
     {
         var rule = Token('a').Preserve();
