@@ -491,21 +491,21 @@ public class WithinTokenRuleTests
     }
 
     [Test]
-    public void Deeper_orphan_from_abandoned_Or_alternative_outranks_shallower_committed_path_WithError()
+    public void WithinToken_WithError_is_shadowed_by_a_deeper_orphan_from_an_abandoned_Or_alternative()
     {
         // Or's first alternative reads three tokens before failing at offset 3
-        // with its own WithError. The parser abandons that alternative by
-        // committing to alt 2 (Token('a').Delete() at offset 0). Then
-        // WithinToken at offset 1 fails because the next token isn't 'b' and
-        // records its own WithError there.
+        // with its own WithError ("expected z at end"). The parser abandons
+        // that alternative and commits to alternative 2 (Token('a').Delete()
+        // at offset 0). WithinToken then runs at offset 1, fails because the
+        // next token isn't 'b', and records its own WithError at the outer
+        // cluster boundary, offset 1.
         //
-        // Depth ranks first (see docs/ErrorArchitecture.md): the parser reports
-        // the deepest failure, the furthest it got before giving up, no matter
-        // which path produced it. Alt 1 reached offset 3 before it failed,
-        // which is further into the input than WithinToken's offset-1 failure
-        // on the committed path. So the offset-3 failure wins even though it
-        // came from an Or alternative the parser ultimately abandoned, and the
-        // shallower committed-path WithError is shadowed by it.
+        // Depth ranks first (docs/ErrorArchitecture.md, Case 4): a rejected
+        // Or branch keeps its failure, and offset 3 is deeper than offset 1,
+        // so the abandoned branch's "expected z at end" is the reported
+        // error. WithinToken's shallower WithError is correctly shadowed by
+        // the deeper near-miss. A grammar author who wants the WithinToken
+        // message to win regardless of depth marks it forced.
         var rule = And(
             Or(
                 And(AnyToken(), AnyToken(), AnyToken(), Token('z').WithError("expected z at end")),

@@ -137,31 +137,51 @@ public sealed class Symbol
     // real Rule.Parse call. Hand-built Symbols (no context) and
     // Symbols whose id maps to an unnamed rule both return false.
     //
-    // Use this when you want a typed-AST projection that doesn't
-    // require one public static Rule field per named production on
-    // the grammar class. The lookup walks a per-grammar name index
-    // built lazily on first call to Rule.NameOf / Rule.IdOf, so it's
-    // an O(1) string compare per call after the first.
+    // It resolves the name through the same index Rule.IdOf uses, built lazily on
+    // that index's first call, so it's an O(1) string lookup per call
+    // after the first. Class-derived trace labels ("And", "OneOrMore")
+    // are not in that index, so Is never matches them even though
+    // Symbol.DisplayName falls back to them for unnamed rules.
     public bool Is(string ruleName)
     {
         if (ruleName == null) return false;
-        string? actual = Name;
-        return actual != null && actual == ruleName;
+        Rule? grammarRoot = _context?.GrammarRoot;
+        if (grammarRoot == null) return false;
+        // Resolve the name through the grammar's .As(...) name index, the
+        // same index Rule.IdOf uses. That index holds only user-supplied
+        // names: class-derived trace labels ("And", "OneOrMore") and the
+        // rune-text default for unnamed character rules are deliberately
+        // left out, since they aren't unique and aren't names a grammar
+        // author chose. Comparing against DisplayName instead would match
+        // those defaults too, so Is("And") would wrongly return true for an
+        // anonymous And node. Routing through IdOf keeps Is(string)
+        // matching only named rules and keeps it equivalent to IdOf.
+        SymbolId? namedId = grammarRoot.IdOf(ruleName);
+        return namedId.HasValue && namedId.Value == Id;
     }
 
-    // The grammar-supplied name of the rule that produced this Symbol
-    // — that is, the string the rule was constructed with via
-    // .As("name"). Returns null when:
+    // A human-readable label for the rule that produced this Symbol,
+    // for debug output and tree printing. When the rule was constructed
+    // with .As("name"), that user-supplied name is returned. When it
+    // wasn't, DisplayName falls back the same way Rule.NameOf does: a
+    // composite or built-in rule resolves to its class-derived trace
+    // label ("And", "OneOrMore", "BetweenInclusive[1..3]"), and a
+    // character-leaf rule resolves to the matched rune's own text. So
+    // an anonymous And(...) returns "And", and an anonymous Token('a')
+    // leaf returns "a".
     //
-    //   * the Symbol was hand-built with no ParseContext, or
-    //   * the rule has no .As(string) name (anonymous composites
-    //     like an inline And(...) inside another rule).
+    // Returns null only when there's no grammar to resolve against:
+    // the Symbol was hand-built with no ParseContext (or built before
+    // the GrammarRoot wiring landed), or its Id doesn't map to any
+    // rule reachable from the parse's grammar.
     //
-    // For rune-leaf Symbols (the Id is a Unicode scalar value), the
-    // name is the rune's text by default — Token('a').As("aChar") on
-    // an 'a' leaf returns "aChar"; an anonymous Token('a') leaf
-    // returns "a".
-    public string? Name => _context?.GrammarRoot?.NameOf(Id);
+    // This is a display label, not a dispatch key. Because it includes
+    // the trace-label and rune-text fallbacks it's neither unique nor
+    // limited to names the grammar author chose. To test whether a
+    // Symbol came from a rule the author actually named, use
+    // Is(string), which matches only .As(...) names: symbol.DisplayName
+    // can be "And" while symbol.Is("And") is false.
+    public string? DisplayName => _context?.GrammarRoot?.NameOf(Id);
 
     // Depth-first search for the first Symbol whose Id matches. Returns
     // null if nothing matches. Use when you expect exactly one match

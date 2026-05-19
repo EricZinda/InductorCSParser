@@ -6,39 +6,39 @@ using static InductorParser.Rules;
 namespace InductorParser.Tests;
 
 // Tests for the ParseResult-level name-resolution helpers:
-// NameOf(SymbolId), Name(Symbol), and PrintTree(). These are thin
-// pass-throughs that spare callers from forwarding a Rule reference
-// through every call.
+// DisplayNameOf(SymbolId), DisplayName(Symbol), and PrintTree(). These
+// are thin pass-throughs that spare callers from forwarding a Rule
+// reference through every call.
 [TestFixture]
 public class ParseResultNamingTests
 {
     [Test]
-    public void NameOf_resolves_root_rule_name_from_result()
+    public void DisplayNameOf_resolves_root_rule_name_from_result()
     {
         var word = OneOrMore(OneOf(TokenSet.Letters)).As("word").Flatten(FlattenType.Preserve);
         var result = word.Parse("hello");
         Assert.That(result.Success, Is.True);
 
-        Assert.That(result.NameOf(result.Tree!.Id), Is.EqualTo("word"));
+        Assert.That(result.DisplayNameOf(result.Tree!.Id), Is.EqualTo("word"));
     }
 
     [Test]
-    public void Name_resolves_symbol_to_rule_name()
+    public void DisplayName_resolves_symbol_to_rule_name()
     {
         var word = OneOrMore(OneOf(TokenSet.Letters)).As("word").Flatten(FlattenType.Preserve);
         var result = word.Parse("hello");
 
-        Assert.That(result.Name(result.Tree!), Is.EqualTo("word"));
+        Assert.That(result.DisplayName(result.Tree!), Is.EqualTo("word"));
     }
 
     [Test]
-    public void Name_resolves_character_leaf_symbol()
+    public void DisplayName_resolves_character_leaf_symbol()
     {
         var word = OneOrMore(OneOf(TokenSet.Letters)).As("word").Flatten(FlattenType.Preserve);
         var result = word.Parse("h");
         var leaf = result.Tree!.Children[0];
 
-        Assert.That(result.Name(leaf), Is.EqualTo("h"));
+        Assert.That(result.DisplayName(leaf), Is.EqualTo("h"));
     }
 
     [Test]
