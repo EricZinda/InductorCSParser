@@ -15,16 +15,24 @@ namespace InductorParser.StateMachine;
 //
 // PreserveAllSymbols overrides every FlattenType to Preserve, just like
 // the existing Rule.TryParse does at runtime.
+//
+// Every Symbol is stamped with the per-parse ParseContext so the
+// SyntaxTree accessors that depend on it work the same as on a
+// recursive-engine parse: Symbol.DisplayName / Is(string) resolve the
+// id through the grammar, and Symbol.SourceRange / SourceText
+// translate parseInput offsets back to the caller's original-input
+// coordinates under normalization.
 internal static class TreeBuilder
 {
     public static IReadOnlyList<Symbol> Build(
         List<OutputOp> ops,
         string input,
-        bool preserveAllSymbols)
+        bool preserveAllSymbols,
+        ParseContext context)
     {
         var topLevel = new List<Symbol>();
         int cursor = 0;
-        BuildRange(ops, ref cursor, ops.Count, input, preserveAllSymbols, topLevel);
+        BuildRange(ops, ref cursor, ops.Count, input, preserveAllSymbols, context, topLevel);
         return topLevel;
     }
 
@@ -39,6 +47,7 @@ internal static class TreeBuilder
         int end,
         string input,
         bool preserveAllSymbols,
+        ParseContext context,
         List<Symbol> sink)
     {
         while (cursor < end)
@@ -49,7 +58,7 @@ internal static class TreeBuilder
                 case OutputKind.OpenComposite:
                 {
                     cursor++;
-                    BuildComposite(ops, ref cursor, end, input, preserveAllSymbols, operation, sink);
+                    BuildComposite(ops, ref cursor, end, input, preserveAllSymbols, context, operation, sink);
                     break;
                 }
                 case OutputKind.CloseComposite:
@@ -71,7 +80,7 @@ internal static class TreeBuilder
                     // the recursive engine produces under the same flag.
                     if (!preserveAllSymbols && declared == FlattenType.Delete) break;
                     var leafChars = input.AsMemory(operation.Offset, operation.Length);
-                    sink.Add(new Symbol(operation.SymbolId, declared, leafChars));
+                    sink.Add(new Symbol(operation.SymbolId, declared, leafChars, context));
                     break;
                 }
                 case OutputKind.Prebuilt:
@@ -82,7 +91,9 @@ internal static class TreeBuilder
                     // already whatever the recursive evaluator chose
                     // (after PreserveAllSymbols normalization on its
                     // side, since we set lexer.PreserveAllSymbols
-                    // before bridging). Append directly.
+                    // before bridging). It already carries its own
+                    // ParseContext from the recursive parse. Append
+                    // directly.
                     sink.Add(operation.PrebuiltSymbol!);
                     break;
                 }
@@ -96,6 +107,7 @@ internal static class TreeBuilder
         int end,
         string input,
         bool preserveAllSymbols,
+        ParseContext context,
         OutputOp open,
         List<Symbol> parentSink)
     {
@@ -118,7 +130,7 @@ internal static class TreeBuilder
 
         if (!preserveAllSymbols && declared == FlattenType.Flatten)
         {
-            BuildRange(ops, ref cursor, end, input, preserveAllSymbols, parentSink);
+            BuildRange(ops, ref cursor, end, input, preserveAllSymbols, context, parentSink);
             if (cursor < end && ops[cursor].Kind == OutputKind.CloseComposite) cursor++;
             return;
         }
@@ -129,8 +141,14 @@ internal static class TreeBuilder
         // Flatten. The recursive engine puts the declared FlattenType
         // on the wrapper too under the same flag.
         var children = new List<Symbol>();
-        BuildRange(ops, ref cursor, end, input, preserveAllSymbols, children);
+        BuildRange(ops, ref cursor, end, input, preserveAllSymbols, context, children);
         if (cursor < end && ops[cursor].Kind == OutputKind.CloseComposite) cursor++;
-        parentSink.Add(new Symbol(open.SymbolId, declared, children));
+        // The lowered Open/Close ops carry no input offsets, so the
+        // builder has no consumed span to record on the composite
+        // Symbol. Its SourceRange / SourceText therefore stay empty
+        // (unlike the recursive engine, which records the span). The
+        // context is still passed so Symbol.DisplayName resolves and
+        // the leaf descendants translate their own offsets.
+        parentSink.Add(new Symbol(open.SymbolId, declared, children, default, context));
     }
 }

@@ -494,6 +494,17 @@ public sealed partial class Lexer
     // failures are discarded".
     internal void DiscardSubtreeExtent() => _subtreeDeepestFailure = 0;
 
+    // Restore the subtree-extent high-water mark to a value captured
+    // earlier from the SubtreeDeepestFailure getter. DiscardSubtreeExtent
+    // zeroes the mark outright, which is right for a rule whose whole
+    // transaction window is one lookahead probe (Peek, Not). A rule that
+    // interleaves real scanning with lookahead probes inside one
+    // transaction window (ScanUntil's escape-start rule probe) has to
+    // undo only the probe's contribution and leave the extent its
+    // consumed scanning accumulated intact, so it snapshots the mark
+    // before the probe and restores it here afterward.
+    internal void RestoreSubtreeExtent(int snapshot) => _subtreeDeepestFailure = snapshot;
+
     // Record that a rule just failed at the given input position. The
     // caller's responsibility is to pass the position of the offending
     // input: the *start* of the specific read that couldn't match, not

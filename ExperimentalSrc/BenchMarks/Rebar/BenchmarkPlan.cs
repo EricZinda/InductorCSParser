@@ -124,10 +124,19 @@ internal sealed class BenchmarkPlan
             return total;
         }
 
+        // Recover each match's contiguous input span from SourceRange
+        // and count its UTF-8 bytes, the same value the state-machine
+        // path above computes. SourceRange also derives line/column per
+        // endpoint, which this doesn't need, but a Symbol-level
+        // byte-count accessor wasn't worth keeping for one benchmark.
         var result = Parse(haystack);
         long total2 = 0;
         foreach (var match in result.Tree!.FindAll(_match))
-            total2 += match.GetUtf8ByteCount();
+        {
+            var range = match.SourceRange!.Value;
+            total2 += System.Text.Encoding.UTF8.GetByteCount(
+                haystack.AsSpan(range.Start.CharIndex, range.End.CharIndex - range.Start.CharIndex));
+        }
         return total2;
     }
 

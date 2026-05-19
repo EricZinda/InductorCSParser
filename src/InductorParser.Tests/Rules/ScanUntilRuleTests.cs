@@ -430,6 +430,59 @@ public class ScanUntilRuleTests
     }
 
     [Test]
+    public void ScanUntil_rule_stopper_probe_does_not_leak_a_failure_past_the_body()
+    {
+        // The rule-valued stopper runs as a pure lookahead at every
+        // scanned position: a peek transaction always rolls the lexer
+        // back, so the stopper is never consumed. But a transaction
+        // rolls back the POSITION, not the failure tracker, so a stopper
+        // probe's RecordFailure survives the rollback. Peek / Not avoid
+        // this by snapshotting and restoring the failure state around
+        // their inner probe; the stopper probe has to do the same.
+        //
+        // Stopper "-->" scanning "----->" (five dashes then '>'): the
+        // stopper matches at offset 3. While scanning, the probe at
+        // offset 2 reads "---" before failing on the '-' at offset 4,
+        // recording a mechanical failure there - past the body, which
+        // ends at offset 3. Eof() then fails at offset 3 (ScanUntil
+        // stops at the stopper without consuming it). The reported
+        // error must point at 3, not at the stray offset 4 the stopper
+        // probe left behind.
+        var rule = InductorParser.Rules.And(ScanUntil(Literal("-->")), Eof());
+
+        var result = rule.Parse("----->");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(3),
+            "the rule-stopper lookahead probe leaked a failure past the body");
+    }
+
+    [Test]
+    public void ScanUntil_rule_escape_start_probe_does_not_leak_a_failure_past_the_body()
+    {
+        // The rule-valued escape-start is also a lookahead probe: it is
+        // tried at every position, and when it doesn't match the scan
+        // falls through to the stopper check. A mismatching escape-start
+        // rule rolls its own position back, but (like the stopper probe)
+        // its RecordFailure calls survive, so its failures have to be
+        // discarded too.
+        //
+        // Escape-start Literal("xy"), stopper {'x'}, scanning "abxz": the
+        // stopper 'x' is at offset 2, so the body is "ab". At offset 2 the
+        // escape-start probe reads 'x' (matches) then 'z' (wanted 'y') and
+        // records a failure at offset 3 - past the body. Eof() then fails
+        // at offset 2. The reported error must be 2, not the stray 3.
+        var body = ScanUntil(TokenSet.Runes("x"), Literal("xy"), AnyToken());
+        var rule = InductorParser.Rules.And(body, Eof());
+
+        var result = rule.Parse("abxz");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(2),
+            "the rule-escape-start lookahead probe leaked a failure past the body");
+    }
+
+    [Test]
     public void ScanUntil_rule_based_stopper_with_escape_start()
     {
         // C++-raw-string wouldn't have an escape, but Python
