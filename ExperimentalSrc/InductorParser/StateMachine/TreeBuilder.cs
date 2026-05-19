@@ -18,10 +18,10 @@ namespace InductorParser.StateMachine;
 //
 // Every Symbol is stamped with the per-parse ParseContext so the
 // SyntaxTree accessors that depend on it work the same as on a
-// recursive-engine parse: Symbol.Name / Is(string) resolve the id
-// through the grammar, and Symbol.SourceRange / SourceText translate
-// parseInput offsets back to the caller's original-input coordinates
-// under normalization.
+// recursive-engine parse: Symbol.DisplayName / Is(string) resolve the
+// id through the grammar, and Symbol.SourceRange / SourceText
+// translate parseInput offsets back to the caller's original-input
+// coordinates under normalization.
 internal static class TreeBuilder
 {
     public static IReadOnlyList<Symbol> Build(
@@ -147,8 +147,8 @@ internal static class TreeBuilder
         // builder has no consumed span to record on the composite
         // Symbol. Its SourceRange / SourceText therefore stay empty
         // (unlike the recursive engine, which records the span). The
-        // context is still passed so Symbol.Name resolves and the leaf
-        // descendants translate their own offsets.
+        // context is still passed so Symbol.DisplayName resolves and
+        // the leaf descendants translate their own offsets.
         parentSink.Add(new Symbol(open.SymbolId, declared, children, default, context));
     }
 }

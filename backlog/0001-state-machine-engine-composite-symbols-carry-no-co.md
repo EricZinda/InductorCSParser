@@ -4,7 +4,7 @@ The state-machine engine builds its parse tree in `ExperimentalSrc/InductorParse
 
 `Symbol.SourceRange` and `Symbol.SourceText` recover a composite's match bounds from that span (`_leafChars`). With no span, `Symbol.TryGetCharSpan` returns false, so on any tree produced by `StateMachineParser.Parse`, every composite Symbol's `SourceRange` is `null` and `SourceText` is `""`. The recursive engine records the span (`lexer.Input.AsMemory(matchStart, matchLength)`) at every composite construction site, so it returns the real range and text. A consumer that reads `SourceText` off a named composite (the canonical TOML-style "recover the verbatim matched text of this node" use case from backlog 7s7s) gets an empty string from the SM engine and the right text from the recursive engine, a silent divergence.
 
-This is the second half of the 2026-05-18 find-a-bug hunt. The first half, the SM `TreeBuilder` building Symbols with no `ParseContext` at all, is already fixed (`Symbol.Name` / `Is(string)` and leaf `SourceRange` / `SourceText` under normalization now work on SM trees). This item is the remaining gap: composites still have no span.
+This is the second half of the 2026-05-18 find-a-bug hunt. The first half, the SM `TreeBuilder` building Symbols with no `ParseContext` at all, is already fixed (`Symbol.DisplayName` / `Is(string)` and leaf `SourceRange` / `SourceText` under normalization now work on SM trees). This item is the remaining gap: composites still have no span.
 
 ## Verify the Bug (write test first)
 

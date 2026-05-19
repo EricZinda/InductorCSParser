@@ -669,19 +669,20 @@ public class StateMachineParserTests
     // ---- ParseContext-dependent Symbol APIs ----
 
     [Test]
-    public void Symbol_Name_resolves_through_the_grammar_on_a_state_machine_parse()
+    public void Symbol_DisplayName_resolves_through_the_grammar_on_a_state_machine_parse()
     {
         // TreeBuilder used to build Symbols without a ParseContext.
-        // Symbol.Name resolves the id through ParseContext.GrammarRoot,
-        // so without the context every node in a state-machine-parsed
-        // tree reported Name == null even when the rule was .As(...)-named.
+        // Symbol.DisplayName resolves the id through
+        // ParseContext.GrammarRoot, so without the context every node in
+        // a state-machine-parsed tree reported a null DisplayName even
+        // when the rule was .As(...)-named.
         var letter = OneOf(TokenSet.Letters).As("letter");
         var word = OneOrMore(letter).As("word");
 
         var stateMachine = StateMachineParser.Parse(word, "hi");
         Assert.That(stateMachine.Success, Is.True, stateMachine.ErrorMessage);
 
-        Assert.That(stateMachine.Symbols[0].Name, Is.EqualTo("word"));
+        Assert.That(stateMachine.Symbols[0].DisplayName, Is.EqualTo("word"));
         Assert.That(stateMachine.Symbols[0].Is("word"), Is.True);
     }
 
