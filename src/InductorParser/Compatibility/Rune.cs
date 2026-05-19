@@ -10,8 +10,8 @@
 // The class is defined in the BCL namespace System.Text so that caller code
 // (`using System.Text; ... new Rune(c)`) resolves to whichever Rune is
 // available without changing imports. When this assembly is built against
-// net5.0 or later, the BCL ships its own Rune in System.Text and this file
-// compiles to nothing. References resolve to the BCL type instead.
+// netcoreapp3.0 or later, the BCL ships its own Rune in System.Text and
+// this file compiles to nothing. References resolve to the BCL type instead.
 //
 // This implementation is the minimum we need: a validated 21-bit code point
 // wrapper with surrogate-pair encoding/decoding, equality, comparison, and
@@ -20,7 +20,7 @@
 // decoders, or the IsLetter/IsDigit family. Add those when something
 // inside the parser actually needs them.
 
-#if !NET5_0_OR_GREATER
+#if !NETCOREAPP3_0_OR_GREATER
 
 using System.Globalization;
 
