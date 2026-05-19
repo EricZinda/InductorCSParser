@@ -157,7 +157,16 @@ public static class StateMachineParser
             // memory slices into parseInput, the same string the lexer
             // was reading, mirroring how the recursive engine builds
             // Symbols against the normalized text.
-            IReadOnlyList<Symbol> symbols = TreeBuilder.Build(machine.OutputOps, parseInput, options.PreserveAllSymbols);
+            // The ParseContext lets every Symbol TreeBuilder builds
+            // resolve its rule name (Symbol.Name / Is(string)) and
+            // translate parseInput offsets back to original-input
+            // coordinates (Symbol.SourceRange / SourceText) under
+            // normalization. Rule.ParseRecursive forwards the same
+            // context to the recursive engine's Lexer. Without it here
+            // every state-machine-built Symbol reported a null Name and
+            // leaked parseInput coordinates.
+            var parseContext = new ParseContext(input, parseInput, rootRule.NormalizationForm, rootRule);
+            IReadOnlyList<Symbol> symbols = TreeBuilder.Build(machine.OutputOps, parseInput, options.PreserveAllSymbols, parseContext);
             return ParseResult.Succeeded(symbols, input, rootRule);
         }
         finally
