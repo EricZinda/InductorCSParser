@@ -46,3 +46,11 @@ Options:
 
 Related: backlog item 0a02 (a `SeparatedList` factory could build the
 second instance internally and hide this entirely from the author).
+
+Hit again building the Cron sample (`E2ESamples/Cron/`, backlog 018a).
+The cron grammar's "item" nonterminal appears at the head of a field
+and after a comma. Friction 1 in that sample's README forces a separate
+`Rule` instance for the after-comma item so it can carry its own
+`.WithError`, and both instances genuinely are "item". `Compile`
+rejected the shared name and they had to be split into `"item"` and
+`"listItem"`. Second sample, same wall.
