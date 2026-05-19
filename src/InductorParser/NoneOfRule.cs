@@ -25,7 +25,8 @@ internal sealed class NoneOfRule : Rule
         _setRendered = runeSet.ToString();
     }
 
-    // Accessor for the state-machine evaluator's lowering pass.
+    // Accessor for an alternative evaluator to read the rule's set
+    // without running the rule.
     internal TokenSet LoweringSet => _set;
 
     // See Rule.CollectNormalizationOffenders for the contract. Same
@@ -38,24 +39,22 @@ internal sealed class NoneOfRule : Rule
         OneOfRule.NormalizeAndValidate(this, ref _set, form, offenders);
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        using var transaction = lexer.BeginTransaction();
         var token = lexer.Read();
         if (token.IsEof)
         {
             TraceFailure(lexer, $"found '<EOF>', wanted one not in '{_setRendered}'");
-            lexer.RecordFailure(transaction.StartPosition, ErrorMessage, ErrorForced);
+            lexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);
             return null;
         }
         if (_set.ContainsToken(token.Chars))
         {
             TraceFailure(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted one not in '{_setRendered}'");
-            lexer.RecordFailure(transaction.StartPosition, ErrorMessage, ErrorForced);
+            lexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);
             return null;
         }
         TraceSuccess(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted one not in '{_setRendered}'");
-        transaction.Commit();
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
         // See Rule.ResolveLeafId for the leaf-id rule shared across

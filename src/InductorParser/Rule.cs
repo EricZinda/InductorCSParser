@@ -63,11 +63,11 @@ public abstract class Rule
     private string? _errorMessage;
     private bool _errorForced;
 
-    // Has this rule been compiled yet? External engines (the state-machine
-    // lowerer, alternative evaluators) check this before calling Compile()
-    // so a caller who already compiled the rule with a specific normalization
-    // form (or with null to opt out) doesn't get an InvalidOperationException
-    // from the engine forcing the FormC default.
+    // Has this rule been compiled yet? An alternative evaluator checks
+    // this before calling Compile() so a caller who already compiled the
+    // rule with a specific normalization form (or with null to opt out)
+    // doesn't get an InvalidOperationException from the engine forcing
+    // the FormC default.
     internal bool IsCompiled => _sealed;
 
     // The Unicode normalization form this grammar was compiled against. Set
@@ -103,8 +103,7 @@ public abstract class Rule
 
     // Process-wide kill switch for the lookahead shortcut. When true,
     // CannotMatchLookahead always returns false (every alternative is
-    // attempted) and the SM Lowerer's CanSkipUnreachableAlt also bails,
-    // so neither engine emits or evaluates a pre-check. Used to A/B
+    // attempted), so no engine emits or evaluates a pre-check. Used to A/B
     // the optimization: any test failure outside trace output (which
     // legitimately changes when SKIP lines disappear) under
     // DisableLookaheadShortcut=true is a soundness bug in the
@@ -276,13 +275,11 @@ public abstract class Rule
     private string BuildTraceLabel() =>
         Name != null ? $"{Name}:{_ruleTraceName}" : _ruleTraceName;
 
-    // Internal accessor so the state-machine evaluator can label its
-    // Call / Return trace lines with the same "{Name}:{ruleClassName}"
-    // string the recursive engine uses. The SM emits its own trace
-    // lines from Stepper.Step_Call / Step_ReturnSuccess /
-    // Step_ReturnFailure rather than going through TryParseRule, so it
-    // needs the label without going through the protected TraceSuccess
-    // / TraceFailure helpers.
+    // Internal accessor so an alternative evaluator can label its trace
+    // lines with the same "{Name}:{ruleClassName}" string the recursive
+    // engine uses. An evaluator that emits its own trace lines rather
+    // than going through TryParseRule needs the label without going
+    // through the protected TraceSuccess / TraceFailure helpers.
     internal string TraceLabel => BuildTraceLabel();
 
     // If the rule has .WithError(msg) set, append it in quotes after
@@ -992,8 +989,7 @@ public abstract class Rule
     public ParseResult Parse(string input) => Parse(input, new ParseOptions());
 
     // Dispatcher. Routes to the recursive evaluator by default. An
-    // alternative-evaluator implementation (e.g. the state-machine
-    // engine that ships in ExperimentalSrc) can register itself by
+    // alternative-evaluator implementation can register itself by
     // assigning AlternativeEvaluator at startup. The test suite can
     // flip the routing process-wide via
     // ParseOptions.DefaultUseAlternativeEvaluator, or per-call via
@@ -1015,9 +1011,9 @@ public abstract class Rule
     internal static Func<Rule, string, ParseOptions, ParseResult>? AlternativeEvaluator;
 
     // The recursive evaluator's body. Compare fixtures that need a
-    // guaranteed recursive-engine baseline (so the SM run can compare
-    // its own output against a stable control) call this directly
-    // instead of going through Parse.
+    // guaranteed recursive-engine baseline (so an alternative evaluator's
+    // run can compare its own output against a stable control) call this
+    // directly instead of going through Parse.
     internal ParseResult ParseRecursive(string input, ParseOptions options)
     {
         // Auto-compile preserves whatever form the grammar is already
@@ -1063,14 +1059,14 @@ public abstract class Rule
         }
         catch (ParseBudgetExceeded budget)
         {
-            // The throw rode up through every active rule's `using var
-            // transaction = lexer.BeginTransaction()`, which rolled the
-            // lexer position back frame by frame, so lexer.Position is now
-            // back at 0. lexer.DeepestFailure isn't rolled back (it's a
-            // high-water mark of failure positions), so it's the best
-            // "how far did the parser get" hint we can give. Use the
-            // same Math.Max idiom as the normal failure path below for
-            // consistency.
+            // The throw rode up through every active rule's transaction
+            // (the `using var transaction` in Rule.TryParse), which
+            // rolled the lexer position back frame by frame, so
+            // lexer.Position is now back at 0. lexer.DeepestFailure isn't
+            // rolled back (it's a high-water mark of failure positions),
+            // so it's the best "how far did the parser get" hint we can
+            // give. Use the same Math.Max idiom as the normal failure
+            // path below for consistency.
             int abortRaw = Math.Max(lexer.DeepestFailure, lexer.Position);
             int abortPos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, abortRaw, normalizeInput);
             return ParseResult.Aborted(budget.Outcome, abortPos, BuildBudgetMessage(budget.Outcome, abortPos, input, options), input, this);
@@ -1141,11 +1137,10 @@ public abstract class Rule
         }
     }
 
-    // Both engines (recursive and state-machine) end up here for the
-    // generic-failure path so default error messages stay consistent
-    // and ParseOptions templates apply uniformly. customMessage is the
-    // deepest-failure message recorded by the engine (lexer.DeepestFailureMessage
-    // for the recursive engine, machine.DeepestFailureMessage for the SM);
+    // Every engine ends up here for the generic-failure path so default
+    // error messages stay consistent and ParseOptions templates apply
+    // uniformly. customMessage is the deepest-failure message the engine
+    // recorded (lexer.DeepestFailureMessage on the recursive path).
     // posInParseInput indexes into parseInput (the post-normalization input)
     // for the EOF check and the {character} substitution; failurePos is
     // the same position translated back to the original input for the
@@ -1286,12 +1281,38 @@ public abstract class Rule
                 outputSymbols = new List<Symbol>();
             }
             int savedCount = outputSymbols?.Count ?? 0;
-            var result = TryParseRule(lexer, effectiveFlattenType, outputSymbols);
+
+            Symbol? result;
+            if (OpensTransaction)
+            {
+                // The rule-owned outer transaction is automatic. Opening
+                // it here instead of in every TryParseRule means a
+                // subclass can't forget the Commit on its success path:
+                // Rule.TryParse commits iff TryParseRule returns a
+                // non-null Symbol, and every non-commit exit (failure
+                // return, a thrown exception, a tripped budget) rolls
+                // back through the `using`. The transaction opens inside
+                // this `try`, after EnterRule, so an EnterRule depth-limit
+                // throw can't leak a transaction.
+                using var transaction = lexer.BeginTransaction();
+                result = TryParseRule(lexer, transaction.StartPosition, effectiveFlattenType, outputSymbols);
+                if (result != null)
+                    transaction.Commit();
+            }
+            else
+            {
+                // EofRule and LateBoundRule open no transaction: Eof never
+                // moves the cursor, and LateBound delegates wholly to its
+                // target, which owns its own transaction. They take
+                // startPosition straight from the current cursor.
+                result = TryParseRule(lexer, lexer.Position, effectiveFlattenType, outputSymbols);
+            }
+
             if (result == null)
             {
                 // Roll back any partial writes to outputSymbols. The
-                // transaction's `using` rolled back the lexer. This
-                // rolls back the caller's list.
+                // transaction's `using` already rolled back the lexer
+                // position. This rolls back the caller's list.
                 if (outputSymbols != null && outputSymbols.Count > savedCount)
                     outputSymbols.RemoveRange(savedCount, outputSymbols.Count - savedCount);
                 return null;
@@ -1312,17 +1333,21 @@ public abstract class Rule
     }
 
     // The matching method every subclass implements. Contract:
-    //   * Open a transaction with lexer.BeginTransaction() at the top.
-    //   * On failure: return null without committing. The `using` on the
-    //     transaction rolls the lexer back automatically. Never consume
-    //     input on failure (following the transaction pattern guarantees
-    //     this). Call lexer.RecordFailure() so the "deepest failure wins"
-    //     error-reporting heuristic can surface your rule's error message.
-    //     Rule.TryParse rolls back any partial writes to outputSymbols
-    //     for you, so subclasses don't need to truncate on the failure
-    //     path.
-    //   * On success: call transaction.Commit() and return a non-null
-    //     Symbol. What exactly you return depends on `effectiveFlattenType`:
+    //   * Rule.TryParse owns the outer transaction. It opens one before
+    //     calling this method and commits it iff this method returns a
+    //     non-null Symbol, so a subclass never calls BeginTransaction or
+    //     Commit for its own outer scope and can't forget the commit.
+    //     `startPosition` is the lexer position captured the moment that
+    //     transaction opened. Use it for failure anchors and for the
+    //     ReadOnlyMemory span of any Symbol you build.
+    //   * On failure: return null. Rule.TryParse's transaction rolls the
+    //     lexer back automatically, and Rule.TryParse truncates any
+    //     partial writes to outputSymbols for you. Call
+    //     lexer.RecordFailure() (or lexer.RecordCompositeFailure() for a
+    //     composite's own .WithError) so the "deepest failure wins"
+    //     error-reporting heuristic can surface your rule's message.
+    //   * On success: return a non-null Symbol. What exactly you return
+    //     depends on `effectiveFlattenType`:
     //       - Delete: emit nothing, return Symbol.Discarded.
     //       - Flatten: append each Symbol you would have collected to
     //         `outputSymbols` (the caller's list, guaranteed non-null)
@@ -1331,6 +1356,11 @@ public abstract class Rule
     //         itself.
     //       - Preserve: build a wrapper Symbol around your matched
     //         children (or leaf content) and return it.
+    //   * For speculative lookahead inside the rule (positive or negative
+    //     lookahead, probing a stopper), open a lexer.BeginProbe() rather
+    //     than a transaction: a Probe restores the failure tracker and the
+    //     subtree-extent mark on rollback as well as the position, so an
+    //     off-path probe failure can't leak into error reporting.
     //   * `outputSymbols` is the caller's list in Flatten mode. It's
     //     non-null by contract (callers of Flatten rules are required to
     //     provide one), and null otherwise.
@@ -1343,7 +1373,23 @@ public abstract class Rule
     //     the docs). Without an override the pessimistic defaults apply
     //     and enclosing rules never shortcut this rule (correct but
     //     slower).
-    internal abstract Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols);
+    internal abstract Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols);
+
+    // Whether Rule.TryParse opens an automatic outer transaction around
+    // this rule's TryParseRule. True for every rule that speculatively
+    // reads input, which is almost all of them: a rule that reads tokens
+    // and then fails must be able to roll back. EofRule and LateBoundRule
+    // set this false in their constructors. Eof never moves the cursor,
+    // and LateBound delegates wholly to its target rule, which owns its
+    // own transaction. Skipping the transaction for those two keeps the
+    // recursion hot path (LateBound sits at every recursive grammar
+    // reference) free of a transaction it would never use.
+    //
+    // A plain field, not a virtual property: Rule.TryParse reads it on
+    // every rule invocation, so a virtual dispatch there would be
+    // hot-path overhead. A field read plus a well-predicted branch is
+    // effectively free.
+    private protected bool OpensTransaction = true;
 
     // Helper for composite rules to call a child rule with the right
     // "write-here" list.

@@ -25,10 +25,10 @@ public sealed partial class Lexer
     // this string. The GC never sees the Tokens or ReadOnlySpan<char>s, so they never have
     // to be tracked or reclaimed.
     // _input, _endPosition, _traceSink, _traceLevel are conceptually
-    // readonly but lose the C# `readonly` keyword so the state-machine
-    // evaluator's per-thread Lexer pool can call ResetForReuse() to
-    // re-bind a previously-used Lexer instance to a new input string.
-    // Constructors still treat them as set-once.
+    // readonly but lose the C# `readonly` keyword so a pooled Lexer can
+    // be re-bound to a new input string through ResetForReuse() instead
+    // of allocating a fresh instance per parse. Constructors still treat
+    // them as set-once.
     private string _input;
     // Exclusive upper bound on _position. Defaults to _input.Length (a
     // lexer reads to end of input). Sub-lexer constructors bound this to
@@ -47,8 +47,8 @@ public sealed partial class Lexer
     // call has reported within the current transaction's window. Every
     // BeginTransaction saves and zeroes this, and the matching Dispose
     // merges it back into the enclosing window with Math.Max. A composite
-    // rule reads it through SubtreeDeepestFailure once its children have
-    // run, so a .WithError it carries anchors at the deepest position its
+    // rule's RecordCompositeFailure reads it once its children have run,
+    // so a .WithError it carries anchors at the deepest position its
     // subtree reached rather than at the composite's own start. See
     // docs/ErrorArchitecture.md, "Where each rule records its failure".
     private int _subtreeDeepestFailure;
@@ -164,12 +164,8 @@ public sealed partial class Lexer
     public int Position => _position;
 
     // The position of the failure that would be reported if the parse
-    // ended now. Depth-primary resolution: a forced failure is a hard
-    // override and wins outright. Otherwise the deepest failure wins,
-    // named and mechanical alike, comparing the two high-water marks by
-    // position. A named failure takes an exact-depth tie, which is what
-    // NamedPosition >= MechanicalPosition encodes. See
-    // docs/ErrorArchitecture.md.
+    // ended now. See docs/ErrorArchitecture.md for how forced, named, and
+    // mechanical failures are ranked.
     public int DeepestFailure =>
         _failureState.ForcedMessage != null ? _failureState.ForcedPosition
         : _failureState.NamedMessage != null
@@ -233,17 +229,21 @@ public sealed partial class Lexer
     }
 
     // The error message that would be reported if the parse ended now:
-    // the message carried by whichever failure DeepestFailure picks. A
-    // forced WithError message overrides everything. Otherwise the named
-    // message surfaces only when the named failure is the deepest, or ties
-    // for deepest; when a mechanical failure is strictly deeper this is
-    // null and the report falls back to the generic positional template.
+    // the message carried by whichever failure DeepestFailure picks, or
+    // null when that failure carries no message. See
+    // docs/ErrorArchitecture.md.
     public string? DeepestFailureMessage =>
         _failureState.ForcedMessage != null ? _failureState.ForcedMessage
         : _failureState.NamedMessage != null
             && _failureState.NamedPosition >= _failureState.MechanicalPosition
           ? _failureState.NamedMessage
           : null;
+
+    // True when the failure DeepestFailure / DeepestFailureMessage would
+    // surface is a forced WithError override (recorded via
+    // RecordFailure(..., forced: true)). WithinTokenRule reads this to
+    // carry an inner sub-lexer's forced flag through to the outer lexer.
+    public bool DeepestFailureIsForced => _failureState.ForcedMessage != null;
 
     public bool IsEof => _position >= _endPosition;
 
@@ -408,8 +408,9 @@ public sealed partial class Lexer
     //     // called and restores the lexer's position to where
     //     // BeginTransaction was called.
     //
-    // That's the idiomatic "peek a token" pattern. Rules like Peek
-    // and Not use exactly this shape.
+    // That's the idiomatic "peek a token" pattern. A rule doing pure
+    // lookahead (Peek, Not) wants BeginProbe instead, which also rolls
+    // back the failure tracker and the subtree-extent mark.
     //
     // Aggressive-inlined so the caller sees the same machine
     // code the fully inline decoder would. Pulled out so the
@@ -463,10 +464,12 @@ public sealed partial class Lexer
     // Three-slot failure-tracker state (mechanical / named / forced). See
     // docs/ErrorArchitecture.md.
     // Mutable struct: the Lexer holds one of these as `_failureState` and
-    // mutates its fields in place. SaveFailureState returns a value copy
-    // (struct semantics) that callers stash and pass back to
-    // RestoreFailureState when they want to roll the tracker back.
-    internal struct FailureStateSnapshot
+    // mutates its fields in place. A Probe value-copies it when it opens
+    // and writes the copy back on rollback, which is how a lookahead
+    // probe's failures get undone (see the Probe struct). Private because
+    // rules never touch the failure tracker directly: they go through
+    // RecordFailure / RecordCompositeFailure and BeginProbe.
+    private struct FailureStateSnapshot
     {
         public int MechanicalPosition;
         public int NamedPosition;
@@ -474,36 +477,6 @@ public sealed partial class Lexer
         public int ForcedPosition;
         public string? ForcedMessage;
     }
-
-    internal FailureStateSnapshot SaveFailureState() => _failureState;
-
-    internal void RestoreFailureState(FailureStateSnapshot snapshot) => _failureState = snapshot;
-
-    // The deepest input position any failure has been recorded at since
-    // the current rule's transaction opened, the extent of this rule's
-    // subtree. A composite consults this on the failure path to anchor
-    // its own .WithError failure at the deepest position its children
-    // reached, instead of at the composite's own (shallower) start.
-    internal int SubtreeDeepestFailure => _subtreeDeepestFailure;
-
-    // Drop the subtree-extent high-water mark accumulated so far in the
-    // current transaction's window. Peek and Not call this after their
-    // inner probe runs: the probe's excursion is off the real parse
-    // path, so the depth it reached doesn't belong in an enclosing
-    // composite's anchor. See docs/ErrorArchitecture.md, "Lookahead
-    // failures are discarded".
-    internal void DiscardSubtreeExtent() => _subtreeDeepestFailure = 0;
-
-    // Restore the subtree-extent high-water mark to a value captured
-    // earlier from the SubtreeDeepestFailure getter. DiscardSubtreeExtent
-    // zeroes the mark outright, which is right for a rule whose whole
-    // transaction window is one lookahead probe (Peek, Not). A rule that
-    // interleaves real scanning with lookahead probes inside one
-    // transaction window (ScanUntil's escape-start rule probe) has to
-    // undo only the probe's contribution and leave the extent its
-    // consumed scanning accumulated intact, so it snapshots the mark
-    // before the probe and restores it here afterward.
-    internal void RestoreSubtreeExtent(int snapshot) => _subtreeDeepestFailure = snapshot;
 
     // Record that a rule just failed at the given input position. The
     // caller's responsibility is to pass the position of the offending
@@ -561,6 +534,17 @@ public sealed partial class Lexer
         }
     }
 
+    // Record a composite rule's own .WithError failure, anchored at the
+    // deeper of floorPosition and the subtree-extent high-water mark.
+    // floorPosition is the composite's own floor: usually lexer.Position
+    // after the failing child rolled the cursor back, or the composite's
+    // start position. Folds in the Math.Max idiom every composite would
+    // otherwise repeat by hand. See docs/ErrorArchitecture.md for why a
+    // composite anchors this way.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void RecordCompositeFailure(int floorPosition, string? errorMessage, bool forced)
+        => RecordFailure(Math.Max(_subtreeDeepestFailure, floorPosition), errorMessage, forced);
+
     // Transactions exist so rules can speculatively read input and then
     // decide they didn't match: an alternative that
     // reads three tokens and then fails has to leave the lexer as if it
@@ -598,6 +582,18 @@ public sealed partial class Lexer
         _transactionDepth++;
         return new Transaction(this, _position);
     }
+
+    // Open a lookahead Probe. Unlike a Transaction, a Probe brackets all
+    // three pieces of speculative state (read position, the three-slot
+    // failure tracker, and the subtree-extent high-water mark) and
+    // restores all three on Dispose unless Commit is called. See the Probe
+    // struct for the full explanation. A Probe is not a transaction
+    // nesting level: it doesn't touch _transactionDepth, so it adds no
+    // trace indentation. The rule opening it already owns one transaction
+    // (the one Rule.TryParse opened for it), which supplies the single
+    // indentation level.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Probe BeginProbe() => new Probe(this);
 
     // Wire the per-parse runtime budgets onto the lexer. Called by
     // Rule.Parse right after constructing the lexer and before the first
@@ -651,21 +647,13 @@ public sealed partial class Lexer
         _ruleDepth--;
     }
 
-    // State-machine equivalent of EnterRule. The recursive engine maintains
-    // depth in _ruleDepth via paired EnterRule / ExitRule. The state
-    // machine already tracks call depth in Machine.CallTop and that
-    // counter is naturally restored when a backtrack frame truncates the
-    // call stack, so the SM has no place to call ExitRule. Instead the SM
-    // hands its current call depth in directly. This skips the _ruleDepth
-    // bookkeeping (which the SM doesn't use) and runs the same
-    // RuleCountLimit / Timeout / Cancellation periodic checks the
-    // recursive path runs.
-    //
-    // On a BridgeToRecursive frame the bridged Rule.TryParse calls the
-    // standard EnterRule on the way in, so depth there is tracked by the
-    // recursive engine relative to the bridge entry. The SM-side Call
-    // dispatch never fires for the bridge opcode so there's no double
-    // count.
+    // Depth-passed variant of EnterRule for an alternative evaluator that
+    // tracks call depth itself rather than through paired EnterRule /
+    // ExitRule. The recursive engine maintains depth in _ruleDepth. An
+    // evaluator that already has its own call-depth counter hands the
+    // current depth in here directly, which skips the _ruleDepth
+    // bookkeeping it doesn't use and still runs the same RuleCountLimit /
+    // Timeout / Cancellation periodic checks the recursive path runs.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void EnterRuleAtDepth(int depth)
     {
@@ -677,14 +665,13 @@ public sealed partial class Lexer
             CheckPeriodicBudgets();
     }
 
-    // Counter-only tick used by the state machine on opcodes that do real
-    // work but don't enter a cyclic rule (so they don't go through Call /
-    // EnterRuleAtDepth). Skips the depth check; the SM already enforces
-    // MaxDepth at Step_Call time and fused-scan / backtrack-push opcodes
-    // don't grow call depth. The periodic RuleCountLimit / Timeout /
+    // Counter-only budget tick for an alternative evaluator, used on
+    // steps that do real work but don't enter a cyclic rule (so they
+    // don't go through EnterRuleAtDepth). Skips the depth check. An
+    // evaluator that calls this enforces MaxDepth itself on its
+    // rule-entry path. The periodic RuleCountLimit / Timeout /
     // Cancellation check fires at the same 1024 boundary the recursive
-    // engine uses, so budget aborts on the inlined SM path share the
-    // same trip mechanism.
+    // engine uses, so budget aborts share the same trip mechanism.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void TickPeriodicBudget()
     {
@@ -742,9 +729,9 @@ public sealed partial class Lexer
         // survive both commit and rollback. A rejected Or branch or a
         // count rule's stopped iteration is real evidence about the
         // input and is kept, ranked by depth like any other failure. The
-        // one exception is lookahead: Peek and Not discard the failures
-        // their inner probe produced by calling RestoreFailureState /
-        // DiscardSubtreeExtent directly. See docs/ErrorArchitecture.md.
+        // one exception is lookahead, and that's exactly what BeginProbe
+        // is for: a Probe restores the failure tracker and subtree-extent
+        // mark as well as the position. See docs/ErrorArchitecture.md.
         public void Commit()
         {
             if (_settled) return;
@@ -787,6 +774,78 @@ public sealed partial class Lexer
                     _lexer._subtreeDeepestFailure = _savedSubtreeExtent;
                 _depthPopped = true;
             }
+        }
+    }
+
+    // A Probe runs a rule as pure lookahead. A Transaction saves only the
+    // read position and keeps failures across both commit and rollback,
+    // because a rejected Or branch or a stopped count iteration is real
+    // evidence about the input. A lookahead probe is different: its whole
+    // excursion is off the real parse path, so the deepest-failure mark
+    // left by a few tokens it matched before failing has to be discarded.
+    // A Probe therefore brackets all three pieces of speculative state
+    // (the read position, the three-slot failure tracker, and the
+    // subtree-extent high-water mark) and Dispose-without-Commit restores
+    // all three. Commit keeps all three (the probe turned out to be real
+    // consumed content).
+    //
+    // Peek, Not, and ScanUntil's stopper / escape-start probes all use
+    // this. Bracketing all three pieces of state in one Probe means a
+    // rule can't forget a restore call, so an off-path probe failure
+    // can't leak past where the probe ran, outrank the real parse
+    // failure, and move the error caret.
+    //
+    // Like Transaction, Probe is a struct nested inside Lexer: it lives
+    // inline on the caller's stack frame with no allocation, and the
+    // nesting lets its restore logic touch Lexer's private _position,
+    // _failureState, and _subtreeDeepestFailure without widening their
+    // visibility. Unlike Transaction it doesn't touch _transactionDepth,
+    // so it is not a trace-indentation level.
+    public struct Probe : IDisposable
+    {
+        private readonly Lexer _lexer;
+        private readonly int _savedPosition;
+        private readonly FailureStateSnapshot _savedFailureState;
+        private readonly int _savedSubtreeExtent;
+        private bool _committed;
+        private bool _disposed;
+
+        internal Probe(Lexer lexer)
+        {
+            _lexer = lexer;
+            _savedPosition = lexer._position;
+            _savedFailureState = lexer._failureState;
+            _savedSubtreeExtent = lexer._subtreeDeepestFailure;
+            _committed = false;
+            _disposed = false;
+        }
+
+        // The lexer position at the moment this probe opened. Rules pass
+        // this to RecordFailure as the "pre-read" offset, the same way
+        // Transaction.StartPosition is used.
+        public int StartPosition => _savedPosition;
+
+        // Keep everything the probe did: the position it advanced to, the
+        // failures it recorded, and the subtree extent it reached. Used
+        // when the speculative read turned out to be real consumed
+        // content, the way ScanUntil's escape-start probe keeps a matched
+        // escape start.
+        public void Commit() => _committed = true;
+
+        // Dispose without Commit restores all three pieces of state
+        // exactly: the read position, the failure tracker, and the
+        // subtree-extent mark. The extent is restored to the snapshot, not
+        // Math.Max-merged the way Transaction.Dispose merges it: a
+        // lookahead excursion's depth is off the real parse path and must
+        // not leak into an enclosing composite's anchor.
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            if (_committed) return;
+            _lexer._position = _savedPosition;
+            _lexer._failureState = _savedFailureState;
+            _lexer._subtreeDeepestFailure = _savedSubtreeExtent;
         }
     }
 }

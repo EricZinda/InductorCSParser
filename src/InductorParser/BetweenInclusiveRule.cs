@@ -52,9 +52,8 @@ internal sealed class BetweenInclusiveRule : Rule
         return $"BetweenInclusive[{atLeast}..{upper}]";
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        using var transaction = lexer.BeginTransaction();
         var scannerSkip = TryCreateScannerSkip(lexer);
 
         // First try to shortcut and exit fast using the "Rule Skip" shortcut described
@@ -79,17 +78,17 @@ internal sealed class BetweenInclusiveRule : Rule
                 if (AtLeast == 0)
                 {
                     TraceSuccess(lexer, $"count= 0");
-                    int emptyStart = transaction.StartPosition;
-                    transaction.Commit();
                     return effectiveFlattenType == FlattenType.Preserve
-                        ? new Symbol(Id, FlattenType, Array.Empty<Symbol>(), lexer.Input.AsMemory(emptyStart, 0), lexer.Context)
+                        ? new Symbol(Id, FlattenType, Array.Empty<Symbol>(), lexer.Input.AsMemory(startPosition, 0), lexer.Context)
                         : Symbol.Discarded;
                 }
                 TraceFailure(lexer, $"count= 0");
                 // Shortcut path: we never advanced, so lexer.Position
-                // equals transaction.StartPosition. Record at lexer.Position
-                // so the cursor lands where the user needs to fix the input.
-                // See docs/ErrorArchitecture.md.
+                // equals startPosition, and the rule never entered Inner,
+                // so the subtree extent is still empty. Record at
+                // lexer.Position (plain RecordFailure, not the composite
+                // anchor) so the cursor lands where the user needs to fix
+                // the input. See docs/ErrorArchitecture.md.
                 lexer.RecordFailure(lexer.Position, ErrorMessage, ErrorForced);
                 return null;
             }
@@ -128,23 +127,17 @@ internal sealed class BetweenInclusiveRule : Rule
         if (count < AtLeast)
         {
             TraceFailure(lexer, $"count= {count}");
-            // Anchor a .WithError on this rule at the deepest position
-            // its subtree reached. lexer.Position is the failing
-            // iteration's start (the matched iterations advanced the
-            // cursor, the failing one rolled back there) and is the
-            // floor; an iteration that probed deeper before failing
-            // pushes SubtreeDeepestFailure past it. See
-            // docs/ErrorArchitecture.md.
-            int anchor = Math.Max(lexer.SubtreeDeepestFailure, lexer.Position);
-            lexer.RecordFailure(anchor, ErrorMessage, ErrorForced);
+            // Record this rule's own .WithError, floored at the failing
+            // iteration's start (lexer.Position, where that iteration
+            // rolled back). See docs/ErrorArchitecture.md for how
+            // RecordCompositeFailure anchors it.
+            lexer.RecordCompositeFailure(lexer.Position, ErrorMessage, ErrorForced);
             return null;
         }
         TraceSuccess(lexer, $"count= {count}");
-        int matchStart = transaction.StartPosition;
-        int matchLength = lexer.Position - matchStart;
-        transaction.Commit();
+        int matchLength = lexer.Position - startPosition;
         return effectiveFlattenType == FlattenType.Preserve
-            ? new Symbol(Id, FlattenType, outputSymbols, lexer.Input.AsMemory(matchStart, matchLength), lexer.Context)
+            ? new Symbol(Id, FlattenType, outputSymbols, lexer.Input.AsMemory(startPosition, matchLength), lexer.Context)
             : Symbol.Discarded;
     }
 
@@ -225,14 +218,12 @@ internal sealed class BetweenInclusiveRule : Rule
                 : null;
         // For a single literal, the substring-search cache jumps straight
         // to the next hit and amortizes across iterations. Multi-literal
-        // alternates use the IndexOfAny path below: an attempt to enable
-        // the cache for them measured 23x slower on the rebar Sherlock
-        // haystack than IndexOfAny + per-position MatchesAt, because each
-        // match consumed forces a re-search for every literal whose cached
-        // position is now stale, and the BCL's IndexOfAny is SIMD-tuned
-        // for "any of these chars" while N separate IndexOf calls don't
-        // benefit from that vectorization. See
-        // src/Benchmarks/Rebar/results/multi-literal-cache-rebar-2026-04-28.csv.
+        // alternates use the IndexOfAny path below instead: the cache is
+        // much slower for them, because each match consumed forces a
+        // re-search for every literal whose cached position is now stale,
+        // and the BCL's IndexOfAny is SIMD-tuned for "any of these chars"
+        // while N separate IndexOf calls don't benefit from that
+        // vectorization.
         return new ScannerSkip(
             candidates,
             bmpCandidates.Length == 0 ? null : bmpCandidates,

@@ -10,9 +10,14 @@ namespace InductorParser;
 // parse consumed the entire input rather than stopping early.
 internal sealed class EofRule : Rule
 {
-    public EofRule() : base(FlattenType.Delete) { }
+    public EofRule() : base(FlattenType.Delete)
+    {
+        // EofRule only checks for end-of-input. It never moves the
+        // cursor, so it needs no rollback transaction from Rule.TryParse.
+        OpensTransaction = false;
+    }
 
-    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         if (!lexer.IsEof)
         {

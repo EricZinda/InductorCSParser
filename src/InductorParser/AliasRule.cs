@@ -49,10 +49,9 @@ public sealed class AliasRule : Rule
         _inner = inner;
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        using var transaction = lexer.BeginTransaction();
-        int matchStart = transaction.StartPosition;
+        int matchStart = startPosition;
 
         // When emitting our own Symbol (Preserve), collect into a fresh list
         // that becomes the Symbol's children. When flattening, write directly
@@ -66,16 +65,11 @@ public sealed class AliasRule : Rule
         if (innerSymbol == null)
         {
             TraceFailure(lexer, $"inner failed");
-            // Anchor a .WithError on the alias at the deepest position
-            // the inner reached. The inner rolled back to the alias's
-            // start, so transaction.StartPosition is the floor; the
-            // inner's subtree pushes SubtreeDeepestFailure past it when
-            // it probed deeper before failing. The inner's own failures
-            // (including a .WithError the inner carries) stand untouched;
-            // depth-primary ranking picks the winner between them and the
-            // alias's failure. See docs/ErrorArchitecture.md.
-            int anchor = Math.Max(lexer.SubtreeDeepestFailure, transaction.StartPosition);
-            lexer.RecordFailure(anchor, ErrorMessage, ErrorForced);
+            // Record the alias's own .WithError, floored at the alias's
+            // start (matchStart, where the inner rolled back). See
+            // docs/ErrorArchitecture.md for how RecordCompositeFailure
+            // anchors it.
+            lexer.RecordCompositeFailure(matchStart, ErrorMessage, ErrorForced);
             return null;
         }
 
@@ -119,7 +113,6 @@ public sealed class AliasRule : Rule
 
         TraceSuccess(lexer, $"inner matched");
         int matchLength = lexer.Position - matchStart;
-        transaction.Commit();
 
         if (effectiveFlattenType != FlattenType.Preserve)
             return Symbol.Discarded;

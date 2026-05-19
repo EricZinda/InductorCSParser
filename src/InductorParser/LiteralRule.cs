@@ -12,8 +12,8 @@ namespace InductorParser;
 // the same lockstep compare loop.
 //
 // This is better than using And(Token('m'), Token('a'), Token('j')) since each
-// Token rule opens its own transaction. A three-character And of three Token rules
-// does three BeginTransaction/Commit cycles and three RecordFailure slots.
+// Token rule runs under its own transaction. A three-character And of three
+// Token rules pays three transaction cycles and three RecordFailure slots.
 // Literal("maj") does one. For keyword-heavy grammars (chord notation, SQL
 // keywords, HTTP methods) this is the difference between per-keyword O(N)
 // transaction overhead and O(1).
@@ -61,9 +61,8 @@ internal sealed class LiteralRule : Rule
         _expected = normalized;
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        using var transaction = lexer.BeginTransaction();
         int consumed = 0;
 
         while (consumed < _expected.Length)
@@ -87,12 +86,11 @@ internal sealed class LiteralRule : Rule
         }
 
         TraceSuccess(lexer, $"found '{_expected}'");
-        transaction.Commit();
         // Default FlattenType is Delete: the common case collapses to
         // the shared Discarded value and skips the per-match Symbol allocation.
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
-        var leafSymbol = new Symbol(Id, FlattenType, lexer.Input.AsMemory(transaction.StartPosition, consumed), lexer.Context);
+        var leafSymbol = new Symbol(Id, FlattenType, lexer.Input.AsMemory(startPosition, consumed), lexer.Context);
         if (effectiveFlattenType == FlattenType.Flatten)
         {
             outputSymbols!.Add(leafSymbol);

@@ -30,24 +30,23 @@ internal sealed class NotRule : Rule
 
     private Rule Inner => Children[0];
 
-    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         // Lookahead only: inner's result is thrown away regardless, so we
         // pass null for outputSymbols. If inner has FlattenType.Flatten
         // (which normally writes its children into a caller-supplied
         // list), Rule.TryParse gives it a throwaway list that nobody
-        // reads.
-        using var transaction = lexer.BeginTransaction();
-        var failureSnapshot = lexer.SaveFailureState();
-        var innerResult = Inner.TryParse(lexer, outputSymbols: null);
-        // Inner ran as a throwaway probe. Discard the failures and
-        // the subtree extent it produced, succeed or fail: those
-        // positions were only probed, never consumed. Keeping them would
-        // let a probe's deep excursion outrank the real parse's failures.
-        // See docs/ErrorArchitecture.md, "Lookahead failures are discarded".
-        lexer.RestoreFailureState(failureSnapshot);
-        lexer.DiscardSubtreeExtent();
-        if (innerResult != null)
+        // reads. BeginProbe brackets the position, the failure tracker,
+        // and the subtree-extent mark, and with no Commit restores all
+        // three on Dispose, so inner's probe leaves nothing behind
+        // whether it matched or not. See docs/ErrorArchitecture.md,
+        // "Lookahead failures are discarded".
+        bool innerMatched;
+        using (lexer.BeginProbe())
+        {
+            innerMatched = Inner.TryParse(lexer, outputSymbols: null) != null;
+        }
+        if (innerMatched)
         {
             TraceFailure(lexer, $"inner matched");
             // Not records one failure of its own, at the lookahead anchor
@@ -55,13 +54,15 @@ internal sealed class NotRule : Rule
             // carrying its .WithError if it has one. This is the
             // exception to composite anchoring: there is no surviving
             // descendant failure to anchor to. See docs/ErrorArchitecture.md.
-            lexer.RecordFailure(transaction.StartPosition, ErrorMessage, ErrorForced);
+            lexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);
             return null;
         }
         TraceSuccess(lexer, $"inner didn't match");
-        transaction.Commit();
+        // Not is zero-width. Inner failed, so its transaction already
+        // rolled the cursor back to startPosition. Returning non-null
+        // makes Rule.TryParse commit that unchanged position.
         return effectiveFlattenType == FlattenType.Preserve
-            ? new Symbol(Id, FlattenType, Array.Empty<Symbol>(), lexer.Input.AsMemory(transaction.StartPosition, 0), lexer.Context)
+            ? new Symbol(Id, FlattenType, Array.Empty<Symbol>(), lexer.Input.AsMemory(startPosition, 0), lexer.Context)
             : Symbol.Discarded;
     }
 

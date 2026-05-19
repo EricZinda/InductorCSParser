@@ -22,21 +22,19 @@ internal sealed class PeekRule : Rule
 
     private Rule Inner => Children[0];
 
-    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        // Lookahead only: inner's result is thrown away.
-        using var transaction = lexer.BeginTransaction();
-        var failureSnapshot = lexer.SaveFailureState();
-        var innerResult = Inner.TryParse(lexer, outputSymbols: null);
-        // Inner ran as a throwaway probe. Discard the failures and
-        // the subtree extent it produced, succeed or fail: those
-        // positions were only probed, never consumed, and keeping them
-        // would let a probe's deep excursion outrank the real parse's
-        // failures. See docs/ErrorArchitecture.md, "Lookahead failures are
-        // discarded".
-        lexer.RestoreFailureState(failureSnapshot);
-        lexer.DiscardSubtreeExtent();
-        if (innerResult == null)
+        // Lookahead only: inner runs as a throwaway probe. BeginProbe
+        // brackets the position, the failure tracker, and the
+        // subtree-extent mark, and with no Commit restores all three on
+        // Dispose, so inner's excursion leaves nothing behind. See
+        // docs/ErrorArchitecture.md, "Lookahead failures are discarded".
+        bool innerMatched;
+        using (lexer.BeginProbe())
+        {
+            innerMatched = Inner.TryParse(lexer, outputSymbols: null) != null;
+        }
+        if (!innerMatched)
         {
             TraceFailure(lexer, $"inner didn't match");
             // Peek records one failure of its own, at the lookahead anchor
@@ -44,17 +42,17 @@ internal sealed class PeekRule : Rule
             // carrying its .WithError if it has one. This is the
             // exception to composite anchoring: there is no surviving
             // descendant failure to anchor to. See docs/ErrorArchitecture.md.
-            lexer.RecordFailure(transaction.StartPosition, ErrorMessage, ErrorForced);
+            lexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);
             return null;
         }
         TraceSuccess(lexer, $"inner matched");
-        // Peek is zero-width: the using transaction will roll the lexer
-        // back to transaction.StartPosition on dispose. Record a
-        // zero-length consumed span at that anchor so the Symbol's
-        // bounds reflect the lookahead's position, not where inner
-        // advanced to before rollback.
+        // Peek is zero-width: the probe already rolled the lexer back to
+        // startPosition, and Rule.TryParse's transaction commits that
+        // unchanged position. Record a zero-length consumed span at the
+        // anchor so the Symbol's bounds reflect the lookahead's position,
+        // not where inner advanced to before rollback.
         return effectiveFlattenType == FlattenType.Preserve
-            ? new Symbol(Id, FlattenType, Array.Empty<Symbol>(), lexer.Input.AsMemory(transaction.StartPosition, 0), lexer.Context)
+            ? new Symbol(Id, FlattenType, Array.Empty<Symbol>(), lexer.Input.AsMemory(startPosition, 0), lexer.Context)
             : Symbol.Discarded;
     }
 

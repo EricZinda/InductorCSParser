@@ -14,17 +14,16 @@ internal sealed class OrRule : Rule
 {
     public OrRule(Rule[] children) : base(FlattenType.Flatten, children) { }
 
-    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        // Outer transaction wraps every branch attempt. Whether the Or
-        // succeeds or fails, the failures its branches produced are kept:
-        // a rejected branch's failure is a real near-miss, ranked by depth
-        // like any other failure (see docs/ErrorArchitecture.md, Case 4).
-        // The transaction also windows the subtree-extent high-water
-        // mark, which the failure path reads back to anchor the Or's own
+        // Rule.TryParse's outer transaction wraps every branch attempt.
+        // Whether the Or succeeds or fails, the failures its branches
+        // produced are kept: a rejected branch's failure is a real
+        // near-miss, ranked by depth like any other failure (see
+        // docs/ErrorArchitecture.md, Case 4). That transaction also windows
+        // the subtree-extent high-water mark, which the failure path reads
+        // back (through RecordCompositeFailure) to anchor the Or's own
         // .WithError at the deepest position its branches reached.
-        using var outerTransaction = lexer.BeginTransaction();
-        int startPosition = outerTransaction.StartPosition;
 
         // Peek the next token (one grapheme cluster, or one rune in
         // WithinToken sub-lexer mode) for the skip shortcut. peekFirstRune
@@ -62,12 +61,12 @@ internal sealed class OrRule : Rule
             {
                 TraceSuccess(lexer, $"symbol #{symbolIndex}");
                 int matchLength = lexer.Position - matchStart;
-                // Commit keeps the position the winning branch reached.
-                // It doesn't clear the rejected branches' failures: a
-                // rejected branch is the parser genuinely trying to read
-                // the input, and its failure is a near-miss kept and ranked
-                // by depth. See docs/ErrorArchitecture.md.
-                outerTransaction.Commit();
+                // Returning non-null makes Rule.TryParse commit the outer
+                // transaction, keeping the position the winning branch
+                // reached. The commit doesn't clear the rejected branches'
+                // failures: a rejected branch is the parser genuinely
+                // trying to read the input, and its failure is a near-miss
+                // kept and ranked by depth. See docs/ErrorArchitecture.md.
                 // Don't add child symbols if they're discarded
                 if (outputSymbols != null && !ReferenceEquals(symbol, Symbol.Discarded))
                     outputSymbols.Add(symbol);
@@ -77,13 +76,11 @@ internal sealed class OrRule : Rule
             }
         }
         TraceFailure(lexer, $"");
-        // Every branch rolled back, so lexer.Position is back at the Or's
-        // start. A .WithError on the Or anchors at the deepest position
-        // any branch reached, not at that shallow start, so depth-primary
-        // ranking can let the named failure win an exact-depth tie against
-        // the branch's own deepest failure. See docs/ErrorArchitecture.md.
-        int anchor = Math.Max(lexer.SubtreeDeepestFailure, startPosition);
-        lexer.RecordFailure(anchor, ErrorMessage, ErrorForced);
+        // Record the Or's own .WithError, floored at the Or's start
+        // (startPosition, where every branch rolled back). See
+        // docs/ErrorArchitecture.md for how RecordCompositeFailure
+        // anchors it.
+        lexer.RecordCompositeFailure(startPosition, ErrorMessage, ErrorForced);
         return null;
     }
 

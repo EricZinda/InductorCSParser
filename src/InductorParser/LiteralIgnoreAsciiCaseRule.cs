@@ -52,9 +52,8 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
         _expected = normalized;
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        using var transaction = lexer.BeginTransaction();
         int consumed = 0;
 
         while (consumed < _expected.Length)
@@ -77,13 +76,12 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
             consumed += token.Length;
         }
 
-        TraceSuccess(lexer, $"found '{lexer.Input.Substring(transaction.StartPosition, consumed)}', wanted '{_expected}' (case-insensitive)");
-        transaction.Commit();
+        TraceSuccess(lexer, $"found '{lexer.Input.Substring(startPosition, consumed)}', wanted '{_expected}' (case-insensitive)");
         // Default FlattenType is Delete: the common case collapses to
         // the shared Discarded value and skips the per-match Symbol allocation.
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
-        var leafSymbol = new Symbol(Id, FlattenType, lexer.Input.AsMemory(transaction.StartPosition, consumed), lexer.Context);
+        var leafSymbol = new Symbol(Id, FlattenType, lexer.Input.AsMemory(startPosition, consumed), lexer.Context);
         if (effectiveFlattenType == FlattenType.Flatten)
         {
             outputSymbols!.Add(leafSymbol);

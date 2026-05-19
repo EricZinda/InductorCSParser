@@ -504,7 +504,11 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return count;
     }
 
-    private static bool TrySingleRune(string grapheme, out int runeValue) =>
+    // True iff the string is exactly one Unicode rune (one non-surrogate
+    // UTF-16 char, or one surrogate pair), giving its code point. internal
+    // so rules like GraphemeRule can reuse it instead of duplicating the
+    // surrogate-pair decode. The span overload below stays private.
+    internal static bool TrySingleRune(string grapheme, out int runeValue) =>
         TrySingleRune(grapheme.AsSpan(), out runeValue);
 
     private static bool TrySingleRune(ReadOnlySpan<char> grapheme, out int runeValue)

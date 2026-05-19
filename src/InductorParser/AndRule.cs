@@ -12,9 +12,8 @@ internal sealed class AndRule : Rule
 {
     public AndRule(Rule[] children) : base(FlattenType.Flatten, children) { }
 
-    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        using var transaction = lexer.BeginTransaction();
         // If we're preserving this node, create a new list to capture its outputSymbols
         if (effectiveFlattenType == FlattenType.Preserve)
             outputSymbols = new List<Symbol>(Children.Count);
@@ -26,17 +25,11 @@ internal sealed class AndRule : Rule
             if (symbol == null)
             {
                 TraceFailure(lexer, $"symbol #{symbolIndex}");
-                // Anchor a .WithError on the And at the deepest position
-                // its subtree reached. lexer.Position is the failing
-                // child's start (its transaction rolled back there) and
-                // is the floor; a descendant that probed deeper before
-                // failing pushes SubtreeDeepestFailure past it. Recording
-                // at the deeper of the two keeps the And's named failure
-                // level with its deepest child failure so depth-primary
-                // ranking compares them fairly. See
-                // docs/ErrorArchitecture.md.
-                int anchor = Math.Max(lexer.SubtreeDeepestFailure, lexer.Position);
-                lexer.RecordFailure(anchor, ErrorMessage, ErrorForced);
+                // Record the And's own .WithError, floored at the failing
+                // child's start (lexer.Position, where the child's
+                // transaction rolled back). See docs/ErrorArchitecture.md
+                // for how RecordCompositeFailure anchors it.
+                lexer.RecordCompositeFailure(lexer.Position, ErrorMessage, ErrorForced);
                 return null;
             }
             // Don't add child symbols if they're discarded
@@ -44,11 +37,9 @@ internal sealed class AndRule : Rule
                 outputSymbols.Add(symbol);
         }
         TraceSuccess(lexer, $"found {Children.Count}");
-        int matchStart = transaction.StartPosition;
-        int matchLength = lexer.Position - matchStart;
-        transaction.Commit();
+        int matchLength = lexer.Position - startPosition;
         return effectiveFlattenType == FlattenType.Preserve
-            ? new Symbol(Id, FlattenType, outputSymbols, lexer.Input.AsMemory(matchStart, matchLength), lexer.Context)
+            ? new Symbol(Id, FlattenType, outputSymbols, lexer.Input.AsMemory(startPosition, matchLength), lexer.Context)
             : Symbol.Discarded;
     }
 

@@ -47,15 +47,13 @@ internal sealed class WithinTokenRule : Rule
         _innerRule = innerRule;
     }
 
-    internal override Symbol? TryParseRule(Lexer outerLexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    internal override Symbol? TryParseRule(Lexer outerLexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        using var outerTransaction = outerLexer.BeginTransaction();
-
         var token = outerLexer.Read();
         if (token.IsEof)
         {
             TraceFailure(outerLexer, $"found '<EOF>'");
-            outerLexer.RecordFailure(outerTransaction.StartPosition, ErrorMessage, ErrorForced);
+            outerLexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);
             return null;
         }
 
@@ -104,18 +102,16 @@ internal sealed class WithinTokenRule : Rule
             TraceFailure(outerLexer, $"inner rule failed at token rune offset {innerFailurePos}");
             // The inner rule ran on the sub-lexer, so its deepest failure
             // is recorded there. Surface it on the outer lexer keeping the
-            // inner's forced flag (the deepest message is the forced one
-            // exactly when ForcedMessage is set), so a forced inner
-            // .WithError stays forced. Then record WithinToken's own
+            // inner's forced flag (DeepestFailureIsForced), so a forced
+            // inner .WithError stays forced. Then record WithinToken's own
             // .WithError so ranking picks between the two. Both land at the
             // outer cluster's start, the position WithinToken reports for
             // any inner failure.
-            var innerFailureState = subLexer.SaveFailureState();
             string? innerMessage = subLexer.DeepestFailureMessage;
             if (innerMessage != null)
-                outerLexer.RecordFailure(outerTransaction.StartPosition, innerMessage,
-                    forced: innerFailureState.ForcedMessage != null);
-            outerLexer.RecordFailure(outerTransaction.StartPosition, ErrorMessage, ErrorForced);
+                outerLexer.RecordFailure(startPosition, innerMessage,
+                    forced: subLexer.DeepestFailureIsForced);
+            outerLexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);
             return null;
         }
 
@@ -129,12 +125,11 @@ internal sealed class WithinTokenRule : Rule
             // the substring, so it's the consumed rune count directly.
             int consumed = subLexer.Position;
             TraceFailure(outerLexer, $"inner rule consumed only {consumed}/{token.Length} of the token");
-            outerLexer.RecordFailure(outerTransaction.StartPosition, ErrorMessage, ErrorForced);
+            outerLexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);
             return null;
         }
 
         TraceSuccess(outerLexer, $"token '{outerLexer.Input.AsSpan(token.Offset, token.Length)}' matched inner rule");
-        outerTransaction.Commit();
 
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;

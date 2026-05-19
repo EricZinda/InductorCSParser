@@ -116,7 +116,7 @@ public class CompileTests
     {
         public InconsistentRuleStartRule() : base(FlattenType.Preserve) { }
 
-        internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, System.Collections.Generic.List<Symbol>? outputSymbols) => null;
+        internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, System.Collections.Generic.List<Symbol>? outputSymbols) => null;
 
         // Return the set of tokens (grapheme clusters) this rule
         // might consume as its first token (can be a superset).

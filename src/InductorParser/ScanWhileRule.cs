@@ -13,7 +13,6 @@ namespace InductorParser;
 // top, drops into lexer.AdvanceWhileRuneIn (rune-only sets) or
 // lexer.AdvanceWhileTokenIn (sets with multi-rune entries) for the
 // inner loop, and emits one leaf Symbol over the whole matched span.
-// On the word-scan benchmarks that's a 2x speedup.
 //
 // minimumCount is the minimum number of tokens the run must contain
 // to succeed. The default of 1 keeps every successful match consuming
@@ -67,11 +66,8 @@ internal sealed class ScanWhileRule : Rule
         OneOfRule.NormalizeAndValidate(this, ref _set, form, offenders);
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        using var transaction = lexer.BeginTransaction();
-        int startPosition = transaction.StartPosition;
-
         // Lexer primitive instead of a loop of OneOfRule.TryParse calls:
         // one transaction and one Symbol allocation regardless of the
         // run's length, versus one of each per token in the OneOf form.
@@ -93,7 +89,6 @@ internal sealed class ScanWhileRule : Rule
 
         int length = lexer.Position - startPosition;
         TraceSuccess(lexer, $"count= {count}, {length} chars, wanted at least {_minimumCount} of '{_setRendered}'");
-        transaction.Commit();
 
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;

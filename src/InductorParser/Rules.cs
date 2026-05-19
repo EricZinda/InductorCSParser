@@ -262,10 +262,8 @@ public static class Rules
     /// and allocates a Symbol per token (which the tree then flattens
     /// away). This rule opens one transaction at the top, runs a tight
     /// scan loop in the lexer, and emits one Symbol over the whole run.
-    /// On the word-scan rebar benchmarks that's a 2x speedup. The
-    /// preserved-leaf shape is also what the state-machine engine and
-    /// the scanner-skip optimization need to recognize a run as a single
-    /// match span.
+    /// The preserved-leaf shape is also what the scanner-skip optimization
+    /// needs to recognize a run as a single match span.
     ///
     /// The exact converse of <see cref="ScanUntil(TokenSet, bool)"/>: ScanUntil
     /// stops when the next token is in its stop set, ScanWhile stops when

@@ -255,11 +255,10 @@ public sealed partial class Lexer
         // Single-literal only. The runtime's optimized substring search
         // jumps straight to the next full-literal candidate instead of
         // stopping at every matching first character. Multi-literal
-        // alternates use the IndexOfAny path below: an experiment that
-        // enabled the cached path for them measured 23x slower on the
-        // rebar Sherlock haystack because the BCL's IndexOfAny is SIMD-
-        // tuned for "any of these chars" while N separate IndexOf calls
-        // are not. See src/Benchmarks/Rebar/results/multi-literal-cache-rebar-2026-04-28.csv.
+        // alternates use the IndexOfAny path below instead: the cached
+        // path is much slower for them, because the BCL's IndexOfAny is
+        // SIMD-tuned for "any of these chars" while N separate IndexOf
+        // calls are not.
         //
         // Both fast paths use byte-level substring search (IndexOf /
         // IndexOfAny) and don't know about cluster boundaries. The one

@@ -74,23 +74,22 @@ internal sealed class OneOfRule : Rule
         }
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        using var transaction = lexer.BeginTransaction();
         var token = lexer.Read();
         if (token.IsEof || !_set.ContainsToken(token.Chars))
         {
             TraceFailure(lexer,
                 $"found '{(token.IsEof ? "<EOF>" : lexer.Input.Substring(token.Offset, token.Length))}', wanted one of '{_setRendered}'");
             // Error Positioning: the position of the token we tried to read.
-            // OneOfRule does exactly one Read, so the transaction's saved start
-            // position is exactly where that token sits in the input (or
-            // equals input.Length on EOF).
-            lexer.RecordFailure(transaction.StartPosition, ErrorMessage, ErrorForced);
+            // OneOfRule does exactly one Read, so startPosition (the
+            // cursor when Rule.TryParse's transaction opened) is exactly
+            // where that token sits in the input (or equals input.Length
+            // on EOF).
+            lexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);
             return null;
         }
         TraceSuccess(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted one of '{_setRendered}'");
-        transaction.Commit();
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
         // ResolveLeafId carries the leaf-id rule shared with NoneOfRule,

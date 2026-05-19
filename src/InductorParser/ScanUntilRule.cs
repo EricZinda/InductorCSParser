@@ -137,10 +137,9 @@ internal sealed class ScanUntilRule : Rule
         _eofIsTerminator = eofIsTerminator;
     }
 
-    // Accessors for the state-machine lowering pass (StateMachine/Lowerer.cs).
-    // The recursive evaluator reads these private fields directly inside
-    // TryParseRule; the lowering pass needs the same data without
-    // running the rule.
+    // Accessors for an alternative evaluator. The recursive evaluator
+    // reads these private fields directly inside TryParseRule. An
+    // alternative evaluator needs the same data without running the rule.
     internal TokenSet LoweringStopperSet => _stopperSet;
     internal Rule? LoweringStopperRule => _stopperRule;
     internal bool LoweringHasEscape => _hasEscape;
@@ -244,10 +243,8 @@ internal sealed class ScanUntilRule : Rule
             OneOfRule.NormalizeAndValidate(this, ref _stopperSet, form, offenders);
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        using var transaction = lexer.BeginTransaction();
-        int startPosition = transaction.StartPosition;
         string input = lexer.Input;
         int inputLen = input.Length;
 
@@ -316,30 +313,22 @@ internal sealed class ScanUntilRule : Rule
             {
                 if (_escapeStartRule != null)
                 {
-                    // General start path. TryParse opens its own
-                    // transaction, so a start mismatch rolls the
-                    // position back to `pos` and we fall through to the
-                    // stopper check (and then the body fall-through).
-                    //
-                    // Snapshot the failure tracker before the probe. On a
-                    // mismatch the escape-start ran as pure lookahead, so
-                    // its failures get discarded below the same way the
-                    // stopper probe and Peek / Not discard theirs: a
-                    // multi-token escape-start rule that matches a few
-                    // tokens before failing would otherwise leave a
-                    // deepest-failure mark past where the body ends. The
-                    // subtree extent is snapshotted-and-restored rather
-                    // than zeroed (DiscardSubtreeExtent) because, unlike a
-                    // Peek transaction, this probe shares its transaction
-                    // window with the rule's real scanning: a committed
-                    // escape-end's near-misses earlier in the window have
-                    // to survive. See docs/ErrorArchitecture.md.
-                    var failureSnapshot = lexer.SaveFailureState();
-                    int subtreeSnapshot = lexer.SubtreeDeepestFailure;
-                    var start = _escapeStartRule.TryParse(lexer, outputSymbols: null);
+                    // General start path. The escape-start runs inside a
+                    // Probe. On a mismatch it was pure lookahead, so the
+                    // Probe's Dispose restores position, failure tracker,
+                    // and subtree extent. On a match the start is consumed
+                    // content, so probe.Commit keeps all three. See
+                    // docs/ErrorArchitecture.md.
+                    Symbol? start;
+                    using (var probe = lexer.BeginProbe())
+                    {
+                        start = _escapeStartRule.TryParse(lexer, outputSymbols: null);
+                        if (start != null)
+                            probe.Commit();
+                    }
                     if (start != null)
                     {
-                        // Start committed. End failure is a hard
+                        // Start matched and was kept. End failure is a hard
                         // failure: an escape sequence was started, so
                         // the input isn't a well-formed string body.
                         var end = _escapeEnd!.TryParse(lexer, outputSymbols: null);
@@ -364,14 +353,9 @@ internal sealed class ScanUntilRule : Rule
                         if (lexer.Position == pos) break;
                         continue;
                     }
-                    // Start didn't match: it ran as pure lookahead, so
-                    // discard the failures the probe recorded. The
-                    // matched-start path above keeps its failures instead:
-                    // a committed escape start is consumed content and its
-                    // near-misses rank like any other. Fall through to the
-                    // stopper check.
-                    lexer.RestoreFailureState(failureSnapshot);
-                    lexer.RestoreSubtreeExtent(subtreeSnapshot);
+                    // Start didn't match: the Probe restored the position,
+                    // the failure tracker, and the subtree extent. Fall
+                    // through to the stopper check.
                 }
                 else if (tokenLen == runeLen && runeValue == _escapeStartRune)
                 {
@@ -419,27 +403,18 @@ internal sealed class ScanUntilRule : Rule
             }
             else
             {
-                using var peek = lexer.BeginTransaction();
-                var failureSnapshot = lexer.SaveFailureState();
-                var stopMatch = _stopperRule.TryParse(lexer, outputSymbols: null);
-                // No Commit: the `using` disposes the transaction and
-                // rolls the position back regardless of what the
-                // stopper rule consumed.
-                //
-                // The stopper runs as pure lookahead, so discard the
-                // failures it recorded too. A transaction rolls back the
-                // position, not the failure tracker, and a stopper that
-                // doesn't match here is the scan continuing normally, not
-                // a near-miss. Without this a multi-token stopper rule
-                // that matches a few tokens before failing leaves a
-                // deepest-failure mark past where the body ends, and an
-                // enclosing rule's failure gets reported at that stray
-                // position. Same discard Peek / Not do for their inner
-                // probe. See docs/ErrorArchitecture.md, "Lookahead
+                // The stopper runs as pure lookahead: ScanUntil never
+                // consumes it (the surrounding grammar matches it). The
+                // Probe brackets position, failure tracker, and subtree
+                // extent, and with no Commit restores all three on
+                // Dispose. See docs/ErrorArchitecture.md, "Lookahead
                 // failures are discarded".
-                lexer.RestoreFailureState(failureSnapshot);
-                lexer.DiscardSubtreeExtent();
-                if (stopMatch != null)
+                bool stopMatched;
+                using (lexer.BeginProbe())
+                {
+                    stopMatched = _stopperRule.TryParse(lexer, outputSymbols: null) != null;
+                }
+                if (stopMatched)
                 {
                     stopperMatched = true;
                     break;
@@ -465,15 +440,15 @@ internal sealed class ScanUntilRule : Rule
         // real token, and EOF produces none.
         if (!stopperMatched && !_eofIsTerminator && _stopperRule != null && lexer.IsEof)
         {
-            using var peek = lexer.BeginTransaction();
-            var failureSnapshot = lexer.SaveFailureState();
-            bool matchedAtEof = _stopperRule.TryParse(lexer, outputSymbols: null) != null;
-            // No Commit: the `using` rolls the position back, same as
-            // the in-loop Rule-stopper check, so the stopper is never
-            // consumed by ScanUntil. The probe's failures are discarded
-            // for the same lookahead reason the in-loop check gives.
-            lexer.RestoreFailureState(failureSnapshot);
-            lexer.DiscardSubtreeExtent();
+            // Same pure-lookahead Probe as the in-loop stopper check: the
+            // stopper is never consumed by ScanUntil, and the probe's
+            // position, failure tracker, and subtree extent are all
+            // restored on Dispose.
+            bool matchedAtEof;
+            using (lexer.BeginProbe())
+            {
+                matchedAtEof = _stopperRule.TryParse(lexer, outputSymbols: null) != null;
+            }
             if (matchedAtEof)
                 stopperMatched = true;
         }
@@ -492,7 +467,6 @@ internal sealed class ScanUntilRule : Rule
 
         int length = lexer.Position - startPosition;
         TraceSuccess(lexer, $"{length} chars, stopper '{_stopperRendered}'");
-        transaction.Commit();
         if (effectiveFlattenType == FlattenType.Delete) return Symbol.Discarded;
         var leafSymbol = new Symbol(Id, FlattenType, input.AsMemory(startPosition, length), lexer.Context);
         if (effectiveFlattenType == FlattenType.Flatten)

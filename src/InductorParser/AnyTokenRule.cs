@@ -16,22 +16,19 @@ internal sealed class AnyTokenRule : Rule
 {
     public AnyTokenRule() : base(FlattenType.Preserve) { }
 
-    // No accessors needed for the state-machine lowering pass: AnyTokenRule
-    // carries no per-instance data. The lowerer recognizes the type and
-    // emits the MatchAnyToken opcode directly.
+    // No accessors for an alternative evaluator: AnyTokenRule carries no
+    // per-instance data, so there is nothing for one to read.
 
-    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        using var transaction = lexer.BeginTransaction();
         var token = lexer.Read();
         if (token.IsEof)
         {
             TraceFailure(lexer, $"found '<EOF>'");
-            lexer.RecordFailure(transaction.StartPosition, ErrorMessage, ErrorForced);
+            lexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);
             return null;
         }
         TraceSuccess(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}'");
-        transaction.Commit();
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
         // See Rule.ResolveLeafId for the leaf-id rule shared across

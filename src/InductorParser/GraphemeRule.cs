@@ -55,7 +55,7 @@ internal sealed class GraphemeRule : Rule
         // Single-rune tokens get their code point assigned as the rule's
         // Id, matching C++ character-symbol numbering. Multi-rune
         // tokens fall through to Compile's custom-range assignment.
-        if (TrySingleRuneValue(expectedToken, out int runeValue))
+        if (TokenSet.TrySingleRune(expectedToken, out int runeValue))
             SetIdInternal(new SymbolId(runeValue));
     }
 
@@ -91,7 +91,7 @@ internal sealed class GraphemeRule : Rule
         // or name-hashed id is what keeps numbering stable, and
         // re-assigning to the new rune would clobber the custom-range id
         // AssignNamedIds gave a named rule.
-        if (!IsUserSymbolIdExplicit && Name == null && TrySingleRuneValue(_expected, out int runeValue))
+        if (!IsUserSymbolIdExplicit && Name == null && TokenSet.TrySingleRune(_expected, out int runeValue))
             SetIdInternal(new SymbolId(runeValue));
     }
 
@@ -104,9 +104,8 @@ internal sealed class GraphemeRule : Rule
         return count;
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        using var transaction = lexer.BeginTransaction();
         int consumed = 0;
 
         // No heap allocations here except the one for the Symbol we return at the end.
@@ -127,7 +126,7 @@ internal sealed class GraphemeRule : Rule
             int tokenStart = lexer.Position;
             var token = lexer.Read();
             // Error Positioning: tokenStart is where the specific failing token began.
-            // For a single-token match this equals transaction.StartPosition.
+            // For a single-token match this equals startPosition.
             // For multi-token lockstep (a multi-rune token under the
             // WithinToken sub-lexer's one-rune-per-token mode) it's the
             // start of whichever token mismatched, not the start of the
@@ -149,7 +148,6 @@ internal sealed class GraphemeRule : Rule
         }
 
         TraceSuccess(lexer, $"found '{_expected}'");
-        transaction.Commit();
         // Default FlattenType is Delete, so most Token matches end up
         // in the discard branch and return the shared Discarded value
         // (no per-match Symbol allocation). Grammar authors who want
@@ -157,7 +155,7 @@ internal sealed class GraphemeRule : Rule
         // on the Token rule.
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
-        var leafSymbol = new Symbol(Id, FlattenType, lexer.Input.AsMemory(transaction.StartPosition, consumed), lexer.Context);
+        var leafSymbol = new Symbol(Id, FlattenType, lexer.Input.AsMemory(startPosition, consumed), lexer.Context);
         if (effectiveFlattenType == FlattenType.Flatten)
         {
             outputSymbols!.Add(leafSymbol);
@@ -168,23 +166,4 @@ internal sealed class GraphemeRule : Rule
 
     internal override RuleStartRequirements ComputeRuleStart() =>
         RuleStartRequirements.FirstTokenMustBeFirstGraphemeOf(_expected);
-
-    // True iff the string is exactly one Unicode rune (one UTF-16 char
-    // or one surrogate pair). Works without depending on
-    // Rune.EnumerateRunes, which isn't in netstandard2.1.
-    private static bool TrySingleRuneValue(string s, out int runeValue)
-    {
-        if (s.Length == 1 && !char.IsSurrogate(s[0]))
-        {
-            runeValue = s[0];
-            return true;
-        }
-        if (s.Length == 2 && char.IsHighSurrogate(s[0]) && char.IsLowSurrogate(s[1]))
-        {
-            runeValue = char.ConvertToUtf32(s[0], s[1]);
-            return true;
-        }
-        runeValue = 0;
-        return false;
-    }
 }

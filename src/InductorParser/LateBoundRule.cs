@@ -53,6 +53,12 @@ public sealed class LateBoundRule : Rule
     public LateBoundRule(string? debugName = null) : base(FlattenType.Flatten)
     {
         _debugName = debugName;
+        // LateBoundRule delegates wholly to its target, which opens and
+        // owns its own transaction. A transaction here would be redundant,
+        // and skipping it keeps the recursion hot path (a LateBoundRule
+        // sits at every recursive grammar reference) free of an unused
+        // transaction.
+        OpensTransaction = false;
     }
 
     // Attach the real target. Returns this LateBoundRule so callers can
@@ -132,7 +138,7 @@ public sealed class LateBoundRule : Rule
         "LateBoundRule.WithError(...) isn't supported: the rule is transparent at parse " +
         "time, so its ErrorMessage is never consulted. Set .WithError(...) on the bound target instead.");
 
-    internal override Symbol? TryParseRule(Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         // _target is guaranteed non-null here: Compile's ValidateCompiled
         // throws on an unbound LateBoundRule before any parse can reach
