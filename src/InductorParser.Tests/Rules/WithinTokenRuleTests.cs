@@ -491,19 +491,21 @@ public class WithinTokenRuleTests
     }
 
     [Test]
-    public void WithinToken_WithError_surfaces_over_deeper_orphan_from_abandoned_Or_alternative()
+    public void WithinToken_WithError_is_shadowed_by_a_deeper_orphan_from_an_abandoned_Or_alternative()
     {
         // Or's first alternative reads three tokens before failing at offset 3
-        // with its own WithError. The parser abandons that alternative by
-        // committing to alt 2 (Token('a').Delete() at offset 0). Then
-        // WithinToken at offset 1 fails because the next token isn't 'b'.
+        // with its own WithError ("expected z at end"). The parser abandons
+        // that alternative and commits to alternative 2 (Token('a').Delete()
+        // at offset 0). WithinToken then runs at offset 1, fails because the
+        // next token isn't 'b', and records its own WithError at the outer
+        // cluster boundary, offset 1.
         //
-        // WithinToken records its failure at the outer cluster boundary
-        // (offset 1), which is shallower than the orphan record alt 1 left at
-        // offset 3. A user-supplied WithError on WithinToken still wins the
-        // message slot at the cluster boundary where the real failure
-        // happened, rather than the orphan's "expected z at end" surfacing at
-        // offset 3 — a position the parser already gave up on.
+        // Depth ranks first (docs/ErrorArchitecture.md, Case 4): a rejected
+        // Or branch keeps its failure, and offset 3 is deeper than offset 1,
+        // so the abandoned branch's "expected z at end" is the reported
+        // error. WithinToken's shallower WithError is correctly shadowed by
+        // the deeper near-miss. A grammar author who wants the WithinToken
+        // message to win regardless of depth marks it forced.
         var rule = And(
             Or(
                 And(AnyToken(), AnyToken(), AnyToken(), Token('z').WithError("expected z at end")),
@@ -514,7 +516,7 @@ public class WithinTokenRuleTests
         var result = rule.Parse("axyw");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected b in WithinToken"));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected z at end"));
     }
 }
