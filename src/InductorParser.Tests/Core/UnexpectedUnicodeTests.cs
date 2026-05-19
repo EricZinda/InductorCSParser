@@ -460,7 +460,7 @@ public class UnexpectedUnicodeTests
         // halves into a valid pair: each surrogate stays in its
         // original position as its own token, so OneOrMore sees two
         // tokens, not one merged scalar.
-        string input = UnicodeExamples.LowSurrogateMinText + UnicodeExamples.HighSurrogateMinText;
+        string input = UnicodeExamples.ReversedSurrogatePairText;
 
         // OneOrMore(AnyToken()) consumes both surrogates as wildcards
         // and confirms the lexer didn't merge or swap them.
