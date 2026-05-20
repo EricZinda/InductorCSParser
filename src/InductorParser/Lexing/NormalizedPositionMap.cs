@@ -59,18 +59,18 @@ internal static class NormalizedPositionMap
         int normPos = 0;
         while (normPos < normalized.Length && origPos < original.Length)
         {
-            // Defensive: GetNextTextElement should always return at least one
-            // char at a valid in-bounds position. Throw rather than fall back
-            // to a step of 1, which would spin forever if step ever came back 0.
+            // GetNextTextElement should always return at least one char at a
+            // valid in-bounds position. Asserts catch the impossible-zero case
+            // so the loop can't spin forever on a step that ever came back 0.
             int normStep = StringInfo.GetNextTextElement(normalized, normPos).Length;
-            if (normStep <= 0)
-                throw new InvalidOperationException(
-                    "StringInfo.GetNextTextElement returned an empty element on the normalized string");
+            Invariant.That(normStep > 0,
+                $"StringInfo.GetNextTextElement returned an empty element on the normalized string "
+                + $"at position {normPos} (length {normalized.Length}) in TranslateViaLockstep.");
 
             int origStep = StringInfo.GetNextTextElement(original, origPos).Length;
-            if (origStep <= 0)
-                throw new InvalidOperationException(
-                    "StringInfo.GetNextTextElement returned an empty element on the original string");
+            Invariant.That(origStep > 0,
+                $"StringInfo.GetNextTextElement returned an empty element on the original string "
+                + $"at position {origPos} (length {original.Length}) in TranslateViaLockstep.");
 
             int normNext = normPos + normStep;
             if (normNext > normalizedIndex)
@@ -106,14 +106,15 @@ internal static class NormalizedPositionMap
 
         while (origPos < original.Length)
         {
-            // Defensive: GetNextTextElement should always return at least one
-            // char at a valid in-bounds position. Throw rather than fall back
-            // to a step of 1, which would spin forever if length ever came back 0.
+            // GetNextTextElement should always return at least one char at a
+            // valid in-bounds position. Assert catches the impossible-zero
+            // case so the loop can't spin forever on a length that ever came
+            // back 0.
             string grapheme = StringInfo.GetNextTextElement(original, origPos);
             int graphemeLength = grapheme.Length;
-            if (graphemeLength <= 0)
-                throw new InvalidOperationException(
-                    "StringInfo.GetNextTextElement returned an empty element on the original string");
+            Invariant.That(graphemeLength > 0,
+                $"StringInfo.GetNextTextElement returned an empty element on the original string "
+                + $"at position {origPos} (length {original.Length}) in TranslateViaPerGraphemeNormalize.");
             origPos += graphemeLength;
 
             string chunk = original[lastSafeOrigPos..origPos];

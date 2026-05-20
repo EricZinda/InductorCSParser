@@ -76,11 +76,10 @@ internal sealed class GraphemeClusterIndex
     {
         if (position < 0 || position >= _input.Length) return 0;
         EnsureWalkedTo(position);
-        if (!_isStart[position])
-            throw new InvalidOperationException(
-                $"Internal lexer invariant violated: LengthAt called at position {position}, " +
-                $"which is not a grapheme cluster start (input length {_input.Length}). " +
-                $"The lexer's read cursor is supposed to land only on cluster boundaries.");
+        Invariant.That(_isStart[position],
+            $"LengthAt called at position {position}, which is not a grapheme cluster start "
+            + $"(input length {_input.Length}). The lexer's read cursor is supposed to land "
+            + $"only on cluster boundaries.");
         int next = position + 1;
         while (next < _input.Length)
         {
