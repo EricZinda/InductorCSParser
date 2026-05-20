@@ -273,6 +273,88 @@ public class BudgetTests
     }
 
     [Test]
+    public void WithinToken_inner_rule_honors_outer_MaxDepth()
+    {
+        // Security/DoS surface: WithinToken builds a fresh sub-lexer
+        // to run its inner rule against one outer token. The sub-lexer
+        // has to enforce the caller's MaxDepth (and RuleCountLimit /
+        // Timeout / Cancellation) too, otherwise the inner rule runs
+        // with no budget. A grammar author who uses WithinToken with a
+        // recursive inner rule reasonably expects MaxDepth to cap the
+        // combined depth: a single grapheme cluster of N runes (one
+        // base char + N-1 combining marks) becomes N tokens in the
+        // sub-lexer, and a right-recursive inner rule walks all N
+        // depth-by-depth. Without budget propagation, the inner depth
+        // is bounded only by the host stack, so a maliciously-crafted
+        // cluster with thousands of combining marks would crash the
+        // process with StackOverflowException, which .NET can't catch.
+        //
+        // The sub-lexer delegates EnterRuleBudgetChecks/ExitRuleBudgetChecks to the outer, so
+        // MaxDepth covers the COMBINED outer-plus-inner depth rather
+        // than letting the inner spend a fresh MaxDepth on top of the
+        // outer's depth. This test uses a small enough cluster to stay
+        // safe even without the fix (no real stack overflow), but with
+        // MaxDepth set well below the recursion the inner rule needs.
+        var rec = new LateBoundRule("rec");
+        rec.Bind(Or(And(AnyToken(), rec), Eof()));
+        var grammar = WithinToken(rec);
+
+        // "a" + 50 combining acute accents (U+0301) glues into one UAX
+        // #29 cluster, which the sub-lexer (oneRunePerToken: true) walks
+        // as 51 tokens. The right-recursive Or/And bottoms out only at
+        // Eof, so the depth needs ~2 frames per rune (Or + And), about
+        // 100 frames total.
+        string oneLongCluster = "a" + new string('\u0301', 50);
+        var options = new ParseOptions { MaxDepth = 10 };
+        grammar.Compile(null);  // null normalization so the cluster stays as-is.
+        var result = grammar.Parse(oneLongCluster, options);
+
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.DepthLimitExceeded),
+            "MaxDepth set by the caller must apply inside a WithinToken " +
+            "sub-lexer too. Without budget propagation the inner recursion " +
+            "is bounded only by the host stack.");
+    }
+
+    [Test]
+    public void WithinToken_inner_depth_combines_with_outer_depth()
+    {
+        // The sub-lexer delegates EnterRuleBudgetChecks/ExitRuleBudgetChecks to the outer, so
+        // the inner's recursion stacks on top of the outer's CURRENT
+        // depth at the moment WithinToken fires. MaxDepth covers the
+        // combined outer + inner depth, not "a fresh MaxDepth for the
+        // inner on top of the outer."
+        //
+        // Discriminating shape: an inner rule that needs only ~9 frames
+        // (well under MaxDepth = 20 on its own) wrapped under enough
+        // outer Ands to put outer-depth ~15 at the moment WithinToken
+        // fires. A counters-stay-separate design would let the inner
+        // succeed (9 <= 20). The delegating design correctly trips
+        // because 15 + 9 > 20.
+        var rec = new LateBoundRule("rec");
+        rec.Bind(Or(And(AnyToken(), rec), Eof()));
+        // 14 nested Ands above WithinToken put the outer at depth 15
+        // when WithinToken's TryParseRule starts running its inner rule.
+        Rule grammar = WithinToken(rec);
+        for (int level = 0; level < 14; level++)
+            grammar = And(grammar);
+        grammar.Compile(null);
+
+        // Two combining marks on a base char => one UAX #29 cluster,
+        // 3 sub-tokens in oneRunePerToken mode. The right-recursive
+        // inner walks all three before hitting Eof, peaking at depth
+        // ~9 on its own counter (or ~24 on the outer's).
+        string smallCluster = "a" + new string('\u0301', 2);
+        var options = new ParseOptions { MaxDepth = 20 };
+        var result = grammar.Parse(smallCluster, options);
+
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.DepthLimitExceeded),
+            "the inner rule's recursion has to count on top of the outer " +
+            "rules' depth, not from zero. Without delegation the inner " +
+            "alone fits under MaxDepth and the parse would incorrectly " +
+            "succeed.");
+    }
+
+    [Test]
     public void Aborted_result_reflects_deepest_progress_when_failures_recorded()
     {
         // Regression guard for the abort-position bug: when the budget
@@ -308,5 +390,97 @@ public class BudgetTests
         //     a ParseResult, so ErrorCharIndex is exactly 341.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(341),
             "ErrorCharIndex should reflect DeepestFailure, not the rolled-back lexer.Position.");
+    }
+
+    // Regression tests: when a budget trips while a lookahead Probe is
+    // active, the throw unwinds through Probe.Dispose, which restores
+    // the failure tracker to its pre-probe state. Without the fix in
+    // Lexer.ThrowBudgetExceeded, ErrorCharIndex collapses to 0. The four
+    // tests below cover each budget kind so a new throw site that
+    // bypasses the helper gets caught for whichever outcome it touches.
+    //
+    // Shared grammar: Peek(recursive inner). The inner's first Or branch
+    // consumes one 'a' then fails on 'z' (so RecordFailure fires inside
+    // the probe), and the second branch consumes one 'a' and recurses.
+    // The MaxDepth case trips on the depth check at level 17; the three
+    // periodic-check cases (RuleCountLimit, Timeout, Cancellation) all
+    // trip at invocation 1024, which lands on level 147 of the recursion.
+
+    [Test]
+    public void Aborted_result_keeps_deepest_progress_when_MaxDepth_trips_inside_a_lookahead_probe()
+    {
+        var inner = new LateBoundRule("inner");
+        inner.Bind(Or(
+            And(Token('a'), Token('z')),
+            And(Token('a'), inner)));
+
+        var rule = Peek(inner);
+        var options = new ParseOptions { MaxDepth = 50 };
+        var result = rule.Parse(new string('a', 1000), options);
+
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.DepthLimitExceeded));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(16));
+    }
+
+    [Test]
+    public void Aborted_result_keeps_deepest_progress_when_RuleCountLimit_trips_inside_a_lookahead_probe()
+    {
+        var inner = new LateBoundRule("inner");
+        inner.Bind(Or(
+            And(Token('a'), Token('z')),
+            And(Token('a'), inner)));
+
+        var rule = Peek(inner);
+        var options = new ParseOptions { RuleCountLimit = 100 };
+        var result = rule.Parse(new string('a', 1000), options);
+
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.RuleCountLimitExceeded));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(146));
+    }
+
+    [Test]
+    public void Aborted_result_keeps_deepest_progress_when_Timeout_trips_inside_a_lookahead_probe()
+    {
+        var inner = new LateBoundRule("inner");
+        inner.Bind(Or(
+            And(Token('a'), Token('z')),
+            And(Token('a'), inner)));
+
+        var rule = Peek(inner);
+        // RuleCountLimit = 0 disables the rule-count slot so the timeout
+        // slot is the one that trips (CheckPeriodicBudgets's order is
+        // rule-count, then timeout, then cancellation).
+        var options = new ParseOptions
+        {
+            Timeout = TimeSpan.FromTicks(1),
+            RuleCountLimit = 0,
+        };
+        var result = rule.Parse(new string('a', 1000), options);
+
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.Timeout));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(146));
+    }
+
+    [Test]
+    public void Aborted_result_keeps_deepest_progress_when_Cancellation_trips_inside_a_lookahead_probe()
+    {
+        var cancellation = new ParseCancellation();
+        cancellation.Cancel();
+
+        var inner = new LateBoundRule("inner");
+        inner.Bind(Or(
+            And(Token('a'), Token('z')),
+            And(Token('a'), inner)));
+
+        var rule = Peek(inner);
+        var options = new ParseOptions
+        {
+            Cancellation = cancellation,
+            RuleCountLimit = 0,
+        };
+        var result = rule.Parse(new string('a', 1000), options);
+
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.Canceled));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(146));
     }
 }
