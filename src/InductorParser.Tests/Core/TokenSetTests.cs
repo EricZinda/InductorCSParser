@@ -1314,4 +1314,75 @@ public class TokenSetTests
         Assert.That(TokenSet.Graphemes(USFlagGrapheme).HasMultiRuneGraphemes, Is.True);
         Assert.That((TokenSet.Letters | TokenSet.Graphemes(USFlagGrapheme)).HasMultiRuneGraphemes, Is.True);
     }
+
+    [Test]
+    public void Contains_string_agrees_with_int_for_lone_surrogate_on_surrogate_covering_range()
+    {
+        // Range(0, 0x10FFFF) is the documented surrogate-spanning range: its
+        // single interval literally covers the 0xD800..0xDFFF block, so
+        // Contains(int) over a surrogate code unit returns true.The Contains(string) 
+        // overload has to agree with Contains(int) for a 1-char string holding the same
+        // surrogate code unit.
+        var set = TokenSet.Range(0, 0x10FFFF);
+        Assert.That(set.Contains((int)HighSurrogateMinRune), Is.True,
+            "Range(0, 0x10FFFF).Contains(int) covers the surrogate code unit");
+
+        Assert.That(set.Contains(HighSurrogateMinText), Is.True,
+            "Contains(string) must agree with Contains(int) for a lone high surrogate");
+        Assert.That(set.Contains(HighSurrogateMaxText), Is.True);
+        Assert.That(set.Contains(LowSurrogateMinText), Is.True);
+        Assert.That(set.Contains(LowSurrogateMaxText), Is.True);
+    }
+
+    [Test]
+    public void Contains_string_lone_surrogate_returns_false_when_set_skips_the_surrogate_block()
+    {
+        // TokenSet.Universe is built by complementing the empty set, and
+        // EmitIntervalSkippingSurrogates explicitly splits the gap around
+        // 0xD800..0xDFFF: Universe's intervals are [0, 0xD7FF] and
+        // [0xE000, 0x10FFFF]. A lone surrogate isn't in any interval, so
+        // Contains(int) is false. Contains(string) on the same input must
+        // agree.
+        var universe = TokenSet.Universe;
+        Assert.That(universe.Contains((int)HighSurrogateMinRune), Is.False);
+        Assert.That(universe.Contains(HighSurrogateMinText), Is.False);
+        Assert.That(universe.Contains(LowSurrogateMaxText), Is.False);
+
+        // A small set that doesn't touch the surrogate block at all returns
+        // false on both overloads. This is the common case; the asymmetry
+        // only surfaces for sets explicitly built with a surrogate-spanning
+        // range.
+        var letters = TokenSet.Letters;
+        Assert.That(letters.Contains((int)HighSurrogateMinRune), Is.False);
+        Assert.That(letters.Contains(HighSurrogateMinText), Is.False);
+    }
+
+    [Test]
+    public void Contains_string_lone_surrogate_does_not_match_non_surrogate_rune_intervals()
+    {
+        // A set whose intervals miss the surrogate block returns false.
+        var asciiLetters = TokenSet.Ascii.Letters;
+        Assert.That(asciiLetters.Contains(HighSurrogateMinText), Is.False);
+        Assert.That(asciiLetters.Contains(LowSurrogateMaxText), Is.False);
+        Assert.That(asciiLetters.Contains(EmojiStartHighSurrogateText), Is.False);
+    }
+
+    [Test]
+    public void Contains_string_lone_surrogate_matches_a_single_surrogate_band_range()
+    {
+        // A Range whose interior straddles the surrogate block matches
+        // every lone surrogate via Contains(string)'s surrogate-code-unit
+        // branch. Range_spanning_the_surrogate_gap_is_allowed pins the
+        // constructor side.
+        var crossSurrogateRange = TokenSet.Range(0xD000, 0xE000);
+        Assert.That(crossSurrogateRange.Contains((int)HighSurrogateMinRune), Is.True);
+        Assert.That(crossSurrogateRange.Contains(HighSurrogateMinText), Is.True);
+        Assert.That(crossSurrogateRange.Contains(LowSurrogateMaxText), Is.True);
+
+        // A Range strictly below the surrogate block doesn't.
+        var asciiOnly = TokenSet.Range(0x0000, 0x007F);
+        Assert.That(asciiOnly.Contains((int)HighSurrogateMinRune), Is.False);
+        Assert.That(asciiOnly.Contains(HighSurrogateMinText), Is.False);
+        Assert.That(asciiOnly.Contains(LowSurrogateMaxText), Is.False);
+    }
 }

@@ -137,17 +137,10 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     public bool Contains(char c) => Contains((int)c);
     public bool Contains(Rune r) => Contains(r.Value);
 
-    // Membership over a grapheme. If the input decodes as exactly one
-    // Unicode scalar value (one rune in 1 or 2 UTF-16 chars), check the
-    // rune intervals. Otherwise binary search the sorted multi-rune
-    // grapheme array for an ordinal match. Empty input is never a member.
     public bool Contains(string grapheme)
     {
         if (grapheme == null) throw new ArgumentNullException(nameof(grapheme));
-        if (grapheme.Length == 0) return false;
-        if (TrySingleRune(grapheme, out int runeValue))
-            return Contains(runeValue);
-        return BinarySearchMultiRuneGrapheme(grapheme.AsSpan()) >= 0;
+        return ContainsToken(grapheme.AsSpan());
     }
 
     // Span overload so rules can probe a token's Chars without building
