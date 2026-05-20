@@ -644,16 +644,14 @@ public class StateMachineParserTests
     {
         public CustomTwoQs() : base(FlattenType.Delete) { }
 
-        internal override Symbol? TryParseRule(InductorParser.Lexing.Lexer lexer, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+        internal override Symbol? TryParseRule(InductorParser.Lexing.Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
         {
-            using var transaction = lexer.BeginTransaction();
             for (int i = 0; i < 2; i++)
             {
                 if (lexer.IsEof) return null;
                 var token = lexer.Read();
                 if (token.RuneValue != 'q') return null;
             }
-            transaction.Commit();
             return Symbol.Discarded;
         }
     }

@@ -255,4 +255,12 @@ public static class CssGrammar
         CssWhitespace,
         Eof()
     );
+
+    // Compile Document eagerly so the strict "fresh-tree" Compile invariant
+    // holds for tests that .Parse on sub-rules (CssWhitespace, Identifier,
+    // BlockComment, ...) AND on Document in the same fixture run.
+    static CssGrammar()
+    {
+        Document.Compile();
+    }
 }

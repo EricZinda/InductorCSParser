@@ -234,4 +234,106 @@ public class StateMachineBudgetCompareTests
 
         Assert.That(matched, Is.False);
     }
+
+    [Test]
+    public void Pre_canceled_signal_aborts_StateMachineParser_Parse_on_tiny_parses()
+    {
+        // Same pre-cancellation gap the recursive engine had at Rule.Parse
+        // (fixed 2026-05-19). The state-machine engine's direct entry
+        // points bypass Rule.Parse and ran their own periodic budget check,
+        // which is gated on the 1024-invocation boundary. A single-rule
+        // parse against a single-char input fires zero periodic checks,
+        // so a pre-canceled signal silently dropped through and the
+        // entry point returned Success, contradicting
+        // ParseCancellation.cs's documented behavior ("On the next check
+        // after Cancel() fires, the parse aborts with
+        // ParseOutcome.Canceled.").
+        var cancellation = new ParseCancellation();
+        cancellation.Cancel();
+
+        var rule = Token('a').Compile();
+        var options = new ParseOptions
+        {
+            Cancellation = cancellation,
+            RuleCountLimit = 0,
+            MaxDepth = 0,
+        };
+
+        var result = StateMachineParser.Parse(rule, "a", options);
+
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.Canceled));
+        Assert.That(result.ErrorMessage,
+            Is.EqualTo("Parse aborted: cancellation requested."));
+    }
+
+    [Test]
+    public void Pre_canceled_signal_aborts_StateMachineParser_TryMatch_on_tiny_parses()
+    {
+        var cancellation = new ParseCancellation();
+        cancellation.Cancel();
+
+        var rule = Token('a').Compile();
+        var options = new ParseOptions
+        {
+            Cancellation = cancellation,
+            RuleCountLimit = 0,
+            MaxDepth = 0,
+        };
+
+        bool matched = StateMachineParser.TryMatch(rule, "a", options);
+
+        Assert.That(matched, Is.False);
+    }
+
+    [Test]
+    public void Pre_canceled_signal_aborts_StateMachineParser_count_entries_on_tiny_parses()
+    {
+        // Same gap on the counter / matcher reducer entry points
+        // (CountMatches, HasAnyMatch, EnumerateMatchSpans,
+        // CountMatchesAndCaptures). All four collapse the cancellation
+        // to the entry point's "didn't match anything" value.
+        var cancellation = new ParseCancellation();
+        cancellation.Cancel();
+
+        var matchRule = Token('a').As("matchRule");
+        var rule = matchRule.Compile();
+        var options = new ParseOptions
+        {
+            Cancellation = cancellation,
+            RuleCountLimit = 0,
+            MaxDepth = 0,
+        };
+
+        Assert.That(StateMachineParser.CountMatches(rule, matchRule, "a", options),
+            Is.EqualTo(0L));
+        Assert.That(StateMachineParser.HasAnyMatch(rule, matchRule, "a", options),
+            Is.False);
+        Assert.That(StateMachineParser.EnumerateMatchSpans(rule, matchRule, "a", options),
+            Is.Empty);
+        Assert.That(StateMachineParser.CountMatchesAndCaptures(
+                rule, matchRule, new[] { matchRule }, "a", options),
+            Is.EqualTo(0L));
+    }
+
+    [Test]
+    public void Uncanceled_ParseCancellation_does_not_abort_normal_state_machine_parse()
+    {
+        // Counterpart to the recursive-engine version
+        // (BudgetTests.Uncanceled_ParseCancellation_does_not_abort_normal_parse).
+        // A live but never-canceled ParseCancellation must let the parse
+        // run to completion on the SM, so the pre-flight check in Parse /
+        // TryMatch / RunAndReduce / RunWithCaptureReducer doesn't
+        // accidentally turn the "has cancellation source" knob into the
+        // "cancel" knob.
+        var cancellation = new ParseCancellation();
+
+        var rule = Token('a').Compile();
+        var options = new ParseOptions { Cancellation = cancellation };
+
+        var result = StateMachineParser.Parse(rule, "a", options);
+        bool matched = StateMachineParser.TryMatch(rule, "a", options);
+
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.Success));
+        Assert.That(matched, Is.True);
+    }
 }
