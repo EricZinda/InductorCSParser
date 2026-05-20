@@ -196,22 +196,24 @@ public class CssGrammarTests
     [Test]
     public void Hex_color_requires_3_or_6_digits()
     {
-        var grammar = And(CssGrammar.ValueColorHex, Rules.Eof());
-        Assert.That(grammar.Parse("#fff").Success, Is.True);
-        Assert.That(grammar.Parse("#FFFFFF").Success, Is.True);
-        Assert.That(grammar.Parse("#ff").Success, Is.False);
-        Assert.That(grammar.Parse("#fffff").Success, Is.False);
-        Assert.That(grammar.Parse("#fffffff").Success, Is.False);
+        // .Parse with default options (AllowTrailingInput = false) already
+        // enforces "must consume everything," so an And(..., Eof()) wrap
+        // is redundant. Wrapping a sealed shared rule in a new composite
+        // is also rejected by the strict fresh-tree Compile invariant.
+        Assert.That(CssGrammar.ValueColorHex.Parse("#fff").Success, Is.True);
+        Assert.That(CssGrammar.ValueColorHex.Parse("#FFFFFF").Success, Is.True);
+        Assert.That(CssGrammar.ValueColorHex.Parse("#ff").Success, Is.False);
+        Assert.That(CssGrammar.ValueColorHex.Parse("#fffff").Success, Is.False);
+        Assert.That(CssGrammar.ValueColorHex.Parse("#fffffff").Success, Is.False);
     }
 
     [Test]
     public void Identifier_rejects_leading_digit()
     {
-        var grammar = And(CssGrammar.Identifier, Rules.Eof());
-        Assert.That(grammar.Parse("foo").Success, Is.True);
-        Assert.That(grammar.Parse("foo-bar").Success, Is.True);
-        Assert.That(grammar.Parse("_foo").Success, Is.True);
-        Assert.That(grammar.Parse("1foo").Success, Is.False);
+        Assert.That(CssGrammar.Identifier.Parse("foo").Success, Is.True);
+        Assert.That(CssGrammar.Identifier.Parse("foo-bar").Success, Is.True);
+        Assert.That(CssGrammar.Identifier.Parse("_foo").Success, Is.True);
+        Assert.That(CssGrammar.Identifier.Parse("1foo").Success, Is.False);
     }
 
     private static Rule And(Rule a, Rule b) => Rules.And(a, b);
