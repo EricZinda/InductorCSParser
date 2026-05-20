@@ -1266,7 +1266,7 @@ public abstract class Rule
     // the three modes per the TryParseRule rules below.
     internal Symbol? TryParse(Lexer lexer, List<Symbol>? outputSymbols)
     {
-        lexer.EnterRule();
+        lexer.EnterRuleBudgetChecks();
         try
         {
             // effectiveFlattenType collapses FlattenType +
@@ -1302,8 +1302,9 @@ public abstract class Rule
                 // non-null Symbol, and every non-commit exit (failure
                 // return, a thrown exception, a tripped budget) rolls
                 // back through the `using`. The transaction opens inside
-                // this `try`, after EnterRule, so an EnterRule depth-limit
-                // throw can't leak a transaction.
+                // this `try`, after EnterRuleBudgetChecks, so an
+                // EnterRuleBudgetChecks depth-limit throw can't leak a
+                // transaction.
                 using var transaction = lexer.BeginTransaction();
                 result = TryParseRule(lexer, transaction.StartPosition, effectiveFlattenType, outputSymbols);
                 if (result != null)
@@ -1338,7 +1339,7 @@ public abstract class Rule
         }
         finally
         {
-            lexer.ExitRule();
+            lexer.ExitRuleBudgetChecks();
         }
     }
 
