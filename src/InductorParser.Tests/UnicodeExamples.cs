@@ -679,4 +679,148 @@ internal static class UnicodeExamples
 
     // U+D83D: high-surrogate code unit that starts common emoji pairs.
     public const int EmojiStartHighSurrogateRune = 0xD83D;
+
+    // === Real-world Unicode gotcha constants used by UnexpectedUnicodeTests ===
+
+    // U+0130 LATIN CAPITAL LETTER I WITH DOT ABOVE. The uppercase form of
+    // Turkish 'i'. Famous locale bug: a locale-aware ToLower on a Turkish
+    // system maps ASCII 'I' to 'ı' (U+0131) and ASCII 'i' to 'İ' (U+0130),
+    // breaking case-insensitive string comparisons. Bit Spotify in 2013,
+    // .NET Framework's String.Compare without an explicit culture, Win32
+    // CompareString, Java's String.toLowerCase, and others. The parser's
+    // LiteralIgnoreAsciiCase is named for the ASCII-only restriction
+    // specifically to avoid this: ASCII 'I' folds only to ASCII 'i', and
+    // U+0130 is its own rune that doesn't participate in the fold.
+    public static readonly string TurkishCapitalIWithDotGrapheme = Canary(
+        "İ", "latin capital I with dot above (Turkish dotted I)", 0x0130);
+
+    // U+0131 LATIN SMALL LETTER DOTLESS I. The lowercase form of Turkish
+    // capital 'I' under Turkish locale rules. Its own rune; doesn't fold
+    // to ASCII 'i' under LiteralIgnoreAsciiCase.
+    public static readonly string TurkishSmallDotlessIGrapheme = Canary(
+        "ı", "latin small dotless i (Turkish dotless i)", 0x0131);
+
+    // U+13A0 CHEROKEE LETTER A. Cherokee block runs U+13A0..U+13F5. Several
+    // letters in the block render as glyphs that closely resemble Latin
+    // capitals in common fonts (the most-cited examples: U+13A0 'Ꭰ' near
+    // Latin D or T, U+13C7 'Ꮇ' near Latin W, U+13F4 'Ꮤ' near Latin W).
+    // Used in the Microsoft 2018 phishing campaign where attacker
+    // hostnames mixed Cherokee letters with Latin to spoof legitimate
+    // names. Category Lo, so Identifier() accepts it under the default
+    // UAX #31 profile; a Latin-only TokenSet rejects it.
+    public static readonly string CherokeeLetterAGrapheme = Canary(
+        "Ꭰ", "cherokee letter A (homoglyph for latin caps in some fonts)", 0x13A0);
+
+    // U+2028 LINE SEPARATOR. UAX #14 line break, UAX #18 line terminator.
+    // Famous JavaScript bug: ECMAScript source disallowed U+2028 and U+2029
+    // as unescaped characters in string literals, but JSON.parse allowed
+    // them. JSONP responses containing these characters in user content
+    // produced "Unexpected token ILLEGAL" errors in the browser. Fixed in
+    // ES2019 (string-literal grammar updated to allow them). The Inductor
+    // parser treats U+2028 as one ordinary token; a grammar matching
+    // Token('\n') doesn't catch it, but EndOfLine() does (it's in
+    // TokenSet.LineTerminators).
+    public static readonly string LineSeparatorText = Canary(
+        "\u2028", "line separator (UAX #18 line terminator)", 0x2028);
+
+    // U+2029 PARAGRAPH SEPARATOR. Same JSON / JavaScript story as U+2028.
+    public static readonly string ParagraphSeparatorText = Canary(
+        "\u2029", "paragraph separator (UAX #18 line terminator)", 0x2029);
+
+    // U+0085 NEXT LINE (NEL). EBCDIC line-terminator-equivalent that
+    // crossed into Unicode for round-tripping with IBM mainframe text. C0
+    // control (Cc), UAX #18 line terminator. Real-world bug: Java's
+    // BufferedReader.readLine treats NEL as a line terminator on some
+    // JVMs but not others; XML 1.1 explicitly added it to the newline
+    // characters list (XML 1.0 didn't). The Inductor parser treats NEL
+    // as one ordinary token; Token('\n') doesn't catch it, EndOfLine()
+    // does.
+    public static readonly string NextLineText = Canary(
+        "\u0085", "next line / NEL (EBCDIC heritage line terminator)", 0x0085);
+
+    // U+2066 LEFT-TO-RIGHT ISOLATE (LRI). One of the Unicode 6.3 bidi
+    // isolate controls (LRI, RLI U+2067, FSI U+2068, PDI U+2069). The
+    // original Trojan Source paper (CVE-2021-42574) demonstrates source
+    // code attacks using the directional formatting characters, including
+    // these isolates as well as the older RLO. Treated by the parser as
+    // an ordinary token; the parser doesn't apply Unicode's Bidirectional
+    // Algorithm, so a Trojan Source string can't trick the grammar into
+    // matching something different from what's in the input.
+    public static readonly string LeftToRightIsolateText = Canary(
+        "\u2066", "left-to-right isolate (bidi control, Trojan Source variant)", 0x2066);
+
+    // U+034F COMBINING GRAPHEME JOINER (CGJ). Combining mark whose only
+    // purpose is to block canonical reordering of combining marks under
+    // normalization. Used in Hebrew and Yiddish typography to keep marks
+    // in non-canonical visual order. UAX #29 GCB=Extend, so when bare at
+    // the start of input it ends up as its own one-character cluster (the
+    // same shape as the other bare combining marks).
+    public static readonly string CombiningGraphemeJoinerText = Canary(
+        "\u034F", "combining grapheme joiner (blocks NFC mark reordering)", 0x034F);
+
+    // U+03C3 GREEK SMALL LETTER SIGMA. The "non-final" form of lowercase
+    // sigma, used in the middle of Greek words.
+    public static readonly string GreekSmallSigmaGrapheme = Canary(
+        "σ", "greek small letter sigma (non-final form)", 0x03C3);
+
+    // U+03C2 GREEK SMALL LETTER FINAL SIGMA. Word-final form of lowercase
+    // sigma. Different rune from U+03C3 even though Unicode treats them as
+    // case-equivalent to the same uppercase Σ. Real-world Greek search
+    // bug: matching software that compares rune-by-rune misses "πῶς" vs
+    // "πῶσ" because the final sigma and non-final sigma are different
+    // code points, but Greek readers consider them the same letter.
+    public static readonly string GreekSmallFinalSigmaGrapheme = Canary(
+        "ς", "greek small letter final sigma (word-final form)", 0x03C2);
+
+    // U+1F3F4 WAVING BLACK FLAG. Base emoji for tag-sequence subdivision
+    // flags (England, Scotland, Wales). Stand-alone it renders as a
+    // generic black/pirate flag.
+    public const int BlackFlagRune = 0x1F3F4;
+    public static readonly string BlackFlagGrapheme = Canary(
+        "🏴", "waving black flag (base for tag-sequence subdivision flags)", BlackFlagRune);
+
+    // U+E0067 TAG LATIN SMALL LETTER G. One of the tag characters used
+    // inside emoji tag sequences (U+E0020..U+E007E). UAX #29 GCB=Extend.
+    public static readonly string TagLatinSmallGText = Canary(
+        "󠁧", "tag latin small letter g", 0xE0067);
+
+    // U+E0062 TAG LATIN SMALL LETTER B.
+    public static readonly string TagLatinSmallBText = Canary(
+        "󠁢", "tag latin small letter b", 0xE0062);
+
+    // U+E0065 TAG LATIN SMALL LETTER E.
+    public static readonly string TagLatinSmallEText = Canary(
+        "󠁥", "tag latin small letter e", 0xE0065);
+
+    // U+E006E TAG LATIN SMALL LETTER N.
+    public static readonly string TagLatinSmallNText = Canary(
+        "󠁮", "tag latin small letter n", 0xE006E);
+
+    // U+E007F CANCEL TAG. Marks the end of an emoji tag sequence.
+    // UAX #29 GCB=Extend.
+    public static readonly string CancelTagText = Canary(
+        "󠁿", "cancel tag (end of emoji tag sequence)", 0xE007F);
+
+    // England flag emoji as a UAX #29 emoji tag sequence: WAVING BLACK
+    // FLAG + tag chars for "gbeng" + CANCEL TAG. UAX #29 GB10 keeps the
+    // whole sequence (7 runes, 14 UTF-16 chars) as a single grapheme
+    // cluster. Renderers that recognize the sequence display the
+    // St George's Cross; renderers that don't show a black flag followed
+    // by the tag letters or nothing at all.
+    public static readonly string EnglandFlagGrapheme = Canary(
+        "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "england flag emoji (waving black flag + GBENG tag sequence)",
+        BlackFlagRune, 0xE0067, 0xE0062, 0xE0065, 0xE006E, 0xE0067, 0xE007F);
+
+    // U+1F1F8 REGIONAL INDICATOR LETTER S. Second half of the US flag
+    // (paired with U+1F1FA REGIONAL INDICATOR LETTER U).
+    public const int RegionalIndicatorSRune = 0x1F1F8;
+    public static readonly string RegionalIndicatorSText = Canary(
+        "🇸", "regional indicator letter s (second half of US flag)", RegionalIndicatorSRune);
+
+    // U+1F1EB REGIONAL INDICATOR LETTER F. Used after the US flag pair
+    // (U + S) to construct an input with three consecutive regional
+    // indicators, exercising UAX #29's pair-from-left rule (GB12/GB13).
+    public const int RegionalIndicatorFRune = 0x1F1EB;
+    public static readonly string RegionalIndicatorFText = Canary(
+        "🇫", "regional indicator letter f (lone, used as trailing third RI)", RegionalIndicatorFRune);
 }
