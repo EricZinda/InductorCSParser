@@ -235,6 +235,19 @@ public static class HtmlGrammar
     // Fire the late-binding at type-init time.
     private static readonly Rule _elementBinding = ElementForward.Bind(ElementDef);
 
+    // Compile Document eagerly so the strict "fresh-tree" Compile invariant
+    // is satisfied for tests that call .Parse on sub-rules (Comment,
+    // Attribute) AND on Document in the same fixture run. Without this,
+    // whichever .Parse fires first auto-compiles its own subtree, sealing
+    // the shared sub-rules; subsequent Compile of Document then walks
+    // into a sealed sub-rule and throws. Eager compile here seals every
+    // rule reachable from Document once, and each sub-rule's .Parse
+    // afterward sees `_sealed=true` and short-circuits the recompile.
+    static HtmlGrammar()
+    {
+        Document.Compile();
+    }
+
     // Document: any number of leading whitespace or comments, then one
     // root element, optional trailing whitespace, EOF. DOCTYPE and BOM
     // aren't implemented here. The C++ version doesn't handle them

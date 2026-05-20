@@ -184,21 +184,15 @@ public class IdAssignmentTests
     }
 
     [Test]
-    public void Pre_compiled_sub_rule_explicit_id_collides_with_unsealed_sibling()
+    public void Pre_compiled_sub_rule_cannot_be_used_in_a_new_grammar()
     {
-        // Two distinct reachable rules in the same grammar both set the
-        // same custom-range SymbolId explicitly. One was compiled
-        // standalone first, so it's already sealed by the time the larger
-        // grammar reaches it. The second got its explicit id but isn't
-        // sealed yet. Compile of the larger grammar should catch this just
-        // like the all-unsealed version
-        // (Two_reachable_rules_given_the_same_explicit_SymbolId_fail_to_compile),
-        // because the second rule's id would otherwise silently shadow
-        // the first one's: Tree.Find against either rule reference would
-        // return the same nodes regardless of which rule actually
-        // matched. Pre-compiling one branch is a real pattern when a
-        // shared identifier rule lives in a library and gets reused
-        // across multiple grammars.
+        // Strict fresh-tree invariant: Compile walks the graph and rejects
+        // any reachable rule that's already sealed. A pre-compiled rule
+        // reused as a child of a new composite has its id assignment,
+        // FirstConsumedTokens, projected literal text, etc., already
+        // committed; the new Compile's passes don't revisit those fields,
+        // so reusing the sealed rule would silently corrupt one grammar
+        // or the other. The walk catches it.
         var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 5678);
         var preCompiled = OneOrMore(OneOf(TokenSet.Letters)).As(explicitId).As("first");
         preCompiled.Compile();
@@ -207,9 +201,9 @@ public class IdAssignmentTests
         var doc = And(preCompiled, unsealed);
 
         var exception = Assert.Throws<InvalidOperationException>(() => doc.Compile());
-        Assert.That(exception!.Message, Does.Contain(explicitId.Value.ToString()));
-        Assert.That(exception.Message, Does.Contain("first"));
-        Assert.That(exception.Message, Does.Contain("second"));
+        Assert.That(exception!.Message, Does.Contain("first"),
+            "exception names the already-compiled rule");
+        Assert.That(exception.Message, Does.Contain("already been compiled"));
     }
 
     // .As(string) and .As(SymbolId) each write a different field (Name and

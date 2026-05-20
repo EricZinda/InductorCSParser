@@ -159,6 +159,27 @@ public static class PrologGrammar
     public static readonly GrammarBundle Standard = Build(CapitalizedVariableRule);
     public static readonly GrammarBundle Htn = Build(HtnVariableRule);
 
+    // Compile Standard and Htn together so the strict "fresh-tree" Compile
+    // invariant is satisfied for tests that .Parse on individual sub-rules
+    // (Atom, OptionalWhitespace, Comment, Standard.Term, Htn.Term, ...).
+    // Without this, the first sub-rule .Parse auto-compiles its own subtree
+    // and seals the shared rules. Later .Parse on a sibling root walks the
+    // sealed shared sub-rules and throws. An Or used only for its
+    // reachability (never parsed) lets one Compile walk both grammar
+    // bundles plus every shared sub-rule in a single pass.
+    static PrologGrammar()
+    {
+        // Query and FunctorList aren't reachable from Document (Document
+        // uses Or(rule, functor, list), not Query), so include them
+        // explicitly. Same for the other GrammarBundle exposed rules
+        // tests call .Parse on. They all need to live in the same
+        // compile pass as their sibling sub-rules.
+        Or(
+            Standard.Document, Htn.Document,
+            Standard.Query, Htn.Query
+        ).Compile();
+    }
+
     private static GrammarBundle Build(Rule variableFlavorRule)
     {
         // Mutual recursion: Term -> Functor -> TermList -> Term, and
