@@ -452,4 +452,47 @@ public class OneOfRuleTests
             input: "a",
             expectedSourceText: "a");
     }
+
+    [Test]
+    public void OneOf_with_surrogate_covering_range_matches_a_lone_surrogate_input()
+    {
+        // The lexer reads a lone surrogate as a 1-char token; OneOfRule
+        // routes it through TokenSet.ContainsToken, whose surrogate-code-
+        // unit branch matches a user-typed Range that spans the surrogate
+        // block. Pair test: TokenSetTests.Contains_string_agrees_with_int_for_lone_surrogate_on_surrogate_covering_range
+        // locks in that the public Contains(string) overload reports the
+        // same membership a user probing the set would expect to predict
+        // this parse outcome.
+        //
+        // Compile(null) skips input normalization: a lone surrogate isn't
+        // a valid Unicode scalar, so String.Normalize throws on it. The
+        // unnormalized compile is the documented way to keep raw input
+        // intact, and it's exactly when a user-typed surrogate-spanning
+        // Range matters (Range_spanning_the_surrogate_gap_is_allowed
+        // makes the same point).
+        var rule = OneOf(TokenSet.Range(0, 0x10FFFF));
+        rule.Compile(normalizeInput: null);
+
+        var result = rule.Parse(HighSurrogateMinText);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
+
+    [Test]
+    public void OneOf_with_surrogate_skipping_range_rejects_a_lone_surrogate_input()
+    {
+        // TokenSet.Universe is built by complementing the empty set, and
+        // the complement operator splits around the surrogate block. Its
+        // intervals never cover a surrogate code unit, so a lone surrogate
+        // input doesn't match. Counterpart to the surrogate-covering case
+        // above: Contains(string) and the parse engine agree here too,
+        // because both return false through every overload's surrogate
+        // branch.
+        var rule = OneOf(TokenSet.Universe);
+        rule.Compile(normalizeInput: null);
+
+        var result = rule.Parse(HighSurrogateMinText);
+
+        Assert.That(result.Success, Is.False);
+    }
 }

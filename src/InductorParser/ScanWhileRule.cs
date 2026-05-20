@@ -51,18 +51,9 @@ internal sealed class ScanWhileRule : Rule
         List<(Rule rule, string original, string normalized)> offenders,
         List<ArgumentException> failures)
     {
-        // ScanWhile matches one grapheme per consumed run iteration
-        // against _set, the same shape OneOf uses. Project the set's
-        // entries under the chosen form so a user-typed precomposed
-        // entry (or a decomposed one) survives normalization to match
-        // canonically equivalent input. Without this override the set
-        // stays in its pre-normalization shape and the rule silently
-        // refuses to match input the lexer's normalization would
-        // otherwise hand it. Multi-grapheme conversions are reported
-        // through the same NormalizeAndValidate helper OneOf / NoneOf
-        // use. The message says OneOf / NoneOf, but the
-        // single-grapheme-per-token shape applies here too, and the
-        // user sees the offending rule via the offender's `Rule` ref.
+        // ScanWhile checks one grapheme per iteration against _set,
+        // the same shape OneOf uses, so it form-projects _set through
+        // the same helper. See OneOfRule.NormalizeAndValidate.
         OneOfRule.NormalizeAndValidate(this, ref _set, form, offenders);
     }
 

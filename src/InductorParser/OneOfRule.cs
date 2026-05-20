@@ -48,12 +48,22 @@ internal sealed class OneOfRule : Rule
         NormalizeAndValidate(this, ref _set, form, offenders);
     }
 
-    // Shared form-projection + validation between OneOfRule and NoneOfRule.
-    // NormalizedFor projects the set and reports any multi-grapheme
-    // conversion result via the out list (excluded from the projected
-    // set so the TokenSet single-grapheme invariant holds). For each
-    // report, contribute an offender so the user gets a clear Compile-
-    // time error pointing at the fix.
+    // Re-project every TokenSet entry under the grammar's chosen Unicode
+    // normalization form (FormC/FormD/FormKC/FormKD), so the set's
+    // entries are in the same form the lexer applies to input before
+    // matching. Without this, a user-typed 'é' (precomposed U+00E9)
+    // wouldn't match an input lexed under FormD (decomposed
+    // "e + U+0301"), or vice versa. Set entries can be single runes or
+    // multi-rune grapheme clusters. Both go through the projection.
+    //
+    // An entry that converts to a multi-grapheme sequence (e.g. the
+    // ligature ﬁ -> "fi" under FormKC) can't stay in a TokenSet (set
+    // members are single graphemes by invariant), so it's dropped from
+    // the projected set and reported as an offender for the user to
+    // fix at Compile time. The offender description is rule-agnostic
+    // because the four callers (OneOfRule, NoneOfRule, ScanWhileRule,
+    // ScanUntilRule) have different matching consequences.
+    // BuildNormalizationErrorMessage already names the offending rule.
     internal static void NormalizeAndValidate(
         Rule rule, ref TokenSet set, NormalizationForm form,
         List<(Rule rule, string original, string normalized)> offenders)
@@ -63,14 +73,12 @@ internal sealed class OneOfRule : Rule
         foreach (var (original, normalized) in multiGraphemeConversions)
         {
             offenders.Add((rule, original,
-                $"<converts under {form} to multi-grapheme sequence " +
-                $"\"{normalized}\". OneOf / NoneOf match exactly one grapheme " +
-                $"per token, so no single input token can match. Use " +
-                $"Literal(\"{normalized}\") for the whole sequence, " +
-                $"And(Token-per-grapheme) for token-by-token control, or call " +
-                $"`set.WithCompatibilityEquivalents({form})` before OneOf / " +
-                $"NoneOf to expand into the grapheme pieces as separate " +
-                $"set members.>"));
+                $"<converts under {form} to the multi-grapheme sequence " +
+                $"\"{normalized}\", but a TokenSet member has to be exactly " +
+                $"one grapheme. Call `set.WithCompatibilityEquivalents({form})` " +
+                $"before building the rule to expand this entry into its " +
+                $"individual graphemes as separate set members, or remove " +
+                $"the entry.>"));
         }
     }
 

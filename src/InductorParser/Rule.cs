@@ -997,10 +997,20 @@ public abstract class Rule
     // run through either engine without per-test rewrites. The flag
     // without a registered hook is inert: a recursive-only build
     // always hits ParseRecursive regardless of the flag.
-    public ParseResult Parse(string input, ParseOptions options) =>
-        options.ResolveUseAlternativeEvaluator() && AlternativeEvaluator is { } hook
+    public ParseResult Parse(string input, ParseOptions options)
+    {
+        // The in-loop budget check fires every 1024 rule invocations,
+        // so a parse smaller than that would silently drop a
+        // pre-canceled signal. Pre-flight it here.
+        if (options.Cancellation != null && options.Cancellation.IsCanceled)
+        {
+            string message = BuildBudgetMessage(ParseOutcome.Canceled, abortPos: 0, input, options);
+            return ParseResult.Aborted(ParseOutcome.Canceled, errorCharIndex: 0, message, input, this);
+        }
+        return options.ResolveUseAlternativeEvaluator() && AlternativeEvaluator is { } hook
             ? hook(this, input, options)
             : ParseRecursive(input, options);
+    }
 
     // Module-wide alternative-evaluator hook. Set by an alternative engine
     // implementation at startup (typically from a test fixture's
@@ -1259,7 +1269,7 @@ public abstract class Rule
     // the three modes per the TryParseRule rules below.
     internal Symbol? TryParse(Lexer lexer, List<Symbol>? outputSymbols)
     {
-        lexer.EnterRule();
+        lexer.EnterRuleBudgetChecks();
         try
         {
             // effectiveFlattenType collapses FlattenType +
@@ -1295,8 +1305,9 @@ public abstract class Rule
                 // non-null Symbol, and every non-commit exit (failure
                 // return, a thrown exception, a tripped budget) rolls
                 // back through the `using`. The transaction opens inside
-                // this `try`, after EnterRule, so an EnterRule depth-limit
-                // throw can't leak a transaction.
+                // this `try`, after EnterRuleBudgetChecks, so an
+                // EnterRuleBudgetChecks depth-limit throw can't leak a
+                // transaction.
                 using var transaction = lexer.BeginTransaction();
                 result = TryParseRule(lexer, transaction.StartPosition, effectiveFlattenType, outputSymbols);
                 if (result != null)
@@ -1331,7 +1342,7 @@ public abstract class Rule
         }
         finally
         {
-            lexer.ExitRule();
+            lexer.ExitRuleBudgetChecks();
         }
     }
 

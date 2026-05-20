@@ -566,9 +566,10 @@ internal static class Stepper
         // non-cyclic rules are inlined. CallTop after the push is the
         // current call depth, which the lexer's budget check compares
         // against MaxDepth and increments the periodic-check counter. No
-        // matching ExitRule is needed because backtrack frames carry
-        // CallStackHeight and restore CallTop directly when they fire.
-        machine.Lexer.EnterRuleAtDepth(machine.CallTop);
+        // matching ExitRuleBudgetChecks is needed because backtrack
+        // frames carry CallStackHeight and restore CallTop directly when
+        // they fire.
+        machine.Lexer.EnterRuleAtDepthBudgetChecks(machine.CallTop);
         return state.Data;
     }
 
@@ -577,7 +578,7 @@ internal static class Stepper
     {
         machine.Program.SubprogramRuleByEntry.TryGetValue(state.Data, out Rule? sourceRule);
         machine.PushCall(state.OnSuccess, state.OnFailure, machine.OutputOps.Count, sourceRule);
-        machine.Lexer.EnterRuleAtDepth(machine.CallTop);
+        machine.Lexer.EnterRuleAtDepthBudgetChecks(machine.CallTop);
         return state.Data;
     }
 
