@@ -458,8 +458,8 @@ public class OneOfRuleTests
     {
         // The lexer reads a lone surrogate as a 1-char token; OneOfRule
         // routes it through TokenSet.ContainsToken, whose surrogate-code-
-        // unit branch matches a user-typed Range that spans the surrogate
-        // block. Pair test: TokenSetTests.Contains_string_agrees_with_int_for_lone_surrogate_on_surrogate_covering_range
+        // unit branch matches a set that holds surrogates. Pair test:
+        // TokenSetTests.Contains_string_agrees_with_int_for_lone_surrogate_on_set_holding_surrogates
         // locks in that the public Contains(string) overload reports the
         // same membership a user probing the set would expect to predict
         // this parse outcome.
@@ -467,10 +467,9 @@ public class OneOfRuleTests
         // Compile(null) skips input normalization: a lone surrogate isn't
         // a valid Unicode scalar, so String.Normalize throws on it. The
         // unnormalized compile is the documented way to keep raw input
-        // intact, and it's exactly when a user-typed surrogate-spanning
-        // Range matters (Range_spanning_the_surrogate_gap_is_allowed
-        // makes the same point).
-        var rule = OneOf(TokenSet.Range(0, 0x10FFFF));
+        // intact, and it's exactly when a user-typed surrogate-bearing
+        // set matters.
+        var rule = OneOf(TokenSet.Range(0, 0x10FFFF) | TokenSet.Surrogates);
         rule.Compile(normalizeInput: null);
 
         var result = rule.Parse(HighSurrogateMinText);
@@ -479,16 +478,31 @@ public class OneOfRuleTests
     }
 
     [Test]
-    public void OneOf_with_surrogate_skipping_range_rejects_a_lone_surrogate_input()
+    public void OneOf_universe_rejects_a_lone_surrogate_input_under_null_normalization()
     {
-        // TokenSet.Universe is built by complementing the empty set, and
-        // the complement operator splits around the surrogate block. Its
-        // intervals never cover a surrogate code unit, so a lone surrogate
-        // input doesn't match. Counterpart to the surrogate-covering case
-        // above: Contains(string) and the parse engine agree here too,
-        // because both return false through every overload's surrogate
-        // branch.
+        // Universe is the scalar-value universe: ~Empty under operator ~
+        // that complements over scalar values only. Surrogates aren't
+        // in Universe, so even under Compile(null) where the lexer
+        // surfaces a lone surrogate as a one-char token, OneOf(Universe)
+        // doesn't match it. A grammar that wants surrogates writes
+        // `Universe | Surrogates` (or just `Surrogates`).
         var rule = OneOf(TokenSet.Universe);
+        rule.Compile(normalizeInput: null);
+
+        var result = rule.Parse(HighSurrogateMinText);
+
+        Assert.That(result.Success, Is.False);
+    }
+
+    [Test]
+    public void OneOf_scalar_range_rejects_a_lone_surrogate_input_under_null_normalization()
+    {
+        // Range(0, 0x10FFFF) splits around the surrogate block, so its
+        // intervals are [0, 0xD7FF] and [0xE000, 0x10FFFF]. A lone
+        // surrogate input isn't in either interval, so OneOf rejects it
+        // even under Compile(null) where the lexer would otherwise surface
+        // the surrogate. To match surrogates the grammar adds `| Surrogates`.
+        var rule = OneOf(TokenSet.Range(0, 0x10FFFF));
         rule.Compile(normalizeInput: null);
 
         var result = rule.Parse(HighSurrogateMinText);

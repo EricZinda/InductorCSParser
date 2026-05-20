@@ -23,13 +23,11 @@
 //   "a<TAB>b"              error     raw control character
 //   "\x"                   error     invalid escape
 //
-// Five of serde_json's six string errors are grammar errors. The sixth,
-// InvalidUnicodeCodePoint for a bare unpaired surrogate code unit sitting
-// literally in the input, can't be a grammar rule: the surrogate block
-// 0xD800..0xDFFF isn't expressible as a TokenSet (TokenSet.Range rejects
-// surrogate endpoints, and the ~ operator strips the surrogate block out).
-// JsonStringParser.cs handles that one as a post-parse check. See backlog
-// item 0000a.
+// All six of serde_json's string errors are grammar errors. The sixth,
+// InvalidUnicodeCodePoint, fires for a bare unpaired surrogate code unit
+// sitting literally in the input. TokenSet.Surrogates names the surrogate
+// block and lets the body's NoneOf reject one alongside the other illegal
+// content characters.
 //
 // Tree shape: JsonString -> Body -> a run of `text` and `escape` nodes in
 // source order. The decoder in JsonStringParser.cs walks that.
@@ -109,6 +107,10 @@ public static class JsonStringGrammar
             "lone surrogate in hex escape; a \\uDC00-\\uDFFF trailing surrogate " +
             "has no \\uD800-\\uDBFF leading surrogate before it";
 
+        const string LoneSurrogateCodeUnitMessage =
+            "invalid unicode code point; the string content contains an " +
+            "unpaired UTF-16 surrogate code unit";
+
         // ---- \uXXXX escape, surrogate-aware ------------------------------
         // Tried after the '\' and the 'u' have been consumed.
         //
@@ -169,27 +171,27 @@ public static class JsonStringGrammar
             .As(nameof(Escape));
 
         // ---- the string body ---------------------------------------------
-        // Anything that isn't a quote, a backslash, or a control character is
-        // ordinary text. A bare unpaired surrogate code unit would belong in
-        // this exclusion set too, but the surrogate block can't be written as
-        // a TokenSet (see the header comment and backlog 0000a), so it's
-        // left to a post-parse check in JsonStringParser.
-        var literalCharacter = NoneOf(TokenSet.Runes("\"\\") | controlCharacter);
+        // Anything that isn't a quote, a backslash, a control character, or
+        // an unpaired surrogate code unit is ordinary text. TokenSet.Surrogates
+        // names the surrogate block U+D800..U+DFFF so the exclusion set
+        // covers a lone surrogate sitting raw in the input.
+        var literalCharacter = NoneOf(TokenSet.Runes("\"\\") | controlCharacter | TokenSet.Surrogates);
 
         Text = OneOrMore(literalCharacter).As(nameof(Text));
         Body = ZeroOrMore(Or(Escape, Text)).As(nameof(Body));
 
         // ---- the whole literal -------------------------------------------
-        // After the body, exactly one of these is true: the next token is the
-        // closing quote, it's a control character, or the input ended. The
-        // Not() check turns the control character into its own message, and
-        // the closing Token('"') covers the EOF case. A body that stopped on
-        // a malformed escape fails deeper inside the escape, so that message
-        // wins on depth and these two never fire.
+        // After the body, one of: the next token is the closing quote, it's
+        // a control character, it's a lone surrogate code unit, or the input
+        // ended. Each Not() check turns one of those into its own message,
+        // and the closing Token('"') covers the EOF case. A body that
+        // stopped on a malformed escape fails deeper inside the escape, so
+        // that message wins on depth and these never fire.
         JsonString = And(
                 Token('"'),
                 Body,
                 Not(OneOf(controlCharacter)).WithError(ControlCharacterMessage),
+                Not(OneOf(TokenSet.Surrogates)).WithError(LoneSurrogateCodeUnitMessage),
                 Token('"').WithError(MissingClosingQuoteMessage))
             .As(nameof(JsonString));
 

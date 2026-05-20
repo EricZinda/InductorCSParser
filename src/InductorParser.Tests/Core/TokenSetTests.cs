@@ -59,16 +59,77 @@ public class TokenSetTests
     }
 
     [Test]
-    public void Range_spanning_the_surrogate_gap_is_allowed()
+    public void Range_straddling_the_surrogate_block_splits_around_it()
     {
-        // Endpoints are valid scalar values even though the range as a whole
-        // straddles the surrogate block. The set contains "dead" slots in
-        // 0xD800..0xDFFF, which is harmless because the lexer never produces
-        // those as token values.
+        // Range validates its endpoints (no surrogate halves) and splits
+        // a range that straddles the surrogate block into two intervals,
+        // so Range(0, 0x10FFFF) is "every scalar value, no surrogates"
+        // and that's the only thing it can mean. Named entry points that
+        // put surrogates into a TokenSet are Surrogates, SurrogateRange,
+        // and Universe, plus set operations like ~Range('a','z').
         var set = TokenSet.Range(0x0000, 0x10FFFF);
 
         Assert.That(set.Contains('a'), Is.True);
         Assert.That(set.Contains(GuitarRune), Is.True);
+        Assert.That(set.Contains(HighSurrogateMinRune), Is.False);
+        Assert.That(set.Contains(LowSurrogateMaxRune), Is.False);
+    }
+
+    [Test]
+    public void Surrogates_constant_holds_the_full_surrogate_block()
+    {
+        // The Surrogates named constant covers U+D800..U+DFFF inclusive,
+        // and is the most direct way to spell the block; SurrogateRange
+        // names a sub-block, and Universe contains it too. Set operations
+        // like ~Letters can bring surrogates in indirectly.
+        var set = TokenSet.Surrogates;
+
+        Assert.That(set.Contains(HighSurrogateMinRune), Is.True);
+        Assert.That(set.Contains(HighSurrogateMaxRune), Is.True);
+        Assert.That(set.Contains(LowSurrogateMinRune), Is.True);
+        Assert.That(set.Contains(LowSurrogateMaxRune), Is.True);
+        Assert.That(set.Contains(HighSurrogateMinRune - 1), Is.False);
+        Assert.That(set.Contains(LowSurrogateMaxRune + 1), Is.False);
+        Assert.That(set.Contains('a'), Is.False);
+    }
+
+    [Test]
+    public void SurrogateRange_builds_a_sub_block_of_surrogates()
+    {
+        // SurrogateRange's endpoints must both be surrogate code units.
+        // The leading-surrogate half is one natural use.
+        var leadingSurrogates = TokenSet.SurrogateRange(0xD800, 0xDBFF);
+        Assert.That(leadingSurrogates.Contains(HighSurrogateMinRune), Is.True);
+        Assert.That(leadingSurrogates.Contains(HighSurrogateMaxRune), Is.True);
+        Assert.That(leadingSurrogates.Contains(LowSurrogateMinRune), Is.False);
+    }
+
+    [Test]
+    public void SurrogateRange_rejects_non_surrogate_endpoints()
+    {
+        // Mixing semantics is rejected at construction so the spelling
+        // stays unambiguous: Range for scalar values, SurrogateRange for
+        // surrogate code units.
+        Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.SurrogateRange(0x0000, 0xD800));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.SurrogateRange(0xD800, 0xE000));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.SurrogateRange(0xD7FF, 0xDFFF));
+    }
+
+    [Test]
+    public void Complement_never_fabricates_surrogates()
+    {
+        // ~ complements over the scalar universe only, so the result is
+        // always surrogate-free regardless of whether the input had any.
+        // The grammar-author-safety story: NoneOf(Letters) never quietly
+        // matches a lone surrogate even under Compile(null).
+        Assert.That((~TokenSet.Letters).Contains(HighSurrogateMinRune), Is.False);
+        Assert.That((~TokenSet.Letters).Contains(LowSurrogateMaxRune), Is.False);
+        // The most aggressive complement is also surrogate-free.
+        AssertEqual(~TokenSet.Empty, TokenSet.Universe);
+        AssertEqual(~TokenSet.Range(0, 0x10FFFF), TokenSet.Empty);
+        // Complementing Surrogates strips them; the result is the scalar
+        // universe, equal to Universe.
+        AssertEqual(~TokenSet.Surrogates, TokenSet.Universe);
     }
 
     [Test]
@@ -370,49 +431,56 @@ public class TokenSetTests
         Assert.That(cyrillicLetters.Contains(0x0488), Is.False);
     }
 
-    // The set of every Unicode scalar value: [0, 0x10FFFF] minus the surrogate
-    // block [0xD800, 0xDFFF]. Equivalent to ~default(TokenSet). Pulled out so
-    // complement tests can compare against it by equality instead of sampling
-    // specific codepoints.
-    private static readonly TokenSet AllScalarValues =
-        TokenSet.Range(0, 0xD7FF) | TokenSet.Range(0xE000, 0x10FFFF);
-
     [Test]
-    public void Complement_of_empty_set_is_all_scalar_values()
+    public void Complement_of_single_rune_excludes_that_rune_and_surrogates()
     {
-        AssertEqual(~default(TokenSet), AllScalarValues);
-    }
-
-    [Test]
-    public void Complement_of_single_rune_excludes_that_rune()
-    {
-        // ~{'a'} = all scalar values minus 'a'. Build the expected set as
-        // the two gaps around 'a'.
-        var expected = TokenSet.Range(0, 'a' - 1)
-            | TokenSet.Range('a' + 1, 0xD7FF)
-            | TokenSet.Range(0xE000, 0x10FFFF);
+        // ~{'a'} is the scalar universe minus 'a'. The surrogate block
+        // is excluded too because ~ complements over scalar values only,
+        // not because Single('a') has any opinion about surrogates.
+        var expected = TokenSet.Range(0, 'a' - 1) | TokenSet.Range('a' + 1, 0x10FFFF);
 
         AssertEqual(~TokenSet.Single('a'), expected);
     }
 
     [Test]
-    public void Complement_of_full_range_is_empty()
+    public void Complement_of_universe_is_empty()
     {
-        // ~[0..0x10FFFF] = ∅ (the input already covers every gap, including
-        // the dead slots in the surrogate block).
-        var set = ~TokenSet.Range(0, 0x10FFFF);
-
-        Assert.That(set.IsEmpty, Is.True);
+        // ~Universe = ∅ over the closed universe [0, 0x10FFFF]. Universe
+        // already covers every code point including surrogates, so the
+        // complement has nothing left.
+        AssertEqual(~TokenSet.Universe, TokenSet.Empty);
     }
 
     [Test]
-    public void Complement_is_involutive()
+    public void Complement_of_empty_is_universe()
     {
-        // ~~A = A for any A. Surrogates aren't in either side, so value
-        // equality is the right check.
-        var original = TokenSet.Range('a', 'z') | TokenSet.Range('A', 'Z');
+        // ~Empty = Universe. The Universe constant is wired up that way,
+        // so this is the round-trip check.
+        AssertEqual(~TokenSet.Empty, TokenSet.Universe);
+    }
 
-        AssertEqual(~~original, original);
+    [Test]
+    public void Complement_is_involutive_on_surrogate_free_sets()
+    {
+        // ~~A = A for any A that doesn't contain surrogates. ~ strips
+        // surrogates from the result, so it isn't involutive across the
+        // surrogate boundary (a set that contains surrogates won't get
+        // them back after a double complement). That's the deliberate
+        // trade-off: NoneOf(Letters) doesn't quietly admit lone
+        // surrogates under Compile(null).
+        var ascii = TokenSet.Range('a', 'z') | TokenSet.Range('A', 'Z');
+
+        AssertEqual(~~ascii, ascii);
+    }
+
+    [Test]
+    public void Double_complement_of_a_set_with_surrogates_strips_them()
+    {
+        // ~Surrogates is the scalar universe (Surrogates' surrogates are
+        // outside the scalar universe complement). ~~Surrogates strips
+        // every scalar from the scalar universe, leaving Empty. So a
+        // set's surrogate content doesn't survive a double complement.
+        AssertEqual(~~TokenSet.Surrogates, TokenSet.Empty);
     }
 
     [Test]
@@ -837,23 +905,26 @@ public class TokenSetTests
     [Test]
     public void Complement_of_range_ending_at_surrogate_low_boundary()
     {
-        // Input ends at 0xD7FF. Complement is just [0xE000, 0x10FFFF].
-        // No prefix, no surrogate slots, full suffix.
+        // Input ends at 0xD7FF. Complement is [0xE000, 0x10FFFF]: the
+        // surrogate block stays excluded because ~ complements over the
+        // scalar universe.
         AssertEqual(~TokenSet.Range(0, 0xD7FF), TokenSet.Range(0xE000, 0x10FFFF));
     }
 
     [Test]
     public void Complement_of_range_starting_at_surrogate_high_boundary()
     {
-        // Input starts at 0xE000. Complement is just [0, 0xD7FF].
+        // Input starts at 0xE000. Complement is [0, 0xD7FF]: the
+        // pre-surrogate prefix, with the surrogate block stripped.
         AssertEqual(~TokenSet.Range(0xE000, 0x10FFFF), TokenSet.Range(0, 0xD7FF));
     }
 
     [Test]
     public void Complement_of_multi_interval_input_emits_all_gaps()
     {
-        // Input [5, 10] ∪ [20, 30]. Complement should be the three gaps,
-        // with the trailing one split around the surrogate block.
+        // Input [5, 10] ∪ [20, 30]. Complement is the three gaps over
+        // the scalar universe, with the trailing one split around the
+        // surrogate block.
         var expected = TokenSet.Range(0, 4)
             | TokenSet.Range(11, 19)
             | TokenSet.Range(31, 0xD7FF)
@@ -1316,16 +1387,15 @@ public class TokenSetTests
     }
 
     [Test]
-    public void Contains_string_agrees_with_int_for_lone_surrogate_on_surrogate_covering_range()
+    public void Contains_string_agrees_with_int_for_lone_surrogate_on_set_holding_surrogates()
     {
-        // Range(0, 0x10FFFF) is the documented surrogate-spanning range: its
-        // single interval literally covers the 0xD800..0xDFFF block, so
-        // Contains(int) over a surrogate code unit returns true.The Contains(string) 
-        // overload has to agree with Contains(int) for a 1-char string holding the same
-        // surrogate code unit.
-        var set = TokenSet.Range(0, 0x10FFFF);
-        Assert.That(set.Contains((int)HighSurrogateMinRune), Is.True,
-            "Range(0, 0x10FFFF).Contains(int) covers the surrogate code unit");
+        // A set that opted in to surrogates (via TokenSet.Surrogates,
+        // unioned in here on top of every scalar value) matches every
+        // lone surrogate code unit through Contains(string)'s
+        // surrogate-code-unit branch. Contains(string) has to agree with
+        // Contains(int) for a one-char string holding the same surrogate.
+        var set = TokenSet.Range(0, 0x10FFFF) | TokenSet.Surrogates;
+        Assert.That(set.Contains((int)HighSurrogateMinRune), Is.True);
 
         Assert.That(set.Contains(HighSurrogateMinText), Is.True,
             "Contains(string) must agree with Contains(int) for a lone high surrogate");
@@ -1335,23 +1405,18 @@ public class TokenSetTests
     }
 
     [Test]
-    public void Contains_string_lone_surrogate_returns_false_when_set_skips_the_surrogate_block()
+    public void Contains_string_lone_surrogate_returns_false_when_set_lacks_surrogates()
     {
-        // TokenSet.Universe is built by complementing the empty set, and
-        // EmitIntervalSkippingSurrogates explicitly splits the gap around
-        // 0xD800..0xDFFF: Universe's intervals are [0, 0xD7FF] and
-        // [0xE000, 0x10FFFF]. A lone surrogate isn't in any interval, so
-        // Contains(int) is false. Contains(string) on the same input must
-        // agree.
-        var universe = TokenSet.Universe;
-        Assert.That(universe.Contains((int)HighSurrogateMinRune), Is.False);
-        Assert.That(universe.Contains(HighSurrogateMinText), Is.False);
-        Assert.That(universe.Contains(LowSurrogateMaxText), Is.False);
+        // Range(0, 0x10FFFF) splits around the surrogate block, so a lone
+        // surrogate code unit isn't in any of its intervals.
+        // Contains(string) on the same input has to agree.
+        var scalars = TokenSet.Range(0, 0x10FFFF);
+        Assert.That(scalars.Contains((int)HighSurrogateMinRune), Is.False);
+        Assert.That(scalars.Contains(HighSurrogateMinText), Is.False);
+        Assert.That(scalars.Contains(LowSurrogateMaxText), Is.False);
 
-        // A small set that doesn't touch the surrogate block at all returns
-        // false on both overloads. This is the common case; the asymmetry
-        // only surfaces for sets explicitly built with a surrogate-spanning
-        // range.
+        // A small set that doesn't touch the surrogate block at all
+        // behaves the same way. That's the common case.
         var letters = TokenSet.Letters;
         Assert.That(letters.Contains((int)HighSurrogateMinRune), Is.False);
         Assert.That(letters.Contains(HighSurrogateMinText), Is.False);
@@ -1368,18 +1433,25 @@ public class TokenSetTests
     }
 
     [Test]
-    public void Contains_string_lone_surrogate_matches_a_single_surrogate_band_range()
+    public void Contains_string_lone_surrogate_matches_only_via_Surrogates_or_SurrogateRange()
     {
-        // A Range whose interior straddles the surrogate block matches
-        // every lone surrogate via Contains(string)'s surrogate-code-unit
-        // branch. Range_spanning_the_surrogate_gap_is_allowed pins the
-        // constructor side.
-        var crossSurrogateRange = TokenSet.Range(0xD000, 0xE000);
-        Assert.That(crossSurrogateRange.Contains((int)HighSurrogateMinRune), Is.True);
-        Assert.That(crossSurrogateRange.Contains(HighSurrogateMinText), Is.True);
-        Assert.That(crossSurrogateRange.Contains(LowSurrogateMaxText), Is.True);
+        // A Range that straddles the surrogate block splits around it,
+        // so it doesn't match surrogates on its own. The user opts in via
+        // TokenSet.Surrogates or SurrogateRange.
+        var splitRange = TokenSet.Range(0xD000, 0xE000);
+        Assert.That(splitRange.Contains((int)HighSurrogateMinRune), Is.False);
+        Assert.That(splitRange.Contains(HighSurrogateMinText), Is.False);
 
-        // A Range strictly below the surrogate block doesn't.
+        var withSurrogates = splitRange | TokenSet.Surrogates;
+        Assert.That(withSurrogates.Contains((int)HighSurrogateMinRune), Is.True);
+        Assert.That(withSurrogates.Contains(HighSurrogateMinText), Is.True);
+        Assert.That(withSurrogates.Contains(LowSurrogateMaxText), Is.True);
+
+        var leadingHalf = TokenSet.SurrogateRange(0xD800, 0xDBFF);
+        Assert.That(leadingHalf.Contains(HighSurrogateMinText), Is.True);
+        Assert.That(leadingHalf.Contains(LowSurrogateMaxText), Is.False);
+
+        // A Range strictly below the surrogate block doesn't match either.
         var asciiOnly = TokenSet.Range(0x0000, 0x007F);
         Assert.That(asciiOnly.Contains((int)HighSurrogateMinRune), Is.False);
         Assert.That(asciiOnly.Contains(HighSurrogateMinText), Is.False);

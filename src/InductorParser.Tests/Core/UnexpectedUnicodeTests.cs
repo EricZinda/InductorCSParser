@@ -373,14 +373,12 @@ public class UnexpectedUnicodeTests
     [Test]
     public void OneOf_universe_rejects_lone_surrogate_under_null_normalization()
     {
-        // Universe = ~default(TokenSet) is [0, 0xD7FF] union [0xE000,
-        // 0x10FFFF]: the complement operator splits around the surrogate
-        // block, so Universe doesn't include surrogates by construction.
-        // A lone surrogate token therefore doesn't match Universe —
-        // not because of the membership logic, but because the surrogate
-        // isn't in the set. Compare with the Range(0, 0x10FFFF) test
-        // below which explicitly does include the surrogate block and
-        // does match a stray surrogate.
+        // Universe is the scalar-value universe (no surrogates), because
+        // operator ~ complements over scalar values only. Under
+        // Compile(null) a lone surrogate token therefore doesn't match
+        // Universe, not because of the membership logic, but because
+        // the surrogate isn't in the set. Grammars that want surrogates
+        // opt in with `| Surrogates`.
         var rule = OneOf(TokenSet.Universe);
         rule.Compile(null);
         string input = UnicodeExamples.HighSurrogateMinText;
@@ -390,31 +388,29 @@ public class UnexpectedUnicodeTests
     }
 
     [Test]
-    public void OneOf_with_range_including_surrogates_matches_lone_high_surrogate()
+    public void OneOf_with_surrogate_bearing_set_matches_lone_high_surrogate()
     {
-        // Range(0, 0x10FFFF) is documented to include the surrogate gap
-        // as legal-but-rarely-useful interior of the interval (see
-        // TokenSet.Range docs around TokenSet.cs:363-371). Under
-        // Compile(null) a stray surrogate is a valid one-char token. The
-        // OneOf membership check disambiguates the three RuneValue == -1
+        // The opt-in surrogate set: every scalar value, plus the
+        // surrogate block. Under Compile(null) a stray surrogate is a
+        // valid one-char token, and OneOf membership through
+        // TokenSet.ContainsToken disambiguates the three RuneValue == -1
         // cases (EOF / multi-rune / stray surrogate) and queries the
         // rune intervals using the surrogate's UTF-16 code unit value
-        // for the surrogate case, so a user-typed Range that includes
-        // surrogate code points correctly matches them. The motivating
-        // use case is WTF-8 / unpaired-surrogate round-tripping.
-        var rule = OneOf(TokenSet.Range(0, 0x10FFFF));
+        // for the surrogate case. The motivating use case is WTF-8 /
+        // unpaired-surrogate round-tripping.
+        var rule = OneOf(TokenSet.Range(0, 0x10FFFF) | TokenSet.Surrogates);
         rule.Compile(null);
 
         Assert.That(rule.Parse(UnicodeExamples.HighSurrogateMinText).Success, Is.True,
-            "Range(0, 0x10FFFF) includes the high surrogate min; should match it.");
+            "The set includes the high surrogate min; should match it.");
         Assert.That(rule.Parse(UnicodeExamples.LowSurrogateMaxText).Success, Is.True,
-            "Range(0, 0x10FFFF) includes the low surrogate max; should match it.");
+            "The set includes the low surrogate max; should match it.");
         Assert.That(rule.Parse("a").Success, Is.True,
-            "Range(0, 0x10FFFF) still matches ordinary scalars.");
+            "The set still matches ordinary scalars.");
     }
 
     [Test]
-    public void NoneOf_with_range_including_surrogates_rejects_lone_surrogate()
+    public void NoneOf_with_surrogate_bearing_set_rejects_lone_surrogate()
     {
         // The mirror case for NoneOf. Without the surrogate-aware
         // membership check, NoneOf wrongly accepted lone surrogates
@@ -423,25 +419,40 @@ public class UnexpectedUnicodeTests
         // and the rune intervals weren't queried), NoneOf inverted
         // false to true, and the false-positive match shipped. The
         // surrogate-aware check fixes both directions in lockstep.
-        var rule = And(NoneOf(TokenSet.Range(0, 0x10FFFF)), Eof());
+        var everything = TokenSet.Range(0, 0x10FFFF) | TokenSet.Surrogates;
+        var rule = And(NoneOf(everything), Eof());
         rule.Compile(null);
 
         Assert.That(rule.Parse(UnicodeExamples.HighSurrogateMinText).Success, Is.False,
-            "NoneOf(range that includes surrogates) should reject a high surrogate.");
+            "NoneOf(everything) should reject a high surrogate.");
         Assert.That(rule.Parse(UnicodeExamples.LowSurrogateMaxText).Success, Is.False,
-            "NoneOf(range that includes surrogates) should reject a low surrogate.");
+            "NoneOf(everything) should reject a low surrogate.");
         Assert.That(rule.Parse("a").Success, Is.False,
-            "NoneOf(Range(0, 0x10FFFF)) covers everything; rejects ASCII too.");
+            "NoneOf(everything) covers ASCII too; rejects it.");
     }
 
     [Test]
-    public void OneOf_with_range_excluding_surrogates_still_rejects_lone_surrogate()
+    public void NoneOf_scalar_range_accepts_lone_surrogate_input()
     {
-        // Sanity counter-test. A user-typed Range that doesn't include
-        // surrogates (the typical case — Range('a','z'), Letters, etc.)
-        // should still reject lone-surrogate input. The fix only adds a
-        // new path; it doesn't change how non-surrogate-bearing sets
-        // behave.
+        // Range(0, 0x10FFFF) splits around the surrogate block, so a
+        // lone surrogate isn't in the set. NoneOf(scalars) therefore
+        // ACCEPTS a lone surrogate under Compile(null) (the surrogate
+        // is "not in the set of scalar values"). The grammar adds
+        // `| Surrogates` to the inner set when it wants surrogates
+        // rejected as well.
+        var rule = And(NoneOf(TokenSet.Range(0, 0x10FFFF)), Eof());
+        rule.Compile(null);
+
+        Assert.That(rule.Parse(UnicodeExamples.HighSurrogateMinText).Success, Is.True);
+        Assert.That(rule.Parse(UnicodeExamples.LowSurrogateMaxText).Success, Is.True);
+    }
+
+    [Test]
+    public void OneOf_with_range_excluding_surrogates_rejects_lone_surrogate()
+    {
+        // A user-typed Range that doesn't touch the surrogate block (the
+        // typical case, Range('a','z'), Letters, etc.) rejects lone-
+        // surrogate input.
         var rule = OneOf(TokenSet.Range('a', 'z'));
         rule.Compile(null);
 

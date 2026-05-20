@@ -437,17 +437,17 @@ public class ScanWhileRuleTests
     }
 
     [Test]
-    public void ScanWhile_consumes_a_lone_surrogate_that_a_covering_range_accepts()
+    public void ScanWhile_consumes_a_lone_surrogate_that_a_covering_set_accepts()
     {
-        // Range validates only its endpoints, so Range(0, 0x10FFFF)
-        // spans the surrogate block 0xD800..0xDFFF as interior slots.
-        // Under Compile(null) the lexer surfaces a lone surrogate as a
-        // one-char token, and OneOf(thatRange) matches it via
-        // TokenSet.ContainsToken's lone-surrogate branch. ScanWhile is
-        // documented as the optimized equivalent of
+        // Range(0, 0x10FFFF) splits around the surrogate block, so a
+        // grammar that genuinely wants surrogates in the set unions
+        // TokenSet.Surrogates on. Under Compile(null) the lexer surfaces
+        // a lone surrogate as a one-char token, and OneOf(thatSet)
+        // matches it via TokenSet.ContainsToken's lone-surrogate branch.
+        // ScanWhile is documented as the optimized equivalent of
         // AtLeast(n, OneOf(set)) producing the same matched text, so its
         // run has to include the lone surrogate too.
-        var set = TokenSet.Range(0, 0x10FFFF);
+        var set = TokenSet.Range(0, 0x10FFFF) | TokenSet.Surrogates;
         string input = "a" + UnicodeExamples.HighSurrogateMinText + "b";
 
         // Reference: OneOf(set) matches the lone-surrogate token, so the
