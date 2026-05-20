@@ -36,14 +36,34 @@ namespace InductorParser.Lexing;
 // the enumerator has been advanced past the position. After the
 // enumerator is exhausted (the input has been fully walked once),
 // every query becomes pure bool-array work.
+//
+// Thread safety: the cache is keyed on the input string instance, so
+// multiple parses of the same string (interned literals, cached
+// config text, identical request bodies in a web server) share one
+// index instance. The walk that fills _isStart is locked because
+// TextElementEnumerator's MoveNext isn't thread-safe and the bool[]
+// updates would race in lockstep. The lock is per-instance (one
+// per input string), so concurrent parses of DIFFERENT inputs don't
+// contend. The two fast-path reads (the _exhausted check and the
+// _walkedTo check at the top of EnsureWalkedTo) skip the lock once
+// the walk has reached the requested position, so the steady-state
+// cost on a long parse is a pair of volatile reads per Read.
 internal sealed class GraphemeClusterIndex
 {
     private static readonly ConditionalWeakTable<string, GraphemeClusterIndex> _byInput = new();
 
     private readonly string _input;
     private readonly bool[] _isStart;
+    private readonly object _walkLock = new();
     private TextElementEnumerator? _enumerator;
-    private bool _exhausted;
+    private volatile bool _exhausted;
+    // Highest position any MoveNext has visited so far. Volatile so a
+    // reader can skip the lock when the walk has already reached the
+    // requested target. Starts at -1 before the first MoveNext. The
+    // volatile write inside the lock orders the _isStart updates that
+    // preceded it, so a thread that observes _walkedTo >= target also
+    // sees the _isStart writes for every cluster start in [0, _walkedTo].
+    private volatile int _walkedTo = -1;
 
     private GraphemeClusterIndex(string input)
     {
@@ -128,31 +148,54 @@ internal sealed class GraphemeClusterIndex
     // Advance the enumerator until _isStart[target] has its final value.
     private void EnsureWalkedTo(int target)
     {
+        // Fast path: already past target, or the walk has been exhausted.
+        // Both reads are volatile so any _isStart writes that preceded the
+        // last _walkedTo / _exhausted update are visible without the lock.
         if (_exhausted) return;
+        if (target <= _walkedTo) return;
         if (target < 0) target = 0;
         if (target > _input.Length) target = _input.Length;
 
-        // The Lexer's NextTokenLength path queries this index on every
-        // Read, so for any non-empty parse the enumerator gets created
-        // on the first read. The null-coalescing init still pays off in
-        // the corner cases that don't query: empty inputs, and pooled
-        // sub-lexers that get a fresh For() call but operate in rune
-        // mode and never go through LengthAt / IsClusterStart.
-        _enumerator ??= StringInfo.GetTextElementEnumerator(_input);
-
-        // Walk until we've passed `target` or run out. After MoveNext
-        // returns idx, _isStart[idx] is final; we keep going if
-        // idx < target so target itself gets its final value.
-        while (true)
+        // TextElementEnumerator.MoveNext isn't thread-safe: racing
+        // threads can land a mid-cluster ElementIndex, which then marks
+        // a non-cluster-start position in _isStart and makes the next
+        // LengthAt against that position throw. The lock is per-instance,
+        // so parses of different inputs don't contend, and same-input
+        // parses only wait during that string's initial walk.
+        lock (_walkLock)
         {
-            if (!_enumerator.MoveNext())
+            // Re-check after acquiring the lock: another thread may have
+            // exhausted the walk or already walked past target while this
+            // thread was waiting on the lock.
+            if (_exhausted) return;
+            if (target <= _walkedTo) return;
+
+            // The Lexer's NextTokenLength path queries this index on every
+            // Read, so for any non-empty parse the enumerator gets created
+            // on the first read. The null-coalescing init still pays off in
+            // the corner cases that don't query: empty inputs, and pooled
+            // sub-lexers that get a fresh For() call but operate in rune
+            // mode and never go through LengthAt / IsClusterStart.
+            _enumerator ??= StringInfo.GetTextElementEnumerator(_input);
+
+            // Walk until we've passed `target` or run out. After MoveNext
+            // returns idx, _isStart[idx] is final; we keep going if
+            // idx < target so target itself gets its final value.
+            while (true)
             {
-                _exhausted = true;
-                return;
+                if (!_enumerator.MoveNext())
+                {
+                    _exhausted = true;
+                    return;
+                }
+                int idx = _enumerator.ElementIndex;
+                _isStart[idx] = true;
+                // Volatile write publishes the _isStart update along with
+                // the new walked-to high water mark. A reader hitting the
+                // fast path on a later call sees both consistently.
+                _walkedTo = idx;
+                if (idx >= target) return;
             }
-            int idx = _enumerator.ElementIndex;
-            _isStart[idx] = true;
-            if (idx >= target) return;
         }
     }
 }
