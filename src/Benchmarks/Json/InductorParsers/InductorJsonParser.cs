@@ -137,15 +137,16 @@ public static class InductorJsonParser
         }
         if (symbol.Is(JsonObjectRule))
         {
-            // JsonMemberRule is Flatten-default, so its two kept children
-            // (key JsonStringRule match + value) are lifted into
-            // JsonObjectRule's children. Read pairwise: even indices are
-            // keys, odd indices are values.
-            var members = new Dictionary<string, IJson>(symbol.Children.Count / 2);
-            for (int i = 0; i < symbol.Children.Count; i += 2)
+            // JsonMemberRule is named with .As("member"), so it's Preserve
+            // by default and each member shows up as its own child of the
+            // object. The member's two surviving children are the key
+            // string and the value (the colon and surrounding whitespace
+            // are filtered out as Delete).
+            var members = new Dictionary<string, IJson>(symbol.Children.Count);
+            foreach (var memberSymbol in symbol.Children)
             {
-                string key = DecodeStringBody(symbol.Children[i]);
-                IJson value = BuildTyped(symbol.Children[i + 1]);
+                string key = DecodeStringBody(memberSymbol.Children[0]);
+                IJson value = BuildTyped(memberSymbol.Children[1]);
                 members[key] = value;
             }
             return new JsonObject(members);

@@ -719,12 +719,32 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // instead of relying on "default happens to mean empty."
     public static readonly TokenSet Empty = default;
 
-    // The universal set, containing every valid Unicode scalar value
-    // (0..0x10FFFF minus the surrogate block). The complement of Empty.
-    // Used as the "unknown / anything goes" default for FirstConsumedTokens
-    // (see RuleStartRequirements) so rules with no tighter information
-    // never get filtered out.
+    // The scalar-value universe: every code point in 0..0x10FFFF except
+    // the surrogate block 0xD800..0xDFFF. Equal to ~Empty, since
+    // operator ~ complements over scalar values only. Used as the
+    // "unknown / anything goes" default for FirstConsumedTokens (see
+    // RuleStartRequirements) so rules with no tighter information never
+    // get filtered out, and the default is safe by construction: a
+    // grammar with no opinion about surrogates won't quietly admit them.
     public static readonly TokenSet Universe = ~default(TokenSet);
+
+    // All surrogate code units U+D800..U+DFFF as a TokenSet. Matchable
+    // only by grammars compiled with Compile(null), where the lexer
+    // surfaces a lone surrogate as a one-char token. Under the default
+    // Compile(FormC), the lexer pre-rejects lone surrogates from input,
+    // so this set has nothing to match against.
+    //
+    // The two named entry points for putting surrogates into a TokenSet
+    // are this constant (the whole block) and SurrogateRange (a sub-
+    // block). Range, Single, and Runes reject surrogate endpoints /
+    // arguments, and operator ~ never fabricates surrogates from a
+    // surrogate-free input. So Surrogates and SurrogateRange are the
+    // only places fresh surrogates come from; from there union and
+    // intersection move them between sets, and complement strips them
+    // out. A grammar that doesn't say "Surrogates" or "SurrogateRange"
+    // never gets one in any TokenSet it builds.
+    public static readonly TokenSet Surrogates =
+        new TokenSet(new[] { new Interval(0xD800, 0xDFFF) });
 
     public static TokenSet Single(char c) => Single((int)c);
     public static TokenSet Single(Rune r) => Single(r.Value);
@@ -736,19 +756,48 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     public static TokenSet Range(char low, char high) => Range((int)low, (int)high);
     public static TokenSet Range(Rune low, Rune high) => Range(low.Value, high.Value);
-    // Validates the endpoints themselves, not the interior of the range.
-    // That means Range(0, 0x10FFFF) is allowed even though the interval
-    // covers the surrogate block 0xD800..0xDFFF, which isn't a set of
-    // valid scalar values. The internal set ends up with "dead" slots in
-    // that block, which is harmless: the lexer never produces surrogate
-    // halves as token values, so no Contains() check against those slots
-    // can ever fire. Auto-splitting the range around the surrogate gap
-    // would be more principled but also more code for zero user-visible
-    // effect.
+    // Builds a TokenSet of scalar values in [low, high]. Both endpoints
+    // must be valid Unicode scalar values (no surrogate halves) and a
+    // range that straddles the surrogate block is split into two
+    // intervals so the result contains no surrogate code units. So
+    // Range(0, 0x10FFFF) is the set of every scalar value, with no
+    // surrogates, and that's the only thing it can mean. To get
+    // surrogates into a set, name them with Surrogates or SurrogateRange
+    // and union them in.
     public static TokenSet Range(int low, int high)
     {
         ValidateScalarValue(low, nameof(low));
         ValidateScalarValue(high, nameof(high));
+        if (high < low) throw new ArgumentException("high must be >= low");
+        if (low < SurrogateLow && high > SurrogateHigh)
+            return new TokenSet(new[]
+            {
+                new Interval(low, SurrogateLow - 1),
+                new Interval(SurrogateHigh + 1, high),
+            });
+        return new TokenSet(new[] { new Interval(low, high) });
+    }
+
+    // Builds a TokenSet covering [low, high] inside the surrogate block
+    // 0xD800..0xDFFF. Both endpoints must themselves be surrogate code
+    // units. Use this to select a specific sub-range of the surrogate
+    // block (just the leading-surrogate half, just the trailing-surrogate
+    // half, etc.); for the whole block use the Surrogates constant.
+    //
+    // The result is matchable only by grammars compiled with
+    // Compile(null), where the lexer surfaces lone surrogates as one-char
+    // tokens. Under the default Compile(FormC) the lexer pre-rejects
+    // lone surrogates from input, so the set has nothing to match.
+    public static TokenSet SurrogateRange(int low, int high)
+    {
+        if (low < SurrogateLow || low > SurrogateHigh)
+            throw new ArgumentOutOfRangeException(nameof(low), low,
+                "Must be a surrogate code unit (0xD800..0xDFFF). " +
+                "Use Range for scalar-value ranges.");
+        if (high < SurrogateLow || high > SurrogateHigh)
+            throw new ArgumentOutOfRangeException(nameof(high), high,
+                "Must be a surrogate code unit (0xD800..0xDFFF). " +
+                "Use Range for scalar-value ranges.");
         if (high < low) throw new ArgumentException("high must be >= low");
         return new TokenSet(new[] { new Interval(low, high) });
     }
@@ -1003,11 +1052,24 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return new TokenSet(result.ToArray(), mergedGraphemes);
     }
 
-    // Complement against the full set of Unicode scalar values: everything
-    // in 0..0x10FFFF except the surrogate block 0xD800..0xDFFF (which isn't
-    // a set of valid scalar values) and except the input set's intervals.
-    // Implementation walks the input intervals and emits the gaps between
-    // them, splitting any gap that straddles the surrogate block.
+    // Complement over the scalar-value universe. The result is always
+    // surrogate-free, regardless of whether the input had surrogates.
+    // So ~Letters is "every scalar non-letter" without quietly admitting
+    // U+D800..U+DFFF, and ~Empty is the scalar universe (also exposed
+    // as TokenSet.Universe). A grammar that wants surrogates in the
+    // complement writes `~set | Surrogates`. The rule is: surrogates
+    // enter a TokenSet through the Surrogates constant or SurrogateRange
+    // and never through a complement. Union and intersection move them
+    // between sets, but ~ never fabricates them.
+    //
+    // The cost is that ~ is not involutive across the surrogate
+    // boundary: ~~Surrogates is the scalar universe, not Surrogates,
+    // because the first ~ strips Surrogates' code units and the second
+    // ~ can't put them back. The opposite ordering (~ as true complement
+    // and surrogates riding along in ~A whenever A doesn't have them)
+    // would buy involution at the cost of NoneOf(Letters) silently
+    // matching a lone surrogate under Compile(null). The surface every
+    // author hits wins.
     //
     // Throws InvalidOperationException when the input has any multi-rune
     // grapheme entries. The universe of grapheme clusters is unbounded
@@ -1023,8 +1085,6 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                 "The universe of grapheme clusters is unbounded, so the result " +
                 "isn't representable as a finite set. Build the rune-only mask " +
                 "you want to subtract and use `set & ~runeOnlyMask` instead.");
-        const int MinScalarValue = 0;
-        const int MaxScalarValue = 0x10FFFF;
         var inputRanges = a._ranges;
         var result = new List<Interval>();
         int cursor = MinScalarValue;
@@ -1033,13 +1093,30 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             for (int index = 0; index < inputRanges.Length; index++)
             {
                 if (cursor < inputRanges[index].Low)
-                    EmitIntervalSkippingSurrogates(result, cursor, inputRanges[index].Low - 1);
+                    EmitScalarInterval(result, cursor, inputRanges[index].Low - 1);
                 cursor = inputRanges[index].High + 1;
             }
         }
         if (cursor <= MaxScalarValue)
-            EmitIntervalSkippingSurrogates(result, cursor, MaxScalarValue);
+            EmitScalarInterval(result, cursor, MaxScalarValue);
         return new TokenSet(result.ToArray());
+    }
+
+    // Emit [low, high] into result, splitting around the surrogate block
+    // if the interval straddles it so the result holds only scalar
+    // values. Called from operator ~ to keep surrogates out of complement
+    // results.
+    private static void EmitScalarInterval(List<Interval> result, int low, int high)
+    {
+        if (high < SurrogateLow || low > SurrogateHigh)
+        {
+            result.Add(new Interval(low, high));
+            return;
+        }
+        if (low < SurrogateLow)
+            result.Add(new Interval(low, SurrogateLow - 1));
+        if (high > SurrogateHigh)
+            result.Add(new Interval(SurrogateHigh + 1, high));
     }
 
     // Sorted-merge union of two sorted-ordinal grapheme arrays. Linear
@@ -1105,24 +1182,16 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return merged.Count == 0 ? Array.Empty<string>() : merged.ToArray();
     }
 
-    // Emit [low, high] into result, splitting around the surrogate block
-    // 0xD800..0xDFFF if the interval straddles it. Called only from the
-    // complement operator, where the input interval came from a gap
-    // calculation and is therefore guaranteed non-empty (low <= high).
-    private static void EmitIntervalSkippingSurrogates(List<Interval> result, int low, int high)
-    {
-        const int SurrogateLow = 0xD800;
-        const int SurrogateHigh = 0xDFFF;
-        if (high < SurrogateLow || low > SurrogateHigh)
-        {
-            result.Add(new Interval(low, high));
-            return;
-        }
-        if (low < SurrogateLow)
-            result.Add(new Interval(low, SurrogateLow - 1));
-        if (high > SurrogateHigh)
-            result.Add(new Interval(SurrogateHigh + 1, high));
-    }
+    // Boundary constants for the surrogate code-unit block (UTF-16
+    // surrogate halves, not valid Unicode scalar values) and the closed
+    // [0, 0x10FFFF] code-point universe. Used by Range, SurrogateRange,
+    // operator ~, and the per-rune walks in NormalizedFor /
+    // WithCompatibilityEquivalents / BuildCategories /
+    // BuildInlineWhitespace.
+    private const int SurrogateLow = 0xD800;
+    private const int SurrogateHigh = 0xDFFF;
+    private const int MinScalarValue = 0;
+    private const int MaxScalarValue = 0x10FFFF;
 
     private static Interval[] Normalize(List<Interval> ranges)
     {

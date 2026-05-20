@@ -49,21 +49,6 @@ public static class JsonStringParser
             return false;
         }
 
-        // serde_json's sixth string error, InvalidUnicodeCodePoint, fires for
-        // a bare unpaired surrogate code unit in the string content. The
-        // grammar can't catch it: the surrogate block 0xD800..0xDFFF isn't
-        // expressible as a TokenSet (see JsonStringGrammar's header comment
-        // and backlog item 0000a). So it's a post-parse check here.
-        int loneSurrogate = FindUnpairedSurrogate(literal);
-        if (loneSurrogate >= 0)
-        {
-            error = new JsonStringParseError(
-                "invalid unicode code point; the string content contains an " +
-                "unpaired UTF-16 surrogate code unit",
-                loneSurrogate, 0, loneSurrogate, literal);
-            return false;
-        }
-
         var builder = new StringBuilder();
         var body = result.Tree!.Find(JsonStringGrammar.Body);
         if (body is not null)
@@ -116,27 +101,5 @@ public static class JsonStringParser
 
     private static int Hex4(string text, int offset) =>
         int.Parse(text.AsSpan(offset, 4), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-
-    // Index of the first UTF-16 surrogate code unit that isn't part of a
-    // valid high+low pair, or -1 if the string is well-formed UTF-16.
-    private static int FindUnpairedSurrogate(string text)
-    {
-        for (int i = 0; i < text.Length; i++)
-        {
-            char c = text[i];
-            if (char.IsHighSurrogate(c))
-            {
-                if (i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
-                {
-                    i++;          // a well-formed pair, skip its low half
-                    continue;
-                }
-                return i;         // a high surrogate with no low half after it
-            }
-            if (char.IsLowSurrogate(c))
-                return i;         // a low surrogate with no high half before it
-        }
-        return -1;
-    }
 }
 

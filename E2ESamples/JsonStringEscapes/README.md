@@ -13,6 +13,16 @@ This sample was built to answer the backlog item "do some appbuilding to
 ensure it is natural to give good error messages." So the README leads with
 that exercise, not with the rewrite.
 
+This sample originally hit a wall on the sixth serde_json error
+(`InvalidUnicodeCodePoint`, a bare unpaired surrogate code unit in the
+input): the surrogate block U+D800..U+DFFF wasn't expressible as a
+TokenSet, so that one error was a post-parse check. Backlog item 0000a
+added `TokenSet.Surrogates` and `TokenSet.SurrogateRange` so a grammar can
+name the surrogate block, and this sample now handles all six errors as
+grammar rules. The narrative below still walks through the original
+friction. The "what shipped" details (line counts, the error-mapping table)
+already reflect the post-0000a grammar.
+
 ## Why this parser
 
 We went looking for real code that has to deal with **lone surrogates**, and
@@ -158,14 +168,14 @@ arguably the better of the two every time it differs.
 
 Three pieces of friction came up, each now a backlog item:
 
-- **The sixth error couldn't be a grammar rule at all.**
+- **The sixth error couldn't be a grammar rule at all** (originally).
   `InvalidUnicodeCodePoint` fires for a bare unpaired surrogate code unit
   sitting literally in the input (an actual surrogate char, not the six-char
-  text `\uD800`). The grammar can't reject that, because the surrogate block
-  `0xD800..0xDFFF` isn't expressible as a `TokenSet`: `TokenSet.Range`
-  rejects surrogate endpoints and the `~` operator strips the surrogate
-  block out. So `Rewrite/JsonStringParser.cs` handles it as a post-parse
-  scan. Filed as backlog `0000a`.
+  text `\uD800`). The grammar couldn't reject that, because the surrogate
+  block `0xD800..0xDFFF` wasn't expressible as a `TokenSet`. Filed as
+  backlog `0000a`, now fixed: `TokenSet.Surrogates` and `SurrogateRange`
+  let the grammar name the block, and the body's `NoneOf` excludes it
+  alongside the control characters. All six errors are now grammar errors.
 
 - **There's no `Fail(message)` rule.** "A lone trailing surrogate is always
   an error here" needs a rule that just fails with a message. There isn't
@@ -203,7 +213,7 @@ ControlCharacterWhileParsingString   Not(OneOf(controlCharacter)).WithError(...)
 InvalidEscape                        the AlwaysFails(...) catch-all in Escape
 UnexpectedEndOfHexEscape             the required \ and u of the trailing-surrogate escape
 LoneLeadingSurrogateInHexEscape      trailingSurrogate's .WithError, and loneTrailingSurrogate
-InvalidUnicodeCodePoint              post-parse FindUnpairedSurrogate (backlog 0000a)
+InvalidUnicodeCodePoint              Not(OneOf(TokenSet.Surrogates)).WithError(...) (after backlog 0000a)
 ```
 
 serde_json reports both a lone *leading* and a lone *trailing* surrogate
@@ -219,19 +229,19 @@ better than the original's.
                                       code lines
   Original/SerdeJsonStringParser.cs       198
   ----
-  Rewrite/JsonStringGrammar.cs             73
-  Rewrite/JsonStringParser.cs             107
-  Rewrite total                           180
+  Rewrite/JsonStringGrammar.cs             77
+  Rewrite/JsonStringParser.cs              79
+  Rewrite total                           156
 ```
 
-About the same size, which is the honest result here, and a different shape.
-Of the grammar's 73 lines, roughly 20 are the eight error-message strings
-(each wrapped across two or three lines) and 3 are the `AlwaysFails` helper,
-so the rule definitions proper are about 35 lines. The twin packs scanning,
-surrogate validation, decoding, and error positioning into one imperative
-loop. The rewrite splits validation (the grammar) from decoding (the parser),
-and gets a walkable parse tree and four-unit error positions for free,
-neither of which the twin has.
+Smaller than the twin and a different shape. Of the grammar's 77 lines,
+roughly 20 are the eight error-message strings (each wrapped across two or
+three lines) and 3 are the `AlwaysFails` helper, so the rule definitions
+proper are about 35 lines. The twin packs scanning, surrogate validation,
+decoding, and error positioning into one imperative loop. The rewrite
+splits validation (the grammar) from decoding (the parser), and gets a
+walkable parse tree and four-unit error positions for free, neither of
+which the twin has.
 
 ## Worked example
 

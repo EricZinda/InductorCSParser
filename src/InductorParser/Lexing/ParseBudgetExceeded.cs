@@ -16,9 +16,19 @@ internal sealed class ParseBudgetExceeded : Exception
 {
     public ParseOutcome Outcome { get; }
 
-    public ParseBudgetExceeded(ParseOutcome outcome)
+    // The "how far did the parser get" position, captured at throw time
+    // by Lexer.ThrowBudgetExceeded so it survives the unwind of any
+    // active lookahead Probe. The Probe's Dispose runs on the exception
+    // path and restores the failure tracker to its pre-probe value, so
+    // the catch handler in Rule.ParseRecursive can't reliably read
+    // lexer.DeepestFailure after the unwind. Capturing the value at
+    // throw time freezes it before any restoration runs.
+    public int DeepestPositionAtAbort { get; }
+
+    public ParseBudgetExceeded(ParseOutcome outcome, int deepestPositionAtAbort)
         : base($"Parse aborted: {outcome}.")
     {
         Outcome = outcome;
+        DeepestPositionAtAbort = deepestPositionAtAbort;
     }
 }
