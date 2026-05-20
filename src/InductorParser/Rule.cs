@@ -700,9 +700,11 @@ public abstract class Rule
             throw new InvalidOperationException(
                 $".WithError(\"{errorMessage}\") can't be applied to this rule: " +
                 $"it already has the error message \"{_errorMessage}\". " +
-                $".WithError(...) is set-once. To reuse this rule shape with a " +
-                $"different error message, build a factory function that returns " +
-                $"a fresh rule each call.");
+                $".WithError(...) is set-once. To attach a different error to the " +
+                $"same rule shape at multiple call sites, wrap it with Alias(...) " +
+                $"to get a fresh wrapper that can carry its own error: " +
+                $"Alias(rule).WithError(\"{errorMessage}\"). Or build a factory " +
+                $"function that returns a fresh rule each call.");
         _errorMessage = errorMessage;
         _errorForced = forced;
         return this;
