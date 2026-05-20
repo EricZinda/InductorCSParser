@@ -905,6 +905,36 @@ public class ScanUntilRuleTests
     }
 
     [Test]
+    public void ScanUntil_WithError_anchors_at_deepest_subtree_position_when_fast_path_escape_end_fails()
+    {
+        // Literal("uX") on "\uY" matches 'u' then mismatches 'Y' against 'X',
+        // leaving a mechanical failure at offset 2 even though the escape-end
+        // itself rolled back to 1. ScanUntil's .WithError has to anchor at
+        // the deeper subtree position or it loses the deepest-wins tiebreaker.
+        var rule = ScanUntil(TokenSet.Runes("\""), new Rune('\\'), Literal("uX"))
+            .WithError("bad string body");
+        var result = rule.Parse("\\uY\"");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Does.Contain("bad string body"));
+    }
+
+    [Test]
+    public void ScanUntil_WithError_anchors_at_deepest_subtree_position_when_rule_form_escape_end_fails()
+    {
+        // Same shape as the fast-path test above, but with the rule-form
+        // escape-start: a multi-char Literal triggers the escape, and a
+        // multi-char Literal escape-end records its failure deeper than
+        // where the escape-end started.
+        var rule = ScanUntil(TokenSet.Runes("\""), Literal("$$"), Literal("uX"))
+            .WithError("bad string body");
+        var result = rule.Parse("$$uY\"");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Does.Contain("bad string body"));
+    }
+
+    [Test]
     public void ScanUntil_strict_fails_on_EOF_even_with_escape_support()
     {
         // Escape-having variant: even when escapes are configured, a
