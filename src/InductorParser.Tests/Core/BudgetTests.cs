@@ -280,4 +280,96 @@ public class BudgetTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(341),
             "ErrorCharIndex should reflect DeepestFailure, not the rolled-back lexer.Position.");
     }
+
+    // Regression tests: when a budget trips while a lookahead Probe is
+    // active, the throw unwinds through Probe.Dispose, which restores
+    // the failure tracker to its pre-probe state. Without the fix in
+    // Lexer.ThrowBudgetExceeded, ErrorCharIndex collapses to 0. The four
+    // tests below cover each budget kind so a new throw site that
+    // bypasses the helper gets caught for whichever outcome it touches.
+    //
+    // Shared grammar: Peek(recursive inner). The inner's first Or branch
+    // consumes one 'a' then fails on 'z' (so RecordFailure fires inside
+    // the probe), and the second branch consumes one 'a' and recurses.
+    // The MaxDepth case trips on the depth check at level 17; the three
+    // periodic-check cases (RuleCountLimit, Timeout, Cancellation) all
+    // trip at invocation 1024, which lands on level 147 of the recursion.
+
+    [Test]
+    public void Aborted_result_keeps_deepest_progress_when_MaxDepth_trips_inside_a_lookahead_probe()
+    {
+        var inner = new LateBoundRule("inner");
+        inner.Bind(Or(
+            And(Token('a'), Token('z')),
+            And(Token('a'), inner)));
+
+        var rule = Peek(inner);
+        var options = new ParseOptions { MaxDepth = 50 };
+        var result = rule.Parse(new string('a', 1000), options);
+
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.DepthLimitExceeded));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(16));
+    }
+
+    [Test]
+    public void Aborted_result_keeps_deepest_progress_when_RuleCountLimit_trips_inside_a_lookahead_probe()
+    {
+        var inner = new LateBoundRule("inner");
+        inner.Bind(Or(
+            And(Token('a'), Token('z')),
+            And(Token('a'), inner)));
+
+        var rule = Peek(inner);
+        var options = new ParseOptions { RuleCountLimit = 100 };
+        var result = rule.Parse(new string('a', 1000), options);
+
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.RuleCountLimitExceeded));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(146));
+    }
+
+    [Test]
+    public void Aborted_result_keeps_deepest_progress_when_Timeout_trips_inside_a_lookahead_probe()
+    {
+        var inner = new LateBoundRule("inner");
+        inner.Bind(Or(
+            And(Token('a'), Token('z')),
+            And(Token('a'), inner)));
+
+        var rule = Peek(inner);
+        // RuleCountLimit = 0 disables the rule-count slot so the timeout
+        // slot is the one that trips (CheckPeriodicBudgets's order is
+        // rule-count, then timeout, then cancellation).
+        var options = new ParseOptions
+        {
+            Timeout = TimeSpan.FromTicks(1),
+            RuleCountLimit = 0,
+        };
+        var result = rule.Parse(new string('a', 1000), options);
+
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.Timeout));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(146));
+    }
+
+    [Test]
+    public void Aborted_result_keeps_deepest_progress_when_Cancellation_trips_inside_a_lookahead_probe()
+    {
+        var cancellation = new ParseCancellation();
+        cancellation.Cancel();
+
+        var inner = new LateBoundRule("inner");
+        inner.Bind(Or(
+            And(Token('a'), Token('z')),
+            And(Token('a'), inner)));
+
+        var rule = Peek(inner);
+        var options = new ParseOptions
+        {
+            Cancellation = cancellation,
+            RuleCountLimit = 0,
+        };
+        var result = rule.Parse(new string('a', 1000), options);
+
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.Canceled));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(146));
+    }
 }

@@ -634,7 +634,7 @@ public sealed partial class Lexer
     {
         _ruleDepth++;
         if (_maxDepth > 0 && _ruleDepth > _maxDepth)
-            throw new ParseBudgetExceeded(ParseOutcome.DepthLimitExceeded);
+            ThrowBudgetExceeded(ParseOutcome.DepthLimitExceeded);
 
         _ruleInvocations++;
         if ((_ruleInvocations & BudgetCheckMask) == 0)
@@ -658,7 +658,7 @@ public sealed partial class Lexer
     internal void EnterRuleAtDepth(int depth)
     {
         if (_maxDepth > 0 && depth > _maxDepth)
-            throw new ParseBudgetExceeded(ParseOutcome.DepthLimitExceeded);
+            ThrowBudgetExceeded(ParseOutcome.DepthLimitExceeded);
 
         _ruleInvocations++;
         if ((_ruleInvocations & BudgetCheckMask) == 0)
@@ -687,11 +687,31 @@ public sealed partial class Lexer
     private void CheckPeriodicBudgets()
     {
         if (_ruleCountLimit > 0 && _ruleInvocations > _ruleCountLimit)
-            throw new ParseBudgetExceeded(ParseOutcome.RuleCountLimitExceeded);
+            ThrowBudgetExceeded(ParseOutcome.RuleCountLimitExceeded);
         if (_stopwatch != null && _stopwatch.Elapsed >= _timeout)
-            throw new ParseBudgetExceeded(ParseOutcome.Timeout);
+            ThrowBudgetExceeded(ParseOutcome.Timeout);
         if (_cancellation != null && _cancellation.IsCanceled)
-            throw new ParseBudgetExceeded(ParseOutcome.Canceled);
+            ThrowBudgetExceeded(ParseOutcome.Canceled);
+    }
+
+    // Throw a budget abort with the deepest-failure position frozen at
+    // throw time. Without this freeze, an active lookahead Probe's
+    // Dispose would run on the exception path and restore the failure
+    // tracker to its pre-probe value, collapsing the catch handler's
+    // "how far did the parse get" reading to a shallow position. By
+    // computing the position here, before the throw, and stashing it
+    // on the exception, the catch handler in Rule.ParseRecursive gets
+    // a value that survives the unwind regardless of how many probes
+    // were open.
+    //
+    // NoInlining keeps the throw out of the hot inlining of EnterRule /
+    // EnterRuleAtDepth: a method that throws is poison to the JIT's
+    // inliner, and the throw fires at most once per parse anyway.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void ThrowBudgetExceeded(ParseOutcome outcome)
+    {
+        int deepestAtAbort = Math.Max(DeepestFailure, _position);
+        throw new ParseBudgetExceeded(outcome, deepestAtAbort);
     }
 
     public struct Transaction : IDisposable
