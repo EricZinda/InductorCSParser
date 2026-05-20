@@ -434,11 +434,13 @@ public class PrologGrammarTests
     [Test]
     public void Cpp_optional_whitespace_corpus_parses()
     {
-        // OptionalWhitespace on its own doesn't force EOF. To check the
-        // corpus covers the full input we tack on an Eof so a half-
-        // matched whitespace run fails loudly.
-        var rule = Rules.And(PrologGrammar.OptionalWhitespace, Rules.Eof());
-        AssertAllParse(rule, CppOptionalWhitespaceCorpus, "OptionalWhitespace");
+        // OptionalWhitespace.Parse with the default options (AllowTrailingInput =
+        // false) already rejects a half-matched run, so we don't need to
+        // wrap it in And(..., Eof()). Wrapping a shared static rule in a
+        // new composite is also rejected by the parser's fresh-child
+        // check when the static rule has been compiled by another test in
+        // this fixture.
+        AssertAllParse(PrologGrammar.OptionalWhitespace, CppOptionalWhitespaceCorpus, "OptionalWhitespace");
     }
 
     [Test]

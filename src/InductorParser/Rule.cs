@@ -765,6 +765,17 @@ public abstract class Rule
             return this;
         }
 
+        // Every rule reachable from this root has to be unsealed. Compile
+        // commits each rule's id, FirstConsumedTokens, projected literal
+        // text, and normalization form, and the per-pass mutators don't
+        // re-check `_sealed`; walking into one already-sealed rule would
+        // silently corrupt its previous compile's state. Trade-off: a
+        // static sub-rule shared across grammars stops working once one
+        // of them has been Parsed or Compiled. Expose shared shapes via
+        // factory functions that return a fresh instance per call.
+        var freshTreeVisited = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
+        CheckNoSealedReachableRules(this, freshTreeVisited);
+
         var usedIds = new HashSet<int>();
         var explicitRules = new Dictionary<int, Rule>();
         var namedRules = new Dictionary<string, Rule>();
@@ -1844,6 +1855,29 @@ public abstract class Rule
         r._normalizationForm = form;
         foreach (var child in r.Children)
             StampNormalizationForm(child, visited, form);
+    }
+
+    // Walk the graph and reject this Compile if any reachable rule has
+    // already been compiled. See the caller in Compile for the full
+    // rationale. The short version is that a rule's compile bakes in
+    // its identity (ids, FirstConsumedTokens, projected literal text,
+    // normalization form), and the per-pass mutators inside Compile
+    // don't re-check `_sealed`. This walk is the one check that makes
+    // those passes safe. Without it, a second Compile from a new root
+    // would silently corrupt the sealed sub-rule's state.
+    private static void CheckNoSealedReachableRules(Rule r, HashSet<Rule> visited)
+    {
+        if (!visited.Add(r)) return;
+        if (r._sealed)
+        {
+            string ruleLabel = r.Name ?? r._ruleTraceName;
+            throw new InvalidOperationException(
+                $"Rule '{ruleLabel}' has already been compiled and can't be reused in " +
+                $"another grammar. Compile the parent first, or use factory functions for " +
+                $"shared rule shapes.");
+        }
+        foreach (var child in r.Children)
+            CheckNoSealedReachableRules(child, visited);
     }
 
     private void ThrowIfSealed()

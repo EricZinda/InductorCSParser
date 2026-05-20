@@ -473,7 +473,7 @@ public sealed partial class Lexer
             return new Token(_input, _position, 0, isEof: true);
         }
         int len = NextTokenLength(_position);
-        if (len <= 0) len = 1; // defensive: never advance zero on a non-EOF read
+        Invariant.That(len > 0, $"NextTokenLength returned <= 0 on a non-EOF read at position {_position} (endPosition {_endPosition}). Read would advance zero and loop.");
         Token t = new Token(_input, _position, len, isEof: false);
         _position += len;
         Trace(TraceLevel.Diagnostic, "Lexer.Read", TraceOutcome.Info, $"'{_input.Substring(t.Offset, t.Length)}', Consumed: {_position}");

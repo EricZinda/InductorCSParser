@@ -335,12 +335,10 @@ internal sealed class ScanUntilRule : Rule
                         if (end == null)
                         {
                             TraceFailure(lexer, $"bad escape end at offset {lexer.Position}");
-                            // Record at the stuck position: the scan got
-                            // here and couldn't finish the escape. A
-                            // .WithError rides along at that same spot
-                            // rather than being pulled back to the rule's
-                            // start. See docs/ErrorArchitecture.md.
-                            lexer.RecordFailure(lexer.Position, ErrorMessage, ErrorForced);
+                            // Composite anchor: a multi-step escape-end's deeper inner
+                            // failure would otherwise shadow this .WithError. See
+                            // docs/ErrorArchitecture.md.
+                            lexer.RecordCompositeFailure(lexer.Position, ErrorMessage, ErrorForced);
                             return null;
                         }
                         // Zero-width guard: if both the start and end
@@ -373,11 +371,8 @@ internal sealed class ScanUntilRule : Rule
                     if (end == null)
                     {
                         TraceFailure(lexer, $"bad escape end at offset {pos + tokenLen}");
-                        // Record at the stuck position (the escape end
-                        // failed and rolled the cursor back to just past
-                        // the escape-start rune). See the rule-form path
-                        // above and docs/ErrorArchitecture.md.
-                        lexer.RecordFailure(lexer.Position, ErrorMessage, ErrorForced);
+                        // Composite anchor, same shape as the rule-form path above.
+                        lexer.RecordCompositeFailure(lexer.Position, ErrorMessage, ErrorForced);
                         return null;
                     }
                     continue;

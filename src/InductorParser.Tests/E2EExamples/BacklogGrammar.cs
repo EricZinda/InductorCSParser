@@ -89,4 +89,15 @@ public static class BacklogGrammar
         ParagraphTarget,
         ZeroOrMore(AnyToken())
     );
+
+    // Compile every top-level rule together so the strict "fresh-tree"
+    // Compile invariant holds for tests that .Parse on more than one of
+    // them. This Or is only used for its reachability (never parsed
+    // against), so one Compile walk seals every reachable rule (including
+    // the shared private sub-rules RestOfLine and OptionalOneWhitespace)
+    // in a single pass.
+    static BacklogGrammar()
+    {
+        Or(H1Heading, H2Heading, BulletHeading, HrRun, HrSpaced, ParagraphSplit).Compile();
+    }
 }
