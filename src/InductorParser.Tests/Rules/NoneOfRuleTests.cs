@@ -466,4 +466,28 @@ public class NoneOfRuleTests
             input: "X",
             expectedSourceText: "X");
     }
+
+    [Test]
+    public void NoneOf_compatibility_conversion_compile_error_does_not_claim_NoneOf_matches_nothing()
+    {
+        // U+FB01 (ﬁ) converts under FormKC to "fi", two graphemes, so
+        // the entry can't survive as one TokenSet member and Compile
+        // throws. The shared OneOf/NoneOf offender text used to assert
+        // "no single input token can match", which is the OneOf
+        // consequence stated verbatim. For NoneOf it is the inverse of
+        // the truth: NoneOf(Graphemes("ﬁ")) under FormKC would match
+        // *every* token, because a dropped exclusion entry excludes
+        // nothing. The diagnostic shouldn't tell a NoneOf author their
+        // rule matches nothing when it actually matches everything.
+        var rule = NoneOf(TokenSet.Graphemes(UnicodeExamples.FiLigatureGrapheme));
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => rule.Compile(NormalizationForm.FormKC));
+        Assert.That(exception!.Message, Does.Contain("fi"),
+            "names the multi-grapheme conversion result");
+        Assert.That(exception.Message, Does.Contain("WithCompatibilityEquivalents"),
+            "points at the helper that resolves the conversion");
+        Assert.That(exception.Message, Does.Not.Contain("no single input token can match"),
+            "the OneOf-only consequence is false for NoneOf, which matches every token here");
+    }
 }

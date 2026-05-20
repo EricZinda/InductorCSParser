@@ -1072,12 +1072,15 @@ public abstract class Rule
             // The throw rode up through every active rule's transaction
             // (the `using var transaction` in Rule.TryParse), which
             // rolled the lexer position back frame by frame, so
-            // lexer.Position is now back at 0. lexer.DeepestFailure isn't
-            // rolled back (it's a high-water mark of failure positions),
-            // so it's the best "how far did the parser get" hint we can
-            // give. Use the same Math.Max idiom as the normal failure
-            // path below for consistency.
-            int abortRaw = Math.Max(lexer.DeepestFailure, lexer.Position);
+            // lexer.Position is now back at 0. An active lookahead Probe
+            // also restores the failure tracker on its way out (see
+            // Lexer.Probe), so lexer.DeepestFailure would no longer
+            // reflect how far the probe explored either. Lexer.ThrowBudgetExceeded
+            // freezes the "how far did the parser get" reading at throw
+            // time (Math.Max(DeepestFailure, Position) before any
+            // restoration runs) and parks it on the exception, so we
+            // read it back unchanged here.
+            int abortRaw = budget.DeepestPositionAtAbort;
             int abortPos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, abortRaw, normalizeInput);
             return ParseResult.Aborted(budget.Outcome, abortPos, BuildBudgetMessage(budget.Outcome, abortPos, input, options), input, this);
         }
@@ -1266,7 +1269,7 @@ public abstract class Rule
     // the three modes per the TryParseRule rules below.
     internal Symbol? TryParse(Lexer lexer, List<Symbol>? outputSymbols)
     {
-        lexer.EnterRule();
+        lexer.EnterRuleBudgetChecks();
         try
         {
             // effectiveFlattenType collapses FlattenType +
@@ -1302,8 +1305,9 @@ public abstract class Rule
                 // non-null Symbol, and every non-commit exit (failure
                 // return, a thrown exception, a tripped budget) rolls
                 // back through the `using`. The transaction opens inside
-                // this `try`, after EnterRule, so an EnterRule depth-limit
-                // throw can't leak a transaction.
+                // this `try`, after EnterRuleBudgetChecks, so an
+                // EnterRuleBudgetChecks depth-limit throw can't leak a
+                // transaction.
                 using var transaction = lexer.BeginTransaction();
                 result = TryParseRule(lexer, transaction.StartPosition, effectiveFlattenType, outputSymbols);
                 if (result != null)
@@ -1338,7 +1342,7 @@ public abstract class Rule
         }
         finally
         {
-            lexer.ExitRule();
+            lexer.ExitRuleBudgetChecks();
         }
     }
 

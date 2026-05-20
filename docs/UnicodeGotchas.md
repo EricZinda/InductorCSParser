@@ -54,7 +54,7 @@ var jamoCluster = WithinToken(And(
 ));
 ```
 
-Caveats: the inner rule runs against a fresh sub-lexer that doesn't share trace or budget state with the outer lexer. It's bounded to the current token's span, so ordinary character-consuming rules stay tiny, but avoid arbitrary long-running user code inside it. Inner-rule symbols are discarded. `WithinToken` emits one leaf per grapheme to the outer tree.
+Caveats: the inner rule runs against a fresh sub-lexer that doesn't share trace state with the outer lexer (so trace output from the inner doesn't show up in the outer trace), but does inherit the caller's budget limits (`MaxDepth`, `RuleCountLimit`, `Timeout`, `Cancellation`) so a recursive inner rule on a cluster with many combining marks can't crash the host with a stack overflow. It's bounded to the current token's span, so ordinary character-consuming rules stay tiny. Inner-rule symbols are discarded. `WithinToken` emits one leaf per grapheme to the outer tree.
 
 ### Matching specific languages
 
