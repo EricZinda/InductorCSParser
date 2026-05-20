@@ -72,8 +72,9 @@ public readonly struct ParseResult
     // Language Server Protocol uses for editor diagnostics. On
     // success this is 0. On failure it's the position of the deepest
     // recorded failure (where the parser got furthest before giving
-    // up), capped to the input length so callers can index into the
-    // original input string without bounds-checking.
+    // up). Always in [0, input.Length] (enforced at construction), so
+    // callers can index into the original input string without
+    // bounds-checking.
     public int ErrorCharIndex { get; }
 
     // Error position's zero-based line number, counting \n, \r\n, and
@@ -228,6 +229,10 @@ public readonly struct ParseResult
         Outcome = outcome;
         _symbols = symbols;
         ErrorMessage = errorMessage;
+        int inputLength = input?.Length ?? 0;
+        if (errorCharIndex < 0 || errorCharIndex > inputLength)
+            throw new ArgumentOutOfRangeException(nameof(errorCharIndex), errorCharIndex,
+                $"errorCharIndex must be in [0, {inputLength}] (input.Length).");
         ErrorCharIndex = errorCharIndex;
         _input = input;
         _grammar = grammar;
