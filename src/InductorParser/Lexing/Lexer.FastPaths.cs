@@ -59,11 +59,10 @@ public sealed partial class Lexer
         // forgets to flatten its set via TokenSet.LookaheadFirstRunes
         // would see the scanner-skip step right past the multi-rune
         // entries it was supposed to stop at.
-        if (candidates.HasMultiRuneGraphemes)
-            throw new InvalidOperationException(
-                "Internal: AdvanceUntilRuneIn requires a rune-only candidate set. " +
-                "Multi-rune cluster entries are not searched and would be silently " +
-                "skipped past. Flatten via TokenSet.LookaheadFirstRunes first.");
+        Invariant.That(!candidates.HasMultiRuneGraphemes,
+            "AdvanceUntilRuneIn requires a rune-only candidate set. "
+            + "Multi-rune cluster entries are not searched and would be silently "
+            + "skipped past. Caller must flatten via TokenSet.LookaheadFirstRunes first.");
         if (IsEof) return;
 
         // Fast path for the common case: the candidate set is small
@@ -126,9 +125,9 @@ public sealed partial class Lexer
         while (_position < _endPosition)
         {
             int len = NextTokenLength(_position);
-            // defensive: NextTokenLength returns 0 only past end-of-input,
-            // which the loop's bound check excludes. Force >= 1 to advance.
-            if (len <= 0) len = 1;
+            Invariant.That(len > 0, "NextTokenLength returned <= 0 inside the "
+                + "AdvanceUntilRuneIn slow-path loop, which the `_position < _endPosition` "
+                + "loop condition already excludes. Scanner would advance zero and loop.");
 
             bool inSet;
             if (TryPeekRune(_input, _position, out int runeValue, out _))
@@ -187,13 +186,12 @@ public sealed partial class Lexer
         // silently invisible to set.Contains(runeValue) below, so a
         // caller passing a mixed set would walk right past every
         // multi-rune cluster the set was supposed to consume. The
-        // multi-rune-aware variant is AdvanceWhileTokenIn — the caller
+        // multi-rune-aware variant is AdvanceWhileTokenIn, the caller
         // is responsible for dispatching to the right one based on
         // whether the set has multi-rune entries.
-        if (set.HasMultiRuneGraphemes)
-            throw new InvalidOperationException(
-                "Internal: AdvanceWhileRuneIn requires a rune-only set. " +
-                "Use AdvanceWhileTokenIn for sets with multi-rune entries.");
+        Invariant.That(!set.HasMultiRuneGraphemes,
+            "AdvanceWhileRuneIn requires a rune-only set. "
+            + "Caller must dispatch to AdvanceWhileTokenIn for sets with multi-rune entries.");
 
         int count = 0;
 
@@ -340,9 +338,9 @@ public sealed partial class Lexer
                     return;
 
                 int len = NextTokenLength(_position);
-                // defensive: NextTokenLength returns 0 only past end-of-input,
-                // which the loop's bound check excludes. Force >= 1 to advance.
-                if (len <= 0) len = 1;
+                Invariant.That(len > 0, "NextTokenLength returned <= 0 inside the "
+                    + "AdvanceUntilLiteralCandidateIn single-literal loop, which the "
+                    + "`_position < _endPosition` loop condition already excludes. Scanner would advance zero and loop.");
                 _position = Math.Min(_position + len, _endPosition);
             }
             return;
@@ -374,9 +372,9 @@ public sealed partial class Lexer
                     return;
 
                 int len = NextTokenLength(_position);
-                // defensive: NextTokenLength returns 0 only past end-of-input,
-                // which the loop's bound check excludes. Force >= 1 to advance.
-                if (len <= 0) len = 1;
+                Invariant.That(len > 0, "NextTokenLength returned <= 0 inside the "
+                    + "AdvanceUntilLiteralCandidateIn IndexOfAny loop, which the "
+                    + "`_position < _endPosition` loop condition already excludes. Scanner would advance zero and loop.");
                 _position = Math.Min(_position + len, _endPosition);
             }
             return;
@@ -396,9 +394,9 @@ public sealed partial class Lexer
             // grapheme cluster. A full literal match is only useful at
             // positions where the outer parser could legally start.
             int len = NextTokenLength(_position);
-            // defensive: NextTokenLength returns 0 only past end-of-input,
-            // which the loop's bound check excludes. Force >= 1 to advance.
-            if (len <= 0) len = 1;
+            Invariant.That(len > 0, "NextTokenLength returned <= 0 inside the "
+                + "AdvanceUntilLiteralCandidateIn fall-through loop, which the "
+                + "`_position < _endPosition` loop condition already excludes. Scanner would advance zero and loop.");
             _position = Math.Min(_position + len, _endPosition);
         }
     }
