@@ -148,7 +148,9 @@ int port = int.Parse(typed.ToString(), CultureInfo.InvariantCulture);
 
 The grammar already verified the value's shape. If the input was `port = abc`, the typed child would be a `bareWord` (not an `integerValue`). If the input was `port = "8080"`, the typed child would be a `quotedString` and we can either coerce or reject it. 
 
-`symbol.ToString()` returns the matched text. For a leaf, that's the consumed string. For a composite like `And`, it's the concatenation of every leaf underneath. Either way, you get back what the rule consumed.
+`symbol.ToString()` returns the matched text. For a leaf, that's the consumed string. For a composite like `And`, it's the concatenation of every leaf underneath after FlattenType has been applied: Delete'd leaves are gone, Flatten'd ones lift their children into the parent. That's almost always what you want for reading a value out of the tree, and it's what this section uses to grab the port number.
+
+There's a second accessor, `symbol.SourceText`, that returns the verbatim section of input the Symbol covered. It ignores FlattenType, so it includes the characters that Delete'd rules matched. Use that when you need it for errors to show the raw text, or you don't want to flip a bunch of rules to use a different flatten mode.
 
 If you want every section regardless of context, two helpers besides `.Is()` come up enough to be worth knowing:
 
@@ -226,6 +228,19 @@ Parse failed at line 1, column 5
 ```
 
 `ErrorLine` and `ErrorColumn` follow the Language Server Protocol convention used by text editors and developer tools: zero-based, with line breaks at `\n`, `\r\n`, or lone `\r`.
+
+The example above attaches `.WithError(...)` to a `Token('=')` that's constructed right there in the `And(...)`, so the message is bound to that one caller. But what if the rule you want to decorate is one you're using in several places? Setting `.WithError("...")` on the shared rule means it will be used everywhere that rule is shared.
+
+The fix is `AliasRule`. It runs the same inner rule but carries its own identity, its own `.WithError(...)` slot, and its own `FlattenType`:
+
+```CSharp
+var comma = Token(',').Flatten(FlattenType.Delete);  // shared, silent
+
+// At the one caller that wants a message:
+new AliasRule(comma).WithError("expected ',' after citation key")
+```
+
+The alias defaults to `FlattenType.Flatten`, so it contributes no tree node, which is what you want for a delimiter. The shared `comma` stays untouched everywhere else it's referenced. If you also want the alias to surface as a named child in the tree (the typical use case for `AliasedAs`), call `comma.AliasedAs("commaAfterCitationKey").WithError("...")` instead. That flips the alias to `Preserve` and gives it a name `Tree.Find` can locate.
 
 `.WithError` covers the rules you can predict will fail. For the catch-all the parser falls back to when nothing was decorated at the deepest failure, `ParseOptions` carries a set of templates with `{name}`-style placeholders. The placeholders match the position units `ParseResult` already names, so a template author uses the same vocabulary the rest of the API does. Going back to the basic grammar (the version before we attached `.WithError`), suppose you want the catch-all rendered in French:
 
