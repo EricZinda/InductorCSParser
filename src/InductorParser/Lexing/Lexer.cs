@@ -84,6 +84,24 @@ public sealed partial class Lexer
     private Stopwatch? _stopwatch;
     private ParseCancellation? _cancellation;
 
+    // When non-null, this lexer is a sub-lexer that delegates ALL budget
+    // bookkeeping (depth increments, invocation counts, periodic checks)
+    // to the named parent lexer. The sub-lexer's own _ruleDepth /
+    // _ruleInvocations stay at zero and unused; EnterRuleBudgetChecks /
+    // ExitRuleBudgetChecks / EnterRuleAtDepthBudgetChecks /
+    // TickPeriodicBudget forward straight to the
+    // parent so MaxDepth and RuleCountLimit cover the COMBINED depth
+    // (outer's running depth at the moment the sub-lexer opened, PLUS
+    // the inner's recursion on top of it) and total invocations across
+    // outer + inner. Cancellation and the wall-clock Stopwatch are
+    // also the parent's, which a non-null _budgetParent already implies
+    // (InheritBudgetsFrom copies those references).
+    //
+    // Null means "this is a top-level lexer that owns its own budget
+    // state," which is the Rule.ParseRecursive path. Set by
+    // InheritBudgetsFrom and cleared by ResetForReuse.
+    private Lexer? _budgetParent;
+
     // Debug knob wired in from ParseOptions. Rules that would normally
     // apply parse-time tree-shape optimizations (e.g.
     // Delete-node filtering) consult this flag and skip the optimization
@@ -207,6 +225,7 @@ public sealed partial class Lexer
         _timeout = TimeSpan.Zero;
         _stopwatch = null;
         _cancellation = null;
+        _budgetParent = null;
         PreserveAllSymbols = false;
     }
 
@@ -610,8 +629,24 @@ public sealed partial class Lexer
         PreserveAllSymbols = options.PreserveAllSymbols;
     }
 
-    // Called by Rule.TryParse on entry to every rule invocation. Two
-    // cheap counters plus a periodic deeper check.
+    // Wire this lexer up as a budget sub-lexer of `source`. After this
+    // call EnterRuleBudgetChecks / ExitRuleBudgetChecks /
+    // TickPeriodicBudget forward to `source`,
+    // so the inner work stacks on the outer's counters and MaxDepth /
+    // RuleCountLimit / Timeout / Cancellation cover both sides combined.
+    // Used by WithinTokenRule; without it, a recursive inner rule on a
+    // cluster with many combining marks would crash the host with an
+    // uncatchable StackOverflowException. Nests cleanly: a sub-lexer of
+    // a sub-lexer chains through to the root that owns the counters.
+    internal void InheritBudgetsFrom(Lexer source)
+    {
+        _budgetParent = source;
+    }
+
+    // Budget bookkeeping called by Rule.TryParse on entry to every rule
+    // invocation. Two cheap counters plus a periodic deeper check; the
+    // real rule-entry machinery (transactions, output lists, dispatch)
+    // lives in Rule.TryParse itself.
     //
     // Depth is checked every call because (a) the comparison is one
     // integer op and (b) catching it late means a stack overflow already
@@ -630,11 +665,16 @@ public sealed partial class Lexer
     // twice on the same input and both runs abort at the exact same
     // invocation count, so budget tests won't be flaky.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void EnterRule()
+    internal void EnterRuleBudgetChecks()
     {
+        if (_budgetParent != null)
+        {
+            _budgetParent.EnterRuleBudgetChecks();
+            return;
+        }
         _ruleDepth++;
         if (_maxDepth > 0 && _ruleDepth > _maxDepth)
-            throw new ParseBudgetExceeded(ParseOutcome.DepthLimitExceeded);
+            ThrowBudgetExceeded(ParseOutcome.DepthLimitExceeded);
 
         _ruleInvocations++;
         if ((_ruleInvocations & BudgetCheckMask) == 0)
@@ -642,23 +682,34 @@ public sealed partial class Lexer
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void ExitRule()
+    internal void ExitRuleBudgetChecks()
     {
+        if (_budgetParent != null)
+        {
+            _budgetParent.ExitRuleBudgetChecks();
+            return;
+        }
         _ruleDepth--;
     }
 
-    // Depth-passed variant of EnterRule for an alternative evaluator that
-    // tracks call depth itself rather than through paired EnterRule /
-    // ExitRule. The recursive engine maintains depth in _ruleDepth. An
-    // evaluator that already has its own call-depth counter hands the
-    // current depth in here directly, which skips the _ruleDepth
-    // bookkeeping it doesn't use and still runs the same RuleCountLimit /
-    // Timeout / Cancellation periodic checks the recursive path runs.
+    // Depth-passed variant of EnterRuleBudgetChecks for an alternative
+    // evaluator that tracks call depth itself rather than through paired
+    // EnterRuleBudgetChecks / ExitRuleBudgetChecks. The recursive engine
+    // maintains depth in _ruleDepth. An evaluator that already has its
+    // own call-depth counter hands the current depth in here directly,
+    // which skips the _ruleDepth bookkeeping it doesn't use and still
+    // runs the same RuleCountLimit / Timeout / Cancellation periodic
+    // checks the recursive path runs.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void EnterRuleAtDepth(int depth)
+    internal void EnterRuleAtDepthBudgetChecks(int depth)
     {
+        if (_budgetParent != null)
+        {
+            _budgetParent.EnterRuleAtDepthBudgetChecks(depth);
+            return;
+        }
         if (_maxDepth > 0 && depth > _maxDepth)
-            throw new ParseBudgetExceeded(ParseOutcome.DepthLimitExceeded);
+            ThrowBudgetExceeded(ParseOutcome.DepthLimitExceeded);
 
         _ruleInvocations++;
         if ((_ruleInvocations & BudgetCheckMask) == 0)
@@ -667,7 +718,7 @@ public sealed partial class Lexer
 
     // Counter-only budget tick for an alternative evaluator, used on
     // steps that do real work but don't enter a cyclic rule (so they
-    // don't go through EnterRuleAtDepth). Skips the depth check. An
+    // don't go through EnterRuleAtDepthBudgetChecks). Skips the depth check. An
     // evaluator that calls this enforces MaxDepth itself on its
     // rule-entry path. The periodic RuleCountLimit / Timeout /
     // Cancellation check fires at the same 1024 boundary the recursive
@@ -675,6 +726,11 @@ public sealed partial class Lexer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void TickPeriodicBudget()
     {
+        if (_budgetParent != null)
+        {
+            _budgetParent.TickPeriodicBudget();
+            return;
+        }
         _ruleInvocations++;
         if ((_ruleInvocations & BudgetCheckMask) == 0)
             CheckPeriodicBudgets();
@@ -682,16 +738,36 @@ public sealed partial class Lexer
 
     // Off the hot path on purpose: only invoked once every
     // BudgetCheckInterval rule invocations, so making it a separate
-    // non-inlined method keeps EnterRule small enough for the JIT to
+    // non-inlined method keeps EnterRuleBudgetChecks small enough for the JIT to
     // inline cleanly.
     private void CheckPeriodicBudgets()
     {
         if (_ruleCountLimit > 0 && _ruleInvocations > _ruleCountLimit)
-            throw new ParseBudgetExceeded(ParseOutcome.RuleCountLimitExceeded);
+            ThrowBudgetExceeded(ParseOutcome.RuleCountLimitExceeded);
         if (_stopwatch != null && _stopwatch.Elapsed >= _timeout)
-            throw new ParseBudgetExceeded(ParseOutcome.Timeout);
+            ThrowBudgetExceeded(ParseOutcome.Timeout);
         if (_cancellation != null && _cancellation.IsCanceled)
-            throw new ParseBudgetExceeded(ParseOutcome.Canceled);
+            ThrowBudgetExceeded(ParseOutcome.Canceled);
+    }
+
+    // Throw a budget abort with the deepest-failure position frozen at
+    // throw time. Without this freeze, an active lookahead Probe's
+    // Dispose would run on the exception path and restore the failure
+    // tracker to its pre-probe value, collapsing the catch handler's
+    // "how far did the parse get" reading to a shallow position. By
+    // computing the position here, before the throw, and stashing it
+    // on the exception, the catch handler in Rule.ParseRecursive gets
+    // a value that survives the unwind regardless of how many probes
+    // were open.
+    //
+    // NoInlining keeps the throw out of the hot inlining of EnterRule /
+    // EnterRuleAtDepth: a method that throws is poison to the JIT's
+    // inliner, and the throw fires at most once per parse anyway.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void ThrowBudgetExceeded(ParseOutcome outcome)
+    {
+        int deepestAtAbort = Math.Max(DeepestFailure, _position);
+        throw new ParseBudgetExceeded(outcome, deepestAtAbort);
     }
 
     public struct Transaction : IDisposable
