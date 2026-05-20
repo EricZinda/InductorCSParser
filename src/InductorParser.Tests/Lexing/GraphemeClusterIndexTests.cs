@@ -178,11 +178,10 @@ public class GraphemeClusterIndexTests
     {
         // CRLF: position 1 (the LF) is mid-cluster. Asking for the
         // length of "the cluster starting at the LF" is incoherent.
-        // The API throws an InductorParserBugException (which derives
-        // from InvalidOperationException) so a Lexer bug that handed
-        // us a mid-cluster offset surfaces immediately and the bug
-        // exception type identifies it as an internal invariant break,
-        // not a user-API misuse.
+        // The API throws an InductorParserBugException so a Lexer bug
+        // that handed us a mid-cluster offset surfaces immediately,
+        // and the dedicated exception type identifies it as an
+        // internal invariant break rather than a user-API misuse.
         var index = GraphemeClusterIndex.For("\r\n");
         Assert.Throws<InductorParserBugException>(() => index.LengthAt(1));
     }
