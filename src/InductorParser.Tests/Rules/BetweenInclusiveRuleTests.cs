@@ -516,15 +516,15 @@ public class BetweenInclusiveRuleTests
     }
 
     [Test]
-    public void BetweenInclusive_scanner_skip_admits_a_lone_surrogate_a_covering_range_accepts()
+    public void BetweenInclusive_scanner_skip_admits_a_lone_surrogate_a_covering_set_accepts()
     {
-        // Range only validates its endpoints, so Range(0, 0xE000)
-        // spans the surrogate block 0xD800..0xDFFF. Under Compile(null)
-        // a lone surrogate is a one-char token that OneOf matches by
-        // its code unit. The scanner-skip slow path (AdvanceUntilRuneIn)
-        // must stop at such a token, so the optimized parse keeps every
-        // surrogate the plain parse keeps.
-        var set = TokenSet.Range(0, 0xE000);
+        // Range splits around the surrogate block, so a grammar that
+        // wants surrogates in the set unions TokenSet.Surrogates on.
+        // Under Compile(null) a lone surrogate is a one-char token that
+        // OneOf matches by its code unit. The scanner-skip slow path
+        // (AdvanceUntilRuneIn) must stop at such a token, so the
+        // optimized parse keeps every surrogate the plain parse keeps.
+        var set = TokenSet.Range(0, 0xE000) | TokenSet.Surrogates;
         string input = "a" + UnicodeExamples.HighSurrogateMinText + "b";
 
         // Reference: OneOf(set) matches the lone-surrogate token, so the
@@ -554,15 +554,15 @@ public class BetweenInclusiveRuleTests
         // A lone surrogate with a combining mark glued onto it (UAX #29
         // GB9 keeps Extend with the preceding char) is ONE grapheme
         // cluster, two chars wide. WithinToken matches that whole
-        // cluster by walking its runes, and both runes sit inside
-        // Range(0, 0xE000).
+        // cluster by walking its runes, and both runes sit inside the
+        // set once the user opts in to surrogates with TokenSet.Surrogates.
         //
         // The scanner-skip slow path keys off the cluster's leading
         // char. AdvanceUntilRuneIn is a lookahead scanner, so it stops
         // wherever that leading char is a candidate. A token-length
-        // gate on the lone-surrogate branch would refuse the two-char
+        // check on the lone-surrogate branch would refuse the two-char
         // cluster and skip a match WithinToken makes.
-        var set = TokenSet.Range(0, 0xE000);
+        var set = TokenSet.Range(0, 0xE000) | TokenSet.Surrogates;
         // 'a', then a lone high surrogate with a combining acute glued
         // onto it (one grapheme cluster, two chars wide), then 'b'.
         string input = "a" + UnicodeExamples.HighSurrogateMinText

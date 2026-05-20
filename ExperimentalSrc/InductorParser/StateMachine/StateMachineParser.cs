@@ -55,6 +55,16 @@ public static class StateMachineParser
 
     public static bool TryMatch(Rule rootRule, string input, ParseOptions options)
     {
+        // A pre-canceled signal on a parse short enough to finish before the
+        // periodic budget check fires would otherwise be silently dropped:
+        // TryMatch's only abort surface is the ParseBudgetExceeded catch
+        // below, and the throw is gated on the 1024-invocation periodic
+        // check. Pre-flighting matches Rule.Parse's same-day fix for the
+        // recursive engine. Done before NormalizeIfRequested so a huge
+        // pre-canceled input doesn't pay the normalize cost either.
+        if (options.Cancellation != null && options.Cancellation.IsCanceled)
+            return false;
+
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
         string parseInput = NormalizeIfRequested(input, rootRule.NormalizationForm);
         Lexer lexer = RentLexer(parseInput, options);
@@ -84,6 +94,19 @@ public static class StateMachineParser
 
     public static ParseResult Parse(Rule rootRule, string input, ParseOptions options)
     {
+        // A pre-canceled signal on a parse short enough to finish before the
+        // periodic budget check fires would otherwise be silently dropped
+        // and the parse would return Success. The recursive engine has the
+        // same pre-flight at Rule.Parse for tiny parses; the SM engine
+        // needs its own because callers invoking StateMachineParser.Parse
+        // directly bypass Rule.Parse. Done before NormalizeIfRequested so
+        // a huge pre-canceled input doesn't pay the normalize cost either.
+        if (options.Cancellation != null && options.Cancellation.IsCanceled)
+        {
+            string canceledMessage = Rule.BuildBudgetMessage(ParseOutcome.Canceled, abortPos: 0, input, options);
+            return ParseResult.Aborted(ParseOutcome.Canceled, errorCharIndex: 0, canceledMessage, input, rootRule);
+        }
+
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
 
         // Normalize before the lexer sees the input so grammars written
@@ -97,10 +120,11 @@ public static class StateMachineParser
 
         Lexer lexer = RentLexer(parseInput, options);
 
-        // Configure budgets / debug flags on the lexer so EnterRuleAtDepth
-        // (called from Step_Call / Step_CallSuppressOutputs) and
-        // BridgeToRecursive (which delegates back to Rule.TryParse and
-        // calls EnterRule itself) see the same options the recursive
+        // Configure budgets / debug flags on the lexer so
+        // EnterRuleAtDepthBudgetChecks (called from Step_Call /
+        // Step_CallSuppressOutputs) and BridgeToRecursive (which
+        // delegates back to Rule.TryParse and calls
+        // EnterRuleBudgetChecks itself) see the same options the recursive
         // evaluator would. RuleCountLimit / MaxDepth / Timeout /
         // Cancellation trip the same ParseBudgetExceeded the recursive
         // engine throws and we translate it into ParseResult.Aborted
@@ -263,6 +287,13 @@ public static class StateMachineParser
         OutputReducer<T> reducer,
         T failureValue)
     {
+        // Pre-canceled signal pre-flight: a tiny parse (counter / matcher
+        // entry points fire on grep-style inputs that can finish below the
+        // 1024-invocation periodic-check boundary) would otherwise drop the
+        // cancellation. See TryMatch / Parse for the same fix.
+        if (options.Cancellation != null && options.Cancellation.IsCanceled)
+            return failureValue;
+
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
         string parseInput = NormalizeIfRequested(input, rootRule.NormalizationForm);
         Lexer lexer = RentLexer(parseInput, options);
@@ -301,6 +332,13 @@ public static class StateMachineParser
         SymbolId matchId,
         SymbolId[] captureIds)
     {
+        // Pre-canceled signal pre-flight: see RunAndReduce / TryMatch /
+        // Parse for the same fix. CountMatchesAndCaptures' single
+        // caller-visible return value collapses every abort path (and
+        // the pre-cancellation path) to zero.
+        if (options.Cancellation != null && options.Cancellation.IsCanceled)
+            return 0;
+
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
         string parseInput = NormalizeIfRequested(input, rootRule.NormalizationForm);
         Lexer lexer = RentLexer(parseInput, options);

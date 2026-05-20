@@ -28,11 +28,16 @@ namespace InductorParser;
 // - The inner rule runs against a bounded sub-lexer that shares the
 //   outer lexer's input string (no Substring copy) and walks one rune
 //   per Read instead of one token. The sub-lexer doesn't share trace
-//   or budget state with the outer lexer; trace output from the inner
-//   rule doesn't appear in the outer trace. It can only consume inside
-//   the outer token's span, so normal character-consuming rules are
-//   tiny. Avoid using arbitrary long-running user code here, because
-//   the sub-lexer has no shared budget counters.
+//   state with the outer lexer, so trace output from the inner rule
+//   doesn't appear in the outer trace. It DOES delegate every
+//   EnterRuleBudgetChecks / ExitRuleBudgetChecks / TickPeriodicBudget to the outer via
+//   Lexer.InheritBudgetsFrom, so the inner's recursion counts on top
+//   of the outer's current depth: MaxDepth and RuleCountLimit cover
+//   the combined outer-plus-inner work, and a Cancel() or expired
+//   Timeout observed on either lexer trips both. Without this, a
+//   recursive inner rule on a grapheme cluster crafted with many
+//   combining marks could spend a fresh MaxDepth on top of the outer's
+//   depth and crash the host process with a stack overflow.
 //
 // - Inner-rule Symbols are discarded. WithinToken emits one leaf
 //   Symbol representing the whole token on success. Callers that
@@ -83,6 +88,18 @@ internal sealed class WithinTokenRule : Rule
             traceSink: null,
             traceLevel: TraceLevel.Normal,
             oneRunePerToken: true);
+        // The sub-lexer delegates every EnterRule / ExitRule /
+        // TickPeriodicBudget to the outer lexer so the inner's recursion
+        // counts on top of the outer's CURRENT depth. MaxDepth and
+        // RuleCountLimit cover the combined outer-plus-inner work
+        // rather than letting the inner spend a fresh MaxDepth on top
+        // of the outer's depth. Without this, a recursive inner rule
+        // on a cluster crafted with many combining marks could crash
+        // the host process with a stack overflow. The wall-clock
+        // Stopwatch and the ParseCancellation reach the inner through
+        // the same delegation: a Cancel() or expired Timeout observed
+        // by either lexer trips both.
+        subLexer.InheritBudgetsFrom(outerLexer);
 
         // Throwaway output list for the inner rule. Any symbols the inner
         // rule emits are discarded: WithinToken exposes one leaf per
