@@ -84,6 +84,8 @@ var example = And(ZeroOrMore(And(Not(target),
 ```
 ... were the `AnyToken()` Symbols, one for each token that was consumed.
 
+`ToString()` gives you what the surviving tree says, not the verbatim section of input the rule covered. If you want the verbatim section (including the characters Delete'd rules consumed), use `symbol.SourceText` instead. It ignores FlattenType and returns all of the original source between the Symbol's start and end. 
+
 To help with debugging, you can flip them all to `Preserve` with options on the `Parse()` method like this: 
 
 ```CSharp
