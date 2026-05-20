@@ -997,10 +997,20 @@ public abstract class Rule
     // run through either engine without per-test rewrites. The flag
     // without a registered hook is inert: a recursive-only build
     // always hits ParseRecursive regardless of the flag.
-    public ParseResult Parse(string input, ParseOptions options) =>
-        options.ResolveUseAlternativeEvaluator() && AlternativeEvaluator is { } hook
+    public ParseResult Parse(string input, ParseOptions options)
+    {
+        // The in-loop budget check fires every 1024 rule invocations,
+        // so a parse smaller than that would silently drop a
+        // pre-canceled signal. Pre-flight it here.
+        if (options.Cancellation != null && options.Cancellation.IsCanceled)
+        {
+            string message = BuildBudgetMessage(ParseOutcome.Canceled, abortPos: 0, input, options);
+            return ParseResult.Aborted(ParseOutcome.Canceled, errorCharIndex: 0, message, input, this);
+        }
+        return options.ResolveUseAlternativeEvaluator() && AlternativeEvaluator is { } hook
             ? hook(this, input, options)
             : ParseRecursive(input, options);
+    }
 
     // Module-wide alternative-evaluator hook. Set by an alternative engine
     // implementation at startup (typically from a test fixture's
