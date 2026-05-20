@@ -759,6 +759,42 @@ public class UnexpectedUnicodeTests
         Assert.That(And(Token(UnicodeExamples.DevanagariViramaText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
     }
 
+    [Test]
+    public void Bare_combining_grapheme_joiner_at_start_of_input_is_one_token()
+    {
+        // U+034F COMBINING GRAPHEME JOINER (CGJ). Combining mark
+        // whose only role in NFC is to block canonical reordering
+        // of the combining marks around it. Used in Hebrew niqqud
+        // and Yiddish typography to keep mark sequences in
+        // visually correct (but canonically non-canonical) order
+        // through normalization. UAX #29 GCB=Extend, so a bare
+        // CGJ with no preceding base ends up as its own one-
+        // character cluster, same shape as the other bare
+        // attaching characters above.
+        string input = UnicodeExamples.CombiningGraphemeJoinerText + "hello";
+
+        // (1) Naive grammar fails: Literal("hello") doesn't match
+        // a CGJ followed by 'h'.
+        Assert.That(And(Literal("hello"), Eof()).Parse(input).Success, Is.False);
+
+        // (2) AnyToken at the front consumes the CGJ as a
+        // wildcard. Literal() and Eof() default to FlattenType.Delete
+        // so only the AnyToken's match surfaces in the symbol list;
+        // asserting its content verifies that the leading AnyToken
+        // really is the CGJ alone (one cluster) and the lexer
+        // didn't accidentally merge the CGJ into the following 'h'.
+        var anyTokenResult = And(AnyToken(), Literal("hello"), Eof()).Parse(input);
+        Assert.That(anyTokenResult.Success, Is.True);
+        Assert.That(anyTokenResult.Symbols.Count, Is.EqualTo(1),
+            "only the AnyToken surfaces; Literal('hello') deletes");
+        Assert.That(anyTokenResult.Symbols[0].SourceText, Is.EqualTo(UnicodeExamples.CombiningGraphemeJoinerText),
+            "the leading AnyToken matched exactly the CGJ, not CGJ+'h'");
+
+        // (3) Targeting the CGJ specifically via Token(...) also
+        // works.
+        Assert.That(And(Token(UnicodeExamples.CombiningGraphemeJoinerText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
+    }
+
     // ============================================================
     // Group 3: Default-ignorable / format / bidi characters
     //   expected: surfaces as a normal token, so grammar mismatches
@@ -980,6 +1016,138 @@ public class UnexpectedUnicodeTests
         Assert.That(And(Token(UnicodeExamples.MongolianVowelSeparatorText), Literal("hello"), Eof()).Parse(input).Success, Is.True);
     }
 
+    [Test]
+    public void Line_separator_U_2028_is_a_token_not_matched_by_Token_LF()
+    {
+        // U+2028 LINE SEPARATOR. UAX #18 line terminator, but a
+        // distinct rune from LF. The famous ECMAScript / JSON
+        // mismatch bug: pre-ES2019 JavaScript string literals
+        // disallowed U+2028 and U+2029 as unescaped characters
+        // while JSON allowed them, so JSONP responses containing
+        // these characters in user-generated content produced
+        // "Unexpected token ILLEGAL" errors in the browser. ES2019
+        // aligned the JS string grammar with JSON. The parser
+        // treats U+2028 as one ordinary token; a line-based
+        // grammar matching Token('\n') doesn't catch it, but
+        // EndOfLine() (which uses TokenSet.LineTerminators) does.
+        string input = "a" + UnicodeExamples.LineSeparatorText + "b";
+
+        // (1) Naive Token('\n') doesn't catch the line separator
+        // (different rune from U+000A).
+        Assert.That(And(Token('a'), Token('\n'), Token('b'), Eof()).Parse(input).Success, Is.False);
+
+        // (2) AnyToken consumes U+2028 as a wildcard between the
+        // letters. Token('a') / Token('b') / Eof() default to
+        // FlattenType.Delete so only the AnyToken match surfaces
+        // in the symbol list; asserting its content verifies that
+        // the middle cluster really is U+2028 (not silently dropped
+        // or remapped).
+        var anyTokenResult = And(Token('a'), AnyToken(), Token('b'), Eof()).Parse(input);
+        Assert.That(anyTokenResult.Success, Is.True);
+        Assert.That(anyTokenResult.Symbols.Count, Is.EqualTo(1),
+            "only the AnyToken surfaces; the surrounding Tokens delete");
+        Assert.That(anyTokenResult.Symbols[0].SourceText, Is.EqualTo(UnicodeExamples.LineSeparatorText),
+            "the AnyToken between 'a' and 'b' matched exactly U+2028");
+
+        // (3) EndOfLine() recognizes U+2028 as a line terminator.
+        // EndOfLine defaults to FlattenType.Delete so it doesn't
+        // surface a symbol, but the structural shape of the
+        // grammar (Token('a') ... Token('b'), Eof()) only succeeds
+        // if EndOfLine consumed exactly the U+2028 cluster: any
+        // other consumption would leave 'b' / Eof mismatching.
+        Assert.That(And(Token('a'), EndOfLine(), Token('b'), Eof()).Parse(input).Success, Is.True,
+            "EndOfLine matched the U+2028 char specifically; " +
+            "any other consumption would fail Token('b') or Eof");
+    }
+
+    [Test]
+    public void Paragraph_separator_U_2029_is_a_token_not_matched_by_Token_LF()
+    {
+        // U+2029 PARAGRAPH SEPARATOR. Sibling of U+2028 with the
+        // same JSON / JavaScript history. Same parser behavior:
+        // one ordinary token, Token('\n') doesn't catch it,
+        // EndOfLine() does.
+        string input = "a" + UnicodeExamples.ParagraphSeparatorText + "b";
+
+        Assert.That(And(Token('a'), Token('\n'), Token('b'), Eof()).Parse(input).Success, Is.False);
+
+        var anyTokenResult = And(Token('a'), AnyToken(), Token('b'), Eof()).Parse(input);
+        Assert.That(anyTokenResult.Success, Is.True);
+        Assert.That(anyTokenResult.Symbols[0].SourceText, Is.EqualTo(UnicodeExamples.ParagraphSeparatorText),
+            "the AnyToken between 'a' and 'b' matched exactly U+2029");
+
+        Assert.That(And(Token('a'), EndOfLine(), Token('b'), Eof()).Parse(input).Success, Is.True,
+            "EndOfLine matched the U+2029 char specifically");
+    }
+
+    [Test]
+    public void Next_line_U_0085_is_a_token_not_matched_by_Token_LF()
+    {
+        // U+0085 NEXT LINE (NEL). C1 control imported from EBCDIC
+        // for round-tripping with IBM mainframe text. UAX #18
+        // line terminator. Real-world quirk: Java's BufferedReader
+        // treats NEL as a line terminator on some JVMs but not
+        // others, and XML 1.1 added it to the newline list while
+        // XML 1.0 omitted it. The parser treats NEL as one
+        // ordinary token; Token('\n') doesn't catch it,
+        // EndOfLine() does.
+        string input = "a" + UnicodeExamples.NextLineText + "b";
+
+        Assert.That(And(Token('a'), Token('\n'), Token('b'), Eof()).Parse(input).Success, Is.False);
+
+        var anyTokenResult = And(Token('a'), AnyToken(), Token('b'), Eof()).Parse(input);
+        Assert.That(anyTokenResult.Success, Is.True);
+        Assert.That(anyTokenResult.Symbols[0].SourceText, Is.EqualTo(UnicodeExamples.NextLineText),
+            "the AnyToken between 'a' and 'b' matched exactly U+0085");
+
+        Assert.That(And(Token('a'), EndOfLine(), Token('b'), Eof()).Parse(input).Success, Is.True,
+            "EndOfLine matched the NEL char specifically");
+    }
+
+    [Test]
+    public void Bidi_isolate_LRI_inside_identifier_is_consumed_as_token()
+    {
+        // U+2066 LEFT-TO-RIGHT ISOLATE (LRI). One of the Unicode
+        // 6.3 bidi isolate controls (LRI, RLI U+2067, FSI U+2068,
+        // PDI U+2069). The Trojan Source paper (CVE-2021-42574)
+        // demonstrated source-code attacks using the directional
+        // formatting characters, including the newer isolates
+        // alongside the older RLO covered above. Same safety
+        // story as RLO: the parser doesn't apply Unicode's
+        // Bidirectional Algorithm, so what the grammar sees is
+        // the actual character sequence in the input, not what a
+        // bidi-aware renderer might display.
+        string input = "ab" + UnicodeExamples.LeftToRightIsolateText + "cd";
+
+        // (1) Identifier() fails: U+2066 isn't an identifier-
+        // continue character, so the identifier ends at the bidi
+        // control.
+        var identifierResult = And(Identifier(), Eof()).Parse(input);
+        Assert.That(identifierResult.Success, Is.False,
+            "U+2066 isn't a valid identifier-continue character, " +
+            "so the identifier ends at the bidi isolate");
+
+        // (2) AnyToken consumes the LRI as a wildcard between the
+        // two halves of the word. Literal() defaults to
+        // FlattenType.Delete so the surrounding "ab" / "cd"
+        // matches don't surface; the only top-level symbol is
+        // the AnyToken match. Asserting its content verifies that
+        // the consumed cluster really is U+2066 and not some
+        // bidi-aware reorder.
+        var anyTokenResult = And(Literal("ab"), AnyToken(), Literal("cd"), Eof()).Parse(input);
+        Assert.That(anyTokenResult.Success, Is.True);
+        Assert.That(anyTokenResult.Symbols.Count, Is.EqualTo(1),
+            "only the AnyToken surfaces; the surrounding Literals delete");
+        Assert.That(anyTokenResult.Symbols[0].SourceText, Is.EqualTo(UnicodeExamples.LeftToRightIsolateText),
+            "the AnyToken between 'ab' and 'cd' matched exactly U+2066");
+
+        // (3) Targeting the LRI specifically via Token(...) makes
+        // the same input parse successfully. Useful for grammars
+        // that want to detect bidi controls explicitly and either
+        // flag them or process around them.
+        Assert.That(And(Literal("ab"), Token(UnicodeExamples.LeftToRightIsolateText), Literal("cd"), Eof()).Parse(input).Success, Is.True);
+    }
+
     // ============================================================
     // Group 4: Noncharacters, Private Use, Replacement
     //   expected: surfaces as a normal token, so grammar mismatches
@@ -1195,6 +1363,116 @@ public class UnexpectedUnicodeTests
         Assert.That(result.Success, Is.True);
     }
 
+    [Test]
+    public void LiteralIgnoreAsciiCase_doesnt_fold_Turkish_dotted_or_dotless_I()
+    {
+        // The famous internationalization bug. Under Turkish
+        // locale rules, ToUpper("i") is "İ" (U+0130, capital I
+        // with dot above) and ToLower("I") is "ı" (U+0131,
+        // dotless small i), not the ASCII forms. Locale-aware
+        // case-insensitive comparisons therefore disagree
+        // depending on the user's system locale. Bit Spotify in
+        // 2013 (Turkish iOS users couldn't log in if their email
+        // had 'I' in it), .NET Framework's String.Compare without
+        // an explicit culture, Win32 CompareString, Java's
+        // String.toLowerCase, and many others.
+        //
+        // The parser's LiteralIgnoreAsciiCase is ASCII-only by
+        // design specifically to avoid this. ASCII 'I' folds only
+        // to ASCII 'i'; U+0130 and U+0131 are their own runes
+        // that don't participate in the fold either direction.
+        // A grammar matching LiteralIgnoreAsciiCase("size") on
+        // input containing Turkish dotted I or dotless i fails
+        // normally, same as any other unrecognized rune.
+        var rule = LiteralIgnoreAsciiCase("size").Compile();
+
+        // ASCII case-insensitive matching works as expected.
+        Assert.That(rule.Parse("size").Success, Is.True);
+        Assert.That(rule.Parse("SIZE").Success, Is.True);
+        Assert.That(rule.Parse("Size").Success, Is.True);
+
+        // Turkish dotted I (U+0130) doesn't fold to ASCII 'i'.
+        string turkishCapitalI = "s" + UnicodeExamples.TurkishCapitalIWithDotGrapheme + "ze";
+        Assert.That(rule.Parse(turkishCapitalI).Success, Is.False,
+            $"{UnicodeExamples.TurkishCapitalIWithDotGrapheme} (U+0130) is its own rune; " +
+            "the ASCII-only fold doesn't treat it as 'i'");
+
+        // Turkish dotless i (U+0131) doesn't fold to ASCII 'I'.
+        string turkishSmallDotlessI = "s" + UnicodeExamples.TurkishSmallDotlessIGrapheme + "ze";
+        Assert.That(rule.Parse(turkishSmallDotlessI).Success, Is.False,
+            $"{UnicodeExamples.TurkishSmallDotlessIGrapheme} (U+0131) is its own rune; " +
+            "the ASCII-only fold doesn't treat it as 'i' either");
+    }
+
+    [Test]
+    public void Cherokee_letter_passes_Identifier_but_Latin_only_TokenSet_rejects_it()
+    {
+        // U+13A0 CHEROKEE LETTER A renders as a glyph that
+        // resembles Latin capitals in common fonts. Microsoft's
+        // 2018 phishing analysis documented hostnames mixing
+        // Cherokee letters with Latin to spoof legitimate names
+        // (the Cherokee letter has category Lo, in XID_Start, so
+        // identifier rules let it through). Same shape as the
+        // Cyrillic 'а' homoglyph case above: the default
+        // Identifier() accepts the mixed-script input, and the
+        // fix is a script-restricted TokenSet that rejects
+        // runes outside the desired script. The Latin-only set
+        // built from Ascii.Letters + Latin-1 Supplement is the
+        // same one shown in
+        // UnicodeGotchasExamples.Homoglyph_LatinLetters_set_rejects_Cyrillic_a.
+        string input = "Apple" + UnicodeExamples.CherokeeLetterAGrapheme + "Sauce";
+
+        // (1) Default Identifier() accepts the mixed-script input
+        // because Cherokee letters are XID_Continue.
+        Assert.That(And(Identifier(), Eof()).Parse(input).Success, Is.True,
+            $"default Identifier accepts {UnicodeExamples.CherokeeLetterAGrapheme} (Cherokee letter A)");
+
+        // (2) Latin-only TokenSet rejects the Cherokee letter.
+        var latinLetters =
+            TokenSet.Ascii.Letters |
+            TokenSet.Range(new System.Text.Rune(0x00C0), new System.Text.Rune(0x00FF));
+        var latinOnly = And(OneOrMore(OneOf(latinLetters)), Eof()).Compile();
+        Assert.That(latinOnly.Parse(input).Success, Is.False,
+            $"Latin-only set rejects {UnicodeExamples.CherokeeLetterAGrapheme} (Cherokee A)");
+        Assert.That(latinOnly.Parse("AppleSauce").Success, Is.True,
+            "Latin-only set accepts plain ASCII unchanged");
+    }
+
+    [Test]
+    public void Greek_final_sigma_and_regular_sigma_are_different_tokens()
+    {
+        // U+03C2 GREEK SMALL LETTER FINAL SIGMA and U+03C3 GREEK
+        // SMALL LETTER SIGMA are different runes, but to a Greek
+        // reader they're the same letter: the final form only
+        // appears at the end of a word, and Unicode treats them
+        // as case-equivalent to the same uppercase Σ. Real-world
+        // Greek search bug: software that compares text rune-by-
+        // rune misses "πῶς" (with final sigma) for a query of
+        // "πῶσ" (with regular sigma). The parser treats the two
+        // as distinct: a grammar matching one doesn't accept the
+        // other. Grammars that want either-sigma matching build a
+        // TokenSet that includes both runes explicitly.
+        var sigmaRule = And(Token(UnicodeExamples.GreekSmallSigmaGrapheme), Eof());
+        var finalSigmaRule = And(Token(UnicodeExamples.GreekSmallFinalSigmaGrapheme), Eof());
+
+        // Each Token matches only its own rune.
+        Assert.That(sigmaRule.Parse(UnicodeExamples.GreekSmallSigmaGrapheme).Success, Is.True);
+        Assert.That(sigmaRule.Parse(UnicodeExamples.GreekSmallFinalSigmaGrapheme).Success, Is.False,
+            $"Token({UnicodeExamples.GreekSmallSigmaGrapheme}) doesn't match the final-sigma form " +
+            $"{UnicodeExamples.GreekSmallFinalSigmaGrapheme} (different rune)");
+
+        Assert.That(finalSigmaRule.Parse(UnicodeExamples.GreekSmallFinalSigmaGrapheme).Success, Is.True);
+        Assert.That(finalSigmaRule.Parse(UnicodeExamples.GreekSmallSigmaGrapheme).Success, Is.False,
+            $"Token({UnicodeExamples.GreekSmallFinalSigmaGrapheme}) doesn't match the regular-sigma form " +
+            $"{UnicodeExamples.GreekSmallSigmaGrapheme} (different rune)");
+
+        // Either-sigma matching: a TokenSet that includes both
+        // runes is the documented fix shape.
+        var eitherSigma = And(OneOf(TokenSet.Single(0x03C2) | TokenSet.Single(0x03C3)), Eof());
+        Assert.That(eitherSigma.Parse(UnicodeExamples.GreekSmallSigmaGrapheme).Success, Is.True);
+        Assert.That(eitherSigma.Parse(UnicodeExamples.GreekSmallFinalSigmaGrapheme).Success, Is.True);
+    }
+
     // ============================================================
     // Group 7: Trivial / defensive
     //   expected: parser doesn't crash, regardless of shape or
@@ -1287,5 +1565,96 @@ public class UnexpectedUnicodeTests
         var result = rule.Parse(input);
 
         Assert.That(result.Success, Is.True);
+    }
+
+    [Test]
+    public void England_flag_tag_sequence_is_one_token()
+    {
+        // The England flag emoji is encoded as a UAX #29 emoji
+        // tag sequence (GB10): WAVING BLACK FLAG U+1F3F4,
+        // followed by tag characters for the ISO 3166-2
+        // subdivision code "gbeng", terminated by CANCEL TAG
+        // U+E007F. Seven runes total, 14 UTF-16 chars. UAX #29
+        // keeps the whole sequence as a single grapheme cluster:
+        // each tag character is GCB=Extend and the cluster
+        // extends from the base black flag through the cancel
+        // tag. Common parser bug: software that doesn't know
+        // about tag sequences treats the base flag and each tag
+        // rune as separate clusters, then strips or rejects the
+        // tag chars because they have no rendering on their own,
+        // which loses the subdivision information.
+        string input = UnicodeExamples.EnglandFlagGrapheme;
+
+        // (1) The whole sequence is exactly one cluster: one
+        // AnyToken consumes it and Eof follows immediately. The
+        // Symbols / ToString assertions verify that the matched
+        // cluster really is the full 14-UTF-16-char sequence,
+        // not just that some prefix matched.
+        var anyTokenResult = And(AnyToken(), Eof()).Parse(input);
+        Assert.That(anyTokenResult.Success, Is.True,
+            "the full England flag tag sequence is a single cluster");
+        Assert.That(anyTokenResult.ToString(), Is.EqualTo(input),
+            "matched text covers every UTF-16 char of the input");
+        Assert.That(anyTokenResult.Symbols.Count, Is.EqualTo(1),
+            "exactly one cluster, not seven runes or two halves");
+        Assert.That(anyTokenResult.Symbols[0].SourceText, Is.EqualTo(UnicodeExamples.EnglandFlagGrapheme),
+            "the single cluster's content is the entire tag sequence");
+
+        // (2) Two AnyTokens would need two clusters, but there's
+        // only one. The second AnyToken sees Eof and fails.
+        Assert.That(And(AnyToken(), AnyToken(), Eof()).Parse(input).Success, Is.False,
+            "the sequence is one cluster, not two");
+
+        // (3) Targeting the whole sequence via Token(string)
+        // matches the multi-rune cluster the lexer produces.
+        Assert.That(And(Token(UnicodeExamples.EnglandFlagGrapheme), Eof()).Parse(input).Success, Is.True);
+    }
+
+    [Test]
+    public void Three_consecutive_regional_indicators_form_a_pair_plus_lone_third()
+    {
+        // UAX #29 GB12 / GB13 group regional indicators into
+        // pairs from the left: every (RI RI) pair is glued
+        // together, and the next RI after a closed pair starts a
+        // fresh cluster. "U + S + F" therefore splits into the
+        // US flag (U + S) and a lone trailing F, not into one
+        // garbled three-letter cluster. Common parser bug:
+        // assuming any run of regional indicators is one cluster
+        // and rendering them as a single (invalid) flag, or
+        // attempting to interpret the third indicator as part of
+        // the country code instead of the start of something
+        // new.
+        string input = UnicodeExamples.RegionalIndicatorUText
+            + UnicodeExamples.RegionalIndicatorSText
+            + UnicodeExamples.RegionalIndicatorFText;
+
+        // (1) Exactly two clusters: the US flag pair, then the
+        // lone F. Two AnyToken matches consume the whole input.
+        // Verifying the matched text per-symbol pins which two
+        // clusters the lexer produced, not just that there were two
+        // of something.
+        var twoTokens = And(AnyToken(), AnyToken(), Eof()).Parse(input);
+        Assert.That(twoTokens.Success, Is.True,
+            "three RIs split as pair + lone third per UAX #29");
+        Assert.That(twoTokens.ToString(), Is.EqualTo(input),
+            "matched text equals the input character-for-character");
+        Assert.That(twoTokens.Symbols.Count, Is.EqualTo(2),
+            "exactly two clusters per UAX #29 GB12/GB13");
+        Assert.That(twoTokens.Symbols[0].SourceText, Is.EqualTo(UnicodeExamples.USFlagGrapheme),
+            "first cluster is the U+S regional-indicator pair (US flag)");
+        Assert.That(twoTokens.Symbols[1].SourceText, Is.EqualTo(UnicodeExamples.RegionalIndicatorFText),
+            "second cluster is the lone F regional indicator");
+
+        // (2) Three AnyToken positions need three clusters, but
+        // there are only two; the third AnyToken sees Eof.
+        Assert.That(And(AnyToken(), AnyToken(), AnyToken(), Eof()).Parse(input).Success, Is.False,
+            "three AnyToken positions need three clusters; the pair counts as one");
+
+        // (3) Targeting the pair as a single cluster via
+        // Token(string) matches the US flag, then the lone F is
+        // its own one-rune token.
+        Assert.That(And(Token(UnicodeExamples.USFlagGrapheme),
+                        Token(UnicodeExamples.RegionalIndicatorFText),
+                        Eof()).Parse(input).Success, Is.True);
     }
 }
