@@ -173,6 +173,35 @@ public class BudgetTests
     }
 
     [Test]
+    public void Pre_canceled_signal_aborts_even_on_tiny_parses()
+    {
+        // The user expectation for a pre-canceled ParseCancellation is
+        // simple: the caller said stop before the parse started, so stop.
+        // ParseCancellation's own doc comment says "On the next check
+        // after Cancel() fires, the parse aborts with
+        // ParseOutcome.Canceled." For a tiny parse (here, one rule
+        // invocation: Token('a') against the single character "a") the
+        // periodic budget check never fires because it's gated on the
+        // 1024-invocation boundary. Without an initial budget check at
+        // parse start, the cancellation is silently dropped and the
+        // parse succeeds, which contradicts that doc comment.
+        var cancellation = new ParseCancellation();
+        cancellation.Cancel();
+
+        var rule = Token('a');
+        var options = new ParseOptions
+        {
+            Cancellation = cancellation,
+            RuleCountLimit = 0,
+        };
+        var result = rule.Parse("a", options);
+
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.Canceled));
+        Assert.That(result.ErrorMessage,
+            Is.EqualTo("Parse aborted: cancellation requested."));
+    }
+
+    [Test]
     public void Uncanceled_ParseCancellation_does_not_abort_normal_parse()
     {
         // A live but never-canceled ParseCancellation must let the parse
