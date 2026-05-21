@@ -425,6 +425,47 @@ public class NormalizationTests
     }
 
     [Test]
+    public void Compile_a_second_root_does_not_silently_change_a_shared_subrule()
+    {
+        // A second compile of a different root that shares a subrule with
+        // the first mustn't silently mutate the shared rule's state.
+        var shared = Literal(LatinSmallEWithGraveGrapheme + "x");
+        var rootA = And(shared, Eof());
+        var rootB = And(Token('y'), shared);
+
+        rootA.Compile(NormalizationForm.FormC);
+        Assert.That(rootA.Parse(LatinSmallEWithGraveGrapheme + "x").Success, Is.True,
+            "rootA accepts its literal under its compiled FormC.");
+
+        try { rootB.Compile(NormalizationForm.FormD); } catch (InvalidOperationException) { }
+
+        // The shared subrule was committed to FormC by rootA's compile.
+        // Whether the second compile throws or no-ops, it can't silently
+        // mutate the shared rule and break rootA. rootA.Parse on input
+        // it was compiled to accept has to still succeed.
+        Assert.That(rootA.Parse(LatinSmallEWithGraveGrapheme + "x").Success, Is.True,
+            "rootA must still accept its FormC literal after a second compile of a different root.");
+    }
+
+    [Test]
+    public void Compile_a_second_root_with_a_different_form_on_a_shared_subrule_throws()
+    {
+        // The strict fresh-tree check at the top of rootB.Compile rejects
+        // because `shared` is sealed by rootA.Compile, regardless of form.
+        var shared = Literal(LatinSmallEWithGraveGrapheme + "x");
+        var rootA = And(shared, Eof());
+        var rootB = And(Token('y'), shared);
+
+        rootA.Compile(NormalizationForm.FormC);
+        Assert.That(rootA.Parse(LatinSmallEWithGraveGrapheme + "x").Success, Is.True,
+            "rootA should accept its own literal under FormC before any rebuild.");
+
+        Assert.Throws<InvalidOperationException>(
+            () => rootB.Compile(NormalizationForm.FormD),
+            "compiling rootB must reject because shared is already sealed by rootA.");
+    }
+
+    [Test]
     public void Compile_with_same_form_is_idempotent()
     {
         // Re-Compile with the same form is a no-op (matching the
