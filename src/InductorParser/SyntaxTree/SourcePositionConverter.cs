@@ -9,7 +9,7 @@ internal static class SourcePositionConverter
     public static int ToTokenIndex(string input, int charIndex)
     {
         if (input == null || charIndex <= 0) return 0;
-        // Goes through GraphemeClusterIndex.For so this share the
+        // Goes through GraphemeClusterIndex.For so this shares the
         // same cache the Lexer populated during the parse. After a
         // full parse the cache is typically already walked end-to-end,
         // so this call is pure bool-array reads with no StringInfo
@@ -28,7 +28,17 @@ internal static class SourcePositionConverter
         for (int i = 0; i < limit; i++)
         {
             char c = input[i];
-            if (c == '\n')
+            // UAX #18 Annex C R1 line terminators that Rules.EndOfLine()
+            // also accepts: LF, VT, FF, NEL (U+0085), LS (U+2028),
+            // PS (U+2029). CR is handled below to keep CRLF a single
+            // break. Keeping this set in sync with EndOfLine() is what
+            // makes ErrorLine/ErrorColumn agree with grammars that
+            // consume any of these as a newline. The separator runes
+            // are spelled as backslash-u escapes so the source file
+            // itself stays free of literal control runes (LS / PS
+            // terminate logical lines in C# source).
+            if (c == '\n' || c == '\v' || c == '\f'
+                || c == '\u0085' || c == '\u2028' || c == '\u2029')
             {
                 line++;
                 lineStart = i + 1;
