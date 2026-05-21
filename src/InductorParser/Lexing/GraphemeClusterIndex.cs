@@ -42,8 +42,8 @@ namespace InductorParser.Lexing;
 // multiple parses of the same string (interned literals, cached
 // config text, identical request bodies in a web server) share one
 // index instance. The walk that fills _isStart is locked because
-// TextElementEnumerator's MoveNext isn't thread-safe and the bool[]
-// updates would race in lockstep. The lock is per-instance (one
+// TextElementEnumerator's MoveNext isn't thread-safe. 
+// The lock is per-instance (one
 // per input string), so concurrent parses of different inputs don't
 // contend. The two fast-path reads (the _exhausted check and the
 // _walkedTo check at the top of EnsureWalkedTo) skip the lock once
