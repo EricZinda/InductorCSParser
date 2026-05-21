@@ -6,6 +6,12 @@ This is a real backlog item, if you reach it, do it!
 
 This item should always be the last item in the backlog. New backlog items go at the **top** of the backlog with the smallest alpha prefix (e.g. `0001-` or `0a00-`), not somewhere alphabetically before this one. Putting new items at the top keeps the most recent work visible and matches the newest-on-top layout already used by `docs/BugSearchLog/` and `docs/PotentialBugSources/`. The VS Code backlog viewer renumbers on next open if you pick a prefix that needs adjusting.
 
+## Design issues that are NOT bugs
+
+Before filing a bug, check this list. If the behavior you spotted matches one of these, it's intentional and the report should be dropped (or the doc you read should be updated to make the design explicit). Add to this list when a hunt surfaces something that looks wrong but turns out to be by design. That saves the next hunter from re-running the same path.
+
+- **`Symbol.ToString()` on an alias wrapping a default-Delete inner returns `""` even though `Symbol.SourceText` returns the matched text.** Example: `Token('a').AliasedAs("name").Parse("a").Tree.ToString()` returns `""` while `Tree.SourceText` returns `"a"`. The Token's default `FlattenType` is `Delete`, which means "this rule's matched content doesn't appear in the tree." The alias is `Preserve` (from `.As`) so a named node exists, but it has no children to render. `Delete` was opted into by the inner rule's class default. `Symbol.SourceText` is explicitly documented to bypass `Delete` and return the verbatim consumed span (see the `SourceText` property comment in `SyntaxTree/Symbol.cs`). `ToString()` respects `Delete`. The two are *meant* to disagree in this case. The 2026-05-15 fix in `AliasRule.cs` handled the `Preserve` leaf inner case (`Token('a').Preserve().AliasedAs("name")`) where the user opted *into* having the inner's content in the tree, and that path is a real bug if ever broken. The `Delete` inner path is the opposite: the user opted *out*, and the empty-children alias is the correct shape. If you want the content in the tree, use `.Preserve()` on the inner.
+
 ## All edits stay inside the worktree you are running in
 
 Every file you write or modify as part of this task goes inside the worktree you started in. That includes:
