@@ -480,7 +480,13 @@ public class BudgetTests
         };
         var result = rule.Parse(new string('a', 1000), options);
 
+        // Pre-cancelled token: the first periodic budget check fires at
+        // rule invocation 0 (0 & 1023 == 0), before any rule has been
+        // entered. DeepestFailure and Position are both genuinely 0 at
+        // that instant, so the frozen "deepest at abort" is 0. The two
+        // sibling tests (RuleCountLimit, Timeout) reach depth 146 only
+        // because neither can trip at invocation 0 by construction.
         Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.Canceled));
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(146));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
     }
 }

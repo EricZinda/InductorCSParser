@@ -1,5 +1,11 @@
 // Polyfill for System.Runtime.CompilerServices.InterpolatedStringHandlerArgumentAttribute.
 //
+// Same story as InterpolatedStringHandlerAttribute.cs: netstandard2.1
+// doesn't ship this type, so we polyfill. The #if gate keeps the polyfill
+// out of the net8.0 build where the BCL provides the real one. `internal`
+// prevents a public-surface conflict with the BCL type on downstream
+// consumers.
+//
 // Placed on a method parameter that's a struct marked with
 // [InterpolatedStringHandler], this attribute names other parameters
 // (or "" for the receiver) whose values get forwarded into the
@@ -12,22 +18,19 @@
 //         [InterpolatedStringHandlerArgument("", nameof(level))]
 //         TraceInterpolatedStringHandler message)
 //
-// A call like
+// A call like:
 //
 //     lexer.Trace(TraceLevel.Diagnostic, "And", TraceOutcome.Success,
 //                 $"found {count}")
 //
-// gets rewritten to
+// gets rewritten to:
 //
 //     var handler = new TraceInterpolatedStringHandler(
 //         6,                       // length of the literal pieces ("found ")
 //         1,                       // number of {...} holes
 //         lexer,                   // "" -> the receiver (this)
 //         TraceLevel.Diagnostic,   // nameof(level) -> the level arg
-//         out bool shouldAppend);  // TraceInterpolatedStringHandler sets this to tell the
-//                                  //   compiler whether to run the
-//                                  //   AppendLiteral/AppendFormatted
-//                                  //   calls below
+//         out bool shouldAppend);
 //     if (shouldAppend)
 //     {
 //         handler.AppendLiteral("found ");
@@ -35,26 +38,13 @@
 //     }
 //     lexer.Trace(TraceLevel.Diagnostic, "And", TraceOutcome.Success, handler);
 //
-// The first two arguments (length of the literal pieces and number
-// of holes) are computed at compile time from the shape of the
-// $"..." expression itself and are always passed. This attribute
-// adds the third and fourth: the receiver and the `level` argument.
-// Without it, the handler wouldn't have access to the lexer or the
-// level and couldn't decide whether to skip the formatting.
+// The literal length and hole count are computed at compile time from the
+// shape of the $"..." expression and are always passed. This attribute
+// adds the rest: the receiver and the level arg. Without it, the handler
+// couldn't see the lexer or the level and couldn't decide whether to skip
+// the formatting.
 //
-// Note: the rewritten code still calls lexer.Trace(handler) even
-// when tracing is off. The if (shouldAppend) block only gates the
-// expensive AppendLiteral/AppendFormatted work, not the method
-// invocation. See the cost-when-off comment block on Lexer.Trace
-// for why the call itself stays cheap.
-//
-// Same story as InterpolatedStringHandlerAttribute.cs:
-// netstandard2.1 doesn't ship this type, so we polyfill. The #if
-// gate keeps the polyfill out of the net8.0 build where the BCL
-// provides the real one. Marking it `internal` prevents public
-// surface conflicts with the BCL type on downstream consumers.
-//
-// Both the (string) and (string[]) constructors exist because the
+// Both the (string) and (params string[]) constructors exist because the
 // C# compiler emits whichever one matches the number of arguments
 // declared on the target parameter.
 
@@ -65,6 +55,8 @@ namespace System.Runtime.CompilerServices;
 [AttributeUsage(AttributeTargets.Parameter, AllowMultiple = false, Inherited = false)]
 internal sealed class InterpolatedStringHandlerArgumentAttribute : Attribute
 {
+    public string[] Arguments { get; }
+
     public InterpolatedStringHandlerArgumentAttribute(string argument)
     {
         Arguments = new[] { argument };
@@ -74,8 +66,6 @@ internal sealed class InterpolatedStringHandlerArgumentAttribute : Attribute
     {
         Arguments = arguments;
     }
-
-    public string[] Arguments { get; }
 }
 
 #endif

@@ -1,24 +1,24 @@
 // Polyfill for System.Text.Rune.
 //
-// Background: System.Text.Rune ships with .NET Core 3.0 and .NET 5+, but is
-// NOT in the netstandard2.1 reference assemblies. The library targets
-// netstandard2.1 because that's what Unity's IL2CPP scripting backend
-// supports (see docs/CodeArchitecture.md). Without this polyfill, callers
-// on netstandard2.1 hosts (Unity, including WebGL and iOS) can't use the
-// Rune-typed overloads of Token(), TokenSet.Single(), etc.
+// netstandard2.1 doesn't ship this type, so we polyfill. The #if gate keeps
+// the polyfill out of the netcoreapp3.0+ and net8.0 builds where the BCL
+// provides the real one. The class is defined in the BCL namespace
+// System.Text so caller code (`using System.Text; ... new Rune(c)`) resolves
+// to whichever Rune is available without changing imports.
 //
-// The class is defined in the BCL namespace System.Text so that caller code
-// (`using System.Text; ... new Rune(c)`) resolves to whichever Rune is
-// available without changing imports. When this assembly is built against
-// netcoreapp3.0 or later, the BCL ships its own Rune in System.Text and
-// this file compiles to nothing. References resolve to the BCL type instead.
+// Unlike the other polyfills in this folder, this one is `public` because
+// Rune appears in the parser's public API (Token(Rune), TokenSet.Single(Rune),
+// and so on). Callers on netstandard2.1 hosts (Unity, including WebGL and
+// iOS) have to be able to construct one. The library targets netstandard2.1
+// because that's what Unity's IL2CPP scripting backend supports (see
+// docs/CodeArchitecture.md).
 //
-// This implementation is the minimum we need: a validated 21-bit code point
-// wrapper with surrogate-pair encoding/decoding, equality, comparison, and
-// a Unicode-category lookup that delegates to System.Globalization. It
-// doesn't include the BCL's UTF-8 encoding helpers, OperationStatus-returning
-// decoders, or the IsLetter/IsDigit family. Add those when something
-// inside the parser actually needs them.
+// This implementation is the minimum we need: a 21-bit Unicode scalar with
+// code-point validation, surrogate-pair encoding/decoding, equality,
+// comparison, and a Unicode-category lookup that delegates to
+// System.Globalization. It doesn't include the BCL's UTF-8 encoding helpers,
+// OperationStatus-returning decoders, or the IsLetter/IsDigit family. Add
+// those when something inside the parser actually needs them.
 
 #if !NETCOREAPP3_0_OR_GREATER
 
@@ -26,6 +26,10 @@ using System.Globalization;
 
 namespace System.Text;
 
+/// <summary>
+/// A Unicode scalar value: any code point from U+0000 through U+10FFFF
+/// except the surrogate range U+D800..U+DFFF.
+/// </summary>
 public readonly struct Rune : IEquatable<Rune>, IComparable<Rune>
 {
     private const int MaxCodepoint = 0x10FFFF;
@@ -34,6 +38,12 @@ public readonly struct Rune : IEquatable<Rune>, IComparable<Rune>
     private const int BmpEnd = 0xFFFF;
 
     private readonly int _value;
+    public int Value => _value;
+
+    public bool IsAscii => _value < 0x80;
+    public bool IsBmp => _value <= BmpEnd;
+
+    public static Rune ReplacementChar => new Rune(0xFFFD);
 
     public Rune(char ch)
     {
@@ -59,13 +69,6 @@ public readonly struct Rune : IEquatable<Rune>, IComparable<Rune>
     }
 
     public Rune(uint value) : this((int)value) { }
-
-    public int Value => _value;
-
-    public bool IsAscii => _value < 0x80;
-    public bool IsBmp => _value <= BmpEnd;
-
-    public static Rune ReplacementChar => new Rune(0xFFFD);
 
     public static bool IsValid(int value) =>
         value >= 0 && value <= MaxCodepoint && (value < HighSurrogateStart || value > LowSurrogateEnd);
