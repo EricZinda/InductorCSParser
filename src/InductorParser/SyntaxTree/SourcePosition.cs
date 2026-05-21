@@ -4,10 +4,16 @@ namespace InductorParser.SyntaxTree;
 // the canonical one (UTF-16 code units, what string.Substring uses);
 // the others are derived from it by walking the input from offset 0.
 //
-// Line and Column follow the Language Server Protocol convention used
-// by editor diagnostics: zero-based, with line breaks at "\n", "\r\n"
-// (one break, not two), and lone "\r". Column is in chars, same unit
-// as CharIndex.
+// Line and Column are zero-based. Column counts UTF-16 code units,
+// the same unit as CharIndex, matching the Language Server Protocol
+// convention editor diagnostics use. Line breaks follow UAX #18 Annex
+// C, the same set Rules.EndOfLine() accepts: LF, CRLF (one break, not
+// two), lone CR, VT, FF, NEL (U+0085), LS (U+2028), PS (U+2029).
+// Keeping the two sets aligned matters for grammars that use
+// EndOfLine() on Unicode input: every terminator the grammar consumes
+// also bumps the reported line. The LSP-compliant subset (LF, CRLF,
+// lone CR) covers what every modern editor's diagnostic pipeline sees
+// on real source files.
 //
 // Input is the string the position is into. Always the user's original
 // input. When a grammar normalizes (FormC by default), the parser
