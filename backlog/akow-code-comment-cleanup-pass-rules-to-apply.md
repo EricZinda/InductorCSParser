@@ -6,7 +6,7 @@ The rules below come from corrections across the worktrees' memory files and
 commit history. Global writing-style rules in ~/.claude/CLAUDE.md apply too,
 the ones below are specific to comments.
 
-Execution model: per file, four phases
+Execution model: per file, five phases
 
 For each file, work the phases in order. Finish a phase before starting the
 next. Don't bounce between phases on the same file, the point is that a
@@ -63,7 +63,16 @@ push longer material to `<remarks>` (the style half of Rule 8). Make sure
 each summary tells the caller something the identifier name couldn't (the
 quality half of Rule 9).
 
-Each rule below is tagged with its phase (P1, P2, P3, or P4) in the rule
+Phase 5: Cross-check docs and tests against the final file. Once the source
+file has been through Phases 1 to 4, find the docs and tests that talk about
+it (XML doc examples that reference the type, markdown docs under docs/ that
+walk through it, test files whose comments describe its behavior) and compare
+those against the final version of the file. If the behavior, member names,
+ordering, or examples have shifted during the earlier phases, update the docs
+and tests to match. This is the last stage on a file because the earlier
+phases are the ones that can change what the docs and tests need to say.
+
+Each rule below is tagged with its phase (P1, P2, P3, P4, or P5) in the rule
 heading.
 
 The universal rule for every comment and doc
@@ -193,3 +202,7 @@ Done when the following is true for what you worked on:
 - Spot-check: pick five recently-changed files and confirm their comments
   read as short, plain descriptions of current behavior, not change history
   and not jargon-laden.
+- Docs and tests that reference each touched file have been compared against
+  the file's final state and updated where the earlier phases changed
+  something they relied on (member names, ordering, example code, behavior
+  descriptions).
