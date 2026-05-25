@@ -101,11 +101,13 @@ public sealed partial class Lexer
                     return;
                 }
 
-                if (IsAtMidGraphemeCluster(found))
+                if (IsAtMidToken(found))
                 {
-                    // Skip this one char and try again since it is in the middle
-                    // of a grapheme cluster. If there is another in this same cluster
-                    // it will skip again
+                    // Skip this one char and try again since it is in the
+                    // interior of a token (mid-grapheme-cluster in the default
+                    // mode, the trailing surrogate half in one-rune mode). If
+                    // there is another candidate in this same token it will
+                    // skip again.
                     searchStart = found + 1;
                     if (searchStart >= _endPosition)
                     {
@@ -161,24 +163,42 @@ public sealed partial class Lexer
         }
     }
 
-    // True when `position` is in the middle of a multi-rune grapheme
-    // cluster (UAX #29). The byte-level scanner fast paths in
-    // AdvanceUntilRuneIn / AdvanceUntilLiteralCandidateIn use IndexOf /
-    // IndexOfAny over UTF-16 code units, which can land on a candidate
-    // char that's the second-or-later rune of a cluster (LF inside
-    // CRLF under GB3, a combining mark, ZWJ inside an emoji ZWJ
-    // sequence, a variation selector, a Hangul jamo continuation, ...
-    // anything that GB3-GB13 keeps glued to the previous rune). The
-    // outer parser is grapheme-scoped, so it would never start at such
-    // an offset; this gate skips them.
+    // True when `position` is NOT a valid token-start offset, so the
+    // byte-level scanner fast paths in AdvanceUntilRuneIn /
+    // AdvanceUntilLiteralCandidateIn must skip the IndexOf / IndexOfAny
+    // landing there. Those searches run over UTF-16 code units and can
+    // land in the interior of a token; the outer parser only ever starts
+    // at token boundaries, so this gate filters the interior hits out.
     //
-    // Resolution goes through GraphemeClusterIndex, which walks the
-    // input once and caches every cluster boundary. That's the same
-    // walk Lexer.NextTokenLength uses, so any UAX #29 rule
-    // StringInfo respects (including backward-context rules like
-    // GB9c Indic Conjunct Break) is handled correctly by construction.
-    private bool IsAtMidGraphemeCluster(int position) =>
-        !_graphemeIndex.IsClusterStart(position);
+    // What "interior" means depends on the lexer's token unit, the same
+    // split NextTokenLength makes:
+    //
+    //   * Grapheme mode (the default, every top-level parse): a token is
+    //     one UAX #29 grapheme cluster. The interior offsets are the
+    //     second-or-later runes of a cluster (LF inside CRLF under GB3, a
+    //     combining mark, ZWJ inside an emoji ZWJ sequence, a variation
+    //     selector, a Hangul jamo continuation, ... anything GB3-GB13
+    //     keeps glued to the previous rune). Resolution goes through
+    //     GraphemeClusterIndex, the same walk NextTokenLength uses, so any
+    //     rule StringInfo respects (including backward-context rules like
+    //     GB9c Indic Conjunct Break) is handled by construction.
+    //
+    //   * One-rune-per-token mode (the WithinTokenRule sub-lexer): a token
+    //     is one rune, so a combining mark or any other cluster
+    //     continuation IS its own token and a valid start. The only
+    //     interior offset is the trailing half of a surrogate pair. Using
+    //     the grapheme-cluster index here would wrongly skip every
+    //     mid-cluster rune the sub-lexer can legitimately start at, and
+    //     the IndexOfAny fast path would diverge from the per-token slow
+    //     path (which walks NextTokenLength and stops at those runes).
+    private bool IsAtMidToken(int position)
+    {
+        if (_oneRunePerToken)
+            return char.IsLowSurrogate(_input[position])
+                && position > 0
+                && char.IsHighSurrogate(_input[position - 1]);
+        return !_graphemeIndex.IsClusterStart(position);
+    }
 
     internal int AdvanceWhileRuneIn(TokenSet set)
     {
@@ -326,9 +346,9 @@ public sealed partial class Lexer
                 }
 
                 _position = found;
-                if (IsAtMidGraphemeCluster(_position))
+                if (IsAtMidToken(_position))
                 {
-                    // Mid-cluster landing. Step past the offending
+                    // Mid-token landing. Step past the offending
                     // char; next iteration's substring search will
                     // either find another candidate or run out.
                     _position = Math.Min(_position + 1, _endPosition);
@@ -363,7 +383,7 @@ public sealed partial class Lexer
                 }
 
                 _position = found;
-                if (IsAtMidGraphemeCluster(_position))
+                if (IsAtMidToken(_position))
                 {
                     _position = Math.Min(_position + 1, _endPosition);
                     continue;
