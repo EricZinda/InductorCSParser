@@ -197,27 +197,49 @@ public class NormalizationTests
     [Test]
     public void Abort_via_work_limit_reports_position_into_original_not_normalized()
     {
-        // Budget-abort path shares the same translation code as
-        // grammar-mismatch failure. Prove it by tripping the work limit on
-        // decomposed input and asserting the index lands inside the
-        // caller's original string, not past its end.
+        // Budget-abort path shares the same position-translation code as
+        // grammar-mismatch failure. Prove the abort offset is reported in
+        // the caller's ORIGINAL coordinates, not the lexer's normalized
+        // coordinates.
         //
-        // The decomposed form is 2 chars per grapheme. NFC squashes it to
-        // 1 char. If the parser leaked the normalized-space lexer position
-        // out unchanged, the assertion that ErrorCharIndex is within the
-        // *original* input length would catch it. Input has to be long
-        // enough for OneOrMore to cross BudgetCheckInterval (1024) and
-        // trigger the periodic rule-count check.
-        string chunk = "e" + CombiningAcuteText;
-        string input = string.Concat(Enumerable.Repeat(chunk, 5000));
+        // The trick is two parses that are identical after normalization.
+        // Decomposed "e" + combining acute is 2 chars per grapheme;
+        // precomposed "é" (U+00E9) is 1. Under the default FormC both
+        // normalize to the SAME string (U+00E9 repeated), so the lexer does
+        // identical work and aborts at the same normalized offset after the
+        // same number of rule invocations (the count is a pure function of
+        // grammar + normalized input; see Lexer.BudgetCheckInterval). Both
+        // inputs are long enough for the invocation count to cross
+        // BudgetCheckInterval (1024) and trip the periodic rule-count check.
+        //
+        // For precomposed input original == normalized, so its
+        // ErrorCharIndex IS that normalized abort offset. For decomposed
+        // input every grapheme is two original chars, so the correctly-
+        // translated abort offset is exactly double it. A parser that
+        // leaked the normalized offset straight out would report the same
+        // value for both, so asserting decomposed is exactly 2x catches the
+        // leak. (The old assertion only checked ErrorCharIndex <=
+        // input.Length, which a leaked normalized offset satisfied too,
+        // since FormC shrinks the input and the leaked offset is smaller.)
         var rule = OneOrMore(AnyToken());
-        var result = rule.Parse(input,
-            new ParseOptions { RuleCountLimit = 10 });
+        var options = new ParseOptions { RuleCountLimit = 10 };
+
+        string precomposedInput = string.Concat(Enumerable.Repeat(LatinEAcutePrecomposedGrapheme, 5000));
+        var precomposed = rule.Parse(precomposedInput, options);
+        Assert.That(precomposed.Outcome, Is.EqualTo(ParseOutcome.RuleCountLimitExceeded));
+        int normalizedAbortOffset = precomposed.ErrorCharIndex;
+        Assert.That(normalizedAbortOffset, Is.GreaterThan(0),
+            "the abort has to land at a nonzero interior offset, else original and " +
+            "normalized coordinates coincide and the test proves nothing");
+
+        string decomposedInput = string.Concat(Enumerable.Repeat("e" + CombiningAcuteText, 5000));
+        var result = rule.Parse(decomposedInput, options);
 
         Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.RuleCountLimitExceeded));
-        Assert.That(result.ErrorCharIndex, Is.GreaterThanOrEqualTo(0));
-        Assert.That(result.ErrorCharIndex, Is.LessThanOrEqualTo(input.Length),
-            "abort position must be a valid index into the caller's original input");
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(2 * normalizedAbortOffset),
+            "decomposed graphemes are 2 original chars each, so the abort offset must be " +
+            "exactly double the precomposed reference; equal to it would mean the " +
+            "normalized offset leaked out untranslated");
         Assert.That(result.ErrorLine, Is.EqualTo(0), "input has no newlines");
         Assert.That(result.ErrorColumn, Is.EqualTo(result.ErrorCharIndex),
             "single-line input means column equals char index");

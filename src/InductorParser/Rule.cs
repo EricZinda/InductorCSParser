@@ -38,9 +38,11 @@ namespace InductorParser;
 // Rules are effectively immutable. Before Compile runs, you can call the
 // modifier methods. After Compile runs (either explicitly via .Compile()
 // or automatically on the first .Parse() call) the Rule is sealed and any
-// further modification throws InvalidOperationException. This makes the
-// "build once, parse many times" model safe even when the same Rule is
-// shared across threads.
+// further modification throws InvalidOperationException. A compiled rule
+// is immutable, so any number of threads can Parse it at once with no
+// synchronization. Compilation itself is single-threaded: build and
+// compile a grammar on one thread, then share the compiled grammar. See
+// docs/InductorParserReference.md "Thread Safety".
 //
 // Rule is abstract. The library's composite and leaf rules
 // (AndRule, OrRule, GraphemeRule, etc.) subclass it. User code can subclass
@@ -755,6 +757,13 @@ public abstract class Rule
     // only ever produces the precomposed 'é' as a token.
     public Rule Compile(NormalizationForm? normalizeInput)
     {
+        // Compilation is single-threaded by design: the caller builds and
+        // compiles a grammar on one thread, then shares the compiled
+        // (sealed, immutable) graph across threads for concurrent parses.
+        // See docs/InductorParserReference.md "Thread Safety". Auto-compile
+        // on the first Parse is a convenience for the single-threaded build
+        // path, not a license to share an uncompiled grammar across
+        // threads.
         if (_sealed)
         {
             if (_normalizationForm != normalizeInput)

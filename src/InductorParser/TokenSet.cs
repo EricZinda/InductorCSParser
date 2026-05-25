@@ -661,7 +661,11 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // rendered as low-high. Printable ASCII code points render as the
     // literal character, everything else renders as U+XXXX. Multi-rune
     // graphemes render as the user-perceived character itself, no
-    // special quoting (e.g. `[a-z,????,????]`). Classes with more
+    // special quoting (e.g. `[a-z,????,????]`), except that a control
+    // character or line/paragraph separator inside a grapheme renders as
+    // U+XXXX so a cluster like the CRLF entry in LineTerminators /
+    // Ascii.AnyWhitespace can't inject a raw newline into a one-line
+    // trace. Classes with more
     // than MaxRenderedEntries entries are truncated with a "+N more"
     // tail. Keeps trace lines legible without dragging in the entire
     // Unicode database.
@@ -694,7 +698,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         for (int index = 0; index < multiLength && written < rendered; index++)
         {
             if (written > 0) sb.Append(',');
-            sb.Append(multi![index]);
+            AppendGraphemeForDisplay(sb, multi![index]);
             written++;
         }
         if (totalEntries > MaxRenderedEntries)
@@ -712,6 +716,56 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         if (codepoint >= 0x20 && codepoint <= 0x7E)
             return ((char)codepoint).ToString();
         return $"U+{codepoint:X4}";
+    }
+
+    // Append a multi-rune grapheme entry for ToString. Most multi-rune
+    // entries are printable user-perceived characters (skin-toned emoji,
+    // ZWJ families, regional-indicator flags) and render verbatim so a
+    // reader sees the actual character. But a grapheme can also carry a
+    // character that doesn't stay on one line: the CRLF cluster in
+    // LineTerminators and Ascii.AnyWhitespace is U+000D U+000A. Appending
+    // those verbatim would splice a raw carriage return and line feed
+    // into the rendered string, and since rules cache ToString() into
+    // the text they put on every trace line, one logical trace line
+    // would break into three physical lines. Single-rune entries already
+    // render non-printing characters as U+XXXX via RenderCodepoint; this
+    // gives multi-rune ones the same treatment, char by char, while
+    // leaving every printable char (including the surrogate halves of a
+    // supplementary-plane emoji) untouched so the character still shows
+    // through.
+    private static void AppendGraphemeForDisplay(StringBuilder sb, string grapheme)
+    {
+        foreach (char c in grapheme)
+        {
+            if (IsControlOrLineSeparator(c))
+                sb.Append("U+").Append(((int)c).ToString("X4"));
+            else
+                sb.Append(c);
+        }
+    }
+
+    // True for characters that corrupt or vanish from a single-line trace
+    // when written verbatim. Read straight from the Unicode
+    // General_Category tables the BCL ships, so it tracks new Unicode
+    // versions automatically instead of from a hand-kept code-point list:
+    //   * Control (Cc): LF, CR, VT, FF, NEL, and the rest of the C0/C1
+    //     block. (This is exactly what char.IsControl reports.)
+    //   * LineSeparator (Zl): U+2028.
+    //   * ParagraphSeparator (Zp): U+2029.
+    // Format characters (Cf) such as ZWJ are deliberately NOT included.
+    // ZWJ is the invisible glue inside emoji ZWJ families and similar
+    // clusters we want to render as the user-perceived character, and it
+    // doesn't break the line. Every line-breaking and control character
+    // lives in the BMP, so the per-char (vs per-rune) lookup is enough:
+    // the surrogate halves of a supplementary-plane character report as
+    // Surrogate and fall through to the verbatim path, reassembling the
+    // original character.
+    private static bool IsControlOrLineSeparator(char c)
+    {
+        UnicodeCategory category = CharUnicodeInfo.GetUnicodeCategory(c);
+        return category == UnicodeCategory.Control
+            || category == UnicodeCategory.LineSeparator
+            || category == UnicodeCategory.ParagraphSeparator;
     }
 
     // The empty set, containing no runes. Equivalent to default(TokenSet),

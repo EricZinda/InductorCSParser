@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Concurrent;
+using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.Lexing;
@@ -105,6 +108,78 @@ public class CompileTests
         Assert.That(result.Success, Is.True);
         Assert.That(rule.Id.Value, Is.GreaterThanOrEqualTo(SymbolRanges.CustomRangeStart),
             "named rule should have a custom-range id after Parse, proving auto-compile ran");
+    }
+
+    [Test]
+    public void Concurrent_parsing_of_a_compiled_grammar_is_thread_safe()
+    {
+        // The documented guarantee (docs/InductorParserReference.md "Thread
+        // Safety"): a grammar is built and compiled once on a single thread,
+        // and after Compile the rule graph is sealed and immutable, so any
+        // number of threads can Parse it at once with no synchronization.
+        // Each Parse builds its own lexer, Symbol tree, and ParseResult and
+        // never writes back to the grammar.
+        //
+        // This locks that guarantee in. The grammar is compiled up front, so
+        // no thread races the auto-compile (compiling is the caller's
+        // single-threaded responsibility, not something the library makes
+        // safe). All threads then parse the same input string instance,
+        // which also exercises the per-input GraphemeClusterIndex cache that
+        // genuinely is shared and internally synchronized. The Barrier makes
+        // the threads start together, and every result must match the
+        // single-threaded baseline. A future change that introduced
+        // parse-time mutation of shared rule state would diverge or throw
+        // here.
+        const string input = "(abc,123,d4e,_f)";
+
+        var grammar = BuildGrammar();
+        grammar.Compile();
+        string baselineDump = grammar.Parse(input).ToDebugString();
+
+        for (int trial = 0; trial < 50; trial++)
+        {
+            int threadCount = Math.Max(8, Environment.ProcessorCount * 2);
+            var barrier = new Barrier(threadCount);
+            var results = new ConcurrentBag<string>();
+            var exceptions = new ConcurrentBag<Exception>();
+            var tasks = new Task[threadCount];
+            for (int taskIndex = 0; taskIndex < tasks.Length; taskIndex++)
+            {
+                tasks[taskIndex] = Task.Run(() =>
+                {
+                    try
+                    {
+                        barrier.SignalAndWait();
+                        results.Add(grammar.Parse(input).ToDebugString());
+                    }
+                    catch (Exception exception)
+                    {
+                        exceptions.Add(exception);
+                    }
+                });
+            }
+            Task.WaitAll(tasks);
+
+            Assert.That(exceptions, Is.Empty,
+                $"Trial {trial}: concurrent Parse on a compiled grammar threw: " +
+                $"{(exceptions.IsEmpty ? "" : exceptions.ToString())}");
+            foreach (var dump in results)
+                Assert.That(dump, Is.EqualTo(baselineDump),
+                    $"Trial {trial}: a concurrent parse result diverged from the " +
+                    $"single-threaded baseline, which means a parse mutated shared " +
+                    $"grammar state.");
+        }
+    }
+
+    // A grammar with named, anonymous, and multi-rune-TokenSet rules, used
+    // by the concurrent-parse test.
+    private static Rule BuildGrammar()
+    {
+        var identifier = OneOrMore(OneOf(TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_"))).As("identifier");
+        var number = OneOrMore(OneOf(TokenSet.Digits)).As("number");
+        var atom = Or(identifier, number);
+        var list = And(Token('('), atom, ZeroOrMore(And(Token(','), atom)), Token(')'));
+        return Or(list, atom).As("root");
     }
 
     // Subclass that deliberately violates the RuleStartRequirements invariant. Lives
