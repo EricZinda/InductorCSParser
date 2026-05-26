@@ -1372,6 +1372,38 @@ public class TokenSetTests
     }
 
     [Test]
+    public void ToString_escapes_control_chars_in_multi_rune_grapheme_entries()
+    {
+        // LineTerminators carries the CRLF cluster ("\r\n") as a
+        // multi-rune entry. ToString renders single-rune control
+        // characters as U+XXXX (via RenderCodepoint), but multi-rune
+        // entries were appended verbatim, so a raw CR and LF leaked into
+        // the rendered string. Rules cache set.ToString() into the
+        // _setRendered they splice into every trace line, so a raw
+        // newline splits one logical trace line into three physical
+        // lines and corrupts the trace. The rendered form can't
+        // contain a raw CR or LF, and the CRLF cluster's runes should
+        // show as U+000D / U+000A like every other control character.
+        string rendered = TokenSet.LineTerminators.ToString();
+
+        Assert.That(rendered, Does.Not.Contain("\r"));
+        Assert.That(rendered, Does.Not.Contain("\n"));
+        Assert.That(rendered, Does.Contain("U+000D"));
+        Assert.That(rendered, Does.Contain("U+000A"));
+
+        // Ascii.AnyWhitespace carries the same CRLF cluster.
+        string asciiRendered = TokenSet.Ascii.AnyWhitespace.ToString();
+        Assert.That(asciiRendered, Does.Not.Contain("\r"));
+        Assert.That(asciiRendered, Does.Not.Contain("\n"));
+
+        // A printable multi-rune grapheme (the US flag) still renders as
+        // itself, so the control-character escaping leaves emoji alone.
+        string flagRendered =
+            (TokenSet.Range('a', 'z') | TokenSet.Graphemes(USFlagGrapheme)).ToString();
+        Assert.That(flagRendered, Does.Contain(USFlagGrapheme));
+    }
+
+    [Test]
     public void HasMultiRuneGraphemes_is_false_for_rune_only_sets()
     {
         Assert.That(TokenSet.Runes("abc").HasMultiRuneGraphemes, Is.False);

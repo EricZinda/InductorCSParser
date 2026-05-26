@@ -49,7 +49,19 @@ public sealed class ParseOptions
     // stack). Catches deeply nested but well-formed input (think 10,000
     // open parens) before it blows the .NET call stack and crashes the
     // host process. Independent of RuleCountLimit: a deeply nested
-    // input may use few invocations total. Set to 0 to disable.
+    // input may use few invocations total.
+    //
+    // Set to 0 to disable, but be clear about what that costs. With no
+    // depth limit, deeply nested input recurses until the .NET call
+    // stack runs out and the runtime throws StackOverflowException. That
+    // exception can't be caught. It never surfaces as a failed
+    // ParseResult. It terminates the whole process on the spot, taking
+    // every other in-flight request and thread down with it. A handful
+    // of kilobytes of nested brackets is enough to trigger it (the same
+    // shape as CVE-2026-40324 and similar recursive-descent parser DoS
+    // reports). Any parser that touches untrusted input must keep a
+    // non-zero limit. Only disable it when you fully control the input
+    // and know its nesting stays shallow.
     public int MaxDepth { get; set; } = 1000;
 
     // Wall-clock limit. The parse loop polls Stopwatch.Elapsed

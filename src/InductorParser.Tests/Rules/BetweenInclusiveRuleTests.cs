@@ -778,7 +778,7 @@ public class BetweenInclusiveRuleTests
     // The same byte-level-search bug shape applies to any BMP char that
     // can sit as the second-or-later rune of a multi-rune cluster.
     // CRLF is the practical case; the others below test the broader
-    // contract so a future regression in the IsAtMidGraphemeCluster
+    // behavior so a future regression in the IsAtMidToken
     // gate gets caught for the categories that actually appear in real
     // grammars.
     //

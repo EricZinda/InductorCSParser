@@ -6,7 +6,74 @@ The rules below come from corrections across the worktrees' memory files and
 commit history. Global writing-style rules in ~/.claude/CLAUDE.md apply too,
 the ones below are specific to comments.
 
-Before doing anything: Make sure the text is factually correct! Actually compare with the code to ensure it. Then:
+Execution model: per file, five phases
+
+For each file, work the phases in order. Finish a phase before starting the
+next. Don't bounce between phases on the same file, the point is that a
+comment about to be moved shouldn't get its facts checked, an inaccurate
+comment shouldn't get its prose polished, and a comment that's going to be
+deleted by a lint rule shouldn't get any work at all.
+
+Phase 1: Reordering. Re-arrange the members of each type into this order:
+
+- Fields
+- Properties (with their backing fields right next to them, not in the
+  Fields block)
+- Constructors
+- Finalizers
+- Delegates
+- Events
+- Enums
+- Interfaces
+- Indexers
+- Methods
+
+Then nested types at the bottom:
+
+- Structs
+- Classes (records count as classes)
+
+This differs from StyleCop SA1201 in one place: Properties are hoisted up
+next to Fields so a property and its backing field can sit together.
+
+Exception: if a nested type, delegate, enum, or small helper is used in
+exactly one place and is genuinely small, leave it next to where it's used
+rather than hoisting it to its slot. The point is to make the file
+scannable, not to enforce a mechanical order at the cost of locality.
+
+Reordering goes first so the later passes don't waste effort on comments
+that are about to be moved or on dead members that are about to be deleted.
+
+Phase 2: Accuracy. Read each comment and compare it to the code it sits next
+to. If a claim isn't true anymore, either fix it or delete the comment. Rule
+6 (stale facts) lives here. Don't move on until every comment in the file
+describes what the code actually does today.
+
+Phase 3: Lint screens. Apply the mechanical rules below: drop bug-fix
+history, remove banner dividers, drop benchmark and state-machine
+references, fix the vocabulary offenders, convert public `//` to `///` where
+it describes behavior, and confirm every public member has a `///` summary
+at all. Rules 1, 3, 4, 5, 7, the mechanical half of 8, and the coverage
+half of 9 all live here.
+
+Phase 4: Style. With the content accurate and the lint clean, tighten what's
+left. Apply the universal rule (short, plain, focused). Drop doc comments on
+delegating methods (Rule 2). Keep `<summary>` to one or two sentences and
+push longer material to `<remarks>` (the style half of Rule 8). Make sure
+each summary tells the caller something the identifier name couldn't (the
+quality half of Rule 9).
+
+Phase 5: Cross-check docs and tests against the final file. Once the source
+file has been through Phases 1 to 4, find the docs and tests that talk about
+it (XML doc examples that reference the type, markdown docs under docs/ that
+walk through it, test files whose comments describe its behavior) and compare
+those against the final version of the file. If the behavior, member names,
+ordering, or examples have shifted during the earlier phases, update the docs
+and tests to match. This is the last stage on a file because the earlier
+phases are the ones that can change what the docs and tests need to say.
+
+Each rule below is tagged with its phase (P1, P2, P3, P4, or P5) in the rule
+heading.
 
 The universal rule for every comment and doc
 
@@ -18,7 +85,7 @@ and test comments equally.
 
 Rules to apply
 
-1. No bug-fix history. Comments describe what the code does now, not how it
+1. [P3] No bug-fix history. Comments describe what the code does now, not how it
    got there. Drop "used to X", "previously", "before the fix", "would
    silently break", "now does Y", and any framing that references a bug, a
    commit, or a prior implementation. Counterfactuals like "would otherwise
@@ -28,26 +95,26 @@ Rules to apply
    source tree. This is the most-flagged correction (three separate memories
    across worktrees).
 
-2. No doc comment on a delegating method. If the body is `return Other(...)`
+2. [P4] No doc comment on a delegating method. If the body is `return Other(...)`
    or `if (x == null) throw ...; return Other(...)`, skip the comment. The
    delegate is the definitive source. Restating the same description on the
    calling method duplicates information that will drift. Exception: if the
    calling method is public, add a one-line `<see cref="..." />` pointing
    at the definitive source so IntelliSense lands the reader there.
 
-3. No banner-section headers in test files. Drop `// === Group N ===` and
+3. [P3] No banner-section headers in test files. Drop `// === Group N ===` and
    `// ---- section ----` dividers. Order related tests near each other and
    let each test's own comment carry the context. (Some older files use
    `// ==== Group N ====` headers. Treat those as the old style and remove
    them when editing nearby code.)
 
-4. No benchmark mentions in comments, especially /// XML doc. No benchmark
+4. [P3] No benchmark mentions in comments, especially /// XML doc. No benchmark
    suite names (rebar, the Sherlock haystack), no measured numbers ("2x
    speedup", "23x slower"), no paths to results files. Qualitative,
    mechanism-based statements are fine ("opens one transaction instead of
    N"). Just drop the benchmark citation and the number.
 
-5. No state-machine mentions in production code under src/InductorParser/.
+5. [P3] No state-machine mentions in production code under src/InductorParser/.
    When a comment must explain code that exists for the experimental
    evaluator (EnterRuleAtDepth, TickPeriodicBudget, the Lowering*
    accessors, ResetForReuse pooling), describe it generically: "an
@@ -56,14 +123,14 @@ Rules to apply
    Stepper, Step_Call, opcodes). Genuine false positives stay: C# async/await
    state machines, the Unicode "Sm" general category.
 
-6. Stale facts. If code changes invalidate a claim in a comment (e.g.
+6. [P2] Stale facts. If code changes invalidate a claim in a comment (e.g.
    "derives from InvalidOperationException" after the exception was changed
    to derive from Exception), correct it. Same for comments that reference
    renamed API members (Symbol.Name → DisplayName, ParseResult.RawSourceTextOf
    → Symbol.SourceText). Two commits already cleaned up specific instances
    (27d4a11, 1a899af). The scrub should catch the rest.
 
-7. Vocabulary fixes that hit comments specifically (the global CLAUDE.md
+7. [P3] Vocabulary fixes that hit comments specifically (the global CLAUDE.md
    vocabulary list applies everywhere, but these came from comment-review
    sessions and are the highest-density offenders in src/ and tests/):
    - "wrapper" / "wrapper Symbol" → "Symbol" or "the rule's Symbol". <!-- style-lint-ok -->
@@ -84,7 +151,7 @@ Rules to apply
    - "honest" / "honestly" / "honest comparison" as a framing word → drop <!-- style-lint-ok -->
      it or use a direct word ("directly comparable", "measured").
 
-8. Public-member comments: convert // to /// when developer-facing. If a `//`
+8. [P3 mechanical, P4 style] Public-member comments: convert // to /// when developer-facing. If a `//`
    comment on a public type or member describes behavior, usage, or anything
    a caller needs to know to use the API, convert it to `///` so it surfaces
    in IntelliSense. Keep `//` for code-shape comments: design-rationale
@@ -99,7 +166,7 @@ Rules to apply
      universal rule: short, plain, focused.
    - `<param>` / `<returns>` / `<exception>` for the mechanical pieces.
 
-9. Every public member has a meaningful doc comment. Walk the public surface
+9. [P3 coverage, P4 quality] Every public member has a meaningful doc comment. Walk the public surface
    of src/InductorParser/ and confirm every public type, method, property,
    and field has a `///` with at least a `<summary>`. "Meaningful" is the
    word that matters: the summary has to tell the caller something they
@@ -113,6 +180,12 @@ Rules to apply
 
 Done when the following is true for what you worked on:
 
+- Members in each type appear in the Phase 1 order (Fields, Properties,
+  Constructors, Finalizers, Delegates, Events, Enums, Interfaces, Indexers,
+  Methods, then nested Structs and Classes). Each property's backing field
+  sits next to the property, not in the Fields block. Small one-use helpers
+  (nested types, delegates, enums) left where they're used are flagged as
+  intentional, not strays the next pass should hoist.
 - The linter used for checkin runs clean except for true exceptions
 - A grep for the vocabulary offenders above returns nothing except the documented exceptions (build machinery, false positives).
 - Test files have no `// ===` / `// ----` banner dividers.
@@ -129,3 +202,7 @@ Done when the following is true for what you worked on:
 - Spot-check: pick five recently-changed files and confirm their comments
   read as short, plain descriptions of current behavior, not change history
   and not jargon-laden.
+- Docs and tests that reference each touched file have been compared against
+  the file's final state and updated where the earlier phases changed
+  something they relied on (member names, ordering, example code, behavior
+  descriptions).
