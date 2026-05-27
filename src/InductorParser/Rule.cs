@@ -177,8 +177,20 @@ public abstract class Rule
     // ("expected an A"). Only used on failure lines. On success
     // there's no error to report so the WithError message is
     // omitted.
-    private string AppendErrorMessage(string body) =>
-        _errorMessage != null ? $"{body} \"{_errorMessage}\"" : body;
+    //
+    // The body-length check drops the body-separator space when the
+    // body is empty. OrRule's failure trace is the only caller that
+    // hits this path (its body is $"" because there's no per-child
+    // detail to surface once all alternatives failed); without the
+    // check, WriteTraceLine's own ": " plus the leading space in the
+    // format string would render "Or:  \"...\"" with a double space.
+    private string AppendErrorMessage(string body)
+    {
+        if (_errorMessage == null) return body;
+        return body.Length > 0
+            ? $"{body} \"{_errorMessage}\""
+            : $"\"{_errorMessage}\"";
+    }
 
     // Short-form trace helpers called from a rule's TryParse on the
     // success or failure path. [AggressiveInlining] + the
