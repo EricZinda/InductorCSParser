@@ -175,17 +175,14 @@ public sealed partial class Lexer
     //
     //   * Grapheme mode (the default, every top-level parse): a token is
     //     one UAX #29 grapheme cluster. The interior offsets are the
-    //     second-or-later runes of a cluster (LF inside CRLF under GB3, a
-    //     combining mark, ZWJ inside an emoji ZWJ sequence, a variation
-    //     selector, a Hangul jamo continuation, ... anything GB3-GB13
-    //     keeps glued to the previous rune). Resolution goes through
+    //     second-or-later runes of a cluster. Resolution goes through
     //     GraphemeClusterIndex, the same walk NextTokenLength uses, so any
     //     rule StringInfo respects (including backward-context rules like
     //     GB9c Indic Conjunct Break) is handled by construction.
     //
     //   * One-rune-per-token mode (the WithinTokenRule sub-lexer): a token
     //     is one rune, so a combining mark or any other cluster
-    //     continuation IS its own token and a valid start. The only
+    //     continuation IS its own token. The only
     //     interior offset is the trailing half of a surrogate pair. Using
     //     the grapheme-cluster index here would wrongly skip every
     //     mid-cluster rune the sub-lexer can legitimately start at, and
