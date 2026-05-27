@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using InductorParser.Lexing;
 
 namespace InductorParser.Tests;
 
@@ -66,17 +67,14 @@ internal static class CanaryHelper
         int index = 0;
         while (index < literal.Length)
         {
-            char current = literal[index];
-            if (char.IsHighSurrogate(current)
-                && index + 1 < literal.Length
-                && char.IsLowSurrogate(literal[index + 1]))
+            if (SurrogateHelpers.IsSurrogatePairAt(literal, index))
             {
-                yield return char.ConvertToUtf32(current, literal[index + 1]);
+                yield return char.ConvertToUtf32(literal[index], literal[index + 1]);
                 index += 2;
             }
             else
             {
-                yield return current;
+                yield return literal[index];
                 index += 1;
             }
         }

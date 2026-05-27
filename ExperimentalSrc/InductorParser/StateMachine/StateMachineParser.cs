@@ -68,7 +68,7 @@ public static class StateMachineParser
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
         string parseInput = NormalizeIfRequested(input, rootRule.NormalizationForm);
         Lexer lexer = RentLexer(parseInput, options);
-        lexer.ConfigureBudgets(options);
+        lexer.ConfigureOptions(options);
         Machine machine = default;
         try
         {
@@ -129,7 +129,7 @@ public static class StateMachineParser
         // Cancellation trip the same ParseBudgetExceeded the recursive
         // engine throws and we translate it into ParseResult.Aborted
         // below, mirroring Rule.Parse's catch.
-        lexer.ConfigureBudgets(options);
+        lexer.ConfigureOptions(options);
 
         Machine machine = default;
         try
@@ -297,7 +297,7 @@ public static class StateMachineParser
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
         string parseInput = NormalizeIfRequested(input, rootRule.NormalizationForm);
         Lexer lexer = RentLexer(parseInput, options);
-        lexer.ConfigureBudgets(options);
+        lexer.ConfigureOptions(options);
         Machine machine = default;
         try
         {
@@ -342,7 +342,7 @@ public static class StateMachineParser
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
         string parseInput = NormalizeIfRequested(input, rootRule.NormalizationForm);
         Lexer lexer = RentLexer(parseInput, options);
-        lexer.ConfigureBudgets(options);
+        lexer.ConfigureOptions(options);
         Machine machine = default;
         try
         {
@@ -615,7 +615,7 @@ public static class StateMachineParser
             pooled.ResetForReuse(input, options.TraceSink, options.TraceLevel);
             return pooled;
         }
-        return new Lexer(input, options.TraceSink, options.TraceLevel);
+        return new Lexer(input, traceSink: options.TraceSink, traceLevel: options.TraceLevel);
     }
 
     private static void ReturnLexerToPool(Lexer lexer)

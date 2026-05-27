@@ -7,138 +7,148 @@ using InductorParser.Tracing;
 
 namespace InductorParser.Lexing;
 
-// One token per .NET text element (grapheme cluster). Cluster
-// boundaries come from the GraphemeClusterIndex on the input string
-//
-// One sub-lexer mode (selected by an internal constructor and used only
-// by WithinTokenRule) walks one rune per token instead of one full
-// token. That sub-lexer reads a bounded range of the same shared
-// input string and lets the inner rule walk the runes inside one
-// token. The mode is one private bool checked once in Read; not a
-// virtual dispatch.
+/// <summary>
+/// Tokenizes a string one grapheme cluster at a time.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Cluster boundaries come from the GraphemeClusterIndex on the input string. One
+/// sub-lexer mode, selected by an internal constructor and used only by
+/// WithinTokenRule, walks one rune per token instead. That sub-lexer reads a
+/// bounded range of the same shared input string and lets the inner rule walk the
+/// runes inside one outer token.
+/// </para>
+/// <para>
+/// Malformed UTF-16: stray surrogates (a high surrogate without a paired low,
+/// or a low surrogate in any position) are walked one char at a time in both
+/// modes and never throw. In rune mode the surrogate-pair check returns 1 for
+/// any stray by construction; in grapheme mode the walk delegates to
+/// StringInfo, which treats unpaired surrogates as 1-char text elements. Read
+/// produces a one-char token over the stray and the read cursor keeps moving.
+/// Deciding whether each position represents a valid Unicode character is left
+/// to rune-level callers: TryPeekRune returns false on a stray, and rules that
+/// decode runes (LiteralRule, TokenSet membership, etc.) handle the false case
+/// explicitly.
+/// </para>
+/// </remarks>
 public sealed partial class Lexer
 {
-    // _input is the one reference kept to the input string, which is immutable and shared by
-    // every Token and ReadOnlySpan<char> the parser hands out. The GC sees this one string
-    // object and tracks it. Everything else is stack-resident structs that point back into
-    // this string. The GC never sees the Tokens or ReadOnlySpan<char>s, so they never have
-    // to be tracked or reclaimed.
-    // _input, _endPosition, _traceSink, _traceLevel are conceptually
-    // readonly but lose the C# `readonly` keyword so a pooled Lexer can
-    // be re-bound to a new input string through ResetForReuse() instead
-    // of allocating a fresh instance per parse. Constructors still treat
-    // them as set-once.
-    private string _input;
-    // Exclusive upper bound on _position. Defaults to _input.Length (a
-    // lexer reads to end of input). Sub-lexer constructors bound this to
-    // a sub-range of the shared input string so rules like WithinToken
-    // can run inner rules over a portion of the same string without
-    // allocating a Substring copy. Tokens and positions still use
-    // absolute offsets into _input, so outer error-position reporting
-    // works without translation.
-    private int _endPosition;
-    private int _position;
-
-    // Sub-lexer mode: when true, Read advances one rune at a time
-    // instead of one grapheme cluster. Set only by the internal
-    // bounded-range constructor used by WithinTokenRule, which
-    // creates a sub-lexer over the runes inside one outer token.
-    // All public construction paths leave this false (token mode).
-    private readonly bool _oneRunePerToken;
+    // "Alternative evaluator" (used in several comments below): any parser
+    // implementation built on this Lexer other than the recursive evaluator
+    // (Rule.TryParse). These reach into internal hooks like BindInput,
+    // ResetParseState, SetPositionUnchecked, and the EndPosition /
+    // OneRunePerToken / IsGraphemeClusterStart accessors that the recursive
+    // evaluator doesn't use.
 
     // Per-input cache of UAX #29 grapheme cluster boundaries.
     private GraphemeClusterIndex _graphemeIndex;
 
-    // _failureState, _subtreeDeepestFailure live in Lexer.Failures.cs.
-    // _transactionDepth lives in Lexer.Transaction.cs. _traceSink / _traceLevel
-    // live in Lexer.Tracing.cs.
+    // _input, _endPosition, _traceSink, _traceLevel are conceptually readonly
+    // but lose the C# `readonly` keyword so an alternative evaluator's pooling
+    // extension can re-bind a pooled Lexer to a new input via BindInput()
+    // instead of allocating a fresh instance per parse. Constructors still
+    // treat them as set-once.
+    //
+    // _input is the one reference kept to the input string, which is immutable
+    // and shared by every Token and ReadOnlySpan<char> the parser hands out.
+    // The GC sees this one string object and tracks it. Everything else is
+    // stack-resident structs that point back into this string, so the GC never
+    // has to track or reclaim them.
+    private string _input;
+
+    /// <summary>The input this lexer reads from.</summary>
+    /// <remarks>
+    /// For a top-level lexer this is what the caller passed to Parse. For a
+    /// sub-lexer (the one WithinTokenRule builds over the runes of one outer
+    /// token) this is the substring covering just those runes; the sub-lexer's
+    /// Position, IsEof, DeepestFailure, and Read / Token offsets are all
+    /// expressed in coordinates of this string. Rule code can bound its own
+    /// loops on Input.Length safely either way: the lexer's readable range and
+    /// Input.Length are always the same string.
+    /// </remarks>
+    public string Input => _input;
+
+    private int _position;
+
+    /// <summary>The current read cursor as a UTF-16 offset into <see cref="Input"/>.</summary>
+    public int Position => _position;
+
+    // Exclusive upper bound on _position. Defaults to _input.Length. Sub-lexer
+    // constructors bound this to a lower value so WithinToken can run inner
+    // rules over part of the shared string without allocating a Substring.
+    // Tokens still carry absolute offsets into _input, so error positions
+    // don't need translation.
+    private int _endPosition;
+
+    internal int EndPosition => _endPosition;
+
+    /// <summary>True when the read cursor has reached the end of the readable range.</summary>
+    public bool IsEof => _position >= _endPosition;
+
+    // Sub-lexer mode: when true, Read advances one rune at a time instead of
+    // one grapheme cluster. Set only by the internal constructor
+    // used by WithinTokenRule, which creates a sub-lexer over the runes inside
+    // one outer token. All public construction paths leave this false.
+    private readonly bool _oneRunePerToken;
+
+    internal bool OneRunePerToken => _oneRunePerToken;
+
+    // Also null for sub-lexers (WithinTokenRule) and for pooled Lexer reuse
+    // before the pooling extension re-binds it.
+    private ParseContext? _context;
+
+    /// <summary>
+    /// The per-parse <see cref="ParseContext"/> supplied at construction so
+    /// every Symbol the engine builds can resolve back to original-input
+    /// positions and text. Null when no context was supplied.
+    /// </summary>
+    public ParseContext? Context => _context;
 
     // Per-parse budget tracking (rule count, depth, wall-clock timeout,
-    // cancellation). Owned by ParseBudget so the budget concept lives in
-    // its own type instead of being woven into the lexer's tokenization
-    // state. Lexer wires the throw callback at construction so the throw
-    // path can still freeze lexer-side position state onto the exception.
-    // See Lexing/ParseBudget.cs for the details. Sub-lexers
-    // (WithinTokenRule) delegate to the outer parse's budget via
-    // Budget.InheritFrom(outer.Budget).
+    // cancellation). Lexer wires the throw callback at construction so the
+    // throw path can freeze lexer-side position state onto the exception. See
+    // Lexing/ParseBudget.cs for the details. Sub-lexers (WithinTokenRule)
+    // delegate to the outer parse's budget via Budget.InheritFrom(outer.Budget).
     private readonly ParseBudget _budget;
 
     internal ParseBudget Budget => _budget;
 
-    // Debug knob wired in from ParseOptions. Rules that would normally
-    // apply parse-time tree-shape optimizations (e.g.
-    // Delete-node filtering) consult this flag and skip the optimization
-    // when it's set, producing a tree whose shape matches the grammar
-    // one-to-one. See ParseOptions.PreserveAllSymbols.
+    // Debug knob wired in from ParseOptions. Rules that would normally apply
+    // parse-time tree-shape optimizations (e.g. Delete-node filtering) consult
+    // this flag and skip the optimization when it's set, producing a tree
+    // whose shape matches the grammar one-to-one. See ParseOptions.PreserveAllSymbols.
     internal bool PreserveAllSymbols { get; set; }
 
-    // Internal accessors so an alternative evaluator (the StateMachine in
-    // ExperimentalSrc/InductorParser/StateMachine/) can implement its own
-    // scanner-skip and pooling extension methods without the lexer
-    // growing private state into its concerns. The recursive evaluator
-    // doesn't call any of these.
-    internal int EndPosition => _endPosition;
-    internal bool OneRunePerToken => _oneRunePerToken;
-    internal bool IsGraphemeClusterStart(int position) => _graphemeIndex.IsClusterStart(position);
-
-    // Per-parse state reset for the pooling extension in the StateMachine
-    // project. Zeros the failure tracker, transaction depth, and other
-    // per-parse-only fields so a pooled Lexer can't leak state into the
-    // next parse. The budget has its own ParseBudget.Reset; this method
-    // covers everything else.
-    internal void ResetParseState()
-    {
-        _context = null;
-        _failureState = default;
-        _subtreeDeepestFailure = 0;
-        _transactionDepth = 0;
-        PreserveAllSymbols = false;
-    }
-
-    // Per-parse context the parse driver supplies so every Symbol the
-    // engine builds can resolve original-input positions / text. Null
-    // for sub-lexers (WithinTokenRule), pooled-Lexer reuse before
-    // ResetForReuse re-binds it. Has constructors that don't take a
-    // context (callers that build a Lexer directly and don't need
-    // Symbol-level position recovery).
-    private ParseContext? _context;
-
-    public ParseContext? Context => _context;
-
-    public Lexer(string input)
-        : this(input, traceSink: null, traceLevel: TraceLevel.Normal)
-    {
-    }
-
-    public Lexer(string input, TextWriter? traceSink, TraceLevel traceLevel)
+    /// <summary>Create a lexer over <paramref name="input"/>.</summary>
+    /// <param name="input">The string to tokenize.</param>
+    /// <param name="context">Per-parse <see cref="ParseContext"/>, or null when Symbol-level position recovery isn't needed.</param>
+    /// <param name="traceSink">Destination for trace output, or null to disable tracing.</param>
+    /// <param name="traceLevel">Verbosity when tracing is enabled.</param>
+    public Lexer(
+        string input,
+        ParseContext? context = null,
+        TextWriter? traceSink = null,
+        TraceLevel traceLevel = TraceLevel.Normal)
         : this(input, startPosition: 0, endPosition: (input ?? throw new ArgumentNullException(nameof(input))).Length, traceSink, traceLevel, oneRunePerToken: false)
-    {
-    }
-
-    // Construct a top-level Lexer with a ParseContext so every Symbol
-    // produced during this parse can resolve original-input positions
-    // via Symbol.SourceRange and Symbol.SourceText. 
-    public Lexer(string input, ParseContext? context, TextWriter? traceSink, TraceLevel traceLevel)
-        : this(input, traceSink, traceLevel)
     {
         _context = context;
     }
 
-    // Bounded-range constructor used to build sub-lexers that read a
-    // portion of a shared input string. startPosition is the initial
-    // read cursor and endPosition is the exclusive upper bound (IsEof
-    // fires when _position reaches endPosition). Tokens still carry
-    // absolute offsets into the shared string so the outer parse's
-    // error-position reporting works uniformly whether positions come
-    // from the main lexer or a sub-lexer.
+    // Constructor used to build sub-lexers that read only a portion
+    // of a shared input string. startPosition is the initial read cursor and
+    // endPosition is the exclusive upper bound (IsEof fires when _position
+    // reaches endPosition). Tokens still carry absolute offsets into the
+    // shared string so the outer parse's error-position reporting works
+    // uniformly whether positions come from the main lexer or a sub-lexer.
     //
-    // oneRunePerToken switches Read to walk one rune at a time instead
-    // of one grapheme cluster. WithinTokenRule passes true so the
-    // inner rule sees the runes inside the outer token; everywhere
-    // else the default (false) keeps grapheme tokenization.
+    // oneRunePerToken switches Read to walk one rune at a time instead of one
+    // grapheme cluster. WithinTokenRule passes true so its inner rule can see the
+    // runes inside the outer token. Everywhere else the default (false) uses
+    // grapheme tokenization.
     internal Lexer(string input, int startPosition, int endPosition, TextWriter? traceSink, TraceLevel traceLevel, bool oneRunePerToken)
     {
         if (input == null) throw new ArgumentNullException(nameof(input));
+        // uint cast: negatives wrap to huge values, so one compare catches < 0 and > Length.
         if ((uint)startPosition > (uint)input.Length)
             throw new ArgumentOutOfRangeException(nameof(startPosition), startPosition, "startPosition must be in [0, input.Length].");
         if (endPosition < startPosition || endPosition > input.Length)
@@ -148,29 +158,13 @@ public sealed partial class Lexer
         BindInput(input, startPosition, endPosition, traceSink, traceLevel);
     }
 
-    // The string this lexer reads from. For a top-level lexer this is
-    // the input the caller passed to Parse. For a sub-lexer (the one
-    // WithinTokenRule builds over the runes of one outer token) this is
-    // the substring covering just those runes; the sub-lexer's
-    // Position, IsEof, DeepestFailure, and Read() / Token offsets are
-    // all expressed in coordinates of this string. Rule code can bound
-    // its own loops on Input.Length safely either way: the lexer's
-    // readable range and Input.Length are always the same string.
-    public string Input => _input;
-    public int Position => _position;
-
-    // Direct write-access to the read cursor for alternative
-    // evaluator's backtrack-rollback path. For the recursive evaluator,
-    // BeginTransaction is the right mechanism. 
-    internal void SetPositionUnchecked(int position) => _position = position;
-
-    // Set the per-input fields that both the constructor and
-    // the StateMachine's ResetForReuse extension have to assign: input string, position bounds,
-    // trace destination, and the grapheme-cluster index for the new
+    // Set the per-input fields that both the constructor and an alternative
+    // evaluator's pooling extension have to assign: input string, position
+    // bounds, trace destination, and the grapheme-cluster index for the new
     // input. Doesn't touch _oneRunePerToken (readonly, set-once in the
-    // constructor) and doesn't reset per-parse counters / budgets
-    // (those are zero-initialized for fresh constructions, and
-    // ResetForReuse clears them itself).
+    // constructor) and doesn't reset per-parse counters or budgets (those are
+    // zero-initialized for fresh constructions, and the pooling extension
+    // clears them itself).
     [MemberNotNull(nameof(_input), nameof(_graphemeIndex))]
     internal void BindInput(string input, int startPosition, int endPosition, TextWriter? traceSink, TraceLevel traceLevel)
     {
@@ -182,125 +176,85 @@ public sealed partial class Lexer
         _graphemeIndex = GraphemeClusterIndex.For(input);
     }
 
-    public bool IsEof => _position >= _endPosition;
+    // Per-parse state reset for an alternative evaluator's pooling extension.
+    // Zeros the failure tracker, transaction depth, and other per-parse-only
+    // fields so a pooled Lexer can't leak state into the next parse. The
+    // budget has its own ParseBudget.Reset. This method covers everything
+    // else.
+    internal void ResetParseState()
+    {
+        _context = null;
+        _failureState = default;
+        _subtreeDeepestFailure = 0;
+        _transactionDepth = 0;
+        PreserveAllSymbols = false;
+    }
 
-    // Tracing methods (IsTracing, Trace, WriteTraceLine) live in Lexer.Tracing.cs.
+    // Exposes the cached grapheme-cluster boundaries for a string, used only by alternative evaluators.
+    internal bool IsGraphemeClusterStart(int position) => _graphemeIndex.IsClusterStart(position);
 
-    // How many UTF-16 chars are in the next token at `startOffset`.
-    // Returns one rune in WithinToken sub-lexer mode, or one grapheme
-    // cluster otherwise. Caller has already verified there's at least
-    // one char left in the readable range.
+    // Direct write-access to the read cursor for an alternative evaluator's
+    // backtrack-rollback path. Used only by alternative evaluators.
+    internal void SetPositionUnchecked(int position) => _position = position;
+
+    // Apply per-parse ParseOptions to the lexer. Called by Rule.Parse right
+    // after constructing the lexer and before the first rule fires. Forwards
+    // budget limits to ParseBudget and pulls out PreserveAllSymbols, a debug
+    // flag that doesn't live on the budget.
+    internal void ConfigureOptions(ParseOptions options)
+    {
+        _budget.Configure(options);
+        PreserveAllSymbols = options.PreserveAllSymbols;
+    }
+
+    // How many UTF-16 chars are in the next token at `startOffset`. Returns
+    // one rune in WithinToken sub-lexer mode, or one grapheme cluster
+    // otherwise. Caller has verified there's at least one char left in the
+    // readable range.
+    //
+    // Invariants: always returns >= 1 and never throws. In rune mode, returns
+    // 2 only for a well-formed surrogate pair (high then low); stray surrogates
+    // in any position return 1. See the class doc for the full malformed-UTF-16
+    // rules.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal int NextTokenLength(int startOffset)
     {
+        Invariant.That(startOffset < _endPosition, $"NextTokenLength called with startOffset={startOffset} at or past endPosition={_endPosition}.");
         if (_oneRunePerToken)
-        {
-            char c = _input[startOffset];
-            if (char.IsHighSurrogate(c)
-                && startOffset + 1 < _input.Length
-                && char.IsLowSurrogate(_input[startOffset + 1]))
-            {
-                return 2;
-            }
-            return 1;
-        }
+            return SurrogateHelpers.IsSurrogatePairAt(_input, startOffset) ? 2 : 1;
         return _graphemeIndex.LengthAt(startOffset);
     }
 
-    // "How long is the next token at this position?" without
-    // advancing. Returns 0 if `position` is at or past the end.
+    // "How long is the next token at this position?" without advancing.
+    // Returns 0 if `position` is at or past the end. See the class doc
+    // for the full malformed-UTF-16 rules.
     internal int PeekTokenLength(int position)
     {
         if (position >= _endPosition) return 0;
         return NextTokenLength(position);
     }
 
-    // Peek the next token (one grapheme cluster, or one rune in the
-    // WithinToken sub-lexer mode) without advancing. Returns an EOF
-    // token when the lexer is at end-of-input. The returned Token's
-    // Chars span lives over the original input string and stays valid
-    // as long as the lexer's input does.
+    // Decode the rune at `pos` in `input` without advancing any lexer state.
+    // Writes the rune value and its UTF-16 length. Returns false on a stray
+    // surrogate (see the class doc for the malformed-UTF-16 rules).
     //
-    // Used by OrRule and BetweenInclusiveRule for the lookahead
-    // shortcut: peek one token, ask each child rule whether it could
-    // match this token. The shortcut runs at the lexer's current
-    // cursor position, which the GraphemeClusterIndex has already
-    // walked past (every committed Read calls LengthAt before
-    // advancing), so PeekToken is a cache-hit O(1) lookup in the
-    // common path.
-    //
-    // Why not BeginTransaction + Read + rollback? Read emits a trace
-    // line, mutates _position, bumps _transactionDepth, and rolls
-    // back through a using-block disposer. Correct, but too heavy
-    // for the per-Or-entry hot path and would clutter trace
-    // output with phantom Read lines. PeekToken is the side-effect-
-    // free, AggressiveInlining-friendly alternative.
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal Token PeekToken()
-    {
-        if (_position >= _endPosition)
-            return new Token(_input, _position, 0, isEof: true);
-        int length = NextTokenLength(_position);
-        return new Token(_input, _position, length, isEof: false);
-    }
-
-    // Peek the rune at `pos` in `input` without advancing any lexer
-    // state. Writes the rune value and its UTF-16 length. Returns
-    // false if the char at `pos` is a stray surrogate without its
-    // paired half (malformed UTF-16 that doesn't represent any real
-    // Unicode character).
-    //
-    // `pos` must be a valid index into `input`
-    // (0 <= pos < input.Length). Calling at end-of-input throws
-    // IndexOutOfRangeException, by design: the false return is
-    // reserved for "stray surrogate" so callers don't have to
-    // distinguish "EOF" from "malformed input" off one boolean.
-    // Callers gate this call with their own EOF check (most live
-    // inside `while (_position < _endPosition)` loops; rules that
-    // peek at the lookahead position guard with `pos < input.Length`
-    // explicitly).
-    //
-    // Always one rune at a time. Rules that need to walk rune-by-rune
-    // (like the WithinToken sub-lexer) get consistent semantics
-    // regardless of how the outer lexer is tokenizing. Callers that
-    // want to inspect one token at a time in the lexer's natural unit
-    // (one grapheme cluster, or one rune in the WithinToken sub-
-    // lexer mode) should call lexer.Read(). Note that Read() advances
-    // the lexer, so for peek semantics wrap it in an uncommitted
-    // transaction:
-    //
-    //     using var transaction = lexer.BeginTransaction();
-    //     var token = lexer.Read();
-    //     // inspect token.Memory, token.Chars, etc.
-    //     // DON'T call transaction.Commit(). When the `using`
-    //     // block exits, Transaction.Dispose sees Commit wasn't
-    //     // called and restores the lexer's position to where
-    //     // BeginTransaction was called.
-    //
-    // That's the idiomatic "peek a token" pattern. A rule doing pure
-    // lookahead (Peek, Not) wants BeginProbe instead, which also rolls
-    // back the failure tracker and the subtree-extent mark.
-    //
-    // Aggressive-inlined so the caller sees the same machine
-    // code the fully inline decoder would. Pulled out so the
-    // surrogate-pair logic lives in exactly one place instead of
-    // being re-implemented in every rule that peeks.
+    // `pos` must be a valid index (0 <= pos < input.Length). The false return
+    // is reserved for "stray surrogate" so callers don't have to distinguish
+    // EOF from malformed input off one bool. Callers check EOF themselves.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool TryPeekRune(string input, int pos, out int runeValue, out int runeLen)
     {
-        char c0 = input[pos];
-        if (char.IsHighSurrogate(c0)
-            && pos + 1 < input.Length
-            && char.IsLowSurrogate(input[pos + 1]))
+        Invariant.That((uint)pos < (uint)input.Length, $"TryPeekRune called with pos={pos} outside [0, input.Length={input.Length}).");
+        if (SurrogateHelpers.IsSurrogatePairAt(input, pos))
         {
-            runeValue = char.ConvertToUtf32(c0, input[pos + 1]);
+            runeValue = char.ConvertToUtf32(input[pos], input[pos + 1]);
             runeLen = 2;
             return true;
         }
+        char c0 = input[pos];
         if (char.IsSurrogate(c0))
         {
-            // Stray surrogate without its paired half. Not a valid
-            // Unicode character.
+            // Stray surrogate.
             runeValue = -1;
             runeLen = 0;
             return false;
@@ -310,11 +264,17 @@ public sealed partial class Lexer
         return true;
     }
 
-    // Advance one token and return it. The "one token" shape is decided
-    // by the subclass (see NextTokenLength). Cheap: Token is a stack-only
-    // ref struct carrying offset+length into the input string, no
-    // allocation, no substring copying. See Token for why it's safe to
-    // return one by value.
+    /// <summary>
+    /// Advance one token and return it. The token shape is one grapheme
+    /// cluster in normal mode, or one rune in the WithinToken sub-lexer mode.
+    /// </summary>
+    /// <remarks>
+    /// Cheap: <see cref="Token"/> is a stack-only ref struct carrying offset
+    /// and length into the input string, with no allocation and no substring
+    /// copying. On malformed UTF-16 (stray surrogates), Read advances by one
+    /// char and returns a one-char token rather than throwing. See the class
+    /// doc for the full rules.
+    /// </remarks>
     public Token Read()
     {
         if (IsEof)
@@ -330,38 +290,41 @@ public sealed partial class Lexer
         return t;
     }
 
-    // Open a Transaction over the current position. Every rule does this
-    // on entry: it captures _position so a failure can roll back, bumps
-    // _transactionDepth for trace indentation, and saves the
-    // subtree-extent window. See the Transaction struct in Lexer.Transaction.cs
-    // for the full semantics.
+    /// <summary>
+    /// Open a <see cref="Transaction"/> over the current position. Every
+    /// rule opens one on entry (via Rule.TryParse): commit keeps the cursor
+    /// where children advanced it, rollback restores the cursor to where
+    /// the rule was entered.
+    /// </summary>
+    /// <remarks>
+    /// Rollback restores the cursor but keeps any failures recorded during
+    /// the rule: a rejected Or branch or a stopped Count iteration is real
+    /// evidence about the input and the error reporter uses it. For pure
+    /// lookahead that has to discard the failures too, use
+    /// <see cref="Probe"/>. See <see cref="Transaction"/> for the full
+    /// semantics.
+    /// </remarks>
     public Transaction BeginTransaction()
     {
         _transactionDepth++;
         return new Transaction(this, _position);
     }
 
-    // Open a lookahead Probe. Unlike a Transaction, a Probe brackets all
-    // three pieces of speculative state (read position, the three-slot
-    // failure tracker, and the subtree-extent high-water mark) and
-    // restores all three on Dispose unless Commit is called. See the
-    // Probe struct in Lexer.Probe.cs for the full explanation. A Probe is
-    // not a transaction nesting level: it doesn't touch _transactionDepth,
-    // so it adds no trace indentation. The rule opening it already owns
-    // one transaction (the one Rule.TryParse opened for it), which
-    // supplies the single indentation level.
+    /// <summary>
+    /// Open a lookahead <see cref="Probe"/>. Used by rules that do pure
+    /// lookahead (Peek, Not, ScanUntil's stopper and escape-start probes):
+    /// excursions whose failures are off the real parse path and can't
+    /// influence the error report.
+    /// </summary>
+    /// <remarks>
+    /// Where <see cref="Transaction"/> rollback restores only the cursor
+    /// and keeps recorded failures, Probe rollback restores the cursor AND
+    /// the failure tracker AND the subtree-extent mark, so a probed
+    /// excursion that fails leaves no trace in the error reporter. Probes
+    /// open inside an existing transaction (Rule.TryParse already opened
+    /// one), so a Probe doesn't add a trace-indentation level. See
+    /// <see cref="Probe"/> for the full semantics.
+    /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Probe BeginProbe() => new Probe(this);
-
-    // Wire the per-parse runtime budgets onto the lexer. Called by
-    // Rule.Parse right after constructing the lexer and before the first
-    // rule fires. Forwards the limits onto the lexer's ParseBudget and
-    // picks up PreserveAllSymbols which is a per-parse debug flag that
-    // doesn't live on the budget.
-    internal void ConfigureBudgets(ParseOptions options)
-    {
-        _budget.Configure(options);
-        PreserveAllSymbols = options.PreserveAllSymbols;
-    }
-
 }
