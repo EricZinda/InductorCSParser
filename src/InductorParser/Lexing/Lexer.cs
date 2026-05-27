@@ -271,6 +271,13 @@ public sealed partial class Lexer
     internal bool IsTracing(TraceLevel level) =>
         _traceSink != null && _traceLevel >= level;
 
+    // True when a trace sink is attached at all. Use this when behavior
+    // should change because someone is watching the parse (turning off an
+    // optimization that would create gaps in the trace, for example), as
+    // opposed to IsTracing(level), which asks whether to emit a line at a
+    // specific verbosity.
+    internal bool IsTracing() => _traceSink != null;
+
     // The `message` parameter is a TraceInterpolatedStringHandler, 
     // which means callers can write `lexer.Trace(level, label, outcome, $"...")` 
     // and the C# compiler will skip building the string when the sink is off or the level
