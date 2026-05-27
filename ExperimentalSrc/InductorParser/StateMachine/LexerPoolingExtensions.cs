@@ -16,7 +16,7 @@ internal static class LexerPoolingExtensions
     // mode can't leak between parses.
     //
     // After ResetForReuse, the caller is expected to invoke
-    // ConfigureBudgets to set the budget limits and PreserveAllSymbols
+    // ConfigureOptions to set the budget limits and PreserveAllSymbols
     // for the new parse. The reset clears the budget counters via
     // Budget.Reset so a pooled lexer can't leak rule-invocation count
     // from the previous parse.

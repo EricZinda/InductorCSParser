@@ -764,13 +764,6 @@ public static class Rules
     /// end-of-input. Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Delete"/>.
     /// </summary>
-    /// <param name="eofIsEol">
-    /// When <c>true</c>, end-of-input counts as an end-of-line. The
-    /// last line of a document typically isn't followed by a terminator,
-    /// so a grammar that wants one at the end of every line has to
-    /// accept EOF as equivalent. Default is <c>false</c>: a real
-    /// terminator is required.
-    /// </param>
     /// <remarks>
     /// Consumes one of:
     /// <list type="bullet">
@@ -789,6 +782,13 @@ public static class Rules
     /// <c>Optional(EndOfLine(eofIsEol: true))</c>.
     /// </para>
     /// </remarks>
+    /// <param name="eofIsEol">
+    /// When <c>true</c>, end-of-input counts as an end-of-line. The
+    /// last line of a document typically isn't followed by a terminator,
+    /// so a grammar that wants one at the end of every line has to
+    /// accept EOF as equivalent. Default is <c>false</c>: a real
+    /// terminator is required.
+    /// </param>
     public static Rule EndOfLine(bool eofIsEol = false)
     {
         var alternatives = eofIsEol
@@ -805,34 +805,6 @@ public static class Rules
     /// so the match appears in the tree as one named node whose
     /// children are the per-rune leaves.
     /// </summary>
-    /// <param name="form">
-    /// The normalization form the rule will be compiled under. Must
-    /// match the form passed to <c>Compile</c>. Default is
-    /// <see cref="NormalizationForm.FormC"/>, the same default Compile
-    /// uses. Pass <see cref="NormalizationForm.FormKC"/> /
-    /// <see cref="NormalizationForm.FormKD"/> for compatibility-form
-    /// identifiers (Python 3 / Rust style: fullwidth Latin and ligatures
-    /// match their plain ASCII equivalents). Pass <c>null</c> to opt out
-    /// of normalization at parse time, matching the unnormalized Compile
-    /// path.
-    /// </param>
-    /// <param name="extraStartRunes">
-    /// Runes to union into <see cref="TokenSet.XidStart"/> for the
-    /// first character. UAX #31 calls this a "profile extension":
-    /// the base Start property plus language-specific additions.
-    /// Typical value for a programming-language grammar is
-    /// <c>TokenSet.Runes("_")</c>. Python and Rust use this shape; C#
-    /// also permits leading underscores, though its full identifier
-    /// specification differs. Defaults to
-    /// <see cref="TokenSet.Empty"/> (the base UAX #31-style profile).
-    /// </param>
-    /// <param name="extraBodyRunes">
-    /// Runes to union into <see cref="TokenSet.XidContinue"/> for
-    /// every character after the first. Same idea as
-    /// <paramref name="extraStartRunes"/>. ECMAScript, for example,
-    /// adds <c>$</c> to both positions. Defaults to
-    /// <see cref="TokenSet.Empty"/>.
-    /// </param>
     /// <remarks>
     /// The same word can be typed more than one way. "café" might be
     /// stored with a single precomposed "é", or with a plain "e"
@@ -861,6 +833,34 @@ public static class Rules
     /// <c>Compile</c> time.
     /// </para>
     /// </remarks>
+    /// <param name="form">
+    /// The normalization form the rule will be compiled under. Must
+    /// match the form passed to <c>Compile</c>. Default is
+    /// <see cref="NormalizationForm.FormC"/>, the same default Compile
+    /// uses. Pass <see cref="NormalizationForm.FormKC"/> /
+    /// <see cref="NormalizationForm.FormKD"/> for compatibility-form
+    /// identifiers (Python 3 / Rust style: fullwidth Latin and ligatures
+    /// match their plain ASCII equivalents). Pass <c>null</c> to opt out
+    /// of normalization at parse time, matching the unnormalized Compile
+    /// path.
+    /// </param>
+    /// <param name="extraStartRunes">
+    /// Runes to union into <see cref="TokenSet.XidStart"/> for the
+    /// first character. UAX #31 calls this a "profile extension":
+    /// the base Start property plus language-specific additions.
+    /// Typical value for a programming-language grammar is
+    /// <c>TokenSet.Runes("_")</c>. Python and Rust use this shape; C#
+    /// also permits leading underscores, though its full identifier
+    /// specification differs. Defaults to
+    /// <see cref="TokenSet.Empty"/> (the base UAX #31-style profile).
+    /// </param>
+    /// <param name="extraBodyRunes">
+    /// Runes to union into <see cref="TokenSet.XidContinue"/> for
+    /// every character after the first. Same idea as
+    /// <paramref name="extraStartRunes"/>. ECMAScript, for example,
+    /// adds <c>$</c> to both positions. Defaults to
+    /// <see cref="TokenSet.Empty"/>.
+    /// </param>
     public static Rule Identifier(
         NormalizationForm? form = NormalizationForm.FormC,
         TokenSet extraStartRunes = default,
@@ -901,13 +901,6 @@ public static class Rules
     /// Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
-    /// <param name="innerRule">
-    /// The rule to run against the token's runes. Must consume every
-    /// rune of the token on success; a rule that matches only a
-    /// prefix causes the whole <c>WithinToken</c> to fail. Any rule
-    /// composition is allowed inside (<see cref="And"/>, <see cref="Or"/>,
-    /// <c>OneOf</c>, etc.).
-    /// </param>
     /// <remarks>
     /// Building block for rules that care about token-internal
     /// structure. Used by <see cref="Identifier"/> to make identifier
@@ -921,9 +914,23 @@ public static class Rules
     /// One leaf Symbol is emitted per successful match, representing the
     /// whole token. Inner-rule symbols are discarded. Inner-rule
     /// tracing isn't propagated to the outer trace. The inner parse is
-    /// bounded to the token's rune span, but the sub-lexer doesn't
-    /// share the outer parse's trace or budget counters.
+    /// bounded to the token's rune span. The sub-lexer's recursion,
+    /// rule-count, timeout, and cancellation budgets all count against
+    /// the outer parse: a Cancel() or expired Timeout observed on
+    /// either lexer trips both, and MaxDepth / RuleCountLimit cover the
+    /// combined outer-plus-inner work rather than letting the inner
+    /// rule spend a fresh budget on top of the outer's. Without this,
+    /// a recursive inner rule on a cluster crafted with many combining
+    /// marks could spend a fresh MaxDepth on top of the outer's depth
+    /// and crash the host process with a stack overflow.
     /// </para>
     /// </remarks>
+    /// <param name="innerRule">
+    /// The rule to run against the token's runes. Must consume every
+    /// rune of the token on success; a rule that matches only a
+    /// prefix causes the whole <c>WithinToken</c> to fail. Any rule
+    /// composition is allowed inside (<see cref="And"/>, <see cref="Or"/>,
+    /// <c>OneOf</c>, etc.).
+    /// </param>
     public static Rule WithinToken(Rule innerRule) => new WithinTokenRule(innerRule);
 }

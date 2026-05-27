@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using InductorParser.Lexing;
 
 namespace InductorParser;
 
@@ -99,9 +100,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             foreach (string grapheme in MultiRuneGraphemes)
             {
                 int firstRune;
-                if (grapheme.Length >= 2
-                    && char.IsHighSurrogate(grapheme[0])
-                    && char.IsLowSurrogate(grapheme[1]))
+                if (SurrogateHelpers.IsSurrogatePairAt(grapheme, 0))
                 {
                     firstRune = char.ConvertToUtf32(grapheme[0], grapheme[1]);
                 }
@@ -513,9 +512,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             runeValue = c;
             return true;
         }
-        if (grapheme.Length == 2
-            && char.IsHighSurrogate(grapheme[0])
-            && char.IsLowSurrogate(grapheme[1]))
+        if (grapheme.Length == 2 && SurrogateHelpers.IsSurrogatePairAt(grapheme, 0))
         {
             runeValue = char.ConvertToUtf32(grapheme[0], grapheme[1]);
             return true;
@@ -906,9 +903,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             string grapheme = StringInfo.GetNextTextElement(text, index);
             int rune;
             int consumed;
-            if (char.IsHighSurrogate(text[index])
-                && index + 1 < text.Length
-                && char.IsLowSurrogate(text[index + 1]))
+            if (SurrogateHelpers.IsSurrogatePairAt(text, index))
             {
                 rune = char.ConvertToUtf32(text[index], text[index + 1]);
                 consumed = 2;
@@ -976,9 +971,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
             int firstRune;
             int firstRuneLength;
-            if (char.IsHighSurrogate(cluster[0])
-                && cluster.Length >= 2
-                && char.IsLowSurrogate(cluster[1]))
+            if (SurrogateHelpers.IsSurrogatePairAt(cluster, 0))
             {
                 firstRune = char.ConvertToUtf32(cluster[0], cluster[1]);
                 firstRuneLength = 2;
@@ -1016,9 +1009,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         for (int runeIndex = 0; runeIndex < grapheme.Length;)
         {
             int runeCodepoint;
-            if (char.IsHighSurrogate(grapheme[runeIndex])
-                && runeIndex + 1 < grapheme.Length
-                && char.IsLowSurrogate(grapheme[runeIndex + 1]))
+            if (SurrogateHelpers.IsSurrogatePairAt(grapheme, runeIndex))
             {
                 runeCodepoint = char.ConvertToUtf32(grapheme[runeIndex], grapheme[runeIndex + 1]);
                 runeIndex += 2;

@@ -409,7 +409,8 @@ public class UnicodeAsAndWithErrorTests
 
         string expected = Lines(
             "   Lexer.Read: 'x', Consumed: 1",
-            "   FAIL | Token: found 'x', wanted 'a' \"" + message + "\"");
+            "   FAIL | Token: found 'x', wanted 'a' \"" + message + "\"",
+            "   Lexer.RecordFailure: first named failure at char 0");
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
 

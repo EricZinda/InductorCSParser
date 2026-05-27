@@ -139,6 +139,33 @@ public class OrRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
+    public void Or_trace_failure_with_WithError_renders_with_single_space_before_quoted_message()
+    {
+        // Or's failure trace body is empty (no per-child detail to surface
+        // when all alternatives failed), so AppendErrorMessage runs on a
+        // zero-length body. The WithError message is the only thing on the
+        // line after the label. The format should be one space between
+        // ": " and the opening quote, matching how Token's failure trace
+        // renders its WithError (see TracingTests:
+        // WithError_message_appears_in_quotes_after_trace_body_on_failure).
+        var sink = NewSink();
+        Or(Token('a'), Token('b'))
+            .WithError("expected ab")
+            .Parse("z", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "      Lexer.Read: 'z', Consumed: 1",
+            "      FAIL | Token: found 'z', wanted 'a'",
+            "      Lexer.Read: 'z', Consumed: 1",
+            "      FAIL | Token: found 'z', wanted 'b'",
+            "   FAIL | Or: \"expected ab\"",
+            "   Lexer.RecordFailure: first named failure at char 0"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
     public void Sealed_Or_rejects_Flatten()
     {
         var rule = Or(Token('a'), Token('b'));

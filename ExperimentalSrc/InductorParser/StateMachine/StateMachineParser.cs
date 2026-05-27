@@ -68,7 +68,7 @@ public static class StateMachineParser
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
         string parseInput = NormalizeIfRequested(input, rootRule.NormalizationForm);
         Lexer lexer = RentLexer(parseInput, options);
-        lexer.ConfigureBudgets(options);
+        lexer.ConfigureOptions(options);
         Machine machine = default;
         try
         {
@@ -129,7 +129,7 @@ public static class StateMachineParser
         // Cancellation trip the same ParseBudgetExceeded the recursive
         // engine throws and we translate it into ParseResult.Aborted
         // below, mirroring Rule.Parse's catch.
-        lexer.ConfigureBudgets(options);
+        lexer.ConfigureOptions(options);
 
         Machine machine = default;
         try
@@ -151,7 +151,7 @@ public static class StateMachineParser
                 // the same shape of ParseResult.Aborted from the same
                 // ParseOutcome, so a side-by-side compare on the
                 // recursive vs SM run agrees on outcome and position.
-                int abortRaw = System.Math.Max(System.Math.Max(machine.DeepestFailure, lexer.DeepestFailure), lexer.Position);
+                int abortRaw = System.Math.Max(System.Math.Max(machine.DeepestFailure, lexer.DeepestFailurePosition), lexer.Position);
                 int abortPos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, abortRaw, rootRule.NormalizationForm);
                 return ParseResult.Aborted(budget.Outcome, abortPos, Rule.BuildBudgetMessage(budget.Outcome, abortPos, input, options), input, rootRule);
             }
@@ -297,7 +297,7 @@ public static class StateMachineParser
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
         string parseInput = NormalizeIfRequested(input, rootRule.NormalizationForm);
         Lexer lexer = RentLexer(parseInput, options);
-        lexer.ConfigureBudgets(options);
+        lexer.ConfigureOptions(options);
         Machine machine = default;
         try
         {
@@ -342,7 +342,7 @@ public static class StateMachineParser
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
         string parseInput = NormalizeIfRequested(input, rootRule.NormalizationForm);
         Lexer lexer = RentLexer(parseInput, options);
-        lexer.ConfigureBudgets(options);
+        lexer.ConfigureOptions(options);
         Machine machine = default;
         try
         {
@@ -615,7 +615,7 @@ public static class StateMachineParser
             pooled.ResetForReuse(input, options.TraceSink, options.TraceLevel);
             return pooled;
         }
-        return new Lexer(input, options.TraceSink, options.TraceLevel);
+        return new Lexer(input, traceSink: options.TraceSink, traceLevel: options.TraceLevel);
     }
 
     private static void ReturnLexerToPool(Lexer lexer)

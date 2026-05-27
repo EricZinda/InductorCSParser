@@ -85,7 +85,6 @@ public sealed partial class Lexer
         {
             case TraceOutcome.Success: _traceSink!.Write("SUCC | "); break;
             case TraceOutcome.Failure: _traceSink!.Write("FAIL | "); break;
-            case TraceOutcome.Skipped: _traceSink!.Write("SKIP | "); break;
         }
         _traceSink!.Write(label);
         if (message.Length > 0)

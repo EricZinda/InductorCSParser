@@ -177,8 +177,20 @@ public abstract class Rule
     // ("expected an A"). Only used on failure lines. On success
     // there's no error to report so the WithError message is
     // omitted.
-    private string AppendErrorMessage(string body) =>
-        _errorMessage != null ? $"{body} \"{_errorMessage}\"" : body;
+    //
+    // The body-length check drops the body-separator space when the
+    // body is empty. OrRule's failure trace is the only caller that
+    // hits this path (its body is $"" because there's no per-child
+    // detail to surface once all alternatives failed); without the
+    // check, WriteTraceLine's own ": " plus the leading space in the
+    // format string would render "Or:  \"...\"" with a double space.
+    private string AppendErrorMessage(string body)
+    {
+        if (_errorMessage == null) return body;
+        return body.Length > 0
+            ? $"{body} \"{_errorMessage}\""
+            : $"\"{_errorMessage}\"";
+    }
 
     // Short-form trace helpers called from a rule's TryParse on the
     // success or failure path. [AggressiveInlining] + the
@@ -940,7 +952,7 @@ public abstract class Rule
         // ParseResult.
         var parseContext = new ParseContext(input, parseInput, normalizeInput, this);
         Lexer lexer = new Lexer(parseInput, parseContext, options.TraceSink, options.TraceLevel);
-        lexer.ConfigureBudgets(options);
+        lexer.ConfigureOptions(options);
         Symbol? result;
         // Pre-allocate a root list so a root with FlattenType.Flatten
         // has somewhere to merge into. If root is FlattenType.Preserve,
@@ -959,10 +971,10 @@ public abstract class Rule
             // rolled the lexer position back frame by frame, so
             // lexer.Position is now back at 0. An active lookahead Probe
             // also restores the failure tracker on its way out (see
-            // Lexer.Probe), so lexer.DeepestFailure would no longer
+            // Lexer.Probe), so lexer.DeepestFailurePosition would no longer
             // reflect how far the probe explored either. Lexer.ThrowBudgetExceeded
             // freezes the "how far did the parser get" reading at throw
-            // time (Math.Max(DeepestFailure, Position) before any
+            // time (Math.Max(DeepestFailurePosition, Position) before any
             // restoration runs) and parks it on the exception, so we
             // read it back unchanged here.
             int abortRaw = budget.DeepestPositionAtAbort;
@@ -971,7 +983,7 @@ public abstract class Rule
         }
         if (result == null && rootList.Count == 0)
         {
-            var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
+            var pos = Math.Max(lexer.DeepestFailurePosition, lexer.Position);
             int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, normalizeInput);
             return ParseResult.Failed(failurePos, BuildErrorMessage(lexer.DeepestFailureMessage, pos, parseInput, failurePos, input, options), input, this);
         }
@@ -980,8 +992,8 @@ public abstract class Rule
             // Trailing-input branch: the parse SUCCEEDED but the rule
             // didn't claim everything. Report at lexer.Position (the
             // start of the unconsumed tail), not the high-water
-            // DeepestFailure that the two branches above use. 
-            // Position is meaningful and DeepestFailure is
+            // DeepestFailurePosition that the two branches above use.
+            // Position is meaningful and DeepestFailurePosition is
             // from a sibling alternative the parser deliberately
             // abandoned. Same reason for passing customMessage: null
             // instead of DeepestFailureMessage. A WithError on a
@@ -1602,15 +1614,14 @@ public abstract class Rule
         {
             int runeValue;
             int runeLength;
-            char c0 = literal[index];
-            if (char.IsHighSurrogate(c0) && index + 1 < literal.Length && char.IsLowSurrogate(literal[index + 1]))
+            if (SurrogateHelpers.IsSurrogatePairAt(literal, index))
             {
-                runeValue = char.ConvertToUtf32(c0, literal[index + 1]);
+                runeValue = char.ConvertToUtf32(literal[index], literal[index + 1]);
                 runeLength = 2;
             }
             else
             {
-                runeValue = c0;
+                runeValue = literal[index];
                 runeLength = 1;
             }
 

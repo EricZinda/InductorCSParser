@@ -25,13 +25,14 @@ namespace InductorParser;
 //
 // Scope limits worth calling out:
 //
-// - The inner rule runs against a bounded sub-lexer that shares the
-//   outer lexer's input string (no Substring copy) and walks one rune
-//   per Read instead of one token. The sub-lexer doesn't share trace
-//   state with the outer lexer, so trace output from the inner rule
-//   doesn't appear in the outer trace. It DOES delegate every
-//   EnterRuleBudgetChecks / ExitRuleBudgetChecks / TickPeriodicBudget to the outer via
-//   Lexer.InheritBudgetsFrom, so the inner's recursion counts on top
+// - The inner rule runs against a bounded sub-lexer over a Substring
+//   of the outer input (one short string per WithinToken match, see
+//   the per-call comment below for why we pay the copy) and walks one
+//   rune per Read instead of one token. The sub-lexer doesn't share
+//   trace state with the outer lexer, so trace output from the inner
+//   rule doesn't appear in the outer trace. It DOES delegate every
+//   EnterRule / ExitRule / TickPeriodic to the outer via
+//   ParseBudget.InheritFrom, so the inner's recursion counts on top
 //   of the outer's current depth: MaxDepth and RuleCountLimit cover
 //   the combined outer-plus-inner work, and a Cancel() or expired
 //   Timeout observed on either lexer trips both. Without this, a
@@ -64,7 +65,7 @@ internal sealed class WithinTokenRule : Rule
 
         // Sub-lexer over the token's runes. Owns a substring of the
         // outer input: the inner rule walks subInput[0 .. token.Length),
-        // and the sub-lexer's Input / Position / IsEof / DeepestFailure
+        // and the sub-lexer's Input / Position / IsEof / DeepestFailurePosition
         // / Read() Token offsets are all 0-based on that substring.
         // Other rules don't need to know what mode the lexer is in.
         // Switched to one-rune-per-token mode so the inner rule sees
@@ -115,7 +116,7 @@ internal sealed class WithinTokenRule : Rule
             // so the parser-wide "errors land at cluster boundaries"
             // invariant holds. Trace cites the rune-level offset for
             // debug.
-            int innerFailurePos = Math.Max(subLexer.DeepestFailure, subLexer.Position);
+            int innerFailurePos = Math.Max(subLexer.DeepestFailurePosition, subLexer.Position);
             TraceFailure(outerLexer, $"inner rule failed at token rune offset {innerFailurePos}");
             // The inner rule ran on the sub-lexer, so its deepest failure
             // is recorded there. Surface it on the outer lexer keeping the
