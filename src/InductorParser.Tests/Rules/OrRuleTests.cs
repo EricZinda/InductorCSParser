@@ -99,20 +99,17 @@ public class OrRuleTests
     [RecursiveEngineOnly]
     public void Or_trace_success_produces_expected_output()
     {
-        // Third alternative wins. Required-runes dispatch skips Token('a') and
-        // Token('b') on lookahead 'c' (their FirstConsumedTokens don't contain 'c'
-        // and neither is empty-capable), so only the matching Token('c')
-        // branch emits trace lines. Nesting is depth 2 (Or's outer
-        // transaction + Token's own transaction).
+        // Third alternative wins. Each alternative runs in its own
+        // transaction. Token('a') and Token('b') read 'c', fail, and
+        // roll back. Token('c') then runs and matches.
         var sink = NewSink();
         Or(Token('a'), Token('b'), Token('c')).Parse("c", new ParseOptions { TraceSink = sink });
 
-        // The shortcut rules out Token('a') and Token('b') on the 'c'
-        // peek, emitting a SKIP line per skipped child (depth 1 under
-        // Or's outer transaction). Token('c') then runs and matches.
         string expected = Lines(
-            "   SKIP | Token: shortcut: peek 'c' not in '[a]'",
-            "   SKIP | Token: shortcut: peek 'c' not in '[b]'",
+            "      Lexer.Read: 'c', Consumed: 1",
+            "      FAIL | Token: found 'c', wanted 'a'",
+            "      Lexer.Read: 'c', Consumed: 1",
+            "      FAIL | Token: found 'c', wanted 'b'",
             "      Lexer.Read: 'c', Consumed: 1",
             "      SUCC | Token: found 'c'",
             "   SUCC | Or: symbol #2"
@@ -124,18 +121,18 @@ public class OrRuleTests
     [RecursiveEngineOnly]
     public void Or_trace_failure_produces_expected_output()
     {
-        // Required-runes dispatch rules out both Token('a') and Token('b') on
-        // lookahead 'z', so no child transaction ever opens. Each skip emits
-        // a SKIP trace line at depth 1 (under Or's outer transaction).
-        // Or's FAIL line also fires at depth 1 since the outer transaction
-        // is still open when TraceFailure runs. The empty detail means no
+        // Each alternative reads 'z', fails, and rolls back. Or's FAIL
+        // line fires at depth 1 since the outer transaction is still
+        // open when TraceFailure runs. The empty detail means no
         // ": {detail}" tail - the line reads "FAIL | Or".
         var sink = NewSink();
         Or(Token('a'), Token('b')).Parse("z", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
-            "   SKIP | Token: shortcut: peek 'z' not in '[a]'",
-            "   SKIP | Token: shortcut: peek 'z' not in '[b]'",
+            "      Lexer.Read: 'z', Consumed: 1",
+            "      FAIL | Token: found 'z', wanted 'a'",
+            "      Lexer.Read: 'z', Consumed: 1",
+            "      FAIL | Token: found 'z', wanted 'b'",
             "   FAIL | Or"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));

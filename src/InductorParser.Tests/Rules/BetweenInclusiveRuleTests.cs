@@ -449,90 +449,6 @@ public class BetweenInclusiveRuleTests
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
 
-    // ----- Scanner-skip optimization (atLeast=0, atMost=int.MaxValue) -----
-    //
-    // BetweenInclusiveRule.TryCreateScannerSkip recognizes the shape
-    // ZeroOrMore(Or(match, AnyToken.Delete)) and jumps directly to
-    // the next rune that could start a real match. The optimization only
-    // triggers when atLeast=0 and atMost=int.MaxValue, which is the
-    // ZeroOrMore-equivalent shape, so these tests construct that shape
-    // explicitly via BetweenInclusive(0, int.MaxValue, ...).
-
-    [Test]
-    public void BetweenInclusive_scanner_shape_skips_deleted_fallback_runs()
-    {
-        var match = Literal("Sherlock").As("match").Flatten(SyntaxTree.FlattenType.Preserve);
-        var scanner = BetweenInclusive(0, int.MaxValue, Or(
-            match,
-            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
-        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
-
-        // The slow path would invoke the inner Or once per rune (5000+
-        // times). RuleCountLimit=100 caps invocations, so a successful parse
-        // can only mean the scanner skip jumped over the 'x' run.
-        string input = new string('x', 5000) + "Sherlock";
-        scanner.Compile(null);
-        var result = scanner.Parse(input, new ParseOptions
-        {
-            RuleCountLimit = 100,
-            MaxDepth = 0
-        });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("Sherlock"));
-        Assert.That(result.Tree.Find(match)!.ToString(), Is.EqualTo("Sherlock"));
-    }
-
-    [Test]
-    public void BetweenInclusive_scanner_shape_prefilters_ascii_case_insensitive_literal()
-    {
-        var match = LiteralIgnoreAsciiCase("Sherlock Holmes")
-            .As("match")
-            .Flatten(SyntaxTree.FlattenType.Preserve);
-        var scanner = BetweenInclusive(0, int.MaxValue, Or(
-            match,
-            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
-        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
-
-        string input = new string('s', 5000) + "sHeRlOcK hOlMeS";
-        scanner.Compile(null);
-        var result = scanner.Parse(input, new ParseOptions
-        {
-            RuleCountLimit = 100,
-            MaxDepth = 0
-        });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("sHeRlOcK hOlMeS"));
-        Assert.That(result.Tree.Find(match)!.ToString(), Is.EqualTo("sHeRlOcK hOlMeS"));
-    }
-
-    [Test]
-    public void BetweenInclusive_scanner_shape_prefilters_nested_literal_alternates()
-    {
-        var match = Or(
-            LiteralIgnoreAsciiCase("Sherlock Holmes").Flatten(SyntaxTree.FlattenType.Preserve),
-            LiteralIgnoreAsciiCase("John Watson").Flatten(SyntaxTree.FlattenType.Preserve),
-            LiteralIgnoreAsciiCase("Irene Adler").Flatten(SyntaxTree.FlattenType.Preserve)
-        ).As("match").Flatten(SyntaxTree.FlattenType.Preserve);
-        var scanner = BetweenInclusive(0, int.MaxValue, Or(
-            match,
-            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
-        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
-
-        string input = new string('j', 5000) + "jOhN wAtSoN";
-        scanner.Compile(null);
-        var result = scanner.Parse(input, new ParseOptions
-        {
-            RuleCountLimit = 100,
-            MaxDepth = 0
-        });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("jOhN wAtSoN"));
-        Assert.That(result.Tree.Find(match)!.ToString(), Is.EqualTo("jOhN wAtSoN"));
-    }
-
     [Test]
     public void BetweenInclusive_scanner_shape_preserves_debug_tree_when_requested()
     {
@@ -593,112 +509,6 @@ public class BetweenInclusiveRuleTests
         Assert.That(result.Symbols[1].ToString(), Is.EqualTo(""), "the 'a' fallback slot is an empty Symbol");
         Assert.That(result.Symbols[2].ToString(), Is.EqualTo("b"));
     }
-
-    // The scanner-skip is an optimization, so parsing WITH it must produce
-    // the exact same tree as parsing WITHOUT it. This test builds thousands
-    // of random scanner-shaped grammars and checks that holds.
-    //
-    //   - "with it" is an ordinary parse.
-    //   - "without it" turns tracing on, which disables the scanner-skip and
-    //     changes nothing else (see TryCreateScannerSkip), giving the
-    //     reference tree.
-    //
-    // Why this is a complete check even though users can write their own Rule
-    // subclasses: the scanner-skip only jumps over tokens that fall through
-    // to the AnyToken().Delete() fallback. It never RUNS one of the Or's real
-    // alternatives on a token it skips, because it only skips tokens whose
-    // first rune no alternative claims. So an alternative only ever runs at a
-    // position the skip stops at, where the parse is identical to the no-skip
-    // path, and an alternative's own output can never land in the skipped gap.
-    // The only things that run on a skipped token are the built-in Or Symbol
-    // and the built-in AnyToken fallback, which is why testing with built-in
-    // leaves is enough to cover everything the skip can emit.
-    //
-    // The one thing an alternative does control is whether a token gets
-    // skipped at all, via the first-token set it publishes from
-    // ComputeRuleStart. TruthfulRuneRule stands in for a custom rule that
-    // publishes that set accurately, so the pool covers both halves: built-in
-    // leaves for what gets emitted, plus a truthful custom rule for the "is
-    // this token a candidate?" decision. A custom rule that LIES about its
-    // first-token set is its own bug (the same trust the ordinary lookahead
-    // shortcut places in every rule) and is out of scope here by design.
-    [Test]
-    public void BetweenInclusive_scanner_skip_tree_matches_unoptimized_parse_over_random_grammars()
-    {
-        var random = new Random(20260525);
-        const string alphabet = "abc";
-
-        Rule WithRandomFlatten(Rule rule)
-        {
-            switch (random.Next(4))
-            {
-                case 0: return rule.Preserve();
-                case 1: return rule.Flatten();
-                case 2: return rule.Delete();
-                default: return rule; // leave the class default
-            }
-        }
-
-        TokenSet RandomSet()
-        {
-            switch (random.Next(3))
-            {
-                case 0: return TokenSet.Runes("a");
-                case 1: return TokenSet.Runes("ab");
-                default: return TokenSet.Runes("b");
-            }
-        }
-
-        Rule RandomAlternative()
-        {
-            switch (random.Next(5))
-            {
-                case 0: return WithRandomFlatten(OneOf(RandomSet()));
-                case 1: return WithRandomFlatten(Token(alphabet[random.Next(alphabet.Length)]));
-                case 2: return WithRandomFlatten(Literal(
-                    alphabet[random.Next(alphabet.Length)].ToString() +
-                    alphabet[random.Next(alphabet.Length)]));
-                case 3: return WithRandomFlatten(new TruthfulRuneRule(RandomSet())); // truthful custom rule
-                default: return WithRandomFlatten(OneOf(RandomSet()));
-            }
-        }
-
-        for (int iteration = 0; iteration < 5000; iteration++)
-        {
-            var children = new List<Rule>();
-            int alternativeCount = 1 + random.Next(3);
-            for (int i = 0; i < alternativeCount; i++)
-                children.Add(RandomAlternative());
-            children.Add(AnyToken().Delete()); // the scanner-skip fallback
-            var grammar = ZeroOrMore(WithRandomFlatten(Or(children.ToArray())));
-            grammar.Compile();
-
-            var input = new StringBuilder();
-            int length = random.Next(6);
-            for (int i = 0; i < length; i++)
-                input.Append(alphabet[random.Next(alphabet.Length)]);
-            string text = input.ToString();
-
-            var optimized = grammar.Parse(text);
-            var unoptimized = grammar.Parse(text, ScannerSkipOff());
-
-            Assert.That(optimized.Success, Is.EqualTo(unoptimized.Success),
-                $"success differs for input \"{text}\"");
-            Assert.That(TestHelpers.Fingerprint(optimized.Symbols),
-                Is.EqualTo(TestHelpers.Fingerprint(unoptimized.Symbols)),
-                $"scanner-skip changed the tree for input \"{text}\"");
-        }
-    }
-
-    // Tracing on disables the scanner-skip (TryCreateScannerSkip bails when
-    // lexer.IsTracing(TraceLevel.Normal)) without changing the parse in any
-    // other way, so a parse with these options produces the tree the
-    // optimization is supposed to match.
-    private static ParseOptions ScannerSkipOff() => new()
-    {
-        TraceSink = System.IO.TextWriter.Null,
-        TraceLevel = InductorParser.Tracing.TraceLevel.Normal,
-    };
 
     [Test]
     public void BetweenInclusive_scanner_skip_does_not_skip_NoneOf_alternative_matches()
@@ -1062,47 +872,11 @@ public class BetweenInclusiveRuleTests
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
 
-    // The inner-loop shortcut (peek before each iteration, take count==0
-    // fast-exit when inner can't match) is covered by ZeroOrMoreRuleTests.
-    // The tests below cover the OTHER direction: an enclosing Or
-    // skipping a BetweenInclusive whose AtLeast >= 1 (so its Advance is
-    // Always and the outer shortcut can fire).
-
-    [Test]
-    [RecursiveEngineOnly]
-    public void Or_OneOrMore_skips_when_peek_is_not_in_inner_set()
-    {
-        // OneOrMore(inner) forwards inner's first-set with Advance.Always
-        // (since AtLeast == 1). Peek 'x' isn't in {'a'}, so the outer
-        // Or skips OneOrMore.
-        var sink = NewSink();
-        var rule = Or(OneOrMore(Token('a')), Literal("x"));
-        var result = rule.Parse("x", new ParseOptions { TraceSink = sink });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Contain("SKIP | OneOrMore:"));
-    }
-
-    [Test]
-    [RecursiveEngineOnly]
-    public void Or_OneOrMore_runs_when_peek_is_in_inner_set()
-    {
-        // Peek 'a' is in {'a'}, so the outer Or doesn't skip
-        // OneOrMore. It runs and matches.
-        var sink = NewSink();
-        var rule = Or(OneOrMore(Token('a')), Literal("x"));
-        var result = rule.Parse("aaa", new ParseOptions { TraceSink = sink });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | OneOrMore:"));
-    }
-
     [Test]
     public void SourceText_on_zero_match_shortcut_is_empty_at_anchor()
     {
-        // atLeast = 0 with inner that can't match at this position
-        // (Inner.CannotMatchLookahead returns true). The engine's
-        // empty-match shortcut fires and returns a Preserve composite
+        // atLeast = 0 with inner that can't match at this position. The
+        // loop runs zero iterations and returns a Preserve composite
         // with a zero-length consumed span at lexer.Position. SourceText
         // is empty, SourceRange is zero-width at that offset.
         var counted = ZeroOrMore(Literal("X")).As("count");

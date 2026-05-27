@@ -123,6 +123,4 @@ public sealed class AliasRule : Rule
             : new Symbol(Id, FlattenType, outputSymbols, matchedSpan, lexer.Context);
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.PassesThroughTo(_inner);
 }

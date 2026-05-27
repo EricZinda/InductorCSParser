@@ -164,6 +164,4 @@ internal sealed class GraphemeRule : Rule
         return leafSymbol;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.FirstTokenMustBeFirstGraphemeOf(_expected);
 }

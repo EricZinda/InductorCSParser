@@ -46,6 +46,9 @@ internal sealed class ScanWhileRule : Rule
         SetTraceName(minimumCount == 1 ? "ScanWhile" : $"ScanWhile[{minimumCount}..]");
     }
 
+    internal TokenSet LoweringSet => _set;
+    internal int LoweringMinimumCount => _minimumCount;
+
     internal override void CollectNormalizationOffenders(
         System.Text.NormalizationForm form,
         List<(Rule rule, string original, string normalized)> offenders,
@@ -93,21 +96,4 @@ internal sealed class ScanWhileRule : Rule
         return leafSymbol;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        // minimumCount >= 1: every successful match consumes at least
-        // one token from _set, so Advance.Always is sound and the
-        // lookahead shortcut can skip this rule when the peek is
-        // outside the set.
-        //
-        // minimumCount == 0: the rule can succeed with a zero-width
-        // match at the current position, so Advance has to drop to
-        // Sometimes. Same shape Optional(ScanWhile(set, 1)) would
-        // publish via BetweenInclusiveRule's AtLeast==0 downgrade.
-        // _set stays as the first-token set (it's still the set of
-        // tokens we'd consume on a non-zero match), but the shortcut
-        // ignores it under Sometimes per the rules in
-        // RuleStartRequirements.
-        _minimumCount == 0
-            ? new RuleStartRequirements(_set, Advance.Sometimes, Polarity.MustBeIn)
-            : RuleStartRequirements.FirstTokenMustBeInSet(_set);
 }

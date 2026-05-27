@@ -56,6 +56,4 @@ internal sealed class PeekRule : Rule
             : Symbol.Discarded;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.NeverAdvances;
 }

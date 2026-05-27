@@ -99,6 +99,4 @@ internal sealed class LiteralRule : Rule
         return leafSymbol;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.FirstTokenMustBeFirstGraphemeOf(_expected);
 }

@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace InductorParser;
+namespace InductorParser.StateMachine;
 
-// RuleStarRequirements is the Return type of Rule.ComputeRuleStart. 
-// It carries the three compile-time
-// fields (FirstConsumedTokens, Advance, Polarity) that power the "can I
-// skip this rule?" shortcut.
+// RuleStartRequirements is the value returned by RuleStartAnalysis for each
+// rule. It carries the three compile-time fields (FirstConsumedTokens,
+// Advance, Polarity) that power the StateMachine's "can I skip this rule?"
+// dispatch shortcut.
 //
 // ===== Definitive reference for the "can I skip this rule?" shortcut =====
 //
@@ -40,21 +40,12 @@ namespace InductorParser;
 //
 //   Polarity: see the enum below. Default is MustBeIn.
 //
-// Callers that want to see if they can skip a rule because it can't possibly
-// succeed don't inspect these fields directly. They call
-// Rule.CannotMatchLookahead(peekTokenChars), which combines them as:
+// Composite rules (And, Or, BetweenInclusive, ...) combine their children's
+// fields via MatchesAnyOf / MatchesAllOf below. The Lowerer reads the
+// composed values off RuleStartAnalysis's side table to drive its dispatch
+// emit choices.
 //
-//     Advance == Always
-//         && (Polarity == MustBeIn
-//             ? !FirstConsumedTokens.ContainsToken(peek)
-//             :  FirstConsumedTokens.ContainsToken(peek))
-//
-// Only Always makes the filter sound: Sometimes rules (e.g. ZeroOrMore)
-// can sometimes (e.g. Optional) succeed without consuming lookahead,
-// and Never rules (e.g. Peek, Not, Eof) never consume anything. In both
-// cases CannotMatchLookahead returns false and the rule gets attempted.
-//
-// Advance serves two equally necessary roles:
+// Advance serves two roles:
 //
 //   1. Ensures we only skip rules that would truly fail. Without it,
 //      Sometimes rules (which can succeed on any lookahead via zero-
@@ -93,12 +84,12 @@ namespace InductorParser;
 //     skips fewer than possible). A superset would cause enclosing
 //     rules to wrongly skip a rule that could succeed. TokenSet.Empty
 //     with MustNotBeIn means "I don't know, don't filter me."
-//   * Advance.Never requires FirstConsumedTokens == TokenSet.Empty
-//     (Compile enforces this). A rule that never consumes can't have
-//     a set of "tokens it would consume first."
-//   * MustNotBeIn requires Advance.Always (Compile enforces this). The
-//     "peek IS in fail-set => skip" logic relies on the rule actually
-//     attempting a consume on success.
+//   * Advance.Never requires FirstConsumedTokens == TokenSet.Empty.
+//     A rule that never consumes can't have a set of "tokens it
+//     would consume first."
+//   * MustNotBeIn requires Advance.Always. The "peek IS in fail-set
+//     => skip" logic relies on the rule actually attempting a consume
+//     on success.
 //
 // Why this algebra? It's essentially a tailored variant of LL(1)
 // FIRST-set analysis from classical parser theory, extended with
@@ -110,7 +101,6 @@ namespace InductorParser;
 // the dual ("FAIL set") for negation rules without losing the
 // shortcut's precision.
 
-
 // Membership polarity for FirstConsumedTokens. Most rules want
 // MustBeIn: "the rule might consume only when the lookahead token is
 // in this set." Negative rules like NoneOf want MustNotBeIn: "the
@@ -119,9 +109,9 @@ namespace InductorParser;
 // test should flip.
 internal enum Polarity { MustBeIn, MustNotBeIn }
 
-// Populated at Compile time. Rule's pessimistic defaults (Universe,
-// Sometimes, MustBeIn) mean any user-defined Rule subclass that doesn't
-// override ComputeRuleStart is safe: it'll never be shortcutted out.
+// Populated by RuleStartAnalysis. The pessimistic defaults (Universe,
+// Sometimes, MustBeIn) mean any rule that doesn't get a more specific
+// answer is safe: it'll never be shortcutted out.
 internal readonly record struct RuleStartRequirements(
     TokenSet FirstConsumedTokens,
     Advance Advance,
@@ -131,26 +121,33 @@ internal readonly record struct RuleStartRequirements(
     //
     // Each constant completes the sentence "my rule ___" and packages
     // the (set, advance, polarity) triple a rule with that shape would
-    // publish. 
+    // publish.
     //
-    // "My rule NEVER ADVANCES" — examines the lookahead but doesn't
+    // "My rule NEVER ADVANCES": examines the lookahead but doesn't
     // consume it. Advance.Never excludes the rule from the shortcut
     // by construction. Use for: Eof, Not, Peek.
     public static readonly RuleStartRequirements NeverAdvances =
         new(TokenSet.Empty, Advance.Never, Polarity.MustBeIn);
 
-    // "My rule ALWAYS ADVANCES BY ONE TOKEN" — consumes exactly one
+    // "My rule ALWAYS ADVANCES BY ONE TOKEN": consumes exactly one
     // token, no constraint on which. Universe + Always + MustBeIn:
     // the shortcut never filters this rule because Universe accepts
     // every peek. Use for: AnyToken.
     public static readonly RuleStartRequirements AlwaysAdvancesByOneToken =
         new(TokenSet.Universe, Advance.Always, Polarity.MustBeIn);
 
-    // "My rule MAY ADVANCE BY ANY TOKENS" — may consume zero or more
+    // "My rule MAY ADVANCE BY ANY TOKENS": may consume zero or more
     // tokens, no upfront filter on what's accepted. Advance.Sometimes
     // excludes the rule from the shortcut by construction. Use for:
     // ScanUntil.
     public static readonly RuleStartRequirements MayAdvanceByAnyTokens =
+        new(TokenSet.Universe, Advance.Sometimes, Polarity.MustBeIn);
+
+    // Default pessimistic value for any rule whose shape the analysis
+    // doesn't recognize (user-defined Rule subclasses, etc.). Same shape
+    // a virtual default would produce: Universe + Sometimes + MustBeIn,
+    // which the shortcut never filters.
+    public static readonly RuleStartRequirements Pessimistic =
         new(TokenSet.Universe, Advance.Sometimes, Polarity.MustBeIn);
 
     // "My rule['s] FIRST TOKEN MUST BE IN [this] SET". Consumes one
@@ -160,7 +157,7 @@ internal readonly record struct RuleStartRequirements(
     public static RuleStartRequirements FirstTokenMustBeInSet(TokenSet set) =>
         new(set, Advance.Always, Polarity.MustBeIn);
 
-    // "My rule['s] FIRST TOKEN MUST NOT BE IN [this] SET". Consumes
+    // "My rule['s] FIRST TOKEN MUST NOT BE IN [this] SET". Consumes  // style-lint-ok: matches FirstTokenMustNotBeInSet method name
     // one token on success (Advance.Always), polarity MustNotBeIn. The
     // shortcut skips this rule when the peek IS in the set. Use for:
     // NoneOf.
@@ -172,10 +169,8 @@ internal readonly record struct RuleStartRequirements(
     // a TokenSet containing it (single-rune graphemes land in the
     // rune intervals, multi-rune graphemes in the multi-rune entries).
     // Falls back to AlwaysAdvancesByOneToken for surrogate-half
-    // starts that StringInfo can't decode as a valid grapheme — same
-    // fallback as the open-coded versions in
-    // GraphemeRule/LiteralRule/LiteralIgnoreAsciiCase. Use for:
-    // Grapheme, Literal.
+    // starts that StringInfo can't decode as a valid grapheme. Use
+    // for: Grapheme, Literal.
     public static RuleStartRequirements FirstTokenMustBeFirstGraphemeOf(string expected)
     {
         try
@@ -190,17 +185,11 @@ internal readonly record struct RuleStartRequirements(
         }
     }
 
-    // "My rule PASSES THROUGH TO [this rule]" — propagates the source
-    // rule's published (set, advance, polarity) triple unchanged. Use
-    // for transparent proxy rules whose lookahead behavior mirrors
-    // their target. Reads at the call site as "my rule passes through
-    // to inner."
-    public static RuleStartRequirements PassesThroughTo(Rule source) =>
-        new(source.FirstConsumedTokens, source.Advance, source.Polarity);
-
-    // Builder-style modifier: "...with [this] Advance instead." Reads
-    // as a continuation of PassesThroughTo: "my rule passes through to
-    // inner, with this advance."
+    // Builder-style modifier: "...with [this] Advance instead." Used
+    // by composites that pass an inner rule's requirements through
+    // but override the Advance value (BetweenInclusiveRule with
+    // AtLeast==0 downgrades Always to Sometimes; WithinTokenRule
+    // promotes Sometimes/Never to Always).
     //
     // Three cases, picked by the two ifs:
     //
@@ -209,7 +198,7 @@ internal readonly record struct RuleStartRequirements(
     //     rules stay MustBeIn.
     //
     //   * newAdvance is non-Always and the original was MustNotBeIn:
-    //     MustNotBeIn requires Always (ComputeRuleStartAll rejects any
+    //     MustNotBeIn requires Always (the invariant rejects any
     //     other combination), so polarity drops to MustBeIn. The
     //     original set was a fail-set and can't carry over under that
     //     polarity. Use Universe (the noncommittal "no constraint on
@@ -227,18 +216,18 @@ internal readonly record struct RuleStartRequirements(
         return new RuleStartRequirements(FirstConsumedTokens, newAdvance, Polarity.MustBeIn);
     }
 
-    // These two map directly to the two core composition
-    // operators. Each absorbs the polarity composition logic that was
-    // previously open-coded in OrRule and AndRule.
-
-    // "My rule MATCHES ANY OF [these children]" — composite that
+    // "My rule MATCHES ANY OF [these children]": composite that
     // succeeds when any child does (Or shape). Unions every
     // child's first-set, combining polarity-aware via the Combine
     // helper below. Advance derives from "all children Always" / "all
     // children Never" / mixed. Falls back to MustBeIn when Advance
     // drops below Always (MustNotBeIn requires Advance.Always per the
     // invariant). Use for: Or.
-    public static RuleStartRequirements MatchesAnyOf(IReadOnlyList<Rule> children)
+    //
+    // Takes the already-resolved requirements of each child so the
+    // walker (which is post-order) hands the values in directly,
+    // without re-reading them off the Rule objects.
+    public static RuleStartRequirements MatchesAnyOf(IReadOnlyList<RuleStartRequirements> children)
     {
         TokenSet runningSet = TokenSet.Empty;
         Polarity runningPolarity = Polarity.MustBeIn;
@@ -271,7 +260,7 @@ internal readonly record struct RuleStartRequirements(
         return new RuleStartRequirements(runningSet, advance, runningPolarity);
     }
 
-    // "My rule MATCHES ALL OF [these children, in order]" — composite
+    // "My rule MATCHES ALL OF [these children, in order]": composite
     // that runs children sequentially, all must succeed (And shape).
     // The first-set is the union of leading children's first-sets up
     // to (and including) the first child whose Advance is Always
@@ -279,7 +268,7 @@ internal readonly record struct RuleStartRequirements(
     // composite consumes). Children whose Advance is Never (Peek,
     // Not, Eof) don't contribute. Same MustNotBeIn-to-MustBeIn
     // fallback as MatchesAnyOf. Use for: And.
-    public static RuleStartRequirements MatchesAllOf(IReadOnlyList<Rule> children)
+    public static RuleStartRequirements MatchesAllOf(IReadOnlyList<RuleStartRequirements> children)
     {
         TokenSet runningSet = TokenSet.Empty;
         Polarity runningPolarity = Polarity.MustBeIn;
@@ -363,13 +352,8 @@ internal readonly record struct RuleStartRequirements(
             return (aSet | bSet, Polarity.MustBeIn);
         if (aPolarity == Polarity.MustNotBeIn && bPolarity == Polarity.MustNotBeIn)
             return (aSet & bSet, Polarity.MustNotBeIn);
-        // Mixed: pick the negative side as N and the positive as P.
         var negativeSet = aPolarity == Polarity.MustNotBeIn ? aSet : bSet;
         var positiveSet = aPolarity == Polarity.MustBeIn ? aSet : bSet;
-        // N \ P = N & ~P. ~ throws on multi-rune entries; project P
-        // down to its rune-only part first. Result is sound (a subset
-        // of the actual fail-set) at the cost of less precise skipping
-        // when P has multi-rune members.
         TokenSet positiveRunes = positiveSet.HasMultiRuneGraphemes
             ? positiveSet.RunesOnlyPart
             : positiveSet;

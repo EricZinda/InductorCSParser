@@ -409,37 +409,6 @@ public class WithinTokenRuleTests
     }
 
     [Test]
-    [RecursiveEngineOnly]
-    public void Or_WithinToken_skips_when_peek_first_rune_is_outside_inner_set()
-    {
-        // WithinToken forwards the inner rule's first-token set with
-        // Advance.Always. The inner OneOf({a..z}) gives a first-rune set
-        // covering ASCII lowercase. Peek '1' isn't in that set, so the
-        // shortcut skips WithinToken and the second branch wins.
-        var sink = NewSink();
-        var rule = Or(WithinToken(OneOf(TokenSet.Ascii.Letters)), Literal("1"));
-        var result = rule.Parse("1", new ParseOptions { TraceSink = sink });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Contain("SKIP | WithinToken:"));
-    }
-
-    [Test]
-    [RecursiveEngineOnly]
-    public void Or_WithinToken_runs_when_peek_first_rune_is_in_inner_set()
-    {
-        // Peek 'a' is in the inner's first-rune set, so the shortcut
-        // doesn't skip. WithinToken runs and the inner rule consumes
-        // the cluster.
-        var sink = NewSink();
-        var rule = Or(WithinToken(OneOf(TokenSet.Ascii.Letters)), Literal("1"));
-        var result = rule.Parse("a", new ParseOptions { TraceSink = sink });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | WithinToken:"));
-    }
-
-    [Test]
     public void Or_WithinToken_does_not_skip_when_inner_negative_rule_walks_a_multi_rune_cluster()
     {
         // A TokenSet whose only member is the CRLF grapheme cluster. \r
@@ -592,44 +561,4 @@ public class WithinTokenRuleTests
         Assert.That(result.ErrorMessage, Is.EqualTo("not a recognized reaction"));
     }
 
-    [Test]
-    public void Scanner_skip_in_one_rune_sublexer_does_not_skip_mid_cluster_runes()
-    {
-        // The lexer normally reads one grapheme per token
-        // (a character can be several code points: an accented letter, an
-        // emoji). WithinToken switches to a mode that reads one code point
-        // per token, so an inner rule can look inside a character.
-        //
-        // The scanner-skip speed trick (Lexer.AdvanceUntilRuneIn and
-        // friends) jumps ahead with a fast text search, then asks
-        // IsAtMidToken "did I land on a real token start?" before stopping.
-        // IsAtMidToken answers by the active token unit: in the one-code-
-        // point mode a combining mark is its own token, and
-        // only the trailing half of a surrogate pair counts as token
-        // interior. So the fast search has to stop on the combining mark,
-        // the same place the slow per-token scan stops. This test holds the
-        // two scans to that agreement.
-        //
-        // Fixture: "e" + combining accent (U+0065 then U+0301) is one
-        // character made of two code points. Reading one code point at a
-        // time, a scan for the accent has to stop on it (offset 1), not run
-        // off the end (offset 2).
-        string subInput = "e\u0301"; // e + combining acute, decomposed (ASCII-safe in source)
-        var set = TokenSet.Single(0x0301);
-        Assert.That(set.TryGetBmpChars(1, out var bmpCandidates), Is.True,
-            "U+0301 is a single BMP char, so the vectorized fast path applies.");
-
-        var fastPath = new Lexer(subInput, startPosition: 0, endPosition: subInput.Length,
-            traceSink: null, traceLevel: TraceLevel.Normal, oneRunePerToken: true);
-        fastPath.AdvanceUntilRuneIn(set, bmpCandidates);
-
-        var slowPath = new Lexer(subInput, startPosition: 0, endPosition: subInput.Length,
-            traceSink: null, traceLevel: TraceLevel.Normal, oneRunePerToken: true);
-        slowPath.AdvanceUntilRuneIn(set, bmpCandidates: null);
-
-        Assert.That(fastPath.Position, Is.EqualTo(1),
-            "Vectorized fast path must stop on the combining mark, the one-rune token at offset 1.");
-        Assert.That(fastPath.Position, Is.EqualTo(slowPath.Position),
-            "The IndexOfAny fast path and the per-token slow path must agree in one-rune mode.");
-    }
 }

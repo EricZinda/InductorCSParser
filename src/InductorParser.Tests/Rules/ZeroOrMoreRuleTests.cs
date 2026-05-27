@@ -19,18 +19,15 @@ public class ZeroOrMoreRuleTests
     {
         // Trace label "ZeroOrMore" proves the named factory was used.
         // SUCC at count= 0 on input that doesn't match proves atLeast = 0
-        // (zero matches still succeed). The first-rune lookahead skip
-        // proves the inner rule never matched, so the count= 0 outcome
-        // is a real zero-match success, not a one-match success after
-        // an inner SUCC line.
+        // (zero matches still succeed). The inner Token's FAIL line shows
+        // the loop tried once, the inner rolled back, and ZeroOrMore took
+        // its count==0 success branch.
         var sink = NewSink();
         ZeroOrMore(Token('a')).Parse("z", new ParseOptions { TraceSink = sink });
 
-        // The SKIP line shows the inner Token('a') was shortcut-out
-        // by BetweenInclusive's lookahead check (peek 'z' not in '[a]').
-        // The ZeroOrMore then takes its count==0 success branch.
         string expected = Lines(
-            "   SKIP | Token: shortcut: peek 'z' not in '[a]'",
+            "      Lexer.Read: 'z', Consumed: 1",
+            "      FAIL | Token: found 'z', wanted 'a'",
             "   SUCC | ZeroOrMore: count= 0"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));

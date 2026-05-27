@@ -16,6 +16,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\InductorParser\InductorParser.csproj" />
+    <!-- Lowerer.DisableLookaheadShortcut is internal and gets flipped by
+         the test fixture and the rebar benchmark for A/B-measuring the
+         StateMachine's lookahead-skip optimization. The Tests assembly
+         also constructs LoweringContext and friends directly in
+         Lowerer-level unit tests. -->
+    <InternalsVisibleTo Include="InductorParser.StateMachine.Tests" />
+    <InternalsVisibleTo Include="InductorParser.RebarRunner" />
+    <InternalsVisibleTo Include="InductorParser.StateMachine.Benchmarks" />
   </ItemGroup>
 
 </Project>

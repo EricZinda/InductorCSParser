@@ -563,6 +563,4 @@ internal sealed class ScanUntilRule : Rule
         return leafSymbol;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.MayAdvanceByAnyTokens;
 }
