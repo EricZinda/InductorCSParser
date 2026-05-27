@@ -914,8 +914,15 @@ public static class Rules
     /// One leaf Symbol is emitted per successful match, representing the
     /// whole token. Inner-rule symbols are discarded. Inner-rule
     /// tracing isn't propagated to the outer trace. The inner parse is
-    /// bounded to the token's rune span, but the sub-lexer doesn't
-    /// share the outer parse's trace or budget counters.
+    /// bounded to the token's rune span. The sub-lexer's recursion,
+    /// rule-count, timeout, and cancellation budgets all count against
+    /// the outer parse: a Cancel() or expired Timeout observed on
+    /// either lexer trips both, and MaxDepth / RuleCountLimit cover the
+    /// combined outer-plus-inner work rather than letting the inner
+    /// rule spend a fresh budget on top of the outer's. Without this,
+    /// a recursive inner rule on a cluster crafted with many combining
+    /// marks could spend a fresh MaxDepth on top of the outer's depth
+    /// and crash the host process with a stack overflow.
     /// </para>
     /// </remarks>
     /// <param name="innerRule">
