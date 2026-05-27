@@ -658,7 +658,7 @@ internal static class Stepper
             // when a sibling already recorded an empty slot at the
             // same position.
             machine.RecordFailure(
-                machine.Lexer.DeepestFailure,
+                machine.Lexer.DeepestFailurePosition,
                 machine.Lexer.DeepestFailureMessage);
             return state.OnFailure;
         }

@@ -971,10 +971,10 @@ public abstract class Rule
             // rolled the lexer position back frame by frame, so
             // lexer.Position is now back at 0. An active lookahead Probe
             // also restores the failure tracker on its way out (see
-            // Lexer.Probe), so lexer.DeepestFailure would no longer
+            // Lexer.Probe), so lexer.DeepestFailurePosition would no longer
             // reflect how far the probe explored either. Lexer.ThrowBudgetExceeded
             // freezes the "how far did the parser get" reading at throw
-            // time (Math.Max(DeepestFailure, Position) before any
+            // time (Math.Max(DeepestFailurePosition, Position) before any
             // restoration runs) and parks it on the exception, so we
             // read it back unchanged here.
             int abortRaw = budget.DeepestPositionAtAbort;
@@ -983,7 +983,7 @@ public abstract class Rule
         }
         if (result == null && rootList.Count == 0)
         {
-            var pos = Math.Max(lexer.DeepestFailure, lexer.Position);
+            var pos = Math.Max(lexer.DeepestFailurePosition, lexer.Position);
             int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, normalizeInput);
             return ParseResult.Failed(failurePos, BuildErrorMessage(lexer.DeepestFailureMessage, pos, parseInput, failurePos, input, options), input, this);
         }
@@ -992,8 +992,8 @@ public abstract class Rule
             // Trailing-input branch: the parse SUCCEEDED but the rule
             // didn't claim everything. Report at lexer.Position (the
             // start of the unconsumed tail), not the high-water
-            // DeepestFailure that the two branches above use. 
-            // Position is meaningful and DeepestFailure is
+            // DeepestFailurePosition that the two branches above use.
+            // Position is meaningful and DeepestFailurePosition is
             // from a sibling alternative the parser deliberately
             // abandoned. Same reason for passing customMessage: null
             // instead of DeepestFailureMessage. A WithError on a
