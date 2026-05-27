@@ -131,6 +131,79 @@ public class BetweenInclusiveRuleTests
     }
 
     [Test]
+    public void Lower_bound_one_is_satisfied_by_a_single_zero_width_match()
+    {
+        // Only one empty success is counted, satisfying AtLeast = 1.
+        var result = BetweenInclusive(1, int.MaxValue, Optional(OneOf("a"))).Parse("");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Symbols, Is.Empty);
+    }
+
+    [Test]
+    public void OneOrMore_and_ZeroOrMore_of_a_nullable_inner_agree_on_empty_input()
+    {
+        // Only one empty success is counted, and it's enough for both
+        // lower bounds on empty input.
+        Assert.That(ZeroOrMore(Optional(OneOf("a"))).Parse("").Success, Is.True);
+        Assert.That(OneOrMore(Optional(OneOf("a"))).Parse("").Success, Is.True);
+    }
+
+    [Test]
+    public void Lower_bound_is_satisfied_by_a_zero_width_lookahead_match()
+    {
+        // Peek is zero-width. Only one empty success is counted,
+        // satisfying AtLeast = 1.
+        var rule = And(OneOrMore(Peek(OneOf("a"))), OneOf("a").Preserve());
+        var result = rule.Parse("a");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.ToString(), Is.EqualTo("a"));
+    }
+
+    [Test]
+    public void Lower_bound_still_fails_when_the_inner_cannot_match_at_all()
+    {
+        // Only successes are counted (empty or otherwise). A real failure
+        // leaves the count short, so the rule still rejects.
+        Assert.That(OneOrMore(OneOf("a")).Parse("").Success, Is.False);
+        Assert.That(OneOrMore(OneOf("a")).Parse("z").Success, Is.False);
+    }
+
+    [Test]
+    public void AtLeast_with_nullable_inner_counts_at_most_one_terminal_empty_match()
+    {
+        // Only one empty success is counted, so AtLeast(N, Optional(a))
+        // requires N-1 real a's.
+        Assert.That(AtLeast(2, Optional(OneOf("a"))).Parse("a").Success, Is.True);
+        Assert.That(AtLeast(3, Optional(OneOf("a"))).Parse("a").Success, Is.False);
+        Assert.That(AtLeast(3, Optional(OneOf("a"))).Parse("aa").Success, Is.True);
+        Assert.That(AtLeast(2, Optional(OneOf("a"))).Parse("").Success, Is.False);
+    }
+
+    [Test]
+    public void Exactly_with_nullable_inner_accepts_count_or_count_minus_one_real_matches()
+    {
+        // Only one empty success is counted, so Exactly(N, Optional(a))
+        // reaches N either as (N-1) reals plus the empty terminal or as N
+        // reals before AtMost exits.
+        Assert.That(Exactly(2, Optional(OneOf("a"))).Parse("a").Success, Is.True);
+        Assert.That(Exactly(2, Optional(OneOf("a"))).Parse("aa").Success, Is.True);
+        Assert.That(Exactly(2, Optional(OneOf("a"))).Parse("").Success, Is.False);
+        Assert.That(Exactly(2, Optional(OneOf("a"))).Parse("aaa").Success, Is.False);
+    }
+
+    [Test]
+    public void Any_zero_width_inner_shape_satisfies_the_lower_bound()
+    {
+        // ZeroOrMore and Not are zero-width too. Only one empty success
+        // is counted from each, satisfying AtLeast = 1.
+        Assert.That(OneOrMore(ZeroOrMore(OneOf("a"))).Parse("").Success, Is.True);
+        var notFollowedByZ = And(OneOrMore(Not(OneOf("z"))), OneOf("a").Preserve());
+        Assert.That(notFollowedByZ.Parse("a").Success, Is.True);
+    }
+
+    [Test]
     public void BetweenInclusive_failure_without_WithError_falls_back_to_positional_message()
     {
         var rule = BetweenInclusive(2, 4, Token('a'));
@@ -844,7 +917,7 @@ public class BetweenInclusiveRuleTests
     // The same byte-level-search bug shape applies to any BMP char that
     // can sit as the second-or-later rune of a multi-rune cluster.
     // CRLF is the practical case; the others below test the broader
-    // contract so a future regression in the IsAtMidGraphemeCluster
+    // behavior so a future regression in the IsAtMidToken
     // gate gets caught for the categories that actually appear in real
     // grammars.
     //

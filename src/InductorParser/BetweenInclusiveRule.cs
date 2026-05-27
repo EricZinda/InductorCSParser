@@ -99,11 +99,16 @@ internal sealed class BetweenInclusiveRule : Rule
         int count = 0;
         while (count < AtMost)
         {
+            // Scanner-skip fast path (null for everything but the
+            // ZeroOrMore(Or(match..., AnyToken().Delete())) shape): jump
+            // the lexer straight to the next position a real alternative
+            // could start, since the skipped tokens would only be eaten
+            // by the deleted AnyToken fallback and never reach the tree.
+            // See TryCreateScannerSkip.
             scannerSkip?.Advance(lexer);
             int positionBefore = lexer.Position;
             var nextSymbol = ParseChild(Inner, lexer, outputSymbols);
             if (nextSymbol == null) break;
-            bool zeroWidthMatch = lexer.Position == positionBefore;
             // Add the matched child to outputSymbols before deciding
             // whether to continue. Zero-width Inner that returns a real
             // wrapper Symbol (e.g. Not(X).Preserve() succeeding when X
@@ -114,14 +119,12 @@ internal sealed class BetweenInclusiveRule : Rule
             // BetweenInclusive matches that behavior here.
             if (outputSymbols != null && !ReferenceEquals(nextSymbol, Symbol.Discarded))
                 outputSymbols.Add(nextSymbol);
-            // Zero-width-match guard. Inner succeeded but didn't advance the
-            // lexer (e.g. Optional, Peek, Not, or any composite of zero-width
-            // children). Without this break the loop would spin forever on
-            // ZeroOrMore(Optional(X)) and friends, incrementing count without
-            // making progress. Exit with whatever count we have. The AtLeast
-            // check below decides if that's enough to call the rule a success.
-            if (zeroWidthMatch) break;
             count++;
+            // Only one empty success is counted. count++ above ran for this
+            // match. Break now so the loop doesn't spin matching the same
+            // empty span again.
+            bool zeroWidthMatch = lexer.Position == positionBefore;
+            if (zeroWidthMatch) break;
         }
         if (count < AtLeast)
         {
