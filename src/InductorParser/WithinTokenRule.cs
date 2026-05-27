@@ -143,6 +143,17 @@ internal sealed class WithinTokenRule : Rule
             // the substring, so it's the consumed rune count directly.
             int consumed = subLexer.Position;
             TraceFailure(outerLexer, $"inner rule consumed only {consumed}/{token.Length} of the token");
+            // Same pattern as the inner-failed branch: surface the inner's
+            // deepest failure with its forced flag preserved so a forced
+            // .WithError from a rejected alternative inside the cluster
+            // competes with WithinToken's own under depth-primary ranking.
+            // Without this, a forced inner hint is silently dropped when
+            // the inner succeeded via a fallback that consumed only a
+            // prefix of the cluster.
+            string? innerMessage = subLexer.DeepestFailureMessage;
+            if (innerMessage != null)
+                outerLexer.RecordFailure(startPosition, innerMessage,
+                    forced: subLexer.DeepestFailureIsForced);
             outerLexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);
             return null;
         }
