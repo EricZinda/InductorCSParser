@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Text;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
@@ -560,6 +562,143 @@ public class BetweenInclusiveRuleTests
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("xxS"));
     }
+
+    [Test]
+    public void BetweenInclusive_scanner_skip_keeps_preserved_Or_Symbol_for_fallback_match()
+    {
+        // The scanner-skip is documented to jump over deleted fallback runs
+        // "without changing the emitted syntax tree." That premise holds only
+        // when a fallback-matched position contributes nothing to the tree.
+        // When the inner Or is itself Preserve, a position matched only by the
+        // AnyToken().Delete() fallback still produces an empty-children
+        // Preserve Symbol for that Or, the same way the Or wraps a real
+        // match. Skipping the position drops that Symbol, so the optimized
+        // tree has fewer nodes than the unoptimized one.
+        //
+        // Input "bab": both 'b's match the real OneOf("b") alternative, and
+        // the 'a' falls to the AnyToken().Delete() fallback. With the inner
+        // Or preserved, the slow path emits three Or Symbols (b, empty-a, b),
+        // and the optimized path must emit the same three.
+        var slot = Or(OneOf("b").Preserve(), AnyToken().Delete()).As("slot"); // .As => Preserve
+        var scanner = ZeroOrMore(slot);
+
+        var result = scanner.Parse("bab");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        // ZeroOrMore is Flatten, so it lifts each slot Symbol into the
+        // top-level Symbols list. The 'a' slot is an empty-children Preserve
+        // Symbol that the scanner-skip used to drop, leaving only two.
+        Assert.That(result.Symbols.Count, Is.EqualTo(3), "slot Symbols (b, empty-a, b)");
+        Assert.That(result.Symbols[0].ToString(), Is.EqualTo("b"));
+        Assert.That(result.Symbols[1].ToString(), Is.EqualTo(""), "the 'a' fallback slot is an empty Symbol");
+        Assert.That(result.Symbols[2].ToString(), Is.EqualTo("b"));
+    }
+
+    // The scanner-skip is an optimization, so parsing WITH it must produce
+    // the exact same tree as parsing WITHOUT it. This test builds thousands
+    // of random scanner-shaped grammars and checks that holds.
+    //
+    //   - "with it" is an ordinary parse.
+    //   - "without it" turns tracing on, which disables the scanner-skip and
+    //     changes nothing else (see TryCreateScannerSkip), giving the
+    //     reference tree.
+    //
+    // Why this is a complete check even though users can write their own Rule
+    // subclasses: the scanner-skip only jumps over tokens that fall through
+    // to the AnyToken().Delete() fallback. It never RUNS one of the Or's real
+    // alternatives on a token it skips, because it only skips tokens whose
+    // first rune no alternative claims. So an alternative only ever runs at a
+    // position the skip stops at, where the parse is identical to the no-skip
+    // path, and an alternative's own output can never land in the skipped gap.
+    // The only things that run on a skipped token are the built-in Or Symbol
+    // and the built-in AnyToken fallback, which is why testing with built-in
+    // leaves is enough to cover everything the skip can emit.
+    //
+    // The one thing an alternative does control is whether a token gets
+    // skipped at all, via the first-token set it publishes from
+    // ComputeRuleStart. TruthfulRuneRule stands in for a custom rule that
+    // publishes that set accurately, so the pool covers both halves: built-in
+    // leaves for what gets emitted, plus a truthful custom rule for the "is
+    // this token a candidate?" decision. A custom rule that LIES about its
+    // first-token set is its own bug (the same trust the ordinary lookahead
+    // shortcut places in every rule) and is out of scope here by design.
+    [Test]
+    public void BetweenInclusive_scanner_skip_tree_matches_unoptimized_parse_over_random_grammars()
+    {
+        var random = new Random(20260525);
+        const string alphabet = "abc";
+
+        Rule WithRandomFlatten(Rule rule)
+        {
+            switch (random.Next(4))
+            {
+                case 0: return rule.Preserve();
+                case 1: return rule.Flatten();
+                case 2: return rule.Delete();
+                default: return rule; // leave the class default
+            }
+        }
+
+        TokenSet RandomSet()
+        {
+            switch (random.Next(3))
+            {
+                case 0: return TokenSet.Runes("a");
+                case 1: return TokenSet.Runes("ab");
+                default: return TokenSet.Runes("b");
+            }
+        }
+
+        Rule RandomAlternative()
+        {
+            switch (random.Next(5))
+            {
+                case 0: return WithRandomFlatten(OneOf(RandomSet()));
+                case 1: return WithRandomFlatten(Token(alphabet[random.Next(alphabet.Length)]));
+                case 2: return WithRandomFlatten(Literal(
+                    alphabet[random.Next(alphabet.Length)].ToString() +
+                    alphabet[random.Next(alphabet.Length)]));
+                case 3: return WithRandomFlatten(new TruthfulRuneRule(RandomSet())); // truthful custom rule
+                default: return WithRandomFlatten(OneOf(RandomSet()));
+            }
+        }
+
+        for (int iteration = 0; iteration < 5000; iteration++)
+        {
+            var children = new List<Rule>();
+            int alternativeCount = 1 + random.Next(3);
+            for (int i = 0; i < alternativeCount; i++)
+                children.Add(RandomAlternative());
+            children.Add(AnyToken().Delete()); // the scanner-skip fallback
+            var grammar = ZeroOrMore(WithRandomFlatten(Or(children.ToArray())));
+            grammar.Compile();
+
+            var input = new StringBuilder();
+            int length = random.Next(6);
+            for (int i = 0; i < length; i++)
+                input.Append(alphabet[random.Next(alphabet.Length)]);
+            string text = input.ToString();
+
+            var optimized = grammar.Parse(text);
+            var unoptimized = grammar.Parse(text, ScannerSkipOff());
+
+            Assert.That(optimized.Success, Is.EqualTo(unoptimized.Success),
+                $"success differs for input \"{text}\"");
+            Assert.That(TestHelpers.Fingerprint(optimized.Symbols),
+                Is.EqualTo(TestHelpers.Fingerprint(unoptimized.Symbols)),
+                $"scanner-skip changed the tree for input \"{text}\"");
+        }
+    }
+
+    // Tracing on disables the scanner-skip (TryCreateScannerSkip bails when
+    // lexer.IsTracing(TraceLevel.Normal)) without changing the parse in any
+    // other way, so a parse with these options produces the tree the
+    // optimization is supposed to match.
+    private static ParseOptions ScannerSkipOff() => new()
+    {
+        TraceSink = System.IO.TextWriter.Null,
+        TraceLevel = InductorParser.Tracing.TraceLevel.Normal,
+    };
 
     [Test]
     public void BetweenInclusive_scanner_skip_does_not_skip_NoneOf_alternative_matches()

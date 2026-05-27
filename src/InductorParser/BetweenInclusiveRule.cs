@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
-using InductorParser.Tracing;
 
 namespace InductorParser;
 
@@ -144,65 +143,122 @@ internal sealed class BetweenInclusiveRule : Rule
             : Symbol.Discarded;
     }
 
+    // Fast path for scanner-style loops shaped like
+    //   ZeroOrMore(Or(real1, ..., realN, AnyToken().Delete()))
+    // The loop walks a run of input, matching a "real" alternative where it
+    // can and throwing away everything else one token at a time through the
+    // deleted AnyToken fallback. Rather than invoke the Or once per thrown-
+    // away token, we jump the cursor straight to the next token a real
+    // alternative could start at and skip everything before.
+    //
+    // We can only skip a token if the tree wouldn't have gained a node for
+    // it. That requires the AnyToken fallback to be Delete (so it
+    // contributes no leaf) and the Or to not be Preserve (so it doesn't
+    // wrap the empty fallback match in its own node). The gates below
+    // enforce both.
+    // The real alternatives never run on a skipped token, so their own output
+    // and flatten policy don't matter here. They run only at the candidate
+    // positions the skip stops at, exactly as they would without the skip,
+    // which is also why a custom Rule alternative is safe as long as the
+    // first-token metadata it publishes is correct.
     private ScannerSkip? TryCreateScannerSkip(Lexer lexer)
     {
-        // Recognize scanner-style loops: ZeroOrMore(Or(match, AnyToken.Delete)).
-        // The deleted AnyToken fallback means non-matching input would be thrown
-        // away one token at a time, so we can jump directly to the next rune that
-        // could start a real match without changing the emitted syntax tree.
+        // Only ZeroOrMore-shaped loops qualify (atLeast 0, atMost unbounded); other bounds aren't this loop shape.
         if (AtLeast != 0 || AtMost != int.MaxValue)
             return null;
-        if (lexer.PreserveAllSymbols || lexer.IsTracing(TraceLevel.Normal))
+        // PreserveAllSymbols wants every grammar node in the tree, so we can't drop the ones the skip would jump over.
+        if (lexer.PreserveAllSymbols)
             return null;
-        if (Inner is not OrRule || Inner.ErrorMessage != null)
+        // Tracing wants every per-token Or invocation visible in the trace, which a silent cursor jump would hide.
+        if (lexer.IsTracing())
+            return null;
+        // Inner has to be an Or; that's the only loop shape this fast path models.
+        if (Inner is not OrRule)
+            return null;
+        // A .WithError on the Or is user-attached error reporting, which only the slow path honors.
+        if (Inner.ErrorMessage != null)
+            return null;
+        // A Preserve Or wraps every match in its own node, so even fallback matches leave empty nodes the skip would drop.
+        if (Inner.FlattenType == FlattenType.Preserve)
             return null;
 
         var alternatives = Inner.Children;
+        // Need at least one real alternative in addition to the fallback.
         if (alternatives.Count < 2)
             return null;
-
-        Rule fallback = alternatives[alternatives.Count - 1];
-        if (fallback is not AnyTokenRule
-            || fallback.FlattenType != FlattenType.Delete
-            || fallback.ErrorMessage != null)
+        // The last alternative has to be the throw-away branch (a deleted AnyToken with no .WithError) the skip stands in for.
+        if (!IsDeletedAnyTokenFallback(alternatives[alternatives.Count - 1]))
             return null;
 
-        TokenSet candidates = TokenSet.Empty;
+        // A non-fallback alternative was disqualified, or no useful candidate set emerged; either way the skip can't help here.
+        if (!TryCollectScannerCandidates(alternatives, out TokenSet candidates, out LiteralScannerCandidate[]? literals))
+            return null;
+
+        candidates.TryGetBmpChars(maxChars: 256, out var bmpCandidates);
+        return new ScannerSkip(
+            candidates,
+            bmpCandidates.Length == 0 ? null : bmpCandidates,
+            literals,
+            // A single literal uses the substring-search cache, which jumps
+            // straight to the next hit and amortizes across iterations.
+            // Multiple literals fall to the IndexOfAny path instead (the cache
+            // is much slower for them, because each consumed match restales
+            // the others' cached positions, and the BCL's IndexOfAny is
+            // SIMD-tuned for "any of these chars").
+            literals is { Length: 1 } ? CreateUnknownPositions(literals.Length) : null);
+    }
+
+    // The Or's last alternative is the scanner-skip's "throw this token away"
+    // fallback. It only stays transparent when it emits nothing and records
+    // no failure, which means exactly AnyToken().Delete() with no .WithError.
+    private static bool IsDeletedAnyTokenFallback(Rule rule) =>
+        rule is AnyTokenRule
+        && rule.FlattenType == FlattenType.Delete
+        && rule.ErrorMessage == null;
+
+    // Collect the runes a real (non-fallback) alternative could start with;
+    // the scanner jumps to the next position holding one of them. Returns
+    // false (and the caller runs the slow loop) if any non-fallback
+    // alternative isn't a plain positive, always-advancing matcher, or if the
+    // collected set is empty or everything, where the skip can't help.
+    private static bool TryCollectScannerCandidates(
+        IReadOnlyList<Rule> alternatives,
+        out TokenSet candidates,
+        out LiteralScannerCandidate[]? literals)
+    {
+        candidates = TokenSet.Empty;
+        literals = null;
+
         var literalCandidates = new List<LiteralScannerCandidate>();
         bool allCandidatesAreLiterals = true;
         for (int index = 0; index < alternatives.Count - 1; index++)
         {
             Rule alternative = alternatives[index];
             if (alternative.ErrorMessage != null || alternative.Advance != Advance.Always)
-                return null;
-            // MustNotBeIn polarity inverts the meaning of
-            // FirstConsumedTokens: the published set is the rule's
-            // FAIL-set, not its match-set. Unioning it into `candidates`
-            // would direct the scanner to FAIL positions and silently
-            // skip past every match position (e.g.
-            // `Or(NoneOf("xy"), AnyToken().Delete())` would have the
-            // scanner jump to 'x' / 'y' and the AnyToken fallback consume
-            // them, while the runes the user wanted captured by NoneOf
-            // are never read). Bail out so the slow path runs. Building
-            // a sound candidate set under MustNotBeIn would need the
-            // complement of the fail-set, which under grapheme
-            // tokenization is unbounded.
+                return false;
+            // MustNotBeIn polarity inverts the meaning of FirstConsumedTokens:
+            // the published set is the rule's FAIL-set, not its match-set.
+            // Unioning it into the candidates would point the scanner at FAIL
+            // positions and skip past every match position (e.g.
+            // Or(NoneOf("xy"), AnyToken().Delete()) would jump to 'x' / 'y'
+            // and have the fallback consume them, while the runes NoneOf
+            // wanted are never read). A sound candidate set under MustNotBeIn
+            // would need the complement of the fail-set, which is unbounded
+            // under grapheme tokenization, so bail to the slow path instead.
             if (alternative.Polarity != Polarity.MustBeIn)
-                return null;
-            // AdvanceUntilRuneIn requires a rune-only candidate set
-            // (multi-rune entries are silently invisible to its
-            // IndexOfAny / Contains paths). Flatten via the
-            // TokenSet.LookaheadFirstRunes view so each multi-rune
-            // entry's first rune still pulls the scanner to a real
-            // candidate position.
+                return false;
+            // AdvanceUntilRuneIn needs a rune-only candidate set (multi-rune
+            // entries are invisible to its IndexOfAny / Contains paths), so
+            // project through LookaheadFirstRunes: each multi-rune entry's
+            // first rune still pulls the scanner to a real candidate position.
             candidates |= alternative.FirstConsumedTokens.LookaheadFirstRunes;
 
-            // Optional stronger prefilter: if the real alternatives are all
-            // literals, the scanner can skip false first-rune hits too. This
-            // matters for ASCII ignore-case searches where the first-rune set
-            // is broad (`S` or `s`) and common in normal text. If any branch
-            // isn't a literal, keep the generic first-rune skip. It's less
-            // aggressive but still safe for arbitrary grammar shapes.
+            // Optional stronger prefilter: when every real alternative is a
+            // literal, the scanner can also skip false first-rune hits (the
+            // first-rune set for an ASCII ignore-case search like 'S' or 's'
+            // is broad and common in normal text). If any branch isn't a
+            // literal, drop the literal set and keep the generic first-rune
+            // skip, which is less aggressive but safe for any grammar shape.
             if (allCandidatesAreLiterals
                 && !TryCollectLiteralScannerCandidates(alternative, literalCandidates))
             {
@@ -212,26 +268,12 @@ internal sealed class BetweenInclusiveRule : Rule
         }
 
         if (candidates.IsEmpty || candidates == TokenSet.Universe)
-            return null;
+            return false;
 
-        candidates.TryGetBmpChars(maxChars: 256, out var bmpCandidates);
-        LiteralScannerCandidate[]? literals =
-            allCandidatesAreLiterals && literalCandidates.Count > 0
-                ? literalCandidates.ToArray()
-                : null;
-        // For a single literal, the substring-search cache jumps straight
-        // to the next hit and amortizes across iterations. Multi-literal
-        // alternates use the IndexOfAny path below instead: the cache is
-        // much slower for them, because each match consumed forces a
-        // re-search for every literal whose cached position is now stale,
-        // and the BCL's IndexOfAny is SIMD-tuned for "any of these chars"
-        // while N separate IndexOf calls don't benefit from that
-        // vectorization.
-        return new ScannerSkip(
-            candidates,
-            bmpCandidates.Length == 0 ? null : bmpCandidates,
-            literals,
-            literals is { Length: 1 } ? CreateUnknownPositions(literals.Length) : null);
+        literals = allCandidatesAreLiterals && literalCandidates.Count > 0
+            ? literalCandidates.ToArray()
+            : null;
+        return true;
     }
 
     private static int[] CreateUnknownPositions(int length)
