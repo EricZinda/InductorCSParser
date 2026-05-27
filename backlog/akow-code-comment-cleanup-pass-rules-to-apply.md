@@ -61,7 +61,8 @@ left. Apply the universal rule (short, plain, focused). Drop doc comments on
 delegating methods (Rule 2). Keep `<summary>` to one or two sentences and
 push longer material to `<remarks>` (the style half of Rule 8). Make sure
 each summary tells the caller something the identifier name couldn't (the
-quality half of Rule 9).
+quality half of Rule 9). Drop implementation details that don't help the
+reader (Rule 10).
 
 Phase 5: Cross-check docs and tests against the final file. Once the source
 file has been through Phases 1 to 4, find the docs and tests that talk about
@@ -178,6 +179,29 @@ Rules to apply
    that was about adding `///` where none exists. x2x2 also has the
    inventory of types and members that need coverage.
 
+10. [P4] No implementation detail for its own sake. Drop notes that describe
+    how the code is implemented at the micro level (one bool branch instead
+    of a virtual call, stored in a private field, uses a switch instead of
+    a Dictionary, called once at construction) unless the detail actually
+    helps the reader understand what the code does, why it's structured
+    that way, or how to use it. The test: would removing this sentence
+    leave the next reader unable to do their job? If no, it's noise.
+    Implementation details that earn their place: ones that warn about
+    subtle behavior ("returns 0 if `position` is at or past the end"),
+    point at collaborators where the topic is actually explained ("see
+    Lexing/ParseBudget.cs for the details", "see the Probe struct in
+    Lexer.Probe.cs for the full explanation"), or justify a non-obvious
+    design choice that the reader would otherwise question.
+
+    Specifically don't write IDE-replaceable navigation. A comment like
+    "_traceSink lives in Lexer.Tracing.cs" or "Tracing methods
+    (IsTracing, Trace, WriteTraceLine) live in Lexer.Tracing.cs" is just
+    duplicating what Go To Definition gives you in one keystroke, and the
+    comment goes stale if anything moves. The distinction from the good
+    pointers above: those point at *what's explained* in another file.
+    These point at *where something is declared*. The IDE handles the
+    second case for free.
+
 Done when the following is true for what you worked on:
 
 - Members in each type appear in the Phase 1 order (Fields, Properties,
@@ -199,6 +223,9 @@ Done when the following is true for what you worked on:
   `<remarks>`.
 - Every public type and member under src/InductorParser/ has a meaningful
   `<summary>`, not a restatement of the identifier name.
+- No comment describes a private implementation detail (field-vs-virtual
+  choice, internal data-structure choice, micro-optimization note) that
+  doesn't help the reader understand what the code does or how it works.
 - Spot-check: pick five recently-changed files and confirm their comments
   read as short, plain descriptions of current behavior, not change history
   and not jargon-laden.

@@ -241,7 +241,7 @@ public class TracingTests
         // never called even when tracing is on. Two would mean the
         // compiler generated a spurious extra evaluation.
         var sink = NewSink();
-        var lexer = new Lexer("x", sink, TraceLevel.Diagnostic);
+        var lexer = new Lexer("x", traceSink: sink, traceLevel: TraceLevel.Diagnostic);
         int sideEffectCount = 0;
 
         lexer.Trace(TraceLevel.Diagnostic, "test", TraceOutcome.Info,

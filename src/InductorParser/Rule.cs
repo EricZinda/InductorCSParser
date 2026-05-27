@@ -177,8 +177,20 @@ public abstract class Rule
     // ("expected an A"). Only used on failure lines. On success
     // there's no error to report so the WithError message is
     // omitted.
-    private string AppendErrorMessage(string body) =>
-        _errorMessage != null ? $"{body} \"{_errorMessage}\"" : body;
+    //
+    // The body-length check drops the body-separator space when the
+    // body is empty. OrRule's failure trace is the only caller that
+    // hits this path (its body is $"" because there's no per-child
+    // detail to surface once all alternatives failed); without the
+    // check, WriteTraceLine's own ": " plus the leading space in the
+    // format string would render "Or:  \"...\"" with a double space.
+    private string AppendErrorMessage(string body)
+    {
+        if (_errorMessage == null) return body;
+        return body.Length > 0
+            ? $"{body} \"{_errorMessage}\""
+            : $"\"{_errorMessage}\"";
+    }
 
     // Short-form trace helpers called from a rule's TryParse on the
     // success or failure path. [AggressiveInlining] + the
@@ -940,7 +952,7 @@ public abstract class Rule
         // ParseResult.
         var parseContext = new ParseContext(input, parseInput, normalizeInput, this);
         Lexer lexer = new Lexer(parseInput, parseContext, options.TraceSink, options.TraceLevel);
-        lexer.ConfigureBudgets(options);
+        lexer.ConfigureOptions(options);
         Symbol? result;
         // Pre-allocate a root list so a root with FlattenType.Flatten
         // has somewhere to merge into. If root is FlattenType.Preserve,
@@ -1602,15 +1614,14 @@ public abstract class Rule
         {
             int runeValue;
             int runeLength;
-            char c0 = literal[index];
-            if (char.IsHighSurrogate(c0) && index + 1 < literal.Length && char.IsLowSurrogate(literal[index + 1]))
+            if (SurrogateHelpers.IsSurrogatePairAt(literal, index))
             {
-                runeValue = char.ConvertToUtf32(c0, literal[index + 1]);
+                runeValue = char.ConvertToUtf32(literal[index], literal[index + 1]);
                 runeLength = 2;
             }
             else
             {
-                runeValue = c0;
+                runeValue = literal[index];
                 runeLength = 1;
             }
 
