@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace InductorParser.SyntaxTree;
@@ -56,7 +57,14 @@ public static class SymbolExtensions
             }
             else
             {
-                builder.Append('\'').Append(charName ?? "�").Append('\'');
+                builder.Append('\'');
+                if (charName == null)
+                    builder.Append('�');
+                else if (IsControlOrLineSeparator(idValue))
+                    builder.Append("U+").Append(idValue.ToString("X4"));
+                else
+                    builder.Append(charName);
+                builder.Append('\'');
             }
         }
         else
@@ -68,5 +76,24 @@ public static class SymbolExtensions
 
         foreach (var child in symbol.Children)
             AppendNode(child, rule, builder, depth + 1);
+    }
+
+    // True for runes that corrupt a single-line tree dump when written
+    // verbatim. Same set TokenSet.ToString escapes for the same reason:
+    //   * Control (Cc): LF, CR, VT, FF, NEL, and the rest of the C0/C1
+    //     block. (This is exactly what char.IsControl reports.)
+    //   * LineSeparator (Zl): U+2028.
+    //   * ParagraphSeparator (Zp): U+2029.
+    // Format characters (Cf) like ZWJ are deliberately NOT included: they
+    // pass through the multi-rune render path unmolested and the same is
+    // expected here. Supplementary-plane runes can't land in any of these
+    // categories, so the BMP-only fast path is enough.
+    private static bool IsControlOrLineSeparator(int codepoint)
+    {
+        if (codepoint < 0 || codepoint > char.MaxValue) return false;
+        UnicodeCategory category = CharUnicodeInfo.GetUnicodeCategory((char)codepoint);
+        return category == UnicodeCategory.Control
+            || category == UnicodeCategory.LineSeparator
+            || category == UnicodeCategory.ParagraphSeparator;
     }
 }
