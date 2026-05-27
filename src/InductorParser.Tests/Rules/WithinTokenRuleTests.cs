@@ -309,7 +309,7 @@ public class WithinTokenRuleTests
         // The other failure path: inner is an And whose first child
         // succeeds and advances the sub-lexer past the first rune, then
         // the second child fails. WithinTokenRule's inner-failure branch
-        // reads subLexer.DeepestFailure (set by the second child at the
+        // reads subLexer.DeepestFailurePosition (set by the second child at the
         // rune offset where it failed) and feeds that mid-cluster offset
         // to outerLexer.RecordFailure. Same outer-view invariant
         // violation as the prefix-match path above.

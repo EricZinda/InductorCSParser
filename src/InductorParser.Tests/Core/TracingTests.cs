@@ -84,7 +84,8 @@ public class TracingTests
 
         string expected = Lines(
             "   Lexer.Read: 'x', Consumed: 1",
-            "   FAIL | Token: found 'x', wanted 'a' \"expected an A\""
+            "   FAIL | Token: found 'x', wanted 'a' \"expected an A\"",
+            "   Lexer.RecordFailure: first named failure at char 0"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
@@ -128,6 +129,59 @@ public class TracingTests
             "      FAIL | Token: found 'x', wanted 'b'",
             "      Lexer.RecordFailure: new deepest failure at char 1",
             "   FAIL | And: symbol #1"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Forced_deepest_failure_update_is_announced_in_trace()
+    {
+        // The forced slot has its own trace line: "forced deepest failure
+        // at char N" instead of "new deepest failure at char N". Same
+        // strictly-greater gate: the announcement only fires when the new
+        // forced position advances past the previous one.
+        //
+        // And(a, b.WithError(forced: true)) on "ax" advances past 'a'
+        // then the forced b fails at position 1, which is > the initial
+        // forced position of 0, so the announcement appears. The trailing
+        // mechanical announcement comes from And's own RecordCompositeFailure
+        // (no .WithError on the And, so errorMessage=null routes through the
+        // mechanical slot, which is still at 0 and advances to 1).
+        var sink = NewSink();
+        var rule = And(
+            Token('a'),
+            Token('b').WithError("expected B", forced: true));
+        rule.Parse("ax", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "      Lexer.Read: 'a', Consumed: 1",
+            "      SUCC | Token: found 'a'",
+            "      Lexer.Read: 'x', Consumed: 2",
+            "      FAIL | Token: found 'x', wanted 'b' \"expected B\"",
+            "      Lexer.RecordFailure: forced deepest failure at char 1",
+            "   FAIL | And: symbol #1",
+            "   Lexer.RecordFailure: new deepest failure at char 1"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void First_forced_failure_at_position_zero_is_announced_in_trace()
+    {
+        // The forced slot's first-fill case: a forced .WithError fails at
+        // position 0 before the lexer has moved. The position write is a
+        // no-op (0 to 0) but the message is genuinely captured, and the
+        // "first forced failure at char 0" trace line announces it.
+        var sink = NewSink();
+        var rule = Token('a').WithError("expected A", forced: true);
+        rule.Parse("x", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   Lexer.Read: 'x', Consumed: 1",
+            "   FAIL | Token: found 'x', wanted 'a' \"expected A\"",
+            "   Lexer.RecordFailure: first forced failure at char 0"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }

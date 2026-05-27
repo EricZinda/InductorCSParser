@@ -114,4 +114,39 @@ public class SymbolExtensionsTests
 
         Assert.That(staleLeaf.PrintTree(rule), Is.EqualTo($"'{UnicodeExamples.ReplacementCharacterText}'\n"));
     }
+
+    [Test]
+    public void PrintTree_escapes_control_character_rune_in_short_form()
+    {
+        // A leaf rule on a single control character (LF, U+000A) carries
+        // id 0x0A from GraphemeRule's auto-rune-id pass. The compact
+        // `'c'` form would splice a literal newline into the printed
+        // tree, breaking the one-leaf-per-line layout that lines up with
+        // the indent-per-depth shape every other node uses. Mirrors
+        // TokenSet.ToString's AppendGraphemeForDisplay: the rune renders
+        // as `'U+XXXX'` so the tree dump stays one line per node.
+        var rule = Token('\n').Preserve();
+        var result = rule.Parse("\n");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.PrintTree(rule), Is.EqualTo("'U+000A'\n"));
+    }
+
+    [Test]
+    public void PrintTree_escapes_line_separator_rune_in_short_form()
+    {
+        // U+2028 LINE SEPARATOR is in Unicode category Zl, not Cc, so a
+        // `char.IsControl`-only check would miss it. The lexer treats
+        // it as a line terminator (see TokenSet.LineTerminators), so a
+        // grammar that uses it as a Preserve'd Token can land it as a
+        // leaf in the printed tree. Render as `'U+2028'` for the same
+        // line-breaks-the-output reason as LF / CR. Escape form keeps
+        // the test source free of a literal line separator that would
+        // split the C# source line.
+        var rule = Token('\u2028').Preserve();
+        var result = rule.Parse("\u2028");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.PrintTree(rule), Is.EqualTo("'U+2028'\n"));
+    }
 }

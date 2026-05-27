@@ -160,6 +160,13 @@ Rules to apply
    transaction-semantics block in Lexer), implementation-detail notes inside
    method bodies, and similar discursive material aimed at contributors.
    Doc-comment style:
+   - Order: `<summary>` first, then `<remarks>`, then `<param>` /
+     `<returns>` / `<exception>` / `<typeparam>`. Keep `<remarks>` right
+     after `<summary>` so the high-level description and the extended
+     explanation stay together. A reader skimming the doc shouldn't have
+     to scroll past per-parameter detail to find the section that
+     explains the method's behavior. If a method's `<remarks>` sits at
+     the bottom, move it.
    - `<summary>` stays tight. One or two sentences describing what the
      member does. If the summary is growing past that, the rest belongs in
      `<remarks>`, not in the summary.

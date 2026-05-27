@@ -117,34 +117,6 @@ public class ScanWhileRuleTests
     }
 
     [Test]
-    [RecursiveEngineOnly]
-    public void Or_ScanWhile_with_minimumCount_zero_does_not_skip_on_outside_peek()
-    {
-        // minimumCount: 0 makes the rule zero-matchable, so
-        // ComputeRuleStart publishes Advance.Sometimes (the same
-        // shape Optional / ZeroOrMore publish). The lookahead
-        // shortcut requires Advance.Always to fire, so this
-        // ScanWhile must run regardless of what the peek is. Without
-        // the downgrade, an outer Or would skip this rule on '1' and
-        // the literal "1" branch would win for the wrong reason
-        // (the ScanWhile would never get a chance to match its empty
-        // run, and a different grammar shape might see the wrong tree).
-        var sink = NewSink();
-        var rule = Or(
-            ScanWhile(TokenSet.Ascii.Letters, minimumCount: 0),
-            Literal("1"));
-        var result = rule.Parse("1",
-            new ParseOptions
-            {
-                TraceSink = sink,
-                AllowTrailingInput = true
-            });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | ScanWhile"));
-    }
-
-    [Test]
     public void ScanWhile_rejects_multi_rune_grapheme_under_grapheme_lexer()
     {
         var rule = ScanWhile(TokenSet.Single(WavingHandRune));

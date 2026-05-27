@@ -151,7 +151,7 @@ public static class StateMachineParser
                 // the same shape of ParseResult.Aborted from the same
                 // ParseOutcome, so a side-by-side compare on the
                 // recursive vs SM run agrees on outcome and position.
-                int abortRaw = System.Math.Max(System.Math.Max(machine.DeepestFailure, lexer.DeepestFailure), lexer.Position);
+                int abortRaw = System.Math.Max(System.Math.Max(machine.DeepestFailure, lexer.DeepestFailurePosition), lexer.Position);
                 int abortPos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, abortRaw, rootRule.NormalizationForm);
                 return ParseResult.Aborted(budget.Outcome, abortPos, Rule.BuildBudgetMessage(budget.Outcome, abortPos, input, options), input, rootRule);
             }
