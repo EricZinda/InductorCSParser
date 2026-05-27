@@ -4,6 +4,7 @@ Done:
 Compatability/*
 Lexing/
     GraphemeClusterIndex.cs
+	Lexer.cs
 
 SyntaxTree/
     FlattenType.cs
