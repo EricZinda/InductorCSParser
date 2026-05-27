@@ -65,7 +65,7 @@ internal sealed class WithinTokenRule : Rule
 
         // Sub-lexer over the token's runes. Owns a substring of the
         // outer input: the inner rule walks subInput[0 .. token.Length),
-        // and the sub-lexer's Input / Position / IsEof / DeepestFailure
+        // and the sub-lexer's Input / Position / IsEof / DeepestFailurePosition
         // / Read() Token offsets are all 0-based on that substring.
         // Other rules don't need to know what mode the lexer is in.
         // Switched to one-rune-per-token mode so the inner rule sees
@@ -116,7 +116,7 @@ internal sealed class WithinTokenRule : Rule
             // so the parser-wide "errors land at cluster boundaries"
             // invariant holds. Trace cites the rune-level offset for
             // debug.
-            int innerFailurePos = Math.Max(subLexer.DeepestFailure, subLexer.Position);
+            int innerFailurePos = Math.Max(subLexer.DeepestFailurePosition, subLexer.Position);
             TraceFailure(outerLexer, $"inner rule failed at token rune offset {innerFailurePos}");
             // The inner rule ran on the sub-lexer, so its deepest failure
             // is recorded there. Surface it on the outer lexer keeping the

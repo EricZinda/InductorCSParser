@@ -21,7 +21,7 @@ internal sealed class ParseBudgetExceeded : Exception
     // active lookahead Probe. The Probe's Dispose runs on the exception
     // path and restores the failure tracker to its pre-probe value, so
     // the catch handler in Rule.ParseRecursive can't reliably read
-    // lexer.DeepestFailure after the unwind. Capturing the value at
+    // lexer.DeepestFailurePosition after the unwind. Capturing the value at
     // throw time freezes it before any restoration runs.
     public int DeepestPositionAtAbort { get; }
 

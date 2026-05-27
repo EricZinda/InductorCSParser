@@ -159,7 +159,8 @@ public class OrRuleTests
             "      FAIL | Token: found 'z', wanted 'a'",
             "      Lexer.Read: 'z', Consumed: 1",
             "      FAIL | Token: found 'z', wanted 'b'",
-            "   FAIL | Or: \"expected ab\""
+            "   FAIL | Or: \"expected ab\"",
+            "   Lexer.RecordFailure: first named failure at char 0"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }

@@ -105,7 +105,7 @@ public class AllowTrailingInputTests
         // is that ErrorCharIndex is the first leftover character (offset
         // 1, the 'e'), not a position from a rolled-back alternative
         // (offset 4, the 'z' that the abandoned Literal hit and that
-        // lexer.DeepestFailure still records).
+        // lexer.DeepestFailurePosition still records).
         var rule = Or(Literal("hello"), Token('h'));
         var result = rule.Parse("hellz");
 

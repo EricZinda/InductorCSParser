@@ -16,7 +16,7 @@ namespace InductorParser.Lexing;
 // its own type instead of being woven into the lexer's tokenization
 // state.
 //
-// Holds a back-reference to its Lexer so it can read Lexer.DeepestFailure
+// Holds a back-reference to its Lexer so it can read Lexer.DeepestFailurePosition
 // and Lexer.Position when freezing the deepest-position onto the
 // ParseBudgetExceeded it throws. The read happens only on the unhappy
 // path; the happy-path EnterRule / TickPeriodic never touch the Lexer.
@@ -208,7 +208,7 @@ internal sealed class ParseBudget
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void ThrowBudgetExceeded(ParseOutcome outcome)
     {
-        int deepestAtAbort = Math.Max(_lexer.DeepestFailure, _lexer.Position);
+        int deepestAtAbort = Math.Max(_lexer.DeepestFailurePosition, _lexer.Position);
         throw new ParseBudgetExceeded(outcome, deepestAtAbort);
     }
 }

@@ -61,7 +61,7 @@ public sealed partial class Lexer
     /// For a top-level lexer this is what the caller passed to Parse. For a
     /// sub-lexer (the one WithinTokenRule builds over the runes of one outer
     /// token) this is the substring covering just those runes; the sub-lexer's
-    /// Position, IsEof, DeepestFailure, and Read / Token offsets are all
+    /// Position, IsEof, DeepestFailurePosition, and Read / Token offsets are all
     /// expressed in coordinates of this string. Rule code can bound its own
     /// loops on Input.Length safely either way: the lexer's readable range and
     /// Input.Length are always the same string.
