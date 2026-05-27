@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
@@ -106,8 +107,20 @@ internal sealed class ScanUntilRule : Rule
     // start rule .Flatten(FlattenType.Delete), and the parse-time
     // Delete filter will remove it.
     private readonly bool _hasEscape;
-    private readonly int _escapeStartRune;
+    private int _escapeStartRune;
     private readonly Rule? _escapeStartRule;
+
+    // Non-null when Compile's normalization-form pass converted the
+    // single-rune escape start to a multi-rune-but-single-grapheme
+    // sequence (e.g. 'é' → "e + U+0301" under FormD). The fast path
+    // can't compare a multi-rune cluster against a single int, so the
+    // whole normalized cluster lives here and gets a span-equal check
+    // instead. Null on every other path: no escape, rule-form escape
+    // start, or single-rune escape start that stayed single-rune under
+    // the chosen form (canonical-singleton substitutions like
+    // U+212A → 'K' still take the single-rune path, just at the new
+    // rune value).
+    private string? _escapeStartGrapheme;
 
     // _escapeEnd runs once per escape occurrence (not per rune), so
     // its cost is amortized across the whole escape sequence rather
@@ -237,10 +250,67 @@ internal sealed class ScanUntilRule : Rule
         // would silently swallow the boundary the user typed in.
         // Rule-mode stoppers (and the optional escapeEnd / escapeStartRule
         // sub-rules) handle their own normalization through the
-        // walker's recursion into Children, so only _stopperSet needs
-        // projection here.
+        // walker's recursion into Children.
         if (_stopperRule == null)
             OneOfRule.NormalizeAndValidate(this, ref _stopperSet, form, offenders);
+
+        // Same shape for the single-rune escape start: the fast-path
+        // check (`runeValue == _escapeStartRune`) sees the lexer's
+        // post-normalization view, so a user-typed precomposed 'é'
+        // never matches the FormD-decomposed cluster the lexer reads.
+        // Three outcomes:
+        //   * Single rune unchanged under the form: nothing to do, the
+        //     existing int compare already matches the input the lexer
+        //     hands the rule.
+        //   * Single rune that converts to a different single rune
+        //     (canonical-singleton substitutions like U+212A → 'K'):
+        //     re-point _escapeStartRune at the new rune and keep the
+        //     int compare path.
+        //   * Single rune that converts to a multi-rune single
+        //     grapheme (the 'é' → "e + U+0301" case under FormD): the
+        //     int compare can't match the cluster, so stash the whole
+        //     normalized cluster in _escapeStartGrapheme for the
+        //     span-equal path in TryParseRule.
+        //   * Single rune that converts to a multi-grapheme sequence
+        //     (e.g. ligature ﬁ → "fi" under FormKC): report as
+        //     offender, since one escape start can't expand into two
+        //     graphemes the lexer would read separately.
+        // Rule-form escape starts handle their own normalization
+        // through the walker's recursion into Children, so skip the
+        // projection here.
+        if (!_hasEscape || _escapeStartRule != null) return;
+
+        string originalRuneText = char.ConvertFromUtf32(_escapeStartRune);
+        string? normalized = TryConvertToForm(this, originalRuneText, form, offenders, failures);
+        if (normalized == null) return;
+        if (string.Equals(normalized, originalRuneText, StringComparison.Ordinal)) return;
+
+        if (CountGraphemes(normalized) > 1)
+        {
+            offenders.Add((this, originalRuneText,
+                $"<escape-start rune converts under {form} to the multi-grapheme " +
+                $"sequence \"{normalized}\", but a single-rune escape start matches " +
+                $"exactly one grapheme. Use the Rule-valued escape-start constructor " +
+                $"with Literal(\"{normalized}\") instead.>"));
+            return;
+        }
+
+        if (TokenSet.TrySingleRune(normalized, out int newRune))
+        {
+            _escapeStartRune = newRune;
+            return;
+        }
+
+        _escapeStartGrapheme = normalized;
+    }
+
+    private static int CountGraphemes(string text)
+    {
+        if (text.Length == 0) return 0;
+        var enumerator = StringInfo.GetTextElementEnumerator(text);
+        int count = 0;
+        while (enumerator.MoveNext()) count++;
+        return count;
     }
 
     internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
@@ -355,27 +425,48 @@ internal sealed class ScanUntilRule : Rule
                     // the failure tracker, and the subtree extent. Fall
                     // through to the stopper check.
                 }
-                else if (tokenLen == runeLen && runeValue == _escapeStartRune)
+                else
                 {
-                    // Single-rune start fast path. The token must be
-                    // exactly the escape rune with nothing else glued
-                    // onto it: '\' alone matches, but '\<combining
-                    // mark>' (one cluster, two runes by UAX #29 GB9)
-                    // does NOT, the same way Token('\\') would refuse
-                    // it. tokenLen == runeLen is the test for "this
-                    // cluster is one rune long," which is what makes
-                    // the fast path safe under the parser-wide
-                    // grapheme invariant.
-                    lexer.SetPositionUnchecked(pos + tokenLen);
-                    var end = _escapeEnd!.TryParse(lexer, outputSymbols: null);
-                    if (end == null)
+                    // Two flavors of the no-sub-rule escape-start fast
+                    // path, picked by Compile's normalization-form pass
+                    // (see CollectNormalizationOffenders above):
+                    //
+                    // Single-rune start (the default and every form-
+                    // stable escape start): the token must be exactly
+                    // the escape rune with nothing else glued onto it.
+                    // '\' alone matches, but '\<combining mark>' (one
+                    // cluster, two runes by UAX #29 GB9) doesn't, the
+                    // same way Token('\\') would refuse it. tokenLen
+                    // == runeLen is the test for "this cluster is one
+                    // rune long," which is what makes the fast path
+                    // safe under the parser-wide grapheme invariant.
+                    //
+                    // Multi-rune-cluster start (the user wrote a single
+                    // rune that decomposes to multiple runes under the
+                    // chosen form, e.g. 'é' → "e + U+0301" under
+                    // FormD): the int compare can never match the
+                    // cluster's first rune, so a span-equal against
+                    // the whole normalized cluster takes its place.
+                    // The whole cluster has to match: a partial match
+                    // can't fire the escape because the lexer hands
+                    // the rule one cluster per token.
+                    bool escapeStartMatched = _escapeStartGrapheme != null
+                        ? pos + tokenLen <= inputLen
+                            && input.AsSpan(pos, tokenLen).SequenceEqual(_escapeStartGrapheme.AsSpan())
+                        : tokenLen == runeLen && runeValue == _escapeStartRune;
+                    if (escapeStartMatched)
                     {
-                        TraceFailure(lexer, $"bad escape end at offset {pos + tokenLen}");
-                        // Composite anchor, same shape as the rule-form path above.
-                        lexer.RecordCompositeFailure(lexer.Position, ErrorMessage, ErrorForced);
-                        return null;
+                        lexer.SetPositionUnchecked(pos + tokenLen);
+                        var end = _escapeEnd!.TryParse(lexer, outputSymbols: null);
+                        if (end == null)
+                        {
+                            TraceFailure(lexer, $"bad escape end at offset {pos + tokenLen}");
+                            // Composite anchor, same shape as the rule-form path above.
+                            lexer.RecordCompositeFailure(lexer.Position, ErrorMessage, ErrorForced);
+                            return null;
+                        }
+                        continue;
                     }
-                    continue;
                 }
             }
 
@@ -472,6 +563,4 @@ internal sealed class ScanUntilRule : Rule
         return leafSymbol;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.MayAdvanceByAnyTokens;
 }

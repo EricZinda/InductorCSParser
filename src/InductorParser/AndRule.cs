@@ -43,6 +43,4 @@ internal sealed class AndRule : Rule
             : Symbol.Discarded;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.MatchesAllOf(Children);
 }

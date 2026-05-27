@@ -61,6 +61,81 @@ public class ScanUntilRuleTests
     }
 
     [Test]
+    public void ScanUntil_with_precomposed_escape_start_rune_fires_on_decomposed_input_under_FormD()
+    {
+        // Escape start: U+00E9 (precomposed LATIN SMALL LETTER E WITH
+        // ACUTE). Under FormD the lexer decomposes input for that
+        // character to the two-rune cluster "e + combining acute". The
+        // escape-start fast path compares the next token's single rune
+        // against _escapeStartRune. The decomposed cluster's first rune
+        // is 'e' (0x65), not 0xE9, and tokenLen (2) doesn't equal
+        // runeLen (1) either, so the fast path's check rejects every
+        // cluster and the escape never fires.
+        //
+        // OneOf and ScanUntil's stopper set project their TokenSet
+        // entries through OneOfRule.NormalizeAndValidate at Compile
+        // time so the same precomposed rune written in a stopper set
+        // recognizes the decomposed cluster. _escapeStartRune sits in
+        // the same Compile-time pass but isn't projected, so the fix
+        // is to convert the rune to its FormD-normalized cluster and
+        // span-compare against it.
+        //
+        // Asserts the user-visible consequence: the escape should fire
+        // on the decomposed cluster and run the escape-end on the next
+        // token. Here escape end is Token('x'); the input has 'Y'
+        // after the e-acute, so when the escape fires the escape-end
+        // fails and the whole ScanUntil fails. Without the fix the
+        // escape is silently skipped, the cluster is consumed as body,
+        // and ScanUntil reaches '|' and succeeds.
+        var rule = InductorParser.Rules.And(
+            ScanUntil(TokenSet.Runes("|"), new Rune(LatinEAcuteRune), Token('x')),
+            Token('|'));
+        rule.Compile(System.Text.NormalizationForm.FormD);
+
+        var result = rule.Parse("abc" + LatinEAcutePrecomposedGrapheme + "Yhello|");
+
+        Assert.That(result.Success, Is.False,
+            "escape start (precomposed e-acute) should recognize the decomposed cluster under FormD; "
+            + "the trailing 'Y' isn't 'x', so escape-end Token('x') should fail "
+            + "and the whole ScanUntil should fail. Without the fix the escape is "
+            + "silently skipped, ScanUntil consumes the whole pre-'|' span as body, "
+            + "and the outer And succeeds.");
+    }
+
+    [Test]
+    public void ScanUntil_with_precomposed_escape_start_rune_consumes_escape_on_decomposed_input_under_FormD()
+    {
+        // Happy-path sibling of the test above: same shape, but the
+        // input has the matching 'x' after the e-acute so the escape
+        // sequence completes. Without the fix the escape silently
+        // never fires and the cluster + 'x' are consumed as body too;
+        // with the fix the escape fires, escape-end matches 'x', and
+        // scanning resumes for the rest of the body. Either way the
+        // outer And succeeds (the cursor reaches the same '|'), so
+        // success alone isn't the discriminator. The trace is.
+        var sink = TraceTestHelpers.NewSink();
+        var rule = InductorParser.Rules.And(
+            ScanUntil(TokenSet.Runes("|"), new Rune(LatinEAcuteRune), Token('x')),
+            Token('|'));
+        rule.Compile(System.Text.NormalizationForm.FormD);
+
+        var result = rule.Parse(
+            "abc" + LatinEAcutePrecomposedGrapheme + "xhello|",
+            new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        // Token('x') is Delete by default, so a successfully-fired
+        // escape produces a Token SUCC trace line for the 'x'. Without
+        // the fix, the escape never fires and no such trace line
+        // exists: the 'x' is consumed as body alongside the e-acute
+        // cluster.
+        Assert.That(sink.ToString(), Does.Contain("Token: found 'x'"),
+            "the escape-end Token('x') should run after the escape start "
+            + "fires on the decomposed cluster; without the fix the escape "
+            + "is silently skipped and Token('x') is never invoked.");
+    }
+
+    [Test]
     public void ScanUntil_matches_a_run_of_body_chars_into_one_leaf()
     {
         // "abcXYZ|" scans the whole "abcXYZ" run as body up to the

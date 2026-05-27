@@ -15,18 +15,6 @@ public class Program
 {
     public static int Main(string[] args)
     {
-        // Honor INDUCTOR_DISABLE_LOOKAHEAD_SHORTCUT for A/B-measuring the
-        // Or / BetweenInclusive lookahead-skip optimization. Set the
-        // env var to any non-empty, non-"0", non-"false" value to disable
-        // the shortcut for this benchmark run. BenchmarkDotNet child
-        // processes inherit the env, so the flag flows through to each
-        // BenchmarkRunner. Logged so the result CSVs are unambiguous.
-        var disableShortcut = Environment.GetEnvironmentVariable("INDUCTOR_DISABLE_LOOKAHEAD_SHORTCUT");
-        InductorParser.Rule.DisableLookaheadShortcut = !string.IsNullOrEmpty(disableShortcut)
-            && !string.Equals(disableShortcut, "0", StringComparison.Ordinal)
-            && !string.Equals(disableShortcut, "false", StringComparison.OrdinalIgnoreCase);
-        Console.WriteLine($"InductorParser lookahead shortcut: {(InductorParser.Rule.DisableLookaheadShortcut ? "DISABLED" : "ENABLED")}");
-
         if (args.Contains("--spot-check"))
         {
             return SpotCheck();

@@ -50,6 +50,4 @@ internal sealed class EofRule : Rule
             : Symbol.Discarded;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.NeverAdvances;
 }

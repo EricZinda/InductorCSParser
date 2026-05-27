@@ -66,6 +66,4 @@ internal sealed class NotRule : Rule
             : Symbol.Discarded;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.NeverAdvances;
 }

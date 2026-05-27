@@ -69,6 +69,4 @@ internal sealed class NoneOfRule : Rule
         return leafSymbol;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.FirstTokenMustNotBeInSet(_set);
 }

@@ -266,39 +266,6 @@ public class ScanWhileRuleTests
         Assert.That(result.Tree!.ToString(), Is.EqualTo("abc" + USFlagGrapheme + "d"));
     }
 
-    [Test]
-    [RecursiveEngineOnly]
-    public void Or_ScanWhile_skips_when_peek_is_outside_set()
-    {
-        // The default minimumCount is 1, so ScanWhile(set) publishes
-        // (set, Always, MustBeIn): every successful match consumes at
-        // least one token from set. Peek '1' isn't in {a..z}, so the
-        // shortcut skips ScanWhile and the literal "1" branch wins.
-        // (Contrast with Or_ScanWhile_with_minimumCount_zero_does_not_skip
-        // for the minimumCount: 0 case, which publishes Advance.Sometimes
-        // and can't be skipped.)
-        var sink = NewSink();
-        var rule = Or(ScanWhile(TokenSet.Ascii.Letters), Literal("1"));
-        var result = rule.Parse("1", new ParseOptions { TraceSink = sink });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Contain("SKIP | ScanWhile:"));
-    }
-
-    [Test]
-    [RecursiveEngineOnly]
-    public void Or_ScanWhile_runs_when_peek_is_in_set()
-    {
-        // Peek 'a' is in {a..z}, so the shortcut doesn't skip and
-        // ScanWhile runs.
-        var sink = NewSink();
-        var rule = Or(ScanWhile(TokenSet.Ascii.Letters), Literal("1"));
-        var result = rule.Parse("abc", new ParseOptions { TraceSink = sink });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | ScanWhile:"));
-    }
-
     // -----------------------------------------------------------------
     // Compile-form normalization matrix
     //

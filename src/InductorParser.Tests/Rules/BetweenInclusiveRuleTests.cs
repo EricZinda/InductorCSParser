@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Text;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
@@ -126,6 +128,79 @@ public class BetweenInclusiveRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Symbols, Is.Empty);
+    }
+
+    [Test]
+    public void Lower_bound_one_is_satisfied_by_a_single_zero_width_match()
+    {
+        // Only one empty success is counted, satisfying AtLeast = 1.
+        var result = BetweenInclusive(1, int.MaxValue, Optional(OneOf("a"))).Parse("");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Symbols, Is.Empty);
+    }
+
+    [Test]
+    public void OneOrMore_and_ZeroOrMore_of_a_nullable_inner_agree_on_empty_input()
+    {
+        // Only one empty success is counted, and it's enough for both
+        // lower bounds on empty input.
+        Assert.That(ZeroOrMore(Optional(OneOf("a"))).Parse("").Success, Is.True);
+        Assert.That(OneOrMore(Optional(OneOf("a"))).Parse("").Success, Is.True);
+    }
+
+    [Test]
+    public void Lower_bound_is_satisfied_by_a_zero_width_lookahead_match()
+    {
+        // Peek is zero-width. Only one empty success is counted,
+        // satisfying AtLeast = 1.
+        var rule = And(OneOrMore(Peek(OneOf("a"))), OneOf("a").Preserve());
+        var result = rule.Parse("a");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.ToString(), Is.EqualTo("a"));
+    }
+
+    [Test]
+    public void Lower_bound_still_fails_when_the_inner_cannot_match_at_all()
+    {
+        // Only successes are counted (empty or otherwise). A real failure
+        // leaves the count short, so the rule still rejects.
+        Assert.That(OneOrMore(OneOf("a")).Parse("").Success, Is.False);
+        Assert.That(OneOrMore(OneOf("a")).Parse("z").Success, Is.False);
+    }
+
+    [Test]
+    public void AtLeast_with_nullable_inner_counts_at_most_one_terminal_empty_match()
+    {
+        // Only one empty success is counted, so AtLeast(N, Optional(a))
+        // requires N-1 real a's.
+        Assert.That(AtLeast(2, Optional(OneOf("a"))).Parse("a").Success, Is.True);
+        Assert.That(AtLeast(3, Optional(OneOf("a"))).Parse("a").Success, Is.False);
+        Assert.That(AtLeast(3, Optional(OneOf("a"))).Parse("aa").Success, Is.True);
+        Assert.That(AtLeast(2, Optional(OneOf("a"))).Parse("").Success, Is.False);
+    }
+
+    [Test]
+    public void Exactly_with_nullable_inner_accepts_count_or_count_minus_one_real_matches()
+    {
+        // Only one empty success is counted, so Exactly(N, Optional(a))
+        // reaches N either as (N-1) reals plus the empty terminal or as N
+        // reals before AtMost exits.
+        Assert.That(Exactly(2, Optional(OneOf("a"))).Parse("a").Success, Is.True);
+        Assert.That(Exactly(2, Optional(OneOf("a"))).Parse("aa").Success, Is.True);
+        Assert.That(Exactly(2, Optional(OneOf("a"))).Parse("").Success, Is.False);
+        Assert.That(Exactly(2, Optional(OneOf("a"))).Parse("aaa").Success, Is.False);
+    }
+
+    [Test]
+    public void Any_zero_width_inner_shape_satisfies_the_lower_bound()
+    {
+        // ZeroOrMore and Not are zero-width too. Only one empty success
+        // is counted from each, satisfying AtLeast = 1.
+        Assert.That(OneOrMore(ZeroOrMore(OneOf("a"))).Parse("").Success, Is.True);
+        var notFollowedByZ = And(OneOrMore(Not(OneOf("z"))), OneOf("a").Preserve());
+        Assert.That(notFollowedByZ.Parse("a").Success, Is.True);
     }
 
     [Test]
@@ -374,90 +449,6 @@ public class BetweenInclusiveRuleTests
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
 
-    // ----- Scanner-skip optimization (atLeast=0, atMost=int.MaxValue) -----
-    //
-    // BetweenInclusiveRule.TryCreateScannerSkip recognizes the shape
-    // ZeroOrMore(Or(match, AnyToken.Delete)) and jumps directly to
-    // the next rune that could start a real match. The optimization only
-    // triggers when atLeast=0 and atMost=int.MaxValue, which is the
-    // ZeroOrMore-equivalent shape, so these tests construct that shape
-    // explicitly via BetweenInclusive(0, int.MaxValue, ...).
-
-    [Test]
-    public void BetweenInclusive_scanner_shape_skips_deleted_fallback_runs()
-    {
-        var match = Literal("Sherlock").As("match").Flatten(SyntaxTree.FlattenType.Preserve);
-        var scanner = BetweenInclusive(0, int.MaxValue, Or(
-            match,
-            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
-        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
-
-        // The slow path would invoke the inner Or once per rune (5000+
-        // times). RuleCountLimit=100 caps invocations, so a successful parse
-        // can only mean the scanner skip jumped over the 'x' run.
-        string input = new string('x', 5000) + "Sherlock";
-        scanner.Compile(null);
-        var result = scanner.Parse(input, new ParseOptions
-        {
-            RuleCountLimit = 100,
-            MaxDepth = 0
-        });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("Sherlock"));
-        Assert.That(result.Tree.Find(match)!.ToString(), Is.EqualTo("Sherlock"));
-    }
-
-    [Test]
-    public void BetweenInclusive_scanner_shape_prefilters_ascii_case_insensitive_literal()
-    {
-        var match = LiteralIgnoreAsciiCase("Sherlock Holmes")
-            .As("match")
-            .Flatten(SyntaxTree.FlattenType.Preserve);
-        var scanner = BetweenInclusive(0, int.MaxValue, Or(
-            match,
-            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
-        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
-
-        string input = new string('s', 5000) + "sHeRlOcK hOlMeS";
-        scanner.Compile(null);
-        var result = scanner.Parse(input, new ParseOptions
-        {
-            RuleCountLimit = 100,
-            MaxDepth = 0
-        });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("sHeRlOcK hOlMeS"));
-        Assert.That(result.Tree.Find(match)!.ToString(), Is.EqualTo("sHeRlOcK hOlMeS"));
-    }
-
-    [Test]
-    public void BetweenInclusive_scanner_shape_prefilters_nested_literal_alternates()
-    {
-        var match = Or(
-            LiteralIgnoreAsciiCase("Sherlock Holmes").Flatten(SyntaxTree.FlattenType.Preserve),
-            LiteralIgnoreAsciiCase("John Watson").Flatten(SyntaxTree.FlattenType.Preserve),
-            LiteralIgnoreAsciiCase("Irene Adler").Flatten(SyntaxTree.FlattenType.Preserve)
-        ).As("match").Flatten(SyntaxTree.FlattenType.Preserve);
-        var scanner = BetweenInclusive(0, int.MaxValue, Or(
-            match,
-            AnyToken().Flatten(SyntaxTree.FlattenType.Delete)
-        )).As("scan").Flatten(SyntaxTree.FlattenType.Preserve);
-
-        string input = new string('j', 5000) + "jOhN wAtSoN";
-        scanner.Compile(null);
-        var result = scanner.Parse(input, new ParseOptions
-        {
-            RuleCountLimit = 100,
-            MaxDepth = 0
-        });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("jOhN wAtSoN"));
-        Assert.That(result.Tree.Find(match)!.ToString(), Is.EqualTo("jOhN wAtSoN"));
-    }
-
     [Test]
     public void BetweenInclusive_scanner_shape_preserves_debug_tree_when_requested()
     {
@@ -486,6 +477,37 @@ public class BetweenInclusiveRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("xxS"));
+    }
+
+    [Test]
+    public void BetweenInclusive_scanner_skip_keeps_preserved_Or_Symbol_for_fallback_match()
+    {
+        // The scanner-skip is documented to jump over deleted fallback runs
+        // "without changing the emitted syntax tree." That premise holds only
+        // when a fallback-matched position contributes nothing to the tree.
+        // When the inner Or is itself Preserve, a position matched only by the
+        // AnyToken().Delete() fallback still produces an empty-children
+        // Preserve Symbol for that Or, the same way the Or wraps a real
+        // match. Skipping the position drops that Symbol, so the optimized
+        // tree has fewer nodes than the unoptimized one.
+        //
+        // Input "bab": both 'b's match the real OneOf("b") alternative, and
+        // the 'a' falls to the AnyToken().Delete() fallback. With the inner
+        // Or preserved, the slow path emits three Or Symbols (b, empty-a, b),
+        // and the optimized path must emit the same three.
+        var slot = Or(OneOf("b").Preserve(), AnyToken().Delete()).As("slot"); // .As => Preserve
+        var scanner = ZeroOrMore(slot);
+
+        var result = scanner.Parse("bab");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        // ZeroOrMore is Flatten, so it lifts each slot Symbol into the
+        // top-level Symbols list. The 'a' slot is an empty-children Preserve
+        // Symbol that the scanner-skip used to drop, leaving only two.
+        Assert.That(result.Symbols.Count, Is.EqualTo(3), "slot Symbols (b, empty-a, b)");
+        Assert.That(result.Symbols[0].ToString(), Is.EqualTo("b"));
+        Assert.That(result.Symbols[1].ToString(), Is.EqualTo(""), "the 'a' fallback slot is an empty Symbol");
+        Assert.That(result.Symbols[2].ToString(), Is.EqualTo("b"));
     }
 
     [Test]
@@ -850,47 +872,11 @@ public class BetweenInclusiveRuleTests
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
     }
 
-    // The inner-loop shortcut (peek before each iteration, take count==0
-    // fast-exit when inner can't match) is covered by ZeroOrMoreRuleTests.
-    // The tests below cover the OTHER direction: an enclosing Or
-    // skipping a BetweenInclusive whose AtLeast >= 1 (so its Advance is
-    // Always and the outer shortcut can fire).
-
-    [Test]
-    [RecursiveEngineOnly]
-    public void Or_OneOrMore_skips_when_peek_is_not_in_inner_set()
-    {
-        // OneOrMore(inner) forwards inner's first-set with Advance.Always
-        // (since AtLeast == 1). Peek 'x' isn't in {'a'}, so the outer
-        // Or skips OneOrMore.
-        var sink = NewSink();
-        var rule = Or(OneOrMore(Token('a')), Literal("x"));
-        var result = rule.Parse("x", new ParseOptions { TraceSink = sink });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Contain("SKIP | OneOrMore:"));
-    }
-
-    [Test]
-    [RecursiveEngineOnly]
-    public void Or_OneOrMore_runs_when_peek_is_in_inner_set()
-    {
-        // Peek 'a' is in {'a'}, so the outer Or doesn't skip
-        // OneOrMore. It runs and matches.
-        var sink = NewSink();
-        var rule = Or(OneOrMore(Token('a')), Literal("x"));
-        var result = rule.Parse("aaa", new ParseOptions { TraceSink = sink });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | OneOrMore:"));
-    }
-
     [Test]
     public void SourceText_on_zero_match_shortcut_is_empty_at_anchor()
     {
-        // atLeast = 0 with inner that can't match at this position
-        // (Inner.CannotMatchLookahead returns true). The engine's
-        // empty-match shortcut fires and returns a Preserve composite
+        // atLeast = 0 with inner that can't match at this position. The
+        // loop runs zero iterations and returns a Preserve composite
         // with a zero-length consumed span at lexer.Position. SourceText
         // is empty, SourceRange is zero-width at that offset.
         var counted = ZeroOrMore(Literal("X")).As("count");
