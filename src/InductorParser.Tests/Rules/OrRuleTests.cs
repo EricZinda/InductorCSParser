@@ -155,8 +155,10 @@ public class OrRuleTests
             .Parse("z", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
-            "   SKIP | Token: shortcut: peek 'z' not in '[a]'",
-            "   SKIP | Token: shortcut: peek 'z' not in '[b]'",
+            "      Lexer.Read: 'z', Consumed: 1",
+            "      FAIL | Token: found 'z', wanted 'a'",
+            "      Lexer.Read: 'z', Consumed: 1",
+            "      FAIL | Token: found 'z', wanted 'b'",
             "   FAIL | Or: \"expected ab\""
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
