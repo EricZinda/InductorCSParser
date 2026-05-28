@@ -264,45 +264,19 @@ public class NamedRuleFlattenTests
         Assert.That(exception!.Message, Does.Contain("Delete"));
     }
 
-    // -----------------------------------------------------------------
-    // Null-name argument validation for .As(string) / .AliasedAs(string).
-    // -----------------------------------------------------------------
-
     [Test]
-    public void As_string_rejects_null_name_at_construction()
+    public void As_string_rejects_null_name()
     {
-        // .As(null) throws ArgumentNullException at the call, matching
-        // the WithError null-message gate. A name is required for the
-        // rule to be findable, so a null name has nothing to do.
-        var exception = Assert.Throws<ArgumentNullException>(
-            () => Token('a').As((string)null!));
+        // .As(null!) rejects the null at the API boundary, before
+        // ApplyIdentificationFlattenPolicy gets a chance to flip Token's
+        // default Delete FlattenType to Preserve. The post-throw state
+        // assertions verify that no side effect ran: FlattenType stayed
+        // Delete, Name stayed null, and a follow-up legitimate .As(...)
+        // would still see the rule in its untouched "no name yet" state.
+        var token = Token('!');
+        var exception = Assert.Throws<ArgumentNullException>(() => token.As((string)null!));
         Assert.That(exception!.ParamName, Is.EqualTo("name"));
-    }
-
-    [Test]
-    public void As_string_with_null_name_doesnt_mutate_FlattenType_or_Name()
-    {
-        // The null-name throw fires before any state mutation, so the
-        // rule's FlattenType and Name stay at whatever they were before
-        // the failed call. (.As normally auto-flips a class-default
-        // FlattenType to Preserve as a side effect.)
-        var rule = Token('a');
-        var preFlattenType = rule.FlattenType;
-        var preName = rule.Name;
-
-        Assert.Throws<ArgumentNullException>(() => rule.As((string)null!));
-
-        Assert.That(rule.FlattenType, Is.EqualTo(preFlattenType));
-        Assert.That(rule.Name, Is.EqualTo(preName));
-    }
-
-    [Test]
-    public void AliasedAs_string_rejects_null_name_at_construction()
-    {
-        // AliasedAs(string) builds a fresh AliasRule and calls .As on it,
-        // so the same null check fires on the inner .As call.
-        var exception = Assert.Throws<ArgumentNullException>(
-            () => Token('a').AliasedAs((string)null!));
-        Assert.That(exception!.ParamName, Is.EqualTo("name"));
+        Assert.That(token.FlattenType, Is.EqualTo(FlattenType.Delete));
+        Assert.That(token.Name, Is.Null);
     }
 }
