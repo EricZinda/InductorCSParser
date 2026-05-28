@@ -1202,9 +1202,8 @@ public abstract class Rule
                 // non-null Symbol, and every non-commit exit (failure
                 // return, a thrown exception, a tripped budget) rolls
                 // back through the `using`. The transaction opens inside
-                // this `try`, after EnterRuleBudgetChecks, so an
-                // EnterRuleBudgetChecks depth-limit throw can't leak a
-                // transaction.
+                // this `try`, after Budget.EnterRule, so a depth-limit
+                // throw from EnterRule can't leak a transaction.
                 using var transaction = lexer.BeginTransaction();
                 result = TryParseRule(lexer, transaction.StartPosition, effectiveFlattenType, outputSymbols);
                 if (result != null)

@@ -121,10 +121,10 @@ public static class StateMachineParser
         Lexer lexer = RentLexer(parseInput, options);
 
         // Configure budgets / debug flags on the lexer so
-        // EnterRuleAtDepthBudgetChecks (called from Step_Call /
+        // Budget.EnterRuleAtDepth (called from Step_Call /
         // Step_CallSuppressOutputs) and BridgeToRecursive (which
-        // delegates back to Rule.TryParse and calls
-        // EnterRuleBudgetChecks itself) see the same options the recursive
+        // delegates back to Rule.TryParse and calls Budget.EnterRule
+        // itself) see the same options the recursive
         // evaluator would. RuleCountLimit / MaxDepth / Timeout /
         // Cancellation trip the same ParseBudgetExceeded the recursive
         // engine throws and we translate it into ParseResult.Aborted
