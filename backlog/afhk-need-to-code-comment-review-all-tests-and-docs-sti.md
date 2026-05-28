@@ -5,6 +5,7 @@ Compatability/*
 Lexing/
     GraphemeClusterIndex.cs
 	Lexer.cs
+	Lexer.Failures.cs
 
 SyntaxTree/
     FlattenType.cs

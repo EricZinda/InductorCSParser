@@ -96,6 +96,24 @@ public class OrRuleTests
     }
 
     [Test]
+    public void Or_rejects_null_child_rule()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => Or(Token('a'), null!));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("children"));
+        Assert.That(exception.Message, Does.Contain("index 1"));
+    }
+
+    [Test]
+    public void Or_rejects_empty_child_list()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => Or());
+
+        Assert.That(exception!.ParamName, Is.EqualTo("children"));
+        Assert.That(exception.Message, Does.Contain("at least one child"));
+    }
+
+    [Test]
     [RecursiveEngineOnly]
     public void Or_trace_success_produces_expected_output()
     {

@@ -70,6 +70,24 @@ public class AndRuleTests
     }
 
     [Test]
+    public void And_rejects_null_child_rule()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => And(Token('a'), null!));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("children"));
+        Assert.That(exception.Message, Does.Contain("index 1"));
+    }
+
+    [Test]
+    public void And_rejects_empty_child_list()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => And());
+
+        Assert.That(exception!.ParamName, Is.EqualTo("children"));
+        Assert.That(exception.Message, Does.Contain("at least one child"));
+    }
+
+    [Test]
     [RecursiveEngineOnly]
     public void And_trace_success_produces_expected_output()
     {

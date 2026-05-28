@@ -43,9 +43,9 @@ public sealed class AliasRule : Rule
 {
     private readonly Rule _inner;
 
-    public AliasRule(Rule inner) : base(FlattenType.Flatten, inner)
+    public AliasRule(Rule inner)
+        : base(FlattenType.Flatten, inner ?? throw new ArgumentNullException(nameof(inner)))
     {
-        if (inner == null) throw new ArgumentNullException(nameof(inner));
         _inner = inner;
     }
 

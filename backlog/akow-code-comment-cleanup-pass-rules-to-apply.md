@@ -117,7 +117,7 @@ Rules to apply
 
 5. [P3] No state-machine mentions in production code under src/InductorParser/.
    When a comment must explain code that exists for the experimental
-   evaluator (EnterRuleAtDepth, TickPeriodicBudget, the Lowering*
+   evaluator (EnterRuleAtDepth, TickPeriodic, the Lowering*
    accessors, ResetForReuse pooling), describe it generically: "an
    alternative evaluator", "a pooled Lexer". Never name "the state machine",
    "SM", "the lowering pass", or SM-internal concepts (Machine.CallTop,

@@ -134,10 +134,10 @@ public abstract class Rule
     // any depth (and loses only to a deeper forced failure).
     protected internal bool ErrorForced => _errorForced;
 
-    protected Rule(FlattenType defaultFlatten, params Rule[] children)
+    protected Rule(FlattenType defaultFlatten, params Rule[]? children)
     {
         FlattenType = defaultFlatten;
-        Children = children.Length > 0 ? children : NoChildren;
+        Children = ValidateChildren(children);
         _ruleTraceName = DeriveRuleTraceName(GetType());
     }
 
@@ -274,7 +274,21 @@ public abstract class Rule
     protected void SetChildren(params Rule[] children)
     {
         ThrowIfSealed();
-        Children = children.Length > 0 ? children : NoChildren;
+        Children = ValidateChildren(children);
+    }
+
+    private static IReadOnlyList<Rule> ValidateChildren(Rule[]? children)
+    {
+        if (children == null)
+            throw new ArgumentException("Rule children array must not be null.", nameof(children));
+
+        for (int i = 0; i < children.Length; i++)
+        {
+            if (children[i] == null)
+                throw new ArgumentException($"Rule child at index {i} is null.", nameof(children));
+        }
+
+        return children.Length > 0 ? children : NoChildren;
     }
 
     // Replace this rule's trace label. Intended for use only from subclass
@@ -595,6 +609,7 @@ public abstract class Rule
     // silently do nothing).
     public virtual Rule WithError(string errorMessage, bool forced = false)
     {
+        if (errorMessage == null) throw new ArgumentNullException(nameof(errorMessage));
         ThrowIfSealed();
         if (_errorMessage != null)
             throw new InvalidOperationException(
@@ -916,6 +931,9 @@ public abstract class Rule
     // always hits ParseRecursive regardless of the flag.
     public ParseResult Parse(string input, ParseOptions options)
     {
+        if (input == null) throw new ArgumentNullException(nameof(input));
+        if (options == null) throw new ArgumentNullException(nameof(options));
+
         // The in-loop budget check fires every 1024 rule invocations,
         // so a parse smaller than that would silently drop a
         // pre-canceled signal. Pre-flight it here.
@@ -1222,9 +1240,8 @@ public abstract class Rule
                 // non-null Symbol, and every non-commit exit (failure
                 // return, a thrown exception, a tripped budget) rolls
                 // back through the `using`. The transaction opens inside
-                // this `try`, after EnterRuleBudgetChecks, so an
-                // EnterRuleBudgetChecks depth-limit throw can't leak a
-                // transaction.
+                // this `try`, after Budget.EnterRule, so a depth-limit
+                // throw from EnterRule can't leak a transaction.
                 using var transaction = lexer.BeginTransaction();
                 result = TryParseRule(lexer, transaction.StartPosition, effectiveFlattenType, outputSymbols);
                 if (result != null)
