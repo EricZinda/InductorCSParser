@@ -289,7 +289,7 @@ public class BudgetTests
         // cluster with thousands of combining marks would crash the
         // process with StackOverflowException, which .NET can't catch.
         //
-        // The sub-lexer delegates EnterRuleBudgetChecks/ExitRuleBudgetChecks to the outer, so
+        // The sub-lexer's budget delegates EnterRule/ExitRule to the outer, so
         // MaxDepth covers the COMBINED outer-plus-inner depth rather
         // than letting the inner spend a fresh MaxDepth on top of the
         // outer's depth. This test uses a small enough cluster to stay
@@ -318,7 +318,7 @@ public class BudgetTests
     [Test]
     public void WithinToken_inner_depth_combines_with_outer_depth()
     {
-        // The sub-lexer delegates EnterRuleBudgetChecks/ExitRuleBudgetChecks to the outer, so
+        // The sub-lexer's budget delegates EnterRule/ExitRule to the outer, so
         // the inner's recursion stacks on top of the outer's CURRENT
         // depth at the moment WithinToken fires. MaxDepth covers the
         // combined outer + inner depth, not "a fresh MaxDepth for the
