@@ -18,12 +18,13 @@ internal sealed class OneOfRule : Rule
     private TokenSet _set;
 
     // Pre-rendered "[A-Z,a-z]" form of the set, computed once at
-    // construction. Trace lines reference this instead of the TokenSet
-    // directly so we don't re-render the same string on every traced
-    // match. The TokenSet is immutable, so the rendering is too.
-    // Worth caching because tracing is intended to be usable while
-    // iterating on a grammar, not just for one-off debug runs.
-    private readonly string _setRendered;
+    // construction and refreshed by CollectNormalizationOffenders when
+    // Compile's normalization pass mutates _set. Trace lines reference
+    // this instead of the TokenSet directly so we don't re-render the
+    // same string on every traced match. Worth caching because tracing
+    // is intended to be usable while iterating on a grammar, not just
+    // for one-off debug runs.
+    private string _setRendered;
 
     public OneOfRule(TokenSet runeSet) : base(FlattenType.Preserve)
     {
@@ -46,6 +47,14 @@ internal sealed class OneOfRule : Rule
         List<ArgumentException> failures)
     {
         NormalizeAndValidate(this, ref _set, form, offenders);
+        // The constructor already wrote _setRendered from the user-typed
+        // entries, which is the right answer for a Compile(null) parse
+        // (no projection runs, _set keeps the typed shape). This pass
+        // rewrites _set onto the lexer-normalized form (canonical
+        // singletons substituted, precomposed runes possibly decomposed
+        // to multi-rune clusters), so the rendering has to follow or
+        // the trace shows entries the rule no longer matches.
+        _setRendered = _set.ToString();
     }
 
     // Re-project every TokenSet entry under the grammar's chosen Unicode

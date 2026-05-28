@@ -127,6 +127,29 @@ public class NoneOfRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
+    public void NoneOf_trace_set_rendering_refreshes_after_Compile_projects_the_set()
+    {
+        // Same shape as OneOf: the constructor cached the set's
+        // rendering, Compile's normalization pass mutates _set onto
+        // the lexer-normalized form (U+212A KELVIN -> U+004B 'K'
+        // under FormC), and the cache used to keep the pre-projection
+        // entry. NoneOf fails when the token IS in the set, so this
+        // exercises the FAIL trace path.
+        var sink = NewSink();
+        // KelvinGrapheme is U+212A wrapped in Canary so an editor
+        // can't silently swap it for ASCII 'K'. Parse input is real
+        // ASCII 'K', which IS in the projected set after Compile.
+        NoneOf(KelvinGrapheme).Parse("K", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   Lexer.Read: 'K', Consumed: 1",
+            "   FAIL | NoneOf: found 'K', wanted one not in '[K]'"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
     public void Sealed_NoneOf_rejects_Flatten()
     {
         var rule = NoneOf("abc");

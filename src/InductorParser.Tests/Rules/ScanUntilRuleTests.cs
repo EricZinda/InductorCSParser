@@ -1187,4 +1187,32 @@ public class ScanUntilRuleTests
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("abc"));
     }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void ScanUntil_trace_stopper_rendering_refreshes_after_Compile_projects_the_set()
+    {
+        // Same shape as OneOf: the constructor cached the stopper
+        // set's rendering, Compile's normalization pass mutates
+        // _stopperSet onto the lexer-normalized form (U+212A KELVIN
+        // -> U+004B 'K' under FormC), and the cache used to keep the
+        // pre-projection entry. ScanUntil's success trace quotes the
+        // stopper rendering, so this exercises the SUCC trace path.
+        var sink = TraceTestHelpers.NewSink();
+        // KelvinGrapheme is U+212A wrapped in Canary so an editor
+        // can't silently swap it for ASCII 'K'. The parse input has
+        // no 'K', so ScanUntil consumes "ab" and stops at EOF, and
+        // the success trace renders the projected stopper set.
+        ScanUntil(TokenSet.Runes(KelvinGrapheme), eofIsTerminator: true)
+            .Parse("ab", new ParseOptions { TraceSink = sink });
+
+        Assert.That(sink.ToString(), Does.Contain("stopper '[K]'"),
+            "ScanUntil's success trace should render the stopper set in "
+            + "its post-Compile form: under FormC, U+212A canonicalizes "
+            + "to U+004B 'K', so the cached rendering has to refresh "
+            + "from '[U+212A]' to '[K]' or a grammar author reading "
+            + "the trace sees a different set than the rule matches.");
+        Assert.That(sink.ToString(), Does.Not.Contain("U+212A"),
+            "the stale pre-projection rendering must not leak into the trace");
+    }
 }

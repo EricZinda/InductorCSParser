@@ -115,6 +115,34 @@ public class OneOfRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
+    public void OneOf_trace_set_rendering_refreshes_after_Compile_projects_the_set()
+    {
+        // OneOfRule cached the set's rendering at construction
+        // (_setRendered = set.ToString()), but Compile's normalization
+        // pass mutates _set onto the lexer-normalized form. U+212A
+        // KELVIN SIGN is a canonical singleton that substitutes to
+        // U+004B 'K' under FormC, so a OneOf("KELVIN") rule's _set
+        // changes from one entry at 0x212A to one entry at 0x004B
+        // after Compile. Without refreshing the cache, the trace
+        // showed "wanted one of '[U+212A]'" while the rule was
+        // actually matching 'K'. Re-rendering the set after the
+        // projection keeps the trace faithful to what the rule
+        // matches at parse time.
+        var sink = NewSink();
+        // KelvinGrapheme is U+212A wrapped in Canary so an editor
+        // can't silently swap it for ASCII 'K'. Parse input is real
+        // ASCII 'K', matching the projected entry post-Compile.
+        OneOf(KelvinGrapheme).Parse("K", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   Lexer.Read: 'K', Consumed: 1",
+            "   SUCC | OneOf: found 'K', wanted one of '[K]'"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
     public void Sealed_OneOf_rejects_Flatten()
     {
         var rule = OneOf("abc");
