@@ -165,4 +165,20 @@ public class WithErrorTests
         Assert.That(exception.Message, Does.Contain("need letters"));
         Assert.That(exception.Message, Does.Contain("set-once"));
     }
+
+    [Test]
+    public void WithError_rejects_null_message()
+    {
+        // .WithError(null!, forced: true) rejects the null at the API
+        // boundary, before any field write. The follow-up assertion
+        // verifies that no sibling state mutated: a subsequent legitimate
+        // .WithError("real", forced: true) call passes the set-once check
+        // and records both the message and the forced flag, because the
+        // null-first call left _errorMessage and _errorForced untouched.
+        var rule = OneOrMore(OneOf(TokenSet.Letters));
+        var exception = Assert.Throws<ArgumentNullException>(
+            () => rule.WithError(null!, forced: true));
+        Assert.That(exception!.ParamName, Is.EqualTo("errorMessage"));
+        Assert.DoesNotThrow(() => rule.WithError("need letters", forced: true));
+    }
 }

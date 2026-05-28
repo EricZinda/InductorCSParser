@@ -355,6 +355,13 @@ public abstract class Rule
     // previous call set.
     public virtual Rule As(string name)
     {
+        // Null check runs before every state mutation: ThrowIfSealed,
+        // the Name != null set-once check, and the FlattenType auto-flip
+        // in ApplyIdentificationFlattenPolicy. Without it, .As(null!) on
+        // a rule whose Name is still null would skip the set-once check,
+        // silently flip FlattenType to Preserve, leave Name unset, and
+        // let a later legitimate .As(...) still succeed.
+        if (name == null) throw new ArgumentNullException(nameof(name));
         ThrowIfSealed();
         if (Name != null)
             throw new InvalidOperationException(
@@ -609,6 +616,13 @@ public abstract class Rule
     // silently do nothing).
     public virtual Rule WithError(string errorMessage, bool forced = false)
     {
+        // Null check runs before every state mutation: ThrowIfSealed,
+        // the _errorMessage != null set-once check, and the field writes.
+        // Without it, .WithError(null!, forced: true) would skip the
+        // set-once check, write _errorForced without writing a message,
+        // and let a later legitimate .WithError(...) still succeed,
+        // silently overwriting the forced flag the first call asked for.
+        if (errorMessage == null) throw new ArgumentNullException(nameof(errorMessage));
         ThrowIfSealed();
         if (_errorMessage != null)
             throw new InvalidOperationException(
