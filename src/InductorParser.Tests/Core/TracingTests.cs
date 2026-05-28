@@ -68,6 +68,31 @@ public class TracingTests
 
     [Test]
     [RecursiveEngineOnly]
+    public void WithError_message_in_trace_escapes_control_chars()
+    {
+        // The user's .WithError text is appended to the FAIL trace body
+        // by Rule.AppendErrorMessage AFTER the interpolation handler
+        // runs, so the handler's auto-escape (which covers every $"..."
+        // hole in a rule's trace body) doesn't reach it. A control char
+        // in the user's message used to splice verbatim into the FAIL
+        // line and break the one-event-per-line layout. AppendErrorMessage
+        // routes the message through DisplayEscape.Escape for the trace
+        // path. The stored _errorMessage stays the user's exact text so
+        // ParseResult.ErrorMessage still shows it verbatim.
+        var sink = NewSink();
+        var rule = Token('a').WithError("line1\nline2");
+        rule.Parse("x", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   Lexer.Read: 'x', Consumed: 1",
+            "   FAIL | Token: found 'x', wanted 'a' \"line1U+000Aline2\"",
+            "   Lexer.RecordFailure: first named failure at char 0"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
     public void WithError_message_appears_in_quotes_after_trace_body_on_failure()
     {
         // .WithError() is the user-facing error message, not a rule

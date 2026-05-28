@@ -184,12 +184,22 @@ public abstract class Rule
     // detail to surface once all alternatives failed); without the
     // check, WriteTraceLine's own ": " plus the leading space in the
     // format string would render "Or:  \"...\"" with a double space.
+    //
+    // DisplayEscape.Escape rewrites Cc/Zl/Zp chars in the message to
+    // U+XXXX for the trace render. AppendErrorMessage runs after the
+    // TraceInterpolatedStringHandler builds `body`, so the handler's
+    // own auto-escape doesn't reach the WithError text. Without this
+    // a user's WithError("line1\nline2") would split the FAIL line.
+    // The stored _errorMessage stays the user's exact text so
+    // ParseResult.ErrorMessage still surfaces it verbatim for callers
+    // who want the literal multi-line message.
     private string AppendErrorMessage(string body)
     {
         if (_errorMessage == null) return body;
+        string escapedMessage = DisplayEscape.Escape(_errorMessage, 0, _errorMessage.Length);
         return body.Length > 0
-            ? $"{body} \"{_errorMessage}\""
-            : $"\"{_errorMessage}\"";
+            ? $"{body} \"{escapedMessage}\""
+            : $"\"{escapedMessage}\"";
     }
 
     // Short-form trace helpers called from a rule's TryParse on the
