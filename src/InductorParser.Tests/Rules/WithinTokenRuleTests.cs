@@ -584,4 +584,27 @@ public class WithinTokenRuleTests
         Assert.That(result.ErrorMessage, Is.EqualTo("expected ex"));
     }
 
+    [Test]
+    public void Named_inner_WithError_surfaces_when_WithinToken_fails_on_prefix_consume()
+    {
+        // Same shape as the forced variant above, but the inner .WithError
+        // is a plain (named) hint rather than forced. The transfer in the
+        // prefix-consume branch preserves whatever forced flag the inner
+        // message had, so a non-forced hint flows through the same code
+        // path and lands in the outer lexer's named slot. Without the
+        // transfer, a named inner hint is just as silently dropped as a
+        // forced one when a fallback alternative shaves off a prefix of
+        // the outer cluster.
+        var inner = Or(
+            Literal("ex").WithError("expected ex"),
+            AnyToken());
+        var rule = WithinToken(inner);
+        rule.Compile(null);
+
+        var result = rule.Parse(LatinEAcuteGrapheme);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected ex"));
+    }
+
 }

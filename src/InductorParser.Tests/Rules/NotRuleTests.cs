@@ -16,6 +16,14 @@ public class NotRuleTests
     private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
     [Test]
+    public void Not_factory_rejects_null_inner()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() => Not(null!));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("inner"));
+    }
+
+    [Test]
     public void Not_succeeds_when_inner_fails_and_consumes_no_input()
     {
         // Not(Token('a')) on "b": Token('a') fails, Not succeeds and leaves

@@ -36,6 +36,14 @@ public class AliasRuleTests
     }
 
     [Test]
+    public void Alias_factory_rejects_null_inner()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() => Alias(null!));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("inner"));
+    }
+
+    [Test]
     public void AliasedAs_sets_name_on_alias_only()
     {
         var inner = OneOrMore(OneOf(TokenSet.Digits));

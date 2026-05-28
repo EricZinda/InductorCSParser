@@ -133,6 +133,23 @@ public class SymbolExtensionsTests
     }
 
     [Test]
+    public void PrintTree_renders_long_form_when_user_name_matches_rune_text()
+    {
+        // Edge case the old "charName != runeText" string-compare hack
+        // couldn't distinguish from an anonymous rune leaf: a user who
+        // explicitly named the rule to the rune's own text. Routing
+        // through Rule.UserNameOf instead reads the user-supplied flag
+        // directly, so the long `name: "text"` form fires the moment
+        // .As(...) is on the rule, regardless of which string the name
+        // happens to be.
+        var rule = Token('a').As("a");
+        var result = rule.Parse("a");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.PrintTree(rule), Is.EqualTo("a: \"a\"\n"));
+    }
+
+    [Test]
     public void PrintTree_escapes_line_separator_rune_in_short_form()
     {
         // U+2028 LINE SEPARATOR is in Unicode category Zl, not Cc, so a
