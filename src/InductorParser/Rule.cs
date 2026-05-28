@@ -355,6 +355,7 @@ public abstract class Rule
     // previous call set.
     public virtual Rule As(string name)
     {
+        if (name == null) throw new ArgumentNullException(nameof(name));
         ThrowIfSealed();
         if (Name != null)
             throw new InvalidOperationException(
