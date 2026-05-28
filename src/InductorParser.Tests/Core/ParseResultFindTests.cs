@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using NUnit.Framework;
 using InductorParser;
@@ -112,5 +113,39 @@ public class ParseResultFindTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.FindAll(word).ToArray(), Is.Empty);
+    }
+
+    [Test]
+    public void Find_rejects_null_rule()
+    {
+        // Find(Rule rule) rejects a null rule with ArgumentNullException,
+        // matching the public API shape used by Rule.Parse / Rule.As /
+        // Rule.WithError. Without the null check, the forwarding body
+        // `Find(rule.Id)` would dereference rule.Id and throw a raw
+        // NullReferenceException instead.
+        var word = OneOrMore(OneOf(TokenSet.Ascii.Letters)).As("word").Flatten(FlattenType.Preserve);
+        var rule = And(word, Eof());
+        rule.Compile();
+        var result = rule.Parse("ab");
+
+        var exception = Assert.Throws<ArgumentNullException>(() => result.Find((Rule)null!));
+        Assert.That(exception!.ParamName, Is.EqualTo("rule"));
+    }
+
+    [Test]
+    public void FindAll_rejects_null_rule()
+    {
+        // FindAll(Rule rule) rejects a null rule with ArgumentNullException.
+        // FindAll(SymbolId) is iterator-bodied, but the public Rule overload
+        // is a regular method whose forwarding expression `FindAll(rule.Id)`
+        // would evaluate rule.Id eagerly. The exception fires immediately on
+        // the call rather than at first enumeration.
+        var word = OneOrMore(OneOf(TokenSet.Ascii.Letters)).As("word").Flatten(FlattenType.Preserve);
+        var rule = And(word, Eof());
+        rule.Compile();
+        var result = rule.Parse("ab");
+
+        var exception = Assert.Throws<ArgumentNullException>(() => result.FindAll((Rule)null!));
+        Assert.That(exception!.ParamName, Is.EqualTo("rule"));
     }
 }
