@@ -166,4 +166,41 @@ public class SymbolExtensionsTests
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.PrintTree(rule), Is.EqualTo("'U+2028'\n"));
     }
+
+    [Test]
+    public void PrintTree_escapes_control_character_in_named_leaf_long_form()
+    {
+        // A `.As("nl")` on a Token('\n') routes the leaf through the
+        // long-form `name: "text"` branch instead of the compact `'c'`
+        // branch. The matched text is "\n" and goes into the rendered
+        // line as the quoted span, so the LF splits the line in two
+        // unless the long form runs the same Cc / Zl / Zp escape the
+        // short form already does.
+        var rule = Token('\n').As("nl");
+        var result = rule.Parse("\n");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.PrintTree(rule), Is.EqualTo("nl: \"U+000A\"\n"));
+    }
+
+    [Test]
+    public void PrintTree_escapes_control_character_in_composite_long_form()
+    {
+        // A composite Symbol's ToString concatenates its leaves' matched
+        // text. When that text spans a control or line-separator char,
+        // the long-form `name: "text"` line carries the raw char into
+        // the output and the layout collapses, even though the child
+        // leaves themselves render correctly (the short-form fix from
+        // 2026-05-27 escapes the LF child leaf).
+        var body = OneOrMore(AnyToken()).As("body");
+        var result = body.Parse("a\nb");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        string expected =
+            "body: \"aU+000Ab\"\n" +
+            "  'a'\n" +
+            "  'U+000A'\n" +
+            "  'b'\n";
+        Assert.That(result.Tree!.PrintTree(body), Is.EqualTo(expected));
+    }
 }
