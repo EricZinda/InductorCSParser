@@ -515,14 +515,9 @@ public static class Rules
     /// start of the sequence.
     /// </remarks>
     /// <exception cref="ArgumentException">
-    /// <paramref name="children"/> is null or empty.
+    /// <paramref name="children"/> is null, empty, or contains a null child.
     /// </exception>
-    public static Rule And(params Rule[] children)
-    {
-        if (children == null || children.Length == 0)
-            throw new ArgumentException("And requires at least one child rule.", nameof(children));
-        return new AndRule(children);
-    }
+    public static Rule And(params Rule[] children) => new AndRule(children);
 
     /// <summary>
     /// Ordered choice: try each child left-to-right and commit to
@@ -535,14 +530,9 @@ public static class Rules
     /// child fails.
     /// </remarks>
     /// <exception cref="ArgumentException">
-    /// <paramref name="children"/> is null or empty.
+    /// <paramref name="children"/> is null, empty, or contains a null child.
     /// </exception>
-    public static Rule Or(params Rule[] children)
-    {
-        if (children == null || children.Length == 0)
-            throw new ArgumentException("Or requires at least one child rule.", nameof(children));
-        return new OrRule(children);
-    }
+    public static Rule Or(params Rule[] children) => new OrRule(children);
 
     /// <summary>
     /// Match <paramref name="inner"/> between

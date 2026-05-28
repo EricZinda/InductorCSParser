@@ -23,9 +23,9 @@ internal sealed class NotRule : Rule
     // contributes no text to the parse tree. Delete ensures the empty
     // Symbol disappears during FlattenInto so it doesn't leave a marker
     // node in the syntax tree.
-    public NotRule(Rule inner) : base(FlattenType.Delete, inner)
+    public NotRule(Rule inner)
+        : base(FlattenType.Delete, inner ?? throw new ArgumentNullException(nameof(inner)))
     {
-        if (inner == null) throw new ArgumentNullException(nameof(inner));
     }
 
     private Rule Inner => Children[0];

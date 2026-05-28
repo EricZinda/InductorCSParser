@@ -165,10 +165,8 @@ internal sealed class ScanUntilRule : Rule
     // TokenSet.Contains plus one int equality on non-stopper runes.
     // Covers JSON, C, C++ regular, Python single-line.
     public ScanUntilRule(TokenSet stopAt, Rune escapeStart, Rule escapeEnd, bool eofIsTerminator = false)
-        : base(FlattenType.Preserve, escapeEnd)
+        : base(FlattenType.Preserve, escapeEnd ?? throw new ArgumentNullException(nameof(escapeEnd)))
     {
-        if (escapeEnd == null)
-            throw new ArgumentNullException(nameof(escapeEnd));
         _stopperSet = stopAt;
         _stopperRule = null;
         _stopperRendered = stopAt.ToString();
@@ -183,12 +181,11 @@ internal sealed class ScanUntilRule : Rule
     // runes only. Use for multi-rune starts like $$ or a choice
     // across several starts.
     public ScanUntilRule(TokenSet stopAt, Rule escapeStart, Rule escapeEnd, bool eofIsTerminator = false)
-        : base(FlattenType.Preserve, escapeStart, escapeEnd)
+        : base(
+            FlattenType.Preserve,
+            escapeStart ?? throw new ArgumentNullException(nameof(escapeStart)),
+            escapeEnd ?? throw new ArgumentNullException(nameof(escapeEnd)))
     {
-        if (escapeStart == null)
-            throw new ArgumentNullException(nameof(escapeStart));
-        if (escapeEnd == null)
-            throw new ArgumentNullException(nameof(escapeEnd));
         _stopperSet = stopAt;
         _stopperRule = null;
         _stopperRendered = stopAt.ToString();
@@ -203,10 +200,8 @@ internal sealed class ScanUntilRule : Rule
     // the stopper (peek transaction, never consumed). Use for
     // multi-rune boundaries like C++ raw strings.
     public ScanUntilRule(Rule stopAt, bool eofIsTerminator = false)
-        : base(FlattenType.Preserve, stopAt)
+        : base(FlattenType.Preserve, stopAt ?? throw new ArgumentNullException(nameof(stopAt)))
     {
-        if (stopAt == null)
-            throw new ArgumentNullException(nameof(stopAt));
         _stopperSet = default;
         _stopperRule = stopAt;
         _stopperRendered = $"rule {stopAt.Name ?? stopAt.GetType().Name}";
@@ -220,12 +215,11 @@ internal sealed class ScanUntilRule : Rule
     // General stopper with single-rune escape start. Canonical use:
     // Python triple-quote """...""" with backslash escapes.
     public ScanUntilRule(Rule stopAt, Rune escapeStart, Rule escapeEnd, bool eofIsTerminator = false)
-        : base(FlattenType.Preserve, stopAt, escapeEnd)
+        : base(
+            FlattenType.Preserve,
+            stopAt ?? throw new ArgumentNullException(nameof(stopAt)),
+            escapeEnd ?? throw new ArgumentNullException(nameof(escapeEnd)))
     {
-        if (stopAt == null)
-            throw new ArgumentNullException(nameof(stopAt));
-        if (escapeEnd == null)
-            throw new ArgumentNullException(nameof(escapeEnd));
         _stopperSet = default;
         _stopperRule = stopAt;
         _stopperRendered = $"rule {stopAt.Name ?? stopAt.GetType().Name}";
