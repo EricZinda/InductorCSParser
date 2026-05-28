@@ -134,10 +134,10 @@ public abstract class Rule
     // any depth (and loses only to a deeper forced failure).
     protected internal bool ErrorForced => _errorForced;
 
-    protected Rule(FlattenType defaultFlatten, params Rule[] children)
+    protected Rule(FlattenType defaultFlatten, params Rule[]? children)
     {
         FlattenType = defaultFlatten;
-        Children = children.Length > 0 ? children : NoChildren;
+        Children = ValidateChildren(children);
         _ruleTraceName = DeriveRuleTraceName(GetType());
     }
 
@@ -274,7 +274,21 @@ public abstract class Rule
     protected void SetChildren(params Rule[] children)
     {
         ThrowIfSealed();
-        Children = children.Length > 0 ? children : NoChildren;
+        Children = ValidateChildren(children);
+    }
+
+    private static IReadOnlyList<Rule> ValidateChildren(Rule[]? children)
+    {
+        if (children == null)
+            throw new ArgumentException("Rule children array must not be null.", nameof(children));
+
+        for (int i = 0; i < children.Length; i++)
+        {
+            if (children[i] == null)
+                throw new ArgumentException($"Rule child at index {i} is null.", nameof(children));
+        }
+
+        return children.Length > 0 ? children : NoChildren;
     }
 
     // Replace this rule's trace label. Intended for use only from subclass

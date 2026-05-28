@@ -10,7 +10,15 @@ namespace InductorParser;
 // lexer rolls back to where the And started.
 internal sealed class AndRule : Rule
 {
-    public AndRule(Rule[] children) : base(FlattenType.Flatten, children) { }
+    public AndRule(Rule[]? children) : base(FlattenType.Flatten, RequireChildren(children)) { }
+
+    private static Rule[] RequireChildren(Rule[]? children)
+    {
+        if (children == null || children.Length == 0)
+            throw new ArgumentException("And requires at least one child rule.", nameof(children));
+
+        return children;
+    }
 
     internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {

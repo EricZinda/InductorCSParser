@@ -39,6 +39,29 @@ public class ScanUntilRuleTests
     }
 
     [Test]
+    public void ScanUntil_factories_reject_null_rule_arguments()
+    {
+        Assert.That(
+            Assert.Throws<ArgumentNullException>(() => ScanUntil((Rule)null!))!.ParamName,
+            Is.EqualTo("stopAt"));
+        Assert.That(
+            Assert.Throws<ArgumentNullException>(() => ScanUntil(TokenSet.Runes("|"), new Rune('\\'), null!))!.ParamName,
+            Is.EqualTo("escapeEnd"));
+        Assert.That(
+            Assert.Throws<ArgumentNullException>(() => ScanUntil(TokenSet.Runes("|"), (Rule)null!, Token('x')))!.ParamName,
+            Is.EqualTo("escapeStart"));
+        Assert.That(
+            Assert.Throws<ArgumentNullException>(() => ScanUntil(TokenSet.Runes("|"), Token('\\'), null!))!.ParamName,
+            Is.EqualTo("escapeEnd"));
+        Assert.That(
+            Assert.Throws<ArgumentNullException>(() => ScanUntil((Rule)null!, new Rune('\\'), Token('x')))!.ParamName,
+            Is.EqualTo("stopAt"));
+        Assert.That(
+            Assert.Throws<ArgumentNullException>(() => ScanUntil(Token('|'), new Rune('\\'), null!))!.ParamName,
+            Is.EqualTo("escapeEnd"));
+    }
+
+    [Test]
     public void ScanUntil_with_precomposed_stopper_set_stops_at_decomposed_input_under_FormD()
     {
         // Stopper set: precomposed U+00E9. Under FormD the lexer
