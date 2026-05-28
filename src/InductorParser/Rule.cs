@@ -896,6 +896,9 @@ public abstract class Rule
     // always hits ParseRecursive regardless of the flag.
     public ParseResult Parse(string input, ParseOptions options)
     {
+        if (input == null) throw new ArgumentNullException(nameof(input));
+        if (options == null) throw new ArgumentNullException(nameof(options));
+
         // The in-loop budget check fires every 1024 rule invocations,
         // so a parse smaller than that would silently drop a
         // pre-canceled signal. Pre-flight it here.
