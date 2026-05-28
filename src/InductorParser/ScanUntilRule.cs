@@ -19,7 +19,7 @@ namespace InductorParser;
 //
 // There are two options for the string body stop condition:
 //   * TokenSet stopAt (fast path): stop when the next rune is in the
-//     set. Only does one TokenSet.Contains per rune and handles any grammar whose
+//     set. Only does one TokenSet.ContainsRune per rune and handles any grammar whose
 //     closing boundary is a single rune: JSON ", Python ' or ", C# $"..."
 //     closing, etc.
 //   * Rule stopAt (general path): stop when a user-supplied rule
@@ -136,7 +136,7 @@ internal sealed class ScanUntilRule : Rule
     // rolls the lexer back to where ScanUntil opened.
     private readonly Rule? _escapeEnd;
 
-    // FAST PATH, no escape. Per rune: one TokenSet.Contains.
+    // FAST PATH, no escape. Per rune: one TokenSet.ContainsRune.
     public ScanUntilRule(TokenSet stopAt, bool eofIsTerminator = false)
         : base(FlattenType.Preserve)
     {
@@ -162,7 +162,7 @@ internal sealed class ScanUntilRule : Rule
     internal bool LoweringEofIsTerminator => _eofIsTerminator;
 
     // FAST PATH, single-rune escape start. Per rune: one
-    // TokenSet.Contains plus one int equality on non-stopper runes.
+    // TokenSet.ContainsRune plus one int equality on non-stopper runes.
     // Covers JSON, C, C++ regular, Python single-line.
     public ScanUntilRule(TokenSet stopAt, Rune escapeStart, Rule escapeEnd, bool eofIsTerminator = false)
         : base(FlattenType.Preserve, escapeEnd)

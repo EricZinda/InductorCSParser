@@ -68,10 +68,15 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         _multiRuneGraphemes = multiRuneGraphemes ?? Array.Empty<string>();
     }
 
-    // True when the set has any multi-rune grapheme members. Rules that
-    // need to choose between the rune fast path and the grapheme-aware
-    // path branch on this once at parse-time entry, not per-token.
-    internal bool HasMultiRuneGraphemes =>
+    /// <summary>
+    /// True when this set has any multi-rune grapheme members
+    /// (e.g. CRLF, a skin-toned emoji, a ZWJ family).
+    /// </summary>
+    /// <remarks>
+    /// Rules that need to choose between a rune-only fast path and a
+    /// grapheme-aware path branch on this once at entry, not per-token.
+    /// </remarks>
+    public bool HasMultiRuneGraphemes =>
         _multiRuneGraphemes != null && _multiRuneGraphemes.Length > 0;
 
     // The rune-only portion of this set. Used by rules that need to
@@ -121,7 +126,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     internal ReadOnlySpan<string> MultiRuneGraphemes =>
         _multiRuneGraphemes ?? Array.Empty<string>();
 
-    public bool Contains(int codepoint)
+    public bool ContainsRune(int codepoint)
     {
         var ranges = _ranges;
         if (ranges == null) return false;
@@ -133,10 +138,10 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return false;
     }
 
-    public bool Contains(char c) => Contains((int)c);
-    public bool Contains(Rune r) => Contains(r.Value);
+    public bool ContainsRune(char c) => ContainsRune((int)c);
+    public bool ContainsRune(Rune r) => ContainsRune(r.Value);
 
-    public bool Contains(string grapheme)
+    public bool ContainsToken(string grapheme)
     {
         if (grapheme == null) throw new ArgumentNullException(nameof(grapheme));
         return ContainsToken(grapheme.AsSpan());
@@ -158,9 +163,9 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     {
         if (grapheme.Length == 0) return false;
         if (grapheme.Length == 1 && char.IsSurrogate(grapheme[0]))
-            return Contains((int)grapheme[0]);
+            return ContainsRune((int)grapheme[0]);
         if (TrySingleRune(grapheme, out int runeValue))
-            return Contains(runeValue);
+            return ContainsRune(runeValue);
         // Cache to local + null-check, matching the Contains(int) shape.
         // default(TokenSet) (= TokenSet.Empty) leaves _multiRuneGraphemes
         // null because the field-coalescing constructor never ran on it.
