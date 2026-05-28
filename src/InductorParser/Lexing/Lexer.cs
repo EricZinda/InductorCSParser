@@ -286,12 +286,12 @@ public sealed partial class Lexer
         Invariant.That(len > 0, $"NextTokenLength returned <= 0 on a non-EOF read at position {_position} (endPosition {_endPosition}). Read would advance zero and loop.");
         Token t = new Token(_input, _position, len, isEof: false);
         _position += len;
-        // DisplayEscape.Escape keeps the trace line on one physical line
-        // when the token contains control / line-separator chars (CRLF,
-        // Token('\n').Preserve(), and so on). Off the hot path: only
-        // runs when the Trace handler's shouldAppend gate fires, so
-        // tracing-off parses pay nothing.
-        Trace(TraceLevel.Diagnostic, "Lexer.Read", TraceOutcome.Info, $"'{DisplayEscape.Escape(_input, t.Offset, t.Length)}', Consumed: {_position}");
+        // The token text is spliced raw here; TraceInterpolatedStringHandler
+        // routes every interpolation hole through DisplayEscape, so control /
+        // line-separator chars (CRLF, Token('\n').Preserve(), and so on) can't
+        // break this line apart. Keeping the escape in the handler instead of
+        // here means no trace caller has to remember it.
+        Trace(TraceLevel.Diagnostic, "Lexer.Read", TraceOutcome.Info, $"'{_input.Substring(t.Offset, t.Length)}', Consumed: {_position}");
         return t;
     }
 

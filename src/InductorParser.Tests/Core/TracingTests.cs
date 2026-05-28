@@ -139,6 +139,91 @@ public class TracingTests
 
     [Test]
     [RecursiveEngineOnly]
+    public void Rule_match_trace_escapes_control_chars_in_matched_token_text()
+    {
+        // Lexer.Read's own trace line now escapes control chars (see the
+        // test above), but every rule that matches a token ALSO emits its
+        // own "found '<token>'" line built from
+        // lexer.Input.Substring(token.Offset, token.Length). AnyToken is
+        // the simplest: it succeeds on any single token and quotes the
+        // matched text. For an LF token the raw splice dumps a literal
+        // newline into the middle of the SUCC line, splitting the
+        // one-event-per-line layout. The matched text must escape to
+        // U+XXXX the same way Lexer.Read does.
+        var sink = NewSink();
+        var rule = AnyToken();
+        rule.Parse("\n", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   Lexer.Read: 'U+000A', Consumed: 1",
+            "   SUCC | AnyToken: found 'U+000A'"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Rule_mismatch_trace_escapes_control_chars_in_matched_token_text()
+    {
+        // The failure path has the same leak: OneOf's "found '<token>',
+        // wanted one of '...'" line quotes the rejected token's raw text.
+        // A mechanical failure at char 0 records no Lexer.RecordFailure
+        // trace line (0 is not strictly past the initial deepest of 0), so
+        // the trace is just the Read line and the FAIL line. The rejected
+        // LF must escape to U+XXXX so the FAIL line stays one physical line.
+        var sink = NewSink();
+        var rule = OneOf(TokenSet.Ascii.Letters);
+        rule.Parse("\n", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   Lexer.Read: 'U+000A', Consumed: 1",
+            "   FAIL | OneOf: found 'U+000A', wanted one of '[A-Z,a-z]'"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Token_match_trace_escapes_control_chars_in_expected_literal()
+    {
+        // The other half of the leak is the rule's stored expected text:
+        // GraphemeRule's success line is "found '{_expected}'", and for
+        // Token('\n') that _expected is a raw LF. Preserve() keeps the
+        // match in the tree but the trace concern is independent of the
+        // flatten policy. The expected literal must escape to U+XXXX too.
+        var sink = NewSink();
+        var rule = Token('\n').Preserve();
+        rule.Parse("\n", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   Lexer.Read: 'U+000A', Consumed: 1",
+            "   SUCC | Token: found 'U+000A'"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void WithinToken_match_trace_escapes_control_chars_in_outer_token_text()
+    {
+        // WithinToken's success line quotes the outer token text via
+        // outerLexer.Input.AsSpan(token.Offset, token.Length), which
+        // renders the raw chars when interpolated. A single-rune LF token
+        // matched by the inner rule must escape to U+XXXX so the SUCC line
+        // stays one physical line.
+        var sink = NewSink();
+        var rule = WithinToken(AnyToken());
+        rule.Parse("\n", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   Lexer.Read: 'U+000A', Consumed: 1",
+            "   SUCC | WithinToken: token 'U+000A' matched inner rule"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
     public void Deepest_failure_update_is_announced_in_trace()
     {
         // The deepest-failure trace fires only when the new position is
