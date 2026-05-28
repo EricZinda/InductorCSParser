@@ -77,7 +77,12 @@ internal sealed class ScanUntilRule : Rule
     // TokenSet path never pay for Rule dispatch.
     private TokenSet _stopperSet;
     private readonly Rule? _stopperRule;
-    private readonly string _stopperRendered;
+    // Refreshed by CollectNormalizationOffenders when Compile's
+    // normalization pass mutates _stopperSet. For rule-mode stoppers
+    // the rendering is "rule <name>" and never needs refreshing,
+    // since the inner Rule handles its own normalization through
+    // the walker's recursion into Children. See OneOfRule for the why.
+    private string _stopperRendered;
 
     // When false (strict, the default), reaching end-of-input without
     // matching the stopper fails the rule. When true, EOF is itself a
@@ -246,7 +251,12 @@ internal sealed class ScanUntilRule : Rule
         // sub-rules) handle their own normalization through the
         // walker's recursion into Children.
         if (_stopperRule == null)
+        {
             OneOfRule.NormalizeAndValidate(this, ref _stopperSet, form, offenders);
+            // See OneOfRule.CollectNormalizationOffenders for why the
+            // rendering has to be refreshed after the set is projected.
+            _stopperRendered = _stopperSet.ToString();
+        }
 
         // Same shape for the single-rune escape start: the fast-path
         // check (`runeValue == _escapeStartRune`) sees the lexer's

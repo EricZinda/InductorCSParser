@@ -17,7 +17,9 @@ namespace InductorParser;
 internal sealed class NoneOfRule : Rule
 {
     private TokenSet _set;
-    private readonly string _setRendered;
+    // Refreshed by CollectNormalizationOffenders when Compile's
+    // normalization pass mutates _set. See OneOfRule for the why.
+    private string _setRendered;
 
     public NoneOfRule(TokenSet runeSet) : base(FlattenType.Preserve)
     {
@@ -37,6 +39,9 @@ internal sealed class NoneOfRule : Rule
         List<ArgumentException> failures)
     {
         OneOfRule.NormalizeAndValidate(this, ref _set, form, offenders);
+        // See OneOfRule.CollectNormalizationOffenders for why the
+        // rendering has to be refreshed after the set is projected.
+        _setRendered = _set.ToString();
     }
 
     internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)

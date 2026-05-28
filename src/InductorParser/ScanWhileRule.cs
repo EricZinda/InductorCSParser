@@ -31,7 +31,9 @@ internal sealed class ScanWhileRule : Rule
 {
     private TokenSet _set;
     private readonly int _minimumCount;
-    private readonly string _setRendered;
+    // Refreshed by CollectNormalizationOffenders when Compile's
+    // normalization pass mutates _set. See OneOfRule for the why.
+    private string _setRendered;
 
     public ScanWhileRule(TokenSet set, int minimumCount)
         : base(FlattenType.Preserve)
@@ -58,6 +60,9 @@ internal sealed class ScanWhileRule : Rule
         // the same shape OneOf uses, so it form-projects _set through
         // the same helper. See OneOfRule.NormalizeAndValidate.
         OneOfRule.NormalizeAndValidate(this, ref _set, form, offenders);
+        // See OneOfRule.CollectNormalizationOffenders for why the
+        // rendering has to be refreshed after the set is projected.
+        _setRendered = _set.ToString();
     }
 
     internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)

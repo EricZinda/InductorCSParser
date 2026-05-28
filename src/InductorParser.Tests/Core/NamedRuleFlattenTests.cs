@@ -263,4 +263,20 @@ public class NamedRuleFlattenTests
         var exception = Assert.Throws<InvalidOperationException>(() => marker.Delete());
         Assert.That(exception!.Message, Does.Contain("Delete"));
     }
+
+    [Test]
+    public void As_string_rejects_null_name()
+    {
+        // .As(null!) rejects the null at the API boundary, before
+        // ApplyIdentificationFlattenPolicy gets a chance to flip Token's
+        // default Delete FlattenType to Preserve. The post-throw state
+        // assertions verify that no side effect ran: FlattenType stayed
+        // Delete, Name stayed null, and a follow-up legitimate .As(...)
+        // would still see the rule in its untouched "no name yet" state.
+        var token = Token('!');
+        var exception = Assert.Throws<ArgumentNullException>(() => token.As((string)null!));
+        Assert.That(exception!.ParamName, Is.EqualTo("name"));
+        Assert.That(token.FlattenType, Is.EqualTo(FlattenType.Delete));
+        Assert.That(token.Name, Is.Null);
+    }
 }
