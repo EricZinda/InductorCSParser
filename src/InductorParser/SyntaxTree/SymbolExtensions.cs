@@ -45,7 +45,9 @@ public static class SymbolExtensions
             string? userName = rule.UserNameOf(symbol.Id);
             if (userName != null)
             {
-                builder.Append(userName).Append(": \"").Append(symbol.ToString()).Append('"');
+                builder.Append(userName).Append(": \"");
+                DisplayEscape.AppendEscaped(builder, symbol.ToString());
+                builder.Append('"');
             }
             else
             {
@@ -58,7 +60,9 @@ public static class SymbolExtensions
         else
         {
             string? name = rule.NameOf(symbol.Id) ?? "<unknown>";
-            builder.Append(name).Append(": \"").Append(symbol.ToString()).Append('"');
+            builder.Append(name).Append(": \"");
+            DisplayEscape.AppendEscaped(builder, symbol.ToString());
+            builder.Append('"');
         }
         builder.Append('\n');
 
