@@ -100,8 +100,8 @@ public sealed partial class Lexer
 
             // Try the rune fast path first. If the token is a single
             // rune we don't have to hash a span against the multi-rune
-            // array. Multi-rune tokens fall through to the grapheme
-            // membership check.
+            // array. Multi-rune tokens and lone surrogates fall through
+            // to the grapheme membership check.
             // tokenLength == runeLen rejects 2-char multi-rune
             // clusters (CRLF, base + combining mark): TryPeekRune
             // reports just the first rune, so runeLen=1 but
@@ -114,8 +114,9 @@ public sealed partial class Lexer
             }
             else
             {
-                inSet = set.HasMultiRuneGraphemes
-                    && set.ContainsToken(_input.AsSpan(pos, tokenLength));
+                // ContainsToken handles both a lone surrogate (matched
+                // by code unit) and a multi-rune cluster.
+                inSet = set.ContainsToken(_input.AsSpan(pos, tokenLength));
             }
             if (!inSet) break;
 
