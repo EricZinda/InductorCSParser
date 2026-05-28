@@ -4,15 +4,10 @@ using InductorParser.Tracing;
 
 namespace InductorParser.Lexing;
 
-// Tracing surface. Rules call IsTracing / Trace on every parse step;
-// when the sink is off both collapse to a few inlined null checks
-// (see Trace's comment for the cost story). When the sink is on
+// Tracing surface. Rules call IsTracing / Trace on every parse step.
+// When the sink is off both collapse to a few inlined null checks
+// (see Trace's comment for the cost story). When the sink is on,
 // each rule entry emits one indented line through WriteTraceLine.
-//
-// The _traceSink / _traceLevel fields live here too, even though
-// BindInput in Lexer.cs writes them. Partial-class files share private
-// fields, so the field declarations sit in the file that uses them
-// most.
 public sealed partial class Lexer
 {
     // Trace destination and verbosity. Null _traceSink means tracing is off.
@@ -21,20 +16,35 @@ public sealed partial class Lexer
     private TextWriter? _traceSink;
     private TraceLevel _traceLevel;
 
-    internal bool IsTracing(TraceLevel level) =>
+    /// <summary>
+    /// True when a trace sink is attached and its level is at or above
+    /// <paramref name="level"/>, so a trace line at this level would be written.
+    /// </summary>
+    /// <remarks>
+    /// A rule that wants to emit a trace line should call the protected
+    /// TraceSuccess / TraceFailure helpers on <see cref="Rule"/> instead. Those
+    /// already cost nothing when the level is gated out. Check this overload
+    /// only to skip expensive work that builds the arguments for such a message
+    /// at <paramref name="level"/>, which the helpers can't gate for you.
+    /// </remarks>
+    public bool IsTracing(TraceLevel level) =>
         _traceSink != null && _traceLevel >= level;
 
-    // True when a trace sink is attached at all. Use this when behavior
-    // should change because someone is watching the parse (turning off an
-    // optimization that would create gaps in the trace, for example), as
-    // opposed to IsTracing(level), which asks whether to emit a line at a
-    // specific verbosity.
-    internal bool IsTracing() => _traceSink != null;
+    /// <summary>
+    /// True when a trace sink is attached at all, whatever its level.
+    /// </summary>
+    /// <remarks>
+    /// Use this when behavior should change because someone is watching the
+    /// parse (turning off an optimization that would create gaps in the trace,
+    /// for example), as opposed to <see cref="IsTracing(TraceLevel)"/>, which
+    /// asks whether to emit a line at a specific verbosity.
+    /// </remarks>
+    public bool IsTracing() => _traceSink != null;
 
     // The `message` parameter is a TraceInterpolatedStringHandler,
     // which means callers can write `lexer.Trace(level, label, outcome, $"...")`
     // and the C# compiler will skip building the string when the sink is off or the level
-    // is gated out. No "if" needed at the caller. See
+    // means the trace won't be emitted. No "if" needed at the caller. See
     // TraceInterpolatedStringHandler for how the compiler rewrite
     // actually works.
     //
@@ -83,8 +93,12 @@ public sealed partial class Lexer
             _traceSink!.Write(' ');
         switch (outcome)
         {
-            case TraceOutcome.Success: _traceSink!.Write("SUCC | "); break;
-            case TraceOutcome.Failure: _traceSink!.Write("FAIL | "); break;
+            case TraceOutcome.Success: 
+                _traceSink!.Write("SUCC | "); 
+                break;
+            case TraceOutcome.Failure: 
+                _traceSink!.Write("FAIL | "); 
+                break;
         }
         _traceSink!.Write(label);
         if (message.Length > 0)
