@@ -26,3 +26,6 @@ Claude Let me compress the exploration and multiple rewrites of the project into
 - Form-aware Compile auto-converts grammar literals
 - Self-contained Symbol.SourceRange and Symbol.SourceText
 - AllOf/FirstOf → And/Or rename
+
+Testing:
+- Even when random numbers are used to pick files, Claude seems to find the same bug on different worktrees when starting from different places. picking very specific test criteria like "look for threading bugs" helps, saying "find any bug" and giving it different places to look doesnt. it still seems to migrate back to the ame place from different directions
