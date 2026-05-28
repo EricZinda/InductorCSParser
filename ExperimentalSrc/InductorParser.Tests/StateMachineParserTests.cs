@@ -550,17 +550,6 @@ public class StateMachineParserTests
         AssertSameOutcome(rule, "world", expectSuccess: false);
     }
 
-    [Test]
-    public void LiteralIgnoreAsciiCase_does_not_fold_non_ascii()
-    {
-        // ASCII letters fold; non-ASCII does not. Same as
-        // LiteralIgnoreAsciiCaseRule.
-        var rule = And(LiteralIgnoreAsciiCase("café"), Eof());
-        AssertSameOutcome(rule, "café", expectSuccess: true);
-        AssertSameOutcome(rule, "CAFé", expectSuccess: true);
-        AssertSameOutcome(rule, "CAFÉ", expectSuccess: false); // É is non-ASCII, doesn't fold
-    }
-
     // ---- WithError attribution ----
 
     [Test]

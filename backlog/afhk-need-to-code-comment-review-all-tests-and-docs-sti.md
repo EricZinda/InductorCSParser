@@ -6,6 +6,7 @@ Lexing/
     GraphemeClusterIndex.cs
 	Lexer.cs
 	Lexer.Failures.cs
+	Lexer.Probe.cs
 
 SyntaxTree/
     FlattenType.cs

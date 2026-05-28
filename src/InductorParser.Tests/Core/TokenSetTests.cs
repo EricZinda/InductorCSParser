@@ -69,10 +69,10 @@ public class TokenSetTests
         // and Universe, plus set operations like ~Range('a','z').
         var set = TokenSet.Range(0x0000, 0x10FFFF);
 
-        Assert.That(set.Contains('a'), Is.True);
-        Assert.That(set.Contains(GuitarRune), Is.True);
-        Assert.That(set.Contains(HighSurrogateMinRune), Is.False);
-        Assert.That(set.Contains(LowSurrogateMaxRune), Is.False);
+        Assert.That(set.ContainsRune('a'), Is.True);
+        Assert.That(set.ContainsRune(GuitarRune), Is.True);
+        Assert.That(set.ContainsRune(HighSurrogateMinRune), Is.False);
+        Assert.That(set.ContainsRune(LowSurrogateMaxRune), Is.False);
     }
 
     [Test]
@@ -84,13 +84,13 @@ public class TokenSetTests
         // like ~Letters can bring surrogates in indirectly.
         var set = TokenSet.Surrogates;
 
-        Assert.That(set.Contains(HighSurrogateMinRune), Is.True);
-        Assert.That(set.Contains(HighSurrogateMaxRune), Is.True);
-        Assert.That(set.Contains(LowSurrogateMinRune), Is.True);
-        Assert.That(set.Contains(LowSurrogateMaxRune), Is.True);
-        Assert.That(set.Contains(HighSurrogateMinRune - 1), Is.False);
-        Assert.That(set.Contains(LowSurrogateMaxRune + 1), Is.False);
-        Assert.That(set.Contains('a'), Is.False);
+        Assert.That(set.ContainsRune(HighSurrogateMinRune), Is.True);
+        Assert.That(set.ContainsRune(HighSurrogateMaxRune), Is.True);
+        Assert.That(set.ContainsRune(LowSurrogateMinRune), Is.True);
+        Assert.That(set.ContainsRune(LowSurrogateMaxRune), Is.True);
+        Assert.That(set.ContainsRune(HighSurrogateMinRune - 1), Is.False);
+        Assert.That(set.ContainsRune(LowSurrogateMaxRune + 1), Is.False);
+        Assert.That(set.ContainsRune('a'), Is.False);
     }
 
     [Test]
@@ -99,9 +99,9 @@ public class TokenSetTests
         // SurrogateRange's endpoints must both be surrogate code units.
         // The leading-surrogate half is one natural use.
         var leadingSurrogates = TokenSet.SurrogateRange(0xD800, 0xDBFF);
-        Assert.That(leadingSurrogates.Contains(HighSurrogateMinRune), Is.True);
-        Assert.That(leadingSurrogates.Contains(HighSurrogateMaxRune), Is.True);
-        Assert.That(leadingSurrogates.Contains(LowSurrogateMinRune), Is.False);
+        Assert.That(leadingSurrogates.ContainsRune(HighSurrogateMinRune), Is.True);
+        Assert.That(leadingSurrogates.ContainsRune(HighSurrogateMaxRune), Is.True);
+        Assert.That(leadingSurrogates.ContainsRune(LowSurrogateMinRune), Is.False);
     }
 
     [Test]
@@ -122,8 +122,8 @@ public class TokenSetTests
         // always surrogate-free regardless of whether the input had any.
         // The grammar-author-safety story: NoneOf(Letters) never quietly
         // matches a lone surrogate even under Compile(null).
-        Assert.That((~TokenSet.Letters).Contains(HighSurrogateMinRune), Is.False);
-        Assert.That((~TokenSet.Letters).Contains(LowSurrogateMaxRune), Is.False);
+        Assert.That((~TokenSet.Letters).ContainsRune(HighSurrogateMinRune), Is.False);
+        Assert.That((~TokenSet.Letters).ContainsRune(LowSurrogateMaxRune), Is.False);
         // The most aggressive complement is also surrogate-free.
         AssertEqual(~TokenSet.Empty, TokenSet.Universe);
         AssertEqual(~TokenSet.Range(0, 0x10FFFF), TokenSet.Empty);
@@ -153,7 +153,7 @@ public class TokenSetTests
         // Guitar as a surrogate pair. Treated as one codepoint.
         var set = TokenSet.Graphemes(GuitarGrapheme);
 
-        Assert.That(set.Contains(GuitarRune), Is.True);
+        Assert.That(set.ContainsRune(GuitarRune), Is.True);
     }
 
     [Test]
@@ -161,22 +161,22 @@ public class TokenSetTests
     {
         var uppercaseLetters = TokenSet.Category(UnicodeCategory.UppercaseLetter);
 
-        Assert.That(uppercaseLetters.Contains('A'), Is.True);
-        Assert.That(uppercaseLetters.Contains('Z'), Is.True);
-        Assert.That(uppercaseLetters.Contains('a'), Is.False);
-        Assert.That(uppercaseLetters.Contains('1'), Is.False);
+        Assert.That(uppercaseLetters.ContainsRune('A'), Is.True);
+        Assert.That(uppercaseLetters.ContainsRune('Z'), Is.True);
+        Assert.That(uppercaseLetters.ContainsRune('a'), Is.False);
+        Assert.That(uppercaseLetters.ContainsRune('1'), Is.False);
 
         // Non-ASCII BMP uppercase letters (Greek Alpha, Cyrillic Zhe).
-        Assert.That(uppercaseLetters.Contains('\u0391'), Is.True);
-        Assert.That(uppercaseLetters.Contains('\u0416'), Is.True);
+        Assert.That(uppercaseLetters.ContainsRune('\u0391'), Is.True);
+        Assert.That(uppercaseLetters.ContainsRune('\u0416'), Is.True);
 
         // Supplementary-plane uppercase letter (Mathematical Bold Capital A,
         // U+1D400). Verifies the category scan reaches past the surrogate gap.
-        Assert.That(uppercaseLetters.Contains(0x1D400), Is.True);
+        Assert.That(uppercaseLetters.ContainsRune(0x1D400), Is.True);
 
         // Titlecase letter U+01F2 '\u01F2' is category TitlecaseLetter, not
         // UppercaseLetter. Easy bug to make if someone conflates the two.
-        Assert.That(uppercaseLetters.Contains('\u01F2'), Is.False);
+        Assert.That(uppercaseLetters.ContainsRune('\u01F2'), Is.False);
     }
 
     [Test]
@@ -188,8 +188,8 @@ public class TokenSetTests
 
         // TokenSet is a value type, but the internal _ranges array reference
         // should be shared across both returns when the cache hit.
-        Assert.That(first.Contains('5'), Is.True);
-        Assert.That(second.Contains('5'), Is.True);
+        Assert.That(first.ContainsRune('5'), Is.True);
+        Assert.That(second.ContainsRune('5'), Is.True);
     }
 
     [Test]
@@ -197,9 +197,9 @@ public class TokenSetTests
     {
         var set = TokenSet.Single('a') | TokenSet.Single('z');
 
-        Assert.That(set.Contains('a'), Is.True);
-        Assert.That(set.Contains('z'), Is.True);
-        Assert.That(set.Contains('m'), Is.False);
+        Assert.That(set.ContainsRune('a'), Is.True);
+        Assert.That(set.ContainsRune('z'), Is.True);
+        Assert.That(set.ContainsRune('m'), Is.False);
     }
 
     [Test]
@@ -212,9 +212,9 @@ public class TokenSetTests
         var set = TokenSet.Range(1, 5) | TokenSet.Range(3, 7);
 
         for (int codepoint = 1; codepoint <= 7; codepoint++)
-            Assert.That(set.Contains(codepoint), Is.True, $"{codepoint} should be in union");
-        Assert.That(set.Contains(0), Is.False);
-        Assert.That(set.Contains(8), Is.False);
+            Assert.That(set.ContainsRune(codepoint), Is.True, $"{codepoint} should be in union");
+        Assert.That(set.ContainsRune(0), Is.False);
+        Assert.That(set.ContainsRune(8), Is.False);
     }
 
     [Test]
@@ -226,9 +226,9 @@ public class TokenSetTests
         var set = TokenSet.Range(1, 5) | TokenSet.Range(6, 10);
 
         for (int codepoint = 1; codepoint <= 10; codepoint++)
-            Assert.That(set.Contains(codepoint), Is.True, $"{codepoint} should be in union");
-        Assert.That(set.Contains(0), Is.False);
-        Assert.That(set.Contains(11), Is.False);
+            Assert.That(set.ContainsRune(codepoint), Is.True, $"{codepoint} should be in union");
+        Assert.That(set.ContainsRune(0), Is.False);
+        Assert.That(set.ContainsRune(11), Is.False);
     }
 
     [Test]
@@ -237,11 +237,11 @@ public class TokenSetTests
         // [1, 5] | [10, 15]. Gap at 6..9 must stay uncovered.
         var set = TokenSet.Range(1, 5) | TokenSet.Range(10, 15);
 
-        Assert.That(set.Contains(3), Is.True);
-        Assert.That(set.Contains(12), Is.True);
-        Assert.That(set.Contains(7), Is.False);
-        Assert.That(set.Contains(0), Is.False);
-        Assert.That(set.Contains(16), Is.False);
+        Assert.That(set.ContainsRune(3), Is.True);
+        Assert.That(set.ContainsRune(12), Is.True);
+        Assert.That(set.ContainsRune(7), Is.False);
+        Assert.That(set.ContainsRune(0), Is.False);
+        Assert.That(set.ContainsRune(16), Is.False);
     }
 
     [Test]
@@ -260,8 +260,8 @@ public class TokenSetTests
         // tolerate that and return a set equivalent to the non-empty side.
         var set = default(TokenSet) | TokenSet.Single('x');
 
-        Assert.That(set.Contains('x'), Is.True);
-        Assert.That(set.Contains('y'), Is.False);
+        Assert.That(set.ContainsRune('x'), Is.True);
+        Assert.That(set.ContainsRune('y'), Is.False);
     }
 
     [Test]
@@ -273,7 +273,7 @@ public class TokenSetTests
         var set = default(TokenSet);
 
         Assert.That(set.IsEmpty, Is.True);
-        Assert.That(set.Contains('a'), Is.False);
+        Assert.That(set.ContainsRune('a'), Is.False);
     }
 
     [Test]
@@ -348,13 +348,13 @@ public class TokenSetTests
     {
         // Letters is now built as a union of five Category calls. Verify it
         // still behaves correctly (one sample per category).
-        Assert.That(TokenSet.Letters.Contains('A'), Is.True);  // UppercaseLetter
-        Assert.That(TokenSet.Letters.Contains('a'), Is.True);  // LowercaseLetter
-        Assert.That(TokenSet.Letters.Contains('\u01C5'), Is.True); // TitlecaseLetter (ǅ)
-        Assert.That(TokenSet.Letters.Contains('\u02B0'), Is.True); // ModifierLetter (ʰ)
-        Assert.That(TokenSet.Letters.Contains('\u4E2D'), Is.True); // OtherLetter (中)
-        Assert.That(TokenSet.Letters.Contains('1'), Is.False);
-        Assert.That(TokenSet.Letters.Contains(' '), Is.False);
+        Assert.That(TokenSet.Letters.ContainsRune('A'), Is.True);  // UppercaseLetter
+        Assert.That(TokenSet.Letters.ContainsRune('a'), Is.True);  // LowercaseLetter
+        Assert.That(TokenSet.Letters.ContainsRune('\u01C5'), Is.True); // TitlecaseLetter (ǅ)
+        Assert.That(TokenSet.Letters.ContainsRune('\u02B0'), Is.True); // ModifierLetter (ʰ)
+        Assert.That(TokenSet.Letters.ContainsRune('\u4E2D'), Is.True); // OtherLetter (中)
+        Assert.That(TokenSet.Letters.ContainsRune('1'), Is.False);
+        Assert.That(TokenSet.Letters.ContainsRune(' '), Is.False);
     }
 
     [Test]
@@ -363,10 +363,10 @@ public class TokenSetTests
         // [1, 7] & [5, 10] = [5, 7]. The classic overlap case.
         var set = TokenSet.Range(1, 7) & TokenSet.Range(5, 10);
 
-        Assert.That(set.Contains(4), Is.False);
-        Assert.That(set.Contains(5), Is.True);
-        Assert.That(set.Contains(7), Is.True);
-        Assert.That(set.Contains(8), Is.False);
+        Assert.That(set.ContainsRune(4), Is.False);
+        Assert.That(set.ContainsRune(5), Is.True);
+        Assert.That(set.ContainsRune(7), Is.True);
+        Assert.That(set.ContainsRune(8), Is.False);
     }
 
     [Test]
@@ -409,10 +409,10 @@ public class TokenSetTests
 
         // Inside the expected intervals.
         foreach (int codepoint in new[] { 3, 4, 5, 10, 11, 12, 22, 23, 24, 25 })
-            Assert.That(intersection.Contains(codepoint), Is.True, $"{codepoint} should be in A & B");
+            Assert.That(intersection.ContainsRune(codepoint), Is.True, $"{codepoint} should be in A & B");
         // Outside: in A but not B, in B but not A, or in neither.
         foreach (int codepoint in new[] { 1, 2, 6, 9, 13, 14, 15, 20, 21, 26, 30 })
-            Assert.That(intersection.Contains(codepoint), Is.False, $"{codepoint} SHOULDN'T be in A & B");
+            Assert.That(intersection.ContainsRune(codepoint), Is.False, $"{codepoint} SHOULDN'T be in A & B");
     }
 
     [Test]
@@ -424,11 +424,11 @@ public class TokenSetTests
         var cyrillicLetters = TokenSet.Letters & TokenSet.Range(0x0400, 0x04FF);
 
         // ж (U+0436) is a Cyrillic letter (in both sets).
-        Assert.That(cyrillicLetters.Contains(0x0436), Is.True);
+        Assert.That(cyrillicLetters.ContainsRune(0x0436), Is.True);
         // A (U+0041) is a letter but not Cyrillic.
-        Assert.That(cyrillicLetters.Contains('A'), Is.False);
+        Assert.That(cyrillicLetters.ContainsRune('A'), Is.False);
         // U+0488 is a Cyrillic combining mark, not a letter.
-        Assert.That(cyrillicLetters.Contains(0x0488), Is.False);
+        Assert.That(cyrillicLetters.ContainsRune(0x0488), Is.False);
     }
 
     [Test]
@@ -491,21 +491,21 @@ public class TokenSetTests
         var asciiConsonants = TokenSet.Ascii.Letters & ~TokenSet.Runes("aeiouAEIOU");
 
         // Consonants: in.
-        Assert.That(asciiConsonants.Contains('b'), Is.True);
-        Assert.That(asciiConsonants.Contains('z'), Is.True);
-        Assert.That(asciiConsonants.Contains('B'), Is.True);
-        Assert.That(asciiConsonants.Contains('Z'), Is.True);
+        Assert.That(asciiConsonants.ContainsRune('b'), Is.True);
+        Assert.That(asciiConsonants.ContainsRune('z'), Is.True);
+        Assert.That(asciiConsonants.ContainsRune('B'), Is.True);
+        Assert.That(asciiConsonants.ContainsRune('Z'), Is.True);
         // Vowels: out.
-        Assert.That(asciiConsonants.Contains('a'), Is.False);
-        Assert.That(asciiConsonants.Contains('e'), Is.False);
-        Assert.That(asciiConsonants.Contains('i'), Is.False);
-        Assert.That(asciiConsonants.Contains('o'), Is.False);
-        Assert.That(asciiConsonants.Contains('u'), Is.False);
-        Assert.That(asciiConsonants.Contains('A'), Is.False);
-        Assert.That(asciiConsonants.Contains('U'), Is.False);
+        Assert.That(asciiConsonants.ContainsRune('a'), Is.False);
+        Assert.That(asciiConsonants.ContainsRune('e'), Is.False);
+        Assert.That(asciiConsonants.ContainsRune('i'), Is.False);
+        Assert.That(asciiConsonants.ContainsRune('o'), Is.False);
+        Assert.That(asciiConsonants.ContainsRune('u'), Is.False);
+        Assert.That(asciiConsonants.ContainsRune('A'), Is.False);
+        Assert.That(asciiConsonants.ContainsRune('U'), Is.False);
         // Non-letters: out.
-        Assert.That(asciiConsonants.Contains('0'), Is.False);
-        Assert.That(asciiConsonants.Contains(' '), Is.False);
+        Assert.That(asciiConsonants.ContainsRune('0'), Is.False);
+        Assert.That(asciiConsonants.ContainsRune(' '), Is.False);
     }
 
     // Contains boundaries ----------------------------------------------------
@@ -517,10 +517,10 @@ public class TokenSetTests
         // off-by-one in the < vs <= choice in Contains breaks loudly.
         var set = TokenSet.Range(10, 20);
 
-        Assert.That(set.Contains(9), Is.False);
-        Assert.That(set.Contains(10), Is.True);
-        Assert.That(set.Contains(20), Is.True);
-        Assert.That(set.Contains(21), Is.False);
+        Assert.That(set.ContainsRune(9), Is.False);
+        Assert.That(set.ContainsRune(10), Is.True);
+        Assert.That(set.ContainsRune(20), Is.True);
+        Assert.That(set.ContainsRune(21), Is.False);
     }
 
     [Test]
@@ -531,10 +531,10 @@ public class TokenSetTests
         var zero = TokenSet.Single(0);
         var max = TokenSet.Single(UnicodeExamples.MaximumCodePointRune);
 
-        Assert.That(zero.Contains(0), Is.True);
-        Assert.That(zero.Contains(1), Is.False);
-        Assert.That(max.Contains(0x10FFFF), Is.True);
-        Assert.That(max.Contains(0x10FFFE), Is.False);
+        Assert.That(zero.ContainsRune(0), Is.True);
+        Assert.That(zero.ContainsRune(1), Is.False);
+        Assert.That(max.ContainsRune(0x10FFFF), Is.True);
+        Assert.That(max.ContainsRune(0x10FFFE), Is.False);
     }
 
     [Test]
@@ -543,11 +543,11 @@ public class TokenSetTests
         var set = TokenSet.Single(GuitarRune) | TokenSet.Single('a');
 
         // char overload: BMP only.
-        Assert.That(set.Contains('a'), Is.True);
-        Assert.That(set.Contains('b'), Is.False);
+        Assert.That(set.ContainsRune('a'), Is.True);
+        Assert.That(set.ContainsRune('b'), Is.False);
         // Rune overload: any scalar value, including supplementary plane.
-        Assert.That(set.Contains(new Rune(GuitarRune)), Is.True);
-        Assert.That(set.Contains(new Rune(MusicalKeyboardRune)), Is.False);
+        Assert.That(set.ContainsRune(new Rune(GuitarRune)), Is.True);
+        Assert.That(set.ContainsRune(new Rune(MusicalKeyboardRune)), Is.False);
     }
 
     // Single / Range corner cases --------------------------------------------
@@ -560,8 +560,8 @@ public class TokenSetTests
         var fromChar = TokenSet.Single('Z');
         var fromRune = TokenSet.Single(new Rune(GuitarRune));
 
-        Assert.That(fromChar.Contains('Z'), Is.True);
-        Assert.That(fromRune.Contains(GuitarRune), Is.True);
+        Assert.That(fromChar.ContainsRune('Z'), Is.True);
+        Assert.That(fromRune.ContainsRune(GuitarRune), Is.True);
     }
 
     [Test]
@@ -570,12 +570,12 @@ public class TokenSetTests
         var charRange = TokenSet.Range('a', 'c');
         var runeRange = TokenSet.Range(new Rune(GuitarRune), new Rune(MusicalKeyboardRune));
 
-        Assert.That(charRange.Contains('a'), Is.True);
-        Assert.That(charRange.Contains('b'), Is.True);
-        Assert.That(charRange.Contains('c'), Is.True);
-        Assert.That(charRange.Contains('d'), Is.False);
-        Assert.That(runeRange.Contains(GuitarRune), Is.True);
-        Assert.That(runeRange.Contains(MusicalKeyboardRune), Is.True);
+        Assert.That(charRange.ContainsRune('a'), Is.True);
+        Assert.That(charRange.ContainsRune('b'), Is.True);
+        Assert.That(charRange.ContainsRune('c'), Is.True);
+        Assert.That(charRange.ContainsRune('d'), Is.False);
+        Assert.That(runeRange.ContainsRune(GuitarRune), Is.True);
+        Assert.That(runeRange.ContainsRune(MusicalKeyboardRune), Is.True);
     }
 
     [Test]
@@ -593,9 +593,9 @@ public class TokenSetTests
         // Range(x, x) is allowed and behaves like Single(x): one-codepoint set.
         var set = TokenSet.Range(0x41, 0x41);
 
-        Assert.That(set.Contains('A'), Is.True);
-        Assert.That(set.Contains('B'), Is.False);
-        Assert.That(set.Contains(0x40), Is.False);
+        Assert.That(set.ContainsRune('A'), Is.True);
+        Assert.That(set.ContainsRune('B'), Is.False);
+        Assert.That(set.ContainsRune(0x40), Is.False);
     }
 
     // Runes corner cases -----------------------------------------------------
@@ -622,10 +622,10 @@ public class TokenSetTests
         // distinct-char version, and as the compact ToString.
         var set = TokenSet.Runes("aabbccba");
 
-        Assert.That(set.Contains('a'), Is.True);
-        Assert.That(set.Contains('b'), Is.True);
-        Assert.That(set.Contains('c'), Is.True);
-        Assert.That(set.Contains('d'), Is.False);
+        Assert.That(set.ContainsRune('a'), Is.True);
+        Assert.That(set.ContainsRune('b'), Is.True);
+        Assert.That(set.ContainsRune('c'), Is.True);
+        Assert.That(set.ContainsRune('d'), Is.False);
         // Adjacent 'a','b','c' merge into one interval a-c.
         Assert.That(set.ToString(), Is.EqualTo("[a-c]"));
     }
@@ -671,9 +671,9 @@ public class TokenSetTests
         var thumbsUpSkinTone = Canary("👍🏽", "thumbs up + medium skin tone", 0x1F44D, 0x1F3FD);
         var set = TokenSet.Graphemes(thumbsUpSkinTone);
 
-        Assert.That(set.Contains(thumbsUpSkinTone), Is.True);
-        Assert.That(set.Contains(0x1F44D), Is.False, "the base rune isn't a member on its own");
-        Assert.That(set.Contains(0x1F3FD), Is.False, "the modifier rune isn't a member on its own");
+        Assert.That(set.ContainsToken(thumbsUpSkinTone), Is.True);
+        Assert.That(set.ContainsRune(0x1F44D), Is.False, "the base rune isn't a member on its own");
+        Assert.That(set.ContainsRune(0x1F3FD), Is.False, "the modifier rune isn't a member on its own");
     }
 
     [Test]
@@ -688,9 +688,9 @@ public class TokenSetTests
 
         var set = TokenSet.Graphemes(decomposedE);
 
-        Assert.That(set.Contains(decomposedE), Is.True);
-        Assert.That(set.Contains('e'), Is.False);
-        Assert.That(set.Contains(0x0301), Is.False);
+        Assert.That(set.ContainsToken(decomposedE), Is.True);
+        Assert.That(set.ContainsRune('e'), Is.False);
+        Assert.That(set.ContainsRune(0x0301), Is.False);
     }
 
     [Test]
@@ -702,8 +702,8 @@ public class TokenSetTests
         var grinningFace = UnicodeExamples.GrinningFaceEmojiGrapheme;
         var set = TokenSet.Graphemes(grinningFace);
 
-        Assert.That(set.Contains(0x1F600), Is.True);
-        Assert.That(set.Contains('A'), Is.False);
+        Assert.That(set.ContainsRune(0x1F600), Is.True);
+        Assert.That(set.ContainsRune('A'), Is.False);
     }
 
     [Test]
@@ -714,9 +714,9 @@ public class TokenSetTests
         // Contains('\r') and Contains('\n') don't.
         var set = TokenSet.Graphemes("\r\n");
 
-        Assert.That(set.Contains("\r\n"), Is.True);
-        Assert.That(set.Contains('\r'), Is.False);
-        Assert.That(set.Contains('\n'), Is.False);
+        Assert.That(set.ContainsToken("\r\n"), Is.True);
+        Assert.That(set.ContainsRune('\r'), Is.False);
+        Assert.That(set.ContainsRune('\n'), Is.False);
     }
 
     [Test]
@@ -738,10 +738,10 @@ public class TokenSetTests
         // cluster. Set semantics are order-independent.
         var set = TokenSet.Runes("\r\t\n");
 
-        Assert.That(set.Contains('\r'), Is.True);
-        Assert.That(set.Contains('\n'), Is.True);
-        Assert.That(set.Contains('\t'), Is.True);
-        Assert.That(set.Contains("\r\n"), Is.False);
+        Assert.That(set.ContainsRune('\r'), Is.True);
+        Assert.That(set.ContainsRune('\n'), Is.True);
+        Assert.That(set.ContainsRune('\t'), Is.True);
+        Assert.That(set.ContainsToken("\r\n"), Is.False);
     }
 
     [Test]
@@ -940,15 +940,15 @@ public class TokenSetTests
     {
         // TokenSet.Digits is UnicodeCategory.DecimalDigitNumber, every
         // decimal digit in every script, not just ASCII 0-9.
-        Assert.That(TokenSet.Digits.Contains('0'), Is.True);
-        Assert.That(TokenSet.Digits.Contains('9'), Is.True);
-        Assert.That(TokenSet.Digits.Contains(0x0660), Is.True); // Arabic-Indic digit zero ٠
-        Assert.That(TokenSet.Digits.Contains(0x09E6), Is.True); // Bengali digit zero ০
+        Assert.That(TokenSet.Digits.ContainsRune('0'), Is.True);
+        Assert.That(TokenSet.Digits.ContainsRune('9'), Is.True);
+        Assert.That(TokenSet.Digits.ContainsRune(0x0660), Is.True); // Arabic-Indic digit zero ٠
+        Assert.That(TokenSet.Digits.ContainsRune(0x09E6), Is.True); // Bengali digit zero ০
         // Letters and whitespace aren't digits.
-        Assert.That(TokenSet.Digits.Contains('a'), Is.False);
-        Assert.That(TokenSet.Digits.Contains(' '), Is.False);
+        Assert.That(TokenSet.Digits.ContainsRune('a'), Is.False);
+        Assert.That(TokenSet.Digits.ContainsRune(' '), Is.False);
         // Roman numeral letters are category NumberLetter, not digits.
-        Assert.That(TokenSet.Digits.Contains(0x2160), Is.False); // Ⅰ
+        Assert.That(TokenSet.Digits.ContainsRune(0x2160), Is.False); // Ⅰ
     }
 
     [Test]
@@ -958,25 +958,25 @@ public class TokenSetTests
         // seven UAX #18 single-rune line terminators. Includes the
         // obvious ASCII intra-line whitespace plus a few Unicode-only
         // runes that are also intra-line.
-        Assert.That(TokenSet.InlineWhitespace.Contains(' '), Is.True);
-        Assert.That(TokenSet.InlineWhitespace.Contains('\t'), Is.True);
-        Assert.That(TokenSet.InlineWhitespace.Contains(0x00A0), Is.True); // NBSP
-        Assert.That(TokenSet.InlineWhitespace.Contains(0x1680), Is.True); // OGHAM SPACE MARK
-        Assert.That(TokenSet.InlineWhitespace.Contains(0x2003), Is.True); // EM SPACE
-        Assert.That(TokenSet.InlineWhitespace.Contains(0x202F), Is.True); // NARROW NO-BREAK SPACE
-        Assert.That(TokenSet.InlineWhitespace.Contains(0x3000), Is.True); // IDEOGRAPHIC SPACE
+        Assert.That(TokenSet.InlineWhitespace.ContainsRune(' '), Is.True);
+        Assert.That(TokenSet.InlineWhitespace.ContainsRune('\t'), Is.True);
+        Assert.That(TokenSet.InlineWhitespace.ContainsRune(0x00A0), Is.True); // NBSP
+        Assert.That(TokenSet.InlineWhitespace.ContainsRune(0x1680), Is.True); // OGHAM SPACE MARK
+        Assert.That(TokenSet.InlineWhitespace.ContainsRune(0x2003), Is.True); // EM SPACE
+        Assert.That(TokenSet.InlineWhitespace.ContainsRune(0x202F), Is.True); // NARROW NO-BREAK SPACE
+        Assert.That(TokenSet.InlineWhitespace.ContainsRune(0x3000), Is.True); // IDEOGRAPHIC SPACE
         // Line terminators are NOT in InlineWhitespace; they live in
         // LineTerminators / EndOfLine().
-        Assert.That(TokenSet.InlineWhitespace.Contains('\r'), Is.False);
-        Assert.That(TokenSet.InlineWhitespace.Contains('\n'), Is.False);
-        Assert.That(TokenSet.InlineWhitespace.Contains('\v'), Is.False); // VT
-        Assert.That(TokenSet.InlineWhitespace.Contains('\f'), Is.False); // FF
-        Assert.That(TokenSet.InlineWhitespace.Contains(0x0085), Is.False); // NEL
-        Assert.That(TokenSet.InlineWhitespace.Contains(0x2028), Is.False); // LINE SEPARATOR
-        Assert.That(TokenSet.InlineWhitespace.Contains(0x2029), Is.False); // PARAGRAPH SEPARATOR
+        Assert.That(TokenSet.InlineWhitespace.ContainsRune('\r'), Is.False);
+        Assert.That(TokenSet.InlineWhitespace.ContainsRune('\n'), Is.False);
+        Assert.That(TokenSet.InlineWhitespace.ContainsRune('\v'), Is.False); // VT
+        Assert.That(TokenSet.InlineWhitespace.ContainsRune('\f'), Is.False); // FF
+        Assert.That(TokenSet.InlineWhitespace.ContainsRune(0x0085), Is.False); // NEL
+        Assert.That(TokenSet.InlineWhitespace.ContainsRune(0x2028), Is.False); // LINE SEPARATOR
+        Assert.That(TokenSet.InlineWhitespace.ContainsRune(0x2029), Is.False); // PARAGRAPH SEPARATOR
         // Not whitespace at all.
-        Assert.That(TokenSet.InlineWhitespace.Contains('a'), Is.False);
-        Assert.That(TokenSet.InlineWhitespace.Contains('0'), Is.False);
+        Assert.That(TokenSet.InlineWhitespace.ContainsRune('a'), Is.False);
+        Assert.That(TokenSet.InlineWhitespace.ContainsRune('0'), Is.False);
     }
 
     [Test]
@@ -988,8 +988,8 @@ public class TokenSetTests
         for (int codepoint = 0; codepoint <= 0xFFFF; codepoint++)
         {
             if (codepoint >= 0xD800 && codepoint <= 0xDFFF) continue;
-            bool inInline = TokenSet.InlineWhitespace.Contains(codepoint);
-            bool inLineTerm = TokenSet.LineTerminators.Contains(codepoint);
+            bool inInline = TokenSet.InlineWhitespace.ContainsRune(codepoint);
+            bool inLineTerm = TokenSet.LineTerminators.ContainsRune(codepoint);
             Assert.That(inInline && inLineTerm, Is.False,
                 $"U+{codepoint:X4} is in both InlineWhitespace and LineTerminators");
         }
@@ -1000,20 +1000,20 @@ public class TokenSetTests
     {
         // The full-Unicode "regex \s" set: every rune that's intra-line
         // whitespace OR a UAX #18 single-rune line terminator.
-        Assert.That(TokenSet.AnyWhitespace.Contains(' '), Is.True);
-        Assert.That(TokenSet.AnyWhitespace.Contains('\t'), Is.True);
-        Assert.That(TokenSet.AnyWhitespace.Contains('\r'), Is.True);
-        Assert.That(TokenSet.AnyWhitespace.Contains('\n'), Is.True);
-        Assert.That(TokenSet.AnyWhitespace.Contains('\v'), Is.True);  // VT, line terminator
-        Assert.That(TokenSet.AnyWhitespace.Contains('\f'), Is.True);  // FF, line terminator
-        Assert.That(TokenSet.AnyWhitespace.Contains(0x0085), Is.True); // NEL
-        Assert.That(TokenSet.AnyWhitespace.Contains(0x00A0), Is.True); // NBSP (inline)
-        Assert.That(TokenSet.AnyWhitespace.Contains(0x2028), Is.True); // LS
-        Assert.That(TokenSet.AnyWhitespace.Contains(0x2029), Is.True); // PS
-        Assert.That(TokenSet.AnyWhitespace.Contains(0x3000), Is.True); // ideographic space (inline)
+        Assert.That(TokenSet.AnyWhitespace.ContainsRune(' '), Is.True);
+        Assert.That(TokenSet.AnyWhitespace.ContainsRune('\t'), Is.True);
+        Assert.That(TokenSet.AnyWhitespace.ContainsRune('\r'), Is.True);
+        Assert.That(TokenSet.AnyWhitespace.ContainsRune('\n'), Is.True);
+        Assert.That(TokenSet.AnyWhitespace.ContainsRune('\v'), Is.True);  // VT, line terminator
+        Assert.That(TokenSet.AnyWhitespace.ContainsRune('\f'), Is.True);  // FF, line terminator
+        Assert.That(TokenSet.AnyWhitespace.ContainsRune(0x0085), Is.True); // NEL
+        Assert.That(TokenSet.AnyWhitespace.ContainsRune(0x00A0), Is.True); // NBSP (inline)
+        Assert.That(TokenSet.AnyWhitespace.ContainsRune(0x2028), Is.True); // LS
+        Assert.That(TokenSet.AnyWhitespace.ContainsRune(0x2029), Is.True); // PS
+        Assert.That(TokenSet.AnyWhitespace.ContainsRune(0x3000), Is.True); // ideographic space (inline)
         // Letters and digits aren't whitespace.
-        Assert.That(TokenSet.AnyWhitespace.Contains('a'), Is.False);
-        Assert.That(TokenSet.AnyWhitespace.Contains('0'), Is.False);
+        Assert.That(TokenSet.AnyWhitespace.ContainsRune('a'), Is.False);
+        Assert.That(TokenSet.AnyWhitespace.ContainsRune('0'), Is.False);
     }
 
     [Test]
@@ -1039,12 +1039,12 @@ public class TokenSetTests
     [Test]
     public void Ascii_Digits_contains_only_0_through_9()
     {
-        Assert.That(TokenSet.Ascii.Digits.Contains('0'), Is.True);
-        Assert.That(TokenSet.Ascii.Digits.Contains('5'), Is.True);
-        Assert.That(TokenSet.Ascii.Digits.Contains('9'), Is.True);
+        Assert.That(TokenSet.Ascii.Digits.ContainsRune('0'), Is.True);
+        Assert.That(TokenSet.Ascii.Digits.ContainsRune('5'), Is.True);
+        Assert.That(TokenSet.Ascii.Digits.ContainsRune('9'), Is.True);
         // The Unicode-full Digits would include Arabic-Indic zero. Ascii.Digits doesn't.
-        Assert.That(TokenSet.Ascii.Digits.Contains(0x0660), Is.False);
-        Assert.That(TokenSet.Ascii.Digits.Contains('a'), Is.False);
+        Assert.That(TokenSet.Ascii.Digits.ContainsRune(0x0660), Is.False);
+        Assert.That(TokenSet.Ascii.Digits.ContainsRune('a'), Is.False);
     }
 
     [Test]
@@ -1053,14 +1053,14 @@ public class TokenSetTests
         // ASCII whitespace including line terminators. The "regex \s on
         // ASCII" set, for grammars that treat newlines as ordinary
         // whitespace.
-        Assert.That(TokenSet.Ascii.AnyWhitespace.Contains(' '), Is.True);
-        Assert.That(TokenSet.Ascii.AnyWhitespace.Contains('\t'), Is.True);
-        Assert.That(TokenSet.Ascii.AnyWhitespace.Contains('\r'), Is.True);
-        Assert.That(TokenSet.Ascii.AnyWhitespace.Contains('\n'), Is.True);
+        Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune(' '), Is.True);
+        Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\t'), Is.True);
+        Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\r'), Is.True);
+        Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\n'), Is.True);
         // Not in the literal " \t\r\n" set, even though char.IsWhiteSpace says yes.
-        Assert.That(TokenSet.Ascii.AnyWhitespace.Contains(0x00A0), Is.False); // NBSP
-        Assert.That(TokenSet.Ascii.AnyWhitespace.Contains('\v'), Is.False);   // vertical tab
-        Assert.That(TokenSet.Ascii.AnyWhitespace.Contains('\f'), Is.False);   // form feed
+        Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune(0x00A0), Is.False); // NBSP
+        Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\v'), Is.False);   // vertical tab
+        Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\f'), Is.False);   // form feed
     }
 
     [Test]
@@ -1068,13 +1068,13 @@ public class TokenSetTests
     {
         // ASCII intra-line whitespace. Mirrors the full-Unicode
         // TokenSet.InlineWhitespace but stays inside ASCII.
-        Assert.That(TokenSet.Ascii.InlineWhitespace.Contains(' '), Is.True);
-        Assert.That(TokenSet.Ascii.InlineWhitespace.Contains('\t'), Is.True);
+        Assert.That(TokenSet.Ascii.InlineWhitespace.ContainsRune(' '), Is.True);
+        Assert.That(TokenSet.Ascii.InlineWhitespace.ContainsRune('\t'), Is.True);
         // Line terminators excluded by definition.
-        Assert.That(TokenSet.Ascii.InlineWhitespace.Contains('\r'), Is.False);
-        Assert.That(TokenSet.Ascii.InlineWhitespace.Contains('\n'), Is.False);
+        Assert.That(TokenSet.Ascii.InlineWhitespace.ContainsRune('\r'), Is.False);
+        Assert.That(TokenSet.Ascii.InlineWhitespace.ContainsRune('\n'), Is.False);
         // Unicode-only whitespace excluded because this is the ASCII set.
-        Assert.That(TokenSet.Ascii.InlineWhitespace.Contains(0x00A0), Is.False); // NBSP
+        Assert.That(TokenSet.Ascii.InlineWhitespace.ContainsRune(0x00A0), Is.False); // NBSP
     }
 
     [Test]
@@ -1082,10 +1082,10 @@ public class TokenSetTests
     {
         // The Ascii-qualified built-ins are the "only ASCII" versions. They
         // must not drift into full Unicode by accident.
-        Assert.That(TokenSet.Ascii.Letters.Contains('a'), Is.True);
-        Assert.That(TokenSet.Ascii.Letters.Contains('Z'), Is.True);
-        Assert.That(TokenSet.Ascii.Letters.Contains(0x00E9), Is.False); // é
-        Assert.That(TokenSet.Ascii.Letters.Contains(0x4E2D), Is.False); // 中
+        Assert.That(TokenSet.Ascii.Letters.ContainsRune('a'), Is.True);
+        Assert.That(TokenSet.Ascii.Letters.ContainsRune('Z'), Is.True);
+        Assert.That(TokenSet.Ascii.Letters.ContainsRune(0x00E9), Is.False); // é
+        Assert.That(TokenSet.Ascii.Letters.ContainsRune(0x4E2D), Is.False); // 中
     }
 
     // Category niche ---------------------------------------------------------
@@ -1120,11 +1120,11 @@ public class TokenSetTests
         // different non-letter category so the cache path sees more variety.
         var spaces = TokenSet.Category(UnicodeCategory.SpaceSeparator);
 
-        Assert.That(spaces.Contains(' '), Is.True);       // U+0020 space
-        Assert.That(spaces.Contains(0x00A0), Is.True);    // NBSP
-        Assert.That(spaces.Contains(0x2003), Is.True);    // EM SPACE
-        Assert.That(spaces.Contains('\t'), Is.False);     // tab is Control, not SpaceSeparator
-        Assert.That(spaces.Contains('a'), Is.False);
+        Assert.That(spaces.ContainsRune(' '), Is.True);       // U+0020 space
+        Assert.That(spaces.ContainsRune(0x00A0), Is.True);    // NBSP
+        Assert.That(spaces.ContainsRune(0x2003), Is.True);    // EM SPACE
+        Assert.That(spaces.ContainsRune('\t'), Is.False);     // tab is Control, not SpaceSeparator
+        Assert.That(spaces.ContainsRune('a'), Is.False);
     }
 
     [Test]
@@ -1137,10 +1137,10 @@ public class TokenSetTests
         // empty or miss this codepoint.
         var unassigned = TokenSet.Category(UnicodeCategory.OtherNotAssigned);
 
-        Assert.That(unassigned.Contains(0x0378), Is.True);
-        Assert.That(unassigned.Contains('A'), Is.False);
-        Assert.That(unassigned.Contains('0'), Is.False);
-        Assert.That(unassigned.Contains(' '), Is.False);
+        Assert.That(unassigned.ContainsRune(0x0378), Is.True);
+        Assert.That(unassigned.ContainsRune('A'), Is.False);
+        Assert.That(unassigned.ContainsRune('0'), Is.False);
+        Assert.That(unassigned.ContainsRune(' '), Is.False);
     }
 
     // Operator invariant -----------------------------------------------------
@@ -1176,15 +1176,15 @@ public class TokenSetTests
         // members don't accidentally match.
         var set = TokenSet.Runes("az") | TokenSet.Graphemes(USFlagGrapheme, SkinTonedWaveGrapheme);
 
-        Assert.That(set.Contains('a'), Is.True);
-        Assert.That(set.Contains('z'), Is.True);
-        Assert.That(set.Contains(USFlagGrapheme), Is.True);
-        Assert.That(set.Contains(SkinTonedWaveGrapheme), Is.True);
+        Assert.That(set.ContainsRune('a'), Is.True);
+        Assert.That(set.ContainsRune('z'), Is.True);
+        Assert.That(set.ContainsToken(USFlagGrapheme), Is.True);
+        Assert.That(set.ContainsToken(SkinTonedWaveGrapheme), Is.True);
         // The first runes of the multi-rune entries aren't single-rune
         // members on their own.
-        Assert.That(set.Contains(0x1F1FA), Is.False, "regional indicator U not a single-rune member");
-        Assert.That(set.Contains(WavingHandRune), Is.False, "lone waving hand isn't in the set");
-        Assert.That(set.Contains('m'), Is.False);
+        Assert.That(set.ContainsRune(0x1F1FA), Is.False, "regional indicator U not a single-rune member");
+        Assert.That(set.ContainsRune(WavingHandRune), Is.False, "lone waving hand isn't in the set");
+        Assert.That(set.ContainsRune('m'), Is.False);
     }
 
     [Test]
@@ -1192,7 +1192,7 @@ public class TokenSetTests
     {
         var set = TokenSet.Runes("a") | TokenSet.Graphemes(USFlagGrapheme);
 
-        Assert.That(set.Contains(""), Is.False);
+        Assert.That(set.ContainsToken(""), Is.False);
     }
 
     [Test]
@@ -1203,8 +1203,8 @@ public class TokenSetTests
         // single-rune Contains(string) doesn't hit it.
         var set = TokenSet.Graphemes(USFlagGrapheme);
 
-        Assert.That(set.Contains("a"), Is.False);
-        Assert.That(set.Contains(USFlagGrapheme), Is.True);
+        Assert.That(set.ContainsToken("a"), Is.False);
+        Assert.That(set.ContainsToken(USFlagGrapheme), Is.True);
     }
 
     [Test]
@@ -1215,10 +1215,10 @@ public class TokenSetTests
         // also match the flag grapheme.
         var mixed = TokenSet.Letters | TokenSet.Graphemes(USFlagGrapheme);
 
-        Assert.That(mixed.Contains('a'), Is.True);
-        Assert.That(mixed.Contains('Z'), Is.True);
-        Assert.That(mixed.Contains(USFlagGrapheme), Is.True);
-        Assert.That(mixed.Contains('1'), Is.False);
+        Assert.That(mixed.ContainsRune('a'), Is.True);
+        Assert.That(mixed.ContainsRune('Z'), Is.True);
+        Assert.That(mixed.ContainsToken(USFlagGrapheme), Is.True);
+        Assert.That(mixed.ContainsRune('1'), Is.False);
     }
 
     [Test]
@@ -1231,11 +1231,11 @@ public class TokenSetTests
         var right = TokenSet.Runes("bc") | TokenSet.Graphemes(SkinTonedWaveGrapheme);
         var combined = left | right;
 
-        Assert.That(combined.Contains('a'), Is.True);
-        Assert.That(combined.Contains('b'), Is.True);
-        Assert.That(combined.Contains('c'), Is.True);
-        Assert.That(combined.Contains(USFlagGrapheme), Is.True);
-        Assert.That(combined.Contains(SkinTonedWaveGrapheme), Is.True);
+        Assert.That(combined.ContainsRune('a'), Is.True);
+        Assert.That(combined.ContainsRune('b'), Is.True);
+        Assert.That(combined.ContainsRune('c'), Is.True);
+        Assert.That(combined.ContainsToken(USFlagGrapheme), Is.True);
+        Assert.That(combined.ContainsToken(SkinTonedWaveGrapheme), Is.True);
         // Same multi-rune entry on both sides shouldn't double-count or
         // produce a non-canonical array.
         var withDup = (TokenSet.Runes("a") | TokenSet.Graphemes(USFlagGrapheme))
@@ -1251,11 +1251,11 @@ public class TokenSetTests
         var right = TokenSet.Runes("ac") | TokenSet.Graphemes(USFlagGrapheme);
         var intersected = left & right;
 
-        Assert.That(intersected.Contains('a'), Is.True);
-        Assert.That(intersected.Contains(USFlagGrapheme), Is.True);
-        Assert.That(intersected.Contains('b'), Is.False);
-        Assert.That(intersected.Contains('c'), Is.False);
-        Assert.That(intersected.Contains(SkinTonedWaveGrapheme), Is.False);
+        Assert.That(intersected.ContainsRune('a'), Is.True);
+        Assert.That(intersected.ContainsToken(USFlagGrapheme), Is.True);
+        Assert.That(intersected.ContainsRune('b'), Is.False);
+        Assert.That(intersected.ContainsRune('c'), Is.False);
+        Assert.That(intersected.ContainsToken(SkinTonedWaveGrapheme), Is.False);
     }
 
     [Test]
@@ -1298,16 +1298,16 @@ public class TokenSetTests
         var letters = TokenSet.Letters;
         var withoutVowels = letters & ~TokenSet.Runes("aeiou");
 
-        Assert.That(withoutVowels.Contains('b'), Is.True);
-        Assert.That(withoutVowels.Contains('a'), Is.False);
+        Assert.That(withoutVowels.ContainsRune('b'), Is.True);
+        Assert.That(withoutVowels.ContainsRune('a'), Is.False);
 
         // To keep a multi-rune entry through the operation, project
         // the rune-only part, complement that, then union the
         // multi-rune part back in.
         var withoutVowelsKeepingFlag =
             (letters & ~TokenSet.Runes("aeiou")) | TokenSet.Graphemes(USFlagGrapheme);
-        Assert.That(withoutVowelsKeepingFlag.Contains(USFlagGrapheme), Is.True);
-        Assert.That(withoutVowelsKeepingFlag.Contains('a'), Is.False);
+        Assert.That(withoutVowelsKeepingFlag.ContainsToken(USFlagGrapheme), Is.True);
+        Assert.That(withoutVowelsKeepingFlag.ContainsRune('a'), Is.False);
     }
 
     [Test]
@@ -1427,13 +1427,13 @@ public class TokenSetTests
         // surrogate-code-unit branch. Contains(string) has to agree with
         // Contains(int) for a one-char string holding the same surrogate.
         var set = TokenSet.Range(0, 0x10FFFF) | TokenSet.Surrogates;
-        Assert.That(set.Contains((int)HighSurrogateMinRune), Is.True);
+        Assert.That(set.ContainsRune((int)HighSurrogateMinRune), Is.True);
 
-        Assert.That(set.Contains(HighSurrogateMinText), Is.True,
+        Assert.That(set.ContainsToken(HighSurrogateMinText), Is.True,
             "Contains(string) must agree with Contains(int) for a lone high surrogate");
-        Assert.That(set.Contains(HighSurrogateMaxText), Is.True);
-        Assert.That(set.Contains(LowSurrogateMinText), Is.True);
-        Assert.That(set.Contains(LowSurrogateMaxText), Is.True);
+        Assert.That(set.ContainsToken(HighSurrogateMaxText), Is.True);
+        Assert.That(set.ContainsToken(LowSurrogateMinText), Is.True);
+        Assert.That(set.ContainsToken(LowSurrogateMaxText), Is.True);
     }
 
     [Test]
@@ -1443,15 +1443,15 @@ public class TokenSetTests
         // surrogate code unit isn't in any of its intervals.
         // Contains(string) on the same input has to agree.
         var scalars = TokenSet.Range(0, 0x10FFFF);
-        Assert.That(scalars.Contains((int)HighSurrogateMinRune), Is.False);
-        Assert.That(scalars.Contains(HighSurrogateMinText), Is.False);
-        Assert.That(scalars.Contains(LowSurrogateMaxText), Is.False);
+        Assert.That(scalars.ContainsRune((int)HighSurrogateMinRune), Is.False);
+        Assert.That(scalars.ContainsToken(HighSurrogateMinText), Is.False);
+        Assert.That(scalars.ContainsToken(LowSurrogateMaxText), Is.False);
 
         // A small set that doesn't touch the surrogate block at all
         // behaves the same way. That's the common case.
         var letters = TokenSet.Letters;
-        Assert.That(letters.Contains((int)HighSurrogateMinRune), Is.False);
-        Assert.That(letters.Contains(HighSurrogateMinText), Is.False);
+        Assert.That(letters.ContainsRune((int)HighSurrogateMinRune), Is.False);
+        Assert.That(letters.ContainsToken(HighSurrogateMinText), Is.False);
     }
 
     [Test]
@@ -1459,9 +1459,9 @@ public class TokenSetTests
     {
         // A set whose intervals miss the surrogate block returns false.
         var asciiLetters = TokenSet.Ascii.Letters;
-        Assert.That(asciiLetters.Contains(HighSurrogateMinText), Is.False);
-        Assert.That(asciiLetters.Contains(LowSurrogateMaxText), Is.False);
-        Assert.That(asciiLetters.Contains(EmojiStartHighSurrogateText), Is.False);
+        Assert.That(asciiLetters.ContainsToken(HighSurrogateMinText), Is.False);
+        Assert.That(asciiLetters.ContainsToken(LowSurrogateMaxText), Is.False);
+        Assert.That(asciiLetters.ContainsToken(EmojiStartHighSurrogateText), Is.False);
     }
 
     [Test]
@@ -1471,22 +1471,22 @@ public class TokenSetTests
         // so it doesn't match surrogates on its own. The user opts in via
         // TokenSet.Surrogates or SurrogateRange.
         var splitRange = TokenSet.Range(0xD000, 0xE000);
-        Assert.That(splitRange.Contains((int)HighSurrogateMinRune), Is.False);
-        Assert.That(splitRange.Contains(HighSurrogateMinText), Is.False);
+        Assert.That(splitRange.ContainsRune((int)HighSurrogateMinRune), Is.False);
+        Assert.That(splitRange.ContainsToken(HighSurrogateMinText), Is.False);
 
         var withSurrogates = splitRange | TokenSet.Surrogates;
-        Assert.That(withSurrogates.Contains((int)HighSurrogateMinRune), Is.True);
-        Assert.That(withSurrogates.Contains(HighSurrogateMinText), Is.True);
-        Assert.That(withSurrogates.Contains(LowSurrogateMaxText), Is.True);
+        Assert.That(withSurrogates.ContainsRune((int)HighSurrogateMinRune), Is.True);
+        Assert.That(withSurrogates.ContainsToken(HighSurrogateMinText), Is.True);
+        Assert.That(withSurrogates.ContainsToken(LowSurrogateMaxText), Is.True);
 
         var leadingHalf = TokenSet.SurrogateRange(0xD800, 0xDBFF);
-        Assert.That(leadingHalf.Contains(HighSurrogateMinText), Is.True);
-        Assert.That(leadingHalf.Contains(LowSurrogateMaxText), Is.False);
+        Assert.That(leadingHalf.ContainsToken(HighSurrogateMinText), Is.True);
+        Assert.That(leadingHalf.ContainsToken(LowSurrogateMaxText), Is.False);
 
         // A Range strictly below the surrogate block doesn't match either.
         var asciiOnly = TokenSet.Range(0x0000, 0x007F);
-        Assert.That(asciiOnly.Contains((int)HighSurrogateMinRune), Is.False);
-        Assert.That(asciiOnly.Contains(HighSurrogateMinText), Is.False);
-        Assert.That(asciiOnly.Contains(LowSurrogateMaxText), Is.False);
+        Assert.That(asciiOnly.ContainsRune((int)HighSurrogateMinRune), Is.False);
+        Assert.That(asciiOnly.ContainsToken(HighSurrogateMinText), Is.False);
+        Assert.That(asciiOnly.ContainsToken(LowSurrogateMaxText), Is.False);
     }
 }
