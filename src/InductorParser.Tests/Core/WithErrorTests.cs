@@ -149,6 +149,21 @@ public class WithErrorTests
     }
 
     [Test]
+    public void WithError_rejects_null_message_at_construction()
+    {
+        Assert.Multiple(() =>
+        {
+            var namedException = Assert.Throws<ArgumentNullException>(
+                () => Token('a').WithError(null!));
+            Assert.That(namedException!.ParamName, Is.EqualTo("errorMessage"));
+
+            var forcedException = Assert.Throws<ArgumentNullException>(
+                () => Token('a').WithError(null!, forced: true));
+            Assert.That(forcedException!.ParamName, Is.EqualTo("errorMessage"));
+        });
+    }
+
+    [Test]
     public void WithError_is_set_once()
     {
         // The fluent API encourages chaining, and a second .WithError on the

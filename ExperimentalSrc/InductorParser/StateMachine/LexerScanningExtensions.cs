@@ -116,7 +116,7 @@ internal static class LexerScanningExtensions
             bool inSet;
             if (Lexer.TryPeekRune(input, position, out int runeValue, out _))
             {
-                inSet = candidates.Contains(runeValue);
+                inSet = candidates.ContainsRune(runeValue);
             }
             else
             {
@@ -133,7 +133,7 @@ internal static class LexerScanningExtensions
                 // the cluster is a single rune. A `len == 1` gate would
                 // skip a multi-char cluster a WithinToken alternative
                 // could still match.
-                inSet = candidates.Contains((int)input[position]);
+                inSet = candidates.ContainsRune((int)input[position]);
             }
             if (inSet)
                 return;
@@ -243,7 +243,7 @@ internal static class LexerScanningExtensions
         while (lexer.Position < endPosition)
         {
             if (Lexer.TryPeekRune(input, lexer.Position, out int runeValue, out _)
-                && firstRunes.Contains(runeValue)
+                && firstRunes.ContainsRune(runeValue)
                 && AnyLiteralMatchesAt(literals, input, lexer.Position, endPosition))
             {
                 return;
