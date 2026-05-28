@@ -242,37 +242,6 @@ public class OneOfRuleTests
     }
 
     [Test]
-    [RecursiveEngineOnly]
-    public void Or_OneOf_skips_when_peek_is_outside_set()
-    {
-        // OneOf publishes (set, Always, MustBeIn). Or peeks 'b',
-        // sees 'b' isn't in {a}, skips OneOf via the shortcut, falls to
-        // the literal "b" alternative. The SKIP line proves the
-        // shortcut fired.
-        var sink = NewSink();
-        var rule = Or(OneOf(TokenSet.Runes("a")), Literal("b"));
-        var result = rule.Parse("b", new ParseOptions { TraceSink = sink });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Contain("SKIP | OneOf:"));
-    }
-
-    [Test]
-    [RecursiveEngineOnly]
-    public void Or_OneOf_runs_when_peek_is_in_set()
-    {
-        // Mirror of the previous test: peek 'a' is in {a}, so the
-        // shortcut doesn't skip. OneOf runs and matches. No SKIP line
-        // for OneOf appears in the trace.
-        var sink = NewSink();
-        var rule = Or(OneOf(TokenSet.Runes("a")), Literal("b"));
-        var result = rule.Parse("a", new ParseOptions { TraceSink = sink });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | OneOf:"));
-    }
-
-    [Test]
     public void OneOf_in_OneOrMore_matches_after_FormC_canonical_singleton_substitution()
     {
         // U+212B ANGSTROM SIGN is a canonical singleton: under FormC it

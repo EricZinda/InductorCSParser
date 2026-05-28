@@ -98,9 +98,7 @@ public readonly ref struct Token
                 char c = Source[Offset];
                 return char.IsSurrogate(c) ? -1 : c;
             }
-            if (Length == 2
-                && char.IsHighSurrogate(Source[Offset])
-                && char.IsLowSurrogate(Source[Offset + 1]))
+            if (Length == 2 && SurrogateHelpers.IsSurrogatePairAt(Source, Offset))
             {
                 return char.ConvertToUtf32(Source[Offset], Source[Offset + 1]);
             }
@@ -120,13 +118,9 @@ public readonly ref struct Token
         get
         {
             if (IsEof || Length == 0) return -1;
+            if (Length >= 2 && SurrogateHelpers.IsSurrogatePairAt(Source, Offset))
+                return char.ConvertToUtf32(Source[Offset], Source[Offset + 1]);
             char c0 = Source[Offset];
-            if (char.IsHighSurrogate(c0))
-            {
-                if (Length >= 2 && char.IsLowSurrogate(Source[Offset + 1]))
-                    return char.ConvertToUtf32(c0, Source[Offset + 1]);
-                return -1;
-            }
             if (char.IsSurrogate(c0)) return -1;
             return c0;
         }

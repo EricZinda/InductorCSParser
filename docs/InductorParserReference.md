@@ -260,6 +260,29 @@ Rules are mutable up until `Compile` runs and then sealed. `.As(...)`, `.Flatten
 
 Default values for `Flatten`, error messages, and so on mostly match the C++ defaults from the original source. `InlineWhitespace()` and `AnyWhitespace()` default to `FlattenType.Delete`. `Token('=')` defaults to `FlattenType.Delete`. `And(...)` defaults to `FlattenType.Flatten`. `Integer()` and `Float()` are compositions whose outer rule also defaults to `FlattenType.Flatten`; either chain `.As(name)` (which upgrades the default to `Preserve`) or call `.Preserve()` directly when you want to find them as wrapper nodes. `Parse` applies these types to the tree before returning: `Delete` nodes are dropped, `Flatten` wrappers have their children lifted into the parent, and `Preserve` wrappers survive. `ParseOptions.PreserveAllSymbols` turns the whole pass off and gives you back a grammar-shaped debug tree with every wrapper in place.
 
+### Counted Repetition Over a Rule That Can Match Empty
+
+The repetition rules (`OneOrMore`, `ZeroOrMore`, `Optional`, `AtLeast`, `AtMost`, `Exactly`, `BetweenInclusive`) run their inner in a greedy loop. When the inner can succeed without consuming input (`Optional`, `ZeroOrMore`, `Peek`, `Not`, and similar zero-width rules), one rule covers what the loop does: **only one empty success is counted.**
+
+Each successful inner match counts. The first iteration that succeeds without advancing the lexer is the last: it counts once and the loop breaks. The break is what makes the loop terminate (a nullable inner would otherwise match empty forever at the same position), and the count is what makes `OneOrMore(Optional(X))` succeed on input where no `X` appears:
+
+```csharp
+OneOrMore(Optional(OneOf("a"))).Parse("");    // success, matched ""
+ZeroOrMore(Optional(OneOf("a"))).Parse("");   // success, matched ""
+```
+
+The consequence is that a nullable inner inflates the count by exactly one over the real consuming matches. `AtLeast(N, Optional(a))` therefore requires `N - 1` actual a's, not N:
+
+```csharp
+AtLeast(2, Optional(OneOf("a"))).Parse("a");   // success (1 real + 1 empty = 2)
+AtLeast(3, Optional(OneOf("a"))).Parse("a");   // fail   (count tops out at 2)
+AtLeast(3, Optional(OneOf("a"))).Parse("aa");  // success (2 real + 1 empty = 3)
+```
+
+This isn't unique to InductorParser. Every greedy PEG has to settle this one way or another, because counted repetition over a rule that can match empty doesn't terminate under the natural recursive semantics. Ford's PEG paper ([Ford 2004](https://bford.info/pub/lang/peg/), §3.3 "*-loop condition") identifies it as one of the two structural non-termination cases (the other is left recursion). Some implementations refuse to build the grammar at all (Lua's LPeg throws "loop body may accept empty string"). InductorParser instead runs it via the "only one empty success" rule, which is the cheapest terminating choice that still lets a normal `OneOrMore` of a sometimes-empty inner succeed.
+
+If you find yourself writing `OneOrMore(Optional(X))` or `AtLeast(N, Optional(X))`, the `Optional` is almost always a mistake. Drop it: `OneOrMore(X)` and `AtLeast(N, X)` say what you mean and don't depend on the +1 from the empty terminal.
+
 ### User-Defined Rules
 
 `Rule` is an abstract class and users can derive from it to add matching logic the built-in composites don't cover. The contract a subclass has to satisfy:
@@ -526,6 +549,36 @@ var result = grammar.Parse(input, options);
 `TraceSink` is `TextWriter?`. Set it to `Console.Out` for the C++ behavior, set it to a file writer to capture a trace, set it to a custom writer to filter or tag lines. Leave it null and tracing is off, with trace-message construction short-circuited by a cheap null check that IL2CPP devirtualizes.
 
 The trace format matches the C++ version exactly, including the indentation-by-transaction-depth trick. We do this on purpose: the C++ test corpus has traced output captured in comments and docs, and matching the format lets us reuse those examples as reference material.
+
+## Thread Safety
+
+The rule for sharing a grammar across threads is short: compile it on one thread, then parse it from as many threads as you like.
+
+A grammar is built and compiled once, on a single thread. After `Compile` returns the whole rule graph is sealed and immutable: ids, `FirstConsumedTokens`, projected literal text, and the normalization form are all fixed, and every modification method throws. Parsing never writes back to the grammar. Each `Parse` call builds its own lexer, its own `Symbol` tree, and its own `ParseResult`, all of which point into the grammar and the input but never mutate the grammar. So once a grammar is compiled, any number of threads can call `Parse` on it at the same time with no locking. That immutability is the whole reason the grammar gets sealed after compile, and "build once, parse many times" is the model the library is designed around.
+
+What is *not* thread-safe is `Compile` itself. Compilation walks the graph and mutates each rule across several passes, and those passes assume nothing else is touching the graph at the same time. Two threads compiling one grammar at once will corrupt it. The catch is that `Parse` auto-compiles on its first call, so if you share an *uncompiled* grammar and the first parses land on several threads at once, they race on that hidden compile. The usual symptom is a confusing `InvalidOperationException` out of compile ("...has already been compiled and can't be reused in another grammar"), and occasionally a wrong parse result. This is by design: compilation is a build step, not a per-parse operation, so the library doesn't pay to make it thread-safe. Doing the compile yourself, once, keeps it off the parse hot path.
+
+So compile before you share. Two ways:
+
+```csharp
+// Option A: compile explicitly at startup (single thread), then share.
+static readonly Rule Grammar = BuildGrammar().Compile();
+
+// Option B: one warm-up parse on a single thread before going wide.
+static readonly Rule Grammar = BuildGrammar();
+...
+Grammar.Parse("");   // forces the one-time compile here, single-threaded
+// now safe to Parse from many threads
+```
+
+Option A is the clean one, and it doubles as a startup check that the grammar is well-formed: compile errors (an unbound `LateBoundRule`, a literal that isn't in the chosen normalization form, two rules sharing an explicit id) surface at program start instead of on the first parse.
+
+A few smaller points for the concurrent case:
+
+- The parser keeps a per-input cache of grapheme-cluster boundaries, keyed on the input *string instance*. If two threads parse the same string instance (an interned literal, a cached config string), they share that one cache. It's internally synchronized, so that case is safe too.
+- `ParseCancellation` is built for cross-thread use. Hold the instance and call `Cancel()` from any thread, and the running parse picks it up on its next periodic budget check (see the next section).
+- `ParseOptions` is a per-call bag of settings. Building a fresh one per parse is simplest. Sharing one across concurrent parses is fine as long as you treat it as read-only once parsing has started, since the parser only reads from it.
+- If you set a `TraceSink`, remember a `TextWriter` generally isn't thread-safe. Don't point concurrent traced parses at one unsynchronized writer, or the trace lines will interleave and corrupt each other. Tracing is a debug aid, so this rarely comes up in production.
 
 ## Catastrophic Backtracking and Timeouts
 

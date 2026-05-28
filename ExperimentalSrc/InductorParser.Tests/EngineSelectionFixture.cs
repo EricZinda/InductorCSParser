@@ -43,13 +43,14 @@ public class EngineSelectionFixture
         TestContext.WriteLine($"InductorParser default engine: {(useStateMachine ? "statemachine" : "recursive")}");
 
         // INDUCTOR_DISABLE_LOOKAHEAD_SHORTCUT=1 disables the lookahead
-        // skip in both engines so the suite can A/B against the
-        // optimization. Anything that fails outside trace output (which
-        // legitimately loses its SKIP lines) is a soundness bug.
+        // skip in the StateMachine engine so the suite can A/B against
+        // the optimization. Anything that fails outside trace output
+        // (which legitimately loses its SKIP lines) is a soundness bug.
+        // The recursive engine no longer has this shortcut.
         var disableShortcut = Environment.GetEnvironmentVariable("INDUCTOR_DISABLE_LOOKAHEAD_SHORTCUT");
-        Rule.DisableLookaheadShortcut = !string.IsNullOrEmpty(disableShortcut)
+        Lowerer.DisableLookaheadShortcut = !string.IsNullOrEmpty(disableShortcut)
             && !string.Equals(disableShortcut, "0", StringComparison.Ordinal)
             && !string.Equals(disableShortcut, "false", StringComparison.OrdinalIgnoreCase);
-        TestContext.WriteLine($"InductorParser lookahead shortcut: {(Rule.DisableLookaheadShortcut ? "disabled" : "enabled")}");
+        TestContext.WriteLine($"InductorParser lookahead shortcut: {(Lowerer.DisableLookaheadShortcut ? "disabled" : "enabled")}");
     }
 }

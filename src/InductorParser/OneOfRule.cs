@@ -115,6 +115,4 @@ internal sealed class OneOfRule : Rule
         return leafSymbol;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.FirstTokenMustBeInSet(_set);
 }

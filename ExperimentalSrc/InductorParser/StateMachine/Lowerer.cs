@@ -20,6 +20,15 @@ namespace InductorParser.StateMachine;
 //      rule completes one way or the other.
 internal static class Lowerer
 {
+    // Process-wide kill switch for the lookahead shortcut. When true,
+    // CanSkipUnreachableAlt always returns false, so no Or alternative
+    // gets a peek pre-check. Used to A/B the optimization: any test
+    // failure outside trace output under DisableLookaheadShortcut=true
+    // is a soundness bug in the shortcut path. Also useful for
+    // measuring the shortcut's performance contribution. Set once at
+    // process start (e.g. from a test fixture) before any Lower call.
+    internal static bool DisableLookaheadShortcut;
+
     public static CompiledProgram Lower(Rule rootRule, bool preserveAllSymbols = false)
     {
         // Only force-compile when the caller hasn't already done so.
@@ -139,6 +148,14 @@ internal sealed class LoweringContext
     public readonly Rule RootRule;
     public readonly bool PreserveAllSymbols;
 
+    // Side table of per-rule first-token / advance / polarity metadata
+    // and a set of rules whose subtree carries a .WithError. Computed
+    // by RuleStartAnalysis at LoweringContext construction. The
+    // recursive evaluator in src/InductorParser/ no longer carries
+    // these on Rule itself; the StateMachine recomputes them here so
+    // its dispatch-shortcut sites can read them.
+    public readonly RuleStartAnalysis.Result Analysis;
+
     // For cyclic rules: the index of the "shared" entry that callers
     // Call into. Allocated lazily the first time a cyclic rule is
     // lowered. Subsequent encounters Call this index.
@@ -154,6 +171,7 @@ internal sealed class LoweringContext
     {
         RootRule = rootRule;
         PreserveAllSymbols = preserveAllSymbols;
+        Analysis = RuleStartAnalysis.Build(rootRule);
     }
 
     // Resolve the FlattenType the rule's outputs actually contribute
@@ -463,10 +481,7 @@ internal sealed class LoweringContext
                 // entries' first runes into the rune intervals so a
                 // peek of the cluster's first rune still passes the
                 // check when the rule matches a multi-rune cluster.
-                // The recursive engine's CannotMatchLookahead does the
-                // same thing implicitly via its first-rune-or-cluster
-                // membership test.
-                TokenSet smSet = child.FirstConsumedTokens.LookaheadFirstRunes;
+                TokenSet smSet = Analysis.Get(child).FirstConsumedTokens.LookaheadFirstRunes;
                 int tokenSetIdx = InternTokenSet(smSet);
                 altStart = AddState(LoweredOpCode.CheckPeekedRuneInSet, tokenSetIdx, pushIdx, nextAltStartWithoutPop);
             }
@@ -523,26 +538,26 @@ internal sealed class LoweringContext
     }
 
     // Whether this alternative could be safely skipped on a peeked-rune
-    // mismatch. Mirrors OrRule's runtime guard: only skip when the
-    // child Always advances (so its first rune is guaranteed to be
-    // consumed) AND has a strictly tighter FirstConsumedTokens than the
-    // universe. Alternatives whose subtree carries any .WithError are NOT
-    // skipped, because the existing code lets them run so the message
-    // can reach DeepestFailureMessage on a parse failure.
-    // HasErrorMessageInSubtree is the subtree-aware check; the immediate-
-    // only `child.ErrorMessage == null` would be a half-check that would
-    // skip a composite child whose own ErrorMessage is null even when a
-    // deeper rule in its subtree carries the user's message. Same shape
-    // as OrRule's runtime guard.
-    private static bool CanSkipUnreachableAlt(Rule child)
+    // mismatch. Only skip when the child Always advances (so its first
+    // rune is guaranteed to be consumed) AND has a strictly tighter
+    // FirstConsumedTokens than the universe. Alternatives whose subtree
+    // carries any .WithError are NOT skipped, because the existing code
+    // lets them run so the message can reach DeepestFailureMessage on a
+    // parse failure. HasErrorMessageInSubtree is the subtree-aware check;
+    // the immediate-only `child.ErrorMessage == null` would be a half-
+    // check that would skip a composite child whose own ErrorMessage is
+    // null even when a deeper rule in its subtree carries the user's
+    // message.
+    private bool CanSkipUnreachableAlt(Rule child)
     {
-        if (Rule.DisableLookaheadShortcut) return false;
-        if (child.Advance != Advance.Always) return false;
-        if (child.HasErrorMessageInSubtree) return false;
+        if (Lowerer.DisableLookaheadShortcut) return false;
+        var requirements = Analysis.Get(child);
+        if (requirements.Advance != Advance.Always) return false;
+        if (Analysis.HasError(child)) return false;
         // FirstConsumedTokens equality with Universe means the set
         // accepts any rune, so the peek check would never skip. Avoid
         // the wasted state.
-        if (child.FirstConsumedTokens.Equals(TokenSet.Universe)) return false;
+        if (requirements.FirstConsumedTokens.Equals(TokenSet.Universe)) return false;
         // MustNotBeIn polarity inverts the membership test: peek IN
         // set => rule definitely fails. The SM's CheckPeekedRuneInSet
         // opcode tests the positive direction (peek IN set => alt is
@@ -552,7 +567,7 @@ internal sealed class LoweringContext
         // through the general PushBacktrack path so they get tried
         // without the peek pre-check. See backlog for the SM
         // polarity-aware dispatch follow-up.
-        if (child.Polarity == Polarity.MustNotBeIn) return false;
+        if (requirements.Polarity == Polarity.MustNotBeIn) return false;
         return true;
     }
 
@@ -584,7 +599,7 @@ internal sealed class LoweringContext
         for (int i = 0; i < altRecords.Count; i++)
         {
             flattenedSets[i] = altRecords[i].skipEligible
-                ? altRecords[i].child.FirstConsumedTokens.LookaheadFirstRunes
+                ? Analysis.Get(altRecords[i].child).FirstConsumedTokens.LookaheadFirstRunes
                 : default;
         }
         // altRecords is reverse-priority. Walk forward through indices
@@ -852,7 +867,8 @@ internal sealed class LoweringContext
         for (int index = 0; index < orRule.Children.Count - 1; index++)
         {
             Rule alternative = orRule.Children[index];
-            if (alternative.ErrorMessage != null || alternative.Advance != Advance.Always)
+            var altRequirements = Analysis.Get(alternative);
+            if (alternative.ErrorMessage != null || altRequirements.Advance != Advance.Always)
                 return false;
             // MustNotBeIn polarity inverts the meaning of
             // FirstConsumedTokens: the published set is the rule's
@@ -863,17 +879,13 @@ internal sealed class LoweringContext
             // scanner jump to 'x' / 'y' and the AnyToken fallback consume
             // them, while the runes the user wanted captured by NoneOf
             // are never read). Bail out so the per-iteration path runs.
-            // Mirrors the recursive engine's TryCreateScannerSkip
-            // polarity gate.
-            if (alternative.Polarity != Polarity.MustBeIn)
+            if (altRequirements.Polarity != Polarity.MustBeIn)
                 return false;
             // Flatten multi-rune entries' first runes into the rune
             // intervals so AdvanceUntilRuneIn (rune-only) and the
             // BMP IndexOfAny fast path still pull the scanner to
             // candidate positions for multi-rune-cluster matches.
-            // See the recursive engine's TryCreateScannerSkip for the
-            // sibling shape.
-            candidates |= alternative.FirstConsumedTokens.LookaheadFirstRunes;
+            candidates |= altRequirements.FirstConsumedTokens.LookaheadFirstRunes;
 
             if (allCandidatesAreLiterals
                 && !TryCollectScannerLiteralCandidates(alternative, literalCandidates))
@@ -940,13 +952,12 @@ internal sealed class LoweringContext
     // Walk an alternative looking for a flat list of literal candidates.
     // Returns false on the first non-literal-shaped alternative, leaving
     // the caller to drop the literal payload and fall back to the
-    // generic first-rune skip. Mirrors the recursive evaluator's
-    // TryCollectLiteralScannerCandidates.
-    private static bool TryCollectScannerLiteralCandidates(
+    // generic first-rune skip.
+    private bool TryCollectScannerLiteralCandidates(
         Rule rule,
         List<LiteralScannerCandidate> candidates)
     {
-        if (rule.ErrorMessage != null || rule.Advance != Advance.Always)
+        if (rule.ErrorMessage != null || Analysis.Get(rule).Advance != Advance.Always)
             return false;
 
         switch (rule)

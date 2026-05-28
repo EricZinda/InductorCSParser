@@ -146,7 +146,7 @@ internal static class Stepper
         // inside the lexer is a single pass that can cross the whole
         // input, so without a tick here the surrounding ZeroOrMore frame
         // pushes alone wouldn't drive the periodic budget check.
-        lexer.TickPeriodicBudget();
+        lexer.Budget.TickPeriodic();
         TokenSet candidates = machine.Program.TokenSets[spec.CandidatesTokenSetIndex];
 
         if (spec.Literals is { Length: > 0 })
@@ -430,7 +430,7 @@ internal static class Stepper
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Step_PushBacktrack(in State state, ref Machine machine)
     {
-        machine.Lexer.TickPeriodicBudget();
+        machine.Lexer.Budget.TickPeriodic();
         machine.PushBacktrack(machine.Lexer.Position, machine.OutputOps.Count, machine.CallTop);
         return state.OnSuccess;
     }
@@ -467,7 +467,7 @@ internal static class Stepper
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Step_PushBetween(in State state, ref Machine machine)
     {
-        machine.Lexer.TickPeriodicBudget();
+        machine.Lexer.Budget.TickPeriodic();
         int dataPacked = state.Data;
         int atLeast = dataPacked & 0xFFFF;
         int atMost = (dataPacked >> 16) & 0xFFFF;
@@ -517,7 +517,7 @@ internal static class Stepper
         // loop like OneOrMore(OneOf(letters)) on a long input still
         // drives the periodic RuleCountLimit / Timeout / Cancellation
         // check.
-        machine.Lexer.TickPeriodicBudget();
+        machine.Lexer.Budget.TickPeriodic();
         ref var between = ref machine.BacktrackStack[machine.BacktrackTop - 1];
         between.Counter++;
         if (between.Counter < between.AtMost)
@@ -566,10 +566,10 @@ internal static class Stepper
         // non-cyclic rules are inlined. CallTop after the push is the
         // current call depth, which the lexer's budget check compares
         // against MaxDepth and increments the periodic-check counter. No
-        // matching ExitRuleBudgetChecks is needed because backtrack
+        // matching ExitRule is needed because backtrack
         // frames carry CallStackHeight and restore CallTop directly when
         // they fire.
-        machine.Lexer.EnterRuleAtDepthBudgetChecks(machine.CallTop);
+        machine.Lexer.Budget.EnterRuleAtDepth(machine.CallTop);
         return state.Data;
     }
 
@@ -578,7 +578,7 @@ internal static class Stepper
     {
         machine.Program.SubprogramRuleByEntry.TryGetValue(state.Data, out Rule? sourceRule);
         machine.PushCall(state.OnSuccess, state.OnFailure, machine.OutputOps.Count, sourceRule);
-        machine.Lexer.EnterRuleAtDepthBudgetChecks(machine.CallTop);
+        machine.Lexer.Budget.EnterRuleAtDepth(machine.CallTop);
         return state.Data;
     }
 
@@ -658,7 +658,7 @@ internal static class Stepper
             // when a sibling already recorded an empty slot at the
             // same position.
             machine.RecordFailure(
-                machine.Lexer.DeepestFailure,
+                machine.Lexer.DeepestFailurePosition,
                 machine.Lexer.DeepestFailureMessage);
             return state.OnFailure;
         }
@@ -817,7 +817,7 @@ internal static class Stepper
 
         while (true)
         {
-            lexer.TickPeriodicBudget();
+            lexer.Budget.TickPeriodic();
             int pos = lexer.Position;
             if (pos >= inputLen)
                 return spec.EofIsTerminator ? state.OnSuccess : spec.OnEofFailState;

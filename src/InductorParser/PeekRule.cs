@@ -15,9 +15,9 @@ namespace InductorParser;
 // Peek(Literal("else")).
 internal sealed class PeekRule : Rule
 {
-    public PeekRule(Rule inner) : base(FlattenType.Delete, inner)
+    public PeekRule(Rule inner)
+        : base(FlattenType.Delete, inner ?? throw new ArgumentNullException(nameof(inner)))
     {
-        if (inner == null) throw new ArgumentNullException(nameof(inner));
     }
 
     private Rule Inner => Children[0];
@@ -56,6 +56,4 @@ internal sealed class PeekRule : Rule
             : Symbol.Discarded;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.NeverAdvances;
 }

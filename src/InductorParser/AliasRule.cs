@@ -43,9 +43,9 @@ public sealed class AliasRule : Rule
 {
     private readonly Rule _inner;
 
-    public AliasRule(Rule inner) : base(FlattenType.Flatten, inner)
+    public AliasRule(Rule inner)
+        : base(FlattenType.Flatten, inner ?? throw new ArgumentNullException(nameof(inner)))
     {
-        if (inner == null) throw new ArgumentNullException(nameof(inner));
         _inner = inner;
     }
 
@@ -123,6 +123,4 @@ public sealed class AliasRule : Rule
             : new Symbol(Id, FlattenType, outputSymbols, matchedSpan, lexer.Context);
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.PassesThroughTo(_inner);
 }

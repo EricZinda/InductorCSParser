@@ -70,6 +70,24 @@ public class AndRuleTests
     }
 
     [Test]
+    public void And_rejects_null_child_rule()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => And(Token('a'), null!));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("children"));
+        Assert.That(exception.Message, Does.Contain("index 1"));
+    }
+
+    [Test]
+    public void And_rejects_empty_child_list()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => And());
+
+        Assert.That(exception!.ParamName, Is.EqualTo("children"));
+        Assert.That(exception.Message, Does.Contain("at least one child"));
+    }
+
+    [Test]
     [RecursiveEngineOnly]
     public void And_trace_success_produces_expected_output()
     {
@@ -129,37 +147,6 @@ public class AndRuleTests
         var rule = And(Token('a'), Token('b'));
         rule.Compile();
         Assert.Throws<InvalidOperationException>(() => rule.As("late"));
-    }
-
-    [Test]
-    [RecursiveEngineOnly]
-    public void Or_And_skips_when_first_child_cannot_match_peek()
-    {
-        // And publishes the first-token set of its leading
-        // Always-consuming child. And(Token('a'), Token('b'))'s
-        // first-set is {'a'}. Peek 'x' isn't in {'a'}, so the outer
-        // Or skips the And branch entirely (one SKIP line for
-        // the And, none for its inner Token children).
-        var sink = NewSink();
-        var rule = Or(And(Token('a'), Token('b')), Literal("x"));
-        var result = rule.Parse("x", new ParseOptions { TraceSink = sink });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Contain("SKIP | And:"));
-    }
-
-    [Test]
-    [RecursiveEngineOnly]
-    public void Or_And_runs_when_first_child_can_match_peek()
-    {
-        // Peek 'a' is in And's first-set ({'a'}), so the outer Or
-        // doesn't skip the And — it runs and matches "ab".
-        var sink = NewSink();
-        var rule = Or(And(Token('a'), Token('b')), Literal("x"));
-        var result = rule.Parse("ab", new ParseOptions { TraceSink = sink });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | And:"));
     }
 
     [Test]

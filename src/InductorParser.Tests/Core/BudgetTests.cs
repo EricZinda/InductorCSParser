@@ -289,7 +289,7 @@ public class BudgetTests
         // cluster with thousands of combining marks would crash the
         // process with StackOverflowException, which .NET can't catch.
         //
-        // The sub-lexer delegates EnterRuleBudgetChecks/ExitRuleBudgetChecks to the outer, so
+        // The sub-lexer's budget delegates EnterRule/ExitRule to the outer, so
         // MaxDepth covers the COMBINED outer-plus-inner depth rather
         // than letting the inner spend a fresh MaxDepth on top of the
         // outer's depth. This test uses a small enough cluster to stay
@@ -318,7 +318,7 @@ public class BudgetTests
     [Test]
     public void WithinToken_inner_depth_combines_with_outer_depth()
     {
-        // The sub-lexer delegates EnterRuleBudgetChecks/ExitRuleBudgetChecks to the outer, so
+        // The sub-lexer's budget delegates EnterRule/ExitRule to the outer, so
         // the inner's recursion stacks on top of the outer's CURRENT
         // depth at the moment WithinToken fires. MaxDepth covers the
         // combined outer + inner depth, not "a fresh MaxDepth for the
@@ -359,13 +359,13 @@ public class BudgetTests
     {
         // Regression guard for the abort-position bug: when the budget
         // trips, every active transaction unwinds and lexer.Position
-        // rolls back to 0. Rule.Parse has to use lexer.DeepestFailure
+        // rolls back to 0. Rule.Parse has to use lexer.DeepestFailurePosition
         // (a high-water mark that isn't rolled back) to surface a
         // meaningful "how far did we get" hint.
         //
         // Grammar: each iteration tries Literal("ab") first (matches 'a',
         // fails on the second Token, records a failure), then falls back
-        // to Token('a') which succeeds. DeepestFailure grows with every
+        // to Token('a') which succeeds. DeepestFailurePosition grows with every
         // iteration, so by the time the budget trips it's well above 0.
         // If Parse used lexer.Position here (pre-fix behavior), the
         // rolled-back value of 0 would make this assertion fail.
@@ -386,10 +386,10 @@ public class BudgetTests
         //   - 1 + 3N = 1024 puts the trip mid-iteration 341, on the
         //     EnterRule of Token('a') for iter 341. By that point Literal
         //     has just recorded a failure at position 341. That's the
-        //     value DeepestFailure has when Parse converts the abort into
+        //     value DeepestFailurePosition has when Parse converts the abort into
         //     a ParseResult, so ErrorCharIndex is exactly 341.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(341),
-            "ErrorCharIndex should reflect DeepestFailure, not the rolled-back lexer.Position.");
+            "ErrorCharIndex should reflect DeepestFailurePosition, not the rolled-back lexer.Position.");
     }
 
     // Regression tests: when a budget trips while a lookahead Probe is
@@ -482,7 +482,7 @@ public class BudgetTests
 
         // Pre-cancelled token: the first periodic budget check fires at
         // rule invocation 0 (0 & 1023 == 0), before any rule has been
-        // entered. DeepestFailure and Position are both genuinely 0 at
+        // entered. DeepestFailurePosition and Position are both genuinely 0 at
         // that instant, so the frozen "deepest at abort" is 0. The two
         // sibling tests (RuleCountLimit, Timeout) reach depth 146 only
         // because neither can trip at invocation 0 by construction.

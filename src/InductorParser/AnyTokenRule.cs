@@ -43,6 +43,4 @@ internal sealed class AnyTokenRule : Rule
         return leafSymbol;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.AlwaysAdvancesByOneToken;
 }

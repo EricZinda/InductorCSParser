@@ -50,6 +50,17 @@ public class OneOrMoreRuleTests
     }
 
     [Test]
+    public void OneOrMore_of_a_nullable_inner_succeeds_via_a_zero_width_match()
+    {
+        // Optional always matches. Only one empty success is counted,
+        // satisfying OneOrMore's AtLeast of 1.
+        var result = OneOrMore(Optional(OneOf("a"))).Parse("");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.ToString(), Is.EqualTo(""));
+    }
+
+    [Test]
     public void OneOrMore_named_WithError_anchors_at_deepest_descendant_failure()
     {
         // Inner And(Letter, Letter) consumes the first letter then fails

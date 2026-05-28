@@ -21,15 +21,16 @@ internal static class Program
     public static int Main(string[] args)
     {
         // Honor INDUCTOR_DISABLE_LOOKAHEAD_SHORTCUT for A/B-measuring the
-        // Or / BetweenInclusive lookahead-skip optimization in the
-        // rebar grammars. Set the env var to any non-empty, non-"0",
-        // non-"false" value to disable the shortcut for this run. Logged
-        // to stderr so the result CSV stays clean.
+        // StateMachine's Or lookahead-skip optimization in the rebar
+        // grammars. Set the env var to any non-empty, non-"0", non-"false"
+        // value to disable the shortcut for this run. Logged to stderr so
+        // the result CSV stays clean. The recursive engine no longer has
+        // this shortcut, so the env var only affects StateMachine runs.
         var disableShortcut = Environment.GetEnvironmentVariable("INDUCTOR_DISABLE_LOOKAHEAD_SHORTCUT");
-        InductorParser.Rule.DisableLookaheadShortcut = !string.IsNullOrEmpty(disableShortcut)
+        InductorParser.StateMachine.Lowerer.DisableLookaheadShortcut = !string.IsNullOrEmpty(disableShortcut)
             && !string.Equals(disableShortcut, "0", StringComparison.Ordinal)
             && !string.Equals(disableShortcut, "false", StringComparison.OrdinalIgnoreCase);
-        if (InductorParser.Rule.DisableLookaheadShortcut)
+        if (InductorParser.StateMachine.Lowerer.DisableLookaheadShortcut)
             Console.Error.WriteLine("InductorParser lookahead shortcut: DISABLED");
 
         try
@@ -146,7 +147,7 @@ internal static class Program
     {
         public static int Run()
         {
-            var enabled = !InductorParser.Rule.DisableLookaheadShortcut;
+            var enabled = !InductorParser.StateMachine.Lowerer.DisableLookaheadShortcut;
             Console.Out.WriteLine($"# Lookahead shortcut: {(enabled ? "ENABLED" : "DISABLED")}");
             Console.Out.WriteLine("# columns: case, model, iterations, min_ns, median_ns, mean_ns, count");
 

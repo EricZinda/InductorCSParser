@@ -7,9 +7,10 @@ namespace InductorParser.Lexing;
 // A per-input cache of UAX #29 grapheme cluster boundaries, populated
 // lazily as positions are queried. The single source of truth for
 // "where does one user-visible character end and the next begin" in
-// this parser. Replaces direct per-call invocations of
-// StringInfo.GetNextTextElement, which allocates a substring on each
-// call just to read the cluster length.
+// this parser. Caching the boundaries once means reading a cluster
+// length is a bool-array lookup rather than a
+// StringInfo.GetNextTextElement call, which allocates a substring on
+// every query.
 //
 // Runtime caveat: cluster detection delegates to
 // System.Globalization.StringInfo, which is UAX #29 rev. 35 compliant
@@ -31,7 +32,7 @@ namespace InductorParser.Lexing;
 //
 // The cache is populated by walking a TextElementEnumerator one
 // MoveNext at a time, recording each cluster start in a bool[] sized
-// to the input. bool[] gives O(1) IsClusterStart lookups; LengthAt
+// to the input. bool[] gives O(1) IsClusterStart lookups. LengthAt
 // scans forward by at most one cluster's worth of bool reads after
 // the enumerator has been advanced past the position. After the
 // enumerator is exhausted (the input has been fully walked once),
@@ -41,9 +42,9 @@ namespace InductorParser.Lexing;
 // multiple parses of the same string (interned literals, cached
 // config text, identical request bodies in a web server) share one
 // index instance. The walk that fills _isStart is locked because
-// TextElementEnumerator's MoveNext isn't thread-safe and the bool[]
-// updates would race in lockstep. The lock is per-instance (one
-// per input string), so concurrent parses of DIFFERENT inputs don't
+// TextElementEnumerator's MoveNext isn't thread-safe. 
+// The lock is per-instance (one
+// per input string), so concurrent parses of different inputs don't
 // contend. The two fast-path reads (the _exhausted check and the
 // _walkedTo check at the top of EnsureWalkedTo) skip the lock once
 // the walk has reached the requested position, so the steady-state
@@ -57,12 +58,44 @@ internal sealed class GraphemeClusterIndex
     private readonly object _walkLock = new();
     private TextElementEnumerator? _enumerator;
     private volatile bool _exhausted;
-    // Highest position any MoveNext has visited so far. Volatile so a
-    // reader can skip the lock when the walk has already reached the
-    // requested target. Starts at -1 before the first MoveNext. The
-    // volatile write inside the lock orders the _isStart updates that
-    // preceded it, so a thread that observes _walkedTo >= target also
-    // sees the _isStart writes for every cluster start in [0, _walkedTo].
+    // How far the walk has reached: the highest position any MoveNext
+    // has marked so far, or -1 before the first one. It doubles as a
+    // "the boundary data is ready" flag for the lock-free fast path in
+    // EnsureWalkedTo.
+    //
+    // Why the fast path is safe: each _isStart entry only ever goes from
+    // false to true, once, and never changes back. The walk does that
+    // write first, then sets _walkedTo. 
+    // 
+    // Marking _walkedTo volatile ensures that 
+    // that order remains the same in other threads, so a reader that sees
+    // _walkedTo >= position is guaranteed the _isStart write for that
+    // position is already done. 
+    // 
+    // Checking _walkedTo before reading  _isStart[position] is therefore always safe. 
+    // 
+    // Without volatile, those reads and writes still appear in the same
+    // order in the source code, but nothing forces the compiler or the
+    // CPU to preserve that order as another thread observes it. A reader
+    // on a different CPU could see the new _walkedTo and a stale _isStart,
+    // and give the wrong answer.
+    //
+    // The guarantee being relied on is the acquire/release semantics of
+    // volatile in ECMA-335 (CLI), Partition I, section 12.6.7 "Volatile
+    // reads and writes". Verbatim:
+    //
+    //   "A volatile read has 'acquire semantics'; that is, it is
+    //    guaranteed to occur prior to any references to [any] memory that occur
+    //    after it in the instruction sequence."
+    //
+    //   "A volatile write has 'release semantics'; that is, it is
+    //    guaranteed to happen after any memory references prior to the
+    //    write instruction in the instruction sequence."
+    //
+    // Applied here: the volatile write of _walkedTo (release) will always happen after
+    // the _isStart write that precedes it, and the volatile read of
+    // _walkedTo (acquire) will always happen before the _isStart read that follows it.
+    // The C# language spec restates this under "Volatile fields".
     private volatile int _walkedTo = -1;
 
     private GraphemeClusterIndex(string input)
@@ -71,8 +104,10 @@ internal sealed class GraphemeClusterIndex
         _isStart = new bool[input.Length + 1];
         if (input.Length > 0)
             _isStart[0] = true;
-        // EOF is always a boundary; pre-mark so callers can ask
-        // IsClusterStart(input.Length) without a walk.
+        // EOF is always a boundary, but the walk never lands on it: the
+        // enumerator's ElementIndex only reaches the last cluster start,
+        // never input.Length. The constructor marks it here so
+        // IsClusterStart(input.Length) returns true instead of false.
         _isStart[input.Length] = true;
     }
 
@@ -87,11 +122,10 @@ internal sealed class GraphemeClusterIndex
 
     // Length in chars (UTF-16 code units) of the cluster starting at
     // `position`. Returns 0 at end-of-input. Throws when `position`
-    // isn't a cluster start, since asking for "the length of the
-    // cluster starting at this offset" makes no sense if no cluster
-    // starts there. The Lexer's _position invariant satisfies the
-    // precondition on every Read / NextTokenLength call; tripping
-    // this throw would mean a real Lexer bug, not a caller mistake.
+    // isn't a cluster start, since asking for the length of a cluster
+    // that starts at this offset makes no sense when none does. The
+    // Lexer's read cursor only lands on cluster boundaries, so this
+    // throw firing would mean a Lexer bug, not a caller mistake.
     public int LengthAt(int position)
     {
         if (position < 0 || position >= _input.Length) return 0;
@@ -112,8 +146,8 @@ internal sealed class GraphemeClusterIndex
 
     // True iff `position` is a UAX #29 grapheme cluster boundary.
     // Position 0 (when input is non-empty) and position input.Length
-    // are always boundaries. Used by the scanner-skip post-validation
-    // gate to reject mid-cluster IndexOfAny landings.
+    // are always boundaries. The scanner fast paths use it to reject
+    // mid-cluster IndexOf / IndexOfAny landings before they advance.
     public bool IsClusterStart(int position)
     {
         if (position < 0 || position > _input.Length) return false;
@@ -128,11 +162,10 @@ internal sealed class GraphemeClusterIndex
     // A cluster counts only once its end boundary is at or before
     // charIndex. Those end boundaries are the cluster starts past
     // position 0 plus the always-marked input.Length boundary, so the
-    // walk is _isStart over [1, charIndex], not the cluster starts over
-    // [0, charIndex). The two agree when charIndex is a cluster boundary.
-    // They differ inside a multi-char cluster, where counting starts
-    // would also count the containing cluster and ToTokenIndex would name
-    // the following token instead of the one the char is in.
+    // count is the number of true _isStart entries in [1, charIndex].
+    // When charIndex sits inside a multi-char cluster, that range stops
+    // short of the cluster's own end, so the cluster the char belongs
+    // to is left out of the count.
     public int CountClustersUpTo(int charIndex)
     {
         if (charIndex <= 0) return 0;
@@ -147,20 +180,18 @@ internal sealed class GraphemeClusterIndex
     // Advance the enumerator until _isStart[target] has its final value.
     private void EnsureWalkedTo(int target)
     {
-        // Fast path: already past target, or the walk has been exhausted.
-        // Both reads are volatile so any _isStart writes that preceded the
-        // last _walkedTo / _exhausted update are visible without the lock.
+        // Fast path, no lock: if the walk is exhausted, or has already
+        // reached target, then _isStart[target] is final and safe to read
+        // directly. These two reads are volatile, which is what makes that
+        // safe without the lock. The _walkedTo field has the ordering
+        // argument for why.
         if (_exhausted) return;
         if (target <= _walkedTo) return;
         if (target < 0) target = 0;
         if (target > _input.Length) target = _input.Length;
 
-        // TextElementEnumerator.MoveNext isn't thread-safe: racing
-        // threads can land a mid-cluster ElementIndex, which then marks
-        // a non-cluster-start position in _isStart and makes the next
-        // LengthAt against that position throw. The lock is per-instance,
-        // so parses of different inputs don't contend, and same-input
-        // parses only wait during that string's initial walk.
+        // TextElementEnumerator.MoveNext isn't thread-safe, so the walk
+        // runs under a lock.
         lock (_walkLock)
         {
             // Re-check after acquiring the lock: another thread may have
@@ -178,8 +209,8 @@ internal sealed class GraphemeClusterIndex
             _enumerator ??= StringInfo.GetTextElementEnumerator(_input);
 
             // Walk until we've passed `target` or run out. After MoveNext
-            // returns idx, _isStart[idx] is final; we keep going if
-            // idx < target so target itself gets its final value.
+            // returns idx, _isStart[idx] has its final value. Keep going
+            // while idx < target so target itself gets marked.
             while (true)
             {
                 if (!_enumerator.MoveNext())
@@ -189,9 +220,9 @@ internal sealed class GraphemeClusterIndex
                 }
                 int idx = _enumerator.ElementIndex;
                 _isStart[idx] = true;
-                // Volatile write publishes the _isStart update along with
-                // the new walked-to high water mark. A reader hitting the
-                // fast path on a later call sees both consistently.
+                // Set the flag after the _isStart write above, never
+                // before. The _walkedTo field comment explains why the
+                // order matters.
                 _walkedTo = idx;
                 if (idx >= target) return;
             }
