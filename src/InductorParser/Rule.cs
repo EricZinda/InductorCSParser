@@ -799,6 +799,26 @@ public abstract class Rule
         return entry.Name;
     }
 
+    // Return the user-supplied .As("name") name for `id`, or null if the
+    // id has no user name (an anonymous rule, or one whose name comes
+    // from the rune-text / class-trace-name fallback NameOf uses).
+    // Lets a tree walker distinguish "the user named this rule" from
+    // "NameOf returned something because it always returns something";
+    // NameOf's string-compare hack `name != defaultLabel` can't
+    // distinguish a user who happened to .As(...) the rule to the same
+    // string the default would have produced.
+    //
+    // Auto-compiles for the same reason NameOf does: ids aren't stable
+    // until Compile runs.
+    public string? UserNameOf(SymbolId id)
+    {
+        if (!_sealed) Compile();
+        _nameIndex ??= BuildNameIndex();
+        return _nameIndex.TryGetValue(id, out var entry) && entry.IsUserSupplied
+            ? entry.Name
+            : null;
+    }
+
     private Dictionary<SymbolId, (string Name, bool IsUserSupplied)> BuildNameIndex()
     {
         var map = new Dictionary<SymbolId, (string Name, bool IsUserSupplied)>();

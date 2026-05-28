@@ -112,6 +112,33 @@ public class TracingTests
 
     [Test]
     [RecursiveEngineOnly]
+    public void Lexer_Read_trace_escapes_control_chars_in_token_text()
+    {
+        // Lexer.Read's trace line quotes the consumed token text between
+        // single quotes. For a CRLF cluster (one token, two control-char
+        // runes), splicing the raw chars verbatim would dump a literal
+        // CR+LF into the middle of the trace line, breaking the
+        // one-event-per-line layout every other trace assertion relies
+        // on. Same shape TokenSet.ToString already escapes via
+        // AppendGraphemeForDisplay, and the same shape PrintTree escapes
+        // in its short form: control characters (Cc) and line / paragraph
+        // separators (Zl / Zp) render as U+XXXX so the trace stays one
+        // line per event.
+        var sink = NewSink();
+        var lexer = new Lexer("\r\n", traceSink: sink, traceLevel: TraceLevel.Diagnostic);
+        lexer.Read();
+
+        // Without the fix, the sink contains a literal CR+LF between the
+        // single quotes, so the line splits into three physical lines
+        // (an empty "Lexer.Read: '" line, an empty middle line, and the
+        // trailing "', Consumed: 2" line). With the fix, both CR and LF
+        // escape to U+XXXX and the line stays intact.
+        string expected = "Lexer.Read: 'U+000DU+000A', Consumed: 2\n";
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
     public void Deepest_failure_update_is_announced_in_trace()
     {
         // The deepest-failure trace fires only when the new position is
