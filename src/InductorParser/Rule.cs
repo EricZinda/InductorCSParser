@@ -595,6 +595,7 @@ public abstract class Rule
     // silently do nothing).
     public virtual Rule WithError(string errorMessage, bool forced = false)
     {
+        if (errorMessage == null) throw new ArgumentNullException(nameof(errorMessage));
         ThrowIfSealed();
         if (_errorMessage != null)
             throw new InvalidOperationException(
