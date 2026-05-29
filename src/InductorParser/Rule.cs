@@ -806,6 +806,17 @@ public abstract class Rule
                         BuildNormalizationErrorMessage(normalizeInput.Value, offenders),
                         inner);
                 }
+
+                // The normalization pass can turn a single-rune Token into a
+                // multi-rune cluster (Token('é'), U+00E9, becomes "e + U+0301"
+                // under FormD). Such a rule dropped its constructor-assigned rune
+                // id in ValidateNormalization (a multi-rune leaf can't carry a
+                // character-range id), so re-run the anonymous-id pass to hand it
+                // a custom-range id, matching a Token built multi-rune from the
+                // start. The pass only touches rules whose id was cleared
+                // (!_idAssigned); every rule whose id survived keeps it.
+                visited.Clear();
+                AssignAnonymousIds(this, visited, usedIds, ref nextAnon);
             }
 
             visited.Clear();
@@ -1523,6 +1534,24 @@ public abstract class Rule
     {
         if (!IsUserSymbolIdExplicit && Name == null)
             SetIdInternal(new SymbolId(runeValue));
+    }
+
+    // Counterpart to SetLeafRuneId for a single-rune leaf rule whose stored
+    // text turned multi-rune during the normalization pass (Token('é'),
+    // U+00E9, decomposing to "e + U+0301" under FormD). The constructor
+    // assigned that rule its precomposed rune's code point as the Id, a
+    // character-range id (0..0x10FFFF) the SymbolRanges layout documents as
+    // "the match is exactly that one rune." A multi-rune leaf can't honor
+    // that, so drop the stale auto-assigned id. Compile re-runs the
+    // anonymous-id pass after normalization, handing this rule a
+    // custom-range id, the same shape a Token built multi-rune from the
+    // start already carries. Like SetLeafRuneId, this leaves a user's
+    // explicit .As(SymbolId) id or a name-hashed id untouched: those
+    // numbering hooks win over the rune-as-id default.
+    protected void ClearLeafRuneId()
+    {
+        if (!IsUserSymbolIdExplicit && Name == null)
+            _idAssigned = false;
     }
 
     // Pass 1. Walk the graph and stash any user-set explicit ids so the

@@ -1364,4 +1364,45 @@ public class NormalizationTests
         return original.Length;
     }
 
+    [Test]
+    public void Token_that_decomposes_to_multi_rune_drops_its_character_range_id()
+    {
+        // Sibling of Token_with_singleton_decomposable_rune_reassigns_id,
+        // but the decomposition crosses the single-rune boundary instead of
+        // staying single-rune. Token('é') U+00E9 gets its code point (0xE9,
+        // a character-range id) assigned in the constructor. Under FormD the
+        // lexer decomposes to "e + U+0301", so the rule's _expected becomes a
+        // two-rune cluster and the leaf it emits is two runes wide. A
+        // character-range SymbolId (0..0x10FFFF) is documented to mean "the
+        // matched content is exactly that one rune" (SymbolRanges), so a
+        // two-rune leaf can't carry one. Compile has to drop the stale
+        // rune id and hand the rule a custom-range id, exactly like a Token
+        // built multi-rune from the start.
+        const int eacute = 0x00E9;
+        string combiningAcute = ((char)0x0301).ToString();
+
+        var becomesMultiRune = Token(eacute).Flatten(FlattenType.Preserve);
+        becomesMultiRune.Compile(NormalizationForm.FormD);
+        var leaf = becomesMultiRune.Parse(((char)eacute).ToString()).Tree!;
+        Assert.That(leaf.ToString().Length, Is.EqualTo(2),
+            "FormD decomposed the match to a two-rune cluster");
+        Assert.That(leaf.Id.Value, Is.GreaterThanOrEqualTo(SymbolRanges.CustomRangeStart),
+            "A multi-rune leaf must carry a custom-range id, not the precomposed rune's character-range code point");
+
+        // Shape parity with a Token built multi-rune from the start: both are
+        // anonymous, both match the same two-rune cluster under FormD, so both
+        // land in the custom range.
+        var multiFromStart = Token("e" + combiningAcute).Flatten(FlattenType.Preserve);
+        multiFromStart.Compile(NormalizationForm.FormD);
+        var leafFromStart = multiFromStart.Parse("e" + combiningAcute).Tree!;
+        Assert.That(leafFromStart.Id.Value, Is.GreaterThanOrEqualTo(SymbolRanges.CustomRangeStart));
+
+        // Regression: under FormC the same Token stays one precomposed
+        // rune, so it keeps the rune-as-id shape at 0x00E9.
+        var formC = Token(eacute).Flatten(FlattenType.Preserve);
+        formC.Compile(NormalizationForm.FormC);
+        Assert.That(formC.Parse(((char)eacute).ToString()).Tree!.Id.Value, Is.EqualTo(eacute),
+            "FormC keeps the single precomposed rune, so the leaf keeps its rune id");
+    }
+
 }
