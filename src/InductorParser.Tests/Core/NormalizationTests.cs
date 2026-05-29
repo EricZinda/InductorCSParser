@@ -813,6 +813,31 @@ public class NormalizationTests
     }
 
     [Test]
+    public void Failed_compile_invalidates_touched_rules_and_refuses_recompile()
+    {
+        // Compile(FormKC) auto-converts the Kelvin sign literal to plain
+        // ASCII "K", then discovers that the following Token("fi ligature")
+        // is an offender because it expands to two graphemes. Compile throws.
+        // The graph has already been touched by the mutating compile phase,
+        // so the caller must rebuild it instead of retrying with a different
+        // form against partially normalized nodes.
+        var kelvin = Literal(KelvinGrapheme).Preserve();
+        var ligature = Token(FiLigatureGrapheme).Preserve();
+        var rule = And(kelvin, ligature);
+
+        Assert.Throws<InvalidOperationException>(
+            () => rule.Compile(NormalizationForm.FormKC));
+
+        var rootRetry = Assert.Throws<InvalidOperationException>(() => rule.Compile(null));
+        var firstChildRetry = Assert.Throws<InvalidOperationException>(() => kelvin.Compile(null));
+        var secondChildRetry = Assert.Throws<InvalidOperationException>(() => ligature.Compile(null));
+
+        Assert.That(rootRetry!.Message, Does.Contain("previous Compile attempt failed"));
+        Assert.That(firstChildRetry!.Message, Does.Contain("previous Compile attempt failed"));
+        Assert.That(secondChildRetry!.Message, Does.Contain("previous Compile attempt failed"));
+    }
+
+    [Test]
     public void Identifier_default_under_FormKC_throws_clear_compile_error()
     {
         // TokenSet.XidStart contains U+FB01 (LATIN SMALL LIGATURE FI)
