@@ -81,7 +81,7 @@ public sealed class Symbol
     // differently. Used by composites that lift a child's content to tell
     // "lift the child's children" (composite) apart from "the child is
     // itself the content" (leaf).
-    internal bool IsLeaf => _isLeaf;
+    public bool IsLeaf => _isLeaf;
 
     public SymbolId Id { get; }
     public FlattenType FlattenType { get; }

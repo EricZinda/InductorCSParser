@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
-using InductorParser.Tracing;
 
 namespace InductorParser;
 
@@ -53,7 +52,7 @@ internal sealed class WithinTokenRule : Rule
         _innerRule = innerRule;
     }
 
-    protected internal override Symbol? TryParseRule(Lexer outerLexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected override Symbol? TryParseRule(Lexer outerLexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         var token = outerLexer.Read();
         if (token.IsEof)
@@ -82,13 +81,7 @@ internal sealed class WithinTokenRule : Rule
         // have bitten any user-defined Rule subclass following the same
         // pattern.
         string subInput = outerLexer.Input.Substring(token.Offset, token.Length);
-        var subLexer = new Lexer(
-            subInput,
-            startPosition: 0,
-            endPosition: subInput.Length,
-            traceSink: null,
-            traceLevel: TraceLevel.Normal,
-            oneRunePerToken: true);
+        var subLexer = new Lexer(subInput, oneRunePerToken: true);
         // The sub-lexer's budget delegates every EnterRule / ExitRule /
         // TickPeriodic to the outer budget so the inner's recursion
         // counts on top of the outer's CURRENT depth. MaxDepth and
@@ -100,13 +93,13 @@ internal sealed class WithinTokenRule : Rule
         // Stopwatch and the ParseCancellation reach the inner through
         // the same delegation: a Cancel() or expired Timeout observed
         // by either lexer trips both.
-        subLexer.Budget.InheritFrom(outerLexer.Budget);
+        subLexer.InheritBudgetFrom(outerLexer);
 
         // Throwaway output list for the inner rule. Any symbols the inner
         // rule emits are discarded: WithinToken exposes one leaf per
         // token to the outer parse, not the rune-level substructure.
         var innerOutputs = new List<Symbol>();
-        var innerResult = _innerRule.TryParse(subLexer, innerOutputs);
+        var innerResult = ParseRuleAgainst(_innerRule, subLexer, innerOutputs);
 
         if (innerResult == null && innerOutputs.Count == 0)
         {

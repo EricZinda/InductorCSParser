@@ -22,7 +22,7 @@ internal sealed class PeekRule : Rule
 
     private Rule Inner => Children[0];
 
-    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         // Lookahead only: inner runs as a throwaway probe. BeginProbe
         // brackets the position, the failure tracker, and the
@@ -32,7 +32,7 @@ internal sealed class PeekRule : Rule
         bool innerMatched;
         using (lexer.BeginProbe())
         {
-            innerMatched = Inner.TryParse(lexer, outputSymbols: null) != null;
+            innerMatched = ParseRuleAgainst(Inner, lexer, outputSymbols: null) != null;
         }
         if (!innerMatched)
         {

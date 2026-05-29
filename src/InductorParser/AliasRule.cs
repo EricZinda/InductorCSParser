@@ -43,7 +43,7 @@ namespace InductorParser;
 // forwards FlattenType and EmitsLeaf to its bound target, so
 // `lateBound.AliasedAs("x")` builds the same tree as aliasing the target
 // rule directly.
-public sealed class AliasRule : Rule
+internal sealed class AliasRule : Rule
 {
     private readonly Rule _inner;
 
@@ -53,7 +53,7 @@ public sealed class AliasRule : Rule
         _inner = inner;
     }
 
-    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         int matchStart = startPosition;
 

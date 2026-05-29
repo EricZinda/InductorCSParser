@@ -247,7 +247,7 @@ public static class BibTexGrammar
             Optional(AnyWhitespace()),
             CitationKey.WithError("expected a citation key"),
             Optional(AnyWhitespace()),
-            new AliasRule(comma).WithError("expected ',' after citation key"),
+            Alias(comma).WithError("expected ',' after citation key"),
             Optional(AnyWhitespace()),
             fieldList,
             Optional(AnyWhitespace()),

@@ -31,7 +31,7 @@ internal sealed class ScanWhileRule : Rule
 {
     private TokenSet _set;
     private readonly int _minimumCount;
-    // Refreshed by CollectNormalizationOffenders when Compile's
+    // Refreshed by ValidateNormalization when Compile's
     // normalization pass mutates _set. See OneOfRule for the why.
     private string _setRendered;
 
@@ -51,21 +51,20 @@ internal sealed class ScanWhileRule : Rule
     internal TokenSet LoweringSet => _set;
     internal int LoweringMinimumCount => _minimumCount;
 
-    internal override void CollectNormalizationOffenders(
+    protected override void ValidateNormalization(
         System.Text.NormalizationForm form,
-        List<(Rule rule, string original, string normalized)> offenders,
-        List<ArgumentException> failures)
+        INormalizationReporter reporter)
     {
         // ScanWhile checks one grapheme per iteration against _set,
         // the same shape OneOf uses, so it form-projects _set through
         // the same helper. See OneOfRule.NormalizeAndValidate.
-        OneOfRule.NormalizeAndValidate(this, ref _set, form, offenders);
-        // See OneOfRule.CollectNormalizationOffenders for why the
+        OneOfRule.NormalizeAndValidate(this, ref _set, form, reporter);
+        // See OneOfRule.ValidateNormalization for why the
         // rendering has to be refreshed after the set is projected.
         _setRendered = _set.ToString();
     }
 
-    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         // Lexer primitive instead of a loop of OneOfRule.TryParse calls:
         // one transaction and one Symbol allocation regardless of the

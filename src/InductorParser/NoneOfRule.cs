@@ -17,7 +17,7 @@ namespace InductorParser;
 internal sealed class NoneOfRule : Rule
 {
     private TokenSet _set;
-    // Refreshed by CollectNormalizationOffenders when Compile's
+    // Refreshed by ValidateNormalization when Compile's
     // normalization pass mutates _set. See OneOfRule for the why.
     private string _setRendered;
 
@@ -31,20 +31,19 @@ internal sealed class NoneOfRule : Rule
     // without running the rule.
     internal TokenSet LoweringSet => _set;
 
-    // See Rule.CollectNormalizationOffenders for the contract. Same
+    // See Rule.ValidateNormalization for how this works. Same
     // shape as OneOfRule and shares the implementation.
-    internal override void CollectNormalizationOffenders(
+    protected override void ValidateNormalization(
         System.Text.NormalizationForm form,
-        List<(Rule rule, string original, string normalized)> offenders,
-        List<ArgumentException> failures)
+        INormalizationReporter reporter)
     {
-        OneOfRule.NormalizeAndValidate(this, ref _set, form, offenders);
-        // See OneOfRule.CollectNormalizationOffenders for why the
+        OneOfRule.NormalizeAndValidate(this, ref _set, form, reporter);
+        // See OneOfRule.ValidateNormalization for why the
         // rendering has to be refreshed after the set is projected.
         _setRendered = _set.ToString();
     }
 
-    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         var token = lexer.Read();
         if (token.IsEof)

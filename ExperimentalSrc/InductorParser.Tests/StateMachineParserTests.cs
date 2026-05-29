@@ -631,9 +631,9 @@ public class StateMachineParserTests
 
     private sealed class CustomTwoQs : Rule
     {
-        public CustomTwoQs() : base(FlattenType.Delete) { }
+        public CustomTwoQs() : base(FlattenType.Delete, emitsLeaf: false) { }
 
-        internal override Symbol? TryParseRule(InductorParser.Lexing.Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+        protected override Symbol? TryParseRule(InductorParser.Lexing.Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
         {
             for (int i = 0; i < 2; i++)
             {

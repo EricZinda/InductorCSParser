@@ -28,4 +28,43 @@
     <ProjectReference Include="..\InductorParser\InductorParser.csproj" />
   </ItemGroup>
 
+  <!--
+    Verbatim-link the built-in rule source a second time into this no-IVT
+    assembly. Each linked file is recompiled here against only the public +
+    protected surface of InductorParser, so if a rule ever reaches for an
+    internal member, or the surface it needs is narrowed, THIS build breaks.
+    That's the regression guard: the same proof FailRule gives by hand,
+    extended to the real built-in rules.
+
+    These rule classes are `internal sealed`, so the copy compiled here is a
+    distinct type internal to this test assembly and does not collide with
+    the (invisible-across-the-boundary) copy in the referenced DLL. Do NOT
+    add a glob over ..\InductorParser\*.cs; list each linked rule explicitly
+    so unrelated core files aren't pulled in.
+
+    LateBoundRule is deliberately absent: it's a `public sealed class`
+    (its .Bind() forward-reference pattern needs the concrete type), so a
+    locally compiled public InductorParser.LateBoundRule would collide with
+    the same public type the referenced DLL exports. It stays expressible by
+    a third party; it just can't be self-linked as the guard's subject.
+  -->
+  <ItemGroup>
+    <Compile Include="..\InductorParser\AndRule.cs"                  Link="BuiltIn\AndRule.cs" />
+    <Compile Include="..\InductorParser\OrRule.cs"                   Link="BuiltIn\OrRule.cs" />
+    <Compile Include="..\InductorParser\NotRule.cs"                  Link="BuiltIn\NotRule.cs" />
+    <Compile Include="..\InductorParser\PeekRule.cs"                 Link="BuiltIn\PeekRule.cs" />
+    <Compile Include="..\InductorParser\EofRule.cs"                  Link="BuiltIn\EofRule.cs" />
+    <Compile Include="..\InductorParser\AnyTokenRule.cs"             Link="BuiltIn\AnyTokenRule.cs" />
+    <Compile Include="..\InductorParser\BetweenInclusiveRule.cs"     Link="BuiltIn\BetweenInclusiveRule.cs" />
+    <Compile Include="..\InductorParser\LiteralRule.cs"              Link="BuiltIn\LiteralRule.cs" />
+    <Compile Include="..\InductorParser\LiteralIgnoreAsciiCaseRule.cs" Link="BuiltIn\LiteralIgnoreAsciiCaseRule.cs" />
+    <Compile Include="..\InductorParser\OneOfRule.cs"               Link="BuiltIn\OneOfRule.cs" />
+    <Compile Include="..\InductorParser\NoneOfRule.cs"              Link="BuiltIn\NoneOfRule.cs" />
+    <Compile Include="..\InductorParser\ScanWhileRule.cs"          Link="BuiltIn\ScanWhileRule.cs" />
+    <Compile Include="..\InductorParser\ScanUntilRule.cs"          Link="BuiltIn\ScanUntilRule.cs" />
+    <Compile Include="..\InductorParser\GraphemeRule.cs"           Link="BuiltIn\GraphemeRule.cs" />
+    <Compile Include="..\InductorParser\WithinTokenRule.cs"        Link="BuiltIn\WithinTokenRule.cs" />
+    <Compile Include="..\InductorParser\AliasRule.cs"             Link="BuiltIn\AliasRule.cs" />
+  </ItemGroup>
+
 </Project>

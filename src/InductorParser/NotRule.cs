@@ -30,7 +30,7 @@ internal sealed class NotRule : Rule
 
     private Rule Inner => Children[0];
 
-    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         // Lookahead only: inner's result is thrown away regardless, so we
         // pass null for outputSymbols. If inner has FlattenType.Flatten
@@ -44,7 +44,7 @@ internal sealed class NotRule : Rule
         bool innerMatched;
         using (lexer.BeginProbe())
         {
-            innerMatched = Inner.TryParse(lexer, outputSymbols: null) != null;
+            innerMatched = ParseRuleAgainst(Inner, lexer, outputSymbols: null) != null;
         }
         if (innerMatched)
         {
