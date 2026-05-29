@@ -36,6 +36,13 @@ public sealed partial class Lexer
 
         while (_position < _endPosition)
         {
+            // One iteration is work the budget should see. The whole
+            // scan is one rule invocation from the engine's view, so
+            // without this tick Timeout / Cancellation / RuleCountLimit
+            // can't fire until the scan returns. The budget's own
+            // 1024-mask amortizes the actual checks.
+            _budget.TickPeriodic();
+
             int tokenLength = NextTokenLength(_position);
             // NextTokenLength is bounded by _input.Length; sub-lexers
             // hold a substring copy, so _input.Length == _endPosition
@@ -92,6 +99,9 @@ public sealed partial class Lexer
         int count = 0;
         while (_position < _endPosition)
         {
+            // See AdvanceWhileRuneIn for why every iteration ticks.
+            _budget.TickPeriodic();
+
             int pos = _position;
             int tokenLength = NextTokenLength(pos);
             // Same bound invariant as AdvanceWhileRuneIn.

@@ -32,17 +32,17 @@ public sealed class ParseOptions
     // Gates how verbose the trace output is
     public TraceLevel TraceLevel { get; set; } = TraceLevel.Diagnostic;
 
-    // Caps how many rules the parse is allowed to invoke before giving
-    // up. Every rule invocation increments a counter. When it exceeds
-    // this number, the parse aborts with
-    // ParseOutcome.RuleCountLimitExceeded. Because it's a count and not
-    // a wall-clock measurement, the same input against the same grammar
-    // trips at exactly the same point on every run regardless of
-    // hardware speed. The default of 10,000,000 lets well-formed parses
-    // through (a 1 MB file runs through low millions of invocations on
-    // a typical grammar) and cleanly catches the catastrophic-
-    // backtracking shapes that produce tens of billions of invocations
-    // on tiny inputs. Set to 0 to disable.
+    // Caps how many work units the parse may consume before giving up.
+    // Each rule invocation counts as one unit, and each iteration of a
+    // bulk-scan inner loop (ScanWhile, ScanUntil, the AdvanceWhile*
+    // primitives, any user rule that calls Lexer.TickBudget) counts as
+    // one too. The parse aborts with ParseOutcome.RuleCountLimitExceeded
+    // when the counter exceeds this limit. Because it's a count not a
+    // wall-clock measurement, the same input against the same grammar
+    // trips at the same point on every run. The default of 10,000,000
+    // lets well-formed parses through (a 1 MB file usually runs through
+    // low millions) and catches both catastrophic-backtracking shapes
+    // and bulk-scan DoS. Set to 0 to disable.
     public long RuleCountLimit { get; set; } = 10_000_000L;
 
     // Maximum recursion depth (rule invocations currently on the call
