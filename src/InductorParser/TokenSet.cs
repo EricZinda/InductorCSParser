@@ -1382,10 +1382,11 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return new TokenSet(list.ToArray());
     }
 
-    // Mirror of LineTerminators contents, used by BuildInlineWhitespace
-    // at type-init time. Kept as an inline check so we don't depend on
-    // the LineTerminators field initialization order.
-    private static bool IsLineTerminator(int codepoint) =>
+    // Scalar membership test for the UAX #18 single-rune line terminators,
+    // mirroring LineTerminators. Kept independent of the LineTerminators
+    // field so a caller that runs at type-init time (BuildInlineWhitespace)
+    // doesn't depend on that field's initialization order.
+    internal static bool IsLineTerminator(int codepoint) =>
         codepoint == 0x000A   // LF
         || codepoint == 0x000B   // VT
         || codepoint == 0x000C   // FF

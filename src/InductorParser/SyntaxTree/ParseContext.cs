@@ -7,12 +7,6 @@ namespace InductorParser.SyntaxTree;
 /// needed to recover a Symbol's original-input position, raw source text, and human-readable rule
 /// name.
 /// </summary>
-/// <remarks>
-/// One instance per <see cref="Rule.Parse(string)"/> call. Hand-built Symbols (test fixtures
-/// constructing trees by hand) can pass null for the Symbol constructor's context parameter
-/// instead, in which case Symbol.SourceRange falls back to treating the leaf's backing string as
-/// both parseInput and originalInput, and Symbol.DisplayName returns null.
-/// </remarks>
 public sealed class ParseContext
 {
     /// <summary>The exact string the caller passed to <see cref="Rule.Parse(string)"/>.</summary>

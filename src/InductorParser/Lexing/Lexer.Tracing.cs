@@ -100,7 +100,17 @@ public sealed partial class Lexer
                 _traceSink!.Write("FAIL | "); 
                 break;
         }
-        _traceSink!.Write(label);
+        // The label is "{Name}:{ruleClassName}" (see Rule.BuildTraceLabel).
+        // The class-name half is always a safe literal, but the Name half
+        // is the user's .As("...") string, which .As doesn't validate, so
+        // a control / line-separator char in a rule name would otherwise
+        // splice raw into the line and split the one-event-per-line layout.
+        // DisplayEscape rewrites Cc / Zl / Zp to U+XXXX, the same treatment
+        // matched text gets through TraceInterpolatedStringHandler and a
+        // .WithError message gets through Rule.AppendErrorMessage. The
+        // fast path returns the label unchanged (no allocation) when it
+        // holds no such char, which is every built-in label.
+        _traceSink!.Write(DisplayEscape.Escape(label, 0, label.Length));
         if (message.Length > 0)
         {
             _traceSink.Write(": ");
