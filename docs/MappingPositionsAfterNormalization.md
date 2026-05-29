@@ -23,7 +23,7 @@ A *grapheme* is what a user thinks of as one character, even when it's stored as
 
 ## The problem
 
-By default, the parser normalizes input before lexing. When parsing fails, the lexer reports the failure at some position in the *normalized* string. The caller wants the corresponding position in the *original* string they handed us, so editor highlighting points at the right place. That mapping is `NormalizedPositionMap.TranslateToOriginal`.
+By default, the parser normalizes input before lexing, so the positions the engine works with are offsets into the *normalized* string. The caller wants the corresponding position in the *original* string they handed us, so editor highlighting points at the right place. This comes up two ways: a failure position when parsing fails, and a symbol's source range (`Symbol.SourceRange`) on a successful parse. Both go through `NormalizedPositionMap.TranslateToOriginal`.
 
 Two examples show why this isn't trivial.
 
