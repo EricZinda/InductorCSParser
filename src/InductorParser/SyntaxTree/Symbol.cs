@@ -127,7 +127,11 @@ public sealed class Symbol
     // node?") reads more naturally as symbol.Is(Rule) than as
     // symbol.Id == rule.Id, and hides the Id plumbing from consumer
     // code. Unlike Find, this is a single-node check, no tree walk.
-    public bool Is(Rule rule) => Id == rule.Id;
+    public bool Is(Rule rule)
+    {
+        if (rule == null) throw new ArgumentNullException(nameof(rule));
+        return Id == rule.Id;
+    }
 
     // String-named variant of Is, for tree walkers that prefer to
     // dispatch on the name the grammar gave the rule via .As("name")
@@ -187,7 +191,11 @@ public sealed class Symbol
     // null if nothing matches. Use when you expect exactly one match
     // (e.g. a named rule that appears once at a known position in the
     // grammar).
-    public Symbol? Find(Rule rule) => Find(rule.Id);
+    public Symbol? Find(Rule rule)
+    {
+        if (rule == null) throw new ArgumentNullException(nameof(rule));
+        return Find(rule.Id);
+    }
 
     public Symbol? Find(SymbolId id)
     {
@@ -203,7 +211,11 @@ public sealed class Symbol
     // Depth-first search that yields every matching Symbol. Use when
     // the rule can appear multiple times (repetitions, alternations,
     // recursive grammars).
-    public IEnumerable<Symbol> FindAll(Rule rule) => FindAll(rule.Id);
+    public IEnumerable<Symbol> FindAll(Rule rule)
+    {
+        if (rule == null) throw new ArgumentNullException(nameof(rule));
+        return FindAll(rule.Id);
+    }
 
     public IEnumerable<Symbol> FindAll(SymbolId id)
     {
