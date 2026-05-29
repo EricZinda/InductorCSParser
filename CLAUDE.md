@@ -2,7 +2,7 @@
 
 ## Use Invariant.That for internal invariants, not silent defensive code
 
-When you'd otherwise write a silent fixup like `if (len <= 0) len = 1; // defensive` or a verbose `throw new InvalidOperationException("Internal: ...")`, use `Invariant.That(condition, message)` (defined in `src/InductorParser/Invariant.cs`). Failure throws an `InductorParserBugException` whose message starts with "InductorParser internal invariant violated:" and points at the GitHub issues page.
+When you'd otherwise write a silent fixup like `if (len <= 0) len = 1; // defensive` or a verbose `throw new InvalidOperationException("Internal: ...")`, use `Invariant.That(condition, message)` (defined in `src/InductorParser/Invariant.cs`). Failure throws an `InductorParserBugException` whose message starts with "Invariant violated:" and ends with "This is an invariant assertion that should never happen." `Invariant` is public so a user-defined rule can assert its own invariants the same way, which is why the message stays neutral instead of blaming InductorParser.
 
 The check is `[MethodImpl(AggressiveInlining)]` and the throw is `[MethodImpl(NoInlining)]`, same hot-path pattern as `Lexer.ThrowBudgetExceeded`, so it's safe on the parser's inner loops.
 

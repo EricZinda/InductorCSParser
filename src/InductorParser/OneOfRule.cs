@@ -18,7 +18,7 @@ internal sealed class OneOfRule : Rule
     private TokenSet _set;
 
     // Pre-rendered "[A-Z,a-z]" form of the set, computed once at
-    // construction and refreshed by CollectNormalizationOffenders when
+    // construction and refreshed by ValidateNormalization when
     // Compile's normalization pass mutates _set. Trace lines reference
     // this instead of the TokenSet directly so we don't re-render the
     // same string on every traced match. Worth caching because tracing
@@ -36,17 +36,16 @@ internal sealed class OneOfRule : Rule
     // that need to inspect the rule's matchable tokens.
     internal TokenSet LoweringSet => _set;
 
-    // See Rule.CollectNormalizationOffenders for the contract. OneOf-
+    // See Rule.ValidateNormalization for how this works. OneOf-
     // specific: form-project the set and report any entry whose
     // conversion is multi-grapheme as an offender, since OneOf matches
     // exactly one grapheme per token. Shared with NoneOfRule via
     // NormalizeAndValidate.
-    internal override void CollectNormalizationOffenders(
+    protected override void ValidateNormalization(
         System.Text.NormalizationForm form,
-        List<(Rule rule, string original, string normalized)> offenders,
-        List<ArgumentException> failures)
+        INormalizationReporter reporter)
     {
-        NormalizeAndValidate(this, ref _set, form, offenders);
+        NormalizeAndValidate(this, ref _set, form, reporter);
         // The constructor already wrote _setRendered from the user-typed
         // entries, which is the right answer for a Compile(null) parse
         // (no projection runs, _set keeps the typed shape). This pass
@@ -75,23 +74,23 @@ internal sealed class OneOfRule : Rule
     // BuildNormalizationErrorMessage already names the offending rule.
     internal static void NormalizeAndValidate(
         Rule rule, ref TokenSet set, NormalizationForm form,
-        List<(Rule rule, string original, string normalized)> offenders)
+        INormalizationReporter reporter)
     {
         var multiGraphemeConversions = new List<(string original, string normalized)>();
         set = set.NormalizedFor(form, multiGraphemeConversions);
         foreach (var (original, normalized) in multiGraphemeConversions)
         {
-            offenders.Add((rule, original,
+            reporter.ReportOffender(rule, original,
                 $"<converts under {form} to the multi-grapheme sequence " +
                 $"\"{normalized}\", but a TokenSet member has to be exactly " +
                 $"one grapheme. Call `set.WithCompatibilityEquivalents({form})` " +
                 $"before building the rule to expand this entry into its " +
                 $"individual graphemes as separate set members, or remove " +
-                $"the entry.>"));
+                $"the entry.>");
         }
     }
 
-    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         var token = lexer.Read();
         if (token.IsEof || !_set.ContainsToken(token.Chars))

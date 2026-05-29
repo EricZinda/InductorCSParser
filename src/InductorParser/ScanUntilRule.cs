@@ -77,7 +77,7 @@ internal sealed class ScanUntilRule : Rule
     // TokenSet path never pay for Rule dispatch.
     private TokenSet _stopperSet;
     private readonly Rule? _stopperRule;
-    // Refreshed by CollectNormalizationOffenders (TokenSet stopper,
+    // Refreshed by ValidateNormalization (TokenSet stopper,
     // post-projection entries) or by ValidateCompiled (rule-mode
     // stopper, picks up a .As(name) the inner rule got after this
     // ScanUntil was constructed).
@@ -244,10 +244,9 @@ internal sealed class ScanUntilRule : Rule
             _stopperRendered = $"rule {_stopperRule.Name ?? _stopperRule.GetType().Name}";
     }
 
-    internal override void CollectNormalizationOffenders(
+    protected override void ValidateNormalization(
         System.Text.NormalizationForm form,
-        List<(Rule rule, string original, string normalized)> offenders,
-        List<ArgumentException> failures)
+        INormalizationReporter reporter)
     {
         // ScanUntil's TokenSet stopper checks one grapheme at a time
         // (via ContainsToken on the next whole token), so its set
@@ -261,8 +260,8 @@ internal sealed class ScanUntilRule : Rule
         // walker's recursion into Children.
         if (_stopperRule == null)
         {
-            OneOfRule.NormalizeAndValidate(this, ref _stopperSet, form, offenders);
-            // See OneOfRule.CollectNormalizationOffenders for why the
+            OneOfRule.NormalizeAndValidate(this, ref _stopperSet, form, reporter);
+            // See OneOfRule.ValidateNormalization for why the
             // rendering has to be refreshed after the set is projected.
             _stopperRendered = _stopperSet.ToString();
         }
@@ -294,17 +293,17 @@ internal sealed class ScanUntilRule : Rule
         if (!_hasEscape || _escapeStartRule != null) return;
 
         string originalRuneText = char.ConvertFromUtf32(_escapeStartRune);
-        string? normalized = TryConvertToForm(this, originalRuneText, form, offenders, failures);
+        string? normalized = TryConvertToForm(this, originalRuneText, form, reporter);
         if (normalized == null) return;
         if (string.Equals(normalized, originalRuneText, StringComparison.Ordinal)) return;
 
         if (CountGraphemes(normalized) > 1)
         {
-            offenders.Add((this, originalRuneText,
+            reporter.ReportOffender(this, originalRuneText,
                 $"<escape-start rune converts under {form} to the multi-grapheme " +
                 $"sequence \"{normalized}\", but a single-rune escape start matches " +
                 $"exactly one grapheme. Use the Rule-valued escape-start constructor " +
-                $"with Literal(\"{normalized}\") instead.>"));
+                $"with Literal(\"{normalized}\") instead.>");
             return;
         }
 
@@ -326,7 +325,7 @@ internal sealed class ScanUntilRule : Rule
         return count;
     }
 
-    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         string input = lexer.Input;
         int inputLen = input.Length;
@@ -348,7 +347,7 @@ internal sealed class ScanUntilRule : Rule
         // Comparing against input.Length would be the FULL outer string
         // and let the loop run past the sub-lexer's bound: PeekTokenLength
         // would return 0 there, the body fall-through's
-        // SetPositionUnchecked(pos + 0) wouldn't move the cursor, and the
+        // SetPosition(pos + 0) wouldn't move the cursor, and the
         // loop would spin forever.
         //
         // Lone surrogates flow through as body. The lexer surfaces
@@ -410,7 +409,7 @@ internal sealed class ScanUntilRule : Rule
                     Symbol? start;
                     using (var probe = lexer.BeginProbe())
                     {
-                        start = _escapeStartRule.TryParse(lexer, outputSymbols: null);
+                        start = ParseRuleAgainst(_escapeStartRule, lexer, outputSymbols: null);
                         if (start != null)
                             probe.Commit();
                     }
@@ -419,7 +418,7 @@ internal sealed class ScanUntilRule : Rule
                         // Start matched and was kept. End failure is a hard
                         // failure: an escape sequence was started, so
                         // the input isn't a well-formed string body.
-                        var end = _escapeEnd!.TryParse(lexer, outputSymbols: null);
+                        var end = ParseRuleAgainst(_escapeEnd!, lexer, outputSymbols: null);
                         if (end == null)
                         {
                             TraceFailure(lexer, $"bad escape end at offset {lexer.Position}");
@@ -447,7 +446,7 @@ internal sealed class ScanUntilRule : Rule
                 {
                     // Two flavors of the no-sub-rule escape-start fast
                     // path, picked by Compile's normalization-form pass
-                    // (see CollectNormalizationOffenders above):
+                    // (see ValidateNormalization above):
                     //
                     // Single-rune start (the default and every form-
                     // stable escape start): the token must be exactly
@@ -474,8 +473,8 @@ internal sealed class ScanUntilRule : Rule
                         : tokenLen == runeLen && runeValue == _escapeStartRune;
                     if (escapeStartMatched)
                     {
-                        lexer.SetPositionUnchecked(pos + tokenLen);
-                        var end = _escapeEnd!.TryParse(lexer, outputSymbols: null);
+                        lexer.SetPosition(pos + tokenLen);
+                        var end = ParseRuleAgainst(_escapeEnd!, lexer, outputSymbols: null);
                         if (end == null)
                         {
                             TraceFailure(lexer, $"bad escape end at offset {pos + tokenLen}");
@@ -516,7 +515,7 @@ internal sealed class ScanUntilRule : Rule
                 bool stopMatched;
                 using (lexer.BeginProbe())
                 {
-                    stopMatched = _stopperRule.TryParse(lexer, outputSymbols: null) != null;
+                    stopMatched = ParseRuleAgainst(_stopperRule, lexer, outputSymbols: null) != null;
                 }
                 if (stopMatched)
                 {
@@ -531,7 +530,7 @@ internal sealed class ScanUntilRule : Rule
             // grapheme-cluster boundaries, which is what the rest of
             // the parser sees.
             if (pos + tokenLen > inputLen) break;
-            lexer.SetPositionUnchecked(pos + tokenLen);
+            lexer.SetPosition(pos + tokenLen);
         }
 
         // Tests the Rule-stopper at the EOF position. The scan loop
@@ -551,7 +550,7 @@ internal sealed class ScanUntilRule : Rule
             bool matchedAtEof;
             using (lexer.BeginProbe())
             {
-                matchedAtEof = _stopperRule.TryParse(lexer, outputSymbols: null) != null;
+                matchedAtEof = ParseRuleAgainst(_stopperRule, lexer, outputSymbols: null) != null;
             }
             if (matchedAtEof)
                 stopperMatched = true;

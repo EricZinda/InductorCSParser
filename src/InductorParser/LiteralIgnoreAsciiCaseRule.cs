@@ -36,23 +36,25 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
         SetTraceName("LiteralIgnoreAsciiCase");
     }
 
-    internal override string? ExpectedText => _expected;
+    // Read-only accessor for the rule's literal text, used by out-of-assembly
+    // analyzers (the required-literal prefilter and an alternative evaluator)
+    // that inspect a rule's fixed text. Same role as OneOfRule.LoweringSet.
+    internal string? ExpectedText => _expected;
 
-    internal override void CollectNormalizationOffenders(
+    protected override void ValidateNormalization(
         System.Text.NormalizationForm form,
-        List<(Rule rule, string original, string normalized)> offenders,
-        List<ArgumentException> failures)
+        INormalizationReporter reporter)
     {
-        // See Rule.CollectNormalizationOffenders for the contract.
+        // See Rule.ValidateNormalization for how this works.
         // Same shape as LiteralRule: replace _expected with the
         // converted form.
-        string? normalized = TryConvertToForm(this, _expected, form, offenders, failures);
+        string? normalized = TryConvertToForm(this, _expected, form, reporter);
         if (normalized == null) return;
         if (string.Equals(normalized, _expected, StringComparison.Ordinal)) return;
         _expected = normalized;
     }
 
-    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         int consumed = 0;
 

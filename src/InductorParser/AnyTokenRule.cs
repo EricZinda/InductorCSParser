@@ -19,7 +19,7 @@ internal sealed class AnyTokenRule : Rule
     // No accessors for an alternative evaluator: AnyTokenRule carries no
     // per-instance data, so there is nothing for one to read.
 
-    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         var token = lexer.Read();
         if (token.IsEof)

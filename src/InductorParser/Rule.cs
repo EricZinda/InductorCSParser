@@ -510,7 +510,7 @@ public abstract class Rule
     // Set by .As(SymbolId) and only by .As(SymbolId). Two consumers,
     // both checking for "user explicitly identified this rule by id":
     //   * Auto-assignment sites (SetIdInternal callers like
-    //     GraphemeRule.CollectNormalizationOffenders) skip the
+    //     GraphemeRule.ValidateNormalization) skip the
     //     auto-assignment so a user's explicit id survives normalization.
     //   * Leaf-emitting rules with the rune-as-leaf-id optimization
     //     (OneOfRule / NoneOfRule / AnyTokenRule / WithinTokenRule, via
@@ -783,8 +783,9 @@ public abstract class Rule
             // the runtime causes; the user-facing message stays the
             // multi-rule offender list BuildNormalizationErrorMessage emits.
             var normalizeFailures = new List<ArgumentException>();
+            var reporter = new CompileNormalizationReporter(offenders, normalizeFailures);
             visited.Clear();
-            CollectNormalizationOffendersAll(this, visited, normalizeInput.Value, offenders, normalizeFailures);
+            ValidateNormalizationAll(this, visited, normalizeInput.Value, reporter);
             if (offenders.Count > 0)
             {
                 Exception? inner = normalizeFailures.Count > 0
@@ -1374,13 +1375,15 @@ public abstract class Rule
     //     via `base(flattenType, children)`. The `Children` property is
     //     populated automatically and Compile walks it to assign ids and
     //     seal the graph.
-    // `protected internal` so external Rule subclasses can override this. The
-    // `internal` half preserves every existing caller (the built-in
-    // composite rules and Rule.TryParse itself). The `protected` half is what
-    // makes the abstract member visible to subclasses in other assemblies.
-    // See src/InductorParser.ExternalContractTests for an external subclass
-    // that exercises this.
-    protected internal abstract Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols);
+    // `protected` so a Rule subclass in any assembly overrides it with a
+    // plain `protected override`. It's never called cross-instance from
+    // outside the type (Rule.TryParse invokes it on `this`; a rule that
+    // drives another rule goes through ParseRuleAgainst / ParseChild), so it
+    // needs no `internal` half. The built-in rules and external subclasses
+    // both compile from identical source against this declaration. See
+    // src/InductorParser.ExternalContractTests for external subclasses, and
+    // the BuiltIn/ linked copies of the built-in rules, that exercise this.
+    protected abstract Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols);
 
     // Whether Rule.TryParse opens an automatic outer transaction around
     // this rule's TryParseRule. True for every rule that speculatively
@@ -1425,35 +1428,35 @@ public abstract class Rule
         return child.TryParse(lexer, listForChild);
     }
 
-    // The user-supplied literal text this rule matches against, exposed
-    // on the base so every consumer that wants "the literal" reads from
-    // one polymorphic spot instead of switching on rule type. Default
-    // null means "this rule has no literal text" (composites, zero-width
-    // predicates, OneOf / NoneOf which carry rune sets, etc.).
-    // GraphemeRule, LiteralRule, and LiteralIgnoreAsciiCaseRule override
-    // to return their expected text. Used by BetweenInclusiveRule's
-    // scanner-skip optimization, which collects literal candidates for
-    // the substring-search fast path.
-    // Compile's normalization-form validation does NOT read this. It
-    // calls CollectNormalizationOffenders below instead, which lets each
-    // rule (including OneOf / NoneOf with set entries that aren't a
-    // single string) validate its own data shape.
-    internal virtual string? ExpectedText => null;
+    // Run `rule` against `lexer` directly, with the same transaction and
+    // budget wrapping every rule gets, writing any Flatten-mode children
+    // into `outputSymbols`. Unlike ParseChild this doesn't pick the
+    // write-here list based on the child's FlattenType: the caller passes
+    // exactly the list it wants written into (or null). A rule that drives
+    // an inner rule against a sub-lexer it built (the way WithinToken does),
+    // or against the main lexer at a hand-chosen point (the way ScanUntil
+    // runs an escape rule), uses this instead of ParseChild. Forwards to the
+    // internal TryParse so user-defined rules don't need internal access to
+    // the parse entry point.
+    protected Symbol? ParseRuleAgainst(Rule rule, Lexer lexer, List<Symbol>? outputSymbols)
+        => rule.TryParse(lexer, outputSymbols);
 
     // Subclass hook for Compile-time normalization-form validation. Each
     // rule that holds user-supplied text the parser will compare against
-    // normalized input overrides this to walk its own data and add an
-    // offender (or an ArgumentException to failures) for any text whose
-    // normalization differs from the chosen form. Default no-op covers
-    // composites, zero-width predicates, and any rule whose match doesn't
-    // depend on stored fixed text. Compile's static walker (below) calls
-    // this on every reachable rule and recurses into Children. See
-    // backlog n4kp for the form-check shape and the user-visible error
-    // message.
-    internal virtual void CollectNormalizationOffenders(
+    // normalized input overrides this to walk its own data: it reports any
+    // text whose normalization can't be represented under the chosen form
+    // via reporter.ReportOffender, and may convert its own stored text or
+    // set to the normalized form in place (those mutations are the rule
+    // writing its own private state, so they don't go through the
+    // reporter). Default no-op covers composites, zero-width predicates,
+    // and any rule whose match doesn't depend on stored fixed text.
+    // Compile's static walker (below) calls this on every reachable rule
+    // and recurses into Children. Public so a user-defined rule that holds
+    // fixed text can participate in the same validation the built-in
+    // literal rules do.
+    protected virtual void ValidateNormalization(
         NormalizationForm form,
-        List<(Rule rule, string original, string normalized)> offenders,
-        List<ArgumentException> failures)
+        INormalizationReporter reporter)
     {
         // default no-op
     }
@@ -1462,16 +1465,16 @@ public abstract class Rule
     // convert `text` to `form`. Returns the normalized text on success.
     // On ArgumentException (in practice an unpaired surrogate, which
     // string.Normalize rejects regardless of which form was requested),
-    // captures the exception in `failures` and adds a synthetic offender
-    // entry that points at Compile(null), then returns null. Callers that
-    // get a non-null result should replace their stored expected text
-    // with it; the auto-convert behavior makes the rule's match-time view
-    // canonically equivalent to the user's typed text under any form.
+    // reports the failure to the reporter (which surfaces it as the thrown
+    // exception's InnerException and records a matching offender), then
+    // returns null. Callers that get a non-null result should replace
+    // their stored expected text with it; the auto-convert behavior makes
+    // the rule's match-time view canonically equivalent to the user's
+    // typed text under any form.
     protected static string? TryConvertToForm(
         Rule rule, string text,
         NormalizationForm form,
-        List<(Rule rule, string original, string normalized)> offenders,
-        List<ArgumentException> failures)
+        INormalizationReporter reporter)
     {
         try
         {
@@ -1479,11 +1482,7 @@ public abstract class Rule
         }
         catch (ArgumentException exception)
         {
-            failures.Add(exception);
-            offenders.Add((rule, text,
-                $"<string.Normalize rejected this literal: {exception.Message} " +
-                $"This is usually an unpaired surrogate. Use Compile(null) to keep " +
-                $"surrogate-bearing literals as-is.>"));
+            reporter.ReportNormalizeFailure(rule, text, exception);
             return null;
         }
     }
@@ -1492,6 +1491,21 @@ public abstract class Rule
     {
         Id = id;
         _idAssigned = true;
+    }
+
+    // Protected hook for a single-rune leaf rule that wants its id to be
+    // the rune's code point (the "id == rune" shape that gives
+    // Symbol.Is(Token('x')) its meaning). Encapsulates the safe-assignment
+    // rule so a user-defined rule doesn't have to know about the internal
+    // id machinery: the assignment is skipped when the user already pinned
+    // an explicit SymbolId via .As(SymbolId) or named the rule via
+    // .As(string), since their explicit or name-hashed id is what keeps
+    // numbering stable. GraphemeRule (the built-in Token) uses this; a
+    // third-party single-rune leaf can use it too.
+    protected void SetLeafRuneId(int runeValue)
+    {
+        if (!IsUserSymbolIdExplicit && Name == null)
+            SetIdInternal(new SymbolId(runeValue));
     }
 
     // Pass 1. Walk the graph and stash any user-set explicit ids so the
@@ -1653,22 +1667,56 @@ public abstract class Rule
 
     // Walk the rule graph and ask each rule to validate its own user-
     // supplied text against the chosen normalization form. Each rule
-    // overrides the instance-level CollectNormalizationOffenders to do
+    // overrides the instance-level ValidateNormalization to do
     // the right thing for its own data shape: literal-bearing rules
     // normalize one fixed string, set-bearing rules walk their entries,
     // composites no-op (this walker recurses into Children separately).
-    // Records every offender; the caller throws one combined exception.
-    private static void CollectNormalizationOffendersAll(
+    // Reports every offender through the reporter; the caller throws one
+    // combined exception.
+    private static void ValidateNormalizationAll(
         Rule r,
         HashSet<Rule> visited,
         NormalizationForm form,
-        List<(Rule rule, string original, string normalized)> offenders,
-        List<ArgumentException> normalizeFailures)
+        INormalizationReporter reporter)
     {
         if (!visited.Add(r)) return;
-        r.CollectNormalizationOffenders(form, offenders, normalizeFailures);
+        r.ValidateNormalization(form, reporter);
         foreach (var child in r.Children)
-            CollectNormalizationOffendersAll(child, visited, form, offenders, normalizeFailures);
+            ValidateNormalizationAll(child, visited, form, reporter);
+    }
+
+    // The Compile-time INormalizationReporter. Accumulates into the same
+    // offenders / failures lists the throw path reads, so the thrown
+    // InvalidOperationException (its BuildNormalizationErrorMessage text and
+    // its AggregateException InnerException) is identical to what the old
+    // list-based hook produced. ReportNormalizeFailure records both the
+    // ArgumentException (for the InnerException) and a synthetic offender
+    // (so the rule still shows up in the user-facing list) with the same
+    // wording TryConvertToForm used to build inline.
+    private sealed class CompileNormalizationReporter : INormalizationReporter
+    {
+        private readonly List<(Rule rule, string original, string normalized)> _offenders;
+        private readonly List<ArgumentException> _failures;
+
+        public CompileNormalizationReporter(
+            List<(Rule rule, string original, string normalized)> offenders,
+            List<ArgumentException> failures)
+        {
+            _offenders = offenders;
+            _failures = failures;
+        }
+
+        public void ReportOffender(Rule rule, string original, string suggestedReplacement)
+            => _offenders.Add((rule, original, suggestedReplacement));
+
+        public void ReportNormalizeFailure(Rule rule, string original, ArgumentException failure)
+        {
+            _failures.Add(failure);
+            _offenders.Add((rule, original,
+                $"<string.Normalize rejected this literal: {failure.Message} " +
+                $"This is usually an unpaired surrogate. Use Compile(null) to keep " +
+                $"surrogate-bearing literals as-is.>"));
+        }
     }
 
     // Build the multi-rule error message. One header line names the form,

@@ -160,7 +160,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     //   * Multi-rune span (2+ chars that aren't a surrogate pair):
     //     binary search the multi-rune array. Sets with no multi-rune
     //     entries skip the search entirely.
-    internal bool ContainsToken(ReadOnlySpan<char> grapheme)
+    public bool ContainsToken(ReadOnlySpan<char> grapheme)
     {
         if (grapheme.Length == 0) return false;
         if (grapheme.Length == 1 && char.IsSurrogate(grapheme[0]))
@@ -240,7 +240,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // the lexer can produce go through the same Normalize call and would
     // hit the same rejection, so a dropped entry can't match anything
     // the rule would otherwise have seen.
-    internal TokenSet NormalizedFor(NormalizationForm form, List<(string original, string normalized)>? multiGraphemeConversions = null)
+    public TokenSet NormalizedFor(NormalizationForm form, List<(string original, string normalized)>? multiGraphemeConversions = null)
     {
         // The body walks every rune in every range and P/Invokes
         // IsNormalized per rune. On a built-in the size of TokenSet.Letters
@@ -503,10 +503,10 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     }
 
     // True iff the string is exactly one Unicode rune (one non-surrogate
-    // UTF-16 char, or one surrogate pair), giving its code point. internal
-    // so rules like GraphemeRule can reuse it instead of duplicating the
+    // UTF-16 char, or one surrogate pair), giving its code point. Public so
+    // user-defined rules can reuse it instead of duplicating the
     // surrogate-pair decode. The span overload below stays private.
-    internal static bool TrySingleRune(string grapheme, out int runeValue) =>
+    public static bool TrySingleRune(string grapheme, out int runeValue) =>
         TrySingleRune(grapheme.AsSpan(), out runeValue);
 
     private static bool TrySingleRune(ReadOnlySpan<char> grapheme, out int runeValue)
@@ -1382,10 +1382,11 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return new TokenSet(list.ToArray());
     }
 
-    // Mirror of LineTerminators contents, used by BuildInlineWhitespace
-    // at type-init time. Kept as an inline check so we don't depend on
-    // the LineTerminators field initialization order.
-    private static bool IsLineTerminator(int codepoint) =>
+    // Scalar membership test for the UAX #18 single-rune line terminators,
+    // mirroring LineTerminators. Kept independent of the LineTerminators
+    // field so a caller that runs at type-init time (BuildInlineWhitespace)
+    // doesn't depend on that field's initialization order.
+    internal static bool IsLineTerminator(int codepoint) =>
         codepoint == 0x000A   // LF
         || codepoint == 0x000B   // VT
         || codepoint == 0x000C   // FF

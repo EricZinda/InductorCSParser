@@ -15,16 +15,14 @@ namespace InductorParser;
 // break.
 //
 // Not for user-API errors. ".As(...) called twice" or "rule was never
-// bound" are bugs in the user's grammar, not in InductorParser, and
-// keep their own InvalidOperationException with a helpful message
-// pointing at the fix. Invariant.That is for the other direction: a
-// condition the user could never trigger by misusing the public API,
-// only by hitting a bug in this assembly. The exception type
-// (InductorParserBugException) is what tells the difference.
-//
-// Named Invariant rather than Assert to avoid colliding with NUnit's
-// Assert in the test assembly, which has InternalsVisibleTo on this
-// one and would otherwise see two Assert types in scope.
+// bound" are bugs in the user's grammar, and keep their own
+// InvalidOperationException with a helpful message pointing at the fix.
+// Invariant.That is for the other direction: a condition that should
+// never happen no matter how the API is used, i.e. a bug in the code
+// that declared the invariant. The exception type
+// (InductorParserBugException) is what tells the difference. This is
+// public so a user-defined Rule can assert its own internal invariants
+// the same way the built-in rules do.
 //
 // The message parameter is an [InterpolatedStringHandler], the same
 // pattern Lexer.Trace uses. When the condition holds, the compiler
@@ -38,7 +36,7 @@ namespace InductorParser;
 // collapses to a branch on `condition` and a ref-struct construction
 // that the JIT folds into the caller. See InvariantInterpolatedStringHandler
 // below for the rewrite mechanics.
-internal static class Invariant
+public static class Invariant
 {
     // AggressiveInlining on the check, NoInlining on the throw. Same
     // pattern as Lexer.ThrowBudgetExceeded: a method that throws is
@@ -101,7 +99,7 @@ internal static class Invariant
 // ref struct keeps the handler stack-only for the duration of the
 // call, so the struct construction itself is free.
 [InterpolatedStringHandler]
-internal ref struct InvariantInterpolatedStringHandler
+public ref struct InvariantInterpolatedStringHandler
 {
     private StringBuilder? _builder;
 
@@ -144,16 +142,15 @@ internal ref struct InvariantInterpolatedStringHandler
 // Thrown when an Invariant.That condition fails. Derives from
 // Exception directly rather than from InvalidOperationException so a
 // stray `catch (InvalidOperationException)` somewhere up the stack
-// can't quietly swallow a bug report from this library. The
-// user-API rejections (".As called twice", etc.) are still
-// InvalidOperationException; this one is exclusively "InductorParser
-// hit its own bug" and the type name says so.
+// can't quietly swallow it. The user-API rejections (".As called
+// twice", etc.) are still InvalidOperationException; this one means an
+// invariant that should never fail did, whether it was declared by
+// InductorParser itself or by a user-defined rule.
 public sealed class InductorParserBugException : Exception
 {
     internal InductorParserBugException(string message)
-        : base("InductorParser internal invariant violated: " + message
-            + " This is a bug in InductorParser; please report it at "
-            + "https://github.com/EricZinda/InductorCSParser/issues.")
+        : base("Invariant violated: " + message
+            + " This is an invariant assertion that should never happen.")
     {
     }
 }

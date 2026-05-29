@@ -114,6 +114,17 @@ public sealed partial class Lexer
     internal ParseBudget Budget => _budget;
 
     /// <summary>
+    /// Make this lexer's parse budget delegate every rule-entry, rule-exit,
+    /// and periodic tick to <paramref name="parent"/>'s budget, so work done
+    /// on this lexer counts on top of the parent's current depth and limits.
+    /// A user-defined Rule that runs an inner rule against a sub-lexer (the
+    /// way the built-in WithinToken does) calls this so the inner recursion
+    /// can't spend a fresh MaxDepth on top of the outer parse's depth, and so
+    /// a Timeout or Cancellation observed on either lexer trips both.
+    /// </summary>
+    public void InheritBudgetFrom(Lexer parent) => _budget.InheritFrom(parent._budget);
+
+    /// <summary>
     /// Tick the parse budget once. A user-defined Rule subclass whose
     /// TryParseRule scans many tokens in a single invocation should call
     /// this once per iteration of its inner loop, the same way the
@@ -148,6 +159,22 @@ public sealed partial class Lexer
         : this(input, startPosition: 0, endPosition: (input ?? throw new ArgumentNullException(nameof(input))).Length, traceSink, traceLevel, oneRunePerToken: false)
     {
         _context = context;
+    }
+
+    /// <summary>
+    /// Create a lexer over the whole of <paramref name="input"/>, choosing
+    /// whether Read walks one rune at a time (<paramref name="oneRunePerToken"/>
+    /// true) instead of one grapheme cluster. A user-defined Rule that needs
+    /// to run an inner rule against the runes inside a single token (the way
+    /// the built-in WithinToken does) builds a sub-lexer this way over the
+    /// token's text, then calls <see cref="InheritBudgetFrom"/> to fold the
+    /// inner work into the outer parse's budget.
+    /// </summary>
+    public Lexer(string input, bool oneRunePerToken)
+        : this(input, startPosition: 0,
+               endPosition: (input ?? throw new ArgumentNullException(nameof(input))).Length,
+               traceSink: null, traceLevel: TraceLevel.Normal, oneRunePerToken: oneRunePerToken)
+    {
     }
 
     // Constructor used to build sub-lexers that read only a portion
@@ -209,8 +236,83 @@ public sealed partial class Lexer
     // Exposes the cached grapheme-cluster boundaries for a string, used only by alternative evaluators.
     internal bool IsGraphemeClusterStart(int position) => _graphemeIndex.IsClusterStart(position);
 
-    // Direct write-access to the read cursor for an alternative evaluator's
-    // backtrack-rollback path. Used only by alternative evaluators.
+    /// <summary>
+    /// Move the read cursor to <paramref name="position"/>. Two invariants are
+    /// enforced so a user-defined scanning Rule that walks the cursor by hand
+    /// (the way the built-in ScanUntil does, jumping past a token whose length
+    /// it already peeked) can't put the lexer into a state a later Read would
+    /// choke on:
+    /// <list type="bullet">
+    /// <item>It must lie in the readable range [0, <see cref="EndPosition"/>],
+    /// or this throws <see cref="System.ArgumentOutOfRangeException"/>.</item>
+    /// <item>It must sit on a token boundary: a grapheme-cluster boundary in
+    /// normal mode, or between runes (never inside a surrogate pair) in the
+    /// WithinToken sub-lexer's rune mode. A mid-token offset throws
+    /// <see cref="System.ArgumentException"/> here, rather than surfacing later
+    /// as an opaque failure when the next Read tries to size a token at it.</item>
+    /// </list>
+    /// Positions taken from a prior <see cref="Read"/> or computed as
+    /// <c>cursor + PeekTokenLength(cursor)</c> always satisfy both.
+    /// </summary>
+    /// <remarks>
+    /// This moves only the read cursor. It is safe with respect to the two
+    /// pieces of parse state a rule author might worry about:
+    /// <list type="bullet">
+    /// <item><b>Error tracking</b> is unaffected. RecordFailure /
+    /// RecordCompositeFailure record at the explicit position the rule passes,
+    /// not at the live cursor, and the deepest-failure mark is a max-only
+    /// high-water value. A transaction restores the cursor (and that mark) by
+    /// value on rollback, so a jump that's later rolled back leaves no trace in
+    /// the failure state. Because the cursor only ever holds an in-range
+    /// token-boundary offset (the two checks above), a failure a rule records
+    /// at <see cref="Position"/> afterward is always a real source offset the
+    /// error machinery can map back.</item>
+    /// <item><b>Tracing</b> is unaffected but not automatic. Trace output is
+    /// diagnostic logging keyed on transaction depth and validated token
+    /// offsets, so a cursor move can't corrupt it, but unlike <see cref="Read"/>
+    /// SetPosition emits no trace line. A rule that advances the cursor over a span by
+    /// hand should emit its own summary via the Rule.TraceSuccess /
+    /// TraceFailure helpers (as the built-in ScanWhile / ScanUntil do), or that
+    /// span won't appear in the trace.</item>
+    /// </list>
+    /// </remarks>
+    public void SetPosition(int position)
+    {
+        // uint cast: negatives wrap to huge values, so one compare catches
+        // both < 0 and > EndPosition.
+        if ((uint)position > (uint)_endPosition)
+            throw new ArgumentOutOfRangeException(nameof(position), position,
+                $"position must be in [0, {_endPosition}] (the lexer's readable range).");
+        if (!IsTokenBoundary(position))
+            throw new ArgumentException(
+                $"position {position} is not a token boundary. The read cursor can only sit "
+                + (_oneRunePerToken
+                    ? "between runes, not inside a surrogate pair. "
+                    : "on a grapheme-cluster boundary. ")
+                + "Compute it from a prior Read or from cursor + PeekTokenLength(cursor).",
+                nameof(position));
+        _position = position;
+    }
+
+    // True when `position` is a place the lexer could legitimately stop reading:
+    // the start, the end, or a token boundary in the current tokenization mode.
+    // Mirrors how Read sizes tokens (one grapheme cluster, or one rune in the
+    // sub-lexer mode), so any boundary this accepts is one Read can resume from.
+    private bool IsTokenBoundary(int position)
+    {
+        if (position <= 0 || position >= _endPosition) return true;
+        if (_oneRunePerToken)
+            // Mid-pair only when a low surrogate at `position` follows its high
+            // surrogate. A stray (unpaired) surrogate is its own one-char token,
+            // so a position on one is a valid boundary.
+            return !(char.IsHighSurrogate(_input[position - 1]) && char.IsLowSurrogate(_input[position]));
+        return _graphemeIndex.IsClusterStart(position);
+    }
+
+    // Direct write-access to the read cursor with no bounds or transaction
+    // bookkeeping, for an alternative evaluator's backtrack-rollback path
+    // where the position came from a prior checkpoint and is known good.
+    // User-defined rules use the bounds-checked SetPosition above instead.
     internal void SetPositionUnchecked(int position) => _position = position;
 
     // Apply per-parse ParseOptions to the lexer. Called by Rule.Parse right
@@ -244,7 +346,7 @@ public sealed partial class Lexer
     // "How long is the next token at this position?" without advancing.
     // Returns 0 if `position` is at or past the end. See the class doc
     // for the full malformed-UTF-16 rules.
-    internal int PeekTokenLength(int position)
+    public int PeekTokenLength(int position)
     {
         if (position >= _endPosition) return 0;
         return NextTokenLength(position);
@@ -258,7 +360,7 @@ public sealed partial class Lexer
     // is reserved for "stray surrogate" so callers don't have to distinguish
     // EOF from malformed input off one bool. Callers check EOF themselves.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static bool TryPeekRune(string input, int pos, out int runeValue, out int runeLen)
+    public static bool TryPeekRune(string input, int pos, out int runeValue, out int runeLen)
     {
         Invariant.That((uint)pos < (uint)input.Length, $"TryPeekRune called with pos={pos} outside [0, input.Length={input.Length}).");
         if (SurrogateHelpers.IsSurrogatePairAt(input, pos))

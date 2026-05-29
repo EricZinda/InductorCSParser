@@ -54,45 +54,50 @@ internal sealed class GraphemeRule : Rule
 
         // Single-rune tokens get their code point assigned as the rule's
         // Id, matching C++ character-symbol numbering. Multi-rune
-        // tokens fall through to Compile's custom-range assignment.
+        // tokens fall through to Compile's custom-range assignment. At
+        // construction the user hasn't named or set an explicit id yet, so
+        // SetLeafRuneId always takes effect here; it re-checks those
+        // conditions itself for the re-id during the normalization pass below.
         if (TokenSet.TrySingleRune(expectedToken, out int runeValue))
-            SetIdInternal(new SymbolId(runeValue));
+            SetLeafRuneId(runeValue);
     }
 
-    internal override string? ExpectedText => _expected;
+    // Read-only accessor for the rule's literal text, used by out-of-assembly
+    // analyzers (the required-literal prefilter and an alternative evaluator)
+    // that inspect a rule's fixed text. Same role as OneOfRule.LoweringSet.
+    internal string? ExpectedText => _expected;
 
-    internal override void CollectNormalizationOffenders(
+    protected override void ValidateNormalization(
         System.Text.NormalizationForm form,
-        List<(Rule rule, string original, string normalized)> offenders,
-        List<ArgumentException> failures)
+        INormalizationReporter reporter)
     {
-        // See Rule.CollectNormalizationOffenders for the contract.
+        // See Rule.ValidateNormalization for how this works.
         // Token-specific: a multi-grapheme conversion (Token("ﬁ") under
         // FormKC, where NFKC = "fi" is two graphemes) is reported as an
         // offender, since Token matches exactly one grapheme by
         // definition. Single-grapheme conversions update _expected and
         // re-id (e.g., U+2126 -> U+03A9 changes the rune).
-        string? normalized = TryConvertToForm(this, _expected, form, offenders, failures);
+        string? normalized = TryConvertToForm(this, _expected, form, reporter);
         if (normalized == null) return;
         if (string.Equals(normalized, _expected, StringComparison.Ordinal)) return;
 
         if (CountGraphemes(normalized) > 1)
         {
-            offenders.Add((this, _expected,
+            reporter.ReportOffender(this, _expected,
                 $"<Token converts to multi-grapheme sequence \"{normalized}\" under {form}. " +
                 $"Token matches exactly one grapheme. Use Literal(\"{normalized}\") or " +
-                $"And(Token-per-grapheme) instead.>"));
+                $"And(Token-per-grapheme) instead.>");
             return;
         }
 
         _expected = normalized;
-        // Skip the rune re-assignment when the user set an explicit Id via
-        // .As(SymbolId) or named the rule via .As(string): their explicit
-        // or name-hashed id is what keeps numbering stable, and
-        // re-assigning to the new rune would clobber the custom-range id
-        // AssignNamedIds gave a named rule.
-        if (!IsUserSymbolIdExplicit && Name == null && TokenSet.TrySingleRune(_expected, out int runeValue))
-            SetIdInternal(new SymbolId(runeValue));
+        // Re-id to the converted rune. SetLeafRuneId skips the assignment
+        // when the user set an explicit Id via .As(SymbolId) or named the
+        // rule via .As(string): their explicit or name-hashed id is what
+        // keeps numbering stable, and re-assigning to the new rune would
+        // clobber the custom-range id AssignNamedIds gave a named rule.
+        if (TokenSet.TrySingleRune(_expected, out int runeValue))
+            SetLeafRuneId(runeValue);
     }
 
     private static int CountGraphemes(string text)
@@ -104,7 +109,7 @@ internal sealed class GraphemeRule : Rule
         return count;
     }
 
-    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         int consumed = 0;
 

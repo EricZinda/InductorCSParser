@@ -57,18 +57,19 @@ public class InvariantTests
     }
 
     [Test]
-    public void That_failing_condition_throws_InductorParserBugException_with_bug_report_prefix()
+    public void That_failing_condition_throws_InductorParserBugException_with_neutral_framing()
     {
         // Verifies the exception type and the message framing. The
-        // "internal invariant violated" prefix and the github issues
-        // URL are what tell a future bug report reader that this came
-        // from inside InductorParser, not from the caller's grammar.
+        // "Invariant violated" prefix and the "should never happen"
+        // framing read correctly whether the invariant was declared by
+        // InductorParser itself or by a user-defined rule using the same
+        // public utility, so the message doesn't blame the wrong party.
         var caught = Assert.Throws<InductorParserBugException>(() =>
             Invariant.That(false, "the sky is the wrong color"));
 
-        Assert.That(caught!.Message, Does.StartWith("InductorParser internal invariant violated:"));
+        Assert.That(caught!.Message, Does.StartWith("Invariant violated:"));
         Assert.That(caught.Message, Does.Contain("the sky is the wrong color"));
-        Assert.That(caught.Message, Does.Contain("github.com/EricZinda/InductorCSParser/issues"));
+        Assert.That(caught.Message, Does.Contain("should never happen"));
     }
 
     [Test]
