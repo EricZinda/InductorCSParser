@@ -77,11 +77,10 @@ internal sealed class ScanUntilRule : Rule
     // TokenSet path never pay for Rule dispatch.
     private TokenSet _stopperSet;
     private readonly Rule? _stopperRule;
-    // Refreshed by CollectNormalizationOffenders when Compile's
-    // normalization pass mutates _stopperSet. For rule-mode stoppers
-    // the rendering is "rule <name>" and never needs refreshing,
-    // since the inner Rule handles its own normalization through
-    // the walker's recursion into Children. See OneOfRule for the why.
+    // Refreshed by CollectNormalizationOffenders (TokenSet stopper,
+    // post-projection entries) or by ValidateCompiled (rule-mode
+    // stopper, picks up a .As(name) the inner rule got after this
+    // ScanUntil was constructed).
     private string _stopperRendered;
 
     // When false (strict, the default), reaching end-of-input without
@@ -233,6 +232,14 @@ internal sealed class ScanUntilRule : Rule
         _escapeStartRune = escapeStart.Value;
         _escapeStartRule = null;
         _eofIsTerminator = eofIsTerminator;
+    }
+
+    protected override void ValidateCompiled()
+    {
+        // Catch a .As(name) the inner rule got between this ScanUntil's
+        // constructor and Compile.
+        if (_stopperRule != null)
+            _stopperRendered = $"rule {_stopperRule.Name ?? _stopperRule.GetType().Name}";
     }
 
     internal override void CollectNormalizationOffenders(
