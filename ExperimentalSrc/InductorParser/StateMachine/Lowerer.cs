@@ -611,7 +611,7 @@ internal sealed class LoweringContext
                 var record = altRecords[recordIndex];
                 if (record.skipEligible)
                 {
-                    if (flattenedSets[recordIndex].Contains(rune))
+                    if (flattenedSets[recordIndex].ContainsRune(rune))
                     {
                         table[rune] = record.pushIdx;
                         break;

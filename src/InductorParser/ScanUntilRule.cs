@@ -19,7 +19,7 @@ namespace InductorParser;
 //
 // There are two options for the string body stop condition:
 //   * TokenSet stopAt (fast path): stop when the next rune is in the
-//     set. Only does one TokenSet.Contains per rune and handles any grammar whose
+//     set. Only does one TokenSet.ContainsRune per rune and handles any grammar whose
 //     closing boundary is a single rune: JSON ", Python ' or ", C# $"..."
 //     closing, etc.
 //   * Rule stopAt (general path): stop when a user-supplied rule
@@ -77,7 +77,11 @@ internal sealed class ScanUntilRule : Rule
     // TokenSet path never pay for Rule dispatch.
     private TokenSet _stopperSet;
     private readonly Rule? _stopperRule;
-    private readonly string _stopperRendered;
+    // Refreshed by CollectNormalizationOffenders (TokenSet stopper,
+    // post-projection entries) or by ValidateCompiled (rule-mode
+    // stopper, picks up a .As(name) the inner rule got after this
+    // ScanUntil was constructed).
+    private string _stopperRendered;
 
     // When false (strict, the default), reaching end-of-input without
     // matching the stopper fails the rule. When true, EOF is itself a
@@ -136,7 +140,7 @@ internal sealed class ScanUntilRule : Rule
     // rolls the lexer back to where ScanUntil opened.
     private readonly Rule? _escapeEnd;
 
-    // FAST PATH, no escape. Per rune: one TokenSet.Contains.
+    // FAST PATH, no escape. Per rune: one TokenSet.ContainsRune.
     public ScanUntilRule(TokenSet stopAt, bool eofIsTerminator = false)
         : base(FlattenType.Preserve)
     {
@@ -162,7 +166,7 @@ internal sealed class ScanUntilRule : Rule
     internal bool LoweringEofIsTerminator => _eofIsTerminator;
 
     // FAST PATH, single-rune escape start. Per rune: one
-    // TokenSet.Contains plus one int equality on non-stopper runes.
+    // TokenSet.ContainsRune plus one int equality on non-stopper runes.
     // Covers JSON, C, C++ regular, Python single-line.
     public ScanUntilRule(TokenSet stopAt, Rune escapeStart, Rule escapeEnd, bool eofIsTerminator = false)
         : base(FlattenType.Preserve, escapeEnd ?? throw new ArgumentNullException(nameof(escapeEnd)))
@@ -230,6 +234,14 @@ internal sealed class ScanUntilRule : Rule
         _eofIsTerminator = eofIsTerminator;
     }
 
+    protected override void ValidateCompiled()
+    {
+        // Catch a .As(name) the inner rule got between this ScanUntil's
+        // constructor and Compile.
+        if (_stopperRule != null)
+            _stopperRendered = $"rule {_stopperRule.Name ?? _stopperRule.GetType().Name}";
+    }
+
     internal override void CollectNormalizationOffenders(
         System.Text.NormalizationForm form,
         List<(Rule rule, string original, string normalized)> offenders,
@@ -246,7 +258,12 @@ internal sealed class ScanUntilRule : Rule
         // sub-rules) handle their own normalization through the
         // walker's recursion into Children.
         if (_stopperRule == null)
+        {
             OneOfRule.NormalizeAndValidate(this, ref _stopperSet, form, offenders);
+            // See OneOfRule.CollectNormalizationOffenders for why the
+            // rendering has to be refreshed after the set is projected.
+            _stopperRendered = _stopperSet.ToString();
+        }
 
         // Same shape for the single-rune escape start: the fast-path
         // check (`runeValue == _escapeStartRune`) sees the lexer's

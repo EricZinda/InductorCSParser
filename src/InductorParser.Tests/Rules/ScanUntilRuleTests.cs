@@ -1187,4 +1187,64 @@ public class ScanUntilRuleTests
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("abc"));
     }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void ScanUntil_trace_stopper_rendering_refreshes_after_Compile_projects_the_set()
+    {
+        // Same shape as OneOf: the constructor cached the stopper
+        // set's rendering, Compile's normalization pass mutates
+        // _stopperSet onto the lexer-normalized form (U+212A KELVIN
+        // -> U+004B 'K' under FormC), and the cache used to keep the
+        // pre-projection entry. ScanUntil's success trace quotes the
+        // stopper rendering, so this exercises the SUCC trace path.
+        var sink = TraceTestHelpers.NewSink();
+        // KelvinGrapheme is U+212A wrapped in Canary so an editor
+        // can't silently swap it for ASCII 'K'. The parse input has
+        // no 'K', so ScanUntil consumes "ab" and stops at EOF, and
+        // the success trace renders the projected stopper set.
+        ScanUntil(TokenSet.Runes(KelvinGrapheme), eofIsTerminator: true)
+            .Parse("ab", new ParseOptions { TraceSink = sink });
+
+        Assert.That(sink.ToString(), Does.Contain("stopper '[K]'"),
+            "ScanUntil's success trace should render the stopper set in "
+            + "its post-Compile form: under FormC, U+212A canonicalizes "
+            + "to U+004B 'K', so the cached rendering has to refresh "
+            + "from '[U+212A]' to '[K]' or a grammar author reading "
+            + "the trace sees a different set than the rule matches.");
+        Assert.That(sink.ToString(), Does.Not.Contain("U+212A"),
+            "the stale pre-projection rendering must not leak into the trace");
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void ScanUntil_rule_stopper_rendering_refreshes_after_inner_rule_is_renamed()
+    {
+        // Sibling case to the TokenSet-stopper test above. The
+        // rule-mode stopper rendering captures `stopAt.Name ?? stopAt.GetType().Name`
+        // at construction. If the inner rule gets .As(name) AFTER the
+        // ScanUntil was built but before Compile (a static-init pattern
+        // where the stopper field is named in the static ctor after
+        // every field initializer has run, or a refactor that named a
+        // shared rule later), the cached rendering keeps the typeof-name
+        // and the trace says `rule OneOfRule` even though the rule's
+        // actual name is "foo". Grammar authors reading the trace see
+        // a name that doesn't match anything in their source.
+        var sink = TraceTestHelpers.NewSink();
+        var stopper = OneOf("X");
+        var scan = ScanUntil(stopper);
+        stopper.As("stopX");
+        // Input has no "X" and eofIsTerminator is false, so ScanUntil
+        // fails with "unterminated body", which is the trace path that
+        // splices _stopperRendered.
+        scan.Parse("abc", new ParseOptions { TraceSink = sink });
+
+        Assert.That(sink.ToString(), Does.Contain("stopper 'rule stopX'"),
+            "rule-mode stopper trace should reflect the inner rule's name "
+            + "as it stands at Compile time, not at ScanUntil-construction "
+            + "time. A grammar author reading the trace sees the name they "
+            + "wrote in source.");
+        Assert.That(sink.ToString(), Does.Not.Contain("OneOfRule"),
+            "the stale pre-rename typeof-name must not leak into the trace");
+    }
 }

@@ -133,6 +133,23 @@ public class SymbolExtensionsTests
     }
 
     [Test]
+    public void PrintTree_renders_long_form_when_user_name_matches_rune_text()
+    {
+        // Edge case the old "charName != runeText" string-compare hack
+        // couldn't distinguish from an anonymous rune leaf: a user who
+        // explicitly named the rule to the rune's own text. Routing
+        // through Rule.UserNameOf instead reads the user-supplied flag
+        // directly, so the long `name: "text"` form fires the moment
+        // .As(...) is on the rule, regardless of which string the name
+        // happens to be.
+        var rule = Token('a').As("a");
+        var result = rule.Parse("a");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Tree!.PrintTree(rule), Is.EqualTo("a: \"a\"\n"));
+    }
+
+    [Test]
     public void PrintTree_escapes_line_separator_rune_in_short_form()
     {
         // U+2028 LINE SEPARATOR is in Unicode category Zl, not Cc, so a
@@ -148,5 +165,42 @@ public class SymbolExtensionsTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.PrintTree(rule), Is.EqualTo("'U+2028'\n"));
+    }
+
+    [Test]
+    public void PrintTree_escapes_control_character_in_named_leaf_long_form()
+    {
+        // A `.As("nl")` on a Token('\n') routes the leaf through the
+        // long-form `name: "text"` branch instead of the compact `'c'`
+        // branch. The matched text is "\n" and goes into the rendered
+        // line as the quoted span, so the LF splits the line in two
+        // unless the long form runs the same Cc / Zl / Zp escape the
+        // short form already does.
+        var rule = Token('\n').As("nl");
+        var result = rule.Parse("\n");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.PrintTree(rule), Is.EqualTo("nl: \"U+000A\"\n"));
+    }
+
+    [Test]
+    public void PrintTree_escapes_control_character_in_composite_long_form()
+    {
+        // A composite Symbol's ToString concatenates its leaves' matched
+        // text. When that text spans a control or line-separator char,
+        // the long-form `name: "text"` line carries the raw char into
+        // the output and the layout collapses, even though the child
+        // leaves themselves render correctly (the short-form fix from
+        // 2026-05-27 escapes the LF child leaf).
+        var body = OneOrMore(AnyToken()).As("body");
+        var result = body.Parse("a\nb");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        string expected =
+            "body: \"aU+000Ab\"\n" +
+            "  'a'\n" +
+            "  'U+000A'\n" +
+            "  'b'\n";
+        Assert.That(result.Tree!.PrintTree(body), Is.EqualTo(expected));
     }
 }

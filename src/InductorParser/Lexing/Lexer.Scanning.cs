@@ -3,63 +3,67 @@ using InductorParser.Tracing;
 
 namespace InductorParser.Lexing;
 
-// ScanWhileRule's bulk-consume scanners. AdvanceWhileRuneIn walks one
-// rune at a time and checks each against a rune-only TokenSet;
-// AdvanceWhileTokenIn walks one grapheme cluster at a time so multi-rune
-// entries (CRLF, ZWJ-glued emoji sequences, etc.) can match too.
-//
-// The look-ahead "skip past stretches that can't start a match"
-// scanners (AdvanceUntilRuneIn, AdvanceUntilLiteralCandidateIn) live in
-// the StateMachine project. No rule in the recursive evaluator calls
-// them.
+// Bulk-consume scanners exposed to ScanWhileRule and to user-defined
+// Rule subclasses. AdvanceWhileRuneIn walks one rune at a time and
+// checks each against a rune-only TokenSet; AdvanceWhileTokenIn walks
+// one grapheme cluster at a time so multi-rune entries (CRLF, ZWJ-glued
+// emoji sequences, etc.) can match too.
 public sealed partial class Lexer
 {
-    internal int AdvanceWhileRuneIn(TokenSet set)
+    /// <summary>
+    /// Consume tokens while each one is a single rune in <paramref name="set"/>.
+    /// Returns the number of tokens consumed.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="set"/> must be rune-only. For sets that contain
+    /// multi-rune entries (CRLF, ZWJ emoji, etc.), use
+    /// <see cref="AdvanceWhileTokenIn"/>. Branch on
+    /// <see cref="TokenSet.HasMultiRuneGraphemes"/> to pick.
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="set"/> contains a multi-rune grapheme entry.
+    /// </exception>
+    public int AdvanceWhileRuneIn(TokenSet set)
     {
-        // Set must be rune-only. Multi-rune entries are
-        // silently invisible to set.Contains(runeValue) below, so a
-        // caller passing a mixed set would walk right past every
-        // multi-rune cluster the set was supposed to consume. The
-        // multi-rune-aware variant is AdvanceWhileTokenIn, the caller
-        // is responsible for dispatching to the right one based on
-        // whether the set has multi-rune entries.
-        Invariant.That(!set.HasMultiRuneGraphemes,
-            "AdvanceWhileRuneIn requires a rune-only set. "
-            + "Caller must dispatch to AdvanceWhileTokenIn for sets with multi-rune entries.");
+        if (set.HasMultiRuneGraphemes)
+            throw new ArgumentException(
+                "AdvanceWhileRuneIn requires a rune-only set. " +
+                "Use AdvanceWhileTokenIn for sets with multi-rune entries, " +
+                "or branch on TokenSet.HasMultiRuneGraphemes to pick.",
+                nameof(set));
 
         int count = 0;
 
         while (_position < _endPosition)
         {
             int tokenLength = NextTokenLength(_position);
-            // Sub-lexer edge case: a stray surrogate in the outer input
-            // makes the outer cluster one char long, so the sub-lexer's
-            // _endPosition can sit between the two halves of a surrogate
-            // pair in the underlying string. NextTokenLength reads ahead
-            // and reports 2, which would walk past the sub-lexer's
-            // bound; stop here.
-            if (tokenLength <= 0 || _position + tokenLength > _endPosition)
+            // NextTokenLength is bounded by _input.Length; sub-lexers
+            // hold a substring copy, so _input.Length == _endPosition
+            // and this stays in bounds. Asserted, not assumed.
+            Invariant.That(tokenLength >= 1 && _position + tokenLength <= _endPosition,
+                $"NextTokenLength returned {tokenLength} at _position={_position} with _endPosition={_endPosition}.");
+            // A single rune is at most 2 chars (surrogate pair); longer
+            // means a multi-rune cluster, which a rune-only run can't match.
+            if (tokenLength > 2)
                 break;
 
             bool inSet;
             if (TryPeekRune(_input, _position, out int runeValue, out int runeLen))
             {
-                // A Run-based rule matches only when the whole token is
-                // exactly one rune in the set. A multi-rune grapheme
-                // whose first rune happens to be in the set isn't part
-                // of the run. Under the WithinToken sub-lexer mode every
-                // token is one rune, so tokenLength == runeLen still works.
-                inSet = tokenLength == runeLen && set.Contains(runeValue);
+                // tokenLength == runeLen rejects 2-char multi-rune
+                // clusters (CRLF, base + combining mark): TryPeekRune
+                // reports just the first rune, so runeLen=1 but
+                // tokenLength=2.
+                inSet = tokenLength == runeLen && set.ContainsRune(runeValue);
             }
             else
             {
-                // Lone surrogate: a one-char token that isn't a valid
-                // Unicode scalar. OneOf matches it against the rune
-                // intervals by its UTF-16 code unit under an unnormalized
-                // Compile (see TokenSet.ContainsToken's lone-surrogate
-                // branch), so the run scanner has to agree to stay
-                // equivalent to AtLeast(n, OneOf(set)).
-                inSet = tokenLength == 1 && set.Contains((int)_input[_position]);
+                // Lone surrogate: a 1-char token whose UTF-16 code unit
+                // can still be a set member if the set's intervals cover
+                // it. tokenLength == 1 excludes the normal-grapheme-mode
+                // case where StringInfo fuses a stray surrogate with a
+                // following extender (combining mark, ZWJ) into one cluster.
+                inSet = tokenLength == 1 && set.ContainsRune((int)_input[_position]);
             }
             if (!inSet)
                 break;
@@ -73,38 +77,46 @@ public sealed partial class Lexer
         return count;
     }
 
-    // Token-aware variant of AdvanceWhileRuneIn. Used when the
-    // TokenSet has multi-rune entries: a multi-rune token can be a
-    // member of the set, so the loop has to pull a full token per
-    // iteration and check it against both halves of the set. Slower
-    // per character than AdvanceWhileRuneIn (we pay per-token
-    // overhead instead of inline rune decode), but only fires when the
-    // grammar actually contains multi-rune set entries. Rune-only sets
-    // continue to use AdvanceWhileRuneIn via the rule's dispatch.
-    internal int AdvanceWhileTokenIn(TokenSet set)
+    /// <summary>
+    /// Consume tokens while each one is in <paramref name="set"/>,
+    /// matching either rune or multi-rune grapheme entries. Returns
+    /// the number of tokens consumed.
+    /// </summary>
+    /// <remarks>
+    /// For rune-only sets, <see cref="AdvanceWhileRuneIn"/> is faster
+    /// (it can skip the multi-rune membership check). Branch on
+    /// <see cref="TokenSet.HasMultiRuneGraphemes"/> to pick.
+    /// </remarks>
+    public int AdvanceWhileTokenIn(TokenSet set)
     {
         int count = 0;
         while (_position < _endPosition)
         {
             int pos = _position;
             int tokenLength = NextTokenLength(pos);
-            if (tokenLength <= 0 || pos + tokenLength > _endPosition)
-                break;
+            // Same bound invariant as AdvanceWhileRuneIn.
+            Invariant.That(tokenLength >= 1 && pos + tokenLength <= _endPosition,
+                $"NextTokenLength returned {tokenLength} at pos={pos} with _endPosition={_endPosition}.");
 
             // Try the rune fast path first. If the token is a single
             // rune we don't have to hash a span against the multi-rune
-            // array. Multi-rune tokens fall through to the grapheme
-            // membership check.
+            // array. Multi-rune tokens and lone surrogates fall through
+            // to the grapheme membership check.
+            // tokenLength == runeLen rejects 2-char multi-rune
+            // clusters (CRLF, base + combining mark): TryPeekRune
+            // reports just the first rune, so runeLen=1 but
+            // tokenLength=2.
             bool inSet;
             if (TryPeekRune(_input, pos, out int runeValue, out int runeLen)
                 && tokenLength == runeLen)
             {
-                inSet = set.Contains(runeValue);
+                inSet = set.ContainsRune(runeValue);
             }
             else
             {
-                inSet = set.HasMultiRuneGraphemes
-                    && set.ContainsToken(_input.AsSpan(pos, tokenLength));
+                // ContainsToken handles both a lone surrogate (matched
+                // by code unit) and a multi-rune cluster.
+                inSet = set.ContainsToken(_input.AsSpan(pos, tokenLength));
             }
             if (!inSet) break;
 

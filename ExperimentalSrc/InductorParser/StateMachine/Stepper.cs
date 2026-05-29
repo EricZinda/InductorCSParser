@@ -244,7 +244,7 @@ internal static class Stepper
         }
         var token = lexer.Read();
         TokenSet set = machine.Program.TokenSets[tokenSetIndex];
-        if (!set.Contains(token.RuneValue))
+        if (!set.ContainsRune(token.RuneValue))
         {
             lexer.SetPositionUnchecked(entryPosition);
             machine.RecordFailure(entryPosition, ResolveMatchErrorMessage(in machine, state.Data));
@@ -332,7 +332,7 @@ internal static class Stepper
         if (runeValue >= 0)
         {
             TokenSet set = machine.Program.TokenSets[tokenSetIndex];
-            if (set.Contains(runeValue))
+            if (set.ContainsRune(runeValue))
             {
                 lexer.SetPositionUnchecked(entryPosition);
                 machine.RecordFailure(entryPosition, ResolveMatchErrorMessage(in machine, state.Data));
@@ -747,7 +747,7 @@ internal static class Stepper
     private static int Step_CheckPeekedRuneInSet(in State state, ref Machine machine)
     {
         TokenSet set = machine.Program.TokenSets[state.Data];
-        if (set.Contains(machine.PeekedRune))
+        if (set.ContainsRune(machine.PeekedRune))
             return state.OnSuccess;
         return state.OnFailure;
     }
@@ -845,7 +845,7 @@ internal static class Stepper
                 runeLen = 1;
             }
 
-            if (stopperSet.Contains(runeValue)) return state.OnSuccess;
+            if (stopperSet.ContainsRune(runeValue)) return state.OnSuccess;
 
             if (spec.HasEscape && runeValue == spec.EscapeStartRune)
             {

@@ -179,17 +179,17 @@ public class EndOfLineRuleTests
         // terminator rune" would read this set through NoneOf, so
         // its contents matter on their own.
         var set = TokenSet.LineTerminators;
-        Assert.That(set.Contains(0x000A), Is.True, "LF");
-        Assert.That(set.Contains(0x000B), Is.True, "VT");
-        Assert.That(set.Contains(0x000C), Is.True, "FF");
-        Assert.That(set.Contains(0x000D), Is.True, "CR");
-        Assert.That(set.Contains(0x0085), Is.True, "NEL");
-        Assert.That(set.Contains(0x2028), Is.True, "LS");
-        Assert.That(set.Contains(0x2029), Is.True, "PS");
+        Assert.That(set.ContainsRune(0x000A), Is.True, "LF");
+        Assert.That(set.ContainsRune(0x000B), Is.True, "VT");
+        Assert.That(set.ContainsRune(0x000C), Is.True, "FF");
+        Assert.That(set.ContainsRune(0x000D), Is.True, "CR");
+        Assert.That(set.ContainsRune(0x0085), Is.True, "NEL");
+        Assert.That(set.ContainsRune(0x2028), Is.True, "LS");
+        Assert.That(set.ContainsRune(0x2029), Is.True, "PS");
 
-        Assert.That(set.Contains(0x0020), Is.False, "space not a terminator");
-        Assert.That(set.Contains(0x0009), Is.False, "tab not a terminator");
-        Assert.That(set.Contains('x'), Is.False, "letter not a terminator");
+        Assert.That(set.ContainsRune(0x0020), Is.False, "space not a terminator");
+        Assert.That(set.ContainsRune(0x0009), Is.False, "tab not a terminator");
+        Assert.That(set.ContainsRune('x'), Is.False, "letter not a terminator");
     }
 
     [Test]
@@ -204,10 +204,10 @@ public class EndOfLineRuleTests
         // because the cluster as a whole isn't equal to any single-rune
         // entry.
         var set = TokenSet.LineTerminators;
-        Assert.That(set.Contains("\r\n"), Is.True, "CRLF cluster");
-        Assert.That(set.Contains("\r"), Is.True, "bare CR still matches");
-        Assert.That(set.Contains("\n"), Is.True, "bare LF still matches");
-        Assert.That(set.Contains("ab"), Is.False, "non-terminator multi-char isn't in set");
+        Assert.That(set.ContainsToken("\r\n"), Is.True, "CRLF cluster");
+        Assert.That(set.ContainsToken("\r"), Is.True, "bare CR still matches");
+        Assert.That(set.ContainsToken("\n"), Is.True, "bare LF still matches");
+        Assert.That(set.ContainsToken("ab"), Is.False, "non-terminator multi-char isn't in set");
     }
 
     [Test]

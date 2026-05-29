@@ -184,12 +184,22 @@ public abstract class Rule
     // detail to surface once all alternatives failed); without the
     // check, WriteTraceLine's own ": " plus the leading space in the
     // format string would render "Or:  \"...\"" with a double space.
+    //
+    // DisplayEscape.Escape rewrites Cc/Zl/Zp chars in the message to
+    // U+XXXX for the trace render. AppendErrorMessage runs after the
+    // TraceInterpolatedStringHandler builds `body`, so the handler's
+    // own auto-escape doesn't reach the WithError text. Without this
+    // a user's WithError("line1\nline2") would split the FAIL line.
+    // The stored _errorMessage stays the user's exact text so
+    // ParseResult.ErrorMessage still surfaces it verbatim for callers
+    // who want the literal multi-line message.
     private string AppendErrorMessage(string body)
     {
         if (_errorMessage == null) return body;
+        string escapedMessage = DisplayEscape.Escape(_errorMessage, 0, _errorMessage.Length);
         return body.Length > 0
-            ? $"{body} \"{_errorMessage}\""
-            : $"\"{_errorMessage}\"";
+            ? $"{body} \"{escapedMessage}\""
+            : $"\"{escapedMessage}\"";
     }
 
     // Short-form trace helpers called from a rule's TryParse on the
@@ -360,6 +370,13 @@ public abstract class Rule
     // previous call set.
     public virtual Rule As(string name)
     {
+        // Null check runs before every state mutation: ThrowIfSealed,
+        // the Name != null set-once check, and the FlattenType auto-flip
+        // in ApplyIdentificationFlattenPolicy. Without it, .As(null!) on
+        // a rule whose Name is still null would skip the set-once check,
+        // silently flip FlattenType to Preserve, leave Name unset, and
+        // let a later legitimate .As(...) still succeed.
+        if (name == null) throw new ArgumentNullException(nameof(name));
         ThrowIfSealed();
         if (Name != null)
             throw new InvalidOperationException(
@@ -614,6 +631,12 @@ public abstract class Rule
     // silently do nothing).
     public virtual Rule WithError(string errorMessage, bool forced = false)
     {
+        // Null check runs before every state mutation: ThrowIfSealed,
+        // the _errorMessage != null set-once check, and the field writes.
+        // Without it, .WithError(null!, forced: true) would skip the
+        // set-once check, write _errorForced without writing a message,
+        // and let a later legitimate .WithError(...) still succeed,
+        // silently overwriting the forced flag the first call asked for.
         if (errorMessage == null) throw new ArgumentNullException(nameof(errorMessage));
         ThrowIfSealed();
         if (_errorMessage != null)
@@ -817,6 +840,26 @@ public abstract class Rule
         // class-derived trace name (And, OneOrMore,
         // BetweenInclusive[1..3]).
         return entry.Name;
+    }
+
+    // Return the user-supplied .As("name") name for `id`, or null if the
+    // id has no user name (an anonymous rule, or one whose name comes
+    // from the rune-text / class-trace-name fallback NameOf uses).
+    // Lets a tree walker distinguish "the user named this rule" from
+    // "NameOf returned something because it always returns something";
+    // NameOf's string-compare hack `name != defaultLabel` can't
+    // distinguish a user who happened to .As(...) the rule to the same
+    // string the default would have produced.
+    //
+    // Auto-compiles for the same reason NameOf does: ids aren't stable
+    // until Compile runs.
+    public string? UserNameOf(SymbolId id)
+    {
+        if (!_sealed) Compile();
+        _nameIndex ??= BuildNameIndex();
+        return _nameIndex.TryGetValue(id, out var entry) && entry.IsUserSupplied
+            ? entry.Name
+            : null;
     }
 
     private Dictionary<SymbolId, (string Name, bool IsUserSupplied)> BuildNameIndex()

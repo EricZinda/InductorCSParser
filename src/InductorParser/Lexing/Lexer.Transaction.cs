@@ -5,8 +5,7 @@ namespace InductorParser.Lexing;
 public sealed partial class Lexer
 {
     // Current transaction nesting depth. BeginTransaction increments,
-    // Transaction.Dispose decrements. Read by Lexer.Tracing's
-    // WriteTraceLine for indent width.
+    // Transaction.Dispose decrements. Drives the indent width of trace output.
     private int _transactionDepth;
 
     // Transactions exist so rules can speculatively read input and then
@@ -27,7 +26,7 @@ public sealed partial class Lexer
     // which is earlier than the inner's saved point. The inner's
     // commit doesn't "promote" its reads to permanent. It only says
     // "I personally wouldn't roll back here." Any ancestor is free
-    // to roll further back. That's the PEG semantic: only the
+    // to roll further back. That's the semantic: only the
     // outermost successful match is final, and a failure anywhere
     // above it undoes everything below.
     //
@@ -40,8 +39,12 @@ public sealed partial class Lexer
     //
     // Transaction is nested inside Lexer on purpose: the rollback logic
     // touches Lexer's private _position field, and nesting keeps that
-    // access legitimate without widening visibility. The factory method
-    // BeginTransaction lives in Lexer.cs next to Read.
+    // access legitimate without widening visibility.
+    /// <summary>
+    /// A speculative read scope. Code inside reads input freely. On
+    /// <see cref="Dispose"/> the lexer position rolls back to where the
+    /// transaction opened unless <see cref="Commit"/> was called first.
+    /// </summary>
     public struct Transaction : IDisposable
     {
         private readonly Lexer _lexer;
@@ -54,6 +57,13 @@ public sealed partial class Lexer
         private bool _settled;
         private bool _depthPopped;
 
+        /// <summary>
+        /// The lexer position at the moment this transaction opened. Rules
+        /// pass this to RecordFailure as the pre-read offset where the
+        /// offending input starts.
+        /// </summary>
+        public int StartPosition => _savedPosition;
+
         internal Transaction(Lexer lexer, int savedPosition)
         {
             _lexer = lexer;
@@ -64,28 +74,29 @@ public sealed partial class Lexer
             _depthPopped = false;
         }
 
-        // The lexer position at the moment this transaction opened. Rules
-        // pass this to RecordFailure as the "pre-read" offset where the
-        // offending input starts. Saves a separate local that would
-        // duplicate this state.
-        public int StartPosition => _savedPosition;
-
-        // Commit succeeds the transaction: the lexer keeps the position
-        // its children advanced it to, and Dispose won't roll it back.
-        //
-        // Commit does nothing to the failure tracker. Failures
-        // survive both commit and rollback. A rejected Or branch or a
-        // count rule's stopped iteration is real evidence about the
-        // input and is kept, ranked by depth like any other failure. The
-        // one exception is lookahead, and that's exactly what BeginProbe
-        // is for: a Probe restores the failure tracker and subtree-extent
-        // mark as well as the position. See docs/ErrorArchitecture.md.
+        /// <summary>
+        /// Succeeds the transaction: the lexer keeps the position its children
+        /// advanced it to, and <see cref="Dispose"/> won't roll it back.
+        /// </summary>
+        /// <remarks>
+        /// Commit does nothing to the failure tracker. Failures survive both
+        /// commit and rollback. A rejected Or branch or a count rule's stopped
+        /// iteration is real evidence about the input and is kept, ranked by
+        /// depth like any other failure. The one exception is lookahead, which
+        /// is what BeginProbe is for: a Probe restores the failure tracker and
+        /// subtree-extent mark as well as the position. See
+        /// docs/ErrorArchitecture.md.
+        /// </remarks>
         public void Commit()
         {
             if (_settled) return;
             _settled = true;
         }
 
+        /// <summary>
+        /// Rolls the lexer position back to where this transaction opened and
+        /// marks it settled, so the later <see cref="Dispose"/> is a no-op.
+        /// </summary>
         public void Rollback()
         {
             if (_settled) return;
@@ -93,21 +104,21 @@ public sealed partial class Lexer
             _settled = true;
         }
 
-        // Dispose runs on every exit path (commit, rollback, normal return,
-        // exception). It does three things, each behind its own flag check so
-        // the combination of explicit Commit()/Rollback() followed by
-        // implicit Dispose stays balanced:
-        //   * Restore the lexer position if the transaction wasn't settled.
-        //   * Pop the transaction-depth counter exactly once so trace
-        //     indentation mirrors the transaction nesting. The depth pop
-        //     has to happen regardless of commit vs. rollback, because the
-        //     rule that opened this transaction is unwinding either way.
-        //   * Merge this transaction's subtree-extent window back into the
-        //     enclosing one with Math.Max. The deepest failure this rule's
-        //     subtree reached is part of the parent's subtree too, so the
-        //     parent's window has to absorb it. Done in the same once-only
-        //     block as the depth pop, for the same "unwinding either way"
-        //     reason.
+        /// <summary>
+        /// Runs on every exit path (commit, rollback, normal return,
+        /// exception) and rolls the position back if the transaction was never
+        /// settled.
+        /// </summary>
+        /// <remarks>
+        /// If <see cref="Commit"/> or <see cref="Rollback"/> already ran, the
+        /// position is left alone. Either way Dispose pops the depth counter
+        /// that drives trace indentation and merges this transaction's deepest
+        /// failure back into the enclosing one. The pop waits until the scope
+        /// exits rather than happening in Commit or Rollback, which allows
+        /// traces to emit at the right level from within the using block after
+        /// a commit or rollback. Flag checks keep it balanced so each part runs
+        /// once even when an explicit call came first.
+        /// </remarks>
         public void Dispose()
         {
             if (!_settled)

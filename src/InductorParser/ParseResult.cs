@@ -135,7 +135,11 @@ public readonly struct ParseResult
     // who just want "find the node with this rule's id in the result"
     // can use this without first figuring out which shape their root
     // produced.
-    public Symbol? Find(Rule rule) => Find(rule.Id);
+    public Symbol? Find(Rule rule)
+    {
+        if (rule == null) throw new ArgumentNullException(nameof(rule));
+        return Find(rule.Id);
+    }
 
     public Symbol? Find(SymbolId id)
     {
@@ -152,7 +156,11 @@ public readonly struct ParseResult
     // matching node. Use when the rule can appear multiple times. Like
     // Find, this works regardless of whether the root preserved itself
     // or flattened its children into the top-level Symbols list.
-    public IEnumerable<Symbol> FindAll(Rule rule) => FindAll(rule.Id);
+    public IEnumerable<Symbol> FindAll(Rule rule)
+    {
+        if (rule == null) throw new ArgumentNullException(nameof(rule));
+        return FindAll(rule.Id);
+    }
 
     public IEnumerable<Symbol> FindAll(SymbolId id)
     {

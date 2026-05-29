@@ -126,13 +126,47 @@ public ref struct TraceInterpolatedStringHandler
     // but the compiler also skips the calls entirely when
     // shouldAppend was false, so the no-op guards here are mostly
     // defense in depth (and appease nullable analysis).
+    //
+    // AppendLiteral handles the static scaffolding between holes ("found '",
+    // "', wanted one of '") which the grammar author wrote in source and
+    // can't carry a stray control char, so it appends verbatim.
+    //
+    // The AppendFormatted overloads handle the interpolation holes, the
+    // dynamic values a caller splices in: matched token text, a stored
+    // expected literal, a rule's set rendering, a count. Every one of
+    // those runs through DisplayEscape.AppendEscaped, which rewrites
+    // Control (Cc) / LineSeparator (Zl) / ParagraphSeparator (Zp) chars
+    // to U+XXXX and leaves everything else (including emoji and ZWJ glue)
+    // verbatim. That makes "one trace event renders as one physical line"
+    // an invariant the handler enforces, instead of a rule every caller
+    // has to remember: a Token('\n') match, a CRLF cluster, or an LF
+    // captured by OneOf(LineTerminators) can't split a trace line no
+    // matter which rule quoted it. Escaping is idempotent (a value that's
+    // already "U+000A" holds no control chars) and AppendEscaped appends
+    // straight into the builder with no intermediate allocation, so the
+    // common printable hole pays only a single scan, and only on the
+    // tracing-on path where the builder exists at all.
     public void AppendLiteral(string value) => _builder?.Append(value);
 
-    public void AppendFormatted<T>(T value) => _builder?.Append(value?.ToString());
+    public void AppendFormatted<T>(T value)
+    {
+        if (_builder == null) return;
+        string? text = value?.ToString();
+        if (text != null)
+            DisplayEscape.AppendEscaped(_builder, text.AsSpan());
+    }
 
-    public void AppendFormatted(string? value) => _builder?.Append(value);
+    public void AppendFormatted(string? value)
+    {
+        if (_builder != null && value != null)
+            DisplayEscape.AppendEscaped(_builder, value.AsSpan());
+    }
 
-    public void AppendFormatted(ReadOnlySpan<char> value) => _builder?.Append(value);
+    public void AppendFormatted(ReadOnlySpan<char> value)
+    {
+        if (_builder != null)
+            DisplayEscape.AppendEscaped(_builder, value);
+    }
 
     // Called by Lexer.Trace and the Rule.TraceSuccess /
     // Rule.TraceFailure helpers to pull out the formatted message.

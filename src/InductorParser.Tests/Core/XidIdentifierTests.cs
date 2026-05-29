@@ -284,10 +284,10 @@ public class XidIdentifierTests
         // U+309B and U+309C aren't here because NFKC closure drops them
         // from XID_Start; see Katakana_voicing_marks_are_excluded_by_NFKC_closure.
         var startSet = TokenSet.XidStart;
-        Assert.That(startSet.Contains(0x1885), Is.True, "MONGOLIAN LETTER ALI GALI BALUDA (Mn, range low)");
-        Assert.That(startSet.Contains(0x1886), Is.True, "MONGOLIAN LETTER ALI GALI THREE BALUDA (Mn, range high)");
-        Assert.That(startSet.Contains(0x2118), Is.True, "SCRIPT CAPITAL P (Sm)");
-        Assert.That(startSet.Contains(0x212E), Is.True, "ESTIMATED SYMBOL (So)");
+        Assert.That(startSet.ContainsRune(0x1885), Is.True, "MONGOLIAN LETTER ALI GALI BALUDA (Mn, range low)");
+        Assert.That(startSet.ContainsRune(0x1886), Is.True, "MONGOLIAN LETTER ALI GALI THREE BALUDA (Mn, range high)");
+        Assert.That(startSet.ContainsRune(0x2118), Is.True, "SCRIPT CAPITAL P (Sm)");
+        Assert.That(startSet.ContainsRune(0x212E), Is.True, "ESTIMATED SYMBOL (So)");
     }
 
     [Test]
@@ -315,13 +315,13 @@ public class XidIdentifierTests
         // them. Confirmed against the Unicode DerivedCoreProperties.txt:
         // 309B..309C appears under ID_Start / ID_Continue but the XID
         // sections skip from 3041..3096 straight to 309D..309E.
-        Assert.That(TokenSet.XidStart.Contains(0x309B), Is.False,
+        Assert.That(TokenSet.XidStart.ContainsRune(0x309B), Is.False,
             "U+309B is excluded from XID_Start by NFKC closure");
-        Assert.That(TokenSet.XidStart.Contains(0x309C), Is.False,
+        Assert.That(TokenSet.XidStart.ContainsRune(0x309C), Is.False,
             "U+309C is excluded from XID_Start by NFKC closure");
-        Assert.That(TokenSet.XidContinue.Contains(0x309B), Is.False,
+        Assert.That(TokenSet.XidContinue.ContainsRune(0x309B), Is.False,
             "U+309B is excluded from XID_Continue by NFKC closure");
-        Assert.That(TokenSet.XidContinue.Contains(0x309C), Is.False,
+        Assert.That(TokenSet.XidContinue.ContainsRune(0x309C), Is.False,
             "U+309C is excluded from XID_Continue by NFKC closure");
 
         // Behavioral: Identifier() rejects a bare voicing mark.
@@ -343,29 +343,29 @@ public class XidIdentifierTests
         var continueSet = TokenSet.XidContinue;
 
         // Other_ID_Continue: code points the L+Nl+Mn+Mc+Nd+Pc base misses.
-        Assert.That(continueSet.Contains(0x00B7), Is.True, "MIDDLE DOT (Po)");
-        Assert.That(continueSet.Contains(0x0387), Is.True, "GREEK ANO TELEIA (Po)");
-        Assert.That(continueSet.Contains(0x1369), Is.True, "ETHIOPIC DIGIT ONE (range low)");
-        Assert.That(continueSet.Contains(0x1371), Is.True, "ETHIOPIC DIGIT NINE (range high)");
-        Assert.That(continueSet.Contains(0x19DA), Is.True, "NEW TAI LUE THAM DIGIT ONE (No)");
-        Assert.That(continueSet.Contains(0x200C), Is.True, "ZERO WIDTH NON-JOINER (Cf, added in Unicode 16)");
-        Assert.That(continueSet.Contains(0x200D), Is.True, "ZERO WIDTH JOINER (Cf, added in Unicode 16)");
-        Assert.That(continueSet.Contains(0x30FB), Is.True, "KATAKANA MIDDLE DOT (Po, added in Unicode 16)");
-        Assert.That(continueSet.Contains(0xFF65), Is.True, "HALFWIDTH KATAKANA MIDDLE DOT (Po, added in Unicode 16)");
+        Assert.That(continueSet.ContainsRune(0x00B7), Is.True, "MIDDLE DOT (Po)");
+        Assert.That(continueSet.ContainsRune(0x0387), Is.True, "GREEK ANO TELEIA (Po)");
+        Assert.That(continueSet.ContainsRune(0x1369), Is.True, "ETHIOPIC DIGIT ONE (range low)");
+        Assert.That(continueSet.ContainsRune(0x1371), Is.True, "ETHIOPIC DIGIT NINE (range high)");
+        Assert.That(continueSet.ContainsRune(0x19DA), Is.True, "NEW TAI LUE THAM DIGIT ONE (No)");
+        Assert.That(continueSet.ContainsRune(0x200C), Is.True, "ZERO WIDTH NON-JOINER (Cf, added in Unicode 16)");
+        Assert.That(continueSet.ContainsRune(0x200D), Is.True, "ZERO WIDTH JOINER (Cf, added in Unicode 16)");
+        Assert.That(continueSet.ContainsRune(0x30FB), Is.True, "KATAKANA MIDDLE DOT (Po, added in Unicode 16)");
+        Assert.That(continueSet.ContainsRune(0xFF65), Is.True, "HALFWIDTH KATAKANA MIDDLE DOT (Po, added in Unicode 16)");
 
         // Symbol-category Other_ID_Start members that survive NFKC closure
         // (XID_Start is a subset of XID_Continue, so they show up here too).
         // U+309B and U+309C are deliberately NOT in this list because NFKC
         // closure drops them from XID_Continue; see
         // Katakana_voicing_marks_are_excluded_by_NFKC_closure.
-        Assert.That(continueSet.Contains(0x2118), Is.True, "SCRIPT CAPITAL P (Sm)");
-        Assert.That(continueSet.Contains(0x212E), Is.True, "ESTIMATED SYMBOL (So)");
+        Assert.That(continueSet.ContainsRune(0x2118), Is.True, "SCRIPT CAPITAL P (Sm)");
+        Assert.That(continueSet.ContainsRune(0x212E), Is.True, "ESTIMATED SYMBOL (So)");
 
         // The "already in the union" claim in XidContinueAdds' comment: the
         // one non-symbol Other_ID_Start member, U+1885..1886 (Mn), is in
         // XidContinue via the Mn category base, NOT via the adds table.
-        Assert.That(continueSet.Contains(0x1885), Is.True, "MONGOLIAN LETTER ALI GALI BALUDA (Mn, range low)");
-        Assert.That(continueSet.Contains(0x1886), Is.True, "MONGOLIAN LETTER ALI GALI THREE BALUDA (Mn, range high)");
+        Assert.That(continueSet.ContainsRune(0x1885), Is.True, "MONGOLIAN LETTER ALI GALI BALUDA (Mn, range low)");
+        Assert.That(continueSet.ContainsRune(0x1886), Is.True, "MONGOLIAN LETTER ALI GALI THREE BALUDA (Mn, range high)");
     }
 
     [Test]
@@ -378,28 +378,28 @@ public class XidIdentifierTests
         var continueSet = TokenSet.XidContinue;
 
         // Non-Arabic NFKC-unstable exclusions.
-        Assert.That(continueSet.Contains(0x037A), Is.False, "GREEK YPOGEGRAMMENI");
-        Assert.That(continueSet.Contains(0x2E2F), Is.False, "VERTICAL TILDE");
+        Assert.That(continueSet.ContainsRune(0x037A), Is.False, "GREEK YPOGEGRAMMENI");
+        Assert.That(continueSet.ContainsRune(0x2E2F), Is.False, "VERTICAL TILDE");
 
         // FC5E..FC63 range (Arabic ligature shadda + harakat isolated forms).
-        Assert.That(continueSet.Contains(0xFC5E), Is.False, "ARABIC LIGATURE SHADDA WITH DAMMATAN (range low)");
-        Assert.That(continueSet.Contains(0xFC63), Is.False, "ARABIC LIGATURE SHADDA WITH KASRA (range high)");
+        Assert.That(continueSet.ContainsRune(0xFC5E), Is.False, "ARABIC LIGATURE SHADDA WITH DAMMATAN (range low)");
+        Assert.That(continueSet.ContainsRune(0xFC63), Is.False, "ARABIC LIGATURE SHADDA WITH KASRA (range high)");
 
         // FDFA..FDFB Arabic phrase ligatures.
-        Assert.That(continueSet.Contains(0xFDFA), Is.False, "ARABIC LIGATURE SALLALLAHOU (range low)");
-        Assert.That(continueSet.Contains(0xFDFB), Is.False, "ARABIC LIGATURE JALLAJALALOUHOU (range high)");
+        Assert.That(continueSet.ContainsRune(0xFDFA), Is.False, "ARABIC LIGATURE SALLALLAHOU (range low)");
+        Assert.That(continueSet.ContainsRune(0xFDFB), Is.False, "ARABIC LIGATURE JALLAJALALOUHOU (range high)");
 
         // FE70..FE7E Arabic harakat isolated forms. The whole table is
         // excluded from XID_Continue, so every entry XidStartExclusions
         // lists in this block must also be in XidContinueExclusions.
-        Assert.That(continueSet.Contains(0xFE70), Is.False, "ARABIC FATHATAN ISOLATED FORM");
-        Assert.That(continueSet.Contains(0xFE72), Is.False, "ARABIC DAMMATAN ISOLATED FORM");
-        Assert.That(continueSet.Contains(0xFE74), Is.False, "ARABIC KASRATAN ISOLATED FORM");
-        Assert.That(continueSet.Contains(0xFE76), Is.False, "ARABIC FATHA ISOLATED FORM");
-        Assert.That(continueSet.Contains(0xFE78), Is.False, "ARABIC DAMMA ISOLATED FORM");
-        Assert.That(continueSet.Contains(0xFE7A), Is.False, "ARABIC KASRA ISOLATED FORM");
-        Assert.That(continueSet.Contains(0xFE7C), Is.False, "ARABIC SHADDA ISOLATED FORM");
-        Assert.That(continueSet.Contains(0xFE7E), Is.False, "ARABIC SUKUN ISOLATED FORM");
+        Assert.That(continueSet.ContainsRune(0xFE70), Is.False, "ARABIC FATHATAN ISOLATED FORM");
+        Assert.That(continueSet.ContainsRune(0xFE72), Is.False, "ARABIC DAMMATAN ISOLATED FORM");
+        Assert.That(continueSet.ContainsRune(0xFE74), Is.False, "ARABIC KASRATAN ISOLATED FORM");
+        Assert.That(continueSet.ContainsRune(0xFE76), Is.False, "ARABIC FATHA ISOLATED FORM");
+        Assert.That(continueSet.ContainsRune(0xFE78), Is.False, "ARABIC DAMMA ISOLATED FORM");
+        Assert.That(continueSet.ContainsRune(0xFE7A), Is.False, "ARABIC KASRA ISOLATED FORM");
+        Assert.That(continueSet.ContainsRune(0xFE7C), Is.False, "ARABIC SHADDA ISOLATED FORM");
+        Assert.That(continueSet.ContainsRune(0xFE7E), Is.False, "ARABIC SUKUN ISOLATED FORM");
     }
 
     [Test]
@@ -412,9 +412,9 @@ public class XidIdentifierTests
         // XID_Continue. The two exclusion tables are deliberately asymmetric
         // here, and dropping these into XidContinueExclusions would wrongly
         // reject identifiers like Thai "kam" mid-word.
-        Assert.That(TokenSet.XidContinue.Contains(0x0E33), Is.True,
+        Assert.That(TokenSet.XidContinue.ContainsRune(0x0E33), Is.True,
             "THAI CHARACTER SARA AM is in XID_Continue");
-        Assert.That(TokenSet.XidContinue.Contains(0x0EB3), Is.True,
+        Assert.That(TokenSet.XidContinue.ContainsRune(0x0EB3), Is.True,
             "LAO VOWEL SIGN AM is in XID_Continue");
     }
 
@@ -531,16 +531,16 @@ public class XidIdentifierTests
         var failures = new List<string>();
         foreach (var codepoint in patternSyntaxInBase)
         {
-            if (TokenSet.XidStart.Contains(codepoint))
+            if (TokenSet.XidStart.ContainsRune(codepoint))
                 failures.Add($"U+{codepoint:X4}: in Pattern_Syntax and the identifier base, but TokenSet.XidStart admits it");
-            if (TokenSet.XidContinue.Contains(codepoint))
+            if (TokenSet.XidContinue.ContainsRune(codepoint))
                 failures.Add($"U+{codepoint:X4}: in Pattern_Syntax and the identifier base, but TokenSet.XidContinue admits it");
         }
         foreach (var codepoint in patternWhiteSpaceInBase)
         {
-            if (TokenSet.XidStart.Contains(codepoint))
+            if (TokenSet.XidStart.ContainsRune(codepoint))
                 failures.Add($"U+{codepoint:X4}: in Pattern_White_Space and the identifier base, but TokenSet.XidStart admits it");
-            if (TokenSet.XidContinue.Contains(codepoint))
+            if (TokenSet.XidContinue.ContainsRune(codepoint))
                 failures.Add($"U+{codepoint:X4}: in Pattern_White_Space and the identifier base, but TokenSet.XidContinue admits it");
         }
 
