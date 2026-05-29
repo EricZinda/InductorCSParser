@@ -39,7 +39,7 @@ internal sealed class NoneOfRule : Rule
         OneOfRule.NormalizeAndValidate(this, ref _set, form, offenders);
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         var token = lexer.Read();
         if (token.IsEof)

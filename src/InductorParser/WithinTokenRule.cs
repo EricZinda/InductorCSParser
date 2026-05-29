@@ -53,7 +53,7 @@ internal sealed class WithinTokenRule : Rule
         _innerRule = innerRule;
     }
 
-    internal override Symbol? TryParseRule(Lexer outerLexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected internal override Symbol? TryParseRule(Lexer outerLexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         var token = outerLexer.Read();
         if (token.IsEof)

@@ -265,7 +265,12 @@ public abstract class Rule
     // for the LateBoundRule case. Every other rule fixes its children in
     // the constructor and never touches them again. After Compile seals
     // the rule, SetChildren throws and Children becomes truly immutable.
-    protected internal IReadOnlyList<Rule> Children { get; private set; }
+    //
+    // `public` so external tools (visualizers, doc generators, tests) can
+    // walk the rule graph the same way Symbol.Children lets them walk the
+    // parse tree. The return type is IReadOnlyList<Rule>, so external
+    // callers can read the graph but not mutate it.
+    public IReadOnlyList<Rule> Children { get; private set; }
 
     // Replace this rule's children. The only production use is LateBoundRule,
     // which needs to install its target after construction. Throws if the
@@ -1296,7 +1301,13 @@ public abstract class Rule
     //     via `base(flattenType, children)`. The `Children` property is
     //     populated automatically and Compile walks it to assign ids and
     //     seal the graph.
-    internal abstract Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols);
+    // `protected internal` so external Rule subclasses can override this. The
+    // `internal` half preserves every existing caller (the built-in
+    // composite rules and Rule.TryParse itself). The `protected` half is what
+    // makes the abstract member visible to subclasses in other assemblies.
+    // See src/InductorParser.ExternalContractTests for an external subclass
+    // that exercises this.
+    protected internal abstract Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols);
 
     // Whether Rule.TryParse opens an automatic outer transaction around
     // this rule's TryParseRule. True for every rule that speculatively
@@ -1312,7 +1323,12 @@ public abstract class Rule
     // every rule invocation, so a virtual dispatch there would be
     // hot-path overhead. A field read plus a well-predicted branch is
     // effectively free.
-    private protected bool OpensTransaction = true;
+    //
+    // `protected internal` so external Rule subclasses can also opt out
+    // of the auto-managed transaction when they own their own probe /
+    // transaction scope. The default (true) is what almost every shape
+    // wants.
+    protected internal bool OpensTransaction = true;
 
     // Helper for composite rules to call a child rule with the right
     // "write-here" list.

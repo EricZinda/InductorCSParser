@@ -60,7 +60,7 @@ internal sealed class ScanWhileRule : Rule
         OneOfRule.NormalizeAndValidate(this, ref _set, form, offenders);
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         // Lexer primitive instead of a loop of OneOfRule.TryParse calls:
         // one transaction and one Symbol allocation regardless of the
