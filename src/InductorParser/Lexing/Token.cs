@@ -2,92 +2,101 @@ using System;
 
 namespace InductorParser.Lexing;
 
-// A Token is one chunk of input the lexer just consumed: one .NET text
-// element (one StringInfo grapheme cluster, possibly several runes wide)
-// or a flag-only token at end-of-input. Instead of copying the matched
-// text into a new string, a Token keeps a reference to the original
-// input plus an offset and a length.
-//
-// Not to be confused with the <see cref="InductorParser.Rules.Token"/>
-// factory in the rules namespace, which constructs a rule that matches
-// one Token from the input. C# resolves the two by syntactic context:
-// a method call <c>Token('a')</c> is the rule factory; a type usage
-// <c>Token token = lexer.Read()</c> is this struct.
-//
-// This matters because PEG parsers backtrack. The
-// same cursor gets visited many times as alternatives are tried and
-// abandoned. If every lexer.Read() allocated a new string for the matched
-// text, most of those strings would be thrown away within microseconds,
-// when the matching rule fails and the parser tries the next alternative.
+// The Inductor parser backtracks, so the same cursor gets visited many times
+// as alternatives are tried and abandoned. If every lexer.Read() allocated a
+// new string for the matched text, most of those strings would be thrown away
+// within microseconds, when the matching rule fails and the parser tries the
+// next alternative. Token avoids that by pointing into the original input
+// instead of copying out of it.
 //
 // Token is a `readonly ref struct`:
 //
-//   * `struct` (value type) is what keeps Token off the heap. A Token
-//     lives on the stack or inline in whatever holds it, and returning
-//     one from a method copies its fields into the caller's storage
-//     rather than allocating. The input string is the only heap object
-//     in the picture. Every Token just carries an 8-byte pointer to it
-//     plus a few ints.
+//   * `struct` (value type) is what keeps Token off the heap. A Token lives
+//     on the stack or inline in whatever holds it, and returning one from a
+//     method copies its fields into the caller's storage rather than
+//     allocating. The input string is the only heap object in the picture.
+//     Every Token just carries an 8-byte pointer to it plus a few ints.
 //
-//   * `readonly` means the Token's fields never change after
-//     construction. That lets the compiler avoid defensive copies when
-//     passing a Token around, and gives callers a guarantee that
-//     nothing will mutate the Token under them.
+//   * `readonly` means the Token's fields never change after construction.
+//     That lets the compiler avoid defensive copies when passing a Token
+//     around, and gives callers a guarantee that nothing will mutate the
+//     Token under them.
 //
-//   * `ref` is the language-enforced lifetime guarantee. A ref struct
-//     is stack-only. The compiler forbids storing it in a
-//     class field, a List, a Dictionary, a lambda capture, etc, 
-//     anywhere the span inside it could outlive the
-//     input string. That's why Chars can be a direct field (below)
-//     rather than a property that reconstructs the span on each access.
+//   * `ref` makes Token stack-only: the compiler won't let a ref struct be
+//     boxed or stored on the heap (a class field, a List, a Dictionary, a
+//     lambda capture). That restriction is what buys us the stored Chars
+//     span. A ReadOnlySpan<char> is itself a ref struct, so it can only be a
+//     field, or a get-only auto-property the compiler backs with one, inside
+//     another ref struct (error CS8345). A non-ref Token couldn't store the
+//     span at all. It would have to recompute Source.AsSpan(Offset, Length)
+//     on every Chars access.
+
+/// <summary>
+/// One chunk of input the lexer just consumed: a Unicode grapheme (i.e. one
+/// StringInfo grapheme cluster, possibly several runes wide) or the EOF token
+/// at the end of the input. Rather than copying the matched text into a new
+/// string, a Token keeps a reference to the original input plus an offset and
+/// a length.
+/// </summary>
+/// <remarks>
+/// Not to be confused with the <c>Token</c> factory in
+/// <see cref="InductorParser.Rules"/>, which constructs a rule that matches
+/// one Token from the input. 
+/// </remarks>
 public readonly ref struct Token
 {
+    /// <summary>The input string this token points into, shared with every
+    /// other token from the same parse.</summary>
     public string Source { get; }
+
+    /// <summary>Index into <see cref="Source"/> where this token's text
+    /// begins.</summary>
     public int Offset { get; }
+
+    /// <summary>Number of C# chars (UTF-16 code units) this token spans. A single
+    /// grapheme cluster can be several.</summary>
     public int Length { get; }
+
+    /// <summary>True for the token the lexer returns at
+    /// end-of-input. That token has an empty <see cref="Chars"/> and a
+    /// <see cref="RuneValue"/> of -1.</summary>
     public bool IsEof { get; }
 
-    // Chars is a ReadOnlySpan<char> over the source input. Spans don't
-    // allocate. They're (pointer, length) structs that live on the
-    // stack, pointing into the original string. Comparison rules like
-    // Literal("function") or Token('=') precompute their expected sequence
-    // at construction time and at match time call SequenceEqual on the
-    // spans. No string allocation anywhere in the matching loop.
-    //
-    // Storing this as a field (rather than a property that calls AsSpan
-    // on each access) is only legal because Token is a ref struct. A
-    // regular struct can't carry a Span field because the compiler
-    // can't guarantee the struct stays on the stack.
+    /// <summary>
+    /// A span over <see cref="Source"/> covering this token's text, without
+    /// allocating. Empty for the end-of-input token.
+    /// </summary>
+    /// <remarks>
+    /// Comparison rules like Literal("function") or Token('=') precompute
+    /// their expected sequence and call SequenceEqual against this span, so
+    /// the matching loop never allocates a string.
+    /// </remarks>
     public ReadOnlySpan<char> Chars { get; }
 
-    public Token(string source, int offset, int length, bool isEof)
-    {
-        Source = source;
-        Offset = offset;
-        Length = length;
-        IsEof = isEof;
-        Chars = isEof ? ReadOnlySpan<char>.Empty : source.AsSpan(offset, length);
-    }
-
-    // Memory returns a ReadOnlyMemory<char> which is the heap-safe version
-    // of Span: it's a regular struct (not a ref struct), so it can be
-    // stored on classes, dictionaries, async state machines, places where
-    // Span can't go. Internally it has three things we need:
-    // source string reference, offset, length.
-    // Constructing one is a handful of field writes, and it doesn't
-    // allocate. Leaf Symbols use Memory to hold onto the matched
-    // text without copying it until
-    // someone actually calls ToString() on them.
+    /// <summary>
+    /// A <see cref="ReadOnlyMemory{T}"/> over this token's text. Unlike
+    /// <see cref="Chars"/>, Memory is heap-safe: it can be stored on a class,
+    /// in a dictionary, or across an await, where a span can't go. Empty for
+    /// the end-of-input token.
+    /// </summary>
+    /// <remarks>
+    /// Leaf Symbols hold their matched text as Memory so they don't copy it
+    /// into a string until someone calls ToString().
+    /// </remarks>
     public ReadOnlyMemory<char> Memory =>
         IsEof ? ReadOnlyMemory<char>.Empty : Source.AsMemory(Offset, Length);
 
-    // RuneValue returns the rune value when the token is exactly one rune,
-    // or -1 otherwise. EOF returns -1. Multi-rune tokens (the family
-    // emoji 👨‍👩‍👧‍👦, for example) also return -1, so single-rune tests
-    // like GraphemeRule and OneOfRule fail correctly without each
-    // caller having to special-case the multi-rune path. Returned as
-    // int rather than System.Text.Rune because -1 is the "no single
-    // rune here" marker, and Rune has no invalid state.
+    /// <summary>
+    /// The Unicode scalar value when this token is exactly one rune, or -1
+    /// otherwise. End-of-input, empty, and multi-rune tokens (the family
+    /// emoji 👨‍👩‍👧‍👦, for example) all return -1, so single-rune tests like
+    /// GraphemeRule and OneOfRule fail correctly without each caller having
+    /// to special-case the multi-rune path.
+    /// </summary>
+    /// <remarks>
+    /// Returned as int rather than System.Text.Rune because -1 is the "no
+    /// single rune here" marker, and Rune has no invalid state.
+    /// </remarks>
     public int RuneValue
     {
         get
@@ -106,23 +115,18 @@ public readonly ref struct Token
         }
     }
 
-    // FirstRune returns the first Unicode scalar of a multi-rune token,
-    // or the same value as RuneValue for a single-rune token. Returns
-    // -1 for EOF or when the token starts with a stray surrogate. Used
-    // by the lookahead shortcut: positive rules check whether the
-    // peek cluster's FIRST rune is in their FirstConsumedTokens, which
-    // covers WithinToken and other rules that match multi-rune
-    // clusters by walking their runes.
-    public int FirstRune
+    /// <summary>
+    /// Creates a token spanning <paramref name="length"/> chars of
+    /// <paramref name="source"/> starting at <paramref name="offset"/>. When
+    /// <paramref name="isEof"/> is true the token is the flag-only
+    /// end-of-input token and its span is empty.
+    /// </summary>
+    public Token(string source, int offset, int length, bool isEof)
     {
-        get
-        {
-            if (IsEof || Length == 0) return -1;
-            if (Length >= 2 && SurrogateHelpers.IsSurrogatePairAt(Source, Offset))
-                return char.ConvertToUtf32(Source[Offset], Source[Offset + 1]);
-            char c0 = Source[Offset];
-            if (char.IsSurrogate(c0)) return -1;
-            return c0;
-        }
+        Source = source;
+        Offset = offset;
+        Length = length;
+        IsEof = isEof;
+        Chars = isEof ? ReadOnlySpan<char>.Empty : source.AsSpan(offset, length);
     }
 }

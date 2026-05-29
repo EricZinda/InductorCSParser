@@ -2,20 +2,7 @@
 
 Done:
 Compatability/*
-Lexing/
-    GraphemeClusterIndex.cs
-	NormalizedPositionMap.cs
-	Lexer.cs
-	Lexer.Failures.cs
-	Lexer.Probe.cs
-	Lexer.Scanning.cs
-	Lexer.Tracing.cs
-	Lexer.Transaction.cs
-	NormalizedPositionMap.cs
-	ParseBudget.cs
-	ParseBudgetExceeded.cs
-	SurrogateHelpers.cs
-
+Lexing/*
 SyntaxTree/
     FlattenType.cs
     ParseContext.cs

@@ -1169,9 +1169,22 @@ public abstract class Rule
         // and math letters to ASCII; the user is still looking at the
         // unfolded form). The EOF guard above ensures failurePos is in
         // range for the GetNextTextElement call.
+        //
+        // Route the character through DisplayEscape so a control / line-
+        // separator char (a bare LF, U+2028, etc.) renders as U+XXXX
+        // rather than splicing a raw newline into the one-line error
+        // message and splitting it across two lines in a log or terminal.
+        // This is the same Cc / Zl / Zp escape every other diagnostic-
+        // render site uses (TokenSet.ToString, PrintTree, the Lexer.Read
+        // trace); printable characters (including fullwidth, ligatures,
+        // and supplementary-plane runes) still render verbatim.
         return FormatTemplate(options.PositionalErrorTemplate,
             PositionPlaceholders(failurePos, input),
-            ("character", () => StringInfo.GetNextTextElement(input, failurePos)));
+            ("character", () =>
+            {
+                string element = StringInfo.GetNextTextElement(input, failurePos);
+                return DisplayEscape.Escape(element, 0, element.Length);
+            }));
     }
 
     // The four position placeholders shared by every default template.
