@@ -19,26 +19,23 @@ internal static class SourcePositionConverter
 
     public static void ToLineColumn(string input, int charIndex, out int line, out int column)
     {
-        int limit = charIndex;
-        if (limit > input.Length) limit = input.Length;
-        if (limit < 0) limit = 0;
+        Invariant.That(charIndex >= 0 && charIndex <= input.Length,
+            $"charIndex {charIndex} is outside [0, {input.Length}]. Every caller passes a clamped "
+            + "(SourcePosition.From) or in-range recorded failure position (ParseResult.ErrorCharIndex).");
 
         line = 0;
         int lineStart = 0;
-        for (int i = 0; i < limit; i++)
+        for (int i = 0; i < charIndex; i++)
         {
             char c = input[i];
-            // UAX #18 Annex C R1 line terminators that Rules.EndOfLine()
-            // also accepts: LF, VT, FF, NEL (U+0085), LS (U+2028),
-            // PS (U+2029). CR is handled below to keep CRLF a single
-            // break. Keeping this set in sync with EndOfLine() is what
-            // makes ErrorLine/ErrorColumn agree with grammars that
-            // consume any of these as a newline. The separator runes
-            // are spelled as backslash-u escapes so the source file
-            // itself stays free of literal control runes (LS / PS
-            // terminate logical lines in C# source).
-            if (c == '\n' || c == '\v' || c == '\f'
-                || c == '\u0085' || c == '\u2028' || c == '\u2029')
+            // Single-rune line terminators, tested through the shared
+            // TokenSet.IsLineTerminator predicate so this stays in step with
+            // TokenSet.LineTerminators (and Rules.EndOfLine(), which matches
+            // that set) instead of re-listing the code points. That alignment
+            // is what makes ErrorLine/ErrorColumn agree with grammars that
+            // consume any of these as a newline. CR is excluded here and
+            // handled below so CRLF counts as one break.
+            if (c != '\r' && TokenSet.IsLineTerminator(c))
             {
                 line++;
                 lineStart = i + 1;
@@ -49,6 +46,6 @@ internal static class SourcePositionConverter
                 lineStart = i + 1;
             }
         }
-        column = limit - lineStart;
+        column = charIndex - lineStart;
     }
 }

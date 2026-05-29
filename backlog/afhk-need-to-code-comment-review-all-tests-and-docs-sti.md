@@ -5,4 +5,5 @@ Compatability/*
 Lexing/*
 SyntaxTree/
     FlattenType.cs
-    ParseContext.cs
+	..
+	SourceRange.cs
