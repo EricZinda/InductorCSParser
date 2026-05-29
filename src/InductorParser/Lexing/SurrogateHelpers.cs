@@ -5,15 +5,17 @@ namespace InductorParser.Lexing;
 
 // One place to ask "does input[pos] start a well-formed UTF-16 surrogate
 // pair?" so the high-then-low predicate doesn't drift across the codebase.
-// All forward-direction surrogate-pair decoders (Lexer.NextTokenLength,
-// Lexer.TryPeekRune, Rule's LiteralRule formatter, TokenSet's set
-// construction, Token.RuneValue / Token.FirstRune, the Canary
-// test helper) call into here.
+// Every forward-direction surrogate-pair decoder (in the lexer, the rules,
+// TokenSet construction, and Token's rune accessors) calls into here.
 //
-// AggressiveInlining keeps the call free at the IL/JIT level; the body
-// is three short calls and folds into the caller. The string and span
-// overloads exist so callers don't have to pay for an .AsSpan() round-
-// trip on a string they already have.
+// char.IsSurrogatePair computes the same result but only takes a string, not
+// a ReadOnlySpan<char>, so the span callers need a handwritten check anyway.
+// Defining both overloads here keeps the predicate identical in one place
+// instead of split between the BCL and our own span code, lets us skip the
+// BCL method's null and range checks (callers guarantee pos is in range), and
+// carries AggressiveInlining so the body folds into the caller. Both
+// overloads exist so callers don't pay an .AsSpan() round-trip on what they
+// already have.
 internal static class SurrogateHelpers
 {
     // True when input[pos] is a high surrogate followed by a low surrogate,

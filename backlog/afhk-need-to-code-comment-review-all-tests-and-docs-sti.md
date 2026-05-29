@@ -13,6 +13,9 @@ Lexing/
 	Lexer.Transaction.cs
 	NormalizedPositionMap.cs
 	ParseBudget.cs
+	ParseBudgetExceeded.cs
+	SurrogateHelpers.cs
+
 SyntaxTree/
     FlattenType.cs
     ParseContext.cs
