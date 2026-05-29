@@ -53,6 +53,25 @@ public sealed class AliasRule : Rule
         _inner = inner;
     }
 
+    // An alias emits a leaf exactly when it substitutes its identity onto a
+    // leaf inner: the inner emits a leaf, this alias is Preserve (so it
+    // actually asserts an identity in the tree), and the inner isn't Delete.
+    // The base ctor's emitsLeaf:false seed is never read because this getter
+    // overrides it, the same pattern LateBoundRule uses for a forwarded value.
+    //
+    // This matters when an alias wraps another alias. A parent alias asks its
+    // inner's EmitsLeaf to decide whether to substitute. If this reported the
+    // base default (false), aliasing an alias would wrap the inner alias's
+    // leaf in an extra composite level and leave the inner alias's identity
+    // findable in the tree, both of which break the tenet above. Computing it
+    // from the substitution gate keeps `leaf.AliasedAs("a").AliasedAs("b")`
+    // collapsing to one leaf carrying b's identity, exactly as a single alias
+    // of the leaf would.
+    public override bool EmitsLeaf =>
+        _inner.EmitsLeaf
+        && FlattenType == FlattenType.Preserve
+        && _inner.FlattenType != FlattenType.Delete;
+
     protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         int matchStart = startPosition;
@@ -86,12 +105,13 @@ public sealed class AliasRule : Rule
                 $"AliasRule entered the content-build block with outputSymbols=null while effectiveFlattenType={effectiveFlattenType}; the framework should have allocated a list for any non-Delete effective type.");
 
             // First condition asks "should we substitute?" via the rule's
-            // declared semantics. Static check: the answer must be the same
-            // regardless of PreserveAllSymbols forcing every inner to act
-            // Preserve.
-            if (_inner.EmitsLeaf
-                && FlattenType == FlattenType.Preserve
-                && _inner.FlattenType != FlattenType.Delete)
+            // declared semantics (EmitsLeaf, computed above from the inner's
+            // shape and this alias's FlattenType). Static check: the answer
+            // must be the same regardless of PreserveAllSymbols forcing every
+            // inner to act Preserve. EmitsLeaf is also what a parent alias
+            // reads to make the same decision about this one, so routing both
+            // through the property keeps the two in sync.
+            if (EmitsLeaf)
             {
                 // The alias leaf's text comes from the matchedSpan
                 // computed below: the lexer already advanced through the

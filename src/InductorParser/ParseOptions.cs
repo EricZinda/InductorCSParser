@@ -71,6 +71,21 @@ public sealed class ParseOptions
     // convention. Off by default because timeouts are inherently flaky
     // (same input takes different time on different hardware) and would
     // cause unpredictable test failures as a default.
+    //
+    // Best-effort, by design. The clock is polled on a periodic check
+    // that fires once every so many rule invocations, not on every
+    // step (checking the clock on every step would cost more than it
+    // saves). A parse that finishes in fewer invocations than that
+    // interval never reaches a check, so a very short parse can run
+    // past a very small Timeout and still return its normal result
+    // instead of aborting. That's fine in practice: the deadline is
+    // there to stop a long-running or runaway parse, and a parse long
+    // enough to matter runs long enough to hit a check. A parse that
+    // finishes before the first check is already fast, so letting it
+    // complete is the right outcome. Don't rely on Timeout to trip on a
+    // tiny grammar against a tiny input. If you need a hard, count-based
+    // cap that trips deterministically regardless of input size, use
+    // RuleCountLimit instead.
     public TimeSpan Timeout { get; set; } = TimeSpan.Zero;
 
     // External cancellation signal. Null means no cancellation source.
