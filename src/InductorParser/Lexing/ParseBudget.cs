@@ -6,49 +6,44 @@ namespace InductorParser.Lexing;
 
 // Tracks the four parse budgets (rule-count limit, depth limit, wall-clock
 // timeout, cancellation) for one parse. Owns the counters that accumulate
-// as the parse runs and the limits set by ParseOptions, plus the parent-
-// chain plumbing that makes sub-lexer budgets delegate to the outer
-// parse's budget.
+// as the parse runs and the limits set by ParseOptions.
 //
-// The Lexer holds one of these and exposes it as Lexer.Budget. Both
-// engines call its methods to mark rule entry/exit and to tick the
-// periodic checks. Extracted from Lexer so the budget concept lives in
-// its own type instead of being woven into the lexer's tokenization
-// state.
+// The Lexer holds one of these and exposes it as Lexer.Budget. Its
+// methods mark rule entry/exit and tick the periodic checks.
 //
 // Holds a back-reference to its Lexer so it can read Lexer.DeepestFailurePosition
-// and Lexer.Position when freezing the deepest-position onto the
+// and Lexer.Position when freezing the deepest position onto the
 // ParseBudgetExceeded it throws. The read happens only on the unhappy
-// path; the happy-path EnterRule / TickPeriodic never touch the Lexer.
+// path. The happy-path EnterRule / TickPeriodic never touch the Lexer.
+//
+// A budget can be a sub-budget: instead of holding its own limits and
+// counters, it forwards all bookkeeping to a parent budget (see
+// InheritFrom). WithinTokenRule's inner sub-lexer uses one so its
+// recursion counts against the outer parse's combined limits.
 internal sealed class ParseBudget
 {
-    // The three limit fields are set by Configure and stay constant for
-    // the rest of the parse. The two counter fields accumulate as the
-    // parse runs. Both groups stay zero on sub-budgets (the parent's are
-    // used instead).
+    // Configure sets these limits and they stay constant for the rest of
+    // the parse. On a sub-budget they're left at their defaults (the
+    // parent's are used instead).
     private long _ruleCountLimit;
     private int _maxDepth;
     private TimeSpan _timeout;
     private Stopwatch? _stopwatch;
     private ParseCancellation? _cancellation;
 
+    // These counters accumulate as the parse runs. They stay zero on a
+    // sub-budget (the parent's are used instead).
     private long _ruleInvocations;
     private int _ruleDepth;
 
-    // When non-null, this is a sub-budget that delegates ALL bookkeeping
-    // to the named parent. The sub-budget's own counters stay at zero;
-    // the parent's are what the limit checks read. Mirrors how
-    // WithinTokenRule's sub-lexer used to delegate budgets to its outer
-    // via the old Lexer._budgetParent pointer.
+    // When non-null, this budget is a sub-budget delegating to the named
+    // parent. Its own counters stay at zero. The parent's are what the
+    // limit checks read.
     private ParseBudget? _parent;
 
-    // The Lexer this budget belongs to. Used by ThrowBudgetExceeded to
-    // freeze the deepest-failure position onto the exception so the
-    // value survives an active lookahead Probe's Dispose-on-unwind. The
-    // sub-budget chain forwards bookkeeping to the parent, but each
-    // budget still throws via its OWN lexer reference, matching the
-    // pre-extract behavior where sub-lexer overflow reported the
-    // sub-lexer's position (not the outer's).
+    // The Lexer this budget belongs to. ThrowBudgetExceeded reads its
+    // position when building the exception, so each budget reports its
+    // own lexer's position even when it delegates bookkeeping to a parent.
     private readonly Lexer _lexer;
 
     // Periodic check fires every BudgetCheckInterval rule invocations.
@@ -137,11 +132,7 @@ internal sealed class ParseBudget
     // Depth-passed variant of EnterRule for an alternative evaluator
     // that tracks call depth itself rather than through paired EnterRule
     // / ExitRule. The recursive engine maintains depth in _ruleDepth via
-    // EnterRule. An evaluator that already has its own call-depth
-    // counter hands the current depth in here directly, which skips the
-    // _ruleDepth bookkeeping it doesn't use and still runs the same
-    // RuleCountLimit / Timeout / Cancellation periodic checks the
-    // recursive path runs.
+    // EnterRule. 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void EnterRuleAtDepth(int depth)
     {
@@ -161,10 +152,7 @@ internal sealed class ParseBudget
     // Counter-only tick for an alternative evaluator, used on steps
     // that do real work but don't enter a cyclic rule (so they don't
     // go through EnterRuleAtDepth). Skips the depth check. An evaluator
-    // that calls this enforces MaxDepth itself on its rule-entry path.
-    // The periodic RuleCountLimit / Timeout / Cancellation check fires
-    // at the same 1024 boundary the recursive engine uses, so budget
-    // aborts share the same trip mechanism.
+    // that calls this must enforce MaxDepth itself on its rule-entry path.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void TickPeriodic()
     {
@@ -202,9 +190,12 @@ internal sealed class ParseBudget
     // value that survives the unwind regardless of how many probes were
     // open.
     //
-    // NoInlining keeps the throw out of the hot inlining of EnterRule /
-    // EnterRuleAtDepth: a method that throws is poison to the JIT's
-    // inliner, and the throw fires at most once per parse anyway.
+    // NoInlining factors the throw out of EnterRule / EnterRuleAtDepth.
+    // A throw expands to a fair amount of IL, and the JIT weighs caller
+    // size when deciding what to inline, so keeping it in its own method
+    // leaves the hot callers small enough to inline. The throw fires at
+    // most once per parse, so the extra call costs nothing. Same pattern
+    // as the BCL's ThrowHelper methods.
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void ThrowBudgetExceeded(ParseOutcome outcome)
     {

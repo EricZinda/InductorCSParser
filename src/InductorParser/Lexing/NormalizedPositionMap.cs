@@ -4,10 +4,11 @@ using System.Text;
 
 namespace InductorParser.Lexing;
 
-// Maps a char index for a normalized string back to a char index for
-// the caller's original (un-normalized) string, so ParseResult can
-// report failure positions in the coordinate system the caller passed
-// in rather than the internal normalized one. See
+// Maps a char index in a normalized string back to a char index in
+// the caller's original (un-normalized) string, so positions land in
+// the coordinate system the caller passed in rather than the internal
+// normalized one. Used for failure positions (Rule's RecordFailure
+// path) and for symbol source ranges (Symbol.SourceRange). See
 // Rule.Compile(NormalizationForm?) for the wider picture.
 //
 // Two walker shapes, one picked by the form:
@@ -22,15 +23,17 @@ namespace InductorParser.Lexing;
 //     the chunk-since-the-last-verified-boundary matches the next
 //     portion of the normalized string. When the check fails (Korean
 //     compatibility jamo is the known case), the chunk absorbs the
-//     next grapheme and the check is tried again.
+//     next grapheme and the check is tried again. The check is
+//     general: it catches any grapheme-count change, so correctness
+//     doesn't depend on which script triggered it. Korean jamo being
+//     the only such case in Unicode 16 just keeps the absorbed chunks
+//     small. See docs/MappingPositionsAfterNormalization.md for why
+//     this per-boundary check is correct.
 //
-// When the failure position lands inside a grapheme (or multi-grapheme
-// region) that got rewritten, the walker snaps back to the start of
-// that region so editor highlighting covers the whole offending text.
-// Only runs on parse failure, off the hot path.
-//
-// See docs/MappingPositionsAfterNormalization.md for the full argument and
-// the UAX #29 citations.
+// When the position lands inside a grapheme (or multi-grapheme region)
+// that got rewritten, the walker snaps back to the start of that
+// region so editor highlighting covers the whole affected text. Runs
+// on demand when a position is mapped, off the parsing hot path.
 internal static class NormalizedPositionMap
 {
     public static int TranslateToOriginal(string original, string normalized, int normalizedIndex, NormalizationForm? form)
@@ -59,9 +62,9 @@ internal static class NormalizedPositionMap
         int normPos = 0;
         while (normPos < normalized.Length && origPos < original.Length)
         {
-            // GetNextTextElement should always return at least one char at a
-            // valid in-bounds position. Asserts catch the impossible-zero case
-            // so the loop can't spin forever on a step that ever came back 0.
+            // GetNextTextElement always returns at least one char at a valid
+            // position. The Invariant.That calls catch the impossible-zero
+            // case that would spin this loop forever.
             int normStep = StringInfo.GetNextTextElement(normalized, normPos).Length;
             Invariant.That(normStep > 0,
                 $"StringInfo.GetNextTextElement returned an empty element on the normalized string "
@@ -87,17 +90,12 @@ internal static class NormalizedPositionMap
         return origPos <= original.Length ? origPos : original.Length;
     }
 
-    // Walker for compatibility forms (FormKC, FormKD). Walks the
-    // original grapheme by grapheme, verifying at each boundary that
-    // normalizing the chunk-since-the-last-verified-boundary matches
-    // the next portion of the normalized string. When the check
-    // fails (Korean compatibility jamo is the known example), the
-    // chunk absorbs the next grapheme and the check is tried again.
-    // When the failure position lands inside such a region, the
-    // walker snaps back to the start of the region.
-    //
-    // See docs/MappingPositionsAfterNormalization.md for the full argument
-    // and the UAX #29 citation.
+    // Walker for compatibility forms (FormKC, FormKD), where grapheme
+    // boundaries can shift under normalization so the lockstep walk
+    // doesn't hold. Walks the original grapheme by grapheme and grows a
+    // chunk until its normalized form matches the next portion of the
+    // normalized string. See the file header and
+    // docs/MappingPositionsAfterNormalization.md for why this is correct.
     private static int TranslateViaPerGraphemeNormalize(string original, string normalized, int normalizedIndex, NormalizationForm form)
     {
         int origPos = 0;
@@ -106,10 +104,9 @@ internal static class NormalizedPositionMap
 
         while (origPos < original.Length)
         {
-            // GetNextTextElement should always return at least one char at a
-            // valid in-bounds position. Assert catches the impossible-zero
-            // case so the loop can't spin forever on a length that ever came
-            // back 0.
+            // GetNextTextElement always returns at least one char at a valid
+            // position. The Invariant.That catches the impossible-zero case
+            // that would spin this loop forever.
             string grapheme = StringInfo.GetNextTextElement(original, origPos);
             int graphemeLength = grapheme.Length;
             Invariant.That(graphemeLength > 0,
