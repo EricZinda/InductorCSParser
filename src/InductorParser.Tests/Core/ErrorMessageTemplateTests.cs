@@ -315,4 +315,62 @@ public class ErrorMessageTemplateTests
         Assert.That(result.ErrorMessage,
             Is.EqualTo($"Parse failed at offset 0: unexpected '{UnicodeExamples.FiLigatureGrapheme}'."));
     }
+
+    [Test]
+    public void Character_placeholder_escapes_control_character()
+    {
+        // The {character} placeholder splices the unexpected input
+        // character into the message verbatim. For a printable character
+        // that's right (see the supplementary-plane / NFKC tests above),
+        // but a control character like LF injects a raw newline into the
+        // one-line error message, splitting it across two lines in a log
+        // or terminal. Every other diagnostic-render site in the parser
+        // (TokenSet.ToString, PrintTree, the Lexer.Read trace) routes
+        // user-bearing text through DisplayEscape so Cc / Zl / Zp render
+        // as U+XXXX. The error message has to do the same.
+        var rule = And(Token('a'), Token('b'));
+        var result = rule.Parse("a\nb");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage,
+            Is.EqualTo("Parse failed at offset 1: unexpected 'U+000A'."));
+    }
+
+    [Test]
+    public void Character_placeholder_escapes_line_separator()
+    {
+        // U+2028 LINE SEPARATOR is category Zl, not Cc, so a
+        // char.IsControl-only check would miss it. DisplayEscape covers
+        // Cc / Zl / Zp, so the error message escapes it to U+2028 rather
+        // than embedding the raw separator (which terminates a logical
+        // line the same way LF does). Built via (char)0x2028 so the
+        // source file itself carries no literal line separator.
+        var rule = And(Token('a'), Token('b'));
+        string input = "a" + (char)0x2028 + "b";
+        var result = rule.Parse(input);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage,
+            Is.EqualTo("Parse failed at offset 1: unexpected 'U+2028'."));
+    }
+
+    [Test]
+    public void Character_placeholder_escapes_control_character_in_custom_template()
+    {
+        // The escape lives in the {character} value provider, not in the
+        // default template text, so a caller who swaps in their own
+        // PositionalErrorTemplate with {character} in it still gets a
+        // control character rendered as U+XXXX rather than a raw newline
+        // splitting their message. Here the parse fails on a bare LF at
+        // offset 1.
+        var rule = And(Token('a'), Token('b'));
+        var options = new ParseOptions
+        {
+            PositionalErrorTemplate = "boom at {charIndex}: '{character}'",
+        };
+        var result = rule.Parse("a\nb", options);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("boom at 1: 'U+000A'"));
+    }
 }
