@@ -355,6 +355,23 @@ public class ErrorMessageTemplateTests
     }
 
     [Test]
+    public void Character_placeholder_escapes_lone_surrogate()
+    {
+        // Compile(null) is the documented opt-in path for malformed
+        // UTF-16 / WTF-8 round-tripping. A lone surrogate can therefore
+        // reach the normal error-message path, but the message itself
+        // should contain a readable code-unit escape rather than a raw
+        // unpaired surrogate that output encoders may replace or reject.
+        var rule = Token('a');
+        rule.Compile(null);
+        var result = rule.Parse(UnicodeExamples.HighSurrogateMinText);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage,
+            Is.EqualTo("Parse failed at offset 0: unexpected 'U+D800'."));
+    }
+
+    [Test]
     public void Character_placeholder_escapes_control_character_in_custom_template()
     {
         // The escape lives in the {character} value provider, not in the

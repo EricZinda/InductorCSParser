@@ -2,6 +2,7 @@ using System;
 using System.Text;
 using NUnit.Framework;
 using InductorParser.Tracing;
+using static InductorParser.Tests.UnicodeExamples;
 
 namespace InductorParser.Tests;
 
@@ -30,11 +31,16 @@ public class DisplayEscapeTests
     [TestCase('\r', Description = "CR")]
     [TestCase('\u001F', Description = "C0 boundary (US)")]
     [TestCase('\u007F', Description = "DEL (C0 / C1 gap)")]
-    [TestCase('\u0085', Description = "NEL (C1)")]
     [TestCase('\u009F', Description = "C1 boundary (APC)")]
     public void IsControlOrLineSeparator_returns_true_for_C0_and_C1_control_chars(char c)
     {
         Assert.That(DisplayEscape.IsControlOrLineSeparator(c), Is.True);
+    }
+
+    [Test]
+    public void IsControlOrLineSeparator_returns_true_for_NEL()
+    {
+        Assert.That(DisplayEscape.IsControlOrLineSeparator(NextLineText[0]), Is.True);
     }
 
     [Test]
@@ -46,7 +52,7 @@ public class DisplayEscapeTests
         // (TokenSet.LineTerminators) and any grammar that .Preserve's a
         // Token('\u2028') match would otherwise leak a real line
         // separator into the one-line display.
-        Assert.That(DisplayEscape.IsControlOrLineSeparator('\u2028'), Is.True);
+        Assert.That(DisplayEscape.IsControlOrLineSeparator(LineSeparatorText[0]), Is.True);
     }
 
     [Test]
@@ -54,7 +60,7 @@ public class DisplayEscapeTests
     {
         // U+2029 PARAGRAPH SEPARATOR is Unicode category Zp. Same
         // reason as the U+2028 case above.
-        Assert.That(DisplayEscape.IsControlOrLineSeparator('\u2029'), Is.True);
+        Assert.That(DisplayEscape.IsControlOrLineSeparator(ParagraphSeparatorText[0]), Is.True);
     }
 
     [TestCase('a', Description = "ASCII lowercase letter")]
@@ -62,11 +68,16 @@ public class DisplayEscapeTests
     [TestCase('1', Description = "ASCII digit")]
     [TestCase(' ', Description = "ASCII SPACE (Zs, not Zl/Zp)")]
     [TestCase('!', Description = "ASCII punctuation")]
-    [TestCase('\u00A0', Description = "NO-BREAK SPACE (Zs)")]
-    [TestCase('\u00E9', Description = "Latin precomposed letter")]
     public void IsControlOrLineSeparator_returns_false_for_printable_chars(char c)
     {
         Assert.That(DisplayEscape.IsControlOrLineSeparator(c), Is.False);
+    }
+
+    [Test]
+    public void IsControlOrLineSeparator_returns_false_for_named_printable_unicode_chars()
+    {
+        Assert.That(DisplayEscape.IsControlOrLineSeparator(NoBreakSpaceText[0]), Is.False, "NO-BREAK SPACE (Zs)");
+        Assert.That(DisplayEscape.IsControlOrLineSeparator(LatinEAcutePrecomposedGrapheme[0]), Is.False, "Latin precomposed letter");
     }
 
     [Test]
@@ -79,23 +90,22 @@ public class DisplayEscapeTests
         // already excludes it, but pin the behavior here so a future
         // refactor that broadens the predicate to "anything not
         // printable" doesn't silently break ZWJ-bearing emoji renders.
-        Assert.That(DisplayEscape.IsControlOrLineSeparator('\u200D'), Is.False, "ZWJ");
-        Assert.That(DisplayEscape.IsControlOrLineSeparator('\uFEFF'), Is.False, "ZWNBSP / BOM is also Cf");
+        Assert.That(DisplayEscape.IsControlOrLineSeparator(ZeroWidthJoinerText[0]), Is.False, "ZWJ");
+        Assert.That(DisplayEscape.IsControlOrLineSeparator(ByteOrderMarkText[0]), Is.False, "ZWNBSP / BOM is also Cf");
     }
 
     [Test]
     public void IsControlOrLineSeparator_returns_false_for_surrogate_halves()
     {
         // Surrogate halves (U+D800..U+DFFF) are Unicode category Cs.
-        // They're not in the escape set because supplementary-plane
-        // characters land in the input as surrogate pairs and the
-        // per-char walk in AppendEscaped relies on both halves passing
-        // through verbatim so the pair reassembles into the emoji /
-        // CJK Extension B / etc.
-        Assert.That(DisplayEscape.IsControlOrLineSeparator('\uD800'), Is.False, "high surrogate start");
-        Assert.That(DisplayEscape.IsControlOrLineSeparator('\uDBFF'), Is.False, "high surrogate end");
-        Assert.That(DisplayEscape.IsControlOrLineSeparator('\uDC00'), Is.False, "low surrogate start");
-        Assert.That(DisplayEscape.IsControlOrLineSeparator('\uDFFF'), Is.False, "low surrogate end");
+        // This predicate is intentionally only the category test for
+        // line-breaking chars. AppendEscaped handles surrogate context
+        // separately: paired halves pass through together, unpaired
+        // halves render as U+XXXX.
+        Assert.That(DisplayEscape.IsControlOrLineSeparator(HighSurrogateMinText[0]), Is.False, "high surrogate start");
+        Assert.That(DisplayEscape.IsControlOrLineSeparator(HighSurrogateMaxText[0]), Is.False, "high surrogate end");
+        Assert.That(DisplayEscape.IsControlOrLineSeparator(LowSurrogateMinText[0]), Is.False, "low surrogate start");
+        Assert.That(DisplayEscape.IsControlOrLineSeparator(LowSurrogateMaxText[0]), Is.False, "low surrogate end");
     }
 
     // ---------------------------------------------------------------
@@ -150,11 +160,11 @@ public class DisplayEscapeTests
     public void AppendEscaped_renders_LINE_SEPARATOR_and_PARAGRAPH_SEPARATOR_as_U_XXXX()
     {
         var sb = new StringBuilder();
-        DisplayEscape.AppendEscaped(sb, "\u2028".AsSpan());
+        DisplayEscape.AppendEscaped(sb, LineSeparatorText.AsSpan());
         Assert.That(sb.ToString(), Is.EqualTo("U+2028"));
 
         sb.Clear();
-        DisplayEscape.AppendEscaped(sb, "\u2029".AsSpan());
+        DisplayEscape.AppendEscaped(sb, ParagraphSeparatorText.AsSpan());
         Assert.That(sb.ToString(), Is.EqualTo("U+2029"));
     }
 
@@ -163,13 +173,26 @@ public class DisplayEscapeTests
     {
         // U+1F3B8 (guitar emoji) is a supplementary-plane character
         // that arrives in UTF-16 as the surrogate pair U+D83C U+DFB8.
-        // Each half reports as Surrogate (Cs), not Control / Zl / Zp,
-        // so the per-char walk in AppendEscaped writes both halves
-        // verbatim and the rendered string reassembles into the emoji.
+        // AppendEscaped has to recognize the valid pair and write both
+        // halves verbatim so the rendered string reassembles into the
+        // emoji.
         var sb = new StringBuilder();
-        string guitar = char.ConvertFromUtf32(0x1F3B8);
+        string guitar = GuitarGrapheme;
         DisplayEscape.AppendEscaped(sb, guitar.AsSpan());
         Assert.That(sb.ToString(), Is.EqualTo(guitar));
+    }
+
+    [Test]
+    public void AppendEscaped_escapes_unpaired_surrogate_halves()
+    {
+        // Valid surrogate pairs should keep rendering as the actual
+        // supplementary character, but a lone high or low half is not a
+        // valid Unicode scalar value. If it reaches a one-line diagnostic
+        // raw, encoders can replace it with U+FFFD or fail, hiding the
+        // exact code unit the parser saw.
+        var sb = new StringBuilder();
+        DisplayEscape.AppendEscaped(sb, (HighSurrogateMinText + "a" + LowSurrogateMaxText).AsSpan());
+        Assert.That(sb.ToString(), Is.EqualTo("U+D800aU+DFFF"));
     }
 
     [Test]
@@ -180,7 +203,7 @@ public class DisplayEscapeTests
         // break the pad-to-four convention the U+XXXX form everywhere
         // else in the codebase relies on.
         var sb = new StringBuilder();
-        DisplayEscape.AppendEscaped(sb, "\u0000".AsSpan());
+        DisplayEscape.AppendEscaped(sb, NullText.AsSpan());
         Assert.That(sb.ToString(), Is.EqualTo("U+0000"));
     }
 
@@ -194,7 +217,7 @@ public class DisplayEscapeTests
         // test pins the policy at the helper layer.
         // Man + ZWJ + Woman (U+1F468 U+200D U+1F469). The ZWJ in the
         // middle has to come through unchanged.
-        string family = char.ConvertFromUtf32(0x1F468) + "\u200D" + char.ConvertFromUtf32(0x1F469);
+        string family = ManEmojiGrapheme + ZeroWidthJoinerText + WomanEmojiGrapheme;
         var sb = new StringBuilder();
         DisplayEscape.AppendEscaped(sb, family.AsSpan());
         Assert.That(sb.ToString(), Is.EqualTo(family));
@@ -281,10 +304,29 @@ public class DisplayEscapeTests
     public void Escape_keeps_supplementary_plane_emoji_intact()
     {
         // Mirrors AppendEscaped's emoji test on the Escape entry point.
-        // A supplementary-plane char crosses through as its surrogate
-        // pair without either half being escaped, so the rendered string
-        // is byte-identical to the input range.
-        string guitar = char.ConvertFromUtf32(0x1F3B8);
+        // A supplementary-plane char crosses through as its complete
+        // surrogate pair without either half being escaped, so the
+        // rendered string is byte-identical to the input range.
+        string guitar = GuitarGrapheme;
         Assert.That(DisplayEscape.Escape(guitar, 0, 2), Is.EqualTo(guitar));
+    }
+
+    [Test]
+    public void Escape_escapes_unpaired_surrogate_halves()
+    {
+        Assert.That(DisplayEscape.Escape(HighSurrogateMinText + "ab", 0, 3), Is.EqualTo("U+D800ab"));
+        Assert.That(DisplayEscape.Escape("ab" + LowSurrogateMaxText, 0, 3), Is.EqualTo("abU+DFFF"));
+    }
+
+    [Test]
+    public void Escape_escapes_a_surrogate_pair_half_when_the_range_splits_the_pair()
+    {
+        // Escape works on the requested range, not on the whole source
+        // string. A valid pair in the larger source is not valid if the
+        // range exposes only one half.
+        string guitar = GuitarGrapheme;
+
+        Assert.That(DisplayEscape.Escape(guitar, 0, 1), Is.EqualTo("U+D83C"));
+        Assert.That(DisplayEscape.Escape(guitar, 1, 1), Is.EqualTo("U+DFB8"));
     }
 }

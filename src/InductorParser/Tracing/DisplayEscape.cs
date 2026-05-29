@@ -24,13 +24,16 @@ namespace InductorParser.Tracing;
 //     block. char.IsControl reports exactly this set.
 //   * LineSeparator (Zl): U+2028.
 //   * ParagraphSeparator (Zp): U+2029.
+//   * Unpaired surrogate halves (Cs): valid supplementary-plane
+//     characters must pass through as high+low pairs, but an unpaired
+//     UTF-16 surrogate is not a valid scalar value and most display
+//     sinks either replace it or fail to encode it. Rendering the lone
+//     code unit as U+XXXX keeps diagnostics readable and round-trippable.
 // Format characters (Cf) such as ZWJ are deliberately NOT included. ZWJ
 // is the invisible glue inside emoji ZWJ families and similar clusters
 // we want rendered as the user-perceived character, and it doesn't break
-// the line. Every line-breaking and control character lives in the BMP,
-// so the per-char (vs per-rune) check is enough: the surrogate halves
-// of a supplementary-plane character report as Surrogate and fall
-// through to the verbatim path, reassembling the original character.
+// the line. Valid surrogate pairs fall through to the verbatim path as
+// a pair, reassembling the original supplementary-plane character.
 //
 // Reading the category from the BCL tables (CharUnicodeInfo.GetUnicodeCategory)
 // rather than a hand-kept code-point list keeps the escape set tracking
@@ -61,10 +64,19 @@ internal static class DisplayEscape
         for (int i = 0; i < text.Length; i++)
         {
             char c = text[i];
-            if (IsControlOrLineSeparator(c))
-                builder.Append("U+").Append(((int)c).ToString("X4"));
-            else
+            if (i + 1 < text.Length && IsValidSurrogatePairAt(text, i))
+            {
                 builder.Append(c);
+                builder.Append(text[++i]);
+            }
+            else if (NeedsCodeUnitEscape(c))
+            {
+                AppendCodeUnitEscape(builder, c);
+            }
+            else
+            {
+                builder.Append(c);
+            }
         }
     }
 
@@ -76,31 +88,40 @@ internal static class DisplayEscape
     /// </summary>
     public static string Escape(string source, int offset, int length)
     {
-        for (int i = 0; i < length; i++)
-        {
-            if (IsControlOrLineSeparator(source[offset + i]))
-                return EscapeSlow(source, offset, length, i);
-        }
-        return source.Substring(offset, length);
-    }
+        ReadOnlySpan<char> text = source.AsSpan(offset, length);
+        if (!ContainsEscapableCodeUnit(text))
+            return source.Substring(offset, length);
 
-    // Build the escaped string starting from `startAt`, the first
-    // index whose char needs escaping. The chars before it are already
-    // known to be verbatim. Pulled out so the fast path (no escape
-    // needed) stays a single scan plus one Substring.
-    private static string EscapeSlow(string source, int offset, int length, int startAt)
-    {
         var sb = new StringBuilder(length + 6);
-        if (startAt > 0)
-            sb.Append(source, offset, startAt);
-        for (int i = startAt; i < length; i++)
-        {
-            char c = source[offset + i];
-            if (IsControlOrLineSeparator(c))
-                sb.Append("U+").Append(((int)c).ToString("X4"));
-            else
-                sb.Append(c);
-        }
+        AppendEscaped(sb, text);
         return sb.ToString();
     }
+
+    private static bool ContainsEscapableCodeUnit(ReadOnlySpan<char> text)
+    {
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (i + 1 < text.Length && IsValidSurrogatePairAt(text, i))
+            {
+                i++;
+                continue;
+            }
+            if (NeedsCodeUnitEscape(text[i]))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool IsValidSurrogatePairAt(ReadOnlySpan<char> text, int index)
+    {
+        Invariant.That(index >= 0 && index < text.Length - 1,
+            $"IsValidSurrogatePairAt requires index and index+1 in range; index={index}, length={text.Length}.");
+        return char.IsHighSurrogate(text[index]) && char.IsLowSurrogate(text[index + 1]);
+    }
+
+    private static bool NeedsCodeUnitEscape(char c) =>
+        char.IsSurrogate(c) || IsControlOrLineSeparator(c);
+
+    private static void AppendCodeUnitEscape(StringBuilder builder, char c) =>
+        builder.Append("U+").Append(((int)c).ToString("X4"));
 }
