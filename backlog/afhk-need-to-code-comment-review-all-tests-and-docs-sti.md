@@ -12,7 +12,7 @@ Lexing/
 	Lexer.Tracing.cs
 	Lexer.Transaction.cs
 	NormalizedPositionMap.cs
-
+	ParseBudget.cs
 SyntaxTree/
     FlattenType.cs
     ParseContext.cs
