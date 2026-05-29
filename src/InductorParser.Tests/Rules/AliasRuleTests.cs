@@ -119,6 +119,28 @@ public class AliasRuleTests
     }
 
     [Test]
+    public void Alias_of_alias_of_leaf_substitutes_to_a_single_leaf()
+    {
+        // Aliasing an alias of a Preserve leaf. AliasRule's tenet: a
+        // Preserve alias's Symbol behaves like the inner's Symbol would,
+        // except for its identity. The inner here is itself an alias that
+        // emits a leaf, so the outer alias should also be a single leaf
+        // carrying "5", with the inner alias's identity hidden.
+        var innerAlias = OneOf(TokenSet.Digits).AliasedAs("inner");
+        var outerAlias = innerAlias.AliasedAs("outer");
+
+        var result = outerAlias.Parse("5");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+
+        Assert.That(result.Tree!.Is(outerAlias), Is.True);
+        Assert.That(result.Tree.ToString(), Is.EqualTo("5"));
+        Assert.That(result.Tree.Find(innerAlias), Is.Null,
+            "The inner alias's identity should be hidden under the outer alias.");
+        Assert.That(result.Tree.Children.Count(), Is.EqualTo(0),
+            "Outer alias over a leaf inner should itself be a leaf.");
+    }
+
+    [Test]
     public void Inner_name_remains_findable_from_parallel_branch()
     {
         // One grammar, two paths to the same inner: one through an alias,
