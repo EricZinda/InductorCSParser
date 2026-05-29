@@ -1,5 +1,7 @@
 # Code comment cleanup pass: rules to apply
 
+Mark these commits as doc updates unless there were features in them
+
 A scrub of all code comments (// prose, /// XML doc, and test comments) to bring them in line with the comment rules Eric has flagged
 repeatedly. Not a rewrite pass for the prose itself, just a rules-driven sweep.
 The rules below come from corrections across the worktrees' memory files and
