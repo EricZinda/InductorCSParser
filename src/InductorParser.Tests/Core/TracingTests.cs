@@ -249,6 +249,31 @@ public class TracingTests
 
     [Test]
     [RecursiveEngineOnly]
+    public void Trace_label_escapes_control_chars_in_rule_name()
+    {
+        // The trace label is "{Name}:{ruleClassName}", where Name is the
+        // user's .As("...") string spliced verbatim by WriteTraceLine.
+        // .As(string) doesn't validate the name's content, so a name
+        // carrying a control / line-separator char (a name built from
+        // data, a stray "\n" in a constant) used to dump that char
+        // straight into the SUCC / FAIL line and split the
+        // one-event-per-line layout. Every other dynamic text on a trace
+        // line, the matched token, the stored literal, a .WithError
+        // message, already escapes to U+XXXX. The label has to match so
+        // the same control char in a rule name renders as U+XXXX too.
+        var sink = NewSink();
+        var rule = OneOf(TokenSet.Ascii.Digits).As("dig\nit");
+        rule.Parse("5", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   Lexer.Read: '5', Consumed: 1",
+            "   SUCC | dig" + "U+000A" + "it:OneOf: found '5', wanted one of '[0-9]'"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
     public void Deepest_failure_update_is_announced_in_trace()
     {
         // The deepest-failure trace fires only when the new position is
