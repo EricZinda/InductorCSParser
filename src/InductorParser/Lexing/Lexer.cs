@@ -113,6 +113,22 @@ public sealed partial class Lexer
 
     internal ParseBudget Budget => _budget;
 
+    /// <summary>
+    /// Tick the parse budget once. A user-defined Rule subclass whose
+    /// TryParseRule scans many tokens in a single invocation should call
+    /// this once per iteration of its inner loop, the same way the
+    /// built-in ScanWhile and ScanUntil rules do. Without an inner tick
+    /// the budget's periodic check only runs on rule entry, so Timeout,
+    /// Cancellation, and RuleCountLimit can't observe the per-iteration
+    /// work.
+    /// </summary>
+    /// <remarks>
+    /// The check is amortized to one read every 1024 ticks. The per-call
+    /// cost is one int increment and one mask compare.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void TickBudget() => _budget.TickPeriodic();
+
     // Debug knob wired in from ParseOptions. Rules that would normally apply
     // parse-time tree-shape optimizations (e.g. Delete-node filtering) consult
     // this flag and skip the optimization when it's set, producing a tree

@@ -368,6 +368,11 @@ internal sealed class ScanUntilRule : Rule
         bool stopperMatched = false;
         while (!lexer.IsEof)
         {
+            // See Lexer.AdvanceWhileRuneIn for why every iteration
+            // ticks; the whole scan is one rule invocation from the
+            // engine's view.
+            lexer.TickBudget();
+
             int pos = lexer.Position;
 
             // Peek the next rune for the single-rune escape-start

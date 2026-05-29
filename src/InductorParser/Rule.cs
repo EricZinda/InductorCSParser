@@ -134,10 +134,9 @@ public abstract class Rule
     // any depth (and loses only to a deeper forced failure).
     protected internal bool ErrorForced => _errorForced;
 
-    // Every Rule subclass must declare emitsLeaf explicitly so a new
-    // rule can't silently land on the wrong shape for callers like
-    // AliasRule that decide tree shape based on it. There is no
-    // default-emitsLeaf overload on purpose.
+    // emitsLeaf is required (no default overload) so a new rule can't
+    // silently get the wrong shape. See the EmitsLeaf property for what
+    // it means and how to choose it.
     protected Rule(FlattenType defaultFlatten, bool emitsLeaf, params Rule[]? children)
     {
         FlattenType = defaultFlatten;
@@ -148,27 +147,15 @@ public abstract class Rule
 
     private readonly bool _emitsLeaf;
 
-    // True when this rule's TryParseRule emits a single leaf Symbol
-    // carrying the matched text. False when it emits a composite Symbol
-    // with children, or no Symbol (zero-width predicates).
+    // True when TryParseRule emits a single leaf Symbol carrying the matched
+    // text (terminals: OneOf, Literal, AnyToken, ScanWhile, WithinToken, ...).
+    // False when it emits a composite Symbol with children (And, Or,
+    // BetweenInclusive) or no Symbol at all because it's zero-width (Not,
+    // Peek, Eof). This is the output Symbol's shape, not the count of child
+    // rules: WithinToken holds an inner rule but still emits one leaf.
     //
-    // Note this is about the OUTPUT Symbol shape, not the grammar-graph
-    // child count: it's independent of how many child rules the Rule
-    // holds in its Children list. A rule can have child rules in the
-    // graph (for compile-time traversal) and still emit a single leaf
-    // Symbol at parse time. WithinToken is the clearest example: it has
-    // an inner rule in Children that runs on a sub-lexer per outer
-    // token, but its match produces one leaf Symbol covering that token.
-    // BetweenInclusive also has a child rule in its Children, but its
-    // match accumulates N copies of the inner's output into a composite
-    // Symbol (different output shape, even though both rules look
-    // similar in the graph).
-    //
-    // Asked at the rule level because the obvious runtime alternative
-    // (checking the returned Symbol's IsLeaf) breaks when the inner ran
-    // Flatten: a Flatten inner writes its content into the caller's
-    // outputSymbols list and returns Symbol.Discarded, so there's no
-    // Symbol to ask. The rule-level property answers either way.
+    // If the shape isn't fixed for the subclass, pass false to the ctor and
+    // override this to compute it (AliasRule and LateBoundRule do).
     public virtual bool EmitsLeaf => _emitsLeaf;
 
     // Cached rule class name for trace output, derived from GetType().Name
@@ -1182,9 +1169,22 @@ public abstract class Rule
         // and math letters to ASCII; the user is still looking at the
         // unfolded form). The EOF guard above ensures failurePos is in
         // range for the GetNextTextElement call.
+        //
+        // Route the character through DisplayEscape so a control / line-
+        // separator char (a bare LF, U+2028, etc.) renders as U+XXXX
+        // rather than splicing a raw newline into the one-line error
+        // message and splitting it across two lines in a log or terminal.
+        // This is the same Cc / Zl / Zp escape every other diagnostic-
+        // render site uses (TokenSet.ToString, PrintTree, the Lexer.Read
+        // trace); printable characters (including fullwidth, ligatures,
+        // and supplementary-plane runes) still render verbatim.
         return FormatTemplate(options.PositionalErrorTemplate,
             PositionPlaceholders(failurePos, input),
-            ("character", () => StringInfo.GetNextTextElement(input, failurePos)));
+            ("character", () =>
+            {
+                string element = StringInfo.GetNextTextElement(input, failurePos);
+                return DisplayEscape.Escape(element, 0, element.Length);
+            }));
     }
 
     // The four position placeholders shared by every default template.

@@ -461,6 +461,63 @@ public class BudgetTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(146));
     }
 
+    // Regression tests: the bulk-scan rules (ScanWhile, ScanUntil) collapse
+    // a run of N matching tokens into one Rule invocation. Without an inner
+    // budget tick, an attacker who points such a rule at a long matching
+    // input (a string body, a CSV field, an identifier run) pins the
+    // parser for the whole run, ignoring Timeout / Cancellation /
+    // RuleCountLimit. The grammar's "hot path is one rule call" promise
+    // is the same shape that makes the bypass possible: no EnterRule
+    // fires between scan-open and scan-close, so the 1024-invocation
+    // periodic check on EnterRule never runs.
+    //
+    // Discriminating shape: pick a grammar whose only Rule is a scan rule.
+    // Any wrapping And / Eof / OneOrMore would add EnterRule calls that
+    // could eventually trip the periodic check on their own. With a bare
+    // ScanWhile / ScanUntil, the only rule invocation is the scan itself,
+    // so the only periodic check fires at scan exit, which is too late.
+
+    [Test]
+    public void ScanWhile_observes_Timeout_during_long_inner_scan()
+    {
+        // ScanWhile drops into lexer.AdvanceWhileRuneIn (rune-only sets)
+        // or AdvanceWhileTokenIn (sets with multi-rune entries), both of
+        // which walk the input in a tight while-loop with no budget tick.
+        // Timeout configured at 1 tick should trip well before a million-
+        // char scan completes, but pre-fix the scan runs to completion
+        // and the parse succeeds.
+        var rule = ScanWhile(TokenSet.Letters);
+        var options = new ParseOptions
+        {
+            Timeout = TimeSpan.FromTicks(1),
+            RuleCountLimit = 0,
+        };
+        string input = new string('a', 1_000_000);
+        var result = rule.Parse(input, options);
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.Timeout),
+            "ScanWhile must observe Timeout mid-scan, not only between rule invocations.");
+    }
+
+    [Test]
+    public void ScanUntil_observes_Timeout_during_long_inner_scan()
+    {
+        // ScanUntilRule has its own scan loop (not the AdvanceWhile* path)
+        // that walks the input one token at a time checking the stopper.
+        // Same shape as ScanWhile: no budget tick mid-scan, so an attacker
+        // who picks a stopper that never appears in the input pins the
+        // parser through the whole run.
+        var rule = ScanUntil(TokenSet.Runes("\"\\"), eofIsTerminator: true);
+        var options = new ParseOptions
+        {
+            Timeout = TimeSpan.FromTicks(1),
+            RuleCountLimit = 0,
+        };
+        string input = new string('a', 1_000_000);
+        var result = rule.Parse(input, options);
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.Timeout),
+            "ScanUntil must observe Timeout mid-scan, not only between rule invocations.");
+    }
+
     [Test]
     public void Aborted_result_keeps_deepest_progress_when_Cancellation_trips_inside_a_lookahead_probe()
     {
