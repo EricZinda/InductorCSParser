@@ -260,6 +260,29 @@ Rules are mutable up until `Compile` runs and then sealed. `.As(...)`, `.Flatten
 
 Default values for `Flatten`, error messages, and so on mostly match the C++ defaults from the original source. `InlineWhitespace()` and `AnyWhitespace()` default to `FlattenType.Delete`. `Token('=')` defaults to `FlattenType.Delete`. `And(...)` defaults to `FlattenType.Flatten`. `Integer()` and `Float()` are compositions whose outer rule also defaults to `FlattenType.Flatten`. Either chain `.As(name)` (which upgrades the default to `Preserve`) or call `.Preserve()` directly when you want to find them as parent Symbols. `Parse` applies these types to the tree before returning: `Delete` nodes are dropped, `Preserve` parent Symbols survive, and `Flatten` nodes pass their content up to the parent. For a composite that means lifting its children into the parent's children list and dropping the composite's own Symbol. For a leaf that means keeping the leaf as-is (a leaf has no separate children to lift past it, so it is its own content). `ParseOptions.PreserveAllSymbols` turns the whole pass off and gives you back a grammar-shaped debug tree with every Symbol in place.
 
+### Counted Repetition Over a Rule That Can Match Empty
+
+The repetition rules (`OneOrMore`, `ZeroOrMore`, `Optional`, `AtLeast`, `AtMost`, `Exactly`, `BetweenInclusive`) run their inner in a greedy loop. When the inner can succeed without consuming input (`Optional`, `ZeroOrMore`, `Peek`, `Not`, and similar zero-width rules), one rule covers what the loop does: **only one empty success is counted.**
+
+Each successful inner match counts. The first iteration that succeeds without advancing the lexer is the last: it counts once and the loop breaks. The break is what makes the loop terminate (a nullable inner would otherwise match empty forever at the same position), and the count is what makes `OneOrMore(Optional(X))` succeed on input where no `X` appears:
+
+```csharp
+OneOrMore(Optional(OneOf("a"))).Parse("");    // success, matched ""
+ZeroOrMore(Optional(OneOf("a"))).Parse("");   // success, matched ""
+```
+
+The consequence is that a nullable inner inflates the count by exactly one over the real consuming matches. `AtLeast(N, Optional(a))` therefore requires `N - 1` actual a's, not N:
+
+```csharp
+AtLeast(2, Optional(OneOf("a"))).Parse("a");   // success (1 real + 1 empty = 2)
+AtLeast(3, Optional(OneOf("a"))).Parse("a");   // fail   (count tops out at 2)
+AtLeast(3, Optional(OneOf("a"))).Parse("aa");  // success (2 real + 1 empty = 3)
+```
+
+This isn't unique to InductorParser. Every greedy PEG has to settle this one way or another, because counted repetition over a rule that can match empty doesn't terminate under the natural recursive semantics. Ford's PEG paper ([Ford 2004](https://bford.info/pub/lang/peg/), §3.3 "*-loop condition") identifies it as one of the two structural non-termination cases (the other is left recursion). Some implementations refuse to build the grammar at all (Lua's LPeg throws "loop body may accept empty string"). InductorParser instead runs it via the "only one empty success" rule, which is the cheapest terminating choice that still lets a normal `OneOrMore` of a sometimes-empty inner succeed.
+
+If you find yourself writing `OneOrMore(Optional(X))` or `AtLeast(N, Optional(X))`, the `Optional` is almost always a mistake. Drop it: `OneOrMore(X)` and `AtLeast(N, X)` say what you mean and don't depend on the +1 from the empty terminal.
+
 ### User-Defined Rules
 
 `Rule` is an abstract class and users can derive from it to add matching logic the built-in composites don't cover. The contract a subclass has to satisfy:

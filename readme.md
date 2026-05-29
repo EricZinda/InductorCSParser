@@ -5,6 +5,7 @@ The Inductor Parser (IP) is a loose port of the [Inductor C++ Parser](https://gi
 - **Safer Against Pathological Input:** It's designed to avoid "catastrophic backtracking" and pitfalls like it that can hang your app or blow your stack, by default.
 - **Able to run on WebGL and .NET Standard 2.1 (and later) using IL2CPP**: It doesn't use Reflection.Emit or threads so that it can run in Unity targeting WebGL or IL2CPP on iPhone.
 - **Fast enough to be used in production**: It is competitive against other .Net Parsers and fast enough to be used as a regex replacement for most uses.
+- **Easy to understand and customize**: Your grammar is built out of simple rules that are easy to inspect and understand. Furthermore, building a new rule is simple and can do whatever you want: it is just code.
 
 If you just want to learn how to use it, follow the primers:
 

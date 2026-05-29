@@ -23,14 +23,14 @@ internal sealed class NotRule : Rule
     // contributes no text to the parse tree. Delete ensures the empty
     // Symbol disappears during FlattenInto so it doesn't leave a marker
     // node in the syntax tree.
-    public NotRule(Rule inner) : base(FlattenType.Delete, emitsLeaf: false, inner)
+    public NotRule(Rule inner)
+        : base(FlattenType.Delete, emitsLeaf: false, inner ?? throw new ArgumentNullException(nameof(inner)))
     {
-        if (inner == null) throw new ArgumentNullException(nameof(inner));
     }
 
     private Rule Inner => Children[0];
 
-    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         // Lookahead only: inner's result is thrown away regardless, so we
         // pass null for outputSymbols. If inner has FlattenType.Flatten
@@ -66,6 +66,4 @@ internal sealed class NotRule : Rule
             : Symbol.Discarded;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.NeverAdvances;
 }

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!--
+      AssemblyName intentionally chosen so it does NOT match any of the
+      InternalsVisibleTo grants in src/InductorParser/InductorParser.csproj.
+      The point of this project is to be a true third-party consumer of
+      InductorParser's public + protected surface. If a future change
+      adds this name to the IVT list, the regression catch in FailRule
+      silently goes away.
+    -->
+    <RootNamespace>InductorParser.ExternalContractTests</RootNamespace>
+    <AssemblyName>InductorParser.ExternalContractTests</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="NUnit" Version="4.2.2" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\InductorParser\InductorParser.csproj" />
+  </ItemGroup>
+
+</Project>

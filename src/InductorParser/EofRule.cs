@@ -17,7 +17,7 @@ internal sealed class EofRule : Rule
         OpensTransaction = false;
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         if (!lexer.IsEof)
         {
@@ -50,6 +50,4 @@ internal sealed class EofRule : Rule
             : Symbol.Discarded;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.NeverAdvances;
 }

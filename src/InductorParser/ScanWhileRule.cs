@@ -31,7 +31,9 @@ internal sealed class ScanWhileRule : Rule
 {
     private TokenSet _set;
     private readonly int _minimumCount;
-    private readonly string _setRendered;
+    // Refreshed by CollectNormalizationOffenders when Compile's
+    // normalization pass mutates _set. See OneOfRule for the why.
+    private string _setRendered;
 
     public ScanWhileRule(TokenSet set, int minimumCount)
         : base(FlattenType.Preserve, emitsLeaf: true)
@@ -46,6 +48,9 @@ internal sealed class ScanWhileRule : Rule
         SetTraceName(minimumCount == 1 ? "ScanWhile" : $"ScanWhile[{minimumCount}..]");
     }
 
+    internal TokenSet LoweringSet => _set;
+    internal int LoweringMinimumCount => _minimumCount;
+
     internal override void CollectNormalizationOffenders(
         System.Text.NormalizationForm form,
         List<(Rule rule, string original, string normalized)> offenders,
@@ -55,9 +60,12 @@ internal sealed class ScanWhileRule : Rule
         // the same shape OneOf uses, so it form-projects _set through
         // the same helper. See OneOfRule.NormalizeAndValidate.
         OneOfRule.NormalizeAndValidate(this, ref _set, form, offenders);
+        // See OneOfRule.CollectNormalizationOffenders for why the
+        // rendering has to be refreshed after the set is projected.
+        _setRendered = _set.ToString();
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         // Lexer primitive instead of a loop of OneOfRule.TryParse calls:
         // one transaction and one Symbol allocation regardless of the
@@ -93,21 +101,4 @@ internal sealed class ScanWhileRule : Rule
         return leafSymbol;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        // minimumCount >= 1: every successful match consumes at least
-        // one token from _set, so Advance.Always is sound and the
-        // lookahead shortcut can skip this rule when the peek is
-        // outside the set.
-        //
-        // minimumCount == 0: the rule can succeed with a zero-width
-        // match at the current position, so Advance has to drop to
-        // Sometimes. Same shape Optional(ScanWhile(set, 1)) would
-        // publish via BetweenInclusiveRule's AtLeast==0 downgrade.
-        // _set stays as the first-token set (it's still the set of
-        // tokens we'd consume on a non-zero match), but the shortcut
-        // ignores it under Sometimes per the rules in
-        // RuleStartRequirements.
-        _minimumCount == 0
-            ? new RuleStartRequirements(_set, Advance.Sometimes, Polarity.MustBeIn)
-            : RuleStartRequirements.FirstTokenMustBeInSet(_set);
 }

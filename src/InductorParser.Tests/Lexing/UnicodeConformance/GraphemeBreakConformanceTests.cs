@@ -221,7 +221,7 @@ public class GraphemeBreakConformanceTests
                 string cluster = FirstCluster;
                 if (cluster.Length == 1 && !char.IsSurrogate(cluster[0]))
                     return cluster[0];
-                if (cluster.Length == 2 && char.IsHighSurrogate(cluster[0]) && char.IsLowSurrogate(cluster[1]))
+                if (cluster.Length == 2 && SurrogateHelpers.IsSurrogatePairAt(cluster, 0))
                     return char.ConvertToUtf32(cluster[0], cluster[1]);
                 return -1;
             }

@@ -12,9 +12,17 @@ namespace InductorParser;
 // was before Or called it.
 internal sealed class OrRule : Rule
 {
-    public OrRule(Rule[] children) : base(FlattenType.Flatten, emitsLeaf: false, children) { }
+    public OrRule(Rule[]? children) : base(FlattenType.Flatten, emitsLeaf: false, RequireChildren(children)) { }
 
-    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    private static Rule[] RequireChildren(Rule[]? children)
+    {
+        if (children == null || children.Length == 0)
+            throw new ArgumentException("Or requires at least one child rule.", nameof(children));
+
+        return children;
+    }
+
+    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         // Rule.TryParse's outer transaction wraps every branch attempt.
         // Whether the Or succeeds or fails, the failures its branches
@@ -25,14 +33,6 @@ internal sealed class OrRule : Rule
         // back (through RecordCompositeFailure) to anchor the Or's own
         // .WithError at the deepest position its branches reached.
 
-        // Peek the next token (one grapheme cluster, or one rune in
-        // WithinToken sub-lexer mode) for the skip shortcut. peekFirstRune
-        // is -1 at EOF (empty Chars) or when the cluster starts with a
-        // stray surrogate; CannotMatchLookahead handles both.
-        var peekToken = lexer.PeekToken();
-        var peekChars = peekToken.Chars;
-        int peekFirstRune = peekToken.FirstRune;
-
         // If we're preserving this node, create a new list to capture its outputSymbols
         if (effectiveFlattenType == FlattenType.Preserve)
             outputSymbols = new List<Symbol>();
@@ -40,21 +40,6 @@ internal sealed class OrRule : Rule
         for (int symbolIndex = 0; symbolIndex < Children.Count; symbolIndex++)
         {
             var child = Children[symbolIndex];
-            // Skip children the shortcut proves can't match at this lookahead.
-            // The HasErrorMessageInSubtree guard preserves WithError message
-            // surfacing: a child whose own .WithError or any descendant's
-            // .WithError would belong at the deepest-failure slot still gets
-            // attempted so its failure chain can reach DeepestFailureMessage.
-            // ErrorMessage == null alone would be a half-check: it would skip
-            // a composite child whose own ErrorMessage is null even when a
-            // deeper rule in its subtree carries the user's message, dropping
-            // the message on the floor.
-            if (child.CannotMatchLookahead(peekChars, peekFirstRune) && !child.HasErrorMessageInSubtree)
-            {
-                child.TraceShortcutSkip(lexer, peekChars);
-                continue;
-            }
-
             int matchStart = lexer.Position;
             var symbol = ParseChild(child, lexer, outputSymbols);
             if (symbol != null)
@@ -67,7 +52,6 @@ internal sealed class OrRule : Rule
                 // failures: a rejected branch is the parser genuinely
                 // trying to read the input, and its failure is a near-miss
                 // kept and ranked by depth. See docs/ErrorArchitecture.md.
-                // Don't add child symbols if they're discarded
                 if (outputSymbols != null && !ReferenceEquals(symbol, Symbol.Discarded))
                     outputSymbols.Add(symbol);
                 return effectiveFlattenType == FlattenType.Preserve
@@ -83,7 +67,4 @@ internal sealed class OrRule : Rule
         lexer.RecordCompositeFailure(startPosition, ErrorMessage, ErrorForced);
         return null;
     }
-
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.MatchesAnyOf(Children);
 }

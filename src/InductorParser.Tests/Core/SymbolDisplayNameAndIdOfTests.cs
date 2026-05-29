@@ -70,6 +70,26 @@ public class SymbolDisplayNameAndIdOfTests
     }
 
     [Test]
+    public void Symbol_Find_FindAll_Is_reject_null_rule()
+    {
+        BuildLetterAndWordGrammar(out _, out var word);
+        var symbol = word.Parse("ab").Find(word)!;
+        Assert.That(symbol, Is.Not.Null);
+
+        // All three Rule-typed overloads dereference rule.Id. A null rule
+        // must surface as ArgumentNullException, matching ParseResult.Find /
+        // FindAll and the rest of the public API, not a bare
+        // NullReferenceException. (Symbol.Is(string) already takes the
+        // lenient null-as-no-match path above; the Rule overload is the one
+        // that dereferences a reference the caller is responsible for.)
+        Assert.That(() => symbol.Find((Rule)null!), Throws.ArgumentNullException);
+        // FindAll forwards via an arrow body, so the dereference happens
+        // eagerly on the call, not at first enumeration.
+        Assert.That(() => symbol.FindAll((Rule)null!), Throws.ArgumentNullException);
+        Assert.That(() => symbol.Is((Rule)null!), Throws.ArgumentNullException);
+    }
+
+    [Test]
     public void Symbol_Is_string_and_Rule_overload_agree()
     {
         BuildLetterAndWordGrammar(out var letter, out var word);

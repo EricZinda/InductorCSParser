@@ -6,8 +6,8 @@ namespace InductorParser.Lexing;
 // the lexer when RuleCountLimit, MaxDepth, the Timeout, or the
 // Cancellation trips. The throw unwinds through the rule stack,
 // rolling back every active lexer transaction via the existing `using`
-// scaffolding, and lands at the catch in Rule.Parse, which converts it
-// to a failed ParseResult with the matching outcome.
+// scaffolding, and lands at the catch in Rule.ParseRecursive, which
+// converts it to a failed ParseResult with the matching outcome.
 //
 // One throw per pathological parse, not one per rule invocation, so the
 // IL2CPP exception cost is irrelevant. The design avoids exception
@@ -21,7 +21,7 @@ internal sealed class ParseBudgetExceeded : Exception
     // active lookahead Probe. The Probe's Dispose runs on the exception
     // path and restores the failure tracker to its pre-probe value, so
     // the catch handler in Rule.ParseRecursive can't reliably read
-    // lexer.DeepestFailure after the unwind. Capturing the value at
+    // lexer.DeepestFailurePosition after the unwind. Capturing the value at
     // throw time freezes it before any restoration runs.
     public int DeepestPositionAtAbort { get; }
 

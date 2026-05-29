@@ -1,4 +1,5 @@
 using System.Text;
+using InductorParser.Tracing;
 
 namespace InductorParser.SyntaxTree;
 
@@ -36,33 +37,32 @@ public static class SymbolExtensions
         int idValue = symbol.Id.Value;
         if (idValue >= 0 && idValue < SymbolRanges.CharacterRangeEnd)
         {
-            // Character leaf: id is the code point. NameOf returns either
-            // the user-supplied .As("...") name (when set) or the rune's
-            // own text (the default for unnamed character rules). When the
-            // returned name matches the rune text, the leaf is unnamed and
-            // we use the compact `'c'` form. Otherwise the user named it,
-            // so we fall through to the long form so the name is visible
-            // alongside the matched text.
-            string? charName = rule.NameOf(symbol.Id);
-            // Invalid scalar values (surrogate halves in the 0xD800..0xDFFF
-            // gap) aren't representable as a Rune. Render them as U+FFFD
-            // REPLACEMENT CHARACTER, the Unicode-designated marker for
-            // "this code point can't be encoded." Same character .NET's
-            // decoders use for ill-formed input.
-            string runeText = Rune.IsValid(idValue) ? new Rune(idValue).ToString() : "�";
-            if (charName != null && charName != runeText)
+            // Character leaf: id is the rune's code point. When the user
+            // gave the rule a .As(...) name, use the long `name: "text"`
+            // form so the name is visible alongside the matched text.
+            // Otherwise use the compact `'c'` form, with U+FFFD standing
+            // in when the id isn't a valid scalar (a surrogate half).
+            string? userName = rule.UserNameOf(symbol.Id);
+            if (userName != null)
             {
-                builder.Append(charName).Append(": \"").Append(symbol.ToString()).Append('"');
+                builder.Append(userName).Append(": \"");
+                DisplayEscape.AppendEscaped(builder, symbol.ToString());
+                builder.Append('"');
             }
             else
             {
-                builder.Append('\'').Append(charName ?? "�").Append('\'');
+                string runeText = Rune.IsValid(idValue) ? new Rune(idValue).ToString() : "�";
+                builder.Append('\'');
+                DisplayEscape.AppendEscaped(builder, runeText);
+                builder.Append('\'');
             }
         }
         else
         {
             string? name = rule.NameOf(symbol.Id) ?? "<unknown>";
-            builder.Append(name).Append(": \"").Append(symbol.ToString()).Append('"');
+            builder.Append(name).Append(": \"");
+            DisplayEscape.AppendEscaped(builder, symbol.ToString());
+            builder.Append('"');
         }
         builder.Append('\n');
 

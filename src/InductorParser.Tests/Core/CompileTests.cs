@@ -23,34 +23,14 @@ namespace InductorParser.Tests;
 //   - LateBoundRule auto-compile through Parse, plus a regression that
 //     ValidateAll walks nested rules: LateBoundRuleTests
 //     (the never-bound rule is two levels deep inside Or+And).
-//   - Cycle handling in ComputeRuleStartAll: exercised indirectly by
-//     every recursive grammar test (would hang otherwise).
 //
 // What's left for this file: the cross-cutting Compile behaviors that
-// don't belong to any one rule. The internal RuleStartRequirements
-// consistency check, idempotency of Compile itself, and Parse's
-// auto-compile on the success path (the LateBoundRule tests cover the
-// failure path).
+// don't belong to any one rule. Idempotency of Compile itself, and
+// Parse's auto-compile on the success path (the LateBoundRule tests
+// cover the failure path).
 [TestFixture]
 public class CompileTests
 {
-    [Test]
-    public void Compile_throws_when_a_rule_reports_Advance_Never_with_non_empty_FirstConsumedTokens()
-    {
-        // Advance.Never means "never consumes on success," which logically
-        // forces FirstConsumedTokens to be Empty. If nothing is consumed,
-        // there can't be a set of possible first-consumed runes. A subclass
-        // that returns a non-empty set alongside Never is violating the
-        // contract, and the check here catches it at Compile time rather
-        // than letting the mismatch silently corrupt an enclosing AndRule's
-        // FirstConsumedTokens union.
-        var bad = new InconsistentRuleStartRule();
-
-        var ex = Assert.Throws<InvalidOperationException>(() => bad.Compile());
-        Assert.That(ex!.Message, Does.Contain("InconsistentRuleStartRule"));
-        Assert.That(ex.Message, Does.Contain("Advance.Never"));
-    }
-
     [Test]
     public void Compile_is_idempotent()
     {
@@ -58,17 +38,15 @@ public class CompileTests
         // seal flag is the implementation, but several pieces of state
         // would become wrong if it ever re-ran: named-hash ids depend on
         // linear-probe order and could shift if explicit ids were
-        // re-collected against a clean usedIds set, FirstConsumedTokens
-        // and Advance are computed bottom-up and could drift, and
-        // ValidateAll could throw on a graph that's already settled.
+        // re-collected against a clean usedIds set, and ValidateAll
+        // could throw on a graph that's already settled.
         //
         // Snapshot every reachable rule's post-Compile state (type, id,
-        // name, flatten policy, FirstConsumedTokens, Advance) and verify
-        // the second Compile is a true no-op against the full grammar
-        // shape, not just the few ids the test happened to remember.
-        // A grammar with an explicit id, a named rule, and anonymous rules
-        // exercises all three id-assignment passes plus the bottom-up
-        // RuleStartRequirements walk.
+        // name, flatten policy) and verify the second Compile is a true
+        // no-op against the full grammar shape, not just the few ids the
+        // test happened to remember. A grammar with an explicit id, a
+        // named rule, and anonymous rules exercises all three
+        // id-assignment passes.
         var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 9999);
         var named = OneOrMore(OneOf(TokenSet.Letters)).As("settingName");
         var explicitRule = OneOrMore(OneOf(TokenSet.Digits)).As(explicitId);
@@ -182,25 +160,4 @@ public class CompileTests
         return Or(list, atom).As("root");
     }
 
-    // Subclass that deliberately violates the RuleStartRequirements invariant. Lives
-    // here and not in the main InductorParser assembly because the check
-    // is defensive against authoring mistakes, not behavior any in-tree
-    // rule produces. InternalsVisibleTo makes the internal virtual
-    // overridable from the test assembly.
-    private sealed class InconsistentRuleStartRule : Rule
-    {
-        public InconsistentRuleStartRule() : base(FlattenType.Preserve, emitsLeaf: false) { }
-
-        internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, System.Collections.Generic.List<Symbol>? outputSymbols) => null;
-
-        // Return the set of tokens (grapheme clusters) this rule
-        // might consume as its first token (can be a superset).
-        // TokenSet.Empty when Advance.Never. TokenSet.Universe means
-        // "I don't know". Then say whether the rule Always / Sometimes
-        // / Never consumes at least that first token on success. See
-        // RuleStartRequirements for the full shortcut story including
-        // polarity composition.
-        internal override RuleStartRequirements ComputeRuleStart()
-            => new RuleStartRequirements(TokenSet.Single('x'), Advance.Never);
-    }
 }

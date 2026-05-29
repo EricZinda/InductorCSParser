@@ -2,7 +2,9 @@ using System;
 using System.Text;
 using NUnit.Framework;
 using InductorParser;
+using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
+using InductorParser.Tracing;
 using static InductorParser.Rules;
 using static InductorParser.Tests.TraceTestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
@@ -307,7 +309,7 @@ public class WithinTokenRuleTests
         // The other failure path: inner is an And whose first child
         // succeeds and advances the sub-lexer past the first rune, then
         // the second child fails. WithinTokenRule's inner-failure branch
-        // reads subLexer.DeepestFailure (set by the second child at the
+        // reads subLexer.DeepestFailurePosition (set by the second child at the
         // rune offset where it failed) and feeds that mid-cluster offset
         // to outerLexer.RecordFailure. Same outer-view invariant
         // violation as the prefix-match path above.
@@ -404,37 +406,6 @@ public class WithinTokenRuleTests
         Assert.That(namedResult.Tree!.Id, Is.EqualTo(namedRule.Id));
         Assert.That(namedResult.Tree!.Find(namedRule), Is.Not.Null);
         Assert.That(namedRule.NameOf(namedResult.Tree!.Id), Is.EqualTo("character"));
-    }
-
-    [Test]
-    [RecursiveEngineOnly]
-    public void Or_WithinToken_skips_when_peek_first_rune_is_outside_inner_set()
-    {
-        // WithinToken forwards the inner rule's first-token set with
-        // Advance.Always. The inner OneOf({a..z}) gives a first-rune set
-        // covering ASCII lowercase. Peek '1' isn't in that set, so the
-        // shortcut skips WithinToken and the second branch wins.
-        var sink = NewSink();
-        var rule = Or(WithinToken(OneOf(TokenSet.Ascii.Letters)), Literal("1"));
-        var result = rule.Parse("1", new ParseOptions { TraceSink = sink });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Contain("SKIP | WithinToken:"));
-    }
-
-    [Test]
-    [RecursiveEngineOnly]
-    public void Or_WithinToken_runs_when_peek_first_rune_is_in_inner_set()
-    {
-        // Peek 'a' is in the inner's first-rune set, so the shortcut
-        // doesn't skip. WithinToken runs and the inner rule consumes
-        // the cluster.
-        var sink = NewSink();
-        var rule = Or(WithinToken(OneOf(TokenSet.Ascii.Letters)), Literal("1"));
-        var result = rule.Parse("a", new ParseOptions { TraceSink = sink });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | WithinToken:"));
     }
 
     [Test]
@@ -589,4 +560,51 @@ public class WithinTokenRuleTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage, Is.EqualTo("not a recognized reaction"));
     }
+
+    [Test]
+    public void Forced_inner_WithError_surfaces_when_WithinToken_fails_on_prefix_consume()
+    {
+        // Inner Or matches AnyToken (the second alternative) at sub-position
+        // 0, leaving the second rune of the multi-rune cluster unconsumed.
+        // WithinToken then fails because the inner only consumed a prefix
+        // (1 of 2 runes) of the outer cluster. The forced .WithError that
+        // inner's rejected Literal recorded should still surface as the
+        // parse error message: the user explicitly marked it forced, and
+        // the inner-failed branch already does this transfer. The
+        // prefix-consume branch should do the same.
+        var inner = Or(
+            Literal("ex").WithError("expected ex", forced: true),
+            AnyToken());
+        var rule = WithinToken(inner);
+        rule.Compile(null);
+
+        var result = rule.Parse(LatinEAcuteGrapheme);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected ex"));
+    }
+
+    [Test]
+    public void Named_inner_WithError_surfaces_when_WithinToken_fails_on_prefix_consume()
+    {
+        // Same shape as the forced variant above, but the inner .WithError
+        // is a plain (named) hint rather than forced. The transfer in the
+        // prefix-consume branch preserves whatever forced flag the inner
+        // message had, so a non-forced hint flows through the same code
+        // path and lands in the outer lexer's named slot. Without the
+        // transfer, a named inner hint is just as silently dropped as a
+        // forced one when a fallback alternative shaves off a prefix of
+        // the outer cluster.
+        var inner = Or(
+            Literal("ex").WithError("expected ex"),
+            AnyToken());
+        var rule = WithinToken(inner);
+        rule.Compile(null);
+
+        var result = rule.Parse(LatinEAcuteGrapheme);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected ex"));
+    }
+
 }

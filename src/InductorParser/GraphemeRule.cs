@@ -104,7 +104,7 @@ internal sealed class GraphemeRule : Rule
         return count;
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         int consumed = 0;
 
@@ -164,6 +164,4 @@ internal sealed class GraphemeRule : Rule
         return leafSymbol;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.FirstTokenMustBeFirstGraphemeOf(_expected);
 }

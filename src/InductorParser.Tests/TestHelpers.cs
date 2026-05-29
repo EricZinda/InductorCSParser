@@ -37,11 +37,11 @@ internal static class TestHelpers
 
     // Walk the rule graph in deterministic DFS pre-order and emit one
     // line per reachable rule capturing its post-Compile state: type,
-    // id, name, flatten policy, FirstConsumedTokens, Advance. Two
-    // grammars with the same snapshot are structurally identical for
-    // every property a Compile pass can mutate. NUnit's string-diff
-    // output then names the exact rule and field that drifted on a
-    // mismatch, instead of a bare "the grammars differ."
+    // id, name, flatten policy. Two grammars with the same snapshot are
+    // structurally identical for every property a Compile pass can
+    // mutate. NUnit's string-diff output then names the exact rule and
+    // field that drifted on a mismatch, instead of a bare "the grammars
+    // differ."
     public static string SnapshotGrammar(Rule root)
     {
         var builder = new StringBuilder();
@@ -57,8 +57,6 @@ internal static class TestHelpers
             .Append("|Id=").Append(rule.Id.Value)
             .Append("|Name=").Append(rule.Name ?? "<null>")
             .Append("|Flatten=").Append(rule.FlattenType)
-            .Append("|FirstRunes=").Append(rule.FirstConsumedTokens)
-            .Append("|Advance=").Append(rule.Advance)
             .Append('\n');
         foreach (var child in rule.Children)
             WalkRule(child, builder, visited);

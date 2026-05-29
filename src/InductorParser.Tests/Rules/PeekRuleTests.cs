@@ -16,6 +16,14 @@ public class PeekRuleTests
     private static ParseOptions Debug() => new() { PreserveAllSymbols = true };
 
     [Test]
+    public void Peek_factory_rejects_null_inner()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() => Peek(null!));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("inner"));
+    }
+
+    [Test]
     public void Peek_succeeds_when_inner_matches_and_consumes_no_input()
     {
         // Peek(Token('a')) on "a": confirms 'a' is ahead without consuming

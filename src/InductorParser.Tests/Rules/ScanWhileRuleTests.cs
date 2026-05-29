@@ -117,34 +117,6 @@ public class ScanWhileRuleTests
     }
 
     [Test]
-    [RecursiveEngineOnly]
-    public void Or_ScanWhile_with_minimumCount_zero_does_not_skip_on_outside_peek()
-    {
-        // minimumCount: 0 makes the rule zero-matchable, so
-        // ComputeRuleStart publishes Advance.Sometimes (the same
-        // shape Optional / ZeroOrMore publish). The lookahead
-        // shortcut requires Advance.Always to fire, so this
-        // ScanWhile must run regardless of what the peek is. Without
-        // the downgrade, an outer Or would skip this rule on '1' and
-        // the literal "1" branch would win for the wrong reason
-        // (the ScanWhile would never get a chance to match its empty
-        // run, and a different grammar shape might see the wrong tree).
-        var sink = NewSink();
-        var rule = Or(
-            ScanWhile(TokenSet.Ascii.Letters, minimumCount: 0),
-            Literal("1"));
-        var result = rule.Parse("1",
-            new ParseOptions
-            {
-                TraceSink = sink,
-                AllowTrailingInput = true
-            });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | ScanWhile"));
-    }
-
-    [Test]
     public void ScanWhile_rejects_multi_rune_grapheme_under_grapheme_lexer()
     {
         var rule = ScanWhile(TokenSet.Single(WavingHandRune));
@@ -168,6 +140,30 @@ public class ScanWhileRuleTests
             "   Lexer.AdvanceWhileRuneIn: 'b', Consumed: 2",
             "   Lexer.AdvanceWhileRuneIn: 'c', Consumed: 3",
             "   SUCC | ScanWhile: count= 3, 3 chars, wanted at least 1 of '[A-Z,a-z]'"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void ScanWhile_trace_set_rendering_refreshes_after_Compile_projects_the_set()
+    {
+        // Same shape as OneOf: the constructor cached the set's
+        // rendering, Compile's normalization pass mutates _set onto
+        // the lexer-normalized form (U+212A KELVIN -> U+004B 'K'
+        // under FormC), and the cache used to keep the pre-projection
+        // entry. ScanWhile consumes a run of matching runes, so this
+        // exercises the SUCC trace path with a single Lexer step.
+        var sink = NewSink();
+        // KelvinGrapheme is U+212A wrapped in Canary so an editor
+        // can't silently swap it for ASCII 'K'. Parse input is real
+        // ASCII 'K', matching the projected entry post-Compile.
+        ScanWhile(TokenSet.Runes(KelvinGrapheme)).Parse("K",
+            new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   Lexer.AdvanceWhileRuneIn: 'K', Consumed: 1",
+            "   SUCC | ScanWhile: count= 1, 1 chars, wanted at least 1 of '[K]'"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
@@ -264,39 +260,6 @@ public class ScanWhileRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("abc" + USFlagGrapheme + "d"));
-    }
-
-    [Test]
-    [RecursiveEngineOnly]
-    public void Or_ScanWhile_skips_when_peek_is_outside_set()
-    {
-        // The default minimumCount is 1, so ScanWhile(set) publishes
-        // (set, Always, MustBeIn): every successful match consumes at
-        // least one token from set. Peek '1' isn't in {a..z}, so the
-        // shortcut skips ScanWhile and the literal "1" branch wins.
-        // (Contrast with Or_ScanWhile_with_minimumCount_zero_does_not_skip
-        // for the minimumCount: 0 case, which publishes Advance.Sometimes
-        // and can't be skipped.)
-        var sink = NewSink();
-        var rule = Or(ScanWhile(TokenSet.Ascii.Letters), Literal("1"));
-        var result = rule.Parse("1", new ParseOptions { TraceSink = sink });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Contain("SKIP | ScanWhile:"));
-    }
-
-    [Test]
-    [RecursiveEngineOnly]
-    public void Or_ScanWhile_runs_when_peek_is_in_set()
-    {
-        // Peek 'a' is in {a..z}, so the shortcut doesn't skip and
-        // ScanWhile runs.
-        var sink = NewSink();
-        var rule = Or(ScanWhile(TokenSet.Ascii.Letters), Literal("1"));
-        var result = rule.Parse("abc", new ParseOptions { TraceSink = sink });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | ScanWhile:"));
     }
 
     // -----------------------------------------------------------------

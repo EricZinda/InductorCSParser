@@ -15,14 +15,14 @@ namespace InductorParser;
 // Peek(Literal("else")).
 internal sealed class PeekRule : Rule
 {
-    public PeekRule(Rule inner) : base(FlattenType.Delete, emitsLeaf: false, inner)
+    public PeekRule(Rule inner)
+        : base(FlattenType.Delete, emitsLeaf: false, inner ?? throw new ArgumentNullException(nameof(inner)))
     {
-        if (inner == null) throw new ArgumentNullException(nameof(inner));
     }
 
     private Rule Inner => Children[0];
 
-    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         // Lookahead only: inner runs as a throwaway probe. BeginProbe
         // brackets the position, the failure tracker, and the
@@ -56,6 +56,4 @@ internal sealed class PeekRule : Rule
             : Symbol.Discarded;
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.NeverAdvances;
 }

@@ -39,6 +39,29 @@ public class ScanUntilRuleTests
     }
 
     [Test]
+    public void ScanUntil_factories_reject_null_rule_arguments()
+    {
+        Assert.That(
+            Assert.Throws<ArgumentNullException>(() => ScanUntil((Rule)null!))!.ParamName,
+            Is.EqualTo("stopAt"));
+        Assert.That(
+            Assert.Throws<ArgumentNullException>(() => ScanUntil(TokenSet.Runes("|"), new Rune('\\'), null!))!.ParamName,
+            Is.EqualTo("escapeEnd"));
+        Assert.That(
+            Assert.Throws<ArgumentNullException>(() => ScanUntil(TokenSet.Runes("|"), (Rule)null!, Token('x')))!.ParamName,
+            Is.EqualTo("escapeStart"));
+        Assert.That(
+            Assert.Throws<ArgumentNullException>(() => ScanUntil(TokenSet.Runes("|"), Token('\\'), null!))!.ParamName,
+            Is.EqualTo("escapeEnd"));
+        Assert.That(
+            Assert.Throws<ArgumentNullException>(() => ScanUntil((Rule)null!, new Rune('\\'), Token('x')))!.ParamName,
+            Is.EqualTo("stopAt"));
+        Assert.That(
+            Assert.Throws<ArgumentNullException>(() => ScanUntil(Token('|'), new Rune('\\'), null!))!.ParamName,
+            Is.EqualTo("escapeEnd"));
+    }
+
+    [Test]
     public void ScanUntil_with_precomposed_stopper_set_stops_at_decomposed_input_under_FormD()
     {
         // Stopper set: precomposed U+00E9. Under FormD the lexer
@@ -58,6 +81,81 @@ public class ScanUntilRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("abc"));
+    }
+
+    [Test]
+    public void ScanUntil_with_precomposed_escape_start_rune_fires_on_decomposed_input_under_FormD()
+    {
+        // Escape start: U+00E9 (precomposed LATIN SMALL LETTER E WITH
+        // ACUTE). Under FormD the lexer decomposes input for that
+        // character to the two-rune cluster "e + combining acute". The
+        // escape-start fast path compares the next token's single rune
+        // against _escapeStartRune. The decomposed cluster's first rune
+        // is 'e' (0x65), not 0xE9, and tokenLen (2) doesn't equal
+        // runeLen (1) either, so the fast path's check rejects every
+        // cluster and the escape never fires.
+        //
+        // OneOf and ScanUntil's stopper set project their TokenSet
+        // entries through OneOfRule.NormalizeAndValidate at Compile
+        // time so the same precomposed rune written in a stopper set
+        // recognizes the decomposed cluster. _escapeStartRune sits in
+        // the same Compile-time pass but isn't projected, so the fix
+        // is to convert the rune to its FormD-normalized cluster and
+        // span-compare against it.
+        //
+        // Asserts the user-visible consequence: the escape should fire
+        // on the decomposed cluster and run the escape-end on the next
+        // token. Here escape end is Token('x'); the input has 'Y'
+        // after the e-acute, so when the escape fires the escape-end
+        // fails and the whole ScanUntil fails. Without the fix the
+        // escape is silently skipped, the cluster is consumed as body,
+        // and ScanUntil reaches '|' and succeeds.
+        var rule = InductorParser.Rules.And(
+            ScanUntil(TokenSet.Runes("|"), new Rune(LatinEAcuteRune), Token('x')),
+            Token('|'));
+        rule.Compile(System.Text.NormalizationForm.FormD);
+
+        var result = rule.Parse("abc" + LatinEAcutePrecomposedGrapheme + "Yhello|");
+
+        Assert.That(result.Success, Is.False,
+            "escape start (precomposed e-acute) should recognize the decomposed cluster under FormD; "
+            + "the trailing 'Y' isn't 'x', so escape-end Token('x') should fail "
+            + "and the whole ScanUntil should fail. Without the fix the escape is "
+            + "silently skipped, ScanUntil consumes the whole pre-'|' span as body, "
+            + "and the outer And succeeds.");
+    }
+
+    [Test]
+    public void ScanUntil_with_precomposed_escape_start_rune_consumes_escape_on_decomposed_input_under_FormD()
+    {
+        // Happy-path sibling of the test above: same shape, but the
+        // input has the matching 'x' after the e-acute so the escape
+        // sequence completes. Without the fix the escape silently
+        // never fires and the cluster + 'x' are consumed as body too;
+        // with the fix the escape fires, escape-end matches 'x', and
+        // scanning resumes for the rest of the body. Either way the
+        // outer And succeeds (the cursor reaches the same '|'), so
+        // success alone isn't the discriminator. The trace is.
+        var sink = TraceTestHelpers.NewSink();
+        var rule = InductorParser.Rules.And(
+            ScanUntil(TokenSet.Runes("|"), new Rune(LatinEAcuteRune), Token('x')),
+            Token('|'));
+        rule.Compile(System.Text.NormalizationForm.FormD);
+
+        var result = rule.Parse(
+            "abc" + LatinEAcutePrecomposedGrapheme + "xhello|",
+            new ParseOptions { TraceSink = sink });
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        // Token('x') is Delete by default, so a successfully-fired
+        // escape produces a Token SUCC trace line for the 'x'. Without
+        // the fix, the escape never fires and no such trace line
+        // exists: the 'x' is consumed as body alongside the e-acute
+        // cluster.
+        Assert.That(sink.ToString(), Does.Contain("Token: found 'x'"),
+            "the escape-end Token('x') should run after the escape start "
+            + "fires on the decomposed cluster; without the fix the escape "
+            + "is silently skipped and Token('x') is never invoked.");
     }
 
     [Test]
@@ -1088,5 +1186,65 @@ public class ScanUntilRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("abc"));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void ScanUntil_trace_stopper_rendering_refreshes_after_Compile_projects_the_set()
+    {
+        // Same shape as OneOf: the constructor cached the stopper
+        // set's rendering, Compile's normalization pass mutates
+        // _stopperSet onto the lexer-normalized form (U+212A KELVIN
+        // -> U+004B 'K' under FormC), and the cache used to keep the
+        // pre-projection entry. ScanUntil's success trace quotes the
+        // stopper rendering, so this exercises the SUCC trace path.
+        var sink = TraceTestHelpers.NewSink();
+        // KelvinGrapheme is U+212A wrapped in Canary so an editor
+        // can't silently swap it for ASCII 'K'. The parse input has
+        // no 'K', so ScanUntil consumes "ab" and stops at EOF, and
+        // the success trace renders the projected stopper set.
+        ScanUntil(TokenSet.Runes(KelvinGrapheme), eofIsTerminator: true)
+            .Parse("ab", new ParseOptions { TraceSink = sink });
+
+        Assert.That(sink.ToString(), Does.Contain("stopper '[K]'"),
+            "ScanUntil's success trace should render the stopper set in "
+            + "its post-Compile form: under FormC, U+212A canonicalizes "
+            + "to U+004B 'K', so the cached rendering has to refresh "
+            + "from '[U+212A]' to '[K]' or a grammar author reading "
+            + "the trace sees a different set than the rule matches.");
+        Assert.That(sink.ToString(), Does.Not.Contain("U+212A"),
+            "the stale pre-projection rendering must not leak into the trace");
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void ScanUntil_rule_stopper_rendering_refreshes_after_inner_rule_is_renamed()
+    {
+        // Sibling case to the TokenSet-stopper test above. The
+        // rule-mode stopper rendering captures `stopAt.Name ?? stopAt.GetType().Name`
+        // at construction. If the inner rule gets .As(name) AFTER the
+        // ScanUntil was built but before Compile (a static-init pattern
+        // where the stopper field is named in the static ctor after
+        // every field initializer has run, or a refactor that named a
+        // shared rule later), the cached rendering keeps the typeof-name
+        // and the trace says `rule OneOfRule` even though the rule's
+        // actual name is "foo". Grammar authors reading the trace see
+        // a name that doesn't match anything in their source.
+        var sink = TraceTestHelpers.NewSink();
+        var stopper = OneOf("X");
+        var scan = ScanUntil(stopper);
+        stopper.As("stopX");
+        // Input has no "X" and eofIsTerminator is false, so ScanUntil
+        // fails with "unterminated body", which is the trace path that
+        // splices _stopperRendered.
+        scan.Parse("abc", new ParseOptions { TraceSink = sink });
+
+        Assert.That(sink.ToString(), Does.Contain("stopper 'rule stopX'"),
+            "rule-mode stopper trace should reflect the inner rule's name "
+            + "as it stands at Compile time, not at ScanUntil-construction "
+            + "time. A grammar author reading the trace sees the name they "
+            + "wrote in source.");
+        Assert.That(sink.ToString(), Does.Not.Contain("OneOfRule"),
+            "the stale pre-rename typeof-name must not leak into the trace");
     }
 }

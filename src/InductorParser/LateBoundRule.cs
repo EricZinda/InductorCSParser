@@ -152,7 +152,7 @@ public sealed class LateBoundRule : Rule
         "LateBoundRule.WithError(...) isn't supported: the rule is transparent at parse " +
         "time, so its ErrorMessage is never consulted. Set .WithError(...) on the bound target instead.");
 
-    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         // _target is guaranteed non-null here: Compile's ValidateCompiled
         // throws on an unbound LateBoundRule before any parse can reach
@@ -209,13 +209,4 @@ public sealed class LateBoundRule : Rule
         return current.FlattenType;
     }
 
-    // LateBoundRule is transparent at parse time. Compile's depth-first
-    // walk visits the target as our one child, so the target's values
-    // are populated by the time we land here. If the target graph
-    // forms a cycle back through this LateBoundRule, the cycle-detection
-    // path leaves whichever node it hit at the pessimistic default
-    // (Universe, Advance.Sometimes, MustBeIn). That keeps OrRule
-    // conservative.
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.PassesThroughTo(_target!);
 }

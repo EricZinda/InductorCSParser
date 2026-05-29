@@ -25,13 +25,14 @@ namespace InductorParser;
 //
 // Scope limits worth calling out:
 //
-// - The inner rule runs against a bounded sub-lexer that shares the
-//   outer lexer's input string (no Substring copy) and walks one rune
-//   per Read instead of one token. The sub-lexer doesn't share trace
-//   state with the outer lexer, so trace output from the inner rule
-//   doesn't appear in the outer trace. It DOES delegate every
-//   EnterRuleBudgetChecks / ExitRuleBudgetChecks / TickPeriodicBudget to the outer via
-//   Lexer.InheritBudgetsFrom, so the inner's recursion counts on top
+// - The inner rule runs against a bounded sub-lexer over a Substring
+//   of the outer input (one short string per WithinToken match, see
+//   the per-call comment below for why we pay the copy) and walks one
+//   rune per Read instead of one token. The sub-lexer doesn't share
+//   trace state with the outer lexer, so trace output from the inner
+//   rule doesn't appear in the outer trace. It DOES delegate every
+//   EnterRule / ExitRule / TickPeriodic to the outer via
+//   ParseBudget.InheritFrom, so the inner's recursion counts on top
 //   of the outer's current depth: MaxDepth and RuleCountLimit cover
 //   the combined outer-plus-inner work, and a Cancel() or expired
 //   Timeout observed on either lexer trips both. Without this, a
@@ -52,7 +53,7 @@ internal sealed class WithinTokenRule : Rule
         _innerRule = innerRule;
     }
 
-    internal override Symbol? TryParseRule(Lexer outerLexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected internal override Symbol? TryParseRule(Lexer outerLexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         var token = outerLexer.Read();
         if (token.IsEof)
@@ -64,7 +65,7 @@ internal sealed class WithinTokenRule : Rule
 
         // Sub-lexer over the token's runes. Owns a substring of the
         // outer input: the inner rule walks subInput[0 .. token.Length),
-        // and the sub-lexer's Input / Position / IsEof / DeepestFailure
+        // and the sub-lexer's Input / Position / IsEof / DeepestFailurePosition
         // / Read() Token offsets are all 0-based on that substring.
         // Other rules don't need to know what mode the lexer is in.
         // Switched to one-rune-per-token mode so the inner rule sees
@@ -88,8 +89,8 @@ internal sealed class WithinTokenRule : Rule
             traceSink: null,
             traceLevel: TraceLevel.Normal,
             oneRunePerToken: true);
-        // The sub-lexer delegates every EnterRule / ExitRule /
-        // TickPeriodicBudget to the outer lexer so the inner's recursion
+        // The sub-lexer's budget delegates every EnterRule / ExitRule /
+        // TickPeriodic to the outer budget so the inner's recursion
         // counts on top of the outer's CURRENT depth. MaxDepth and
         // RuleCountLimit cover the combined outer-plus-inner work
         // rather than letting the inner spend a fresh MaxDepth on top
@@ -99,7 +100,7 @@ internal sealed class WithinTokenRule : Rule
         // Stopwatch and the ParseCancellation reach the inner through
         // the same delegation: a Cancel() or expired Timeout observed
         // by either lexer trips both.
-        subLexer.InheritBudgetsFrom(outerLexer);
+        subLexer.Budget.InheritFrom(outerLexer.Budget);
 
         // Throwaway output list for the inner rule. Any symbols the inner
         // rule emits are discarded: WithinToken exposes one leaf per
@@ -115,7 +116,7 @@ internal sealed class WithinTokenRule : Rule
             // so the parser-wide "errors land at cluster boundaries"
             // invariant holds. Trace cites the rune-level offset for
             // debug.
-            int innerFailurePos = Math.Max(subLexer.DeepestFailure, subLexer.Position);
+            int innerFailurePos = Math.Max(subLexer.DeepestFailurePosition, subLexer.Position);
             TraceFailure(outerLexer, $"inner rule failed at token rune offset {innerFailurePos}");
             // The inner rule ran on the sub-lexer, so its deepest failure
             // is recorded there. Surface it on the outer lexer keeping the
@@ -142,6 +143,17 @@ internal sealed class WithinTokenRule : Rule
             // the substring, so it's the consumed rune count directly.
             int consumed = subLexer.Position;
             TraceFailure(outerLexer, $"inner rule consumed only {consumed}/{token.Length} of the token");
+            // Same pattern as the inner-failed branch: surface the inner's
+            // deepest failure with its forced flag preserved so a forced
+            // .WithError from a rejected alternative inside the cluster
+            // competes with WithinToken's own under depth-primary ranking.
+            // Without this, a forced inner hint is silently dropped when
+            // the inner succeeded via a fallback that consumed only a
+            // prefix of the cluster.
+            string? innerMessage = subLexer.DeepestFailureMessage;
+            if (innerMessage != null)
+                outerLexer.RecordFailure(startPosition, innerMessage,
+                    forced: subLexer.DeepestFailureIsForced);
             outerLexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);
             return null;
         }
@@ -167,44 +179,4 @@ internal sealed class WithinTokenRule : Rule
         return leafSymbol;
     }
 
-    // WithinToken always consumes exactly one outer token (one grapheme
-    // cluster) on success, so Advance.Always. The inner rule runs on a
-    // one-rune-per-token sub-lexer, so the set it publishes describes
-    // runes, while the enclosing rule's lookahead shortcut peeks a whole
-    // grapheme cluster. PassesThroughTo reads the inner rule's compiled
-    // fields, which Compile's post-order ComputeRuleStartAll walk has
-    // already populated by the time this composite's ComputeRuleStart
-    // runs (the inner rule is this rule's only child).
-    //
-    // For a MustBeIn inner rule the two coordinate systems line up:
-    // CannotMatchLookahead's MustBeIn path tests the peek cluster's
-    // first rune against the set, which is exactly the rune the inner
-    // rule reads first, so the set forwards unchanged.
-    //
-    // For a MustNotBeIn inner rule (NoneOf and negative composites)
-    // they don't: CannotMatchLookahead's MustNotBeIn path only tests
-    // the whole peek cluster against the fail-set. A multi-rune
-    // grapheme that is a member of that fail-set would skip the
-    // WithinToken, but the inner rule walks that cluster one rune at a
-    // time and never sees it as a unit, so it can still match every
-    // rune (none of which is in the fail-set on its own). Drop the
-    // multi-rune entries: the rune-only fail-set only triggers a skip
-    // on a single-rune peek cluster, where the cluster's one rune IS
-    // the rune the inner rule checks first. A subset of the fail-set is
-    // sound under MustNotBeIn (it just skips fewer peeks); the
-    // multi-rune entries are the unsound part.
-    internal override RuleStartRequirements ComputeRuleStart()
-    {
-        var innerStart = RuleStartRequirements.PassesThroughTo(_innerRule)
-            .WithAdvance(Advance.Always);
-        if (innerStart.Polarity == Polarity.MustNotBeIn
-            && innerStart.FirstConsumedTokens.HasMultiRuneGraphemes)
-        {
-            return new RuleStartRequirements(
-                innerStart.FirstConsumedTokens.RunesOnlyPart,
-                Advance.Always,
-                Polarity.MustNotBeIn);
-        }
-        return innerStart;
-    }
 }

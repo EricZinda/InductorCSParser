@@ -52,7 +52,7 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
         _expected = normalized;
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         int consumed = 0;
 
@@ -114,23 +114,4 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
     private static bool IsAsciiLetter(char c) =>
         (uint)((c | 0x20) - 'a') <= ('z' - 'a');
 
-    internal override RuleStartRequirements ComputeRuleStart()
-    {
-        // ASCII-only patterns can't form multi-rune clusters that start
-        // with an ASCII letter (combining marks are non-ASCII), so the
-        // case-fold first-grapheme is always one char. The only ASCII
-        // multi-char cluster is CRLF (UAX #29 GB3), which starts with
-        // '\r' (not an ASCII letter) and goes through the standard
-        // first-grapheme path below. StringInfo.GetNextTextElement
-        // can't throw on ASCII input, so no try/catch is needed.
-        string firstElement = System.Globalization.StringInfo.GetNextTextElement(_expected, 0);
-        if (firstElement.Length == 1 && IsAsciiLetter(firstElement[0]))
-        {
-            int lower = firstElement[0] | 0x20;
-            int upper = lower & ~0x20;
-            return RuleStartRequirements.FirstTokenMustBeInSet(
-                TokenSet.Single(lower) | TokenSet.Single(upper));
-        }
-        return RuleStartRequirements.FirstTokenMustBeFirstGraphemeOf(_expected);
-    }
 }

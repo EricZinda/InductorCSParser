@@ -115,6 +115,34 @@ public class OneOfRuleTests
     }
 
     [Test]
+    [RecursiveEngineOnly]
+    public void OneOf_trace_set_rendering_refreshes_after_Compile_projects_the_set()
+    {
+        // OneOfRule cached the set's rendering at construction
+        // (_setRendered = set.ToString()), but Compile's normalization
+        // pass mutates _set onto the lexer-normalized form. U+212A
+        // KELVIN SIGN is a canonical singleton that substitutes to
+        // U+004B 'K' under FormC, so a OneOf("KELVIN") rule's _set
+        // changes from one entry at 0x212A to one entry at 0x004B
+        // after Compile. Without refreshing the cache, the trace
+        // showed "wanted one of '[U+212A]'" while the rule was
+        // actually matching 'K'. Re-rendering the set after the
+        // projection keeps the trace faithful to what the rule
+        // matches at parse time.
+        var sink = NewSink();
+        // KelvinGrapheme is U+212A wrapped in Canary so an editor
+        // can't silently swap it for ASCII 'K'. Parse input is real
+        // ASCII 'K', matching the projected entry post-Compile.
+        OneOf(KelvinGrapheme).Parse("K", new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   Lexer.Read: 'K', Consumed: 1",
+            "   SUCC | OneOf: found 'K', wanted one of '[K]'"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
     public void Sealed_OneOf_rejects_Flatten()
     {
         var rule = OneOf("abc");
@@ -239,37 +267,6 @@ public class OneOfRuleTests
         Assert.That(namedResult.Tree!.Id, Is.EqualTo(namedRule.Id));
         Assert.That(namedResult.Tree!.Find(namedRule), Is.Not.Null);
         Assert.That(namedRule.NameOf(namedResult.Tree!.Id), Is.EqualTo("flag"));
-    }
-
-    [Test]
-    [RecursiveEngineOnly]
-    public void Or_OneOf_skips_when_peek_is_outside_set()
-    {
-        // OneOf publishes (set, Always, MustBeIn). Or peeks 'b',
-        // sees 'b' isn't in {a}, skips OneOf via the shortcut, falls to
-        // the literal "b" alternative. The SKIP line proves the
-        // shortcut fired.
-        var sink = NewSink();
-        var rule = Or(OneOf(TokenSet.Runes("a")), Literal("b"));
-        var result = rule.Parse("b", new ParseOptions { TraceSink = sink });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Contain("SKIP | OneOf:"));
-    }
-
-    [Test]
-    [RecursiveEngineOnly]
-    public void Or_OneOf_runs_when_peek_is_in_set()
-    {
-        // Mirror of the previous test: peek 'a' is in {a}, so the
-        // shortcut doesn't skip. OneOf runs and matches. No SKIP line
-        // for OneOf appears in the trace.
-        var sink = NewSink();
-        var rule = Or(OneOf(TokenSet.Runes("a")), Literal("b"));
-        var result = rule.Parse("a", new ParseOptions { TraceSink = sink });
-
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-        Assert.That(sink.ToString(), Does.Not.Contain("SKIP | OneOf:"));
     }
 
     [Test]

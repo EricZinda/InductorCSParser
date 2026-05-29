@@ -47,13 +47,13 @@ public sealed class AliasRule : Rule
 {
     private readonly Rule _inner;
 
-    public AliasRule(Rule inner) : base(FlattenType.Flatten, emitsLeaf: false, inner)
+    public AliasRule(Rule inner)
+        : base(FlattenType.Flatten, emitsLeaf: false, inner ?? throw new ArgumentNullException(nameof(inner)))
     {
-        if (inner == null) throw new ArgumentNullException(nameof(inner));
         _inner = inner;
     }
 
-    internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+    protected internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         int matchStart = startPosition;
 
@@ -136,6 +136,4 @@ public sealed class AliasRule : Rule
             : new Symbol(Id, FlattenType, outputSymbols, matchedSpan, lexer.Context);
     }
 
-    internal override RuleStartRequirements ComputeRuleStart() =>
-        RuleStartRequirements.PassesThroughTo(_inner);
 }
