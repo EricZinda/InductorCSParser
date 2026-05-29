@@ -14,36 +14,40 @@ namespace InductorParser;
 //     var year  = digitSequence.AliasedAs("year");
 //     var month = digitSequence.AliasedAs("month");
 //
-// At parse time, AliasRule runs its inner rule and produces a Symbol
-// carrying the alias's own Id, with the inner's matched content as that
-// Symbol's children. If the inner rule is Preserve (the default for any
-// named rule, since .As(name) auto-flips to Preserve), the inner would
-// normally produce its own Symbol carrying its own Id. AliasRule drops
-// that Symbol and emits its own Symbol in place of it, rather than
-// nesting the two: the inner's identity is hidden when accessed through
-// this alias path.
+// Tenet: when the alias is Preserve (so it actually emits a Symbol),
+// that Symbol behaves like the inner's Symbol would, except for its
+// identity (Id, Name, optional .WithError). That means:
 //
-// If the inner is Flatten or Delete (the inner emits no Symbol of its
-// own), there's nothing to drop and the alias's Symbol just sits over
-// the inner's content directly.
+//   * Same matched span, SourceText, SourceRange.
+//   * Same content shape: a composite inner's children appear directly
+//     under the alias; a leaf inner's matched text appears on the alias
+//     leaf.
+//   * Same ToString rendering.
+//   * Identity only differs: `result.Find(innerRule)` is null at the
+//     aliased position; `result.Find(aliasRule)` finds it. The alias's
+//     own .WithError fires when the alias-wrapped match as a whole
+//     fails; the inner's .WithError still fires on its own deep
+//     failures inside.
 //
-// AliasRule supports the standard .As(string) / .As(SymbolId) / .Flatten
-// / .FlattenByDefault / .WithError modifiers via the base implementation.
-// LateBoundRule forbids those modifiers because it's transparent at parse
-// time: it forwards straight to its target, so its own FlattenType / Id /
-// ErrorMessage are never consulted. AliasRule is the opposite. It emits
-// its own Symbol carrying its own Id and branches on its own FlattenType
-// (see TryParseRule below), so the base implementations apply unchanged
-// and no override is needed.
+// A Flatten alias is transparent: it emits a Flatten Symbol that
+// post-hoc Flatten lifts away, so the inner's content surfaces in the
+// parent with no alias identity. A Delete alias contributes nothing.
+// The tenet above applies only to the Preserve case where the alias
+// actually asserts an identity in the tree.
+//
+// Every case in TryParseRule should preserve "same behavior, different
+// identity" for the Preserve case. That single check is the easiest way
+// to spot a regression or a corner case.
 //
 // Aliasing a LateBoundRule needs no special handling: the LateBoundRule
-// reports its bound target's FlattenType, so `lateBound.AliasedAs("x")`
-// builds the same tree as aliasing the target rule directly.
+// forwards FlattenType and EmitsLeaf to its bound target, so
+// `lateBound.AliasedAs("x")` builds the same tree as aliasing the target
+// rule directly.
 public sealed class AliasRule : Rule
 {
     private readonly Rule _inner;
 
-    public AliasRule(Rule inner) : base(FlattenType.Flatten, inner)
+    public AliasRule(Rule inner) : base(FlattenType.Flatten, emitsLeaf: false, inner)
     {
         if (inner == null) throw new ArgumentNullException(nameof(inner));
         _inner = inner;
@@ -73,41 +77,50 @@ public sealed class AliasRule : Rule
             return null;
         }
 
-        // Rebadge: when the inner is Preserve it returns its own Symbol
-        // carrying its Id. We drop that Symbol so the parse tree shows the
-        // alias's identity in place of the inner's. How we drop it depends
-        // on the inner's shape:
-        //
-        //   * Composite inner: lift its children into our list. The alias's
-        //     own Symbol then wraps those children directly.
-        //   * Leaf inner: a leaf carries its match as text, not as child
-        //     Symbols, so there is nothing to lift. Iterating its (empty)
-        //     Children would drop the matched text from the tree shape:
-        //     ToString on the alias would render "" even though the inner
-        //     matched real text. The alias takes the text onto its own
-        //     Symbol instead, emitted as a leaf in Preserve mode (so
-        //     ToString renders it) or bubbled up as the inner leaf itself
-        //     in Flatten mode.
-        //
-        // ParseChild already wrote the inner's content into our list when
-        // the inner was Flatten (in which case innerSymbol is Discarded),
-        // so we only handle the non-Discarded return here. A LateBoundRule
-        // inner needs no special case: it reports its target's FlattenType,
-        // so it arrives here looking exactly like the target rule would.
-        bool aliasIsLeaf = false;
-        if (!ReferenceEquals(innerSymbol, Symbol.Discarded) && outputSymbols != null)
+        // Leaf inner + Preserved alias → emit one alias leaf with the matched text.
+        // Otherwise → emit an alias composite around whatever the inner contributed.
+        bool aliasEmitsLeaf = false;
+        if (effectiveFlattenType != FlattenType.Delete)
         {
-            if (innerSymbol.IsLeaf)
+            Invariant.That(outputSymbols != null,
+                $"AliasRule entered the content-build block with outputSymbols=null while effectiveFlattenType={effectiveFlattenType}; the framework should have allocated a list for any non-Delete effective type.");
+
+            // First condition asks "should we substitute?" via the rule's
+            // declared semantics. Static check: the answer must be the same
+            // regardless of PreserveAllSymbols forcing every inner to act
+            // Preserve.
+            if (_inner.EmitsLeaf
+                && FlattenType == FlattenType.Preserve
+                && _inner.FlattenType != FlattenType.Delete)
             {
-                if (effectiveFlattenType == FlattenType.Preserve)
-                    aliasIsLeaf = true;
+                // The alias leaf's text comes from the matchedSpan
+                // computed below: the lexer already advanced through the
+                // inner's match, so matchStart..lexer.Position covers the
+                // same characters the inner leaf carried. Drop whatever
+                // the inner contributed (innerSymbol or its leaf in
+                // outputSymbols).
+                aliasEmitsLeaf = true;
+                outputSymbols!.Clear();
+            }
+            // Second condition asks "did the inner return its own Symbol
+            // for us to incorporate?". Runtime question: the inner returns
+            // its own Symbol only when it ran Preserve effective. Under
+            // Flatten or Delete effective it returns Symbol.Discarded
+            // (Flatten already wrote its content into outputSymbols, and
+            // Delete contributed nothing).
+            else if (!ReferenceEquals(innerSymbol, Symbol.Discarded))
+            {
+                if (innerSymbol.IsLeaf)
+                    outputSymbols!.Add(innerSymbol);
                 else
-                    outputSymbols.Add(innerSymbol);
+                    foreach (var child in innerSymbol.Children)
+                        outputSymbols!.Add(child);
             }
             else
             {
-                foreach (var child in innerSymbol.Children)
-                    outputSymbols.Add(child);
+                // Inner returned Discarded: it already wrote its content
+                // into outputSymbols (Flatten inner) or contributed
+                // nothing (Delete inner). Either way, nothing to do.
             }
         }
 
@@ -118,7 +131,7 @@ public sealed class AliasRule : Rule
             return Symbol.Discarded;
 
         var matchedSpan = lexer.Input.AsMemory(matchStart, matchLength);
-        return aliasIsLeaf
+        return aliasEmitsLeaf
             ? new Symbol(Id, FlattenType, matchedSpan, lexer.Context)
             : new Symbol(Id, FlattenType, outputSymbols, matchedSpan, lexer.Context);
     }

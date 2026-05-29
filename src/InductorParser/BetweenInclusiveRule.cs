@@ -26,7 +26,7 @@ internal sealed class BetweenInclusiveRule : Rule
     private Rule Inner => Children[0];
 
     public BetweenInclusiveRule(Rule inner, int atLeast, int atMost, string? traceName = null)
-        : base(FlattenType.Flatten, inner)
+        : base(FlattenType.Flatten, emitsLeaf: false, inner)
     {
         if (inner == null)
             throw new ArgumentNullException(nameof(inner));

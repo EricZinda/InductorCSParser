@@ -14,7 +14,7 @@ namespace InductorParser;
 // consumes content until wherever stopRule would fire.
 internal sealed class AnyTokenRule : Rule
 {
-    public AnyTokenRule() : base(FlattenType.Preserve) { }
+    public AnyTokenRule() : base(FlattenType.Preserve, emitsLeaf: true) { }
 
     // No accessors for an alternative evaluator: AnyTokenRule carries no
     // per-instance data, so there is nothing for one to read.

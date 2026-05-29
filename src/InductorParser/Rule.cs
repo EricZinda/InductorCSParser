@@ -248,12 +248,42 @@ public abstract class Rule
     // any depth (and loses only to a deeper forced failure).
     protected internal bool ErrorForced => _errorForced;
 
-    protected Rule(FlattenType defaultFlatten, params Rule[] children)
+    // Every Rule subclass must declare emitsLeaf explicitly so a new
+    // rule can't silently land on the wrong shape for callers like
+    // AliasRule that decide tree shape based on it. There is no
+    // default-emitsLeaf overload on purpose.
+    protected Rule(FlattenType defaultFlatten, bool emitsLeaf, params Rule[] children)
     {
         FlattenType = defaultFlatten;
+        _emitsLeaf = emitsLeaf;
         Children = children.Length > 0 ? children : NoChildren;
         _ruleTraceName = DeriveRuleTraceName(GetType());
     }
+
+    private readonly bool _emitsLeaf;
+
+    // True when this rule's TryParseRule emits a single leaf Symbol
+    // carrying the matched text. False when it emits a composite Symbol
+    // with children, or no Symbol (zero-width predicates).
+    //
+    // Note this is about the OUTPUT Symbol shape, not the grammar-graph
+    // child count: it's independent of how many child rules the Rule
+    // holds in its Children list. A rule can have child rules in the
+    // graph (for compile-time traversal) and still emit a single leaf
+    // Symbol at parse time. WithinToken is the clearest example: it has
+    // an inner rule in Children that runs on a sub-lexer per outer
+    // token, but its match produces one leaf Symbol covering that token.
+    // BetweenInclusive also has a child rule in its Children, but its
+    // match accumulates N copies of the inner's output into a composite
+    // Symbol (different output shape, even though both rules look
+    // similar in the graph).
+    //
+    // Asked at the rule level because the obvious runtime alternative
+    // (checking the returned Symbol's IsLeaf) breaks when the inner ran
+    // Flatten: a Flatten inner writes its content into the caller's
+    // outputSymbols list and returns Symbol.Discarded, so there's no
+    // Symbol to ask. The rule-level property answers either way.
+    public virtual bool EmitsLeaf => _emitsLeaf;
 
     // Cached rule class name for trace output, derived from GetType().Name
     // in the constructor. The "Rule" suffix is stripped so "AndRule"
@@ -526,7 +556,7 @@ public abstract class Rule
     // accessed through this alias path. From other parts of the grammar
     // that use this rule directly, Tree.Find on its name still works.
     //
-    // Errors: the rebadge is success-only, so it doesn't change error
+    // Errors: the identity substitution is success-only, so it doesn't change error
     // attribution. A .WithError on this rule still fires from inside
     // it. A .WithError on the alias fires when this rule fails to match
     // anywhere within it. If both are set, the standard deepest-failure

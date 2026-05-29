@@ -34,7 +34,7 @@ internal sealed class GraphemeRule : Rule
 {
     private string _expected;
 
-    public GraphemeRule(string expectedToken) : base(FlattenType.Delete)
+    public GraphemeRule(string expectedToken) : base(FlattenType.Delete, emitsLeaf: true)
     {
         // Trace name follows the user-facing factory name, not the
         // internal class name. Rules.Token(...) is the only way to

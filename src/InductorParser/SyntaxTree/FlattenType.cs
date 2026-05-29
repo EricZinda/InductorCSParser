@@ -33,13 +33,22 @@ public enum FlattenType
     Delete,
 
     /// <summary>
-    /// Lift the rule's matched children up into the enclosing rule's children list, as if this
-    /// rule weren't there. The rule's own Symbol is removed.
+    /// Pass the rule's matched content up to the enclosing rule, dropping the rule's own
+    /// Symbol. What "content" means depends on the rule's shape: a composite's content is
+    /// its children (which get lifted into the parent's children list as if this rule weren't
+    /// there). A leaf's content is the leaf itself (which is kept, since it has no separate
+    /// children to lift past it).
     /// </summary>
     /// <remarks>
     /// Use this for structural rules that exist only to combine other rules (a repetition, an
     /// alternation, a grouping) where the rule's Symbol would add a level of nesting the
     /// consumer doesn't want.
+    /// <para>
+    /// On a leaf, <see cref="Flatten"/> and <see cref="Preserve"/> behave identically: the leaf
+    /// surfaces in the parent's children list with its own Id and matched text either way. A
+    /// leaf has no children for Flatten to lift past, so the FlattenType tag has no effect on a
+    /// leaf Symbol in the tree.
+    /// </para>
     /// </remarks>
     Flatten
 }

@@ -35,7 +35,7 @@ internal sealed class LiteralRule : Rule
 {
     private string _expected;
 
-    public LiteralRule(string expected) : base(FlattenType.Delete)
+    public LiteralRule(string expected) : base(FlattenType.Delete, emitsLeaf: true)
     {
         if (expected == null)
             throw new ArgumentNullException(nameof(expected));

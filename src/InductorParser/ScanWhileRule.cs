@@ -34,7 +34,7 @@ internal sealed class ScanWhileRule : Rule
     private readonly string _setRendered;
 
     public ScanWhileRule(TokenSet set, int minimumCount)
-        : base(FlattenType.Preserve)
+        : base(FlattenType.Preserve, emitsLeaf: true)
     {
         if (minimumCount < 0)
             throw new ArgumentOutOfRangeException(nameof(minimumCount), minimumCount,

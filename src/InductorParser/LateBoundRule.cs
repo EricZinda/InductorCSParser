@@ -50,7 +50,7 @@ public sealed class LateBoundRule : Rule
     // base(FlattenType.Flatten) only seeds the base class's backing
     // field. The FlattenType property below overrides the getter to
     // report the target's value, so this seed is never read.
-    public LateBoundRule(string? debugName = null) : base(FlattenType.Flatten)
+    public LateBoundRule(string? debugName = null) : base(FlattenType.Flatten, emitsLeaf: false)
     {
         _debugName = debugName;
         // LateBoundRule delegates wholly to its target, which opens and
@@ -101,6 +101,20 @@ public sealed class LateBoundRule : Rule
             "LateBoundRule.FlattenType was read before Compile resolved it from " +
             "the bound target. A LateBoundRule has no FlattenType of its own. " +
             "Compile the grammar first (Parse compiles automatically).");
+
+    // LateBoundRule forwards EmitsLeaf to its bound target the same way
+    // it forwards FlattenType: a LateBoundRule wrapping a leaf-emitting
+    // rule reads as one, so AliasRule's leaf-substitution gate behaves
+    // identically whether you alias the leaf rule directly or through a
+    // LateBoundRule around it. Reading EmitsLeaf before Bind throws (same
+    // policy as FlattenType) rather than silently returning a default
+    // that could turn out wrong once the target is attached.
+    public override bool EmitsLeaf =>
+        _target?.EmitsLeaf
+        ?? throw new InvalidOperationException(
+            "LateBoundRule.EmitsLeaf was read before Bind attached a target. " +
+            "A LateBoundRule has no EmitsLeaf value of its own; bind the rule " +
+            "first (Compile / Parse will report this as a 'never bound' error).");
 
     // Naming a LateBoundRule is a bug: the name would derive a Name
     // and (via hashing) an Id, but neither is ever visible at parse time.

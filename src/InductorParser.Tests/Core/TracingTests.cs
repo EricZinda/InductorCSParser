@@ -279,7 +279,7 @@ public class TracingTests
     // way to reach it from test code.
     private sealed class TraceProbeRule : Rule
     {
-        public TraceProbeRule() : base(SyntaxTree.FlattenType.Preserve) { }
+        public TraceProbeRule() : base(SyntaxTree.FlattenType.Preserve, emitsLeaf: false) { }
 
         public void CallTraceSuccess(Lexer lexer, ref int sideEffectCount)
         {

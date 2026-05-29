@@ -47,7 +47,7 @@ internal sealed class WithinTokenRule : Rule
     private readonly Rule _innerRule;
 
     public WithinTokenRule(Rule innerRule)
-        : base(FlattenType.Preserve, innerRule ?? throw new ArgumentNullException(nameof(innerRule)))
+        : base(FlattenType.Preserve, emitsLeaf: true, innerRule ?? throw new ArgumentNullException(nameof(innerRule)))
     {
         _innerRule = innerRule;
     }

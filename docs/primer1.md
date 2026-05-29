@@ -68,7 +68,7 @@ How can I match anything up until
 The output works like this: Every rule is able to create a `Symbol` object to represent it and what it found in the tree. Whether it does this or not is controlled by a property on the rule called `FlattenType` which says whether to:
 
 - `FlattenType.Delete` it and what it found along with its children (i.e. remove it completely)
-- `FlattenType.Flatten` (i.e. remove) that rule, but keeping its children and what they found
+- `FlattenType.Flatten` (i.e. remove) that rule, but keeping its children and what they found (a leaf rule has no separate children, so it bubbles up as itself)
 - `FlattenType.Preserve` that rule and all of its children and everything they found so it's available in the final tree
 
 Many rules have their default set to `Flatten` or `Delete` since you usually don't want them. In our case, the only rule that was set to `Preserve` by default is `AnyToken` since that usually represents text the developer wants to capture.

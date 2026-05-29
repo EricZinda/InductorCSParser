@@ -125,7 +125,7 @@ internal sealed class ScanUntilRule : Rule
 
     // FAST PATH, no escape. Per rune: one TokenSet.Contains.
     public ScanUntilRule(TokenSet stopAt, bool eofIsTerminator = false)
-        : base(FlattenType.Preserve)
+        : base(FlattenType.Preserve, emitsLeaf: true)
     {
         _stopperSet = stopAt;
         _stopperRule = null;
@@ -152,7 +152,7 @@ internal sealed class ScanUntilRule : Rule
     // TokenSet.Contains plus one int equality on non-stopper runes.
     // Covers JSON, C, C++ regular, Python single-line.
     public ScanUntilRule(TokenSet stopAt, Rune escapeStart, Rule escapeEnd, bool eofIsTerminator = false)
-        : base(FlattenType.Preserve, escapeEnd)
+        : base(FlattenType.Preserve, emitsLeaf: true, escapeEnd)
     {
         if (escapeEnd == null)
             throw new ArgumentNullException(nameof(escapeEnd));
@@ -170,7 +170,7 @@ internal sealed class ScanUntilRule : Rule
     // runes only. Use for multi-rune starts like $$ or a choice
     // across several starts.
     public ScanUntilRule(TokenSet stopAt, Rule escapeStart, Rule escapeEnd, bool eofIsTerminator = false)
-        : base(FlattenType.Preserve, escapeStart, escapeEnd)
+        : base(FlattenType.Preserve, emitsLeaf: true, escapeStart, escapeEnd)
     {
         if (escapeStart == null)
             throw new ArgumentNullException(nameof(escapeStart));
@@ -190,7 +190,7 @@ internal sealed class ScanUntilRule : Rule
     // the stopper (peek transaction, never consumed). Use for
     // multi-rune boundaries like C++ raw strings.
     public ScanUntilRule(Rule stopAt, bool eofIsTerminator = false)
-        : base(FlattenType.Preserve, stopAt)
+        : base(FlattenType.Preserve, emitsLeaf: true, stopAt)
     {
         if (stopAt == null)
             throw new ArgumentNullException(nameof(stopAt));
@@ -207,7 +207,7 @@ internal sealed class ScanUntilRule : Rule
     // General stopper with single-rune escape start. Canonical use:
     // Python triple-quote """...""" with backslash escapes.
     public ScanUntilRule(Rule stopAt, Rune escapeStart, Rule escapeEnd, bool eofIsTerminator = false)
-        : base(FlattenType.Preserve, stopAt, escapeEnd)
+        : base(FlattenType.Preserve, emitsLeaf: true, stopAt, escapeEnd)
     {
         if (stopAt == null)
             throw new ArgumentNullException(nameof(stopAt));

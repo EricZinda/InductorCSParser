@@ -11,10 +11,10 @@ namespace InductorParser.Tests;
 // AliasRule is a single-child composite: it wraps one inner rule, gives
 // it a fresh name/Id, and at parse time produces a Symbol carrying the
 // alias's identity over the inner's matched content. When the inner is
-// Preserve, the alias rebadges — its Symbol replaces the inner's rather
-// than nesting it. Error behavior follows docs/ErrorArchitecture.md: the
+// Preserve, the alias substitutes its Symbol for the inner's rather than
+// nesting it. Error behavior follows docs/ErrorArchitecture.md: the
 // alias records at its own start (the Or / Peek / Not category), the
-// rebadge is success-only and never touches failures.
+// identity substitution is success-only and never touches failures.
 [TestFixture]
 public class AliasRuleTests
 {
@@ -73,10 +73,10 @@ public class AliasRuleTests
         Assert.That(aliasNode.ToString(), Is.EqualTo("1234"));
     }
 
-    // --- Rebadge behavior (edge cases specific to this composite) --------
+    // --- Identity substitution (edge cases specific to this composite) ---
 
     [Test]
-    public void Rebadge_unnamed_inner_puts_inner_content_directly_under_alias()
+    public void Unnamed_inner_puts_inner_content_directly_under_alias()
     {
         // Inner is unnamed (default Flatten). The alias names it. The tree
         // shows the alias as one named layer with the inner's children
@@ -92,7 +92,7 @@ public class AliasRuleTests
     }
 
     [Test]
-    public void Rebadge_named_inner_hides_inner_name_under_alias()
+    public void Named_inner_hides_inner_name_under_alias()
     {
         // The inner has its OWN name. Under the alias path the inner's name
         // is invisible to Find: the alias's Symbol replaces the inner's.
@@ -106,8 +106,8 @@ public class AliasRuleTests
         Assert.That(aliasNode, Is.Not.Null,
             "alias should be findable in the tree under its own name");
         Assert.That(aliasNode!.Find(inner), Is.Null,
-            "Under rebadge, the inner rule's name is hidden when the inner " +
-            "is reached through the alias.");
+            "The inner rule's name is hidden when the inner is reached " +
+            "through the alias.");
     }
 
     [Test]
@@ -115,7 +115,7 @@ public class AliasRuleTests
     {
         // One grammar, two paths to the same inner: one through an alias,
         // one direct. The direct use keeps the inner's name findable; the
-        // alias path rebadges it away.
+        // alias path substitutes it away.
         var digits = OneOrMore(OneOf(TokenSet.Digits)).As("digits");
         var year   = digits.AliasedAs("year");
         var grammar = And(year, Token('-').Preserve(), digits);
@@ -434,8 +434,9 @@ public class AliasRuleTests
     {
         // A mixed chain: outerLate -> alias -> innerLate -> real rule.
         // The AliasRule sits between two LateBoundRule layers. The outer
-        // LateBoundRule forwards into the alias, the alias rebadges, and
-        // the inner LateBoundRule forwards into the real digits rule.
+        // LateBoundRule forwards into the alias, the alias substitutes its
+        // identity, and the inner LateBoundRule forwards into the real
+        // digits rule.
         var innerLate = new LateBoundRule("innerLate");
         var alias = innerLate.AliasedAs("aliasLayer");
         var outerLate = new LateBoundRule("outerLate");
@@ -456,15 +457,13 @@ public class AliasRuleTests
     }
 
     [Test]
-    public void Alias_of_a_LateBound_rebadges_the_target_like_aliasing_it_directly()
+    public void Alias_of_a_LateBound_substitutes_for_the_target_like_aliasing_it_directly()
     {
         // A LateBoundRule reports its target's FlattenType, so it's fully
         // transparent: Alias(lateBound) behaves exactly like Alias(target).
-        // When the target is Preserve, the alias rebadges it, so the
-        // target's Symbol is replaced by the alias's, not kept as a layer.
-        // (This used to be a documented corner case where the target
-        // survived as an extra layer, back when a LateBoundRule was always
-        // FlattenType.Flatten instead of reporting its target's.)
+        // When the target is Preserve, the alias substitutes its identity
+        // for it, so the target's Symbol is replaced by the alias's, not
+        // kept as a layer.
         var target = And(Token('1'), Token('2')).As("target").Flatten(FlattenType.Preserve);
         var lateBound = new LateBoundRule("placeholder");
         lateBound.Bind(target);
@@ -476,17 +475,17 @@ public class AliasRuleTests
         Assert.That(result.Tree!.Is(alias), Is.True,
             "The alias's Symbol is the top node.");
         Assert.That(result.Tree!.Find(target), Is.Null,
-            "The target is rebadged away, exactly as when aliasing it directly.");
+            "The target is replaced away, exactly as when aliasing it directly.");
     }
 
     [Test]
-    public void Alias_of_a_LateBound_rebadges_consistently_in_normal_and_PreserveAllSymbols_mode()
+    public void Alias_of_a_LateBound_substitutes_consistently_in_normal_and_PreserveAllSymbols_mode()
     {
         // PreserveAllSymbols is a debug mode that turns every rule Preserve;
         // it must agree with normal parsing about structure (only adding
         // Delete leaves, never moving or dropping nodes). A LateBoundRule
-        // reporting its target's FlattenType makes the alias rebadge the
-        // target away identically in both modes. Before the fix the modes
+        // reporting its target's FlattenType makes the alias substitute for
+        // the target identically in both modes. Before the fix the modes
         // disagreed: normal mode kept the target as a layer, PreserveAll
         // dropped it.
         var target = And(Token('1'), Token('2')).As("target").Flatten(FlattenType.Preserve);
@@ -500,9 +499,101 @@ public class AliasRuleTests
         Assert.That(normal.Success, Is.True, normal.ErrorMessage);
         Assert.That(debug.Success, Is.True, debug.ErrorMessage);
         Assert.That(normal.Tree!.Find(target), Is.Null,
-            "normal mode rebadges the target away");
+            "normal mode replaces the target's identity with the alias's");
         Assert.That(debug.Tree!.Find(target), Is.Null,
-            "PreserveAllSymbols rebadges it the same way, so the two modes agree");
+            "PreserveAllSymbols replaces it the same way, so the two modes agree");
+    }
+
+    // Serialize a Symbol subtree to "id(child...)" / "id'text'" so the
+    // regular parse tree and the PreserveAllSymbols-then-Flatten tree can
+    // be compared id-for-id. The two have to match exactly. PreserveAllSymbols
+    // is a debug view of what production parsing produces, so capturing
+    // every Symbol and then collapsing via post-hoc Flatten() should give
+    // back the same tree the regular parse built directly.
+    private static string Serialize(Symbol symbol)
+    {
+        var builder = new System.Text.StringBuilder();
+        Append(symbol, builder);
+        return builder.ToString();
+
+        static void Append(Symbol s, System.Text.StringBuilder b)
+        {
+            b.Append(s.Id.Value);
+            if (s.Children.Count == 0)
+            {
+                b.Append('\'').Append(s.ToString()).Append('\'');
+                return;
+            }
+            b.Append('(');
+            foreach (var child in s.Children) Append(child, b);
+            b.Append(')');
+        }
+    }
+
+    private static string SerializeForest(System.Collections.Generic.IEnumerable<Symbol> symbols)
+    {
+        var builder = new System.Text.StringBuilder();
+        foreach (var s in symbols) builder.Append(Serialize(s));
+        return builder.ToString();
+    }
+
+    [Test]
+    public void Alias_over_a_leaf_inner_flattens_back_to_the_default_tree()
+    {
+        // Parsing with PreserveAllSymbols and then calling Symbol.Flatten()
+        // on the resulting tree must reproduce the regular (no-flag) parse
+        // tree exactly, ids included. PreserveAllSymbols is a debug-mode
+        // view that captures every Symbol. Post-hoc Flatten() then applies
+        // the FlattenType policies that would have been applied at parse
+        // time, recovering the production shape. The two paths have to
+        // agree, or the debug view diverges from production and isn't a
+        // faithful representation.
+        //
+        // The specific case: an unnamed alias is FlattenType.Flatten
+        // (transparent) in the regular parse, so the inner OneOf leaf
+        // surfaces in the parent with its rune id. PreserveAllSymbols
+        // captures the alias as Preserve; a careless implementation
+        // substituted the alias's custom id onto the leaf during capture,
+        // and because a FlattenType.Flatten leaf survives post-hoc
+        // Flatten() unchanged, the captured tree no longer flattened back
+        // to the rune-id leaf that the regular parse produced.
+        var grammar = OneOrMore(Alias(OneOf(TokenSet.Runes("ab")))).Preserve();
+        grammar.Compile();
+
+        var def = grammar.Parse("ab");
+        var debug = grammar.Parse("ab", new ParseOptions { PreserveAllSymbols = true });
+        Assert.That(def.Success, Is.True, def.ErrorMessage);
+        Assert.That(debug.Success, Is.True, debug.ErrorMessage);
+
+        string defTree = SerializeForest(def.Symbols);
+        string flattenedDebug = SerializeForest(debug.Symbols.SelectMany(s => s.Flatten()));
+        Assert.That(flattenedDebug, Is.EqualTo(defTree),
+            "PreserveAllSymbols+Flatten must reproduce the default parse tree for an aliased leaf");
+        // And the leaves carry their rune ids, not the alias's custom id.
+        Assert.That(def.Symbols.Single().Children.Select(c => c.Id),
+            Is.EqualTo(new[] { new SymbolId('a'), new SymbolId('b') }));
+    }
+
+    [Test]
+    public void Alias_over_a_Flatten_inner_flattens_back_to_the_default_tree()
+    {
+        // The mirror case: a Preserve (named) alias over a Flatten leaf
+        // inner. The alias collapses to one alias leaf carrying the matched
+        // text uniformly under default mode and PreserveAllSymbols, so the
+        // captured tree flattens back to the same alias leaf either way.
+        var word = Alias(Literal("ab").Flatten(FlattenType.Flatten)).As("word");
+        var grammar = And(word, Eof()).Preserve();
+        grammar.Compile();
+
+        var def = grammar.Parse("ab");
+        var debug = grammar.Parse("ab", new ParseOptions { PreserveAllSymbols = true });
+        Assert.That(def.Success, Is.True, def.ErrorMessage);
+        Assert.That(debug.Success, Is.True, debug.ErrorMessage);
+
+        string defTree = SerializeForest(def.Symbols);
+        string flattenedDebug = SerializeForest(debug.Symbols.SelectMany(s => s.Flatten()));
+        Assert.That(flattenedDebug, Is.EqualTo(defTree),
+            "PreserveAllSymbols+Flatten must reproduce the default parse tree for an alias over a Flatten inner");
     }
 
     [Test]
@@ -563,13 +654,14 @@ public class AliasRuleTests
     }
 
     [Test]
-    public void Alias_of_a_Preserve_target_directly_rebadges_without_the_extra_layer()
+    public void Alias_of_a_Preserve_target_directly_replaces_it_without_the_extra_layer()
     {
         // Contrast with the test above. Aliasing the Preserve target
-        // DIRECTLY, with no LateBoundRule in between, rebadges it: the
-        // alias's Symbol replaces the target's, so the target is no longer
-        // a findable layer. This is the "aliasing the target rule directly
-        // avoids the extra layer" advice from the AliasRule.cs comment.
+        // DIRECTLY, with no LateBoundRule in between, substitutes for it:
+        // the alias's Symbol replaces the target's, so the target is no
+        // longer a findable layer. This is the "aliasing the target rule
+        // directly avoids the extra layer" advice from the AliasRule.cs
+        // comment.
         var target = And(Token('1'), Token('2')).As("target").Flatten(FlattenType.Preserve);
         var alias = target.AliasedAs("aliasName");
 
@@ -578,8 +670,8 @@ public class AliasRuleTests
 
         Assert.That(result.Tree!.Find(alias), Is.Not.Null);
         Assert.That(result.Tree!.Find(target), Is.Null,
-            "Aliasing the Preserve target directly rebadges it, so the target " +
-            "is replaced by the alias, not kept as a layer.");
+            "Aliasing the Preserve target directly replaces its identity, " +
+            "so the target is not kept as a layer.");
     }
 
     [Test]
@@ -678,11 +770,12 @@ public class AliasRuleTests
     public void Alias_of_a_Preserve_leaf_inner_renders_the_matched_text_in_ToString()
     {
         // Aliasing a Preserve leaf rule. A leaf (Literal here) carries its
-        // match as text rather than as child Symbols, so the alias rebadges
-        // the leaf directly: its node takes over the matched text under the
-        // alias's own identity. SourceText and ToString both render that
-        // text, and the inner leaf's identity is hidden under the alias
-        // path, the same as when the inner is a composite.
+        // match as text rather than as child Symbols, so the alias
+        // substitutes directly for the leaf: its node takes over the
+        // matched text under the alias's own identity. SourceText and
+        // ToString both render that text, and the inner leaf's identity is
+        // hidden under the alias path, the same as when the inner is a
+        // composite.
         var inner = Literal("abc").Preserve();
         var alias = inner.AliasedAs("word");
 
@@ -694,7 +787,7 @@ public class AliasRuleTests
             "ToString() on the alias node should render the matched text, " +
             "the same as the inner leaf rendered directly.");
         Assert.That(result.Tree!.Find(inner), Is.Null,
-            "Rebadge still hides the inner leaf's identity under the alias.");
+            "The inner leaf's identity stays hidden under the alias.");
     }
 
     [Test]
@@ -713,5 +806,115 @@ public class AliasRuleTests
         var range = aliasSymbol.SourceRange!.Value;
         Assert.That(range.Start.CharIndex, Is.EqualTo(2));
         Assert.That(range.End.CharIndex, Is.EqualTo(5));
+    }
+
+    [Test]
+    public void Alias_preserves_inner_behavior_except_for_identity()
+    {
+        // Direct tenet check: parse the same input through `inner` alone
+        // and through `inner.AliasedAs("alias")`, then assert the two
+        // results match in matched text and SourceText but differ in
+        // identity (the inner's id is hidden under the alias; the
+        // alias's id is findable). Covers the four shape × FlattenType
+        // combinations that put a Symbol in the tree. The Delete-inner
+        // case is intentionally excluded: a Delete inner contributes
+        // nothing to the bare tree but the alias still wraps the match
+        // in a placeholder composite, so the "same behavior" framing
+        // doesn't apply.
+        // Every rule's FlattenType is set explicitly (not left to a
+        // default) so the cases stay deterministic if a default changes.
+        var cases = new (string Name, System.Func<Rule> InnerFactory, string Input)[]
+        {
+            ("leaf-Preserve",      () => OneOf(TokenSet.Runes("a")).Preserve(),                                      "a"),
+            ("leaf-Flatten",       () => OneOf(TokenSet.Runes("a")).Flatten(FlattenType.Flatten),                    "a"),
+            ("composite-Preserve", () => And(Token('1').Preserve(), Token('2').Preserve()).Preserve(),               "12"),
+            ("composite-Flatten",  () => OneOrMore(OneOf(TokenSet.Runes("a")).Preserve()).Flatten(FlattenType.Flatten), "aaa"),
+        };
+
+        foreach (var (name, innerFactory, input) in cases)
+        {
+            var bareInner = innerFactory();
+            var aliasedInner = innerFactory();
+            var alias = aliasedInner.AliasedAs("alias");
+
+            var bareResult = bareInner.Parse(input);
+            var aliasResult = alias.Parse(input);
+
+            Assert.That(bareResult.Success, Is.True, $"[{name}] bare: {bareResult.ErrorMessage}");
+            Assert.That(aliasResult.Success, Is.True, $"[{name}] alias: {aliasResult.ErrorMessage}");
+
+            // The total rendered text matches.
+            string bareToString = string.Concat(bareResult.Symbols.Select(s => s.ToString()));
+            string aliasToString = string.Concat(aliasResult.Symbols.Select(s => s.ToString()));
+            Assert.That(aliasToString, Is.EqualTo(bareToString),
+                $"[{name}] ToString of alias result matches inner-alone result.");
+
+            // The total SourceText matches.
+            string bareSource = string.Concat(bareResult.Symbols.Select(s => s.SourceText));
+            string aliasSource = string.Concat(aliasResult.Symbols.Select(s => s.SourceText));
+            Assert.That(aliasSource, Is.EqualTo(bareSource),
+                $"[{name}] SourceText of alias result matches inner-alone result.");
+
+            // Identity differs: the alias is findable under its own
+            // identity, but the inner's identity isn't reachable under the
+            // alias.
+            Assert.That(aliasResult.Find(alias), Is.Not.Null,
+                $"[{name}] alias is findable in the result.");
+            Assert.That(aliasResult.Find(aliasedInner), Is.Null,
+                $"[{name}] inner identity is hidden under the alias.");
+        }
+    }
+
+    [Test]
+    public void Alias_over_a_Delete_inner_emits_a_placeholder_composite_over_the_match()
+    {
+        // The Delete-inner case is the one combination where the tenet
+        // "alias behaves like inner" doesn't apply. A Delete inner
+        // contributes no Symbol to the bare tree, but a Preserve alias
+        // still emits a composite over the matched span (no children,
+        // SourceText carries the matched text, ToString renders empty).
+        // Lock in that shape so it can't drift silently.
+        // Separate Token instances: a Rule can only belong to one
+        // grammar, and compiling the bare inner seals it. FlattenType is
+        // set explicitly so the case stays deterministic if a default
+        // changes.
+        var bareInner = Token('a').Flatten(FlattenType.Delete);
+        var aliasInner = Token('a').Flatten(FlattenType.Delete);
+        var alias = aliasInner.AliasedAs("alias");    // alias auto-flips to Preserve
+
+        var bareResult = bareInner.Parse("a");
+        var aliasResult = alias.Parse("a");
+
+        Assert.That(bareResult.Success, Is.True, bareResult.ErrorMessage);
+        Assert.That(aliasResult.Success, Is.True, aliasResult.ErrorMessage);
+
+        // Bare inner contributes nothing: empty Symbols, no Tree, no
+        // SourceText anywhere.
+        Assert.That(bareResult.Symbols.Count, Is.EqualTo(0),
+            "Bare Delete inner contributes nothing to the tree.");
+        Assert.That(bareResult.Tree, Is.Null);
+        string bareSourceText = string.Concat(bareResult.Symbols.Select(s => s.SourceText));
+        Assert.That(bareSourceText, Is.EqualTo(""),
+            "Bare has no Symbols, so no SourceText to render.");
+
+        // Aliased inner: alias emits a Preserve composite that wraps the
+        // (empty) inner content but still covers the matched span. So
+        // SourceText returns the inner's match even though ToString and
+        // the children list are empty. This is the deliberate divergence
+        // from the tenet (the bare and alias trees differ here, where
+        // the four non-Delete cases agree).
+        var aliasNode = aliasResult.Tree!;
+        Assert.That(aliasNode.Children.Count, Is.EqualTo(0),
+            "Delete inner contributes no children, so the alias composite is empty.");
+        Assert.That(aliasNode.ToString(), Is.EqualTo(""),
+            "ToString walks children; no children means empty rendering.");
+        Assert.That(aliasNode.SourceText, Is.EqualTo("a"),
+            "SourceText reads the alias's recorded span, which covers the inner's match.");
+        Assert.That(aliasNode.SourceText, Is.Not.EqualTo(bareSourceText),
+            "Bare and alias SourceText diverge for a Delete inner: the tenet doesn't apply.");
+        Assert.That(aliasResult.Find(alias), Is.Not.Null,
+            "Alias is findable by its own identity.");
+        Assert.That(aliasResult.Find(aliasInner), Is.Null,
+            "Delete inner has no Symbol in the tree to find.");
     }
 }

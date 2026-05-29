@@ -12,7 +12,7 @@ namespace InductorParser;
 // was before Or called it.
 internal sealed class OrRule : Rule
 {
-    public OrRule(Rule[] children) : base(FlattenType.Flatten, children) { }
+    public OrRule(Rule[] children) : base(FlattenType.Flatten, emitsLeaf: false, children) { }
 
     internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {

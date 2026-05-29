@@ -10,7 +10,7 @@ namespace InductorParser;
 // parse consumed the entire input rather than stopping early.
 internal sealed class EofRule : Rule
 {
-    public EofRule() : base(FlattenType.Delete)
+    public EofRule() : base(FlattenType.Delete, emitsLeaf: false)
     {
         // EofRule only checks for end-of-input. It never moves the
         // cursor, so it needs no rollback transaction from Rule.TryParse.

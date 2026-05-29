@@ -19,7 +19,7 @@ internal sealed class NoneOfRule : Rule
     private TokenSet _set;
     private readonly string _setRendered;
 
-    public NoneOfRule(TokenSet runeSet) : base(FlattenType.Preserve)
+    public NoneOfRule(TokenSet runeSet) : base(FlattenType.Preserve, emitsLeaf: true)
     {
         _set = runeSet;
         _setRendered = runeSet.ToString();

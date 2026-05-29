@@ -495,7 +495,7 @@ public static class Rules
     /// </code>
     /// The fluent equivalent is <see cref="Rule.AliasedAs(string)"/>.
     /// <para>
-    /// Errors: the rebadge is success-only, so it doesn't affect error
+    /// Errors: the identity substitution is success-only, so it doesn't affect error
     /// attribution. A <c>.WithError</c> on <paramref name="inner"/>
     /// still fires from inside the inner exactly as it would without
     /// an alias around it. A <c>.WithError</c> on the alias itself

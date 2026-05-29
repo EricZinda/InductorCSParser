@@ -148,7 +148,7 @@ int port = int.Parse(typed.ToString(), CultureInfo.InvariantCulture);
 
 The grammar already verified the value's shape. If the input was `port = abc`, the typed child would be a `bareWord` (not an `integerValue`). If the input was `port = "8080"`, the typed child would be a `quotedString` and we can either coerce or reject it. 
 
-`symbol.ToString()` returns the matched text. For a leaf, that's the consumed string. For a composite like `And`, it's the concatenation of every leaf underneath after FlattenType has been applied: Delete'd leaves are gone, Flatten'd ones lift their children into the parent. That's almost always what you want for reading a value out of the tree, and it's what this section uses to grab the port number.
+`symbol.ToString()` returns the matched text. For a leaf, that's the consumed string. For a composite like `And`, it's the concatenation of every leaf underneath after FlattenType has been applied: Delete'd nodes are gone, Flatten'd composites have their children lifted into the parent, and Flatten'd leaves bubble up as themselves (a leaf has no children to lift, so the leaf itself is what surfaces). That's almost always what you want for reading a value out of the tree, and it's what this section uses to grab the port number.
 
 There's a second accessor, `symbol.SourceText`, that returns the verbatim section of input the Symbol covered. It ignores FlattenType, so it includes the characters that Delete'd rules matched. Use that when you need it for errors to show the raw text, or you don't want to flip a bunch of rules to use a different flatten mode.
 

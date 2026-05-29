@@ -25,7 +25,7 @@ internal sealed class OneOfRule : Rule
     // iterating on a grammar, not just for one-off debug runs.
     private readonly string _setRendered;
 
-    public OneOfRule(TokenSet runeSet) : base(FlattenType.Preserve)
+    public OneOfRule(TokenSet runeSet) : base(FlattenType.Preserve, emitsLeaf: true)
     {
         _set = runeSet;
         _setRendered = runeSet.ToString();

@@ -17,7 +17,7 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
 {
     private string _expected;
 
-    public LiteralIgnoreAsciiCaseRule(string expected) : base(FlattenType.Delete)
+    public LiteralIgnoreAsciiCaseRule(string expected) : base(FlattenType.Delete, emitsLeaf: true)
     {
         if (expected == null)
             throw new ArgumentNullException(nameof(expected));

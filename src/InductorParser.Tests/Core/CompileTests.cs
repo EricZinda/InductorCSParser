@@ -189,7 +189,7 @@ public class CompileTests
     // overridable from the test assembly.
     private sealed class InconsistentRuleStartRule : Rule
     {
-        public InconsistentRuleStartRule() : base(FlattenType.Preserve) { }
+        public InconsistentRuleStartRule() : base(FlattenType.Preserve, emitsLeaf: false) { }
 
         internal override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, System.Collections.Generic.List<Symbol>? outputSymbols) => null;
 
