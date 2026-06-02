@@ -1338,17 +1338,29 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         // ASCII intra-line whitespace: SPACE and TAB only. Mirrors the
         // full-Unicode TokenSet.InlineWhitespace.
         public static readonly TokenSet InlineWhitespace = Runes(" \t");
-        // ASCII whitespace including line terminators: SPACE, TAB, CR,
-        // LF, plus the CRLF two-rune cluster as a multi-rune entry.
-        // Use this for grammars that treat newlines as ordinary
-        // whitespace (the regex \s convention). For grammars that need
-        // to distinguish intra-line whitespace from line terminators,
-        // use InlineWhitespace and Rules.EndOfLine() instead.
+        // ASCII whitespace including every ASCII line terminator: SPACE,
+        // TAB, LF, VT, FF, CR, plus the CRLF two-rune cluster as a
+        // multi-rune entry. This is exactly the full-Unicode
+        // TokenSet.AnyWhitespace restricted to ASCII, the same way
+        // Ascii.InlineWhitespace mirrors InlineWhitespace. VT (U+000B) and
+        // FF (U+000C) are line terminators under UAX #18, so they live in
+        // TokenSet.LineTerminators and IsLineTerminator and are consumed by
+        // Rules.EndOfLine(); a set "including line terminators" carries them
+        // too. Use this for grammars that treat newlines as ordinary
+        // whitespace. For grammars that need to distinguish intra-line
+        // whitespace from line terminators, use InlineWhitespace and
+        // Rules.EndOfLine() instead.
         // CR, LF, and the CRLF cluster all live in the set so that
         // OneOf / NoneOf / ScanUntil match each consistently: an input
         // CRLF cluster is the multi-rune entry, a bare CR or LF is the
         // matching single-rune entry.
-        public static readonly TokenSet AnyWhitespace = InlineWhitespace | Single('\r') | Single('\n') | Graphemes("\r\n");
+        public static readonly TokenSet AnyWhitespace =
+            InlineWhitespace
+            | Single('\n')       // LF
+            | Single('\v')       // VT
+            | Single('\f')       // FF
+            | Single('\r')       // CR
+            | Graphemes("\r\n");  // CRLF cluster
         public static readonly TokenSet HexDigits = Digits | Range('a', 'f') | Range('A', 'F');
     }
 

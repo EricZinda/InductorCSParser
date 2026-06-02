@@ -128,7 +128,19 @@ internal sealed class AliasRule : Rule
             // Flatten or Delete effective it returns Symbol.Discarded
             // (Flatten already wrote its content into outputSymbols, and
             // Delete contributed nothing).
-            else if (!ReferenceEquals(innerSymbol, Symbol.Discarded))
+            //
+            // The `_inner.FlattenType != Delete` term mirrors the same term
+            // in the EmitsLeaf check above, and it's what keeps the parse-time
+            // / post-hoc Flatten symmetry intact. In a normal parse a Delete
+            // inner returns Discarded, so this branch is skipped and the
+            // alias contributes nothing. Under PreserveAllSymbols the flag
+            // forces every rule to act Preserve, so the Delete inner returns
+            // a real Symbol instead of Discarded. Without this term the
+            // alias would lift that Symbol's children (or add the Delete
+            // leaf), giving the debug tree content the production parse drops
+            // and breaking the "PreserveAllSymbols + Symbol.Flatten()
+            // reproduces the default tree" guarantee.
+            else if (!ReferenceEquals(innerSymbol, Symbol.Discarded) && _inner.FlattenType != FlattenType.Delete)
             {
                 if (innerSymbol.IsLeaf)
                     outputSymbols!.Add(innerSymbol);
