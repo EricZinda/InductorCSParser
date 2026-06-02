@@ -1065,19 +1065,21 @@ public class TokenSetTests
     }
 
     [Test]
-    public void Ascii_AnyWhitespace_contains_space_tab_cr_lf()
+    public void Ascii_AnyWhitespace_contains_every_ascii_whitespace_char()
     {
-        // ASCII whitespace including line terminators. The "regex \s on
-        // ASCII" set, for grammars that treat newlines as ordinary
-        // whitespace.
+        // ASCII whitespace including every ASCII line terminator: the ASCII
+        // restriction of the full-Unicode AnyWhitespace, for grammars that
+        // treat newlines as ordinary whitespace.
         Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune(' '), Is.True);
         Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\t'), Is.True);
         Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\r'), Is.True);
         Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\n'), Is.True);
-        // Not in the literal " \t\r\n" set, even though char.IsWhiteSpace says yes.
+        // VT and FF are ASCII line terminators (UAX #18 / TokenSet.LineTerminators),
+        // so they're in this set too.
+        Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\v'), Is.True);   // vertical tab
+        Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\f'), Is.True);   // form feed
+        // Unicode-only whitespace stays out because this is the ASCII set.
         Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune(0x00A0), Is.False); // NBSP
-        Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\v'), Is.False);   // vertical tab
-        Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\f'), Is.False);   // form feed
     }
 
     [Test]
@@ -1092,6 +1094,20 @@ public class TokenSetTests
         Assert.That(TokenSet.Ascii.InlineWhitespace.ContainsRune('\n'), Is.False);
         // Unicode-only whitespace excluded because this is the ASCII set.
         Assert.That(TokenSet.Ascii.InlineWhitespace.ContainsRune(0x00A0), Is.False); // NBSP
+    }
+
+    [Test]
+    public void Ascii_AnyWhitespace_is_the_ascii_restriction_of_full_AnyWhitespace()
+    {
+        // Ascii.AnyWhitespace contains an ASCII character iff the full-Unicode
+        // AnyWhitespace does, so the two sets agree everywhere inside ASCII.
+        for (int c = 0; c <= 0x7F; c++)
+        {
+            Assert.That(
+                TokenSet.Ascii.AnyWhitespace.ContainsRune(c),
+                Is.EqualTo(TokenSet.AnyWhitespace.ContainsRune(c)),
+                $"U+{c:X4} membership differs between Ascii.AnyWhitespace and the ASCII part of AnyWhitespace");
+        }
     }
 
     [Test]
