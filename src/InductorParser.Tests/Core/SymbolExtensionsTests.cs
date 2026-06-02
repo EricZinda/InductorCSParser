@@ -203,4 +203,39 @@ public class SymbolExtensionsTests
             "  'b'\n";
         Assert.That(result.Tree!.PrintTree(body), Is.EqualTo(expected));
     }
+
+    [Test]
+    public void PrintTree_escapes_control_character_in_user_supplied_name_on_character_leaf()
+    {
+        // The other PrintTree escape tests cover the matched TEXT. The
+        // rule NAME from .As("...") is rendered too, and .As(string)
+        // accepts any string, including one with a control / line-
+        // separator char. A named single-rune Token routes through the
+        // long-form `name: "text"` branch, so an LF inside the name
+        // splits this single node across two lines unless the name runs
+        // the same Cc / Zl / Zp escape the matched text already does.
+        var rule = Token('x').As("a\nb");
+        var result = rule.Parse("x");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.PrintTree(rule), Is.EqualTo("aU+000Ab: \"x\"\n"));
+    }
+
+    [Test]
+    public void PrintTree_escapes_control_character_in_user_supplied_name_on_composite()
+    {
+        // The composite path resolves the name through NameOf (not
+        // UserNameOf), a separate Append site that has to run the same
+        // escape. A `.As("x\ny")` on a composite would otherwise carry
+        // the raw LF into the `name: "text"` line and break the layout.
+        var body = OneOrMore(AnyToken()).As("x\ny");
+        var result = body.Parse("ab");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        string expected =
+            "xU+000Ay: \"ab\"\n" +
+            "  'a'\n" +
+            "  'b'\n";
+        Assert.That(result.Tree!.PrintTree(body), Is.EqualTo(expected));
+    }
 }

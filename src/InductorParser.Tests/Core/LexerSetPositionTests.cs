@@ -95,6 +95,27 @@ public class LexerSetPositionTests
         Assert.DoesNotThrow(() => lexer.SetPosition(2));
     }
 
+    // --- Public Unicode helper validation ----------------------------------
+
+    [Test]
+    public void TryPeekRune_null_input_throws_ArgumentNullException()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() =>
+            Lexer.TryPeekRune(null!, 0, out _, out _));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("input"));
+    }
+
+    [TestCase(-1)]
+    [TestCase(1)]
+    public void TryPeekRune_out_of_range_position_throws_ArgumentOutOfRangeException(int pos)
+    {
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            Lexer.TryPeekRune("a", pos, out _, out _));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("pos"));
+    }
+
     // --- Claim: error tracking is unaffected by cursor moves ---
 
     [Test]

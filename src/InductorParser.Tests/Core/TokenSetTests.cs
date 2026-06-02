@@ -165,6 +165,25 @@ public class TokenSetTests
     }
 
     [Test]
+    public void Graphemes_with_lone_surrogate_after_valid_cluster_reports_invalid_scalar()
+    {
+        // The element is not a valid single Graphemes entry, but the first
+        // problem users need to fix is the malformed UTF-16 at offset 2.
+        // Reporting only "more than one cluster" points them at Runes(),
+        // which rejects the same lone surrogate too.
+        string malformed = LatinEAcuteGrapheme + HighSurrogateMinText;
+
+        var exception = Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(malformed));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("clusters"));
+        Assert.That(exception.Message, Does.Contain("invalid Unicode scalar value"));
+        Assert.That(exception.Message, Does.Contain("0xD800"));
+        Assert.That(exception.Message, Does.Contain("UTF-16 offset 2"));
+        Assert.That(exception.Message, Does.Not.Contain("more than one grapheme cluster"));
+        Assert.That(exception.Message, Does.Not.Contain("Runes(string)"));
+    }
+
+    [Test]
     public void Runes_with_valid_surrogate_pair_works()
     {
         // Guitar as a surrogate pair. Treated as one codepoint.
@@ -613,6 +632,17 @@ public class TokenSetTests
         Assert.That(set.ContainsRune('A'), Is.True);
         Assert.That(set.ContainsRune('B'), Is.False);
         Assert.That(set.ContainsRune(0x40), Is.False);
+    }
+
+    // Public helper argument validation -------------------------------------
+
+    [Test]
+    public void TrySingleRune_null_throws_ArgumentNullException()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() =>
+            TokenSet.TrySingleRune(null!, out _));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("grapheme"));
     }
 
     // Runes corner cases -----------------------------------------------------
