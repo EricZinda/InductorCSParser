@@ -634,6 +634,17 @@ public class TokenSetTests
         Assert.That(set.ContainsRune(0x40), Is.False);
     }
 
+    // Public helper argument validation -------------------------------------
+
+    [Test]
+    public void TrySingleRune_null_throws_ArgumentNullException()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() =>
+            TokenSet.TrySingleRune(null!, out _));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("grapheme"));
+    }
+
     // Runes corner cases -----------------------------------------------------
 
     [Test]

@@ -506,8 +506,13 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // UTF-16 char, or one surrogate pair), giving its code point. Public so
     // user-defined rules can reuse it instead of duplicating the
     // surrogate-pair decode. The span overload below stays private.
-    public static bool TrySingleRune(string grapheme, out int runeValue) =>
-        TrySingleRune(grapheme.AsSpan(), out runeValue);
+    public static bool TrySingleRune(string grapheme, out int runeValue)
+    {
+        if (grapheme == null)
+            throw new ArgumentNullException(nameof(grapheme));
+
+        return TrySingleRune(grapheme.AsSpan(), out runeValue);
+    }
 
     private static bool TrySingleRune(ReadOnlySpan<char> grapheme, out int runeValue)
     {
