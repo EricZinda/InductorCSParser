@@ -869,17 +869,17 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                 rune = text[index];
                 consumed = 1;
             }
+            if (!Rune.IsValid(rune))
+                throw new ArgumentException(
+                    $"Runes(string) encountered an invalid Unicode scalar value (0x{rune:X4}) at UTF-16 offset {index}. " +
+                    "Lone surrogate halves aren't valid scalars.",
+                    nameof(text));
             if (grapheme.Length != consumed)
                 throw new ArgumentException(
                     $"Runes(string) input \"{text}\" contains a multi-rune grapheme cluster (\"{grapheme}\") at UTF-16 offset {index}. " +
                     "Runes(string) walks rune by rune and rejects inputs where consecutive runes form one cluster. " +
                     "If you want a set of grapheme clusters, use Graphemes(string[]). " +
                     "If you want separate scalars that visually combine, build the set explicitly with Single(c1) | Single(c2).",
-                    nameof(text));
-            if (!Rune.IsValid(rune))
-                throw new ArgumentException(
-                    $"Runes(string) encountered an invalid Unicode scalar value (0x{rune:X4}) at UTF-16 offset {index}. " +
-                    "Lone surrogate halves aren't valid scalars.",
                     nameof(text));
             intervals.Add(new Interval(rune, rune));
             index += consumed;
