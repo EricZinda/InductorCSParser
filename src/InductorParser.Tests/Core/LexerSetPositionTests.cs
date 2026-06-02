@@ -95,6 +95,63 @@ public class LexerSetPositionTests
         Assert.DoesNotThrow(() => lexer.SetPosition(2));
     }
 
+    // --- Public token-length helper validation -----------------------------
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void PeekTokenLength_negative_position_throws_ArgumentOutOfRangeException(bool oneRunePerToken)
+    {
+        var lexer = new Lexer("abc", oneRunePerToken);
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            lexer.PeekTokenLength(-1));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("position"));
+    }
+
+    [Test]
+    public void PeekTokenLength_mid_grapheme_cluster_throws_ArgumentException()
+    {
+        var lexer = new Lexer(LatinEAcuteGrapheme);
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            lexer.PeekTokenLength(1));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("position"));
+    }
+
+    [Test]
+    public void PeekTokenLength_inside_surrogate_pair_throws_in_rune_mode()
+    {
+        var lexer = new Lexer(GrinningFaceEmojiGrapheme, oneRunePerToken: true);
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            lexer.PeekTokenLength(1));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("position"));
+    }
+
+    // --- Public Unicode helper validation ----------------------------------
+
+    [Test]
+    public void TryPeekRune_null_input_throws_ArgumentNullException()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() =>
+            Lexer.TryPeekRune(null!, 0, out _, out _));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("input"));
+    }
+
+    [TestCase(-1)]
+    [TestCase(1)]
+    public void TryPeekRune_out_of_range_position_throws_ArgumentOutOfRangeException(int pos)
+    {
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            Lexer.TryPeekRune("a", pos, out _, out _));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("pos"));
+    }
+
     // --- Claim: error tracking is unaffected by cursor moves ---
 
     [Test]

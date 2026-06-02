@@ -5,9 +5,7 @@ using InductorParser.Lexing;
 
 namespace InductorParser.Tracing;
 
-// C# has a feature called "Interpolated string handler" and this is one
-// for Lexer.Trace and the Rule
-// TraceSuccess / TraceFailure helpers. Lets rule code write:
+// Lets rule code write:
 //
 //     TraceSuccess(lexer, $"found {count}")
 //
@@ -15,66 +13,37 @@ namespace InductorParser.Tracing;
 //
 //     lexer.Trace(TraceLevel.Diagnostic, label, outcome, $"found {count}")
 //
-// instead of having to wrap every call in a hand-written guard like:
+// instead of a hand-written check:
 //
 //     if (lexer.IsTracing(TraceLevel.Diagnostic))
 //         lexer.WriteTraceLine(label, outcome, $"found {count}");
 //
-// The handler defers the
-// $"..." formatting until after IsTracing has decided the message
-// will actually be emitted, so callers pay nothing for the
-// formatting work when tracing is off.
+// When the compiler sees a $"..." passed to a TraceInterpolatedStringHandler
+// parameter, it builds the handler first and only runs the
+// AppendLiteral / AppendFormatted calls when the constructor reports
+// shouldAppend. shouldAppend is true only when tracing has somewhere to write
+// (a TraceSink is configured) and the configured level is verbose enough for
+// this message. When it's false, the int never gets boxed, no ToString runs,
+// and no StringBuilder is allocated.
 //
-// When the C# compiler sees a $"..."
-// expression passed to a parameter typed as
-// TraceInterpolatedStringHandler, it rewrites the call to:
+// The "" and nameof(level) in InterpolatedStringHandlerArgument on Lexer.Trace
+// tell the compiler which arguments to pass to the constructor: "" is the
+// receiver (the Lexer), "level" is the level parameter.
 //
-//     var handler = new TraceInterpolatedStringHandler(literalLen, formattedCount, lexer, level, out bool shouldAppend);
-//     if (shouldAppend)
-//     {
-//         handler.AppendLiteral("found ");
-//         handler.AppendFormatted(count);
-//     }
-//     lexer.Trace(level, label, outcome, handler);
+// ref struct keeps this stack-only. The handler never outlives the Trace
+// call, so stack allocation is safe and free.
 //
-// The constructor sets shouldAppend=true only when this message
-// will actually be emitted: tracing has somewhere to write to
-// (a TraceSink is configured) AND the configured trace level is
-// verbose enough to include this message's level. When shouldAppend
-// is false, the compiler skips every AppendLiteral / AppendFormatted
-// call, so the int never gets boxed, no ToString() runs, and no
-// StringBuilder gets allocated.
-//
-// The "" and nameof(level) in InterpolatedStringHandlerArgument on
-// Lexer.Trace tell the C# compiler which arguments to include in
-// the constructor: "" means the receiver (the Lexer instance), and
-// "level" means the level parameter. Both are available at the call
-// site before the handler is built.
-//
-// ref struct keeps this stack-only for the duration of the call.
-// Since the handler never outlives the Trace invocation, stack
-// allocation is both safe and free.
-//
-// Proof the rewrite is actually happening (not silently falling back
-// to eager $"..." formatting):
-// InductorParser.Tests/Core/TracingTests.cs has two side-effect tests
-// to make sure:
-//
-//   * Off_path_does_not_evaluate_interpolated_arguments
-//     places Interlocked.Increment inside the interpolation hole and
-//     asserts the counter stays at zero with tracing off. If the
-//     compiler stopped honoring the handler attribute (polyfill
-//     broken on a target framework, LangVersion regression, etc.),
-//     the increment fires and this test fails immediately.
-//
-//   * On_path_evaluates_interpolated_arguments_exactly_once
-//     is the complement: with tracing on, the same expression must
-//     evaluate exactly once. Catches the opposite regression where
-//     someone "optimizes" the handler in a way that drops or doubles
-//     up the AppendFormatted calls.
-//
-// If you're touching this file, run those two tests first. Build
-// success alone isn't enough. See the test comments for why.
+// TracingTests.Off_path_does_not_evaluate_interpolated_arguments and
+// On_path_evaluates_interpolated_arguments_exactly_once prove the deferral
+// happens. If you touch this file, run those two first: build success alone
+// won't catch a broken handler rewrite.
+
+/// <summary>
+/// Interpolated string handler for <c>Lexer.Trace</c> and the
+/// <c>Rule.TraceSuccess</c> / <c>Rule.TraceFailure</c> helpers. Defers the
+/// <c>$"..."</c> formatting until tracing has decided the message will be
+/// emitted, so callers pay nothing for the formatting when tracing is off.
+/// </summary>
 [InterpolatedStringHandler]
 public ref struct TraceInterpolatedStringHandler
 {
@@ -85,6 +54,11 @@ public ref struct TraceInterpolatedStringHandler
     // whether the call is a no-op.
     private StringBuilder? _builder;
 
+    /// <summary>
+    /// Constructor the compiler resolves for <c>Lexer.Trace</c>. Allocates a
+    /// StringBuilder and sets <paramref name="shouldAppend"/> to true only
+    /// when <paramref name="lexer"/> is tracing at <paramref name="level"/>.
+    /// </summary>
     public TraceInterpolatedStringHandler(
         int literalLength,
         int formattedCount,
@@ -94,10 +68,7 @@ public ref struct TraceInterpolatedStringHandler
     {
         if (lexer.IsTracing(level))
         {
-            // Pre-size to at least the literal length. The formatted
-            // pieces tend to be short (an int, a char, a short string),
-            // so overshooting is more expensive than growing once.
-            _builder = new StringBuilder(literalLength);
+            _builder = new StringBuilder();
             shouldAppend = true;
         }
         else
@@ -107,11 +78,12 @@ public ref struct TraceInterpolatedStringHandler
         }
     }
 
-    // Overload used by the short-form Rule helpers
-    // (Rule.TraceSuccess(lexer, $"...") / Rule.TraceFailure(lexer, $"...")).
-    // The handler attribute on those helpers only adds the lexer argument,
-    // so the compiler resolves this 4-arg constructor instead of the
-    // 5-arg one above.
+    /// <summary>
+    /// Constructor the compiler resolves for the short-form
+    /// Rule.TraceSuccess / Rule.TraceFailure helpers, whose handler attribute
+    /// only adds the lexer argument. Defaults the level to
+    /// <see cref="TraceLevel.Diagnostic"/>.
+    /// </summary>
     public TraceInterpolatedStringHandler(
         int literalLength,
         int formattedCount,
@@ -121,33 +93,21 @@ public ref struct TraceInterpolatedStringHandler
     {
     }
 
-    // The compiler emits calls to these for each chunk of the
-    // interpolated string. They're no-ops when _builder is null,
-    // but the compiler also skips the calls entirely when
-    // shouldAppend was false, so the no-op guards here are mostly
-    // defense in depth (and appease nullable analysis).
-    //
-    // AppendLiteral handles the static scaffolding between holes ("found '",
-    // "', wanted one of '") which the grammar author wrote in source and
-    // can't carry a stray control char, so it appends verbatim.
-    //
-    // The AppendFormatted overloads handle the interpolation holes, the
-    // dynamic values a caller splices in: matched token text, a stored
-    // expected literal, a rule's set rendering, a count. Every one of
-    // those runs through DisplayEscape.AppendEscaped, which rewrites
-    // Control (Cc) / LineSeparator (Zl) / ParagraphSeparator (Zp) chars
-    // to U+XXXX and leaves everything else (including emoji and ZWJ glue)
-    // verbatim. That makes "one trace event renders as one physical line"
-    // an invariant the handler enforces, instead of a rule every caller
-    // has to remember: a Token('\n') match, a CRLF cluster, or an LF
-    // captured by OneOf(LineTerminators) can't split a trace line no
-    // matter which rule quoted it. Escaping is idempotent (a value that's
-    // already "U+000A" holds no control chars) and AppendEscaped appends
-    // straight into the builder with no intermediate allocation, so the
-    // common printable hole pays only a single scan, and only on the
-    // tracing-on path where the builder exists at all.
+    // Nothing calls these directly. The compiler emits them when it rewrites a
+    // $"..." passed to a TraceInterpolatedStringHandler parameter, and skips
+    // them entirely when shouldAppend was false, so the null checks are
+    // defense in depth (and appease nullable analysis). Routing every
+    // formatted value through DisplayEscape enforces "one trace event renders
+    // as one physical line": a Token('\n') match or a CRLF cluster can't split
+    // a trace line no matter which rule quoted it.
+
+    /// <summary>Appends the static text between interpolation holes verbatim.</summary>
     public void AppendLiteral(string value) => _builder?.Append(value);
 
+    /// <summary>
+    /// Appends an interpolation hole's value, escaping control and line-separator
+    /// chars to <c>U+XXXX</c> so the trace stays on one line.
+    /// </summary>
     public void AppendFormatted<T>(T value)
     {
         if (_builder == null) return;
@@ -156,12 +116,20 @@ public ref struct TraceInterpolatedStringHandler
             DisplayEscape.AppendEscaped(_builder, text.AsSpan());
     }
 
+    /// <summary>
+    /// Appends a string interpolation hole, escaping control and line-separator
+    /// chars to <c>U+XXXX</c> so the trace stays on one line.
+    /// </summary>
     public void AppendFormatted(string? value)
     {
         if (_builder != null && value != null)
             DisplayEscape.AppendEscaped(_builder, value.AsSpan());
     }
 
+    /// <summary>
+    /// Appends a span interpolation hole, escaping control and line-separator
+    /// chars to <c>U+XXXX</c> so the trace stays on one line.
+    /// </summary>
     public void AppendFormatted(ReadOnlySpan<char> value)
     {
         if (_builder != null)
