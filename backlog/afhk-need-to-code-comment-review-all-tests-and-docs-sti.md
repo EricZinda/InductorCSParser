@@ -7,3 +7,4 @@ SyntaxTree/
     FlattenType.cs
 	..
 	SourceRange.cs
+	Symbol.cs
