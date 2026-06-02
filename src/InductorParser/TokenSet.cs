@@ -917,6 +917,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                 throw new ArgumentException(
                     $"Graphemes element at index {clusterIndex} is empty. Each element must be exactly one grapheme cluster.",
                     nameof(clusters));
+            ValidateGraphemeScalars(cluster, clusterIndex, nameof(clusters));
             string firstCluster = StringInfo.GetNextTextElement(cluster, 0);
             if (firstCluster.Length != cluster.Length)
                 throw new ArgumentException(
@@ -937,11 +938,6 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                 firstRune = cluster[0];
                 firstRuneLength = 1;
             }
-            if (!Rune.IsValid(firstRune))
-                throw new ArgumentException(
-                    $"Graphemes element at index {clusterIndex} starts with an invalid Unicode scalar (0x{firstRune:X4}). " +
-                    "Lone surrogate halves aren't valid scalars.",
-                    nameof(clusters));
 
             if (cluster.Length == firstRuneLength)
             {
@@ -949,7 +945,6 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             }
             else
             {
-                ValidateGraphemeRunes(cluster, 0);
                 multiRuneGraphemes ??= new List<string>();
                 multiRuneGraphemes.Add(cluster);
             }
@@ -957,13 +952,13 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return new TokenSet(Normalize(intervals), NormalizeGraphemes(multiRuneGraphemes));
     }
 
-    // Walks a grapheme's runes by hand and throws on any lone surrogate
-    // half. We've already validated the first rune in the outer loop;
-    // this is for runes 2..N of a multi-rune grapheme.
-    private static void ValidateGraphemeRunes(string grapheme, int graphemeStart)
+    // Walks a Graphemes element's runes by hand and throws on any lone
+    // surrogate half before the single-cluster shape check can mask it.
+    private static void ValidateGraphemeScalars(string grapheme, int clusterIndex, string parameterName)
     {
         for (int runeIndex = 0; runeIndex < grapheme.Length;)
         {
+            int runeStart = runeIndex;
             int runeCodepoint;
             if (SurrogateHelpers.IsSurrogatePairAt(grapheme, runeIndex))
             {
@@ -977,9 +972,9 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             }
             if (!Rune.IsValid(runeCodepoint))
                 throw new ArgumentException(
-                    $"Graphemes element at UTF-16 offset {graphemeStart} contains an invalid Unicode scalar value (0x{runeCodepoint:X4}). " +
+                    $"Graphemes element at index {clusterIndex} contains an invalid Unicode scalar value (0x{runeCodepoint:X4}) at UTF-16 offset {runeStart}. " +
                     "Lone surrogate halves aren't valid scalars.",
-                    nameof(grapheme));
+                    parameterName);
         }
     }
 
