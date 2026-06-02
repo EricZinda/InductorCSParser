@@ -148,6 +148,23 @@ public class TokenSetTests
     }
 
     [Test]
+    public void Runes_with_lone_surrogate_glued_to_combining_mark_reports_invalid_scalar()
+    {
+        // .NET's grapheme splitter can treat a stray surrogate followed
+        // by an extender as one text element. Runes still needs to tell
+        // the caller the first problem is invalid scalar data, not point
+        // them at Graphemes for an input Graphemes would also reject.
+        string malformedCluster = UnicodeExamples.HighSurrogateMinText + UnicodeExamples.CombiningAcuteText;
+
+        var exception = Assert.Throws<ArgumentException>(() => TokenSet.Runes(malformedCluster));
+
+        Assert.That(exception!.Message, Does.Contain("invalid Unicode scalar value"));
+        Assert.That(exception.Message, Does.Contain("0xD800"));
+        Assert.That(exception.Message, Does.Contain("UTF-16 offset 0"));
+        Assert.That(exception.Message, Does.Not.Contain("multi-rune grapheme cluster"));
+    }
+
+    [Test]
     public void Runes_with_valid_surrogate_pair_works()
     {
         // Guitar as a surrogate pair. Treated as one codepoint.
