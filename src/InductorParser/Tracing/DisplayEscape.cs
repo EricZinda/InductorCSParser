@@ -1,39 +1,33 @@
 using System;
 using System.Globalization;
 using System.Text;
+using InductorParser.Lexing;
 
 namespace InductorParser.Tracing;
 
 // One place that decides which chars corrupt a single-line display string
 // when written verbatim, and how to render them so they don't. Used by
-// every site that splices user-bearing text into a one-line render:
-//   * TokenSet.ToString builds "[a-z,U+000D,...]" form. The multi-rune
-//     grapheme entries used to leak a raw CRLF until 2026-05-20.
+// every site that puts user text into a one-line render:
+//   * TokenSet.ToString builds the "[a-z,U+000D,...]" form, including
+//     multi-rune grapheme entries that can contain a CRLF.
 //   * SymbolExtensions.PrintTree's short-form `'c'` rendering of a
-//     character-leaf id used to leak the same on a Token('\n').Preserve().
-//   * Lexer.Read's diagnostic trace `'<tokenText>', Consumed: N` used to
-//     leak the same on any token whose chars include a control / line
-//     separator (the CRLF cluster, an LF-only Preserve'd Token, etc.).
+//     character-leaf id, which can be a Token('\n').Preserve().
+//   * Lexer.Read's diagnostic trace `'<tokenText>', Consumed: N`, where the
+//     token's chars can include a control / line separator (a CRLF cluster,
+//     an LF-only Preserve'd Token, etc.).
 //
-// All three callers used the same Cc / Zl / Zp test, written three
-// times. Centralizing here keeps them from drifting apart and gives a
-// single home for the rules below.
+// All three need the same control-and-line-separator test, so it lives here
+// once rather than copied at each caller.
 //
-// What counts as "corrupting":
-//   * Control (Cc): LF, CR, VT, FF, NEL, and the rest of the C0/C1
-//     block. char.IsControl reports exactly this set.
-//   * LineSeparator (Zl): U+2028.
-//   * ParagraphSeparator (Zp): U+2029.
-//   * Unpaired surrogate halves (Cs): valid supplementary-plane
-//     characters must pass through as high+low pairs, but an unpaired
-//     UTF-16 surrogate is not a valid scalar value and most display
-//     sinks either replace it or fail to encode it. Rendering the lone
-//     code unit as U+XXXX keeps diagnostics readable and round-trippable.
-// Format characters (Cf) such as ZWJ are deliberately NOT included. ZWJ
-// is the invisible glue inside emoji ZWJ families and similar clusters
-// we want rendered as the user-perceived character, and it doesn't break
-// the line. Valid surrogate pairs fall through to the verbatim path as
-// a pair, reassembling the original supplementary-plane character.
+// What counts as "corrupting" is the official Unicode general categories
+// Control, LineSeparator, and ParagraphSeparator, plus unpaired surrogate
+// halves.
+//
+// Format characters such as ZWJ are deliberately NOT included. ZWJ is the
+// invisible glue inside emoji ZWJ families and similar clusters we want
+// rendered as the user-perceived character, and it doesn't break the line.
+// Valid surrogate pairs fall through to the verbatim path as a pair,
+// reassembling the original supplementary-plane character.
 //
 // Reading the category from the BCL tables (CharUnicodeInfo.GetUnicodeCategory)
 // rather than a hand-kept code-point list keeps the escape set tracking
@@ -41,8 +35,8 @@ namespace InductorParser.Tracing;
 internal static class DisplayEscape
 {
     /// <summary>
-    /// True when <paramref name="c"/>'s Unicode General Category is
-    /// Control (Cc), LineSeparator (Zl), or ParagraphSeparator (Zp).
+    /// True when <paramref name="c"/>'s Unicode general category is
+    /// Control, LineSeparator, or ParagraphSeparator.
     /// </summary>
     public static bool IsControlOrLineSeparator(char c)
     {
@@ -52,32 +46,22 @@ internal static class DisplayEscape
             || category == UnicodeCategory.ParagraphSeparator;
     }
 
-    /// <summary>
-    /// Append <paramref name="text"/> to <paramref name="builder"/>,
-    /// rendering each Cc / Zl / Zp char as <c>U+XXXX</c> and every other
-    /// char verbatim. Use when the caller is already accumulating into a
-    /// StringBuilder (TokenSet.ToString's bracketed render is the
-    /// canonical caller).
-    /// </summary>
-    public static void AppendEscaped(StringBuilder builder, ReadOnlySpan<char> text)
+    private static bool NeedsCodeUnitEscape(char c) =>
+        char.IsSurrogate(c) || IsControlOrLineSeparator(c);
+
+    private static bool ContainsEscapableCodeUnit(ReadOnlySpan<char> text)
     {
         for (int i = 0; i < text.Length; i++)
         {
-            char c = text[i];
-            if (i + 1 < text.Length && IsValidSurrogatePairAt(text, i))
+            if (SurrogateHelpers.IsSurrogatePairAt(text, i))
             {
-                builder.Append(c);
-                builder.Append(text[++i]);
+                i++;
+                continue;
             }
-            else if (NeedsCodeUnitEscape(c))
-            {
-                AppendCodeUnitEscape(builder, c);
-            }
-            else
-            {
-                builder.Append(c);
-            }
+            if (NeedsCodeUnitEscape(text[i]))
+                return true;
         }
+        return false;
     }
 
     /// <summary>
@@ -97,30 +81,33 @@ internal static class DisplayEscape
         return sb.ToString();
     }
 
-    private static bool ContainsEscapableCodeUnit(ReadOnlySpan<char> text)
+    /// <summary>
+    /// Append <paramref name="text"/> to <paramref name="builder"/>,
+    /// rendering each control or line-separator char as <c>U+XXXX</c> and
+    /// every other char verbatim. Use when the caller is already accumulating into a
+    /// StringBuilder (TokenSet.ToString's bracketed render is the
+    /// canonical caller).
+    /// </summary>
+    public static void AppendEscaped(StringBuilder builder, ReadOnlySpan<char> text)
     {
         for (int i = 0; i < text.Length; i++)
         {
-            if (i + 1 < text.Length && IsValidSurrogatePairAt(text, i))
+            char c = text[i];
+            if (SurrogateHelpers.IsSurrogatePairAt(text, i))
             {
-                i++;
-                continue;
+                builder.Append(c);
+                builder.Append(text[++i]);
             }
-            if (NeedsCodeUnitEscape(text[i]))
-                return true;
+            else if (NeedsCodeUnitEscape(c))
+            {
+                AppendCodeUnitEscape(builder, c);
+            }
+            else
+            {
+                builder.Append(c);
+            }
         }
-        return false;
     }
-
-    private static bool IsValidSurrogatePairAt(ReadOnlySpan<char> text, int index)
-    {
-        Invariant.That(index >= 0 && index < text.Length - 1,
-            $"IsValidSurrogatePairAt requires index and index+1 in range; index={index}, length={text.Length}.");
-        return char.IsHighSurrogate(text[index]) && char.IsLowSurrogate(text[index + 1]);
-    }
-
-    private static bool NeedsCodeUnitEscape(char c) =>
-        char.IsSurrogate(c) || IsControlOrLineSeparator(c);
 
     private static void AppendCodeUnitEscape(StringBuilder builder, char c) =>
         builder.Append("U+").Append(((int)c).ToString("X4"));

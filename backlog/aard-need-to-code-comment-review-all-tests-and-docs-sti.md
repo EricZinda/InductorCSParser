@@ -4,3 +4,4 @@ Done:
 Compatability/*
 Lexing/*
 SyntaxTree/*
+Tracing/*
