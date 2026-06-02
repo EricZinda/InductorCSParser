@@ -362,7 +362,12 @@ public sealed partial class Lexer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryPeekRune(string input, int pos, out int runeValue, out int runeLen)
     {
-        Invariant.That((uint)pos < (uint)input.Length, $"TryPeekRune called with pos={pos} outside [0, input.Length={input.Length}).");
+        if (input == null)
+            throw new ArgumentNullException(nameof(input));
+        if ((uint)pos >= (uint)input.Length)
+            throw new ArgumentOutOfRangeException(nameof(pos), pos,
+                $"pos must be in [0, input.Length={input.Length}).");
+
         if (SurrogateHelpers.IsSurrogatePairAt(input, pos))
         {
             runeValue = char.ConvertToUtf32(input[pos], input[pos + 1]);
