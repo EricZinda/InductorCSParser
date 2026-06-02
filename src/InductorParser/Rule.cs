@@ -72,6 +72,12 @@ public abstract class Rule
     // the FormC default.
     internal bool IsCompiled => _sealed;
 
+    // Set when a Compile attempt fails after entering the mutating phase.
+    // At that point ids, literal projections, cached renderings, or other
+    // compile-time state may have been partially written, so the rule graph
+    // must be rebuilt rather than retried.
+    private string? _invalidCompileReason;
+
     // The Unicode normalization form this grammar was compiled against. Set
     // by Compile(form) on every reachable rule, but only the root's value
     // matters at parse time. Default NormalizationForm.FormC matches the
@@ -755,57 +761,79 @@ public abstract class Rule
         visited.Clear();
         CheckNameUniqueness(this, visited, namedRules);
 
-        visited.Clear();
-        AssignNamedIds(this, visited, usedIds);
+        var compileTouched = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
+        MarkCompileTouched(this, compileTouched);
 
-        visited.Clear();
-        int nextAnon = SymbolRanges.CustomRangeStart;
-        AssignAnonymousIds(this, visited, usedIds, ref nextAnon);
-
-        visited.Clear();
-        ValidateAll(this, visited);
-
-        // Validate every literal-bearing rule against the chosen normalization
-        // form. Skipped when normalizeInput is null (the author opted out).
-        // Throws one InvalidOperationException listing every offender so
-        // grammar authors fix all mismatches in one pass instead of one at
-        // a time. The pass mutates literal-bearing rules' stored text
-        // (Token / Literal / LiteralIgnoreAsciiCase) and OneOf / NoneOf
-        // sets when the original entries aren't already in the chosen
-        // form.
-        if (normalizeInput.HasValue)
+        try
         {
-            var offenders = new List<(Rule rule, string original, string normalized)>();
-            // Captures any ArgumentException string.Normalize throws for
-            // literals it can't normalize (in practice, unpaired surrogates).
-            // We aggregate these as InnerException on the thrown
-            // InvalidOperationException so a programmatic caller can walk
-            // the runtime causes; the user-facing message stays the
-            // multi-rule offender list BuildNormalizationErrorMessage emits.
-            var normalizeFailures = new List<ArgumentException>();
-            var reporter = new CompileNormalizationReporter(offenders, normalizeFailures);
             visited.Clear();
-            ValidateNormalizationAll(this, visited, normalizeInput.Value, reporter);
-            if (offenders.Count > 0)
+            AssignNamedIds(this, visited, usedIds);
+
+            visited.Clear();
+            int nextAnon = SymbolRanges.CustomRangeStart;
+            AssignAnonymousIds(this, visited, usedIds, ref nextAnon);
+
+            visited.Clear();
+            ValidateAll(this, visited);
+
+            // Validate every literal-bearing rule against the chosen normalization
+            // form. Skipped when normalizeInput is null (the author opted out).
+            // Throws one InvalidOperationException listing every offender so
+            // grammar authors fix all mismatches in one pass instead of one at
+            // a time. The pass mutates literal-bearing rules' stored text
+            // (Token / Literal / LiteralIgnoreAsciiCase) and OneOf / NoneOf
+            // sets when the original entries aren't already in the chosen
+            // form.
+            if (normalizeInput.HasValue)
             {
-                Exception? inner = normalizeFailures.Count > 0
-                    ? new AggregateException(normalizeFailures)
-                    : null;
-                throw new InvalidOperationException(
-                    BuildNormalizationErrorMessage(normalizeInput.Value, offenders),
-                    inner);
+                var offenders = new List<(Rule rule, string original, string normalized)>();
+                // Captures any ArgumentException string.Normalize throws for
+                // literals it can't normalize (in practice, unpaired surrogates).
+                // We aggregate these as InnerException on the thrown
+                // InvalidOperationException so a programmatic caller can walk
+                // the runtime causes; the user-facing message stays the
+                // multi-rule offender list BuildNormalizationErrorMessage emits.
+                var normalizeFailures = new List<ArgumentException>();
+                var reporter = new CompileNormalizationReporter(offenders, normalizeFailures);
+                visited.Clear();
+                ValidateNormalizationAll(this, visited, normalizeInput.Value, reporter);
+                if (offenders.Count > 0)
+                {
+                    Exception? inner = normalizeFailures.Count > 0
+                        ? new AggregateException(normalizeFailures)
+                        : null;
+                    throw new InvalidOperationException(
+                        BuildNormalizationErrorMessage(normalizeInput.Value, offenders),
+                        inner);
+                }
+
+                // The normalization pass can turn a single-rune Token into a
+                // multi-rune cluster (Token('é'), U+00E9, becomes "e + U+0301"
+                // under FormD). Such a rule dropped its constructor-assigned rune
+                // id in ValidateNormalization (a multi-rune leaf can't carry a
+                // character-range id), so re-run the anonymous-id pass to hand it
+                // a custom-range id, matching a Token built multi-rune from the
+                // start. The pass only touches rules whose id was cleared
+                // (!_idAssigned); every rule whose id survived keeps it.
+                visited.Clear();
+                AssignAnonymousIds(this, visited, usedIds, ref nextAnon);
             }
+
+            visited.Clear();
+            SealAll(this, visited);
+
+            // Stamp the form onto every reachable rule so any subsequent
+            // Compile call (which can land on any rule, not just the original
+            // root) sees the form for its conflict check. Only the root's
+            // value is read at parse time.
+            visited.Clear();
+            StampNormalizationForm(this, visited, normalizeInput);
         }
-
-        visited.Clear();
-        SealAll(this, visited);
-
-        // Stamp the form onto every reachable rule so any subsequent
-        // Compile call (which can land on any rule, not just the original
-        // root) sees the form for its conflict check. Only the root's
-        // value is read at parse time.
-        visited.Clear();
-        StampNormalizationForm(this, visited, normalizeInput);
+        catch (Exception ex)
+        {
+            MarkInvalidAfterFailedCompile(compileTouched, ex.Message);
+            throw;
+        }
 
         return this;
     }
@@ -1508,6 +1536,24 @@ public abstract class Rule
             SetIdInternal(new SymbolId(runeValue));
     }
 
+    // Counterpart to SetLeafRuneId for a single-rune leaf rule whose stored
+    // text turned multi-rune during the normalization pass (Token('é'),
+    // U+00E9, decomposing to "e + U+0301" under FormD). The constructor
+    // assigned that rule its precomposed rune's code point as the Id, a
+    // character-range id (0..0x10FFFF) the SymbolRanges layout documents as
+    // "the match is exactly that one rune." A multi-rune leaf can't honor
+    // that, so drop the stale auto-assigned id. Compile re-runs the
+    // anonymous-id pass after normalization, handing this rule a
+    // custom-range id, the same shape a Token built multi-rune from the
+    // start already carries. Like SetLeafRuneId, this leaves a user's
+    // explicit .As(SymbolId) id or a name-hashed id untouched: those
+    // numbering hooks win over the rune-as-id default.
+    protected void ClearLeafRuneId()
+    {
+        if (!IsUserSymbolIdExplicit && Name == null)
+            _idAssigned = false;
+    }
+
     // Pass 1. Walk the graph and stash any user-set explicit ids so the
     // later passes know which slots are off limits, and reject two
     // reachable rules whose .As(SymbolId) explicit ids land on the same id
@@ -1806,17 +1852,39 @@ public abstract class Rule
             StampNormalizationForm(child, visited, form);
     }
 
+    private static void MarkCompileTouched(Rule r, HashSet<Rule> visited)
+    {
+        if (!visited.Add(r)) return;
+        foreach (var child in r.Children)
+            MarkCompileTouched(child, visited);
+    }
+
+    private static void MarkInvalidAfterFailedCompile(HashSet<Rule> rules, string reason)
+    {
+        foreach (var rule in rules)
+            rule._invalidCompileReason ??= reason;
+    }
+
     // Walk the graph and reject this Compile if any reachable rule has
-    // already been compiled. See the caller in Compile for the full
-    // rationale. The short version is that a rule's compile bakes in
-    // its identity (ids, FirstConsumedTokens, projected literal text,
-    // normalization form), and the per-pass mutators inside Compile
-    // don't re-check `_sealed`. This walk is the one check that makes
-    // those passes safe. Without it, a second Compile from a new root
-    // would silently corrupt the sealed sub-rule's state.
+    // already been compiled or was invalidated by a failed compile attempt.
+    // See the caller in Compile for the full rationale. The short version is
+    // that a rule's compile bakes in its identity (ids, FirstConsumedTokens,
+    // projected literal text, normalization form), and the per-pass mutators
+    // inside Compile don't re-check `_sealed`. This walk is the one check
+    // that makes those passes safe. Without it, a second Compile from a new
+    // root would silently corrupt a sealed or invalidated sub-rule's state.
     private static void CheckNoSealedReachableRules(Rule r, HashSet<Rule> visited)
     {
         if (!visited.Add(r)) return;
+        if (r._invalidCompileReason != null)
+        {
+            string ruleLabel = r.Name ?? r._ruleTraceName;
+            throw new InvalidOperationException(
+                $"Rule '{ruleLabel}' can't be compiled because a previous Compile " +
+                $"attempt failed after mutating this rule graph. Build a fresh " +
+                $"grammar instance before compiling again. Previous failure: " +
+                $"{r._invalidCompileReason}");
+        }
         if (r._sealed)
         {
             string ruleLabel = r.Name ?? r._ruleTraceName;

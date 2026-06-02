@@ -45,7 +45,12 @@ public static class SymbolExtensions
             string? userName = rule.UserNameOf(symbol.Id);
             if (userName != null)
             {
-                builder.Append(userName).Append(": \"");
+                // The name comes from .As("..."), which accepts any string,
+                // including one with a control / line-separator char. Escape
+                // it the same way as the matched text below so a name like
+                // "a\nb" can't split this node across two lines.
+                DisplayEscape.AppendEscaped(builder, userName);
+                builder.Append(": \"");
                 DisplayEscape.AppendEscaped(builder, symbol.ToString());
                 builder.Append('"');
             }
@@ -60,7 +65,11 @@ public static class SymbolExtensions
         else
         {
             string? name = rule.NameOf(symbol.Id) ?? "<unknown>";
-            builder.Append(name).Append(": \"");
+            // Same escape as the character-leaf name branch above: a
+            // .As("...") name carrying a control / line-separator char must
+            // not break this node's single line.
+            DisplayEscape.AppendEscaped(builder, name);
+            builder.Append(": \"");
             DisplayEscape.AppendEscaped(builder, symbol.ToString());
             builder.Append('"');
         }

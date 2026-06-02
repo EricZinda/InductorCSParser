@@ -91,13 +91,28 @@ internal sealed class GraphemeRule : Rule
         }
 
         _expected = normalized;
-        // Re-id to the converted rune. SetLeafRuneId skips the assignment
-        // when the user set an explicit Id via .As(SymbolId) or named the
-        // rule via .As(string): their explicit or name-hashed id is what
-        // keeps numbering stable, and re-assigning to the new rune would
-        // clobber the custom-range id AssignNamedIds gave a named rule.
+        // Re-id for the converted text. SetLeafRuneId / ClearLeafRuneId both
+        // skip the change when the user set an explicit Id via .As(SymbolId)
+        // or named the rule via .As(string): their explicit or name-hashed
+        // id is what keeps numbering stable, and touching it would clobber
+        // the custom-range id AssignNamedIds / As gave them.
         if (TokenSet.TrySingleRune(_expected, out int runeValue))
+        {
+            // Still one rune after the conversion (canonical-singleton
+            // substitutions like U+2126 -> U+03A9): keep the rune-as-id
+            // shape at the new code point.
             SetLeafRuneId(runeValue);
+        }
+        else
+        {
+            // The conversion crossed the single-rune boundary: a precomposed
+            // rune decomposed into a multi-rune cluster (U+00E9 -> "e + U+0301"
+            // under FormD). The constructor's character-range rune id no longer
+            // describes the match, so drop it and let Compile's
+            // post-normalization anonymous-id pass assign a custom-range id,
+            // matching a Token built multi-rune from the start.
+            ClearLeafRuneId();
+        }
     }
 
     private static int CountGraphemes(string text)
