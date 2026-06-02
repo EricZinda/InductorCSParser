@@ -823,4 +823,81 @@ internal static class UnicodeExamples
     public const int RegionalIndicatorFRune = 0x1F1EB;
     public static readonly string RegionalIndicatorFText = Canary(
         "🇫", "regional indicator letter f (lone, used as trailing third RI)", RegionalIndicatorFRune);
+
+    // === Additional real-world script samples ===
+    // Tamil, Tibetan, Hebrew (RTL), and a Simplified/Traditional Chinese
+    // pair. Each is a real word, not a hand-assembled test string, so the
+    // identifier, grapheme, and JSON-roundtrip fixtures exercise the
+    // grammars on text people actually type.
+
+    // Tamil "தமிழ்" (the word "Tamil"). Five runes: TA (Lo), MA (Lo),
+    // VOWEL SIGN I (Mc), LLLA (Lo), VIRAMA (Mn). The lexer composes
+    // these into three graphemes (TA, MA+vowel-sign-i, LLLA+virama).
+    // The vowel sign and virama are both XID_Continue, so the whole
+    // word is a valid identifier after the leading consonant.
+    public static readonly string TamilTamizhIdentifier = Canary(
+        "தமிழ்", "tamil 'tamil' identifier (ta + ma + vowel-sign-i + llla + virama)",
+        0x0BA4, 0x0BAE, 0x0BBF, 0x0BB4, 0x0BCD);
+
+    // Tibetan "བོད" (the word "Tibet", romanized "bod"). Three runes:
+    // BA (Lo) + VOWEL SIGN O (Mn) + DA (Lo). The vowel sign bundles
+    // with the preceding consonant into one grapheme, giving two
+    // graphemes total.
+    public static readonly string TibetanBodIdentifier = Canary(
+        "བོད", "tibetan 'tibet' identifier (ba + vowel-sign-o + da)",
+        0x0F56, 0x0F7C, 0x0F51);
+
+    // Tibetan stacked syllable: KA (Lo) + SUBJOINED LETTER SSA (Mn).
+    // Tibetan stacks a subjoined consonant under its base; the subjoined
+    // letter is GCB=Extend, so base + subjoined is ONE grapheme made of
+    // two runes. The textbook Tibetan grapheme-cluster case, parallel to
+    // Devanagari conjuncts but using a dedicated subjoined code point
+    // rather than a virama linker.
+    public static readonly string TibetanStackedKaSsaGrapheme = Canary(
+        "ཀྵ", "tibetan stacked ka + subjoined ssa (one grapheme, two runes)",
+        0x0F40, 0x0FB5);
+
+    // Hebrew "עברית" (the word "Hebrew", romanized "ivrit"). Five Lo
+    // letters: AYIN, BET, RESH, YOD, TAV. RTL script: the runes are
+    // stored in logical (reading) order, which is the order the parser
+    // walks them. No combining marks, so five single-rune graphemes.
+    public static readonly string HebrewIvritIdentifier = Canary(
+        "עברית", "hebrew 'hebrew' identifier (ayin + bet + resh + yod + tav)",
+        0x05E2, 0x05D1, 0x05E8, 0x05D9, 0x05EA);
+
+    // Hebrew "שָׁלוֹם" (shalom, "peace") written with niqqud (vowel
+    // points). Seven runes: SHIN (Lo) + QAMATS (Mn) + SHIN DOT (Mn) +
+    // LAMED (Lo) + VAV (Lo) + HOLAM (Mn) + FINAL MEM (Lo). The points
+    // are combining marks (XID_Continue) that bundle with their base
+    // letters, giving four graphemes from seven runes. RTL plus
+    // combining marks in one word.
+    public static readonly string HebrewShalomWithNiqqudIdentifier = Canary(
+        "שָׁלוֹם", "hebrew 'shalom' with niqqud (shin + qamats + shin-dot + lamed + vav + holam + final-mem)",
+        0x05E9, 0x05B8, 0x05C1, 0x05DC, 0x05D5, 0x05B9, 0x05DD);
+
+    // U+6C49 CJK UNIFIED IDEOGRAPH (Simplified Chinese "hàn", the first
+    // character of 汉字 "Chinese characters"). One rune, one grapheme.
+    public const int ChineseSimplifiedHanRune = 0x6C49;
+    public static readonly string ChineseSimplifiedHanGrapheme = Canary(
+        "汉", "simplified chinese han (first char of 'hanzi')", ChineseSimplifiedHanRune);
+
+    // U+6F22 CJK UNIFIED IDEOGRAPH (Traditional Chinese "hàn", the
+    // traditional form of U+6C49). A different code point, not a
+    // normalization variant: NFC/NFKC leave both alone, so the parser
+    // treats simplified and traditional as distinct text. One rune.
+    public const int ChineseTraditionalHanRune = 0x6F22;
+    public static readonly string ChineseTraditionalHanGrapheme = Canary(
+        "漢", "traditional chinese han (traditional form of U+6C49)", ChineseTraditionalHanRune);
+
+    // Simplified "汉字" (hànzì, "Chinese characters"). U+6C49 + U+5B57.
+    // Two Lo ideographs, two single-rune graphemes.
+    public static readonly string ChineseSimplifiedHanziIdentifier = Canary(
+        "汉字", "simplified chinese 'hanzi' (han + zi)", ChineseSimplifiedHanRune, 0x5B57);
+
+    // Traditional "漢字" (hànzì, "Chinese characters"). U+6F22 + U+5B57.
+    // Same second character (字) as the simplified form, different first
+    // character. Pair with ChineseSimplifiedHanziIdentifier to verify
+    // the two stay distinct under normalization.
+    public static readonly string ChineseTraditionalHanziIdentifier = Canary(
+        "漢字", "traditional chinese 'hanzi' (han + zi)", ChineseTraditionalHanRune, 0x5B57);
 }
