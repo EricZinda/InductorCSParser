@@ -95,6 +95,42 @@ public class LexerSetPositionTests
         Assert.DoesNotThrow(() => lexer.SetPosition(2));
     }
 
+    // --- Public token-length helper validation -----------------------------
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void PeekTokenLength_negative_position_throws_ArgumentOutOfRangeException(bool oneRunePerToken)
+    {
+        var lexer = new Lexer("abc", oneRunePerToken);
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            lexer.PeekTokenLength(-1));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("position"));
+    }
+
+    [Test]
+    public void PeekTokenLength_mid_grapheme_cluster_throws_ArgumentException()
+    {
+        var lexer = new Lexer(LatinEAcuteGrapheme);
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            lexer.PeekTokenLength(1));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("position"));
+    }
+
+    [Test]
+    public void PeekTokenLength_inside_surrogate_pair_throws_in_rune_mode()
+    {
+        var lexer = new Lexer(GrinningFaceEmojiGrapheme, oneRunePerToken: true);
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            lexer.PeekTokenLength(1));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("position"));
+    }
+
     // --- Public Unicode helper validation ----------------------------------
 
     [Test]
