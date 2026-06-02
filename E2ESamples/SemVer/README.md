@@ -87,7 +87,7 @@ The big patterns this rewrite surfaced:
 
 - The natural translation of the "0 or [1-9][0-9]*" no-leading-zero rule into `Or(Token('0'), And(Range('1','9'), ZeroOrMore(Digits)))` lands the error position in the wrong spot. The `Or` commits to the `0` branch, then the next-rule failure looks like a missing `.`. The fix is the reject-first pattern: put a `Not(And(Token('0'), OneOf(Digits)))` probe in front of any consumption. The grammar message lands at the right column without needing a post-parse re-check. See [docs/Recipes.md](../../docs/Recipes.md) for the walkthrough.
 - Naming a tree node uses `.As("name")`, which mutates the rule. Sharing a `var numericCore = ...` across major/minor/patch and calling `.As("major")` / `.As("minor")` / `.As("patch")` on the same instance silently makes all three "patch". Easy to miss and the build doesn't catch it.
-- A consumer that wants positions for a tree node has to keep the `ParseResult` around and call `result.SourceRangeOf(symbol)`. The position info is on the leaves already (`Symbol.TryGetCharSpan` is internal), but it's not exposed on `Symbol` directly. A typed-AST projection that wants to embed positions in its records has to thread the `ParseResult` through.
+- A consumer that wants positions for a tree node reads `symbol.SourceRange`, which returns a `SourceRange?` with char-index / line / column / token-index endpoints already translated back to the original input. It's on `Symbol` directly, so a typed-AST projection can embed positions in its records without passing the `ParseResult` around.
 
 ## Running it
 
