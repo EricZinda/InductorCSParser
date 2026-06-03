@@ -5,3 +5,6 @@ Compatability/*
 Lexing/*
 SyntaxTree/*
 Tracing/*
+Rules/	AliasRule.cs
+		AndRule.cs
+		AnyTokenRule.cs

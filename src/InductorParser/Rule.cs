@@ -528,17 +528,14 @@ public abstract class Rule
     // shortcut.
     internal bool IsUserSymbolIdExplicit => _idUserExplicit;
 
-    // The leaf-id rule for OneOfRule / NoneOfRule / AnyTokenRule /
-    // WithinTokenRule. A truly anonymous single-rune match carries the
-    // rune's code point as its leaf id, so tree consumers can dispatch
-    // on `leaf.Id == 'a'` without going through a synthetic per-rule id.
-    // A user-identified rule (`.As(string)` sets Name, `.As(SymbolId)`
-    // sets IsUserSymbolIdExplicit) carries the rule's own Id so
-    // Tree.Find / Tree.Is / NameOf resolve through the user's reference.
-    // A multi-rune token has runeValue == -1 and falls through to Id
-    // either way, since one int can't hold a multi-rune code point.
-    // Centralized here so the four leaf-emitting rules can't drift on
-    // the gate.
+    // Picks the leaf id for OneOfRule / NoneOfRule / AnyTokenRule /
+    // WithinTokenRule. An anonymous single-rune match uses the rune's code
+    // point as its id, so consumers can dispatch on `leaf.Id == 'a'`. If the
+    // user named the rule (.As(string)) or gave it an explicit id
+    // (.As(SymbolId)), the leaf uses the rule's own Id instead. A
+    // multi-rune token passes runeValue == -1 and also falls back to Id,
+    // since one int can't hold more than one code point. Centralized here so
+    // the four rules stay in sync.
     protected SymbolId ResolveLeafId(int runeValue) =>
         (Name == null && !IsUserSymbolIdExplicit && runeValue >= 0)
             ? new SymbolId(runeValue)
@@ -1406,7 +1403,7 @@ public abstract class Rule
     // `protected` so a Rule subclass in any assembly overrides it with a
     // plain `protected override`. It's never called cross-instance from
     // outside the type (Rule.TryParse invokes it on `this`; a rule that
-    // drives another rule goes through ParseRuleAgainst / ParseChild), so it
+    // drives another rule goes through ParseChild), so it
     // needs no `internal` half. The built-in rules and external subclasses
     // both compile from identical source against this declaration. See
     // src/InductorParser.ExternalContractTests for external subclasses, and
@@ -1434,40 +1431,23 @@ public abstract class Rule
     // wants.
     protected internal bool OpensTransaction = true;
 
-    // Helper for composite rules to call a child rule with the right
-    // "write-here" list.
+    // Helper for a rule to run an inner rule with the transaction and budget
+    // wrapping every rule gets, forwarding `outputSymbols` to it. Used both by
+    // composites assembling their children (And, Or, Alias, ...) and by rules
+    // that drive an inner rule as a lookahead or subroutine (Not, Peek,
+    // ScanUntil, WithinToken).
     //
-    // `outputSymbols` is the list the caller is currently
-    // collecting its own matched children into: either the caller's
-    // caller's list (when the caller is writing into it), the caller's
-    // own wrap-mode list, or null when the caller has no list yet.
+    // `outputSymbols` is the list the inner writes its Flatten-mode children
+    // into: the caller's collecting list, or null to discard them (a
+    // lookahead or probe passes null). The caller doesn't have to gate this
+    // list on the inner's FlattenType. TryParse nulls it for any inner whose
+    // effective FlattenType isn't Flatten, so handing a list to a Preserve or
+    // Delete inner is harmless.
     //
-    // ParseChild forwards that list only when the child would actually
-    // write into it (FlattenType.Flatten, normal mode). Otherwise it
-    // passes null so a FlattenType.Preserve or FlattenType.Delete
-    // child wraps or discards normally. Rule.TryParse performs the same check as a safety net,
-    // so a custom composite that forgets this helper still gets correct
-    // behavior. This just makes the intent visible at the caller.
+    // Forwards to the internal TryParse so user-defined rules don't need
+    // internal access to the parse entry point.
     protected Symbol? ParseChild(Rule child, Lexer lexer, List<Symbol>? outputSymbols)
-    {
-        var listForChild = child.FlattenType == FlattenType.Flatten && !lexer.PreserveAllSymbols
-            ? outputSymbols
-            : null;
-        return child.TryParse(lexer, listForChild);
-    }
-
-    // Run `rule` against `lexer` directly, with the same transaction and
-    // budget wrapping every rule gets, writing any Flatten-mode children
-    // into `outputSymbols`. Unlike ParseChild this doesn't pick the
-    // write-here list based on the child's FlattenType: the caller passes
-    // exactly the list it wants written into (or null). A rule that drives
-    // an inner rule against a sub-lexer it built (the way WithinToken does),
-    // or against the main lexer at a hand-chosen point (the way ScanUntil
-    // runs an escape rule), uses this instead of ParseChild. Forwards to the
-    // internal TryParse so user-defined rules don't need internal access to
-    // the parse entry point.
-    protected Symbol? ParseRuleAgainst(Rule rule, Lexer lexer, List<Symbol>? outputSymbols)
-        => rule.TryParse(lexer, outputSymbols);
+        => child.TryParse(lexer, outputSymbols);
 
     // Subclass hook for Compile-time normalization-form validation. Each
     // rule that holds user-supplied text the parser will compare against
