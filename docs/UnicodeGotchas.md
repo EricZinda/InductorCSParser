@@ -69,15 +69,19 @@ Identifier();  // base UAX #31-style form
 Python 3 identifiers, per [PEP 3131](https://peps.python.org/pep-3131/) and the [Language Reference](https://docs.python.org/3/reference/lexical_analysis.html#identifiers). Python adds `_` to Start and uses NFKC (not NFC) for equivalence.
 
 ```csharp
-var python = Identifier(extraStartRunes: TokenSet.Runes("_"))
+var python = Identifier(form: NormalizationForm.FormKC,
+                        extraStartRunes: TokenSet.Runes("_"))
     .Compile(NormalizationForm.FormKC);
 var result = python.Parse(input);
 ```
 
+The same form has to be passed to both `Identifier` and `Compile`. `Identifier` needs it so the XID sets are pre-expanded for compatibility equivalents (ligatures, fullwidth Latin, math-bold) whose NFKC conversion is a multi-grapheme sequence. Without that, `Compile(FormKC)` throws `InvalidOperationException` listing the offending entries.
+
 Rust identifiers, per the [Rust Reference](https://doc.rust-lang.org/reference/identifiers.html). Same profile as Python 3 (adds `_` to Start, uses NFKC). One Rust-specific rule this recipe does **not** enforce: Rust rejects bare `_` as an identifier, requiring `_ XID_Continue+`. If you need that, wrap the rule in an explicit check for the second character. For most grammars the practical difference is negligible.
 
 ```csharp
-var rust = Identifier(extraStartRunes: TokenSet.Runes("_"))
+var rust = Identifier(form: NormalizationForm.FormKC,
+                      extraStartRunes: TokenSet.Runes("_"))
     .Compile(NormalizationForm.FormKC);
 var result = rust.Parse(input);
 ```
