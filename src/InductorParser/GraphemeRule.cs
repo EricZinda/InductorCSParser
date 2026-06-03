@@ -34,6 +34,10 @@ internal sealed class GraphemeRule : Rule
 {
     private string _expected;
 
+    // Read-only accessor for the rule's literal text, used by out-of-assembly
+    // analyzers that inspect a rule's fixed text.
+    internal string? ExpectedText => _expected;
+
     public GraphemeRule(string expectedToken) : base(FlattenType.Delete, emitsLeaf: true)
     {
         // Trace name follows the user-facing factory name, not the
@@ -56,16 +60,11 @@ internal sealed class GraphemeRule : Rule
         // Id, matching C++ character-symbol numbering. Multi-rune
         // tokens fall through to Compile's custom-range assignment. At
         // construction the user hasn't named or set an explicit id yet, so
-        // SetLeafRuneId always takes effect here; it re-checks those
+        // SetLeafRuneId always takes effect here. It re-checks those
         // conditions itself for the re-id during the normalization pass below.
         if (TokenSet.TrySingleRune(expectedToken, out int runeValue))
             SetLeafRuneId(runeValue);
     }
-
-    // Read-only accessor for the rule's literal text, used by out-of-assembly
-    // analyzers (the required-literal prefilter and an alternative evaluator)
-    // that inspect a rule's fixed text. Same role as OneOfRule.LoweringSet.
-    internal string? ExpectedText => _expected;
 
     protected override void ValidateNormalization(
         System.Text.NormalizationForm form,
@@ -81,7 +80,7 @@ internal sealed class GraphemeRule : Rule
         if (normalized == null) return;
         if (string.Equals(normalized, _expected, StringComparison.Ordinal)) return;
 
-        if (CountGraphemes(normalized) > 1)
+        if (GraphemeClusters.Count(normalized) > 1)
         {
             reporter.ReportOffender(this, _expected,
                 $"<Token converts to multi-grapheme sequence \"{normalized}\" under {form}. " +
@@ -91,11 +90,7 @@ internal sealed class GraphemeRule : Rule
         }
 
         _expected = normalized;
-        // Re-id for the converted text. SetLeafRuneId / ClearLeafRuneId both
-        // skip the change when the user set an explicit Id via .As(SymbolId)
-        // or named the rule via .As(string): their explicit or name-hashed
-        // id is what keeps numbering stable, and touching it would clobber
-        // the custom-range id AssignNamedIds / As gave them.
+        // Re-id for the converted text.
         if (TokenSet.TrySingleRune(_expected, out int runeValue))
         {
             // Still one rune after the conversion (canonical-singleton
@@ -115,27 +110,15 @@ internal sealed class GraphemeRule : Rule
         }
     }
 
-    private static int CountGraphemes(string text)
-    {
-        if (text.Length == 0) return 0;
-        var enumerator = StringInfo.GetTextElementEnumerator(text);
-        int count = 0;
-        while (enumerator.MoveNext()) count++;
-        return count;
-    }
-
     protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
         int consumed = 0;
 
         // No heap allocations here except the one for the Symbol we return at the end.
-        // The lexer emits one token for the whole text element so the
-        // loop runs once per match in the normal path. The
-        // consumed += token.Length pattern also carries the
-        // multi-iteration sub-lexer case (WithinTokenRule's
-        // one-rune-per-token sub-lexer reading a multi-rune token):
-        // each rune iteration accumulates until consumed catches up
-        // to _expected.Length.
+        // The lexer emits one token for the whole text element, so the
+        // loop runs once in the normal path. It also handles a multi-rune
+        // token arriving one rune at a time (WithinTokenRule's sub-lexer):
+        // consumed += token.Length until it reaches _expected.Length.
         //
         // tokenStart is the pre-read position for THIS iteration's read.
         // Required for multi-token matches so we report the offender at
@@ -183,5 +166,4 @@ internal sealed class GraphemeRule : Rule
         }
         return leafSymbol;
     }
-
 }

@@ -122,7 +122,7 @@ Rules to apply
    evaluator (EnterRuleAtDepth, TickPeriodic, the Lowering*
    accessors, ResetForReuse pooling), describe it generically: "an
    alternative evaluator", "a pooled Lexer". Never name "the state machine",
-   "SM", "the lowering pass", or SM-internal concepts (Machine.CallTop,
+   "SM", "the lowering pass", or SM-internal concepts (Machine.CallTop, <!-- style-lint-ok -->
    Stepper, Step_Call, opcodes). Genuine false positives stay: C# async/await
    state machines, the Unicode "Sm" general category.
 
