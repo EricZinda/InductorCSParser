@@ -151,10 +151,10 @@ public class Primer1Examples
     [Test]
     public void Letter_class_includes_multirune_USFlag_token()
     {
-        var letterOrUSFlag = OneOf(TokenSet.Letters | TokenSet.Graphemes("🇺🇸"));
+        var letterOrUSFlag = OneOf(TokenSet.Letters | TokenSet.Graphemes(UnicodeExamples.USFlagGrapheme));
 
         Assert.That(letterOrUSFlag.Parse("A").Success, Is.True);
-        Assert.That(letterOrUSFlag.Parse("🇺🇸").Success, Is.True);
+        Assert.That(letterOrUSFlag.Parse(UnicodeExamples.USFlagGrapheme).Success, Is.True);
         Assert.That(letterOrUSFlag.Parse("3").Success, Is.False);
     }
 }

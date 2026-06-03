@@ -77,9 +77,15 @@ public readonly struct ParseResult
     // bounds-checking.
     public int ErrorCharIndex { get; }
 
-    // Error position's zero-based line number, counting \n, \r\n, and
-    // lone \r as line breaks. LSP convention. Computed lazily from
-    // ErrorCharIndex and the original input.
+    // Error position's zero-based line number. Line breaks follow UAX #18
+    // Annex C, the same set Rules.EndOfLine() accepts: LF, CRLF (one break,
+    // not two), lone CR, VT, FF, NEL (U+0085), LS (U+2028), PS (U+2029).
+    // That's a superset of the LF, CRLF, and lone CR a Language Server
+    // Protocol client recognizes, so the number matches an editor on
+    // ordinary source and diverges only on the rarer terminators. Keeping
+    // it aligned with EndOfLine() means every terminator a grammar consumes
+    // also bumps the reported line. Computed lazily from ErrorCharIndex and
+    // the original input. See SourcePosition for the same alignment note.
     public int ErrorLine
     {
         get
