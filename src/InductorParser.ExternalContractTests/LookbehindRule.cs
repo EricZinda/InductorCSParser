@@ -26,7 +26,7 @@
 //
 // It uses only the public surface (no internal members), which the no-IVT
 // build of this project enforces: Lexer.SetPosition moves the cursor to an
-// earlier token boundary, ParseRuleAgainst runs `inner` there, and
+// earlier token boundary, ParseChild runs `inner` there, and
 // Lexer.PeekTokenLength walks the boundaries.
 //
 // Negative lookbehind ("NOT preceded by X") composes with the built-in
@@ -102,7 +102,7 @@ public sealed class LookbehindRule : Rule
             using (lexer.BeginProbe())
             {
                 lexer.SetPosition(candidate);
-                bool innerMatched = ParseRuleAgainst(Inner, lexer, outputSymbols: null) != null;
+                bool innerMatched = ParseChild(Inner, lexer, outputSymbols: null) != null;
                 landedOnAnchor = innerMatched && lexer.Position == startPosition;
                 // No Commit: Dispose restores the cursor to startPosition and
                 // drops Inner's failures recorded behind the anchor.

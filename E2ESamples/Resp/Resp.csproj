@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>RespSample</RootNamespace>
+    <AssemblyName>RespSample</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="NUnit" Version="4.2.2" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\InductorParser\InductorParser.csproj" />
+  </ItemGroup>
+
+  <!--
+    Original/ holds the upstream-style reference program. It's Rust, not a .NET
+    source file, so it isn't compiled (the SDK only globs *.cs anyway; this is
+    belt-and-suspenders).
+  -->
+  <ItemGroup>
+    <None Include="Original\resp_nom_example.rs" />
+  </ItemGroup>
+
+</Project>

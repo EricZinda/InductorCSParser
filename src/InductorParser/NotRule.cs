@@ -44,7 +44,7 @@ internal sealed class NotRule : Rule
         bool innerMatched;
         using (lexer.BeginProbe())
         {
-            innerMatched = ParseRuleAgainst(Inner, lexer, outputSymbols: null) != null;
+            innerMatched = ParseChild(Inner, lexer, outputSymbols: null) != null;
         }
         if (innerMatched)
         {

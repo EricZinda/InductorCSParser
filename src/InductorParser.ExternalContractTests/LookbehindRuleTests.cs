@@ -5,7 +5,7 @@
 //
 // It's a Rule-valued lookbehind (LPeg's lpeg.B), built entirely on the
 // public surface: Lexer.SetPosition moves the cursor to an earlier token
-// boundary, ParseRuleAgainst runs the inner rule there, and
+// boundary, ParseChild runs the inner rule there, and
 // Lexer.PeekTokenLength walks the boundaries. Compiling in this no-IVT
 // project proves an outside author can build it using nothing internal.
 
