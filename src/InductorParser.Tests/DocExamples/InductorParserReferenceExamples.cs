@@ -252,6 +252,47 @@ public class InductorParserReferenceExamples
         Assert.That(pairs[2].Find(values)!.ToString(), Is.EqualTo("3"));
     }
 
+    // "LINQ on the Symbol Tree": the doc lists four LINQ entry points
+    // (Children, Walk, FindAll, and "Flattened tree as a list"). The last
+    // one read `symbol.FlattenInto().OfType<Symbol>()`, which doesn't
+    // compile: Symbol.FlattenInto takes a List<Symbol> and returns void.
+    // The list-returning method is Flatten(), which returns
+    // IReadOnlyList<Symbol>, exactly what the prose ("each one is typed as
+    // IReadOnlyList<Symbol> or IEnumerable<Symbol>") and the comment
+    // ("as a list") promise. Running all four keeps the snippet from
+    // drifting back to a non-compiling form.
+    [Test]
+    public void Linq_on_the_symbol_tree_entry_points()
+    {
+        var settingName = Identifier().As("settingName");
+        var number = Integer().As("number");
+        var entry = Or(settingName, number);
+        var document = And(entry, ZeroOrMore(And(Token(','), entry)), Eof())
+            .As("document").Compile();
+
+        var result = document.Parse("alpha,42,beta");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        var symbol = result.Tree!;
+
+        // Direct children (no recursion)
+        var directNames = symbol.Children.Where(c => c.Id == settingName.Id).ToList();
+        Assert.That(directNames.Count, Is.EqualTo(2));
+
+        // Entire subtree, pre-order walk
+        var integers = symbol.Walk().Where(s => s.Id == number.Id).ToList();
+        Assert.That(integers.Count, Is.EqualTo(1));
+        Assert.That(integers[0].ToString(), Is.EqualTo("42"));
+
+        // All descendants matching a specific rule
+        var nameTexts = symbol.FindAll(settingName).Select(s => s.ToString()).ToList();
+        Assert.That(nameTexts, Is.EqualTo(new[] { "alpha", "beta" }));
+
+        // Flattened tree as a list. Flatten() returns IReadOnlyList<Symbol>,
+        // a direct LINQ target exactly as the surrounding prose claims.
+        var flattened = symbol.Flatten().OfType<Symbol>().ToList();
+        Assert.That(flattened.Count, Is.GreaterThan(0));
+    }
+
     // "Tracing": setting ParseOptions.TraceSink + TraceLevel routes trace
     // output to a TextWriter.
     [Test]

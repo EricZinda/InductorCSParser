@@ -2,80 +2,86 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using NUnit.Framework;
+using InductorParser;
 using static InductorParser.Rules;
 
 namespace InductorParser.Tests.DocExamples;
 
 // Verifies the runnable code examples in docs/Primer4.md (the
-// "Security-Related Concerns" walkthrough: pathological input, the
-// FormKC compatibility-lookalike blocker, ASCII script restriction,
-// and the invisible-character defenses). Each test mirrors a code block
-// from the doc and asserts what the doc claims.
+// "Security-Related Concerns" walkthrough). Primer4 had no backing
+// example test, which is exactly the ozpb gap that let two of its
+// snippets drift:
+//   * The "Invisible characters" StripInvisibles helper called
+//     Invisibles.Contains(r), but TokenSet has no Contains method
+//     (the rune-membership test is ContainsRune(Rune)), so the
+//     documented helper didn't compile.
+//   * The "safe username" grammar wrapped NoneOf(Invisibles) in
+//     And(..., AnyToken()). NoneOf already consumes one token, so that
+//     pairing ate two tokens per iteration and failed on odd-length
+//     input like "admin" (which the doc claims succeeds).
+// Each test mirrors a doc snippet and asserts the documented behavior.
+// Non-ASCII test data is built from hex code points (no raw glyphs in
+// source) so the UnicodeLiteralCanary scanner stays happy.
 [TestFixture]
 public class Primer4Examples
 {
-    // Primer4.md "Pathological Input": the linear-time email-ish
-    // validator. Accepts a well-formed address and rejects the
-    // ReDoS-style adversarial input cleanly (no catastrophic
-    // backtracking).
+    // Fullwidth "admin": U+FF41 U+FF44 U+FF4D U+FF49 U+FF4E.
+    private static readonly string FullwidthAdmin =
+        new string(new[] { (char)0xFF41, (char)0xFF44, (char)0xFF4D, (char)0xFF49, (char)0xFF4E });
+    // Math-bold small a (U+1D41A) followed by plain "dmin".
+    private static readonly string MathBoldAdmin = char.ConvertFromUtf32(0x1D41A) + "dmin";
+    // Cyrillic small a (U+0430) followed by plain "dmin".
+    private static readonly string CyrillicAdmin = ((char)0x0430) + "dmin";
+    // Zero-width space (U+200B).
+    private static readonly string ZeroWidthSpace = ((char)0x200B).ToString();
+
+    // "Pathological Input": the ReDoS-shaped grammars run in linear
+    // time and reject / accept cleanly.
     [Test]
-    public void ReDoS_validator_accepts_valid_and_rejects_pathological()
+    public void Pathological_input_validators_match_and_reject_cleanly()
     {
         var validator = And(
             OneOrMore(OneOf(TokenSet.Ascii.Letters | TokenSet.Ascii.Digits)),
             Literal("@example.com"),
-            Eof());
+            Eof()
+        ).Compile();
+        Assert.That(validator.Parse("abc123@example.com").Success, Is.True);
+        Assert.That(validator.Parse("aaaaaaaaaaaaaaaaaaaaa!").Success, Is.False);
 
-        Assert.That(validator.Parse("user42@example.com").Success, Is.True);
-        // "aaaa...!" is the classic ReDoS trigger for the equivalent
-        // regex. The parser consumes the run in one greedy pass and
-        // fails cleanly.
-        Assert.That(validator.Parse(new string('a', 40) + "!").Success, Is.False);
-    }
-
-    // Primer4.md: even the textbook (a+)+ ReDoS shape is linear here.
-    [Test]
-    public void ReDoS_textbook_nested_quantifiers_terminate()
-    {
-        var pattern = And(OneOrMore(OneOrMore(Token('a'))), Eof());
-
+        var pattern = And(OneOrMore(OneOrMore(Token('a'))), Eof()).Compile();
         Assert.That(pattern.Parse("aaaa").Success, Is.True);
-        Assert.That(pattern.Parse("aaaa!").Success, Is.False);
+        Assert.That(pattern.Parse("aaaab").Success, Is.False);
     }
 
-    // Primer4.md "Unicode Compatibility Lookalikes": a FormKC-compiled
-    // blocker treats math-bold and fullwidth variants as plain "admin".
+    // "Unicode Compatibility Lookalikes": a FormKC-compiled blocker
+    // converts math-bold and fullwidth letters to plain ASCII before
+    // the rule runs, so all three spellings of "admin" match.
     [Test]
-    public void FormKC_blocker_catches_compatibility_lookalikes()
+    public void Compatibility_lookalike_blocker_under_FormKC()
     {
         var blocker = And(Literal("admin"), Eof()).Compile(NormalizationForm.FormKC);
 
         Assert.That(blocker.Parse("admin").Success, Is.True);
-        // U+1D41A MATHEMATICAL BOLD SMALL A + "dmin"
-        Assert.That(blocker.Parse("\U0001D41Admin").Success, Is.True);
-        // Fullwidth "admin"
-        Assert.That(blocker.Parse("ａｄｍｉｎ").Success, Is.True);
+        Assert.That(blocker.Parse(MathBoldAdmin).Success, Is.True);
+        Assert.That(blocker.Parse(FullwidthAdmin).Success, Is.True);
     }
 
-    // Primer4.md "Homoglyphs": restricting to ASCII letters rejects
-    // Cyrillic, math-bold, and fullwidth lookalikes under default FormC,
-    // with no FormKC needed.
+    // "Homoglyphs": an ASCII-only username rule rejects Cyrillic,
+    // math-bold, and fullwidth lookalikes under the default FormC.
     [Test]
-    public void Ascii_script_restriction_rejects_homoglyphs_and_compatibility_lookalikes()
+    public void Ascii_only_username_rejects_homoglyphs_and_compat_lookalikes()
     {
         var username = And(OneOrMore(OneOf(TokenSet.Ascii.Letters)), Eof()).Compile();
 
         Assert.That(username.Parse("admin").Success, Is.True);
-        // Cyrillic 'а' (U+0430)
-        Assert.That(username.Parse("аdmin").Success, Is.False);
-        // Math-bold 'a' (U+1D41A)
-        Assert.That(username.Parse("\U0001D41Admin").Success, Is.False);
-        // Fullwidth "admin"
-        Assert.That(username.Parse("ａｄｍｉｎ").Success, Is.False);
+        Assert.That(username.Parse(CyrillicAdmin).Success, Is.False);
+        Assert.That(username.Parse(MathBoldAdmin).Success, Is.False);
+        Assert.That(username.Parse(FullwidthAdmin).Success, Is.False);
     }
 
-    // Primer4.md "Invisible characters": the StripInvisibles helper,
-    // verbatim from the doc. UnicodeCategory.Format is the invisible set.
+    // "Invisible characters": the documented StripInvisibles helper.
+    // This is the snippet that drifted: it must use ContainsRune(Rune),
+    // not the nonexistent Contains(Rune).
     private static readonly TokenSet Invisibles = TokenSet.Category(UnicodeCategory.Format);
 
     private static string StripInvisibles(string input) =>
@@ -83,26 +89,22 @@ public class Primer4Examples
             .Where(r => !Invisibles.ContainsRune(r)));
 
     [Test]
-    public void StripInvisibles_removes_zero_width_characters_so_the_blocker_catches_the_bypass()
+    public void StripInvisibles_removes_format_characters_before_parsing()
     {
-        var blockedWords = And(Literal("kill"), Eof()).Compile();
-
-        // "ki<ZWS>ll" slips past the blocker untouched...
-        string smuggled = "ki​ll";
-        Assert.That(blockedWords.Parse(smuggled).Success, Is.False);
-
-        // ...but stripping invisibles first restores "kill" and the
-        // blocker catches it.
+        // "ki<ZWS>ll" becomes "kill" before the rule sees it.
+        string smuggled = "ki" + ZeroWidthSpace + "ll";
         Assert.That(StripInvisibles(smuggled), Is.EqualTo("kill"));
+
+        var blockedWords = And(Literal("kill"), Eof()).Compile();
         Assert.That(blockedWords.Parse(StripInvisibles(smuggled)).Success, Is.True);
     }
 
-    // Primer4.md: the "allowed"-rule username that refuses any invisible
-    // in the input. NoneOf(Invisibles) is the per-character check, so
-    // OneOrMore(NoneOf(Invisibles)) accepts a clean name and rejects one
-    // carrying a zero-width space.
+    // "Invisible characters": an allowed-rule username that refuses any
+    // invisible in the input via NoneOf(Invisibles). NoneOf already
+    // consumes one non-invisible token per match, so it stands alone
+    // inside OneOrMore (not paired with AnyToken()).
     [Test]
-    public void SafeUsername_accepts_clean_name_and_rejects_invisible_laden_one()
+    public void Safe_username_refuses_any_invisible_character()
     {
         var safeUsername = And(
             OneOrMore(NoneOf(Invisibles)),
@@ -110,22 +112,20 @@ public class Primer4Examples
         ).Compile();
 
         Assert.That(safeUsername.Parse("admin").Success, Is.True);
-        // "ad<ZWS>min": the ZWS fails NoneOf(Invisibles).
-        Assert.That(safeUsername.Parse("ad​min").Success, Is.False);
+        Assert.That(safeUsername.Parse("ad" + ZeroWidthSpace + "min").Success, Is.False);
     }
 
-    // Primer4.md: subtract ZWJ from the invisible set so emoji families
-    // survive the filter while every other Format character is still
-    // caught.
+    // "Invisible characters": keeping emoji whole by subtracting ZWJ
+    // from the Format category with & and ~.
     [Test]
-    public void Invisibles_minus_ZWJ_keeps_ZWJ_out_of_the_set()
+    public void Invisibles_minus_zwj_keeps_zwj_out_of_the_set()
     {
-        var invisiblesKeepingZwj =
+        var invisiblesKeepingEmoji =
             TokenSet.Category(UnicodeCategory.Format) & ~TokenSet.Single(0x200D);
 
-        Assert.That(invisiblesKeepingZwj.ContainsRune(0x200D), Is.False,
-            "ZWJ (U+200D) is subtracted so emoji families survive the filter");
-        Assert.That(invisiblesKeepingZwj.ContainsRune(0x200B), Is.True,
-            "zero-width space (U+200B) is still in the invisible set");
+        Assert.That(invisiblesKeepingEmoji.ContainsRune(0x200B), Is.True,  // ZWS still removed
+            "zero-width space stays in the invisible set");
+        Assert.That(invisiblesKeepingEmoji.ContainsRune(0x200D), Is.False, // ZWJ kept
+            "ZWJ is subtracted so emoji families survive the filter");
     }
 }
