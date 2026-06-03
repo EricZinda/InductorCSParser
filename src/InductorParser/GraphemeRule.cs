@@ -81,7 +81,7 @@ internal sealed class GraphemeRule : Rule
         if (normalized == null) return;
         if (string.Equals(normalized, _expected, StringComparison.Ordinal)) return;
 
-        if (CountGraphemes(normalized) > 1)
+        if (TokenSet.CountGraphemes(normalized) > 1)
         {
             reporter.ReportOffender(this, _expected,
                 $"<Token converts to multi-grapheme sequence \"{normalized}\" under {form}. " +
@@ -113,15 +113,6 @@ internal sealed class GraphemeRule : Rule
             // matching a Token built multi-rune from the start.
             ClearLeafRuneId();
         }
-    }
-
-    private static int CountGraphemes(string text)
-    {
-        if (text.Length == 0) return 0;
-        var enumerator = StringInfo.GetTextElementEnumerator(text);
-        int count = 0;
-        while (enumerator.MoveNext()) count++;
-        return count;
     }
 
     protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)

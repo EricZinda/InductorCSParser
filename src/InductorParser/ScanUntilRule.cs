@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Text;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
@@ -297,7 +296,7 @@ internal sealed class ScanUntilRule : Rule
         if (normalized == null) return;
         if (string.Equals(normalized, originalRuneText, StringComparison.Ordinal)) return;
 
-        if (CountGraphemes(normalized) > 1)
+        if (TokenSet.CountGraphemes(normalized) > 1)
         {
             reporter.ReportOffender(this, originalRuneText,
                 $"<escape-start rune converts under {form} to the multi-grapheme " +
@@ -314,15 +313,6 @@ internal sealed class ScanUntilRule : Rule
         }
 
         _escapeStartGrapheme = normalized;
-    }
-
-    private static int CountGraphemes(string text)
-    {
-        if (text.Length == 0) return 0;
-        var enumerator = StringInfo.GetTextElementEnumerator(text);
-        int count = 0;
-        while (enumerator.MoveNext()) count++;
-        return count;
     }
 
     protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)

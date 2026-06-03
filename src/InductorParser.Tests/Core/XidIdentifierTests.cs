@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using InductorParser;
+using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 using static InductorParser.Tests.CanaryHelper;
@@ -165,6 +167,129 @@ public class XidIdentifierTests
         Assert.That(plain.Success, Is.True, plain.ErrorMessage);
         Assert.That(ligature.Tree!.ToString(), Is.EqualTo("ffoo"));
         Assert.That(ligature.Tree!.ToString(), Is.EqualTo(plain.Tree!.ToString()));
+    }
+
+    [TestCase(NormalizationForm.FormKC)]
+    [TestCase(NormalizationForm.FormKD)]
+    public void Compatibility_identifier_does_not_promote_continuation_piece_to_start(NormalizationForm form)
+    {
+        // U+0140 LATIN SMALL LETTER L WITH MIDDLE DOT is XID_Start and
+        // NFKx-decomposes to "l" + U+00B7. U+00B7 is XID_Continue only,
+        // so the decomposed source character is legal because the middle
+        // dot lands after a valid start. A bare U+00B7 at the beginning
+        // must still be rejected.
+        const string middleDot = "\u00B7";
+        const string lWithMiddleDot = "\u0140";
+        var grammar = And(Identifier(form), Eof());
+        grammar.Compile(form);
+
+        Assert.That(TokenSet.XidStart.ContainsRune(0x00B7), Is.False,
+            "MIDDLE DOT is not an identifier-start character");
+        Assert.That(TokenSet.XidContinue.ContainsRune(0x00B7), Is.True,
+            "MIDDLE DOT is allowed only after the first character");
+
+        var bareMiddleDot = grammar.Parse(middleDot + "foo");
+        Assert.That(bareMiddleDot.Success, Is.False,
+            "The form-aware Identifier helper must not add continuation-only decomposition pieces to XID_Start");
+        Assert.That(bareMiddleDot.ErrorCharIndex, Is.EqualTo(0));
+
+        var decomposedIntoStartThenContinue = grammar.Parse(lWithMiddleDot + "foo");
+        Assert.That(decomposedIntoStartThenContinue.Success, Is.True,
+            decomposedIntoStartThenContinue.ErrorMessage);
+        Assert.That(decomposedIntoStartThenContinue.Tree!.ToString(), Is.EqualTo("l\u00B7foo"));
+    }
+
+    [TestCase(NormalizationForm.FormKC)]
+    [TestCase(NormalizationForm.FormKD)]
+    public void XidStart_compatibility_continuations_are_all_in_XidContinue(NormalizationForm form)
+    {
+        // Rules.Identifier expands each XID_Start character's compatibility
+        // decomposition into the start set but keeps only the first rune in
+        // start position; every later rune is matched against the body set.
+        // That split is sound only if those later runes are all XID_Continue.
+        // UAX #31 Section 5.1.3 "Identifier Closure Under Normalization"
+        // guarantees exactly that. This verifies the guarantee against the
+        // runtime's actual Unicode data, so Identifier can rely on it without
+        // re-checking ~130K code points on every grammar build. The comment
+        // in Rules.Identifier references this test by name.
+        var continueSet = TokenSet.XidContinue;
+        int multiGraphemeStarts = 0;
+        foreach (int rune in TokenSet.XidStart.EnumerateRunes())
+        {
+            string entry = char.ConvertFromUtf32(rune);
+            if (entry.IsNormalized(form)) continue;
+            string normalized;
+            try { normalized = entry.Normalize(form); }
+            catch (ArgumentException) { continue; }
+            if (TokenSet.CountGraphemes(normalized) <= 1) continue;
+            multiGraphemeStarts++;
+            bool firstRune = true;
+            foreach (int continuation in SurrogateHelpers.EnumerateRuneValues(normalized))
+            {
+                if (firstRune) { firstRune = false; continue; }
+                Assert.That(continueSet.ContainsRune(continuation), Is.True,
+                    $"U+{rune:X4} normalizes under {form} to \"{normalized}\"; continuation " +
+                    $"rune U+{continuation:X4} must be XID_Continue for the Identifier " +
+                    $"start/body split to stay sound");
+            }
+        }
+        // Non-vacuity: confirm the form actually exercised the multi-grapheme
+        // path, so a future Unicode-data change that stops decomposing these
+        // can't make the test pass without checking anything.
+        Assert.That(multiGraphemeStarts, Is.GreaterThan(0),
+            "expected at least one XID_Start character to compatibility-decompose into multiple graphemes");
+    }
+
+    [TestCase(NormalizationForm.FormKC)]
+    [TestCase(NormalizationForm.FormKD)]
+    public void Identifier_rejects_start_extra_whose_decomposition_tail_is_not_a_body_character(NormalizationForm form)
+    {
+        // U+00BD VULGAR FRACTION ONE HALF normalizes under NFKC/NFKD to
+        // "1" + U+2044 FRACTION SLASH + "2". The fraction slash isn't
+        // XID_Continue, so adding 1/2 as an identifier-start extra leaves its
+        // middle rune unmatchable in body position. Closure covers XidStart's
+        // own entries but not caller extras, so Identifier must reject this at
+        // grammar-build time instead of silently building a rule that can
+        // never match the decomposed input.
+        const string oneHalf = "\u00BD";
+        const string fractionSlash = "\u2044";
+        Assert.That(TokenSet.XidContinue.ContainsRune(0x2044), Is.False,
+            "FRACTION SLASH must not be XID_Continue for this test to be meaningful");
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            Identifier(form, extraStartRunes: TokenSet.Runes(oneHalf)));
+        Assert.That(exception!.Message, Does.Contain("extraStartRunes"));
+        Assert.That(exception.Message, Does.Contain("extraBodyRunes"));
+        Assert.That(exception.Message, Does.Contain(fractionSlash));
+
+        // Supplying the missing piece in extraBodyRunes clears the rejection.
+        Assert.DoesNotThrow(() =>
+            Identifier(form, extraStartRunes: TokenSet.Runes(oneHalf),
+                       extraBodyRunes: TokenSet.Runes(fractionSlash)));
+    }
+
+    [Test]
+    public void Identifier_rejects_multi_rune_grapheme_extras()
+    {
+        // A TokenSet can hold multi-rune grapheme clusters, but Identifier
+        // matches one code point at a time, so such an entry could never
+        // match in any position. Passing one as an extra is a grammar bug,
+        // and Identifier rejects it at build time rather than silently
+        // building a rule with a dead entry. LatinEAcuteGrapheme is the
+        // canonical two-rune / one-grapheme fixture (e + combining acute);
+        // its Canary check catches an editor normalizing the literal to
+        // precomposed U+00E9.
+        var grapheme = TokenSet.Graphemes(UnicodeExamples.LatinEAcuteGrapheme);
+        Assert.That(grapheme.HasMultiRuneGraphemes, Is.True,
+            "the test fixture must actually be a multi-rune grapheme");
+
+        var startException = Assert.Throws<InvalidOperationException>(() =>
+            Identifier(extraStartRunes: grapheme));
+        Assert.That(startException!.Message, Does.Contain("extraStartRunes"));
+
+        var bodyException = Assert.Throws<InvalidOperationException>(() =>
+            Identifier(extraBodyRunes: grapheme));
+        Assert.That(bodyException!.Message, Does.Contain("extraBodyRunes"));
     }
 
     [Test]
