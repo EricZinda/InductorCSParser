@@ -32,7 +32,7 @@ internal sealed class PeekRule : Rule
         bool innerMatched;
         using (lexer.BeginProbe())
         {
-            innerMatched = ParseRuleAgainst(Inner, lexer, outputSymbols: null) != null;
+            innerMatched = ParseChild(Inner, lexer, outputSymbols: null) != null;
         }
         if (!innerMatched)
         {
