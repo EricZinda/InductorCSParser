@@ -113,7 +113,7 @@ This is just the first form with a literal string instead of a `nameof`. The tra
 
 **`.As(new SymbolId(SymbolRanges.CustomRangeStart + 42))` for explicit numeric ids.** If a grammar needs stable numeric ids across versions for serialization or cross-version debugging, pass a `SymbolId` directly instead of a string. The number stays fixed no matter how you refactor the code. The name lives on the rule, not on the id, so chain a separate `.As("Thing")` call to attach a debug name (the two `.As` overloads write different fields, so they compose).
 
-Naming a rule with `.As(...)` also flips its `FlattenType` to `Preserve` if the policy is still the rule's class default. Identification implies findability: a named rule is one the caller wants to locate later with `Tree.Find` or `result.FindFirst`, and that only works when the rule's wrapper Symbol reaches the parse tree. So `Token('!').As("breaking")` quietly upgrades from the default `FlattenType.Delete` to `Preserve`, and `ZeroOrMore(letter).As("word")` upgrades from the default `FlattenType.Flatten` to `Preserve`, without the caller having to chain an explicit `.Preserve()`. If `.Flatten(...)` (or `.Delete()` / `.Flatten()`) was already called with a non-Preserve value, `.As` throws instead of overriding the caller's explicit choice. The reverse direction throws too: setting a non-Preserve policy on a rule that's already been named would silently break `Tree.Find` for that rule, so it fails loudly at grammar-build time. `.Preserve()` (or `.Flatten(FlattenType.Preserve)`) is always safe to chain with `.As` in either order.
+Naming a rule with `.As(...)` also flips its `FlattenType` to `Preserve` if the policy is still the rule's class default. Identification implies findability: a named rule is one the caller wants to locate later with `Tree.Find` or `result.Find`, and that only works when the rule's Symbol reaches the parse tree. So `Token('!').As("breaking")` quietly upgrades from the default `FlattenType.Delete` to `Preserve`, and `ZeroOrMore(letter).As("word")` upgrades from the default `FlattenType.Flatten` to `Preserve`, without the caller having to chain an explicit `.Preserve()`. If `.Flatten(...)` (or `.Delete()` / `.Flatten()`) was already called with a non-Preserve value, `.As` throws instead of overriding the caller's explicit choice. The reverse direction throws too: setting a non-Preserve policy on a rule that's already been named would silently break `Tree.Find` for that rule, so it fails loudly at grammar-build time. `.Preserve()` (or `.Flatten(FlattenType.Preserve)`) is always safe to chain with `.As` in either order.
 
 ### What `Compile` Actually Does
 
@@ -443,7 +443,7 @@ Usage:
 ```csharp
 var (setting, error) = CompileSetting(document, settingName, settingValue, "difficulty = hard;");
 
-if (setting isn't null)
+if (setting is not null)
     Console.WriteLine($"{setting.Name} = {setting.Value}");
 else
     Console.WriteLine($"Parse failed: {error}");
