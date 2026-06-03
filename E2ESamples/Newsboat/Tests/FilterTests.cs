@@ -283,7 +283,7 @@ public class FilterErrorPositionTests
         // because we wrote it that way. What it doesn't carry is the
         // line / column pair, the matched-rule context, or the source
         // span of the failing sub-expression. The Rewrite gets all
-        // three via SourceRangeOf and ParseResult's line / column
+        // three via Symbol.SourceRange and ParseResult's line / column
         // accessors. The two char indices are close but don't have to
         // match exactly: Inductor's deepest-failure tracker can land
         // a few characters past the hand-written parser's "I gave up

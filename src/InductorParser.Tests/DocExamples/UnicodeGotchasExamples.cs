@@ -77,15 +77,58 @@ public class UnicodeGotchasExamples
     }
 
     // "Matching specific languages" / "Python 3 identifiers" recipe.
-    // Adds underscore to start, NFKC normalization.
+    // Adds underscore to start, NFKC normalization. The form has to be
+    // passed to both Identifier and Compile: Identifier needs it so that
+    // XidStart / XidContinue's compatibility-equivalent entries are
+    // pre-expanded into their grapheme pieces (a TokenSet member has to
+    // be exactly one grapheme), and Compile needs it to normalize input
+    // before matching. The doc snippet used to pass FormKC to Compile
+    // only and let Identifier's `form` parameter default to FormC, which
+    // throws InvalidOperationException at Compile time ("Compile failed:
+    // 1549 rules have expected text that isn't in FormKC"). The corrected
+    // form passes the same value to both.
     [Test]
     public void Python3_identifier_recipe()
     {
-        var python = Identifier(NormalizationForm.FormKC, extraStartRunes: TokenSet.Runes("_"))
+        var python = Identifier(form: NormalizationForm.FormKC,
+                                extraStartRunes: TokenSet.Runes("_"))
             .Compile(NormalizationForm.FormKC);
 
         var result = python.Parse("_foo");
         Assert.That(result.Success, Is.True);
+    }
+
+    // "Matching specific languages" / "Rust identifiers" recipe. Same
+    // profile as Python 3 (adds `_` to Start, uses NFKC), so the same
+    // form-on-both-Identifier-and-Compile requirement applies. Added
+    // as its own test because the Rust example sits in its own code
+    // block in UnicodeGotchas.md.
+    [Test]
+    public void Rust_identifier_recipe()
+    {
+        var rust = Identifier(form: NormalizationForm.FormKC,
+                              extraStartRunes: TokenSet.Runes("_"))
+            .Compile(NormalizationForm.FormKC);
+
+        var result = rust.Parse("_foo");
+        Assert.That(result.Success, Is.True);
+    }
+
+    // Locks in the requirement the Python and Rust recipes above embody:
+    // pairing `Identifier(form: FormC)` (the default) with `Compile(FormKC)`
+    // throws at Compile time, because XidStart and XidContinue carry
+    // FormKC-equivalent multi-grapheme entries (ligatures, fullwidth Latin,
+    // math-bold) that a OneOf rule can't match as single tokens. If a
+    // future change made Compile more permissive (or had Identifier
+    // auto-defer the form to Compile's), the UnicodeGotchas Python/Rust
+    // snippets could be simplified. Until then, this test documents why
+    // the snippets pass FormKC twice.
+    [Test]
+    public void Identifier_default_form_with_FormKC_compile_throws()
+    {
+        Assert.Throws<System.InvalidOperationException>(() =>
+            Identifier(extraStartRunes: TokenSet.Runes("_"))
+                .Compile(NormalizationForm.FormKC));
     }
 
     // "Case-Insensitive Matching Beyond ASCII", the LiteralIgnoreAsciiCase

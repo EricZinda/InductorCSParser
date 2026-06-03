@@ -379,7 +379,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             intervals.Add(new Interval(newRune, newRune));
             return;
         }
-        if (CountGraphemes(normalized) <= 1)
+        if (GraphemeClusters.Count(normalized) <= 1)
         {
             graphemes.Add(normalized);
             return;
@@ -550,7 +550,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         {
             if (entry.IsNormalized(form)) return false;
             string normalized = entry.Normalize(form);
-            if (CountGraphemes(normalized) <= 1) return false;
+            if (GraphemeClusters.Count(normalized) <= 1) return false;
             converted = normalized;
             return true;
         }
@@ -611,20 +611,6 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             intervals.Add(new Interval(rune, rune));
         else
             graphemes.Add(grapheme);
-    }
-
-    // Counts the grapheme clusters (UAX #29 text elements) in `text`. Public
-    // so user-defined rules can reuse it instead of duplicating the
-    // StringInfo walk; the built-in rule types use it to reject an entry
-    // whose normalization spans more than one cluster.
-    public static int CountGraphemes(string text)
-    {
-        if (text == null) throw new ArgumentNullException(nameof(text));
-        if (text.Length == 0) return 0;
-        var enumerator = StringInfo.GetTextElementEnumerator(text);
-        int count = 0;
-        while (enumerator.MoveNext()) count++;
-        return count;
     }
 
     // True iff the string is exactly one Unicode rune (one non-surrogate
@@ -1463,17 +1449,29 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         // ASCII intra-line whitespace: SPACE and TAB only. Mirrors the
         // full-Unicode TokenSet.InlineWhitespace.
         public static readonly TokenSet InlineWhitespace = Runes(" \t");
-        // ASCII whitespace including line terminators: SPACE, TAB, CR,
-        // LF, plus the CRLF two-rune cluster as a multi-rune entry.
-        // Use this for grammars that treat newlines as ordinary
-        // whitespace (the regex \s convention). For grammars that need
-        // to distinguish intra-line whitespace from line terminators,
-        // use InlineWhitespace and Rules.EndOfLine() instead.
+        // ASCII whitespace including every ASCII line terminator: SPACE,
+        // TAB, LF, VT, FF, CR, plus the CRLF two-rune cluster as a
+        // multi-rune entry. This is exactly the full-Unicode
+        // TokenSet.AnyWhitespace restricted to ASCII, the same way
+        // Ascii.InlineWhitespace mirrors InlineWhitespace. VT (U+000B) and
+        // FF (U+000C) are line terminators under UAX #18, so they live in
+        // TokenSet.LineTerminators and IsLineTerminator and are consumed by
+        // Rules.EndOfLine(); a set "including line terminators" carries them
+        // too. Use this for grammars that treat newlines as ordinary
+        // whitespace. For grammars that need to distinguish intra-line
+        // whitespace from line terminators, use InlineWhitespace and
+        // Rules.EndOfLine() instead.
         // CR, LF, and the CRLF cluster all live in the set so that
         // OneOf / NoneOf / ScanUntil match each consistently: an input
         // CRLF cluster is the multi-rune entry, a bare CR or LF is the
         // matching single-rune entry.
-        public static readonly TokenSet AnyWhitespace = InlineWhitespace | Single('\r') | Single('\n') | Graphemes("\r\n");
+        public static readonly TokenSet AnyWhitespace =
+            InlineWhitespace
+            | Single('\n')       // LF
+            | Single('\v')       // VT
+            | Single('\f')       // FF
+            | Single('\r')       // CR
+            | Graphemes("\r\n");  // CRLF cluster
         public static readonly TokenSet HexDigits = Digits | Range('a', 'f') | Range('A', 'F');
     }
 
@@ -1489,9 +1487,24 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         int currentHigh = 0;
         for (int codepoint = 0; codepoint <= 0xFFFF; codepoint++)
         {
-            // Skip the surrogate block: not valid Unicode scalar values.
-            // See BuildFromPredicate below for the full rationale.
-            if (codepoint >= 0xD800 && codepoint <= 0xDFFF) continue;
+            // The surrogate block holds no valid Unicode scalar values, so
+            // nothing in it can be a member. Close any open run and jump past
+            // the whole block. Closing matters: a bare `continue` would leave
+            // an open run spanning the gap, so a run with members just below
+            // 0xD800 and just above 0xDFFF would merge into one interval that
+            // swallowed the surrogate code units. No whitespace sits at that
+            // boundary today, but the close keeps the result surrogate-free
+            // regardless of the data, matching BuildCategories.
+            if (codepoint >= 0xD800 && codepoint <= 0xDFFF)
+            {
+                if (currentLow != null)
+                {
+                    list.Add(new Interval(currentLow.Value, currentHigh));
+                    currentLow = null;
+                }
+                codepoint = 0xDFFF; // the loop's ++ moves to 0xE000
+                continue;
+            }
             if (char.IsWhiteSpace((char)codepoint) && !IsLineTerminator(codepoint))
             {
                 if (currentLow == null) { currentLow = codepoint; currentHigh = codepoint; }
@@ -1555,10 +1568,31 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
         for (int codepoint = 0; codepoint <= 0x10FFFF; codepoint++)
         {
-            // Skip the surrogate block. These code units exist to encode
-            // supplementary-plane code points as UTF-16 pairs. They aren't
-            // valid Unicode scalar values (runes) on their own.
-            if (codepoint >= 0xD800 && codepoint <= 0xDFFF) continue;
+            // The surrogate block (U+D800..U+DFFF) holds UTF-16 code units used
+            // to encode supplementary-plane code points as pairs. They aren't
+            // valid Unicode scalar values (runes) on their own and belong to no
+            // scalar-category set. Close every open run and jump past the whole
+            // block. Closing matters: a bare `continue` would leave a run open
+            // across the gap, so a category with members just below 0xD800 and
+            // just above 0xDFFF (0xD7FF and 0xE000) would merge into one
+            // interval that swallowed the surrogate code units. No category
+            // straddles the gap in the Unicode the BCL ships today (0xD7FF is
+            // Cn, 0xE000 is Co), but the close keeps the result surrogate-free
+            // for any category and any future Unicode version, instead of
+            // silently relying on that adjacency never happening.
+            if (codepoint >= 0xD800 && codepoint <= 0xDFFF)
+            {
+                for (int index = 0; index < missing.Count; index++)
+                {
+                    if (currentLows[index] != null)
+                    {
+                        lists[index].Add(new Interval(currentLows[index]!.Value, currentHighs[index]));
+                        currentLows[index] = null;
+                    }
+                }
+                codepoint = 0xDFFF; // the loop's ++ moves to 0xE000
+                continue;
+            }
 
             // CharUnicodeInfo.GetUnicodeCategory has a (char) overload for
             // code points that fit in one UTF-16 char (U+0000..U+FFFF) and

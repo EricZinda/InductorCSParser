@@ -627,6 +627,54 @@ public class AliasRuleTests
     }
 
     [Test]
+    public void Alias_over_a_Delete_inner_flattens_back_to_the_default_tree()
+    {
+        // The third inner-FlattenType case: a Preserve (named) alias over a
+        // Delete composite inner that has Preserve content underneath. In a
+        // default parse the Delete inner contributes nothing, so the alias
+        // node is empty. PreserveAllSymbols captures every node (the Delete
+        // inner returns a real Symbol instead of Discarded), but post-hoc
+        // Flatten() has to re-apply the inner's Delete and reproduce the
+        // empty default node. Before the fix the alias lifted the Delete
+        // inner's children during the PreserveAllSymbols capture, so the
+        // collapsed debug tree carried content the production parse dropped.
+        var grammar = Or(Token('c').Preserve(), Token('b').Preserve())
+                          .Flatten(FlattenType.Delete).AliasedAs("ROOT");
+        grammar.Compile();
+
+        var def = grammar.Parse("c");
+        var debug = grammar.Parse("c", new ParseOptions { PreserveAllSymbols = true });
+        Assert.That(def.Success, Is.True, def.ErrorMessage);
+        Assert.That(debug.Success, Is.True, debug.ErrorMessage);
+
+        string defTree = SerializeForest(def.Symbols);
+        string flattenedDebug = SerializeForest(debug.Symbols.SelectMany(s => s.Flatten()));
+        Assert.That(flattenedDebug, Is.EqualTo(defTree),
+            "PreserveAllSymbols+Flatten must reproduce the default parse tree for an alias over a Delete inner");
+    }
+
+    [Test]
+    public void Alias_over_a_Delete_leaf_inner_flattens_back_to_the_default_tree()
+    {
+        // The leaf flavor of the same shape: a named alias over a default-
+        // Delete Token. Default parse leaves the alias empty (the documented
+        // "AliasedAs over a Delete inner is empty" behavior); PreserveAll +
+        // Flatten() must agree rather than surfacing the inner leaf.
+        var grammar = Token('a').AliasedAs("x");
+        grammar.Compile();
+
+        var def = grammar.Parse("a");
+        var debug = grammar.Parse("a", new ParseOptions { PreserveAllSymbols = true });
+        Assert.That(def.Success, Is.True, def.ErrorMessage);
+        Assert.That(debug.Success, Is.True, debug.ErrorMessage);
+
+        string defTree = SerializeForest(def.Symbols);
+        string flattenedDebug = SerializeForest(debug.Symbols.SelectMany(s => s.Flatten()));
+        Assert.That(flattenedDebug, Is.EqualTo(defTree),
+            "PreserveAllSymbols+Flatten must reproduce the default parse tree for an alias over a Delete leaf inner");
+    }
+
+    [Test]
     public void Alias_wrapping_a_LateBound_bound_back_to_the_alias_aborts_with_DepthLimitExceeded()
     {
         // The alias analog of the self-bound LateBoundRule test: the alias

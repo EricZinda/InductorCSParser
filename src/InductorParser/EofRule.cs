@@ -21,15 +21,10 @@ internal sealed class EofRule : Rule
     {
         if (!lexer.IsEof)
         {
-            // Render the unconsumed character at lexer.Position as the
-            // full token the lexer would have read, not lexer.Input[Position]
-            // which is one UTF-16 code unit and shows a lone surrogate
-            // half for any supplementary-plane rune (every emoji past
-            // the BMP) and only the first rune of a multi-rune cluster
-            // under Compile(null) (decomposed graphemes, ZWJ sequences).
-            // The same shape was fixed in BuildErrorMessage's {character}
-            // placeholder; trace lines that quote a token need the same
-            // grapheme-aware rendering.
+            // Render the unconsumed character as the full token the lexer
+            // would read, not lexer.Input[Position], which is one UTF-16
+            // code unit and could split a grapheme. BuildErrorMessage's
+            // {character} placeholder is grapheme-aware for the same reason.
             int tokenLength = lexer.PeekTokenLength(lexer.Position);
             TraceFailure(lexer, $"found {lexer.Input.Substring(lexer.Position, tokenLength)}");
             // Error Positioning: the position of the unexpected content. EofRule
@@ -49,5 +44,4 @@ internal sealed class EofRule : Rule
             ? new Symbol(Id, FlattenType, Array.Empty<Symbol>(), lexer.Input.AsMemory(lexer.Position, 0), lexer.Context)
             : Symbol.Discarded;
     }
-
 }

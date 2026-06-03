@@ -112,6 +112,93 @@ public class XidIdentifierTests
     }
 
     [Test]
+    public void Tamil_identifier_with_vowel_sign_and_virama_matches()
+    {
+        // Tamil 'tamil' is five runes: TA (Lo), MA (Lo), VOWEL SIGN I
+        // (Mc), LLLA (Lo), VIRAMA (Mn). The lexer composes them into
+        // three graphemes. Both the spacing vowel sign and the virama
+        // are XID_Continue, so the whole word matches after the leading
+        // consonant.
+        var word = UnicodeExamples.TamilTamizhIdentifier;
+        var result = Identifier().Parse(word);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(word));
+    }
+
+    [Test]
+    public void Tibetan_identifier_with_vowel_sign_matches()
+    {
+        // Tibetan 'bod' (Tibet) is BA (Lo) + VOWEL SIGN O (Mn) + DA (Lo).
+        // The Mn vowel sign is XID_Continue, so the word matches.
+        var word = UnicodeExamples.TibetanBodIdentifier;
+        var result = Identifier().Parse(word);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(word));
+    }
+
+    [Test]
+    public void Tibetan_stacked_subjoined_consonant_matches()
+    {
+        // KA (Lo) + SUBJOINED LETTER SSA (Mn): the Tibetan stacking case.
+        // The subjoined consonant is a combining mark (XID_Continue), so
+        // the two-rune stack is one identifier. WithinToken walks the
+        // grapheme's runes and accepts KA as Start, subjoined SSA as
+        // Continue.
+        var word = UnicodeExamples.TibetanStackedKaSsaGrapheme;
+        var result = Identifier().Parse(word);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(word));
+    }
+
+    [Test]
+    public void Hebrew_identifier_matches_whole_word()
+    {
+        // Hebrew 'ivrit' (Hebrew) is five Lo letters with no combining
+        // marks. RTL text is stored in logical (reading) order and the
+        // parser walks it in that same order, so the match text comes
+        // back byte-for-byte equal to the input. The parser doesn't apply
+        // the Unicode Bidirectional Algorithm; there is no visual
+        // reordering to undo.
+        var word = UnicodeExamples.HebrewIvritIdentifier;
+        var result = Identifier().Parse(word);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(word));
+    }
+
+    [Test]
+    public void Hebrew_identifier_with_niqqud_matches()
+    {
+        // Hebrew 'shalom' with niqqud: SHIN + QAMATS + SHIN DOT + LAMED +
+        // VAV + HOLAM + FINAL MEM. The vowel points are Mn combining marks
+        // (XID_Continue) that bundle with their base letters into four
+        // graphemes. RTL plus combining marks in one word: the lexer's
+        // grapheme bundling and the identifier rules both have to handle
+        // the points mid-word.
+        var word = UnicodeExamples.HebrewShalomWithNiqqudIdentifier;
+        var result = Identifier().Parse(word);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(word));
+    }
+
+    [Test]
+    public void Chinese_simplified_and_traditional_both_match_and_stay_distinct()
+    {
+        // 汉字 (simplified) and 漢字 (traditional) are both valid
+        // identifiers (CJK ideographs are Lo). They share the second
+        // character 字 but differ in the first, and the difference is a
+        // genuine code-point difference, not a normalization variant: NFC
+        // leaves both alone. So both parse and their match texts differ.
+        var simplified = Identifier().Parse(UnicodeExamples.ChineseSimplifiedHanziIdentifier);
+        var traditional = Identifier().Parse(UnicodeExamples.ChineseTraditionalHanziIdentifier);
+
+        Assert.That(simplified.Success, Is.True, simplified.ErrorMessage);
+        Assert.That(traditional.Success, Is.True, traditional.ErrorMessage);
+        Assert.That(simplified.Tree!.ToString(), Is.EqualTo(UnicodeExamples.ChineseSimplifiedHanziIdentifier));
+        Assert.That(traditional.Tree!.ToString(), Is.EqualTo(UnicodeExamples.ChineseTraditionalHanziIdentifier));
+        Assert.That(simplified.Tree!.ToString(), Is.Not.EqualTo(traditional.Tree!.ToString()));
+    }
+
+    [Test]
     public void Nfc_precomposed_and_decomposed_cafe_flatten_to_same_string()
     {
         // R4: NFC equivalence is a free consequence of ParseOptions
@@ -221,7 +308,7 @@ public class XidIdentifierTests
             string normalized;
             try { normalized = entry.Normalize(form); }
             catch (ArgumentException) { continue; }
-            if (TokenSet.CountGraphemes(normalized) <= 1) continue;
+            if (GraphemeClusters.Count(normalized) <= 1) continue;
             multiGraphemeStarts++;
             bool firstRune = true;
             foreach (int continuation in SurrogateHelpers.EnumerateRuneValues(normalized))

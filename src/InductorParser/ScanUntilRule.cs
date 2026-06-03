@@ -296,7 +296,7 @@ internal sealed class ScanUntilRule : Rule
         if (normalized == null) return;
         if (string.Equals(normalized, originalRuneText, StringComparison.Ordinal)) return;
 
-        if (TokenSet.CountGraphemes(normalized) > 1)
+        if (GraphemeClusters.Count(normalized) > 1)
         {
             reporter.ReportOffender(this, originalRuneText,
                 $"<escape-start rune converts under {form} to the multi-grapheme " +
@@ -399,7 +399,7 @@ internal sealed class ScanUntilRule : Rule
                     Symbol? start;
                     using (var probe = lexer.BeginProbe())
                     {
-                        start = ParseRuleAgainst(_escapeStartRule, lexer, outputSymbols: null);
+                        start = ParseChild(_escapeStartRule, lexer, outputSymbols: null);
                         if (start != null)
                             probe.Commit();
                     }
@@ -408,7 +408,7 @@ internal sealed class ScanUntilRule : Rule
                         // Start matched and was kept. End failure is a hard
                         // failure: an escape sequence was started, so
                         // the input isn't a well-formed string body.
-                        var end = ParseRuleAgainst(_escapeEnd!, lexer, outputSymbols: null);
+                        var end = ParseChild(_escapeEnd!, lexer, outputSymbols: null);
                         if (end == null)
                         {
                             TraceFailure(lexer, $"bad escape end at offset {lexer.Position}");
@@ -464,7 +464,7 @@ internal sealed class ScanUntilRule : Rule
                     if (escapeStartMatched)
                     {
                         lexer.SetPosition(pos + tokenLen);
-                        var end = ParseRuleAgainst(_escapeEnd!, lexer, outputSymbols: null);
+                        var end = ParseChild(_escapeEnd!, lexer, outputSymbols: null);
                         if (end == null)
                         {
                             TraceFailure(lexer, $"bad escape end at offset {pos + tokenLen}");
@@ -505,7 +505,7 @@ internal sealed class ScanUntilRule : Rule
                 bool stopMatched;
                 using (lexer.BeginProbe())
                 {
-                    stopMatched = ParseRuleAgainst(_stopperRule, lexer, outputSymbols: null) != null;
+                    stopMatched = ParseChild(_stopperRule, lexer, outputSymbols: null) != null;
                 }
                 if (stopMatched)
                 {
@@ -540,7 +540,7 @@ internal sealed class ScanUntilRule : Rule
             bool matchedAtEof;
             using (lexer.BeginProbe())
             {
-                matchedAtEof = ParseRuleAgainst(_stopperRule, lexer, outputSymbols: null) != null;
+                matchedAtEof = ParseChild(_stopperRule, lexer, outputSymbols: null) != null;
             }
             if (matchedAtEof)
                 stopperMatched = true;

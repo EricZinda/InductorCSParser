@@ -113,7 +113,7 @@ This is just the first form with a literal string instead of a `nameof`. The tra
 
 **`.As(new SymbolId(SymbolRanges.CustomRangeStart + 42))` for explicit numeric ids.** If a grammar needs stable numeric ids across versions for serialization or cross-version debugging, pass a `SymbolId` directly instead of a string. The number stays fixed no matter how you refactor the code. The name lives on the rule, not on the id, so chain a separate `.As("Thing")` call to attach a debug name (the two `.As` overloads write different fields, so they compose).
 
-Naming a rule with `.As(...)` also flips its `FlattenType` to `Preserve` if the policy is still the rule's class default. Identification implies findability: a named rule is one the caller wants to locate later with `Tree.Find` or `result.FindFirst`, and that only works when the rule's wrapper Symbol reaches the parse tree. So `Token('!').As("breaking")` quietly upgrades from the default `FlattenType.Delete` to `Preserve`, and `ZeroOrMore(letter).As("word")` upgrades from the default `FlattenType.Flatten` to `Preserve`, without the caller having to chain an explicit `.Preserve()`. If `.Flatten(...)` (or `.Delete()` / `.Flatten()`) was already called with a non-Preserve value, `.As` throws instead of overriding the caller's explicit choice. The reverse direction throws too: setting a non-Preserve policy on a rule that's already been named would silently break `Tree.Find` for that rule, so it fails loudly at grammar-build time. `.Preserve()` (or `.Flatten(FlattenType.Preserve)`) is always safe to chain with `.As` in either order.
+Naming a rule with `.As(...)` also flips its `FlattenType` to `Preserve` if the policy is still the rule's class default. Identification implies findability: a named rule is one the caller wants to locate later with `Tree.Find` or `result.Find`, and that only works when the rule's Symbol reaches the parse tree. So `Token('!').As("breaking")` quietly upgrades from the default `FlattenType.Delete` to `Preserve`, and `ZeroOrMore(letter).As("word")` upgrades from the default `FlattenType.Flatten` to `Preserve`, without the caller having to chain an explicit `.Preserve()`. If `.Flatten(...)` (or `.Delete()` / `.Flatten()`) was already called with a non-Preserve value, `.As` throws instead of overriding the caller's explicit choice. The reverse direction throws too: setting a non-Preserve policy on a rule that's already been named would silently break `Tree.Find` for that rule, so it fails loudly at grammar-build time. `.Preserve()` (or `.Flatten(FlattenType.Preserve)`) is always safe to chain with `.As` in either order.
 
 ### What `Compile` Actually Does
 
@@ -210,7 +210,7 @@ The parser's token is a `StringInfo` text element: one user-perceived character.
 - `Token('=')` matches the `[=]` token. Single-rune tokens compare to a single rune by identity, so ASCII and other characters that fit in a C# char literal work as you would expect.
 - `Token("👋🏽")` matches the multi-rune waving-hand-with-skin-tone token as one unit. Construction-time validation rejects arguments that aren't exactly one text element.
 - `TokenSet.Letters` matches single-rune letter tokens. For composed-form text (the default after normalization), almost all Latin-style letters are single-rune tokens, so this works as expected. Multi-rune letter tokens (Devanagari conjuncts, decomposed-form sequences with no precomposed equivalent) don't match `TokenSet.Letters` because the token contains more than one rune. Use `Identifier()` or `WithinToken(...)` when you want to validate the runes inside a token.
-- `TokenSet.Letters | TokenSet.Runes("🇺🇸")` extends a rune set with explicit multi-rune tokens. `OneOf` and `NoneOf` consult both halves on each token, so the US flag matches as one token alongside the rune-only letter ranges.
+- `TokenSet.Letters | TokenSet.Graphemes("🇺🇸")` extends a rune set with explicit multi-rune tokens. (`Graphemes`, not `Runes`: the flag is a regional-indicator pair, one grapheme cluster of two runes, and `Runes` throws on a multi-rune cluster.) `OneOf` and `NoneOf` consult both halves on each token, so the US flag matches as one token alongside the rune-only letter ranges.
 - `Literal("café")` matches four tokens, one per character in the literal. Composition normalization runs first so `café` typed as `e + U+0301` reaches the lexer as one token per visible character.
 - Emoji sequences (👋🏽, 🇺🇸, 👨‍👩‍👧‍👦) match as single tokens on runtimes whose `StringInfo` recognizes those extended grapheme clusters, which is almost always what you want.
 
@@ -354,7 +354,7 @@ public class Symbol
 
     public override string ToString();             // recovers the parsed text
     public void FlattenInto(List<Symbol> result);  // same semantics as C++
-    public IReadOnlyList<Symbol> FlattenInto();    // convenience overload
+    public IReadOnlyList<Symbol> Flatten();        // convenience: returns a fresh list
 
     public Symbol? Find(Rule rule);                // first match (recursive)
     public Symbol? Find(SymbolId id);              // same, by raw id
@@ -383,13 +383,13 @@ Every traversal on `Symbol` is a direct LINQ target because each one is typed as
 symbol.Children.Where(c => c.Id == someRule.Id)
 
 // Entire subtree, pre-order walk
-symbol.Walk().Where(s => s.Id == BuiltinSymbols.Integer)
+symbol.Walk().Where(s => s.Id == integerRule.Id)
 
 // All descendants matching a specific rule
 symbol.FindAll(settingName).Select(s => s.ToString())
 
 // Flattened tree as a list
-symbol.FlattenInto().OfType<Symbol>()
+symbol.Flatten()
 ```
 
 Picking between these comes up most often for "a list of named items" grammars (domain labels, JSON members, function parameters, file-path components, ...). A rule shaped like `And(Label, ZeroOrMore(And(Separator, Label)), Eof())` lifts every `Label` up to the wrapping `And` because the inner `And` defaults to `Flatten` and `Separator` / `Eof` default to `Delete`, so `tree.Children` is already the list of Labels. That works as long as you know the FlattenType layout, but it ties the consumer to it: a later grammar change that preserves a new sibling under the wrapper will silently mix the sibling into the list. `symbol.Children.Where(c => c.Is(label))` is the defensive form and reads no worse. When the items can sit anywhere in the subtree instead of only as direct children, use `symbol.FindAll(label)` and the walk recurses for you.
@@ -443,7 +443,7 @@ Usage:
 ```csharp
 var (setting, error) = CompileSetting(document, settingName, settingValue, "difficulty = hard;");
 
-if (setting isn't null)
+if (setting is not null)
     Console.WriteLine($"{setting.Name} = {setting.Value}");
 else
     Console.WriteLine($"Parse failed: {error}");
@@ -529,7 +529,7 @@ into a flattened tree shaped like:
 - [pair]
     - [key] retries
     - [values]
-        - [integerExpression] 3
+        - 3
 ```
 
 ## Tracing

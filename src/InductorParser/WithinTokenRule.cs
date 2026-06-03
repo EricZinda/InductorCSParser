@@ -99,7 +99,7 @@ internal sealed class WithinTokenRule : Rule
         // rule emits are discarded: WithinToken exposes one leaf per
         // token to the outer parse, not the rune-level substructure.
         var innerOutputs = new List<Symbol>();
-        var innerResult = ParseRuleAgainst(_innerRule, subLexer, innerOutputs);
+        var innerResult = ParseChild(_innerRule, subLexer, innerOutputs);
 
         if (innerResult == null && innerOutputs.Count == 0)
         {
