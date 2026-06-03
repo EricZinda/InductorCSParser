@@ -360,4 +360,41 @@ public class RecipesExamples
         Assert.That(grammar.Parse("0.0.0").Success, Is.True);
         Assert.That(grammar.Parse("10.20.30").Success, Is.True);
     }
+
+    // "Numbers with no leading zeros" / "validate after parsing": accept any
+    // digit run in the grammar, then check the leading zero in the consumer
+    // and use the node's source position to build a "line X, column Y"
+    // message. The recipe walks to the named node and reads its position.
+    //
+    // Pins the API the recipe uses to get a node's position: Symbol.SourceRange
+    // (public, standalone, no ParseResult needed). The earlier doc text
+    // described a result.SourceRangeOf(node) call the library no longer has
+    // (it moved onto Symbol once every Symbol carried its ParseContext).
+    [Test]
+    public void No_leading_zero_validate_after_parsing_uses_node_SourceRange()
+    {
+        var numericCore = OneOrMore(OneOf(TokenSet.Ascii.Digits)).As("major");
+
+        var result = numericCore.Parse("01");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+
+        var node = result.Tree!.Find(numericCore)!;
+        var text = node.ToString();
+        Assert.That(text, Is.EqualTo("01"));
+
+        // The recipe's leading-zero branch: text.Length > 1 && text[0] == '0'.
+        Assert.That(text.Length > 1 && text[0] == '0', Is.True);
+
+        // The position the error message points at comes straight off the
+        // Symbol, no ParseResult round-trip.
+        var range = node.SourceRange;
+        Assert.That(range, Is.Not.Null);
+        Assert.That(range!.Value.Start.Line, Is.EqualTo(0));
+        Assert.That(range.Value.Start.Column, Is.EqualTo(0));
+        // The recipe formats these one-based: "line 1, column 1".
+        string message =
+            $"line {range.Value.Start.Line + 1}, column {range.Value.Start.Column + 1}: " +
+            $"Major version '{text}' must not have leading zeros";
+        Assert.That(message, Is.EqualTo("line 1, column 1: Major version '01' must not have leading zeros"));
+    }
 }

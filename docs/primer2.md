@@ -181,7 +181,7 @@ result.Tree!.Walk().Where(s => s.Is(integerValue))
 result.Tree!.FindAll(keyValue).Select(kv => kv.Children[0].ToString())
 
 // Flattened tree as a list of every Symbol
-result.Tree!.FlattenInto().OfType<Symbol>()
+result.Tree!.Flatten()
 ```
 
 `Symbol` itself doesn't implement `IEnumerable<Symbol>` on purpose, because iterating a tree node would have to silently pick one of children, descendants pre-order, descendants post-order, siblings, or tokens, and the four other choices then become second-class. Naming the traversal you want keeps the code unambiguous.
