@@ -156,6 +156,30 @@ public static partial class Rules
                     $"body position. Add \"{missingPiece}\" to extraBodyRunes, or drop " +
                     $"\"{offendingStart}\" from extraStartRunes.");
             }
+            // Mirror check on the body side. Closure covers XidContinue's own
+            // entries, but extras don't have the closure guarantee: an extra
+            // body rune whose NFKx contains a piece the caller didn't ask for
+            // (the SPACE separators inside U+FDFA's Arabic-phrase NFKC are the
+            // canonical example) would silently inject that piece into the
+            // body set when body.WithCompatibilityEquivalents runs over the
+            // union. The allowed set is (XidContinue | extraBodyRunes): pieces
+            // can land in XidContinue (the spec body) OR in the caller's own
+            // body extras (an explicit "yes I want this in body" opt-in by
+            // the same caller in the same call). Pieces that fall outside
+            // both signal an unintended leak, so reject at grammar-build time
+            // with a message that names the offender and the missing piece.
+            if (!extraBodyRunes.AllCompatibilityPiecesIn(
+                    form.Value, TokenSet.XidContinue | extraBodyRunes,
+                    out string offendingBody, out string bodyConversion, out string bodyMissingPiece))
+            {
+                throw new InvalidOperationException(
+                    $"Identifier(form: {form.Value}): the extraBodyRunes entry \"{offendingBody}\" " +
+                    $"normalizes to the multi-grapheme sequence \"{bodyConversion}\", whose piece " +
+                    $"\"{bodyMissingPiece}\" isn't in XidContinue and wasn't added by this " +
+                    $"extraBodyRunes call. Every piece of a body character's decomposition needs " +
+                    $"to be matchable in body position. Add \"{bodyMissingPiece}\" to extraBodyRunes " +
+                    $"to opt in, or drop \"{offendingBody}\" from extraBodyRunes.");
+            }
         }
         // Why rune mode (WithinToken), not whole-token matching: XID_Start
         // and XID_Continue are properties of individual code points, but one
