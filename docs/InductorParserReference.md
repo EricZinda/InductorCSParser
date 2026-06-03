@@ -354,7 +354,7 @@ public class Symbol
 
     public override string ToString();             // recovers the parsed text
     public void FlattenInto(List<Symbol> result);  // same semantics as C++
-    public IReadOnlyList<Symbol> FlattenInto();    // convenience overload
+    public IReadOnlyList<Symbol> Flatten();        // convenience: returns a fresh list
 
     public Symbol? Find(Rule rule);                // first match (recursive)
     public Symbol? Find(SymbolId id);              // same, by raw id
@@ -383,13 +383,13 @@ Every traversal on `Symbol` is a direct LINQ target because each one is typed as
 symbol.Children.Where(c => c.Id == someRule.Id)
 
 // Entire subtree, pre-order walk
-symbol.Walk().Where(s => s.Id == BuiltinSymbols.Integer)
+symbol.Walk().Where(s => s.Id == integerRule.Id)
 
 // All descendants matching a specific rule
 symbol.FindAll(settingName).Select(s => s.ToString())
 
 // Flattened tree as a list
-symbol.FlattenInto().OfType<Symbol>()
+symbol.Flatten()
 ```
 
 Picking between these comes up most often for "a list of named items" grammars (domain labels, JSON members, function parameters, file-path components, ...). A rule shaped like `And(Label, ZeroOrMore(And(Separator, Label)), Eof())` lifts every `Label` up to the wrapping `And` because the inner `And` defaults to `Flatten` and `Separator` / `Eof` default to `Delete`, so `tree.Children` is already the list of Labels. That works as long as you know the FlattenType layout, but it ties the consumer to it: a later grammar change that preserves a new sibling under the wrapper will silently mix the sibling into the list. `symbol.Children.Where(c => c.Is(label))` is the defensive form and reads no worse. When the items can sit anywhere in the subtree instead of only as direct children, use `symbol.FindAll(label)` and the walk recurses for you.
