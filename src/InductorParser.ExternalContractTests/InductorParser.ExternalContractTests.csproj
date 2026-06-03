@@ -11,8 +11,8 @@
       InternalsVisibleTo grants in src/InductorParser/InductorParser.csproj.
       The point of this project is to be a true third-party consumer of
       InductorParser's public + protected surface. If a future change
-      adds this name to the IVT list, the regression catch in FailRule
-      silently goes away.
+      adds this name to the IVT list, the no-IVT compile check below
+      silently stops checking anything.
     -->
     <RootNamespace>InductorParser.ExternalContractTests</RootNamespace>
     <AssemblyName>InductorParser.ExternalContractTests</AssemblyName>
@@ -31,10 +31,12 @@
   <!--
     Verbatim-link the built-in rule source a second time into this no-IVT
     assembly. Each linked file is recompiled here against only the public +
-    protected surface of InductorParser, so if a rule ever reaches for an
-    internal member, or the surface it needs is narrowed, THIS build breaks.
-    That's the regression guard: the same proof FailRule gives by hand,
-    extended to the real built-in rules.
+    protected surface of InductorParser, so if a rule ever uses an internal
+    member, or the surface it needs is narrowed, THIS build breaks. That's
+    the core of what this project checks: the real built-in rules are forced
+    to build as a true third party would build them, with no special access.
+    LookbehindRule.cs does the same by hand for a rule the built-in set
+    has no equivalent of (a backward-looking, zero-width predicate).
 
     These rule classes are `internal sealed`, so the copy compiled here is a
     distinct type internal to this test assembly and does not collide with
