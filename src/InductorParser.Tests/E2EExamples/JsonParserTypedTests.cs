@@ -102,6 +102,10 @@ public class JsonParserTypedTests
         ("Hebrew with niqqud (RTL)", UnicodeExamples.HebrewShalomWithNiqqudIdentifier),
         ("Simplified Chinese", UnicodeExamples.ChineseSimplifiedHanziIdentifier),
         ("Traditional Chinese", UnicodeExamples.ChineseTraditionalHanziIdentifier),
+        ("Cyrillic", UnicodeExamples.CyrillicPrivetIdentifier),
+        ("Arabic (RTL)", UnicodeExamples.ArabicArabiyyaIdentifier),
+        ("Japanese (mixed script)", UnicodeExamples.JapaneseHiraganaKatakanaKanjiIdentifier),
+        ("Korean (Hangul syllables)", UnicodeExamples.KoreanHangugeoIdentifier),
     };
 
     private static System.Collections.Generic.IEnumerable<TestCaseData> RealWorldScriptCases()
