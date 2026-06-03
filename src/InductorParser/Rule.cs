@@ -1754,10 +1754,22 @@ public abstract class Rule
         NormalizationForm form,
         List<(Rule rule, string original, string normalized)> offenders)
     {
+        // Count distinct rules, not offender lines. A single TokenSet-bearing
+        // rule (OneOf / NoneOf / ScanWhile / ScanUntil) reports one offender
+        // per offending set entry, so OneOf(TokenSet.Letters) under FormKC is
+        // one rule with hundreds of convertible members, not hundreds of
+        // rules. The header sentence is about rules ("a rule whose expected
+        // text is in a different form will never match"), so it has to count
+        // rules; the per-entry detail still gets one line each below.
+        var distinctRules = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
+        foreach (var (offendingRule, _, _) in offenders)
+            distinctRules.Add(offendingRule);
+        int ruleCount = distinctRules.Count;
+
         var builder = new StringBuilder();
         builder.Append("Compile failed: ")
-               .Append(offenders.Count)
-               .Append(offenders.Count == 1 ? " rule has" : " rules have")
+               .Append(ruleCount)
+               .Append(ruleCount == 1 ? " rule has" : " rules have")
                .Append(" expected text that isn't in ")
                .Append(FormatNormalizationForm(form))
                .AppendLine(". The parser normalizes input to this form before")

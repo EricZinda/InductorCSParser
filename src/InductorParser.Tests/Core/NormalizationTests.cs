@@ -813,6 +813,40 @@ public class NormalizationTests
     }
 
     [Test]
+    public void Normalization_offender_header_counts_rules_not_offending_entries()
+    {
+        // OneOf(TokenSet.Letters) is ONE rule. Under FormKC many of its
+        // members (ligatures like U+FB01, fullwidth letters, math-bold, ...)
+        // each convert to a multi-grapheme sequence, and the offender
+        // mechanism reports one offender per such member. The header counts
+        // distinct offending rules, not offending set entries, so a single
+        // rule with hundreds of convertible members reads as one rule, not
+        // hundreds.
+        var rule = OneOf(TokenSet.Letters);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => rule.Compile(NormalizationForm.FormKC));
+        Assert.That(exception!.Message, Does.StartWith("Compile failed: 1 rule has"),
+            "one offending rule with many convertible members reads as '1 rule has', not 'N rules have'");
+        Assert.That(exception.Message, Does.Not.Contain("rules have"),
+            "a single offending rule must not be reported in the plural");
+    }
+
+    [Test]
+    public void Normalization_offender_header_counts_distinct_rules_in_plural()
+    {
+        // Two distinct offending rules: a ligature Token (one offender) plus a
+        // OneOf(Letters) (many offenders, all from the one rule). The header
+        // counts the two rules, not the combined offender-line total.
+        var rule = And(Token(UnicodeExamples.FiLigatureGrapheme), OneOf(TokenSet.Letters));
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => rule.Compile(NormalizationForm.FormKC));
+        Assert.That(exception!.Message, Does.StartWith("Compile failed: 2 rules have"),
+            "two distinct offending rules read as '2 rules have', regardless of how many entries each contributes");
+    }
+
+    [Test]
     public void Failed_compile_invalidates_touched_rules_and_refuses_recompile()
     {
         // Compile(FormKC) auto-converts the Kelvin sign literal to plain
