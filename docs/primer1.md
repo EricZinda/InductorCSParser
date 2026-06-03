@@ -151,10 +151,10 @@ If you want to define a character class that includes a multi-rune token (an emo
 
 ```CSharp
 // Letters of any script, plus the US flag emoji as a single token.
-var letterOrUSFlag = OneOf(TokenSet.Letters | TokenSet.Runes("🇺🇸"));
+var letterOrUSFlag = OneOf(TokenSet.Letters | TokenSet.Graphemes("🇺🇸"));
 ```
 
-`TokenSet.Runes(...)` adds whatever the runtime treats as one user-visible character to the set. Single runes go into the rune-range part. Multi-rune tokens like 🇺🇸 go into a separate multi-rune list. `OneOf` checks both halves on each token.
+`TokenSet.Graphemes(...)` adds whatever the runtime treats as one user-visible character to the set. Each argument is one grapheme cluster: a single-rune cluster goes into the rune-range part, and a multi-rune token like 🇺🇸 goes into a separate multi-rune list. (`TokenSet.Runes(...)` is the shortcut for the single-rune case and throws on a multi-rune cluster like the flag, so name `Graphemes` when a member spans more than one rune.) `OneOf` checks both halves on each token.
 
 This matters because the most common Unicode bug in parsers is silently splitting a multi-rune token into pieces. A grammar that consumes "one rune" from 👨‍👩‍👧 and stops would leave six dangling runes for the next rule to trip over. The lexer avoids this by walking the input one user-perceived character at a time. If you want to look *inside* a token (to inspect combining marks individually, say) there's a `WithinToken(...)` helper. But for normal text processing, you don't have to think about any of this. The grammar above already does the right thing on emoji, accented letters, CJK text, and complex scripts.
 

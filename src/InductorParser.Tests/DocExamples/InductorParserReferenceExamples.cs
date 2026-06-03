@@ -50,6 +50,30 @@ public class InductorParserReferenceExamples
         Assert.That($"{nameSym} = {valueSym}", Is.EqualTo("setting = 5"));
     }
 
+    // "Naming Rules": the doc says a named rule "is one the caller wants
+    // to locate later with Tree.Find or result.Find", and that naming a
+    // rule flips its FlattenType to Preserve so its Symbol reaches the
+    // tree. Exercise the ParseResult-level lookup (which walks every
+    // top-level Symbol) so it works even when the root keeps its Flatten
+    // default and result.Tree is null.
+    [Test]
+    public void Naming_a_rule_makes_it_findable_via_result_find()
+    {
+        var word = Identifier().As("word");
+        var breaking = Token('!').As("breaking");
+        var document = And(word, breaking);
+
+        var result = document.Parse("change!");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        // The root And keeps its Flatten default, so result.Tree is null
+        // (two top-level Symbols bubbled up). result.Find walks every
+        // top-level Symbol, so it locates the named rules regardless.
+        Assert.That(result.Tree, Is.Null);
+        Assert.That(result.Find(word)!.ToString(), Is.EqualTo("change"));
+        Assert.That(result.Find(breaking)!.ToString(), Is.EqualTo("!"));
+    }
+
     // "Naming Rules": the doc example uses a class field with
     // `.As(nameof(SettingName))`. The compile-time check on nameof works
     // for fields because the field name is in scope inside its own
