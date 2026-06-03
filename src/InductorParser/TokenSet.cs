@@ -379,7 +379,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             intervals.Add(new Interval(newRune, newRune));
             return;
         }
-        if (CountGraphemes(normalized) <= 1)
+        if (GraphemeClusters.Count(normalized) <= 1)
         {
             graphemes.Add(normalized);
             return;
@@ -470,7 +470,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         {
             if (entry.IsNormalized(form)) return false;
             string normalized = entry.Normalize(form);
-            if (CountGraphemes(normalized) <= 1) return false;
+            if (GraphemeClusters.Count(normalized) <= 1) return false;
             converted = normalized;
             return true;
         }
@@ -493,14 +493,6 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         }
     }
 
-    private static int CountGraphemes(string text)
-    {
-        if (text.Length == 0) return 0;
-        var enumerator = StringInfo.GetTextElementEnumerator(text);
-        int count = 0;
-        while (enumerator.MoveNext()) count++;
-        return count;
-    }
 
     // True iff the string is exactly one Unicode rune (one non-surrogate
     // UTF-16 char, or one surrogate pair), giving its code point. Public so

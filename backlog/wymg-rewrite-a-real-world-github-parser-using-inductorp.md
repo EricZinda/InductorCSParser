@@ -83,7 +83,7 @@ The sample is a self-contained .NET project. Wire it into `InductorParser.sln` s
 
 1. Get the original parser building locally. Read it end to end. Understand the AST, the entry point, the error reporting, and the test corpus before you touch InductorParser.
 2. Write the InductorParser grammar in `Rewrite/`. Keep the AST shape as close to the original as reasonable so the comparison stays apples to apples. If the original uses positional error messages, hook up `WithError` and the symbol-position machinery so the rewrite produces comparable diagnostics.
-3. Port a representative slice of the original tests into `Tests/`. They should pass against both the original and the rewrite, modulo error-message wording. If the original has no tests, write a small corpus of golden inputs (valid + invalid) before you start the grammar so you have something to verify against.
+3. Port a representative portion of the original tests into `Tests/`. They should pass against both the original and the rewrite, modulo error-message wording. If the original has no tests, write a small corpus of golden inputs (valid + invalid) before you start the grammar so you have something to verify against.
 4. Add a side-by-side error-message comparison test. Pick three or four bad inputs and assert that the rewrite produces an error with a sensible position and a sensible expected-thing. The exact wording can differ from the original, but the position has to be right and the message has to point a user at the actual problem.
 
 ## Track everything that hurt
@@ -100,7 +100,7 @@ Things to watch for and write up:
 - A piece of the docs where we expected an example and didn't find one. (Doc gap with a concrete example to add.)
 - Anything where we had to read the source of `src/InductorParser/` to figure out how to do something a regular user shouldn't need to.
 
-For each one, drop a new `.md` in `backlog/` following the existing format. One issue per backlog item. Title clearly, describe the friction concretely (use the sample's code as the example), and propose what would have made it easy. If you can sketch the API change in three or four lines, do it. Name the file with a prefix that sorts at the **top** of the backlog (smaller than the current top entry's prefix); `0001-` or `0a00-` is fine for the first ones.
+For each one, drop a new `.md` in `backlog/` following the existing format. One issue per backlog item. Title clearly, describe the friction concretely (use the sample's code as the example), and propose what would have made it easy. If you can sketch the API change in three or four lines, do it. Name the file with a prefix that sorts at the **top** of the backlog (smaller than the current top entry's prefix). `0001-` or `0a00-` is fine for the first ones.
 
 If you spot a real bug (not just friction) you can fix it on the spot in `src/InductorParser/`, add a regression test, and reference the fix from the sample's README. That's a strictly better outcome than just filing a backlog item.
 
@@ -114,4 +114,4 @@ If you spot a real bug (not just friction) you can fix it on the spot in `src/In
 
 ## Important
 
-Do NOT delete this backlog item when you're done. It stays in the backlog permanently so we keep adding real-world examples and surfacing friction. If you finish a round, the next person picks a different project.
+*Don't* delete this backlog item when you're done. It stays in the backlog permanently so we keep adding real-world examples and surfacing friction. If you finish a round, the next person picks a different project.
