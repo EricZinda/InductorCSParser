@@ -274,6 +274,24 @@ public class InductorParserReferenceExamples
         // pair[2]: retries = 3
         Assert.That(pairs[2].Find(key)!.ToString(), Is.EqualTo("retries"));
         Assert.That(pairs[2].Find(values)!.ToString(), Is.EqualTo("3"));
+
+        // The doc's tree illustration must stay uniform: every value atom
+        // (string or integer) is built with .Flatten(FlattenType.Flatten),
+        // so its own Symbol is lifted and only bare character leaves survive
+        // directly under [values]. The integer "3" is therefore a bare
+        // leaf exactly like "red"/"hard", NOT nested under an
+        // "[integerExpression]" node. An earlier draft of the doc tree
+        // showed "- [integerExpression] 3", a node the grammar never
+        // produces, so these assertions lock the real, uniform shape and
+        // keep the illustration from drifting back.
+        var stringValues = pairs[0].Find(values)!;
+        var integerValues = pairs[2].Find(values)!;
+        Assert.That(stringValues.Children.All(c => c.IsLeaf), Is.True,
+            "string value atoms flatten to bare leaves under [values]");
+        Assert.That(integerValues.Children.All(c => c.IsLeaf), Is.True,
+            "the integer value atom flattens to a bare leaf too, the same shape as the string values");
+        Assert.That(integerValues.Walk().Any(s => result.DisplayName(s) == "integerExpression"), Is.False,
+            "there is no rule named 'integerExpression'; the integer value never wears that wrapper");
     }
 
     // "LINQ on the Symbol Tree": the doc lists four LINQ entry points
