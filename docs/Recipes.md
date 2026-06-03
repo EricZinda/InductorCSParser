@@ -89,14 +89,14 @@ Sometimes the no-leading-zero check is one of several things to validate on a nu
 var numericCore = OneOrMore(OneOf(TokenSet.Ascii.Digits)).As("major");
 ```
 
-After parsing, walk to the node and check it yourself. `result.SourceRangeOf(node)` gives the column of the original text, so the error message can point at the right place:
+After parsing, walk to the node and check it yourself. `node.SourceRange` gives the position of the original text, so the error message can point at the right place:
 
 ```csharp
-var node = tree.Find(numericCore)!;
+var node = result.Tree!.Find(numericCore)!;
 var text = node.ToString();
 if (text.Length > 1 && text[0] == '0')
 {
-    var range = result.SourceRangeOf(node)!;
+    var range = node.SourceRange!;
     throw new FormatException(
         $"line {range.Value.Start.Line + 1}, column {range.Value.Start.Column + 1}: " +
         $"Major version '{text}' must not have leading zeros");
