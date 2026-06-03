@@ -539,6 +539,67 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return true;
     }
 
+    // Companion to WithCompatibilityEquivalents for the body / continue side.
+    // Where AllCompatibilityTailRunesIn verifies the dropped tail of a start
+    // expansion has somewhere to land, this one verifies every piece (head
+    // included) of a body expansion. Body matches against every code point
+    // after the first identifier character, so all decomposition pieces have
+    // to be valid body characters, otherwise the union+expansion silently
+    // injects an out-of-band rune (the SPACE separators inside U+FDFA's
+    // NFKC, for example) into the body set.
+    //
+    // Rules.Identifier calls this on the caller's extra body runes only.
+    // XidContinue's own entries are guaranteed by UAX #31's closure property
+    // (XidContinue is closed under NFKx), so there's no need to re-check
+    // ~130K code points on every call.
+    internal bool AllCompatibilityPiecesIn(
+        NormalizationForm form,
+        TokenSet allowedRunes,
+        out string entry,
+        out string expansion,
+        out string missingRune)
+    {
+        foreach (int rune in EnumerateRunes())
+        {
+            entry = char.ConvertFromUtf32(rune);
+            if (!AllPiecesIn(entry, form, allowedRunes, out expansion, out missingRune))
+                return false;
+        }
+        foreach (string grapheme in MultiRuneGraphemes)
+        {
+            if (!AllPiecesIn(grapheme, form, allowedRunes, out expansion, out missingRune))
+            {
+                entry = grapheme;
+                return false;
+            }
+        }
+        entry = "";
+        expansion = "";
+        missingRune = "";
+        return true;
+    }
+
+    private static bool AllPiecesIn(
+        string entry, NormalizationForm form, TokenSet allowedRunes,
+        out string expansion, out string missingRune)
+    {
+        expansion = "";
+        missingRune = "";
+        // No multi-grapheme conversion means no pieces to check, so it passes.
+        if (!TryGetMultiGraphemeConversion(entry, form, out string? converted))
+            return true;
+        foreach (int codepoint in SurrogateHelpers.EnumerateRuneValues(converted))
+        {
+            if (!allowedRunes.ContainsRune(codepoint))
+            {
+                expansion = converted;
+                missingRune = char.ConvertFromUtf32(codepoint);
+                return false;
+            }
+        }
+        return true;
+    }
+
     // Returns true and sets `converted` if `entry`'s normalization
     // under `form` is a multi-grapheme sequence. Returns false otherwise
     // (entry is already form-stable, single-grapheme conversion, or
