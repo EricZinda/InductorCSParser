@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 namespace InductorParser.Lexing;
@@ -33,4 +34,26 @@ internal static class SurrogateHelpers
         => char.IsHighSurrogate(input[pos])
             && pos + 1 < input.Length
             && char.IsLowSurrogate(input[pos + 1]);
+
+    // Enumerate the Unicode scalar values (rune code points) of `text`,
+    // decoding each well-formed surrogate pair into one value. A lone
+    // surrogate yields its own code-unit value. This allocates an iterator,
+    // so it's for cold paths. Hot paths that already walk chars should decode
+    // inline with IsSurrogatePairAt rather than enumerate.
+    public static IEnumerable<int> EnumerateRuneValues(string text)
+    {
+        for (int index = 0; index < text.Length;)
+        {
+            if (IsSurrogatePairAt(text, index))
+            {
+                yield return char.ConvertToUtf32(text[index], text[index + 1]);
+                index += 2;
+            }
+            else
+            {
+                yield return text[index];
+                index += 1;
+            }
+        }
+    }
 }

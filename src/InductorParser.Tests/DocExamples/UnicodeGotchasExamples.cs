@@ -84,9 +84,10 @@ public class UnicodeGotchasExamples
     // be exactly one grapheme), and Compile needs it to normalize input
     // before matching. The doc snippet used to pass FormKC to Compile
     // only and let Identifier's `form` parameter default to FormC, which
-    // throws InvalidOperationException at Compile time ("Compile failed:
-    // 1549 rules have expected text that isn't in FormKC"). The corrected
-    // form passes the same value to both.
+    // throws InvalidOperationException at Compile time (a "Compile failed:
+    // ... expected text that isn't in FormKC" message listing the
+    // XidStart / XidContinue members that don't survive the form). The
+    // corrected form passes the same value to both.
     [Test]
     public void Python3_identifier_recipe()
     {

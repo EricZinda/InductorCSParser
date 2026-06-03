@@ -62,10 +62,10 @@ So `Rewrite/LengthPrefixedRules.cs` subclasses `Rule` (via a small shared base,
   (`OneOrMore` is greedy-until-failure, `Exactly(n, ...)` takes a compile-time
   constant, not a value read from the input).
 
-Both are built entirely on the public + protected surface: `ParseRuleAgainst`
-runs the count and separator rules (discarding their symbols, since only the
-count's value matters), `ParseChild` runs each array item with its own
-transaction, `lexer.Read()` advances the cursor one grapheme cluster at a time,
+Both are built entirely on the public + protected surface: `ParseChild`
+runs the count, separator, and array item rules, each with its own
+transaction (the count's and separator's symbols don't reach the tree, since
+only the count's value matters), `lexer.Read()` advances the cursor one grapheme cluster at a time,
 `lexer.TickBudget()` bounds every loop so the Timeout / Cancellation /
 RuleCountLimit budget can observe the work, and `lexer.RecordCompositeFailure(...)`
 anchors the failure. No internal members.

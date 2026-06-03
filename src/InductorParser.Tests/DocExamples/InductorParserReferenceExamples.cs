@@ -274,6 +274,21 @@ public class InductorParserReferenceExamples
         // pair[2]: retries = 3
         Assert.That(pairs[2].Find(key)!.ToString(), Is.EqualTo("retries"));
         Assert.That(pairs[2].Find(values)!.ToString(), Is.EqualTo("3"));
+
+        // The doc's tree diagram for this example can't label the integer
+        // value node "[integerExpression]". No grammar rule is named that, and
+        // Integer() is flattened (.Flatten(FlattenType.Flatten)) inside valueAtom,
+        // so "3" reaches the tree as a bare rune leaf, exactly like the letters
+        // of "hard", with no named node around it. (Asserting the opposite,
+        // Has.Some.EqualTo("integerExpression"), fails, which is what proved the
+        // doc diagram wrong.)
+        var allLabels = result.Tree!.Walk().Select(s => result.DisplayName(s)).ToList();
+        Assert.That(allLabels, Has.None.EqualTo("integerExpression"),
+            "No rule is named 'integerExpression'; the doc tree diagram must not show one.");
+        var retriesValues = pairs[2].Find(values)!;
+        Assert.That(retriesValues.Children.Select(c => c.ToString()).ToArray(),
+            Is.EqualTo(new[] { "3" }),
+            "The integer value flattens to one bare rune leaf under values, like the other atoms.");
     }
 
     // "LINQ on the Symbol Tree": the doc lists four LINQ entry points
