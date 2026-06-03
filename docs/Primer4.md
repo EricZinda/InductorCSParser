@@ -84,7 +84,7 @@ static readonly TokenSet Invisibles = TokenSet.Category(UnicodeCategory.Format);
 
 static string StripInvisibles(string input) =>
     string.Concat(input.EnumerateRunes()
-        .Where(r => !Invisibles.Contains(r)));
+        .Where(r => !Invisibles.ContainsRune(r)));
 
 // "ki<ZWS>ll" becomes "kill" before the rule sees it
 var result = blockedWords.Parse(StripInvisibles(userInput));
@@ -96,7 +96,7 @@ The same `Invisibles` value plugs into a real grammar rule. An "allowed"-rule us
 
 ```csharp
 var safeUsername = And(
-    OneOrMore(And(NoneOf(Invisibles), AnyToken())),
+    OneOrMore(NoneOf(Invisibles)),
     Eof()
 ).Compile();
 
