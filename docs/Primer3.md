@@ -135,7 +135,10 @@ Every Symbol in a successful parse exposes the same pair through `SourceRange`:
 
 ```csharp
 var result = list.Parse("[top] 𠮷田 fix\n");
-var range = result.Tree!.Find(itemText)!.SourceRange!.Value;
+// list is OneOrMore(...), a Flatten root, so its children bubble up to the
+// top level and result.Tree is null. result.Find walks every top-level
+// Symbol, so it works whether the root preserved itself or flattened to a list.
+var range = result.Find(itemText)!.SourceRange!.Value;
 // Width of the matched item text:
 //   range.End.CharIndex  - range.Start.CharIndex  == 7  // 𠮷 contributes 2 chars
 //   range.End.TokenIndex - range.Start.TokenIndex == 6  // 𠮷 contributes 1 token
