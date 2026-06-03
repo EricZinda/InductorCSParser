@@ -1,6 +1,6 @@
 # Find a new bug (add new backlog items at the top)
 
-**Read this first:** every path you touch as part of this task must be under the worktree root you started in. Backlog item, search log, pattern doc, failing test, source fix, scratch notes — all of it. Details in the "All edits stay inside the worktree you are running in" section below.
+**Read this first:** every path you touch as part of this task must be under the worktree root you started in. Backlog item, search log, pattern doc, failing test, source fix, scratch notes, all of it. Details in the "All edits stay inside the worktree you are running in" section below.
 
 This is a real backlog item, if you reach it, do it!
 
@@ -47,17 +47,17 @@ Create a new `.md` file in `backlog/` following the same pattern as the other it
 
 1. Title: short description of the bug as an `- Text` heading
 2. A paragraph explaining what's wrong, where in the code it happens (file and line numbers), and what the user-visible consequence is
-3. **Verify the Bug (Write Test First)**: a test that goes in the appropriate existing test file (e.g., `utils_tests.mjs` for utils bugs, `format_detector_tests.mjs` for format detector bugs, etc.). Do NOT create a separate `bug_discovery_tests.mjs` file. The test snippet should not include import lines since those already exist at the top of the target file. Show the `npx playwright test` command to run.
+3. **Verify the Bug (Write Test First)**: a test that goes in the appropriate existing test file (e.g., `utils_tests.mjs` for utils bugs, `format_detector_tests.mjs` for format detector bugs, etc.). Don't create a separate `bug_discovery_tests.mjs` file. The test snippet shouldn't include import lines since those already exist at the top of the target file. Show the `npx playwright test` command to run.
 4. **Fix**: concrete instructions for what to change in the source
 5. **Verify the Fix**: run the same tests, expect them to pass
 
-The filename should follow the `<prefix>-<slug>.md` pattern where the prefix sorts at the top of the backlog (smaller than the current top entry's prefix). `0001-` or `0a00-` is fine for the first ones; pick a prefix slightly smaller than the current top entry for subsequent ones.
+The filename should follow the `<prefix>-<slug>.md` pattern where the prefix sorts at the top of the backlog (smaller than the current top entry's prefix). `0001-` or `0a00-` is fine for the first ones. Pick a prefix slightly smaller than the current top entry for subsequent ones.
 
 ## Remove the backlog item once its fix lands
 
 The backlog item you just wrote is the runbook for the fix, not a permanent record. The find-a-bug flow is find, fix, verify, *then delete the backlog item you created*. By the time you finish, the bug is already resolved in the tree (steps 4 and 5 above), so leaving its backlog entry behind just clutters the list with an already-done to-do. Delete the backlog item file as the last step of the fix, in the same commit as the source change.
 
-The lasting record of the hunt is the `docs/BugSearchLog/` entry (next section). That is why the search-log entry is required and the backlog item is not. A backlog item only stays in `backlog/` if it documents a bug you filed but could not fix in the same pass.
+The lasting record of the hunt is the `docs/BugSearchLog/` entry (next section). That is why the search-log entry is required and the backlog item is not. A backlog item only stays in `backlog/` if it documents a bug you filed but couldn't fix in the same pass.
 
 The same rule applies to existing items: a backlog item whose bug is already fixed in the tree should be removed.
 
@@ -65,9 +65,9 @@ The same rule applies to existing items: a backlog item whose bug is already fix
 
 Two updates, one in each folder. Both folders use the per-item-per-file layout: each entry is a separate `.md` file in the folder, named `<YYYY-MM-DD>-<slug>.md`. Use today's absolute date as the prefix. The backlog viewer sorts by date, so no sort-control prefix (dashes, leading zeros, letter codes) is needed. Older entries still carry historical prefixes like `0-`, `00-`, `z006-`, etc. Those reflect a since-abandoned attempt to control the file-system sort and are being phased out as those files are touched. New entries skip the prefix entirely. The body of each entry follows the bullet format the existing entries use: a top-level `- Title` line, then sub-bullet lines indented under it.
 
-1. **Search log entry (required)** — add a new `.md` file to [docs/BugSearchLog/](../docs/BugSearchLog/) listing the files you reviewed and the categories you checked, plus a one-line note on what (if anything) you fixed. This is the cumulative record that prevents future hunts from repeating your work, so keep it compact. Do not rewrite past entries.
-2. **Pattern documentation (if applicable)** — if the bug you found points to a broader category of issues (like "string truncation can split surrogate pairs"), add a new `.md` file to [docs/PotentialBugSources/](../docs/PotentialBugSources/) describing the pattern.
+1. **Search log entry (required):** add a new `.md` file to [docs/BugSearchLog/](../docs/BugSearchLog/) listing the files you reviewed and the categories you checked, plus a one-line note on what (if anything) you fixed. This is the cumulative record that prevents future hunts from repeating your work, so keep it compact. Don't rewrite past entries.
+2. **Pattern documentation (if applicable):** if the bug you found points to a broader category of issues (like "string truncation can split surrogate pairs"), add a new `.md` file to [docs/PotentialBugSources/](../docs/PotentialBugSources/) describing the pattern.
 
 ## Important
 
-Do NOT delete *this* backlog item (the find-a-bug item itself) when you're done. It stays in the backlog permanently so we keep finding new bugs. This is the one exception: the per-bug item you create for each hunt does get deleted once its fix lands, as described under "Remove the backlog item once its fix lands" above.
+*Don't* delete *this* backlog item (the find-a-bug item itself) when you're done. It stays in the backlog permanently so we keep finding new bugs. This is the one exception: the per-bug item you create for each hunt does get deleted once its fix lands, as described under "Remove the backlog item once its fix lands" above.

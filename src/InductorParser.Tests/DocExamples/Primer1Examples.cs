@@ -139,4 +139,22 @@ public class Primer1Examples
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage, Is.Not.Empty);
     }
+
+    // primer1.md "What about Unicode?" section: a character class that
+    // includes a multi-rune token (the US flag emoji) alongside ordinary
+    // letter ranges:
+    //   var letterOrUSFlag = OneOf(TokenSet.Letters | TokenSet.Graphemes("🇺🇸"));
+    // The flag 🇺🇸 is a regional-indicator pair (two runes forming one
+    // grapheme cluster), so it has to enter the set through Graphemes(...),
+    // which holds multi-rune cluster members. Runes(...) walks rune by rune
+    // and throws on a cluster, so the doc has to name Graphemes here.
+    [Test]
+    public void Letter_class_includes_multirune_USFlag_token()
+    {
+        var letterOrUSFlag = OneOf(TokenSet.Letters | TokenSet.Graphemes("🇺🇸"));
+
+        Assert.That(letterOrUSFlag.Parse("A").Success, Is.True);
+        Assert.That(letterOrUSFlag.Parse("🇺🇸").Success, Is.True);
+        Assert.That(letterOrUSFlag.Parse("3").Success, Is.False);
+    }
 }
