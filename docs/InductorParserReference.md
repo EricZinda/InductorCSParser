@@ -529,7 +529,7 @@ into a flattened tree shaped like:
 - [pair]
     - [key] retries
     - [values]
-        - [integerExpression] 3
+        - 3
 ```
 
 ## Tracing
