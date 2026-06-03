@@ -506,8 +506,13 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // UTF-16 char, or one surrogate pair), giving its code point. Public so
     // user-defined rules can reuse it instead of duplicating the
     // surrogate-pair decode. The span overload below stays private.
-    public static bool TrySingleRune(string grapheme, out int runeValue) =>
-        TrySingleRune(grapheme.AsSpan(), out runeValue);
+    public static bool TrySingleRune(string grapheme, out int runeValue)
+    {
+        if (grapheme == null)
+            throw new ArgumentNullException(nameof(grapheme));
+
+        return TrySingleRune(grapheme.AsSpan(), out runeValue);
+    }
 
     private static bool TrySingleRune(ReadOnlySpan<char> grapheme, out int runeValue)
     {
@@ -869,17 +874,17 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                 rune = text[index];
                 consumed = 1;
             }
+            if (!Rune.IsValid(rune))
+                throw new ArgumentException(
+                    $"Runes(string) encountered an invalid Unicode scalar value (0x{rune:X4}) at UTF-16 offset {index}. " +
+                    "Lone surrogate halves aren't valid scalars.",
+                    nameof(text));
             if (grapheme.Length != consumed)
                 throw new ArgumentException(
                     $"Runes(string) input \"{text}\" contains a multi-rune grapheme cluster (\"{grapheme}\") at UTF-16 offset {index}. " +
                     "Runes(string) walks rune by rune and rejects inputs where consecutive runes form one cluster. " +
                     "If you want a set of grapheme clusters, use Graphemes(string[]). " +
                     "If you want separate scalars that visually combine, build the set explicitly with Single(c1) | Single(c2).",
-                    nameof(text));
-            if (!Rune.IsValid(rune))
-                throw new ArgumentException(
-                    $"Runes(string) encountered an invalid Unicode scalar value (0x{rune:X4}) at UTF-16 offset {index}. " +
-                    "Lone surrogate halves aren't valid scalars.",
                     nameof(text));
             intervals.Add(new Interval(rune, rune));
             index += consumed;
@@ -917,6 +922,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                 throw new ArgumentException(
                     $"Graphemes element at index {clusterIndex} is empty. Each element must be exactly one grapheme cluster.",
                     nameof(clusters));
+            ValidateGraphemeScalars(cluster, clusterIndex, nameof(clusters));
             string firstCluster = StringInfo.GetNextTextElement(cluster, 0);
             if (firstCluster.Length != cluster.Length)
                 throw new ArgumentException(
@@ -937,11 +943,6 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                 firstRune = cluster[0];
                 firstRuneLength = 1;
             }
-            if (!Rune.IsValid(firstRune))
-                throw new ArgumentException(
-                    $"Graphemes element at index {clusterIndex} starts with an invalid Unicode scalar (0x{firstRune:X4}). " +
-                    "Lone surrogate halves aren't valid scalars.",
-                    nameof(clusters));
 
             if (cluster.Length == firstRuneLength)
             {
@@ -949,7 +950,6 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             }
             else
             {
-                ValidateGraphemeRunes(cluster, 0);
                 multiRuneGraphemes ??= new List<string>();
                 multiRuneGraphemes.Add(cluster);
             }
@@ -957,13 +957,13 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return new TokenSet(Normalize(intervals), NormalizeGraphemes(multiRuneGraphemes));
     }
 
-    // Walks a grapheme's runes by hand and throws on any lone surrogate
-    // half. We've already validated the first rune in the outer loop;
-    // this is for runes 2..N of a multi-rune grapheme.
-    private static void ValidateGraphemeRunes(string grapheme, int graphemeStart)
+    // Walks a Graphemes element's runes by hand and throws on any lone
+    // surrogate half before the single-cluster shape check can mask it.
+    private static void ValidateGraphemeScalars(string grapheme, int clusterIndex, string parameterName)
     {
         for (int runeIndex = 0; runeIndex < grapheme.Length;)
         {
+            int runeStart = runeIndex;
             int runeCodepoint;
             if (SurrogateHelpers.IsSurrogatePairAt(grapheme, runeIndex))
             {
@@ -977,9 +977,9 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             }
             if (!Rune.IsValid(runeCodepoint))
                 throw new ArgumentException(
-                    $"Graphemes element at UTF-16 offset {graphemeStart} contains an invalid Unicode scalar value (0x{runeCodepoint:X4}). " +
+                    $"Graphemes element at index {clusterIndex} contains an invalid Unicode scalar value (0x{runeCodepoint:X4}) at UTF-16 offset {runeStart}. " +
                     "Lone surrogate halves aren't valid scalars.",
-                    nameof(grapheme));
+                    parameterName);
         }
     }
 
@@ -1338,17 +1338,29 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         // ASCII intra-line whitespace: SPACE and TAB only. Mirrors the
         // full-Unicode TokenSet.InlineWhitespace.
         public static readonly TokenSet InlineWhitespace = Runes(" \t");
-        // ASCII whitespace including line terminators: SPACE, TAB, CR,
-        // LF, plus the CRLF two-rune cluster as a multi-rune entry.
-        // Use this for grammars that treat newlines as ordinary
-        // whitespace (the regex \s convention). For grammars that need
-        // to distinguish intra-line whitespace from line terminators,
-        // use InlineWhitespace and Rules.EndOfLine() instead.
+        // ASCII whitespace including every ASCII line terminator: SPACE,
+        // TAB, LF, VT, FF, CR, plus the CRLF two-rune cluster as a
+        // multi-rune entry. This is exactly the full-Unicode
+        // TokenSet.AnyWhitespace restricted to ASCII, the same way
+        // Ascii.InlineWhitespace mirrors InlineWhitespace. VT (U+000B) and
+        // FF (U+000C) are line terminators under UAX #18, so they live in
+        // TokenSet.LineTerminators and IsLineTerminator and are consumed by
+        // Rules.EndOfLine(); a set "including line terminators" carries them
+        // too. Use this for grammars that treat newlines as ordinary
+        // whitespace. For grammars that need to distinguish intra-line
+        // whitespace from line terminators, use InlineWhitespace and
+        // Rules.EndOfLine() instead.
         // CR, LF, and the CRLF cluster all live in the set so that
         // OneOf / NoneOf / ScanUntil match each consistently: an input
         // CRLF cluster is the multi-rune entry, a bare CR or LF is the
         // matching single-rune entry.
-        public static readonly TokenSet AnyWhitespace = InlineWhitespace | Single('\r') | Single('\n') | Graphemes("\r\n");
+        public static readonly TokenSet AnyWhitespace =
+            InlineWhitespace
+            | Single('\n')       // LF
+            | Single('\v')       // VT
+            | Single('\f')       // FF
+            | Single('\r')       // CR
+            | Graphemes("\r\n");  // CRLF cluster
         public static readonly TokenSet HexDigits = Digits | Range('a', 'f') | Range('A', 'F');
     }
 

@@ -59,6 +59,40 @@ public class GraphemeRuleTests
     }
 
     [Test]
+    public void Grapheme_string_with_tibetan_stacked_syllable_matches()
+    {
+        // Tibetan KA + SUBJOINED LETTER SSA: a base consonant with a
+        // subjoined consonant stacked under it. The subjoined letter has
+        // Grapheme_Cluster_Break = Extend (GCB=Extend), the same UAX #29
+        // class as an ordinary combining mark, so base + subjoined is one
+        // grapheme made of two runes.
+        //
+        // This test lives in the unconditional part of the file, not the
+        // "#if !UNITY_INCLUDE_TESTS" block at the bottom. That block holds
+        // the cases legacy StringInfo (pre-.NET 5 / Unity IL2CPP) splits
+        // wrongly: skin-tone modifiers, ZWJ emoji, regional-indicator flag
+        // pairs, Thai SARA AM. On the legacy walker Token(...) sees more
+        // than one grapheme in those and throws at construction, so they
+        // have to be fenced out of the legacy build.
+        //
+        // A base followed by an Extend character is different: that's the
+        // original grapheme rule, the one that predates UAX #29, and even
+        // legacy StringInfo gets it right. So this sequence segments to a
+        // single grapheme on every runtime, exactly like LatinEAcuteGrapheme
+        // (e + combining acute), and needs no #if fence.
+        //
+        // Compile(null) for the same reason the e-acute test uses it: NFC
+        // wouldn't change this sequence, but turning normalization off keeps
+        // the rule's expected text and the input in the same form at match
+        // time without relying on that.
+        var rule = Token(TibetanStackedKaSsaGrapheme);
+        rule.Compile(null);
+        var result = rule.Parse(TibetanStackedKaSsaGrapheme);
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
+
+    [Test]
     public void Grapheme_string_with_more_than_one_grapheme_throws_at_construction()
     {
         var ex = Assert.Throws<ArgumentException>(() => Token("ab"));

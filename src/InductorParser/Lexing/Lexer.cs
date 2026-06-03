@@ -344,11 +344,23 @@ public sealed partial class Lexer
     }
 
     // "How long is the next token at this position?" without advancing.
-    // Returns 0 if `position` is at or past the end. See the class doc
-    // for the full malformed-UTF-16 rules.
+    // Returns 0 if `position` is at or past the end. Throws when the
+    // position is negative or sits inside a token, matching the boundary
+    // rules SetPosition enforces. See the class doc for the full
+    // malformed-UTF-16 rules.
     public int PeekTokenLength(int position)
     {
+        if (position < 0)
+            throw new ArgumentOutOfRangeException(nameof(position), position,
+                "position must be non-negative.");
         if (position >= _endPosition) return 0;
+        if (!IsTokenBoundary(position))
+            throw new ArgumentException(
+                $"position {position} is not a token boundary. PeekTokenLength can only measure "
+                + (_oneRunePerToken
+                    ? "from between runes, not inside a surrogate pair."
+                    : "from a grapheme-cluster boundary."),
+                nameof(position));
         return NextTokenLength(position);
     }
 
@@ -362,7 +374,12 @@ public sealed partial class Lexer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryPeekRune(string input, int pos, out int runeValue, out int runeLen)
     {
-        Invariant.That((uint)pos < (uint)input.Length, $"TryPeekRune called with pos={pos} outside [0, input.Length={input.Length}).");
+        if (input == null)
+            throw new ArgumentNullException(nameof(input));
+        if ((uint)pos >= (uint)input.Length)
+            throw new ArgumentOutOfRangeException(nameof(pos), pos,
+                $"pos must be in [0, input.Length={input.Length}).");
+
         if (SurrogateHelpers.IsSurrogatePairAt(input, pos))
         {
             runeValue = char.ConvertToUtf32(input[pos], input[pos + 1]);

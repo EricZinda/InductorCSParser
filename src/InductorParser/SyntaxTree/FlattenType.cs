@@ -36,8 +36,8 @@ public enum FlattenType
     /// Pass the rule's matched content up to the enclosing rule, dropping the rule's own
     /// Symbol. What "content" means depends on the rule's shape: a composite's content is
     /// its children (which get lifted into the parent's children list as if this rule weren't
-    /// there). A leaf's content is the leaf text itself (which is kept, since it has no separate
-    /// children to lift past it).
+    /// there). A leaf has no separate children to lift past it, so its content is the leaf Symbol
+    /// itself, which surfaces in the parent's children list unchanged.
     /// </summary>
     /// <remarks>
     /// Use this for structural rules that exist only to combine other rules (a repetition, an

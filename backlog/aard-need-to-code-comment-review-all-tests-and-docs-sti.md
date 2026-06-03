@@ -3,7 +3,5 @@
 Done:
 Compatability/*
 Lexing/*
-SyntaxTree/
-    FlattenType.cs
-	..
-	SourceRange.cs
+SyntaxTree/*
+Tracing/*

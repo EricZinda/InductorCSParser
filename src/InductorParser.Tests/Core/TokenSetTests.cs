@@ -148,6 +148,42 @@ public class TokenSetTests
     }
 
     [Test]
+    public void Runes_with_lone_surrogate_glued_to_combining_mark_reports_invalid_scalar()
+    {
+        // .NET's grapheme splitter can treat a stray surrogate followed
+        // by an extender as one text element. Runes still needs to tell
+        // the caller the first problem is invalid scalar data, not point
+        // them at Graphemes for an input Graphemes would also reject.
+        string malformedCluster = UnicodeExamples.HighSurrogateMinText + UnicodeExamples.CombiningAcuteText;
+
+        var exception = Assert.Throws<ArgumentException>(() => TokenSet.Runes(malformedCluster));
+
+        Assert.That(exception!.Message, Does.Contain("invalid Unicode scalar value"));
+        Assert.That(exception.Message, Does.Contain("0xD800"));
+        Assert.That(exception.Message, Does.Contain("UTF-16 offset 0"));
+        Assert.That(exception.Message, Does.Not.Contain("multi-rune grapheme cluster"));
+    }
+
+    [Test]
+    public void Graphemes_with_lone_surrogate_after_valid_cluster_reports_invalid_scalar()
+    {
+        // The element is not a valid single Graphemes entry, but the first
+        // problem users need to fix is the malformed UTF-16 at offset 2.
+        // Reporting only "more than one cluster" points them at Runes(),
+        // which rejects the same lone surrogate too.
+        string malformed = LatinEAcuteGrapheme + HighSurrogateMinText;
+
+        var exception = Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(malformed));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("clusters"));
+        Assert.That(exception.Message, Does.Contain("invalid Unicode scalar value"));
+        Assert.That(exception.Message, Does.Contain("0xD800"));
+        Assert.That(exception.Message, Does.Contain("UTF-16 offset 2"));
+        Assert.That(exception.Message, Does.Not.Contain("more than one grapheme cluster"));
+        Assert.That(exception.Message, Does.Not.Contain("Runes(string)"));
+    }
+
+    [Test]
     public void Runes_with_valid_surrogate_pair_works()
     {
         // Guitar as a surrogate pair. Treated as one codepoint.
@@ -596,6 +632,17 @@ public class TokenSetTests
         Assert.That(set.ContainsRune('A'), Is.True);
         Assert.That(set.ContainsRune('B'), Is.False);
         Assert.That(set.ContainsRune(0x40), Is.False);
+    }
+
+    // Public helper argument validation -------------------------------------
+
+    [Test]
+    public void TrySingleRune_null_throws_ArgumentNullException()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() =>
+            TokenSet.TrySingleRune(null!, out _));
+
+        Assert.That(exception!.ParamName, Is.EqualTo("grapheme"));
     }
 
     // Runes corner cases -----------------------------------------------------
@@ -1048,19 +1095,21 @@ public class TokenSetTests
     }
 
     [Test]
-    public void Ascii_AnyWhitespace_contains_space_tab_cr_lf()
+    public void Ascii_AnyWhitespace_contains_every_ascii_whitespace_char()
     {
-        // ASCII whitespace including line terminators. The "regex \s on
-        // ASCII" set, for grammars that treat newlines as ordinary
-        // whitespace.
+        // ASCII whitespace including every ASCII line terminator: the ASCII
+        // restriction of the full-Unicode AnyWhitespace, for grammars that
+        // treat newlines as ordinary whitespace.
         Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune(' '), Is.True);
         Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\t'), Is.True);
         Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\r'), Is.True);
         Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\n'), Is.True);
-        // Not in the literal " \t\r\n" set, even though char.IsWhiteSpace says yes.
+        // VT and FF are ASCII line terminators (UAX #18 / TokenSet.LineTerminators),
+        // so they're in this set too.
+        Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\v'), Is.True);   // vertical tab
+        Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\f'), Is.True);   // form feed
+        // Unicode-only whitespace stays out because this is the ASCII set.
         Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune(0x00A0), Is.False); // NBSP
-        Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\v'), Is.False);   // vertical tab
-        Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\f'), Is.False);   // form feed
     }
 
     [Test]
@@ -1075,6 +1124,20 @@ public class TokenSetTests
         Assert.That(TokenSet.Ascii.InlineWhitespace.ContainsRune('\n'), Is.False);
         // Unicode-only whitespace excluded because this is the ASCII set.
         Assert.That(TokenSet.Ascii.InlineWhitespace.ContainsRune(0x00A0), Is.False); // NBSP
+    }
+
+    [Test]
+    public void Ascii_AnyWhitespace_is_the_ascii_restriction_of_full_AnyWhitespace()
+    {
+        // Ascii.AnyWhitespace contains an ASCII character iff the full-Unicode
+        // AnyWhitespace does, so the two sets agree everywhere inside ASCII.
+        for (int c = 0; c <= 0x7F; c++)
+        {
+            Assert.That(
+                TokenSet.Ascii.AnyWhitespace.ContainsRune(c),
+                Is.EqualTo(TokenSet.AnyWhitespace.ContainsRune(c)),
+                $"U+{c:X4} membership differs between Ascii.AnyWhitespace and the ASCII part of AnyWhitespace");
+        }
     }
 
     [Test]
