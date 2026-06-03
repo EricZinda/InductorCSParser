@@ -1376,9 +1376,24 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         int currentHigh = 0;
         for (int codepoint = 0; codepoint <= 0xFFFF; codepoint++)
         {
-            // Skip the surrogate block: not valid Unicode scalar values.
-            // See BuildFromPredicate below for the full rationale.
-            if (codepoint >= 0xD800 && codepoint <= 0xDFFF) continue;
+            // The surrogate block holds no valid Unicode scalar values, so
+            // nothing in it can be a member. Close any open run and jump past
+            // the whole block. Closing matters: a bare `continue` would leave
+            // an open run spanning the gap, so a run with members just below
+            // 0xD800 and just above 0xDFFF would merge into one interval that
+            // swallowed the surrogate code units. No whitespace sits at that
+            // boundary today, but the close keeps the result surrogate-free
+            // regardless of the data, matching BuildCategories.
+            if (codepoint >= 0xD800 && codepoint <= 0xDFFF)
+            {
+                if (currentLow != null)
+                {
+                    list.Add(new Interval(currentLow.Value, currentHigh));
+                    currentLow = null;
+                }
+                codepoint = 0xDFFF; // the loop's ++ moves to 0xE000
+                continue;
+            }
             if (char.IsWhiteSpace((char)codepoint) && !IsLineTerminator(codepoint))
             {
                 if (currentLow == null) { currentLow = codepoint; currentHigh = codepoint; }
@@ -1442,10 +1457,31 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
         for (int codepoint = 0; codepoint <= 0x10FFFF; codepoint++)
         {
-            // Skip the surrogate block. These code units exist to encode
-            // supplementary-plane code points as UTF-16 pairs. They aren't
-            // valid Unicode scalar values (runes) on their own.
-            if (codepoint >= 0xD800 && codepoint <= 0xDFFF) continue;
+            // The surrogate block (U+D800..U+DFFF) holds UTF-16 code units used
+            // to encode supplementary-plane code points as pairs. They aren't
+            // valid Unicode scalar values (runes) on their own and belong to no
+            // scalar-category set. Close every open run and jump past the whole
+            // block. Closing matters: a bare `continue` would leave a run open
+            // across the gap, so a category with members just below 0xD800 and
+            // just above 0xDFFF (0xD7FF and 0xE000) would merge into one
+            // interval that swallowed the surrogate code units. No category
+            // straddles the gap in the Unicode the BCL ships today (0xD7FF is
+            // Cn, 0xE000 is Co), but the close keeps the result surrogate-free
+            // for any category and any future Unicode version, instead of
+            // silently relying on that adjacency never happening.
+            if (codepoint >= 0xD800 && codepoint <= 0xDFFF)
+            {
+                for (int index = 0; index < missing.Count; index++)
+                {
+                    if (currentLows[index] != null)
+                    {
+                        lists[index].Add(new Interval(currentLows[index]!.Value, currentHighs[index]));
+                        currentLows[index] = null;
+                    }
+                }
+                codepoint = 0xDFFF; // the loop's ++ moves to 0xE000
+                continue;
+            }
 
             // CharUnicodeInfo.GetUnicodeCategory has a (char) overload for
             // code points that fit in one UTF-16 char (U+0000..U+FFFF) and
