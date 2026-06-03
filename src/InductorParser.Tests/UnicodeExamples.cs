@@ -900,4 +900,42 @@ internal static class UnicodeExamples
     // the two stay distinct under normalization.
     public static readonly string ChineseTraditionalHanziIdentifier = Canary(
         "漢字", "traditional chinese 'hanzi' (han + zi)", ChineseTraditionalHanRune, 0x5B57);
+
+    // Cyrillic "привет" (privet, "hello"). Six Ll letters: PE, ER, I, VE,
+    // IE, TE. No combining marks, so six single-rune graphemes. A real
+    // running-text word, distinct from the lone homoglyph
+    // CyrillicSmallAGrapheme above that the security tests use.
+    public static readonly string CyrillicPrivetIdentifier = Canary(
+        "привет", "cyrillic 'hello' identifier (pe + er + i + ve + ie + te)",
+        0x043F, 0x0440, 0x0438, 0x0432, 0x0435, 0x0442);
+
+    // Arabic "عربية" (arabiyya, "Arabic"). Five Lo letters: AIN, REH, BEH,
+    // YEH, TEH MARBUTA. RTL script stored in logical (reading) order,
+    // which is the order the parser walks. No harakat (vowel marks), so
+    // five single-rune graphemes. Parallel to the Hebrew ivrit sample but
+    // in a second RTL script.
+    public static readonly string ArabicArabiyyaIdentifier = Canary(
+        "عربية", "arabic 'arabic' identifier (ain + reh + beh + yeh + teh-marbuta)",
+        0x0639, 0x0631, 0x0628, 0x064A, 0x0629);
+
+    // Japanese "ひらがなカタカナ漢字" (literally "hiragana katakana kanji").
+    // A real string that names the three Japanese writing systems it's
+    // made of, mixing all three in one identifier run: four hiragana
+    // (including the precomposed voiced GA, U+304C), four katakana, and
+    // two kanji. Every rune is Lo / XID, so the lexer reads the whole
+    // mixed-script run as one identifier.
+    public static readonly string JapaneseHiraganaKatakanaKanjiIdentifier = Canary(
+        "ひらがなカタカナ漢字", "japanese 'hiragana katakana kanji' (mixed-script identifier)",
+        0x3072, 0x3089, 0x304C, 0x306A, 0x30AB, 0x30BF, 0x30AB, 0x30CA, 0x6F22, 0x5B57);
+
+    // Korean "한국어" (hangugeo, "the Korean language") as precomposed
+    // Hangul syllables: HAN (U+D55C) + GUK (U+AD6D) + EO (U+C5B4). Three
+    // Lo syllables, three single-rune graphemes. The natural, NFC-stable
+    // form Korean text arrives in. The decomposed conjoining-jamo form
+    // (what macOS filesystems hand back) is derived from this constant in
+    // the Korean identifier test rather than stored separately, so the
+    // syllables and jamo can't drift apart.
+    public static readonly string KoreanHangugeoIdentifier = Canary(
+        "한국어", "korean 'korean language' identifier, precomposed syllables (han + guk + eo)",
+        0xD55C, 0xAD6D, 0xC5B4);
 }

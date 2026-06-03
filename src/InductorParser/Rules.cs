@@ -51,7 +51,7 @@ namespace InductorParser;
 /// on a rule that's already been named. See <see cref="Rule.As(string)"/>
 /// for the full story.
 /// </remarks>
-public static class Rules
+public static partial class Rules
 {
     /// <summary>
     /// Match one token whose content is exactly the given character.
@@ -785,101 +785,6 @@ public static class Rules
             ? new Rule[] { Literal("\r\n"), OneOf(TokenSet.LineTerminators), Eof() }
             : new Rule[] { Literal("\r\n"), OneOf(TokenSet.LineTerminators) };
         return Or(alternatives).FlattenByDefault(FlattenType.Delete);
-    }
-
-    /// <summary>
-    /// Encodes a UAX #31-style "programming language identifier" using
-    /// runtime-backed XID tables plus the built-in exception tables in
-    /// <see cref="TokenSet"/>. Default
-    /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>,
-    /// so the match appears in the tree as one named node whose
-    /// children are the per-rune leaves.
-    /// </summary>
-    /// <remarks>
-    /// The same word can be typed more than one way. "café" might be
-    /// stored with a single precomposed "é", or with a plain "e"
-    /// followed by a combining accent mark drawn on top. Both look
-    /// identical in an editor but use different Unicode scalar sequences. By default
-    /// the parser treats them as the same identifier, so a grammar
-    /// doesn't have to care which form it gets.
-    /// <para>
-    /// Pass <c>null</c> to <c>Compile(NormalizationForm?)</c> to match
-    /// the input string as written, without canonical or compatibility
-    /// normalization. Pass <c>NormalizationForm.FormKC</c> for a stronger
-    /// rule that also treats fullwidth <c>ｆｏｏ</c> and plain <c>foo</c>,
-    /// or the ligature <c>ﬀ</c> and <c>ff</c>, as the same identifier.
-    /// That's the Python 3 and Rust behavior. The stronger rule can,
-    /// however, collapse things you may want kept distinct. It converts
-    /// <c>ℓ</c> (script small L, used in physics) into <c>l</c>, and
-    /// <c>Ⅷ</c> (Roman numeral) into <c>VIII</c>. A grammar that parses
-    /// math or legal text probably wants those distinctions.
-    /// Identifier-heavy grammars (Python source, say) almost always
-    /// don't.
-    /// </para>
-    /// <para>
-    /// See docs/UnicodeGotchas.md for recipes that reproduce the
-    /// identifier rules of specific languages (Python 3, Rust,
-    /// ECMAScript) via these parameters plus the form chosen at
-    /// <c>Compile</c> time.
-    /// </para>
-    /// </remarks>
-    /// <param name="form">
-    /// The normalization form the rule will be compiled under. Must
-    /// match the form passed to <c>Compile</c>. Default is
-    /// <see cref="NormalizationForm.FormC"/>, the same default Compile
-    /// uses. Pass <see cref="NormalizationForm.FormKC"/> /
-    /// <see cref="NormalizationForm.FormKD"/> for compatibility-form
-    /// identifiers (Python 3 / Rust style: fullwidth Latin and ligatures
-    /// match their plain ASCII equivalents). Pass <c>null</c> to opt out
-    /// of normalization at parse time, matching the unnormalized Compile
-    /// path.
-    /// </param>
-    /// <param name="extraStartRunes">
-    /// Runes to union into <see cref="TokenSet.XidStart"/> for the
-    /// first character. UAX #31 calls this a "profile extension":
-    /// the base Start property plus language-specific additions.
-    /// Typical value for a programming-language grammar is
-    /// <c>TokenSet.Runes("_")</c>. Python and Rust use this shape; C#
-    /// also permits leading underscores, though its full identifier
-    /// specification differs. Defaults to
-    /// <see cref="TokenSet.Empty"/> (the base UAX #31-style profile).
-    /// </param>
-    /// <param name="extraBodyRunes">
-    /// Runes to union into <see cref="TokenSet.XidContinue"/> for
-    /// every character after the first. Same idea as
-    /// <paramref name="extraStartRunes"/>. ECMAScript, for example,
-    /// adds <c>$</c> to both positions. Defaults to
-    /// <see cref="TokenSet.Empty"/>.
-    /// </param>
-    public static Rule Identifier(
-        NormalizationForm? form = NormalizationForm.FormC,
-        TokenSet extraStartRunes = default,
-        TokenSet extraBodyRunes = default)
-    {
-        var start = TokenSet.XidStart | extraStartRunes;
-        var body = TokenSet.XidContinue | extraBodyRunes;
-        // Under FormKC / FormKD, XidStart and XidContinue contain entries
-        // (ligatures, fullwidth Latin, math-bold) whose compatibility
-        // conversion is a multi-grapheme sequence. A OneOf rule can't
-        // match a multi-grapheme entry as a single token, so Compile
-        // would throw. Pre-apply WithCompatibilityEquivalents to expand
-        // those entries into their grapheme pieces, which the rest of
-        // the rule structure (ZeroOrMore(OneOf(body))) consumes one at
-        // a time. Pass the same form to Compile afterward.
-        if (form == NormalizationForm.FormKC || form == NormalizationForm.FormKD)
-        {
-            start = start.WithCompatibilityEquivalents(form.Value);
-            body = body.WithCompatibilityEquivalents(form.Value);
-        }
-        return And(
-            // First token: starts with a Start rune, rest of its runes
-            // (if any) are Body runes. Handles precomposed "é", "ñ",
-            // etc. as single-rune tokens and "हि"-style
-            // consonant+vowel-sign tokens as multi-rune.
-            WithinToken(And(OneOf(start), ZeroOrMore(OneOf(body)))),
-            // Subsequent tokens: every rune must be a Body rune.
-            ZeroOrMore(WithinToken(OneOrMore(OneOf(body))))
-        ).FlattenByDefault(FlattenType.Preserve);
     }
 
     /// <summary>
