@@ -82,6 +82,64 @@ public class JsonParserTypedTests
             Is.EqualTo(new JsonStringValue(UnicodeExamples.LatinEAcutePrecomposedGrapheme)));
     }
 
+    // Real-world script samples (Tamil, Tibetan, Hebrew RTL, Simplified
+    // and Traditional Chinese) carried verbatim through a JSON string,
+    // both as a bare value and inside an object key and an array element.
+    // The strings are raw (unescaped) non-ASCII text, which the string-body
+    // ScanUntil consumes up to the closing quote, so a roundtrip failure
+    // means the lexer mis-segmented the script or the projection dropped
+    // runes. All of these are NFC-stable, so the default-FormC parse
+    // returns the input unchanged.
+    //
+    // Cases come from the Canary-protected UnicodeExamples constants (an
+    // editor rewriting a literal trips Canary) rather than inline string
+    // literals in a [TestCase] attribute, which can't be Canary-checked.
+    private static readonly (string Label, string Word)[] RealWorldScriptStrings =
+    {
+        ("Tamil", UnicodeExamples.TamilTamizhIdentifier),
+        ("Tibetan", UnicodeExamples.TibetanBodIdentifier),
+        ("Hebrew (RTL)", UnicodeExamples.HebrewIvritIdentifier),
+        ("Hebrew with niqqud (RTL)", UnicodeExamples.HebrewShalomWithNiqqudIdentifier),
+        ("Simplified Chinese", UnicodeExamples.ChineseSimplifiedHanziIdentifier),
+        ("Traditional Chinese", UnicodeExamples.ChineseTraditionalHanziIdentifier),
+    };
+
+    private static System.Collections.Generic.IEnumerable<TestCaseData> RealWorldScriptCases()
+    {
+        foreach (var (label, word) in RealWorldScriptStrings)
+            yield return new TestCaseData(word).SetName("Json roundtrips " + label);
+    }
+
+    [TestCaseSource(nameof(RealWorldScriptCases))]
+    public void Roundtrips_real_world_unicode_strings(string word)
+    {
+        Assert.That(JsonParserTyped.Project("\"" + word + "\""),
+            Is.EqualTo(new JsonStringValue(word)));
+
+        var asValue = (JsonObjectValue)JsonParserTyped.Project("{\"key\":\"" + word + "\"}");
+        Assert.That(asValue.Members["key"], Is.EqualTo(new JsonStringValue(word)));
+
+        var asKey = (JsonObjectValue)JsonParserTyped.Project("{\"" + word + "\":1}");
+        Assert.That(asKey.Members.ContainsKey(word), Is.True, "non-ASCII object key roundtrips");
+
+        var inArray = (JsonArrayValue)JsonParserTyped.Project("[\"" + word + "\"]");
+        Assert.That(inArray.Items[0], Is.EqualTo(new JsonStringValue(word)));
+    }
+
+    [Test]
+    public void Simplified_and_traditional_chinese_stay_distinct_through_json()
+    {
+        // 汉字 and 漢字 share the second character but differ in the first.
+        // The parser keeps the two distinct (NFC doesn't merge them), so
+        // the projected string values are not equal.
+        var simplified = JsonParserTyped.Project("\"" + UnicodeExamples.ChineseSimplifiedHanziIdentifier + "\"");
+        var traditional = JsonParserTyped.Project("\"" + UnicodeExamples.ChineseTraditionalHanziIdentifier + "\"");
+
+        Assert.That(simplified, Is.EqualTo(new JsonStringValue(UnicodeExamples.ChineseSimplifiedHanziIdentifier)));
+        Assert.That(traditional, Is.EqualTo(new JsonStringValue(UnicodeExamples.ChineseTraditionalHanziIdentifier)));
+        Assert.That(simplified, Is.Not.EqualTo(traditional));
+    }
+
     [Test]
     public void Rejects_malformed_input()
     {

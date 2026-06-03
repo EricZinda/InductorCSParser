@@ -153,6 +153,38 @@ public class Primer2Examples
         Assert.That(sections[1].Children[0].ToString(), Is.EqualTo("client"));
     }
 
+    // primer2.md "Walking the tree with LINQ": the four LINQ entry points
+    // the doc shows (Children, Walk, FindAll, Flatten). The last one, the
+    // "Flattened tree as a list of every Symbol" line, used to read
+    // `result.Tree!.FlattenInto().OfType<Symbol>()`, which doesn't compile:
+    // Symbol.FlattenInto takes a List<Symbol> and returns void. The list-
+    // returning method is Flatten(). This test runs all four so the snippet
+    // can't drift back.
+    [Test]
+    public void Walking_the_tree_with_linq_entry_points()
+    {
+        var (config, section, _, _, _, integerValue) = BuildGrammar();
+
+        var result = config.Parse("[server]\nhost = \"localhost\"\nport = 8080\n");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+
+        // Direct children only (no recursion)
+        var directSections = result.Tree!.Children.Where(c => c.Is(section)).ToList();
+        Assert.That(directSections.Count, Is.EqualTo(1));
+
+        // Entire subtree, pre-order walk
+        var integers = result.Tree!.Walk().Where(s => s.Is(integerValue)).ToList();
+        Assert.That(integers.Count, Is.EqualTo(1));
+        Assert.That(integers[0].ToString(), Is.EqualTo("8080"));
+
+        // Flattened tree as a list of every Symbol. Flatten() returns
+        // IReadOnlyList<Symbol>, so it's a direct LINQ target exactly as
+        // the surrounding prose claims.
+        var flattened = result.Tree!.Flatten().OfType<Symbol>().ToList();
+        Assert.That(flattened.Count, Is.GreaterThan(0));
+        Assert.That(flattened.All(s => s is Symbol), Is.True);
+    }
+
     // primer2.md "When the parse fails": the doc claims that
     //   config.Parse("[server]\nport oops\n")
     // fails at "line 1, column 5" with an error message that surfaces
