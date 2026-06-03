@@ -50,6 +50,30 @@ public class InductorParserReferenceExamples
         Assert.That($"{nameSym} = {valueSym}", Is.EqualTo("setting = 5"));
     }
 
+    // "Naming Rules": the doc says a named rule "is one the caller wants
+    // to locate later with Tree.Find or result.Find", and that naming a
+    // rule flips its FlattenType to Preserve so its Symbol reaches the
+    // tree. Exercise the ParseResult-level lookup (which walks every
+    // top-level Symbol) so it works even when the root keeps its Flatten
+    // default and result.Tree is null.
+    [Test]
+    public void Naming_a_rule_makes_it_findable_via_result_find()
+    {
+        var word = Identifier().As("word");
+        var breaking = Token('!').As("breaking");
+        var document = And(word, breaking);
+
+        var result = document.Parse("change!");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        // The root And keeps its Flatten default, so result.Tree is null
+        // (two top-level Symbols bubbled up). result.Find walks every
+        // top-level Symbol, so it locates the named rules regardless.
+        Assert.That(result.Tree, Is.Null);
+        Assert.That(result.Find(word)!.ToString(), Is.EqualTo("change"));
+        Assert.That(result.Find(breaking)!.ToString(), Is.EqualTo("!"));
+    }
+
     // "Naming Rules": the doc example uses a class field with
     // `.As(nameof(SettingName))`. The compile-time check on nameof works
     // for fields because the field name is in scope inside its own
@@ -250,6 +274,21 @@ public class InductorParserReferenceExamples
         // pair[2]: retries = 3
         Assert.That(pairs[2].Find(key)!.ToString(), Is.EqualTo("retries"));
         Assert.That(pairs[2].Find(values)!.ToString(), Is.EqualTo("3"));
+
+        // The doc's tree diagram for this example can't label the integer
+        // value node "[integerExpression]". No grammar rule is named that, and
+        // Integer() is flattened (.Flatten(FlattenType.Flatten)) inside valueAtom,
+        // so "3" reaches the tree as a bare rune leaf, exactly like the letters
+        // of "hard", with no named node around it. (Asserting the opposite,
+        // Has.Some.EqualTo("integerExpression"), fails, which is what proved the
+        // doc diagram wrong.)
+        var allLabels = result.Tree!.Walk().Select(s => result.DisplayName(s)).ToList();
+        Assert.That(allLabels, Has.None.EqualTo("integerExpression"),
+            "No rule is named 'integerExpression'; the doc tree diagram must not show one.");
+        var retriesValues = pairs[2].Find(values)!;
+        Assert.That(retriesValues.Children.Select(c => c.ToString()).ToArray(),
+            Is.EqualTo(new[] { "3" }),
+            "The integer value flattens to one bare rune leaf under values, like the other atoms.");
     }
 
     // "LINQ on the Symbol Tree": the doc lists four LINQ entry points

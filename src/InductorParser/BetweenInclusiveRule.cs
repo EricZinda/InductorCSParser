@@ -10,7 +10,7 @@ namespace InductorParser;
 // `inner` between `atLeast` and `atMost` times (both inclusive), fails
 // if it can't reach `atLeast`, and stops once it reaches `atMost`.
 //
-// The named factories are thin wrappers:
+// The named factories are shorthand for it:
 //   OneOrMore(inner)      == BetweenInclusive(1, int.MaxValue, inner)
 //   ZeroOrMore(inner)     == BetweenInclusive(0, int.MaxValue, inner)
 //   Optional(inner)       == BetweenInclusive(0, 1, inner)
@@ -60,14 +60,6 @@ internal sealed class BetweenInclusiveRule : Rule
             int positionBefore = lexer.Position;
             var nextSymbol = ParseChild(Inner, lexer, outputSymbols);
             if (nextSymbol == null) break;
-            // Add the matched child to outputSymbols before deciding
-            // whether to continue. Zero-width Inner that returns a real
-            // wrapper Symbol (e.g. Not(X).Preserve() succeeding when X
-            // fails, or any Preserve'd lookahead) would otherwise have
-            // its wrapper silently dropped: the wrapper sits in
-            // nextSymbol but never reaches the parent's children list.
-            // AndRule adds children unconditionally for the same reason;
-            // BetweenInclusive matches that behavior here.
             if (outputSymbols != null && !ReferenceEquals(nextSymbol, Symbol.Discarded))
                 outputSymbols.Add(nextSymbol);
             count++;
