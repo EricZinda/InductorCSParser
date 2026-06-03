@@ -181,6 +181,68 @@ public class XidIdentifierTests
     }
 
     [Test]
+    public void Cyrillic_identifier_matches_whole_word()
+    {
+        // Cyrillic 'privet' (hello) is six Ll letters with no combining
+        // marks, so six single-rune graphemes. A real running-text word
+        // rather than the lone homoglyph 'а' the security tests use.
+        var word = UnicodeExamples.CyrillicPrivetIdentifier;
+        var result = Identifier().Parse(word);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(word));
+    }
+
+    [Test]
+    public void Arabic_identifier_matches_whole_word()
+    {
+        // Arabic 'arabiyya' (Arabic) is five Lo letters with no harakat
+        // (vowel marks). Like Hebrew, RTL text is stored in logical
+        // (reading) order and the parser walks it in that order, so the
+        // match text comes back equal to the input. The parser doesn't
+        // apply the Bidirectional Algorithm, so there's no visual
+        // reordering to undo.
+        var word = UnicodeExamples.ArabicArabiyyaIdentifier;
+        var result = Identifier().Parse(word);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(word));
+    }
+
+    [Test]
+    public void Japanese_mixed_script_identifier_matches_whole_word()
+    {
+        // 'ひらがなカタカナ漢字' mixes all three Japanese writing systems
+        // in one run: hiragana (including the precomposed voiced GA,
+        // U+304C), katakana, and kanji. Every rune is Lo / XID, so the
+        // lexer reads the whole mixed-script run as a single identifier.
+        var word = UnicodeExamples.JapaneseHiraganaKatakanaKanjiIdentifier;
+        var result = Identifier().Parse(word);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.ToString(), Is.EqualTo(word));
+    }
+
+    [Test]
+    public void Korean_identifier_matches_syllables_and_decomposed_jamo()
+    {
+        // '한국어' (the Korean language) is three precomposed Hangul
+        // syllables, three single-rune graphemes. Both forms a reader
+        // might supply have to work: the precomposed syllables most text
+        // arrives in, and the conjoining-jamo form macOS filesystems hand
+        // back.
+        var syllables = UnicodeExamples.KoreanHangugeoIdentifier;
+        var syllableResult = Identifier().Parse(syllables);
+        Assert.That(syllableResult.Success, Is.True, syllableResult.ErrorMessage);
+        Assert.That(syllableResult.Tree!.ToString(), Is.EqualTo(syllables));
+
+        // Same word in NFD (eight conjoining jamo), derived from the
+        // Canary-protected constant so the decomposition can't drift.
+        // Default-FormC normalization composes it back to the three
+        // syllables before the identifier rules run, so it still matches.
+        var decomposedJamo = syllables.Normalize(System.Text.NormalizationForm.FormD);
+        Assert.That(Identifier().Parse(decomposedJamo).Success, Is.True,
+            "decomposed conjoining jamo recompose to syllables under FormC");
+    }
+
+    [Test]
     public void Chinese_simplified_and_traditional_both_match_and_stay_distinct()
     {
         // 汉字 (simplified) and 漢字 (traditional) are both valid
