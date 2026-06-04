@@ -1430,7 +1430,9 @@ public class UnexpectedUnicodeTests
         // (2) Latin-only TokenSet rejects the Cherokee letter.
         var latinLetters =
             TokenSet.Ascii.Letters |
-            TokenSet.Range(new System.Text.Rune(0x00C0), new System.Text.Rune(0x00FF));
+            TokenSet.Range(new System.Text.Rune(0x00C0), new System.Text.Rune(0x00D6)) |   // À..Ö
+            TokenSet.Range(new System.Text.Rune(0x00D8), new System.Text.Rune(0x00F6)) |   // Ø..ö
+            TokenSet.Range(new System.Text.Rune(0x00F8), new System.Text.Rune(0x00FF));    // ø..ÿ
         var latinOnly = And(OneOrMore(OneOf(latinLetters)), Eof()).Compile();
         Assert.That(latinOnly.Parse(input).Success, Is.False,
             $"Latin-only set rejects {UnicodeExamples.CherokeeLetterAGrapheme} (Cherokee A)");

@@ -182,13 +182,26 @@ public class UnicodeGotchasExamples
     {
         var latinLetters =
             TokenSet.Ascii.Letters |
-            TokenSet.Range(new System.Text.Rune(0x00C0), new System.Text.Rune(0x00FF));
+            TokenSet.Range(new System.Text.Rune(0x00C0), new System.Text.Rune(0x00D6)) |   // À..Ö
+            TokenSet.Range(new System.Text.Rune(0x00D8), new System.Text.Rune(0x00F6)) |   // Ø..ö
+            TokenSet.Range(new System.Text.Rune(0x00F8), new System.Text.Rune(0x00FF));    // ø..ÿ
 
         var rule = OneOrMore(OneOf(latinLetters)).Compile();
 
         Assert.That(rule.Parse("apple").Success, Is.True);
         Assert.That(rule.Parse($"Cyrillic{UnicodeExamples.CyrillicSmallAGrapheme}").Success, Is.False,
             $"U+0430 Cyrillic '{UnicodeExamples.CyrillicSmallAGrapheme}' is rejected by LatinLetters");
+
+        // The set is documented as "Latin-1 Supplement letters", so it must
+        // reject the two non-letters that sit inside the U+00C0..U+00FF block:
+        // U+00D7 MULTIPLICATION SIGN and U+00F7 DIVISION SIGN (both Sm). A
+        // naive Range(0x00C0, 0x00FF) wrongly admits them.
+        string timesInput = Canary("a×b", "ASCII a, U+00D7 MULTIPLICATION SIGN, ASCII b", 0x61, 0xD7, 0x62);
+        string divideInput = Canary("a÷b", "ASCII a, U+00F7 DIVISION SIGN, ASCII b", 0x61, 0xF7, 0x62);
+        Assert.That(rule.Parse(timesInput).Success, Is.False,
+            "U+00D7 MULTIPLICATION SIGN is not a letter and must not be in LatinLetters");
+        Assert.That(rule.Parse(divideInput).Success, Is.False,
+            "U+00F7 DIVISION SIGN is not a letter and must not be in LatinLetters");
     }
 
     // "Variation Selectors": stripping U+FE00..U+FE0F before parsing

@@ -684,15 +684,15 @@ public class XidIdentifierTests
         // is the tell that it is not a letter. This locks in that
         // categorization, the reasoning the TokenSet.Xid.cs file header
         // gives for why NFKC closure later drops 309B from XID_Start.
-        Assert.That(CharUnicodeInfo.GetUnicodeCategory('゛'),
+        Assert.That(CharUnicodeInfo.GetUnicodeCategory((char)UnicodeExamples.KatakanaHiraganaVoicedSoundMarkRune),
             Is.EqualTo(UnicodeCategory.ModifierSymbol),
             "U+309B is a Modifier Symbol (Sk), not a letter");
-        Assert.That(char.IsLetter('゛'), Is.False,
+        Assert.That(char.IsLetter((char)UnicodeExamples.KatakanaHiraganaVoicedSoundMarkRune), Is.False,
             "U+309B is not a letter under any letter General_Category");
 
         // Because it isn't a letter, the letter set can't be the path
         // that puts it in ID_Start: TokenSet.Letters excludes it.
-        Assert.That(TokenSet.Letters.ContainsRune(0x309B), Is.False,
+        Assert.That(TokenSet.Letters.ContainsRune(UnicodeExamples.KatakanaHiraganaVoicedSoundMarkRune), Is.False,
             "U+309B is not in the letter categories; its ID_Start membership "
             + "comes from Other_ID_Start, not from Letters");
     }
