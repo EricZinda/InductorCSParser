@@ -34,10 +34,10 @@
 //   count and then loop on it.
 //
 // Both are built on the public + protected surface of InductorParser:
-// ParseRuleAgainst runs the count and separator rules (discarding their
-// symbols, since only the count's *value* matters), ParseChild runs each item
-// with its own transaction, lexer.Read advances the cursor one grapheme
-// cluster at a time, lexer.TickBudget bounds every loop so the Timeout /
+// ParseChild runs the count, separator, and item rules, each with its own
+// transaction (the count's and separator's symbols don't reach the tree,
+// since only the count's *value* matters), lexer.Read advances the cursor one
+// grapheme cluster at a time, lexer.TickBudget bounds every loop so the Timeout /
 // Cancellation / RuleCountLimit budget can observe the work, and
 // lexer.RecordCompositeFailure anchors the failure where a user would look. No
 // internal members.
@@ -125,7 +125,7 @@ public abstract class LengthPrefixedRule : Rule
         // Symbol for a Preserve count rule, or the collected leaves for a
         // Flatten one. Capture both and let CountText pick.
         var countSymbols = new List<Symbol>();
-        var countResult = ParseRuleAgainst(Count, lexer, countSymbols);
+        var countResult = ParseChild(Count, lexer, countSymbols);
         if (countResult == null)
         {
             TraceFailure(lexer, $"count rule did not match");
@@ -141,7 +141,7 @@ public abstract class LengthPrefixedRule : Rule
             return null;
         }
 
-        if (ParseRuleAgainst(Separator, lexer, null) == null)
+        if (ParseChild(Separator, lexer, null) == null)
         {
             TraceFailure(lexer, $"missing separator after count {count}");
             lexer.RecordCompositeFailure(lexer.Position, ErrorMessage, ErrorForced);

@@ -7,3 +7,6 @@ SyntaxTree/*
 Tracing/*
 Rules/	..
 		GraphemeRule.cs
+		InormalizationReporter.cs
+		Invariant.cs
+		Lateboundrule.cs
