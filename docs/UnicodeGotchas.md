@@ -69,19 +69,17 @@ Identifier();  // base UAX #31-style form
 Python 3 identifiers, per [PEP 3131](https://peps.python.org/pep-3131/) and the [Language Reference](https://docs.python.org/3/reference/lexical_analysis.html#identifiers). Python adds `_` to Start and uses NFKC (not NFC) for equivalence.
 
 ```csharp
-var python = Identifier(form: NormalizationForm.FormKC,
-                        extraStartRunes: TokenSet.Runes("_"))
+var python = Identifier(extraStartRunes: TokenSet.Runes("_"))
     .Compile(NormalizationForm.FormKC);
 var result = python.Parse(input);
 ```
 
-The same form has to be passed to both `Identifier` and `Compile`. `Identifier` needs it so the XID sets are pre-expanded for compatibility equivalents (ligatures, fullwidth Latin, math-bold) whose NFKC conversion is a multi-grapheme sequence. Without that, `Compile(FormKC)` throws `InvalidOperationException` listing the offending entries.
+The normalization form lives on `Compile`. `Identifier` defers its form-aware expansion of `XID_Start` and `XID_Continue` to Compile time, so compatibility equivalents (ligatures, fullwidth Latin, math-bold) whose NFKC conversion is a multi-grapheme sequence get expanded into their grapheme pieces by `IdentifierRule` before the form-validation pass runs.
 
 Rust identifiers, per the [Rust Reference](https://doc.rust-lang.org/reference/identifiers.html). Same profile as Python 3 (adds `_` to Start, uses NFKC). One Rust-specific rule this recipe does **not** enforce: Rust rejects bare `_` as an identifier, requiring `_ XID_Continue+`. If you need that, wrap the rule in an explicit check for the second character. For most grammars the practical difference is negligible.
 
 ```csharp
-var rust = Identifier(form: NormalizationForm.FormKC,
-                      extraStartRunes: TokenSet.Runes("_"))
+var rust = Identifier(extraStartRunes: TokenSet.Runes("_"))
     .Compile(NormalizationForm.FormKC);
 var result = rust.Parse(input);
 ```
@@ -235,6 +233,30 @@ ZeroOrMore(NoneOf(TokenSet.Single('\n')))           // swallows the CRLF termina
 ```
 
 If a grammar is a port of regex semantics that explicitly targets LF-only (some Markdown-style formats, for instance), the failure on CRLF is faithful to the source and you can leave `Token('\n')` as-is. Mark the grammar with a comment so the next reader knows the LF-only behavior is intentional, not an oversight.
+
+## Lone Surrogates: `OneOf(~set)` and `NoneOf(set)` Disagree
+
+A lone surrogate is an unpaired UTF-16 code unit in U+D800..U+DFFF, the kind you get from truncated or malformed UTF-16 (a high surrogate with no low surrogate after it). It isn't a Unicode scalar value, so it can't be a member of any `TokenSet` you build with `Single` / `Range` / `Runes` (those reject surrogate arguments). The only way one enters a set is through the explicit `TokenSet.Surrogates` constant or `TokenSet.SurrogateRange`.
+
+Under the default `Compile(NormalizationForm.FormC)` you never see this, because .NET's `string.Normalize` rejects malformed UTF-16. `Parse` normalizes before the lexer runs, so any input with a lone surrogate throws `ArgumentException` before tokenization. The gotcha only shows up under `Compile(null)`, which skips normalization and lets the lexer surface a lone surrogate as a one-char token (with no scalar value).
+
+When that token reaches the parser, two ways of spelling "a single token that isn't a letter" disagree:
+
+```csharp
+string loneSurrogate = "\uD800";   // build at runtime; a string literal may get sanitized to U+FFFD
+
+// ~Letters is surrogate-free (complement never fabricates surrogates),
+// so the lone surrogate isn't a member and the rule does NOT match it.
+OneOf(~TokenSet.Letters).Compile(null).Parse(loneSurrogate).Success;   // False
+
+// NoneOf is a direct non-membership test, not OneOf(~Letters). The lone
+// surrogate isn't in Letters, so NoneOf admits it.
+NoneOf(TokenSet.Letters).Compile(null).Parse(loneSurrogate).Success;   // True
+```
+
+Why the split: `~` complements over scalar values only and never adds surrogates to a set, so a grammar that never names `Surrogates` or `SurrogateRange` never matches one through `~`. That keeps `OneOf(~set)` surrogate-free. `NoneOf(set)` doesn't go through `~` at all (it matches any token whose value isn't in `set`), so a lone surrogate, not being in `set`, passes it. The two aren't interchangeable on this one input.
+
+**Fix.** Decide whether you actually want lone surrogates. If you're sweeping raw or possibly-malformed content under `Compile(null)` (WTF-8 round-tripping, lenient handling of unpaired surrogates), `NoneOf` admitting them is usually exactly what you want, so leave it. If you want to exclude them, write the stop condition as `OneOf(~stopSet)` instead of `NoneOf(stopSet)`, since the surrogate-free complement won't pass them. And remember it only matters under `Compile(null)`: the default `FormC` compile rejects the malformed input upstream, before either rule runs.
 
 ## The Common Thread
 

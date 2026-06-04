@@ -106,7 +106,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             foreach (string grapheme in MultiRuneGraphemes)
             {
                 int firstRune;
-                if (SurrogateHelpers.IsSurrogatePairAt(grapheme, 0))
+                if (RuneHelpers.IsSurrogatePairAt(grapheme, 0))
                 {
                     firstRune = char.ConvertToUtf32(grapheme[0], grapheme[1]);
                 }
@@ -379,7 +379,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             intervals.Add(new Interval(newRune, newRune));
             return;
         }
-        if (GraphemeClusters.Count(normalized) <= 1)
+        if (GraphemeHelpers.Count(normalized) <= 1)
         {
             graphemes.Add(normalized);
             return;
@@ -526,7 +526,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         // The head rune is kept by WithCompatibilityHeadRuneEquivalents and goes
         // in the start slot; every rune after it must live in `allowedRunes`.
         bool head = true;
-        foreach (int codepoint in SurrogateHelpers.EnumerateRuneValues(converted))
+        foreach (int codepoint in RuneHelpers.EnumerateRuneValues(converted))
         {
             if (head) { head = false; continue; }
             if (!allowedRunes.ContainsRune(codepoint))
@@ -588,7 +588,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         // No multi-grapheme conversion means no pieces to check, so it passes.
         if (!TryGetMultiGraphemeConversion(entry, form, out string? converted))
             return true;
-        foreach (int codepoint in SurrogateHelpers.EnumerateRuneValues(converted))
+        foreach (int codepoint in RuneHelpers.EnumerateRuneValues(converted))
         {
             if (!allowedRunes.ContainsRune(codepoint))
             {
@@ -611,7 +611,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         {
             if (entry.IsNormalized(form)) return false;
             string normalized = entry.Normalize(form);
-            if (GraphemeClusters.Count(normalized) <= 1) return false;
+            if (GraphemeHelpers.Count(normalized) <= 1) return false;
             converted = normalized;
             return true;
         }
@@ -640,7 +640,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             if (text.Length > 0)
             {
                 // The head is always a single rune, so it's always an interval.
-                int headRune = SurrogateHelpers.IsSurrogatePairAt(text, 0)
+                int headRune = RuneHelpers.IsSurrogatePairAt(text, 0)
                     ? char.ConvertToUtf32(text[0], text[1])
                     : text[0];
                 intervals.Add(new Interval(headRune, headRune));
@@ -695,7 +695,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             runeValue = c;
             return true;
         }
-        if (grapheme.Length == 2 && SurrogateHelpers.IsSurrogatePairAt(grapheme, 0))
+        if (grapheme.Length == 2 && RuneHelpers.IsSurrogatePairAt(grapheme, 0))
         {
             runeValue = char.ConvertToUtf32(grapheme[0], grapheme[1]);
             return true;
@@ -1036,7 +1036,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             string grapheme = StringInfo.GetNextTextElement(text, index);
             int rune;
             int consumed;
-            if (SurrogateHelpers.IsSurrogatePairAt(text, index))
+            if (RuneHelpers.IsSurrogatePairAt(text, index))
             {
                 rune = char.ConvertToUtf32(text[index], text[index + 1]);
                 consumed = 2;
@@ -1105,7 +1105,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
             int firstRune;
             int firstRuneLength;
-            if (SurrogateHelpers.IsSurrogatePairAt(cluster, 0))
+            if (RuneHelpers.IsSurrogatePairAt(cluster, 0))
             {
                 firstRune = char.ConvertToUtf32(cluster[0], cluster[1]);
                 firstRuneLength = 2;
@@ -1137,7 +1137,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         {
             int runeStart = runeIndex;
             int runeCodepoint;
-            if (SurrogateHelpers.IsSurrogatePairAt(grapheme, runeIndex))
+            if (RuneHelpers.IsSurrogatePairAt(grapheme, runeIndex))
             {
                 runeCodepoint = char.ConvertToUtf32(grapheme[runeIndex], grapheme[runeIndex + 1]);
                 runeIndex += 2;
@@ -1235,14 +1235,18 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // and never through a complement. Union and intersection move them
     // between sets, but ~ never fabricates them.
     //
-    // The cost is that ~ is not involutive across the surrogate
-    // boundary: ~~Surrogates is the scalar universe, not Surrogates,
-    // because the first ~ strips Surrogates' code units and the second
-    // ~ can't put them back. The opposite ordering (~ as true complement
-    // and surrogates riding along in ~A whenever A doesn't have them)
-    // would buy involution at the cost of NoneOf(Letters) silently
-    // matching a lone surrogate under Compile(null). The surface every
-    // author hits wins.
+    // The cost is that applying ~ twice doesn't always get you back
+    // where you started, once surrogates are involved: ~~Surrogates is
+    // Empty, not Surrogates, because the first ~ turns Surrogates into
+    // the scalar universe (the surrogate code units are stripped) and
+    // the second ~ complements that universe down to nothing rather than
+    // restoring the surrogates. The opposite ordering (~ as true
+    // complement and surrogates riding along in ~A whenever A doesn't
+    // have them) would make ~ round-trip cleanly, at the cost of
+    // OneOf(~Letters) silently matching a lone surrogate under
+    // Compile(null). NoneOf(Letters) matches a lone surrogate either way:
+    // it's a direct non-membership test, not OneOf(~Letters), so the ~
+    // design never reaches it.
     //
     // Throws InvalidOperationException when the input has any multi-rune
     // grapheme entries. The universe of grapheme clusters is unbounded

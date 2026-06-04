@@ -107,7 +107,7 @@ public readonly ref struct Token
                 char c = Source[Offset];
                 return char.IsSurrogate(c) ? -1 : c;
             }
-            if (Length == 2 && SurrogateHelpers.IsSurrogatePairAt(Source, Offset))
+            if (Length == 2 && RuneHelpers.IsSurrogatePairAt(Source, Offset))
             {
                 return char.ConvertToUtf32(Source[Offset], Source[Offset + 1]);
             }

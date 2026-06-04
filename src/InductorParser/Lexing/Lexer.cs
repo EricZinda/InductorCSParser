@@ -339,7 +339,7 @@ public sealed partial class Lexer
     {
         Invariant.That(startOffset < _endPosition, $"NextTokenLength called with startOffset={startOffset} at or past endPosition={_endPosition}.");
         if (_oneRunePerToken)
-            return SurrogateHelpers.IsSurrogatePairAt(_input, startOffset) ? 2 : 1;
+            return RuneHelpers.IsSurrogatePairAt(_input, startOffset) ? 2 : 1;
         return _graphemeIndex.LengthAt(startOffset);
     }
 
@@ -380,7 +380,7 @@ public sealed partial class Lexer
             throw new ArgumentOutOfRangeException(nameof(pos), pos,
                 $"pos must be in [0, input.Length={input.Length}).");
 
-        if (SurrogateHelpers.IsSurrogatePairAt(input, pos))
+        if (RuneHelpers.IsSurrogatePairAt(input, pos))
         {
             runeValue = char.ConvertToUtf32(input[pos], input[pos + 1]);
             runeLen = 2;
