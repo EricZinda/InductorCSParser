@@ -5,10 +5,10 @@ using static InductorParser.Rules;
 
 namespace InductorParser.Tests.DocExamples;
 
-// Verifies the runnable claims in docs/UnicodeModel.md. UnicodeModel.md
-// had no backing example test (the "ozpb gap"), which let its
-// "Step 1: Text Normalization" round-trip claim drift: the doc used to
-// say that compiling with null makes tree.ToString() match the original
+// Verifies the runnable claims in docs/UnicodeInternalsArchitecture.md.
+// Like UnicodeModel.md before it, this doc had no backing example test,
+// which let its "Normalization" section repeat the same drifted round-trip
+// claim: that compiling with null makes tree.ToString() match the original
 // input character for character. That's wrong. tree.ToString() rebuilds
 // text only from the nodes left in the tree, so it drops whatever the
 // Delete rules matched, and Token / Literal default to Delete. The
@@ -20,19 +20,19 @@ namespace InductorParser.Tests.DocExamples;
 // Non-ASCII test data is built from hex code points (no raw glyphs in
 // source) so the UnicodeLiteralCanary scanner stays happy.
 [TestFixture]
-public class UnicodeModelExamples
+public class UnicodeInternalsArchitectureExamples
 {
     // U+FB01 LATIN SMALL LIGATURE FI, which NFKC expands to the two
     // chars "fi". "a" + ligature + "b", built from the hex code point so
     // no raw glyph sits in the source.
     private static readonly string LigatureFiInput = "a" + ((char)0xFB01) + "b";
 
-    // The three Compile lines from the doc compile and parse (smoke test
-    // for the "The form is a grammar-level decision" code block).
+    // The three Compile lines from the "The form is a grammar-level
+    // decision" code block compile and parse.
     [Test]
     public void Compile_form_overloads_from_the_doc_all_work()
     {
-        var defaultForm = And(Literal("hi")).Compile();                          // FormC default
+        var defaultForm = And(Literal("hi")).Compile();                           // FormC default
         var compatibility = And(Literal("hi")).Compile(NormalizationForm.FormKC); // explicit FormKC
         var unnormalized = And(Literal("hi")).Compile(null);                      // no normalization
 
@@ -41,11 +41,12 @@ public class UnicodeModelExamples
         Assert.That(unnormalized.Parse("hi").Success, Is.True);
     }
 
-    // The corrected round-trip claim: SourceText is the verbatim
-    // accessor. tree.ToString() is NOT, because Delete content (the
-    // default for Token / Literal) never reaches the tree. The old doc
-    // claim ("compile with null and tree.ToString() matches the original
-    // character for character") would fail this exact grammar.
+    // The corrected round-trip claim. The doc's "Normalization" section
+    // said callers who want character-exact round-trippability (where
+    // tree.ToString() matches the original input character for character)
+    // compile with null. That's wrong: ToString() drops Delete content
+    // (the default for Token / Literal), so even under Compile(null) it is
+    // not a verbatim round-trip. SourceText is the verbatim accessor.
     [Test]
     public void SourceText_is_the_verbatim_accessor_ToString_drops_Delete_content()
     {
@@ -61,32 +62,16 @@ public class UnicodeModelExamples
         Assert.That(result.Tree!.SourceText, Is.EqualTo("hello,world"));
 
         // ToString() drops every Delete child, so it is NOT a verbatim
-        // round-trip even under Compile(null). This is what the old doc
-        // claim got wrong.
+        // round-trip even under Compile(null). The old doc claim
+        // ("compile with null and tree.ToString() matches character for
+        // character") asserts the opposite and would fail here.
         Assert.That(result.Tree!.ToString(), Is.EqualTo(string.Empty));
-    }
-
-    // SourceText round-trips under a normalizing form too, not just null:
-    // it always returns the caller's original characters. ToString under
-    // a normalizing form returns the normalized characters.
-    [Test]
-    public void SourceText_round_trips_under_a_normalizing_form()
-    {
-        var id = Identifier().As("id").Compile(NormalizationForm.FormKC);
-
-        var result = id.Parse(LigatureFiInput); // "a" + U+FB01 + "b"
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-
-        // SourceText is the original, ligature intact.
-        Assert.That(result.Tree!.SourceText, Is.EqualTo(LigatureFiInput));
-        // ToString reflects the normalized (compatibility-expanded) text.
-        Assert.That(result.Tree!.ToString(), Is.EqualTo("afib"));
     }
 
     // What Compile(null) actually buys: the tree's leaf text (and so
     // ToString on a content-preserving grammar) carries the original
-    // characters instead of the normalized ones. AnyToken is Preserve,
-    // so OneOrMore(AnyToken()) preserves everything it matches.
+    // characters instead of the normalized ones. AnyToken is Preserve, so
+    // OneOrMore(AnyToken()) preserves everything it matches.
     [Test]
     public void Compile_null_keeps_leaf_text_in_original_characters()
     {
@@ -98,13 +83,32 @@ public class UnicodeModelExamples
         Assert.That(unnormalized.Success, Is.True, unnormalized.ErrorMessage);
         Assert.That(compatibility.Success, Is.True, compatibility.ErrorMessage);
 
-        // null: ToString carries the original ligature.
+        // null: ToString carries the original ligature; FormKC normalizes it.
         Assert.That(unnormalized.Tree!.ToString(), Is.EqualTo(LigatureFiInput));
-        // FormKC: ToString carries the normalized expansion.
         Assert.That(compatibility.Tree!.ToString(), Is.EqualTo("afib"));
 
         // SourceText is the original under both forms.
         Assert.That(unnormalized.Tree!.SourceText, Is.EqualTo(LigatureFiInput));
         Assert.That(compatibility.Tree!.SourceText, Is.EqualTo(LigatureFiInput));
+    }
+
+    // The doc's "Positions reported in ParseResult ... are always into the
+    // caller's original input string" claim. Parse decomposed input under
+    // the default FormC: the lexer recomposes internally, but the failure
+    // position is reported in original-string coordinates.
+    [Test]
+    public void Error_positions_are_in_original_input_coordinates()
+    {
+        // "café!" with café decomposed: e + U+0301 combining acute, then a
+        // bang the grammar rejects. Built from hex so no raw glyph appears.
+        string decomposed = "cafe" + ((char)0x0301) + "!";
+        var grammar = OneOrMore(Identifier()).As("id").Compile(); // FormC default
+
+        var result = grammar.Parse(decomposed);
+        Assert.That(result.Success, Is.False);
+        // The '!' sits at index 5 in the ORIGINAL (decomposed) string:
+        // c a f e U+0301 ! -> indices 0..5. A position into the recomposed
+        // "café!" ("café" is 4 chars) would report 4 instead.
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(5));
     }
 }

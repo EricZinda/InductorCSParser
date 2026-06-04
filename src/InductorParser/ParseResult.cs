@@ -126,7 +126,17 @@ public readonly struct ParseResult
     // Convenience: true when Outcome is Success, false otherwise.
     // Most callers check this first and only inspect Tree / Symbols
     // when it's true.
-    public bool Success => Outcome == ParseOutcome.Success;
+    //
+    // The `_grammar != null` check keeps a default-constructed ParseResult
+    // from reporting success. ParseOutcome.Success is the enum's zero
+    // value, so a zeroed struct (an unassigned field, a `new ParseResult[n]`
+    // element, `List<ParseResult>.FirstOrDefault()` on an empty list, a
+    // dictionary lookup miss) has Outcome == Success even though it never
+    // came from a parse, and would otherwise claim success while carrying a
+    // null Tree and empty Symbols. Every real result is built through
+    // Succeeded / Failed / Aborted, each of which stamps the grammar, so a
+    // null grammar means "never parsed" and can't be a success.
+    public bool Success => _grammar != null && Outcome == ParseOutcome.Success;
 
     // Depth-first search across every top-level Symbol for the first
     // node whose Id matches the rule. Returns null if no match.
