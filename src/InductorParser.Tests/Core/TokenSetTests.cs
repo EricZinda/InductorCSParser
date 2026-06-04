@@ -120,8 +120,13 @@ public class TokenSetTests
     {
         // ~ complements over the scalar universe only, so the result is
         // always surrogate-free regardless of whether the input had any.
-        // The grammar-author-safety story: NoneOf(Letters) never quietly
-        // matches a lone surrogate even under Compile(null).
+        // The grammar-author-safety story: OneOf(~Letters) never quietly
+        // matches a lone surrogate even under Compile(null), because
+        // ~Letters is surrogate-free. (NoneOf(Letters) is a direct
+        // non-membership test, NOT OneOf(~Letters), so it DOES match a
+        // lone surrogate under Compile(null); the ~ design never reaches
+        // it. NoneOf_admits_a_lone_surrogate_that_OneOf_complement_rejects
+        // locks in that divergence.)
         Assert.That((~TokenSet.Letters).ContainsRune(HighSurrogateMinRune), Is.False);
         Assert.That((~TokenSet.Letters).ContainsRune(LowSurrogateMaxRune), Is.False);
         // The most aggressive complement is also surrogate-free.
@@ -130,6 +135,44 @@ public class TokenSetTests
         // Complementing Surrogates strips them; the result is the scalar
         // universe, equal to Universe.
         AssertEqual(~TokenSet.Surrogates, TokenSet.Universe);
+    }
+
+    [Test]
+    public void Double_complement_of_Surrogates_is_Empty()
+    {
+        // Applying ~ twice doesn't get you back to Surrogates once
+        // surrogates are involved. The first ~ turns Surrogates into the
+        // scalar universe (surrogate code units stripped); the second ~
+        // complements that universe down to nothing. So ~~Surrogates is
+        // Empty, NOT the scalar universe (the value of a SINGLE complement)
+        // and NOT Surrogates.
+        AssertEqual(~TokenSet.Surrogates, TokenSet.Universe);
+        AssertEqual(~~TokenSet.Surrogates, TokenSet.Empty);
+        Assert.That((~~TokenSet.Surrogates).IsEmpty, Is.True);
+        Assert.That(~~TokenSet.Surrogates == TokenSet.Universe, Is.False);
+    }
+
+    [Test]
+    public void NoneOf_admits_a_lone_surrogate_that_OneOf_complement_rejects()
+    {
+        // Two ways of spelling "match a single token that isn't a letter"
+        // diverge on a lone surrogate under Compile(null).
+        //
+        // OneOf(~Letters): ~Letters is surrogate-free, so the lone
+        // surrogate isn't a member and the rule doesn't match it. This is
+        // the rule the surrogate-free complement design actually protects.
+        //
+        // NoneOf(Letters): a direct non-membership test, not OneOf(~Letters).
+        // A lone surrogate isn't in Letters, so NoneOf admits it. The ~
+        // design never reaches NoneOf, so it matches the surrogate either
+        // way.
+        string loneSurrogate = UnicodeExamples.HighSurrogateMinText;
+
+        Assert.That((~TokenSet.Letters).ContainsRune(HighSurrogateMinRune), Is.False);
+        Assert.That(TokenSet.Letters.ContainsToken(loneSurrogate), Is.False);
+
+        Assert.That(Rules.OneOf(~TokenSet.Letters).Compile(null).Parse(loneSurrogate).Success, Is.False);
+        Assert.That(Rules.NoneOf(TokenSet.Letters).Compile(null).Parse(loneSurrogate).Success, Is.True);
     }
 
     [Test]
