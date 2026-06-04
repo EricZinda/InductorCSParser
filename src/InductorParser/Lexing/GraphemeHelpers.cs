@@ -4,9 +4,11 @@ namespace InductorParser.Lexing;
 
 /// <summary>
 /// Shared grapheme-cluster helpers built on <see cref="StringInfo"/>
-/// (UAX #29 on .NET 5+).
+/// (UAX #29 on .NET 5+). This is the grapheme-cluster layer; its rune-layer
+/// counterpart is <c>RuneHelpers</c>, kept separate because runes and UAX #29
+/// clusters are different units.
 /// </summary>
-public static class GraphemeClusters
+public static class GraphemeHelpers
 {
     /// <summary>
     /// Number of user-perceived characters (grapheme clusters) in the

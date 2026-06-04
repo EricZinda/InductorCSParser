@@ -370,10 +370,10 @@ public class XidIdentifierTests
             string normalized;
             try { normalized = entry.Normalize(form); }
             catch (ArgumentException) { continue; }
-            if (GraphemeClusters.Count(normalized) <= 1) continue;
+            if (GraphemeHelpers.Count(normalized) <= 1) continue;
             multiGraphemeStarts++;
             bool firstRune = true;
-            foreach (int continuation in SurrogateHelpers.EnumerateRuneValues(normalized))
+            foreach (int continuation in RuneHelpers.EnumerateRuneValues(normalized))
             {
                 if (firstRune) { firstRune = false; continue; }
                 Assert.That(continueSet.ContainsRune(continuation), Is.True,

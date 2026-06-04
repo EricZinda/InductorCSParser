@@ -607,4 +607,49 @@ public class WithinTokenRuleTests
         Assert.That(result.ErrorMessage, Is.EqualTo("expected ex"));
     }
 
+    [Test]
+    [RecursiveEngineOnly]
+    public void Prefix_consume_trace_reports_rune_counts_not_char_counts_for_supplementary_plane_cluster()
+    {
+        // 👍🏽 is one grapheme cluster of two runes: U+1F44D THUMBS UP SIGN +
+        // U+1F3FD EMOJI MODIFIER FITZPATRICK TYPE-4. Each rune is a
+        // supplementary-plane scalar, so each takes two UTF-16 chars (four
+        // chars total). AnyToken() consumes exactly one rune and leaves the
+        // second, so WithinToken's prefix-consume branch fires. The inner
+        // rule walks the cluster one rune per Read, so the trace's
+        // "consumed X/Y" is meant to count runes: it must say 1/2, not the
+        // UTF-16 char counts 2/4.
+        string cluster = char.ConvertFromUtf32(0x1F44D) + char.ConvertFromUtf32(0x1F3FD);
+        var sink = NewSink();
+        var rule = WithinToken(AnyToken());
+        rule.Parse(cluster, new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   Lexer.Read: '" + cluster + "', Consumed: 4",
+            "   FAIL | WithinToken: inner rule consumed only 1/2 of the token"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    [RecursiveEngineOnly]
+    public void Inner_failed_trace_reports_rune_offset_not_char_offset_for_supplementary_plane_cluster()
+    {
+        // Same 👍🏽 cluster. The inner And matches the first rune with
+        // AnyToken then fails on the second with Token('z'), so WithinToken's
+        // inner-failed branch fires. The failure sits at the second rune,
+        // rune offset 1. The trace cites a rune-level offset, so it must say
+        // 1, not the UTF-16 char offset 2.
+        string cluster = char.ConvertFromUtf32(0x1F44D) + char.ConvertFromUtf32(0x1F3FD);
+        var sink = NewSink();
+        var rule = WithinToken(And(AnyToken(), Token('z')));
+        rule.Parse(cluster, new ParseOptions { TraceSink = sink });
+
+        string expected = Lines(
+            "   Lexer.Read: '" + cluster + "', Consumed: 4",
+            "   FAIL | WithinToken: inner rule failed at token rune offset 1"
+        );
+        Assert.That(sink.ToString(), Is.EqualTo(expected));
+    }
+
 }

@@ -53,7 +53,7 @@ internal static class DisplayEscape
     {
         for (int i = 0; i < text.Length; i++)
         {
-            if (SurrogateHelpers.IsSurrogatePairAt(text, i))
+            if (RuneHelpers.IsSurrogatePairAt(text, i))
             {
                 i++;
                 continue;
@@ -93,7 +93,7 @@ internal static class DisplayEscape
         for (int i = 0; i < text.Length; i++)
         {
             char c = text[i];
-            if (SurrogateHelpers.IsSurrogatePairAt(text, i))
+            if (RuneHelpers.IsSurrogatePairAt(text, i))
             {
                 builder.Append(c);
                 builder.Append(text[++i]);

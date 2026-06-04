@@ -296,7 +296,7 @@ internal sealed class ScanUntilRule : Rule
         if (normalized == null) return;
         if (string.Equals(normalized, originalRuneText, StringComparison.Ordinal)) return;
 
-        if (GraphemeClusters.Count(normalized) > 1)
+        if (GraphemeHelpers.Count(normalized) > 1)
         {
             reporter.ReportOffender(this, originalRuneText,
                 $"<escape-start rune converts under {form} to the multi-grapheme " +

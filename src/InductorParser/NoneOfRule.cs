@@ -7,17 +7,23 @@ namespace InductorParser;
 
 // Mirror of OneOfRule with the predicate flipped: matches one token
 // iff the token's value isn't in the set.
-
-// ZeroOrMore(NoneOf(stopSet)) is commonly used to
-// sweep up arbitrary user-typed text while still stopping at the stop
-// characters.
+//
+// ZeroOrMore(NoneOf(stopSet)) is commonly used to sweep up arbitrary
+// user-typed text while still stopping at the stop characters.
 //
 // EOF never matches. The rule reads one token. At EOF the token has
 // IsEof == true and the rule fails without advancing, same as OneOfRule.
 internal sealed class NoneOfRule : Rule
 {
     private TokenSet _set;
-    // Refreshed by ValidateNormalization when Compile's
+
+    // Accessor for an alternative evaluator to read the rule's set
+    // without running the rule.
+    internal TokenSet LoweringSet => _set;
+
+    // Pre-rendered text form of the set (e.g. "[A-Z,a-z]") that trace
+    // lines reference so a traced match doesn't re-render the TokenSet
+    // every time. Refreshed by ValidateNormalization when Compile's
     // normalization pass mutates _set. See OneOfRule for the why.
     private string _setRendered;
 
@@ -26,10 +32,6 @@ internal sealed class NoneOfRule : Rule
         _set = runeSet;
         _setRendered = runeSet.ToString();
     }
-
-    // Accessor for an alternative evaluator to read the rule's set
-    // without running the rule.
-    internal TokenSet LoweringSet => _set;
 
     // See Rule.ValidateNormalization for how this works. Same
     // shape as OneOfRule and shares the implementation.
