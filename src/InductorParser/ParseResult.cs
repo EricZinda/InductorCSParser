@@ -282,6 +282,19 @@ public readonly struct ParseResult
     // error fields carry the matching "Parse aborted: ..." message
     // and the deepest-failure position so callers still get a
     // "how far did we get" hint.
-    public static ParseResult Aborted(ParseOutcome outcome, int errorCharIndex, string message, string input, Rule grammar) =>
-        new ParseResult(outcome, null, message, errorCharIndex, input, grammar);
+    public static ParseResult Aborted(ParseOutcome outcome, int errorCharIndex, string message, string input, Rule grammar)
+    {
+        if (!IsAbortOutcome(outcome))
+            throw new ArgumentException(
+                "ParseResult.Aborted requires an abort outcome: Timeout, RuleCountLimitExceeded, DepthLimitExceeded, or Canceled.",
+                nameof(outcome));
+
+        return new ParseResult(outcome, null, message, errorCharIndex, input, grammar);
+    }
+
+    private static bool IsAbortOutcome(ParseOutcome outcome) =>
+        outcome == ParseOutcome.Timeout
+        || outcome == ParseOutcome.RuleCountLimitExceeded
+        || outcome == ParseOutcome.DepthLimitExceeded
+        || outcome == ParseOutcome.Canceled;
 }
