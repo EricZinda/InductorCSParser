@@ -588,7 +588,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         // No multi-grapheme conversion means no pieces to check, so it passes.
         if (!TryGetMultiGraphemeConversion(entry, form, out string? converted))
             return true;
-        foreach (int codepoint in SurrogateHelpers.EnumerateRuneValues(converted))
+        foreach (int codepoint in RuneHelpers.EnumerateRuneValues(converted))
         {
             if (!allowedRunes.ContainsRune(codepoint))
             {
