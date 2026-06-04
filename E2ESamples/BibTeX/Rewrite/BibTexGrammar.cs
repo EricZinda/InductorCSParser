@@ -111,9 +111,33 @@ public static class BibTexGrammar
         // the inner braces as part of the value.
         var bracedValueForward = new LateBoundRule("bracedValue");
 
-        // Plain run: one or more runes that aren't '{', '}', or '\'.
-        // Stopping at backslash too lets the escape branch take over.
-        var bracedPlainRun = ScanWhile(~TokenSet.Runes("{}\\"), minimumCount: 1);
+        // Plain run: any text up to the next '{', '}', or '\'. Stopping at
+        // backslash lets the escape branch take over, and at '}' lets the
+        // closing brace match.
+        //
+        // ScanUntil(stopAt), not ScanWhile(~Runes(...)). The two read as the
+        // same intent ("a run of characters that aren't these"), but they
+        // aren't. ~Runes("{}\\") is "any RUNE but those", and a complement can
+        // only ever be runes. Complement is defined against the code-point
+        // universe, which is finite and representable as intervals, but the
+        // universe of grapheme clusters is unbounded (a grapheme is any rune
+        // sequence that respects UAX #29 boundaries), so "every grapheme but
+        // X" isn't a set you can write down. That's why TokenSet complements
+        // rune-only sets and throws on ~ of a set that already holds a
+        // multi-rune grapheme. See the header comment in
+        // src/InductorParser/TokenSet.cs (the "Complement is only defined when
+        // _multiRuneGraphemes is empty" note) for the full reasoning.
+        //
+        // The consequence here: a rune-set scan matches only single-rune
+        // grapheme clusters, so ScanWhile(~Runes(...)) stops dead at a CRLF
+        // (one character, two runes) and a braced value spanning a Windows
+        // line break never reaches its '}'. ScanUntil instead tests each
+        // character against the small stop set, so any character that isn't a
+        // stopper, CRLF included, is consumed. ScanUntil succeeds zero-width
+        // when already at a stopper. The ZeroOrMore in bracedContent counts
+        // that once and then stops (see BetweenInclusiveRule), so the run
+        // yields control at '}'.
+        var bracedPlainRun = ScanUntil(stopAt: TokenSet.Runes("{}\\"));
 
         var bracedContent = ZeroOrMore(Or(
             bracedValueForward,
@@ -262,15 +286,31 @@ public static class BibTexGrammar
         // can FindAll(Entry) regardless of which shape matched.
         Entry = Or(PreambleEntry, StringEntry, RegularEntry).As("entry");
 
-        // Stray text between entries: anything not starting with '@' is
-        // a comment in the .bib format. ScanWhile with the complement
-        // set walks every non-'@' rune; Flatten(Delete) drops it from
-        // the tree so consumers see only entries.
-        var strayText = ScanWhile(~TokenSet.Runes("@"), minimumCount: 1)
+        // Stray text between entries: anything up to the next '@' is a
+        // comment in the .bib format.
+        //
+        // ScanUntil(stopAt: '@'), not ScanWhile(~Runes("@")). The complement
+        // form reads as "any character but '@'", but it actually means "any
+        // RUNE but '@'", and a rune-set scan matches only single-rune
+        // grapheme clusters, so it stops dead at the first CRLF (one
+        // character, two runes). See bracedPlainRun above for the full why,
+        // including why a complement can only ever be rune-only. ScanUntil
+        // tests each character against the one-element stop set instead, so it
+        // consumes any non-'@' character, CRLF included, and runs on to the
+        // next '@'. eofIsTerminator: true so
+        // trailing comment text with no following '@' reaches end of input.
+        // Flatten(Delete) drops it so consumers see only entries.
+        var strayText = ScanUntil(stopAt: TokenSet.Runes("@"), eofIsTerminator: true)
             .Flatten(FlattenType.Delete);
 
+        // Entry before strayText: ScanUntil succeeds zero-width when already
+        // at '@', so strayText first would match empty there and shadow the
+        // entry. Entry only matches at '@', so trying it first costs nothing
+        // elsewhere. The ZeroOrMore's zero-width stop (see
+        // BetweenInclusiveRule) ends the loop on the empty strayText match at
+        // end of input.
         Document = And(
-            ZeroOrMore(Or(strayText, Entry)),
+            ZeroOrMore(Or(Entry, strayText)),
             Eof()
         );
         Document.Compile();
