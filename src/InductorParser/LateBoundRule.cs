@@ -66,9 +66,7 @@ public sealed class LateBoundRule : Rule
     // one-liner that fires at type-init time. Throws if the graph has
     // already been compiled, and throws on a second call against the
     // same instance: .Bind is set-once, matching .As(string) /
-    // .As(SymbolId) / .WithError. A double-Bind silently swaps the
-    // target with no error pointing at the duplicate call, and the
-    // grammar then runs against whichever target initialized last.
+    // .As(SymbolId) / .WithError.
     public LateBoundRule Bind(Rule target)
     {
         if (target == null) throw new ArgumentNullException(nameof(target));
@@ -161,7 +159,7 @@ public sealed class LateBoundRule : Rule
         // set `outputSymbols` up exactly as they would for the target
         // rule itself. Forwarding straight to the target is all that's
         // left: the target writes its children into the list or returns
-        // its own wrapper Symbol, and that result flows back unchanged.
+        // its own Symbol, and that result flows back unchanged.
         return ParseChild(_target!, lexer, outputSymbols);
     }
 
