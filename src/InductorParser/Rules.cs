@@ -197,7 +197,7 @@ public static class Rules
     /// var idChar = OneOf(TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_"));
     ///
     /// // ASCII consonant: ASCII letter minus vowels
-    /// var consonant = OneOf(TokenSet.Ascii.Letters &amp; ~TokenSet.Runes("aeiouAEIOU"));
+    /// var consonant = OneOf(TokenSet.Ascii.Letters - TokenSet.Runes("aeiouAEIOU"));
     ///
     /// // Printable non-whitespace: letters and digits only, in Latin script
     /// var latinAlnum = OneOf(

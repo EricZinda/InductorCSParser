@@ -116,12 +116,12 @@ public class Primer4Examples
     }
 
     // "Invisible characters": keeping emoji whole by subtracting ZWJ
-    // from the Format category with & and ~.
+    // from the Format category with the - (difference) operator.
     [Test]
     public void Invisibles_minus_zwj_keeps_zwj_out_of_the_set()
     {
         var invisiblesKeepingEmoji =
-            TokenSet.Category(UnicodeCategory.Format) & ~TokenSet.Single(0x200D);
+            TokenSet.Category(UnicodeCategory.Format) - TokenSet.Single(0x200D);
 
         Assert.That(invisiblesKeepingEmoji.ContainsRune(0x200B), Is.True,  // ZWS still removed
             "zero-width space stays in the invisible set");
