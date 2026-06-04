@@ -103,14 +103,18 @@ internal sealed class WithinTokenRule : Rule
 
         if (innerResult == null && innerOutputs.Count == 0)
         {
-            // Sub-lexer positions are 0-based on the substring, so they're
-            // rune offsets within the outer token. Snap the recorded
-            // outer-coordinate failure back to the outer cluster's start
-            // so the parser-wide "errors land at cluster boundaries"
-            // invariant holds. Trace cites the rune-level offset for
-            // debug.
-            int innerFailurePos = Math.Max(subLexer.DeepestFailurePosition, subLexer.Position);
-            TraceFailure(outerLexer, $"inner rule failed at token rune offset {innerFailurePos}");
+            // Snap the recorded outer-coordinate failure back to the outer
+            // cluster's start so the parser-wide "errors land at cluster
+            // boundaries" invariant holds. Trace cites the rune-level offset
+            // for debug. Sub-lexer positions are 0-based UTF-16 offsets into
+            // the substring, so they're char offsets, not rune offsets: a
+            // supplementary-plane rune (an emoji, a CJK-extension character)
+            // is two chars but one rune. RuneHelpers.RuneCount converts
+            // to the rune offset the rune-per-token model debugs in. The
+            // conversion sits inside the trace hole, so the handler skips it
+            // when tracing is off.
+            TraceFailure(outerLexer,
+                $"inner rule failed at token rune offset {RuneHelpers.RuneCount(subInput.AsSpan(0, Math.Max(subLexer.DeepestFailurePosition, subLexer.Position)))}");
             // The inner rule ran on the sub-lexer, so its deepest failure
             // is recorded there. Surface it on the outer lexer keeping the
             // inner's forced flag (DeepestFailureIsForced), so a forced
@@ -132,10 +136,16 @@ internal sealed class WithinTokenRule : Rule
             // A token is atomic from the outer view, so the failure
             // belongs at the outer cluster's start, not at the rune
             // offset where the inner rule stopped reading (which is
-            // mid-cluster from outside). subLexer.Position is 0-based on
-            // the substring, so it's the consumed rune count directly.
-            int consumed = subLexer.Position;
-            TraceFailure(outerLexer, $"inner rule consumed only {consumed}/{token.Length} of the token");
+            // mid-cluster from outside). subLexer.Position is a 0-based
+            // UTF-16 offset into the substring, so it counts chars, not
+            // runes: a supplementary-plane rune is two chars but one rune,
+            // and the inner rule walks one rune per Read.
+            // RuneHelpers.RuneCount converts both the consumed amount and
+            // the token length to the rune counts the trace's "X/Y" is meant
+            // to report. The conversions sit inside the trace hole, so the
+            // handler skips them when tracing is off.
+            TraceFailure(outerLexer,
+                $"inner rule consumed only {RuneHelpers.RuneCount(subInput.AsSpan(0, subLexer.Position))}/{RuneHelpers.RuneCount(subInput.AsSpan())} of the token");
             // Same pattern as the inner-failed branch: surface the inner's
             // deepest failure with its forced flag preserved so a forced
             // .WithError from a rejected alternative inside the cluster

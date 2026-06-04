@@ -80,7 +80,7 @@ internal sealed class GraphemeRule : Rule
         if (normalized == null) return;
         if (string.Equals(normalized, _expected, StringComparison.Ordinal)) return;
 
-        if (GraphemeClusters.Count(normalized) > 1)
+        if (GraphemeHelpers.Count(normalized) > 1)
         {
             reporter.ReportOffender(this, _expected,
                 $"<Token converts to multi-grapheme sequence \"{normalized}\" under {form}. " +

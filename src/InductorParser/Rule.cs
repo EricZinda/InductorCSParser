@@ -1806,7 +1806,7 @@ public abstract class Rule
         {
             int runeValue;
             int runeLength;
-            if (SurrogateHelpers.IsSurrogatePairAt(literal, index))
+            if (RuneHelpers.IsSurrogatePairAt(literal, index))
             {
                 runeValue = char.ConvertToUtf32(literal[index], literal[index + 1]);
                 runeLength = 2;
