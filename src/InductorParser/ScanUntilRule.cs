@@ -340,20 +340,29 @@ internal sealed class ScanUntilRule : Rule
         // SetPosition(pos + 0) wouldn't move the cursor, and the
         // loop would spin forever.
         //
-        // Lone surrogates flow through as body. The lexer surfaces
-        // each unpaired surrogate code unit as a one-char token with
-        // RuneValue == -1 (see UnexpectedUnicodeTests for the canonical
-        // behavior). Such a token can't be in any TokenSet (entries
-        // are valid Unicode scalars) and can't equal the escape-start
-        // rune (also a valid scalar), so the stopper and escape-start
-        // checks both correctly say "no match" and the body fall-
-        // through advances past it. The Memory the leaf Symbol holds
-        // is a zero-copy slice of the input string, so the surrogate
-        // round-trips through ToString() byte-for-byte. Mirrors what
-        // ZeroOrMore(NoneOf(stopAt)) would do on the same input.
-        // Lone surrogates only reach this rule under Compile(null),
-        // because string.Normalize rejects malformed UTF-16 with
-        // ArgumentException out of Parse() under any other form.
+        // Lone surrogates the lexer surfaces (one-char tokens carrying
+        // no RuneValue, see UnexpectedUnicodeTests) are handled the same
+        // way ZeroOrMore(NoneOf(stopAt)) handles them, and that depends
+        // on the stopper set:
+        //   * A stopper set with no surrogate code units (the typical
+        //     string-body case, stopAt = '"' / '|' / etc.) doesn't
+        //     contain the surrogate, so the stopper check says "no
+        //     match" and the body fall-through consumes it. The
+        //     escape-start check also says "no match", because the
+        //     escape-start rune is always a valid scalar and can't equal
+        //     a surrogate code unit.
+        //   * A stopper set built with TokenSet.Surrogates or
+        //     SurrogateRange does contain the surrogate's code unit
+        //     (ContainsToken has a lone-surrogate branch for exactly this
+        //     opt-in), so the stopper check matches and the scan stops at
+        //     the surrogate. That's the WTF-8 / unpaired-surrogate
+        //     boundary a grammar deliberately asks for.
+        // Either way the leaf Symbol's Memory points into the input with
+        // no copy, so any surrogate consumed as body round-trips through
+        // ToString() byte-for-byte. Lone surrogates only reach this rule
+        // under Compile(null), because string.Normalize rejects malformed
+        // UTF-16 with ArgumentException out of Parse() under any other
+        // form.
         bool stopperMatched = false;
         while (!lexer.IsEof)
         {
