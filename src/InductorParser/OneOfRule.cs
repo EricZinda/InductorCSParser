@@ -36,6 +36,17 @@ internal sealed class OneOfRule : Rule
     // that need to inspect the rule's matchable tokens.
     internal TokenSet LoweringSet => _set;
 
+    // Replace the rule's TokenSet wholesale and refresh the cached trace
+    // rendering. Used by IdentifierRule to install its form-aware expanded
+    // sets on its embedded start / body OneOfs before the form-validation
+    // walker reaches them. Mirrors the in-place mutation
+    // ValidateNormalization already does on _set / _setRendered.
+    internal void ReplaceSet(TokenSet newSet)
+    {
+        _set = newSet;
+        _setRendered = newSet.ToString();
+    }
+
     // See Rule.ValidateNormalization for how this works. OneOf-
     // specific: form-project the set and report any entry whose
     // conversion is multi-grapheme as an offender, since OneOf matches

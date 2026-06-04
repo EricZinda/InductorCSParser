@@ -285,9 +285,9 @@ public class XidIdentifierTests
         // ASCII before the lexer runs, so both inputs produce the same
         // flattened match text.
         var fullwidthInput = UnicodeExamples.FullwidthFooGrapheme;
-        var fullwidthRule = Identifier(System.Text.NormalizationForm.FormKC);
+        var fullwidthRule = Identifier();
         fullwidthRule.Compile(System.Text.NormalizationForm.FormKC);
-        var plainRule = Identifier(System.Text.NormalizationForm.FormKC);
+        var plainRule = Identifier();
         plainRule.Compile(System.Text.NormalizationForm.FormKC);
         var fullwidth = fullwidthRule.Parse(fullwidthInput);
         var plain = plainRule.Parse("foo");
@@ -305,9 +305,9 @@ public class XidIdentifierTests
         // Same promise: the ligatured and un-ligatured inputs match the
         // same identifier under FormKC.
         var ligatureInput = UnicodeExamples.FfLigaturePlusOoText;
-        var ligatureRule = Identifier(System.Text.NormalizationForm.FormKC);
+        var ligatureRule = Identifier();
         ligatureRule.Compile(System.Text.NormalizationForm.FormKC);
-        var plainRule = Identifier(System.Text.NormalizationForm.FormKC);
+        var plainRule = Identifier();
         plainRule.Compile(System.Text.NormalizationForm.FormKC);
         var ligature = ligatureRule.Parse(ligatureInput);
         var plain = plainRule.Parse("ffoo");
@@ -329,7 +329,7 @@ public class XidIdentifierTests
         // must still be rejected.
         const string middleDot = "\u00B7";
         const string lWithMiddleDot = "\u0140";
-        var grammar = And(Identifier(form), Eof());
+        var grammar = And(Identifier(), Eof());
         grammar.Compile(form);
 
         Assert.That(TokenSet.XidStart.ContainsRune(0x00B7), Is.False,
@@ -370,10 +370,10 @@ public class XidIdentifierTests
             string normalized;
             try { normalized = entry.Normalize(form); }
             catch (ArgumentException) { continue; }
-            if (GraphemeClusters.Count(normalized) <= 1) continue;
+            if (GraphemeHelpers.Count(normalized) <= 1) continue;
             multiGraphemeStarts++;
             bool firstRune = true;
-            foreach (int continuation in SurrogateHelpers.EnumerateRuneValues(normalized))
+            foreach (int continuation in RuneHelpers.EnumerateRuneValues(normalized))
             {
                 if (firstRune) { firstRune = false; continue; }
                 Assert.That(continueSet.ContainsRune(continuation), Is.True,
@@ -397,24 +397,92 @@ public class XidIdentifierTests
         // "1" + U+2044 FRACTION SLASH + "2". The fraction slash isn't
         // XID_Continue, so adding 1/2 as an identifier-start extra leaves its
         // middle rune unmatchable in body position. Closure covers XidStart's
-        // own entries but not caller extras, so Identifier must reject this at
-        // grammar-build time instead of silently building a rule that can
-        // never match the decomposed input.
+        // own entries but not caller extras, so Identifier must reject this
+        // instead of silently building a rule that can never match the
+        // decomposed input. The form is read from Compile, so the rejection
+        // lands at Compile time when the form is known.
         const string oneHalf = "\u00BD";
         const string fractionSlash = "\u2044";
         Assert.That(TokenSet.XidContinue.ContainsRune(0x2044), Is.False,
             "FRACTION SLASH must not be XID_Continue for this test to be meaningful");
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
-            Identifier(form, extraStartRunes: TokenSet.Runes(oneHalf)));
+            Identifier(extraStartRunes: TokenSet.Runes(oneHalf)).Compile(form));
         Assert.That(exception!.Message, Does.Contain("extraStartRunes"));
         Assert.That(exception.Message, Does.Contain("extraBodyRunes"));
         Assert.That(exception.Message, Does.Contain(fractionSlash));
 
         // Supplying the missing piece in extraBodyRunes clears the rejection.
         Assert.DoesNotThrow(() =>
-            Identifier(form, extraStartRunes: TokenSet.Runes(oneHalf),
-                       extraBodyRunes: TokenSet.Runes(fractionSlash)));
+            Identifier(extraStartRunes: TokenSet.Runes(oneHalf),
+                       extraBodyRunes: TokenSet.Runes(fractionSlash)).Compile(form));
+    }
+
+    [TestCase(NormalizationForm.FormKC)]
+    [TestCase(NormalizationForm.FormKD)]
+    public void Identifier_rejects_body_extra_whose_decomposition_piece_is_not_a_body_character(NormalizationForm form)
+    {
+        // Mirror of Identifier_rejects_start_extra_whose_decomposition_tail_is_not_a_body_character,
+        // but for extraBodyRunes. U+FDFA ARABIC LIGATURE SALLALLAHOU ALAYHE
+        // WASALLAM has an NFKC/NFKD decomposition that's an 18-character
+        // Arabic phrase containing three U+0020 SPACE separators between
+        // words. The spec excludes U+FDFA from XidContinue (see
+        // NfkxClosureRemovedFromXidContinue in TokenSet.Xid.cs) precisely
+        // because the SPACE characters in its decomposition would break
+        // the identifier-base invariant.
+        //
+        // Closure covers XidContinue's own entries but not caller extras.
+        // Without this rejection, body.WithCompatibilityEquivalents over
+        // (XidContinue | extraBodyRunes) would silently leak the SPACE
+        // separators into the body set and an input like "abc def" would
+        // parse as one identifier. The form is read from Compile, so the
+        // rejection lands at Compile time.
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            Identifier(extraBodyRunes:
+                TokenSet.Runes(UnicodeExamples.ArabicLigatureSallallahouGrapheme)).Compile(form));
+        Assert.That(exception!.Message, Does.Contain("extraBodyRunes"));
+        Assert.That(exception.Message, Does.Contain(" "),
+            "error message names the offending piece (a SPACE separator inside the Arabic-phrase decomposition)");
+
+        // Sanity: a body extra whose entire decomposition stays in XidContinue
+        // is accepted. The Latin small ligature fi (U+FB01) decomposes to "fi";
+        // both 'f' and 'i' are ordinary XidContinue letters, so the compile
+        // doesn't throw.
+        Assert.DoesNotThrow(() =>
+            Identifier(extraBodyRunes:
+                TokenSet.Runes(UnicodeExamples.FiLigatureGrapheme)).Compile(form));
+
+        // Explicit opt-in: the caller can add the offending piece to
+        // extraBodyRunes themselves and the compile no longer throws. This is
+        // the same shape the start-side check supports (a tail piece passes
+        // when the caller has already added it to extraBodyRunes), and it's
+        // the reason extraBodyRunes exists in the first place: the caller is
+        // explicitly choosing what counts as body, including pieces outside
+        // XidContinue.
+        Assert.DoesNotThrow(() =>
+            Identifier(extraBodyRunes:
+                TokenSet.Runes(UnicodeExamples.ArabicLigatureSallallahouGrapheme) | TokenSet.Single(0x20)).Compile(form));
+    }
+
+    [TestCase(NormalizationForm.FormKC)]
+    [TestCase(NormalizationForm.FormKD)]
+    public void Bare_OneOf_with_decomposing_entry_still_throws_at_Compile(NormalizationForm form)
+    {
+        // IdentifierRule.ValidateNormalization only rewrites the start /
+        // body OneOfs it built itself. A hand-written OneOf that holds
+        // an entry whose NFKx decomposition is multi-grapheme still falls
+        // through to the standard form-validation pass, which reports
+        // the entry as an offender and throws. The IJ ligature (U+0132)
+        // is the canonical fixture: under FormKC it normalizes to "IJ",
+        // which a single OneOf member can't represent. The user clearly
+        // meant the ligature, and a bare OneOf has no surrounding rule
+        // shape to consume the two pieces one at a time, so the
+        // rejection is the right call.
+        var rule = OneOf(TokenSet.Single(0x0132));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
+        Assert.That(exception!.Message, Does.Contain("expected text that isn't in"));
+        Assert.That(exception.Message, Does.Contain(form.ToString()));
     }
 
     [Test]
@@ -448,9 +516,9 @@ public class XidIdentifierTests
         // are supplementary-plane code points NFKC-equivalent to plain
         // ASCII. This is the case that catches math-bold 'foo' vs 'foo' spoofing.
         var mathBoldInput = UnicodeExamples.MathBoldFooIdentifier;
-        var mathBoldRule = Identifier(System.Text.NormalizationForm.FormKC);
+        var mathBoldRule = Identifier();
         mathBoldRule.Compile(System.Text.NormalizationForm.FormKC);
-        var plainRule = Identifier(System.Text.NormalizationForm.FormKC);
+        var plainRule = Identifier();
         plainRule.Compile(System.Text.NormalizationForm.FormKC);
         var mathBold = mathBoldRule.Parse(mathBoldInput);
         var plain = plainRule.Parse("foo");

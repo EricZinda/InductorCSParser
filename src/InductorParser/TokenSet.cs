@@ -106,7 +106,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             foreach (string grapheme in MultiRuneGraphemes)
             {
                 int firstRune;
-                if (SurrogateHelpers.IsSurrogatePairAt(grapheme, 0))
+                if (RuneHelpers.IsSurrogatePairAt(grapheme, 0))
                 {
                     firstRune = char.ConvertToUtf32(grapheme[0], grapheme[1]);
                 }
@@ -379,7 +379,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             intervals.Add(new Interval(newRune, newRune));
             return;
         }
-        if (GraphemeClusters.Count(normalized) <= 1)
+        if (GraphemeHelpers.Count(normalized) <= 1)
         {
             graphemes.Add(normalized);
             return;
@@ -526,9 +526,70 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         // The head rune is kept by WithCompatibilityHeadRuneEquivalents and goes
         // in the start slot; every rune after it must live in `allowedRunes`.
         bool head = true;
-        foreach (int codepoint in SurrogateHelpers.EnumerateRuneValues(converted))
+        foreach (int codepoint in RuneHelpers.EnumerateRuneValues(converted))
         {
             if (head) { head = false; continue; }
+            if (!allowedRunes.ContainsRune(codepoint))
+            {
+                expansion = converted;
+                missingRune = char.ConvertFromUtf32(codepoint);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Companion to WithCompatibilityEquivalents for the body / continue side.
+    // Where AllCompatibilityTailRunesIn verifies the dropped tail of a start
+    // expansion has somewhere to land, this one verifies every piece (head
+    // included) of a body expansion. Body matches against every code point
+    // after the first identifier character, so all decomposition pieces have
+    // to be valid body characters, otherwise the union+expansion silently
+    // injects an out-of-band rune (the SPACE separators inside U+FDFA's
+    // NFKC, for example) into the body set.
+    //
+    // Rules.Identifier calls this on the caller's extra body runes only.
+    // XidContinue's own entries are guaranteed by UAX #31's closure property
+    // (XidContinue is closed under NFKx), so there's no need to re-check
+    // ~130K code points on every call.
+    internal bool AllCompatibilityPiecesIn(
+        NormalizationForm form,
+        TokenSet allowedRunes,
+        out string entry,
+        out string expansion,
+        out string missingRune)
+    {
+        foreach (int rune in EnumerateRunes())
+        {
+            entry = char.ConvertFromUtf32(rune);
+            if (!AllPiecesIn(entry, form, allowedRunes, out expansion, out missingRune))
+                return false;
+        }
+        foreach (string grapheme in MultiRuneGraphemes)
+        {
+            if (!AllPiecesIn(grapheme, form, allowedRunes, out expansion, out missingRune))
+            {
+                entry = grapheme;
+                return false;
+            }
+        }
+        entry = "";
+        expansion = "";
+        missingRune = "";
+        return true;
+    }
+
+    private static bool AllPiecesIn(
+        string entry, NormalizationForm form, TokenSet allowedRunes,
+        out string expansion, out string missingRune)
+    {
+        expansion = "";
+        missingRune = "";
+        // No multi-grapheme conversion means no pieces to check, so it passes.
+        if (!TryGetMultiGraphemeConversion(entry, form, out string? converted))
+            return true;
+        foreach (int codepoint in RuneHelpers.EnumerateRuneValues(converted))
+        {
             if (!allowedRunes.ContainsRune(codepoint))
             {
                 expansion = converted;
@@ -550,7 +611,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         {
             if (entry.IsNormalized(form)) return false;
             string normalized = entry.Normalize(form);
-            if (GraphemeClusters.Count(normalized) <= 1) return false;
+            if (GraphemeHelpers.Count(normalized) <= 1) return false;
             converted = normalized;
             return true;
         }
@@ -579,7 +640,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             if (text.Length > 0)
             {
                 // The head is always a single rune, so it's always an interval.
-                int headRune = SurrogateHelpers.IsSurrogatePairAt(text, 0)
+                int headRune = RuneHelpers.IsSurrogatePairAt(text, 0)
                     ? char.ConvertToUtf32(text[0], text[1])
                     : text[0];
                 intervals.Add(new Interval(headRune, headRune));
@@ -634,7 +695,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             runeValue = c;
             return true;
         }
-        if (grapheme.Length == 2 && SurrogateHelpers.IsSurrogatePairAt(grapheme, 0))
+        if (grapheme.Length == 2 && RuneHelpers.IsSurrogatePairAt(grapheme, 0))
         {
             runeValue = char.ConvertToUtf32(grapheme[0], grapheme[1]);
             return true;
@@ -975,7 +1036,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             string grapheme = StringInfo.GetNextTextElement(text, index);
             int rune;
             int consumed;
-            if (SurrogateHelpers.IsSurrogatePairAt(text, index))
+            if (RuneHelpers.IsSurrogatePairAt(text, index))
             {
                 rune = char.ConvertToUtf32(text[index], text[index + 1]);
                 consumed = 2;
@@ -1044,7 +1105,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
             int firstRune;
             int firstRuneLength;
-            if (SurrogateHelpers.IsSurrogatePairAt(cluster, 0))
+            if (RuneHelpers.IsSurrogatePairAt(cluster, 0))
             {
                 firstRune = char.ConvertToUtf32(cluster[0], cluster[1]);
                 firstRuneLength = 2;
@@ -1076,7 +1137,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         {
             int runeStart = runeIndex;
             int runeCodepoint;
-            if (SurrogateHelpers.IsSurrogatePairAt(grapheme, runeIndex))
+            if (RuneHelpers.IsSurrogatePairAt(grapheme, runeIndex))
             {
                 runeCodepoint = char.ConvertToUtf32(grapheme[runeIndex], grapheme[runeIndex + 1]);
                 runeIndex += 2;

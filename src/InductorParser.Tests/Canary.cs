@@ -67,7 +67,7 @@ internal static class CanaryHelper
         int index = 0;
         while (index < literal.Length)
         {
-            if (SurrogateHelpers.IsSurrogatePairAt(literal, index))
+            if (RuneHelpers.IsSurrogatePairAt(literal, index))
             {
                 yield return char.ConvertToUtf32(literal[index], literal[index + 1]);
                 index += 2;

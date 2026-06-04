@@ -1,13 +1,23 @@
-// LookbehindRule is the externally-authored custom rule this project adds
-// alongside FailRule (failure-only leaf), OneRuneRule (consuming leaf), and
-// ScanRunRule. It exercises a surface none of those do: a zero-width rule
-// that runs its inner rule against the input BEHIND the cursor.
+// Why this project exists
 //
-// It's a Rule-valued lookbehind (LPeg's lpeg.B), built entirely on the
-// public surface: Lexer.SetPosition moves the cursor to an earlier token
-// boundary, ParseChild runs the inner rule there, and
-// Lexer.PeekTokenLength walks the boundaries. Compiling in this no-IVT
-// project proves an outside author can build it using nothing internal.
+// This assembly is deliberately NOT named in any InternalsVisibleTo grant
+// in src/InductorParser/InductorParser.csproj, so it sees only the public +
+// protected surface of InductorParser, exactly as a third-party consumer
+// would. Most of the checking is the build itself: the built-in rule
+// sources are link-compiled here (see the .csproj), so if any of them ever
+// used an internal member, or the surface they need were narrowed, this
+// assembly wouldn't compile.
+//
+// LookbehindRule is the one hand-written custom rule the project keeps. The
+// built-in rules already cover the leaf, bulk-scan, and failure surfaces a
+// custom rule would touch, so a hand-written clone of those adds no coverage
+// the link-compile doesn't already give. A lookbehind is the exception: it's
+// the only thing here that exercises public surface no built-in does. It's a
+// Rule-valued lookbehind (LPeg's lpeg.B), built entirely on the public
+// surface: Lexer.SetPosition moves the cursor to an earlier token boundary,
+// ParseChild runs the inner rule there, and Lexer.PeekTokenLength walks the
+// boundaries. Compiling in this no-IVT project proves an outside author can
+// build it using nothing internal.
 
 using NUnit.Framework;
 using InductorParser;

@@ -134,7 +134,7 @@ public class RecipesExamples
     public void Identifier_with_NFKC_treats_fullwidth_as_ascii()
     {
         var identifierFormC = Identifier().Compile();
-        var identifierFormKC = Identifier(System.Text.NormalizationForm.FormKC).Compile(System.Text.NormalizationForm.FormKC);
+        var identifierFormKC = Identifier().Compile(System.Text.NormalizationForm.FormKC);
 
         // With default FormC, fullwidth ｆｏｏ is its own valid identifier
         // (still letters, just different code points than ASCII foo).
