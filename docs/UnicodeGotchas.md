@@ -161,10 +161,15 @@ This is a grammar-design decision. For security-sensitive grammars (mixed-script
 
 ```csharp
 // Latin script only: Basic Latin letters plus Latin-1 Supplement letters.
-// Rejects Cyrillic а, Greek ο, and other confusables.
+// Rejects Cyrillic а, Greek ο, and other confusables. The three sub-ranges
+// skip U+00D7 (× MULTIPLICATION SIGN) and U+00F7 (÷ DIVISION SIGN), the two
+// non-letters Unicode parked inside the U+00C0..U+00FF block. A naive
+// Range(0x00C0, 0x00FF) would quietly admit × and ÷ as identifier characters.
 static readonly TokenSet LatinLetters =
     TokenSet.Ascii.Letters |
-    TokenSet.Range(new Rune(0x00C0), new Rune(0x00FF));
+    TokenSet.Range(new Rune(0x00C0), new Rune(0x00D6)) |   // À..Ö
+    TokenSet.Range(new Rune(0x00D8), new Rune(0x00F6)) |   // Ø..ö
+    TokenSet.Range(new Rune(0x00F8), new Rune(0x00FF));    // ø..ÿ
 
 // Greek and Coptic block only
 static readonly TokenSet Greek =

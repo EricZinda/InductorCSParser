@@ -248,12 +248,14 @@ public readonly struct ParseResult
         return $"{Outcome} at char {ErrorCharIndex}: {ErrorMessage}";
     }
 
-    private ParseResult(ParseOutcome outcome, IReadOnlyList<Symbol>? symbols, string errorMessage, int errorCharIndex, string? input, Rule? grammar)
+    private ParseResult(ParseOutcome outcome, IReadOnlyList<Symbol>? symbols, string errorMessage, int errorCharIndex, string input, Rule grammar)
     {
         Outcome = outcome;
         _symbols = symbols;
-        ErrorMessage = errorMessage;
-        int inputLength = input?.Length ?? 0;
+        ErrorMessage = errorMessage ?? throw new ArgumentNullException(nameof(errorMessage));
+        if (input == null) throw new ArgumentNullException(nameof(input));
+        if (grammar == null) throw new ArgumentNullException(nameof(grammar));
+        int inputLength = input.Length;
         if (errorCharIndex < 0 || errorCharIndex > inputLength)
             throw new ArgumentOutOfRangeException(nameof(errorCharIndex), errorCharIndex,
                 $"errorCharIndex must be in [0, {inputLength}] (input.Length).");
@@ -269,8 +271,11 @@ public readonly struct ParseResult
 
     // Build a successful result. Outcome is Success, error fields
     // are empty.
-    public static ParseResult Succeeded(IReadOnlyList<Symbol> symbols, string input, Rule grammar) =>
-        new ParseResult(ParseOutcome.Success, symbols, string.Empty, 0, input, grammar);
+    public static ParseResult Succeeded(IReadOnlyList<Symbol> symbols, string input, Rule grammar)
+    {
+        if (symbols == null) throw new ArgumentNullException(nameof(symbols));
+        return new ParseResult(ParseOutcome.Success, symbols, string.Empty, 0, input, grammar);
+    }
 
     // Build a grammar-mismatch result. Outcome is GrammarMismatch,
     // the error fields carry the deepest-failure message and position.
@@ -282,6 +287,19 @@ public readonly struct ParseResult
     // error fields carry the matching "Parse aborted: ..." message
     // and the deepest-failure position so callers still get a
     // "how far did we get" hint.
-    public static ParseResult Aborted(ParseOutcome outcome, int errorCharIndex, string message, string input, Rule grammar) =>
-        new ParseResult(outcome, null, message, errorCharIndex, input, grammar);
+    public static ParseResult Aborted(ParseOutcome outcome, int errorCharIndex, string message, string input, Rule grammar)
+    {
+        if (!IsAbortOutcome(outcome))
+            throw new ArgumentException(
+                "ParseResult.Aborted requires an abort outcome: Timeout, RuleCountLimitExceeded, DepthLimitExceeded, or Canceled.",
+                nameof(outcome));
+
+        return new ParseResult(outcome, null, message, errorCharIndex, input, grammar);
+    }
+
+    private static bool IsAbortOutcome(ParseOutcome outcome) =>
+        outcome == ParseOutcome.Timeout
+        || outcome == ParseOutcome.RuleCountLimitExceeded
+        || outcome == ParseOutcome.DepthLimitExceeded
+        || outcome == ParseOutcome.Canceled;
 }

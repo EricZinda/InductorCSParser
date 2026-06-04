@@ -131,14 +131,56 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     internal ReadOnlySpan<string> MultiRuneGraphemes =>
         _multiRuneGraphemes ?? Array.Empty<string>();
 
+    // Number of intervals ContainsRune scans linearly before switching to
+    // binary search. The first few intervals of every built-in set hold the
+    // low code points (ASCII, then Latin-1, then common Latin extensions),
+    // which dominate real input even in international grammars. A short
+    // linear probe with an early-out finds those (or rules them out) in one
+    // or two comparisons, beating binary search's ~log(n) array loads for
+    // the common case. Sets with no more intervals than this are pure
+    // linear, so small hand-built classes and the Ascii.* sets pay nothing
+    // for the binary-search machinery.
+    private const int LinearScanPrefix = 8;
+
     public bool ContainsRune(int codepoint)
     {
+        // Normalize guarantees _ranges is sorted ascending by Low,
+        // non-overlapping, and non-adjacent, so a code point lands in at most
+        // one interval. Scan a short prefix linearly, then binary-search the
+        // tail. The built-in sets are large (TokenSet.Letters is ~660
+        // intervals, XidContinue ~775) and this is the per-token membership
+        // test on the OneOf / NoneOf / ScanWhile / ScanUntil hot path, so the
+        // binary search keeps a high code point (CJK / Cyrillic / Hangul, or
+        // any miss past the Latin block) at O(log ranges) instead of
+        // O(ranges). The linear prefix keeps the common ASCII case at one or
+        // two comparisons, where binary search's ~log(n) array loads would be
+        // slower.
         var ranges = _ranges;
         if (ranges == null) return false;
-        for (int index = 0; index < ranges.Length; index++)
+        int length = ranges.Length;
+
+        int prefixLimit = length < LinearScanPrefix ? length : LinearScanPrefix;
+        int index = 0;
+        for (; index < prefixLimit; index++)
         {
+            // Sorted intervals: a code point below this interval's Low is
+            // below every later interval too, so it's not in the set.
             if (codepoint < ranges[index].Low) return false;
             if (codepoint <= ranges[index].High) return true;
+        }
+        if (index == length) return false;
+
+        // codepoint is above ranges[prefixLimit - 1].High; binary search the
+        // remaining intervals.
+        int low = index;
+        int high = length - 1;
+        while (low <= high)
+        {
+            int mid = (int)((uint)(low + high) >> 1);
+            var interval = ranges[mid];
+            if (codepoint < interval.Low) high = mid - 1;
+            else if (codepoint > interval.High) low = mid + 1;
+            else return true;
         }
         return false;
     }
@@ -1418,11 +1460,13 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // [0, 0x10FFFF] code-point universe. Used by Range, SurrogateRange,
     // operator ~, and the per-rune walks in NormalizedFor /
     // WithCompatibilityEquivalents / BuildCategories /
-    // BuildInlineWhitespace.
-    private const int SurrogateLow = 0xD800;
-    private const int SurrogateHigh = 0xDFFF;
-    private const int MinScalarValue = 0;
-    private const int MaxScalarValue = 0x10FFFF;
+    // BuildInlineWhitespace. internal (not private) so the test suite's
+    // scalar-space sweeps reference the same bounds the set is built from
+    // instead of re-spelling the magic numbers.
+    internal const int SurrogateLow = 0xD800;
+    internal const int SurrogateHigh = 0xDFFF;
+    internal const int MinScalarValue = 0;
+    internal const int MaxScalarValue = 0x10FFFF;
 
     private static Interval[] Normalize(List<Interval> ranges)
     {

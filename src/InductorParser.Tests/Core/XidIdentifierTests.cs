@@ -675,6 +675,29 @@ public class XidIdentifierTests
     }
 
     [Test]
+    public void Katakana_voiced_sound_mark_309B_is_a_symbol_not_a_letter()
+    {
+        // U+309B reaches ID_Start through Other_ID_Start as a Modifier
+        // Symbol (Sk), NOT through the letter categories. Other_ID_Start
+        // exists precisely to pull in identifier-start characters that the
+        // letter/Nl categories miss, so the fact that 309B is listed there
+        // is the tell that it is not a letter. This locks in that
+        // categorization, the reasoning the TokenSet.Xid.cs file header
+        // gives for why NFKC closure later drops 309B from XID_Start.
+        Assert.That(CharUnicodeInfo.GetUnicodeCategory((char)UnicodeExamples.KatakanaHiraganaVoicedSoundMarkRune),
+            Is.EqualTo(UnicodeCategory.ModifierSymbol),
+            "U+309B is a Modifier Symbol (Sk), not a letter");
+        Assert.That(char.IsLetter((char)UnicodeExamples.KatakanaHiraganaVoicedSoundMarkRune), Is.False,
+            "U+309B is not a letter under any letter General_Category");
+
+        // Because it isn't a letter, the letter set can't be the path
+        // that puts it in ID_Start: TokenSet.Letters excludes it.
+        Assert.That(TokenSet.Letters.ContainsRune(UnicodeExamples.KatakanaHiraganaVoicedSoundMarkRune), Is.False,
+            "U+309B is not in the letter categories; its ID_Start membership "
+            + "comes from Other_ID_Start, not from Letters");
+    }
+
+    [Test]
     public void XidContinue_includes_every_curated_addition()
     {
         // Positive counterpart to the over-admission tests above and to the
