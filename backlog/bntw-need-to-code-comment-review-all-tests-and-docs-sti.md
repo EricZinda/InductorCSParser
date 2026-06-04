@@ -10,3 +10,6 @@ Rules/	..
 		InormalizationReporter.cs
 		Invariant.cs
 		Lateboundrule.cs
+		LiteralIgnoreAsciiCaseRule.cs
+		LiteralRule.cs
+		NoneOfRule.cs

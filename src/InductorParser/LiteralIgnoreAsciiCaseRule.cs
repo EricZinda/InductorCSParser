@@ -10,12 +10,16 @@ namespace InductorParser;
 // letters case-insensitively. The pattern itself is restricted to ASCII
 // (every char in 0x00..0x7F) and the constructor throws on any non-ASCII
 // char. Non-ASCII code points in the pattern would be confusing: ASCII
-// case-folding doesn't apply to them, so a non-ASCII letter in a pattern
-// labeled "IgnoreAsciiCase" gives the reader the wrong mental model.
-// Grammars that want a non-ASCII keyword should use Literal(...). 
+// case-insensitive matching doesn't apply to them, so a non-ASCII letter
+// in a pattern labeled "IgnoreAsciiCase" gives the reader the wrong mental
+// model. Grammars that want a non-ASCII keyword should use Literal(...).
 internal sealed class LiteralIgnoreAsciiCaseRule : Rule
 {
-    private string _expected;
+    private readonly string _expected;
+
+    // Read-only accessor for the rule's literal text, used by out-of-assembly
+    // analyzers that inspect a rule's fixed text.
+    internal string? ExpectedText => _expected;
 
     public LiteralIgnoreAsciiCaseRule(string expected) : base(FlattenType.Delete, emitsLeaf: true)
     {
@@ -33,26 +37,14 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
                     nameof(expected));
         }
         _expected = expected;
-        SetTraceName("LiteralIgnoreAsciiCase");
     }
 
-    // Read-only accessor for the rule's literal text, used by out-of-assembly
-    // analyzers (the required-literal prefilter and an alternative evaluator)
-    // that inspect a rule's fixed text. Same role as OneOfRule.LoweringSet.
-    internal string? ExpectedText => _expected;
-
-    protected override void ValidateNormalization(
-        System.Text.NormalizationForm form,
-        INormalizationReporter reporter)
-    {
-        // See Rule.ValidateNormalization for how this works.
-        // Same shape as LiteralRule: replace _expected with the
-        // converted form.
-        string? normalized = TryConvertToForm(this, _expected, form, reporter);
-        if (normalized == null) return;
-        if (string.Equals(normalized, _expected, StringComparison.Ordinal)) return;
-        _expected = normalized;
-    }
+    // No ValidateNormalization override on purpose. The constructor
+    // restricts the pattern to ASCII, and ASCII code points are invariant
+    // under all four normalization forms (NFC/NFD/NFKC/NFKD), so there's
+    // nothing to convert and the base no-op is correct. Contrast LiteralRule,
+    // which accepts arbitrary text and overrides ValidateNormalization to
+    // normalize its stored string.
 
     protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
@@ -93,8 +85,8 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
     }
 
     // ASCII-only case-insensitive compare. Both sides compare bit-exact
-    // when either char is outside A-Za-z. Within A-Za-z the 0x20 bit
-    // difference is masked out so 'A' and 'a' hash the same. Non-letters
+    // when either char is outside A-Za-z. Within A-Za-z forcing the 0x20
+    // case bit on with `| 0x20` makes 'A' and 'a' compare equal. Non-letters
     // (digits, punctuation, spaces) take the bit-exact path because
     // (c | 0x20) only pairs matching upper and lower cases for the 26
     // ASCII letters. Applying it to '[' would give '{' and break "match ["

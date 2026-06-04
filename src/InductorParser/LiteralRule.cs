@@ -35,6 +35,10 @@ internal sealed class LiteralRule : Rule
 {
     private string _expected;
 
+    // Read-only accessor for the rule's literal text, used by out-of-assembly
+    // analyzers that inspect a rule's fixed text.
+    internal string? ExpectedText => _expected;
+
     public LiteralRule(string expected) : base(FlattenType.Delete, emitsLeaf: true)
     {
         if (expected == null)
@@ -43,11 +47,6 @@ internal sealed class LiteralRule : Rule
             throw new ArgumentException("Literal requires a non-empty string.", nameof(expected));
         _expected = expected;
     }
-
-    // Read-only accessor for the rule's literal text, used by out-of-assembly
-    // analyzers (the required-literal prefilter and an alternative evaluator)
-    // that inspect a rule's fixed text. Same role as OneOfRule.LoweringSet.
-    internal string? ExpectedText => _expected;
 
     protected override void ValidateNormalization(
         System.Text.NormalizationForm form,
