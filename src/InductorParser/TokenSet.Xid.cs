@@ -44,10 +44,12 @@ namespace InductorParser;
 // NFKC or NFKD to it, the result is still a valid identifier. To make
 // that property hold, XID_Start drops any character whose decomposed
 // form wouldn't itself be a valid identifier start. U+309B (a Japanese
-// voicing mark) is the canonical case: it's classified as a letter,
-// so it's in ID_Start, but it decomposes to "space + combining mark",
-// and an identifier can't start with a space. So XID_Start excludes
-// 309B. The same filter on the continue side gives XID_Continue.
+// voicing mark) is the canonical case: it's a Modifier Symbol (Sk),
+// not a letter, and reaches ID_Start through Other_ID_Start (the
+// OtherIdStart table below lists it with that category). But it
+// decomposes to "space + combining mark", and an identifier can't
+// start with a space, so XID_Start excludes 309B. The same filter on
+// the continue side gives XID_Continue.
 //
 // How we get the list of dropped characters without running NFKx
 // ourselves: Unicode publishes both ID_Start and XID_Start as separate
