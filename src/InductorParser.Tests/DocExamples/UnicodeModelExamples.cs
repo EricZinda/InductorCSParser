@@ -72,7 +72,7 @@ public class UnicodeModelExamples
     [Test]
     public void SourceText_round_trips_under_a_normalizing_form()
     {
-        var id = Identifier(NormalizationForm.FormKC).As("id").Compile(NormalizationForm.FormKC);
+        var id = Identifier().As("id").Compile(NormalizationForm.FormKC);
 
         var result = id.Parse(LigatureFiInput); // "a" + U+FB01 + "b"
         Assert.That(result.Success, Is.True, result.ErrorMessage);
