@@ -609,11 +609,16 @@ public class ScanUntilRuleTests
     //
     // The behavior under the grapheme-scoped design: the lexer
     // surfaces a lone surrogate as a one-char token with no
-    // RuneValue. That token isn't in any TokenSet (entries are
-    // valid Unicode scalars) and isn't the escape-start rune, so
-    // ScanUntil consumes it as body, the same way
-    // ZeroOrMore(NoneOf(stopAt)) would. See UnexpectedUnicodeTests
-    // for the parser-wide story on lone surrogates.
+    // RuneValue. The stopper set in these tests ('|') holds no
+    // surrogate code units, so the surrogate isn't a member and isn't
+    // the escape-start rune, and ScanUntil consumes it as body, the
+    // same way ZeroOrMore(NoneOf("|")) would. A stopper set built with
+    // TokenSet.Surrogates / SurrogateRange does contain the surrogate's
+    // code unit, so it stops at the surrogate instead. That opt-in case
+    // is covered by
+    // ScanUntil_stops_at_lone_surrogate_when_stopper_set_includes_surrogates
+    // below. See UnexpectedUnicodeTests for the parser-wide story on
+    // lone surrogates.
 
     [TestCase((char)UnicodeExamples.HighSurrogateMinRune, TestName = "lone high surrogate (first)")]
     [TestCase((char)UnicodeExamples.HighSurrogateMaxRune, TestName = "lone high surrogate (last)")]
@@ -688,6 +693,49 @@ public class ScanUntilRuleTests
         Assert.That(body[6], Is.EqualTo((char)UnicodeExamples.EmojiStartHighSurrogateRune));
         // Reading back into the original input produces the same chars.
         Assert.That(body, Is.EqualTo(input.Substring(0, body.Length)));
+    }
+
+    [TestCase((char)UnicodeExamples.HighSurrogateMinRune, TestName = "stops at lone high surrogate (first)")]
+    [TestCase((char)UnicodeExamples.HighSurrogateMaxRune, TestName = "stops at lone high surrogate (last)")]
+    [TestCase((char)UnicodeExamples.LowSurrogateMinRune, TestName = "stops at lone low surrogate (first)")]
+    [TestCase((char)UnicodeExamples.LowSurrogateMaxRune, TestName = "stops at lone low surrogate (last)")]
+    public void ScanUntil_stops_at_lone_surrogate_when_stopper_set_includes_surrogates(char loneSurrogate)
+    {
+        // The complement of the "surrogate flows through as body" tests
+        // above. When the stopper set is built with TokenSet.Surrogates
+        // (the WTF-8 / unpaired-surrogate opt-in), a lone surrogate IS a
+        // member of the set, so ScanUntil stops at it instead of
+        // consuming it. ContainsToken's lone-surrogate branch is what
+        // makes the surrogate code unit a member, the same branch OneOf /
+        // NoneOf use (see UnexpectedUnicodeTests). The body is everything
+        // before the surrogate, and the surrogate stays unconsumed for a
+        // following rule to claim.
+        string surrogate = new string(loneSurrogate, 1);
+        string input = "abc" + surrogate + "xyz";
+
+        // Set-mode stopper: stop on any surrogate.
+        var setStopper = ScanUntil(TokenSet.Surrogates).Preserve();
+        setStopper.Compile(null);
+        var setResult = setStopper.Parse(input, new ParseOptions { AllowTrailingInput = true });
+        Assert.That(setResult.Success, Is.True, setResult.ErrorMessage);
+        Assert.That(setResult.Tree!.SourceText, Is.EqualTo("abc"),
+            "set-mode surrogate stopper should stop at the lone surrogate, not consume it as body");
+
+        // Rule-mode stopper over the same set must agree.
+        var ruleStopper = ScanUntil(OneOf(TokenSet.Surrogates)).Preserve();
+        ruleStopper.Compile(null);
+        var ruleResult = ruleStopper.Parse(input, new ParseOptions { AllowTrailingInput = true });
+        Assert.That(ruleResult.Success, Is.True, ruleResult.ErrorMessage);
+        Assert.That(ruleResult.Tree!.SourceText, Is.EqualTo("abc"),
+            "rule-mode surrogate stopper should match the same boundary as the set-mode stopper");
+
+        // And the surrogate really is the next token: the grammar
+        // And(ScanUntil(Surrogates), Token(<surrogate>)) consumes the
+        // body, then the stopper, leaving only "xyz" as trailing input.
+        var consumeStopper = And(ScanUntil(TokenSet.Surrogates), Token(surrogate));
+        consumeStopper.Compile(null);
+        Assert.That(consumeStopper.Parse(input, new ParseOptions { AllowTrailingInput = true }).Success, Is.True,
+            "the lone surrogate the scan stopped at is matchable as the next token");
     }
 
     [Test]
