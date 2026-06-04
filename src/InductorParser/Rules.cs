@@ -51,7 +51,7 @@ namespace InductorParser;
 /// on a rule that's already been named. See <see cref="Rule.As(string)"/>
 /// for the full story.
 /// </remarks>
-public static partial class Rules
+public static class Rules
 {
     /// <summary>
     /// Match one token whose content is exactly the given character.
@@ -828,4 +828,88 @@ public static partial class Rules
     /// <c>OneOf</c>, etc.).
     /// </param>
     public static Rule WithinToken(Rule innerRule) => new WithinTokenRule(innerRule);
+
+    /// <summary>
+    /// Encodes a UAX #31 "programming language identifier". Default
+    /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>,
+    /// so the match appears in the tree as one named node whose
+    /// children are the per-rune leaves.
+    /// </summary>
+    /// <remarks>
+    /// The same word can be typed more than one way. "café" might be
+    /// stored with a single precomposed "é", or with a plain "e"
+    /// followed by a combining accent mark drawn on top. Both look
+    /// identical in an editor but use different Unicode scalar sequences. By default
+    /// the parser treats them as the same identifier, so a grammar
+    /// doesn't have to care which form it gets.
+    /// <para>
+    /// Pass <c>null</c> to <c>Compile(NormalizationForm?)</c> to match
+    /// the input string as written, without canonical or compatibility
+    /// normalization. Pass <c>NormalizationForm.FormKC</c> for a stronger
+    /// rule that also treats fullwidth <c>ｆｏｏ</c> and plain <c>foo</c>,
+    /// or the ligature <c>ﬀ</c> and <c>ff</c>, as the same identifier.
+    /// That's the Python 3 and Rust behavior. The stronger rule can,
+    /// however, collapse things you may want kept distinct. It converts
+    /// <c>ℓ</c> (script small L, used in physics) into <c>l</c>, and
+    /// <c>Ⅷ</c> (Roman numeral) into <c>VIII</c>. A grammar that parses
+    /// math or legal text probably wants those distinctions.
+    /// Identifier-heavy grammars (Python source, say) almost always
+    /// don't.
+    /// </para>
+    /// <para>
+    /// The normalization form is read from <c>Compile</c>. The rule
+    /// expands its start and body sets at Compile time so the form
+    /// lives in exactly one place. Pairing
+    /// <c>Identifier(extraStartRunes: TokenSet.Runes("_"))</c> with
+    /// <c>Compile(NormalizationForm.FormKC)</c> is the Python 3 recipe.
+    /// </para>
+    /// <para>
+    /// See docs/UnicodeGotchas.md for recipes that reproduce the
+    /// identifier rules of specific languages (Python 3, Rust,
+    /// ECMAScript) via these parameters plus the form chosen at
+    /// <c>Compile</c> time.
+    /// </para>
+    /// </remarks>
+    /// <param name="extraStartRunes">
+    /// Runes to union into <see cref="TokenSet.XidStart"/> for the
+    /// first character. UAX #31 calls this a "profile extension":
+    /// the base Start property plus language-specific additions.
+    /// Typical value for a programming-language grammar is
+    /// <c>TokenSet.Runes("_")</c>. Python and Rust use this shape; C#
+    /// also permits leading underscores, though its full identifier
+    /// specification differs. Defaults to
+    /// <see cref="TokenSet.Empty"/> (the base UAX #31-style profile).
+    /// </param>
+    /// <param name="extraBodyRunes">
+    /// Runes to union into <see cref="TokenSet.XidContinue"/> for
+    /// every character after the first. Same idea as
+    /// <paramref name="extraStartRunes"/>. ECMAScript, for example,
+    /// adds <c>$</c> to both positions. Defaults to
+    /// <see cref="TokenSet.Empty"/>.
+    /// </param>
+    public static Rule Identifier(
+        TokenSet extraStartRunes = default,
+        TokenSet extraBodyRunes = default)
+    {
+        // extraStartRunes / extraBodyRunes name single runes (code points).
+        // Identifier matches one code point at a time (see the WithinToken
+        // note inside IdentifierRule), so a multi-rune grapheme handed in
+        // here is consulted only against single-rune tokens and can never
+        // match in any position, under any form. Reject it now instead of
+        // silently building a rule with a dead entry. This check is
+        // form-independent so it stays at construction time.
+        static void RejectMultiRuneGraphemes(TokenSet extras, string parameterName)
+        {
+            if (extras.HasMultiRuneGraphemes)
+                throw new InvalidOperationException(
+                    $"Identifier: {parameterName} contains the multi-rune grapheme " +
+                    $"\"{extras.MultiRuneGraphemes[0]}\", but Identifier matches one code point " +
+                    $"at a time, so a multi-rune grapheme can never match. Pass its individual " +
+                    $"runes instead.");
+        }
+        RejectMultiRuneGraphemes(extraStartRunes, nameof(extraStartRunes));
+        RejectMultiRuneGraphemes(extraBodyRunes, nameof(extraBodyRunes));
+
+        return new IdentifierRule(extraStartRunes, extraBodyRunes);
+    }
 }

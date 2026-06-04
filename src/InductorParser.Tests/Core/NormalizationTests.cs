@@ -534,7 +534,7 @@ public class NormalizationTests
         // Built fresh for each form so each rule has its own
         // _set / _expected mutated by Compile.
         static Rule BuildIdentifierGrammar(NormalizationForm? form) =>
-            And(Identifier(form), Eof());
+            And(Identifier(), Eof());
 
         var ruleC = BuildIdentifierGrammar(NormalizationForm.FormC);
         ruleC.Compile(NormalizationForm.FormC);
@@ -872,21 +872,21 @@ public class NormalizationTests
     }
 
     [Test]
-    public void Identifier_default_under_FormKC_throws_clear_compile_error()
+    public void Identifier_default_under_FormKC_compiles_after_deferred_expansion()
     {
         // TokenSet.XidStart contains U+FB01 (LATIN SMALL LIGATURE FI)
         // among many other compatibility-converting letters. Under
-        // FormKC U+FB01 converts to "fi" (multi-grapheme), which a
-        // OneOf rule can't match as a single token. Strict policy:
-        // throw, don't silently miss. The error names the
-        // WithCompatibilityEquivalents helper (and the form-aware
-        // Identifier overload, by extension) as the fix.
+        // FormKC U+FB01 converts to "fi" (multi-grapheme), which a bare
+        // OneOf rule can't hold as a single member. IdentifierRule's
+        // Compile-time hook expands its start and body sets to include
+        // the compatibility-equivalents' grapheme pieces before the
+        // form-validation pass runs, so a default Identifier() compiles
+        // cleanly under FormKC.
         var rule = Identifier();
 
-        var exception = Assert.Throws<InvalidOperationException>(
-            () => rule.Compile(NormalizationForm.FormKC));
-        Assert.That(exception!.Message, Does.Contain("WithCompatibilityEquivalents"),
-            "error message points users at the helper that resolves multi-grapheme conversions");
+        Assert.DoesNotThrow(() => rule.Compile(NormalizationForm.FormKC));
+        Assert.That(rule.Parse(UnicodeExamples.FfLigaturePlusOoText).Success, Is.True,
+            "ff-ligature U+FB00 converts to 'f' + 'f' under FormKC; rule matches as 'ffoo'");
     }
 
     [Test]
@@ -947,14 +947,16 @@ public class NormalizationTests
     }
 
     [Test]
-    public void Identifier_form_aware_overload_compiles_under_FormKC()
+    public void Identifier_compiles_under_FormKC_and_matches_compatibility_input()
     {
-        // The form-aware overload pre-applies WithCompatibilityEquivalents
-        // to XidStart and XidContinue, so multi-grapheme compatibility
-        // conversions get expanded into their grapheme pieces (which
-        // are already in the category sets anyway). Compile under FormKC
-        // succeeds, and matching works on fullwidth / ligature input.
-        var rule = Identifier(NormalizationForm.FormKC);
+        // Compile under FormKC walks the IdentifierRule, expands its
+        // start and body sets to include compatibility-equivalents
+        // (XidStart's head-rune equivalents, XidContinue's full
+        // equivalents), then runs the standard form-validation pass.
+        // Matching on fullwidth / ligature input works because Compile
+        // normalizes the input to FormKC before lexing, so the lexer
+        // sees the plain ASCII the expanded sets already accept.
+        var rule = Identifier();
 
         Assert.DoesNotThrow(() => rule.Compile(NormalizationForm.FormKC));
         Assert.That(rule.Parse(UnicodeExamples.FiLigaturePlusOoText).Success, Is.True,
