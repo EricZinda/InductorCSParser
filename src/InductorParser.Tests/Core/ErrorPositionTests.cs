@@ -1,3 +1,4 @@
+using System.Linq;
 using NUnit.Framework;
 using InductorParser;
 using static InductorParser.Rules;
@@ -251,6 +252,32 @@ public class ErrorPositionTests
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorColumn, Is.EqualTo(0));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Default_struct_does_not_report_success()
+    {
+        // ParseOutcome.Success is the enum's zero value, so a zeroed
+        // ParseResult has Outcome == Success even though no parse produced
+        // it. Without the _grammar check in ParseResult.Success, a default
+        // struct would claim success while carrying a null Tree and empty
+        // Symbols, so the idiomatic `if (result.Success) Use(result.Tree)`
+        // would treat a never-run parse as a successful one and then NRE on
+        // Tree (or silently process empty data). These are the everyday ways
+        // a default ParseResult shows up: a value never assigned, an array
+        // element, a LINQ default, a dictionary miss.
+        Assert.That(default(ParseResult).Success, Is.False,
+            "a default-constructed ParseResult must not report success");
+        Assert.That((new ParseResult[1])[0].Success, Is.False,
+            "an uninitialized ParseResult array element must not report success");
+        Assert.That(new System.Collections.Generic.List<ParseResult>().FirstOrDefault().Success, Is.False,
+            "FirstOrDefault() on an empty List<ParseResult> must not report success");
+
+        // The companion fields stay consistent with "not a success": no
+        // tree, no symbols, empty rendered text.
+        Assert.That(default(ParseResult).Tree, Is.Null);
+        Assert.That(default(ParseResult).Symbols, Is.Empty);
+        Assert.That(default(ParseResult).ToString(), Is.EqualTo(string.Empty));
     }
 
     // Char(codepoint) returns a string holding one Unicode scalar value
