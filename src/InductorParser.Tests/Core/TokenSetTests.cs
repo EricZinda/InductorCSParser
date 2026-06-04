@@ -1595,4 +1595,90 @@ public class TokenSetTests
         Assert.That(asciiOnly.ContainsToken(HighSurrogateMinText), Is.False);
         Assert.That(asciiOnly.ContainsToken(LowSurrogateMaxText), Is.False);
     }
+
+    // ContainsRune scans a short prefix linearly and binary-searches the
+    // rest of the intervals. These tests exercise the handoff and the
+    // binary-search tail, which only kick in once a set has more intervals
+    // than the linear prefix (the built-in Letters / Digits / XID sets have
+    // hundreds). They catch an off-by-one in the prefix-to-binary
+    // boundary, which a small hand-built set would never reach.
+
+    // Independent oracle: a code point is in TokenSet.Letters iff its
+    // Unicode general category is one of the five "Letter" categories.
+    // This is the same definition CategoriesUnion builds the set from, so
+    // it verifies the interval representation plus the binary search
+    // faithfully reproduce category membership across the whole scalar
+    // space, including every code point that lands in the binary-searched
+    // tail.
+    [Test]
+    public void ContainsRune_matches_letter_category_oracle_across_the_scalar_space()
+    {
+        var letters = TokenSet.Letters;
+        for (int codepoint = TokenSet.MinScalarValue; codepoint <= TokenSet.MaxScalarValue; codepoint++)
+        {
+            // Surrogate halves aren't scalar values.
+            if (codepoint >= TokenSet.SurrogateLow && codepoint <= TokenSet.SurrogateHigh) continue;
+            var category = Rune.GetUnicodeCategory(new Rune(codepoint));
+            bool expected =
+                category == UnicodeCategory.UppercaseLetter
+                || category == UnicodeCategory.LowercaseLetter
+                || category == UnicodeCategory.TitlecaseLetter
+                || category == UnicodeCategory.ModifierLetter
+                || category == UnicodeCategory.OtherLetter;
+            // Manual compare keeps the failure message off the hot path so a
+            // ~1.1M-code-point sweep stays fast.
+            if (letters.ContainsRune(codepoint) != expected)
+                Assert.Fail($"Letters.ContainsRune(U+{codepoint:X4}) returned " +
+                    $"{!expected}, expected {expected} (category {category}).");
+        }
+    }
+
+    [Test]
+    public void ContainsRune_binary_search_tail_hits_members_and_misses_gaps()
+    {
+        // 50 disjoint single-rune intervals spaced 16 apart so Normalize
+        // keeps them separate. With a linear prefix of 8, members past the
+        // ninth interval are found only by the binary-search tail.
+        const int count = 50;
+        const int stride = 16;
+        const int baseCodepoint = 0x3000;
+        var set = TokenSet.Empty;
+        for (int i = 0; i < count; i++)
+            set = set | TokenSet.Single(baseCodepoint + i * stride);
+
+        for (int i = 0; i < count; i++)
+        {
+            int member = baseCodepoint + i * stride;
+            Assert.That(set.ContainsRune(member), Is.True, $"member U+{member:X4}");
+            // The code point just above each member sits in the gap.
+            Assert.That(set.ContainsRune(member + 1), Is.False, $"gap after U+{member:X4}");
+        }
+        // Below the first and above the last interval.
+        Assert.That(set.ContainsRune(baseCodepoint - 1), Is.False);
+        Assert.That(set.ContainsRune(baseCodepoint + count * stride), Is.False);
+    }
+
+    [Test]
+    public void ContainsRune_checks_interval_endpoints_in_the_binary_searched_tail()
+    {
+        // Multi-rune intervals well past the linear prefix, so the endpoint
+        // checks run through the binary-search branch. Each interval is
+        // [low, low+4] with an 11-wide gap, keeping them non-adjacent.
+        const int count = 40;
+        var lows = new int[count];
+        var set = TokenSet.Empty;
+        for (int i = 0; i < count; i++)
+        {
+            int low = 0x4000 + i * 16;
+            lows[i] = low;
+            set = set | TokenSet.Range(low, low + 4);
+        }
+        foreach (int low in lows)
+        {
+            Assert.That(set.ContainsRune(low - 1), Is.False, $"below U+{low:X4}");
+            Assert.That(set.ContainsRune(low), Is.True, $"low U+{low:X4}");
+            Assert.That(set.ContainsRune(low + 4), Is.True, $"high U+{low + 4:X4}");
+            Assert.That(set.ContainsRune(low + 5), Is.False, $"above U+{low + 4:X4}");
+        }
+    }
 }

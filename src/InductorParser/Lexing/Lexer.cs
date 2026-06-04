@@ -40,8 +40,23 @@ public sealed partial class Lexer
     // OneRunePerToken / IsGraphemeClusterStart accessors that the recursive
     // evaluator doesn't use.
 
-    // Per-input cache of UAX #29 grapheme cluster boundaries.
-    private GraphemeClusterIndex _graphemeIndex;
+    // Per-input cache of UAX #29 grapheme cluster boundaries. Built on
+    // first grapheme-mode query (see GraphemeIndex), not at construction.
+    // A WithinToken sub-lexer runs in one-rune-per-token mode and never
+    // asks for a cluster boundary, so it never builds one. That keeps the
+    // per-cluster sub-lexer WithinToken creates (one per grapheme cluster,
+    // i.e. one per identifier character on the common Identifier path) from
+    // allocating a GraphemeClusterIndex plus its bool[] plus a
+    // ConditionalWeakTable entry it would only throw away unread.
+    private GraphemeClusterIndex? _graphemeIndex;
+
+    // Grapheme-cluster boundaries for the current input, resolved on first
+    // use and cached for the rest of this lexer's life. Resolving through
+    // GraphemeClusterIndex.For shares one instance per input string with
+    // the post-parse position converters (SourcePositionConverter). Only
+    // grapheme-mode code paths touch this; one-rune-per-token sub-lexers
+    // never reach it, which is what makes the lazy build pay off.
+    private GraphemeClusterIndex GraphemeIndex => _graphemeIndex ??= GraphemeClusterIndex.For(_input);
 
     // _input, _endPosition, _traceSink, _traceLevel are conceptually readonly
     // but lose the C# `readonly` keyword so an alternative evaluator's pooling
@@ -203,12 +218,13 @@ public sealed partial class Lexer
 
     // Set the per-input fields that both the constructor and an alternative
     // evaluator's pooling extension have to assign: input string, position
-    // bounds, trace destination, and the grapheme-cluster index for the new
-    // input. Doesn't touch _oneRunePerToken (readonly, set-once in the
+    // bounds, trace destination, and a reset of the lazily-built
+    // grapheme-cluster index so the next grapheme-mode query rebuilds it for
+    // the new input. Doesn't touch _oneRunePerToken (readonly, set-once in the
     // constructor) and doesn't reset per-parse counters or budgets (those are
     // zero-initialized for fresh constructions, and the pooling extension
     // clears them itself).
-    [MemberNotNull(nameof(_input), nameof(_graphemeIndex))]
+    [MemberNotNull(nameof(_input))]
     internal void BindInput(string input, int startPosition, int endPosition, TextWriter? traceSink, TraceLevel traceLevel)
     {
         _input = input;
@@ -216,7 +232,12 @@ public sealed partial class Lexer
         _endPosition = endPosition;
         _traceSink = traceSink;
         _traceLevel = traceLevel;
-        _graphemeIndex = GraphemeClusterIndex.For(input);
+        // Cleared, not built. The index is resolved lazily on the first
+        // grapheme-mode query (GraphemeIndex). Nulling it here drops any
+        // index cached for a previous input when a pooled lexer is rebound,
+        // so the next query resolves the new input's index rather than
+        // reusing the old one.
+        _graphemeIndex = null;
     }
 
     // Per-parse state reset for an alternative evaluator's pooling extension.
@@ -234,7 +255,7 @@ public sealed partial class Lexer
     }
 
     // Exposes the cached grapheme-cluster boundaries for a string, used only by alternative evaluators.
-    internal bool IsGraphemeClusterStart(int position) => _graphemeIndex.IsClusterStart(position);
+    internal bool IsGraphemeClusterStart(int position) => GraphemeIndex.IsClusterStart(position);
 
     /// <summary>
     /// Move the read cursor to <paramref name="position"/>. Two invariants are
@@ -306,7 +327,7 @@ public sealed partial class Lexer
             // surrogate. A stray (unpaired) surrogate is its own one-char token,
             // so a position on one is a valid boundary.
             return !(char.IsHighSurrogate(_input[position - 1]) && char.IsLowSurrogate(_input[position]));
-        return _graphemeIndex.IsClusterStart(position);
+        return GraphemeIndex.IsClusterStart(position);
     }
 
     // Direct write-access to the read cursor with no bounds or transaction
@@ -340,7 +361,7 @@ public sealed partial class Lexer
         Invariant.That(startOffset < _endPosition, $"NextTokenLength called with startOffset={startOffset} at or past endPosition={_endPosition}.");
         if (_oneRunePerToken)
             return RuneHelpers.IsSurrogatePairAt(_input, startOffset) ? 2 : 1;
-        return _graphemeIndex.LengthAt(startOffset);
+        return GraphemeIndex.LengthAt(startOffset);
     }
 
     // "How long is the next token at this position?" without advancing.
