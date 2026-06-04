@@ -379,4 +379,23 @@ public class ErrorPositionTests
         Assert.That(atBoundary.ErrorCharIndex, Is.EqualTo(input.Length));
         Assert.That(atBoundary.ErrorCharIndex, Is.EqualTo(atBoundary.ErrorPosition!.Value.CharIndex));
     }
+
+    [Test]
+    public void Aborted_factory_rejects_non_abort_outcomes()
+    {
+        // ParseResult.Aborted is for the four budget/cancellation outcomes
+        // only. Accepting Success would produce a contradictory result whose
+        // Success property is true despite carrying an abort message and no
+        // symbols. GrammarMismatch belongs to the Failed factory.
+        var grammar = Literal("hi");
+        grammar.Compile();
+        var input = "ab";
+
+        Assert.Throws<System.ArgumentException>(() =>
+            ParseResult.Aborted(ParseOutcome.Success, errorCharIndex: 0, message: "x", input: input, grammar: grammar));
+        Assert.Throws<System.ArgumentException>(() =>
+            ParseResult.Aborted(ParseOutcome.GrammarMismatch, errorCharIndex: 0, message: "x", input: input, grammar: grammar));
+        Assert.Throws<System.ArgumentException>(() =>
+            ParseResult.Aborted((ParseOutcome)999, errorCharIndex: 0, message: "x", input: input, grammar: grammar));
+    }
 }
