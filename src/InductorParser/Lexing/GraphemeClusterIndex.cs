@@ -120,6 +120,15 @@ internal sealed class GraphemeClusterIndex
         return _byInput.GetValue(input, key => new GraphemeClusterIndex(key));
     }
 
+    // Test-only peek: report whether an index has already been built and
+    // cached for `input`, without building one. Lets a regression test
+    // confirm that a one-rune-per-token sub-lexer (the one WithinToken
+    // creates per grapheme cluster) doesn't construct a grapheme index for
+    // token text it segments by rune and never queries for cluster
+    // boundaries.
+    internal static bool HasCachedIndexFor(string input) =>
+        input != null && _byInput.TryGetValue(input, out _);
+
     // Length in chars (UTF-16 code units) of the cluster starting at
     // `position`. Returns 0 at end-of-input. Throws when `position`
     // isn't a cluster start, since asking for the length of a cluster
