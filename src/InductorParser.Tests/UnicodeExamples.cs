@@ -589,7 +589,8 @@ internal static class UnicodeExamples
     // U+309B KATAKANA-HIRAGANA VOICED SOUND MARK. Sk category.
     // UAX #31 adds it to XID_Start via Other_ID_Start (low end
     // of the 309B..309C range).
-    public static readonly string KatakanaHiraganaVoicedSoundMarkGrapheme = Canary("゛", "katakana-hiragana voiced sound mark", 0x309B);
+    public const int KatakanaHiraganaVoicedSoundMarkRune = 0x309B;
+    public static readonly string KatakanaHiraganaVoicedSoundMarkGrapheme = Canary("゛", "katakana-hiragana voiced sound mark", KatakanaHiraganaVoicedSoundMarkRune);
 
     // U+309C KATAKANA-HIRAGANA SEMI-VOICED SOUND MARK. High end
     // of the Sk range added to XID_Start.

@@ -25,7 +25,7 @@ namespace InductorParser.Lexing;
 // GraphemeHelpers; the two stay separate because runes and UAX #29 clusters
 // are different units, and the lexer's rune-mode / grapheme-mode split rests
 // on keeping them apart.
-internal static class RuneHelpers
+public static class RuneHelpers
 {
     // True when input[pos] is a high surrogate followed by a low surrogate,
     // i.e. a well-formed UTF-16 surrogate pair starts at `pos`. False if
