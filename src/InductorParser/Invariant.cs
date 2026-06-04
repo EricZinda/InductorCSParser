@@ -43,7 +43,8 @@ public static class Invariant
     // poison to the JIT's inliner, and pulling the throw into its own
     // method keeps the caller's hot path branch-only. The check
     // disappears into the caller when the condition holds, which is
-    // every call.
+    // every call. (RyuJIT won't inline a throw-only method anyway and
+    // moves the call to a cold region: see dotnet/runtime#4381.)
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void That(
         bool condition,
@@ -93,7 +94,7 @@ public static class Invariant
 // FALSE, i.e. when That is about to throw and needs the formatted
 // message. Every other call shouldAppend=false, so the compiler skips
 // every Append call: no boxing, no ToString, no StringBuilder. A
-// plain string literal "foo" passed in lowers to AppendLiteral("foo")
+// plain string literal "foo" passed in compiles to AppendLiteral("foo")
 // inside the same if-shouldAppend block and pays the same nothing.
 //
 // ref struct keeps the handler stack-only for the duration of the

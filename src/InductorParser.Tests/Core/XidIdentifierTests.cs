@@ -417,6 +417,51 @@ public class XidIdentifierTests
                        extraBodyRunes: TokenSet.Runes(fractionSlash)));
     }
 
+    [TestCase(NormalizationForm.FormKC)]
+    [TestCase(NormalizationForm.FormKD)]
+    public void Identifier_rejects_body_extra_whose_decomposition_piece_is_not_a_body_character(NormalizationForm form)
+    {
+        // Mirror of Identifier_rejects_start_extra_whose_decomposition_tail_is_not_a_body_character,
+        // but for extraBodyRunes. U+FDFA ARABIC LIGATURE SALLALLAHOU ALAYHE
+        // WASALLAM has an NFKC/NFKD decomposition that's an 18-character
+        // Arabic phrase containing three U+0020 SPACE separators between
+        // words. The spec excludes U+FDFA from XidContinue (see
+        // NfkxClosureRemovedFromXidContinue in TokenSet.Xid.cs) precisely
+        // because the SPACE characters in its decomposition would break
+        // the identifier-base invariant.
+        //
+        // Closure covers XidContinue's own entries but not caller extras.
+        // Without this rejection, body.WithCompatibilityEquivalents over
+        // (XidContinue | extraBodyRunes) would silently leak the SPACE
+        // separators into the body set and an input like "abc def" would
+        // parse as one identifier.
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            Identifier(form, extraBodyRunes:
+                TokenSet.Runes(UnicodeExamples.ArabicLigatureSallallahouGrapheme)));
+        Assert.That(exception!.Message, Does.Contain("extraBodyRunes"));
+        Assert.That(exception.Message, Does.Contain(" "),
+            "error message names the offending piece (a SPACE separator inside the Arabic-phrase decomposition)");
+
+        // Sanity: a body extra whose entire decomposition stays in XidContinue
+        // is accepted. The Latin small ligature fi (U+FB01) decomposes to "fi";
+        // both 'f' and 'i' are ordinary XidContinue letters, so the build
+        // doesn't throw.
+        Assert.DoesNotThrow(() =>
+            Identifier(form, extraBodyRunes:
+                TokenSet.Runes(UnicodeExamples.FiLigatureGrapheme)));
+
+        // Explicit opt-in: the caller can add the offending piece to
+        // extraBodyRunes themselves and the build no longer throws. This is
+        // the same shape the start-side check supports (a tail piece passes
+        // when the caller has already added it to extraBodyRunes), and it's
+        // the reason extraBodyRunes exists in the first place: the caller is
+        // explicitly choosing what counts as body, including pieces outside
+        // XidContinue.
+        Assert.DoesNotThrow(() =>
+            Identifier(form, extraBodyRunes:
+                TokenSet.Runes(UnicodeExamples.ArabicLigatureSallallahouGrapheme) | TokenSet.Single(0x20)));
+    }
+
     [Test]
     public void Identifier_rejects_multi_rune_grapheme_extras()
     {
