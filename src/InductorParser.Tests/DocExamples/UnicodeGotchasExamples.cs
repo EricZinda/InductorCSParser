@@ -181,10 +181,8 @@ public class UnicodeGotchasExamples
     public void Homoglyph_LatinLetters_set_rejects_Cyrillic_a()
     {
         var latinLetters =
-            TokenSet.Ascii.Letters |
-            TokenSet.Range(new System.Text.Rune(0x00C0), new System.Text.Rune(0x00D6)) |   // À..Ö
-            TokenSet.Range(new System.Text.Rune(0x00D8), new System.Text.Rune(0x00F6)) |   // Ø..ö
-            TokenSet.Range(new System.Text.Rune(0x00F8), new System.Text.Rune(0x00FF));    // ø..ÿ
+            (TokenSet.Ascii.Letters | TokenSet.Range(new System.Text.Rune(0x00C0), new System.Text.Rune(0x00FF)))
+            & TokenSet.Letters;
 
         var rule = OneOrMore(OneOf(latinLetters)).Compile();
 
@@ -195,13 +193,43 @@ public class UnicodeGotchasExamples
         // The set is documented as "Latin-1 Supplement letters", so it must
         // reject the two non-letters that sit inside the U+00C0..U+00FF block:
         // U+00D7 MULTIPLICATION SIGN and U+00F7 DIVISION SIGN (both Sm). A
-        // naive Range(0x00C0, 0x00FF) wrongly admits them.
+        // bare Range(0x00C0, 0x00FF) wrongly admits them; intersecting with
+        // TokenSet.Letters drops them.
         string timesInput = Canary("a×b", "ASCII a, U+00D7 MULTIPLICATION SIGN, ASCII b", 0x61, 0xD7, 0x62);
         string divideInput = Canary("a÷b", "ASCII a, U+00F7 DIVISION SIGN, ASCII b", 0x61, 0xF7, 0x62);
         Assert.That(rule.Parse(timesInput).Success, Is.False,
             "U+00D7 MULTIPLICATION SIGN is not a letter and must not be in LatinLetters");
         Assert.That(rule.Parse(divideInput).Success, Is.False,
             "U+00F7 DIVISION SIGN is not a letter and must not be in LatinLetters");
+    }
+
+    // "Homoglyph Confusables": the Greek set is documented as a
+    // confusable-resistant identifier character class, so it must reject
+    // the non-letters that sit inside the U+0370..U+03FF Greek and Coptic
+    // block. U+037E GREEK QUESTION MARK (Po) renders as ';' and U+0387
+    // GREEK ANO TELEIA (Po) renders as '·': both are punctuation
+    // confusables, exactly the kind of character this section promises to
+    // keep out of identifiers. A naive Range(0x0370, 0x03FF) admits them.
+    [Test]
+    public void Homoglyph_Greek_set_rejects_non_letters()
+    {
+        var greek =
+            TokenSet.Range(new System.Text.Rune(0x0370), new System.Text.Rune(0x03FF)) & TokenSet.Letters;
+
+        var rule = OneOrMore(OneOf(greek)).Compile();
+
+        // Greek letters are still accepted.
+        Assert.That(rule.Parse(UnicodeExamples.GreekKalimeraIdentifier).Success, Is.True, "Greek letters");
+
+        // The non-letters parked in the Greek and Coptic block must be
+        // rejected. Built from the scalar value directly so no source-editing
+        // tool can silently swap U+037E for an ASCII ';' lookalike.
+        string questionMark = new System.Text.Rune(0x037E).ToString(); // GREEK QUESTION MARK (looks like ';')
+        string anoTeleia = new System.Text.Rune(0x0387).ToString();    // GREEK ANO TELEIA (looks like '·')
+        Assert.That(rule.Parse(questionMark).Success, Is.False,
+            "U+037E GREEK QUESTION MARK is punctuation, not a letter, and must not be in the Greek set");
+        Assert.That(rule.Parse(anoTeleia).Success, Is.False,
+            "U+0387 GREEK ANO TELEIA is punctuation, not a letter, and must not be in the Greek set");
     }
 
     // "Variation Selectors": stripping U+FE00..U+FE0F before parsing

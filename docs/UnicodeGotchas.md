@@ -160,20 +160,28 @@ This is a grammar-design decision. For security-sensitive grammars (mixed-script
 **Fix.** Pick the character class that matches your threat model:
 
 ```csharp
-// Latin script only: Basic Latin letters plus Latin-1 Supplement letters.
-// Rejects Cyrillic а, Greek ο, and other confusables. The three sub-ranges
-// skip U+00D7 (× MULTIPLICATION SIGN) and U+00F7 (÷ DIVISION SIGN), the two
-// non-letters Unicode parked inside the U+00C0..U+00FF block. A naive
-// Range(0x00C0, 0x00FF) would quietly admit × and ÷ as identifier characters.
+// Latin script only: Basic Latin letters plus the Latin-1 Supplement
+// letters. Rejects Cyrillic а, Greek ο, and other confusables. A
+// code-point range like U+00C0..U+00FF isn't solidly letters: Unicode
+// parked × (U+00D7 MULTIPLICATION SIGN) and ÷ (U+00F7 DIVISION SIGN)
+// between the accented-letter runs, so a bare Range(0x00C0, 0x00FF) would
+// quietly admit × and ÷ as identifier characters. Intersecting the range
+// with TokenSet.Letters lets the General_Category letter classes do the
+// filtering: it drops the two signs and tracks whatever Unicode version
+// the runtime ships. The Greek set below does the same thing.
 static readonly TokenSet LatinLetters =
-    TokenSet.Ascii.Letters |
-    TokenSet.Range(new Rune(0x00C0), new Rune(0x00D6)) |   // À..Ö
-    TokenSet.Range(new Rune(0x00D8), new Rune(0x00F6)) |   // Ø..ö
-    TokenSet.Range(new Rune(0x00F8), new Rune(0x00FF));    // ø..ÿ
+    (TokenSet.Ascii.Letters | TokenSet.Range(new Rune(0x00C0), new Rune(0x00FF)))
+    & TokenSet.Letters;
 
-// Greek and Coptic block only
+// Greek and Coptic block, letters only, the same intersect-with-Letters
+// trick. This block is even more riddled with non-letters: U+037E GREEK
+// QUESTION MARK (renders as ';') and U+0387 GREEK ANO TELEIA (renders as
+// '·') are punctuation, U+0375/U+0384/U+0385 are symbols, and several code
+// points are unassigned. A bare Range(0x0370, 0x03FF) would admit all of
+// those, which is the opposite of what a confusable-resistant set wants.
+// TokenSet.Letters keeps only the actual letters.
 static readonly TokenSet Greek =
-    TokenSet.Range(new Rune(0x0370), new Rune(0x03FF));
+    TokenSet.Range(new Rune(0x0370), new Rune(0x03FF)) & TokenSet.Letters;
 
 public static readonly Rule LatinIdentifier =
     OneOrMore(OneOf(LatinLetters | TokenSet.Ascii.Digits | TokenSet.Runes("_")));
