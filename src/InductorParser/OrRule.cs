@@ -55,7 +55,7 @@ internal sealed class OrRule : Rule
                 if (outputSymbols != null && !ReferenceEquals(symbol, Symbol.Discarded))
                     outputSymbols.Add(symbol);
                 return effectiveFlattenType == FlattenType.Preserve
-                    ? new Symbol(Id, FlattenType, outputSymbols, lexer.Input.AsMemory(matchStart, matchLength), lexer.Context)
+                    ? CreateCompositeFromOwnedChildren(outputSymbols, lexer.Input.AsMemory(matchStart, matchLength), lexer.Context)
                     : Symbol.Discarded;
             }
         }

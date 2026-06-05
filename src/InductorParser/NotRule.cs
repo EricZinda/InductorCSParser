@@ -62,7 +62,7 @@ internal sealed class NotRule : Rule
         // rolled the cursor back to startPosition. Returning non-null
         // makes Rule.TryParse commit that unchanged position.
         return effectiveFlattenType == FlattenType.Preserve
-            ? new Symbol(Id, FlattenType, Array.Empty<Symbol>(), lexer.Input.AsMemory(startPosition, 0), lexer.Context)
+            ? CreateCompositeFromOwnedChildren(Array.Empty<Symbol>(), lexer.Input.AsMemory(startPosition, 0), lexer.Context)
             : Symbol.Discarded;
     }
 

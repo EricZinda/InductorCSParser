@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.SyntaxTree;
@@ -78,5 +80,40 @@ public class ParseResultFactoryTests
             ParseResult.Aborted(ParseOutcome.Timeout, 0, "x", null!, grammar));
         Assert.Throws<System.ArgumentNullException>(() =>
             ParseResult.Aborted(ParseOutcome.Timeout, 0, "x", "hi", null!));
+    }
+
+    [Test]
+    public void Succeeded_factory_copies_symbols_list()
+    {
+        var grammar = Literal("a");
+        grammar.Compile();
+        var original = new Symbol(new SymbolId(1), FlattenType.Preserve, "a".AsMemory());
+        var replacement = new Symbol(new SymbolId(2), FlattenType.Preserve, "z".AsMemory());
+        var symbols = new List<Symbol> { original };
+
+        var result = ParseResult.Succeeded(symbols, "a", grammar);
+
+        symbols[0] = replacement;
+
+        Assert.That(result.Symbols, Is.Not.SameAs(symbols));
+        Assert.That(result.Symbols, Is.Not.InstanceOf<List<Symbol>>());
+        Assert.That(result.Symbols[0], Is.SameAs(original));
+    }
+
+    [Test]
+    public void Parsed_result_symbols_do_not_expose_mutable_array()
+    {
+        var grammar = Token('a').Preserve();
+        var result = grammar.Parse("a");
+        var replacement = new Symbol(new SymbolId(2), FlattenType.Preserve, "z".AsMemory());
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Symbols as Symbol[], Is.Null);
+
+        var writable = result.Symbols as IList<Symbol>;
+        Assert.That(writable, Is.Not.Null);
+        Assert.That(writable!.IsReadOnly, Is.True);
+        Assert.Throws<NotSupportedException>(() => { writable[0] = replacement; });
+        Assert.That(result.ToString(), Is.EqualTo("a"));
     }
 }

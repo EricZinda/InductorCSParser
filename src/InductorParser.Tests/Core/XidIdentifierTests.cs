@@ -657,13 +657,13 @@ public class XidIdentifierTests
         // them. Confirmed against the Unicode DerivedCoreProperties.txt:
         // 309B..309C appears under ID_Start / ID_Continue but the XID
         // sections skip from 3041..3096 straight to 309D..309E.
-        Assert.That(TokenSet.XidStart.ContainsRune(0x309B), Is.False,
+        Assert.That(TokenSet.XidStart.ContainsRune(UnicodeExamples.KatakanaHiraganaVoicedSoundMarkRune), Is.False,
             "U+309B is excluded from XID_Start by NFKC closure");
-        Assert.That(TokenSet.XidStart.ContainsRune(0x309C), Is.False,
+        Assert.That(TokenSet.XidStart.ContainsRune(UnicodeExamples.KatakanaHiraganaSemiVoicedSoundMarkRune), Is.False,
             "U+309C is excluded from XID_Start by NFKC closure");
-        Assert.That(TokenSet.XidContinue.ContainsRune(0x309B), Is.False,
+        Assert.That(TokenSet.XidContinue.ContainsRune(UnicodeExamples.KatakanaHiraganaVoicedSoundMarkRune), Is.False,
             "U+309B is excluded from XID_Continue by NFKC closure");
-        Assert.That(TokenSet.XidContinue.ContainsRune(0x309C), Is.False,
+        Assert.That(TokenSet.XidContinue.ContainsRune(UnicodeExamples.KatakanaHiraganaSemiVoicedSoundMarkRune), Is.False,
             "U+309C is excluded from XID_Continue by NFKC closure");
 
         // Behavioral: Identifier() rejects a bare voicing mark.
@@ -684,15 +684,17 @@ public class XidIdentifierTests
         // is the tell that it is not a letter. This locks in that
         // categorization, the reasoning the TokenSet.Xid.cs file header
         // gives for why NFKC closure later drops 309B from XID_Start.
-        Assert.That(CharUnicodeInfo.GetUnicodeCategory('゛'),
+        char katakanaVoicedSoundMark = (char)UnicodeExamples.KatakanaHiraganaVoicedSoundMarkRune;
+
+        Assert.That(CharUnicodeInfo.GetUnicodeCategory(katakanaVoicedSoundMark),
             Is.EqualTo(UnicodeCategory.ModifierSymbol),
             "U+309B is a Modifier Symbol (Sk), not a letter");
-        Assert.That(char.IsLetter('゛'), Is.False,
+        Assert.That(char.IsLetter(katakanaVoicedSoundMark), Is.False,
             "U+309B is not a letter under any letter General_Category");
 
         // Because it isn't a letter, the letter set can't be the path
         // that puts it in ID_Start: TokenSet.Letters excludes it.
-        Assert.That(TokenSet.Letters.ContainsRune(0x309B), Is.False,
+        Assert.That(TokenSet.Letters.ContainsRune(UnicodeExamples.KatakanaHiraganaVoicedSoundMarkRune), Is.False,
             "U+309B is not in the letter categories; its ID_Start membership "
             + "comes from Other_ID_Start, not from Letters");
     }
