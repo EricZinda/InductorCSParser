@@ -58,21 +58,33 @@ internal static class NormalizedPositionMap
     // preserve grapheme boundaries 1:1.
     private static int TranslateViaLockstep(string original, string normalized, int normalizedIndex)
     {
+        // Step both sides through the shared per-input grapheme-boundary
+        // cache (a bool-array lookup) rather than StringInfo.GetNextTextElement,
+        // which allocates a substring for every grapheme just to read its
+        // length. The normalized side's index was already built by the lexer
+        // during the parse; the original side's is built once here and reused
+        // by every later position lookup on the same input. This is the whole
+        // reason GraphemeClusterIndex exists (see its header), so a tree walk
+        // that reads many Symbol.SourceRange / SourceText values doesn't pay a
+        // per-grapheme allocation on every node.
+        var normalizedIndexCache = GraphemeClusterIndex.For(normalized);
+        var originalIndexCache = GraphemeClusterIndex.For(original);
         int origPos = 0;
         int normPos = 0;
         while (normPos < normalized.Length && origPos < original.Length)
         {
-            // GetNextTextElement always returns at least one char at a valid
-            // position. The Invariant.That calls catch the impossible-zero
-            // case that would spin this loop forever.
-            int normStep = StringInfo.GetNextTextElement(normalized, normPos).Length;
+            // LengthAt returns at least one char at any in-range cluster
+            // start, and the walk only ever lands on cluster starts (it
+            // advances by whole clusters from 0). The Invariant.That calls
+            // catch the impossible-zero case that would spin this loop forever.
+            int normStep = normalizedIndexCache.LengthAt(normPos);
             Invariant.That(normStep > 0,
-                $"StringInfo.GetNextTextElement returned an empty element on the normalized string "
+                $"GraphemeClusterIndex.LengthAt returned an empty element on the normalized string "
                 + $"at position {normPos} (length {normalized.Length}) in TranslateViaLockstep.");
 
-            int origStep = StringInfo.GetNextTextElement(original, origPos).Length;
+            int origStep = originalIndexCache.LengthAt(origPos);
             Invariant.That(origStep > 0,
-                $"StringInfo.GetNextTextElement returned an empty element on the original string "
+                $"GraphemeClusterIndex.LengthAt returned an empty element on the original string "
                 + $"at position {origPos} (length {original.Length}) in TranslateViaLockstep.");
 
             int normNext = normPos + normStep;

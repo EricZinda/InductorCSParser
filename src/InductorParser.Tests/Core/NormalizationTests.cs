@@ -1331,6 +1331,69 @@ public class NormalizationTests
         Assert.That(original[result.ErrorCharIndex], Is.EqualTo('Z'));
     }
 
+    [Test]
+    public void TranslateToOriginal_does_not_allocate_per_grapheme_walking_to_a_deep_position()
+    {
+        // Under the default form (FormC) every Symbol.SourceRange /
+        // Symbol.SourceText read, and every parse-failure position, routes
+        // through NormalizedPositionMap.TranslateToOriginal to map a
+        // parse-input offset back into the user's original-input
+        // coordinates. For non-ASCII input the original and normalized
+        // strings aren't the same instance, so the ReferenceEquals fast
+        // path is skipped and the canonical lockstep walker runs. Walking a
+        // real parse tree reads one position per node, so the per-call cost
+        // of that walker is multiplied across the whole tree.
+        //
+        // The parser already keeps a zero-allocation grapheme-boundary cache
+        // (GraphemeClusterIndex, built once per input string) precisely so a
+        // cluster length is a bool-array lookup instead of a
+        // StringInfo.GetNextTextElement call, which allocates a substring per
+        // grapheme. The lockstep walker used GetNextTextElement directly,
+        // so each translate allocated a substring for every grapheme it
+        // stepped over. This test verifies that a single translate of a deep
+        // position allocates a bounded amount, not an amount that grows with
+        // the offset being mapped.
+
+        // Genuinely non-NFC input: "e + combining acute" (U+0065 U+0301) is
+        // one grapheme of two chars that FormC composes to the single char
+        // 'é' (U+00E9). This is exactly the shape that makes the production
+        // path skip the ReferenceEquals fast path: Normalize changes the
+        // content, so parseInput is a distinct string, and every position
+        // lookup runs the lockstep walker. The original has two chars per
+        // grapheme, the normalized one, so the offsets genuinely differ too.
+        const int length = 20000;
+        string original = string.Concat(Enumerable.Repeat("e\u0301", length));
+        string normalized = original.Normalize(NormalizationForm.FormC);
+        Assert.That(ReferenceEquals(original, normalized), Is.False,
+            "non-NFC input must not take the reference-equal fast path, "
+            + "or this test would prove nothing about the grapheme walker");
+        Assert.That(normalized.Length, Is.EqualTo(length),
+            "FormC composes each two-char grapheme to one char");
+
+        // First call: builds the per-string grapheme caches (a one-time
+        // O(n) walk shared by every later translate, which is the whole
+        // point of the cache). Measure a second, identical call so the
+        // one-time build cost isn't counted.
+        NormalizedPositionMap.TranslateToOriginal(original, normalized, length - 1, NormalizationForm.FormC);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        int result = NormalizedPositionMap.TranslateToOriginal(original, normalized, length - 1, NormalizationForm.FormC);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.That(result, Is.EqualTo(2 * (length - 1)),
+            "each normalized char maps back to a two-char grapheme in the original");
+        // Pre-fix the walker allocates one substring per grapheme stepped on
+        // each side (~2*length of them), hundreds of KB and up. Post-fix it
+        // reuses the cached bool[] boundaries and allocates essentially
+        // nothing. Tying the bound to the input length states the real
+        // property: the cost of mapping one position doesn't scale with
+        // that position's offset.
+        Assert.That(allocated, Is.LessThan(length),
+            $"TranslateToOriginal allocated {allocated} bytes mapping a single position at "
+            + $"normalized offset {length - 1}; it should reuse the cached grapheme boundaries "
+            + "instead of allocating a substring per grapheme.");
+    }
+
     // Iterate every position in the normalized string and compare
     // TranslateToOriginal's per-grapheme answer against the spec-
     // blessed whole-string prefix walk. The normalized form is

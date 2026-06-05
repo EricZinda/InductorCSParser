@@ -238,10 +238,18 @@ public sealed class Symbol
     /// </summary>
     public IEnumerable<Symbol> FindAll(SymbolId id)
     {
-        if (Id == id) yield return this;
-        foreach (var child in Children)
-            foreach (var found in child.FindAll(id))
-                yield return found;
+        var stack = new Stack<Symbol>();
+        stack.Push(this);
+        while (stack.Count > 0)
+        {
+            var node = stack.Pop();
+            if (node.Id == id) yield return node;
+            // Push children in reverse so they pop left-to-right, keeping the
+            // pre-order, children-in-order sequence the recursive form gave.
+            var children = node.Children;
+            for (int i = children.Count - 1; i >= 0; i--)
+                stack.Push(children[i]);
+        }
     }
 
     /// <summary>
@@ -250,10 +258,18 @@ public sealed class Symbol
     /// </summary>
     public IEnumerable<Symbol> Walk()
     {
-        yield return this;
-        foreach (var child in Children)
-            foreach (var descendant in child.Walk())
-                yield return descendant;
+        var stack = new Stack<Symbol>();
+        stack.Push(this);
+        while (stack.Count > 0)
+        {
+            var node = stack.Pop();
+            yield return node;
+            // Push children in reverse so they pop left-to-right, keeping the
+            // pre-order, children-in-order sequence the recursive form gave.
+            var children = node.Children;
+            for (int i = children.Count - 1; i >= 0; i--)
+                stack.Push(children[i]);
+        }
     }
 
     /// <summary>
