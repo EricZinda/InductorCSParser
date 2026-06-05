@@ -1,0 +1,5 @@
+# Shell scripts must stay LF so they run under bash/WSL even when
+# core.autocrlf=true would otherwise rewrite them to CRLF on checkout.
+# A CRLF shebang turns "#!/usr/bin/env bash" into "bash\r", which fails
+# with: /usr/bin/env: 'bash\r': No such file or directory
+*.sh text eol=lf

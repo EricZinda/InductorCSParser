@@ -2,6 +2,10 @@
 
 Run the test suite via `./test.sh` at the repo root. By default it runs the recursive engine; pass `statemachine` to run under the state-machine engine, or `both` to run both sequentially. Extra arguments pass through to `dotnet test`, so `./test.sh statemachine --filter "FullyQualifiedName~Atom_fragment"` targets one fixture under the SM.
 
+On Windows the script runs under Git Bash or WSL. WSL has no native `dotnet`, so the script falls back to the Windows `dotnet.exe` (reachable via WSL's Windows-PATH interop). If you get `dotnet.exe: command not found` from WSL, interop is turned off in your `/etc/wsl.conf`. The `.sh` scripts are kept at LF by `.gitattributes` so the `#!/usr/bin/env bash` shebang isn't broken into `bash\r` by `core.autocrlf` on checkout.
+
+By default the script passes `--logger "console;verbosity=quiet"` so the run shows only failures and the per-assembly pass/fail summary. That alone keeps the ~10,000 `[Explicit]` UnicodeConformance cases (the opt-in UAX #29 grapheme-break suite in `Lexing/UnicodeConformance/`, run via `--filter "TestCategory=UnicodeConformance"`) from flooding the console as skipped lines, but only when dotnet honors the logger. When the suite is driven through `dotnet.exe` from WSL the logger setting is ignored and the run falls back to default verbosity, which lists every explicit-skipped case. As a backstop the script also filters out lines carrying the conformance fixture's `[Explicit]` reason text, so those cases stay quiet regardless of verbosity. Pass your own `--logger` to raise verbosity, for example `./test.sh recursive --logger "console;verbosity=normal"` to list every test (the conformance skip lines are still filtered).
+
 This doc describes what makes a rule's test file "comprehensive" in this codebase. It's aimed at contributors adding a new rule or auditing coverage of an existing one. Use it as a checklist.
 
 Tests live in `src/InductorParser.Tests/`, organized into three subfolders:
