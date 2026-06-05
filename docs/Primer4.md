@@ -104,11 +104,11 @@ safeUsername.Parse("admin").Success;             // true
 safeUsername.Parse("ad\u200Bmin").Success;       // false: the ZWS fails NoneOf(Invisibles)
 ```
 
-One thing to know about `Format`: it includes `U+200D` (ZWJ), so emoji families like `👨‍👩‍👧` split into their components after the filter. That's fine for a banned-text check. If your input can carry emoji you want to keep whole, take the `Format` category and subtract ZWJ with the `&` (intersection) and `~` (complement) operators:
+One thing to know about `Format`: it includes `U+200D` (ZWJ), so emoji families like `👨‍👩‍👧` split into their components after the filter. That's fine for a banned-text check. If your input can carry emoji you want to keep whole, take the `Format` category and subtract ZWJ with the `-` (difference) operator:
 
 ```csharp
 static readonly TokenSet Invisibles =
-    TokenSet.Category(UnicodeCategory.Format) & ~TokenSet.Single(0x200D);
+    TokenSet.Category(UnicodeCategory.Format) - TokenSet.Single(0x200D);
 ```
 
 For each of these, there's a focused test in `SecurityByDefaultTests.cs` showing the attack and how the parser handles it.

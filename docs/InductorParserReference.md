@@ -178,7 +178,7 @@ Built-in symbol ids live in a static class and use a numbering space chosen so t
 
 The parser operates on Unicode text, not raw bytes. By default the lexer reads one .NET `StringInfo` text element per step. On modern .NET that means extended grapheme clusters, so `👨‍👩‍👧‍👦` is one token rather than seven scalar values. The full lexer story, including legacy-runtime caveats and how to opt into rune-level lexing instead, lives in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). For grammar-authoring purposes, you can ignore the distinction until you hit emoji or combining-mark input, at which point the Unicode doc has the answer.
 
-`TokenSet` is a composable value type for character sets. The full API surface (built-ins, factory methods, and the `|`, `&`, `~` operators) lives in [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md). The grammar-authoring shorthand is that you build a class out of built-ins and factory calls and combine them with `|` for union, `&` for intersection, and `~` for complement.
+`TokenSet` is a composable value type for character sets. The full API surface (built-ins, factory methods, and the `|`, `&`, `-`, `~` operators) lives in [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md). The grammar-authoring shorthand is that you build a class out of built-ins and factory calls and combine them with `|` for union, `&` for intersection, `-` for difference ("a minus b"), and `~` for complement.
 
 Grammar code reads like:
 
