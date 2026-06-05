@@ -181,5 +181,4 @@ internal sealed class WithinTokenRule : Rule
         }
         return leafSymbol;
     }
-
 }

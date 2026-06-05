@@ -67,6 +67,7 @@
     <Compile Include="..\InductorParser\GraphemeRule.cs"           Link="BuiltIn\GraphemeRule.cs" />
     <Compile Include="..\InductorParser\WithinTokenRule.cs"        Link="BuiltIn\WithinTokenRule.cs" />
     <Compile Include="..\InductorParser\AliasRule.cs"             Link="BuiltIn\AliasRule.cs" />
+    <Compile Include="..\InductorParser\IdentifierRule.cs"        Link="BuiltIn\IdentifierRule.cs" />
   </ItemGroup>
 
 </Project>

@@ -466,6 +466,62 @@ public class XidIdentifierTests
 
     [TestCase(NormalizationForm.FormKC)]
     [TestCase(NormalizationForm.FormKD)]
+    public void Identifier_start_extra_with_single_grapheme_multi_rune_NFKx_works(NormalizationForm form)
+    {
+        // U+309B KATAKANA-HIRAGANA VOICED SOUND MARK is removed from
+        // XID_Start by NFKx closure because its NFKx is SPACE + U+3099. The
+        // decomposition is two RUNES but only ONE grapheme cluster (SPACE
+        // followed by an Extend combining mark joins into one cluster per
+        // UAX #29 GB9).
+        //
+        // A user adding U+309B back to extraStartRunes expects parsing under
+        // FormKC / FormKD to work, mirroring the existing multi-grapheme
+        // handling: the head rune is silently added to start and the tail
+        // runes are validated against body. Before the fix, the
+        // WithCompatibilityHeadRuneEquivalents / AllCompatibilityTailRunesIn
+        // helpers detected "multi-grapheme" via GraphemeHelpers.Count, missing
+        // the single-grapheme multi-rune case entirely. IdentifierRule's
+        // OneOfRule projection then turned U+309B into a multi-rune grapheme
+        // entry which the WithinToken sub-lexer (one-rune-per-token) couldn't
+        // match. Parse failed silently at offset 0.
+        var rule = Identifier(
+            extraStartRunes: TokenSet.Single(0x309B));
+        rule.Compile(form);
+        var input = UnicodeExamples.KatakanaHiraganaVoicedSoundMarkGrapheme + "foo";
+        var result = rule.Parse(input);
+        Assert.That(result.Success, Is.True,
+            $"identifier starting with U+309B should match under {form}: {result.ErrorMessage}");
+    }
+
+    [TestCase(NormalizationForm.FormKC)]
+    [TestCase(NormalizationForm.FormKD)]
+    public void Identifier_body_extra_with_single_grapheme_multi_rune_NFKx_pieces_validated(NormalizationForm form)
+    {
+        // Symmetric body-side check. U+0344 COMBINING GREEK DIALYTIKA TONOS
+        // decomposes under NFKx to U+0308 + U+0301, two combining marks
+        // forming one cluster. Both pieces are in XidContinue (Mn), so adding
+        // U+0344 to extraBodyRunes compiles without rejection: the body-side
+        // AllCompatibilityPiecesIn validation walks every NFKx rune, not
+        // just the multi-grapheme cases. After the fix, WithCompatibilityRune
+        // Equivalents on the union projects U+0344 into U+0308 and U+0301 as
+        // single-rune body entries (instead of a dead multi-rune entry that
+        // never reaches the sub-lexer).
+        var rule = Identifier(
+            extraBodyRunes: TokenSet.Single(0x0344));
+        Assert.DoesNotThrow(() => rule.Compile(form),
+            "U+0344's NFKx pieces are both XidContinue; compile should accept");
+
+        // Sanity: an identifier with the decomposed mid-token form still
+        // parses. "ä́b" under FormKD becomes "ä́b"; the cluster
+        // "a + diaeresis + acute" sits between the two ASCII letters.
+        var input = "a" + UnicodeExamples.DialytikaTonosPrecomposedGrapheme + "b";
+        var result = rule.Parse(input);
+        Assert.That(result.Success, Is.True,
+            $"identifier with U+0344 mid-body should match under {form}: {result.ErrorMessage}");
+    }
+
+    [TestCase(NormalizationForm.FormKC)]
+    [TestCase(NormalizationForm.FormKD)]
     public void Bare_OneOf_with_decomposing_entry_still_throws_at_Compile(NormalizationForm form)
     {
         // IdentifierRule.ValidateNormalization only rewrites the start /
