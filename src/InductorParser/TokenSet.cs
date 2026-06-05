@@ -1329,16 +1329,66 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // `b`. This is what "a minus b" means for any pair of sets, including
     // ones with multi-rune grapheme members.
     //
-    // Unlike `~`, this never throws on a mixed set: difference against the
-    // bounded set `b` is always representable, even though complement
-    // against the unbounded cluster universe isn't.
+    // This never throws, even when `a` or `b` has cluster members, where
+    // `~` does. The reason is that the result is always a subset of `a`:
+    // we keep `a`'s members and drop the ones `b` also has, so the answer
+    // is at most as big as `a` and is always a finite set we can build.
+    // `~a` is the opposite problem. It has to name every token that isn't
+    // in `a`, and the universe of grapheme clusters is unbounded (any rune
+    // sequence respecting UAX #29 boundaries is a cluster), so there's no
+    // finite set to return and `~` throws on a cluster-bearing set.
     public static TokenSet operator -(TokenSet a, TokenSet b)
     {
-        // Rune part: a's runes minus b's runes. Both projections are
-        // rune-only, so ~ never throws and & is plain interval difference.
-        var runeDifference = new TokenSet(a._ranges) & ~new TokenSet(b._ranges);
+        // Rune part: a's runes minus b's runes, by direct interval
+        // subtraction. We subtract b's intervals from a's own intervals, so
+        // every code point of a that b doesn't cover survives, surrogates
+        // included. Routing through `a & ~b` instead would strip every
+        // surrogate from a, because ~ complements over scalar values only
+        // (surrogates are excluded by design, see operator ~). Surrogates
+        // are first-class set members (TokenSet.Surrogates / SurrogateRange),
+        // so dropping them here would contradict "every member of a that
+        // isn't a member of b" and silently empty a set like
+        // Surrogates - Single('a').
+        var runeDifference = SubtractRuneIntervals(a._ranges, b._ranges);
         var clusters = MergeMultiRuneGraphemeDifference(a._multiRuneGraphemes, b._multiRuneGraphemes);
-        return new TokenSet(runeDifference._ranges, clusters);
+        return new TokenSet(runeDifference, clusters);
+    }
+
+    // Interval difference of two normalized (sorted, non-overlapping,
+    // non-adjacent) interval arrays: every code point in `a` that isn't
+    // covered by any interval in `b`. Surrogate-preserving, unlike the
+    // `a & ~b` route, because it never appeals to the scalar-only universe.
+    // Linear in the sum of the two array lengths.
+    private static Interval[] SubtractRuneIntervals(Interval[]? aRanges, Interval[]? bRanges)
+    {
+        if (aRanges == null || aRanges.Length == 0) return Array.Empty<Interval>();
+        if (bRanges == null || bRanges.Length == 0) return aRanges;
+        var result = new List<Interval>();
+        int bIndex = 0;
+        for (int aIndex = 0; aIndex < aRanges.Length; aIndex++)
+        {
+            int cursor = aRanges[aIndex].Low;
+            int high = aRanges[aIndex].High;
+            // b intervals that end before this a interval starts can never
+            // overlap it or any later (higher) a interval, so retire them.
+            while (bIndex < bRanges.Length && bRanges[bIndex].High < cursor) bIndex++;
+            // Walk the b intervals overlapping [cursor, high]. Use a local
+            // index: a b interval can also straddle the gap into the next a
+            // interval, so it stays available to the next iteration.
+            int localB = bIndex;
+            while (localB < bRanges.Length && bRanges[localB].Low <= high)
+            {
+                var subtract = bRanges[localB];
+                if (subtract.Low > cursor)
+                    result.Add(new Interval(cursor, subtract.Low - 1));
+                if (subtract.High >= cursor) cursor = subtract.High + 1;
+                if (cursor > high) break;
+                localB++;
+            }
+            if (cursor <= high)
+                result.Add(new Interval(cursor, high));
+        }
+        return result.Count == 0 ? Array.Empty<Interval>() : result.ToArray();
     }
 
     // Sorted-merge difference of two sorted-ordinal grapheme arrays: every

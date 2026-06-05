@@ -115,6 +115,33 @@ public class TokenSetTests
     }
 
     [Test]
+    public void Difference_keeps_minuend_surrogates_not_in_subtrahend()
+    {
+        // operator - is documented as "true set difference: every member of
+        // a that isn't a member of b", and it never throws on surrogate
+        // members the way ~ does. Surrogates are a first-class set member
+        // (TokenSet.Surrogates / SurrogateRange), matchable under
+        // Compile(null). Subtracting a set that contains none of a's
+        // surrogates must leave those surrogates in place.
+        //
+        // The most basic case: X - Empty == X. Subtracting nothing can't
+        // remove anything, including surrogates.
+        AssertEqual(TokenSet.Surrogates - TokenSet.Empty, TokenSet.Surrogates);
+
+        // Subtracting an unrelated scalar leaves every surrogate alone.
+        var surrogatesMinusLetter = TokenSet.Surrogates - TokenSet.Single('a');
+        Assert.That(surrogatesMinusLetter.ContainsRune(HighSurrogateMinRune), Is.True);
+        Assert.That(surrogatesMinusLetter.ContainsRune(LowSurrogateMaxRune), Is.True);
+
+        // Subtracting one surrogate sub-block removes only that block and
+        // keeps the rest.
+        var trailingOnly = TokenSet.Surrogates - TokenSet.SurrogateRange(0xD800, 0xDBFF);
+        Assert.That(trailingOnly.ContainsRune(0xD800), Is.False);
+        Assert.That(trailingOnly.ContainsRune(0xDC00), Is.True);
+        Assert.That(trailingOnly.ContainsRune(LowSurrogateMaxRune), Is.True);
+    }
+
+    [Test]
     public void Range_straddling_the_surrogate_block_splits_around_it()
     {
         // Range validates its endpoints (no surrogate halves) and splits
