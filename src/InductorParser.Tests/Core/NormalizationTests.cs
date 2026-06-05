@@ -947,6 +947,27 @@ public class NormalizationTests
     }
 
     [Test]
+    public void WithCompatibilityEquivalents_projects_single_piece_non_form_stable_entries()
+    {
+        // An entry that isn't already in the target form gets replaced in
+        // the result by its normalized version. U+212B ANGSTROM SIGN
+        // normalizes under FormC to U+00C5, so the result has to contain
+        // U+00C5: that's the rune FormC-normalized input will carry.
+        var angstrom = TokenSet.Single(UnicodeExamples.AngstromRune);
+        var expanded = angstrom.WithCompatibilityEquivalents(NormalizationForm.FormC);
+        Assert.That(expanded.ContainsRune(0x00C5), Is.True,
+            "Angstrom normalizes to U+00C5 under FormC");
+
+        // Same shape on the multi-rune side: "e + combining acute" composes
+        // under FormC to a single precomposed rune U+00E9, so the result
+        // has to contain U+00E9.
+        var decomposed = TokenSet.Graphemes(UnicodeExamples.LatinEAcuteGrapheme);
+        var composed = decomposed.WithCompatibilityEquivalents(NormalizationForm.FormC);
+        Assert.That(composed.ContainsRune(UnicodeExamples.LatinEAcuteRune), Is.True,
+            "'e + acute' composes to U+00E9 under FormC");
+    }
+
+    [Test]
     public void Identifier_compiles_under_FormKC_and_matches_compatibility_input()
     {
         // Compile under FormKC walks the IdentifierRule, expands its

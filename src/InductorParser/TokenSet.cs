@@ -120,11 +120,27 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         }
     }
 
-    // Read-only view of the multi-rune graphemes, sorted ordinal. Used
-    // by rules that need to walk the grapheme entries (LookaheadFirstRunes
-    // above is the canonical caller). Empty when the set has no
-    // multi-rune content.
-    internal ReadOnlySpan<string> MultiRuneGraphemes =>
+    /// <summary>
+    /// Read-only view of the multi-rune grapheme entries, sorted ordinal.
+    /// Empty when the set has no multi-rune content. Returns a
+    /// <c>ReadOnlySpan</c> so callers get foreach and indexing without
+    /// allocation; for the iterator shape that composes with LINQ and
+    /// can cross yield boundaries, use
+    /// <see cref="EnumerateMultiRuneGraphemes"/> instead.
+    /// </summary>
+    public ReadOnlySpan<string> MultiRuneGraphemes =>
+        _multiRuneGraphemes ?? Array.Empty<string>();
+
+    /// <summary>
+    /// Iterator-shaped companion to <see cref="MultiRuneGraphemes"/>.
+    /// Yields the same entries in the same order, but as
+    /// <c>IEnumerable&lt;string&gt;</c> so LINQ operators apply and the
+    /// values can flow through a yield-returning method. The
+    /// <c>ReadOnlySpan</c> property is faster (no enumerator, supports
+    /// indexing) and should be preferred when the caller doesn't need
+    /// either of those features.
+    /// </summary>
+    public IEnumerable<string> EnumerateMultiRuneGraphemes() =>
         _multiRuneGraphemes ?? Array.Empty<string>();
 
     // Number of intervals ContainsRune scans linearly before switching to
@@ -216,22 +232,17 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return multi != null && multi.Length > 0 && BinarySearchMultiRuneGrapheme(grapheme) >= 0;
     }
 
-    // The MultiRuneGraphemes ReadOnlySpan accessor can't cross a yield
-    // boundary in a C# iterator. This list-shaped variant lets the
-    // OneOfRule / NoneOfRule Compile-time validation walk multi-rune
-    // entries via an index with no allocations other than the wrapping array
-    // (which is the existing _multiRuneGraphemes field).
-    internal IReadOnlyList<string> MultiRuneGraphemesAsList =>
-        _multiRuneGraphemes ?? Array.Empty<string>();
-
-    // Yield every rune in this set's _ranges (which are single-rune entries).
-    // Used by OneOfRule / NoneOfRule's Compile-time validation walks.
-    // Cost is O(total range size) � for big sets like Letters that's
-    // ~130K iterations.
-    //
-    // Skips the surrogate gap (U+D800..U+DFFF). Surrogates aren't
-    // runes � they're UTF-16 code units only, not Unicode scalar values.
-    internal IEnumerable<int> EnumerateRunes()
+    /// <summary>
+    /// Enumerate every rune (Unicode scalar value) in this set's
+    /// single-rune entries. Cost is O(total range size); for big sets like
+    /// <see cref="Letters"/> that's ~130K iterations. Skips the surrogate
+    /// gap (U+D800..U+DFFF) since surrogates aren't Unicode scalar values;
+    /// call <see cref="EnumerateSurrogates"/> for those. A rule that wants
+    /// to walk every member of a set iterates all three of
+    /// <see cref="EnumerateRunes"/>, <see cref="EnumerateSurrogates"/>, and
+    /// <see cref="EnumerateMultiRuneGraphemes"/>.
+    /// </summary>
+    public IEnumerable<int> EnumerateRunes()
     {
         var ranges = _ranges;
         if (ranges == null) yield break;
@@ -244,6 +255,32 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                 if (rune >= 0xD800 && rune <= 0xDFFF) continue;
                 yield return rune;
             }
+        }
+    }
+
+    /// <summary>
+    /// Enumerate every surrogate code unit (U+D800..U+DFFF) in this set's
+    /// single-rune entries. Surrogates aren't Unicode scalar values, so
+    /// they're excluded from <see cref="EnumerateRunes"/>; this is the
+    /// companion accessor for rules that want to walk them anyway. Empty
+    /// for sets with no surrogate entries (the common case, including
+    /// every built-in (<see cref="Letters"/>, <see cref="XidStart"/>, etc.)
+    /// since the spec subtracts the surrogate gap). Populated by
+    /// <see cref="SurrogateRange(int, int)"/>.
+    /// </summary>
+    public IEnumerable<int> EnumerateSurrogates()
+    {
+        var ranges = _ranges;
+        if (ranges == null) yield break;
+        for (int index = 0; index < ranges.Length; index++)
+        {
+            int low = ranges[index].Low;
+            int high = ranges[index].High;
+            if (high < 0xD800 || low > 0xDFFF) continue;
+            int start = low < 0xD800 ? 0xD800 : low;
+            int end = high > 0xDFFF ? 0xDFFF : high;
+            for (int s = start; s <= end; s++)
+                yield return s;
         }
     }
 
@@ -432,40 +469,23 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         multiGraphemeConversions?.Add((original, normalized));
     }
 
-    // Returns a copy of this set with every entry whose Normalize(form) is a
-    // multi-grapheme sequence replaced by that sequence's individual
-    // graphemes, each as its own member (the fi-ligature, for example,
-    // becomes the two members 'f' and 'i' under FormKC). A TokenSet member is
-    // exactly one grapheme, so an entry that normalizes to several graphemes
-    // can't stay a single member otherwise. Entries that normalize to one
-    // grapheme are unchanged.
-    //
-    // No-op for FormC / FormD, which don't produce multi-grapheme results.
-    public TokenSet WithCompatibilityEquivalents(NormalizationForm form)
-    {
-        return WithCompatibilityEquivalents(form, headOnly: false);
-    }
-
     /// <summary>
-    /// Like <see cref="WithCompatibilityEquivalents(NormalizationForm)"/>, but
-    /// keeps only the head (first rune) of each multi-grapheme conversion and
-    /// drops the tail (every rune after it).
+    /// Returns a copy of this set with every non-form-stable entry projected
+    /// through <c>Normalize(form)</c>. An entry whose conversion is a single
+    /// rune is replaced by that rune. An entry whose conversion is a
+    /// single-grapheme multi-rune cluster (e.g. "e + combining acute" under
+    /// FormD) is added as a multi-rune grapheme member. An entry whose
+    /// conversion is multiple graphemes (e.g. the fi-ligature under FormKC
+    /// becomes the two members 'f' and 'i') is split into one member per
+    /// cluster. Form-stable entries pass through unchanged.
     /// </summary>
     /// <remarks>
-    /// For the start set of an identifier-style grammar under
-    /// <see cref="NormalizationForm.FormKC"/> / <see cref="NormalizationForm.FormKD"/>,
-    /// where only the first rune of a normalized character may begin an
-    /// identifier. Pair it with
-    /// <see cref="WithCompatibilityEquivalents(NormalizationForm)"/> on the
-    /// continue set, and <see cref="AllCompatibilityTailRunesIn"/> to
-    /// confirm the dropped tail can match there.
+    /// Useful for opting into compatibility equivalence: pass
+    /// <see cref="NormalizationForm.FormKC"/> to expand ligatures and
+    /// fullwidth forms into their plain counterparts so a downstream
+    /// <c>OneOf</c> matches either input shape.
     /// </remarks>
-    public TokenSet WithCompatibilityHeadRuneEquivalents(NormalizationForm form)
-    {
-        return WithCompatibilityEquivalents(form, headOnly: true);
-    }
-
-    private TokenSet WithCompatibilityEquivalents(NormalizationForm form, bool headOnly)
+    public TokenSet WithCompatibilityEquivalents(NormalizationForm form)
     {
         bool changed = false;
         var newIntervals = new List<Interval>();
@@ -485,12 +505,13 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                         newIntervals.Add(new Interval(rune, rune));
                         continue;
                     }
-                    if (!TryGetMultiGraphemeConversion(char.ConvertFromUtf32(rune), form, out string? converted))
+                    string entry = char.ConvertFromUtf32(rune);
+                    if (!TryGetNormalizedConversion(entry, form, out string? normalized))
                     {
                         newIntervals.Add(new Interval(rune, rune));
                         continue;
                     }
-                    AddPieces(converted, newIntervals, newGraphemes, headOnly);
+                    AddProjectedConversion(normalized, newIntervals, newGraphemes);
                     changed = true;
                 }
             }
@@ -501,12 +522,12 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         {
             foreach (var entry in multiRune)
             {
-                if (!TryGetMultiGraphemeConversion(entry, form, out string? converted))
+                if (!TryGetNormalizedConversion(entry, form, out string? normalized))
                 {
                     newGraphemes.Add(entry);
                     continue;
                 }
-                AddPieces(converted, newIntervals, newGraphemes, headOnly);
+                AddProjectedConversion(normalized, newIntervals, newGraphemes);
                 changed = true;
             }
         }
@@ -516,145 +537,21 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return new TokenSet(Normalize(newIntervals), graphemes);
     }
 
-    // Companion to WithCompatibilityHeadRuneEquivalents, which keeps each
-    // expansion's head rune and drops the tail. This confirms the dropped
-    // tail still has somewhere to land: for every entry whose Normalize(form)
-    // is multi-grapheme, it checks that each rune after the head is in
-    // `allowedRunes`. Returns true when every entry passes. Returns false at
-    // the first entry that doesn't, with `entry` the member, `expansion` its
-    // normalized form, and `missingRune` the offending tail rune.
-    //
-    // Rules.Identifier calls this on the caller's extra start runes only.
-    // XidStart's own entries are guaranteed by UAX #31's closure property
-    // (verified by XidIdentifierTests
-    // .XidStart_compatibility_continuations_are_all_in_XidContinue), so
-    // there's no need to re-check ~130K code points on every call.
-    internal bool AllCompatibilityTailRunesIn(
-        NormalizationForm form,
-        TokenSet allowedRunes,
-        out string entry,
-        out string expansion,
-        out string missingRune)
-    {
-        foreach (int rune in EnumerateRunes())
-        {
-            entry = char.ConvertFromUtf32(rune);
-            if (!TailRunesAllIn(entry, form, allowedRunes, out expansion, out missingRune))
-                return false;
-        }
-        foreach (string grapheme in MultiRuneGraphemes)
-        {
-            if (!TailRunesAllIn(grapheme, form, allowedRunes, out expansion, out missingRune))
-            {
-                entry = grapheme;
-                return false;
-            }
-        }
-        entry = "";
-        expansion = "";
-        missingRune = "";
-        return true;
-    }
-
-    private static bool TailRunesAllIn(
-        string entry, NormalizationForm form, TokenSet allowedRunes,
-        out string expansion, out string missingRune)
-    {
-        expansion = "";
-        missingRune = "";
-        // No multi-grapheme conversion means no tail to check, so it passes.
-        if (!TryGetMultiGraphemeConversion(entry, form, out string? converted))
-            return true;
-        // The head rune is kept by WithCompatibilityHeadRuneEquivalents and goes
-        // in the start slot; every rune after it must live in `allowedRunes`.
-        bool head = true;
-        foreach (int codepoint in RuneHelpers.EnumerateRuneValues(converted))
-        {
-            if (head) { head = false; continue; }
-            if (!allowedRunes.ContainsRune(codepoint))
-            {
-                expansion = converted;
-                missingRune = char.ConvertFromUtf32(codepoint);
-                return false;
-            }
-        }
-        return true;
-    }
-
-    // Companion to WithCompatibilityEquivalents for the body / continue side.
-    // Where AllCompatibilityTailRunesIn verifies the dropped tail of a start
-    // expansion has somewhere to land, this one verifies every piece (head
-    // included) of a body expansion. Body matches against every code point
-    // after the first identifier character, so all decomposition pieces have
-    // to be valid body characters, otherwise the union+expansion silently
-    // injects an out-of-band rune (the SPACE separators inside U+FDFA's
-    // NFKC, for example) into the body set.
-    //
-    // Rules.Identifier calls this on the caller's extra body runes only.
-    // XidContinue's own entries are guaranteed by UAX #31's closure property
-    // (XidContinue is closed under NFKx), so there's no need to re-check
-    // ~130K code points on every call.
-    internal bool AllCompatibilityPiecesIn(
-        NormalizationForm form,
-        TokenSet allowedRunes,
-        out string entry,
-        out string expansion,
-        out string missingRune)
-    {
-        foreach (int rune in EnumerateRunes())
-        {
-            entry = char.ConvertFromUtf32(rune);
-            if (!AllPiecesIn(entry, form, allowedRunes, out expansion, out missingRune))
-                return false;
-        }
-        foreach (string grapheme in MultiRuneGraphemes)
-        {
-            if (!AllPiecesIn(grapheme, form, allowedRunes, out expansion, out missingRune))
-            {
-                entry = grapheme;
-                return false;
-            }
-        }
-        entry = "";
-        expansion = "";
-        missingRune = "";
-        return true;
-    }
-
-    private static bool AllPiecesIn(
-        string entry, NormalizationForm form, TokenSet allowedRunes,
-        out string expansion, out string missingRune)
-    {
-        expansion = "";
-        missingRune = "";
-        // No multi-grapheme conversion means no pieces to check, so it passes.
-        if (!TryGetMultiGraphemeConversion(entry, form, out string? converted))
-            return true;
-        foreach (int codepoint in RuneHelpers.EnumerateRuneValues(converted))
-        {
-            if (!allowedRunes.ContainsRune(codepoint))
-            {
-                expansion = converted;
-                missingRune = char.ConvertFromUtf32(codepoint);
-                return false;
-            }
-        }
-        return true;
-    }
-
-    // Returns true and sets `converted` if `entry`'s normalization
-    // under `form` is a multi-grapheme sequence. Returns false otherwise
-    // (entry is already form-stable, single-grapheme conversion, or
-    // noncharacter).
-    private static bool TryGetMultiGraphemeConversion(string entry, NormalizationForm form, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? converted)
+    // Returns true and sets `converted` if `entry` isn't already in `form`
+    // (the projection actually changes something). Returns false when
+    // `entry` is form-stable or when Normalize throws (in practice, an
+    // unpaired surrogate). The caller inspects the conversion's piece count
+    // itself, since single-piece and multi-piece projections take different
+    // paths through the result builder.
+    private static bool TryGetNormalizedConversion(
+        string entry, NormalizationForm form,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? converted)
     {
         converted = null;
         try
         {
             if (entry.IsNormalized(form)) return false;
-            string normalized = entry.Normalize(form);
-            if (GraphemeHelpers.Count(normalized) <= 1) return false;
-            converted = normalized;
+            converted = entry.Normalize(form);
             return true;
         }
         catch (ArgumentException)
@@ -663,33 +560,28 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         }
     }
 
-    // Adds the set members contributed by `text` to the accumulating
-    // `intervals` (single-rune members) and `graphemes` (multi-rune members).
-    // With headOnly, adds only `text`'s first rune. Otherwise adds every
-    // grapheme of `text` as its own member.
-    private static void AddPieces(
-        string text,
-        List<Interval> intervals,
-        List<string> graphemes,
-        bool headOnly)
+    // Place the projected (already-normalized) form into the result's
+    // intervals / graphemes buckets. Multi-grapheme outputs route through
+    // AddGraphemePieces to split into one member per cluster. Single-grapheme
+    // outputs are added verbatim: a single rune lands in intervals, and
+    // anything else TrySingleRune rejects (a multi-rune cluster like
+    // "e + combining acute" under FormD, or a lone surrogate that isn't a
+    // Unicode scalar) lands in graphemes.
+    private static void AddProjectedConversion(
+        string normalized,
+        List<Interval> intervals, List<string> graphemes)
     {
-        if (headOnly)
+        if (GraphemeHelpers.Count(normalized) > 1)
         {
-            // Matching consults OneOf(start) one rune at a time, so only the
-            // first rune of the conversion can ever land in the start slot.
-            // Keep that head rune; the tail runes are dropped here and must
-            // be reachable through the companion continue set.
-            if (text.Length > 0)
-            {
-                // The head is always a single rune, so it's always an interval.
-                int headRune = RuneHelpers.IsSurrogatePairAt(text, 0)
-                    ? char.ConvertToUtf32(text[0], text[1])
-                    : text[0];
-                intervals.Add(new Interval(headRune, headRune));
-            }
+            AddGraphemePieces(normalized, intervals, graphemes);
             return;
         }
-        AddGraphemePieces(text, intervals, graphemes);
+        if (TrySingleRune(normalized, out int singleRune))
+        {
+            intervals.Add(new Interval(singleRune, singleRune));
+            return;
+        }
+        graphemes.Add(normalized);
     }
 
     // Splits `text` into its grapheme clusters and adds each as a set member
@@ -1028,12 +920,19 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return new TokenSet(new[] { new Interval(low, high) });
     }
 
-    // Construct a TokenSet from a list of code-point intervals. Each element
-    // is a closed range [Low, High]. The input doesn't need to be sorted or
-    // non-overlapping; Normalize takes care of that. Intended as the bulk
-    // factory for large hand-curated or generated tables that would be
-    // tedious to chain through the | operator.
-    internal static TokenSet FromRanges(ReadOnlySpan<(int Low, int High)> ranges)
+    /// <summary>
+    /// Construct a TokenSet from a list of code-point intervals. Each element
+    /// is a closed range [Low, High]. The input doesn't need to be sorted or
+    /// non-overlapping; the constructor normalizes (sorts, merges adjacent,
+    /// drops empties). Bulk factory for large generated tables that would be
+    /// tedious to chain through the <see cref="op_BitwiseOr"/> operator
+    /// (each <c>|</c> allocates and merges, so an N-rune build is O(N²)).
+    /// </summary>
+    /// <exception cref="ArgumentException">
+    /// Any range has <c>high &lt; low</c>, or contains a value outside the
+    /// Unicode scalar range.
+    /// </exception>
+    public static TokenSet FromRanges(ReadOnlySpan<(int Low, int High)> ranges)
     {
         var list = new List<Interval>(ranges.Length);
         for (int index = 0; index < ranges.Length; index++)

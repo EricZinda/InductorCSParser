@@ -144,14 +144,11 @@ internal sealed class IdentifierRule : Rule
     // every XidStart entry.
     //
     // The closure guarantee only covers XidStart / XidContinue, not the
-    // caller's extras. Both sides need an explicit check. On the start
-    // side, if a user adds a start rune whose decomposition has a
-    // continuation piece that isn't a valid body character, that start
-    // character could never match. On the body side, if a user adds a
-    // body rune whose decomposition has a piece outside (XidContinue |
-    // extraBodyRunes), WithCompatibilityEquivalents would silently inject
-    // that piece into the body set. Either case rejects the grammar with
-    // a message that names the fix.
+    // caller's extras, so both sides have an explicit check. Start side:
+    // every continuation piece of an extra start rune's NFKx must be a
+    // valid body character. Body side: every NFKx piece of an extra body
+    // rune must land in (XidContinue | extraBodyRunes). Either check
+    // failing throws with a message that names the offender and the fix.
     //
     // The walker in ValidateNormalizationAll visits parents before
     // children, so by the time it recurses into the embedded OneOfRules
@@ -159,55 +156,268 @@ internal sealed class IdentifierRule : Rule
     // ValidateNormalization then projects those sets under the form and
     // finds no offenders (the expansion produced form-valid entries).
     protected override void ValidateNormalization(
-        System.Text.NormalizationForm form,
+        NormalizationForm form,
         INormalizationReporter reporter)
     {
         if (form != System.Text.NormalizationForm.FormKC && form != System.Text.NormalizationForm.FormKD)
             return;
 
-        var expandedBody = (TokenSet.XidContinue | _extraBodyRunes).WithCompatibilityEquivalents(form);
+        var expandedBody = WithCompatibilityRuneEquivalents(TokenSet.XidContinue | _extraBodyRunes, form);
 
-        if (!_extraStartRunes.AllCompatibilityTailRunesIn(
-                form, expandedBody,
+        if (!AllCompatibilityTailRunesIn(
+                _extraStartRunes, form, expandedBody,
                 out string offendingStart, out string conversion, out string missingPiece))
         {
             throw new InvalidOperationException(
                 $"Identifier (Compile {form}): the extraStartRunes entry \"{offendingStart}\" " +
-                $"normalizes to the multi-grapheme sequence \"{conversion}\", whose continuation " +
+                $"normalizes to the multi-rune sequence \"{conversion}\", whose continuation " +
                 $"piece \"{missingPiece}\" isn't a valid identifier-continue character. A start " +
                 $"character that decomposes needs every piece after the first to be matchable in " +
                 $"body position. Add \"{missingPiece}\" to extraBodyRunes, or drop " +
                 $"\"{offendingStart}\" from extraStartRunes.");
         }
 
-        // Mirror check on the body side. Closure covers XidContinue's own
-        // entries, but extras don't have the closure guarantee: an extra
-        // body rune whose NFKx contains a piece the caller didn't ask for
-        // (the SPACE separators inside U+FDFA's Arabic-phrase NFKC are the
-        // canonical example) would silently inject that piece into the
-        // body set when WithCompatibilityEquivalents runs over the union.
-        // The allowed set is (XidContinue | extraBodyRunes): pieces can
-        // land in XidContinue (the spec body) OR in the caller's own body
-        // extras (an explicit "yes I want this in body" opt-in by the
-        // same caller in the same call). Pieces that fall outside both
-        // signal an unintended leak, so reject with a message that names
-        // the offender and the missing piece.
-        if (!_extraBodyRunes.AllCompatibilityPiecesIn(
-                form, TokenSet.XidContinue | _extraBodyRunes,
+        // Mirror check on the body side: every piece of each extra body
+        // rune's NFKx must land in the allowed set
+        // (XidContinue | extraBodyRunes). XidContinue covers the spec
+        // body; the caller's own body extras cover the caller's explicit
+        // opt-in. A piece outside both throws with a message naming the
+        // offender and the missing piece. The canonical rejection is
+        // U+FDFA ARABIC LIGATURE SALLALLAHOU ALAYHE WASALLAM, whose NFKC
+        // is an Arabic phrase containing SPACE separators that are in
+        // neither XidContinue nor a typical extras list.
+        if (!AllCompatibilityPiecesIn(
+                _extraBodyRunes, form, TokenSet.XidContinue | _extraBodyRunes,
                 out string offendingBody, out string bodyConversion, out string bodyMissingPiece))
         {
             throw new InvalidOperationException(
                 $"Identifier (Compile {form}): the extraBodyRunes entry \"{offendingBody}\" " +
-                $"normalizes to the multi-grapheme sequence \"{bodyConversion}\", whose piece " +
+                $"normalizes to the multi-rune sequence \"{bodyConversion}\", whose piece " +
                 $"\"{bodyMissingPiece}\" isn't in XidContinue and wasn't added by this " +
                 $"extraBodyRunes call. Every piece of a body character's decomposition needs " +
                 $"to be matchable in body position. Add \"{bodyMissingPiece}\" to extraBodyRunes " +
                 $"to opt in, or drop \"{offendingBody}\" from extraBodyRunes.");
         }
 
-        var expandedStart = (TokenSet.XidStart | _extraStartRunes).WithCompatibilityHeadRuneEquivalents(form);
+        var expandedStart = WithCompatibilityHeadRuneEquivalents(TokenSet.XidStart | _extraStartRunes, form);
         _startOneOf.ReplaceSet(expandedStart);
         _firstBodyOneOf.ReplaceSet(expandedBody);
         _secondBodyOneOf.ReplaceSet(expandedBody);
     }
+
+    // ============================================================
+    // Compile-time form-projection helpers
+    // ============================================================
+    //
+    // These walk a TokenSet entry by entry, compute each entry's NFKx form,
+    // and either project entries into a result set (used by the start /
+    // body OneOf rewrite) or validate that NFKx pieces stay in an allowed
+    // set (used by the user-extra checks). They live here rather than on
+    // TokenSet because the head-stays-X, tail-stays-Y NFKx-closure shape is
+    // specific to UAX #31 identifiers; no other Unicode concept needs the
+    // same projection. TokenSet's public surface treats it as a SET
+    // (membership) plus whole-set transforms; rune-by-rune enumeration is
+    // exposed via TokenSet.EnumerateRunes and TokenSet.MultiRuneGraphemes,
+    // and bulk construction via TokenSet.FromRanges, which together let
+    // these helpers stay in pure rule code without privileged access.
+
+    // Like TokenSet.WithCompatibilityEquivalents, but splits multi-RUNE
+    // conversions by rune (not by grapheme cluster) and keeps only the
+    // head rune of each. For the start OneOf, which lives inside a
+    // WithinToken sub-lexer reading one rune per token (multi-rune
+    // grapheme members would be unreachable there).
+    //
+    // "Multi-rune" covers both multi-grapheme outputs (e.g. U+0140 → "l +
+    // U+00B7", 2 clusters) and single-grapheme multi-rune outputs
+    // (e.g. U+309B → SPACE + U+3099, one cluster); both need the head
+    // kept and the tail dropped since the sub-lexer reads runes one at a
+    // time regardless of cluster structure.
+    private static TokenSet WithCompatibilityHeadRuneEquivalents(
+        TokenSet source, NormalizationForm form)
+        => ProjectByRunes(source, form, headOnly: true);
+
+    // Same as above but keeps every rune of each multi-rune NFKx, not just
+    // the head. For the body OneOf inside the same WithinToken sub-lexer.
+    private static TokenSet WithCompatibilityRuneEquivalents(
+        TokenSet source, NormalizationForm form)
+        => ProjectByRunes(source, form, headOnly: false);
+
+    private static TokenSet ProjectByRunes(
+        TokenSet source, NormalizationForm form, bool headOnly)
+    {
+        var runes = new List<(int Low, int High)>();
+        foreach (int rune in source.EnumerateRunes())
+        {
+            if (rune >= 0xD800 && rune <= 0xDFFF)
+            {
+                runes.Add((rune, rune));
+                continue;
+            }
+            AddProjectedRunes(char.ConvertFromUtf32(rune), form, headOnly, runes);
+        }
+        foreach (string grapheme in source.MultiRuneGraphemes)
+        {
+            AddProjectedRunes(grapheme, form, headOnly, runes);
+        }
+        return TokenSet.FromRanges(runes.ToArray());
+    }
+
+    private static void AddProjectedRunes(
+        string entry, NormalizationForm form, bool headOnly,
+        List<(int Low, int High)> runes)
+    {
+        string projected;
+        try
+        {
+            projected = entry.IsNormalized(form) ? entry : entry.Normalize(form);
+        }
+        catch (ArgumentException) { return; }
+        if (projected.Length == 0) return;
+        if (headOnly)
+        {
+            int headRune = char.IsHighSurrogate(projected[0])
+                            && projected.Length > 1
+                            && char.IsLowSurrogate(projected[1])
+                ? char.ConvertToUtf32(projected[0], projected[1])
+                : projected[0];
+            runes.Add((headRune, headRune));
+            return;
+        }
+        foreach (int rune in RuneHelpers.EnumerateRuneValues(projected))
+        {
+            runes.Add((rune, rune));
+        }
+    }
+
+    // Walk `extras` and confirm each entry's NFKx tail runes (every rune
+    // past the head) are in `allowedRunes`. Returns true when every entry
+    // passes. Returns false at the first entry that doesn't, with `entry`
+    // the offending member, `expansion` its normalized form, and
+    // `missingRune` the offending tail rune.
+    //
+    // Called on the caller's extra start runes only. XidStart's own
+    // entries are guaranteed by UAX #31's closure property (verified by
+    // XidIdentifierTests.XidStart_compatibility_continuations_are_all_in_XidContinue),
+    // so there's no need to re-check ~130K code points on every call.
+    private static bool AllCompatibilityTailRunesIn(
+        TokenSet extras, NormalizationForm form, TokenSet allowedRunes,
+        out string entry, out string expansion, out string missingRune)
+    {
+        foreach (int rune in extras.EnumerateRunes())
+        {
+            entry = char.ConvertFromUtf32(rune);
+            if (!TailRunesAllIn(entry, form, allowedRunes, out expansion, out missingRune))
+                return false;
+        }
+        foreach (string grapheme in extras.MultiRuneGraphemes)
+        {
+            if (!TailRunesAllIn(grapheme, form, allowedRunes, out expansion, out missingRune))
+            {
+                entry = grapheme;
+                return false;
+            }
+        }
+        entry = "";
+        expansion = "";
+        missingRune = "";
+        return true;
+    }
+
+    private static bool TailRunesAllIn(
+        string entry, NormalizationForm form, TokenSet allowedRunes,
+        out string expansion, out string missingRune)
+    {
+        expansion = "";
+        missingRune = "";
+        if (!TryGetMultiRuneConversion(entry, form, out string? converted))
+            return true;
+        bool isHead = true;
+        foreach (int rune in RuneHelpers.EnumerateRuneValues(converted))
+        {
+            if (isHead) { isHead = false; continue; }
+            if (!allowedRunes.ContainsRune(rune))
+            {
+                expansion = converted;
+                missingRune = char.ConvertFromUtf32(rune);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Mirror of AllCompatibilityTailRunesIn for the body side: every NFKx
+    // piece (head included) of each entry has to land in `allowedRunes`.
+    // Called on the caller's extra body runes only; XidContinue is closed
+    // under NFKx so its own entries are guaranteed.
+    private static bool AllCompatibilityPiecesIn(
+        TokenSet extras, NormalizationForm form, TokenSet allowedRunes,
+        out string entry, out string expansion, out string missingRune)
+    {
+        foreach (int rune in extras.EnumerateRunes())
+        {
+            entry = char.ConvertFromUtf32(rune);
+            if (!AllPiecesIn(entry, form, allowedRunes, out expansion, out missingRune))
+                return false;
+        }
+        foreach (string grapheme in extras.MultiRuneGraphemes)
+        {
+            if (!AllPiecesIn(grapheme, form, allowedRunes, out expansion, out missingRune))
+            {
+                entry = grapheme;
+                return false;
+            }
+        }
+        entry = "";
+        expansion = "";
+        missingRune = "";
+        return true;
+    }
+
+    private static bool AllPiecesIn(
+        string entry, NormalizationForm form, TokenSet allowedRunes,
+        out string expansion, out string missingRune)
+    {
+        expansion = "";
+        missingRune = "";
+        if (!TryGetMultiRuneConversion(entry, form, out string? converted))
+            return true;
+        foreach (int rune in RuneHelpers.EnumerateRuneValues(converted))
+        {
+            if (!allowedRunes.ContainsRune(rune))
+            {
+                expansion = converted;
+                missingRune = char.ConvertFromUtf32(rune);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Returns true and sets `converted` if `entry`'s NFKx is a multi-rune
+    // sequence. Returns false when the entry is form-stable, when the
+    // conversion is single-rune, or when Normalize throws (in practice, an
+    // unpaired surrogate). Short-circuits the rune count at 2.
+    private static bool TryGetMultiRuneConversion(
+        string entry, NormalizationForm form,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? converted)
+    {
+        converted = null;
+        try
+        {
+            if (entry.IsNormalized(form)) return false;
+            string normalized = entry.Normalize(form);
+            int count = 0;
+            foreach (int _ in RuneHelpers.EnumerateRuneValues(normalized))
+            {
+                count++;
+                if (count > 1) { converted = normalized; return true; }
+            }
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
 }
