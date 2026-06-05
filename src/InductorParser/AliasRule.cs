@@ -172,7 +172,7 @@ internal sealed class AliasRule : Rule
         var matchedSpan = lexer.Input.AsMemory(matchStart, matchLength);
         return aliasEmitsLeaf
             ? new Symbol(Id, FlattenType, matchedSpan, lexer.Context)
-            : new Symbol(Id, FlattenType, outputSymbols, matchedSpan, lexer.Context);
+            : CreateCompositeFromOwnedChildren(outputSymbols, matchedSpan, lexer.Context);
     }
 
 }

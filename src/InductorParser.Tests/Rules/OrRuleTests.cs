@@ -208,6 +208,34 @@ public class OrRuleTests
     }
 
     [Test]
+    public void Or_copies_children_array_so_compiled_rule_stays_immutable()
+    {
+        var children = new[] { Token('a'), Token('b') };
+        var rule = Or(children);
+        rule.Compile();
+
+        children[0] = Token('z');
+
+        var result = rule.Parse("a");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
+
+    [Test]
+    public void Or_children_property_does_not_expose_mutable_child_array()
+    {
+        var rule = Or(Token('a'), Token('b'));
+        rule.Compile();
+
+        Assert.That(rule.Children as Rule[], Is.Null);
+
+        var writable = rule.Children as System.Collections.Generic.IList<Rule>;
+        Assert.That(writable, Is.Not.Null);
+        Assert.That(writable!.IsReadOnly, Is.True);
+        Assert.Throws<NotSupportedException>(() => { writable[0] = Token('z'); });
+    }
+
+    [Test]
     public void Or_shortcut_doesnt_skip_And_with_optional_NoneOf_prefix()
     {
         // This verifies the lookahead-shortcut soundness story for an And

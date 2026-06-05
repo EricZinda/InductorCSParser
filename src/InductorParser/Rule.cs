@@ -326,7 +326,12 @@ public abstract class Rule
                 throw new ArgumentException($"Rule child at index {i} is null.", nameof(children));
         }
 
-        return children.Length > 0 ? children : NoChildren;
+        if (children.Length == 0)
+            return NoChildren;
+
+        var copy = new Rule[children.Length];
+        Array.Copy(children, copy, children.Length);
+        return Array.AsReadOnly(copy);
     }
 
     // Replace this rule's trace label. Intended for use only from subclass
@@ -1448,6 +1453,24 @@ public abstract class Rule
     // internal access to the parse entry point.
     protected Symbol? ParseChild(Rule child, Lexer lexer, List<Symbol>? outputSymbols)
         => child.TryParse(lexer, outputSymbols);
+
+    // Builds the composite Symbol a rule returns from TryParseRule, taking
+    // ownership of the children collection instead of copying it. Prefer this
+    // over `new Symbol(Id, FlattenType, children, ...)` on the parse hot path.
+    // The public constructor defensively copies the collection because it can't
+    // trust an arbitrary caller to stop touching it, but a rule that built
+    // `children` fresh for this one match and hands it straight off here skips
+    // that array copy, paying only to publish the existing collection read-only.
+    //
+    // The promise the caller makes: `children` must be a collection this rule
+    // built for this match and will never read or mutate again. The returned
+    // Symbol wraps it directly (a List or array goes through AsReadOnly, so
+    // Symbol.Children still can't be cast back to a mutable type). Keep a
+    // reference and mutate the collection after this call and you've mutated the
+    // supposedly-immutable tree, so don't. When you can't make that promise, use
+    // the public Symbol constructor, which copies.
+    protected Symbol CreateCompositeFromOwnedChildren(IReadOnlyList<Symbol>? children, ReadOnlyMemory<char> consumedSpan, ParseContext? context)
+        => Symbol.FromOwnedChildren(Id, FlattenType, children, consumedSpan, context);
 
     // Subclass hook for Compile-time normalization-form validation. Each
     // rule that holds user-supplied text the parser will compare against

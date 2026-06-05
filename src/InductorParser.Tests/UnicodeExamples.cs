@@ -594,7 +594,8 @@ internal static class UnicodeExamples
 
     // U+309C KATAKANA-HIRAGANA SEMI-VOICED SOUND MARK. High end
     // of the Sk range added to XID_Start.
-    public static readonly string KatakanaHiraganaSemiVoicedSoundMarkGrapheme = Canary("゜", "katakana-hiragana semi-voiced sound mark", 0x309C);
+    public const int KatakanaHiraganaSemiVoicedSoundMarkRune = 0x309C;
+    public static readonly string KatakanaHiraganaSemiVoicedSoundMarkGrapheme = Canary("゜", "katakana-hiragana semi-voiced sound mark", KatakanaHiraganaSemiVoicedSoundMarkRune);
 
     // U+2764 HEAVY BLACK HEART. Text-presentation by default,
     // becomes emoji presentation when followed by VS16 (U+FE0F).

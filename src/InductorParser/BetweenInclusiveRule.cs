@@ -82,7 +82,7 @@ internal sealed class BetweenInclusiveRule : Rule
         TraceSuccess(lexer, $"count= {count}");
         int matchLength = lexer.Position - startPosition;
         return effectiveFlattenType == FlattenType.Preserve
-            ? new Symbol(Id, FlattenType, outputSymbols, lexer.Input.AsMemory(startPosition, matchLength), lexer.Context)
+            ? CreateCompositeFromOwnedChildren(outputSymbols, lexer.Input.AsMemory(startPosition, matchLength), lexer.Context)
             : Symbol.Discarded;
     }
 }

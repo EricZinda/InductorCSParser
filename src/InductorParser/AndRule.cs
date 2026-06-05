@@ -47,7 +47,7 @@ internal sealed class AndRule : Rule
         TraceSuccess(lexer, $"found {Children.Count}");
         int matchLength = lexer.Position - startPosition;
         return effectiveFlattenType == FlattenType.Preserve
-            ? new Symbol(Id, FlattenType, outputSymbols, lexer.Input.AsMemory(startPosition, matchLength), lexer.Context)
+            ? CreateCompositeFromOwnedChildren(outputSymbols, lexer.Input.AsMemory(startPosition, matchLength), lexer.Context)
             : Symbol.Discarded;
     }
 

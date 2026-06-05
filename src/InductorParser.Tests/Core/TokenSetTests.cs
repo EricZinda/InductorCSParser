@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using NUnit.Framework;
 using InductorParser;
@@ -185,6 +187,81 @@ public class TokenSetTests
         Assert.That(leadingSurrogates.ContainsRune(HighSurrogateMinRune), Is.True);
         Assert.That(leadingSurrogates.ContainsRune(HighSurrogateMaxRune), Is.True);
         Assert.That(leadingSurrogates.ContainsRune(LowSurrogateMinRune), Is.False);
+    }
+
+    [Test]
+    public void EnumerateRunes_skips_surrogate_gap_EnumerateSurrogates_yields_them()
+    {
+        // EnumerateRunes is documented as scalar-values only; the surrogate
+        // gap (U+D800..U+DFFF) is excluded. EnumerateSurrogates is the
+        // companion accessor a rule iterates to walk the surrogate portion.
+        // Together with MultiRuneGraphemes the three accessors cover every
+        // member of the set with no overlap.
+        var mixed = TokenSet.Range(0x0041, 0x0043)
+                  | TokenSet.SurrogateRange(0xD800, 0xD802)
+                  | TokenSet.Range(0xE000, 0xE002);
+        Assert.That(mixed.EnumerateRunes(), Is.EquivalentTo(new[]
+        {
+            0x0041, 0x0042, 0x0043, 0xE000, 0xE001, 0xE002
+        }));
+        Assert.That(mixed.EnumerateSurrogates(), Is.EquivalentTo(new[]
+        {
+            0xD800, 0xD801, 0xD802
+        }));
+
+        // A set with no surrogate entries yields an empty surrogate
+        // enumeration. The built-ins are surrogate-free; confirm one of
+        // the big ones (XidStart) to lock in the spec subtraction.
+        Assert.That(TokenSet.XidStart.EnumerateSurrogates(), Is.Empty);
+    }
+
+    [Test]
+    public void EnumerateSurrogates_clips_an_interval_that_spans_the_surrogate_boundary()
+    {
+        // operator | merges adjacent scalar + surrogate ranges into one big
+        // interval that crosses U+D800. The enumerator has to clip to the
+        // surrogate gap regardless of the underlying interval shape.
+        var spanning = TokenSet.Range(0xD7F0, 0xD7FF)
+                     | TokenSet.SurrogateRange(0xD800, 0xD810);
+        Assert.That(spanning.EnumerateSurrogates(), Is.EquivalentTo(new[]
+        {
+            0xD800, 0xD801, 0xD802, 0xD803, 0xD804, 0xD805, 0xD806, 0xD807,
+            0xD808, 0xD809, 0xD80A, 0xD80B, 0xD80C, 0xD80D, 0xD80E, 0xD80F,
+            0xD810
+        }));
+        Assert.That(spanning.EnumerateRunes(), Is.EquivalentTo(new[]
+        {
+            0xD7F0, 0xD7F1, 0xD7F2, 0xD7F3, 0xD7F4, 0xD7F5, 0xD7F6, 0xD7F7,
+            0xD7F8, 0xD7F9, 0xD7FA, 0xD7FB, 0xD7FC, 0xD7FD, 0xD7FE, 0xD7FF
+        }));
+
+        // A surrogate-only set yields every surrogate it holds and nothing
+        // from EnumerateRunes.
+        var surrogatesOnly = TokenSet.SurrogateRange(0xD800, 0xDFFF);
+        Assert.That(surrogatesOnly.EnumerateSurrogates().Count(), Is.EqualTo(0x800));
+        Assert.That(surrogatesOnly.EnumerateRunes(), Is.Empty);
+    }
+
+    [Test]
+    public void EnumerateMultiRuneGraphemes_yields_the_same_entries_as_the_Span()
+    {
+        // Iterator-shaped companion to the ReadOnlySpan property. Same
+        // entries, same order; the difference is just that the IEnumerable
+        // composes with LINQ and crosses yield boundaries, where the Span
+        // can't. Both are public so callers pick the shape that fits.
+        // Each Graphemes argument has to be exactly one cluster, so use
+        // two-rune-one-cluster fixtures from UnicodeExamples (a precomposed
+        // sequence whose canonical decomposition is base + combining mark).
+        var set = TokenSet.Graphemes(
+            UnicodeExamples.LatinEAcuteGrapheme,
+            UnicodeExamples.ThaiKamGrapheme);
+        var spanCopy = new List<string>();
+        foreach (string g in set.MultiRuneGraphemes) spanCopy.Add(g);
+        Assert.That(set.EnumerateMultiRuneGraphemes(), Is.EqualTo(spanCopy));
+
+        // Empty for a set with no multi-rune content. Single-rune-only
+        // sets are the common case; confirm that's the empty story.
+        Assert.That(TokenSet.Letters.EnumerateMultiRuneGraphemes(), Is.Empty);
     }
 
     [Test]
