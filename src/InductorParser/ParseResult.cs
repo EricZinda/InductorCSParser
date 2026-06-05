@@ -26,6 +26,8 @@ namespace InductorParser;
 // a heap allocation.
 public readonly struct ParseResult
 {
+    private static readonly IReadOnlyList<Symbol> EmptySymbols = Array.Empty<Symbol>();
+
     private readonly string? _input;
     private readonly Rule? _grammar;
     private readonly IReadOnlyList<Symbol>? _symbols;
@@ -49,7 +51,7 @@ public readonly struct ParseResult
     // bubbled up, this is the flat list of those children. For a
     // failed or aborted parse, it's empty.
     public IReadOnlyList<Symbol> Symbols =>
-        _symbols ?? System.Array.Empty<Symbol>();
+        _symbols ?? EmptySymbols;
 
     // Convenience accessor for the common "root is a single Symbol"
     // case. Returns Symbols[0] if there's exactly one top-level
@@ -248,12 +250,14 @@ public readonly struct ParseResult
         return $"{Outcome} at char {ErrorCharIndex}: {ErrorMessage}";
     }
 
-    private ParseResult(ParseOutcome outcome, IReadOnlyList<Symbol>? symbols, string errorMessage, int errorCharIndex, string? input, Rule? grammar)
+    private ParseResult(ParseOutcome outcome, IReadOnlyList<Symbol>? symbols, string errorMessage, int errorCharIndex, string input, Rule grammar)
     {
         Outcome = outcome;
         _symbols = symbols;
-        ErrorMessage = errorMessage;
-        int inputLength = input?.Length ?? 0;
+        ErrorMessage = errorMessage ?? throw new ArgumentNullException(nameof(errorMessage));
+        if (input == null) throw new ArgumentNullException(nameof(input));
+        if (grammar == null) throw new ArgumentNullException(nameof(grammar));
+        int inputLength = input.Length;
         if (errorCharIndex < 0 || errorCharIndex > inputLength)
             throw new ArgumentOutOfRangeException(nameof(errorCharIndex), errorCharIndex,
                 $"errorCharIndex must be in [0, {inputLength}] (input.Length).");
@@ -269,8 +273,11 @@ public readonly struct ParseResult
 
     // Build a successful result. Outcome is Success, error fields
     // are empty.
-    public static ParseResult Succeeded(IReadOnlyList<Symbol> symbols, string input, Rule grammar) =>
-        new ParseResult(ParseOutcome.Success, symbols, string.Empty, 0, input, grammar);
+    public static ParseResult Succeeded(IReadOnlyList<Symbol> symbols, string input, Rule grammar)
+    {
+        if (symbols == null) throw new ArgumentNullException(nameof(symbols));
+        return new ParseResult(ParseOutcome.Success, CopySymbols(symbols), string.Empty, 0, input, grammar);
+    }
 
     // Build a grammar-mismatch result. Outcome is GrammarMismatch,
     // the error fields carry the deepest-failure message and position.
@@ -297,4 +304,16 @@ public readonly struct ParseResult
         || outcome == ParseOutcome.RuleCountLimitExceeded
         || outcome == ParseOutcome.DepthLimitExceeded
         || outcome == ParseOutcome.Canceled;
+
+    private static IReadOnlyList<Symbol> CopySymbols(IReadOnlyList<Symbol> symbols)
+    {
+        int count = symbols.Count;
+        if (count == 0)
+            return EmptySymbols;
+
+        var copy = new Symbol[count];
+        for (int i = 0; i < count; i++)
+            copy[i] = symbols[i];
+        return Array.AsReadOnly(copy);
+    }
 }

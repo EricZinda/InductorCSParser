@@ -18,13 +18,13 @@ namespace InductorParser;
 //
 //     |   union           a | b           tokens in a or b
 //     &   intersection    a & b           tokens in a and b
+//     -   difference      a - b           tokens in a but not in b
 //     ~   complement      ~a              tokens not in a (rune-only sets)
 //
-// Set difference is the idiom a & ~b ("a minus b"). The operators return a
-// new TokenSet. The struct is immutable.
+// The operators return a new TokenSet. The struct is immutable.
 //
 //     var unicodeIdentifier = TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_");
-//     var asciiConsonants   = TokenSet.Ascii.Letters & ~TokenSet.Runes("aeiouAEIOU");
+//     var asciiConsonants   = TokenSet.Ascii.Letters - TokenSet.Runes("aeiouAEIOU");
 //     var cyrillicLetters   = TokenSet.Letters & TokenSet.Range(0x0400, 0x04FF);
 //     var emojiOrLetters    = TokenSet.Letters | TokenSet.Graphemes(USFlagGrapheme);
 //
@@ -42,8 +42,12 @@ namespace InductorParser;
 // of grapheme clusters is unbounded (any rune sequence respecting UAX #29
 // boundaries is a grapheme), so complement against it can't be represented
 // by a finite explicit set. ~set on a mixed set throws InvalidOperationException
-// rather than silently dropping multi-rune entries. The idiom a & ~b keeps
-// working in the typical case where b is rune-only.
+// rather than silently dropping multi-rune entries. Difference doesn't have
+// that limitation: a - b complements against the bounded set b, not the
+// unbounded cluster universe, so it works on a mixed set and never throws.
+// The a & ~b shorthand works only when a is rune-only (see the operator
+// table above); on a mixed a it drops a's clusters, which is the silent
+// loss a - b avoids.
 public readonly partial struct TokenSet : IEquatable<TokenSet>
 {
     // One contiguous run of Unicode code points, inclusive on both ends:
@@ -1193,16 +1197,16 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // grapheme entries. The universe of grapheme clusters is unbounded
     // (any rune sequence respecting UAX #29 boundaries is a grapheme), so
     // complement against it can't be represented as a finite explicit
-    // set. The workaround is to project the input down to its rune-only
-    // part first: `set & ~runeOnlyMask`.
+    // set. To subtract this set from another, use `a - b` (set
+    // difference), which handles multi-rune members directly.
     public static TokenSet operator ~(TokenSet a)
     {
         if (a.HasMultiRuneGraphemes)
             throw new InvalidOperationException(
                 "Cannot complement a TokenSet that contains multi-rune graphemes. " +
                 "The universe of grapheme clusters is unbounded, so the result " +
-                "isn't representable as a finite set. Build the rune-only mask " +
-                "you want to subtract and use `set & ~runeOnlyMask` instead.");
+                "isn't representable as a finite set. To subtract this set from " +
+                "another, use `a - b` (set difference), which handles multi-rune members.");
         var inputRanges = a._ranges;
         var result = new List<Interval>();
         int cursor = MinScalarValue;
@@ -1218,6 +1222,106 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         if (cursor <= MaxScalarValue)
             EmitScalarInterval(result, cursor, MaxScalarValue);
         return new TokenSet(result.ToArray());
+    }
+
+    // True set difference: every member of `a` that isn't a member of
+    // `b`. This is what "a minus b" means for any pair of sets, including
+    // ones with multi-rune grapheme members.
+    //
+    // This never throws, even when `a` or `b` has cluster members, where
+    // `~` does. The reason is that the result is always a subset of `a`:
+    // we keep `a`'s members and drop the ones `b` also has, so the answer
+    // is at most as big as `a` and is always a finite set we can build.
+    // `~a` is the opposite problem. It has to name every token that isn't
+    // in `a`, and the universe of grapheme clusters is unbounded (any rune
+    // sequence respecting UAX #29 boundaries is a cluster), so there's no
+    // finite set to return and `~` throws on a cluster-bearing set.
+    public static TokenSet operator -(TokenSet a, TokenSet b)
+    {
+        // Rune part: a's runes minus b's runes, by direct interval
+        // subtraction. We subtract b's intervals from a's own intervals, so
+        // every code point of a that b doesn't cover survives, surrogates
+        // included. Routing through `a & ~b` instead would strip every
+        // surrogate from a, because ~ complements over scalar values only
+        // (surrogates are excluded by design, see operator ~). Surrogates
+        // are first-class set members (TokenSet.Surrogates / SurrogateRange),
+        // so dropping them here would contradict "every member of a that
+        // isn't a member of b" and silently empty a set like
+        // Surrogates - Single('a').
+        var runeDifference = SubtractRuneIntervals(a._ranges, b._ranges);
+        var clusters = MergeMultiRuneGraphemeDifference(a._multiRuneGraphemes, b._multiRuneGraphemes);
+        return new TokenSet(runeDifference, clusters);
+    }
+
+    // Interval difference of two normalized (sorted, non-overlapping,
+    // non-adjacent) interval arrays: every code point in `a` that isn't
+    // covered by any interval in `b`. Surrogate-preserving, unlike the
+    // `a & ~b` route, because it never appeals to the scalar-only universe.
+    // Linear in the sum of the two array lengths.
+    private static Interval[] SubtractRuneIntervals(Interval[]? aRanges, Interval[]? bRanges)
+    {
+        if (aRanges == null || aRanges.Length == 0) return Array.Empty<Interval>();
+        if (bRanges == null || bRanges.Length == 0) return aRanges;
+        var result = new List<Interval>();
+        int bIndex = 0;
+        for (int aIndex = 0; aIndex < aRanges.Length; aIndex++)
+        {
+            int cursor = aRanges[aIndex].Low;
+            int high = aRanges[aIndex].High;
+            // b intervals that end before this a interval starts can never
+            // overlap it or any later (higher) a interval, so retire them.
+            while (bIndex < bRanges.Length && bRanges[bIndex].High < cursor) bIndex++;
+            // Walk the b intervals overlapping [cursor, high]. Use a local
+            // index: a b interval can also straddle the gap into the next a
+            // interval, so it stays available to the next iteration.
+            int localB = bIndex;
+            while (localB < bRanges.Length && bRanges[localB].Low <= high)
+            {
+                var subtract = bRanges[localB];
+                if (subtract.Low > cursor)
+                    result.Add(new Interval(cursor, subtract.Low - 1));
+                if (subtract.High >= cursor) cursor = subtract.High + 1;
+                if (cursor > high) break;
+                localB++;
+            }
+            if (cursor <= high)
+                result.Add(new Interval(cursor, high));
+        }
+        return result.Count == 0 ? Array.Empty<Interval>() : result.ToArray();
+    }
+
+    // Sorted-merge difference of two sorted-ordinal grapheme arrays: every
+    // entry in `a` that doesn't appear in `b`. Linear in the sum of the two
+    // array lengths. Fast-paths when `a` is empty (nothing to keep) or `b`
+    // is empty (keep all of a, sharing the already-canonical array).
+    private static string[] MergeMultiRuneGraphemeDifference(string[]? a, string[]? b)
+    {
+        int aLength = a?.Length ?? 0;
+        if (aLength == 0) return Array.Empty<string>();
+        int bLength = b?.Length ?? 0;
+        if (bLength == 0) return a!;
+        var result = new List<string>(aLength);
+        int aIndex = 0;
+        int bIndex = 0;
+        while (aIndex < aLength && bIndex < bLength)
+        {
+            int cmp = string.CompareOrdinal(a![aIndex], b![bIndex]);
+            if (cmp == 0)
+            {
+                aIndex++;
+                bIndex++;
+            }
+            else if (cmp < 0)
+            {
+                result.Add(a[aIndex++]);
+            }
+            else
+            {
+                bIndex++;
+            }
+        }
+        while (aIndex < aLength) result.Add(a![aIndex++]);
+        return result.Count == 0 ? Array.Empty<string>() : result.ToArray();
     }
 
     // Emit [low, high] into result, splitting around the surrogate block

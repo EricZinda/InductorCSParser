@@ -21,6 +21,36 @@ namespace InductorParser.Tests;
 public class WithinTokenRuleTests
 {
     [Test]
+    public void Rune_mode_sublexer_builds_no_grapheme_cluster_index()
+    {
+        // WithinToken runs its inner rule against a one-rune-per-token
+        // sub-lexer, building one such sub-lexer per outer grapheme cluster
+        // (so one per identifier character on the common Identifier path).
+        // Rune mode sizes tokens with RuneHelpers and never asks for a
+        // UAX #29 cluster boundary, so the sub-lexer never builds a
+        // GraphemeClusterIndex for its token text. Building one allocated an
+        // index object, its bool[], and a ConditionalWeakTable entry per
+        // cluster, all thrown away unread. This locks in the lazy build that
+        // skips that work in rune mode.
+        string runeModeInput = new string('a', 16);
+        var runeLexer = new Lexer(runeModeInput, oneRunePerToken: true);
+        while (!runeLexer.IsEof)
+            runeLexer.Read();
+
+        Assert.That(GraphemeClusterIndex.HasCachedIndexFor(runeModeInput), Is.False,
+            "a one-rune-per-token sub-lexer must not build a grapheme-cluster index");
+
+        // Grapheme mode is unchanged: a normal lexer still resolves the
+        // index (now on first read instead of at construction), so
+        // cluster-aware tokenization keeps working.
+        string graphemeModeInput = new string('b', 16);
+        var graphemeLexer = new Lexer(graphemeModeInput);
+        graphemeLexer.Read();
+        Assert.That(GraphemeClusterIndex.HasCachedIndexFor(graphemeModeInput), Is.True,
+            "a grapheme-mode lexer resolves the cluster index on first read");
+    }
+
+    [Test]
     public void Single_rune_grapheme_matches_inner_rune_rule()
     {
         var rule = WithinToken(OneOf(TokenSet.Ascii.Letters));

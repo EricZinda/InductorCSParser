@@ -61,6 +61,89 @@ public class TokenSetTests
     }
 
     [Test]
+    public void Difference_idiom_a_and_complement_b_drops_minuend_clusters()
+    {
+        // a & ~b is a rune-only intersection: ~Single(' ') has no cluster
+        // members, so intersecting it with Ascii.AnyWhitespace produces a
+        // rune-only set and the CRLF entry isn't in the result. That's why
+        // difference is a - b (next test) when the left side may carry
+        // clusters.
+        var viaComplementIdiom = TokenSet.Ascii.AnyWhitespace & ~TokenSet.Single(' ');
+        Assert.That(viaComplementIdiom.ContainsToken("\r\n"), Is.False);
+    }
+
+    [Test]
+    public void Difference_operator_keeps_minuend_clusters_not_in_subtrahend()
+    {
+        // True set difference: "any ASCII whitespace except a bare space."
+        // Removing the space rune leaves the CRLF cluster alone, which
+        // has nothing to do with U+0020.
+        var withoutSpace = TokenSet.Ascii.AnyWhitespace - TokenSet.Single(' ');
+
+        Assert.That(withoutSpace.ContainsRune(' '), Is.False);
+        Assert.That(withoutSpace.ContainsToken("\r\n"), Is.True);
+        Assert.That(withoutSpace.ContainsRune('\r'), Is.True);
+        Assert.That(withoutSpace.ContainsRune('\n'), Is.True);
+
+        // The rule built from the difference still matches a CRLF token
+        // under the default Compile(FormC), where the lexer groups "\r\n"
+        // as one grapheme. The a & ~b form produces a rune-only set, so
+        // OneOf wouldn't match here.
+        Assert.That(Rules.OneOf(withoutSpace).Compile().Parse("\r\n").Success, Is.True);
+    }
+
+    [Test]
+    public void Difference_removes_a_targeted_cluster_and_keeps_the_rest()
+    {
+        // Subtracting the CRLF cluster itself removes only that cluster and
+        // leaves the bare CR and LF runes in place.
+        var withoutCrlf = TokenSet.Ascii.AnyWhitespace - TokenSet.Graphemes("\r\n");
+
+        Assert.That(withoutCrlf.ContainsToken("\r\n"), Is.False);
+        Assert.That(withoutCrlf.ContainsRune('\r'), Is.True);
+        Assert.That(withoutCrlf.ContainsRune('\n'), Is.True);
+        Assert.That(withoutCrlf.ContainsRune(' '), Is.True);
+    }
+
+    [Test]
+    public void Difference_matches_the_complement_idiom_for_rune_only_sets()
+    {
+        // Where the old shorthand was already correct (rune-only minuend),
+        // a - b means exactly the same thing, so existing grammars that
+        // used a & ~b keep their behavior.
+        var viaOperator = TokenSet.Ascii.Letters - TokenSet.Runes("aeiouAEIOU");
+        var viaIdiom = TokenSet.Ascii.Letters & ~TokenSet.Runes("aeiouAEIOU");
+        AssertEqual(viaOperator, viaIdiom);
+    }
+
+    [Test]
+    public void Difference_keeps_minuend_surrogates_not_in_subtrahend()
+    {
+        // operator - is documented as "true set difference: every member of
+        // a that isn't a member of b", and it never throws on surrogate
+        // members the way ~ does. Surrogates are a first-class set member
+        // (TokenSet.Surrogates / SurrogateRange), matchable under
+        // Compile(null). Subtracting a set that contains none of a's
+        // surrogates must leave those surrogates in place.
+        //
+        // The most basic case: X - Empty == X. Subtracting nothing can't
+        // remove anything, including surrogates.
+        AssertEqual(TokenSet.Surrogates - TokenSet.Empty, TokenSet.Surrogates);
+
+        // Subtracting an unrelated scalar leaves every surrogate alone.
+        var surrogatesMinusLetter = TokenSet.Surrogates - TokenSet.Single('a');
+        Assert.That(surrogatesMinusLetter.ContainsRune(HighSurrogateMinRune), Is.True);
+        Assert.That(surrogatesMinusLetter.ContainsRune(LowSurrogateMaxRune), Is.True);
+
+        // Subtracting one surrogate sub-block removes only that block and
+        // keeps the rest.
+        var trailingOnly = TokenSet.Surrogates - TokenSet.SurrogateRange(0xD800, 0xDBFF);
+        Assert.That(trailingOnly.ContainsRune(0xD800), Is.False);
+        Assert.That(trailingOnly.ContainsRune(0xDC00), Is.True);
+        Assert.That(trailingOnly.ContainsRune(LowSurrogateMaxRune), Is.True);
+    }
+
+    [Test]
     public void Range_straddling_the_surrogate_block_splits_around_it()
     {
         // Range validates its endpoints (no surrogate halves) and splits
@@ -642,8 +725,9 @@ public class TokenSetTests
     [Test]
     public void SetDifference_via_complement_and_intersection()
     {
-        // The idiom from the docs: A & ~B is "A minus B". Consonants as
-        // ASCII letters minus vowels.
+        // The rune-only difference shorthand A & ~B. For rune-only A it
+        // equals A - B (see Difference_matches_the_complement_idiom_for_rune_only_sets).
+        // Consonants as ASCII letters minus vowels.
         var asciiConsonants = TokenSet.Ascii.Letters & ~TokenSet.Runes("aeiouAEIOU");
 
         // Consonants: in.
@@ -1463,32 +1547,30 @@ public class TokenSetTests
             var _ = ~mixed;
         });
         Assert.That(exception!.Message, Does.Contain("multi-rune"));
-        Assert.That(exception.Message, Does.Contain("set & ~runeOnlyMask"));
+        Assert.That(exception.Message, Does.Contain("a - b"));
     }
 
     [Test]
     public void Complement_via_explicit_rune_only_mask_works_for_rune_only_sets()
     {
-        // The complement-of-a-rune-only-set workaround: build the
-        // rune-only mask, complement that, intersect with the
-        // rune-only side. Multi-rune entries on the input side aren't
-        // preserved by `mixed & ~runeOnlyMask`, because intersecting
-        // a mixed set with a rune-only set drops the multi-rune
-        // entries (the rune-only side has no multi-rune entries to
-        // pair with). Callers who want to preserve multi-rune entries
-        // through a "subtract these runes" operation union them back
-        // in explicitly.
+        // The rune-only difference shorthand: build the rune-only mask,
+        // complement that, intersect with the rune-only side. The result
+        // is rune-only, because intersecting a mixed set with a rune-only
+        // set keeps only runes (the rune-only side has no cluster members
+        // to pair with). For a mixed input, `a - b` (set difference) keeps
+        // the clusters `b` doesn't contain, so use it there. This test
+        // covers the rune-only case, where the two are equivalent.
         var letters = TokenSet.Letters;
         var withoutVowels = letters & ~TokenSet.Runes("aeiou");
 
         Assert.That(withoutVowels.ContainsRune('b'), Is.True);
         Assert.That(withoutVowels.ContainsRune('a'), Is.False);
 
-        // To keep a multi-rune entry through the operation, project
-        // the rune-only part, complement that, then union the
-        // multi-rune part back in.
-        var withoutVowelsKeepingFlag =
-            (letters & ~TokenSet.Runes("aeiou")) | TokenSet.Graphemes(USFlagGrapheme);
+        // `a - b` keeps a mixed input's clusters automatically: subtracting
+        // rune-only vowels from a set carrying the US flag leaves the flag
+        // in place, no manual union-back-in needed.
+        var lettersWithFlag = letters | TokenSet.Graphemes(USFlagGrapheme);
+        var withoutVowelsKeepingFlag = lettersWithFlag - TokenSet.Runes("aeiou");
         Assert.That(withoutVowelsKeepingFlag.ContainsToken(USFlagGrapheme), Is.True);
         Assert.That(withoutVowelsKeepingFlag.ContainsRune('a'), Is.False);
     }

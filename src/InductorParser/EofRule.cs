@@ -41,7 +41,7 @@ internal sealed class EofRule : Rule
         // lexer.Position so the consumed span has a position even
         // though it has zero length.
         return effectiveFlattenType == FlattenType.Preserve
-            ? new Symbol(Id, FlattenType, Array.Empty<Symbol>(), lexer.Input.AsMemory(lexer.Position, 0), lexer.Context)
+            ? CreateCompositeFromOwnedChildren(Array.Empty<Symbol>(), lexer.Input.AsMemory(lexer.Position, 0), lexer.Context)
             : Symbol.Discarded;
     }
 }

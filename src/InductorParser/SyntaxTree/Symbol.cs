@@ -101,11 +101,21 @@ public sealed class Symbol
     /// <param name="consumedSpan">The parse-input section the match covered.</param>
     /// <param name="context">The per-parse context, or null for a hand-built Symbol.</param>
     public Symbol(SymbolId id, FlattenType flattenType, IReadOnlyList<Symbol>? children, ReadOnlyMemory<char> consumedSpan = default, ParseContext? context = null)
+        : this(id, flattenType, CopyChildren(children), consumedSpan, context, true)
+    {
+    }
+
+    // Wraps a freshly-built children collection without the defensive copy the public
+    // constructor makes (List/array go through AsReadOnly, so Symbol.Children stays
+    // non-castable). The caller must never mutate `children` after this call.
+    internal static Symbol FromOwnedChildren(SymbolId id, FlattenType flattenType, IReadOnlyList<Symbol>? children, ReadOnlyMemory<char> consumedSpan = default, ParseContext? context = null) =>
+        new Symbol(id, flattenType, WrapOwnedChildren(children), consumedSpan, context, true);
+
+    private Symbol(SymbolId id, FlattenType flattenType, IReadOnlyList<Symbol> children, ReadOnlyMemory<char> consumedSpan, ParseContext? context, bool _)
     {
         Id = id;
         FlattenType = flattenType;
-        // Null or an empty list both collapse to the shared empty list.
-        Children = (children == null || children.Count == 0) ? EmptyChildren : children;
+        Children = children;
         _leafChars = consumedSpan;
         _isLeaf = false;
         _context = context;
@@ -228,10 +238,18 @@ public sealed class Symbol
     /// </summary>
     public IEnumerable<Symbol> FindAll(SymbolId id)
     {
-        if (Id == id) yield return this;
-        foreach (var child in Children)
-            foreach (var found in child.FindAll(id))
-                yield return found;
+        var stack = new Stack<Symbol>();
+        stack.Push(this);
+        while (stack.Count > 0)
+        {
+            var node = stack.Pop();
+            if (node.Id == id) yield return node;
+            // Push children in reverse so they pop left-to-right, keeping the
+            // pre-order, children-in-order sequence the recursive form gave.
+            var children = node.Children;
+            for (int i = children.Count - 1; i >= 0; i--)
+                stack.Push(children[i]);
+        }
     }
 
     /// <summary>
@@ -240,10 +258,18 @@ public sealed class Symbol
     /// </summary>
     public IEnumerable<Symbol> Walk()
     {
-        yield return this;
-        foreach (var child in Children)
-            foreach (var descendant in child.Walk())
-                yield return descendant;
+        var stack = new Stack<Symbol>();
+        stack.Push(this);
+        while (stack.Count > 0)
+        {
+            var node = stack.Pop();
+            yield return node;
+            // Push children in reverse so they pop left-to-right, keeping the
+            // pre-order, children-in-order sequence the recursive form gave.
+            var children = node.Children;
+            for (int i = children.Count - 1; i >= 0; i--)
+                stack.Push(children[i]);
+        }
     }
 
     /// <summary>
@@ -403,7 +429,7 @@ public sealed class Symbol
                 // changes which children appear, not what the parser consumed. Pass the recorded
                 // span and context through so SourceRange / SourceText still work on the rebuilt
                 // Symbol.
-                result.Add(new Symbol(Id, FlattenType.Preserve, keptChildren, _leafChars, _context));
+                result.Add(FromOwnedChildren(Id, FlattenType.Preserve, keptChildren, _leafChars, _context));
                 return;
         }
     }
@@ -416,7 +442,36 @@ public sealed class Symbol
     {
         var list = new List<Symbol>();
         FlattenInto(list);
-        return list;
+        return list.Count == 0 ? EmptyChildren : list.AsReadOnly();
+    }
+
+    private static IReadOnlyList<Symbol> CopyChildren(IReadOnlyList<Symbol>? children)
+    {
+        if (children == null)
+            return EmptyChildren;
+
+        int count = children.Count;
+        if (count == 0)
+            return EmptyChildren;
+
+        var copy = new Symbol[count];
+        for (int i = 0; i < count; i++)
+            copy[i] = children[i];
+        return Array.AsReadOnly(copy);
+    }
+
+    private static IReadOnlyList<Symbol> WrapOwnedChildren(IReadOnlyList<Symbol>? children)
+    {
+        if (children == null || children.Count == 0)
+            return EmptyChildren;
+
+        if (children is List<Symbol> list)
+            return list.AsReadOnly();
+
+        if (children is Symbol[] array)
+            return Array.AsReadOnly(array);
+
+        return CopyChildren(children);
     }
 
     private static bool SameChildren(List<Symbol> rebuilt, IReadOnlyList<Symbol> original)

@@ -8,7 +8,7 @@ namespace InductorParser.Lexing;
 /// Forward-direction UTF-16 rune utilities: "does input[pos] start a
 /// well-formed surrogate pair?" (<see cref="IsSurrogatePairAt(string, int)"/>)
 /// and the decode-as-runes walkers built on it
-/// (<see cref="EnumerateRuneValues"/>, <see cref="RuneCount"/>). 
+/// (<see cref="EnumerateRuneValues"/>, <see cref="RuneCount"/>).
 /// </summary>
 /// <remarks>
 /// This is the rune layer. Its grapheme-cluster counterpart is

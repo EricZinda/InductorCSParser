@@ -52,7 +52,7 @@ internal sealed class PeekRule : Rule
         // anchor so the Symbol's bounds reflect the lookahead's position,
         // not where inner advanced to before rollback.
         return effectiveFlattenType == FlattenType.Preserve
-            ? new Symbol(Id, FlattenType, Array.Empty<Symbol>(), lexer.Input.AsMemory(startPosition, 0), lexer.Context)
+            ? CreateCompositeFromOwnedChildren(Array.Empty<Symbol>(), lexer.Input.AsMemory(startPosition, 0), lexer.Context)
             : Symbol.Discarded;
     }
 
