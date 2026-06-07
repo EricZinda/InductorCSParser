@@ -144,11 +144,20 @@ internal sealed class IdentifierRule : Rule
     // every XidStart entry.
     //
     // The closure guarantee only covers XidStart / XidContinue, not the
-    // caller's extras, so both sides have an explicit check. Start side:
-    // every continuation piece of an extra start rune's NFKx must be a
-    // valid body character. Body side: every NFKx piece of an extra body
-    // rune must land in (XidContinue | extraBodyRunes). Either check
-    // failing throws with a message that names the offender and the fix.
+    // caller's extras, so both sides have an explicit check. Start side,
+    // two parts: the head rune of an extra start rune's NFKx must be a
+    // valid identifier-start character (in XidStart, or one the caller
+    // also listed in extraStartRunes), and every continuation piece after
+    // the head must be a valid body character. The head part matters
+    // because some spacing characters decompose to SPACE + a combining
+    // mark (U+00A8 DIAERESIS is SPACE + U+0308, U+309B is SPACE + U+3099),
+    // and under FormKC/FormKD the input is normalized before lexing, so
+    // that SPACE head and a literal leading space are the same U+0020 in
+    // the stream. Keeping such a head would let a bare leading space start
+    // an identifier, so the head check rejects it unless the caller opts
+    // the head in. Body side: every NFKx piece of an extra body rune must
+    // land in (XidContinue | extraBodyRunes). Any check failing throws
+    // with a message that names the offender and the fix.
     //
     // The walker in ValidateNormalizationAll visits parents before
     // children, so by the time it recurses into the embedded OneOfRules
@@ -164,8 +173,8 @@ internal sealed class IdentifierRule : Rule
 
         var expandedBody = WithCompatibilityRuneEquivalents(TokenSet.XidContinue | _extraBodyRunes, form);
 
-        if (!AllCompatibilityTailRunesIn(
-                _extraStartRunes, form, expandedBody,
+        if (!AllCompatibilityPiecesIn(
+                _extraStartRunes, form, expandedBody, NfkxPieceScope.Tail,
                 out string offendingStart, out string conversion, out string missingPiece))
         {
             throw new InvalidOperationException(
@@ -175,6 +184,30 @@ internal sealed class IdentifierRule : Rule
                 $"character that decomposes needs every piece after the first to be matchable in " +
                 $"body position. Add \"{missingPiece}\" to extraBodyRunes, or drop " +
                 $"\"{offendingStart}\" from extraStartRunes.");
+        }
+
+        // Second start-side check: the HEAD rune of an extra start rune's
+        // NFKx must itself be a valid identifier-start character, i.e. a
+        // member of (XidStart | extraStartRunes). XidStart's own entries
+        // are guaranteed by closure (an XidStart character's NFKx head
+        // stays in XidStart), but the caller's extras aren't, so a spacing
+        // character whose NFKx head is SPACE (U+00A8, U+309B, ...) would
+        // otherwise leak that SPACE into the start set. There's no way to
+        // accept such a head without also accepting a literal leading space
+        // (normalization makes them the same U+0020), so the head is
+        // rejected unless the caller listed it in extraStartRunes too.
+        if (!AllCompatibilityPiecesIn(
+                _extraStartRunes, form, TokenSet.XidStart | _extraStartRunes, NfkxPieceScope.Head,
+                out string headOffendingStart, out string headConversion, out string offendingHead))
+        {
+            throw new InvalidOperationException(
+                $"Identifier (Compile {form}): the extraStartRunes entry \"{headOffendingStart}\" " +
+                $"normalizes to the multi-rune sequence \"{headConversion}\", whose first piece " +
+                $"\"{offendingHead}\" isn't a valid identifier-start character. A start character " +
+                $"that decomposes needs its first piece to be a valid start as well, otherwise " +
+                $"that piece (here \"{offendingHead}\") leaks into the identifier-start set and " +
+                $"lets an identifier begin with it. Add \"{offendingHead}\" to extraStartRunes to " +
+                $"opt in, or drop \"{headOffendingStart}\" from extraStartRunes.");
         }
 
         // Mirror check on the body side: every piece of each extra body
@@ -187,7 +220,7 @@ internal sealed class IdentifierRule : Rule
         // is an Arabic phrase containing SPACE separators that are in
         // neither XidContinue nor a typical extras list.
         if (!AllCompatibilityPiecesIn(
-                _extraBodyRunes, form, TokenSet.XidContinue | _extraBodyRunes,
+                _extraBodyRunes, form, TokenSet.XidContinue | _extraBodyRunes, NfkxPieceScope.All,
                 out string offendingBody, out string bodyConversion, out string bodyMissingPiece))
         {
             throw new InvalidOperationException(
@@ -294,29 +327,44 @@ internal sealed class IdentifierRule : Rule
         }
     }
 
-    // Walk `extras` and confirm each entry's NFKx tail runes (every rune
-    // past the head) are in `allowedRunes`. Returns true when every entry
-    // passes. Returns false at the first entry that doesn't, with `entry`
-    // the offending member, `expansion` its normalized form, and
-    // `missingRune` the offending tail rune.
+    // Which runes of an entry's NFKx decomposition a compatibility check
+    // covers. The head is the first rune, the tail is every rune after it.
+    //   Tail - the start-side check: a start character that decomposes
+    //          needs every piece after the head to be a valid body rune.
+    //   Head - the start-side check: the head itself has to be a valid
+    //          start rune, else it would leak into the start set.
+    //   All  - the body-side check: every piece of a body character's
+    //          decomposition has to be a valid body rune.
+    private enum NfkxPieceScope { Head, Tail, All }
+
+    // Walk `extras` and confirm the NFKx pieces selected by `scope` of each
+    // entry are in `allowedRunes`. Returns true when every entry passes.
+    // Returns false at the first entry that doesn't, with `entry` the
+    // offending member, `expansion` its normalized form, and
+    // `offendingPiece` the rune that wasn't allowed.
     //
-    // Called on the caller's extra start runes only. XidStart's own
-    // entries are guaranteed by UAX #31's closure property (verified by
+    // Called on the caller's extras only. XidStart / XidContinue are closed
+    // under NFKx (the head of an XidStart character's decomposition stays in
+    // XidStart, the rest land in XidContinue, verified by
     // XidIdentifierTests.XidStart_compatibility_continuations_are_all_in_XidContinue),
-    // so there's no need to re-check ~130K code points on every call.
-    private static bool AllCompatibilityTailRunesIn(
-        TokenSet extras, NormalizationForm form, TokenSet allowedRunes,
-        out string entry, out string expansion, out string missingRune)
+    // so their own ~130K entries are guaranteed and don't need re-checking.
+    // Entries that are form-stable or whose NFKx is a single rune pass
+    // trivially: TryGetMultiRuneConversion returns false and there's nothing
+    // to check (for a single-rune entry the only piece is its own head,
+    // which the caller already listed).
+    private static bool AllCompatibilityPiecesIn(
+        TokenSet extras, NormalizationForm form, TokenSet allowedRunes, NfkxPieceScope scope,
+        out string entry, out string expansion, out string offendingPiece)
     {
         foreach (int rune in extras.EnumerateRunes())
         {
             entry = char.ConvertFromUtf32(rune);
-            if (!TailRunesAllIn(entry, form, allowedRunes, out expansion, out missingRune))
+            if (!CompatibilityPiecesIn(entry, form, allowedRunes, scope, out expansion, out offendingPiece))
                 return false;
         }
         foreach (string grapheme in extras.MultiRuneGraphemes)
         {
-            if (!TailRunesAllIn(grapheme, form, allowedRunes, out expansion, out missingRune))
+            if (!CompatibilityPiecesIn(grapheme, form, allowedRunes, scope, out expansion, out offendingPiece))
             {
                 entry = grapheme;
                 return false;
@@ -324,76 +372,39 @@ internal sealed class IdentifierRule : Rule
         }
         entry = "";
         expansion = "";
-        missingRune = "";
+        offendingPiece = "";
         return true;
     }
 
-    private static bool TailRunesAllIn(
-        string entry, NormalizationForm form, TokenSet allowedRunes,
-        out string expansion, out string missingRune)
+    private static bool CompatibilityPiecesIn(
+        string entry, NormalizationForm form, TokenSet allowedRunes, NfkxPieceScope scope,
+        out string expansion, out string offendingPiece)
     {
         expansion = "";
-        missingRune = "";
+        offendingPiece = "";
         if (!TryGetMultiRuneConversion(entry, form, out string? converted))
             return true;
         bool isHead = true;
         foreach (int rune in RuneHelpers.EnumerateRuneValues(converted))
         {
-            if (isHead) { isHead = false; continue; }
-            if (!allowedRunes.ContainsRune(rune))
+            bool head = isHead;
+            isHead = false;
+            bool covered = scope switch
+            {
+                NfkxPieceScope.Head => head,
+                NfkxPieceScope.Tail => !head,
+                _ => true,
+            };
+            if (covered && !allowedRunes.ContainsRune(rune))
             {
                 expansion = converted;
-                missingRune = char.ConvertFromUtf32(rune);
+                offendingPiece = char.ConvertFromUtf32(rune);
                 return false;
             }
-        }
-        return true;
-    }
-
-    // Mirror of AllCompatibilityTailRunesIn for the body side: every NFKx
-    // piece (head included) of each entry has to land in `allowedRunes`.
-    // Called on the caller's extra body runes only; XidContinue is closed
-    // under NFKx so its own entries are guaranteed.
-    private static bool AllCompatibilityPiecesIn(
-        TokenSet extras, NormalizationForm form, TokenSet allowedRunes,
-        out string entry, out string expansion, out string missingRune)
-    {
-        foreach (int rune in extras.EnumerateRunes())
-        {
-            entry = char.ConvertFromUtf32(rune);
-            if (!AllPiecesIn(entry, form, allowedRunes, out expansion, out missingRune))
-                return false;
-        }
-        foreach (string grapheme in extras.MultiRuneGraphemes)
-        {
-            if (!AllPiecesIn(grapheme, form, allowedRunes, out expansion, out missingRune))
-            {
-                entry = grapheme;
-                return false;
-            }
-        }
-        entry = "";
-        expansion = "";
-        missingRune = "";
-        return true;
-    }
-
-    private static bool AllPiecesIn(
-        string entry, NormalizationForm form, TokenSet allowedRunes,
-        out string expansion, out string missingRune)
-    {
-        expansion = "";
-        missingRune = "";
-        if (!TryGetMultiRuneConversion(entry, form, out string? converted))
-            return true;
-        foreach (int rune in RuneHelpers.EnumerateRuneValues(converted))
-        {
-            if (!allowedRunes.ContainsRune(rune))
-            {
-                expansion = converted;
-                missingRune = char.ConvertFromUtf32(rune);
-                return false;
-            }
+            // Head scope only cares about the first rune, so stop once it's
+            // checked rather than walking the tail we're going to ignore.
+            if (scope == NfkxPieceScope.Head)
+                return true;
         }
         return true;
     }
