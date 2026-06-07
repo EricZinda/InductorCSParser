@@ -17,3 +17,5 @@ Rules/	..
 		OneOfRule.cs
 		OrRule.cs
 		ParseCancellation.cs
+		ParseOptions.cs
+		ParseOutcome.cs
