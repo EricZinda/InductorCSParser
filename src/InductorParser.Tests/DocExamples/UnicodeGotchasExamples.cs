@@ -91,18 +91,26 @@ public class UnicodeGotchasExamples
         Assert.That(result.Success, Is.True);
     }
 
-    // "Matching specific languages" / "Rust identifiers" recipe. Same
-    // profile as Python 3 (adds `_` to Start, uses NFKC). Added as its
-    // own test because the Rust example sits in its own code block in
-    // UnicodeGotchas.md.
+    // "Matching specific languages" / "Rust identifiers" recipe. Adds `_`
+    // to Start like Python 3, but Rust normalizes identifiers with NFC, not
+    // NFKC (Rust Reference "Identifiers"; RFC 2457), so the form is FormC,
+    // not FormKC. Added as its own test because the Rust example sits in its
+    // own code block in UnicodeGotchas.md.
     [Test]
     public void Rust_identifier_recipe()
     {
         var rust = Identifier(extraStartRunes: TokenSet.Runes("_"))
-            .Compile(NormalizationForm.FormKC);
+            .Compile(NormalizationForm.FormC);
 
-        var result = rust.Parse("_foo");
-        Assert.That(result.Success, Is.True);
+        Assert.That(rust.Parse("_foo").Success, Is.True);
+
+        // NFC, not NFKC, is the whole point of FormC here. U+2460 CIRCLED
+        // DIGIT ONE is category No (not an identifier character), and NFC
+        // leaves it unchanged, so Rust rejects "x" + circled-one. The old
+        // FormKC recipe normalized that input to "x1" before lexing and
+        // wrongly accepted it, treating a non-Rust identifier as valid.
+        string circledDigitInput = Canary("x①", "ASCII x, U+2460 CIRCLED DIGIT ONE", 0x78, 0x2460);
+        Assert.That(rust.Parse(circledDigitInput).Success, Is.False);
     }
 
     // Locks in that Identifier's form-aware set expansion runs at
@@ -173,6 +181,56 @@ public class UnicodeGotchasExamples
             .Where(r => !invisibleFormat.Contains(r.Value)));
 
         Assert.That(grammar.Parse(cleaned).Success, Is.True);
+    }
+
+    // "Zero-Width and Invisible Format Characters": the joiner
+    // characters ZWJ (U+200D) and ZWNJ (U+200C) don't come through as
+    // their own tokens after a base character. They carry UAX #29
+    // grapheme-break properties (ZWJ and Extend), so rule GB9 glues them
+    // onto the preceding character. ZWSP (U+200B) and the soft hyphen
+    // (U+00AD) carry no such rule and lex as their own single-rune
+    // tokens. This is the coverage the doc's tokenization claim needs:
+    // the strip recipe test above only exercises the soft hyphen.
+    [Test]
+    public void Zero_width_joiners_glue_to_preceding_grapheme()
+    {
+        // Built from code points, not source literals, so an invisible
+        // character can't be silently stripped or mis-rendered.
+        string zwj = ((char)0x200D).ToString();   // GCB = ZWJ
+        string zwnj = ((char)0x200C).ToString();  // GCB = Extend
+        string zwsp = ((char)0x200B).ToString();  // GCB = Other (breaks)
+        string shy = ((char)0x00AD).ToString();   // soft hyphen, GCB = Other (breaks)
+
+        // "a" + ZWJ + "b": the joiner rides along with "a", so the first
+        // token is the two-char grapheme "a‍", not a bare "a". A
+        // grammar that expects three standalone tokens a, joiner, b fails.
+        var threeTokens = And(Token('a'), AnyToken(), Token('b'), Eof()).Compile();
+        Assert.That(threeTokens.Parse("a" + zwj + "b").Success, Is.False,
+            "ZWJ glues to the preceding 'a', so 'a' is not a standalone token");
+        Assert.That(threeTokens.Parse("a" + zwnj + "b").Success, Is.False,
+            "ZWNJ glues to the preceding 'a' the same way");
+
+        // The grapheme the joiner glued onto matches as one Token.
+        var gluedZwj = And(Token("a" + zwj), Token('b'), Eof()).Compile();
+        Assert.That(gluedZwj.Parse("a" + zwj + "b").Success, Is.True,
+            "'a\\u200D' is one token");
+        var gluedZwnj = And(Token("a" + zwnj), Token('b'), Eof()).Compile();
+        Assert.That(gluedZwnj.Parse("a" + zwnj + "b").Success, Is.True,
+            "'a\\u200C' is one token");
+
+        // A joiner only stands alone when nothing precedes it.
+        var leadingJoiner = And(Token(zwj), Token('a'), Eof()).Compile();
+        Assert.That(leadingJoiner.Parse(zwj + "a").Success, Is.True,
+            "a leading ZWJ is its own token");
+
+        // The genuinely breaking format chars DO come through as their
+        // own single-rune tokens: a, the format char, then b.
+        var zwspBreaks = And(Token('a'), Token(zwsp), Token('b'), Eof()).Compile();
+        Assert.That(zwspBreaks.Parse("a" + zwsp + "b").Success, Is.True,
+            "ZWSP (U+200B) is its own token");
+        var softHyphenBreaks = And(Token('a'), Token(shy), Token('b'), Eof()).Compile();
+        Assert.That(softHyphenBreaks.Parse("a" + shy + "b").Success, Is.True,
+            "soft hyphen (U+00AD) is its own token");
     }
 
     // "Homoglyph Confusables": the LatinLetters set rejects Cyrillic а

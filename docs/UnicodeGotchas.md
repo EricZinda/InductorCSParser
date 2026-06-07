@@ -76,11 +76,11 @@ var result = python.Parse(input);
 
 The normalization form lives on `Compile`. `Identifier` defers its form-aware expansion of `XID_Start` and `XID_Continue` to Compile time, so compatibility equivalents (ligatures, fullwidth Latin, math-bold) whose NFKC conversion is a multi-grapheme sequence get expanded into their grapheme pieces by `IdentifierRule` before the form-validation pass runs.
 
-Rust identifiers, per the [Rust Reference](https://doc.rust-lang.org/reference/identifiers.html). Same profile as Python 3 (adds `_` to Start, uses NFKC). One Rust-specific rule this recipe does **not** enforce: Rust rejects bare `_` as an identifier, requiring `_ XID_Continue+`. If you need that, wrap the rule in an explicit check for the second character. For most grammars the practical difference is negligible.
+Rust identifiers, per the [Rust Reference](https://doc.rust-lang.org/reference/identifiers.html). Adds `_` to Start the same way Python 3 does, but the form differs: Rust normalizes identifiers with NFC, not NFKC ([RFC 2457](https://rust-lang.github.io/rfcs/2457-non-ascii-idents.html)), so the form on `Compile` is `FormC`, not `FormKC`. That difference is real. Under NFC, Rust keeps compatibility-distinct spellings apart where Python 3's NFKC merges them: the `ﬁ` ligature stays separate from `fi`, fullwidth `ｆｏｏ` stays separate from `foo`, and a character whose only identifier-shaped form is its NFKC expansion (the circled digit `①`, category No, not an identifier character on its own) is rejected rather than quietly turned into `1`. One Rust-specific rule this recipe does **not** enforce: Rust rejects bare `_` as an identifier, requiring `_ XID_Continue+`. If you need that, wrap the rule in an explicit check for the second character. For most grammars the practical difference is negligible.
 
 ```csharp
 var rust = Identifier(extraStartRunes: TokenSet.Runes("_"))
-    .Compile(NormalizationForm.FormKC);
+    .Compile(NormalizationForm.FormC);
 var result = rust.Parse(input);
 ```
 
@@ -129,7 +129,7 @@ var result = grammar.Parse(cleaned);
 
 U+200B (zero-width space), U+200C (zero-width non-joiner), U+200D (zero-width joiner), U+00AD (soft hyphen), and similar runes appear as characters in the input but render as nothing or render conditionally. A string like `"ap\u00ADple"` looks like `"apple"` in an editor but doesn't match `Literal("apple")` because the soft hyphen is a real character in the token stream.
 
-On modern .NET, the lexer handles ZWJ correctly inside emoji sequences (`StringInfo` groups them into one token per UAX #29). Bare ZWJs and other format characters outside emoji contexts still come through as their own tokens. Legacy `StringInfo` runtimes have broader ZWJ gaps covered in [Pre-.NET 5 Token Segmentation](#pre-net-5-grapheme-segmentation).
+On modern .NET, the lexer handles ZWJ correctly inside emoji sequences (`StringInfo` groups them into one token per UAX #29). Outside emoji contexts, the two joiner characters still attach to whatever comes before them rather than standing on their own. ZWJ (U+200D) and ZWNJ (U+200C) carry UAX #29 grapheme-break properties (ZWJ and Extend), so rule GB9 glues them onto the preceding character. The string `a` then U+200D then `b` lexes as two tokens, the joiner riding along with `a`, then `b`, not three separate tokens. A joiner only comes through on its own when nothing precedes it, like one at the very start of the input. The format characters that genuinely break are the ones with no such gluing rule: U+200B (zero-width space), U+00AD (soft hyphen), and friends each lex as their own single-rune token, which is what makes the soft hyphen above break `Literal("apple")`. Legacy `StringInfo` runtimes have broader ZWJ gaps covered in [Pre-.NET 5 Token Segmentation](#pre-net-5-token-segmentation).
 
 **Fix.** The caller strips them before parsing, or the grammar's character classes tolerate them explicitly. For stripping:
 
@@ -303,6 +303,6 @@ The common thread is timing. Combining marks have been in Unicode since the star
 **Fix.** Two options, in order of effort:
 
 1. If the grammar doesn't actually need to tokenize emoji or complex-script text at the user-perceived character level, do nothing. ASCII, source code, config files, and most DSLs are unaffected.
-2. Add a custom UAX #29 implementation into the parser. Tracked in [xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md](../backlog/xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md). Gives full conformance everywhere, at the cost of maintaining Unicode data in the repository.
+2. Add a custom UAX #29 implementation into the parser. Tracked under [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md#open-questions), "Fixing the Unicode version for the lexer." Gives full conformance everywhere, at the cost of maintaining Unicode data in the repository.
 
 The repo's test suite documents the broken cases explicitly. Look for tests gated behind `#if !UNITY_INCLUDE_TESTS` in [GraphemeRuleTests.cs](../src/InductorParser.Tests/Rules/GraphemeRuleTests.cs). Each one is a category that the legacy walker mishandles.

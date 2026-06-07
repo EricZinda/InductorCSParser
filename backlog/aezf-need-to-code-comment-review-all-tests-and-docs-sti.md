@@ -17,3 +17,8 @@ Rules/	..
 		OneOfRule.cs
 		OrRule.cs
 		ParseCancellation.cs
+		ParseOptions.cs
+		ParseOutcome.cs
+		ParseResult.cs
+		PeekRule.cs
+		ReferenceComparer.cs

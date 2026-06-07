@@ -257,7 +257,7 @@ InductorParser builds a bigger data structure than the IJson-producing parsers. 
 
 The parse-time optimizations keep the overhead as low as it can be. The Delete filter removes `Optional(AnyWhitespace())` / delimiter nodes, the Or-wrapper removal collapses every `Or(...)` whose FlattenType is Flatten, the `ScanUntil` leaf produces one leaf Symbol for each string body instead of one per character, and the per-invocation `SuccessMode` routes each composite into either "merge my children into the caller's list" (no wrapper needed) or "wrap into a new Symbol" depending on what the FlattenType implies. What Typed adds on top is one IJson + backing per value, matching competitor libraries' output shape exactly.
 
-This is inherent to what InductorParser is for. The library trades some speed for a parse tree that carries position and rule-id metadata you need for things like syntax highlighting, error recovery, and LSP integrations, the same kind of output a compiler frontend wants. The Typed row shows that even on top of that richer tree, walking to an IJson output costs only about 1.15x extra over the Token row. The Symbol tree isn't "wasted" work, it's a superset that carries metadata competitors throw away.
+This is inherent to what InductorParser is for. The library trades some speed for a parse tree that carries position and rule-id metadata you need for things like syntax highlighting, error recovery, and Language Server Protocol integrations, the same kind of output a compiler frontend wants. The Typed row shows that even on top of that richer tree, walking to an IJson output costs only about 1.15x extra over the Token row. The Symbol tree isn't "wasted" work, it's a superset that carries metadata competitors throw away.
 
 STJ is at the other extreme: it allocates nothing per JSON value, just stores byte offsets into the input. Every other parser has to justify itself against that.
 
@@ -270,7 +270,7 @@ STJ is at the other extreme: it allocates nothing per JSON value, just stores by
 
 ### Design choices that show up in the numbers
 
-- **InductorParser builds a bigger tree** than IJson-producing grammars. Every Symbol carries source position and rule-ID metadata, which is what lets the tree drive IDE-class uses (syntax highlighting, error recovery, LSP integrations). Competitors throw that information away at parse time, which lets them stay smaller but gives up those downstream uses.
+- **InductorParser builds a bigger tree** than IJson-producing grammars. Every Symbol carries source position and rule-ID metadata, which is what lets the tree drive IDE-class uses (syntax highlighting, error recovery, Language Server Protocol integrations). Competitors throw that information away at parse time, which lets them stay smaller but gives up those downstream uses.
 - **STJ allocates nothing.** It stores offset pointers into the input instead of building a tree of objects. No grammar-based parser can match that without making the same design choice, and giving up the tree means giving up everything you'd otherwise do with a tree.
 
 ### Bottom line
