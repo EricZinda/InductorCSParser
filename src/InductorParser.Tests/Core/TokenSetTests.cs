@@ -161,6 +161,28 @@ public class TokenSetTests
     }
 
     [Test]
+    public void FromRanges_straddling_the_surrogate_block_splits_around_it()
+    {
+        // FromRanges takes the same int code-point ranges as Range and must
+        // keep the same invariant: surrogates only enter a TokenSet through
+        // Surrogates / SurrogateRange, never through a scalar-range factory.
+        // A single tuple whose endpoints are both valid scalars can still
+        // straddle the surrogate block (0xD800..0xDFFF), and FromRanges must
+        // split it the way Range does. FromRanges((0, 0x10FFFF)) and
+        // Range(0, 0x10FFFF) describe the same set, so they must agree.
+        var set = TokenSet.FromRanges(new (int, int)[] { (0x0000, 0x10FFFF) });
+
+        Assert.That(set.ContainsRune('a'), Is.True);
+        Assert.That(set.ContainsRune(GuitarRune), Is.True);
+        Assert.That(set.ContainsRune(HighSurrogateMinRune), Is.False);
+        Assert.That(set.ContainsRune(LowSurrogateMaxRune), Is.False);
+        Assert.That(set.EnumerateSurrogates(), Is.Empty);
+
+        // Same set as the equivalent Range build, by value.
+        AssertEqual(set, TokenSet.Range(0x0000, 0x10FFFF));
+    }
+
+    [Test]
     public void Surrogates_constant_holds_the_full_surrogate_block()
     {
         // The Surrogates named constant covers U+D800..U+DFFF inclusive,
