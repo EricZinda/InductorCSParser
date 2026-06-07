@@ -13,22 +13,39 @@ namespace InductorParser.Lexing;
 /// <remarks>
 /// <para>
 /// Cluster boundaries come from the GraphemeClusterIndex on the input string. One
-/// sub-lexer mode, selected by an internal constructor and used only by
-/// WithinTokenRule, walks one rune per token instead. That sub-lexer reads a
-/// bounded range of the same shared input string and lets the inner rule walk the
-/// runes inside one outer token.
+/// sub-lexer mode, selected by the public Lexer(string, bool oneRunePerToken)
+/// constructor, walks one rune per token instead. The built-in WithinToken uses
+/// it, and so can a user-defined Rule that needs to run an inner rule against the
+/// runes inside a single token. The sub-lexer lexes a substring holding just that
+/// token's text, so the inner rule sees each rune of the outer token as its own
+/// token.
 /// </para>
 /// <para>
 /// Malformed UTF-16: stray surrogates (a high surrogate without a paired low,
-/// or a low surrogate in any position) are walked one char at a time in both
-/// modes and never throw. In rune mode the surrogate-pair check returns 1 for
-/// any stray by construction; in grapheme mode the walk delegates to
-/// StringInfo, which treats unpaired surrogates as 1-char text elements. Read
-/// produces a one-char token over the stray and the read cursor keeps moving.
-/// Deciding whether each position represents a valid Unicode character is left
-/// to rune-level callers: TryPeekRune returns false on a stray, and rules that
-/// decode runes (LiteralRule, TokenSet membership, etc.) handle the false case
-/// explicitly.
+/// or a low surrogate in any position) never crash the lexer. They're
+/// tokenized like any other content and never throw, so most grammars need to
+/// do nothing about them. They won't accidentally match rules that specify literals
+/// and they will be consumed safely by rules that match "anytext" like AnyToken.
+///
+/// One caveat: that tolerance is the unnormalized Compile (Compile(null)) story.
+/// A normalizing Compile (FormC/FormD/FormKC/FormKD) runs string.Normalize over
+/// the whole input before the lexer ever sees it, and string.Normalize throws
+/// ArgumentException ("String contains invalid Unicode code points") on any lone
+/// surrogate, bare or fused with a following combining mark. So under a
+/// normalizing grammar malformed input doesn't reach the lexer at all, it throws
+/// out of Parse first. A grammar that has to accept malformed UTF-16 stays on
+/// Compile(null).
+///
+/// If you
+/// want to detect or reject malformed input, Compile with no normalization and 
+/// do it at the rune level:
+/// TryPeekRune returns false on a stray, and rules that decode runes
+/// (LiteralRule, TokenSet membership, etc.) already handle that. One gotcha if
+/// you hand-write a Rule that inspects token lengths: a stray isn't always one
+/// char. In rune mode it is, but in grapheme mode a stray followed by a
+/// combining mark (or any Extend) fuses into one multi-char token, because
+/// StringInfo reads the stray as U+FFFD and UAX #29 GB9 won't break before an
+/// Extend. Read consumes the whole token either way.
 /// </para>
 /// </remarks>
 public sealed partial class Lexer
