@@ -296,7 +296,7 @@ internal sealed class LoweringContext
 
     private int LowerNoneOf(NoneOfRule rule, int onSuccess, int onFailure)
     {
-        int tokenSetIndex = InternTokenSet(rule.LoweringSet);
+        int tokenSetIndex = InternTokenSet(rule.Set);
         return EmitTokenMatch(rule, LoweredOpCode.MatchNoneOf, tokenSetIndex, onSuccess, onFailure);
     }
 
@@ -1240,7 +1240,7 @@ internal sealed class LoweringContext
 
     private static string GetLiteralExpected(LiteralRule rule) => rule.ExpectedText!;
     private static string GetGraphemeExpected(GraphemeRule rule) => rule.ExpectedText!;
-    private static TokenSet GetOneOfSet(OneOfRule rule) => rule.LoweringSet;
+    private static TokenSet GetOneOfSet(OneOfRule rule) => rule.Set;
 
     private int InternLiteral(string text)
     {

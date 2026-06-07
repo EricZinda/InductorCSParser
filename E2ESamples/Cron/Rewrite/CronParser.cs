@@ -45,7 +45,7 @@ public sealed record CronExpression(
     CronFieldValue DayOfWeek);
 
 /// A parse or validation failure with a position into the input.
-/// Line/Column follow the LSP 0-based convention the parser uses;
+/// Line/Column follow the LSP 0-based convention the parser uses.
 /// ToString renders a 1-based column for humans.
 public sealed record CronParseError(string Message, int CharIndex, int Line, int Column)
 {
@@ -83,7 +83,7 @@ public static class CronParser
         error = null;
 
         // An all-blank input fails inside the first field with a
-        // field-specific message; "expected a cron expression" reads
+        // field-specific message. "expected a cron expression" reads
         // better, and only the consumer can tell "empty" apart from
         // "first field is bad" (see the README friction notes).
         if (string.IsNullOrWhiteSpace(input))

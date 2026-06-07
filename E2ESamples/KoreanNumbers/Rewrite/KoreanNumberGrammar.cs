@@ -1,7 +1,7 @@
 // Grammar for Korean number expressions, mirroring the algorithm in
 // korean-numbers.js (https://github.com/ohgyun/korean-numbers, MIT
 // license). The upstream library is regex-validate + linear-scan with
-// a digit buffer; this grammar is a structural rewrite that produces
+// a digit buffer. This grammar is a structural rewrite that produces
 // the same numbers from the same inputs, plus a walkable parse tree
 // and positioned errors.
 //
@@ -15,7 +15,7 @@
 // upstream's permissive behavior:
 //
 // 1. The scale alternatives use Token (one grapheme each), not Literal.
-//    Hangul syllables are single graphemes; Token is the right tool and
+//    Hangul syllables are single graphemes. Token is the right tool and
 //    avoids the per-keyword multi-token-compare overhead Literal exists
 //    to handle.
 // 2. ScaledTerm orders before BareDigits in the Or. ScaledTerm consumes
@@ -25,7 +25,7 @@
 //    before the scale and the parse would fail.
 // 3. Whitespace is trimmed by the caller (Parse / ParseMoney), not by
 //    the grammar. The upstream's ensureText strips leading and trailing
-//    whitespace before the regex check; mid-string whitespace is invalid.
+//    whitespace before the regex check. Mid-string whitespace is invalid.
 //    Keeping the trim in the public surface keeps the grammar focused
 //    about what counts as a number token.
 
@@ -71,7 +71,7 @@ public static class KoreanNumberGrammar
         // follows the digit run), Digits picks up the bare digit run as
         // a trailing-ones term. At the parse-tree top level a Digits
         // child always means a bare run, because any digits that
-        // belong to a scale are nested inside a ScaledTerm wrapper.
+        // belong to a scale are nested inside a ScaledTerm.
         KoreanNumber = And(
             OneOrMore(Or(ScaledTerm, Digits))
                 .WithError("expected a digit (0-9 or 일이삼사오육칠팔구) or a scale (만 억 천 백 십)"),

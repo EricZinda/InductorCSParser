@@ -4,26 +4,34 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
-// The value returned by Rule.Parse. Wraps either a successful parse
-// (Tree / Symbols) or a failure (Outcome, ErrorMessage, and the
-// error-position family). Outcome distinguishes "the grammar rejected
-// the input" (GrammarMismatch) from "a budget tripped" (Timeout,
-// RuleCountLimitExceeded, DepthLimitExceeded, Canceled) so callers
-// can show different messages to the user in each case.
-//
-// The error-position family reports the same point (where the parse
-// got furthest before failing) in different units: ErrorCharIndex
-// (chars / UTF-16 code units), ErrorTokenIndex (tokens, where a token
-// is one character as the user sees it), and the ErrorLine /
-// ErrorColumn pair (LSP-style zero-based line and column). Pick
-// whichever matches the unit the caller will use the number in.
-// ErrorPosition returns all four bundled into one SourcePosition
-// struct, so callers that want more than one unit only pay for one
-// walk of the input. The same conversion is available on
-// Symbol.SourceRange for any node in the parse tree.
-//
-// readonly struct so returning one is a handful of field copies, not
-// a heap allocation.
+/// <summary>
+/// The value returned by Rule.Parse: either a successful parse
+/// (<see cref="Tree"/> / <see cref="Symbols"/>) or a failure
+/// (<see cref="Outcome"/>, <see cref="ErrorMessage"/>, and the error-position
+/// family).
+/// </summary>
+/// <remarks>
+/// <see cref="Outcome"/> distinguishes "the grammar rejected the input"
+/// (GrammarMismatch) from "a budget tripped" (Timeout, RuleCountLimitExceeded,
+/// DepthLimitExceeded, Canceled) so callers can show different messages to the
+/// user in each case.
+/// <para>
+/// The error-position family reports the same point (where the parse got
+/// furthest before failing) in different units: <see cref="ErrorCharIndex"/>
+/// (chars / UTF-16 code units), <see cref="ErrorTokenIndex"/> (tokens, where a
+/// token is one character as the user sees it), and the <see cref="ErrorLine"/>
+/// / <see cref="ErrorColumn"/> pair (LSP-style zero-based line and column).
+/// Pick whichever matches the unit the caller will use the number in.
+/// <see cref="ErrorPosition"/> returns all four bundled into one SourcePosition
+/// struct, so callers that want more than one unit only pay for one walk of the
+/// input. The same conversion is available on Symbol.SourceRange for any node
+/// in the parse tree.
+/// </para>
+/// <para>
+/// A readonly struct so returning one is a handful of field copies, not a heap
+/// allocation.
+/// </para>
+/// </remarks>
 public readonly struct ParseResult
 {
     private static readonly IReadOnlyList<Symbol> EmptySymbols = Array.Empty<Symbol>();
@@ -32,62 +40,84 @@ public readonly struct ParseResult
     private readonly Rule? _grammar;
     private readonly IReadOnlyList<Symbol>? _symbols;
 
-    // Discriminates the shape of this result: success, grammar
-    // mismatch, or which budget tripped. See ParseOutcome for the full
-    // list. Always check this (or Success) before reading Tree /
-    // Symbols.
+    /// <summary>
+    /// Discriminates the shape of this result: success, grammar mismatch, or
+    /// which budget tripped. Always check this (or <see cref="Success"/>)
+    /// before reading <see cref="Tree"/> / <see cref="Symbols"/>.
+    /// </summary>
+    /// <remarks>See <see cref="ParseOutcome"/> for the full list.</remarks>
     public ParseOutcome Outcome { get; }
 
-    // Human-readable description of what went wrong. Empty string on
-    // success. On GrammarMismatch, either the innermost WithError
-    // message set by the grammar or a generated "Parse failed at
-    // offset N" fallback. On a budget abort, the matching
-    // "Parse aborted: ..." string.
+    /// <summary>
+    /// Human-readable description of what went wrong. Empty string on success.
+    /// </summary>
+    /// <remarks>
+    /// On GrammarMismatch, either the innermost WithError message set by the
+    /// grammar or a generated "Parse failed at offset N" fallback. On a budget
+    /// abort, the matching "Parse aborted: ..." string.
+    /// </remarks>
     public string ErrorMessage { get; }
 
-    // The top-level Symbols produced by the parse. For a root with
-    // FlattenType.Preserve this has exactly one element (the root's
-    // wrapper). For a root with FlattenType.Flatten whose children
-    // bubbled up, this is the flat list of those children. For a
-    // failed or aborted parse, it's empty.
+    /// <summary>
+    /// The top-level Symbols produced by the parse. For a failed or aborted
+    /// parse, it's empty.
+    /// </summary>
+    /// <remarks>
+    /// For a root with FlattenType.Preserve this has exactly one element (the
+    /// root's Symbol). For a root with FlattenType.Flatten whose children
+    /// bubbled up, this is the flat list of those children.
+    /// </remarks>
     public IReadOnlyList<Symbol> Symbols =>
         _symbols ?? EmptySymbols;
 
-    // Convenience accessor for the common "root is a single Symbol"
-    // case. Returns Symbols[0] if there's exactly one top-level
-    // Symbol, null otherwise. Callers that know their root has
-    // FlattenType.Preserve (the common case for named grammars) can
-    // keep using this. For grammars whose root produces multiple
-    // top-level Symbols, use Symbols directly.
-    //
-    // Note that this returns null when the root rule's FlattenType is
-    // Flatten (the default for And, Or, and the count rules), because
-    // those rules lift their children into the top-level Symbols list
-    // rather than producing a single wrapper. If you just want to look
-    // up a named child by rule, use Find / FindAll, which walk every
-    // top-level Symbol and don't care which shape the root produced.
+    /// <summary>
+    /// Convenience accessor for the common "root is a single Symbol" case.
+    /// Returns <see cref="Symbols"/>[0] if there's exactly one top-level
+    /// Symbol, null otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Callers that know their root has FlattenType.Preserve (the common case
+    /// for named grammars) can keep using this. For grammars whose root
+    /// produces multiple top-level Symbols, use <see cref="Symbols"/> directly.
+    /// <para>
+    /// This returns null when the root rule's FlattenType is Flatten (the
+    /// default for And, Or, and the count rules), because those rules lift
+    /// their children into the top-level Symbols list rather than producing a
+    /// single Symbol. If you just want to look up a named child by rule, use
+    /// <see cref="Find(Rule)"/> / <see cref="FindAll(Rule)"/>, which walk every
+    /// top-level Symbol and don't care which shape the root produced.
+    /// </para>
+    /// </remarks>
     public Symbol? Tree =>
         _symbols != null && _symbols.Count == 1 ? _symbols[0] : null;
 
-    // Error position in chars (UTF-16 code units), zero-based. The
-    // unit string.Substring / Range / Span use, and the unit the
-    // Language Server Protocol uses for editor diagnostics. On
-    // success this is 0. On failure it's the position of the deepest
-    // recorded failure (where the parser got furthest before giving
-    // up). Always in [0, input.Length] (enforced at construction), so
-    // callers can index into the original input string without
-    // bounds-checking.
+    /// <summary>
+    /// Error position in chars (UTF-16 code units), zero-based. On success this
+    /// is 0. On failure it's the position of the deepest recorded failure
+    /// (where the parser got furthest before giving up).
+    /// </summary>
+    /// <remarks>
+    /// The unit string.Substring / Range / Span use, and the unit the Language
+    /// Server Protocol uses for editor diagnostics. Always in [0, input.Length]
+    /// (enforced at construction), so callers can index into the original input
+    /// string without bounds-checking.
+    /// </remarks>
     public int ErrorCharIndex { get; }
 
-    // Error position's zero-based line number. Line breaks follow UAX #18
-    // Annex C, the same set Rules.EndOfLine() accepts: LF, CRLF (one break,
-    // not two), lone CR, VT, FF, NEL (U+0085), LS (U+2028), PS (U+2029).
-    // That's a superset of the LF, CRLF, and lone CR a Language Server
-    // Protocol client recognizes, so the number matches an editor on
-    // ordinary source and diverges only on the rarer terminators. Keeping
-    // it aligned with EndOfLine() means every terminator a grammar consumes
-    // also bumps the reported line. Computed lazily from ErrorCharIndex and
-    // the original input. See SourcePosition for the same alignment note.
+    /// <summary>
+    /// Error position's zero-based line number. Computed lazily from
+    /// <see cref="ErrorCharIndex"/> and the original input.
+    /// </summary>
+    /// <remarks>
+    /// Line breaks follow UAX #18 Annex C, the same set Rules.EndOfLine()
+    /// accepts: LF, CRLF (one break, not two), lone CR, VT, FF, NEL (U+0085),
+    /// LS (U+2028), PS (U+2029). That's a superset of the LF, CRLF, and lone CR
+    /// a Language Server Protocol client recognizes, so the number matches an
+    /// editor on ordinary source and diverges only on the rarer terminators.
+    /// Keeping it aligned with EndOfLine() means every terminator a grammar
+    /// consumes also bumps the reported line. See SourcePosition for the same
+    /// alignment note.
+    /// </remarks>
     public int ErrorLine
     {
         get
@@ -97,9 +127,10 @@ public readonly struct ParseResult
         }
     }
 
-    // Error position's zero-based column within the line, measured in
-    // chars. Computed lazily from ErrorCharIndex and the original
-    // input.
+    /// <summary>
+    /// Error position's zero-based column within the line, measured in chars.
+    /// Computed lazily from <see cref="ErrorCharIndex"/> and the original input.
+    /// </summary>
     public int ErrorColumn
     {
         get
@@ -109,56 +140,70 @@ public readonly struct ParseResult
         }
     }
 
-    // Error position in tokens (characters as the user sees them),
-    // using the same StringInfo text-element segmentation the lexer
-    // uses. On modern .NET this follows UAX #29 extended grapheme
-    // clusters. Computed lazily from ErrorCharIndex.
+    /// <summary>
+    /// Error position in tokens (characters as the user sees them), using the
+    /// same StringInfo text-element segmentation the lexer uses. Computed lazily
+    /// from <see cref="ErrorCharIndex"/>.
+    /// </summary>
+    /// <remarks>On modern .NET this follows UAX #29 extended grapheme clusters.</remarks>
     public int ErrorTokenIndex =>
         SourcePositionConverter.ToTokenIndex(_input ?? string.Empty, ErrorCharIndex);
 
-    // The error position bundled into a SourcePosition struct. Returns
-    // null on a successful parse. Use this when you need more than one
-    // position unit (line + column for a diagnostic, char index for a
-    // span, etc.) so you don't pay for multiple walks of the input.
+    /// <summary>
+    /// The error position bundled into a SourcePosition struct. Returns null on
+    /// a successful parse.
+    /// </summary>
+    /// <remarks>
+    /// Use this when you need more than one position unit (line + column for a
+    /// diagnostic, char index for a span, etc.) so you don't pay for multiple
+    /// walks of the input.
+    /// </remarks>
     public SourcePosition? ErrorPosition =>
         Outcome == ParseOutcome.Success
             ? null
             : SourcePosition.From(_input ?? string.Empty, ErrorCharIndex);
 
-    // Convenience: true when Outcome is Success, false otherwise.
-    // Most callers check this first and only inspect Tree / Symbols
-    // when it's true.
-    //
-    // The `_grammar != null` check keeps a default-constructed ParseResult
-    // from reporting success. ParseOutcome.Success is the enum's zero
-    // value, so a zeroed struct (an unassigned field, a `new ParseResult[n]`
-    // element, `List<ParseResult>.FirstOrDefault()` on an empty list, a
-    // dictionary lookup miss) has Outcome == Success even though it never
-    // came from a parse, and would otherwise claim success while carrying a
-    // null Tree and empty Symbols. Every real result is built through
-    // Succeeded / Failed / Aborted, each of which stamps the grammar, so a
-    // null grammar means "never parsed" and can't be a success.
+    /// <summary>
+    /// True when <see cref="Outcome"/> is Success, false otherwise. Most callers
+    /// check this first and only inspect <see cref="Tree"/> / <see cref="Symbols"/>
+    /// when it's true.
+    /// </summary>
+    /// <remarks>
+    /// The <c>_grammar != null</c> check keeps a default-constructed ParseResult
+    /// from reporting success. ParseOutcome.Success is the enum's zero value, so a
+    /// zeroed struct (an unassigned field, a <c>new ParseResult[n]</c> element,
+    /// <c>List&lt;ParseResult&gt;.FirstOrDefault()</c> on an empty list, a
+    /// dictionary lookup miss) has Outcome == Success even though it never came
+    /// from a parse, and would otherwise claim success while carrying a null Tree
+    /// and empty Symbols. Every real result is built through Succeeded / Failed /
+    /// Aborted, each of which stamps the grammar, so a null grammar means "never
+    /// parsed" and can't be a success.
+    /// </remarks>
     public bool Success => _grammar != null && Outcome == ParseOutcome.Success;
 
-    // Depth-first search across every top-level Symbol for the first
-    // node whose Id matches the rule. Returns null if no match.
-    //
-    // Symbol.Find requires a single-root tree, but the natural root for
-    // most composite rules (And, Or, count rules) defaults to
-    // FlattenType.Flatten and lifts its children into the top-level
-    // Symbols list, so result.Tree is null and result.Tree.Find blows
-    // up with a NullReferenceException. This walks every top-level
-    // Symbol in turn, so it works regardless of whether the root
-    // preserved itself or flattened its children up. Grammar authors
-    // who just want "find the node with this rule's id in the result"
-    // can use this without first figuring out which shape their root
-    // produced.
+    /// <summary>
+    /// Depth-first search across every top-level Symbol for the first node whose
+    /// Id matches the rule. Returns null if no match.
+    /// </summary>
+    /// <remarks>
+    /// Symbol.Find requires a single-root tree, but the natural root for most
+    /// composite rules (And, Or, count rules) defaults to FlattenType.Flatten
+    /// and lifts its children into the top-level Symbols list, so
+    /// <see cref="Tree"/> is null and Tree.Find would throw a
+    /// NullReferenceException. This walks every top-level Symbol in turn, so it
+    /// works regardless of whether the root preserved itself or flattened its
+    /// children up.
+    /// </remarks>
     public Symbol? Find(Rule rule)
     {
         if (rule == null) throw new ArgumentNullException(nameof(rule));
         return Find(rule.Id);
     }
 
+    /// <summary>
+    /// Depth-first search across every top-level Symbol for the first node with
+    /// this <see cref="SymbolId"/>. Returns null if no match.
+    /// </summary>
     public Symbol? Find(SymbolId id)
     {
         if (_symbols == null) return null;
@@ -170,16 +215,26 @@ public readonly struct ParseResult
         return null;
     }
 
-    // Depth-first search across every top-level Symbol that yields every
-    // matching node. Use when the rule can appear multiple times. Like
-    // Find, this works regardless of whether the root preserved itself
-    // or flattened its children into the top-level Symbols list.
+    /// <summary>
+    /// Depth-first search across every top-level Symbol that yields every
+    /// matching node. Use when the rule can appear multiple times.
+    /// </summary>
+    /// <remarks>
+    /// Like <see cref="Find(Rule)"/>, this works regardless of whether the root
+    /// preserved itself or flattened its children into the top-level Symbols
+    /// list.
+    /// </remarks>
     public IEnumerable<Symbol> FindAll(Rule rule)
     {
         if (rule == null) throw new ArgumentNullException(nameof(rule));
         return FindAll(rule.Id);
     }
 
+    /// <summary>
+    /// Depth-first search across every top-level Symbol that yields every node
+    /// with this <see cref="SymbolId"/>. Use when the id can appear multiple
+    /// times.
+    /// </summary>
     public IEnumerable<Symbol> FindAll(SymbolId id)
     {
         if (_symbols == null) yield break;
@@ -188,21 +243,29 @@ public readonly struct ParseResult
                 yield return found;
     }
 
-    // Looks up the human-readable display label of a SymbolId in the
-    // grammar that produced this result. Returns null if the id isn't
-    // known or this is an empty default ParseResult. This is the
-    // ParseResult-level mirror of Symbol.DisplayName: same fallback
-    // chain (.As(...) name, else class-derived trace label, else rune
-    // text), so it's a display label, not a dispatch key.
+    /// <summary>
+    /// Looks up the human-readable display label of a <see cref="SymbolId"/> in
+    /// the grammar that produced this result. Returns null if the id isn't known
+    /// or this is an empty default ParseResult.
+    /// </summary>
+    /// <remarks>
+    /// The ParseResult-level mirror of Symbol.DisplayName: same fallback chain
+    /// (.As(...) name, else class-derived trace label, else rune text), so it's
+    /// a display label, not a dispatch key.
+    /// </remarks>
     public string? DisplayNameOf(SymbolId id) => _grammar?.NameOf(id);
 
-    // Convenience form of DisplayNameOf that takes a Symbol directly.
-    // Returns null if the symbol is null.
+    /// <summary>
+    /// Convenience form of <see cref="DisplayNameOf(SymbolId)"/> that takes a
+    /// Symbol directly. Returns null if the symbol is null.
+    /// </summary>
     public string? DisplayName(Symbol symbol) => symbol == null ? null : DisplayNameOf(symbol.Id);
 
-    // Render the tree to a string for debug output. If Symbols has
-    // one element, prints that. Otherwise prints each top-level
-    // Symbol in order.
+    /// <summary>
+    /// Render the tree to a string for debug output. If <see cref="Symbols"/>
+    /// has one element, prints that. Otherwise prints each top-level Symbol in
+    /// order.
+    /// </summary>
     public string PrintTree()
     {
         if (_symbols == null || _grammar == null) return string.Empty;
@@ -214,14 +277,18 @@ public readonly struct ParseResult
         return builder.ToString();
     }
 
-    // The matched input text, as one string. Walks every top-level
-    // Symbol and concatenates the text it covers, so a grammar whose
-    // root produces a single Preserve wrapper and a grammar whose root
-    // bubbles up a flat list of leaves both yield the same string here.
-    // Mirrors Symbol.ToString(), which does the same for one Symbol.
-    // Returns the empty string on failure (Symbols is empty in that
-    // case) and on a default-constructed ParseResult. For a
-    // tree-shaped debug rendering, use PrintTree() or ToDebugString().
+    /// <summary>
+    /// The matched input text, as one string. Returns the empty string on
+    /// failure and on a default-constructed ParseResult.
+    /// </summary>
+    /// <remarks>
+    /// Walks every top-level Symbol and concatenates the text it covers, so a
+    /// grammar whose root produces a single Preserve Symbol and a grammar whose
+    /// root bubbles up a flat list of leaves both yield the same string here.
+    /// Mirrors Symbol.ToString(), which does the same for one Symbol. For a
+    /// tree-shaped debug rendering, use <see cref="PrintTree"/> or
+    /// <see cref="ToDebugString"/>.
+    /// </remarks>
     public override string ToString()
     {
         if (_symbols == null || _symbols.Count == 0) return string.Empty;
@@ -232,12 +299,13 @@ public readonly struct ParseResult
         return builder.ToString();
     }
 
-    // Debug-friendly rendering. On success, shows the parse tree
-    // (same output as PrintTree) prefixed with "Success:" so dumping
-    // a ParseResult in a REPL or debugger immediately shows what was
-    // parsed. On failure, a one-line summary with the outcome,
-    // character index, and the error message. Not intended as a stable
-    // format to parse against.
+    /// <summary>
+    /// Debug-friendly rendering. On success, shows the parse tree (same output
+    /// as <see cref="PrintTree"/>) prefixed with "Success:". On failure, a
+    /// one-line summary with the outcome, character index, and the error
+    /// message.
+    /// </summary>
+    /// <remarks>Not intended as a stable format to parse against.</remarks>
     public string ToDebugString()
     {
         if (Outcome == ParseOutcome.Success)
@@ -266,29 +334,32 @@ public readonly struct ParseResult
         _grammar = grammar;
     }
 
-    // Factory methods called by Rule.Parse to build the three shapes
-    // of result. Exposed as public so custom parse drivers can build
-    // a ParseResult with the same structure the built-in Parse
-    // produces. Normal callers don't construct ParseResults directly.
+    // The three factory methods below are public so custom parse drivers can
+    // build a ParseResult with the same structure the built-in Parse produces.
+    // Normal callers don't construct ParseResults directly.
 
-    // Build a successful result. Outcome is Success, error fields
-    // are empty.
+    /// <summary>
+    /// Build a successful result. Outcome is Success, error fields are empty.
+    /// </summary>
     public static ParseResult Succeeded(IReadOnlyList<Symbol> symbols, string input, Rule grammar)
     {
         if (symbols == null) throw new ArgumentNullException(nameof(symbols));
         return new ParseResult(ParseOutcome.Success, CopySymbols(symbols), string.Empty, 0, input, grammar);
     }
 
-    // Build a grammar-mismatch result. Outcome is GrammarMismatch,
-    // the error fields carry the deepest-failure message and position.
+    /// <summary>
+    /// Build a grammar-mismatch result. Outcome is GrammarMismatch, the error
+    /// fields carry the deepest-failure message and position.
+    /// </summary>
     public static ParseResult Failed(int errorCharIndex, string message, string input, Rule grammar) =>
         new ParseResult(ParseOutcome.GrammarMismatch, null, message, errorCharIndex, input, grammar);
 
-    // Build a budget-abort result. Outcome is one of Timeout,
-    // RuleCountLimitExceeded, DepthLimitExceeded, or Canceled. The
-    // error fields carry the matching "Parse aborted: ..." message
-    // and the deepest-failure position so callers still get a
-    // "how far did we get" hint.
+    /// <summary>
+    /// Build a budget-abort result. Outcome is one of Timeout,
+    /// RuleCountLimitExceeded, DepthLimitExceeded, or Canceled. The error fields
+    /// carry the matching "Parse aborted: ..." message and the deepest-failure
+    /// position so callers still get a "how far did we get" hint.
+    /// </summary>
     public static ParseResult Aborted(ParseOutcome outcome, int errorCharIndex, string message, string input, Rule grammar)
     {
         if (!IsAbortOutcome(outcome))

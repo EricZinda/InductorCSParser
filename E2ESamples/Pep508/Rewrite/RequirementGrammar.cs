@@ -3,7 +3,7 @@
 //
 // Modeled on the grammar the `packaging` library parses, which itself
 // follows the ABNF in PEP 508 (https://peps.python.org/pep-0508/).
-// This sample covers the requirement core; environment markers
+// This sample covers the requirement core. Environment markers
 // (`; python_version < "3.8"`) are out of scope. See README.md.
 //
 //   requirement   = wsp* name wsp* extras? wsp* requirement_details wsp*

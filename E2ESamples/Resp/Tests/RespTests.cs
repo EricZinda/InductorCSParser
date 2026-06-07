@@ -72,7 +72,7 @@ public class GoldenInputs
     {
         // The whole reason a bulk string declares its length: the payload is
         // length-counted, so a CRLF inside it is data, not a terminator. No
-        // context-free grammar can do this; the length tells the custom rule
+        // context-free grammar can do this. The length tells the custom rule
         // exactly how far to read. "ab\r\ncd" is six characters.
         Assert.That(RespParser.Parse("$6\r\nab\r\ncd\r\n"), Is.EqualTo(new RespBulkString("ab\r\ncd")));
     }
@@ -129,7 +129,7 @@ public class RejectInputs
     [Test]
     public void Bulk_string_payload_shorter_than_declared()
     {
-        // Declares 5 chars; "hi\r\n" is only four before end-of-input.
+        // Declares 5 chars. "hi\r\n" is only four before end-of-input.
         const string input = "$5\r\nhi\r\n";
         Assert.That(RespParser.TryParse(input, out _, out var error), Is.False);
         Assert.That(error!.CharIndex, Is.EqualTo(input.Length));
@@ -139,7 +139,7 @@ public class RejectInputs
     [Test]
     public void Bulk_string_length_too_small_leaves_junk_before_crlf()
     {
-        // Declares 2 chars, so the payload is "he"; the trailing CRLF check
+        // Declares 2 chars, so the payload is "he". The trailing CRLF check
         // then lands on "llo", which isn't CRLF.
         const string input = "$2\r\nhello\r\n";
         Assert.That(RespParser.TryParse(input, out _, out var error), Is.False);
@@ -150,7 +150,7 @@ public class RejectInputs
     [Test]
     public void Array_shorter_than_its_declared_count()
     {
-        // Declares two elements; only one follows.
+        // Declares two elements, only one follows.
         const string input = "*2\r\n:1\r\n";
         Assert.That(RespParser.TryParse(input, out _, out var error), Is.False);
         Assert.That(error!.CharIndex, Is.EqualTo(input.Length));
@@ -193,7 +193,7 @@ public class CustomRuleCore
     // "count,item item item": read the count, a ',' separator, then run an
     // any-character item that many times.
     // .As makes the root Preserve so its Symbol (whose children are the
-    // matched items) reaches result.Tree; an unnamed LengthCountRule is Flatten
+    // matched items) reaches result.Tree. An unnamed LengthCountRule is Flatten
     // by default and its items would land in result.Symbols instead.
     private static Rule LengthCount() =>
         new LengthCountRule(OneOrMore(OneOf(TokenSet.Ascii.Digits)), Literal(","), AnyToken())
@@ -240,7 +240,7 @@ public class CustomRuleCore
     [Test]
     public void Length_data_rejects_a_length_that_splits_a_character()
     {
-        // U+1F600 is two UTF-16 code units; a declared length of 1 would end
+        // U+1F600 is two UTF-16 code units. A declared length of 1 would end
         // in the middle of it. The rule rejects rather than emit half a char.
         var result = LengthData().Parse("1:\U0001F600");
         Assert.That(result.Success, Is.False);

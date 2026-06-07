@@ -60,7 +60,7 @@ public static class JsonStringGrammar
 
     static JsonStringGrammar()
     {
-        // ---- character classes -------------------------------------------
+        // Character classes.
         var hexDigit = OneOf(TokenSet.Ascii.HexDigits);
 
         // Surrogate halves are spotted from the first two hex digits of a
@@ -76,7 +76,7 @@ public static class JsonStringGrammar
         // written raw inside a string.
         var controlCharacter = TokenSet.Range(0x00, 0x1F);
 
-        // ---- error messages ----------------------------------------------
+        // Error messages.
         // serde_json's ErrorCode names are in README.md's mapping table. The
         // wording is the rewrite's own. The exercise only asks that the
         // position be right and the message point at the real problem.
@@ -111,12 +111,12 @@ public static class JsonStringGrammar
             "invalid unicode code point; the string content contains an " +
             "unpaired UTF-16 surrogate code unit";
 
-        // ---- \uXXXX escape, surrogate-aware ------------------------------
+        // The \uXXXX escape, surrogate-aware.
         // Tried after the '\' and the 'u' have been consumed.
         //
         // A leading surrogate is only legal as the first half of a pair, so
-        // the rule REQUIRES the trailing `\uDCxx` right after it. PEG has no
-        // cut operator, so the commit comes from structure: bmpEscape below
+        // the rule REQUIRES the trailing `\uDCxx` right after it. InductorParser
+        // has no cut operator, so the commit comes from structure: bmpEscape below
         // explicitly excludes the surrogate block, so once `\uD8xx` is seen
         // there is no other branch it can fall through to.
         //
@@ -151,7 +151,7 @@ public static class JsonStringGrammar
 
         var unicodeEscapeTail = Or(leadingSurrogatePair, loneTrailingSurrogate, bmpEscape);
 
-        // ---- escape sequence ---------------------------------------------
+        // Escape sequence.
         var simpleEscape = OneOf("\"\\/bfnrt");
 
         // unicodeEscapeTail classifies the escape by consuming its digits
@@ -170,7 +170,7 @@ public static class JsonStringGrammar
                 Or(simpleEscape, unicodeEscape, AlwaysFails(InvalidEscapeMessage)))
             .As(nameof(Escape));
 
-        // ---- the string body ---------------------------------------------
+        // The string body.
         // Anything that isn't a quote, a backslash, a control character, or
         // an unpaired surrogate code unit is ordinary text. TokenSet.Surrogates
         // names the surrogate block U+D800..U+DFFF so the exclusion set
@@ -180,7 +180,7 @@ public static class JsonStringGrammar
         Text = OneOrMore(literalCharacter).As(nameof(Text));
         Body = ZeroOrMore(Or(Escape, Text)).As(nameof(Body));
 
-        // ---- the whole literal -------------------------------------------
+        // The whole literal.
         // After the body, one of: the next token is the closing quote, it's
         // a control character, it's a lone surrogate code unit, or the input
         // ended. Each Not() check turns one of those into its own message,

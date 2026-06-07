@@ -6,24 +6,16 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
-// Matches one token whose value belongs to the given TokenSet. A token
-// is either a single rune (matched against the set's rune intervals)
-// or a multi-rune sequence the lexer grouped as one user-visible
-// character (skin-toned emoji, ZWJ family, regional-indicator pair,
-// CRLF, etc., matched against the set's multi-rune entries). EOF
+// Matches one token whose value belongs to the given TokenSet. EOF
 // always fails. NoneOfRule is the mirror: same rule, opposite
-// membership test (one token whose value ISN'T in the set).
+// membership test (one token whose value isn't in the set).
 internal sealed class OneOfRule : Rule
 {
     private TokenSet _set;
 
     // Pre-rendered "[A-Z,a-z]" form of the set, computed once at
     // construction and refreshed by ValidateNormalization when
-    // Compile's normalization pass mutates _set. Trace lines reference
-    // this instead of the TokenSet directly so we don't re-render the
-    // same string on every traced match. Worth caching because tracing
-    // is intended to be usable while iterating on a grammar, not just
-    // for one-off debug runs.
+    // Compile's normalization pass mutates _set. Used for tracing
     private string _setRendered;
 
     public OneOfRule(TokenSet runeSet) : base(FlattenType.Preserve, emitsLeaf: true)
@@ -34,7 +26,7 @@ internal sealed class OneOfRule : Rule
 
     // Read-only accessor for the post-Compile set, used by analyzers
     // that need to inspect the rule's matchable tokens.
-    internal TokenSet LoweringSet => _set;
+    internal TokenSet Set => _set;
 
     // Replace the rule's TokenSet wholesale and refresh the cached trace
     // rendering. Used by IdentifierRule to install its form-aware expanded
@@ -57,13 +49,11 @@ internal sealed class OneOfRule : Rule
         INormalizationReporter reporter)
     {
         NormalizeAndValidate(this, ref _set, form, reporter);
-        // The constructor already wrote _setRendered from the user-typed
-        // entries, which is the right answer for a Compile(null) parse
-        // (no projection runs, _set keeps the typed shape). This pass
-        // rewrites _set onto the lexer-normalized form (canonical
+        // The constructor already wrote _setRendered which is the right 
+        // answer for a Compile(null) parse. 
+        // Now we rewrite _set onto the normalized form (canonical
         // singletons substituted, precomposed runes possibly decomposed
-        // to multi-rune clusters), so the rendering has to follow or
-        // the trace shows entries the rule no longer matches.
+        // to multi-rune clusters), so _setRendered has to be updated too.
         _setRendered = _set.ToString();
     }
 
@@ -77,12 +67,11 @@ internal sealed class OneOfRule : Rule
     //
     // An entry that converts to a multi-grapheme sequence (e.g. the
     // ligature ﬁ -> "fi" under FormKC) can't stay in a TokenSet (set
-    // members are single graphemes by invariant), so it's dropped from
+    // members are single graphemes), so it's dropped from
     // the projected set and reported as an offender for the user to
     // fix at Compile time. The offender description is rule-agnostic
-    // because the four callers (OneOfRule, NoneOfRule, ScanWhileRule,
-    // ScanUntilRule) have different matching consequences.
-    // BuildNormalizationErrorMessage already names the offending rule.
+    // because it is used by multiple callers.
+    // BuildNormalizationErrorMessage names the offending rule.
     internal static void NormalizeAndValidate(
         Rule rule, ref TokenSet set, NormalizationForm form,
         INormalizationReporter reporter)
@@ -119,9 +108,9 @@ internal sealed class OneOfRule : Rule
         TraceSuccess(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted one of '{_setRendered}'");
         if (effectiveFlattenType == FlattenType.Delete)
             return Symbol.Discarded;
-        // ResolveLeafId carries the leaf-id rule shared with NoneOfRule,
-        // AnyTokenRule, and WithinTokenRule: rune value when the rule is
-        // truly anonymous and the token is one rune, rule's own Id when
+        // ResolveLeafId implements the leaf-id rule shared with NoneOfRule,
+        // AnyTokenRule, and WithinTokenRule: it is the rune value when the rule is
+        // truly anonymous and the token is one rune or the rule's own Id when
         // the user identified the rule via .As(string) / .As(SymbolId)
         // or the token is multi-rune.
         SymbolId leafId = ResolveLeafId(token.RuneValue);

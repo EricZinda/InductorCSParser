@@ -21,7 +21,7 @@
 //     Or(And(A, B, C), And(A, C, B), And(B, A, C),
 //        And(B, C, A), And(C, A, B), And(C, B, A))
 //
-//   That's N! branches. Three items is already six; four is twenty-four. The
+//   That's N! branches. Three items is already six, four is twenty-four. The
 //   shared work (each item is tried over and over across branches) and the
 //   factorial size are exactly why parsec ships `permute` as a primitive
 //   instead of leaving it to Or. A custom rule does it in N rounds of at most
@@ -39,13 +39,13 @@
 //   * Each item must consume input. An item that can match empty (Optional,
 //     ZeroOrMore, a bare Not) would "match" without advancing and get marked
 //     done at the wrong spot. parsec forbids this on (<||>) for the same
-//     reason and offers a separate optional combinator; this rule doesn't try
+//     reason and offers a separate optional combinator. This rule doesn't try
 //     to detect it.
 //   * Items are matched greedily in declaration order, so the items should
 //     have disjoint first characters (distinct literal prefixes like "width"
 //     vs "height"). If two items can both start at the same point, the
 //     earlier-declared one wins, which may not be what you want. parsec's
-//     type-level machinery sidesteps this; the practical use (a fixed set of
+//     type-level machinery sidesteps this. The practical use (a fixed set of
 //     distinctly-named fields) doesn't hit it.
 
 using System;
@@ -83,8 +83,8 @@ public sealed class PermutationRule : Rule
         int itemCount = Children.Count;
         var done = new bool[itemCount];
 
-        // Preserve builds its own child list to wrap; Flatten writes into the
-        // caller's list; Delete writes nowhere (outputSymbols is null here).
+        // Preserve builds its own child list to wrap. Flatten writes into the
+        // caller's list. Delete writes nowhere (outputSymbols is null here).
         List<Symbol>? collected =
             effectiveFlattenType == FlattenType.Preserve ? new List<Symbol>() : outputSymbols;
 

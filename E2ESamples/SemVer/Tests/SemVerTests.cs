@@ -8,13 +8,13 @@
 //
 // 2. Reject corpus: every kind of bad input the spec calls out
 //    (leading zeros, missing parts, empty identifiers, non-ASCII).
-//    Both parsers must reject; the Rewrite parser additionally has to
+//    Both parsers must reject. The Rewrite parser additionally has to
 //    point at the right position. This is the "errors are useful"
 //    check.
 //
 // 3. Side-by-side: a small set of bad inputs where we explicitly
 //    compare the error messages from Original and Rewrite. Original
-//    only knows "didn't match"; Rewrite gives line, column, and a
+//    only knows "didn't match". Rewrite gives line, column, and a
 //    targeted message. This is the "value-add" check that proves
 //    porting was worth doing.
 //
@@ -200,7 +200,7 @@ public class SemVerErrorPositionTests
         // "v1.2.3" fails at the major position because 'v' is not a
         // digit, not because of a leading zero. The leading-zero
         // WithError sits on the Not probe, which fails only on the
-        // "0[digit]" shape; on 'v' the Not succeeds and the failure is
+        // "0[digit]" shape. On 'v' the Not succeeds and the failure is
         // the OneOrMore's generic one. This is why the WithError is on
         // the Not and not on the major/minor/patch rule as a whole:
         // moving it outward (onto an alias wrapping the whole number,

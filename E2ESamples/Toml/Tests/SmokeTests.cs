@@ -4,7 +4,7 @@ using InductorParser.E2ESamples.Toml.Rewrite;
 namespace InductorParser.E2ESamples.Toml.Tests;
 
 // Minimum viable round-trip tests for the InductorParser TOML grammar.
-// These don't decode values yet; they just assert the grammar accepts
+// These don't decode values yet. They just assert the grammar accepts
 // well-formed TOML and rejects clearly malformed TOML at the right
 // position. Detailed AST tests live in TomlAstTests.
 [TestFixture]

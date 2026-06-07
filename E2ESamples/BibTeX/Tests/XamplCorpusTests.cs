@@ -113,7 +113,7 @@ public class XamplCorpusTests
         Assert.That(concatBooktitle.field.Value, Does.Contain("Proc. Fifteenth Annual ACM"));
 
         // TeX-escape sequences like '{\"{U}}nderwood' stay verbatim
-        // in field values; the parser captures the source form and
+        // in field values. The parser captures the source form and
         // leaves expansion to the renderer.
         var texEscapedAuthor = entries
             .SelectMany(e => e.Fields)

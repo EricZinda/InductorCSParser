@@ -20,7 +20,7 @@ public class ErrorPositionTests
     public void UnterminatedBasicString_PointsToEndOfBody()
     {
         // The closing '"' is missing. The parser walks the body and
-        // hits EOF; the deepest failure should be at the EOF position
+        // hits EOF. The deepest failure should be at the EOF position
         // (or at the newline if there is one).
         var input = "key = \"unclosed";
         var result = TomlGrammar.TomlDocument.Parse(input);
@@ -41,7 +41,7 @@ public class ErrorPositionTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        // The grammar expected '=' after `key `; deepest failure is at the 'v'
+        // The grammar expected '=' after `key `. Deepest failure is at the 'v'
         // of "value" (column 4: 'k'(0) 'e'(1) 'y'(2) ' '(3) 'v'(4)).
         Assert.That(result.ErrorColumn, Is.EqualTo(4));
         Assert.That(result.ErrorMessage, Does.Contain("Expected '='").IgnoreCase);
@@ -77,7 +77,7 @@ public class ErrorPositionTests
     public void TomlParser_DuplicateKey_ReportsAtSemanticLayer()
     {
         // Duplicate key isn't a grammar error (the input matches the
-        // grammar fine); it's caught by the TomlParser consumer when
+        // grammar fine). It's caught by the TomlParser consumer when
         // it tries to insert the second one. The exception type and
         // message tell the user which key was duplicated.
         var input = "name = \"Tom\"\nname = \"Pradyun\"\n";

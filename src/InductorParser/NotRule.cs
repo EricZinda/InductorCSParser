@@ -7,28 +7,17 @@ namespace InductorParser;
 
 // Negative lookahead. Runs its inner rule against the current input,
 // rolls back the lexer regardless of what inner did, and succeeds iff
-// inner FAILED. Consumes no input on either path.
-//
-// Idiom: Not(stopRule) combined with AnyToken() is the rule-based "match
-// everything up to the stop condition" pattern:
-//
-//     ZeroOrMore(And(Not(stopRule), AnyToken()))
-//
-// Each iteration checks that stopRule doesn't match here, then consumes
-// one token and advances. When stopRule would match, Not fails, the
-// And fails, and the ZeroOrMore stops leaving the cursor at the stop.
+// inner failed. Consumes no input on either path.
 internal sealed class NotRule : Rule
 {
+    private Rule Inner => Children[0];
+
     // FlattenType.Delete because Not is a zero-width lookahead: it
-    // contributes no text to the parse tree. Delete ensures the empty
-    // Symbol disappears during FlattenInto so it doesn't leave a marker
-    // node in the syntax tree.
+    // contributes no text to the parse tree. 
     public NotRule(Rule inner)
         : base(FlattenType.Delete, emitsLeaf: false, inner ?? throw new ArgumentNullException(nameof(inner)))
     {
     }
-
-    private Rule Inner => Children[0];
 
     protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
@@ -49,11 +38,14 @@ internal sealed class NotRule : Rule
         if (innerMatched)
         {
             TraceFailure(lexer, $"inner matched");
-            // Not records one failure of its own, at the lookahead anchor
-            // (its own start, where the user has to change something),
-            // carrying its .WithError if it has one. This is the
-            // exception to composite anchoring: there is no surviving
-            // descendant failure to anchor to. See docs/ErrorArchitecture.md.
+            // Not is failing here, because inner matched. A composite
+            // normally anchors its error at the deepest failure among its
+            // children, but Not has none to use: inner succeeded, so it left
+            // no failure, and BeginProbe discarded its internal ones anyway.
+            // So Not records its own failure at startPosition, the lookahead
+            // point where the user would change the input to make the Not
+            // succeed, carrying its .WithError if it has one. See
+            // docs/ErrorArchitecture.md.
             lexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);
             return null;
         }

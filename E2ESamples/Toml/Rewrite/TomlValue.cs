@@ -101,7 +101,7 @@ public sealed record TomlTable : TomlValue
         _members[key] = value;
     }
 
-    // Records' auto-generated equality compares declared properties; we
+    // Records' auto-generated equality compares declared properties. We
     // override here so two TomlTables with the same members compare
     // equal regardless of insertion order.
     public bool Equals(TomlTable? other)

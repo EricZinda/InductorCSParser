@@ -1,7 +1,7 @@
 // Grammar for the BibTeX subset the Original/ parser handles,
 // mirroring the bibtex-parser (https://github.com/digitalheir/bibtex-js-parser,
 // MIT) and pybtex (https://pybtex.org, MIT) entry shape. Both upstreams
-// use a character scanner with regex-driven entry recognition; this
+// use a character scanner with regex-driven entry recognition. This
 // grammar replaces the scanner with a structural declaration.
 //
 //   document      ::= (strayText | entry)* EOF
@@ -21,8 +21,8 @@
 //   fieldValue    ::= valuePart ('#' valuePart)*
 //   valuePart     ::= quotedValue | bracedValue | integerValue | bareWord
 //   bareWord      ::= macroName (an identifier reference like 'jul',
-//                     'STOC', 'ACM' that biber expands at render time;
-//                     the grammar keeps the literal name)
+//                     'STOC', 'ACM' that biber expands at render time.
+//                     The grammar keeps the literal name)
 //   quotedValue   ::= '"' (escape | non-quote-non-backslash)* '"'
 //   bracedValue   ::= '{' bracedContent '}'
 //   bracedContent ::= (bracedValue | escape | non-brace-non-backslash)*
@@ -45,7 +45,7 @@
 // 2. The "stray text between entries" rule uses ScanWhile against the
 //    complement of '@', and is Flatten(Delete) so the matched bytes
 //    drop out of the tree. The Original handles the same case by
-//    advancing _position past stray bytes; the grammar shapes it as a
+//    advancing _position past stray bytes. The grammar shapes it as a
 //    no-emit run.
 
 using System.Text;
@@ -180,7 +180,7 @@ public static class BibTexGrammar
 
         // Field value: one or more value parts joined by '#'. The
         // join character is FlattenType.Delete so it drops out of the
-        // tree; the reader concatenates the surviving parts' contents.
+        // tree. The reader concatenates the surviving parts' contents.
         var hash = Token('#').Flatten(FlattenType.Delete);
         FieldValue = And(
             valuePart,
@@ -230,7 +230,7 @@ public static class BibTexGrammar
 
         // @preamble{ value }: bibliography-scope macros, no citation
         // key. The body is just a value expression. The 'preamble'
-        // keyword is matched but not surfaced as a tree node; the
+        // keyword is matched but not surfaced as a tree node. The
         // reader hardcodes EntryType="preamble" when it sees this
         // shape, so the keyword text doesn't need to round-trip.
         var preambleKeyword = LiteralIgnoreAsciiCase("preamble");
@@ -280,7 +280,7 @@ public static class BibTexGrammar
 
         // Entry-shape dispatch. PreambleEntry and StringEntry are
         // tried before RegularEntry because they share the '@'
-        // prefix; first-match-wins in Or backtracks on inner failure,
+        // prefix. First-match-wins in Or backtracks on inner failure,
         // so a RegularEntry-shaped input still parses if its type
         // isn't preamble/string. The Or is named so a tree walker
         // can FindAll(Entry) regardless of which shape matched.

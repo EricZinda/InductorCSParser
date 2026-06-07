@@ -31,3 +31,7 @@ Testing:
 - Even when random numbers are used to pick files, Claude seems to find the same bug on different worktrees when starting from different places. picking very specific test criteria like "look for threading bugs" helps, saying "find any bug" and giving it different places to look doesnt. it still seems to migrate back to the ame place from different directions
 
 Using claude to build custom rules found some great issues with internal methods, etc. It was able to find custom rules that others had written on other parsers that couldn't be written as the API was designed initially.
+
+New theory: Claude lets you write all of the code and the text you should’ve written in the first place and the overload is because that’s how we overloading it really is. The reason why my software sucks is that nobody’s wanting to do that
+
+this has really been like talking a a dev as a PM.  Asking questions about code, algorithms. getting them to explain, simplify, etc

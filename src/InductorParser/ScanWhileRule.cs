@@ -16,21 +16,31 @@ namespace InductorParser;
 //
 // minimumCount is the minimum number of tokens the run must contain
 // to succeed. The default of 1 keeps every successful match consuming
-// at least one first-set token, which lets ComputeRuleStart publish
-// Advance.Always and lets enclosing rules use the LL(1) lookahead
-// shortcut. Passing 0 makes the rule always succeed: an empty run
+// at least one first-set token, which lets an enclosing rule skip
+// this one via a first-token lookahead when the next token isn't in
+// the set. Passing 0 makes the rule always succeed: an empty run
 // produces a zero-width leaf at the current position. The zero-min
-// case publishes Advance.Sometimes so the shortcut stays sound, the
-// same downgrade BetweenInclusiveRule does for AtLeast == 0
-// (Optional / ZeroOrMore).
+// case can't promise it always advances, so that lookahead skip is
+// disabled, the same downgrade BetweenInclusiveRule does for
+// AtLeast == 0 (Optional / ZeroOrMore).
 //
 // Pairs with ScanUntilRule, which is the inverse stop condition: scan
-// while tokens are NOT a stopper. Both are leaf-shaped scanners that
+// while tokens aren't a stopper. Both are leaf-shaped scanners that
 // produce one Symbol per matched run.
 internal sealed class ScanWhileRule : Rule
 {
     private TokenSet _set;
+
+    // Accessor for an alternative evaluator to read the rule's set
+    // without running the rule.
+    internal TokenSet Set => _set;
+
     private readonly int _minimumCount;
+
+    // Accessor for an alternative evaluator to read the rule's minimum
+    // run length without running the rule.
+    internal int MinimumCount => _minimumCount;
+
     // Refreshed by ValidateNormalization when Compile's
     // normalization pass mutates _set. See OneOfRule for the why.
     private string _setRendered;
@@ -47,9 +57,6 @@ internal sealed class ScanWhileRule : Rule
         _setRendered = set.ToString();
         SetTraceName(minimumCount == 1 ? "ScanWhile" : $"ScanWhile[{minimumCount}..]");
     }
-
-    internal TokenSet LoweringSet => _set;
-    internal int LoweringMinimumCount => _minimumCount;
 
     protected override void ValidateNormalization(
         System.Text.NormalizationForm form,

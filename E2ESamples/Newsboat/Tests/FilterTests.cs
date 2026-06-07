@@ -9,14 +9,14 @@
 // 2. Reject corpus: every kind of bad input the upstream tests call
 //    out (operator typos, unbalanced parens, missing space after
 //    `and`, broken ranges, broken quoted strings). Both parsers must
-//    reject; the Rewrite parser additionally has to point at the
+//    reject. The Rewrite parser additionally has to point at the
 //    right position. This is the "errors are useful" check.
 //
 // 3. Side-by-side: a small set of bad inputs where we explicitly
 //    compare the error messages from Original and Rewrite. The
 //    Original is hand-written and gets the position right too, but
 //    its message is a single sentence with no line / column
-//    formatting; the Rewrite gives line, column, and a targeted
+//    formatting. The Rewrite gives line, column, and a targeted
 //    message via `WithError`. This is the "value-add" check.
 
 using System.Linq;

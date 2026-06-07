@@ -15,7 +15,7 @@
 // first error, with serde_json's own ErrorCode and a character offset.
 //
 // Faithfulness notes:
-//   * serde_json scans UTF-8 *bytes*; this port scans UTF-16 *chars*. Every
+//   * serde_json scans UTF-8 *bytes*. This port scans UTF-16 *chars*. Every
 //     character in a JSON `\u`-escape is ASCII, so byte offset == char offset
 //     for all the inputs the error exercise cares about. The README spells
 //     this out.

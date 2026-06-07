@@ -204,19 +204,27 @@ public readonly partial struct TokenSet
     private static readonly Lazy<TokenSet> _xidStart = new Lazy<TokenSet>(BuildXidStart);
     private static readonly Lazy<TokenSet> _xidContinue = new Lazy<TokenSet>(BuildXidContinue);
 
-    // The set of Unicode scalar values that may begin an identifier per
-    // UAX #31 R1 (XID_Start). Use together with XidContinue and
-    // Rules.Identifier for spec-compliant identifier matching. Doesn't
-    // include "_". For the programming-language profile that allows
-    // leading underscore, use
-    // Rules.Identifier(extraStartRunes: TokenSet.Runes("_")).
+    /// <summary>
+    /// The set of Unicode scalar values that may begin an identifier per
+    /// UAX #31 R1 (XID_Start). Use together with <see cref="XidContinue"/> and
+    /// <see cref="Rules.Identifier"/> for spec-compliant identifier matching.
+    /// </summary>
+    /// <remarks>
+    /// Doesn't include "_". For the programming-language profile that allows a
+    /// leading underscore, use
+    /// Rules.Identifier(extraStartRunes: TokenSet.Runes("_")).
+    /// </remarks>
     public static TokenSet XidStart => _xidStart.Value;
 
-    // The set of Unicode scalar values that may continue an identifier
-    // per UAX #31 R1 (XID_Continue). Includes everything in XidStart
-    // plus combining marks, decimal digits, and connector punctuation
-    // (so "_" is already in XidContinue regardless of the start-side
-    // profile). Intended for the tail of an identifier match.
+    /// <summary>
+    /// The set of Unicode scalar values that may continue an identifier per
+    /// UAX #31 R1 (XID_Continue). Intended for the tail of an identifier match.
+    /// </summary>
+    /// <remarks>
+    /// Includes everything in <see cref="XidStart"/> plus combining marks,
+    /// decimal digits, and connector punctuation (so "_" is already in
+    /// XidContinue regardless of the start-side profile).
+    /// </remarks>
     public static TokenSet XidContinue => _xidContinue.Value;
 
     // ============================================================

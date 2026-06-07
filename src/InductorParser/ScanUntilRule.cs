@@ -50,7 +50,7 @@ namespace InductorParser;
 // original input, same shape as OneOfRule's Symbol. ToString() returns
 // the raw source text, including escape-start runes and their ends as written originally.
 // Callers who want to actually decode the escapes need to walk that text themselves.
-// Lazy decoding means a syntax highlighter or a code-formatter, which WANTS the raw
+// Lazy decoding means a syntax highlighter or a code-formatter, which wants the raw
 // source preserved, doesn't have to pay for it.
 //
 // Worked examples: see
@@ -139,7 +139,18 @@ internal sealed class ScanUntilRule : Rule
     // rolls the lexer back to where ScanUntil opened.
     private readonly Rule? _escapeEnd;
 
-    // FAST PATH, no escape. Per rune: one TokenSet.ContainsRune.
+    // Accessors for an alternative evaluator. The recursive evaluator
+    // reads these private fields directly inside TryParseRule. An
+    // alternative evaluator needs the same data without running the rule.
+    internal TokenSet LoweringStopperSet => _stopperSet;
+    internal Rule? LoweringStopperRule => _stopperRule;
+    internal bool LoweringHasEscape => _hasEscape;
+    internal int LoweringEscapeStartRune => _escapeStartRune;
+    internal Rule? LoweringEscapeStartRule => _escapeStartRule;
+    internal Rule? LoweringEscapeEnd => _escapeEnd;
+    internal bool LoweringEofIsTerminator => _eofIsTerminator;
+
+    // Fast path, no escape. Per rune: one TokenSet.ContainsRune.
     public ScanUntilRule(TokenSet stopAt, bool eofIsTerminator = false)
         : base(FlattenType.Preserve, emitsLeaf: true)
     {
@@ -153,18 +164,7 @@ internal sealed class ScanUntilRule : Rule
         _eofIsTerminator = eofIsTerminator;
     }
 
-    // Accessors for an alternative evaluator. The recursive evaluator
-    // reads these private fields directly inside TryParseRule. An
-    // alternative evaluator needs the same data without running the rule.
-    internal TokenSet LoweringStopperSet => _stopperSet;
-    internal Rule? LoweringStopperRule => _stopperRule;
-    internal bool LoweringHasEscape => _hasEscape;
-    internal int LoweringEscapeStartRune => _escapeStartRune;
-    internal Rule? LoweringEscapeStartRule => _escapeStartRule;
-    internal Rule? LoweringEscapeEnd => _escapeEnd;
-    internal bool LoweringEofIsTerminator => _eofIsTerminator;
-
-    // FAST PATH, single-rune escape start. Per rune: one
+    // Fast path, single-rune escape start. Per rune: one
     // TokenSet.ContainsRune plus one int equality on non-stopper runes.
     // Covers JSON, C, C++ regular, Python single-line.
     public ScanUntilRule(TokenSet stopAt, Rune escapeStart, Rule escapeEnd, bool eofIsTerminator = false)
@@ -334,7 +334,7 @@ internal sealed class ScanUntilRule : Rule
         // The loop bound is `!lexer.IsEof`, which is `_position <
         // _endPosition` for a sub-lexer (the one WithinToken hands us
         // when this rule is the inner of WithinToken(ScanUntil(...))).
-        // Comparing against input.Length would be the FULL outer string
+        // Comparing against input.Length would be the full outer string
         // and let the loop run past the sub-lexer's bound: PeekTokenLength
         // would return 0 there, the body fall-through's
         // SetPosition(pos + 0) wouldn't move the cursor, and the
@@ -376,7 +376,7 @@ internal sealed class ScanUntilRule : Rule
             // Peek the next rune for the single-rune escape-start
             // fast path's runeValue compare. TryPeekRune returns false
             // on a lone surrogate (sets runeValue = -1, runeLen = 0);
-            // we DON'T short-circuit on that, because the surrogate
+            // we don't short-circuit on that, because the surrogate
             // is still a valid token and falls through to body. The
             // tokenLen != runeLen check on the escape-start branch
             // already excludes lone-surrogate tokens (tokenLen == 1,
@@ -389,7 +389,7 @@ internal sealed class ScanUntilRule : Rule
             // below both need it.
             int tokenLen = lexer.PeekTokenLength(pos);
 
-            // Escape-start check, BEFORE the stopper check (see the
+            // Escape-start check, before the stopper check (see the
             // header comment for why the escape wins when its start
             // shares a prefix with a stopper). Single-rune and Rule
             // forms are mutually exclusive; the constructor picks one.
@@ -492,7 +492,7 @@ internal sealed class ScanUntilRule : Rule
             // rule. ContainsToken handles both halves of the set
             // (single-rune intervals and multi-rune entries) against
             // the next full token, so a stopper of '"' doesn't match
-            // a '"<combining-mark>' cluster — the same answer
+            // a '"<combining-mark>' cluster, the same answer
             // OneOf("\"") would give on the same input.
             if (_stopperRule == null)
             {
@@ -538,7 +538,7 @@ internal sealed class ScanUntilRule : Rule
         // Not(AnyToken()), Or(..., Eof())) can match. A match here ends
         // the body at EOF, the same as a match mid-input. Strict mode
         // only: _eofIsTerminator already stops at EOF on its own.
-        // TokenSet stoppers skip this — a TokenSet is tested against a
+        // TokenSet stoppers skip this. A TokenSet is tested against a
         // real token, and EOF produces none.
         if (!stopperMatched && !_eofIsTerminator && _stopperRule != null && lexer.IsEof)
         {

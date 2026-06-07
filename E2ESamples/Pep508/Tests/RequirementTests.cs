@@ -5,7 +5,7 @@
 //    the Rewrite (InductorParser) must produce equal ASTs for each one.
 //
 // 2. Reject corpus: malformed input. Both parsers must reject it. The
-//    position-and-message detail lives in ErrorMessageTests.cs; here we
+//    position-and-message detail lives in ErrorMessageTests.cs. Here we
 //    only check that nothing malformed slips through.
 //
 // 3. Side-by-side: a few bad inputs where the Original and the Rewrite

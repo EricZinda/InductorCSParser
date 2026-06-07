@@ -29,10 +29,10 @@ namespace InductorParser;
 //   the per-call comment below for why we pay the copy) and walks one
 //   rune per Read instead of one token. The sub-lexer doesn't share
 //   trace state with the outer lexer, so trace output from the inner
-//   rule doesn't appear in the outer trace. It DOES delegate every
-//   EnterRule / ExitRule / TickPeriodic to the outer via
-//   ParseBudget.InheritFrom, so the inner's recursion counts on top
-//   of the outer's current depth: MaxDepth and RuleCountLimit cover
+//   rule doesn't appear in the outer trace. It does delegate its
+//   budget bookkeeping to the outer via ParseBudget.InheritFrom, so
+//   the inner's recursion counts on top of the outer's current depth:
+//   MaxDepth and RuleCountLimit cover
 //   the combined outer-plus-inner work, and a Cancel() or expired
 //   Timeout observed on either lexer trips both. Without this, a
 //   recursive inner rule on a grapheme cluster crafted with many
@@ -74,25 +74,22 @@ internal sealed class WithinTokenRule : Rule
         // WithinToken match (typically 1-4 chars per cluster). The
         // payoff is that lexer.Input.Length, lexer.Position, and
         // lexer.IsEof all agree about the readable range, so any rule
-        // that bounds its own loop on lexer.Input.Length stays correct.
-        // That removes a trap that bit ScanUntilRule (it looped on
-        // lexer.Input.Length, which used to be the FULL outer string,
-        // and infinite-looped past the sub-lexer's bound) and would
-        // have bitten any user-defined Rule subclass following the same
-        // pattern.
+        // (built-in or user-defined) that bounds its own loop on
+        // lexer.Input.Length stays correct rather than running past the
+        // sub-lexer's bound.
         string subInput = outerLexer.Input.Substring(token.Offset, token.Length);
         var subLexer = new Lexer(subInput, oneRunePerToken: true);
-        // The sub-lexer's budget delegates every EnterRule / ExitRule /
-        // TickPeriodic to the outer budget so the inner's recursion
-        // counts on top of the outer's CURRENT depth. MaxDepth and
-        // RuleCountLimit cover the combined outer-plus-inner work
-        // rather than letting the inner spend a fresh MaxDepth on top
-        // of the outer's depth. Without this, a recursive inner rule
-        // on a cluster crafted with many combining marks could crash
-        // the host process with a stack overflow. The wall-clock
-        // Stopwatch and the ParseCancellation reach the inner through
-        // the same delegation: a Cancel() or expired Timeout observed
-        // by either lexer trips both.
+        // The sub-lexer's budget delegates its depth, rule-count, and
+        // periodic timeout/cancellation bookkeeping to the outer budget
+        // so the inner's recursion counts on top of the outer's current
+        // depth. MaxDepth and RuleCountLimit cover the combined
+        // outer-plus-inner work rather than letting the inner spend a
+        // fresh MaxDepth on top of the outer's depth. Without this, a
+        // recursive inner rule on a cluster crafted with many combining
+        // marks could crash the host process with a stack overflow. The
+        // wall-clock Stopwatch and the ParseCancellation reach the inner
+        // through the same delegation: a Cancel() or expired Timeout
+        // observed by either lexer trips both.
         subLexer.InheritBudgetFrom(outerLexer);
 
         // Throwaway output list for the inner rule. Any symbols the inner

@@ -7,8 +7,8 @@ namespace InductorParser;
 
 // Matches the first child that succeeds. Tries children left-to-right,
 // committing to whichever one matches first. If none match, the Or fails.
-// Each child rule manages its own lexer rollback (per the TryParseRule
-// contract), so a failed alternative naturally leaves the lexer where it
+// Each child rule manages its own lexer rollback (as TryParseRule
+// requires), so a failed alternative naturally leaves the lexer where it
 // was before Or called it.
 internal sealed class OrRule : Rule
 {
@@ -24,14 +24,9 @@ internal sealed class OrRule : Rule
 
     protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        // Rule.TryParse's outer transaction wraps every branch attempt.
-        // Whether the Or succeeds or fails, the failures its branches
-        // produced are kept: a rejected branch's failure is a real
-        // near-miss, ranked by depth like any other failure (see
-        // docs/ErrorArchitecture.md, Case 4). That transaction also windows
-        // the subtree-extent high-water mark, which the failure path reads
-        // back (through RecordCompositeFailure) to anchor the Or's own
-        // .WithError at the deepest position its branches reached.
+        // Rule.TryParse's outer transaction wraps every branch attempt and
+        // keeps each branch's failures, ranked by depth as near-misses, whether
+        // the Or succeeds or fails. See docs/ErrorArchitecture.md.
 
         // If we're preserving this node, create a new list to capture its outputSymbols
         if (effectiveFlattenType == FlattenType.Preserve)
