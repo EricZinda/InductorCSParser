@@ -247,25 +247,25 @@ public sealed class ParseOptions
         set => _cancellationAbortTemplate = value ?? throw new ArgumentNullException(nameof(value));
     }
 
+    // The three members below are plumbing for an optional alternative
+    // evaluator and are unused in a production build: nothing there registers
+    // an evaluator hook (Rule.AlternativeEvaluator), so they have no effect
+    // and every parse runs on the built-in recursive evaluator. They exist
+    // for test and CI runs that do register a hook and route the suite
+    // through it.
+
     // Test-plumbing knob (intentionally internal) that lets the test
-    // suite flip every Rule.Parse call from the recursive evaluator
-    // over to the alternative-evaluator hook (Rule.AlternativeEvaluator)
-    // without rewriting hundreds of test sites. Null means "use
-    // whatever DefaultUseAlternativeEvaluator says". Does nothing when
-    // no other evaluators are present
+    // suite flip every Rule.Parse call from the recursive evaluator over
+    // to the alternative-evaluator hook without rewriting hundreds of test
+    // sites. Null means "use whatever DefaultUseAlternativeEvaluator says".
     internal bool? UseAlternativeEvaluator { get; set; }
 
-    // Process-wide default for UseAlternativeEvaluator. The
-    // EngineSelectionFixture that ships with the alternative-evaluator
-    // implementation flips this to true when the
-    // INDUCTOR_DEFAULT_ENGINE environment variable is set, so a single
-    // CI invocation can run the entire suite through the alternative
-    // engine without touching individual ParseOptions instances.
-    // Defaults to false so production behavior is unchanged. Without a
-    // registered hook the flag has no effect.
+    // Process-wide default for UseAlternativeEvaluator. A test fixture flips
+    // it via the INDUCTOR_DEFAULT_ENGINE env var so one CI run can put the
+    // whole suite on the alternative engine without per-call options.
+    // Defaults to false so production behavior is unchanged.
     internal static bool DefaultUseAlternativeEvaluator { get; set; }
 
-    // Combine the per-call override with the process-wide default.
-    // Per-call wins; only consulted by the dispatcher in Rule.Parse.
+    // Per-call override wins over the process-wide default.
     internal bool ResolveUseAlternativeEvaluator() => UseAlternativeEvaluator ?? DefaultUseAlternativeEvaluator;
 }

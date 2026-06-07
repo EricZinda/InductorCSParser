@@ -2,7 +2,7 @@ namespace InductorParser;
 
 /// <summary>
 /// Why a parse ended: success, a normal grammar mismatch, or one of the
-/// budget / cancellation aborts. Carried on <see cref="ParseResult.Outcome"/>.
+/// budget / cancellation aborts. Accessed from <see cref="ParseResult.Outcome"/>.
 /// </summary>
 public enum ParseOutcome
 {

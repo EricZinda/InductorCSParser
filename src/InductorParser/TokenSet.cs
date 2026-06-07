@@ -1001,6 +1001,15 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// tedious to chain through the <see cref="op_BitwiseOr"/> operator
     /// (each <c>|</c> allocates and merges, so an N-rune build is O(N²)).
     /// </summary>
+    /// <remarks>
+    /// Like <see cref="Range(int, int)"/>, a tuple that straddles the surrogate
+    /// block is split so the result contains no surrogate code units. Both
+    /// endpoints must be valid scalars, but the interval between them can still
+    /// cover 0xD800..0xDFFF, so <c>FromRanges((0, 0x10FFFF))</c> is every scalar
+    /// value with no surrogates, the same set as <c>Range(0, 0x10FFFF)</c>. To
+    /// put surrogates into a set, name them with <see cref="Surrogates"/> or
+    /// <see cref="SurrogateRange"/> and union them in.
+    /// </remarks>
     /// <exception cref="ArgumentException">
     /// Any range has <c>high &lt; low</c>, or contains a value outside the
     /// Unicode scalar range.
@@ -1017,7 +1026,13 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                 throw new ArgumentException(
                     $"Range at index {index} has high ({high:X}) < low ({low:X}).",
                     nameof(ranges));
-            list.Add(new Interval(low, high));
+            // Split a tuple that straddles the surrogate block so the result
+            // stays surrogate-free, matching Range(int, int). Both endpoints
+            // are valid scalars (checked above), but the closed interval
+            // between them can still cover 0xD800..0xDFFF, e.g. (0, 0x10FFFF).
+            // Surrogates enter a TokenSet only through Surrogates /
+            // SurrogateRange, never through a scalar-range factory.
+            EmitScalarInterval(list, low, high);
         }
         return new TokenSet(Normalize(list));
     }

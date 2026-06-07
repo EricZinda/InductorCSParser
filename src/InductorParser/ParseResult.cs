@@ -6,8 +6,8 @@ namespace InductorParser;
 
 /// <summary>
 /// The value returned by Rule.Parse: either a successful parse
-/// (<see cref="Tree"/> / <see cref="Symbols"/>) or a failure
-/// (<see cref="Outcome"/>, <see cref="ErrorMessage"/>, and the error-position
+/// (the result will be in <see cref="Tree"/> / <see cref="Symbols"/>) or a failure
+/// (see <see cref="Outcome"/>, <see cref="ErrorMessage"/>, and the error-position
 /// family).
 /// </summary>
 /// <remarks>
@@ -18,18 +18,14 @@ namespace InductorParser;
 /// <para>
 /// The error-position family reports the same point (where the parse got
 /// furthest before failing) in different units: <see cref="ErrorCharIndex"/>
-/// (chars / UTF-16 code units), <see cref="ErrorTokenIndex"/> (tokens, where a
-/// token is one character as the user sees it), and the <see cref="ErrorLine"/>
+/// (chars, i.e. UTF-16 code units), <see cref="ErrorTokenIndex"/> (tokens, where a
+/// token is one Unicode Grapheme), and the <see cref="ErrorLine"/>
 /// / <see cref="ErrorColumn"/> pair (LSP-style zero-based line and column).
 /// Pick whichever matches the unit the caller will use the number in.
 /// <see cref="ErrorPosition"/> returns all four bundled into one SourcePosition
 /// struct, so callers that want more than one unit only pay for one walk of the
 /// input. The same conversion is available on Symbol.SourceRange for any node
 /// in the parse tree.
-/// </para>
-/// <para>
-/// A readonly struct so returning one is a handful of field copies, not a heap
-/// allocation.
 /// </para>
 /// </remarks>
 public readonly struct ParseResult
