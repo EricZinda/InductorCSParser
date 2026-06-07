@@ -32,7 +32,8 @@ namespace InductorParser.Tests;
 //   2. Positions reported in ParseResult (ErrorCharIndex and its derived
 //      properties) index into the CALLER'S ORIGINAL input string, never
 //      into the normalized form. An editor forwarding the error straight
-//      into an LSP diagnostic sees offsets that line up with the document
+//      into a Language Server Protocol diagnostic sees offsets that line up
+//      with the document
 //      it knows about.
 [TestFixture]
 public class NormalizationTests
