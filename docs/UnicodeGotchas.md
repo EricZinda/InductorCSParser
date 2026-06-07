@@ -76,11 +76,11 @@ var result = python.Parse(input);
 
 The normalization form lives on `Compile`. `Identifier` defers its form-aware expansion of `XID_Start` and `XID_Continue` to Compile time, so compatibility equivalents (ligatures, fullwidth Latin, math-bold) whose NFKC conversion is a multi-grapheme sequence get expanded into their grapheme pieces by `IdentifierRule` before the form-validation pass runs.
 
-Rust identifiers, per the [Rust Reference](https://doc.rust-lang.org/reference/identifiers.html). Same profile as Python 3 (adds `_` to Start, uses NFKC). One Rust-specific rule this recipe does **not** enforce: Rust rejects bare `_` as an identifier, requiring `_ XID_Continue+`. If you need that, wrap the rule in an explicit check for the second character. For most grammars the practical difference is negligible.
+Rust identifiers, per the [Rust Reference](https://doc.rust-lang.org/reference/identifiers.html). Adds `_` to Start the same way Python 3 does, but the form differs: Rust normalizes identifiers with NFC, not NFKC ([RFC 2457](https://rust-lang.github.io/rfcs/2457-non-ascii-idents.html)), so the form on `Compile` is `FormC`, not `FormKC`. That difference is real. Under NFC, Rust keeps compatibility-distinct spellings apart where Python 3's NFKC merges them: the `ﬁ` ligature stays separate from `fi`, fullwidth `ｆｏｏ` stays separate from `foo`, and a character whose only identifier-shaped form is its NFKC expansion (the circled digit `①`, category No, not an identifier character on its own) is rejected rather than quietly turned into `1`. One Rust-specific rule this recipe does **not** enforce: Rust rejects bare `_` as an identifier, requiring `_ XID_Continue+`. If you need that, wrap the rule in an explicit check for the second character. For most grammars the practical difference is negligible.
 
 ```csharp
 var rust = Identifier(extraStartRunes: TokenSet.Runes("_"))
-    .Compile(NormalizationForm.FormKC);
+    .Compile(NormalizationForm.FormC);
 var result = rust.Parse(input);
 ```
 

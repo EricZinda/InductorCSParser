@@ -12,16 +12,14 @@ namespace InductorParser.Tests;
 // exercises the char-index -> (line, column, grapheme) conversions
 // specifically.
 //
-// ------------------------------------------------------------------
-// LSP position rules the (line, column) cases below encode
-// ------------------------------------------------------------------
-// LSP is the Language Server Protocol, the JSON-RPC protocol VS Code,
-// Neovim, JetBrains, and essentially every modern editor use to talk
-// to language tooling for diagnostics, completion, go-to-definition,
-// etc. ErrorLine / ErrorColumn on ParseResult follow LSP's position
-// conventions end-to-end so a caller forwarding a parse error into an
-// editor diagnostic can just use the value. The expected
-// values in this file may look off until you remember:
+// The (line, column) cases below encode Language Server Protocol position
+// rules. The Language Server Protocol is the JSON-RPC protocol VS Code,
+// Neovim, JetBrains, and essentially every modern editor use to talk to
+// language tooling for diagnostics, completion, go-to-definition, etc.
+// ErrorLine / ErrorColumn on ParseResult follow its position conventions
+// end-to-end so a caller forwarding a parse error into an editor diagnostic
+// can just use the value. The expected values in this file may look off
+// until you remember:
 //
 //   * Both line and column are 0-BASED. The first line is 0, not 1.
 //     The first character of a line is column 0.
@@ -43,7 +41,6 @@ namespace InductorParser.Tests;
 //
 // See docs/InductorParserDesignDecisions.md "LSP Position Semantics" for the full
 // rationale.
-// ------------------------------------------------------------------
 [TestFixture]
 public class ErrorPositionTests
 {

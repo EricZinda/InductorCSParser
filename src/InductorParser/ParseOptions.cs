@@ -162,7 +162,7 @@ public sealed class ParseOptions
     /// <code>
     ///   {charIndex}    ParseResult.ErrorCharIndex   (UTF-16 code units)
     ///   {tokenIndex}   ParseResult.ErrorTokenIndex  (StringInfo text elements)
-    ///   {line}         ParseResult.ErrorLine        (zero-based, LSP convention)
+    ///   {line}         ParseResult.ErrorLine        (zero-based, Language Server Protocol convention)
     ///   {column}       ParseResult.ErrorColumn      (zero-based, in chars)
     /// </code>
     /// plus a per-template placeholder for the unit-specific value:

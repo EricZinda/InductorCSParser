@@ -188,8 +188,8 @@ public class Primer2Examples
     // primer2.md "When the parse fails": the doc claims that
     //   config.Parse("[server]\nport oops\n")
     // fails at "line 1, column 5" with an error message that surfaces
-    // somewhere in the parse. (LSP: 0-based line means line 1 in the
-    // doc corresponds to ErrorLine == 1.)
+    // somewhere in the parse. (Language Server Protocol: 0-based line means
+    // line 1 in the doc corresponds to ErrorLine == 1.)
     [Test]
     public void Parse_failure_reports_line_and_column()
     {
@@ -199,7 +199,7 @@ public class Primer2Examples
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorLine, Is.EqualTo(1),
-            "Second line of input is line 1 in LSP-style 0-based lines");
+            "Second line of input is line 1 in Language Server Protocol-style 0-based lines");
         Assert.That(result.ErrorColumn, Is.EqualTo(5),
             "The space-then-'o' fails where the '=' should be at col 5");
         Assert.That(result.ErrorMessage, Is.Not.Empty);
@@ -282,7 +282,7 @@ public class Primer2Examples
     //   ErrorCharIndex      == 16 (UTF-16 code units)
     //   ErrorTokenIndex  == 9  (graphemes)
     //   ErrorLine           == 1
-    //   ErrorColumn         == 5  (UTF-16 chars, LSP)
+    //   ErrorColumn         == 5  (UTF-16 chars, Language Server Protocol)
     [Test]
     public void Family_emoji_position_divergence_matches_doc()
     {
@@ -327,7 +327,8 @@ public class Primer2Examples
         }
 
         Assert.That(offending, Is.Not.Null);
-        // "Line 4" in the doc's 1-based human form is line 3 in 0-based LSP.
+        // "Line 4" in the doc's 1-based human form is line 3 in the 0-based
+        // Language Server Protocol convention.
         int humanLine = offending!.SourceRange!.Value.Start.Line + 1;
         Assert.That(humanLine, Is.EqualTo(4));
     }

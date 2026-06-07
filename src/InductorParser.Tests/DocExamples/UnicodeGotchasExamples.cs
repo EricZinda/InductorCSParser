@@ -91,18 +91,26 @@ public class UnicodeGotchasExamples
         Assert.That(result.Success, Is.True);
     }
 
-    // "Matching specific languages" / "Rust identifiers" recipe. Same
-    // profile as Python 3 (adds `_` to Start, uses NFKC). Added as its
-    // own test because the Rust example sits in its own code block in
-    // UnicodeGotchas.md.
+    // "Matching specific languages" / "Rust identifiers" recipe. Adds `_`
+    // to Start like Python 3, but Rust normalizes identifiers with NFC, not
+    // NFKC (Rust Reference "Identifiers"; RFC 2457), so the form is FormC,
+    // not FormKC. Added as its own test because the Rust example sits in its
+    // own code block in UnicodeGotchas.md.
     [Test]
     public void Rust_identifier_recipe()
     {
         var rust = Identifier(extraStartRunes: TokenSet.Runes("_"))
-            .Compile(NormalizationForm.FormKC);
+            .Compile(NormalizationForm.FormC);
 
-        var result = rust.Parse("_foo");
-        Assert.That(result.Success, Is.True);
+        Assert.That(rust.Parse("_foo").Success, Is.True);
+
+        // NFC, not NFKC, is the whole point of FormC here. U+2460 CIRCLED
+        // DIGIT ONE is category No (not an identifier character), and NFC
+        // leaves it unchanged, so Rust rejects "x" + circled-one. The old
+        // FormKC recipe normalized that input to "x1" before lexing and
+        // wrongly accepted it, treating a non-Rust identifier as valid.
+        string circledDigitInput = Canary("x①", "ASCII x, U+2460 CIRCLED DIGIT ONE", 0x78, 0x2460);
+        Assert.That(rust.Parse(circledDigitInput).Success, Is.False);
     }
 
     // Locks in that Identifier's form-aware set expansion runs at

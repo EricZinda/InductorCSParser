@@ -82,7 +82,7 @@ public class SymbolPositionTests
     [Test]
     public void Range_treats_CRLF_as_one_line_break()
     {
-        // CRLF is a single LSP line terminator and a single UAX #29
+        // CRLF is a single Language Server Protocol line terminator and a single UAX #29
         // grapheme. End.Line bumps by exactly 1; End.TokenIndex is 5
         // (a, b, \r\n, c, d).
         var rule = Literal("ab\r\ncd").Preserve();

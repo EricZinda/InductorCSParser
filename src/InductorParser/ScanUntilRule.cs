@@ -315,55 +315,121 @@ internal sealed class ScanUntilRule : Rule
         _escapeStartGrapheme = normalized;
     }
 
+    // How a scan loop ended. StopperFound and ReachedEnd leave the cursor at
+    // the body's end (the stopper unconsumed); Failed means the loop already
+    // recorded its own failure (a started escape whose end didn't complete)
+    // and TryParseRule should return null.
+    private enum ScanResult { StopperFound, ReachedEnd, Failed }
+
     protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        string input = lexer.Input;
-        int inputLen = input.Length;
+        // Scan forward one token (one grapheme cluster) at a time until the
+        // stopper matches or input runs out, then decide the outcome: a stopper
+        // match always succeeds; reaching EOF succeeds only if _eofIsTerminator
+        // is set (the tolerant and ScanUntilEof cases) and otherwise fails with
+        // "unterminated body". The TokenSet-stopper-without-a-rule-escape case
+        // takes the Read-based ScanFastPath; everything else takes
+        // ScanGeneralPath, which peeks sub-rules without consuming.
+        //
+        // Lone surrogates the lexer surfaces (one-char tokens with RuneValue
+        // -1, see UnexpectedUnicodeTests) are consumed as body unless the
+        // stopper set opts into surrogates
+        // matching how ZeroOrMore(NoneOf(stopAt)) treats them.
+        // Surrogates reach this
+        // rule only under Compile(null); otherwise string.Normalize rejects
+        // malformed UTF-16 before Parse() runs.
+        ScanResult result = _stopperRule == null && _escapeStartRule == null
+            ? ScanFastPath(lexer)
+            : ScanGeneralPath(lexer);
 
-        // Scan forward one token (one user-perceived character) at a
-        // time: a token is one grapheme cluster. The loop
-        // has two ways out: end-of-input (the while condition) or a
-        // stopper match. Which one happened decides the post-loop
-        // path: stopper match always succeeds; EOF succeeds only if
-        // _eofIsTerminator is true (the tolerant and ScanUntilEof
-        // cases), and otherwise fails with "unterminated body". The
-        // local `stopperMatched` flag carries that decision out of
-        // the loop. Each iteration consumes one token as body or one
-        // escape sequence.
-        //
-        // The loop bound is `!lexer.IsEof`, which is `_position <
-        // _endPosition` for a sub-lexer (the one WithinToken hands us
-        // when this rule is the inner of WithinToken(ScanUntil(...))).
-        // Comparing against input.Length would be the full outer string
-        // and let the loop run past the sub-lexer's bound: PeekTokenLength
-        // would return 0 there, the body fall-through's
-        // SetPosition(pos + 0) wouldn't move the cursor, and the
-        // loop would spin forever.
-        //
-        // Lone surrogates the lexer surfaces (one-char tokens carrying
-        // no RuneValue, see UnexpectedUnicodeTests) are handled the same
-        // way ZeroOrMore(NoneOf(stopAt)) handles them, and that depends
-        // on the stopper set:
-        //   * A stopper set with no surrogate code units (the typical
-        //     string-body case, stopAt = '"' / '|' / etc.) doesn't
-        //     contain the surrogate, so the stopper check says "no
-        //     match" and the body fall-through consumes it. The
-        //     escape-start check also says "no match", because the
-        //     escape-start rune is always a valid scalar and can't equal
-        //     a surrogate code unit.
-        //   * A stopper set built with TokenSet.Surrogates or
-        //     SurrogateRange does contain the surrogate's code unit
-        //     (ContainsToken has a lone-surrogate branch for exactly this
-        //     opt-in), so the stopper check matches and the scan stops at
-        //     the surrogate. That's the WTF-8 / unpaired-surrogate
-        //     boundary a grammar deliberately asks for.
-        // Either way the leaf Symbol's Memory points into the input with
-        // no copy, so any surrogate consumed as body round-trips through
-        // ToString() byte-for-byte. Lone surrogates only reach this rule
-        // under Compile(null), because string.Normalize rejects malformed
-        // UTF-16 with ArgumentException out of Parse() under any other
-        // form.
-        bool stopperMatched = false;
+        if (result == ScanResult.Failed)
+            return null; // the scan already recorded its failure
+
+        if (result == ScanResult.ReachedEnd && !_eofIsTerminator)
+        {
+            // Strict: the scan ran off the end without matching the stopper.
+            // Record at the stuck position (EOF). A .WithError rides along
+            // there rather than being pulled back to the rule's start. See
+            // docs/ErrorArchitecture.md.
+            TraceFailure(lexer, $"unterminated body, expected stopper '{_stopperRendered}'");
+            lexer.RecordFailure(lexer.Position, ErrorMessage, ErrorForced);
+            return null;
+        }
+
+        int length = lexer.Position - startPosition;
+        TraceSuccess(lexer, $"{length} chars, stopper '{_stopperRendered}'");
+        if (effectiveFlattenType == FlattenType.Delete) return Symbol.Discarded;
+        var leafSymbol = new Symbol(Id, FlattenType, lexer.Input.AsMemory(startPosition, length), lexer.Context);
+        if (effectiveFlattenType == FlattenType.Flatten)
+        {
+            outputSymbols!.Add(leafSymbol);
+            return Symbol.Discarded;
+        }
+        return leafSymbol;
+    }
+
+    // Fast path: a TokenSet stopper with no escape or a single-rune escape
+    // start (JSON, Python, C). Consumes body tokens with the public
+    // lexer.Read(). The rule-stopper and rule-escape-start paths can't use
+    // this: they peek a sub-rule without consuming, which Read() can't do, so
+    // they take ScanGeneralPath. 
+    private ScanResult ScanFastPath(Lexer lexer)
+    {
+        while (!lexer.IsEof)
+        {
+            lexer.TickBudget();
+            int position = lexer.Position;
+            Token token = lexer.Read();
+
+            // Escape-start check first, so an escape whose start shares a prefix
+            // with a stopper still wins. Read() already consumed the start; its
+            // end runs next. Token.RuneValue is -1 for a multi-rune cluster or
+            // lone surrogate, so the int compare can only match a one-rune
+            // token. The grapheme case (a single-rune start that decomposed to
+            // a multi-rune cluster under the chosen form) compares the whole
+            // cluster span instead.
+            if (_hasEscape)
+            {
+                bool escapeStartMatched = _escapeStartGrapheme != null
+                    ? token.Chars.SequenceEqual(_escapeStartGrapheme.AsSpan())
+                    : token.RuneValue == _escapeStartRune;
+                if (escapeStartMatched)
+                {
+                    if (ParseChild(_escapeEnd!, lexer, outputSymbols: null) == null)
+                    {
+                        TraceFailure(lexer, $"bad escape end at offset {lexer.Position}");
+                        lexer.RecordCompositeFailure(lexer.Position, ErrorMessage, ErrorForced);
+                        return ScanResult.Failed;
+                    }
+                    continue;
+                }
+            }
+
+            // Stopper check against the whole token Read() consumed. On a match
+            // the stopper isn't part of the body, so back the cursor up to where
+            // this token started and stop. ContainsToken covers the single-rune
+            // intervals, any multi-rune entries (e.g. a CRLF stopper), and the
+            // lone-surrogate opt-in.
+            if (_stopperSet.ContainsToken(token.Chars))
+            {
+                lexer.SetPosition(position);
+                return ScanResult.StopperFound;
+            }
+            // Otherwise the token Read() consumed is body; keep scanning.
+        }
+        return ScanResult.ReachedEnd;
+    }
+
+    // General path: a rule-valued stopper and/or a rule-valued escape start.
+    // Both peek a sub-rule in a Probe without consuming, so the cursor can't be
+    // advanced by Read() up front the way ScanFastPath does. It peeks the next
+    // token's length, classifies it, and advances with SetPosition once the
+    // token is taken as body.
+    private ScanResult ScanGeneralPath(Lexer lexer)
+    {
+        string input = lexer.Input;
+        int inputLength = input.Length;
+
         while (!lexer.IsEof)
         {
             // See Lexer.AdvanceWhileRuneIn for why every iteration
@@ -371,30 +437,24 @@ internal sealed class ScanUntilRule : Rule
             // engine's view.
             lexer.TickBudget();
 
-            int pos = lexer.Position;
+            int position = lexer.Position;
 
-            // Peek the next rune for the single-rune escape-start
-            // fast path's runeValue compare. TryPeekRune returns false
-            // on a lone surrogate (sets runeValue = -1, runeLen = 0);
-            // we don't short-circuit on that, because the surrogate
-            // is still a valid token and falls through to body. The
-            // tokenLen != runeLen check on the escape-start branch
-            // already excludes lone-surrogate tokens (tokenLen == 1,
-            // runeLen == 0) from the fast path, and -1 isn't a valid
-            // escape-start rune anyway, so no further guard is needed.
-            Lexer.TryPeekRune(input, pos, out int runeValue, out int runeLen);
+            // Decode the next rune for the single-rune escape-start compare
+            // below. On a lone surrogate TryPeekRune returns false (runeValue
+            // -1, runeLength 0); that's fine, since the escape-start check's
+            // tokenLength == runeLength rejects it and it falls through to body.
+            Lexer.TryPeekRune(input, position, out int runeValue, out int runeLength);
 
-            // tokenLen is the next whole token's length (one grapheme
+            // tokenLength is the next whole token's length (one grapheme
             // cluster). The escape-start fast path and the stopper check
             // below both need it.
-            int tokenLen = lexer.PeekTokenLength(pos);
+            int tokenLength = lexer.PeekTokenLength(position);
 
-            // Escape-start check, before the stopper check (see the
-            // header comment for why the escape wins when its start
-            // shares a prefix with a stopper). Single-rune and Rule
-            // forms are mutually exclusive; the constructor picks one.
-            // When the escape-start doesn't match here, the scan falls
-            // through to the stopper check below.
+            // Escape-start check, before the stopper check (so the escape wins
+            // when its start shares a prefix with a stopper). Single-rune and
+            // Rule forms are mutually exclusive; the constructor picks one.
+            // When the escape-start doesn't match, the scan falls through to
+            // the stopper check below.
             if (_hasEscape)
             {
                 if (_escapeStartRule != null)
@@ -425,7 +485,7 @@ internal sealed class ScanUntilRule : Rule
                             // failure would otherwise shadow this .WithError. See
                             // docs/ErrorArchitecture.md.
                             lexer.RecordCompositeFailure(lexer.Position, ErrorMessage, ErrorForced);
-                            return null;
+                            return ScanResult.Failed;
                         }
                         // Zero-width guard: if both the start and end
                         // happen to be zero-width rules, position is
@@ -434,7 +494,7 @@ internal sealed class ScanUntilRule : Rule
                         // error (passing zero-width rules here makes
                         // no sense), but we break cleanly rather than
                         // hang. Same pattern as BetweenInclusiveRule.
-                        if (lexer.Position == pos) break;
+                        if (lexer.Position == position) break;
                         continue;
                     }
                     // Start didn't match: the Probe restored the position,
@@ -443,43 +503,27 @@ internal sealed class ScanUntilRule : Rule
                 }
                 else
                 {
-                    // Two flavors of the no-sub-rule escape-start fast
-                    // path, picked by Compile's normalization-form pass
-                    // (see ValidateNormalization above):
-                    //
-                    // Single-rune start (the default and every form-
-                    // stable escape start): the token must be exactly
-                    // the escape rune with nothing else glued onto it.
-                    // '\' alone matches, but '\<combining mark>' (one
-                    // cluster, two runes by UAX #29 GB9) doesn't, the
-                    // same way Token('\\') would refuse it. tokenLen
-                    // == runeLen is the test for "this cluster is one
-                    // rune long," which is what makes the fast path
-                    // safe under the parser-wide grapheme invariant.
-                    //
-                    // Multi-rune-cluster start (the user wrote a single
-                    // rune that decomposes to multiple runes under the
-                    // chosen form, e.g. 'é' → "e + U+0301" under
-                    // FormD): the int compare can never match the
-                    // cluster's first rune, so a span-equal against
-                    // the whole normalized cluster takes its place.
-                    // The whole cluster has to match: a partial match
-                    // can't fire the escape because the lexer hands
-                    // the rule one cluster per token.
+                    // No-sub-rule escape-start match. Normalization may have
+                    // turned a single-rune start into a multi-rune cluster
+                    // (e.g. 'é' → "e + U+0301" under FormD): _escapeStartGrapheme
+                    // holds it and the whole cluster has to span-match. Otherwise
+                    // it's a single rune, and tokenLength == runeLength requires a
+                    // one-rune token, so '\<combining mark>' (one cluster, two
+                    // runes) doesn't match, the same as Token('\\').
                     bool escapeStartMatched = _escapeStartGrapheme != null
-                        ? pos + tokenLen <= inputLen
-                            && input.AsSpan(pos, tokenLen).SequenceEqual(_escapeStartGrapheme.AsSpan())
-                        : tokenLen == runeLen && runeValue == _escapeStartRune;
+                        ? position + tokenLength <= inputLength
+                            && input.AsSpan(position, tokenLength).SequenceEqual(_escapeStartGrapheme.AsSpan())
+                        : tokenLength == runeLength && runeValue == _escapeStartRune;
                     if (escapeStartMatched)
                     {
-                        lexer.SetPosition(pos + tokenLen);
+                        lexer.SetPosition(position + tokenLength);
                         var end = ParseChild(_escapeEnd!, lexer, outputSymbols: null);
                         if (end == null)
                         {
-                            TraceFailure(lexer, $"bad escape end at offset {pos + tokenLen}");
+                            TraceFailure(lexer, $"bad escape end at offset {position + tokenLength}");
                             // Composite anchor, same shape as the rule-form path above.
                             lexer.RecordCompositeFailure(lexer.Position, ErrorMessage, ErrorForced);
-                            return null;
+                            return ScanResult.Failed;
                         }
                         continue;
                     }
@@ -496,11 +540,10 @@ internal sealed class ScanUntilRule : Rule
             // OneOf("\"") would give on the same input.
             if (_stopperRule == null)
             {
-                if (pos + tokenLen <= inputLen
-                    && _stopperSet.ContainsToken(input.AsSpan(pos, tokenLen)))
+                if (position + tokenLength <= inputLength
+                    && _stopperSet.ContainsToken(input.AsSpan(position, tokenLength)))
                 {
-                    stopperMatched = true;
-                    break;
+                    return ScanResult.StopperFound;
                 }
             }
             else
@@ -517,10 +560,7 @@ internal sealed class ScanUntilRule : Rule
                     stopMatched = ParseChild(_stopperRule, lexer, outputSymbols: null) != null;
                 }
                 if (stopMatched)
-                {
-                    stopperMatched = true;
-                    break;
-                }
+                    return ScanResult.StopperFound;
             }
 
             // Not a stopper, not an escape start: consume the whole
@@ -528,19 +568,18 @@ internal sealed class ScanUntilRule : Rule
             // (rather than rune-by-rune) keeps the loop on real
             // grapheme-cluster boundaries, which is what the rest of
             // the parser sees.
-            if (pos + tokenLen > inputLen) break;
-            lexer.SetPosition(pos + tokenLen);
+            if (position + tokenLength > inputLength) break;
+            lexer.SetPosition(position + tokenLength);
         }
 
-        // Tests the Rule-stopper at the EOF position. The scan loop
-        // above runs the stopper at each token position; this covers
-        // end of input, where an EOF-sensitive stopper rule (Eof(),
-        // Not(AnyToken()), Or(..., Eof())) can match. A match here ends
-        // the body at EOF, the same as a match mid-input. Strict mode
-        // only: _eofIsTerminator already stops at EOF on its own.
-        // TokenSet stoppers skip this. A TokenSet is tested against a
-        // real token, and EOF produces none.
-        if (!stopperMatched && !_eofIsTerminator && _stopperRule != null && lexer.IsEof)
+        // Tests the Rule-stopper at the EOF position. The loop above runs the
+        // stopper at each token position; this covers end of input, where an
+        // EOF-sensitive stopper rule (Eof(), Not(AnyToken()), Or(..., Eof()))
+        // can match, ending the body at EOF the same as a match mid-input.
+        // Strict mode only: _eofIsTerminator already stops at EOF on its own.
+        // TokenSet stoppers skip this, since a TokenSet is tested against a
+        // real token and EOF produces none.
+        if (!_eofIsTerminator && _stopperRule != null && lexer.IsEof)
         {
             // Same pure-lookahead Probe as the in-loop stopper check: the
             // stopper is never consumed by ScanUntil, and the probe's
@@ -552,31 +591,10 @@ internal sealed class ScanUntilRule : Rule
                 matchedAtEof = ParseChild(_stopperRule, lexer, outputSymbols: null) != null;
             }
             if (matchedAtEof)
-                stopperMatched = true;
+                return ScanResult.StopperFound;
         }
 
-        if (!stopperMatched && !_eofIsTerminator)
-        {
-            // Strict: the loop ran off the end without ever matching
-            // the stopper. Record at the stuck position the scan
-            // reached (EOF, here). A .WithError rides along at that
-            // same spot rather than being pulled back to the rule's
-            // start. See docs/ErrorArchitecture.md.
-            TraceFailure(lexer, $"unterminated body, expected stopper '{_stopperRendered}'");
-            lexer.RecordFailure(lexer.Position, ErrorMessage, ErrorForced);
-            return null;
-        }
-
-        int length = lexer.Position - startPosition;
-        TraceSuccess(lexer, $"{length} chars, stopper '{_stopperRendered}'");
-        if (effectiveFlattenType == FlattenType.Delete) return Symbol.Discarded;
-        var leafSymbol = new Symbol(Id, FlattenType, input.AsMemory(startPosition, length), lexer.Context);
-        if (effectiveFlattenType == FlattenType.Flatten)
-        {
-            outputSymbols!.Add(leafSymbol);
-            return Symbol.Discarded;
-        }
-        return leafSymbol;
+        return ScanResult.ReachedEnd;
     }
 
 }
