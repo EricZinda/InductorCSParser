@@ -66,4 +66,48 @@ public class LexerScanningTests
         Assert.That(tokenLexer.Position, Is.EqualTo(runeLexer.Position),
             "Both methods should advance the lexer to the same position on rune-only sets.");
     }
+
+    [Test]
+    public void Grapheme_mode_fuses_a_lone_surrogate_with_a_following_combining_mark()
+    {
+        // In grapheme mode a stray surrogate isn't always a one-char
+        // token. A bare stray is one char, but when a combining mark
+        // follows, UAX #29 GB9 (don't break before an Extend) glues the
+        // stray to the mark into one multi-char cluster: StringInfo
+        // decodes the stray to U+FFFD (grapheme property Other) and won't
+        // break before the following Extend. The tokenLength == 1 check in
+        // AdvanceWhileRuneIn depends on this. This test holds grapheme-mode
+        // tokenization to StringInfo's segmentation so a stray followed by
+        // an Extend stays one fused token.
+
+        // A lone surrogate on its own is a one-char token, on every
+        // runtime.
+        var alone = new Lexer(HighSurrogateMinText);
+        Assert.That(alone.PeekTokenLength(0), Is.EqualTo(1),
+            "A lone surrogate with nothing after it is a one-char token.");
+
+        // A lone surrogate followed by U+0301 COMBINING ACUTE. Whether
+        // the two fuse is decided by the runtime's StringInfo, so the
+        // expected token length comes from StringInfo's own segmentation
+        // (the lexer's source of truth) rather than a hard-coded number.
+        // On the suite's .NET 5+ target that fused length is 2.
+        string strayThenMark = HighSurrogateMinText + CombiningAcuteText;
+        int firstClusterLength =
+            System.Globalization.StringInfo.GetNextTextElement(strayThenMark, 0).Length;
+
+        var lexer = new Lexer(strayThenMark);
+        Assert.That(lexer.PeekTokenLength(0), Is.EqualTo(firstClusterLength),
+            "Grapheme-mode tokenization must match StringInfo's UAX #29 "
+            + "segmentation, which on a .NET 5+ runtime fuses the stray "
+            + "surrogate with the following combining mark into one "
+            + "two-char cluster (not two one-char tokens).");
+
+        // Read advances the cursor over the whole fused cluster in one
+        // step.
+        var token = lexer.Read();
+        Assert.That(token.Length, Is.EqualTo(firstClusterLength),
+            "Read consumes the whole fused cluster as one token.");
+        Assert.That(lexer.Position, Is.EqualTo(firstClusterLength),
+            "The read cursor advances past the whole fused cluster.");
+    }
 }

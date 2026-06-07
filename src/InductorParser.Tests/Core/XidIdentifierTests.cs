@@ -412,9 +412,23 @@ public class XidIdentifierTests
         Assert.That(exception.Message, Does.Contain("extraBodyRunes"));
         Assert.That(exception.Message, Does.Contain(fractionSlash));
 
-        // Supplying the missing piece in extraBodyRunes clears the rejection.
-        Assert.DoesNotThrow(() =>
+        // Supplying the missing tail piece in extraBodyRunes clears the tail
+        // rejection, but 1/2's NFKx head is the DIGIT ONE, which isn't a valid
+        // identifier-start character either: a digit leaking into the start
+        // set would let an identifier begin with a digit, the same leak the
+        // head check exists to stop. So the head check still rejects it until
+        // the caller also opts the head into extraStartRunes.
+        var headException = Assert.Throws<InvalidOperationException>(() =>
             Identifier(extraStartRunes: TokenSet.Runes(oneHalf),
+                       extraBodyRunes: TokenSet.Runes(fractionSlash)).Compile(form));
+        Assert.That(headException!.Message, Does.Contain("extraStartRunes"));
+        Assert.That(headException.Message, Does.Contain("1"),
+            "error message names the offending head piece (the digit 1)");
+
+        // Opting in both the unmatchable tail piece (into body) and the digit
+        // head (into start) clears every rejection.
+        Assert.DoesNotThrow(() =>
+            Identifier(extraStartRunes: TokenSet.Runes(oneHalf) | TokenSet.Runes("1"),
                        extraBodyRunes: TokenSet.Runes(fractionSlash)).Compile(form));
     }
 
@@ -466,7 +480,7 @@ public class XidIdentifierTests
 
     [TestCase(NormalizationForm.FormKC)]
     [TestCase(NormalizationForm.FormKD)]
-    public void Identifier_start_extra_with_single_grapheme_multi_rune_NFKx_works(NormalizationForm form)
+    public void Identifier_rejects_start_extra_whose_decomposition_head_is_not_a_start_character(NormalizationForm form)
     {
         // U+309B KATAKANA-HIRAGANA VOICED SOUND MARK is removed from
         // XID_Start by NFKx closure because its NFKx is SPACE + U+3099. The
@@ -474,23 +488,57 @@ public class XidIdentifierTests
         // followed by an Extend combining mark joins into one cluster per
         // UAX #29 GB9).
         //
-        // A user adding U+309B back to extraStartRunes expects parsing under
-        // FormKC / FormKD to work, mirroring the existing multi-grapheme
-        // handling: the head rune is silently added to start and the tail
-        // runes are validated against body. Before the fix, the
-        // WithCompatibilityHeadRuneEquivalents / AllCompatibilityTailRunesIn
-        // helpers detected "multi-grapheme" via GraphemeHelpers.Count, missing
-        // the single-grapheme multi-rune case entirely. IdentifierRule's
-        // OneOfRule projection then turned U+309B into a multi-rune grapheme
-        // entry which the WithinToken sub-lexer (one-rune-per-token) couldn't
-        // match. Parse failed silently at offset 0.
-        var rule = Identifier(
-            extraStartRunes: TokenSet.Single(0x309B));
-        rule.Compile(form);
+        // Its HEAD rune is U+0020 SPACE, which isn't a valid identifier-start
+        // character. Under FormKC/FormKD the input is normalized before
+        // lexing, so U+309B's first rune and a literal leading space are the
+        // same U+0020 in the stream: there's no way to let U+309B start an
+        // identifier without also accepting a bare leading space (" foo"
+        // lexing as one token). So Identifier rejects the extra at Compile
+        // time, the same shape as the body-side rejection of a decomposition
+        // piece outside the allowed set.
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            Identifier(extraStartRunes: TokenSet.Single(0x309B)).Compile(form));
+        Assert.That(exception!.Message, Does.Contain("extraStartRunes"));
+        Assert.That(exception.Message, Does.Contain(" "),
+            "error message names the offending head piece (a SPACE)");
+
+        // Sanity: an extra start rune whose NFKx head IS a valid start
+        // character is accepted. The IJ ligature U+0132 decomposes to "IJ";
+        // the head 'I' is an ordinary XID_Start letter and the tail 'J' is a
+        // valid body character, so the compile doesn't throw.
+        Assert.DoesNotThrow(() =>
+            Identifier(extraStartRunes: TokenSet.Single(0x0132)).Compile(form));
+
+        // Explicit opt-in: the caller can add the offending head (U+0020) to
+        // extraStartRunes themselves, declaring that they really do want a
+        // space to be able to start an identifier. The compile then succeeds
+        // and U+309B parses, the same opt-in shape the body side supports for
+        // pieces outside XidContinue.
+        var optInRule = Identifier(
+            extraStartRunes: TokenSet.Single(0x309B) | TokenSet.Single(0x20));
+        Assert.DoesNotThrow(() => optInRule.Compile(form));
         var input = UnicodeExamples.KatakanaHiraganaVoicedSoundMarkGrapheme + "foo";
-        var result = rule.Parse(input);
+        var result = optInRule.Parse(input);
         Assert.That(result.Success, Is.True,
-            $"identifier starting with U+309B should match under {form}: {result.ErrorMessage}");
+            $"with U+0020 opted into start, U+309B should match under {form}: {result.ErrorMessage}");
+    }
+
+    [TestCase(NormalizationForm.FormKC)]
+    [TestCase(NormalizationForm.FormKD)]
+    public void Identifier_rejects_spacing_diacritic_start_extra_that_would_leak_a_leading_space(NormalizationForm form)
+    {
+        // Regression for the head-leak bug. U+00A8 DIAERESIS has the NFKx
+        // SPACE + U+0308 (one of several spacing diacritics with a SPACE
+        // head: U+00AF, U+00B4, U+00B8, U+02D8..U+02DD, ...). Its tail
+        // U+0308 is a valid body combining mark, so the tail check passes,
+        // but its head is U+0020 SPACE. Before the head check, that SPACE
+        // leaked into the start set and a bare leading space started an
+        // identifier: " x" lexed as a single identifier consuming both
+        // characters, and a lone " " lexed as a complete identifier. The
+        // head check now rejects the extra at Compile time.
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            Identifier(extraStartRunes: TokenSet.Single(0x00A8)).Compile(form));
+        Assert.That(exception!.Message, Does.Contain("extraStartRunes"));
     }
 
     [TestCase(NormalizationForm.FormKC)]
