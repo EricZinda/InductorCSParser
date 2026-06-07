@@ -41,7 +41,7 @@ Nothing in this doc engages with these. They run outside the parser, on the pars
 
 ## The Lexer
 
-The parser has one lexer. It walks the input one .NET text element at a time using `System.Globalization.StringInfo.GetNextTextElement` and hands back one `Token` per `Read()` call. On modern .NET this follows UAX #29 extended-grapheme-cluster behavior. Older .NET / Unity Mono runtimes have known segmentation gaps covered in [UnicodeGotchas.md](UnicodeGotchas.md#pre-net-5-grapheme-segmentation). Each token usually matches what a user would perceive as a single character.
+The parser has one lexer. It walks the input one .NET text element at a time using `System.Globalization.StringInfo.GetNextTextElement` and hands back one `Token` per `Read()` call. On modern .NET this follows UAX #29 extended-grapheme-cluster behavior. Older .NET / Unity Mono runtimes have known segmentation gaps covered in [UnicodeGotchas.md](UnicodeGotchas.md#pre-net-5-token-segmentation). Each token usually matches what a user would perceive as a single character.
 
 ```
 Input:  "🎸 = 👋🏽;"

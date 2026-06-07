@@ -22,8 +22,9 @@ namespace InductorParser;
 // via StringInfo.GetNextTextElement. Token("ab") throws at
 // grammar-build time instead of silently failing at parse time. (Note:
 // on pre-.NET 5 runtimes StringInfo isn't UAX #29 compliant, so the
-// token count for exotic Unicode inputs can be wrong. See
-// backlog/xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md.)
+// token count for exotic Unicode inputs can be wrong. A future vendored
+// UAX #29 grapheme-cluster implementation would make this uniform
+// across runtimes.)
 //
 // If the expected token is exactly one rune (the common case for
 // ASCII, emoji that fit in a single code point, CJK, etc.), the Id is
