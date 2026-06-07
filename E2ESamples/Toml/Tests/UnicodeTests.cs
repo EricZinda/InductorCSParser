@@ -12,7 +12,7 @@ namespace InductorParser.E2ESamples.Toml.Tests;
 //      carve out tab, LF, CR and exclude the rest of U+0000..U+001F
 //      and U+007F.
 //   2. \uXXXX and \UXXXXXXXX escapes must resolve to a valid Unicode
-//      scalar value. The grammar accepts any 4 or 8 hex digits; the
+//      scalar value. The grammar accepts any 4 or 8 hex digits. The
 //      decoder rejects surrogates (U+D800..U+DFFF) and values above
 //      U+10FFFF.
 //   3. Keys are normalized to NFC by the scanner before the consumer
@@ -26,9 +26,7 @@ namespace InductorParser.E2ESamples.Toml.Tests;
 [TestFixture]
 public class UnicodeTests
 {
-    // ---------------------------------------------------------
     // Angle 1: control characters in strings (grammar level)
-    // ---------------------------------------------------------
 
     [TestCase((char)0x00, TestName = "BasicString_RawNul_Rejected")]
     [TestCase((char)0x01, TestName = "BasicString_RawSoh_Rejected")]
@@ -67,9 +65,7 @@ public class UnicodeTests
             $"U+{(int)controlChar:X4} should not be allowed raw in a literal string body.");
     }
 
-    // ---------------------------------------------------------
     // Angle 2: \u and \U surrogate / out-of-range rejection
-    // ---------------------------------------------------------
 
     [Test]
     public void ShortEscape_HighSurrogate_Rejected()
@@ -165,9 +161,7 @@ public class UnicodeTests
         Assert.That(char.ConvertToUtf32(decoded, 0), Is.EqualTo(0x1F600));
     }
 
-    // ---------------------------------------------------------
     // Line endings: only LF and CRLF, per ABNF "newline = LF / CRLF"
-    // ---------------------------------------------------------
 
     [Test]
     public void BareCr_BetweenLines_IsRejected()
@@ -191,8 +185,9 @@ public class UnicodeTests
     [Test]
     public void BareCr_InsideMultilineBasicString_IsRejected()
     {
-        // Bare CR inside an ml-basic-string body would otherwise sneak
-        // through the body's newline alternative.
+        // The body's newline alternative accepts only LF and CRLF, so a
+        // bare CR inside an ml-basic-string body is rejected rather than
+        // accepted as a line break.
         var input = "s = \"\"\"line1\rline2\"\"\"\n";
         var result = TomlGrammar.TomlDocument.Parse(input);
         Assert.That(result.Success, Is.False);
@@ -209,9 +204,7 @@ public class UnicodeTests
         Assert.That((long)root["b"], Is.EqualTo(2));
     }
 
-    // ---------------------------------------------------------
     // Angle 3: key normalization is not implicit
-    // ---------------------------------------------------------
 
     [Test]
     public void NfdInput_PreservesByteFidelity_DistinctFromNfc()

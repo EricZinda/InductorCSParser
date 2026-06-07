@@ -18,7 +18,7 @@ namespace InductorParser.E2ESamples.Toml.Rewrite;
 // All the value-decoding (escape handling for strings, underscore
 // stripping for integers, inf/nan handling for floats, datetime
 // parsing) lives here, not in the grammar. The grammar produces named
-// leaves; this consumer dispatches on the rule each leaf was produced
+// leaves. This consumer dispatches on the rule each leaf was produced
 // by.
 //
 // Static helpers, no per-projection state: every Symbol the engine
@@ -60,7 +60,7 @@ public static class TomlParser
             else if (symbol.Is(Table))
             {
                 // Table = Or(ArrayTable, StandardTable).Preserve(), so the
-                // wrapper Symbol carries one child holding the concrete kind.
+                // Or's Symbol carries one child holding the concrete kind.
                 var inner = symbol.Children[0];
                 if (inner.Is(StandardTable))
                     currentTable = OpenStandardTable(root, inner, explicitlyDefinedTables);
@@ -74,9 +74,7 @@ public static class TomlParser
         return root;
     }
 
-    // ---------------------------------------------------------
     // Key navigation
-    // ---------------------------------------------------------
     // Resolve the key path of a `[section]` header against the root
     // table. Walks each path segment, creating implicit tables along
     // the way and binding the leaf as an explicitly-defined table.
@@ -107,8 +105,8 @@ public static class TomlParser
     }
 
     // Resolve the key path of an `[[array.of.tables]]` header. The leaf
-    // segment names an array; each header line appends a fresh table to
-    // that array.
+    // segment names an array, and each header line appends a fresh table
+    // to that array.
     private static TomlTable OpenArrayTable(TomlTable root, Symbol arrayTable, HashSet<TomlTable> explicitlyDefined)
     {
         var path = ExtractKeyPath(arrayTable.Children[0]);
@@ -154,9 +152,7 @@ public static class TomlParser
         return implicitTable;
     }
 
-    // ---------------------------------------------------------
     // Key extraction
-    // ---------------------------------------------------------
     // A Key Symbol wraps either a SimpleKey or a DottedKey. Walk the
     // structure and return the path as a list of decoded segment names.
     private static List<string> ExtractKeyPath(Symbol keyNode)
@@ -197,9 +193,7 @@ public static class TomlParser
         throw new InvalidOperationException($"Unexpected simple-key shape: {inner.Id.Value}");
     }
 
-    // ---------------------------------------------------------
     // Key/value pair projection
-    // ---------------------------------------------------------
     private static void ProjectKeyValue(Symbol keyValue, TomlTable table)
     {
         // KeyValue -> [Key, Value]
@@ -218,15 +212,13 @@ public static class TomlParser
         owner.Add(leafName, value);
     }
 
-    // ---------------------------------------------------------
     // Value projection
-    // ---------------------------------------------------------
     private static TomlValue ProjectValue(Symbol valueNode)
     {
-        // Value Or wraps the inner concrete value; the Or itself has
+        // Value Or wraps the inner concrete value. The Or itself has
         // FlattenType.Flatten by default, but we marked Value as
-        // Preserve so it shows up as a wrapper. Its single child is the
-        // concrete value rule.
+        // Preserve so it shows up as its own Symbol. Its single child is
+        // the concrete value rule.
         var inner = valueNode.Children.Count == 1 ? valueNode.Children[0] : valueNode;
 
         if (inner.Is(BasicString))             return new TomlString(DecodeBasicStringBody(inner), TomlStringKind.Basic);
@@ -258,7 +250,7 @@ public static class TomlParser
 
     private static TomlValue ProjectFloat(Symbol floatNode)
     {
-        // Float -> SpecialFloat or ordinaryFloat (a Preserve wrapper around
+        // Float -> SpecialFloat or ordinaryFloat (a Preserve Symbol around
         // the digit-bearing And).
         var inner = floatNode.Children[0];
         if (inner.Is(SpecialFloat))
@@ -274,7 +266,7 @@ public static class TomlParser
         }
         // OrdinaryFloat: the fraction's Token('.') and the exponent's
         // Token('e' | 'E') are Delete by default. ToString would lose
-        // them; SourceText gives the verbatim text. Strip underscores
+        // them. SourceText gives the verbatim text. Strip underscores
         // before handing to double.Parse.
         var floatText = inner.SourceText.Replace("_", "");
         return new TomlFloat(double.Parse(floatText, CultureInfo.InvariantCulture));
@@ -302,9 +294,7 @@ public static class TomlParser
         return table;
     }
 
-    // ---------------------------------------------------------
     // Date-time projection
-    // ---------------------------------------------------------
     // Date-time grammar uses Token('-'), Token(':'), and Token('.')
     // which are Delete by default. ToString would render
     // "19790527T073200Z" instead of "1979-05-27T07:32:00Z" and
@@ -329,9 +319,7 @@ public static class TomlParser
     private static TomlValue ProjectLocalTime(Symbol node) =>
         new TomlLocalTime(TimeOnly.Parse(node.SourceText, CultureInfo.InvariantCulture));
 
-    // ---------------------------------------------------------
     // String body decoding
-    // ---------------------------------------------------------
     private static string DecodeBasicStringBody(Symbol stringNode)
     {
         // BasicString = ['"', basicStringBody, '"']. The body's
@@ -349,8 +337,8 @@ public static class TomlParser
     {
         // LiteralString -> [literalStringBody]. The body uses
         // ScanWhile(literalChar, minimumCount: 0), which always emits
-        // one leaf — possibly zero-width for the empty-string case ''
-        // — so the body is always Children[0]. Literal strings have no
+        // one leaf (possibly zero-width for the empty-string case ''),
+        // so the body is always Children[0]. Literal strings have no
         // escapes and can't span newlines, so the body's ToString gives
         // the verbatim text directly.
         return stringNode.Children[0].ToString();
@@ -360,7 +348,7 @@ public static class TomlParser
     {
         // MultiLineBasicString = ['"""', Optional(EOL), multiLineBasicStringBody, '"""']
         // The Optional(EOL) is Delete-flattened, so the only child that
-        // survives is the multiLineBasicStringBody leaf — but only when
+        // survives is the multiLineBasicStringBody leaf, but only when
         // it has content. For an empty multi-line string """""", there
         // are no children.
         if (stringNode.Children.Count == 0) return "";

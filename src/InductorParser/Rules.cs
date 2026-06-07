@@ -24,18 +24,17 @@ namespace InductorParser;
 ///     Integer()
 /// );
 /// </code>
-/// Most factories are thin wrappers that forward their arguments to
-/// the matching rule constructor. Argument validation (null checks,
-/// empty-string checks, range checks) lives on the rule type itself
-/// so every construction path goes through the same gate. A few
-/// factories are compositions of other rules rather than wrappers
-/// over a single rule type, bundled here because every grammar ends
-/// up wanting them.
+/// Most factories just forward their arguments to the matching rule
+/// constructor. Argument validation (null checks, empty-string
+/// checks, range checks) lives on the rule type itself so every
+/// construction path goes through the same gate. A few factories
+/// compose several rules instead of forwarding to a single rule type,
+/// bundled here because every grammar ends up wanting them.
 ///
 /// Every rule carries a default <see cref="FlattenType"/> that
 /// controls how the match contributes to the parse tree: Delete
 /// drops the node, Flatten lifts its children into the parent,
-/// Preserve keeps a wrapper. Each factory's summary names its
+/// Preserve keeps the rule's Symbol. Each factory's summary names its
 /// default. Override on any rule with
 /// <see cref="Rule.Flatten(FlattenType)"/> to change it for a
 /// specific use site.
@@ -44,7 +43,7 @@ namespace InductorParser;
 /// <see cref="Rule.As(SymbolId)"/> on a rule whose default
 /// <see cref="FlattenType"/> isn't Preserve silently flips it
 /// to Preserve. Identification implies findability, and a
-/// non-Preserve rule's wrapper Symbol doesn't reach the tree
+/// non-Preserve rule's Symbol doesn't reach the tree
 /// for Tree.Find to locate. Calling .As after the caller has
 /// explicitly set a non-Preserve policy via .Flatten / .Delete /
 /// .Flatten() throws, and so does setting a non-Preserve policy
@@ -210,8 +209,8 @@ public static class Rules
     /// Shortcut for the common "one of these literal runes" case. The
     /// input is walked rune by rune; each scalar becomes a set member.
     /// Throws at construction if any two consecutive runes in the input
-    /// form one grapheme cluster (CRLF, NFD accent, ZWJ emoji, etc.) —
-    /// for cluster-shaped sets, build the <see cref="TokenSet"/> with
+    /// form one grapheme cluster (CRLF, NFD accent, ZWJ emoji, etc.). For
+    /// cluster-shaped sets, build the <see cref="TokenSet"/> with
     /// <see cref="TokenSet.Graphemes(string[])"/> and pass it to the
     /// <see cref="OneOf(TokenSet)"/> overload. Default
     /// <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>.
@@ -226,7 +225,7 @@ public static class Rules
 
     /// <summary>
     /// Match one token (one character as the user sees it) when
-    /// that token ISN'T in the given <see cref="TokenSet"/>.
+    /// that token isn't in the given <see cref="TokenSet"/>.
     /// Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Preserve"/>.
     /// </summary>
@@ -316,7 +315,7 @@ public static class Rules
     /// </para>
     /// <para>
     /// Pass <paramref name="eofIsTerminator"/> = <c>true</c> for
-    /// grammars where the body legitimately ends at the stopper OR at
+    /// grammars where the body legitimately ends at the stopper or at
     /// EOF (line comments that may close with a newline or with the
     /// end of file, for example). For "match the rest of the input,"
     /// use <see cref="ScanUntilEof"/> instead.
@@ -325,7 +324,7 @@ public static class Rules
     /// // CSV field body: scan until the next comma or LF (strict)
     /// var field = ScanUntil(TokenSet.Runes(",\n"));
     ///
-    /// // Line comment body: stops at any UAX #18 line terminator OR EOF
+    /// // Line comment body: stops at any UAX #18 line terminator or EOF
     /// var lineCommentBody = ScanUntil(TokenSet.LineTerminators,
     ///                                 eofIsTerminator: true);
     /// </code>
@@ -699,7 +698,7 @@ public static class Rules
 
     /// <summary>
     /// Match one or more intra-line whitespace tokens as defined by
-    /// <c>TokenSet.InlineWhitespace</c>. Does NOT match line terminators
+    /// <c>TokenSet.InlineWhitespace</c>. Doesn't match line terminators
     /// (<c>\n</c>, <c>\r</c>, <c>\r\n</c>, NEL, LINE SEPARATOR,
     /// PARAGRAPH SEPARATOR, VT, FF). Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Delete"/> (applied by the factory).

@@ -156,18 +156,18 @@ internal static class RuleStartAnalysis
             }
 
             case OneOfRule oneOf:
-                return RuleStartRequirements.FirstTokenMustBeInSet(oneOf.LoweringSet);
+                return RuleStartRequirements.FirstTokenMustBeInSet(oneOf.Set);
 
             case NoneOfRule noneOf:
-                return RuleStartRequirements.FirstTokenMustNotBeInSet(noneOf.LoweringSet);
+                return RuleStartRequirements.FirstTokenMustNotBeInSet(noneOf.Set);
 
             case AnyTokenRule:
                 return RuleStartRequirements.AlwaysAdvancesByOneToken;
 
             case ScanWhileRule scanWhile:
-                return scanWhile.LoweringMinimumCount == 0
-                    ? new RuleStartRequirements(scanWhile.LoweringSet, Advance.Sometimes, Polarity.MustBeIn)
-                    : RuleStartRequirements.FirstTokenMustBeInSet(scanWhile.LoweringSet);
+                return scanWhile.MinimumCount == 0
+                    ? new RuleStartRequirements(scanWhile.Set, Advance.Sometimes, Polarity.MustBeIn)
+                    : RuleStartRequirements.FirstTokenMustBeInSet(scanWhile.Set);
 
             case ScanUntilRule:
                 return RuleStartRequirements.MayAdvanceByAnyTokens;

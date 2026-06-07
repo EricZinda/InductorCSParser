@@ -144,7 +144,7 @@ public static class FilterParser
         {
             // Body excludes the surrounding quotes. SourceText on the
             // body returns the raw inner text with escape sequences
-            // still in place; UnescapeQuotedBody collapses `\X` to `X`.
+            // still in place. UnescapeQuotedBody collapses `\X` to `X`.
             var body = quotedString.Find(QuotedStringBody);
             return UnescapeQuotedBody(body?.SourceText ?? string.Empty);
         }

@@ -9,12 +9,12 @@ namespace InductorParser.E2ESamples.Toml.Rewrite;
 // The named rules below mirror the production names in the TOML ABNF
 // (Original/toml-1.0.0.abnf). Rules that produce values for the AST
 // consumer use .As("name") so they survive flattening as
-// dispatchable nodes; structural noise (whitespace, separators,
+// dispatchable nodes. Structural noise (whitespace, separators,
 // brackets) keeps the default Delete / Flatten behavior and never
 // appears in the tree.
 //
 // Side-by-side: how TOML's ABNF translates to InductorParser. The
-// left column is verbatim from Original/toml-1.0.0.abnf; the right
+// left column is verbatim from Original/toml-1.0.0.abnf. The right
 // column is the shape this file uses.
 //
 //   ABNF                                                   InductorParser
@@ -40,15 +40,15 @@ namespace InductorParser.E2ESamples.Toml.Rewrite;
 //
 // Patterns the table demonstrates:
 //   * Sequence in ABNF (juxtaposition) becomes And(...).
-//   * Alternation (/) becomes Or(...) — but ordered, not first-match-of-equal-alternatives.
+//   * Alternation (/) becomes Or(...), but ordered, not first-match-of-equal-alternatives.
 //   * Repetition: *X is ZeroOrMore(X), 1*X is OneOrMore(X), nX is Exactly(n, X).
 //   * Optional [X] is Optional(X).
 //   * Character class %x20-7E / non-ascii becomes a TokenSet built with operators (| union, & intersect, ~ complement).
-//   * Multi-char terminals like "0x" become Literal("0x"); single-char terminals are Token('x').
+//   * Multi-char terminals like "0x" become Literal("0x"). Single-char terminals are Token('x').
 //   * The dispatch-name + visibility-in-tree story (".As(name)" auto-flips the default flatten policy to Preserve)
-//     has no ABNF analog; it's how the consumer-side code finds nodes after the parse runs. ABNF productions get
-//     .As("name") whenever the AST consumer needs to dispatch on "this Symbol came from the X production";
-//     structural rules don't.
+//     has no ABNF analog. It's how the consumer-side code finds nodes after the parse runs. ABNF productions get
+//     .As("name") whenever the AST consumer needs to dispatch on "this Symbol came from the X production".
+//     Structural rules don't.
 //
 // A few places where we deviate from the ABNF for InductorParser-friendly
 // shapes:
@@ -119,14 +119,12 @@ public static class TomlGrammar
 
     static TomlGrammar()
     {
-        // ---------------------------------------------------------
         // Whitespace, newlines, and comments
-        // ---------------------------------------------------------
         // ABNF: wschar = SP / HT
         // ABNF: ws = *wschar
         // ABNF: newline = LF / CRLF
         // The built-in EndOfLine() factory also accepts bare CR, NEL,
-        // LS, PS; TOML's ABNF allows only LF and CRLF, so define a
+        // LS, PS. TOML's ABNF allows only LF and CRLF, so define a
         // strict newline locally and use it everywhere a line break is
         // required.
         var whitespaceChar = TokenSet.Runes(" \t");
@@ -167,15 +165,13 @@ public static class TomlGrammar
             And(Optional(comment), newline)
         )).Flatten(FlattenType.Delete);
 
-        // ---------------------------------------------------------
         // Keys
-        // ---------------------------------------------------------
         // unquoted-key = 1*( ALPHA / DIGIT / "-" / "_" )
         var unquotedKeyChars = TokenSet.Ascii.Letters | TokenSet.Ascii.Digits | TokenSet.Runes("-_");
         UnquotedKey = ScanWhile(unquotedKeyChars).As("unquotedKey");
 
         // quoted-key = basic-string / literal-string
-        // Forward-declare; the actual string rules are defined below.
+        // Forward-declare. The actual string rules are defined below.
         var basicStringLateBound = new LateBoundRule("basicString");
         var literalStringLateBound = new LateBoundRule("literalString");
         QuotedKey = Or(basicStringLateBound, literalStringLateBound).As("quotedKey");
@@ -196,9 +192,7 @@ public static class TomlGrammar
         // "a.b.c" doesn't get truncated to just "a")
         Key = Or(DottedKey, SimpleKey).As("key");
 
-        // ---------------------------------------------------------
         // String values
-        // ---------------------------------------------------------
         // basic-unescaped = wschar / %x21 / %x23-5B / %x5D-7E / non-ascii
         // (i.e. printable ASCII minus '"' and '\', plus tab/space and
         // most non-ASCII Unicode)
@@ -226,8 +220,8 @@ public static class TomlGrammar
             Or(simpleEscapeChar, unicodeShortEscape, unicodeLongEscape)
         );
 
-        // basic-string = " *basic-char " — body is OneOrMore so the empty
-        // string is handled by the surrounding Optional.
+        // basic-string = " *basic-char ". The body is ZeroOrMore, so the
+        // empty string "" matches directly.
         var basicStringBody = ZeroOrMore(Or(
             ScanWhile(basicUnescaped),
             basicEscape
@@ -275,7 +269,7 @@ public static class TomlGrammar
         // For multiline body chars we need to allow newlines, but not have
         // ScanWhile cross a """ boundary. The simplest correct shape:
         // ZeroOrMore(Not("""), mlb-content). The strict TOML newline
-        // (LF or CRLF only) sits inside the Or; the body consumer
+        // (LF or CRLF only) sits inside the Or. The body consumer
         // recovers the verbatim text via Symbol.SourceText, so no
         // Preserve hack is needed on the newline.
         var threeQuotes = Literal("\"\"\"");
@@ -315,15 +309,11 @@ public static class TomlGrammar
             threeApostrophes.WithError("Expected closing \"'''\" to end multi-line literal string")
         ).As("multiLineLiteralString");
 
-        // ---------------------------------------------------------
         // Boolean values
-        // ---------------------------------------------------------
         TomlTrue = Literal("true").As("true");
         TomlFalse = Literal("false").As("false");
 
-        // ---------------------------------------------------------
         // Integer values
-        // ---------------------------------------------------------
         var sign = OneOf("+-").Preserve();
 
         // unsigned-dec-int: one digit, OR a 1-9 digit followed by
@@ -353,9 +343,7 @@ public static class TomlGrammar
         BinaryInteger = And(Literal("0b"), binaryDigit, ZeroOrMore(Or(binaryDigit, binaryUnderscore)))
             .As("binaryInteger");
 
-        // ---------------------------------------------------------
         // Float values
-        // ---------------------------------------------------------
         // zero-prefixable-int = DIGIT *( DIGIT / "_" DIGIT )
         // Punctuation tokens (the leading dot of fraction, the 'e' of
         // exponent, the underscore separators) are Delete by default.
@@ -392,9 +380,7 @@ public static class TomlGrammar
         TomlFloat = Or(SpecialFloat, ordinaryFloat.As("ordinaryFloat"))
             .As("float");
 
-        // ---------------------------------------------------------
         // Date-time values
-        // ---------------------------------------------------------
         // Per RFC 3339 and TOML 1.0. The structural punctuation
         // (-, :, .) is Delete by default. The four date/time
         // projection helpers in TomlParser recover the verbatim text
@@ -426,9 +412,7 @@ public static class TomlGrammar
         LocalDate = fullDate.AliasedAs("localDate");
         LocalTime = partialTime.AliasedAs("localTime");
 
-        // ---------------------------------------------------------
         // Composite values: array, inline-table
-        // ---------------------------------------------------------
         // val needs to be late-bound because arrays and inline tables
         // contain values, which can be arrays / inline tables, etc.
         var valueLateBound = new LateBoundRule("value");
@@ -475,9 +459,7 @@ public static class TomlGrammar
             Token('}').WithError("Expected ',' or '}' inside inline table")
         ).As("inlineTable");
 
-        // ---------------------------------------------------------
-        // Value choice — order matters
-        // ---------------------------------------------------------
+        // Value choice, order matters.
         // Strings first (delim-based, no ambiguity with the rest).
         // Then booleans (literal "true"/"false").
         // Then array / inline-table (delim-based).
@@ -500,7 +482,7 @@ public static class TomlGrammar
             LocalDate,
             LocalTime,
             TomlFloat,
-            // Integer last; non-decimal forms before decimal so "0x..." doesn't
+            // Integer last, non-decimal forms before decimal so "0x..." doesn't
             // get truncated to integer 0.
             HexadecimalInteger,
             OctalInteger,
@@ -509,9 +491,7 @@ public static class TomlGrammar
         ).As("value");
         valueLateBound.Bind(Value);
 
-        // ---------------------------------------------------------
         // Key / value pair
-        // ---------------------------------------------------------
         // keyval = key keyval-sep val
         // keyval-sep = ws "=" ws
         KeyValue = And(
@@ -523,9 +503,7 @@ public static class TomlGrammar
         ).As("keyValue");
         keyValueLateBound.Bind(KeyValue);
 
-        // ---------------------------------------------------------
         // Table headers
-        // ---------------------------------------------------------
         // std-table = "[" ws key ws "]"
         StandardTable = And(
             Token('['),
@@ -548,9 +526,7 @@ public static class TomlGrammar
         // (Try array-table first because "[[" must win over "[")
         Table = Or(ArrayTable, StandardTable).As("table");
 
-        // ---------------------------------------------------------
         // Top-level expression and document
-        // ---------------------------------------------------------
         // expression =  ws [ comment ]
         // expression =/ ws keyval ws [ comment ]
         // expression =/ ws table ws [ comment ]

@@ -1,5 +1,5 @@
 // Stub for the LibGit2Sharp.Commit base type the upstream parser receives.
-// LibGit2Sharp ships native git binaries; pulling it as a NuGet dependency
+// LibGit2Sharp ships native git binaries. Pulling it as a NuGet dependency
 // just to expose two strings (Message and Sha) would dwarf the sample.
 // The original ConventionalCommitParser only ever reads commit.Message and
 // commit.Sha, and the upstream test suite already subclasses LibGit2Sharp.Commit

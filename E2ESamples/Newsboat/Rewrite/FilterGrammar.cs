@@ -19,8 +19,8 @@
 //    FF do NOT count as whitespace and trip the parser the way any
 //    other unrecognized rune would.
 // 2. The `and` / `or` keywords must be followed by a space or by `(`.
-//    `x=1and y=0` and `x=1and(y=0)` parse; `x=1and(y=0)` parses too.
-//    `x=1andy=0` doesn't. Encoded here as `Peek(Or(Token(' '),
+//    `x=1and y=0` and `x=1and(y=0)` both parse. `x=1andy=0` doesn't.
+//    Encoded here as `Peek(Or(Token(' '),
 //    Token('(')))` after the keyword.
 // 3. The expression chain is right-associative: `a or b and c` parses
 //    as `Or(a, And(b, c))`, not `And(Or(a, b), c)`. There is no
@@ -129,7 +129,7 @@ public static class FilterGrammar
 
         // Right-associative chain. The optional tail makes a single
         // comparison parse to just <comparison> (no expression
-        // wrapper), and a chain like `a and b and c` parse as a
+        // Symbol), and a chain like `a and b and c` parse as a
         // comparison followed by an `and` and a recursive expression.
         expression.Bind(And(
             primary,

@@ -1,5 +1,5 @@
 // InductorParser rewrite of Versionize's ConventionalCommitParser.
-// The Original parser under ../Original/ uses regex; this version expresses
+// The Original parser under ../Original/ uses regex. This version expresses
 // the same grammar with InductorParser rules so we can compare the two
 // approaches and surface friction. The result type (ConventionalCommit,
 // ConventionalCommitNote, ConventionalCommitIssue) is shared with Original/
@@ -10,7 +10,7 @@
 //   * Default issue pattern (#<digits> in subject).
 //   * BREAKING CHANGE: notes on body lines.
 // Custom HeaderPatterns / IssuesPatterns from CommitParserOptions are NOT
-// supported here because they're regex strings; the InductorParser equivalent
+// supported here because they're regex strings. The InductorParser equivalent
 // would take a Rule and the API surface is out of scope for this sample.
 // The README discusses what that would look like.
 
@@ -43,7 +43,7 @@ public static class ConventionalCommitParserRewrite
     public static readonly Rule Subject = ScanUntilEof()
         .As("subject");
 
-    // Preserve so result.Tree returns the single root wrapper Symbol that
+    // Preserve so result.Tree returns the single root Symbol that
     // Tree.Find can walk. The default for And is Flatten, which would lift
     // every named child into a flat top-level Symbols list and leave
     // result.Tree as null per ParseResult.Tree's "exactly one Symbol" rule.
@@ -80,7 +80,7 @@ public static class ConventionalCommitParserRewrite
 
     public static ConventionalCommit Parse(Commit commit, object? options)
     {
-        // options is unused; left in the signature so the test fixture can
+        // options is unused, left in the signature so the test fixture can
         // share assertions with the regex-based original. CommitParserOptions
         // (custom HeaderPatterns / IssuesPatterns) is not implemented here.
         _ = options;

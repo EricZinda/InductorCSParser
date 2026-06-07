@@ -128,7 +128,7 @@ public static class KoreanNumberParser
             else if (child.Is(Digits))
             {
                 // Top-level Digits = bare-digit term. Any digits that
-                // belong to a scale show up inside a ScaledTerm wrapper.
+                // belong to a scale show up inside a ScaledTerm.
                 total += ParseDigitsValue(child.SourceText);
             }
         }

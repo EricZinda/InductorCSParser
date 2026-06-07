@@ -18,7 +18,7 @@
 // Three grammar shapes here are deliberate and the README's friction
 // notes explain each one:
 //
-//  1. The whitespace separator between fields is folded into each
+//  1. The whitespace separator between fields is built into each
 //     field rule (every field after the first starts with a required
 //     InlineWhitespace) instead of sitting between fields in the
 //     top-level And. That makes a too-short expression report
@@ -50,7 +50,7 @@ public static class CronGrammar
     public static readonly Rule MonthField;
     public static readonly Rule DayOfWeekField;
 
-    // FirstItem is the item at the head of a field; ListItem is an
+    // FirstItem is the item at the head of a field. ListItem is an
     // item after a comma. Same shape, two instances (see note 2 above).
     public static readonly Rule FirstItem;
     public static readonly Rule ListItem;
@@ -92,7 +92,7 @@ public static class CronGrammar
         var step = And(Token('/').Preserve(), StepValue);
 
         // A range is tried before a bare number because both start
-        // with a digit; committing to the number first would leave the
+        // with a digit. Committing to the number first would leave the
         // "-17" tail of "9-17" dangling.
         var baseValue = Or(Wildcard, RangeValue, SingleValue);
 

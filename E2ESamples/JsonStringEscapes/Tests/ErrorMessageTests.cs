@@ -2,9 +2,9 @@
 //
 // serde_json reports six distinct, positioned errors while parsing a JSON
 // string. Each case below is a malformed literal plus the position and the
-// words a user would want to see. The cases were written against serde_json's
-// behavior (see ../Original/) before the grammar's `.WithError` calls went
-// in. README.md walks through how far the natural grammar got on its own.
+// words a user would want to see. The cases define the target behavior from
+// serde_json (see ../Original/), independent of the grammar's own `.WithError`
+// messages. README.md walks through how far the natural grammar got on its own.
 //
 // `ExpectedCharIndex` is the 0-based char offset the caret should land on.
 // `MessageMustContain` is the set of substrings the message must include

@@ -19,7 +19,7 @@ internal sealed class NoneOfRule : Rule
 
     // Accessor for an alternative evaluator to read the rule's set
     // without running the rule.
-    internal TokenSet LoweringSet => _set;
+    internal TokenSet Set => _set;
 
     // Pre-rendered text form of the set (e.g. "[A-Z,a-z]") that trace
     // lines reference so a traced match doesn't re-render the TokenSet

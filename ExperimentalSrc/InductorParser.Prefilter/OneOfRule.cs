@@ -26,10 +26,10 @@ internal static class OneOfRulePrefilter
         // whose consumed text doesn't have to contain any of the
         // rune-only chars. Drop the prefilter for mixed sets and let
         // the caller fall back to the first-rune lookahead skip.
-        if (rule.LoweringSet.HasMultiRuneGraphemes)
+        if (rule.Set.HasMultiRuneGraphemes)
             return null;
 
-        if (!rule.LoweringSet.TryGetBmpChars(maxChars: 2, out char[] chars) || chars.Length == 0)
+        if (!rule.Set.TryGetBmpChars(maxChars: 2, out char[] chars) || chars.Length == 0)
             return null;
         if (chars.Length == 1)
             return (chars[0].ToString(), false);

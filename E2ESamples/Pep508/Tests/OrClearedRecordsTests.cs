@@ -1,17 +1,16 @@
-// Regression coverage for backlog item 0a03, now fixed.
+// Verifies that a count rule's inner `.WithError` surfaces whether or not the
+// count rule sits inside a committed `Or` branch.
 //
-// While building the PEP 508 rewrite, the trailing-comma case
-// `requests>=1.0,` wouldn't produce a targeted message no matter where
-// the `.WithError` went. The cause: an `Or` used to clear every failure
-// record added during its run when it committed to a branch, including
-// the winning branch's count-iteration record. So a count rule's inner
-// `.WithError` surfaced on a top-level path but vanished once the count
-// rule sat inside a committed `Or` branch.
+// Under the depth-primary error model an `Or` that commits to a branch keeps
+// the failure records added during that branch's run, including the winning
+// branch's count-iteration record. So the count rule's inner `.WithError`
+// reaches the result the same way whether the count rule is at the top level
+// or wrapped inside a committed `Or` branch. See docs/ErrorArchitecture.md for
+// the error model.
 //
-// The depth-primary error model removed `Or`'s success-clear entirely
-// (see docs/ErrorArchitecture.md). These two tiny grammars now behave
-// identically: the count rule's inner `.WithError` surfaces whether or
-// not an `Or` commits around it.
+// The two tiny grammars below parse "x," to the same positioned message: one
+// keeps the list at the top level, the other wraps it as a committed `Or`
+// branch.
 
 using InductorParser;
 using NUnit.Framework;
@@ -36,7 +35,7 @@ public class OrClearedRecordsTests
 
     // The same list, but wrapped as the second branch of an `Or`. The
     // first branch can never match "x,", so the `Or` commits to the list
-    // branch. Under the depth-primary model the commit no longer clears
+    // branch. Under the depth-primary model the commit doesn't clear
     // anything, so the result is identical to ListWithoutOr.
     private static Rule ListInsideOr()
     {
@@ -68,9 +67,8 @@ public class OrClearedRecordsTests
 
         Assert.That(result.Success, Is.False);
         // Same grammar, same input, same result as the top-level path.
-        // The Or's success no longer clears the winning branch's
+        // The Or's success doesn't clear the winning branch's
         // count-iteration record, so the inner WithError still surfaces.
-        // This is backlog item 0a03, fixed by the depth-primary model.
         Assert.That(result.ErrorMessage, Does.Contain("expected x after comma"));
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
     }

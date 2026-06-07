@@ -122,7 +122,7 @@ public class TomlynComparisonTests
     public void BadInputs_BothPartiesReject(string input)
     {
         // Both parsers must reject. The exact exception type and
-        // message wording differ; what matters is that nothing parses
+        // message wording differ. What matters is that nothing parses
         // successfully.
         Assert.Throws<TomlParseException>(() => TomlParser.Parse(input));
         Assert.Throws<Tomlyn.TomlException>(() => Tomlyn.Toml.ToModel(input));

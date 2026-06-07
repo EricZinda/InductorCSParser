@@ -1,5 +1,5 @@
 // Side-by-side error reporting comparison. The upstream regex parser has no
-// notion of "this commit is malformed at offset N" — when the header doesn't
+// notion of "this commit is malformed at offset N". When the header doesn't
 // match the structured form it silently falls through to "treat the whole
 // line as the subject," and the caller never finds out something looked
 // almost-but-not-quite right. The InductorParser rewrite exposes a
@@ -44,7 +44,7 @@ public class ErrorMessageComparisonTests
         var result = ConventionalCommitParserRewrite.ParseHeader("feat broadcast $destroy");
 
         Assert.That(result.Success, Is.False);
-        // Type matched "feat" (4 chars); the parser then expected "(", "!", or
+        // Type matched "feat" (4 chars). The parser then expected "(", "!", or
         // ": " and saw a space at offset 4.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(4));
     }
@@ -66,9 +66,9 @@ public class ErrorMessageComparisonTests
     [Test]
     public void Rewrite_reports_position_for_colon_without_space()
     {
-        // "feat: foo" matches; "feat:foo" (no space after colon) does not
+        // "feat: foo" matches. "feat:foo" (no space after colon) doesn't
         // match the upstream regex either. Both engines fail. The rewrite
-        // gives a position; the original silently falls back to subject-only.
+        // gives a position. The original silently falls back to subject-only.
         var commit = new TestCommit(Sha, "feat:foo");
 
         var originalResult = ConventionalCommitParser.Parse(commit);

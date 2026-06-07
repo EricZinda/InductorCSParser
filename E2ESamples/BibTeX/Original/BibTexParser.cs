@@ -16,7 +16,7 @@
 //   - Field values: "..." quoted, {...} braced (with balanced
 //     nested braces), bare integer, or bare identifier (a macro
 //     reference like 'jul' or 'STOC' that biber would expand at
-//     bibliography-rendering time; this parser keeps the literal
+//     bibliography-rendering time. This parser keeps the literal
 //     text rather than expanding)
 //   - String concatenation across value parts with '#'
 //   - Trailing commas (BibTeX is permissive)
@@ -24,7 +24,7 @@
 //
 // What's intentionally cut for this sample:
 //   - Macro expansion / cross-reference resolution (the parser
-//     records the literal source; downstream is the renderer's job)
+//     records the literal source. Downstream is the renderer's job)
 //
 // The citation-key shape is the part that matters for the Unicode
 // angle: the typical regex (and most published BibTeX parser ports)
@@ -193,8 +193,8 @@ public class BibTexParser
     }
 
     // A field value is one or more value parts joined by '#'. The
-    // concatenation glues the parts' contents together verbatim;
-    // macro references stay as their literal name (no expansion).
+    // concatenation glues the parts' contents together verbatim.
+    // Macro references stay as their literal name (no expansion).
     private string ParseFieldValueExpression()
     {
         var buffer = new StringBuilder(ParseFieldValuePart());

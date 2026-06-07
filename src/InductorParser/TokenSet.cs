@@ -8,46 +8,56 @@ using InductorParser.Tracing;
 
 namespace InductorParser;
 
-// A set of tokens, used to describe character classes for OneOf and NoneOf.
-// A token is either a single Unicode scalar value (rune) or a multi-rune
-// grapheme cluster (skin-toned emoji, ZWJ family, regional-indicator pair,
-// base+combining-mark cluster). Build one with the factory methods (Single,
-// Range, Runes, Category) or one of the built-ins (Letters, Digits,
-// InlineWhitespace, LineTerminators, and their Ascii.* variants), then
-// compose larger classes with the set operators:
-//
-//     |   union           a | b           tokens in a or b
-//     &   intersection    a & b           tokens in a and b
-//     -   difference      a - b           tokens in a but not in b
-//     ~   complement      ~a              tokens not in a (rune-only sets)
-//
-// The operators return a new TokenSet. The struct is immutable.
-//
-//     var unicodeIdentifier = TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_");
-//     var asciiConsonants   = TokenSet.Ascii.Letters - TokenSet.Runes("aeiouAEIOU");
-//     var cyrillicLetters   = TokenSet.Letters & TokenSet.Range(0x0400, 0x04FF);
-//     var emojiOrLetters    = TokenSet.Letters | TokenSet.Graphemes(USFlagGrapheme);
-//
-// Internally a TokenSet keeps two pieces. _ranges is a sorted, non-overlapping,
-// non-adjacent array of code-point runs that holds every single-rune member.
-// _multiRuneGraphemes is a sorted ordinal, deduped array of grapheme strings
-// that holds every member that occupies two or more runes. Single-rune
-// graphemes always go in _ranges, never in _multiRuneGraphemes, so a set
-// that's never given a multi-rune entry pays nothing. The rune fast path
-// (binary search of intervals) is unchanged, and a grammar rule that uses
-// TokenSet.Letters a thousand times pays the Unicode-table scan once at
-// startup and then a handful of Contains() calls per match.
-//
-// Complement is only defined when _multiRuneGraphemes is empty. The universe
-// of grapheme clusters is unbounded (any rune sequence respecting UAX #29
-// boundaries is a grapheme), so complement against it can't be represented
-// by a finite explicit set. ~set on a mixed set throws InvalidOperationException
-// rather than silently dropping multi-rune entries. Difference doesn't have
-// that limitation: a - b complements against the bounded set b, not the
-// unbounded cluster universe, so it works on a mixed set and never throws.
-// The a & ~b shorthand works only when a is rune-only (see the operator
-// table above); on a mixed a it drops a's clusters, which is the silent
-// loss a - b avoids.
+/// <summary>
+/// A set of tokens, used to describe character classes for OneOf and NoneOf.
+/// A token is either a single Unicode scalar value (rune) or a multi-rune
+/// grapheme cluster (skin-toned emoji, ZWJ family, regional-indicator pair,
+/// base+combining-mark cluster).
+/// </summary>
+/// <remarks>
+/// Build one with the factory methods (<see cref="Single(int)"/>,
+/// <see cref="Range(int, int)"/>, <see cref="Runes(string)"/>,
+/// <see cref="Category"/>) or one of the built-ins (<see cref="Letters"/>,
+/// <see cref="Digits"/>, <see cref="InlineWhitespace"/>,
+/// <see cref="LineTerminators"/>, and their <see cref="Ascii"/> variants),
+/// then compose larger classes with the set operators:
+/// <code>
+///     |   union           a | b           tokens in a or b
+///     &amp;   intersection    a &amp; b           tokens in a and b
+///     -   difference      a - b           tokens in a but not in b
+///     ~   complement      ~a              tokens not in a (rune-only sets)
+/// </code>
+/// The operators return a new TokenSet. The struct is immutable.
+/// <code>
+///     var unicodeIdentifier = TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_");
+///     var asciiConsonants   = TokenSet.Ascii.Letters - TokenSet.Runes("aeiouAEIOU");
+///     var cyrillicLetters   = TokenSet.Letters &amp; TokenSet.Range(0x0400, 0x04FF);
+///     var emojiOrLetters    = TokenSet.Letters | TokenSet.Graphemes(USFlagGrapheme);
+/// </code>
+/// <para>
+/// Internally a TokenSet keeps two pieces. _ranges is a sorted, non-overlapping,
+/// non-adjacent array of code-point runs that holds every single-rune member.
+/// _multiRuneGraphemes is a sorted ordinal, deduped array of grapheme strings
+/// that holds every member that occupies two or more runes. Single-rune
+/// graphemes always go in _ranges, never in _multiRuneGraphemes, so a set
+/// that's never given a multi-rune entry pays nothing. The rune fast path
+/// (binary search of intervals) is unchanged, and a grammar rule that uses
+/// TokenSet.Letters a thousand times pays the Unicode-table scan once at
+/// startup and then a handful of Contains() calls per match.
+/// </para>
+/// <para>
+/// Complement is only defined when _multiRuneGraphemes is empty. The universe
+/// of grapheme clusters is unbounded (any rune sequence respecting UAX #29
+/// boundaries is a grapheme), so complement against it can't be represented
+/// by a finite explicit set. ~set on a mixed set throws InvalidOperationException
+/// rather than silently dropping multi-rune entries. Difference doesn't have
+/// that limitation: a - b complements against the bounded set b, not the
+/// unbounded cluster universe, so it works on a mixed set and never throws.
+/// The a &amp; ~b shorthand works only when a is rune-only (see the operator
+/// table above). On a mixed a it drops a's clusters, which is the silent
+/// loss a - b avoids.
+/// </para>
+/// </remarks>
 public readonly partial struct TokenSet : IEquatable<TokenSet>
 {
     // One contiguous run of Unicode code points, inclusive on both ends:
@@ -158,6 +168,11 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // for the binary-search machinery.
     private const int LinearScanPrefix = 8;
 
+    /// <summary>
+    /// True when <paramref name="codepoint"/> is a single-rune member of this
+    /// set. Multi-rune grapheme members are matched by
+    /// <see cref="ContainsToken(string)"/>, not this.
+    /// </summary>
     public bool ContainsRune(int codepoint)
     {
         // Normalize guarantees _ranges is sorted ascending by Low,
@@ -201,27 +216,37 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return false;
     }
 
+    /// <summary><see cref="ContainsRune(int)"/> for a <see cref="char"/>.</summary>
     public bool ContainsRune(char c) => ContainsRune((int)c);
+
+    /// <summary><see cref="ContainsRune(int)"/> for a <see cref="Rune"/>.</summary>
     public bool ContainsRune(Rune r) => ContainsRune(r.Value);
 
+    /// <summary>
+    /// True when <paramref name="grapheme"/> (one whole token, rune or
+    /// multi-rune cluster) is a member of this set. See
+    /// <see cref="ContainsToken(ReadOnlySpan{char})"/> for the matching rules.
+    /// </summary>
     public bool ContainsToken(string grapheme)
     {
         if (grapheme == null) throw new ArgumentNullException(nameof(grapheme));
         return ContainsToken(grapheme.AsSpan());
     }
 
-    // Span overload so rules can probe a token's Chars without building
-    // a string. Three token shapes:
-    //   * Single-rune span (1 char BMP, or surrogate-paired 2 chars):
-    //     hit the rune intervals via Contains(int).
-    //   * Lone-surrogate span (1 char that's a high or low surrogate
-    //     without its pair): hit the rune intervals using the surrogate's
-    //     UTF-16 code unit. A surrogate isn't a Unicode scalar value,
-    //     but a user-typed Range that covers the surrogate range under
-    //     an unnormalized Compile should still match it.
-    //   * Multi-rune span (2+ chars that aren't a surrogate pair):
-    //     binary search the multi-rune array. Sets with no multi-rune
-    //     entries skip the search entirely.
+    /// <summary>
+    /// True when <paramref name="grapheme"/> (one whole token) is a member of
+    /// this set, without building a string. Lets rules probe a token's chars
+    /// directly.
+    /// </summary>
+    /// <remarks>
+    /// Three token shapes. A single-rune span (1 BMP char, or a surrogate pair)
+    /// hits the rune intervals. A lone-surrogate span (one high or low surrogate
+    /// without its pair) hits the rune intervals using the surrogate's UTF-16
+    /// code unit, so a user-typed Range covering the surrogate range under an
+    /// unnormalized Compile still matches it. A multi-rune span (2+ chars that
+    /// aren't a surrogate pair) binary-searches the multi-rune array, which
+    /// sets with no multi-rune entries skip entirely.
+    /// </remarks>
     public bool ContainsToken(ReadOnlySpan<char> grapheme)
     {
         if (grapheme.Length == 0) return false;
@@ -288,52 +313,47 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         }
     }
 
-    // Form-project this TokenSet: every entry E becomes Normalize(E, form).
-    // Used by OneOfRule / NoneOfRule's Compile-time pipeline so the set's
-    // entries are in the same canonical (or compatibility) form the lexer
-    // will produce on match-time input. Under FormC the lexer emits NFC,
-    // so the set must contain NFC entries; under FormD it emits NFD, etc.
-    //
-    // The replacement is exact, not additive: an entry whose form-projection
-    // differs is REPLACED by the projection, not augmented. The original
-    // is unreachable under that form � the lexer never produces it � so
-    // keeping it would just be dead weight in the set.
-    //
-    // Maintains the TokenSet invariant that every entry is exactly one
-    // grapheme. If an entry's projection is multi-grapheme (a
-    // compatibility conversion like '?' -> "fi" under FormKC, two
-    // graphemes), the entry is excluded from the result and recorded
-    // in `multiGraphemeConversions` for the caller to surface as an
-    // offender. The caller is OneOfRule / NoneOfRule, which match one
-    // grapheme per token � a multi-grapheme entry can never match
-    // anything in isolation, so dropping it and reporting via the
-    // offenders list gives users a clear Compile-time error pointing
-    // at the fix.
-    //
-    // Surrogate runes (U+D800..U+DFFF) pass through unchanged. Surrogates
-    // aren't runes � string.Normalize throws on them � and a normalized
-    // Compile won't see them in input, so leaving them in the set is
-    // harmless and preserves the unnormalized-Compile semantics that some
-    // grammars rely on.
-    //
-    // Entries whose Normalize call throws ArgumentException (the BCL's
-    // way of saying "I won't normalize this") are dropped silently. The
-    // exact set of rejected code points varies by runtime � Windows NLS
-    // and Linux ICU don't agree � so we don't catalog them here. Inputs
-    // the lexer can produce go through the same Normalize call and would
-    // hit the same rejection, so a dropped entry can't match anything
-    // the rule would otherwise have seen.
+    /// <summary>
+    /// Form-project this set: every entry E becomes Normalize(E, form), so the
+    /// set's entries are in the same form the lexer produces on match-time
+    /// input. Under FormC the lexer emits NFC, so the set must contain NFC
+    /// entries. Used by OneOfRule / NoneOfRule's Compile-time pipeline.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Ensures that every entry is exactly one grapheme. If an
+    /// entry's projection is multi-grapheme (a compatibility conversion like the
+    /// fi-ligature to "fi" under FormKC), the entry is excluded from the result
+    /// and recorded in <paramref name="multiGraphemeConversions"/> for the
+    /// caller to surface as an offender. OneOfRule / NoneOfRule match one
+    /// grapheme per token, so a multi-grapheme entry can never match in
+    /// isolation, and dropping it with a reported offender gives the user a
+    /// clear Compile-time error.
+    /// </para>
+    /// <para>
+    /// Surrogate runes (U+D800..U+DFFF) pass through unchanged: they aren't
+    /// runes (string.Normalize throws on them), and a normalized Compile won't
+    /// see them in input, so leaving them in is harmless and preserves the
+    /// unnormalized-Compile semantics some grammars rely on.
+    /// </para>
+    /// <para>
+    /// Entries whose Normalize call throws ArgumentException (the BCL's way of
+    /// saying "I won't normalize this") are dropped silently. The exact set of
+    /// rejected code points varies by runtime (Windows NLS and Linux ICU don't
+    /// agree), so they aren't cataloged here. Input the lexer produces goes
+    /// through the same Normalize call and would hit the same rejection, so a
+    /// dropped entry can't match anything the rule would otherwise have seen.
+    /// </para>
+    /// </remarks>
     public TokenSet NormalizedFor(NormalizationForm form, List<(string original, string normalized)>? multiGraphemeConversions = null)
     {
         // The body walks every rune in every range and P/Invokes
-        // IsNormalized per rune. On a built-in the size of TokenSet.Letters
-        // (~tens of thousands of code points across Lu/Ll/Lt/Lm/Lo) that's
-        // ~10-20ms per call. Without this cache, every Compile of a
-        // grammar with N OneOf(TokenSet.Letters) leaves repeats the same
-        // walk N times for the same (set, form) pair, since TokenSet is
+        // IsNormalized per rune, which is expensive on a built-in the size
+        // of TokenSet.Letters (tens of thousands of code points across
+        // Lu/Ll/Lt/Lm/Lo). Without this cache, every Compile of a grammar
+        // with N OneOf(TokenSet.Letters) leaves repeats the same walk N
+        // times for the same (set, form) pair, even though TokenSet is
         // immutable and the projection is a pure function of its inputs.
-        // 960 IdAssignment sweep cases with 11 leaves each was paying
-        // ~150s in tests for an answer that's the same every time.
         var key = (this, form);
         if (_normalizedCache.TryGetValue(key, out var hit))
         {
@@ -612,10 +632,12 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             graphemes.Add(grapheme);
     }
 
-    // True iff the string is exactly one Unicode rune (one non-surrogate
-    // UTF-16 char, or one surrogate pair), giving its code point. Public so
-    // user-defined rules can reuse it instead of duplicating the
-    // surrogate-pair decode. The span overload below stays private.
+    /// <summary>
+    /// True when <paramref name="grapheme"/> is exactly one Unicode rune (one
+    /// non-surrogate UTF-16 char, or one surrogate pair), giving its code point
+    /// in <paramref name="runeValue"/>. Exposed so user-defined rules can reuse
+    /// it instead of duplicating the surrogate-pair decode.
+    /// </summary>
     public static bool TrySingleRune(string grapheme, out int runeValue)
     {
         if (grapheme == null)
@@ -664,6 +686,10 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return ~low;
     }
 
+    /// <summary>
+    /// True when this set has no members (no runes and no multi-rune graphemes).
+    /// Equivalent to <c>this == TokenSet.Empty</c>.
+    /// </summary>
     public bool IsEmpty =>
         (_ranges == null || _ranges.Length == 0)
         && (_multiRuneGraphemes == null || _multiRuneGraphemes.Length == 0);
@@ -710,11 +736,16 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return true;
     }
 
-    // Value equality: two TokenSets are equal iff they contain the same
-    // tokens. Normalize guarantees a canonical interval list (sorted,
-    // non-overlapping, non-adjacent), and the multi-rune array is sorted
-    // ordinal and deduped at construction. Equal sets therefore have
-    // identical _ranges and identical _multiRuneGraphemes element-wise.
+    /// <summary>
+    /// Value equality: two TokenSets are equal when they contain the same
+    /// tokens.
+    /// </summary>
+    /// <remarks>
+    /// Construction canonicalizes both halves (the rune intervals are sorted,
+    /// non-overlapping, and non-adjacent, and the multi-rune array is sorted
+    /// ordinal and deduped), so equal sets have identical _ranges and identical
+    /// _multiRuneGraphemes element-wise.
+    /// </remarks>
     public bool Equals(TokenSet other)
     {
         var mine = _ranges;
@@ -736,8 +767,13 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return true;
     }
 
+    /// <summary><see cref="Equals(TokenSet)"/> for an arbitrary object; false for non-TokenSet values.</summary>
     public override bool Equals(object? obj) => obj is TokenSet other && Equals(other);
 
+    /// <summary>
+    /// Hash consistent with <see cref="Equals(TokenSet)"/>: equal sets (including
+    /// the empty set however it was built) hash equal.
+    /// </summary>
     public override int GetHashCode()
     {
         var ranges = _ranges;
@@ -759,7 +795,10 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return hash.ToHashCode();
     }
 
+    /// <summary>Value equality, same as <see cref="Equals(TokenSet)"/>.</summary>
     public static bool operator ==(TokenSet a, TokenSet b) => a.Equals(b);
+
+    /// <summary>Value inequality, the negation of <see cref="Equals(TokenSet)"/>.</summary>
     public static bool operator !=(TokenSet a, TokenSet b) => !a.Equals(b);
 
     // Maximum number of entries ToString renders before truncating.
@@ -773,20 +812,21 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // shows the first 8 and "+1 more".
     private const int MaxRenderedEntries = 8;
 
-    // Human-readable rendering of the set, for trace output and
-    // debugger display. Produces "[a-z,A-Z,0-9]" style output with
-    // single-codepoint ranges collapsed to one char and long ranges
-    // rendered as low-high. Printable ASCII code points render as the
-    // literal character, everything else renders as U+XXXX. Multi-rune
-    // graphemes render as the user-perceived character itself, no
-    // special quoting (e.g. `[a-z,????,????]`), except that a control
-    // character or line/paragraph separator inside a grapheme renders as
-    // U+XXXX so a cluster like the CRLF entry in LineTerminators /
-    // Ascii.AnyWhitespace can't inject a raw newline into a one-line
-    // trace. Classes with more
-    // than MaxRenderedEntries entries are truncated with a "+N more"
-    // tail. Keeps trace lines legible without dragging in the entire
-    // Unicode database.
+    /// <summary>
+    /// Human-readable rendering of the set, for trace output and debugger
+    /// display. Produces "[a-z,A-Z,0-9]" style output.
+    /// </summary>
+    /// <remarks>
+    /// Single-codepoint ranges collapse to one char and long ranges render as
+    /// low-high. Printable ASCII renders as the literal character, everything
+    /// else as U+XXXX. Multi-rune graphemes render as the user-perceived
+    /// character itself, except that a control character or line/paragraph
+    /// separator inside a grapheme renders as U+XXXX so a cluster like the CRLF
+    /// entry in LineTerminators / Ascii.AnyWhitespace can't inject a raw newline
+    /// into a one-line trace. Sets with more than MaxRenderedEntries entries are
+    /// truncated with a "+N more" tail, keeping trace lines legible without
+    /// dragging in the entire Unicode database.
+    /// </remarks>
     public override string ToString()
     {
         var ranges = _ranges;
@@ -836,56 +876,81 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return $"U+{codepoint:X4}";
     }
 
-    // The empty set, containing no runes. Equivalent to default(TokenSet),
-    // exposed as a named constant so callers can write TokenSet.Empty
-    // instead of relying on "default happens to mean empty."
+    /// <summary>
+    /// The empty set, containing no tokens. Equivalent to default(TokenSet),
+    /// exposed as a named constant so callers can write TokenSet.Empty instead
+    /// of relying on "default happens to mean empty."
+    /// </summary>
     public static readonly TokenSet Empty = default;
 
-    // The scalar-value universe: every code point in 0..0x10FFFF except
-    // the surrogate block 0xD800..0xDFFF. Equal to ~Empty, since
-    // operator ~ complements over scalar values only. Used as the
-    // "unknown / anything goes" default for FirstConsumedTokens (see
-    // RuleStartRequirements) so rules with no tighter information never
-    // get filtered out, and the default is safe by construction: a
-    // grammar with no opinion about surrogates won't quietly admit them.
+    /// <summary>
+    /// The scalar-value universe: every code point in 0..0x10FFFF except the
+    /// surrogate block 0xD800..0xDFFF. Equal to ~Empty, since operator ~
+    /// complements over scalar values only.
+    /// </summary>
+    /// <remarks>
+    /// Used as the "anything goes" default for a rule with no tighter
+    /// first-token information, so such a rule never gets filtered out by a
+    /// lookahead. Safe by construction: a grammar with no opinion about
+    /// surrogates won't quietly admit them.
+    /// </remarks>
     public static readonly TokenSet Universe = ~default(TokenSet);
 
-    // All surrogate code units U+D800..U+DFFF as a TokenSet. Matchable
-    // only by grammars compiled with Compile(null), where the lexer
-    // surfaces a lone surrogate as a one-char token. Under the default
-    // Compile(FormC), the lexer pre-rejects lone surrogates from input,
-    // so this set has nothing to match against.
-    //
-    // The two named entry points for putting surrogates into a TokenSet
-    // are this constant (the whole block) and SurrogateRange (a sub-
-    // block). Range, Single, and Runes reject surrogate endpoints /
-    // arguments, and operator ~ never fabricates surrogates from a
-    // surrogate-free input. So Surrogates and SurrogateRange are the
-    // only places fresh surrogates come from; from there union and
-    // intersection move them between sets, and complement strips them
-    // out. A grammar that doesn't say "Surrogates" or "SurrogateRange"
-    // never gets one in any TokenSet it builds.
+    /// <summary>
+    /// All surrogate code units U+D800..U+DFFF as a TokenSet. Matchable only by
+    /// grammars compiled with Compile(null), where the lexer surfaces a lone
+    /// surrogate as a one-char token. Under the default Compile(FormC) the lexer
+    /// pre-rejects lone surrogates from input, so this set has nothing to match.
+    /// </summary>
+    /// <remarks>
+    /// The two named entry points for putting surrogates into a TokenSet are
+    /// this constant (the whole block) and <see cref="SurrogateRange"/> (a
+    /// sub-block). Range, Single, and Runes reject surrogate endpoints /
+    /// arguments, and operator ~ never fabricates surrogates from a
+    /// surrogate-free input. So Surrogates and SurrogateRange are the only places
+    /// fresh surrogates come from. From there union and intersection move them
+    /// between sets, and complement strips them out. A grammar that doesn't name
+    /// Surrogates or SurrogateRange never gets one in any TokenSet it builds.
+    /// </remarks>
     public static readonly TokenSet Surrogates =
         new TokenSet(new[] { new Interval(0xD800, 0xDFFF) });
 
+    /// <summary><see cref="Single(int)"/> for a <see cref="char"/>.</summary>
     public static TokenSet Single(char c) => Single((int)c);
+
+    /// <summary><see cref="Single(int)"/> for a <see cref="Rune"/>.</summary>
     public static TokenSet Single(Rune r) => Single(r.Value);
+
+    /// <summary>
+    /// A one-member set holding the single rune <paramref name="codepoint"/>.
+    /// Throws if it isn't a valid Unicode scalar value (surrogate halves are
+    /// rejected).
+    /// </summary>
     public static TokenSet Single(int codepoint)
     {
         ValidateScalarValue(codepoint, nameof(codepoint));
         return new TokenSet(new[] { new Interval(codepoint, codepoint) });
     }
 
+    /// <summary><see cref="Range(int, int)"/> for <see cref="char"/> endpoints.</summary>
     public static TokenSet Range(char low, char high) => Range((int)low, (int)high);
+
+    /// <summary><see cref="Range(int, int)"/> for <see cref="Rune"/> endpoints.</summary>
     public static TokenSet Range(Rune low, Rune high) => Range(low.Value, high.Value);
-    // Builds a TokenSet of scalar values in [low, high]. Both endpoints
-    // must be valid Unicode scalar values (no surrogate halves) and a
-    // range that straddles the surrogate block is split into two
-    // intervals so the result contains no surrogate code units. So
-    // Range(0, 0x10FFFF) is the set of every scalar value, with no
-    // surrogates, and that's the only thing it can mean. To get
-    // surrogates into a set, name them with Surrogates or SurrogateRange
-    // and union them in.
+
+    /// <summary>
+    /// A set of the scalar values in [<paramref name="low"/>,
+    /// <paramref name="high"/>]. Both endpoints must be valid Unicode scalar
+    /// values (no surrogate halves).
+    /// </summary>
+    /// <remarks>
+    /// A range that straddles the surrogate block is split into two intervals so
+    /// the result contains no surrogate code units. So Range(0, 0x10FFFF) is
+    /// every scalar value, with no surrogates, and that's the only thing it can
+    /// mean. To get surrogates into a set, name them with
+    /// <see cref="Surrogates"/> or <see cref="SurrogateRange"/> and union them
+    /// in.
+    /// </remarks>
     public static TokenSet Range(int low, int high)
     {
         ValidateScalarValue(low, nameof(low));
@@ -900,16 +965,20 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return new TokenSet(new[] { new Interval(low, high) });
     }
 
-    // Builds a TokenSet covering [low, high] inside the surrogate block
-    // 0xD800..0xDFFF. Both endpoints must themselves be surrogate code
-    // units. Use this to select a specific sub-range of the surrogate
-    // block (just the leading-surrogate half, just the trailing-surrogate
-    // half, etc.); for the whole block use the Surrogates constant.
-    //
-    // The result is matchable only by grammars compiled with
-    // Compile(null), where the lexer surfaces lone surrogates as one-char
-    // tokens. Under the default Compile(FormC) the lexer pre-rejects
-    // lone surrogates from input, so the set has nothing to match.
+    /// <summary>
+    /// A set covering [<paramref name="low"/>, <paramref name="high"/>] inside
+    /// the surrogate block 0xD800..0xDFFF. Both endpoints must themselves be
+    /// surrogate code units. For the whole block use the
+    /// <see cref="Surrogates"/> constant.
+    /// </summary>
+    /// <remarks>
+    /// Use this to select a specific sub-range of the surrogate block (just the
+    /// leading-surrogate half, just the trailing-surrogate half, etc.). The
+    /// result is matchable only by grammars compiled with Compile(null), where
+    /// the lexer surfaces lone surrogates as one-char tokens. Under the default
+    /// Compile(FormC) the lexer pre-rejects lone surrogates from input, so the
+    /// set has nothing to match.
+    /// </remarks>
     public static TokenSet SurrogateRange(int low, int high)
     {
         if (low < SurrogateLow || low > SurrogateHigh)
@@ -1129,6 +1198,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                 "Must be a valid Unicode scalar value (0..0x10FFFF, excluding surrogates 0xD800..0xDFFF).");
     }
 
+    /// <summary>Union: a set whose members are in <paramref name="a"/> or <paramref name="b"/>.</summary>
     public static TokenSet operator |(TokenSet a, TokenSet b)
     {
         var combined = new List<Interval>();
@@ -1138,13 +1208,14 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return new TokenSet(Normalize(combined), mergedGraphemes);
     }
 
-    // Sorted-range intersection: walk both sets once, picking [max(low), min(high)]
-    // whenever the current intervals overlap, and advancing whichever interval
-    // ends first. Linear in the sum of the two interval counts. Both inputs are
-    // already normalized (sorted, non-overlapping, non-adjacent), and so is the
-    // result. Adjacent overlap fragments can't appear because that would imply
-    // the inputs themselves had adjacent intervals, contradicting normalization.
-    // Multi-rune graphemes are intersected separately by sorted ordinal merge.
+    /// <summary>Intersection: a set whose members are in both <paramref name="a"/> and <paramref name="b"/>.</summary>
+    /// <remarks>
+    /// Sorted-range intersection: walk both sets once, picking
+    /// [max(low), min(high)] whenever the current intervals overlap and
+    /// advancing whichever interval ends first. Linear in the sum of the two
+    /// interval counts. The result is normalized like the inputs. Multi-rune
+    /// graphemes are intersected separately by sorted ordinal merge.
+    /// </remarks>
     public static TokenSet operator &(TokenSet a, TokenSet b)
     {
         var aRanges = a._ranges;
@@ -1170,35 +1241,40 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return new TokenSet(result.ToArray(), mergedGraphemes);
     }
 
-    // Complement over the scalar-value universe. The result is always
-    // surrogate-free, regardless of whether the input had surrogates.
-    // So ~Letters is "every scalar non-letter" without quietly admitting
-    // U+D800..U+DFFF, and ~Empty is the scalar universe (also exposed
-    // as TokenSet.Universe). A grammar that wants surrogates in the
-    // complement writes `~set | Surrogates`. The rule is: surrogates
-    // enter a TokenSet through the Surrogates constant or SurrogateRange
-    // and never through a complement. Union and intersection move them
-    // between sets, but ~ never fabricates them.
-    //
-    // The cost is that applying ~ twice doesn't always get you back
-    // where you started, once surrogates are involved: ~~Surrogates is
-    // Empty, not Surrogates, because the first ~ turns Surrogates into
-    // the scalar universe (the surrogate code units are stripped) and
-    // the second ~ complements that universe down to nothing rather than
-    // restoring the surrogates. The opposite ordering (~ as true
-    // complement and surrogates riding along in ~A whenever A doesn't
-    // have them) would make ~ round-trip cleanly, at the cost of
-    // OneOf(~Letters) silently matching a lone surrogate under
-    // Compile(null). NoneOf(Letters) matches a lone surrogate either way:
-    // it's a direct non-membership test, not OneOf(~Letters), so the ~
-    // design never reaches it.
-    //
-    // Throws InvalidOperationException when the input has any multi-rune
-    // grapheme entries. The universe of grapheme clusters is unbounded
-    // (any rune sequence respecting UAX #29 boundaries is a grapheme), so
-    // complement against it can't be represented as a finite explicit
-    // set. To subtract this set from another, use `a - b` (set
-    // difference), which handles multi-rune members directly.
+    /// <summary>
+    /// Complement over the scalar-value universe: a set of every scalar value
+    /// not in <paramref name="a"/>. The result is always surrogate-free,
+    /// regardless of whether the input had surrogates.
+    /// </summary>
+    /// <remarks>
+    /// So ~Letters is "every scalar non-letter" without quietly admitting
+    /// U+D800..U+DFFF, and ~Empty is the scalar universe (also exposed as
+    /// <see cref="Universe"/>). A grammar that wants surrogates in the complement
+    /// writes <c>~set | Surrogates</c>. The rule is: surrogates enter a TokenSet
+    /// through the Surrogates constant or SurrogateRange and never through a
+    /// complement. Union and intersection move them between sets, but ~ never
+    /// fabricates them.
+    /// <para>
+    /// The cost is that applying ~ twice doesn't always get you back where you
+    /// started, once surrogates are involved: ~~Surrogates is Empty, not
+    /// Surrogates, because the first ~ turns Surrogates into the scalar universe
+    /// (the surrogate code units are stripped) and the second ~ complements that
+    /// universe down to nothing rather than restoring the surrogates. The
+    /// opposite ordering (~ as true complement and surrogates riding along in ~A
+    /// whenever A doesn't have them) would make ~ round-trip cleanly, at the cost
+    /// of OneOf(~Letters) silently matching a lone surrogate under Compile(null).
+    /// NoneOf(Letters) matches a lone surrogate either way: it's a direct
+    /// non-membership test, not OneOf(~Letters), so the ~ design never reaches it.
+    /// </para>
+    /// <para>
+    /// Throws InvalidOperationException when the input has any multi-rune grapheme
+    /// entries. The universe of grapheme clusters is unbounded (any rune sequence
+    /// respecting UAX #29 boundaries is a grapheme), so complement against it
+    /// can't be represented as a finite explicit set. To subtract this set from
+    /// another, use <c>a - b</c> (set difference), which handles multi-rune
+    /// members directly.
+    /// </para>
+    /// </remarks>
     public static TokenSet operator ~(TokenSet a)
     {
         if (a.HasMultiRuneGraphemes)
@@ -1344,7 +1420,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // Sorted-merge union of two sorted-ordinal grapheme arrays. Linear
     // in the sum of the two array lengths. Skips duplicates so the
     // result stays canonical. Fast-paths when either side is empty so
-    // rune-only sets pay no allocation past the empty-array sentinel.
+    // rune-only sets pay no allocation past the shared empty array.
     private static string[] MergeMultiRuneGraphemeUnion(string[]? a, string[]? b)
     {
         int aLength = a?.Length ?? 0;
@@ -1379,7 +1455,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     }
 
     // Sorted-merge intersection of two sorted-ordinal grapheme arrays.
-    // Returns the empty sentinel when either side is empty so a
+    // Returns the shared empty array when either side is empty so a
     // rune-only side erases the other's multi-rune content under &.
     private static string[] MergeMultiRuneGraphemeIntersect(string[]? a, string[]? b)
     {
@@ -1448,7 +1524,11 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<UnicodeCategory, TokenSet> _categoryCache
         = new System.Collections.Concurrent.ConcurrentDictionary<UnicodeCategory, TokenSet>();
 
-    // One UnicodeCategory is one TokenSet and it's cached (if used).
+    /// <summary>
+    /// The set of every scalar value in the given <see cref="UnicodeCategory"/>.
+    /// The result is cached, so repeated calls for the same category are
+    /// hash-table lookups.
+    /// </summary>
     public static TokenSet Category(UnicodeCategory category)
     {
         if (_categoryCache.TryGetValue(category, out var cached)) return cached;
@@ -1487,43 +1567,55 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     }
 
     // InlineWhitespace is "whitespace within a line": every rune that
-    // char.IsWhiteSpace accepts MINUS the seven UAX #18 single-rune line
+    // char.IsWhiteSpace accepts minus the seven UAX #18 single-rune line
     // terminators (LF, VT, FF, CR, NEL, LS, PS). It doesn't decompose
     // cleanly into UnicodeCategory values, so it's built by a predicate
     // scan rather than CategoriesUnion. For line terminators see
     // LineTerminators below and Rules.EndOfLine().
     private static readonly Lazy<TokenSet> _inlineWhitespace = new Lazy<TokenSet>(BuildInlineWhitespace);
 
-    // The set of Unicode scalar values that are letters in Unicode's
-    // General_Category sense (Lu, Ll, Lt, Lm, Lo). Matches what
-    // char.IsLetter and Rune.IsLetter consider a letter.
-    //
-    // Use this for things that are literally letters: identifier characters
-    // in a name, keyword text inside an alphabetic token, a rule that
-    // accepts 'a' through 'z' plus '�' and '?' and '?'.
-    //
-    // DON'T use this as a way to match "any character" or "any content." It
-    // rejects digits, whitespace, punctuation, symbols, and any multi-rune
-    // grapheme like emoji. A grammar that wants "match everything up to the
-    // next delimiter" or "match anything the other rules didn't claim"
-    // should use NoneOf(stopSet) for delimiter-based stops, or
-    // Not(stopRule) + AnyToken() for rule-based stops.
+    /// <summary>
+    /// The set of Unicode scalar values that are letters in Unicode's
+    /// General_Category sense (Lu, Ll, Lt, Lm, Lo). Matches what char.IsLetter
+    /// and Rune.IsLetter consider a letter.
+    /// </summary>
+    /// <remarks>
+    /// Use this for things that are literally letters: identifier characters in
+    /// a name, keyword text inside an alphabetic token, a rule that accepts 'a'
+    /// through 'z' plus a few accented letters.
+    /// <para>
+    /// Don't use this as a way to match "any character" or "any content." It
+    /// rejects digits, whitespace, punctuation, symbols, and any multi-rune
+    /// grapheme like emoji. A grammar that wants "match everything up to the next
+    /// delimiter" or "match anything the other rules didn't claim" should use
+    /// NoneOf(stopSet) for delimiter-based stops, or Not(stopRule) + AnyToken()
+    /// for rule-based stops.
+    /// </para>
+    /// </remarks>
     public static TokenSet Letters => _letters.Value;
+
+    /// <summary>The decimal-digit set (Unicode General_Category Nd).</summary>
     public static TokenSet Digits => _digits.Value;
+
+    /// <summary>
+    /// Intra-line whitespace: every rune char.IsWhiteSpace accepts except the
+    /// UAX #18 line terminators. See <see cref="LineTerminators"/> for those.
+    /// </summary>
     public static TokenSet InlineWhitespace => _inlineWhitespace.Value;
 
-    // The line terminators defined by UAX #18 Annex C: the seven
-    // single-rune terminators LF (U+000A), VT (U+000B), FF (U+000C),
-    // CR (U+000D), NEL (U+0085), LINE SEPARATOR (U+2028),
-    // PARAGRAPH SEPARATOR (U+2029), plus the CRLF two-rune cluster
-    // (which UAX #29 GB3 keeps glued together in one grapheme).
-    // Matches what Java's \R, ECMAScript's "line terminator" concept,
-    // and most modern regex engines treat as a newline.
-    //
-    // CRLF lives in the set as a multi-rune entry (TokenSet supports
-    // mixing single-rune and multi-rune entries), so OneOf / NoneOf / 
-    // ScanUntil / ScanWhile against
-    // this set all treat the CRLF cluster as one terminator. 
+    /// <summary>
+    /// The line terminators defined by UAX #18 Annex C: the seven single-rune
+    /// terminators LF (U+000A), VT (U+000B), FF (U+000C), CR (U+000D), NEL
+    /// (U+0085), LINE SEPARATOR (U+2028), PARAGRAPH SEPARATOR (U+2029), plus the
+    /// CRLF two-rune cluster (which UAX #29 GB3 keeps glued together in one
+    /// grapheme).
+    /// </summary>
+    /// <remarks>
+    /// Matches what Java's \R, ECMAScript's "line terminator" concept, and most
+    /// modern regex engines treat as a newline. CRLF lives in the set as a
+    /// multi-rune entry, so OneOf / NoneOf / ScanUntil / ScanWhile against this
+    /// set all treat the CRLF cluster as one terminator.
+    /// </remarks>
     public static readonly TokenSet LineTerminators =
           Single(0x000A)   // LF
         | Single(0x000B)   // VT
@@ -1534,49 +1626,63 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         | Single(0x2029)     // PS
         | Graphemes("\r\n"); // CRLF cluster
 
-    // Full-Unicode intra-line whitespace plus every UAX #18 line
-    // terminator (the seven single-rune terminators and the CRLF
-    // two-rune cluster, which LineTerminators carries as a multi-rune
-    // entry). Use this for grammars that treat any whitespace as
-    // ordinary separator. For ASCII-only whitespace use
-    // Ascii.AnyWhitespace.
+    /// <summary>
+    /// Full-Unicode intra-line whitespace plus every UAX #18 line terminator
+    /// (the seven single-rune terminators and the CRLF two-rune cluster). Use
+    /// this for grammars that treat any whitespace as an ordinary separator. For
+    /// ASCII-only whitespace use <see cref="Ascii.AnyWhitespace"/>.
+    /// </summary>
     public static TokenSet AnyWhitespace => _anyWhitespace.Value;
     private static readonly Lazy<TokenSet> _anyWhitespace =
         new Lazy<TokenSet>(() => InlineWhitespace | LineTerminators);
 
-    // U+FFFD REPLACEMENT CHARACTER. .NET's Unicode-encoding decoders
-    // (Encoding.UTF8, Encoding.Unicode, Encoding.UTF32) substitute
-    // U+FFFD for ill-formed byte sequences when using the default
-    // DecoderReplacementFallback. So a U+FFFD in your input is the
-    // fingerprint of an upstream decoder that swallowed something
-    // malformed. Grammars that want to surface or reject those
-    // markers can use OneOf(TokenSet.Replacement) or
-    // NoneOf(TokenSet.Replacement | ...).
+    /// <summary>
+    /// The single-member set holding U+FFFD REPLACEMENT CHARACTER.
+    /// </summary>
+    /// <remarks>
+    /// .NET's Unicode-encoding decoders (Encoding.UTF8, Encoding.Unicode,
+    /// Encoding.UTF32) substitute U+FFFD for ill-formed byte sequences under the
+    /// default DecoderReplacementFallback, so a U+FFFD in your input is the
+    /// fingerprint of an upstream decoder that swallowed something malformed.
+    /// Grammars that want to surface or reject those markers can use
+    /// OneOf(TokenSet.Replacement) or NoneOf(TokenSet.Replacement | ...).
+    /// </remarks>
     public static readonly TokenSet Replacement = Single(0xFFFD);
 
+    /// <summary>
+    /// ASCII-restricted versions of the built-in sets, for grammars that want
+    /// only the 0x00..0x7F range.
+    /// </summary>
     public static class Ascii
     {
+        /// <summary>The ASCII letters A-Z and a-z.</summary>
         public static readonly TokenSet Letters = Range('A', 'Z') | Range('a', 'z');
+
+        /// <summary>The ASCII digits 0-9.</summary>
         public static readonly TokenSet Digits = Range('0', '9');
-        // ASCII intra-line whitespace: SPACE and TAB only. Mirrors the
-        // full-Unicode TokenSet.InlineWhitespace.
+
+        /// <summary>
+        /// ASCII intra-line whitespace: SPACE and TAB only. Mirrors the
+        /// full-Unicode <see cref="TokenSet.InlineWhitespace"/>.
+        /// </summary>
         public static readonly TokenSet InlineWhitespace = Runes(" \t");
-        // ASCII whitespace including every ASCII line terminator: SPACE,
-        // TAB, LF, VT, FF, CR, plus the CRLF two-rune cluster as a
-        // multi-rune entry. This is exactly the full-Unicode
-        // TokenSet.AnyWhitespace restricted to ASCII, the same way
-        // Ascii.InlineWhitespace mirrors InlineWhitespace. VT (U+000B) and
-        // FF (U+000C) are line terminators under UAX #18, so they live in
-        // TokenSet.LineTerminators and IsLineTerminator and are consumed by
-        // Rules.EndOfLine(); a set "including line terminators" carries them
-        // too. Use this for grammars that treat newlines as ordinary
-        // whitespace. For grammars that need to distinguish intra-line
-        // whitespace from line terminators, use InlineWhitespace and
-        // Rules.EndOfLine() instead.
-        // CR, LF, and the CRLF cluster all live in the set so that
-        // OneOf / NoneOf / ScanUntil match each consistently: an input
-        // CRLF cluster is the multi-rune entry, a bare CR or LF is the
-        // matching single-rune entry.
+        /// <summary>
+        /// ASCII whitespace including every ASCII line terminator: SPACE, TAB,
+        /// LF, VT, FF, CR, plus the CRLF two-rune cluster. The full-Unicode
+        /// <see cref="TokenSet.AnyWhitespace"/> restricted to ASCII.
+        /// </summary>
+        /// <remarks>
+        /// VT (U+000B) and FF (U+000C) are line terminators under UAX #18, so
+        /// they live in <see cref="TokenSet.LineTerminators"/> and are consumed
+        /// by Rules.EndOfLine(), and a set "including line terminators" carries
+        /// them too. Use this for grammars that treat newlines as ordinary
+        /// whitespace. To distinguish intra-line whitespace from line
+        /// terminators, use <see cref="InlineWhitespace"/> and Rules.EndOfLine()
+        /// instead. CR, LF, and the CRLF cluster all live in the set so OneOf /
+        /// NoneOf / ScanUntil match each consistently: an input CRLF cluster is
+        /// the multi-rune entry, a bare CR or LF is the matching single-rune
+        /// entry.
+        /// </remarks>
         public static readonly TokenSet AnyWhitespace =
             InlineWhitespace
             | Single('\n')       // LF
@@ -1584,13 +1690,14 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             | Single('\f')       // FF
             | Single('\r')       // CR
             | Graphemes("\r\n");  // CRLF cluster
+        /// <summary>The ASCII hex digits 0-9, a-f, and A-F.</summary>
         public static readonly TokenSet HexDigits = Digits | Range('a', 'f') | Range('A', 'F');
     }
 
     // Build from predicate over code points that fit in one UTF-16 char
     // (U+0000..U+FFFF). Supplementary-plane whitespace is rare in real
     // input and not needed for the smallest core. Includes a code point
-    // when char.IsWhiteSpace accepts it AND it's not one of the seven
+    // when char.IsWhiteSpace accepts it and it's not one of the seven
     // UAX #18 single-rune line terminators (those belong to EndOfLine).
     private static TokenSet BuildInlineWhitespace()
     {

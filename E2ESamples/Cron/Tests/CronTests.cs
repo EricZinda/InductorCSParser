@@ -180,7 +180,7 @@ public class CronErrorPositionTests
     [Test]
     public void Too_few_fields_names_the_first_missing_field()
     {
-        // "* * *" has 3 fields; the month field (the 4th) is the first
+        // "* * *" has 3 fields. The month field (the 4th) is the first
         // one missing. The error lands at end of input.
         var error = ErrorOf("* * *");
         Assert.That(error.CharIndex, Is.EqualTo(5));

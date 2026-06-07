@@ -7,7 +7,7 @@ namespace InductorParser;
 
 // Positive lookahead. Runs its inner rule against the current input,
 // rolls back the lexer regardless of what inner did, and succeeds iff
-// inner SUCCEEDED. Consumes no input on either path.
+// inner succeeded. Consumes no input on either path.
 //
 // Useful when a rule needs to confirm that specific content is ahead
 // without actually consuming it. For example, an if-statement rule that
@@ -15,12 +15,12 @@ namespace InductorParser;
 // Peek(Literal("else")).
 internal sealed class PeekRule : Rule
 {
+    private Rule Inner => Children[0];
+
     public PeekRule(Rule inner)
         : base(FlattenType.Delete, emitsLeaf: false, inner ?? throw new ArgumentNullException(nameof(inner)))
     {
     }
-
-    private Rule Inner => Children[0];
 
     protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {

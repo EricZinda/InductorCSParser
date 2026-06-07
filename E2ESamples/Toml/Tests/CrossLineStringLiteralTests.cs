@@ -10,10 +10,10 @@ namespace InductorParser.E2ESamples.Toml.Tests;
 // in the Toml sample's sources. Such a newline is a real source byte,
 // so git's autocrlf rewrites it: the same literal is LF on a Linux
 // checkout and CRLF on a Windows one, and a test built on it silently
-// exercises a different input per platform (this is exactly how the
-// CRLF comment-scanning bug stayed hidden). A multi-line test input
+// exercises a different input per platform, which is exactly how a
+// CRLF-specific bug can slip through. A multi-line test input
 // must instead be built from single-line literals plus an explicit
-// line break — see TestSupport.Lines — so the fixture is identical on
+// line break (see TestSupport.Lines), so the fixture is identical on
 // every checkout, and parameterizing the test over LineBreak covers
 // LF and CRLF deliberately.
 //

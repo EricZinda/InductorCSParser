@@ -102,7 +102,7 @@ public static class BibTexReader
 
     // FieldValue is one-or-more value-part children joined by '#' at
     // parse time. The '#' is Delete'd so only the parts survive in the
-    // tree; this walk concatenates their contents in tree order.
+    // tree. This walk concatenates their contents in tree order.
     private static string ConcatenateValueParts(Symbol fieldValue)
     {
         var buffer = new StringBuilder();
@@ -127,7 +127,7 @@ public static class BibTexReader
     // Token('}') inside a nested braced value default to
     // FlattenType.Delete and would drop from ToString. SourceText is
     // verbatim source bytes, so nested braces and escape characters
-    // survive; the only adjustment is to strip the surrounding pair.
+    // survive. The only adjustment is to strip the surrounding pair.
     private static string StripDelimiters(Symbol delimitedValue)
     {
         var raw = delimitedValue.SourceText;

@@ -13,3 +13,7 @@ Rules/	..
 		LiteralIgnoreAsciiCaseRule.cs
 		LiteralRule.cs
 		NoneOfRule.cs
+		NotRule.cs
+		OneOfRule.cs
+		OrRule.cs
+		ParseCancellation.cs
