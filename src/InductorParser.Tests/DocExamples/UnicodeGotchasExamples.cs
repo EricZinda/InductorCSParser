@@ -183,6 +183,56 @@ public class UnicodeGotchasExamples
         Assert.That(grammar.Parse(cleaned).Success, Is.True);
     }
 
+    // "Zero-Width and Invisible Format Characters": the joiner
+    // characters ZWJ (U+200D) and ZWNJ (U+200C) don't come through as
+    // their own tokens after a base character. They carry UAX #29
+    // grapheme-break properties (ZWJ and Extend), so rule GB9 glues them
+    // onto the preceding character. ZWSP (U+200B) and the soft hyphen
+    // (U+00AD) carry no such rule and lex as their own single-rune
+    // tokens. This is the coverage the doc's tokenization claim needs:
+    // the strip recipe test above only exercises the soft hyphen.
+    [Test]
+    public void Zero_width_joiners_glue_to_preceding_grapheme()
+    {
+        // Built from code points, not source literals, so an invisible
+        // character can't be silently stripped or mis-rendered.
+        string zwj = ((char)0x200D).ToString();   // GCB = ZWJ
+        string zwnj = ((char)0x200C).ToString();  // GCB = Extend
+        string zwsp = ((char)0x200B).ToString();  // GCB = Other (breaks)
+        string shy = ((char)0x00AD).ToString();   // soft hyphen, GCB = Other (breaks)
+
+        // "a" + ZWJ + "b": the joiner rides along with "a", so the first
+        // token is the two-char grapheme "a‍", not a bare "a". A
+        // grammar that expects three standalone tokens a, joiner, b fails.
+        var threeTokens = And(Token('a'), AnyToken(), Token('b'), Eof()).Compile();
+        Assert.That(threeTokens.Parse("a" + zwj + "b").Success, Is.False,
+            "ZWJ glues to the preceding 'a', so 'a' is not a standalone token");
+        Assert.That(threeTokens.Parse("a" + zwnj + "b").Success, Is.False,
+            "ZWNJ glues to the preceding 'a' the same way");
+
+        // The grapheme the joiner glued onto matches as one Token.
+        var gluedZwj = And(Token("a" + zwj), Token('b'), Eof()).Compile();
+        Assert.That(gluedZwj.Parse("a" + zwj + "b").Success, Is.True,
+            "'a\\u200D' is one token");
+        var gluedZwnj = And(Token("a" + zwnj), Token('b'), Eof()).Compile();
+        Assert.That(gluedZwnj.Parse("a" + zwnj + "b").Success, Is.True,
+            "'a\\u200C' is one token");
+
+        // A joiner only stands alone when nothing precedes it.
+        var leadingJoiner = And(Token(zwj), Token('a'), Eof()).Compile();
+        Assert.That(leadingJoiner.Parse(zwj + "a").Success, Is.True,
+            "a leading ZWJ is its own token");
+
+        // The genuinely breaking format chars DO come through as their
+        // own single-rune tokens: a, the format char, then b.
+        var zwspBreaks = And(Token('a'), Token(zwsp), Token('b'), Eof()).Compile();
+        Assert.That(zwspBreaks.Parse("a" + zwsp + "b").Success, Is.True,
+            "ZWSP (U+200B) is its own token");
+        var softHyphenBreaks = And(Token('a'), Token(shy), Token('b'), Eof()).Compile();
+        Assert.That(softHyphenBreaks.Parse("a" + shy + "b").Success, Is.True,
+            "soft hyphen (U+00AD) is its own token");
+    }
+
     // "Homoglyph Confusables": the LatinLetters set rejects Cyrillic а
     // (U+0430) but accepts Latin a (U+0061).
     [Test]

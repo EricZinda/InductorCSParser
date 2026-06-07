@@ -129,7 +129,7 @@ var result = grammar.Parse(cleaned);
 
 U+200B (zero-width space), U+200C (zero-width non-joiner), U+200D (zero-width joiner), U+00AD (soft hyphen), and similar runes appear as characters in the input but render as nothing or render conditionally. A string like `"ap\u00ADple"` looks like `"apple"` in an editor but doesn't match `Literal("apple")` because the soft hyphen is a real character in the token stream.
 
-On modern .NET, the lexer handles ZWJ correctly inside emoji sequences (`StringInfo` groups them into one token per UAX #29). Bare ZWJs and other format characters outside emoji contexts still come through as their own tokens. Legacy `StringInfo` runtimes have broader ZWJ gaps covered in [Pre-.NET 5 Token Segmentation](#pre-net-5-grapheme-segmentation).
+On modern .NET, the lexer handles ZWJ correctly inside emoji sequences (`StringInfo` groups them into one token per UAX #29). Outside emoji contexts, the two joiner characters still attach to whatever comes before them rather than standing on their own. ZWJ (U+200D) and ZWNJ (U+200C) carry UAX #29 grapheme-break properties (ZWJ and Extend), so rule GB9 glues them onto the preceding character. The string `a` then U+200D then `b` lexes as two tokens, the joiner riding along with `a`, then `b`, not three separate tokens. A joiner only comes through on its own when nothing precedes it, like one at the very start of the input. The format characters that genuinely break are the ones with no such gluing rule: U+200B (zero-width space), U+00AD (soft hyphen), and friends each lex as their own single-rune token, which is what makes the soft hyphen above break `Literal("apple")`. Legacy `StringInfo` runtimes have broader ZWJ gaps covered in [Pre-.NET 5 Token Segmentation](#pre-net-5-token-segmentation).
 
 **Fix.** The caller strips them before parsing, or the grammar's character classes tolerate them explicitly. For stripping:
 
@@ -303,6 +303,6 @@ The common thread is timing. Combining marks have been in Unicode since the star
 **Fix.** Two options, in order of effort:
 
 1. If the grammar doesn't actually need to tokenize emoji or complex-script text at the user-perceived character level, do nothing. ASCII, source code, config files, and most DSLs are unaffected.
-2. Add a custom UAX #29 implementation into the parser. Tracked in [xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md](../backlog/xlll-vendor-a-uax-#29-grapheme-cluster-implementation.md). Gives full conformance everywhere, at the cost of maintaining Unicode data in the repository.
+2. Add a custom UAX #29 implementation into the parser. Tracked under [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md#open-questions), "Fixing the Unicode version for the lexer." Gives full conformance everywhere, at the cost of maintaining Unicode data in the repository.
 
 The repo's test suite documents the broken cases explicitly. Look for tests gated behind `#if !UNITY_INCLUDE_TESTS` in [GraphemeRuleTests.cs](../src/InductorParser.Tests/Rules/GraphemeRuleTests.cs). Each one is a category that the legacy walker mishandles.

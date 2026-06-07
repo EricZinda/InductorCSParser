@@ -17,7 +17,7 @@ namespace InductorParser;
 /// </summary>
 /// <remarks>
 /// Rules are instances, not types. In C# you build a Rule by calling factory
-/// functions (And, Or, Token, etc.) that return Rule instances. The tree is
+/// functions (And, Or, Token, etc.) on the Rules class that return Rule instances. The tree is
 /// built at runtime, compiled once, and reused for every parse after that. A
 /// grammar can live anywhere a reference can live: a local variable, a static
 /// field, an entry in a dictionary, an argument passed around.
@@ -1255,7 +1255,7 @@ public abstract class Rule
     // {charIndex} is the failure position in chars (UTF-16 code units),
     // matching ParseResult.ErrorCharIndex. {tokenIndex} mirrors
     // ErrorTokenIndex. {line} and {column} are zero-based, matching
-    // ErrorLine and ErrorColumn (LSP convention).
+    // ErrorLine and ErrorColumn (Language Server Protocol convention).
     //
     // The Func<string> delegates are deliberate: each token-index /
     // line-column conversion walks the input once, so we only want to pay

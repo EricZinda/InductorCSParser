@@ -248,17 +248,22 @@ internal sealed class IdentifierRule : Rule
         var runes = new List<(int Low, int High)>();
         foreach (int rune in source.EnumerateRunes())
         {
-            if (rune >= 0xD800 && rune <= 0xDFFF)
-            {
-                runes.Add((rune, rune));
-                continue;
-            }
             AddProjectedRunes(char.ConvertFromUtf32(rune), form, headOnly, runes);
         }
         foreach (string grapheme in source.MultiRuneGraphemes)
         {
             AddProjectedRunes(grapheme, form, headOnly, runes);
         }
+        // Surrogate members (from TokenSet.Surrogates / SurrogateRange) are
+        // intentionally dropped here: EnumerateRunes already skips them, they
+        // have no NFKx expansion (Normalize throws on them), and FromRanges
+        // rejects them as endpoints. Unlike TokenSet.WithCompatibilityEquivalents,
+        // which preserves them for general callers, ProjectByRunes runs only
+        // under FormKC / FormKD, where the lexer rejects lone surrogates from
+        // input before a rule sees one, so a surrogate carried here could never
+        // match. Dropping them keeps this path free of unreachable, untestable
+        // work rather than mirroring WithCompatibilityEquivalents for its own
+        // sake.
         return TokenSet.FromRanges(runes.ToArray());
     }
 

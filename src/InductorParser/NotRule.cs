@@ -21,15 +21,12 @@ internal sealed class NotRule : Rule
 
     protected override Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
     {
-        // Lookahead only: inner's result is thrown away regardless, so we
-        // pass null for outputSymbols. If inner has FlattenType.Flatten
-        // (which normally writes its children into a caller-supplied
-        // list), Rule.TryParse gives it a throwaway list that nobody
-        // reads. BeginProbe brackets the position, the failure tracker,
-        // and the subtree-extent mark, and with no Commit restores all
-        // three on Dispose, so inner's probe leaves nothing behind
-        // whether it matched or not. See docs/ErrorArchitecture.md,
-        // "Lookahead failures are discarded".
+        // Lookahead only: inner's result is thrown away either way, so pass
+        // null for outputSymbols. BeginProbe brackets the position, the failure
+        // tracker, and the subtree-extent mark and, with no Commit, restores
+        // all three on Dispose, so inner's probe leaves nothing behind whether
+        // it matched or not. See docs/ErrorArchitecture.md, "Lookahead failures
+        // are discarded".
         bool innerMatched;
         using (lexer.BeginProbe())
         {

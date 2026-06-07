@@ -136,7 +136,7 @@ public class ErrorMessageTemplateTests
         //   x  (the failing character)
         // The grammar matches the bold-A then \n then b, then asks for
         // 'y' and gets 'x'. Failure point: char 4, grapheme 3, line 1
-        // column 1 (LSP zero-based).
+        // column 1 (Language Server Protocol zero-based).
         var rule = And(
             Token(0x1D400),
             Token('\n'),
