@@ -103,7 +103,7 @@ public static class StateMachineParser
         // a huge pre-canceled input doesn't pay the normalize cost either.
         if (options.Cancellation != null && options.Cancellation.IsCanceled)
         {
-            string canceledMessage = Rule.BuildBudgetMessage(ParseOutcome.Canceled, abortPos: 0, input, options);
+            string canceledMessage = Rule.BuildBudgetMessage(ParseOutcome.Canceled, abortPosition: 0, input, options);
             return ParseResult.Aborted(ParseOutcome.Canceled, errorCharIndex: 0, canceledMessage, input, rootRule);
         }
 

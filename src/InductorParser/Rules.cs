@@ -5,7 +5,7 @@ using InductorParser.SyntaxTree;
 namespace InductorParser;
 
 /// <summary>
-/// The factory surface for building grammars. Every built-in rule
+/// The main class for building grammars. Every built-in rule
 /// type has a corresponding factory method here, so grammar code
 /// composes rules by calling these functions instead of
 /// instantiating rule classes directly.
