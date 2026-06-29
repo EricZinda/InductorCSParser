@@ -14,15 +14,9 @@ namespace InductorParser;
 // lexer.AdvanceWhileTokenIn (sets with multi-rune entries) for the
 // inner loop, and emits one leaf Symbol over the whole matched span.
 //
-// minimumCount is the minimum number of tokens the run must contain
-// to succeed. The default of 1 keeps every successful match consuming
-// at least one first-set token, which lets an enclosing rule skip
-// this one via a first-token lookahead when the next token isn't in
-// the set. Passing 0 makes the rule always succeed: an empty run
-// produces a zero-width leaf at the current position. The zero-min
-// case can't promise it always advances, so that lookahead skip is
-// disabled, the same downgrade BetweenInclusiveRule does for
-// AtLeast == 0 (Optional / ZeroOrMore).
+// minimumCount is the fewest tokens the run must have to succeed. The
+// default of 1 fails on an empty run. Passing 0 makes the rule always
+// succeed, producing a zero-width leaf on an empty run. 
 //
 // Pairs with ScanUntilRule, which is the inverse stop condition: scan
 // while tokens aren't a stopper. Both are leaf-shaped scanners that

@@ -15,11 +15,9 @@ namespace InductorParser;
 /// base+combining-mark cluster).
 /// </summary>
 /// <remarks>
-/// Build one with the factory methods (<see cref="Single(int)"/>,
-/// <see cref="Range(int, int)"/>, <see cref="Runes(string)"/>,
-/// <see cref="Category"/>) or one of the built-ins (<see cref="Letters"/>,
-/// <see cref="Digits"/>, <see cref="InlineWhitespace"/>,
-/// <see cref="LineTerminators"/>, and their <see cref="Ascii"/> variants),
+/// Build one with the factory methods on this class (e.g. <see cref="Single(int)"/>,
+/// <see cref="Range(int, int)"/>) or one of the built-ins (<see cref="Letters"/>,
+/// <see cref="Digits"/>),
 /// then compose larger classes with the set operators:
 /// <code>
 ///     |   union           a | b           tokens in a or b
