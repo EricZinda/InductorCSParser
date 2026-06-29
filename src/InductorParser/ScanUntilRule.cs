@@ -7,21 +7,22 @@ using InductorParser.SyntaxTree;
 namespace InductorParser;
 
 // This is the leaf for a JSON / C++ / Python string body.
-// It's a specialized scanner for the "string body" grammar shape: scan
+// This is a specialized scanner for the "string body" grammar shape of a language
+// like JSON / C++ / Python. It scans
 // forward until a stopper is seen at the current lexer position, handling
 // escape sequences inline.
 // Collapses ZeroOrMore(Or(bodyRune, And(escapeStart, escapeEnd))) into one rule that
 // does the scan in a tight loop and returns one leaf Symbol
-// covering the matched section of input. One dispatch for the outer rule
+// covering the matched section of input. It has one dispatch for the outer rule
 // and one Symbol allocation per matched run, however many runes the run
 // contains.
 //
 // There are two options for the string body stop condition:
-//   * TokenSet stopAt (fast path): stop when the next rune is in the
+//   * (fast path) TokenSet stopAt: stop when the next rune is in the
 //     set. Only does one TokenSet.ContainsRune per rune and handles any grammar whose
 //     closing boundary is a single rune: JSON ", Python ' or ", C# $"..."
 //     closing, etc.
-//   * Rule stopAt (general path): stop when a user-supplied rule
+//   * (general path) Rule stopAt: stop when a user-supplied rule
 //     matches. The rule is executed in a peek
 //     transaction that always rolls back, so the stopper itself isn't
 //     consumed. The surrounding grammar is still responsible for
