@@ -6,7 +6,7 @@ using InductorParser.SyntaxTree;
 namespace InductorParser;
 
 // Scan forward while tokens are in a TokenSet, returning the whole run
-// as one leaf Symbol. The optimization story: AtLeast(n, OneOf(set))
+// as one leaf Symbol. This exists because AtLeast(n, OneOf(set))
 // produces the same matched text but pays one transaction and one
 // per-token leaf Symbol for every token in the run, which the tree then
 // has to flatten away. ScanWhileRule opens one transaction at the
