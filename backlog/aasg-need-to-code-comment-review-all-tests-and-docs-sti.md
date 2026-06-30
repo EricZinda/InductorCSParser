@@ -22,3 +22,4 @@ Rules/	..
 		ParseResult.cs
 		PeekRule.cs
 		ReferenceComparer.cs
+		Rule.cs
