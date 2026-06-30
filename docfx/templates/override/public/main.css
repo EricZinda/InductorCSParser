@@ -96,3 +96,17 @@ article pre .hljs {
 .hljs-title, .hljs-name, .hljs-type,
 .hljs-class .hljs-title { color: #82aaff; }
 .hljs-attribute, .hljs-variable, .hljs-template-variable { color: #ffcb6b; }
+
+/* Brand: the inductor circuit wordmark in the navbar. Size it by height so the
+   wide mark scales cleanly. The art is dark grey, so flip it to light in dark
+   mode to keep contrast against the dark navbar. */
+.navbar-brand #logo {
+  height: 1.7rem;
+  width: auto;
+}
+.navbar-brand {
+  gap: .4rem;
+}
+[data-bs-theme="dark"] .navbar-brand #logo {
+  filter: brightness(0) invert(1);
+}
