@@ -1,0 +1,18 @@
+{{!Override of the modern template's namespace page. The stock version groups
+   a namespace's types under "Classes", "Structs", "Interfaces", "Enums"
+   subheadings. We drop those subheadings and render one flat list of types,
+   since the kind breakdown doesn't help readers find a type.}}
+
+<h1 id="{{id}}" data-uid="{{uid}}" class="text-break">{{>partials/title}}</h1>
+<div class="markdown level0 summary">{{{summary}}}</div>
+<div class="markdown level0 conceptual">{{{conceptual}}}</div>
+<div class="markdown level0 remarks">{{{remarks}}}</div>
+
+{{#children}}
+  {{#children}}
+  <dl class="jumplist">
+    <dt><xref uid="{{uid}}" altProperty="fullName" displayProperty="name"/></dt>
+    <dd>{{{summary}}}</dd>
+  </dl>
+  {{/children}}
+{{/children}}

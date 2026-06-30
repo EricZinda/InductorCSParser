@@ -1,0 +1,112 @@
+/* Inductor Parser docs skin, modeled on the DELPH-IN site's Minimal Mistakes
+   theme (https://delph-in.github.io/docs/matrix/). The modern DocFX template
+   loads public/main.css after its own stylesheet, so these rules win at equal
+   specificity. We restyle, not restructure: fonts, the teal link palette,
+   reading rhythm, dark code blocks, thin-ruled tables, and a left-ruled
+   blockquote. DocFX's Bootstrap layout (navbar, left toc, right affix) stays. */
+
+:root {
+  /* Minimal Mistakes system font stack and monospace. */
+  --bs-body-font-family: -apple-system, BlinkMacSystemFont, "Roboto",
+    "Segoe UI", "Helvetica Neue", "Lucida Grande", Arial, sans-serif;
+  --bs-font-monospace: Monaco, Consolas, "Lucida Console", monospace;
+  --bs-body-font-size: 1rem;     /* 16px */
+  --bs-body-line-height: 1.5;
+}
+
+/* Teal link palette (#2f7d95 / hover #235e70). Bootstrap 5.3 reads RGB
+   triplets, so set those; light and dark themes get their own contrast. */
+:root,
+[data-bs-theme="light"] {
+  --bs-link-color-rgb: 47, 125, 149;
+  --bs-link-hover-color-rgb: 35, 94, 112;
+}
+[data-bs-theme="dark"] {
+  --bs-link-color-rgb: 90, 178, 201;
+  --bs-link-hover-color-rgb: 124, 198, 217;
+}
+
+body {
+  font-family: var(--bs-body-font-family);
+  line-height: 1.5;
+}
+
+/* Headings: bold, same sans family, a little more air above each section. */
+article h1, article h2, article h3,
+article h4, article h5, article h6 {
+  font-family: var(--bs-body-font-family);
+  font-weight: 700;
+}
+article h2 { margin-top: 1.8rem; }
+article h3 { margin-top: 1.4rem; }
+
+/* Greyer masthead text, like the Minimal Mistakes top bar. */
+.navbar .navbar-brand { font-weight: 700; }
+
+/* Tables: thin grey rules with a bold header underline. */
+article table {
+  border-collapse: collapse;
+  width: auto;
+  margin: 1.25rem 0;
+}
+article table th,
+article table td {
+  border: 1px solid #b6b6b6;
+  padding: .4rem .75rem;
+}
+article table thead th {
+  border-bottom: 2px solid #b6b6b6;
+}
+
+/* Blockquote: indented with a left rule in the theme's slate grey. */
+article blockquote {
+  margin: 1.5em 0;
+  padding: .25em 0 .25em 1em;
+  border-left: .25em solid #6f777d;
+  color: var(--bs-secondary-color);
+}
+
+/* Inline code: a soft grey chip in the monospace family. */
+code { font-family: var(--bs-font-monospace); }
+:not(pre) > code {
+  background-color: rgba(175, 184, 193, .2);
+  padding: .15em .35em;
+  border-radius: .25rem;
+}
+
+/* Code blocks: the dark Material-style panel the reference site uses. A light
+   default color keeps any untokenized text readable; the rest is accenting. */
+article pre {
+  background-color: #263238;
+  border-radius: .3rem;
+  padding: 1rem 1.15rem;
+}
+article pre > code,
+article pre .hljs {
+  background: transparent;
+  color: #eeffff;
+  font-family: var(--bs-font-monospace);
+}
+.hljs-comment, .hljs-quote { color: #6a8a96; font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-built_in,
+.hljs-meta { color: #c792ea; }
+.hljs-string, .hljs-attr, .hljs-regexp,
+.hljs-addition { color: #c3e88d; }
+.hljs-number, .hljs-literal, .hljs-symbol { color: #f78c6c; }
+.hljs-title, .hljs-name, .hljs-type,
+.hljs-class .hljs-title { color: #82aaff; }
+.hljs-attribute, .hljs-variable, .hljs-template-variable { color: #ffcb6b; }
+
+/* Brand: the inductor circuit wordmark in the navbar. Size it by height so the
+   wide mark scales cleanly. The art is dark grey, so flip it to light in dark
+   mode to keep contrast against the dark navbar. */
+.navbar-brand #logo {
+  height: 1.7rem;
+  width: auto;
+}
+.navbar-brand {
+  gap: .4rem;
+}
+[data-bs-theme="dark"] .navbar-brand #logo {
+  filter: brightness(0) invert(1);
+}

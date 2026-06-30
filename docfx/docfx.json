@@ -1,0 +1,42 @@
+{
+  "$schema": "https://raw.githubusercontent.com/dotnet/docfx/main/schemas/docfx.schema.json",
+  "metadata": [
+    {
+      "src": [
+        {
+          "src": "..",
+          "files": [ "src/InductorParser/InductorParser.csproj" ]
+        }
+      ],
+      "dest": "api",
+      "properties": {
+        "TargetFramework": "net8.0",
+        "Configuration": "Release"
+      }
+    }
+  ],
+  "build": {
+    "content": [
+      { "files": [ "api/**.{md,yml}" ] },
+      { "files": [ "docs/**.md" ] },
+      { "files": [ "toc.yml", "index.md" ] }
+    ],
+    "resource": [
+      { "files": [ "docs/**.{png,jpg,jpeg,gif,svg}", "images/**", "logo.png" ] }
+    ],
+    "output": "_site",
+    "template": [ "default", "modern", "templates/override" ],
+    "globalMetadata": {
+      "_appName": "Inductor Parser",
+      "_appLogoPath": "logo.png",
+      "_appTitle": "Inductor Parser",
+      "_enableSearch": true,
+      "_disableBreadcrumb": true,
+      "_disableContribution": false,
+      "_gitContribute": {
+        "repo": "https://github.com/EricZinda/InductorCSParser",
+        "branch": "master"
+      }
+    }
+  }
+}
