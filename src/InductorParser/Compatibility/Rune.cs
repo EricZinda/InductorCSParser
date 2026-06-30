@@ -48,7 +48,7 @@ public readonly struct Rune : IEquatable<Rune>, IComparable<Rune>
     public Rune(char ch)
     {
         if (char.IsSurrogate(ch))
-            throw new ArgumentOutOfRangeException(nameof(ch), "Surrogate halves aren't valid scalar values.");
+            throw new ArgumentOutOfRangeException(nameof(ch), "Surrogate halves aren't valid Runes (i.e. Unicode scalar values).");
         _value = ch;
     }
 
@@ -64,7 +64,7 @@ public readonly struct Rune : IEquatable<Rune>, IComparable<Rune>
     public Rune(int value)
     {
         if (!IsValid(value))
-            throw new ArgumentOutOfRangeException(nameof(value), "Not a valid Unicode scalar value.");
+            throw new ArgumentOutOfRangeException(nameof(value), "Not a valid Rune (i.e. Unicode scalar value).");
         _value = value;
     }
 

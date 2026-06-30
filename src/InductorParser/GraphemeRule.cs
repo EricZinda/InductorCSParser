@@ -52,7 +52,7 @@ internal sealed class GraphemeRule : Rule
         string firstElement = StringInfo.GetNextTextElement(expectedToken, 0);
         if (firstElement.Length != expectedToken.Length)
             throw new ArgumentException(
-                $"Token requires exactly one user-perceived character (one StringInfo text element / grapheme cluster). Use Literal(string) for multi-token matches.",
+                $"Token requires exactly one user-perceived character (one grapheme cluster). Use Literal(string) to match a sequence of more than one.",
                 nameof(expectedToken));
 
         _expected = expectedToken;

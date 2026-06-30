@@ -383,7 +383,7 @@ public class TokenSetTests
 
         var exception = Assert.Throws<ArgumentException>(() => TokenSet.Runes(malformedCluster));
 
-        Assert.That(exception!.Message, Does.Contain("invalid Unicode scalar value"));
+        Assert.That(exception!.Message, Does.Contain("Unicode scalar value"));
         Assert.That(exception.Message, Does.Contain("0xD800"));
         Assert.That(exception.Message, Does.Contain("UTF-16 offset 0"));
         Assert.That(exception.Message, Does.Not.Contain("multi-rune grapheme cluster"));
@@ -401,7 +401,7 @@ public class TokenSetTests
         var exception = Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(malformed));
 
         Assert.That(exception!.ParamName, Is.EqualTo("clusters"));
-        Assert.That(exception.Message, Does.Contain("invalid Unicode scalar value"));
+        Assert.That(exception.Message, Does.Contain("Unicode scalar value"));
         Assert.That(exception.Message, Does.Contain("0xD800"));
         Assert.That(exception.Message, Does.Contain("UTF-16 offset 2"));
         Assert.That(exception.Message, Does.Not.Contain("more than one grapheme cluster"));

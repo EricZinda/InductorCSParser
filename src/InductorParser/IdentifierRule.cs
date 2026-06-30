@@ -178,12 +178,11 @@ internal sealed class IdentifierRule : Rule
                 out string offendingStart, out string conversion, out string missingPiece))
         {
             throw new InvalidOperationException(
-                $"Identifier (Compile {form}): the extraStartRunes entry \"{offendingStart}\" " +
-                $"normalizes to the multi-rune sequence \"{conversion}\", whose continuation " +
-                $"piece \"{missingPiece}\" isn't a valid identifier-continue character. A start " +
-                $"character that decomposes needs every piece after the first to be matchable in " +
-                $"body position. Add \"{missingPiece}\" to extraBodyRunes, or drop " +
-                $"\"{offendingStart}\" from extraStartRunes.");
+                $"Identifier can't compile under {form}: the extraStartRunes entry " +
+                $"\"{offendingStart}\" becomes \"{conversion}\", and \"{missingPiece}\" in " +
+                $"there isn't allowed in the body of an identifier. After the first " +
+                $"character, the pieces sit in the body. Add \"{missingPiece}\" to " +
+                $"extraBodyRunes, or remove \"{offendingStart}\" from extraStartRunes.");
         }
 
         // Second start-side check: the HEAD rune of an extra start rune's
@@ -201,13 +200,12 @@ internal sealed class IdentifierRule : Rule
                 out string headOffendingStart, out string headConversion, out string offendingHead))
         {
             throw new InvalidOperationException(
-                $"Identifier (Compile {form}): the extraStartRunes entry \"{headOffendingStart}\" " +
-                $"normalizes to the multi-rune sequence \"{headConversion}\", whose first piece " +
-                $"\"{offendingHead}\" isn't a valid identifier-start character. A start character " +
-                $"that decomposes needs its first piece to be a valid start as well, otherwise " +
-                $"that piece (here \"{offendingHead}\") leaks into the identifier-start set and " +
-                $"lets an identifier begin with it. Add \"{offendingHead}\" to extraStartRunes to " +
-                $"opt in, or drop \"{headOffendingStart}\" from extraStartRunes.");
+                $"Identifier can't compile under {form}: the extraStartRunes entry " +
+                $"\"{headOffendingStart}\" becomes \"{headConversion}\", and its first " +
+                $"character \"{offendingHead}\" isn't allowed at the start of an identifier. " +
+                $"Allowing it would let an identifier begin with \"{offendingHead}\". Add " +
+                $"\"{offendingHead}\" to extraStartRunes to allow it, or remove " +
+                $"\"{headOffendingStart}\" from extraStartRunes.");
         }
 
         // Mirror check on the body side: every piece of each extra body
@@ -224,12 +222,11 @@ internal sealed class IdentifierRule : Rule
                 out string offendingBody, out string bodyConversion, out string bodyMissingPiece))
         {
             throw new InvalidOperationException(
-                $"Identifier (Compile {form}): the extraBodyRunes entry \"{offendingBody}\" " +
-                $"normalizes to the multi-rune sequence \"{bodyConversion}\", whose piece " +
-                $"\"{bodyMissingPiece}\" isn't in XidContinue and wasn't added by this " +
-                $"extraBodyRunes call. Every piece of a body character's decomposition needs " +
-                $"to be matchable in body position. Add \"{bodyMissingPiece}\" to extraBodyRunes " +
-                $"to opt in, or drop \"{offendingBody}\" from extraBodyRunes.");
+                $"Identifier can't compile under {form}: the extraBodyRunes entry " +
+                $"\"{offendingBody}\" becomes \"{bodyConversion}\", and \"{bodyMissingPiece}\" " +
+                $"in there isn't allowed in the body of an identifier. Every piece it " +
+                $"becomes has to be valid in the body. Add \"{bodyMissingPiece}\" to " +
+                $"extraBodyRunes, or remove \"{offendingBody}\" from extraBodyRunes.");
         }
 
         var expandedStart = WithCompatibilityHeadRuneEquivalents(TokenSet.XidStart | _extraStartRunes, form);

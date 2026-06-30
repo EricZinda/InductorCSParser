@@ -585,7 +585,7 @@ public class XidIdentifierTests
         var rule = OneOf(TokenSet.Single(0x0132));
 
         var exception = Assert.Throws<InvalidOperationException>(() => rule.Compile(form));
-        Assert.That(exception!.Message, Does.Contain("expected text that isn't in"));
+        Assert.That(exception!.Message, Does.Contain("text that can't be converted to"));
         Assert.That(exception.Message, Does.Contain(form.ToString()));
     }
 
