@@ -667,7 +667,7 @@ public abstract class Rule
                 $".WithError(\"{errorMessage}\") can't be applied to this rule: " +
                 $"it already has the error message \"{_errorMessage}\". " +
                 $".WithError(...) is set-once. To attach a different error to the " +
-                $"same rule shape at multiple call sites, wrap it with Alias(...) " +
+                $"same rule shape in more than one place, wrap it with Alias(...) " +
                 $"to get a fresh wrapper that can carry its own error: " +
                 $"Alias(rule).WithError(\"{errorMessage}\"). Or build a factory " +
                 $"function that returns a fresh rule each call.");
@@ -1049,9 +1049,37 @@ public abstract class Rule
         // precomposed 'é' in the grammar against a decomposed 'e + accent' in
         // the input).
         NormalizationForm? normalizeInput = _normalizationForm;
-        string parseInput = normalizeInput.HasValue
-            ? input.Normalize(normalizeInput.Value)
-            : input;
+        string parseInput;
+        if (normalizeInput.HasValue)
+        {
+            try
+            {
+                parseInput = input.Normalize(normalizeInput.Value);
+            }
+            catch (ArgumentException)
+            {
+                // .NET's string.Normalize rejects input that isn't well-formed
+                // Unicode (an unpaired UTF-16 surrogate, or U+FFFE) by throwing
+                // ArgumentException whose message comes from the BCL in the
+                // runtime's culture, not the grammar author's. That's the one
+                // parse-time failure mode that would otherwise escape the
+                // ParseResult model. Turn it into a MalformedInput result
+                // positioned at the offending character, with a message the
+                // author can localize via ParseOptions.MalformedInputTemplate,
+                // so a non-English app reports it the same way it reports every
+                // other failure. Callers that deliberately want surrogate-bearing
+                // input as tokens opt out with Compile(null), which skips
+                // normalization and never reaches this catch.
+                int badIndex = FindFirstUnnormalizableIndex(input);
+                if (badIndex < 0) badIndex = 0;
+                string malformedMessage = BuildMalformedInputMessage(badIndex, input, options);
+                return ParseResult.MalformedInput(badIndex, malformedMessage, input, this);
+            }
+        }
+        else
+        {
+            parseInput = input;
+        }
 
         // Per-parse context every Symbol the engine builds will hold
         // a reference to. Lets Symbol.SourceRange / Symbol.SourceText
@@ -1176,6 +1204,49 @@ public abstract class Rule
                 string element = StringInfo.GetNextTextElement(input, failurePosition);
                 return DisplayEscape.Escape(element, 0, element.Length);
             }));
+    }
+
+    // Build the message for a MalformedInput result. Same template
+    // machinery as BuildErrorMessage: {charIndex} / {tokenIndex} / {line} /
+    // {column} plus a {character} placeholder that renders the offending
+    // element through DisplayEscape, so a lone surrogate comes out as
+    // "U+D800" rather than a raw, unrenderable code unit. The default
+    // MalformedInputTemplate only mentions {charIndex}, so the {character}
+    // delegate (and the O(n) position scans) stay unevaluated unless a
+    // custom template asks for them.
+    internal static string BuildMalformedInputMessage(int badIndex, string input, ParseOptions options)
+    {
+        return FormatTemplate(options.MalformedInputTemplate,
+            PositionPlaceholders(badIndex, input),
+            ("character", () =>
+            {
+                string element = StringInfo.GetNextTextElement(input, badIndex);
+                return DisplayEscape.Escape(element, 0, element.Length);
+            }));
+    }
+
+    // Find the first index string.Normalize would reject: an unpaired UTF-16
+    // surrogate, or U+FFFE (the byte-swapped BOM .NET refuses to normalize).
+    // Valid surrogate pairs are skipped, so any surrogate we reach is
+    // genuinely unpaired. Returns -1 if it finds none. That shouldn't happen
+    // on the catch path (Normalize only throws when one is present), but the
+    // caller falls back to offset 0 if it does, rather than trusting the
+    // index baked into the BCL exception message (which is localized to the
+    // runtime's culture and would have to be string-scraped to read).
+    private static int FindFirstUnnormalizableIndex(string input)
+    {
+        for (int i = 0; i < input.Length; i++)
+        {
+            if (RuneHelpers.IsSurrogatePairAt(input, i))
+            {
+                i++;
+                continue;
+            }
+            char c = input[i];
+            if (char.IsSurrogate(c)) return i;
+            if (c == (char)0xFFFE) return i;
+        }
+        return -1;
     }
 
     // The four placeholders shared by every default template:
@@ -1547,7 +1618,7 @@ public abstract class Rule
             if (r._idUserExplicit && explicitRules.TryGetValue(idValue, out var existing))
             {
                 throw new InvalidOperationException(
-                    $"Two reachable rules use the explicit SymbolId({idValue}): " +
+                    $"Two rules use the explicit SymbolId({idValue}): " +
                     $"'{DescribeRule(existing)}' and '{DescribeRule(r)}'. " +
                     $"Each .As(new SymbolId(...)) explicit id must be unique within a grammar.");
             }
@@ -1574,7 +1645,7 @@ public abstract class Rule
             if (namedRules.ContainsKey(r.Name))
             {
                 throw new InvalidOperationException(
-                    $"Two reachable rules share the name '{r.Name}'. " +
+                    $"Two rules share the name '{r.Name}'. " +
                     $"Each .As(string) name must be unique within a grammar.");
             }
             namedRules[r.Name] = r;
@@ -1736,16 +1807,25 @@ public abstract class Rule
 
     // Build the multi-rule error message, e.g.:
     //
-    //   Compile failed: 2 rules have expected text that isn't in FormKC. 
-    //   The parser normalizes input to this form before
-    //   matching, so a rule whose expected text is in a different form will
-    //   never match. Use the suggested form below or pass a different
-    //   normalization form to Compile (or null to disable normalization):
-    //     - keyword (LiteralRule): 'U+FB01le' should be 'file'
-    //     - label (LiteralRule): 'U+FF21' should be 'A'
+    //   Compile failed: 2 rules hold text that can't be converted to FormKC.
+    //   Compile normalizes each rule's text to the chosen form, so it will
+    //   match the form the input gets converted to. These rules can't be
+    //   converted that way, either because the text isn't valid Unicode or
+    //   because converting it splits one grapheme into several where the
+    //   rule matches exactly one. Fix each rule as noted below, or pass a
+    //   different normalization form to Compile (or null to turn
+    //   normalization off):
+    //     - Token (GraphemeRule): 'U+FB01' <Token converts to multi-grapheme
+    //       sequence "fi" under FormKC. Token matches exactly one grapheme.
+    //       Use Literal("fi") or And(Token-per-grapheme) instead.>
+    //     - letter (OneOfRule): 'U+FB01' <converts under FormKC to the
+    //       multi-grapheme sequence "fi", but a TokenSet member has to be
+    //       exactly one grapheme. ...>
     //
-    // (U+FB01 is the "ﬁ" ligature, U+FF21 the fullwidth "A". FormatLiteralForError
-    // renders non-ASCII runes as U+XXXX, since the difference is often invisible.)
+    // (U+FB01 is the "ﬁ" ligature. FormatLiteralForError renders non-ASCII
+    // runes as U+XXXX, since the difference is often invisible. The detail
+    // after each literal is the offender description the reporting rule
+    // supplied, not a drop-in replacement value.)
     private static string BuildNormalizationErrorMessage(
         NormalizationForm form,
         List<(Rule rule, string original, string normalized)> offenders)
@@ -1765,14 +1845,17 @@ public abstract class Rule
         var builder = new StringBuilder();
         builder.Append("Compile failed: ")
                .Append(ruleCount)
-               .Append(ruleCount == 1 ? " rule has" : " rules have")
-               .Append(" expected text that isn't in ")
+               .Append(ruleCount == 1 ? " rule holds" : " rules hold")
+               .Append(" text that can't be converted to ")
                .Append(FormatNormalizationForm(form))
-               .AppendLine(". The parser normalizes input to this form before")
-               .AppendLine("matching, so a rule whose expected text is in a different form will")
-               .AppendLine("never match. Use the suggested form below or pass a different");
-        builder.AppendLine("normalization form to Compile (or null to disable normalization):");
-        foreach (var (rule, original, normalized) in offenders)
+               .Append(". Compile normalizes each rule's text to the chosen form, so it ")
+               .Append("will match the form the input gets converted to. ")
+               .Append(ruleCount == 1 ? "This rule" : "These rules")
+               .Append(" can't be converted that way, either because the text isn't valid ")
+               .Append("Unicode or because converting it splits one grapheme into several ")
+               .Append("where the rule matches exactly one. Fix each rule as noted below, or ")
+               .AppendLine("pass a different normalization form to Compile (or null to turn normalization off):");
+        foreach (var (rule, original, detail) in offenders)
         {
             string displayName = rule.Name ?? rule._ruleTraceName;
             string ruleType = rule.GetType().Name;
@@ -1782,8 +1865,8 @@ public abstract class Rule
                    .Append(ruleType)
                    .Append("): ")
                    .Append(FormatLiteralForError(original))
-                   .Append(" should be ")
-                   .Append(FormatLiteralForError(normalized))
+                   .Append(' ')
+                   .Append(detail)
                    .AppendLine();
         }
         return builder.ToString().TrimEnd();
@@ -1874,7 +1957,7 @@ public abstract class Rule
             string ruleLabel = r.Name ?? r._ruleTraceName;
             throw new InvalidOperationException(
                 $"Rule '{ruleLabel}' can't be compiled because a previous Compile " +
-                $"attempt failed after mutating this rule graph. Build a fresh " +
+                $"attempt failed after it had already changed these rules. Build a fresh " +
                 $"grammar instance before compiling again. Previous failure: " +
                 $"{r._invalidCompileReason}");
         }

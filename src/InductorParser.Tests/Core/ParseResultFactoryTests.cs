@@ -83,6 +83,32 @@ public class ParseResultFactoryTests
     }
 
     [Test]
+    public void MalformedInput_factory_builds_a_non_success_result()
+    {
+        // The MalformedInput factory mirrors Failed: a non-Success result
+        // carrying a message and an offending index, but with its own outcome
+        // so callers can tell "the input isn't valid Unicode" apart from a
+        // plain grammar mismatch. It's public for custom parse drivers that do
+        // their own normalization.
+        var grammar = Literal("hi");
+        grammar.Compile();
+        var input = "ab";
+
+        var result = ParseResult.MalformedInput(errorCharIndex: 1, message: "bad", input: input, grammar: grammar);
+
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.MalformedInput));
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("bad"));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
+
+        // Same range enforcement and null-argument checks as the other factories.
+        Assert.Throws<System.ArgumentOutOfRangeException>(() =>
+            ParseResult.MalformedInput(errorCharIndex: 999, message: "x", input: input, grammar: grammar));
+        Assert.Throws<System.ArgumentNullException>(() =>
+            ParseResult.MalformedInput(0, null!, input, grammar));
+    }
+
+    [Test]
     public void Succeeded_factory_copies_symbols_list()
     {
         var grammar = Literal("a");

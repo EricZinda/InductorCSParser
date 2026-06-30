@@ -110,7 +110,7 @@ internal sealed class AliasRule : Rule
         if (effectiveFlattenType != FlattenType.Delete)
         {
             Invariant.That(outputSymbols != null,
-                $"AliasRule entered the content-build block with outputSymbols=null while effectiveFlattenType={effectiveFlattenType}; the framework should have allocated a list for any non-Delete effective type.");
+                $"AliasRule entered the content-build block with outputSymbols=null while effectiveFlattenType={effectiveFlattenType}. The framework should have allocated a list for any non-Delete effective type.");
 
             // First condition asks "should we substitute?". It reads
             // EmitsLeaf (computed above from the inner's shape and this

@@ -15,10 +15,11 @@ public sealed partial class Lexer
     /// Returns the number of tokens consumed.
     /// </summary>
     /// <remarks>
-    /// <paramref name="set"/> must be rune-only. For sets that contain
+    /// <paramref name="set"/> must be rune-only. For a set that contains
     /// multi-rune entries (CRLF, ZWJ emoji, etc.), use
-    /// <see cref="AdvanceWhileTokenIn"/>. Branch on
-    /// <see cref="TokenSet.HasMultiRuneGraphemes"/> to pick.
+    /// <see cref="AdvanceWhileTokenIn"/> instead, or check
+    /// <see cref="TokenSet.HasMultiRuneGraphemes"/> yourself and call
+    /// whichever one fits.
     /// </remarks>
     /// <exception cref="ArgumentException">
     /// <paramref name="set"/> contains a multi-rune grapheme entry.
@@ -28,8 +29,8 @@ public sealed partial class Lexer
         if (set.HasMultiRuneGraphemes)
             throw new ArgumentException(
                 "AdvanceWhileRuneIn requires a rune-only set. " +
-                "Use AdvanceWhileTokenIn for sets with multi-rune entries, " +
-                "or branch on TokenSet.HasMultiRuneGraphemes to pick.",
+                "For a set with multi-rune entries, use AdvanceWhileTokenIn instead, " +
+                "or check set.HasMultiRuneGraphemes yourself and call whichever one fits.",
                 nameof(set));
 
         int count = 0;

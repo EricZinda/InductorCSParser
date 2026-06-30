@@ -1,4 +1,6 @@
-The Inductor Parser (IP) is a loose port of the [Inductor C++ Parser](https://github.com/EricZinda/InductorParser), designed for C#. I ported this while creating a new project in Unity and during a period where I've been subjected to reviewing way too many Claude generated Regex's. My goal is to design a parser library that is:
+The Inductor Parser (IP) is a loose port of the [Inductor C++ Parser](https://github.com/EricZinda/InductorParser), designed for C#. Browse the full documentation site (guides, reference, and API) at https://ericzinda.github.io/InductorCSParser/.
+
+I ported this while creating a new project in Unity and during a period where I've been subjected to reviewing way too many Claude generated Regex's. My goal is to design a parser library that is:
 
 - **More Readable than Regex:** The grammars are self-describing and human readable so they can be reasoned about, code reviewed and understood without looking up obscure letters and symbols. 
 - **Designed for World Languages:** From the lexer, to the built-in rules, to normalization, it's designed around Unicode so grammars have a good starting point for world-language text (but it's not in your face if you don't care).

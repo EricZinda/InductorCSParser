@@ -1050,15 +1050,15 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             }
             if (!Rune.IsValid(rune))
                 throw new ArgumentException(
-                    $"Runes(string) encountered an invalid Unicode scalar value (0x{rune:X4}) at UTF-16 offset {index}. " +
-                    "Lone surrogate halves aren't valid scalars.",
+                    $"Runes(string) encountered an invalid Rune (i.e. Unicode scalar value), 0x{rune:X4}, at UTF-16 offset {index}. " +
+                    "Lone surrogate halves aren't valid Runes.",
                     nameof(text));
             if (grapheme.Length != consumed)
                 throw new ArgumentException(
                     $"Runes(string) input \"{text}\" contains a multi-rune grapheme cluster (\"{grapheme}\") at UTF-16 offset {index}. " +
-                    "Runes(string) walks rune by rune and rejects inputs where consecutive runes form one cluster. " +
-                    "If you want a set of grapheme clusters, use Graphemes(string[]). " +
-                    "If you want separate scalars that visually combine, build the set explicitly with Single(c1) | Single(c2).",
+                    "Runes(string) makes one set member per code point, so when neighboring code points count as one character it can't tell whether you meant one member or one member per code point, and rejects rather than guess. " +
+                    "To match the whole character as a single member, use Graphemes(string[]). " +
+                    "To match each code point on its own, list them yourself: Single(c1) | Single(c2).",
                     nameof(text));
             intervals.Add(new Interval(rune, rune));
             index += consumed;
@@ -1154,8 +1154,8 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             }
             if (!Rune.IsValid(runeCodepoint))
                 throw new ArgumentException(
-                    $"Graphemes element at index {clusterIndex} contains an invalid Unicode scalar value (0x{runeCodepoint:X4}) at UTF-16 offset {runeStart}. " +
-                    "Lone surrogate halves aren't valid scalars.",
+                    $"Graphemes element at index {clusterIndex} contains an invalid Rune (i.e. Unicode scalar value), 0x{runeCodepoint:X4}, at UTF-16 offset {runeStart}. " +
+                    "Lone surrogate halves aren't valid Runes.",
                     parameterName);
         }
     }
@@ -1186,7 +1186,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     {
         if (!Rune.IsValid(codepoint))
             throw new ArgumentOutOfRangeException(parameterName, codepoint,
-                "Must be a valid Unicode scalar value (0..0x10FFFF, excluding surrogates 0xD800..0xDFFF).");
+                "Must be a valid Rune (i.e. Unicode scalar value): 0..0x10FFFF, excluding surrogates 0xD800..0xDFFF.");
     }
 
     /// <summary>Union: a set whose members are in <paramref name="a"/> or <paramref name="b"/>.</summary>

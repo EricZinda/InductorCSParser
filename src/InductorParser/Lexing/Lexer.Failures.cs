@@ -94,7 +94,7 @@ public sealed partial class Lexer
     public void RecordFailure(int position, string? errorMessage = null, bool forced = false)
     {
         Invariant.That(!forced || errorMessage != null,
-            $"RecordFailure(forced: true) requires a non-null errorMessage; got null at position {position}.");
+            $"RecordFailure(forced: true) requires a non-null errorMessage. Got null at position {position}.");
         // Every failure, whatever its precedence, advances the subtree-extent
         // high-water mark so an enclosing composite can anchor its own
         // .WithError at the deepest position its subtree reached.

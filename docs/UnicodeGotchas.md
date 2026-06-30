@@ -251,7 +251,7 @@ If a grammar is a port of regex semantics that explicitly targets LF-only (some 
 
 A lone surrogate is an unpaired UTF-16 code unit in U+D800..U+DFFF, the kind you get from truncated or malformed UTF-16 (a high surrogate with no low surrogate after it). It isn't a Unicode scalar value, so it can't be a member of any `TokenSet` you build with `Single` / `Range` / `Runes` (those reject surrogate arguments). The only way one enters a set is through the explicit `TokenSet.Surrogates` constant or `TokenSet.SurrogateRange`.
 
-Under the default `Compile(NormalizationForm.FormC)` you never see this, because .NET's `string.Normalize` rejects malformed UTF-16. `Parse` normalizes before the lexer runs, so any input with a lone surrogate throws `ArgumentException` before tokenization. The gotcha only shows up under `Compile(null)`, which skips normalization and lets the lexer surface a lone surrogate as a one-char token (with no scalar value).
+Under the default `Compile(NormalizationForm.FormC)` you never see this, because .NET's `string.Normalize` rejects malformed UTF-16. `Parse` normalizes before the lexer runs, so any input with a lone surrogate fails the parse with a `MalformedInput` outcome before tokenization (the parser catches the rejection and reports it as a result you can localize, rather than letting an `ArgumentException` escape). The gotcha only shows up under `Compile(null)`, which skips normalization and lets the lexer surface a lone surrogate as a one-char token (with no scalar value).
 
 When that token reaches the parser, `NoneOf(set)` admits it:
 

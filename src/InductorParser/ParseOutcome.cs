@@ -24,6 +24,26 @@ public enum ParseOutcome
     GrammarMismatch,
 
     /// <summary>
+    /// The input couldn't be normalized to the grammar's
+    /// <see cref="Rule.NormalizationForm"/> because it isn't well-formed
+    /// Unicode (an unpaired UTF-16 surrogate, or U+FFFE). The grammar never
+    /// ran, so this is distinct from <see cref="GrammarMismatch"/>: the input
+    /// is broken at the encoding level, not merely unrecognized.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ParseResult.ErrorCharIndex"/> points at the offending
+    /// character and <see cref="ParseResult.ErrorMessage"/> carries the
+    /// message rendered from <see cref="ParseOptions.MalformedInputTemplate"/>,
+    /// so a non-English app can localize it the same way it localizes every
+    /// other failure. Only reachable when the grammar was compiled with a
+    /// normalization form (the default); <c>Compile(null)</c> skips
+    /// normalization and surfaces ill-formed code units as ordinary tokens
+    /// instead, which a grammar can decide how to handle
+    /// <see cref="GrammarMismatch"/>.
+    /// </remarks>
+    MalformedInput,
+
+    /// <summary>
     /// <see cref="ParseOptions.Timeout"/> elapsed before the parse finished.
     /// Wall-clock, polled from inside the parse loop.
     /// </summary>

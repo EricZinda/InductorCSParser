@@ -267,7 +267,7 @@ public class SecurityByDefaultTests
     // ============================================================
 
     [Test]
-    public void Ill_formed_UTF16_throws_at_normalization_before_any_grammar_runs()
+    public void Ill_formed_UTF16_reported_as_MalformedInput_before_any_grammar_runs()
     {
         // Threat: an attacker constructs a .NET string with
         // ill-formed UTF-16 (lone surrogate, reversed pair, and
@@ -280,22 +280,20 @@ public class SecurityByDefaultTests
         // Default safety: every non-null normalization form
         // (FormC, FormD, FormKC, FormKD) routes input through
         // String.Normalize before the lexer runs. Normalize
-        // throws ArgumentException on ill-formed UTF-16, and the
-        // exception propagates out of Parse. The caller learns
-        // the input was corrupt; no grammar rule ever sees the
-        // ill-formed input and never silently matches against it.
+        // rejects ill-formed UTF-16, and Parse reports that as a
+        // MalformedInput result rather than running any grammar
+        // rule against the input. No rule ever sees the ill-formed
+        // input, so it can never silently match; the caller learns
+        // the input was corrupt by checking Outcome.
         var grammar = And(Literal("hello"), Eof()).Compile();  // default FormC
 
-        string loneHigh = BuildString(0xD800);
-        Assert.Throws<ArgumentException>(
-            () => grammar.Parse(loneHigh),
-            "lone high surrogate throws at normalization, before the " +
-            "lexer runs");
+        string loneHigh = UnicodeExamples.HighSurrogateMinText;
+        Assert.That(grammar.Parse(loneHigh).Outcome, Is.EqualTo(ParseOutcome.MalformedInput),
+            "lone high surrogate is rejected at normalization, before the lexer runs");
 
-        string reversedPair = BuildString(0xDC00, 0xD800);  // low followed by high
-        Assert.Throws<ArgumentException>(
-            () => grammar.Parse(reversedPair),
-            "reversed surrogate pair throws the same way");
+        string reversedPair = UnicodeExamples.ReversedSurrogatePairText;  // low followed by high
+        Assert.That(grammar.Parse(reversedPair).Outcome, Is.EqualTo(ParseOutcome.MalformedInput),
+            "reversed surrogate pair is rejected the same way");
     }
 
     // ============================================================
@@ -379,15 +377,5 @@ public class SecurityByDefaultTests
             "classic Unicode-security issue the parser does NOT defend " +
             "against by default. Use a script-restricted TokenSet " +
             "(see UnicodeGotchasExamples) when this matters.");
-    }
-
-    // Helper: build a string from raw UTF-16 code units, preserving
-    // ill-formed sequences. Used for tests that need to feed lone
-    // surrogates or reversed pairs through the parser.
-    private static string BuildString(params int[] codeUnits)
-    {
-        var chars = new char[codeUnits.Length];
-        for (int i = 0; i < codeUnits.Length; i++) chars[i] = (char)codeUnits[i];
-        return new string(chars);
     }
 }

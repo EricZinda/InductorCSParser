@@ -168,6 +168,7 @@ public sealed class ParseOptions
     /// plus a per-template placeholder for the unit-specific value:
     /// <code>
     ///   PositionalErrorTemplate      {character}  (the unexpected input character)
+    ///   MalformedInputTemplate       {character}  (the offending element, e.g. U+D800)
     ///   TimeoutAbortTemplate         {timeout}    (options.Timeout as a TimeSpan string)
     ///   RuleCountLimitAbortTemplate  {limit}      (options.RuleCountLimit)
     ///   DepthLimitAbortTemplate      {limit}      (options.MaxDepth)
@@ -197,6 +198,25 @@ public sealed class ParseOptions
     {
         get => _endOfInputErrorTemplate;
         set => _endOfInputErrorTemplate = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    private string _malformedInputTemplate =
+        "Parse failed at offset {charIndex}: the input isn't valid Unicode and can't be normalized.";
+    /// <summary>
+    /// Template for the message when the input can't be normalized to the
+    /// grammar's normalization form because it isn't well-formed Unicode (an
+    /// unpaired UTF-16 surrogate, or U+FFFE). The parse returns
+    /// <see cref="ParseOutcome.MalformedInput"/> carrying this message instead
+    /// of letting .NET's string.Normalize throw an ArgumentException whose text
+    /// the app can't control. See <see cref="PositionalErrorTemplate"/> for the
+    /// placeholder syntax; the per-template {character} placeholder renders the
+    /// offending element (a lone surrogate comes out as U+D800-style text).
+    /// Setting it to null throws.
+    /// </summary>
+    public string MalformedInputTemplate
+    {
+        get => _malformedInputTemplate;
+        set => _malformedInputTemplate = value ?? throw new ArgumentNullException(nameof(value));
     }
 
     private string _timeoutAbortTemplate = "Parse aborted: timeout exceeded.";
