@@ -6,17 +6,30 @@ using InductorParser.SyntaxTree;
 namespace InductorParser;
 
 // Reads one token from the outer lexer and runs an inner rule against
-// the runes inside that token. The outer token is a StringInfo text
-// element that may span several runes, and the inner rule gets to walk
-// and validate each of them.
+// the runes inside that token. The outer token is one grapheme that may
+// span several runes, and the inner rule gets to walk and validate each
+// of them.
 //
-// Semantics: the inner rule must consume every rune of the token. If
-// it matches only a prefix, the whole WithinToken match fails and the
-// outer lexer rolls back. A token is atomic from the outer view: we
-// don't leave half of it on the floor for a following rule to pick up.
+// Semantics: the inner rule can be any rule, a composition of built-ins
+// (And, Or, OneOf, repetition) or a user's own Rule subclass. Nothing about
+// it is special-cased. WithinToken hands it the sub-lexer below through the
+// same ParseChild path every nested rule goes through. The sub-lexer feeds
+// the outer token's runes one per Read, and the inner rule can't tell those
+// from ordinary one-rune tokens: it's the same stream it would see parsing
+// plain ASCII, where every grapheme is already a single rune. So the inner
+// rule does nothing different from ordinary parsing, no "inside a token" code
+// path, and any rule that uses only the lexer it's given works, whoever wrote
+// it. The inner rule must consume every rune of the token. If it matches only
+// a prefix, the whole WithinToken match fails and the outer lexer rolls back.
+// A token is atomic from the outer view: we don't leave half of it on the
+// floor for a following rule to pick up.
 //
-// This is how Rules.Identifier handles Devanagari / Thai / Arabic-with-
-// vowels under token-level tokenization. It's also the reusable building
+// This is how Rules.Identifier validates a script like Devanagari, Thai, or
+// Arabic-with-vowels, where one identifier character is a grapheme
+// spanning several runes: WithinToken walks into the token and checks each
+// rune against the XID sets (the sets of valid starts and continue characters), 
+// rather than matching the whole token as one
+// unit. It's also the reusable building
 // block for any rule that needs to look inside a token: emoji-with-
 // modifier matchers, jamo-cluster validators, "reject any multi-rune
 // token" strictness rules, etc. See Rules.WithinToken for the factory
@@ -129,27 +142,30 @@ internal sealed class WithinTokenRule : Rule
 
         if (!subLexer.IsEof)
         {
-            // Inner rule matched a prefix of the token but not all of it.
-            // A token is atomic from the outer view, so the failure
-            // belongs at the outer cluster's start, not at the rune
-            // offset where the inner rule stopped reading (which is
-            // mid-cluster from outside). subLexer.Position is a 0-based
-            // UTF-16 offset into the substring, so it counts chars, not
-            // runes: a supplementary-plane rune is two chars but one rune,
-            // and the inner rule walks one rune per Read.
-            // RuneHelpers.RuneCount converts both the consumed amount and
-            // the token length to the rune counts the trace's "X/Y" is meant
-            // to report. The conversions sit inside the trace hole, so the
-            // handler skips them when tracing is off.
+            // The inner rule succeeded but stopped before the end of the
+            // token, so WithinToken fails (the whole token has to match).
+            // Record the failure at startPosition, the token's start. A token
+            // is atomic from outside, so there's no meaningful place to point
+            // inside it: the rune offset where the inner rule stopped is
+            // mid-grapheme from the outer view.
+            //
+            // The trace's "consumed X/Y" counts runes, but subLexer.Position
+            // is a UTF-16 char offset (a supplementary-plane rune is two
+            // chars, one rune), so RuneHelpers.RuneCount converts both the
+            // consumed amount and the token length to runes. The conversions
+            // sit inside the trace string, so they cost nothing when tracing
+            // is off.
             TraceFailure(outerLexer,
                 $"inner rule consumed only {RuneHelpers.RuneCount(subInput.AsSpan(0, subLexer.Position))}/{RuneHelpers.RuneCount(subInput.AsSpan())} of the token");
-            // Same pattern as the inner-failed branch: surface the inner's
-            // deepest failure with its forced flag preserved so a forced
-            // .WithError from a rejected alternative inside the cluster
-            // competes with WithinToken's own under depth-primary ranking.
-            // Without this, a forced inner hint is silently dropped when
-            // the inner succeeded via a fallback that consumed only a
-            // prefix of the cluster.
+            // Same idea as the branch above. When WithinToken fails, the
+            // parser later shows the user the best error it collected. If
+            // something inside the token failed with a custom .WithError
+            // message, that's usually more helpful than WithinToken's generic
+            // one. But the inner rule overall succeeded here (it just didn't
+            // match the whole token), so its message wasn't kept. Grab it from
+            // the sub-lexer and record it too, keeping whether it was forced,
+            // so it competes with WithinToken's own. Without this, the user
+            // only ever sees the generic message.
             string? innerMessage = subLexer.DeepestFailureMessage;
             if (innerMessage != null)
                 outerLexer.RecordFailure(startPosition, innerMessage,
@@ -165,10 +181,11 @@ internal sealed class WithinTokenRule : Rule
 
         // One leaf Symbol per token. See Rule.ResolveLeafId for the
         // leaf-id rule shared across OneOfRule / NoneOfRule /
-        // AnyTokenRule / WithinTokenRule. The Memory points into the
-        // outer input, not the substring we passed to the sub-lexer, so
-        // callers that walk the tree get spans that reference the
-        // caller's original string.
+        // AnyTokenRule / WithinTokenRule. The Symbol's text is token.Memory, a
+        // ReadOnlyMemory<char> window into the outer input (the caller's
+        // original string), not the throwaway substring we passed to the
+        // sub-lexer. So callers that walk the tree get spans pointing into
+        // their own string.
         SymbolId leafId = ResolveLeafId(token.RuneValue);
         var leafSymbol = new Symbol(leafId, FlattenType, token.Memory, outerLexer.Context);
         if (effectiveFlattenType == FlattenType.Flatten)
