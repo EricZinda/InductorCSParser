@@ -1,10 +1,11 @@
 {{!Override of the modern template's _master layout. Two changes from stock:
-   the navbar logo img no longer carries class="svg", and the visible brand
-   text after the logo is removed so only the logo shows. The class="svg"
-   marker makes DocFX fetch the logo and inline it as SVG for dark-mode
-   recoloring, which only works for real SVG files and would mangle our PNG
-   wordmark. As a plain img the PNG renders fine. main.css sizes it and flips
-   its color in dark mode. The alt text still comes from _appName.}}
+   the navbar logo img no longer carries class="svg", and the brand shows the
+   logo with a "Parser" subtitle stacked beneath it instead of the plain
+   _appName text. The class="svg" marker makes DocFX fetch the logo and inline
+   it as SVG for dark-mode recoloring, which only works for real SVG files and
+   would mangle our PNG wordmark. As a plain img the PNG renders fine. main.css
+   sizes it, stacks the subtitle, and flips the logo color in dark mode. The
+   alt text still comes from _appName.}}
 {{!include(/^public/.*/)}}
 {{!include(favicon.ico)}}
 {{!include(logo.svg)}}
@@ -71,6 +72,7 @@
         <div class="container-xxl flex-nowrap">
           <a class="navbar-brand" href="{{_appLogoUrl}}{{^_appLogoUrl}}{{_rel}}index.html{{/_appLogoUrl}}">
             <img id="logo" src="{{_rel}}{{{_appLogoPath}}}{{^_appLogoPath}}logo.svg{{/_appLogoPath}}" alt="{{_appName}}" >
+            <span class="brand-subtitle">Parser</span>
           </a>
           <button class="btn btn-lg d-md-none border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navpanel" aria-controls="navpanel" aria-expanded="false" aria-label="Toggle navigation">
             <i class="bi bi-three-dots"></i>

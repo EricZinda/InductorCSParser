@@ -7,7 +7,7 @@ I ported this while creating a new project in Unity and during a period where I'
 - **Safer Against Pathological Input:** It's designed to avoid "catastrophic backtracking" and pitfalls like it that can hang your app or blow your stack, by default.
 - **Able to run on WebGL and .NET Standard 2.1 (and later) using IL2CPP**: It doesn't use Reflection.Emit or threads so that it can run in Unity targeting WebGL or IL2CPP on iPhone.
 - **Fast enough to be used in production**: It is competitive against other .Net Parsers and fast enough to be used as a regex replacement for most uses.
-- **Easy to understand and customize**: Your grammar is built out of simple rules that are easy to inspect and understand. Furthermore, building a new rule is simple and can do whatever you want: it is just code.
+- **Easy to understand and customize**: Your grammar is built out of simple rules that are easy to inspect and understand. Furthermore, building a new rule is simple and can do whatever you want: it is just code, not a grammar specific mathematical language
 
 If you just want to learn how to use it, follow the primers:
 
@@ -67,10 +67,10 @@ If you write grammars using the Inductor Parser, you get a foundation that suppo
 - Each token presented to a rule is a user-perceived character (a ["Grapheme Cluster"](https://www.unicode.org/reports/tr29/#Grapheme_Cluster_Boundaries) in Unicode) which keeps grammars from matching partial non-ASCII characters or emoji sequences accidentally and allows writing rules more naturally.
 - Built-in rules use Unicode-aware definitions for things like "whitespace" and "identifiers" so you don't miss corner cases.
 - The parser defaults to normalizing both the input and your rules to the same form (which you can choose) so that you can write rules how you want and they will match the different forms automatically.
-- Characters that can't possibly match the normalized form throw at compile time. They won't silently be ignored.
-- Every Symbol in the parse tree (and every error on the result) exposes its source position in four units: char index, token index, line, and column. Symbols give you a start/end pair via SourceRange; errors give you the single failure point.
+- Characters that can't possibly match the chosen normalized form for the input throw at compile time. They won't silently be ignored.
+- Every Symbol in the parse tree (and every error on the result) exposes its source position in four units: char index, token index, line, and column. These positions index into the original source even if it has been normalized into something else for parsing. Errors give you the single failure point the same way.
 
-You can pretend you never heard the word "grapheme cluster" and write rules naturally: the guardrails are there by default and give you the right base to start from.
+You can pretend you never heard the phrase "grapheme cluster" and write rules naturally: the guardrails are there by default and give you the right base to start from.
 
 Here's a grammar for reading a simple setting that only accepts strings:
 
@@ -116,8 +116,8 @@ document.Parse("नमस्ते = '1'"); // name: "नमस्ते", value
 document.Parse("𠮷田 = '5'"); // name: "𠮷田", value: "5"
 
 // Optional(AnyWhitespace()) matches Unicode's White_Space property (UAX #44), not just ASCII
-document.Parse("setting\u00A0=\u00A0'5'");  // (non-breaking space)
-document.Parse("setting\u3000=\u3000'5'");  // (ideographic space) name: "setting", value: "5"
+document.Parse("setting\u00A0=\u00A0'5'");  // (\u00A0 = non-breaking space)
+document.Parse("setting\u3000=\u3000'5'");  // (\u3000 = ideographic space) name: "setting", value: "5"
 
 // String values can hold anything except the closing quote. 
 // Mixed scripts, emoji, and multi-rune graphemes all pass through untouched
@@ -129,12 +129,12 @@ document.Parse("motto = '🇺🇸'");  // (regional-indicator flag) name: "motto
 // the same way Python and Rust do:
 document.Parse("setting🎉 = '5'"); // GrammarMismatch at char 7
 ```
-Error positions are also designed for Unicode and reported in multiple units. When the input contains multi-C#-char letters, the char index and the token index are different. When it contains multi-rune tokens, they can be different by even more. This gives you the right tools for different jobs:
+Error positions are also designed for Unicode and reported in multiple units. When a letter takes more than one C# char, the char index and the token index diverge, and graphemes built from several joined characters (an emoji family, say) push them apart even further. This gives you the right tools for different jobs:
 
 ```CSharp
 var result = document.Parse("𠮷田 = ");
 // ErrorCharIndex=6, ErrorTokenIndex=5
-// (each supplementary letter is two chars but one token)
+// (𠮷 is one token but two chars, so char index runs one ahead; 田 is a normal one-char token)
 
 var result = document.Parse("नमस्ते = ");
 // ErrorCharIndex=9, ErrorTokenIndex=7
@@ -151,7 +151,7 @@ var range = result.Tree!.Find(quotedString)!.SourceRange!.Value;
 //   range.End.TokenIndex - range.Start.TokenIndex ==  3  // 1 for the family + 2 quotes
 ```
 
-Use whichever unit matches what your consumer counts in. Chars for `string.Substring` or an editor diagnostic. Tokens for a `^^^` underline a human will look at and recognize as covering one thing.
+Use whichever unit your code needs. Chars for `string.Substring` or an editor diagnostic. Tokens for a `^^^` underline a human will look at and recognize as covering one thing.
 
 [Primer 3: Unicode in the Inductor Parser](docs/Primer3.md) walks through how Unicode works in rules in more detail.
 

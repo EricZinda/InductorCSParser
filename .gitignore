@@ -31,9 +31,10 @@ src/InductorParser.Tests/Unity/Assets/Plugins/InductorParser.dll
 # DocFX documentation build outputs. Only the hand-authored config
 # (docfx/docfx.json, docfx/toc.yml) is tracked. build-docs.sh regenerates
 # everything below: the API metadata, the staged copy of the curated docs,
-# the readme-derived home page, and the rendered site, which the GitHub
-# Actions workflow deploys to GitHub Pages.
+# the staged benchmark chart, the readme-derived home page, and the rendered
+# site, which the GitHub Actions workflow deploys to GitHub Pages.
 docfx/_site/
 docfx/api/
 docfx/docs/
+docfx/images/
 docfx/index.md
