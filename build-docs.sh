@@ -71,13 +71,17 @@ done
 
 echo "=== Generating home page from readme.md ==="
 # Use the readme as the site home so it stays the single source of truth.
-# Keep its docs/ links relative (they resolve to docfx/docs above). Point
+# Prepend an H1 title (the readme opens with a paragraph, no heading of its
+# own). Keep its docs/ links relative (they resolve to docfx/docs above). Point
 # the benchmark chart image at the raw URL so it renders inline, and the
 # other src/ links at GitHub blob URLs so they stay clickable.
-sed \
-    -e "s#](src/Benchmarks/performance-chart.jpg)#](${raw_base}/src/Benchmarks/performance-chart.jpg)#g" \
-    -e "s#](src/#](${blob_base}/src/#g" \
-    readme.md > docfx/index.md
+{
+    printf '# The Inductor Parser\n\n'
+    sed \
+        -e "s#](src/Benchmarks/performance-chart.jpg)#](${raw_base}/src/Benchmarks/performance-chart.jpg)#g" \
+        -e "s#](src/#](${blob_base}/src/#g" \
+        readme.md
+} > docfx/index.md
 
 echo "=== Cleaning previous output ==="
 # DocFX doesn't delete stale files from a prior run, so wipe the generated API
