@@ -81,11 +81,27 @@ article pre {
   border-radius: .3rem;
   padding: 1rem 1.15rem;
 }
+/* In dark mode use Bootstrap's neutral elevated surface, a subtle low-contrast
+   box, instead of the saturated teal panel used on white. */
+[data-bs-theme="dark"] article pre {
+  background-color: var(--bs-tertiary-bg);
+}
 article pre > code,
 article pre .hljs {
   background: transparent;
   color: #eeffff;
   font-family: var(--bs-font-monospace);
+}
+/* In dark mode, highlight.js tags the inner <code> with .hljs at runtime, and
+   DocFX's "[data-bs-theme=dark] .hljs" rule paints it #1e1e1e. That fill is
+   darker than the pre's surface, so the pre's padding shows as a frame around
+   the code (the "border" seen only in dark mode). These dark-scoped selectors
+   outrank that rule and keep the inner code transparent, so the whole block is
+   one flat surface. */
+[data-bs-theme="dark"] article pre .hljs,
+[data-bs-theme="dark"] article pre > code {
+  background: transparent;
+  color: inherit;
 }
 .hljs-comment, .hljs-quote { color: #6a8a96; font-style: italic; }
 .hljs-keyword, .hljs-selector-tag, .hljs-built_in,

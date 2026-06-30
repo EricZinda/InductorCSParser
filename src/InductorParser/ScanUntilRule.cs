@@ -239,7 +239,7 @@ internal sealed class ScanUntilRule : Rule
             return;
         }
 
-        if (TokenSet.TrySingleRune(normalized, out int newRune))
+        if (RuneHelpers.TrySingleRune(normalized, out int newRune))
         {
             _escapeStartRune = newRune;
             return;

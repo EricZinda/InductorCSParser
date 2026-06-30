@@ -477,8 +477,8 @@ public class OneOfRuleTests
     [Test]
     public void OneOf_universe_rejects_a_lone_surrogate_input_under_null_normalization()
     {
-        // Universe is the scalar-value universe: ~Empty under operator ~
-        // that complements over scalar values only. Surrogates aren't
+        // Universe is the scalar-value universe: every code point except
+        // the surrogate block. Surrogates aren't
         // in Universe, so even under Compile(null) where the lexer
         // surfaces a lone surrogate as a one-char token, OneOf(Universe)
         // doesn't match it. A grammar that wants surrogates writes
