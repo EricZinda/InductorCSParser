@@ -63,7 +63,7 @@ internal sealed class GraphemeRule : Rule
         // construction the user hasn't named or set an explicit id yet, so
         // SetLeafRuneId always takes effect here. It re-checks those
         // conditions itself for the re-id during the normalization pass below.
-        if (TokenSet.TrySingleRune(expectedToken, out int runeValue))
+        if (RuneHelpers.TrySingleRune(expectedToken, out int runeValue))
             SetLeafRuneId(runeValue);
     }
 
@@ -92,7 +92,7 @@ internal sealed class GraphemeRule : Rule
 
         _expected = normalized;
         // Re-id for the converted text.
-        if (TokenSet.TrySingleRune(_expected, out int runeValue))
+        if (RuneHelpers.TrySingleRune(_expected, out int runeValue))
         {
             // Still one rune after the conversion (canonical-singleton
             // substitutions like U+2126 -> U+03A9): keep the rune-as-id

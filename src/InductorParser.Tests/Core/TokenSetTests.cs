@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using NUnit.Framework;
 using InductorParser;
+using InductorParser.Lexing;
 using static InductorParser.Tests.UnicodeExamples;
 
 using static InductorParser.Tests.CanaryHelper;
@@ -61,18 +62,6 @@ public class TokenSetTests
     }
 
     [Test]
-    public void Difference_idiom_a_and_complement_b_drops_minuend_clusters()
-    {
-        // a & ~b is a rune-only intersection: ~Single(' ') has no cluster
-        // members, so intersecting it with Ascii.AnyWhitespace produces a
-        // rune-only set and the CRLF entry isn't in the result. That's why
-        // difference is a - b (next test) when the left side may carry
-        // clusters.
-        var viaComplementIdiom = TokenSet.Ascii.AnyWhitespace & ~TokenSet.Single(' ');
-        Assert.That(viaComplementIdiom.ContainsToken("\r\n"), Is.False);
-    }
-
-    [Test]
     public void Difference_operator_keeps_minuend_clusters_not_in_subtrahend()
     {
         // True set difference: "any ASCII whitespace except a bare space."
@@ -87,8 +76,8 @@ public class TokenSetTests
 
         // The rule built from the difference still matches a CRLF token
         // under the default Compile(FormC), where the lexer groups "\r\n"
-        // as one grapheme. The a & ~b form produces a rune-only set, so
-        // OneOf wouldn't match here.
+        // as one grapheme. An intersection with a rune-only set would have
+        // dropped the cluster, so OneOf wouldn't match there.
         Assert.That(Rules.OneOf(withoutSpace).Compile().Parse("\r\n").Success, Is.True);
     }
 
@@ -106,22 +95,11 @@ public class TokenSetTests
     }
 
     [Test]
-    public void Difference_matches_the_complement_idiom_for_rune_only_sets()
-    {
-        // Where the old shorthand was already correct (rune-only minuend),
-        // a - b means exactly the same thing, so existing grammars that
-        // used a & ~b keep their behavior.
-        var viaOperator = TokenSet.Ascii.Letters - TokenSet.Runes("aeiouAEIOU");
-        var viaIdiom = TokenSet.Ascii.Letters & ~TokenSet.Runes("aeiouAEIOU");
-        AssertEqual(viaOperator, viaIdiom);
-    }
-
-    [Test]
     public void Difference_keeps_minuend_surrogates_not_in_subtrahend()
     {
         // operator - is documented as "true set difference: every member of
         // a that isn't a member of b", and it never throws on surrogate
-        // members the way ~ does. Surrogates are a first-class set member
+        // members. Surrogates are a first-class set member
         // (TokenSet.Surrogates / SurrogateRange), matchable under
         // Compile(null). Subtracting a set that contains none of a's
         // surrogates must leave those surrogates in place.
@@ -150,8 +128,7 @@ public class TokenSetTests
         // a range that straddles the surrogate block into two intervals,
         // so Range(0, 0x10FFFF) is "every scalar value, no surrogates"
         // and that's the only thing it can mean. Named entry points that
-        // put surrogates into a TokenSet are Surrogates, SurrogateRange,
-        // and Universe, plus set operations like ~Range('a','z').
+        // put surrogates into a TokenSet are Surrogates and SurrogateRange.
         var set = TokenSet.Range(0x0000, 0x10FFFF);
 
         Assert.That(set.ContainsRune('a'), Is.True);
@@ -185,10 +162,9 @@ public class TokenSetTests
     [Test]
     public void Surrogates_constant_holds_the_full_surrogate_block()
     {
-        // The Surrogates named constant covers U+D800..U+DFFF inclusive,
-        // and is the most direct way to spell the block; SurrogateRange
-        // names a sub-block, and Universe contains it too. Set operations
-        // like ~Letters can bring surrogates in indirectly.
+        // The Surrogates named constant covers U+D800..U+DFFF inclusive and
+        // is the most direct way to spell the block. SurrogateRange names a
+        // sub-block.
         var set = TokenSet.Surrogates;
 
         Assert.That(set.ContainsRune(HighSurrogateMinRune), Is.True);
@@ -298,62 +274,14 @@ public class TokenSetTests
     }
 
     [Test]
-    public void Complement_never_fabricates_surrogates()
+    public void NoneOf_admits_a_lone_surrogate_under_null_normalization()
     {
-        // ~ complements over the scalar universe only, so the result is
-        // always surrogate-free regardless of whether the input had any.
-        // The grammar-author-safety story: OneOf(~Letters) never quietly
-        // matches a lone surrogate even under Compile(null), because
-        // ~Letters is surrogate-free. (NoneOf(Letters) is a direct
-        // non-membership test, NOT OneOf(~Letters), so it DOES match a
-        // lone surrogate under Compile(null); the ~ design never reaches
-        // it. NoneOf_admits_a_lone_surrogate_that_OneOf_complement_rejects
-        // locks in that divergence.)
-        Assert.That((~TokenSet.Letters).ContainsRune(HighSurrogateMinRune), Is.False);
-        Assert.That((~TokenSet.Letters).ContainsRune(LowSurrogateMaxRune), Is.False);
-        // The most aggressive complement is also surrogate-free.
-        AssertEqual(~TokenSet.Empty, TokenSet.Universe);
-        AssertEqual(~TokenSet.Range(0, 0x10FFFF), TokenSet.Empty);
-        // Complementing Surrogates strips them; the result is the scalar
-        // universe, equal to Universe.
-        AssertEqual(~TokenSet.Surrogates, TokenSet.Universe);
-    }
-
-    [Test]
-    public void Double_complement_of_Surrogates_is_Empty()
-    {
-        // Applying ~ twice doesn't get you back to Surrogates once
-        // surrogates are involved. The first ~ turns Surrogates into the
-        // scalar universe (surrogate code units stripped); the second ~
-        // complements that universe down to nothing. So ~~Surrogates is
-        // Empty, NOT the scalar universe (the value of a SINGLE complement)
-        // and NOT Surrogates.
-        AssertEqual(~TokenSet.Surrogates, TokenSet.Universe);
-        AssertEqual(~~TokenSet.Surrogates, TokenSet.Empty);
-        Assert.That((~~TokenSet.Surrogates).IsEmpty, Is.True);
-        Assert.That(~~TokenSet.Surrogates == TokenSet.Universe, Is.False);
-    }
-
-    [Test]
-    public void NoneOf_admits_a_lone_surrogate_that_OneOf_complement_rejects()
-    {
-        // Two ways of spelling "match a single token that isn't a letter"
-        // diverge on a lone surrogate under Compile(null).
-        //
-        // OneOf(~Letters): ~Letters is surrogate-free, so the lone
-        // surrogate isn't a member and the rule doesn't match it. This is
-        // the rule the surrogate-free complement design actually protects.
-        //
-        // NoneOf(Letters): a direct non-membership test, not OneOf(~Letters).
-        // A lone surrogate isn't in Letters, so NoneOf admits it. The ~
-        // design never reaches NoneOf, so it matches the surrogate either
-        // way.
+        // NoneOf(Letters) is a direct non-membership test: a lone surrogate
+        // isn't in Letters, so under Compile(null), where the lexer surfaces
+        // a lone surrogate as a one-char token, NoneOf admits it.
         string loneSurrogate = UnicodeExamples.HighSurrogateMinText;
 
-        Assert.That((~TokenSet.Letters).ContainsRune(HighSurrogateMinRune), Is.False);
         Assert.That(TokenSet.Letters.ContainsToken(loneSurrogate), Is.False);
-
-        Assert.That(Rules.OneOf(~TokenSet.Letters).Compile(null).Parse(loneSurrogate).Success, Is.False);
         Assert.That(Rules.NoneOf(TokenSet.Letters).Compile(null).Parse(loneSurrogate).Success, Is.True);
     }
 
@@ -560,7 +488,7 @@ public class TokenSetTests
     [Test]
     public void Operations_always_produce_normalized_representation()
     {
-        // Every result of |, &, ~, and Runes(...) should be normalized
+        // Every result of |, &, -, and Runes(...) should be normalized
         // (sorted, non-overlapping, non-adjacent intervals). If any operator
         // left the output un-normalized, value equality would fail for two
         // sets with the same membership because Equals compares _ranges
@@ -584,13 +512,9 @@ public class TokenSetTests
         // Messy chain of overlapping fragments.
         AssertEqual(TokenSet.Range(1, 5) | TokenSet.Range(3, 10) | TokenSet.Range(10, 15)
             | TokenSet.Range(14, 22) | TokenSet.Range(20, 30), expected);
-        // Double complement round-trip.
-        AssertEqual(~~expected, expected);
-        // Complement split across surrogate block, then complement again.
-        // Verifies the surrogate-split path doesn't leak adjacent intervals.
-        AssertEqual(~~TokenSet.Range(0xD7FE, 0xD7FE), TokenSet.Range(0xD7FE, 0xD7FE));
-        // A & ~B chain through the full operator set.
-        AssertEqual(TokenSet.Range(1, 30) & ~TokenSet.Range(40, 50), expected);
+        // Difference must produce normalized intervals: removing a range
+        // beyond the set leaves it unchanged and still normalized.
+        AssertEqual(TokenSet.Range(1, 50) - TokenSet.Range(31, 50), expected);
     }
 
     [Test]
@@ -693,64 +617,10 @@ public class TokenSetTests
     }
 
     [Test]
-    public void Complement_of_single_rune_excludes_that_rune_and_surrogates()
+    public void SetDifference_gives_consonants_as_letters_minus_vowels()
     {
-        // ~{'a'} is the scalar universe minus 'a'. The surrogate block
-        // is excluded too because ~ complements over scalar values only,
-        // not because Single('a') has any opinion about surrogates.
-        var expected = TokenSet.Range(0, 'a' - 1) | TokenSet.Range('a' + 1, 0x10FFFF);
-
-        AssertEqual(~TokenSet.Single('a'), expected);
-    }
-
-    [Test]
-    public void Complement_of_universe_is_empty()
-    {
-        // ~Universe = ∅ over the closed universe [0, 0x10FFFF]. Universe
-        // already covers every code point including surrogates, so the
-        // complement has nothing left.
-        AssertEqual(~TokenSet.Universe, TokenSet.Empty);
-    }
-
-    [Test]
-    public void Complement_of_empty_is_universe()
-    {
-        // ~Empty = Universe. The Universe constant is wired up that way,
-        // so this is the round-trip check.
-        AssertEqual(~TokenSet.Empty, TokenSet.Universe);
-    }
-
-    [Test]
-    public void Complement_is_involutive_on_surrogate_free_sets()
-    {
-        // ~~A = A for any A that doesn't contain surrogates. ~ strips
-        // surrogates from the result, so it isn't involutive across the
-        // surrogate boundary (a set that contains surrogates won't get
-        // them back after a double complement). That's the deliberate
-        // trade-off: NoneOf(Letters) doesn't quietly admit lone
-        // surrogates under Compile(null).
-        var ascii = TokenSet.Range('a', 'z') | TokenSet.Range('A', 'Z');
-
-        AssertEqual(~~ascii, ascii);
-    }
-
-    [Test]
-    public void Double_complement_of_a_set_with_surrogates_strips_them()
-    {
-        // ~Surrogates is the scalar universe (Surrogates' surrogates are
-        // outside the scalar universe complement). ~~Surrogates strips
-        // every scalar from the scalar universe, leaving Empty. So a
-        // set's surrogate content doesn't survive a double complement.
-        AssertEqual(~~TokenSet.Surrogates, TokenSet.Empty);
-    }
-
-    [Test]
-    public void SetDifference_via_complement_and_intersection()
-    {
-        // The rune-only difference shorthand A & ~B. For rune-only A it
-        // equals A - B (see Difference_matches_the_complement_idiom_for_rune_only_sets).
-        // Consonants as ASCII letters minus vowels.
-        var asciiConsonants = TokenSet.Ascii.Letters & ~TokenSet.Runes("aeiouAEIOU");
+        // ASCII consonants are the ASCII letters minus the vowels.
+        var asciiConsonants = TokenSet.Ascii.Letters - TokenSet.Runes("aeiouAEIOU");
 
         // Consonants: in.
         Assert.That(asciiConsonants.ContainsRune('b'), Is.True);
@@ -866,7 +736,7 @@ public class TokenSetTests
     public void TrySingleRune_null_throws_ArgumentNullException()
     {
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            TokenSet.TrySingleRune(null!, out _));
+            RuneHelpers.TrySingleRune(null!, out _));
 
         Assert.That(exception!.ParamName, Is.EqualTo("grapheme"));
     }
@@ -1173,39 +1043,6 @@ public class TokenSetTests
         Assert.That(set.IsEmpty, Is.True);
     }
 
-    // Complement surrogate-boundary cases ------------------------------------
-
-    [Test]
-    public void Complement_of_range_ending_at_surrogate_low_boundary()
-    {
-        // Input ends at 0xD7FF. Complement is [0xE000, 0x10FFFF]: the
-        // surrogate block stays excluded because ~ complements over the
-        // scalar universe.
-        AssertEqual(~TokenSet.Range(0, 0xD7FF), TokenSet.Range(0xE000, 0x10FFFF));
-    }
-
-    [Test]
-    public void Complement_of_range_starting_at_surrogate_high_boundary()
-    {
-        // Input starts at 0xE000. Complement is [0, 0xD7FF]: the
-        // pre-surrogate prefix, with the surrogate block stripped.
-        AssertEqual(~TokenSet.Range(0xE000, 0x10FFFF), TokenSet.Range(0, 0xD7FF));
-    }
-
-    [Test]
-    public void Complement_of_multi_interval_input_emits_all_gaps()
-    {
-        // Input [5, 10] ∪ [20, 30]. Complement is the three gaps over
-        // the scalar universe, with the trailing one split around the
-        // surrogate block.
-        var expected = TokenSet.Range(0, 4)
-            | TokenSet.Range(11, 19)
-            | TokenSet.Range(31, 0xD7FF)
-            | TokenSet.Range(0xE000, 0x10FFFF);
-
-        AssertEqual(~(TokenSet.Range(5, 10) | TokenSet.Range(20, 30)), expected);
-    }
-
     // Built-ins --------------------------------------------------------------
 
     [Test]
@@ -1435,15 +1272,13 @@ public class TokenSetTests
     // Operator invariant -----------------------------------------------------
 
     [Test]
-    public void A_and_not_A_is_empty_for_any_A()
+    public void A_minus_A_is_empty_for_any_A()
     {
-        // A ∩ ~A = ∅. One test covers the complement-then-intersect pipeline
-        // for a nontrivial multi-interval A that also crosses the surrogate
-        // split.
+        // A - A = ∅, for a nontrivial multi-interval A that also crosses the
+        // surrogate split.
         var a = TokenSet.Ascii.Letters | TokenSet.Range(0xE000, 0xE00F);
-        var intersection = a & ~a;
 
-        Assert.That(intersection.IsEmpty, Is.True);
+        Assert.That((a - a).IsEmpty, Is.True);
     }
 
     // Multi-rune grapheme support -------------------------------------------
@@ -1560,38 +1395,12 @@ public class TokenSetTests
     }
 
     [Test]
-    public void Complement_of_mixed_set_throws_with_documented_message()
+    public void Difference_from_a_mixed_set_keeps_clusters_the_subtrahend_lacks()
     {
-        var mixed = TokenSet.Runes("a") | TokenSet.Graphemes(USFlagGrapheme);
-
-        var exception = Assert.Throws<InvalidOperationException>(() =>
-        {
-            var _ = ~mixed;
-        });
-        Assert.That(exception!.Message, Does.Contain("multi-rune"));
-        Assert.That(exception.Message, Does.Contain("a - b"));
-    }
-
-    [Test]
-    public void Complement_via_explicit_rune_only_mask_works_for_rune_only_sets()
-    {
-        // The rune-only difference shorthand: build the rune-only mask,
-        // complement that, intersect with the rune-only side. The result
-        // is rune-only, because intersecting a mixed set with a rune-only
-        // set keeps only runes (the rune-only side has no cluster members
-        // to pair with). For a mixed input, `a - b` (set difference) keeps
-        // the clusters `b` doesn't contain, so use it there. This test
-        // covers the rune-only case, where the two are equivalent.
-        var letters = TokenSet.Letters;
-        var withoutVowels = letters & ~TokenSet.Runes("aeiou");
-
-        Assert.That(withoutVowels.ContainsRune('b'), Is.True);
-        Assert.That(withoutVowels.ContainsRune('a'), Is.False);
-
-        // `a - b` keeps a mixed input's clusters automatically: subtracting
+        // a - b keeps a mixed input's clusters automatically: subtracting
         // rune-only vowels from a set carrying the US flag leaves the flag
         // in place, no manual union-back-in needed.
-        var lettersWithFlag = letters | TokenSet.Graphemes(USFlagGrapheme);
+        var lettersWithFlag = TokenSet.Letters | TokenSet.Graphemes(USFlagGrapheme);
         var withoutVowelsKeepingFlag = lettersWithFlag - TokenSet.Runes("aeiou");
         Assert.That(withoutVowelsKeepingFlag.ContainsToken(USFlagGrapheme), Is.True);
         Assert.That(withoutVowelsKeepingFlag.ContainsRune('a'), Is.False);

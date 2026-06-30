@@ -440,14 +440,6 @@ public class GraphemeBreakConformanceTests
     }
 
     [TestCaseSource(nameof(Cases))]
-    public void OneOf_via_double_complement_matches_single_rune_first_cluster(ConformanceCase? testCase)
-    {
-        // ~(~S) round-trips back to S. Exercises the complement
-        // operator twice on a real code point.
-        AssertOneOfMatchesFirstClusterUsingRune(testCase, rune => ~(~TokenSet.Single(rune)));
-    }
-
-    [TestCaseSource(nameof(Cases))]
     public void OneOf_via_union_with_empty_matches_single_rune_first_cluster(ConformanceCase? testCase)
     {
         AssertOneOfMatchesFirstClusterUsingRune(testCase, rune => TokenSet.Single(rune) | default(TokenSet));
@@ -466,10 +458,9 @@ public class GraphemeBreakConformanceTests
         int rune = testCase!.FirstClusterSingleRune;
         if (rune < 0) Assert.Ignore("Multi-rune first cluster; TokenSet doesn't apply.");
 
-        // The complement set explicitly excludes the rune, so NoneOf
-        // (which inverts membership) accepts it. Round-trips through
-        // both ~ and the NoneOf rule's internal complement.
-        var excludingSet = ~TokenSet.Single(rune);
+        // The excluding set leaves out the rune, so NoneOf (which inverts
+        // membership) accepts it.
+        var excludingSet = TokenSet.Universe - TokenSet.Single(rune);
         AssertRuleMatchesFirstCluster(testCase, NoneOf(excludingSet));
     }
 

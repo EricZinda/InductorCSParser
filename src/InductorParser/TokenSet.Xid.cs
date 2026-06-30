@@ -233,8 +233,8 @@ public readonly partial struct TokenSet
     // ============================================================
 
     // Each Build method below is a direct translation of one line from
-    // the formula at the top of this file. The "|" operator is "+", the
-    // "& ~" pair is "-".
+    // the formula at the top of this file. The "|" operator is "+", and
+    // "-" is set difference.
 
     // ID_Start = Lu + Ll + Lt + Lm + Lo + Nl + Other_ID_Start
     //          - Pattern_Syntax - Pattern_White_Space
@@ -248,8 +248,8 @@ public readonly partial struct TokenSet
             UnicodeCategory.OtherLetter,
             UnicodeCategory.LetterNumber);
         return (lettersAndLetterNumber | FromRanges(OtherIdStart))
-            & ~FromRanges(IdCategoriesInPatternSyntax)
-            & ~FromRanges(IdCategoriesInPatternWhiteSpace);
+            - FromRanges(IdCategoriesInPatternSyntax)
+            - FromRanges(IdCategoriesInPatternWhiteSpace);
     }
 
     // ID_Continue = ID_Start + Mn + Mc + Nd + Pc + Other_ID_Continue
@@ -262,15 +262,15 @@ public readonly partial struct TokenSet
             UnicodeCategory.DecimalDigitNumber,
             UnicodeCategory.ConnectorPunctuation);
         return (BuildIdStart() | continueExtraCategories | FromRanges(OtherIdContinue))
-            & ~FromRanges(IdCategoriesInPatternSyntax)
-            & ~FromRanges(IdCategoriesInPatternWhiteSpace);
+            - FromRanges(IdCategoriesInPatternSyntax)
+            - FromRanges(IdCategoriesInPatternWhiteSpace);
     }
 
     // XID_Start = ID_Start, closed under NFKx
     private static TokenSet BuildXidStart() =>
-        BuildIdStart() & ~FromRanges(NfkxClosureRemovedFromXidStart);
+        BuildIdStart() - FromRanges(NfkxClosureRemovedFromXidStart);
 
     // XID_Continue = ID_Continue, closed under NFKx
     private static TokenSet BuildXidContinue() =>
-        BuildIdContinue() & ~FromRanges(NfkxClosureRemovedFromXidContinue);
+        BuildIdContinue() - FromRanges(NfkxClosureRemovedFromXidContinue);
 }

@@ -243,7 +243,7 @@ public readonly struct TokenSet
 
     public static TokenSet operator |(TokenSet a, TokenSet b);   // union
     public static TokenSet operator &(TokenSet a, TokenSet b);   // intersection
-    public static TokenSet operator ~(TokenSet a);                // complement
+    public static TokenSet operator -(TokenSet a, TokenSet b);   // difference
 
     public bool Contains(Rune r);
     public bool Contains(char c);
@@ -275,25 +275,23 @@ TokenSet.Ascii.Letters - TokenSet.Runes("aeiouAEIOU")
 TokenSet.Ascii.Identifier - TokenSet.Runes("_")
 ```
 
-`a - b` keeps `a`'s multi-rune grapheme members (CRLF, a skin-toned emoji) that `b` doesn't contain, so subtracting a rune from a set leaves its clusters alone. The shorthand `a & ~b` means the same thing only when `a` is rune-only: `~b` is rune-only by construction, so `a & ~b` is a rune-only intersection and its result can't contain any of `a`'s clusters. Use `-` whenever `a` might carry multi-rune graphemes.
-
-**`~` (complement)** is its building block: it inverts a rune-only class over the scalar-value universe. It's most useful for "everything except these categories":
+`a - b` keeps `a`'s multi-rune grapheme members (CRLF, a skin-toned emoji) that `b` doesn't contain, so subtracting a rune from a set leaves its clusters alone. For "everything except these categories," subtract from the full scalar universe:
 
 ```csharp
-// Any printable non-whitespace character. Start from "all runes",
-// subtract categories you don't want.
-~(TokenSet.InlineWhitespace | TokenSet.LineTerminators | TokenSet.Category(UnicodeCategory.Control))
+// Any printable non-whitespace character: all runes minus the
+// categories you don't want.
+TokenSet.Universe - (TokenSet.InlineWhitespace | TokenSet.LineTerminators | TokenSet.Category(UnicodeCategory.Control))
 ```
 
-`OneOf(~X)` and `NoneOf(X)` match the same single-rune tokens, so at the outermost level the complement operator is redundant with `NoneOf`. The reason complement exists on the class is that `NoneOf` is a rule and can't be fed back into another set expression. `~X` is a class and can be intersected, unioned, or handed to another `OneOf` / `NoneOf`.
+`TokenSet.Universe` is the surrogate-free scalar universe, so subtracting from it gives the same "everything except" set that the rule-level `NoneOf(X)` would match, but as a class you can keep composing with `|`, `&`, and `-`.
 
-Intersection, difference, and complement are niche compared to union. Most grammars use `|` dozens of times and never touch the others. They earn their spot because they're cheap (sorted-range intersection, difference, and complement are single passes), and because when an author does need set difference, hand-enumerating the ranges goes stale the moment Unicode adds a new letter to the base class.
+Intersection and difference are niche compared to union. Most grammars use `|` dozens of times and never touch the others. They earn their spot because they're cheap (sorted-range intersection and difference are single passes), and because when an author does need set difference, hand-enumerating the ranges goes stale the moment Unicode adds a new letter to the base class.
 
 `TokenSet.Letters` and its siblings cover Unicode scalar values by category: `Letters` matches single-rune letters like `é`, `漢`, `Ω`, and `ж`. Grammars that specifically want ASCII-only can use `TokenSet.Ascii.Letters` to say so explicitly. A programming-language keyword parser wants ASCII keywords so a stray `café` doesn't parse as a keyword. A text-processing grammar often wants the full Unicode set, and for scripts whose visible letters are multi-rune graphemes it should combine those sets with `WithinToken(...)` or use `Identifier()`.
 
 `Contains(Rune)` is the predicate every `OneOf` / `NoneOf` match resolves to, exposed as public so user-defined rules can reuse the same predicate without going through the rule wrapper.
 
-Internally a `TokenSet` is a sorted list of rune ranges. Union, intersection, and complement are all linear in the number of ranges, which is small for typical grammars (letters and digits are a handful of ranges each). Construction-time evaluation folds compound expressions into a single range list, so `Letters | Digits | Runes("_")` is one flat structure by the time a `OneOf` rule sees it.
+Internally a `TokenSet` is a sorted list of rune ranges. Union, intersection, and difference are all linear in the number of ranges, which is small for typical grammars (letters and digits are a handful of ranges each). Construction-time evaluation folds compound expressions into a single range list, so `Letters | Digits | Runes("_")` is one flat structure by the time a `OneOf` rule sees it.
 
 ### The Non-Content Leaves
 
@@ -367,7 +365,7 @@ A multi-rune token like 👨‍👩‍👧‍👦 arrives from the lexer as a si
 
 What you *can't* do:
 
-- **Use complement on a set with multi-rune entries.** `~set` is only defined when the set is rune-only. The grapheme universe is unbounded, so the complement of a set containing 👋🏽 has no finite explicit representation. To subtract one set from another, use `set - exclusions` (set difference): it works even when `set` carries clusters and keeps the clusters `exclusions` doesn't contain. `set & ~exclusions` is the rune-only shorthand: because `~exclusions` is rune-only, that intersection is rune-only too, so it can't preserve any clusters `set` had.
+- **Express "any grapheme cluster except these" as a TokenSet.** `set - exclusions` (set difference) subtracts members and keeps the clusters of `set` that `exclusions` doesn't contain, but there's no set that means "every cluster except X": the grapheme universe is unbounded (any rune sequence respecting UAX #29 boundaries is a cluster), so "everything but 👋🏽" has no finite explicit representation. For "any token that isn't one of these," use the rule-level `NoneOf(stopSet)` or `ScanUntil(stopSet)`, which test non-membership per token instead of enumerating a set.
 - **Test "is this token a letter?" with `OneOf(TokenSet.Letters)`** when the token is multi-rune. `TokenSet.Letters` is built from rune intervals only, so any multi-rune token falls outside it. If you want "any identifier character, including combining marks as part of a letter sequence," use `Identifier()`. For custom shapes, `WithinToken(...)` is the escape hatch: it reads exactly one outer token, then runs your child rule over the runes inside that token. The child must consume the whole token. On success, the outer parse advances by one token and, when preserved, exposes one leaf for the whole token rather than separate leaves for the base letter and marks.
 
 ## Greedy Repetition, No Repetition Backtracking

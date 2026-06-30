@@ -148,7 +148,7 @@ public static class StringLiteralGrammars
         // name content to a printable-ASCII subset. We accept any
         // non-} rune as a simplifying sketch. Matches the shape,
         // not the validation.
-        var nameChar = OneOf(~TokenSet.Runes("}"));
+        var nameChar = NoneOf(TokenSet.Runes("}"));
         var namedEscapeEnd = And(Token('N'), Token('{'), OneOrMore(nameChar), Token('}'));
 
         // Simple single-char escapes. \0 is covered by octalEscapeEnd

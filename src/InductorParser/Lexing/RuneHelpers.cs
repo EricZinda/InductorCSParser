@@ -88,4 +88,42 @@ public static class RuneHelpers
             index += IsSurrogatePairAt(text, index) ? 2 : 1;
         return runes;
     }
+
+    /// <summary>
+    /// True when <paramref name="grapheme"/> is exactly one Unicode rune (one
+    /// non-surrogate UTF-16 char, or one surrogate pair), giving its code point
+    /// in <paramref name="runeValue"/>. Exposed so user-defined rules can reuse
+    /// it instead of duplicating the surrogate-pair decode.
+    /// </summary>
+    public static bool TrySingleRune(string grapheme, out int runeValue)
+    {
+        if (grapheme == null)
+            throw new ArgumentNullException(nameof(grapheme));
+
+        return TrySingleRune(grapheme.AsSpan(), out runeValue);
+    }
+
+    /// <summary>
+    /// Span overload of <see cref="TrySingleRune(string, out int)"/>. Same
+    /// rule: true for one non-surrogate char or one surrogate pair, false for a
+    /// lone surrogate or a multi-rune span. Exists so span callers don't pay an
+    /// <c>.AsSpan()</c> round-trip on what they already have.
+    /// </summary>
+    public static bool TrySingleRune(ReadOnlySpan<char> grapheme, out int runeValue)
+    {
+        if (grapheme.Length == 1)
+        {
+            char c = grapheme[0];
+            if (char.IsSurrogate(c)) { runeValue = -1; return false; }
+            runeValue = c;
+            return true;
+        }
+        if (grapheme.Length == 2 && IsSurrogatePairAt(grapheme, 0))
+        {
+            runeValue = char.ConvertToUtf32(grapheme[0], grapheme[1]);
+            return true;
+        }
+        runeValue = -1;
+        return false;
+    }
 }
