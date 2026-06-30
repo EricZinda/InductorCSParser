@@ -45,3 +45,5 @@
       href: docs/MappingPositionsAfterNormalization.md
 - name: API
   href: api/index.md
+- name: GitHub
+  href: https://github.com/EricZinda/InductorCSParser
