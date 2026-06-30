@@ -1,7 +1,7 @@
 # Unicode in the Inductor Parser
 When you build grammars in the Inductor Parser you don't need to worry about the encoding complexities of Unicode, you build rules around the characters you care about and the engine ensures that:
 
-1) The text stream is normalized into a form that is canonical. Invalid Unicode throws.
+1) The text stream is normalized into a form that is canonical. Invalid Unicode fails the parse with a `MalformedInput` result.
 2) Characters in your rules are encoded in the same normalized form so they match properly. Rules in non-normalized form throw at compile time.
 3) Tokens given to your rules are always characters the user (and you!) perceives as a single character (i.e. "Grapheme Clusters") and match exactly that character in the text.
 
@@ -149,7 +149,7 @@ Use whichever unit matches what your consumer counts in. Chars for `string.Subst
 Now lets look at how the grammar will behave on what might be unexpected Unicode input.
 
 ## Unexpected Unicode
-There are very few ways to write a truly "illegal" Unicode document. The parser actually throws an exception during normalization for those cases. However, there are many ways the text could be "unexpected", especially for someone new to Unicode. The parser is designed to keep grammars understandable and avoid pitfalls with those.
+There are very few ways to write a truly "illegal" Unicode document. The parser actually rejects those during normalization, failing the parse with a `MalformedInput` result. However, there are many ways the text could be "unexpected", especially for someone new to Unicode. The parser is designed to keep grammars understandable and avoid pitfalls with those.
 
 ### Legitimate Ill-formed Input
 The parser takes a .Net `String`. If you created your string from a file or a sequence of bytes using any of .Net's UTF encoding types, like:
@@ -165,7 +165,7 @@ Non-Unicode encodings (ASCII, Latin-1, Windows-1252) use a different fallback ch
 
 But if your code doesn't do this, or got a string by some other means, it could contain invalid Unicode sequences. 
 
-In that case, when you call .Parse() using the defaults, you will get an exception. The default FormC normalization will catch it and throw. 
+In that case, when you call .Parse() using the defaults, the parse fails with a `MalformedInput` outcome. The default FormC normalization catches the ill-formed input before any rule runs, so you read `result.Outcome` to tell it apart from an ordinary grammar mismatch and `result.ErrorMessage` (set from `ParseOptions.MalformedInputTemplate`) for a message you can localize. 
 
 If you decide to go without Normalization at all by calling `Compile(null)` and then `Parse()`, the engine will treat ill-formed code points as separate tokens that you can match specifically by using any Rule that matches specific tokens (e.g. `Token`), or collect them with a range of "any" text in all tokens like `AnyToken` that match literally anything. Those are the only ways you will match them. 
 
@@ -178,7 +178,7 @@ Just like ill-formed tokens above, the only way you can match these is by puttin
 
 - Bare attaching characters: characters meant to combine with the one before or after, but appearing alone. Examples: a stray combining accent (`U+0301`) without a letter under it, a Zero Width Joiner (`U+200D`) without emoji to glue together, an unpaired regional indicator (the things that compose country flags).
 - Invisible formatting characters: don't render as a glyph but still take a position in the text. Examples: zero-width space (`U+200B`), soft hyphen (`U+00AD`), byte-order mark (`U+FEFF`), bidi-direction controls (the characters behind "Trojan Source" attacks).
-- Noncharacters: code points Unicode reserved for internal use, not supposed to appear in real text. Examples: `U+FFFE`, `U+FFFF`, and the block `U+FDD0`..`U+FDEF`. One special case: parsing input containing `U+FFFE` under default normalization throws, because .NET treats it as a sign of byte-order confusion upstream.
+- Noncharacters: code points Unicode reserved for internal use, not supposed to appear in real text. Examples: `U+FFFE`, `U+FFFF`, and the block `U+FDD0`..`U+FDEF`. One special case: parsing input containing `U+FFFE` under default normalization fails with a `MalformedInput` result, because .NET treats it as a sign of byte-order confusion upstream.
 - Private use: code points Unicode set aside for private agreements between apps, with no assigned meaning. Examples: Apple's logo at `U+F8FF`, corporate logo fonts, game icon fonts. Main block is `U+E000`..`U+F8FF`.
 - Replacement: a single character, `U+FFFD` (often shown as � or a question mark in a box), inserted by .NET decoders for bytes that weren't valid in the source encoding. Its presence means an upstream decoder swallowed something. The parser exposes `TokenSet.Replacement` to detect or reject these.
 

@@ -12,7 +12,8 @@ namespace InductorParser;
 /// </summary>
 /// <remarks>
 /// <see cref="Outcome"/> distinguishes "the grammar rejected the input"
-/// (GrammarMismatch) from "a budget tripped" (Timeout, RuleCountLimitExceeded,
+/// (GrammarMismatch) from "the input isn't valid Unicode" (MalformedInput)
+/// from "a budget tripped" (Timeout, RuleCountLimitExceeded,
 /// DepthLimitExceeded, Canceled) so callers can show different messages to the
 /// user in each case.
 /// <para>
@@ -50,8 +51,10 @@ public readonly struct ParseResult
     /// </summary>
     /// <remarks>
     /// On GrammarMismatch, either the innermost WithError message set by the
-    /// grammar or a generated "Parse failed at offset N" fallback. On a budget
-    /// abort, the matching "Parse aborted: ..." string. See: docs/ErrorArchitecture.md
+    /// grammar or a generated "Parse failed at offset N" fallback. On
+    /// MalformedInput, the message from
+    /// <see cref="ParseOptions.MalformedInputTemplate"/>. On a budget abort, the
+    /// matching "Parse aborted: ..." string. See: docs/ErrorArchitecture.md
     /// </remarks>
     public string ErrorMessage { get; }
 
@@ -327,6 +330,17 @@ public readonly struct ParseResult
     /// </summary>
     public static ParseResult Failed(int errorCharIndex, string message, string input, Rule grammar) =>
         new ParseResult(ParseOutcome.GrammarMismatch, null, message, errorCharIndex, input, grammar);
+
+    /// <summary>
+    /// Build a malformed-input result. Outcome is MalformedInput: the input
+    /// couldn't be normalized to the grammar's form because it isn't well-formed
+    /// Unicode. The error fields carry the localized message and the offending
+    /// character index. Rule.Parse builds this in place of letting .NET's
+    /// string.Normalize throw. It's public so a custom parse driver that does its
+    /// own normalization can report the same shape.
+    /// </summary>
+    public static ParseResult MalformedInput(int errorCharIndex, string message, string input, Rule grammar) =>
+        new ParseResult(ParseOutcome.MalformedInput, null, message, errorCharIndex, input, grammar);
 
     /// <summary>
     /// Build a budget-abort result. Outcome is one of Timeout,
