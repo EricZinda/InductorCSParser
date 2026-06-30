@@ -10,7 +10,7 @@ There are three sources of truth, and the site is just those three things stitch
 
 The engine that stitches them is [DocFX](https://dotnet.github.io/docfx/), a .NET documentation generator. We pin it as a local tool in `.config/dotnet-tools.json`, so anyone who runs `dotnet tool restore` gets the exact same version. Nothing is installed globally.
 
-Two scripts do everything. `build-docs.sh` makes the site, `publish-docs.sh` puts it online.
+`build-docs.sh` makes the site. A GitHub Actions workflow deploys it whenever changes land on `master`.
 
 ## How the site is built
 
@@ -37,10 +37,10 @@ The styling and the API-page tweaks are a thin customization layer in `docfx/tem
 
 ## Publishing
 
-`publish-docs.sh` is separate and simple. It takes the already-built `docfx/_site` and pushes it to a `gh-pages` branch using a throwaway git worktree. It drops in a `.nojekyll` file, so GitHub doesn't run Jekyll over DocFX's underscore-prefixed asset folders, and a `.gitattributes`, so line endings don't churn on every publish. GitHub Pages serves that branch at the public URL. The rendered HTML never lands on `master`.
+Deployment is automatic. The GitHub Actions workflow in `.github/workflows/docs.yml` runs on every push to `master` that touches the docs or the library. It builds the site with `build-docs.sh` and hands `docfx/_site` straight to GitHub's Pages deploy, so the rendered HTML never lands on a branch (there's no `gh-pages` branch). You can also run it by hand from the Actions tab.
 
-One time only, the repo's Settings, Pages source has to be set to deploy from the `gh-pages` branch root. After that, every `publish-docs.sh` just updates it.
+One-time setup, already done: the repo's Settings, Pages source is set to "GitHub Actions". To check the site before pushing, run `build-docs.sh --serve` locally.
 
 ## What's tracked vs generated
 
-Almost everything under `docfx/` is generated and gitignored: `_site`, `api`, the staged `docs` copy, and `index.md`. The only hand-authored, tracked files are `docfx.json`, `toc.yml`, and the `templates/override` folder, plus the two scripts and the tool manifest. So if the generated output ever looks wrong, delete it and re-run `build-docs.sh` to rebuild from scratch.
+Almost everything under `docfx/` is generated and gitignored: `_site`, `api`, the staged `docs` copy, and `index.md`. The only hand-authored, tracked files are `docfx.json`, `toc.yml`, and the `templates/override` folder, plus `build-docs.sh`, the deploy workflow, and the tool manifest. So if the generated output ever looks wrong, delete it and re-run `build-docs.sh` to rebuild from scratch.

@@ -1,11 +1,11 @@
 # Builds the DocFX documentation site and deploys it to GitHub Pages on every
 # push to master that touches the docs, the library, or the build setup. This
-# is the hands-off path; build-docs.sh / publish-docs.sh still work for local
-# preview and manual one-off publishes.
+# is the only path that publishes the live site. build-docs.sh is just for
+# local preview.
 #
-# One-time setup: repo Settings -> Pages -> Source -> "GitHub Actions".
-# After that this workflow owns the live site; you don't need the gh-pages
-# branch anymore (publish-docs.sh still uses it if you run it by hand).
+# Setup (already done): repo Settings -> Pages -> Source -> "GitHub Actions".
+# The site deploys straight from the build artifact, so no gh-pages branch is
+# involved.
 name: Build and deploy docs
 
 on:

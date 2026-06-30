@@ -9,8 +9,9 @@
 #   ./build-docs.sh            # build once, output in docfx/_site
 #   ./build-docs.sh --serve    # build, then serve at http://localhost:8080
 #
-# After a successful build, run ./publish-docs.sh to push docfx/_site to
-# the gh-pages branch that GitHub Pages serves.
+# A successful build leaves the site in docfx/_site. The live site is deployed
+# by the GitHub Actions workflow (.github/workflows/docs.yml) on push to master.
+# Run this script for local preview. The workflow runs the same build.
 
 set -euo pipefail
 
