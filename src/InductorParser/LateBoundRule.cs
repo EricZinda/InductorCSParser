@@ -96,9 +96,9 @@ public sealed class LateBoundRule : Rule
     public override FlattenType FlattenType =>
         _resolvedFlattenType
         ?? throw new InvalidOperationException(
-            "LateBoundRule.FlattenType was read before Compile resolved it from " +
-            "the bound target. A LateBoundRule has no FlattenType of its own. " +
-            "Compile the grammar first (Parse compiles automatically).");
+            "A LateBoundRule has no FlattenType of its own. It takes the FlattenType " +
+            "of the rule you Bind it to, worked out when the grammar is compiled. " +
+            "Compile the grammar first, then read FlattenType (Parse compiles for you).");
 
     // LateBoundRule forwards EmitsLeaf to its bound target the same way
     // it forwards FlattenType: a LateBoundRule wrapping a leaf-emitting
@@ -110,22 +110,25 @@ public sealed class LateBoundRule : Rule
     public override bool EmitsLeaf =>
         _target?.EmitsLeaf
         ?? throw new InvalidOperationException(
-            "LateBoundRule.EmitsLeaf was read before Bind attached a target. " +
-            "A LateBoundRule has no EmitsLeaf value of its own; bind the rule " +
-            "first (Compile / Parse will report this as a 'never bound' error).");
+            "A LateBoundRule has no EmitsLeaf value of its own. It takes the value " +
+            "from the rule you Bind it to. Bind it first, then read EmitsLeaf.");
 
     // Naming a LateBoundRule is a bug: the name would derive a Name
     // and (via hashing) an Id, but neither is ever visible at parse time.
     // Fail instead of letting users build a rule whose Find
     // silently returns null. Pass the debug name to the constructor.
     public override Rule As(string name) => throw new InvalidOperationException(
-        "LateBoundRule.As(string) isn't supported: the rule is transparent at parse " +
-        "time, so Find() would never match it. Pass a debug name to the constructor: " +
-        "new LateBoundRule(\"name\").");
+        "LateBoundRule.As(string) isn't supported: a LateBoundRule is transparent at " +
+        "parse time, so no Symbol carries its name and Find() can never match it. To " +
+        "make the bound shape findable under a name, name the target rule instead " +
+        "(target.As(\"name\")). The constructor's name is only a label for traces and " +
+        "error messages, not a findable name: new LateBoundRule(\"name\").");
 
     public override Rule As(SymbolId id) => throw new InvalidOperationException(
-        "LateBoundRule.As(SymbolId) isn't supported: the rule is transparent at parse " +
-        "time, so no Symbol in the parse tree will carry this Id.");
+        "LateBoundRule.As(SymbolId) isn't supported: a LateBoundRule is transparent at " +
+        "parse time, so no Symbol in the parse tree will carry this Id. To give the " +
+        "bound shape an explicit id, set it on the target rule instead " +
+        "(target.As(new SymbolId(...))).");
 
     // Flatten on LateBoundRule is rejected because its FlattenType is not
     // its own: the property forwards to the bound target. A value set

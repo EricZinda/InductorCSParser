@@ -357,7 +357,7 @@ internal readonly record struct RuleStartRequirements(
         TokenSet positiveRunes = positiveSet.HasMultiRuneGraphemes
             ? positiveSet.RunesOnlyPart
             : positiveSet;
-        TokenSet difference = negativeSet & ~positiveRunes;
+        TokenSet difference = negativeSet & (TokenSet.Universe - positiveRunes);
         return (difference, Polarity.MustNotBeIn);
     }
 }

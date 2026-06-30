@@ -136,7 +136,7 @@ public static class Rules
     {
         if (!Rune.IsValid(codepoint))
             throw new ArgumentOutOfRangeException(nameof(codepoint), codepoint,
-                "Not a valid Unicode scalar value (0..0x10FFFF, excluding surrogates 0xD800..0xDFFF).");
+                "Not a valid Rune (i.e. Unicode scalar value): 0..0x10FFFF, excluding surrogates 0xD800..0xDFFF.");
         return new GraphemeRule(new Rune(codepoint).ToString());
     }
 

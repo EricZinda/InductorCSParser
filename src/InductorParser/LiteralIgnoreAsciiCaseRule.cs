@@ -33,7 +33,7 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
             if (c > 0x7F)
                 throw new ArgumentException(
                     $"LiteralIgnoreAsciiCase requires an ASCII-only pattern. " +
-                    $"Char at index {charIndex} is U+{(int)c:X4} (outside 0x00..0x7F).",
+                    $"Character at index {charIndex} is U+{(int)c:X4} (outside 0x00..0x7F).",
                     nameof(expected));
         }
         _expected = expected;

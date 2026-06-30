@@ -667,7 +667,7 @@ public abstract class Rule
                 $".WithError(\"{errorMessage}\") can't be applied to this rule: " +
                 $"it already has the error message \"{_errorMessage}\". " +
                 $".WithError(...) is set-once. To attach a different error to the " +
-                $"same rule shape at multiple call sites, wrap it with Alias(...) " +
+                $"same rule shape in more than one place, wrap it with Alias(...) " +
                 $"to get a fresh wrapper that can carry its own error: " +
                 $"Alias(rule).WithError(\"{errorMessage}\"). Or build a factory " +
                 $"function that returns a fresh rule each call.");
@@ -1618,7 +1618,7 @@ public abstract class Rule
             if (r._idUserExplicit && explicitRules.TryGetValue(idValue, out var existing))
             {
                 throw new InvalidOperationException(
-                    $"Two reachable rules use the explicit SymbolId({idValue}): " +
+                    $"Two rules use the explicit SymbolId({idValue}): " +
                     $"'{DescribeRule(existing)}' and '{DescribeRule(r)}'. " +
                     $"Each .As(new SymbolId(...)) explicit id must be unique within a grammar.");
             }
@@ -1645,7 +1645,7 @@ public abstract class Rule
             if (namedRules.ContainsKey(r.Name))
             {
                 throw new InvalidOperationException(
-                    $"Two reachable rules share the name '{r.Name}'. " +
+                    $"Two rules share the name '{r.Name}'. " +
                     $"Each .As(string) name must be unique within a grammar.");
             }
             namedRules[r.Name] = r;
@@ -1807,16 +1807,25 @@ public abstract class Rule
 
     // Build the multi-rule error message, e.g.:
     //
-    //   Compile failed: 2 rules have expected text that isn't in FormKC. 
-    //   The parser normalizes input to this form before
-    //   matching, so a rule whose expected text is in a different form will
-    //   never match. Use the suggested form below or pass a different
-    //   normalization form to Compile (or null to disable normalization):
-    //     - keyword (LiteralRule): 'U+FB01le' should be 'file'
-    //     - label (LiteralRule): 'U+FF21' should be 'A'
+    //   Compile failed: 2 rules hold text that can't be converted to FormKC.
+    //   Compile normalizes each rule's text to the chosen form, so it will
+    //   match the form the input gets converted to. These rules can't be
+    //   converted that way, either because the text isn't valid Unicode or
+    //   because converting it splits one grapheme into several where the
+    //   rule matches exactly one. Fix each rule as noted below, or pass a
+    //   different normalization form to Compile (or null to turn
+    //   normalization off):
+    //     - Token (GraphemeRule): 'U+FB01' <Token converts to multi-grapheme
+    //       sequence "fi" under FormKC. Token matches exactly one grapheme.
+    //       Use Literal("fi") or And(Token-per-grapheme) instead.>
+    //     - letter (OneOfRule): 'U+FB01' <converts under FormKC to the
+    //       multi-grapheme sequence "fi", but a TokenSet member has to be
+    //       exactly one grapheme. ...>
     //
-    // (U+FB01 is the "ﬁ" ligature, U+FF21 the fullwidth "A". FormatLiteralForError
-    // renders non-ASCII runes as U+XXXX, since the difference is often invisible.)
+    // (U+FB01 is the "ﬁ" ligature. FormatLiteralForError renders non-ASCII
+    // runes as U+XXXX, since the difference is often invisible. The detail
+    // after each literal is the offender description the reporting rule
+    // supplied, not a drop-in replacement value.)
     private static string BuildNormalizationErrorMessage(
         NormalizationForm form,
         List<(Rule rule, string original, string normalized)> offenders)
@@ -1836,14 +1845,17 @@ public abstract class Rule
         var builder = new StringBuilder();
         builder.Append("Compile failed: ")
                .Append(ruleCount)
-               .Append(ruleCount == 1 ? " rule has" : " rules have")
-               .Append(" expected text that isn't in ")
+               .Append(ruleCount == 1 ? " rule holds" : " rules hold")
+               .Append(" text that can't be converted to ")
                .Append(FormatNormalizationForm(form))
-               .AppendLine(". The parser normalizes input to this form before")
-               .AppendLine("matching, so a rule whose expected text is in a different form will")
-               .AppendLine("never match. Use the suggested form below or pass a different");
-        builder.AppendLine("normalization form to Compile (or null to disable normalization):");
-        foreach (var (rule, original, normalized) in offenders)
+               .Append(". Compile normalizes each rule's text to the chosen form, so it ")
+               .Append("will match the form the input gets converted to. ")
+               .Append(ruleCount == 1 ? "This rule" : "These rules")
+               .Append(" can't be converted that way, either because the text isn't valid ")
+               .Append("Unicode or because converting it splits one grapheme into several ")
+               .Append("where the rule matches exactly one. Fix each rule as noted below, or ")
+               .AppendLine("pass a different normalization form to Compile (or null to turn normalization off):");
+        foreach (var (rule, original, detail) in offenders)
         {
             string displayName = rule.Name ?? rule._ruleTraceName;
             string ruleType = rule.GetType().Name;
@@ -1853,8 +1865,8 @@ public abstract class Rule
                    .Append(ruleType)
                    .Append("): ")
                    .Append(FormatLiteralForError(original))
-                   .Append(" should be ")
-                   .Append(FormatLiteralForError(normalized))
+                   .Append(' ')
+                   .Append(detail)
                    .AppendLine();
         }
         return builder.ToString().TrimEnd();
@@ -1945,7 +1957,7 @@ public abstract class Rule
             string ruleLabel = r.Name ?? r._ruleTraceName;
             throw new InvalidOperationException(
                 $"Rule '{ruleLabel}' can't be compiled because a previous Compile " +
-                $"attempt failed after mutating this rule graph. Build a fresh " +
+                $"attempt failed after it had already changed these rules. Build a fresh " +
                 $"grammar instance before compiling again. Previous failure: " +
                 $"{r._invalidCompileReason}");
         }

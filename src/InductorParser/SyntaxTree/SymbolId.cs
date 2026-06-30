@@ -42,7 +42,7 @@ public readonly struct SymbolId : IEquatable<SymbolId>
             throw new ArgumentOutOfRangeException(
                 nameof(codepoint),
                 codepoint,
-                "Must be a valid Unicode scalar value (0..0x10FFFF, excluding surrogates 0xD800..0xDFFF).");
+                "Must be a valid Rune (i.e. Unicode scalar value): 0..0x10FFFF, excluding surrogates 0xD800..0xDFFF.");
         return new SymbolId(codepoint);
     }
 }
