@@ -11,8 +11,9 @@ I ported this while creating a new project in Unity and during a period where I'
 
 If you just want to learn how to use it, follow the primers:
 
-- [Primer 1: Getting Started](docs/primer1.md)
-- [Primer 2: Walking the Tree](docs/primer2.md)
+- [Primer 1: Building a Grammar](docs/primer1.md)
+- [Primer 2: Parsing and Processing](docs/primer2.md)
+- [Primer: Parsing Errors](docs/primerFailure.md)
 - [Primer 3: Unicode in the Inductor Parser](docs/Primer3.md)
 - [Primer 4: Security-Related Concerns](docs/Primer4.md)
 - [Tutorial: Peek](docs/tutorial-peek.md)
@@ -59,7 +60,7 @@ var lineWithoutHede = And(
 ```
 
 
-[Primer 1: Getting Started](docs/primer1.md) walks through how to build rules in more detail.
+[Primer 1: Building a Grammar](docs/primer1.md) walks through how to build rules in more detail.
 
 ## Designed for World Languages
 If you write grammars using the Inductor Parser, you get a foundation that supports Unicode from the start:

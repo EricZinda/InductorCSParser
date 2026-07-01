@@ -33,7 +33,7 @@ public class EofRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected end of input"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected end of input at line 1, column 2."));
     }
 
     [Test]
@@ -47,7 +47,7 @@ public class EofRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
-        Assert.That(result.ErrorMessage, Does.StartWith("Parse failed at offset 1"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("Unexpected 'b' at line 1, column 2."));
     }
 
     [Test]

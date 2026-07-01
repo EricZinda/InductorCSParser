@@ -559,7 +559,7 @@ public class StateMachineParserTests
         var rule = And(keyword, Eof());
         var stateMachine = StateMachineParser.Parse(rule, "world");
         Assert.That(stateMachine.Success, Is.False);
-        Assert.That(stateMachine.ErrorMessage, Is.EqualTo("expected the greeting"));
+        Assert.That(stateMachine.ErrorMessage, Is.EqualTo("expected the greeting at line 1, column 1."));
     }
 
     [Test]
@@ -569,7 +569,7 @@ public class StateMachineParserTests
         var rule = And(digit, Eof());
         var stateMachine = StateMachineParser.Parse(rule, "x");
         Assert.That(stateMachine.Success, Is.False);
-        Assert.That(stateMachine.ErrorMessage, Is.EqualTo("expected a digit"));
+        Assert.That(stateMachine.ErrorMessage, Is.EqualTo("expected a digit at line 1, column 1."));
     }
 
     [Test]
@@ -595,7 +595,7 @@ public class StateMachineParserTests
 
         Assert.That(stateMachine.Success, Is.False);
         Assert.That(stateMachine.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(stateMachine.ErrorMessage, Is.EqualTo("want 'a'"));
+        Assert.That(stateMachine.ErrorMessage, Is.EqualTo("want 'a' at line 1, column 1."));
     }
 
     // ---- Bridge fallback (WithinGrapheme + custom subclasses) ----

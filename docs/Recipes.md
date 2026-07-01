@@ -25,7 +25,7 @@ var semver = And(
 );
 
 // Result on "01.2.3":
-//   fail at column 1: Parse failed at offset 1: unexpected '1'.
+//   fail at column 1: the default "Unexpected '1'" message
 ```
 
 The position is wrong. The actual problem is the leading zero at column 0 (the `0`), but the parser reports a missing `.` at column 1 (the `1`). The reason is how `Or` works. It tries `Token('0')` first, that succeeds on the lone `0`, and the parser commits to it. The outer `And` then tries `Token('.')`, sees `1`, and fails there. Once an `Or` branch matches, the parser doesn't go back and try the others later. Committed is committed.
@@ -45,6 +45,8 @@ var peekCore = Or(
 ```
 
 This gets the friendly message. The caret lands at column 1, the digit *after* the `0`: that's the spot the `Not` lookahead got stuck, where it found a digit it didn't want. Depth-primary ranking anchors the `Or`'s `WithError` at the deepest position its branches reached, and that's it. The message is right and the caret points one past the zero. If you want the caret *on* the zero, use the next pattern.
+
+(The `Result on ...` comments here show just the `WithError` text and the caret column. By default the parser also appends ` at line 1, column N` to the message, counting the column from 1. Set `ParseOptions.WithErrorTemplate` to `"{message}"` for the bare text, or reshape it. See the [parsing-errors primer](primerFailure.md) for the template.)
 
 ### Fix that puts the caret on the zero: reject the bad prefix first
 
@@ -68,7 +70,7 @@ var semver = And(
 // Result on "01.2.3":     fail at column 0: major version must not have leading zeros
 // Result on "1.02.3":     fail at column 2: minor version must not have leading zeros
 // Result on "1.2.03":     fail at column 4: patch version must not have leading zeros
-// Result on "v1.2.3":     fail at column 0: Parse failed at offset 0: unexpected 'v'.
+// Result on "v1.2.3":     fail at column 0: the default "Unexpected 'v'" message
 // Result on "0.0.0":      success
 // Result on "10.20.30":   success
 ```
@@ -98,7 +100,7 @@ if (text.Length > 1 && text[0] == '0')
 {
     var range = node.SourceRange!;
     throw new FormatException(
-        $"line {range.Value.Start.Line + 1}, column {range.Value.Start.Column + 1}: " +
+        $"line {range.Value.Start.Line + 1}, column {range.Value.Start.CharColumn + 1}: " +
         $"Major version '{text}' must not have leading zeros");
 }
 if (!int.TryParse(text, out var major))

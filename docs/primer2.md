@@ -1,4 +1,4 @@
-# Inductor Parser Primer 2: Walking the Tree
+# Inductor Parser Primer 2: Parsing and Processing
 
 Primer 1 built a grammar that succeeds or fails and that's it. But most of the time, parsing isn't the goal. You parse so you can do something with what you parsed: look settings up by name, check that the right things are there, point at the spot where it went wrong. Once the parser hands you back a tree, all of that's just walking the tree.
 
@@ -13,73 +13,71 @@ port = 8080
 timeout = 30
 ```
 
-Two sections, each with a couple of `key = value` lines. We'll parse it, walk the tree to look up `[server] port`, and report errors for the cases where things go wrong.
+The example is two sections, each with a couple of `key = value` lines. We'll parse it, walk the tree to look up `[server] port`, and report errors for the cases where things go wrong.
 
-A quick spec, so the rules below don't surprise you:
-
-- A line is one of a section header, a key/value pair, or blank.
-- A section header is `[name]` on its own line. Names are tokens that aren't single-rune whitespace and not `]`. So `[a=b]` is legal (`=` only has special meaning between a key and a value), but `[my server]` and `[ server ]` aren't.
-- A key/value pair is `key = value`. Keys are tokens that aren't single-rune whitespace and not `=`. Whitespace around `=` is optional.
-- Values are typed: an integer, a float, a double-quoted string, or a bare word (a single run of tokens that aren't single-rune whitespace or quotes). Multi-word strings need quotes, so `name = "my favorite thing"` works but `name = my favorite thing` doesn't.
-- Line terminators are the full Unicode set (LF, CR, CRLF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR, VT, FF), not just `\n`.
-
-The grammar:
+Here's the grammar:
 
 ```CSharp
-// All the runes that end a line in Unicode (LF, CR, VT, FF, NEL,
-// LINE SEPARATOR, PARAGRAPH SEPARATOR), so we can exclude them from
-// the body of a name, key, or value. EndOfLine() then consumes the
-// terminator itself, including CRLF as a single unit.
-var lineEndRunes = TokenSet.LineTerminators;
+// Everything Unicode treats as ending a line (LF, CR, CRLF, VT, FF, NEL,
+// LINE SEPARATOR, PARAGRAPH SEPARATOR), so we can exclude them from the
+// body of a name, key, or value. 
+var lineTerminators = TokenSet.LineTerminators;
 
-// "Any single-rune whitespace, line terminators included." We need
-// this in the NoneOf stop sets below: a name or key should stop
-// either at horizontal whitespace OR at a line terminator. The
-// built-in TokenSet.InlineWhitespace is intra-line only by design,
-// so we union with the line terminators here to get a single set
-// that covers both cases for use inside NoneOf.
-var anySpaceRunes = TokenSet.InlineWhitespace | lineEndRunes;
+// A name or key should stop either at any whitespace
+var anyWhitespace = TokenSet.InlineWhitespace | lineTerminators;
 
-// Section names and keys: one or more non-whitespace runes, stopping
-// at the relevant terminator (']' for a name, '=' for a key).
-var name = OneOrMore(NoneOf(TokenSet.Runes("]") | anySpaceRunes)).As("name");
-var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes)).As("key");
+// Section names and keys can be anything 
+// that isn't whitespace or the character that ends them.
+// `NoneOf(set)` matches a token when that token isn't in the 
+// set, and `|` is set union
+var name = OneOrMore(NoneOf(TokenSet.Single(']') | anyWhitespace)).As("name");
+var key = OneOrMore(NoneOf(TokenSet.Single('=') | anyWhitespace)).As("key");
 
-var section = And(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
-    .As("section");
+var section = And(Token('['), 
+                  name, 
+                  Token(']'), 
+                  Optional(InlineWhitespace()), 
+                  EndOfLine())
+              .As("section");
 
-// Typed values. Each alternative is .As(name) so the matching one
-// survives flattening as a discoverable child of value. Order matters
-// in Or: Float before Integer because "3.14" would otherwise commit
-// to Integer on the leading "3" and stall.
-var quotedString = And(
-    Token('"'),
-    ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
-    Token('"')).As("quotedString");
-
-var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\""))).As("bareWord");
-
+// Typed values: .As(name) does two things: it attaches a 
+// name to find later, and it sets the rule to `FlattenType.Preserve` 
+// so the rule's wrapper survives flattening and can be found
+var quotedString = And(Token('"'),
+                       ZeroOrMore(NoneOf(TokenSet.Single('"') |  lineTerminators)),
+                       Token('"'))
+                    .As("quotedString");
+var bareWord = OneOrMore(NoneOf(anyWhitespace | TokenSet.Single('"'))).As("bareWord");
 var floatValue = Float().As("float");
 var integerValue = Integer().As("integer");
 
-var value = Or(floatValue, integerValue, quotedString, bareWord).As("value");
+// Or tries left to right, so Float must come before Integer.
+var value = Or(floatValue, 
+               integerValue, 
+               quotedString, 
+               bareWord)
+            .As("value");
 
-var keyValue = And(key, Optional(InlineWhitespace()), Token('='), Optional(InlineWhitespace()), value, Optional(InlineWhitespace()), EndOfLine())
+var keyValue = And(key, 
+                   Optional(InlineWhitespace()), 
+                   Token('='), 
+                   Optional(InlineWhitespace()), 
+                   value, 
+                   Optional(InlineWhitespace()), 
+                   EndOfLine())
     .As("keyValue");
 
-var blankLine = And(Optional(InlineWhitespace()), EndOfLine());
+var blankLine = And(Optional(InlineWhitespace()), 
+                    EndOfLine());
 
-var line = Or(section, keyValue, blankLine);
-var config = And(ZeroOrMore(line), Eof()).As("config");
+var line = Or(section, 
+              keyValue, 
+              blankLine);
+
+var config = And(ZeroOrMore(line), 
+                 Eof())
+             .As("config");
 ```
-
-`name` and `key` are the same shape: one or more tokens that aren't whitespace and aren't the stop character (`]` for names, `=` for keys). `NoneOf(set)` matches a token when that token isn't in the set, and `|` is set union.
-
-`value` is where typing happens. Each alternative is `.As(name)` so the matching one lands in the tree as a typed child. `Float()` and `Integer()` are built-in rules, `quotedString` is the standard open-quote/body/close-quote shape and `bareWord` catches everything else. Order in `Or` matters because it stops at the first match: `Float` is before `Integer` so `3.14` doesn't commit to `3` and leave `.14` for the next rule to choke on.
-
-`EndOfLine()` accepts CRLF as a unit plus any of the seven Unicode single-rune line terminators. `Token('\n')` only handles LF and would silently cause a bug on a CRLF Windows file or anything using NEL, LINE SEPARATOR, or PARAGRAPH SEPARATOR.
-
-`.As(name)` does two things at once: it attaches a name so you can find the rule later, and (when the rule's `FlattenType` is still its class default) it flips the policy to `FlattenType.Preserve` so the rule's wrapper survives flattening and is something to find. Without that flip, naming a rule whose default is `FlattenType.Flatten` (every `And`, `Or`, `OneOrMore`, etc.) or `FlattenType.Delete` (every `Token`, `Literal`) would compile fine but `Tree.Find(rule)` would silently return null. If you really want a non-`Preserve` policy on a named rule, `.As` will throw rather than silently override an explicit `.Flatten(...)` / `.Delete()` decision in either order.
 
 # What the tree looks like
 
@@ -99,13 +97,13 @@ config
         └── integer ── "8080"
 ```
 
-The `'['`, `']'`, `'='`, the surrounding quote tokens of a quotedString, and the line terminator are all gone after flattening (their default flatten policy is Delete). The `Optional(InlineWhitespace())` around `=` are gone too. What's left is the structure we care about: each `value` carries one named child indicating which alternative matched, and the consumer can use it without re-parsing the text.
+The `'['`, `']'`, `'='`, the surrounding quotes of a quotedString, and the line terminator are all gone after flattening (their default flatten policy is Delete, the flatten process is covered in [Primer 1](primer1.md)). The `Optional(InlineWhitespace())` around `=` are gone too. What's left is the structure we care about: each `value` carries one named child indicating which alternative matched.
 
-INI doesn't nest sections. The `[server]` header and the keys that belong to it sit as siblings under the root rather than as children. To find "the keys belonging to section X" we just look for siblings of the section that are keyValues.
+The INI grammar doesn't nest sections. The `[server]` header and the keys that belong to it are siblings under the root. To find "the keys belonging to section X" we just look for siblings after the section that are keyValues.
 
 # Walking the tree
 
-Walk the children of config, remembering each `section` name you pass. When you hit a `keyValue`, it lives in the last section you passed:
+To process the tree, you'd walk the children of config, remembering each `section` name you pass. When you hit a `keyValue`, it lives in the last section you passed:
 
 ```CSharp
 public static Symbol? FindSetting(Symbol config, string sectionName, string keyName)
@@ -121,18 +119,19 @@ public static Symbol? FindSetting(Symbol config, string sectionName, string keyN
         {
             string thisKey = child.Children[0].ToString();
             if (thisKey == keyName)
-                return child.Children[1];  // the value node, with its typed child
+                // the value node, with its typed child
+                return child.Children[1];  
         }
     }
     return null;
 }
 ```
 
-`symbol.Is(rule)` checks whether the symbol was produced by the rule. 
+`symbol.Is(rule)` checks whether the symbol was produced by the rule in the `rule` variable. 
 
 `symbol.Children` is the list of children that survived flattening. For a section, that's a single `name` leaf, so `child.Children[0].ToString()` gives the section's name as a string. For a keyValue, the children are `[key, value]`, so index 0 is the key and index 1 is the value's container.
 
-We return the value `Symbol` so the caller can still read the type of the child. To read `[server]/port` as an integer:
+We return the whole `Symbol` object so the caller can still read the type of the child. To do this with `[server]/port` you'd write code like this:
 
 ```CSharp
 var portValue = FindSetting(result.Tree!, "server", "port");
@@ -146,13 +145,36 @@ if (!typed.Is(integerValue))
 int port = int.Parse(typed.ToString(), CultureInfo.InvariantCulture);
 ```
 
-The grammar already verified the value's shape. If the input was `port = abc`, the typed child would be a `bareWord` (not an `integerValue`). If the input was `port = "8080"`, the typed child would be a `quotedString` and we can either coerce or reject it. 
+The grammar already interpreted the value as one of our defined types. So, if the input was `port = abc`, the typed child would be a `bareWord` (not an `integerValue`). If the input was `port = "8080"`, the typed child would be a `quotedString` and we can either coerce or reject it. 
 
-`symbol.ToString()` returns the matched text. For a leaf, that's the consumed string. For a composite like `And`, it's the concatenation of every leaf underneath after FlattenType has been applied: Delete'd nodes are gone, Flatten'd composites have their children lifted into the parent, and Flatten'd leaves bubble up as themselves (a leaf has no children to lift, so the leaf itself is what surfaces). That's almost always what you want for reading a value out of the tree, and it's what this section uses to grab the port number.
+`symbol.ToString()` returns the matched text that wasn't removed via flattening. For a leaf, that's the consumed string. For a composite like `And`, it's the concatenation of every leaf underneath after FlattenType has been applied: Delete'd nodes are gone, Flatten'd composites have their children lifted into the parent. That's almost always what you want for reading a value out of the tree.
 
-There's a second accessor, `symbol.SourceText`, that returns the verbatim section of input the Symbol covered. It ignores FlattenType, so it includes the characters that Delete'd rules matched. Use that when you need it for errors to show the raw text, or you don't want to flip a bunch of rules to use a different flatten mode.
+To illustrate how the deleted nodes work, let's look at the `host = "localhost"` line. The `quotedString` rule has two `Token('"')` subrules that are Delete'd by default, so the quotes never enter the tree. Here's that rule for reference:
 
-If you want every section regardless of context, two helpers besides `.Is()` come up enough to be worth knowing:
+```CSharp
+var quotedString = And(Token('"'),
+                       ZeroOrMore(NoneOf(TokenSet.Single('"') |  lineTerminators)),
+                       Token('"'))
+                    .As("quotedString");
+```
+
+And here's an example of using it:
+
+```CSharp
+var quoted = FindSetting(result.Tree!, "server", "host")!.Children[0];  
+// returns: localhost
+// the quotes were Delete'd, so they're gone
+quoted.ToString()   
+```
+If you want the verbatim text, you can use a different property: `symbol.SourceText`. It returns the verbatim section of input the Symbol covered. It ignores FlattenType, so it includes the characters that Delete'd rules matched (the quotes in this example). Use it when an error message should show the raw text, or when you don't want to flip a bunch of rules to a different flatten mode just to read them back.
+
+```CSharp
+// returns "localhost"
+// which is the verbatim input range, quotes and all
+quoted.SourceText   
+```
+
+Two helpers are available if you want to find symbols in the tree regardless of context:
 
 - `symbol.Find(rule)` does a depth-first search and returns the first matching descendant (or null). Use it when you expect one match in a known position.
 - `symbol.FindAll(rule)` does the same but yields every match. Use it for "give me every section" or "every keyValue."
@@ -164,104 +186,26 @@ foreach (var sectionSymbol in result.Tree!.FindAll(section))
 }
 ```
 
-For our setting-lookup problem we aren't using FindAll, because we care about where in the file each section header appears (it groups the keys that follow it). Find and FindAll are for "go grab the title node" or "give me every link" cases where order isn't meaningful.
+For our setting-lookup problem we aren't using FindAll, because we care about where in the file each section header appears (it groups the keys that follow it). Find and FindAll are for "go grab the title node" or "give me every link" cases where location in the tree isn't meaningful.
 
 # Walking the tree with LINQ
 
-Find and FindAll are convenience helpers. Underneath, every traversal on `Symbol` is a direct LINQ target because each one is typed as `IReadOnlyList<Symbol>` or `IEnumerable<Symbol>`. Four entry points cover the four things you usually want to do with a Symbol tree:
+Every accessor that finds things on `Symbol` is a direct LINQ target because they are typed as `IReadOnlyList<Symbol>` or `IEnumerable<Symbol>`. Three accessors exist for things you usually want to do with a Symbol tree:
 
 ```CSharp
 // Direct children only (no recursion)
 result.Tree!.Children.Where(c => c.Is(section))
 
-// Entire subtree, pre-order walk
+// Entire subtree, pre-order walk (every Symbol)
 result.Tree!.Walk().Where(s => s.Is(integerValue))
 
 // All descendants matching a specific rule
 result.Tree!.FindAll(keyValue).Select(kv => kv.Children[0].ToString())
-
-// Flattened tree as a list of every Symbol
-result.Tree!.Flatten()
 ```
 
-`Symbol` itself doesn't implement `IEnumerable<Symbol>` on purpose, because iterating a tree node would have to silently pick one of children, descendants pre-order, descendants post-order, siblings, or tokens, and the four other choices then become second-class. Naming the traversal you want keeps the code unambiguous.
+`Symbol` itself doesn't implement `IEnumerable<Symbol>` on purpose, because iterating a tree node would have to silently pick one of children. Naming the traversal you want keeps the code unambiguous.
 
-# When the parse fails
-
-`Parse()` returns a `ParseResult`, and on failure it carries enough to point at the problem:
-
-```CSharp
-var result = config.Parse("[server]\nport oops\n");
-if (!result.Success)
-{
-    Console.WriteLine($"Parse failed at line {result.ErrorLine}, column {result.ErrorColumn}");
-    Console.WriteLine($"  {result.ErrorMessage}");
-}
-```
-
-That input tries to use `port oops` as a key/value pair without an `=` sign. The output looks like:
-
-```
-Parse failed at line 1, column 5
-  Parse failed at offset 14: unexpected 'o'.
-```
-
-The default error message is generic. To upgrade it, attach `.WithError(...)` to the rule that's most likely to be where the user went wrong:
-
-```CSharp
-var keyValue = And(
-    key,
-    Optional(InlineWhitespace()),
-    Token('=').WithError("Expected '=' after the setting name"),
-    Optional(InlineWhitespace()),
-    value,
-    Optional(InlineWhitespace()),
-    EndOfLine())
-    .As("keyValue");
-```
-
-If `Token('=')` is the deepest failure when a parse fails (the rule that got furthest before giving up), `result.ErrorMessage` will be your custom string instead of the default. Re-running the same `[server]\nport oops\n` input now reports:
-
-```
-Parse failed at line 1, column 5
-  Expected '=' after the setting name
-```
-
-`ErrorLine` and `ErrorColumn` follow the Language Server Protocol convention used by text editors and developer tools: zero-based, with line breaks at `\n`, `\r\n`, or lone `\r`.
-
-The example above attaches `.WithError(...)` to a `Token('=')` that's constructed right there in the `And(...)`, so the message is bound to that one caller. But what if the rule you want to decorate is one you're using in several places? Setting `.WithError("...")` on the shared rule means it will be used everywhere that rule is shared.
-
-The fix is `AliasRule`. It runs the same inner rule but carries its own identity, its own `.WithError(...)` slot, and its own `FlattenType`:
-
-```CSharp
-var comma = Token(',').Flatten(FlattenType.Delete);  // shared, silent
-
-// At the one caller that wants a message:
-new AliasRule(comma).WithError("expected ',' after citation key")
-```
-
-The alias defaults to `FlattenType.Flatten`, so it contributes no tree node, which is what you want for a delimiter. The shared `comma` stays untouched everywhere else it's referenced. If you also want the alias to surface as a named child in the tree (the typical use case for `AliasedAs`), call `comma.AliasedAs("commaAfterCitationKey").WithError("...")` instead. That flips the alias to `Preserve` and gives it a name `Tree.Find` can locate.
-
-`.WithError` covers the rules you can predict will fail. For the catch-all the parser falls back to when nothing was decorated at the deepest failure, `ParseOptions` carries a set of templates with `{name}`-style placeholders. The placeholders match the position units `ParseResult` already names, so a template author uses the same vocabulary the rest of the API does. Going back to the basic grammar (the version before we attached `.WithError`), suppose you want the catch-all rendered in French:
-
-```CSharp
-var options = new ParseOptions
-{
-    PositionalErrorTemplate = "Erreur à la position {charIndex}: caractère '{character}' inattendu.",
-    EndOfInputErrorTemplate = "Fin d'entrée inattendue.",
-};
-
-var result = config.Parse("[server]\nport oops\n", options);
-Console.WriteLine(result.ErrorMessage);
-```
-
-Output:
-
-```
-Erreur à la position 14: caractère 'o' inattendu.
-```
-
-The position placeholders work in every template: `{charIndex}`, `{runeIndex}`, `{tokenIndex}`, `{line}`, `{column}`. The positional template gets one extra, `{character}`, for the input character that didn't match. Four matching templates exist for the budget aborts (timeout, rule-count limit, recursion-depth limit, cancellation) with their own unit-specific placeholders like `{timeout}` and `{limit}`. 
+# Semantic errors
 
 Semantic errors happen after the parse: a duplicate section, a missing required key, a number out of range. The parse already succeeded so now you need to walk the tree and check things.
 
@@ -274,17 +218,17 @@ foreach (var sectionSymbol in result.Tree!.FindAll(section))
     string sectionName = sectionSymbol.Children[0].ToString();
     if (!seen.Add(sectionName))
     {
-        int line = sectionSymbol.SourceRange!.Value.Start.Line + 1;
+        int line = sectionSymbol.SourceRange!.Value.Start.LineNumber;
         throw new FormatException($"Duplicate section [{sectionName}] on line {line}");
     }
 }
 ```
 
-`SourceRange` returns a `Start` and `End` pair, each a `SourcePosition` carrying the same four units as `ParseResult`'s error position: `CharIndex`, `TokenIndex`, `Line`, `Column`. The `+ 1` here is because Language Server Protocol lines are zero-based but humans count from 1.
+`SourceRange` gives a `Start` and `End`, each a `SourcePosition`. `Start.LineNumber` is the one-based line the message wants (its zero-based `Line` and the position's other units come up in the next section).
 
-A composite node's range covers every leaf underneath it. Ask `keyValue.SourceRange` and you get the whole `host = "localhost"` line. Ask `value.SourceRange` and you get just the value. Pick the node and you pick the span.
+A composite node's range covers every leaf underneath it. `keyValue.SourceRange` returns the whole `host = "localhost"` line. `value.SourceRange` returns just the value. 
 
-A range with both ends is also exactly what you need to draw a compiler-style underline. The grammar already accepts any integer for `port`, but ports are 1..65535. Catch out-of-range values after the parse and point at the offending value:
+A range with both ends is also exactly what you need to draw a compiler-style underline. The grammar already accepts any integer for `port`, but ports are 1..65535. So, you can catch out-of-range values after the parse and point at the offending value:
 
 ```CSharp
 string sourceText = "[server]\nhost = \"localhost\"\nport = 99999\n";
@@ -297,10 +241,10 @@ int port = int.Parse(typed.ToString(), CultureInfo.InvariantCulture);
 if (port < 1 || port > 65535)
 {
     var range = typed.SourceRange!.Value;
-    string offendingLine = sourceText.Split('\n')[range.Start.Line];
-    int startColumn = range.Start.Column;
-    int width = range.End.Column - range.Start.Column;
-    Console.WriteLine($"Line {range.Start.Line + 1}: port {port} is out of range");
+    string offendingLine = range.SourceLine();
+    int startColumn = range.Start.CharColumn;
+    int width = range.End.CharColumn - range.Start.CharColumn;
+    Console.WriteLine($"Line {range.Start.LineNumber}: port {port} is out of range");
     Console.WriteLine($"  {offendingLine}");
     Console.WriteLine($"  {new string(' ', startColumn)}{new string('^', width)}");
 }
@@ -314,38 +258,43 @@ Line 3: port 99999 is out of range
          ^^^^^
 ```
 
-`Start.Line` picks the right line out of the input, `Start.Column` indents the underline to the value, and `End.Column - Start.Column` sizes it. No re-scanning the input to figure out where things are, the parser already knew.
+`range.SourceLine()` pulls out the offending line, `Start.CharColumn` indents the underline to the value, and `End.CharColumn - Start.CharColumn` sizes it. `SourceLine` finds the line boundaries the same way the parser found `Start.Line`, so it handles CRLF and the rarer Unicode terminators that splitting the input on `\n` would get wrong.
 
 
 # Unicode and where the error actually is
 
-Here's where it gets interesting. `ErrorColumn` and a sibling field `ErrorCharIndex` both count chars (UTF-16 code units), which is what `string.Substring`, `Span<char>`, and the Language Server Protocol all use. That works fine for ASCII. But suppose this is a config for a family-shared device and the user types a section header in emoji:
+[Primer: Parsing Errors](primerFailure.md) showed the error message itself. This section is about the units the parser counts positions in, which start to matter the moment the input isn't plain ASCII, and which apply to a Symbol's `SourceRange` just as much as to an error.
+
+`ParseResult.ErrorCharColumn` and a sibling field `ParseResult.ErrorCharIndex` both count chars (UTF-16 code units), which is what `string.Substring`, `Span<char>`, and the Language Server Protocol all use. That works fine for ASCII. But suppose this is a config for a family-shared device and the user types a section header in emoji:
 
 ```ini
 [👨‍👩‍👧]
 port oops
 ```
 
-That's a section name made of a single family emoji, then a malformed key/value line. The family emoji is the demo's whole point: it's one of the few characters that pulls chars and tokens apart by a wide margin. A bare guitar emoji 🎸 is 2 chars but 1 token (one user-visible character). The family emoji is 8 chars but still 1 token. So the char count and the token count give very different numbers, which is what makes "which one do I report?" a real question instead of a hypothetical one.
+That's a section name made of a single family emoji, then a malformed key/value line. The family emoji is the demo's whole point: it's one of the few characters that pulls chars and tokens apart by a wide margin. A bare guitar emoji 🎸 is 2 chars but 1 token (one user-visible character). The family emoji is 8 chars but still 1 token. So the char count and the token count give very different numbers.
 
-The section header itself parses fine: `name` rejects single-rune whitespace and `]`, but a multi-rune token like the family emoji isn't any single rune in any rune-only set, so `NoneOf` accepts it as one token. The parser gets past the header and fails on line 2 at the same spot it would for an ASCII version: where the `=` should be.
+The section header itself parses fine: `name` only rejects whitespace and accepts anything else. The parser gets past the header and fails on line 2 at the same spot it would for an ASCII version: where the `=` should be.
 
 But the position numbers diverge. To a human, the family is one character and the failure happens 5 characters into the second line. In memory, the family is eight UTF-16 code units (each emoji is a surrogate pair, plus two code units for the two ZWJs). So which "position" should the parser report?
 
 Inductor Parser reports it three ways plus line/column, because the right unit depends on what the caller is going to do with the number:
 
 ```CSharp
-result.ErrorCharIndex   // 16 - UTF-16 code units, what string.Substring uses
-result.ErrorTokenIndex  // 9  - tokens (user-visible characters)
-result.ErrorLine        // 1
-result.ErrorColumn      // 5  - same unit as ErrorCharIndex, used by the Language Server Protocol
+result.ErrorCharIndex    // 16 - UTF-16 code units, what string.Substring uses
+result.ErrorTokenIndex   // 9  - tokens (user-visible characters)
+result.ErrorLine         // 1
+result.ErrorCharColumn   // 5  - char column, the unit the Language Server Protocol uses
+result.ErrorTokenColumn  // 5  - grapheme column; matches ErrorCharColumn here since line 2 is ASCII
 ```
 
 All four point at the same place in the input. They just count it in different units.
 
-Use `ErrorCharIndex` (or `ErrorColumn`) when you're going to feed the number into something that thinks in chars: `string.Substring`, `ReadOnlySpan<char>.Slice`, a Language Server Protocol diagnostic, a regex offset. That's most production code, because chars are the unit .NET strings index in.
+Use `ErrorCharIndex` (or `ErrorCharColumn`) when you're going to feed the number into something that thinks in chars: `string.Substring`, `ReadOnlySpan<char>.Slice`, a Language Server Protocol diagnostic, a regex offset. That's most production code, because chars are the unit .NET strings index in.
 
 Use `ErrorTokenIndex` for anything that faces a human. "Error at character 9" is what a person sees on screen. "Error at character 16" would seem to point past the end of what they typed, because they don't think of an emoji as taking up 8 of anything.
+
+The column has the same two flavors. `ErrorCharColumn` counts chars (the Language Server Protocol unit) and `ErrorTokenColumn` counts graphemes. They match on this example because line 2 is plain ASCII, but move the family emoji onto the failing line ahead of the error and `ErrorCharColumn` jumps by its 8 code units while `ErrorTokenColumn` moves by 1. The default error message reports the grapheme column because, to a person, "column 6" should be the 6th character they see.
 
 Most of the time you won't care, because most input is ASCII and the two numbers are equal. But the moment a user pastes in an emoji, a flag, or a letter with a combining accent, the indices diverge, and "which one do I show in the error message" stops being a question you can ignore.
 

@@ -229,7 +229,7 @@ public class AliasRuleTests
         var result = alias.Parse("b");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Does.StartWith("Parse failed at offset 0"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("Unexpected 'b' at line 1, column 1."));
     }
 
     // --- WithError message propagation -----------------------------------
@@ -242,7 +242,7 @@ public class AliasRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected a letter"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected a letter at line 1, column 1."));
     }
 
     [Test]
@@ -259,7 +259,7 @@ public class AliasRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected the word"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected the word at line 1, column 3."));
     }
 
     [Test]
@@ -275,7 +275,7 @@ public class AliasRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected abc here"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected abc here at line 1, column 3."));
     }
 
     [Test]
@@ -293,7 +293,7 @@ public class AliasRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(4));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected the word"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected the word at line 1, column 5."));
     }
 
     [Test]
@@ -312,7 +312,7 @@ public class AliasRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
-        Assert.That(result.ErrorMessage, Is.EqualTo("inner: expected abc"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("inner: expected abc at line 1, column 3."));
     }
 
     [Test]
@@ -328,7 +328,7 @@ public class AliasRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
-        Assert.That(result.ErrorMessage, Is.EqualTo("alias: expected a word"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("alias: expected a word at line 1, column 3."));
     }
 
     // --- Identity --------------------------------------------------------

@@ -149,7 +149,7 @@ public class GraphemeRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected guitar"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected guitar at line 1, column 1."));
     }
 
     [Test]
@@ -164,7 +164,7 @@ public class GraphemeRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need 'a'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need 'a' at line 1, column 1."));
     }
 
     [Test]
@@ -179,7 +179,7 @@ public class GraphemeRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need 'a'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need 'a' at line 1, column 1."));
     }
 
     [Test]
@@ -197,7 +197,7 @@ public class GraphemeRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need a 'b'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need a 'b' at line 1, column 2."));
     }
 
     [Test]

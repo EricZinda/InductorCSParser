@@ -242,7 +242,7 @@ public class NormalizationTests
             "exactly double the precomposed reference; equal to it would mean the " +
             "normalized offset leaked out untranslated");
         Assert.That(result.ErrorLine, Is.EqualTo(0), "input has no newlines");
-        Assert.That(result.ErrorColumn, Is.EqualTo(result.ErrorCharIndex),
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(result.ErrorCharIndex),
             "single-line input means column equals char index");
         var position = result.ErrorPosition;
         Assert.That(position, Is.Not.Null);

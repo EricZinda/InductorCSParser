@@ -75,7 +75,7 @@ public class OneOrMoreRuleTests
         var result = rule.Parse("a1");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected letter pairs"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected letter pairs at line 1, column 2."));
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     }
 }

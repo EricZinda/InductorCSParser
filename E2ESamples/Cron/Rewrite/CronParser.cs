@@ -94,11 +94,19 @@ public static class CronParser
             return false;
         }
 
-        var result = Cron.Parse(input);
+        // This sample renders the failure position itself (see the error type's
+        // formatting), so the message text stays position-less.
+        var options = new ParseOptions
+        {
+            WithErrorTemplate = "{message}",
+            PositionalErrorTemplate = "unexpected '{character}'.",
+            EndOfInputErrorTemplate = "unexpected end of input.",
+        };
+        var result = Cron.Parse(input, options);
         if (!result.Success)
         {
             error = new CronParseError(
-                result.ErrorMessage, result.ErrorCharIndex, result.ErrorLine, result.ErrorColumn);
+                result.ErrorMessage, result.ErrorCharIndex, result.ErrorLine, result.ErrorCharColumn);
             return false;
         }
 
@@ -189,6 +197,6 @@ public static class CronParser
         return new CronParseError(message,
             range?.Start.CharIndex ?? 0,
             range?.Start.Line ?? 0,
-            range?.Start.Column ?? 0);
+            range?.Start.CharColumn ?? 0);
     }
 }

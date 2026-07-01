@@ -38,4 +38,17 @@ public readonly struct SourceRange
     /// </remarks>
     public string SubstringOfInput() =>
         Start.Input.Substring(Start.CharIndex, End.CharIndex - Start.CharIndex);
+
+    /// <summary>
+    /// The full text of the line <see cref="Start"/> falls on, terminator excluded.
+    /// </summary>
+    /// <remarks>
+    /// Shorthand for <c>Start.SourceLine()</c>. Use it with
+    /// <see cref="SourcePosition.CharColumn"/> to draw a compiler-style caret under
+    /// this span: the line for context, the column to indent the caret. On a
+    /// range that spans more than one line this returns the first line, the one
+    /// <see cref="Start"/> is on. See <see cref="SourcePosition.SourceLine"/> for
+    /// how the line boundaries are found.
+    /// </remarks>
+    public string SourceLine() => Start.SourceLine();
 }

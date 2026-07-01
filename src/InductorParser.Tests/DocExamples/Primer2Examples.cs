@@ -200,7 +200,7 @@ public class Primer2Examples
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorLine, Is.EqualTo(1),
             "Second line of input is line 1 in Language Server Protocol-style 0-based lines");
-        Assert.That(result.ErrorColumn, Is.EqualTo(5),
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(5),
             "The space-then-'o' fails where the '=' should be at col 5");
         Assert.That(result.ErrorMessage, Is.Not.Empty);
     }
@@ -251,7 +251,7 @@ public class Primer2Examples
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage,
-            Is.EqualTo("Expected '=' after the setting name"));
+            Is.EqualTo("Expected '=' after the setting name at line 2, column 6."));
     }
 
     // primer2.md "ParseOptions carries a set of templates with {name}-
@@ -282,7 +282,7 @@ public class Primer2Examples
     //   ErrorCharIndex      == 16 (UTF-16 code units)
     //   ErrorTokenIndex  == 9  (graphemes)
     //   ErrorLine           == 1
-    //   ErrorColumn         == 5  (UTF-16 chars, Language Server Protocol)
+    //   ErrorCharColumn     == 5  (UTF-16 chars, Language Server Protocol)
     [Test]
     public void Family_emoji_position_divergence_matches_doc()
     {
@@ -301,7 +301,7 @@ public class Primer2Examples
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(9),
             "1 grapheme for family + '[' + ']' + '\\n' + 4 graphemes 'port' + ' ' = 9");
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(5));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(5));
     }
 
     // primer2.md "you might want to disallow duplicate section names":
@@ -327,9 +327,36 @@ public class Primer2Examples
         }
 
         Assert.That(offending, Is.Not.Null);
-        // "Line 4" in the doc's 1-based human form is line 3 in the 0-based
-        // Language Server Protocol convention.
-        int humanLine = offending!.SourceRange!.Value.Start.Line + 1;
+        // LineNumber is the one-based human line; Start.Line is 3 in the
+        // zero-based Language Server Protocol convention.
+        int humanLine = offending!.SourceRange!.Value.Start.LineNumber;
         Assert.That(humanLine, Is.EqualTo(4));
+    }
+
+    // primer2.md "draw a compiler-style underline": the index-based line
+    // extraction (CharIndex - Column for the start, TokenSet.IsLineTerminator to
+    // the end) and the LineNumber / Column caret math. Uses CRLF endings to prove
+    // the extraction doesn't depend on '\n' the way the old sourceText.Split('\n')
+    // version did.
+    [Test]
+    public void Out_of_range_underline_extracts_the_line_by_index()
+    {
+        var (config, section, keyValue, _, _, _) = BuildGrammar();
+
+        string sourceText = "[server]\r\nport = 99999\r\n";
+        var result = config.Parse(sourceText);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+
+        var value = FindSetting(result.Tree!, section, keyValue, "server", "port");
+        var typed = value!.Children[0];
+        var range = typed.SourceRange!.Value;
+        string offendingLine = range.SourceLine();
+
+        // A sourceText.Split('\n') would leave a trailing '\r'; SourceLine stops
+        // at the CR, so the extracted line is clean even with CRLF endings.
+        Assert.That(offendingLine, Is.EqualTo("port = 99999"));
+        Assert.That(range.Start.LineNumber, Is.EqualTo(2));
+        Assert.That(range.Start.CharColumn, Is.EqualTo(7));                    // "port = ".Length
+        Assert.That(range.End.CharColumn - range.Start.CharColumn, Is.EqualTo(5)); // "99999".Length
     }
 }

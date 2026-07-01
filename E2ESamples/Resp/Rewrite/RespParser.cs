@@ -148,12 +148,20 @@ public static class RespParser
 
     public static bool TryParse(string input, out RespValue? value, out RespParseError? error)
     {
-        var result = Resp.Parse(input);
+        // RespParseError surfaces position through its Line / Column fields, so
+        // the message text stays position-less.
+        var options = new ParseOptions
+        {
+            WithErrorTemplate = "{message}",
+            PositionalErrorTemplate = "unexpected '{character}'.",
+            EndOfInputErrorTemplate = "unexpected end of input.",
+        };
+        var result = Resp.Parse(input, options);
         if (!result.Success)
         {
             value = null;
             error = new RespParseError(
-                result.ErrorMessage, result.ErrorCharIndex, result.ErrorLine, result.ErrorColumn);
+                result.ErrorMessage, result.ErrorCharIndex, result.ErrorLine, result.ErrorCharColumn);
             return false;
         }
 

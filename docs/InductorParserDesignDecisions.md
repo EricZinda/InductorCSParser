@@ -6,8 +6,9 @@ If you want to write grammars, start with the primers below or read [InductorPar
 
 Primers:
 
-- [Primer 1: Getting Started](primer1.md): build a grammar that consumes everything up to a stop sequence, parse some input, look at the tree.
-- [Primer 2: Walking the Tree](primer2.md): a tiny INI-style config grammar with typed values, a tree walker, and Unicode-aware error positions.
+- [Primer 1: Building a Grammar](primer1.md): build a grammar that consumes everything up to a stop sequence, parse some input, look at the tree.
+- [Primer 2: Parsing and Processing](primer2.md): a tiny INI-style config grammar with typed values, a tree walker, semantic validation, and Unicode-aware source positions.
+- [Primer: Parsing Errors](primerFailure.md): what the parser reports when input doesn't match: failure positions, custom `.WithError` messages, and reshaping or localizing the default text.
 - [Primer 3: Unicode in the Inductor Parser](Primer3.md): how the parser handles Unicode normalization, error positions, ill-formed input, and unexpected characters.
 - [Primer 4: Security-Related Concerns](Primer4.md): parser defenses against pathological input (ReDoS, recursion limits) and Unicode-based attacks (Trojan Source, lookalikes, homoglyphs, invisible characters).
 - [Tutorial: Peek](tutorial-peek.md): a password-validation regex translated into the parser, using `Peek` for non-consuming lookahead.
@@ -408,7 +409,7 @@ var rule = OneOrMore(Token('a'));
 var result = rule.Parse("aabb");
 // result.Success == false
 // result.ErrorCharIndex == 2
-// result.ErrorMessage starts with "Parse failed at offset 2"
+// result.ErrorMessage == "Unexpected 'b' at line 1, column 3."
 ```
 
 `OneOrMore(Token('a'))` greedily matches "aa" and stops because the next char isn't 'a'. The rule's own `TryParse` returned a tree happily. But the top-level `Parse` then checks `lexer.IsEof`, finds we're at offset 2 with "bb" still ahead, and turns the success into a failure.
@@ -437,7 +438,7 @@ Walk through the smallest case to see why this matters. `Token('a').Parse("x")`:
 2. Reads 'x'. Lexer position advances to 1.
 3. 'x' doesn't equal 'a'. GraphemeRule records its failure at `transaction.StartPosition` (0), not at the current lexer position (1).
 4. Transaction rolls back, lexer returns to position 0.
-5. `result.ErrorCharIndex` is 0. `result.ErrorMessage` is `"Parse failed at offset 0: unexpected 'x'."`.
+5. `result.ErrorCharIndex` is 0. `result.ErrorMessage` is `"Unexpected 'x' at line 1, column 1."`.
 
 A naive post-read implementation would record at 1 instead of 0, which equals `input.Length` for this one-char input, which makes `BuildErrorMessage` take the "Unexpected end of input" branch even though the input isn't empty. That's the kind of off-by-one that accumulates over a library's lifetime until every error message is slightly off and nobody remembers why. Picking a principle early and applying it uniformly keeps the error messages accurate.
 
@@ -469,7 +470,7 @@ This isn't a bug. It's a property of the heuristic. Because depth ranks first, a
 
 ### LSP Position Semantics
 
-`ParseResult.ErrorLine` and `ErrorColumn` follow the Language Server Protocol's position conventions. LSP is the JSON-RPC protocol that VS Code, Neovim, JetBrains IDEs, and essentially every modern editor use to talk to language tooling. If a grammar author is going to forward a parse error into an editor, they're almost certainly going to do it through LSP, either directly or through a layer that speaks LSP. Matching LSP end-to-end means the integration is `new Diagnostic { Range = new Range(errorLine, errorColumn, ...) }` with no arithmetic in between. Pick a different convention and every caller writes the same `-1` shim forever.
+`ParseResult.ErrorLine` and `ErrorCharColumn` follow the Language Server Protocol's position conventions. LSP is the JSON-RPC protocol that VS Code, Neovim, JetBrains IDEs, and essentially every modern editor use to talk to language tooling. If a grammar author is going to forward a parse error into an editor, they're almost certainly going to do it through LSP, either directly or through a layer that speaks LSP. Matching LSP end-to-end means the integration is `new Diagnostic { Range = new Range(errorLine, errorColumn, ...) }` with no arithmetic in between. Pick a different convention and every caller writes the same `-1` shim forever.
 
 Three specific rules fall out:
 
@@ -583,7 +584,7 @@ Variadic rules without the `Args` wrapper. `And(r1, r2, r3, r4)` beats `AndExpre
 
 Composable character classes. `TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_-")` is worth the whole port by itself.
 
-Proper error objects. `ParseResult.ErrorLine` and `ErrorColumn` are computed on demand from the position. In the C++ version you get a message and a character offset and you have to compute line/column yourself. The same conversion is also available on every parse-tree node via `Symbol.SourceRange`, so semantic errors ("duplicate section on line 7", "value out of range at char 42") report positions in the same units the parse error does.
+Proper error objects. `ParseResult.ErrorLine` and `ErrorCharColumn` are computed on demand from the position. In the C++ version you get a message and a character offset and you have to compute line/column yourself. The same conversion is also available on every parse-tree node via `Symbol.SourceRange`, so semantic errors ("duplicate section on line 7", "value out of range at char 42") report positions in the same units the parse error does.
 
 ## Things That Got Worse
 

@@ -142,8 +142,33 @@ public sealed class ParseOptions
     /// </remarks>
     public bool AllowTrailingInput { get; set; } = false;
 
+    private string _withErrorTemplate =
+        "{message} at line {lineNumber}, column {tokenColumnNumber}.";
+    /// <summary>
+    /// Template that wraps a rule's <c>.WithError("...")</c> message when that
+    /// rule is the deepest failure. The author's text fills the {message}
+    /// placeholder, and the position placeholders every template shares add the
+    /// location, so a custom message carries its position the way the mechanical
+    /// default does. Setting it to null throws.
+    /// </summary>
+    /// <remarks>
+    /// The default appends " at line {lineNumber}, column {tokenColumnNumber}." to
+    /// the author's text. Set it to "{message}" to get the raw <c>.WithError</c>
+    /// string back with no position, or reshape it however you like (position
+    /// first, localized, and so on). See <see cref="PositionalErrorTemplate"/> for
+    /// the placeholder syntax; the per-template placeholder here is {message}, the
+    /// author's text. Unlike the mechanical templates it carries no {character},
+    /// since a WithError failure can sit at end of input where there's no
+    /// character to name.
+    /// </remarks>
+    public string WithErrorTemplate
+    {
+        get => _withErrorTemplate;
+        set => _withErrorTemplate = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
     private string _positionalErrorTemplate =
-        "Parse failed at offset {charIndex}: unexpected '{character}'.";
+        "Unexpected '{character}' at line {lineNumber}, column {tokenColumnNumber}.";
     /// <summary>
     /// Template for the default message when the parser rejects a specific
     /// input character and no .WithError("...") was attached at the deepest
@@ -156,17 +181,29 @@ public sealed class ParseOptions
     /// rather than throwing.
     /// <para>
     /// Every template (this one and the abort templates below) supports the
-    /// same four position placeholders, named to match the ParseResult.ErrorXxx
+    /// same position placeholders, named to match the ParseResult.ErrorXxx
     /// properties so a template author can mirror whatever unit the rest of
     /// their code already uses:
     /// <code>
-    ///   {charIndex}    ParseResult.ErrorCharIndex   (UTF-16 code units)
-    ///   {tokenIndex}   ParseResult.ErrorTokenIndex  (StringInfo text elements)
-    ///   {line}         ParseResult.ErrorLine        (zero-based, Language Server Protocol convention)
-    ///   {column}       ParseResult.ErrorColumn      (zero-based, in chars)
+    ///   {charIndex}          ParseResult.ErrorCharIndex   (UTF-16 code units)
+    ///   {tokenIndex}         ParseResult.ErrorTokenIndex  (StringInfo text elements)
+    ///   {line}               ParseResult.ErrorLine        (zero-based, Language Server Protocol convention)
+    ///   {charColumn}         ParseResult.ErrorCharColumn  (zero-based char column)
+    ///   {tokenColumn}        ParseResult.ErrorTokenColumn (zero-based grapheme column)
+    ///   {lineNumber}         ErrorLine + 1                (one-based line)
+    ///   {charColumnNumber}   ErrorCharColumn + 1          (one-based char column)
+    ///   {tokenColumnNumber}  ErrorTokenColumn + 1         (one-based grapheme column)
     /// </code>
+    /// The default templates use {lineNumber} and {tokenColumnNumber} so the
+    /// out-of-the-box message reads the way a person counts lines and characters
+    /// in an editor: an emoji or a combining sequence earlier on the line counts
+    /// as one column, not as its several UTF-16 code units. Use {charColumnNumber}
+    /// (or {charColumn}) instead for a Language Server Protocol client or editor,
+    /// which count columns in chars. The ParseResult fields stay zero-based; only
+    /// the *Number placeholders are shifted.
     /// plus a per-template placeholder for the unit-specific value:
     /// <code>
+    ///   WithErrorTemplate            {message}    (the rule's .WithError text)
     ///   PositionalErrorTemplate      {character}  (the unexpected input character)
     ///   MalformedInputTemplate       {character}  (the offending element, e.g. U+D800)
     ///   TimeoutAbortTemplate         {timeout}    (options.Timeout as a TimeSpan string)
@@ -175,10 +212,14 @@ public sealed class ParseOptions
     /// </code>
     /// </para>
     /// <para>
-    /// The token-index and line/column conversions each walk the input once, so
-    /// they're computed lazily and only paid for when the corresponding
-    /// placeholder appears in the template. The default templates only mention
-    /// {charIndex}, so by default the O(n) scans never run.
+    /// The token-index, line/column, and token-column conversions each walk the
+    /// input once, so they're computed lazily and only paid for when the
+    /// corresponding placeholder appears in the template. The default templates
+    /// use {lineNumber} and {tokenColumnNumber}, so building a default failure
+    /// message pays one line scan plus one grapheme-cluster count of the input.
+    /// That runs only on the failure path (a successful parse builds no message).
+    /// A caller who wants the message built with no scan at all can set the
+    /// templates to a {charIndex}-only string.
     /// </para>
     /// </remarks>
     public string PositionalErrorTemplate
@@ -187,7 +228,8 @@ public sealed class ParseOptions
         set => _positionalErrorTemplate = value ?? throw new ArgumentNullException(nameof(value));
     }
 
-    private string _endOfInputErrorTemplate = "Unexpected end of input.";
+    private string _endOfInputErrorTemplate =
+        "Unexpected end of input at line {lineNumber}, column {tokenColumnNumber}.";
     /// <summary>
     /// Template for the default message when the parser fails at end of input
     /// and no .WithError("...") was attached. See
@@ -201,7 +243,7 @@ public sealed class ParseOptions
     }
 
     private string _malformedInputTemplate =
-        "Parse failed at offset {charIndex}: the input isn't valid Unicode and can't be normalized.";
+        "Malformed input at line {lineNumber}, column {tokenColumnNumber}: '{character}' isn't valid Unicode and can't be normalized.";
     /// <summary>
     /// Template for the message when the input can't be normalized to the
     /// grammar's normalization form because it isn't well-formed Unicode (an

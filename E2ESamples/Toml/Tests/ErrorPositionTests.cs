@@ -27,9 +27,9 @@ public class ErrorPositionTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        // ErrorColumn is at end-of-input (column == length of the only line)
+        // ErrorCharColumn is at end-of-input (column == length of the only line)
         // because that's where the closing quote was expected.
-        Assert.That(result.ErrorColumn, Is.EqualTo(input.Length));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(input.Length));
     }
 
     [Test]
@@ -43,7 +43,7 @@ public class ErrorPositionTests
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         // The grammar expected '=' after `key `. Deepest failure is at the 'v'
         // of "value" (column 4: 'k'(0) 'e'(1) 'y'(2) ' '(3) 'v'(4)).
-        Assert.That(result.ErrorColumn, Is.EqualTo(4));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(4));
         Assert.That(result.ErrorMessage, Does.Contain("Expected '='").IgnoreCase);
     }
 
@@ -58,7 +58,7 @@ public class ErrorPositionTests
         // Deepest failure is at the newline after "[server"
         // (line 0, column 7: '['(0) 's'(1) 'e'(2) 'r'(3) 'v'(4) 'e'(5) 'r'(6)).
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(7));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(7));
         Assert.That(result.ErrorMessage, Does.Contain("']'"));
     }
 

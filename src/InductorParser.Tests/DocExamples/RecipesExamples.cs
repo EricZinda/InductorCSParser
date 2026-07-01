@@ -281,7 +281,7 @@ public class RecipesExamples
         Assert.That(result.Success, Is.False);
         // The actual leading-zero problem is at column 0. The reported
         // column is 1, the '1' that follows the committed-to '0'.
-        Assert.That(result.ErrorColumn, Is.EqualTo(1));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(1));
     }
 
     // "Numbers with no leading zeros": the lookahead-inside-Or pattern
@@ -309,7 +309,7 @@ public class RecipesExamples
 
         var result = grammar.Parse("01.2.3");
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorColumn, Is.EqualTo(1),
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(1),
             "the Or's WithError anchors at the deepest position its branches reached");
         Assert.That(result.ErrorMessage,
             Does.Contain("Number with no leading zeros"),
@@ -343,17 +343,17 @@ public class RecipesExamples
 
         var leadingZeroOnMajor = grammar.Parse("01.2.3");
         Assert.That(leadingZeroOnMajor.Success, Is.False);
-        Assert.That(leadingZeroOnMajor.ErrorColumn, Is.EqualTo(0));
+        Assert.That(leadingZeroOnMajor.ErrorCharColumn, Is.EqualTo(0));
         Assert.That(leadingZeroOnMajor.ErrorMessage,
             Does.Contain("no leading zeros"));
 
         var leadingZeroOnMinor = grammar.Parse("1.02.3");
         Assert.That(leadingZeroOnMinor.Success, Is.False);
-        Assert.That(leadingZeroOnMinor.ErrorColumn, Is.EqualTo(2));
+        Assert.That(leadingZeroOnMinor.ErrorCharColumn, Is.EqualTo(2));
 
         var leadingZeroOnPatch = grammar.Parse("1.2.03");
         Assert.That(leadingZeroOnPatch.Success, Is.False);
-        Assert.That(leadingZeroOnPatch.ErrorColumn, Is.EqualTo(4));
+        Assert.That(leadingZeroOnPatch.ErrorCharColumn, Is.EqualTo(4));
 
         // Bare 0 is fine (the spec allows it), and "10.20.30" is fine
         // because the reject-first probe rejects only "0[digit]".
@@ -390,10 +390,10 @@ public class RecipesExamples
         var range = node.SourceRange;
         Assert.That(range, Is.Not.Null);
         Assert.That(range!.Value.Start.Line, Is.EqualTo(0));
-        Assert.That(range.Value.Start.Column, Is.EqualTo(0));
+        Assert.That(range.Value.Start.CharColumn, Is.EqualTo(0));
         // The recipe formats these one-based: "line 1, column 1".
         string message =
-            $"line {range.Value.Start.Line + 1}, column {range.Value.Start.Column + 1}: " +
+            $"line {range.Value.Start.Line + 1}, column {range.Value.Start.CharColumn + 1}: " +
             $"Major version '{text}' must not have leading zeros";
         Assert.That(message, Is.EqualTo("line 1, column 1: Major version '01' must not have leading zeros"));
     }

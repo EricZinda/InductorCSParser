@@ -1,4 +1,4 @@
-# Inductor Parser Primer 1: Getting Started
+# Inductor Parser Primer 1: Building a Grammar
 Let's answer a top stackoverflow question, but use the Inductor Parser instead of Regex: [How can I match "anything up until this sequence of characters"?](https://stackoverflow.com/questions/7124778/)
 
 To parse text using the Inductor Parser, you build up a set of rules that "consume" the text, in the order they're written. The set of rules is called a "grammar". More often than not it will read very close to the way you'd describe it in words. 
