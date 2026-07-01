@@ -42,8 +42,8 @@ So, we'll join our rules together, using composite rules like `And` or `Or`. `An
 ```
 var target = Literal("this sequence of characters");
 var example = And(ZeroOrMore(And(Not(target),
-                               AnyToken())), 
-                    target);
+                                 AnyToken())), 
+                  target);
 ```
 This will now compile. 
 
@@ -62,13 +62,13 @@ Console.WriteLine(result.ToString());
 ```
 The output is (with one space at the end):
 
-```
+```Text
 How can I match anything up until 
 ```
 The output works like this: Every rule is able to create a `Symbol` object to represent it and what it found in the tree. Whether it does this or not is controlled by a property on the rule called `FlattenType` which says whether to:
 
 - `FlattenType.Delete` it and what it found along with its children (i.e. remove it completely)
-- `FlattenType.Flatten` (i.e. remove) that rule, but keeping its children and what they found (a leaf rule has no separate children, so it bubbles up as itself)
+- `FlattenType.Flatten` (i.e. remove) that rule, but keep its children and what they found
 - `FlattenType.Preserve` that rule and all of its children and everything they found so it's available in the final tree
 
 Many rules have their default set to `Flatten` or `Delete` since you usually don't want them. In our case, the only rule that was set to `Preserve` by default is `AnyToken` since that usually represents text the developer wants to capture.
@@ -78,8 +78,8 @@ So, when you call `ToString()` on the result of a parse, all the symbols left in
 ```CSharp
 var target = Literal("this sequence of characters");
 var example = And(ZeroOrMore(And(Not(target),
-                               AnyToken())), 
-                    target);
+                                 AnyToken())), 
+                  target);
 
 ```
 ... were the `AnyToken()` Symbols, one for each token that was consumed.
@@ -91,8 +91,8 @@ To help with debugging, you can flip them all to `Preserve` with options on the 
 ```CSharp
 var target = Literal("this sequence of characters");
 var example = And(ZeroOrMore(And(Not(target),
-                               AnyToken())), 
-                    target);
+                                 AnyToken())), 
+                  target);
 
 var options = new ParseOptions { PreserveAllSymbols = true };
 var result = example.Parse("How can I match anything up until this sequence of characters", options);
@@ -130,8 +130,8 @@ Notice we've not even thought about Unicode anything so far. Let's try the same 
 ```CSharp
 var target = Literal("this 👨‍👩‍👧 sequence of characters");
 var example = And(ZeroOrMore(And(Not(target),
-                               AnyToken())), 
-                    target);
+                                 AnyToken())), 
+                  target);
 
 var result = example.Parse("How can I match 👋🏽 anything up until this 👨‍👩‍👧 sequence of characters");
 Console.WriteLine(result.ToString());
@@ -143,19 +143,19 @@ The output (with one space at the end):
 How can I match 👋🏽 anything up until 
 ```
 
-Two different multi-rune tokens are at work here. The waving hand 👋🏽 is a base emoji plus a skin-tone modifier (two runes, one token). The family 👨‍👩‍👧 is built from five runes joined by zero-width joiners (man, ZWJ, woman, ZWJ, girl) and takes eight UTF-16 code units to encode. The grammar didn't need to know any of that. `AnyToken()` asked for "one token" in the middle and got the waving hand as a single unit. `Literal(...)` walks the input the same way the rest of the grammar does, so the family emoji in the target text matched as one token too. The exact-match string and the input string are both read as a stream of user-perceived characters, and they line up.
+Both of those emoji are more complicated than they look. The waving hand 👋🏽 and the family 👨‍👩‍👧 are each built from several Unicode pieces stuck together, even though each one shows up as a single character on screen. The grammar didn't need to know any of that. `AnyToken()` asked for "one token" in the middle and got the whole waving hand as a single unit. `Literal(...)` walks the input the same way the rest of the grammar does, so the family emoji in the target text matched as one token too. The string you're matching against and the input string are both read as a stream of user-perceived characters, so they line up.
 
-The same thing works with accented letters typed as a base letter plus a combining mark, with regional-indicator flag pairs, and with combining-mark scripts like Devanagari or Thai. They all come through as one token each, both inside `AnyToken()` and inside `Literal(...)`.
+The same thing works with accented letters typed as a base letter plus a separate accent mark, or any other multi-C#-char Unicode letters. They all come through as one token each, both inside `AnyToken()` and inside `Literal(...)` (inside any rule, in fact).
 
-If you want to define a character class that includes a multi-rune token (an emoji, say) alongside ordinary letter ranges, `TokenSet` accepts both:
+If you want to define a set of characters that includes an emoji alongside ordinary letter ranges, `TokenSet` accepts both:
 
 ```CSharp
-// Letters of any script, plus the US flag emoji as a single token.
-var letterOrUSFlag = OneOf(TokenSet.Letters | TokenSet.Graphemes("🇺🇸"));
+// Letters of any script, plus the family emoji as a single token.
+var letterOrFamily = OneOf(TokenSet.Letters | TokenSet.Graphemes("👨‍👩‍👧"));
 ```
 
-`TokenSet.Graphemes(...)` adds whatever the runtime treats as one user-visible character to the set. Each argument is one grapheme cluster: a single-rune cluster goes into the rune-range part, and a multi-rune token like 🇺🇸 goes into a separate multi-rune list. (`TokenSet.Runes(...)` is the shortcut for the single-rune case and throws on a multi-rune cluster like the flag, so name `Graphemes` when a member spans more than one rune.) `OneOf` checks both halves on each token.
+`TokenSet.Graphemes(...)` adds whatever the runtime treats as one user-visible character to the set, so each argument is one on-screen character. `OneOf` then checks each token in the input against the whole set.
 
-This matters because the most common Unicode bug in parsers is silently splitting a multi-rune token into pieces. A grammar that consumes "one rune" from 👨‍👩‍👧 and stops would leave six dangling runes for the next rule to trip over. The lexer avoids this by walking the input one user-perceived character at a time. If you want to look *inside* a token (to inspect combining marks individually, say) there's a `WithinToken(...)` helper. But for normal text processing, you don't have to think about any of this. The grammar above already does the right thing on emoji, accented letters, CJK text, and complex scripts.
+This matters because the most common Unicode bug in parsers is silently splitting one of these multi-piece characters apart. A grammar that grabbed only the first piece of 👨‍👩‍👧 and stopped would leave the rest dangling for the next rule to trip over. The lexer avoids this by walking the input one user-perceived character at a time. If you want to look *inside* a token (to inspect accent marks individually, say) there's a `WithinToken(...)` helper. But for normal text processing, you don't have to think about any of this. The grammar above already does the right thing on emoji, accented letters, and complex scripts.
 
-For the bigger picture (normalization, line terminators beyond `\n`, position tracking in chars and tokens) see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). For the surprises that *do* come up and how to handle them, see [UnicodeGotchas.md](UnicodeGotchas.md).
+For the bigger picture (normalization, line terminators beyond `\n`, position tracking in chars and tokens) see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). For the surprises that *can* come up and how to handle them, see [UnicodeGotchas.md](UnicodeGotchas.md).
