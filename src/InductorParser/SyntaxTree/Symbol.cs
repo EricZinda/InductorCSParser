@@ -283,6 +283,11 @@ public sealed class Symbol
     /// matched do still appear. To get the exact input verbatim, keep the string you passed to
     /// Parse, read <see cref="SourceText"/>, or set ParseOptions.PreserveAllSymbols to keep every
     /// grammar node (including Delete ones) in the tree.
+    /// <para>
+    /// When the grammar normalized the input (any form other than <c>Compile(null)</c>), a leaf's
+    /// text comes from the normalized parse input, so this renders the normalized form the parser
+    /// matched, not the user's original spelling. <see cref="SourceText"/> returns the original.
+    /// </para>
     /// </remarks>
     public override string ToString()
     {
@@ -362,8 +367,9 @@ public sealed class Symbol
     /// </summary>
     /// <remarks>
     /// Unlike <see cref="ToString"/>, which concatenates the text of the leaves present in the
-    /// tree, this reaches back to the original input by character range, so it includes characters
-    /// matched by FlattenType.Delete leaves (the default for Token, Literal, EndOfLine) that
+    /// tree and renders it in the normalized form the parser matched, this reaches back to the
+    /// original input by character range, so it includes characters matched by FlattenType.Delete
+    /// leaves (the default for Token, Literal, EndOfLine) that
     /// aren't in the tree for <see cref="ToString"/> to render. When the grammar normalized the
     /// input, the parse-input offsets are translated back to the original before the section is
     /// taken, so the result is always a piece of the user's original input.
