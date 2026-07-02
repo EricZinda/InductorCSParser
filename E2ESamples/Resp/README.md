@@ -104,7 +104,7 @@ rule rejects it where nom would have returned a result. There's no public API to
 advance the cursor by a raw char count, so it can't be worked around at the rule
 level. This is the friction filed in the backlog item "No primitive to advance
 the cursor by a fixed code-unit (or byte) count". For ASCII payloads, the common
-case for these text protocols, none of it bites: one char per rune per grapheme,
+case for these text protocols, none of it matters: one char per rune per grapheme,
 and byte / code-unit / code-point counts all agree.
 
 The grammar compiles with normalization disabled (`Resp.Compile(null)`) so a

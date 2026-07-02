@@ -22,11 +22,25 @@ Each layer is a composition over the one below, so any string has a code-unit co
 - For a rune above U+FFFF with no modifier (a lone 🎸, say), UTF-16 uses a surrogate pair so the code-unit count doubles while the code-point and token counts stay the same.
 - For combining-mark text or emoji sequences (👋🏽, 👨‍👩‍👧‍👦), multiple code points form one token, so the token count falls below the code-point count.
 
+### Four Ways Code Points Build A Grapheme
+
+Every grapheme ends up the same, one user-visible character, but Unicode has four different patterns for building one out of code points:
+
+1. **Single code point graphemes**: like `A` (all of ASCII) have a single rune that represents them (U+0041) and that's the only way you'll ever see them. (Not a formal Unicode term, since Unicode doesn't have a name for this category.)
+
+2. **Combining character sequences**: like `क्ष` don't have a single defining code point but are always represented as the same sequence (U+0915 क, U+094D ्, U+0937 ष).
+
+3. **Canonically equivalent sequences**: characters that can be represented like #1 *or* #2. Like `é`: it has a single rune that represents it (U+00E9) *and* can be represented by a sequence of runes that build the character (U+0065 e, U+0301 combining acute). Unicode says both spellings represent the same thing and should display identically. Normalization (below) is what reconciles them.
+
+4. **Emoji sequences**: "Lego blocks" of graphemes that can be built out of combinations of characters using certain rules. They're an open-ended and growing set, like `👨‍👩‍👧` (U+1F468 👨, U+200D ZWJ, U+1F469 👩, U+200D ZWJ, U+1F467 👧). These are more like a programming language for building graphemes.
+
+All four patterns end at the same place: one character a reader perceives, which the lexer hands back as one token. That's why the parser's rules are designed around graphemes. Note that some code points and code point sequences don't represent a user-perceived character at all (a stray combining accent, an invisible format character). The valid ones split by the same UAX #29 rules and surface as ordinary tokens (see [Primer3.md](Primer3.md) "Unexpected Unicode" for the survey). Ill-formed ones (an unpaired surrogate) fail the parse with a `MalformedInput` result before any rule runs.
+
 ### Text transformations (orthogonal)
 
 Rewrites that produce a different rune sequence. These apply to runes, they aren't a higher layer.
 
-- **Normalization**: canonical rewrites so that visually-identical text compares equal regardless of spelling. "café" as one rune and "café" as two runes (`e` + "combining accent") are different rune sequences but the same normalized text. There are four normalization forms defined by Unicode. The parser uses the *composed* form by default (the one that produces U+00E9 `é` as a single code point rather than `e` + combining acute). See the Normalization section below.
+- **Normalization**: canonical rewrites so that visually-identical text compares equal regardless of what the bytes look like. The "é" in "café" as one rune or in "café" as two runes (`e` + "combining accent") are different rune sequences but the same normalized text. There are four normalization forms defined by Unicode. The parser uses the *composed* form by default (the one that produces U+00E9 `é` as a single code point rather than `e` + combining acute). See the Normalization section below.
 - **Case-insensitive matching (Unicode)**: treating upper and lower case as equivalent across the full Unicode range. Not the same as `ToLower`: German `ß` pairs with `ss`, Turkish dotless-i behaves differently from dotted i, Greek final sigma pairs with regular sigma. The parser doesn't apply this by default. See the Workarounds section.
 
 ### Downstream algorithms (not parser concerns)
@@ -48,18 +62,18 @@ Input:  "🎸 = 👋🏽;"
 Stream: [🎸] [ ] [=] [ ] [👋🏽] [;]    (6 tokens)
 ```
 
-A token can be one rune (ASCII, composed-form Latin, CJK, most punctuation) or several runes that combine into one human-perceived character (skin-toned emoji, regional-indicator flags, ZWJ family emoji, Devanagari conjuncts, decomposed-form combinations). The leaves that compare against tokens (`Token`, `Literal`, `OneOf`, `NoneOf`, `AnyToken`) treat each token as one unit, so a grammar written against the `Rule` API doesn't have to know whether the user-typed character at this position is one code point or seven.
+A token can be one rune (ASCII, composed-form Latin, most punctuation) or several runes that combine into one human-perceived character (skin-toned emoji, ZWJ family emoji). The rules that compare against tokens (`Token`, `Literal`, `OneOf`, `NoneOf`, `AnyToken`) treat each token as one unit, so a grammar written against them doesn't have to know whether the user-typed character at this position is one code point or seven.
 
 The lexer runs ASCII fast paths inside `AdvanceUntilRuneIn` and `AdvanceWhileRuneIn` for the common case where a rule is scanning over a rune-only `TokenSet` and most of the input is plain ASCII. Those helpers fall through to the general per-token walk when the set has multi-rune entries, when the input contains non-ASCII text, or when the scan needs to inspect token content beyond a single-rune membership check. There's no separate lexer for the rune-level case. One token-aware lexer covers both shapes by switching helpers based on what the rule asked for.
 
-When a rule needs to look *inside* one token (inspect combining marks individually, walk the runes of a grapheme), it uses the `WithinToken(innerRule)` factory. `WithinToken` runs an internal sub-lexer that walks one rune per `Read()`, bounded to the runes of the outer token. The inner rule must consume every rune of the token. Outside `WithinToken`, every rule sees the same one-token-per-`Read()` stream.
+When a rule needs to look *inside* one token (inspect combining marks individually, walk the runes of a grapheme), it uses the `WithinToken(innerRule)` rule. `WithinToken` runs an internal sub-lexer that walks one rune per `Read()`, bounded to the runes of the outer token. The inner rule must consume every rune of the token. Outside `WithinToken`, every rule sees the same one-token-per-`Read()` stream.
 
 ## Position Tracking
 
-The lexer advances by UTF-16 char offset because that's the unit a .NET string uses. `ParseResult` and `Symbol.SourceRange` derive other position units from that char index when a caller asks for them:
+The lexer indexes by UTF-16 char offset because that's the unit a .NET string uses. `ParseResult` and `Symbol.SourceRange` derive other position units from that char index when a caller asks for them:
 
 - **Char index**: UTF-16 code unit offset into the original input (matches `string[i]`, `Substring`, and LSP).
-- **Token index**: text-element offset into the input, using the same `StringInfo` logic the lexer uses.
+- **Token index**: Grapheme offset into the input, using the same `StringInfo` logic the lexer uses.
 - **Line and column**: zero-based, LSP convention. Column is in chars.
 
 The char index is stored on the parse result. The token index is computed lazily from the original input, so the common char/line/column path doesn't pay for a counter it never reads.
@@ -117,7 +131,7 @@ var grammar = And(...).Compile(null);                          // no normalizati
 
 Why grammar-level instead of per-parse: the moment you write `Token("é")` you've committed to a specific Unicode form for that literal. If a later `Parse` ran the grammar against decomposed input under FormD, the lexer would hand back the two-rune `e + U+0301` form and your `Token("é")` rule (looking for the single-rune U+00E9) would silently never match. The form is part of the grammar's identity, so it lives on the grammar, not the call.
 
-`Compile(form)` validates every literal-bearing rule (`Token`, `Literal`, `LiteralIgnoreAsciiCase`) against the chosen form. A literal whose text isn't already in that form gets reported in a single `InvalidOperationException` listing every offender and the suggested normalized form, so the author fixes them all in one pass. Validation is skipped when the form is `null`.
+`Compile(form)` converts every literal-bearing rule's stored text (`Token`, `Literal`, `LiteralIgnoreAsciiCase`) into the chosen form in place, so a literal typed in a different form still matches the normalized input. A literal that can't be represented in the form (an unpaired surrogate that `string.Normalize` rejects, or a single-grapheme slot whose conversion produces more than one grapheme, like the ligature `ﬁ` becoming the two-grapheme "fi" under `FormKC`) gets reported in a single `InvalidOperationException` listing every offender, so the author fixes them all in one pass. The pass is skipped when the form is `null`.
 
 When you need the exact characters the user typed back out, read `Symbol.SourceText` (or just keep the string you passed to `Parse`). `SourceText` returns the verbatim original section a rule matched no matter which form the grammar compiled under, because it translates the match back to the original input. `tree.ToString()` isn't the verbatim accessor: it rebuilds text only from the nodes left in the tree, so it drops whatever the `Delete` rules matched (and `Token` / `Literal` default to `Delete`), and under a normalizing form the characters it does keep come back normalized. What `Compile(null)` buys you is that the tree's leaf text (and so `ToString()` on a grammar that preserves the content it matches) carries the original characters instead of the normalized ones. The tradeoff is that input in the "wrong" form will silently fail exact-match rules that are written for a specific composition.
 

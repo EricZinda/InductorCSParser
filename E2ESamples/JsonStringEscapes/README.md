@@ -26,7 +26,7 @@ already reflect the post-0000a grammar.
 ## Why this parser
 
 We went looking for real code that has to deal with **lone surrogates**, and
-JSON string escapes are where that problem actually bites people. A JSON
+JSON string escapes are where that problem actually hurts people. A JSON
 `\uXXXX` escape can name any UTF-16 code unit, including the surrogate halves
 `U+D800..U+DFFF`. A character outside the Basic Multilingual Plane is written
 as two escapes, a leading surrogate then a trailing one. When a `\uXXXX`

@@ -49,7 +49,7 @@ Every concept from the original [GettingStarted.md](https://github.com/EricZinda
 | `FlattenType::None/Delete/Flatten` | `FlattenType.Preserve/Delete/Flatten`, set via `.Flatten(FlattenType.Preserve)` (implicit when the rule is also `.As(...)`-named) |
 | `MySymbolID::SettingName`          | `.As(nameof(SettingName))`, optional. Also flips the rule's flatten policy to `Preserve` so `Tree.Find` can locate it |
 | `tree->FlattenInto(vector)`        | `tree.FlattenInto(list)` (same semantics)       |
-| `Compiler<T>::ProcessAst`          | plain function, or your own base class (Recipes)|
+| `Compiler<T>::ProcessAst`          | plain function, or your own base class          |
 | `staticErrorMessage`               | `.WithError("...")`                             |
 | `SetTraceFilter(...)`              | field on `ParseOptions` passed to `Parse`       |
 

@@ -2,7 +2,7 @@
 
 Most Unicode surprises live outside the "what is a token?" question the lexer answers, so the fix is usually caller-side preprocessing (clean the input before parsing) or grammar-design (pick the right `TokenSet`, add explicit tolerance rules). A few gotchas below are about how `OneOf` / `NoneOf` / `Literal` interact with multi-rune tokens, and those sections call that out directly.
 
-This doc lists the common gotchas, why they bite, and the idiomatic workaround for each. For lexer internals (how tokens are detected, how positions are tracked), see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md).
+This doc lists the common gotchas, what goes wrong, and the idiomatic workaround for each. For lexer internals (how tokens are detected, how positions are tracked), see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md).
 
 ## Identifier Matching
 
@@ -207,7 +207,7 @@ If you are doing emoji-sensitive parsing, be careful: variation selectors are pa
 
 ## CRLF Line Endings
 
-Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 rule GB3), so the lexer hands the parser one two-char token whenever it sees a Windows line ending. This bites any line-based grammar that tries to match or stop on a bare `\n`:
+Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 rule GB3), so the lexer hands the parser one two-char token whenever it sees a Windows line ending. This breaks any line-based grammar that tries to match or stop on a bare `\n`:
 
 - `Token('\n')` matches a one-element token whose content is exactly `'\n'`. The CRLF token has content `"\r\n"`, so `Token('\n')` does *not* match it.
 - `OneOf(TokenSet.Runes("\n"))` matches when the next token is one of the scalars in the set. The CRLF token has two runes, and `TokenSet.Runes("\n")` is rune-only, so the cluster isn't in the set. To register the CRLF cluster as one multi-rune entry, use `TokenSet.Graphemes("\r\n")`; a "any line terminator" set then unions CR, LF, VT, FF, NEL, LS, PS, *and* the CRLF cluster, which is what `EndOfLine()` is for.

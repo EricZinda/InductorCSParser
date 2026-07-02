@@ -46,13 +46,11 @@ curated_docs=(
     Primer4.md
     tutorial-peek.md
     InductorParserReference.md
-    Recipes.md
     InductorParserDesignDecisions.md
     CodeArchitecture.md
     ErrorArchitecture.md
     TestArchitecture.md
     Terminology.md
-    UnicodeModel.md
     UnicodeGotchas.md
     UnicodeInternalsArchitecture.md
     MappingPositionsAfterNormalization.md

@@ -669,7 +669,7 @@ public class TokenSetTests
     public void Contains_hits_exact_low_and_high_endpoints()
     {
         // Endpoints are inclusive on both sides. Lock it in so a future
-        // off-by-one in the < vs <= choice in Contains breaks loudly.
+        // off-by-one in the < vs <= choice in Contains fails this test.
         var set = TokenSet.Range(10, 20);
 
         Assert.That(set.ContainsRune(9), Is.False);

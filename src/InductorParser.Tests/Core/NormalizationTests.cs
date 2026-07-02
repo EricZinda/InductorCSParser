@@ -354,10 +354,11 @@ public class NormalizationTests
     }
 
     // Compile-time validation pass tests. The form chosen at Compile is
-    // checked against every literal-bearing rule's expected text. A rule
+    // applied to every literal-bearing rule's expected text. A rule
     // whose text isn't already in that form would silently never match
     // (the lexer normalizes input, so the literal would be looking for
-    // bytes the lexer can't produce). Compile catches that at startup.
+    // bytes the lexer can't produce). Compile rewrites the stored text
+    // into the form so the rule matches what the lexer produces.
 
     [Test]
     public void Compile_auto_converts_literal_to_FormC()
@@ -366,7 +367,8 @@ public class NormalizationTests
         // acute, two runes that render as one user-visible character).
         // Default Compile uses FormC, which composes the two runes into
         // U+00E9. The lexer would never produce a two-rune "e+acute" for
-        // this rule to match. Compile catches that at grammar-build time.
+        // this rule to match. Compile rewrites the literal to U+00E9 at
+        // grammar-build time.
         var rule = Token(CafeDecomposed[3..]);  // a one-grapheme decomposed form
         Assert.DoesNotThrow(() => rule.Compile());
         Assert.That(rule.Parse(CafePrecomposed[3..]).Success, Is.True);
@@ -1025,9 +1027,8 @@ public class NormalizationTests
         // uses non-canonical mark order would silently never match
         // any input under FormC, because every input gets canonicalized
         // before the lexer sees it. The Compile validation pass
-        // catches this and throws so the author fixes the literal at
-        // grammar-build time instead of debugging silent match
-        // failures.
+        // rewrites the literal into canonical order so the rule
+        // matches both spellings of the input.
         var rule = Token(UnicodeExamples.VietnameseACircumflexDotBelowReorderedText);
 
         // Compile auto-converts the non-canonical mark order to canonical order.
@@ -1061,7 +1062,8 @@ public class NormalizationTests
         // decomposed-jamo form would silently never match any input
         // under FormC, because every input gets canonicalized
         // (composed back to U+D55C) before the lexer sees it. The
-        // Compile validation pass catches this.
+        // Compile validation pass rewrites the literal to the
+        // precomposed form.
         var rule = Token(UnicodeExamples.HangulHanDecomposedText);
 
         // Compile auto-converts the decomposed jamo to its precomposed form.
@@ -1077,8 +1079,7 @@ public class NormalizationTests
         // CAPITAL LETTER A WITH RING ABOVE. NFC rewrites the Angstrom
         // form to U+00C5 before the lexer sees the input. So a grammar
         // with Token("Å") under FormC would silently never match.
-        // The new compile-time validation pass catches this and tells
-        // the author to use U+00C5 instead.
+        // The Compile validation pass rewrites the literal to U+00C5.
         var rule = Token(UnicodeExamples.AngstromGrapheme);
         // Compile auto-converts U+212B to U+00C5 at Compile.
         Assert.DoesNotThrow(() => rule.Compile());
@@ -1097,11 +1098,10 @@ public class NormalizationTests
     [Test]
     public void Compile_auto_converts_Angstrom_singleton_under_FormD()
     {
-        // Under FormD the Angstrom decomposes to A + combining ring,
-        // and the literal text U+212B matches its own FormD only by
-        // accident. Actually NFD of U+212B is "Å" (A + ring),
-        // so the literal does NOT match its own FormD. Lock in the
-        // Compile-time error here.
+        // Under FormD the Angstrom singleton decomposes to A +
+        // combining ring, so the literal text U+212B doesn't match
+        // its own FormD. The Compile validation pass rewrites the
+        // literal to the decomposed pair.
         var rule = Token(UnicodeExamples.AngstromGrapheme);
         // Compile auto-converts U+212B to its NFD form ("A" + combining ring).
         Assert.DoesNotThrow(() => rule.Compile(NormalizationForm.FormD));
@@ -1202,8 +1202,8 @@ public class NormalizationTests
         // FormKC, NFKC also applies compatibility decompositions,
         // so U+2102 normalizes to U+0043 plain C. A grammar literal
         // in the source character would silently never match. The
-        // Compile validation pass catches this exactly the same way
-        // it catches canonical singletons under FormC.
+        // Compile validation pass rewrites it exactly the same way
+        // it rewrites canonical singletons under FormC.
         var rule = Token(UnicodeExamples.DoubleStruckCGrapheme);
         // Compile auto-converts U+2102 to U+0043 (the NFKC conversion) at Compile.
         Assert.DoesNotThrow(() => rule.Compile(NormalizationForm.FormKC));

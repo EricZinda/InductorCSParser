@@ -381,7 +381,7 @@ public class ScanUntilRuleTests
         // Tree shape matters because the performance win of this
         // primitive is "one Symbol per run, not one per rune." Lock
         // in the shape so a future change that accidentally splits
-        // the leaf back into per-rune pieces fails loudly. Tolerant
+        // the leaf back into per-rune pieces fails this test. Tolerant
         // variant so the no-pipe input still parses; the leaf shape
         // is the same under either eofIsTerminator setting.
         var result = StopOnPipeOrEof().Parse("hello");

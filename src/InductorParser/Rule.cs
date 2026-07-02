@@ -458,10 +458,12 @@ public abstract class Rule
     /// policy explicitly via .Flatten(...) / .Flatten() / .Delete(), .As throws
     /// rather than silently overriding that choice.
     /// <para>
-    /// The value must land in the custom range (&gt;= CustomRangeStart); a lower
-    /// value throws. The ranges below it are auto-assigned and would collide 
-    ///  if a rule reused one: 0..0x10FFFF go to Unicode rune
-    /// leaves (e.g. Token('a')), and 0x110000..0x1FFFFF go to non-leaf rules (e.g. And, Or, OneOrMore, Eof, ...).
+    /// The value must land in the custom range (&gt;= CustomRangeStart). A lower
+    /// value throws. The ranges below it would collide with auto-assigned ids
+    /// if a rule reused one: 0..0x10FFFF go to Unicode rune
+    /// leaves (e.g. Token('a')), and 0x110000..0x1FFFFF is reserved for future
+    /// built-in ids and is unused today (anonymous rules get custom-range ids
+    /// at Compile).
     /// </para>
     /// </remarks>
     public virtual Rule As(SymbolId id)
@@ -1165,7 +1167,7 @@ public abstract class Rule
             default:
                 // The four cases above are the only outcomes that abort a parse,
                 // and ParseBudgetExceeded is only ever thrown with one of them, so
-                // this branch is unreachable. Fail loudly if a new ParseOutcome is
+                // this branch is unreachable. Throw if a new ParseOutcome is
                 // ever wired into the abort path without a case here, rather than
                 // returning a vague string that hides the omission.
                 throw Invariant.Fail(

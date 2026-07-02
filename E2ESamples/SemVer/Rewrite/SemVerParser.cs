@@ -6,7 +6,7 @@
 //   AST               four capture groups    walkable parse tree
 //
 // Major/minor/patch leading-zero checks run in the grammar via the
-// reject-first pattern (see SemVerGrammar.cs and docs/Recipes.md), so
+// reject-first pattern (see SemVerGrammar.cs), so
 // only the Int32 range check stays here for those positions. The
 // numeric pre-release ident leading-zero check still runs as a
 // post-parse check because the pre-release ident rule mixes numeric
