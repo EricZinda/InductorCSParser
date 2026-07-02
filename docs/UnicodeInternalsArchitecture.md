@@ -73,7 +73,7 @@ When a rule needs to look *inside* one token (inspect combining marks individual
 The lexer indexes by UTF-16 char offset because that's the unit a .NET string uses. `ParseResult` and `Symbol.SourceRange` derive other position units from that char index when a caller asks for them:
 
 - **Char index**: UTF-16 code unit offset into the original input (matches `string[i]`, `Substring`, and LSP).
-- **Token index**: text-element offset into the input, using the same `StringInfo` logic the lexer uses.
+- **Token index**: Grapheme offset into the input, using the same `StringInfo` logic the lexer uses.
 - **Line and column**: zero-based, LSP convention. Column is in chars.
 
 The char index is stored on the parse result. The token index is computed lazily from the original input, so the common char/line/column path doesn't pay for a counter it never reads.
