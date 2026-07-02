@@ -16,7 +16,6 @@ on:
       - "src/InductorParser/**"
       - "docs/**"
       - "readme.md"
-      - "docfx/**"
       - "build-docs.sh"
       - ".config/dotnet-tools.json"
       - ".github/workflows/docs.yml"
@@ -63,7 +62,7 @@ jobs:
       - name: Upload the site artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docfx/_site
+          path: docs/docfx/_site
 
   deploy:
     needs: build

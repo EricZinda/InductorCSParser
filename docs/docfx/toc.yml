@@ -1,5 +1,5 @@
 # Top navigation for the Inductor Parser docs site.
-# The build copies the curated docs/ markdown into docfx/docs/ (see
+# The build copies the curated docs/ markdown into docs/docfx/docs/ (see
 # build-docs.sh), so every href below is a real file at build time and
 # DocFX rewrites the .md links to .html in the output. The capitalized
 # Primer3/Primer4 names match the actual filenames on disk.
@@ -7,13 +7,15 @@
   href: index.md
 - name: Guides
   items:
-    - name: Primer 1 - Getting Started
+    - name: Primer - Building a Grammar
       href: docs/primer1.md
-    - name: Primer 2 - Walking the Tree
+    - name: Primer - Parsing and Processing
       href: docs/primer2.md
-    - name: Primer 3 - Unicode
+    - name: Primer - Parsing Errors
+      href: docs/primerFailure.md
+    - name: Primer - Unicode
       href: docs/Primer3.md
-    - name: Primer 4 - Security
+    - name: Primer - Security
       href: docs/Primer4.md
     - name: Tutorial - Peek
       href: docs/tutorial-peek.md
