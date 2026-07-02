@@ -11,10 +11,10 @@ namespace InductorParser.Tests.DocExamples;
 [TestFixture]
 public class RecipesExamples
 {
-    // "Pass-Through Text: Matching 'All Text'", the markdown-ish
-    // grammar. Doc claim: parsing "Hello 🎸 **world** 你好 `code` done"
-    // produces a tree where the guitar emoji is in the first text node,
-    // the CJK in another, and ToString() reassembles each node losslessly.
+    // A markdown-ish pass-through text grammar. Parsing
+    // "Hello 🎸 **world** 你好 `code` done" produces a tree where the
+    // guitar emoji is in the first text node, the CJK in another, and
+    // ToString() reassembles each node losslessly.
     [Test]
     public void Pass_through_text_grammar_handles_emoji_and_cjk()
     {
@@ -43,9 +43,9 @@ public class RecipesExamples
         Assert.That(result.Success, Is.True, result.ErrorMessage);
 
         // The guitar emoji belongs to a text node before the bold, and
-        // the CJK belongs to a text node between bold and code. The doc
-        // claims "ToString() reassembles each node losslessly," meaning
-        // each text/bold/code wrapper carries its content back as text.
+        // the CJK belongs to a text node between bold and code.
+        // ToString() reassembles each node losslessly, meaning each
+        // text/bold/code Symbol carries its content back as text.
         var texts = result.Tree!.FindAll(text).Select(t => t.ToString()).ToList();
         Assert.That(texts.Any(t => t.Contains(UnicodeExamples.GuitarGrapheme)), Is.True,
             "guitar emoji lives in some text node");
@@ -61,9 +61,9 @@ public class RecipesExamples
         Assert.That(result.Tree!.FindAll(code).Single().ToString(), Is.EqualTo("code"));
     }
 
-    // "Stopping at a Multi-Character Terminator", block comment grammar.
-    // Doc claim: ZeroOrMore(And(Not(stop), AnyToken())) followed by stop
-    // matches a block comment without prematurely consuming the close marker.
+    // Stopping at a multi-character terminator:
+    // ZeroOrMore(And(Not(stop), AnyToken())) followed by stop matches
+    // a block comment without prematurely consuming the close marker.
     [Test]
     public void Block_comment_grammar_stops_at_close_marker()
     {
@@ -78,13 +78,13 @@ public class RecipesExamples
 
         // The comment delimiters Token('/'), Token('*') default to
         // FlattenType.Delete, so result.Tree.ToString() carries only
-        // the body text. The success of the parse plus consumption of
-        // the trailing close marker is the doc's claim.
+        // the body text. The parse succeeds and consumes the trailing
+        // close marker.
         Assert.That(result.Tree!.ToString(), Is.EqualTo(" hello world "));
     }
 
-    // "Matching an Identifier": Identifier accepts foo, café,
-    // καλημέρα, Devanagari, Thai under the lexer.
+    // Identifier() accepts foo, café, καλημέρα, Devanagari, and Thai
+    // under the lexer.
     [Test]
     public void Identifier_matches_unicode_scripts()
     {
@@ -102,9 +102,9 @@ public class RecipesExamples
             "strict UAX #31 doesn't include underscore in XID_Start");
     }
 
-    // "Matching an Identifier" / "programming-language profile that also
-    // allows leading underscore": Identifier(extraStartRunes:
-    // TokenSet.Runes("_")) accepts _foo.
+    // A programming-language profile that also allows leading
+    // underscore: Identifier(extraStartRunes: TokenSet.Runes("_"))
+    // accepts _foo.
     [Test]
     public void Identifier_with_underscore_extra_start_rune()
     {
@@ -113,7 +113,7 @@ public class RecipesExamples
         Assert.That(identifier.Parse("foo_bar").Success, Is.True);
     }
 
-    // "Matching an Identifier" / "ECMAScript-style": adds _ and $.
+    // An ECMAScript-style identifier profile: adds _ and $.
     [Test]
     public void Identifier_with_dollar_sign_for_ecmascript()
     {
@@ -126,10 +126,9 @@ public class RecipesExamples
         Assert.That(identifier.Parse("_$").Success, Is.True);
     }
 
-    // "Matching an Identifier" / "NFKC equivalence": fullwidth ｆｏｏ
-    // matches the same identifier as plain foo when normalization is
-    // FormKC. Without FormKC, fullwidth and plain are different
-    // identifiers.
+    // NFKC equivalence: fullwidth ｆｏｏ matches the same identifier as
+    // plain foo when normalization is FormKC. Without FormKC, fullwidth
+    // and plain are different identifiers.
     [Test]
     public void Identifier_with_NFKC_treats_fullwidth_as_ascii()
     {
@@ -147,9 +146,9 @@ public class RecipesExamples
         Assert.That(result.Success, Is.True);
     }
 
-    // "Organizing a Large Grammar as a Class", the NameValueGrammar
+    // Organizing a large grammar as a class: the NameValueGrammar
     // example. Class fields with .As(nameof(...)) and .Compile() at type
-    // init time. Doc claim: callers get the value via
+    // init time. Callers get the value via
     //   var name = result.Tree.Find(NameValueGrammar.SettingName).ToString();
     public static class NameValueGrammar
     {
@@ -192,7 +191,7 @@ public class RecipesExamples
         Assert.That(value, Is.EqualTo("hard"));
     }
 
-    // "A Reusable Compiler Base Class", the Compiler<TResult> abstract
+    // A reusable compiler base class: the Compiler<TResult> abstract
     // base class and the NameValueCompiler subclass that uses it.
     public abstract class Compiler<TResult>
     {
@@ -253,14 +252,14 @@ public class RecipesExamples
         Assert.That(error, Does.StartWith("Line "));
     }
 
-    // "Numbers with no leading zeros": the natural Or(Token('0'), ...)
-    // translation positions the error one column past the actual
-    // problem on bad input like "01.2.3". The Or commits to Token('0'),
-    // the outer And then fails on Token('.') at offset 1.
+    // The natural Or(Token('0'), ...) translation of the
+    // no-leading-zero rule positions the error one column past the
+    // actual problem on bad input like "01.2.3". The Or commits to
+    // Token('0'), the outer And then fails on Token('.') at offset 1.
     //
-    // The test verifies this ordered-choice trap so the recipe's claim
-    // ("the error message points one column past the actual problem")
-    // doesn't drift if the parser ever changes default messages.
+    // The test verifies this ordered-choice trap so the reported
+    // position doesn't drift if the parser ever changes default
+    // messages.
     [Test]
     public void No_leading_zero_natural_translation_positions_error_one_column_past_the_problem()
     {
@@ -284,7 +283,7 @@ public class RecipesExamples
         Assert.That(result.ErrorCharColumn, Is.EqualTo(1));
     }
 
-    // "Numbers with no leading zeros": the lookahead-inside-Or pattern
+    // The lookahead-inside-Or pattern for no-leading-zero numbers
     // (only accept '0' if not followed by another digit). Under
     // depth-primary ranking, the outer Or's named WithError anchors at
     // the deepest position its branches reached (column 1, the digit
@@ -316,13 +315,12 @@ public class RecipesExamples
             "the Or's named WithError wins the named-beats-mechanical tie at that depth");
     }
 
-    // "Numbers with no leading zeros": the reject-first pattern puts
+    // The reject-first pattern for no-leading-zero numbers puts
     // the Not before any consumption, so the Not's inner succeeds on
     // bad input (consumed "01" internally) and no failures get
     // recorded inside it. The outer And's WithError on the Not fires
-    // at the rule's start position.
-    //
-    // This is the working approach the recipe recommends.
+    // at the rule's start position. This is the approach that gets
+    // the position right.
     [Test]
     public void No_leading_zero_reject_first_pattern_positions_error_at_the_bad_digit()
     {
@@ -361,15 +359,13 @@ public class RecipesExamples
         Assert.That(grammar.Parse("10.20.30").Success, Is.True);
     }
 
-    // "Numbers with no leading zeros" / "validate after parsing": accept any
-    // digit run in the grammar, then check the leading zero in the consumer
-    // and use the node's source position to build a "line X, column Y"
-    // message. The recipe walks to the named node and reads its position.
+    // The validate-after-parsing approach to no-leading-zero numbers:
+    // accept any digit run in the grammar, then check the leading zero
+    // in the consumer by walking to the named node and using its source
+    // position to build a "line X, column Y" message.
     //
-    // Pins the API the recipe uses to get a node's position: Symbol.SourceRange
-    // (public, standalone, no ParseResult needed). The earlier doc text
-    // described a result.SourceRangeOf(node) call the library no longer has
-    // (it moved onto Symbol once every Symbol carried its ParseContext).
+    // Locks in the API for getting a node's position: Symbol.SourceRange
+    // (public, standalone, no ParseResult needed).
     [Test]
     public void No_leading_zero_validate_after_parsing_uses_node_SourceRange()
     {
@@ -382,7 +378,7 @@ public class RecipesExamples
         var text = node.ToString();
         Assert.That(text, Is.EqualTo("01"));
 
-        // The recipe's leading-zero branch: text.Length > 1 && text[0] == '0'.
+        // The leading-zero check: text.Length > 1 && text[0] == '0'.
         Assert.That(text.Length > 1 && text[0] == '0', Is.True);
 
         // The position the error message points at comes straight off the
@@ -391,7 +387,7 @@ public class RecipesExamples
         Assert.That(range, Is.Not.Null);
         Assert.That(range!.Value.Start.Line, Is.EqualTo(0));
         Assert.That(range.Value.Start.CharColumn, Is.EqualTo(0));
-        // The recipe formats these one-based: "line 1, column 1".
+        // The message formats these one-based: "line 1, column 1".
         string message =
             $"line {range.Value.Start.Line + 1}, column {range.Value.Start.CharColumn + 1}: " +
             $"Major version '{text}' must not have leading zeros";

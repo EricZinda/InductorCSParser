@@ -101,7 +101,7 @@ no `TokenSet` for "a number between 0 and 23". So `CronParser` walks
 the parse tree afterward, pulls each numeric node, and checks it,
 reading `Symbol.SourceRange` to point the error at the right token.
 That's the same "validate after parsing" pattern the SemVer sample uses
-for its Int32 range check, and `docs/Recipes.md` already documents it.
+for its Int32 range check.
 No surprise there, and it was smooth.
 
 ## Where the friction was

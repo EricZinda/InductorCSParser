@@ -5,8 +5,7 @@ This doc explains how we map a position in a normalized string back to a positio
 If you just want to use normalization in a grammar, start with these:
 
 - [Primer3.md](Primer3.md) walks through what normalization is and how to pick a form.
-- [UnicodeModel.md, Step 1: Text Normalization](UnicodeModel.md#step-1-text-normalization) is the conceptual model the parser follows.
-- [UnicodeInternalsArchitecture.md, Normalization](UnicodeInternalsArchitecture.md#normalization) covers the per-grammar policy and validation.
+- [UnicodeInternalsArchitecture.md, Normalization](UnicodeInternalsArchitecture.md#normalization) is the conceptual model the parser follows: the per-grammar form and how Compile converts rule literals to it.
 - [Primer4.md](Primer4.md) shows security uses of FormKC.
 - [UnicodeGotchas.md](UnicodeGotchas.md) lists what normalization can't fix.
 

@@ -23,10 +23,6 @@
   items:
     - name: Inductor Parser Reference
       href: docs/InductorParserReference.md
-    - name: Recipes
-      href: docs/Recipes.md
-    - name: Unicode Model
-      href: docs/UnicodeModel.md
     - name: Unicode Gotchas
       href: docs/UnicodeGotchas.md
     - name: Unicode Internals

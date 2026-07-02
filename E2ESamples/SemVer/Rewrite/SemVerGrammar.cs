@@ -8,10 +8,9 @@
 //   <buildIdent>      ::= [0-9A-Za-z-]+
 //
 // The major/minor/patch positions express the no-leading-zero rule
-// directly in the grammar using the reject-first pattern from
-// docs/Recipes.md: a Not(...) probe in front of any consumption
-// rejects the bad "0[digit]" prefix and positions the error at the
-// start of the bad token. The numeric pre-release ident still goes
+// directly in the grammar using the reject-first pattern: a Not(...)
+// probe in front of any consumption rejects the bad "0[digit]" prefix
+// and positions the error at the start of the bad token. The numeric pre-release ident still goes
 // through post-parse validation in SemVerParser.cs because its rule
 // mixes numeric and alphanumeric shapes and the per-field message
 // is easier to express that way.
