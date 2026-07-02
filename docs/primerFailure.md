@@ -1,6 +1,6 @@
 # Inductor Parser Primer: Parsing Errors
 
-The other primers assume the input matches your grammar. This one is about the other case: what the parser tells you when the input doesn't match, how to attach your own messages to the rules that fail, and how to reshape or localize the default text. The examples reuse the INI grammar from [Primer 2: Parsing and Processing](primer2.md).
+The other primers assume the input matches your grammar. This one is about the other case: what the parser tells you when the input doesn't match, how to attach your own messages to the rules that fail, and how to reshape or localize the default text. The examples reuse the INI grammar from [Primer: Parsing and Processing](primer2.md).
 
 `Parse()` returns a `ParseResult`, and when a parse fails it tells you where the problem is:
 
@@ -16,7 +16,7 @@ That input tried to use `port oops` as a key/value pair without an `=` sign. The
 Unexpected 'o' at line 2, column 6.
 ```
 
-The default message points at the error with a one-based line and column, counting the column in graphemes so it lines up with the characters a person sees. When a tool is consuming the position instead of a person, you can read it off the result object. `result.ErrorLine` and `result.ErrorCharColumn` are zero-based (the Language Server Protocol convention), with the column counted in chars. Those are the conventions an editor or LSP client expects. The line count uses every terminator the parser treats as ending a line (the full Unicode set, not just `\n`, `\r\n` or lone `\r`), so it matches an editor on ordinary input and diverges only on the rarer terminators. Several other position units are available, covered in the Unicode section of [Primer 2: Parsing and Processing](primer2.md).
+The default message points at the error with a one-based line and column, counting the column in graphemes so it lines up with the characters a person sees. When a tool is consuming the position instead of a person, you can read it off the result object. `result.ErrorLine` and `result.ErrorCharColumn` are zero-based (the Language Server Protocol convention), with the column counted in chars. Those are the conventions an editor or LSP client expects. The line count uses every terminator the parser treats as ending a line (the full Unicode set, not just `\n`, `\r\n` or lone `\r`), so it matches an editor on ordinary input and diverges only on the rarer terminators. Several other position units are available, covered in the Unicode section of [Primer: Parsing and Processing](primer2.md).
 
 The default is a generic error that only says something went wrong. To report a more grammar-specific error, attach `.WithError(...)` to the rule that's most likely to be where the user went wrong:
 

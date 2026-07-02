@@ -11,11 +11,11 @@ I ported this while creating a new project in Unity and during a period where I'
 
 If you just want to learn how to use it, follow the primers:
 
-- [Primer 1: Building a Grammar](docs/primer1.md)
-- [Primer 2: Parsing and Processing](docs/primer2.md)
+- [Primer: Building a Grammar](docs/primer1.md)
+- [Primer: Parsing and Processing](docs/primer2.md)
 - [Primer: Parsing Errors](docs/primerFailure.md)
-- [Primer 3: Unicode in the Inductor Parser](docs/Primer3.md)
-- [Primer 4: Security-Related Concerns](docs/Primer4.md)
+- [Primer: Unicode in the Inductor Parser](docs/Primer3.md)
+- [Primer: Security-Related Concerns](docs/Primer4.md)
 - [Tutorial: Peek](docs/tutorial-peek.md)
 
 For more background, read on.
@@ -60,7 +60,7 @@ var lineWithoutHede = And(
 ```
 
 
-[Primer 1: Building a Grammar](docs/primer1.md) walks through how to build rules in more detail.
+[Primer: Building a Grammar](docs/primer1.md) walks through how to build rules in more detail.
 
 ## Designed for World Languages
 If you write grammars using the Inductor Parser, you get a foundation that supports Unicode from the start:
@@ -154,7 +154,7 @@ var range = result.Tree!.Find(quotedString)!.SourceRange!.Value;
 
 Use whichever unit your code needs. Chars for `string.Substring` or an editor diagnostic. Tokens for a `^^^` underline a human will look at and recognize as covering one thing.
 
-[Primer 3: Unicode in the Inductor Parser](docs/Primer3.md) walks through how Unicode works in rules in more detail.
+[Primer: Unicode in the Inductor Parser](docs/Primer3.md) walks through how Unicode works in rules in more detail.
 
 ## Safer Against Pathological Input
 
@@ -182,7 +182,7 @@ Backtracking isn't the only way to hang. A 100 MB input file, a grammar that rec
 - `MaxDepth` (default 1000) caps the recursion depth. 
 - `Timeout` (default off) caps wall-clock time spent (done without a thread to support WebGL).
 
-See [Primer 4: Security-Related Concerns](docs/Primer4.md) for more details on security related features and how the parser is designed to combat them.
+See [Primer: Security-Related Concerns](docs/Primer4.md) for more details on security related features and how the parser is designed to combat them.
 
 
 ## Able to run on WebGL and .NET Standard 2.1 (and later) using IL2CPP 

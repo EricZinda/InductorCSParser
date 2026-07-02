@@ -8,11 +8,11 @@ The library implements a [Parsing Expression Grammar (PEG)](https://en.wikipedia
 
 Primers:
 
-- [Primer 1: Building a Grammar](primer1.md): build a grammar that consumes everything up to a stop sequence, parse some input, look at the tree.
-- [Primer 2: Parsing and Processing](primer2.md): a tiny INI-style config grammar with typed values, a tree walker, semantic validation, and Unicode-aware source positions.
+- [Primer: Building a Grammar](primer1.md): build a grammar that consumes everything up to a stop sequence, parse some input, look at the tree.
+- [Primer: Parsing and Processing](primer2.md): a tiny INI-style config grammar with typed values, a tree walker, semantic validation, and Unicode-aware source positions.
 - [Primer: Parsing Errors](primerFailure.md): what the parser reports when input doesn't match: failure positions, custom `.WithError` messages, and reshaping or localizing the default text.
-- [Primer 3: Unicode in the Inductor Parser](Primer3.md): how the parser handles Unicode normalization, error positions, ill-formed input, and unexpected characters.
-- [Primer 4: Security-Related Concerns](Primer4.md): parser defenses against pathological input (ReDoS, recursion limits) and Unicode-based attacks (Trojan Source, lookalikes, homoglyphs, invisible characters).
+- [Primer: Unicode in the Inductor Parser](Primer3.md): how the parser handles Unicode normalization, error positions, ill-formed input, and unexpected characters.
+- [Primer: Security-Related Concerns](Primer4.md): parser defenses against pathological input (ReDoS, recursion limits) and Unicode-based attacks (Trojan Source, lookalikes, homoglyphs, invisible characters).
 - [Tutorial: Peek](tutorial-peek.md): a password-validation regex translated into the parser, using `Peek` for non-consuming lookahead.
 - [Recipes](Recipes.md): small patterns that come up often when writing grammars. Each recipe shows the natural-but-wrong translation and walks through what actually works.
 

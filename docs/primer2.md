@@ -1,6 +1,6 @@
-# Inductor Parser Primer 2: Parsing and Processing
+# Inductor Parser Primer: Parsing and Processing
 
-Primer 1 built a grammar that succeeds or fails and that's it. But most of the time, parsing isn't the goal. You parse so you can do something with what you parsed: look settings up by name, check that the right things are there, point at the spot where it went wrong. Once the parser hands you back a tree, all of that's just walking the tree.
+The first primer built a grammar that succeeds or fails and that's it. But most of the time, parsing isn't the goal. You parse so you can do something with what you parsed: look settings up by name, check that the right things are there, point at the spot where it went wrong. Once the parser hands you back a tree, all of that's just walking the tree.
 
 Let's parse a tiny INI-style config file. Something like this:
 
@@ -97,7 +97,7 @@ config
         └── integer ── "8080"
 ```
 
-The `'['`, `']'`, `'='`, the surrounding quotes of a quotedString, and the line terminator are all gone after flattening (their default flatten policy is Delete, the flatten process is covered in [Primer 1](primer1.md)). The `Optional(InlineWhitespace())` around `=` are gone too. What's left is the structure we care about: each `value` carries one named child indicating which alternative matched.
+The `'['`, `']'`, `'='`, the surrounding quotes of a quotedString, and the line terminator are all gone after flattening (their default flatten policy is Delete, the flatten process is covered in [Primer: Building a Grammar](primer1.md)). The `Optional(InlineWhitespace())` around `=` are gone too. What's left is the structure we care about: each `value` carries one named child indicating which alternative matched.
 
 The INI grammar doesn't nest sections. The `[server]` header and the keys that belong to it are siblings under the root. To find "the keys belonging to section X" we just look for siblings after the section that are keyValues.
 
