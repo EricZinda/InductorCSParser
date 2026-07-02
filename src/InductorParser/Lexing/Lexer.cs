@@ -29,12 +29,11 @@ namespace InductorParser.Lexing;
 ///
 /// One caveat: that tolerance is the unnormalized Compile (Compile(null)) story.
 /// A normalizing Compile (FormC/FormD/FormKC/FormKD) runs string.Normalize over
-/// the whole input before the lexer ever sees it, and string.Normalize throws
-/// ArgumentException ("String contains invalid Unicode code points") on any lone
-/// surrogate, bare or fused with a following combining mark. So under a
-/// normalizing grammar malformed input doesn't reach the lexer at all, it throws
-/// out of Parse first. A grammar that has to accept malformed UTF-16 stays on
-/// Compile(null).
+/// the whole input before the lexer ever sees it, and string.Normalize rejects
+/// any lone surrogate, bare or fused with a following combining mark. Parse
+/// catches that and returns a MalformedInput ParseResult, so under a normalizing
+/// grammar malformed input never reaches the lexer at all. A grammar that has to
+/// accept malformed UTF-16 stays on Compile(null).
 ///
 /// If you
 /// want to detect or reject malformed input, Compile with no normalization and 

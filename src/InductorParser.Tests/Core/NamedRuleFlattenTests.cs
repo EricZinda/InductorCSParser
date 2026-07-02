@@ -22,8 +22,8 @@ namespace InductorParser.Tests;
 //   * .As on a rule whose flatten policy was explicitly set to a
 //     non-Preserve value, OR .Flatten(non-Preserve) on a rule that's
 //     already been .As'd, throws InvalidOperationException. The two
-//     requests contradict each other and the safe answer is to fail
-//     loudly rather than pick a winner.
+//     requests contradict each other and the safe answer is to throw
+//     rather than pick a winner.
 [TestFixture]
 public class NamedRuleFlattenTests
 {

@@ -1165,7 +1165,7 @@ public abstract class Rule
             default:
                 // The four cases above are the only outcomes that abort a parse,
                 // and ParseBudgetExceeded is only ever thrown with one of them, so
-                // this branch is unreachable. Fail loudly if a new ParseOutcome is
+                // this branch is unreachable. Throw if a new ParseOutcome is
                 // ever wired into the abort path without a case here, rather than
                 // returning a vague string that hides the omission.
                 throw Invariant.Fail(

@@ -128,11 +128,11 @@ public class UnicodeAsAndWithErrorTests
         //
         // The expected values are hardcoded rather than recomputed via
         // HashNameToCustomRange: recomputing would pass even if the hash
-        // silently changed, because both sides would move together. A
-        // hardcoded number fails loudly and forces a conscious decision
-        // about breaking persisted ids, for instance if someone reworked
-        // the per-char loop into a per-rune one, which would shift every
-        // supplementary-plane name's id.
+        // silently changed, because both sides would move together. With
+        // a hardcoded number, a hash change fails the assertion and forces
+        // a conscious decision about breaking persisted ids, for
+        // instance if someone reworked the per-char loop into a per-rune
+        // one, which would shift every supplementary-plane name's id.
         //
         // This test doesn't run the UnicodeStringCatalog like the
         // round-trip tests above. Those assert one uniform property, so
@@ -158,7 +158,7 @@ public class UnicodeAsAndWithErrorTests
         // matters most: string.EnumerateRunes turns every lone surrogate
         // into U+FFFD, so a hash reworked to walk runes wouldn't just
         // shift this id, it would give every distinct lone surrogate the
-        // same one. The hardcoded value fails loudly if that happens.
+        // same one. The hardcoded value turns that into a test failure.
         var loneSurrogate = OneOrMore(OneOf(TokenSet.Letters)).As(UnicodeExamples.HighSurrogateMinText);
         loneSurrogate.Compile();
         Assert.That(loneSurrogate.Id.Value, Is.EqualTo(966238277), "lone high surrogate name");

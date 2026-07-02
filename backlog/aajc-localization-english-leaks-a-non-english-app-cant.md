@@ -13,7 +13,7 @@ This matters because `NameOf`'s own doc comment recommends it "for error-message
 Options to consider:
 - A hook on `ParseOptions` (or the grammar) that maps a `SymbolId` or rule kind to a caller-supplied label, consulted before the class-name fallback.
 - Or make the class-name fallback opt-in and have `DisplayName` / `NameOf` return null for unnamed structural rules, so the app decides what to render instead of getting English silently.
-- At minimum, document loudly that anything you surface to users has to be `.As(...)`-named, and that `DisplayName` is otherwise an English debug label.
+- At minimum, document prominently that anything you surface to users has to be `.As(...)`-named, and that `DisplayName` is otherwise an English debug label.
 
 ## 2. "Parse aborted." has no template
 
