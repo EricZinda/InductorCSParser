@@ -125,7 +125,7 @@ The property that matters: **depth ranks first.** A named failure doesn't beat a
 
 ## Why depth ranks first
 
-The deepest failure is the parser's honest answer to "how far did this input get before it stopped being valid?" That position is the most specific true thing the parser can say. A `.WithError` is the author improving the wording of the report. It shouldn't also drag the caret to a shallower spot, because a shallower spot is, by construction, somewhere the parser was still doing fine.
+The deepest failure is the parser's honest answer to "how far did this input get before it stopped being valid?" That position is the most specific true thing the parser can say. A `.WithError` is the author improving the wording of the report. It shouldn't also drag the caret to a shallower spot, because a shallower spot is, by definition, somewhere the parser was still doing fine.
 
 An earlier version of this model let a named failure outrank a deeper mechanical one. It produced a recurring bug: an author would attach a `.WithError` to improve a message and, without intending to, move the reported caret backward, onto a closing bracket or a rule boundary, away from the deeper spot the mechanical failure had correctly identified. (See backlog item 0a04 for a concrete instance.) Making depth primary removes that coupling. Adding or changing a `.WithError` can never move the caret now. It can only change the words, or win an exact-depth tie.
 

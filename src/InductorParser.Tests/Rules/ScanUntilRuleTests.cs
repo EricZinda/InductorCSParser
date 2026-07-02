@@ -360,7 +360,7 @@ public class ScanUntilRuleTests
         // body run with the rule's Id directly (no rune-as-leaf-id
         // shortcut, since a body of multiple tokens doesn't have one
         // distinguished rune to carry). .As(SymbolId) writes the user's
-        // explicit value into Id, so the leaf carries it by construction.
+        // explicit value into Id, so the leaf carries it automatically.
         // Test locks in the matrix so a future leaf-id refactor that
         // routes ScanUntil through ResolveLeafId or a similar helper has
         // to keep .As(SymbolId) honored.

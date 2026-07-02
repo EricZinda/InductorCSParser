@@ -200,7 +200,7 @@ public class ScanWhileRuleTests
         // matched run with the rule's Id directly (no rune-as-leaf-id
         // shortcut, since a run of multiple tokens doesn't have one
         // distinguished rune to carry). .As(SymbolId) writes the user's
-        // explicit value into Id, so the leaf carries it by construction.
+        // explicit value into Id, so the leaf carries it automatically.
         // Test locks in the matrix so a future leaf-id refactor that
         // routes ScanWhile through ResolveLeafId or a similar helper has
         // to keep .As(SymbolId) honored.

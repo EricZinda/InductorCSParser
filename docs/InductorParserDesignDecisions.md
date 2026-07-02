@@ -371,7 +371,7 @@ What you *can't* do:
 
 ## Greedy Repetition, No Repetition Backtracking
 
-PEG parsers backtrack on alternatives (`Or` tries each branch in order until one succeeds, rolls back between attempts), but they DON'T backtrack inside repetition. `OneOrMore`, `ZeroOrMore`, and `Optional` are greedy by construction: they grab as many matches as they can get and never give any back. This is inherited from the C++ library and it's a defining property of PEG, not a design choice unique to this port.
+PEG parsers backtrack on alternatives (`Or` tries each branch in order until one succeeds, rolls back between attempts), but they DON'T backtrack inside repetition. `OneOrMore`, `ZeroOrMore`, and `Optional` are greedy: they grab as many matches as they can get and never give any back. This is inherited from the C++ library and it's a defining property of PEG, not a design choice unique to this port.
 
 The practical consequence is the most common trip-up when moving from regex to PEG. Consider:
 
@@ -532,7 +532,7 @@ Once a budget trips, the parse has to unwind cleanly from deep inside possibly-n
 - The exception unwinds through whatever stack of rules is currently active. Each frame has a `using var tx = lexer.BeginTransaction()`, which rolls back on any non-commit exit including an in-flight exception, so the lexer state is restored frame by frame on the way up at no additional cost.
 - `Parse()` catches the exception at the top and converts it to a failed `ParseResult` with the budget-exceeded reason.
 
-The throw is cold by construction. It fires once per pathological parse, not per rule invocation, so the IL2CPP exception performance cost is irrelevant. The only IL2CPP constraint that does apply is "no exception filters" (`catch ... when (...)`), which this design doesn't need anyway.
+The throw is cold. It fires once per pathological parse, not per rule invocation, so the IL2CPP exception performance cost is irrelevant. The only IL2CPP constraint that does apply is "no exception filters" (`catch ... when (...)`), which this design doesn't need anyway.
 
 This is a change from an earlier draft that used a sticky abort flag on every `EnterRule` to avoid throwing. The flag-check approach works, but it adds a field to every parse state, a branch to every rule invocation, and a two-step "check flag then null-return" pattern in every rule. The throw-at-the-boundary approach leans on the `using`-based rollback scaffolding that already exists, so the rule-side code stays identical to the normal match-failure path.
 
@@ -546,7 +546,7 @@ Counting rule invocations gives us a metric that responds directly to the thing 
 
 ### Cut Operator
 
-A grammar-level `Cut()` rule is the PEG community's standard tool for preventing catastrophic backtracking by construction rather than by runtime limit. Once the parser passes a cut, it isn't allowed to backtrack past that point. If a subsequent rule fails, the failure is hard and propagates up instead of triggering a retry of an earlier alternative.
+A grammar-level `Cut()` rule is the PEG community's standard tool for making catastrophic backtracking impossible in the grammar itself rather than capped by a runtime limit. Once the parser passes a cut, it isn't allowed to backtrack past that point. If a subsequent rule fails, the failure is hard and propagates up instead of triggering a retry of an earlier alternative.
 
 ```csharp
 // Conceptual sketch of the API if we added it

@@ -4,7 +4,7 @@ This document is a reference document and is more technical and detailed than th
 
 In this library a *rule* is a C# object. You build rules by calling factory functions like `And(...)`, `Or(...)`, `Token('=')`, you compose them into a grammar, and you call `.Parse(input)` on the root rule to get a tree back.
 
-The library implements a [Parsing Expression Grammar (PEG)](https://en.wikipedia.org/wiki/Parsing_expression_grammar) parser. In PEG terms, `And` is sequence (match a, then b, then c), `Or` is ordered choice (try each alternative in order, the first match wins, so grammars are unambiguous by construction), `OneOrMore` and `ZeroOrMore` are greedy repetition, and `Peek` and `Not` are the lookahead predicates. Matching is recursive-descent with backtracking on failure, but greedy repetition never gives input back once it has matched, so grammars are written with that in mind.
+The library implements a [Parsing Expression Grammar (PEG)](https://en.wikipedia.org/wiki/Parsing_expression_grammar) parser. In PEG terms, `And` is sequence (match a, then b, then c), `Or` is ordered choice (try each alternative in order, the first match wins, so grammars can't be ambiguous), `OneOrMore` and `ZeroOrMore` are greedy repetition, and `Peek` and `Not` are the lookahead predicates. Matching is recursive-descent with backtracking on failure, but greedy repetition never gives input back once it has matched.
 
 Primers:
 

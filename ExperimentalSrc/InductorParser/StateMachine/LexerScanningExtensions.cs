@@ -278,7 +278,7 @@ internal static class LexerScanningExtensions
     //     through Lexer.IsGraphemeClusterStart, the same walk
     //     NextTokenLength uses, so any rule StringInfo respects (including
     //     backward-context rules like GB9c Indic Conjunct Break) is
-    //     handled by construction.
+    //     handled automatically.
     //
     //   * One-rune-per-token mode (the WithinTokenRule sub-lexer): a token
     //     is one rune, so a combining mark or any other cluster
