@@ -6,10 +6,11 @@ If you want to write grammars, start with the primers below or read [InductorPar
 
 Primers:
 
-- [Primer 1: Getting Started](primer1.md): build a grammar that consumes everything up to a stop sequence, parse some input, look at the tree.
-- [Primer 2: Walking the Tree](primer2.md): a tiny INI-style config grammar with typed values, a tree walker, and Unicode-aware error positions.
-- [Primer 3: Unicode in the Inductor Parser](Primer3.md): how the parser handles Unicode normalization, error positions, ill-formed input, and unexpected characters.
-- [Primer 4: Security-Related Concerns](Primer4.md): parser defenses against pathological input (ReDoS, recursion limits) and Unicode-based attacks (Trojan Source, lookalikes, homoglyphs, invisible characters).
+- [Primer: Building a Grammar](primer1.md): build a grammar that consumes everything up to a stop sequence, parse some input, look at the tree.
+- [Primer: Parsing and Processing](primer2.md): a tiny INI-style config grammar with typed values, a tree walker, semantic validation, and Unicode-aware source positions.
+- [Primer: Parsing Errors](primerFailure.md): what the parser reports when input doesn't match: failure positions, custom `.WithError` messages, and reshaping or localizing the default text.
+- [Primer: Unicode in the Inductor Parser](Primer3.md): how the parser handles Unicode normalization, error positions, ill-formed input, and unexpected characters.
+- [Primer: Security-Related Concerns](Primer4.md): parser defenses against pathological input (ReDoS, recursion limits) and Unicode-based attacks (Trojan Source, lookalikes, homoglyphs, invisible characters).
 - [Tutorial: Peek](tutorial-peek.md): a password-validation regex translated into the parser, using `Peek` for non-consuming lookahead.
 
 Related docs:
@@ -370,7 +371,7 @@ What you *can't* do:
 
 ## Greedy Repetition, No Repetition Backtracking
 
-PEG parsers backtrack on alternatives (`Or` tries each branch in order until one succeeds, rolls back between attempts), but they DON'T backtrack inside repetition. `OneOrMore`, `ZeroOrMore`, and `Optional` are greedy by construction: they grab as many matches as they can get and never give any back. This is inherited from the C++ library and it's a defining property of PEG, not a design choice unique to this port.
+PEG parsers backtrack on alternatives (`Or` tries each branch in order until one succeeds, rolls back between attempts), but they DON'T backtrack inside repetition. `OneOrMore`, `ZeroOrMore`, and `Optional` are greedy: they grab as many matches as they can get and never give any back. This is inherited from the C++ library and it's a defining property of PEG, not a design choice unique to this port.
 
 The practical consequence is the most common trip-up when moving from regex to PEG. Consider:
 
@@ -408,7 +409,7 @@ var rule = OneOrMore(Token('a'));
 var result = rule.Parse("aabb");
 // result.Success == false
 // result.ErrorCharIndex == 2
-// result.ErrorMessage starts with "Parse failed at offset 2"
+// result.ErrorMessage == "Unexpected 'b' at line 1, column 3."
 ```
 
 `OneOrMore(Token('a'))` greedily matches "aa" and stops because the next char isn't 'a'. The rule's own `TryParse` returned a tree happily. But the top-level `Parse` then checks `lexer.IsEof`, finds we're at offset 2 with "bb" still ahead, and turns the success into a failure.
@@ -437,7 +438,7 @@ Walk through the smallest case to see why this matters. `Token('a').Parse("x")`:
 2. Reads 'x'. Lexer position advances to 1.
 3. 'x' doesn't equal 'a'. GraphemeRule records its failure at `transaction.StartPosition` (0), not at the current lexer position (1).
 4. Transaction rolls back, lexer returns to position 0.
-5. `result.ErrorCharIndex` is 0. `result.ErrorMessage` is `"Parse failed at offset 0: unexpected 'x'."`.
+5. `result.ErrorCharIndex` is 0. `result.ErrorMessage` is `"Unexpected 'x' at line 1, column 1."`.
 
 A naive post-read implementation would record at 1 instead of 0, which equals `input.Length` for this one-char input, which makes `BuildErrorMessage` take the "Unexpected end of input" branch even though the input isn't empty. That's the kind of off-by-one that accumulates over a library's lifetime until every error message is slightly off and nobody remembers why. Picking a principle early and applying it uniformly keeps the error messages accurate.
 
@@ -469,7 +470,7 @@ This isn't a bug. It's a property of the heuristic. Because depth ranks first, a
 
 ### LSP Position Semantics
 
-`ParseResult.ErrorLine` and `ErrorColumn` follow the Language Server Protocol's position conventions. LSP is the JSON-RPC protocol that VS Code, Neovim, JetBrains IDEs, and essentially every modern editor use to talk to language tooling. If a grammar author is going to forward a parse error into an editor, they're almost certainly going to do it through LSP, either directly or through a layer that speaks LSP. Matching LSP end-to-end means the integration is `new Diagnostic { Range = new Range(errorLine, errorColumn, ...) }` with no arithmetic in between. Pick a different convention and every caller writes the same `-1` shim forever.
+`ParseResult.ErrorLine` and `ErrorCharColumn` follow the Language Server Protocol's position conventions. LSP is the JSON-RPC protocol that VS Code, Neovim, JetBrains IDEs, and essentially every modern editor use to talk to language tooling. If a grammar author is going to forward a parse error into an editor, they're almost certainly going to do it through LSP, either directly or through a layer that speaks LSP. Matching LSP end-to-end means the integration is `new Diagnostic { Range = new Range(errorLine, errorColumn, ...) }` with no arithmetic in between. Pick a different convention and every caller writes the same `-1` shim forever.
 
 Three specific rules fall out:
 
@@ -531,7 +532,7 @@ Once a budget trips, the parse has to unwind cleanly from deep inside possibly-n
 - The exception unwinds through whatever stack of rules is currently active. Each frame has a `using var tx = lexer.BeginTransaction()`, which rolls back on any non-commit exit including an in-flight exception, so the lexer state is restored frame by frame on the way up at no additional cost.
 - `Parse()` catches the exception at the top and converts it to a failed `ParseResult` with the budget-exceeded reason.
 
-The throw is cold by construction. It fires once per pathological parse, not per rule invocation, so the IL2CPP exception performance cost is irrelevant. The only IL2CPP constraint that does apply is "no exception filters" (`catch ... when (...)`), which this design doesn't need anyway.
+The throw is cold. It fires once per pathological parse, not per rule invocation, so the IL2CPP exception performance cost is irrelevant. The only IL2CPP constraint that does apply is "no exception filters" (`catch ... when (...)`), which this design doesn't need anyway.
 
 This is a change from an earlier draft that used a sticky abort flag on every `EnterRule` to avoid throwing. The flag-check approach works, but it adds a field to every parse state, a branch to every rule invocation, and a two-step "check flag then null-return" pattern in every rule. The throw-at-the-boundary approach leans on the `using`-based rollback scaffolding that already exists, so the rule-side code stays identical to the normal match-failure path.
 
@@ -545,7 +546,7 @@ Counting rule invocations gives us a metric that responds directly to the thing 
 
 ### Cut Operator
 
-A grammar-level `Cut()` rule is the PEG community's standard tool for preventing catastrophic backtracking by construction rather than by runtime limit. Once the parser passes a cut, it isn't allowed to backtrack past that point. If a subsequent rule fails, the failure is hard and propagates up instead of triggering a retry of an earlier alternative.
+A grammar-level `Cut()` rule is the PEG community's standard tool for making catastrophic backtracking impossible in the grammar itself rather than capped by a runtime limit. Once the parser passes a cut, it isn't allowed to backtrack past that point. If a subsequent rule fails, the failure is hard and propagates up instead of triggering a retry of an earlier alternative.
 
 ```csharp
 // Conceptual sketch of the API if we added it
@@ -583,7 +584,7 @@ Variadic rules without the `Args` wrapper. `And(r1, r2, r3, r4)` beats `AndExpre
 
 Composable character classes. `TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_-")` is worth the whole port by itself.
 
-Proper error objects. `ParseResult.ErrorLine` and `ErrorColumn` are computed on demand from the position. In the C++ version you get a message and a character offset and you have to compute line/column yourself. The same conversion is also available on every parse-tree node via `Symbol.SourceRange`, so semantic errors ("duplicate section on line 7", "value out of range at char 42") report positions in the same units the parse error does.
+Proper error objects. `ParseResult.ErrorLine` and `ErrorCharColumn` are computed on demand from the position. In the C++ version you get a message and a character offset and you have to compute line/column yourself. The same conversion is also available on every parse-tree node via `Symbol.SourceRange`, so semantic errors ("duplicate section on line 7", "value out of range at char 42") report positions in the same units the parse error does.
 
 ## Things That Got Worse
 

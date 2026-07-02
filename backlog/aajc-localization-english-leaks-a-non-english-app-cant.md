@@ -13,11 +13,11 @@ This matters because `NameOf`'s own doc comment recommends it "for error-message
 Options to consider:
 - A hook on `ParseOptions` (or the grammar) that maps a `SymbolId` or rule kind to a caller-supplied label, consulted before the class-name fallback.
 - Or make the class-name fallback opt-in and have `DisplayName` / `NameOf` return null for unnamed structural rules, so the app decides what to render instead of getting English silently.
-- At minimum, document loudly that anything you surface to users has to be `.As(...)`-named, and that `DisplayName` is otherwise an English debug label.
+- At minimum, document prominently that anything you surface to users has to be `.As(...)`-named, and that `DisplayName` is otherwise an English debug label.
 
 ## 2. "Parse aborted." has no template
 
-`BuildBudgetMessage`'s `default:` branch returns the hardcoded "Parse aborted." (Rule.cs). It's the only abort message with no `ParseOptions` template behind it. Effectively unreachable right now (every abort outcome is handled above it), so this is purely defensive, but if the enum ever grows a new abort kind, the new path emits English with no override. Either add a catch-all template or keep the hardcoded string and note it's unreachable by construction.
+`BuildBudgetMessage`'s `default:` branch returns the hardcoded "Parse aborted." (Rule.cs). It's the only abort message with no `ParseOptions` template behind it. Effectively unreachable right now (every abort outcome is handled above it), so this is purely defensive, but if the enum ever grows a new abort kind, the new path emits English with no override. Either add a catch-all template or keep the hardcoded string and note that it can't run while every abort outcome has its own branch above it.
 
 ## 3. TokenSet.ToString() emits "more"
 

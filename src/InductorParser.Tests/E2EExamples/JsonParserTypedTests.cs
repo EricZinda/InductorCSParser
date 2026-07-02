@@ -201,7 +201,8 @@ public class JsonParserTypedTests
     {
         var root = JsonParserTyped.Project("{\"age\":30}");
 
-        // Asking for a string when the value is a number fails loudly.
+        // Asking for a string when the value is a number throws rather
+        // than returning null.
         Assert.Throws<InvalidCastException>(() => { var _ = (string?)root["age"]; });
         // Indexing a non-object by string surfaces through the indexer
         // on the base JsonValue.

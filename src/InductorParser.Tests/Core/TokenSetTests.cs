@@ -301,6 +301,29 @@ public class TokenSetTests
     }
 
     [Test]
+    public void IsLineTerminator_matches_the_UAX18_single_rune_terminators()
+    {
+        // The public predicate the docs use to scan for line ends. True for the
+        // seven single-rune terminators UAX #18 defines, false for ordinary content.
+        foreach (char terminator in new[]
+                 {
+                     '\n', '\r',
+                     UnicodeExamples.VerticalTabText[0], UnicodeExamples.FormFeedText[0],
+                     UnicodeExamples.NextLineText[0], UnicodeExamples.LineSeparatorText[0],
+                     UnicodeExamples.ParagraphSeparatorText[0],
+                 })
+            Assert.That(TokenSet.IsLineTerminator(terminator), Is.True, $"U+{(int)terminator:X4}");
+
+        Assert.That(TokenSet.IsLineTerminator('a'), Is.False);
+        Assert.That(TokenSet.IsLineTerminator(' '), Is.False);
+        Assert.That(TokenSet.IsLineTerminator('\t'), Is.False);
+
+        // The int overload agrees with the char overload.
+        Assert.That(TokenSet.IsLineTerminator((int)UnicodeExamples.LineSeparatorText[0]), Is.True);
+        Assert.That(TokenSet.IsLineTerminator((int)'a'), Is.False);
+    }
+
+    [Test]
     public void Runes_with_lone_surrogate_glued_to_combining_mark_reports_invalid_scalar()
     {
         // .NET's grapheme splitter can treat a stray surrogate followed
@@ -646,7 +669,7 @@ public class TokenSetTests
     public void Contains_hits_exact_low_and_high_endpoints()
     {
         // Endpoints are inclusive on both sides. Lock it in so a future
-        // off-by-one in the < vs <= choice in Contains breaks loudly.
+        // off-by-one in the < vs <= choice in Contains fails this test.
         var set = TokenSet.Range(10, 20);
 
         Assert.That(set.ContainsRune(9), Is.False);

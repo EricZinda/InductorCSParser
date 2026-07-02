@@ -492,7 +492,7 @@ internal sealed class ScanUntilRule : Rule
             // in bounds. The invariant makes that explicit: unlike Read(), the
             // raw SetPosition has no EOF handling of its own, so if the bound
             // were ever exceeded it would run the cursor (and the next
-            // iteration's span reads) off the end. Fail loudly here instead.
+            // iteration's span reads) off the end. Throw here instead.
             Invariant.That(position + tokenLength <= inputLength,
                 $"ScanUntil body advance past end of input: position {position} + tokenLength {tokenLength} exceeds inputLength {inputLength}");
             lexer.SetPosition(position + tokenLength);

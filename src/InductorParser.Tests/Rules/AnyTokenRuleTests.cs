@@ -30,7 +30,7 @@ public class AnyTokenRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("wanted any character"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("wanted any character at line 1, column 1."));
     }
 
     [Test]

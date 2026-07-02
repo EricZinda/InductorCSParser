@@ -43,7 +43,7 @@ public class NotRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("didn't want an 'a'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("didn't want an 'a' at line 1, column 1."));
     }
 
     [Test]
@@ -75,7 +75,7 @@ public class NotRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("did not want 'a' or 'ab' here"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("did not want 'a' or 'ab' here at line 1, column 1."));
     }
 
     [Test]
@@ -99,7 +99,7 @@ public class NotRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected no 'xy' after 'abc'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected no 'xy' after 'abc' at line 1, column 4."));
     }
 
     [Test]

@@ -360,7 +360,7 @@ public class ScanUntilRuleTests
         // body run with the rule's Id directly (no rune-as-leaf-id
         // shortcut, since a body of multiple tokens doesn't have one
         // distinguished rune to carry). .As(SymbolId) writes the user's
-        // explicit value into Id, so the leaf carries it by construction.
+        // explicit value into Id, so the leaf carries it automatically.
         // Test locks in the matrix so a future leaf-id refactor that
         // routes ScanUntil through ResolveLeafId or a similar helper has
         // to keep .As(SymbolId) honored.
@@ -381,7 +381,7 @@ public class ScanUntilRuleTests
         // Tree shape matters because the performance win of this
         // primitive is "one Symbol per run, not one per rune." Lock
         // in the shape so a future change that accidentally splits
-        // the leaf back into per-rune pieces fails loudly. Tolerant
+        // the leaf back into per-rune pieces fails this test. Tolerant
         // variant so the no-pipe input still parses; the leaf shape
         // is the same under either eofIsTerminator setting.
         var result = StopOnPipeOrEof().Parse("hello");
@@ -1047,7 +1047,7 @@ public class ScanUntilRuleTests
         var result = rule.Parse("\\x\"");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("invalid escape character"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("invalid escape character at line 1, column 2."));
     }
 
     [Test]

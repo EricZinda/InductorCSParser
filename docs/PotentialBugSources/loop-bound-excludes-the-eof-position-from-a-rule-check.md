@@ -1,6 +1,6 @@
 - A scan loop bounded by `while (!lexer.IsEof)` that performs a per-position rule check inside the body never runs that check at the EOF position itself
     - `ScanUntilRule.TryParseRule` scans the body one token at a time with `while (!lexer.IsEof)` and tests the stopper at the top of each iteration. When input runs out the loop condition goes false and the loop exits — but the EOF position is itself a position, and a rule can succeed there. So a check that lives only inside the loop body silently never sees the EOF position.
-    - For a TokenSet membership test this is harmless: a TokenSet is matched against a real token and EOF produces none, so "the set never matches at EOF" is correct by construction. The bug only shows up when the per-position check is a *rule* invocation, because rules can be EOF-sensitive:
+    - For a TokenSet membership test this is harmless: a TokenSet is matched against a real token and EOF produces none, so "the set never matches at EOF" is just true. The bug only shows up when the per-position check is a *rule* invocation, because rules can be EOF-sensitive:
         - `Eof()` succeeds only at end of input.
         - `Not(AnyToken())` succeeds only at end of input (AnyToken fails at EOF, so Not succeeds there).
         - `Or(Literal("END"), Eof())` and similar — the natural way to write "stop here OR at end of input."

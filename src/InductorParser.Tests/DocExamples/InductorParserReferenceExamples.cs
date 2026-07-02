@@ -144,7 +144,7 @@ public class InductorParserReferenceExamples
     {
         var parsed = root.Parse(input);
         if (!parsed.Success)
-            return (null, $"Line {parsed.ErrorLine}: {parsed.ErrorMessage}");
+            return (null, parsed.ErrorMessage);
 
         var nameText = parsed.Tree!.Find(name)!.ToString();
         var valueText = parsed.Tree!.Find(valueRule)!.ToString();
@@ -192,11 +192,13 @@ public class InductorParserReferenceExamples
     {
         var (document, settingName, settingValue) = BuildWalkthroughGrammar();
 
-        // Missing semicolon: the doc claims an error result with line/message.
+        // Missing semicolon: the doc claims an error result whose message
+        // already carries a 1-based position from the default template.
         var (setting, error) = CompileSetting(document, settingName, settingValue, "x = 5");
 
         Assert.That(setting, Is.Null);
-        Assert.That(error, Does.StartWith("Line "));
+        Assert.That(error, Does.StartWith("Unexpected end of input"));
+        Assert.That(error, Does.Contain("line 1"));
     }
 
     // "A Bigger Example: Nested Rules": the doc shows a multi-setting
@@ -211,9 +213,10 @@ public class InductorParserReferenceExamples
     {
         var key = Identifier(extraStartRunes: TokenSet.Runes("_")).As("key");
 
-        // Build a separate identifier-shaped alternative for valueAtom
-        // because .Flatten(...) mutates the rule it's called on, and
-        // reusing `key` here would flatten its position inside `pair` too.
+        // Build a separate identifier-shaped alternative for valueAtom:
+        // this spot needs a flattened, unnamed identifier, and `key` is
+        // named (so Preserve). Calling .Flatten(FlattenType.Flatten) on
+        // it would throw rather than silently override the .As choice.
         var valueAtom = Or(
             Float().Flatten(FlattenType.Flatten),
             Integer().Flatten(FlattenType.Flatten),

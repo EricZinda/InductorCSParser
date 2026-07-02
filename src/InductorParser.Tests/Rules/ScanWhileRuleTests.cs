@@ -42,7 +42,7 @@ public class ScanWhileRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need a letter"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need a letter at line 1, column 1."));
     }
 
     [Test]
@@ -57,7 +57,7 @@ public class ScanWhileRuleTests
         // (position 3, the '!'), independent of whether .WithError is
         // attached. See ErrorArchitecture.md.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need four letters"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need four letters at line 1, column 4."));
     }
 
     [Test]
@@ -200,7 +200,7 @@ public class ScanWhileRuleTests
         // matched run with the rule's Id directly (no rune-as-leaf-id
         // shortcut, since a run of multiple tokens doesn't have one
         // distinguished rune to carry). .As(SymbolId) writes the user's
-        // explicit value into Id, so the leaf carries it by construction.
+        // explicit value into Id, so the leaf carries it automatically.
         // Test locks in the matrix so a future leaf-id refactor that
         // routes ScanWhile through ResolveLeafId or a similar helper has
         // to keep .As(SymbolId) honored.

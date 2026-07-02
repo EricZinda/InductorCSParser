@@ -398,8 +398,8 @@ public sealed class Symbol
     /// Preserve.
     /// </summary>
     /// <remarks>
-    /// Flattens a tree after the fact, for example one parsed with ParseOptions.PreserveAllSymbols.
-    /// <see cref="Flatten"/> is the convenience entry point.
+    /// Flattens a tree after it has been parsed with ParseOptions.PreserveAllSymbols which ignores the default flattening.
+    /// Does nothing to a tree that has already been flattened. <see cref="Flatten"/> is the convenience entry point.
     /// </remarks>
     public void FlattenInto(List<Symbol> result)
     {
@@ -444,6 +444,10 @@ public sealed class Symbol
     /// Returns a flattened copy of this subtree: Delete nodes dropped and Flatten nodes' children
     /// lifted into their parents. See <see cref="FlattenInto"/>.
     /// </summary>
+    /// <remarks>
+    /// Flattens a tree after it has been parsed with ParseOptions.PreserveAllSymbols which ignores the default flattening.
+    /// Does nothing to a tree that has already been flattened.
+    /// </remarks>
     public IReadOnlyList<Symbol> Flatten()
     {
         var list = new List<Symbol>();

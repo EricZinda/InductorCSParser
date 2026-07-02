@@ -34,7 +34,7 @@ Every rule's test file, regardless of rule type, should cover these four categor
 
 For a composite rule, add a second test that locks in where its `.WithError` anchors (the Newsboat operator case): construct a grammar where the composite's children record a mechanical failure deeper than the composite's own start, and assert the composite's named message surfaces at that deeper position. Composite anchoring records the message at the deepest position the subtree reached, where it ties the mechanical failure on depth and wins the named-beats-mechanical tie-break. Example: `OrRuleTests.Or_named_WithError_beats_same_depth_mechanical_branch_failures`.
 
-**4. At least one test without WithError.** To verify the positional-fallback path in `BuildErrorMessage`. Without this, the fallback code could break silently. One `Does.StartWith("Unexpected end of input")` or `Does.StartWith("Parse failed at offset")` test per rule file is enough.
+**4. At least one test without WithError.** To verify the positional-fallback path in `BuildErrorMessage`. Without this, the fallback code could break silently. One `Does.StartWith("Unexpected end of input")` or `Does.StartWith("Unexpected '")` test per rule file is enough.
 
 **5. Sealed-rule rejection.** Three tests, one each verifying that `Flatten(...)`, `WithError(...)`, and `As(...)` throw `InvalidOperationException` when called on the rule after `Compile()` has run. The pattern:
 

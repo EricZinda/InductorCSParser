@@ -37,7 +37,7 @@ For canonical forms (FormC, FormD), the count of *graphemes* doesn't change afte
 
 > "A key feature of Unicode grapheme clusters (both legacy and extended) is that they remain unchanged across all canonically equivalent forms of the underlying text. Thus the boundaries remain unchanged whether the text is in NFC or NFD."
 
-The §3 quote names two specific normalized forms, but the same guarantee covers the caller's original input too. Per [UAX #15 §1.1](https://www.unicode.org/reports/tr15/#Introduction), *canonical equivalence* is a relation between "sequences of characters which represent the same abstract character." The caller's original and the normalized version represent the same abstract characters by construction (that's what canonical normalization preserves), so they're canonically equivalent. §3 applies to them as a pair.
+The §3 quote names two specific normalized forms, but the same guarantee covers the caller's original input too. Per [UAX #15 §1.1](https://www.unicode.org/reports/tr15/#Introduction), *canonical equivalence* is a relation between "sequences of characters which represent the same abstract character." The caller's original and the normalized version represent the same abstract characters (that's what canonical normalization preserves), so they're canonically equivalent. §3 applies to them as a pair.
 
 So for canonical forms, the algorithm walks both strings side by side with `StringInfo.GetNextTextElement`, one grapheme at a time. When the normalized pointer reaches the failure position, the original pointer is at the right spot.
 

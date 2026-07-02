@@ -185,7 +185,7 @@ public static class HtmlGrammar
     //     says "</style" must be followed by space, ">", or "/". Anything
     //     else is ill-formed. Stopping at the prefix catches this. If the
     //     characters after don't form a valid end tag, EndStyleTag fails
-    //     and the outer rule fails loudly at the right spot.
+    //     and the outer rule reports a parse error at the right spot.
     //
     //   * Cost. A Literal stopper is one string-compare per rune in a
     //     peek transaction. EndStyleTag as a stopper would invoke a

@@ -21,7 +21,7 @@ public class AllowTrailingInputTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
-        Assert.That(result.ErrorMessage, Does.StartWith("Parse failed at offset 2"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("Unexpected 'b' at line 1, column 3."));
     }
 
     [Test]
@@ -113,7 +113,7 @@ public class AllowTrailingInputTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1),
             "trailing input begins at offset 1; the 'z' at offset 4 belongs to a rolled-back alternative");
         Assert.That(result.ErrorMessage,
-            Is.EqualTo("Parse failed at offset 1: unexpected 'e'."));
+            Is.EqualTo("Unexpected 'e' at line 1, column 2."));
     }
 
     [Test]
@@ -130,7 +130,7 @@ public class AllowTrailingInputTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage,
-            Is.EqualTo("Parse failed at offset 1: unexpected 'e'."),
+            Is.EqualTo("Unexpected 'e' at line 1, column 2."),
             "WithError on a rolled-back alternative shouldn't surface as the trailing-input message");
     }
 

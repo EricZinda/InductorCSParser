@@ -72,7 +72,7 @@ Bad-input example:
     Input:   key = "unclosed
     Output:  ParseResult.Success = false
              ErrorLine = 0
-             ErrorColumn = 15
+             ErrorCharColumn = 15
              ErrorMessage = "Expected closing '\"' to end basic string"
 
 The error position is reported in LSP's zero-based line/column

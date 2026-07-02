@@ -1165,7 +1165,7 @@ public abstract class Rule
             default:
                 // The four cases above are the only outcomes that abort a parse,
                 // and ParseBudgetExceeded is only ever thrown with one of them, so
-                // this branch is unreachable. Fail loudly if a new ParseOutcome is
+                // this branch is unreachable. Throw if a new ParseOutcome is
                 // ever wired into the abort path without a case here, rather than
                 // returning a vague string that hides the omission.
                 throw Invariant.Fail(
@@ -1181,9 +1181,17 @@ public abstract class Rule
     internal static string BuildErrorMessage(string? customMessage, int positionInParseInput, string parseInput, int failurePosition, string input, ParseOptions options)
     {
         // customMessage is a rule's .WithError("...") text for the deepest
-        // failure. Prefer it over the generic message when set.
+        // failure. When set it wins over the generic message, but it still goes
+        // through WithErrorTemplate so the author's text picks up the failure
+        // position ("... at line L, column C.") the same way the mechanical
+        // messages do. A caller who wants the raw text back sets
+        // WithErrorTemplate to "{message}". This branch is checked before the
+        // EOF one below, so a WithError at end of input is wrapped too; the
+        // position placeholders resolve to the end position.
         if (customMessage != null)
-            return customMessage;
+            return FormatTemplate(options.WithErrorTemplate,
+                PositionPlaceholders(failurePosition, input),
+                ("message", () => customMessage));
 
         // At EOF (positionInParseInput == parseInput.Length) there's no
         // character to point at, so give an "end of input" message instead of
@@ -1207,13 +1215,14 @@ public abstract class Rule
     }
 
     // Build the message for a MalformedInput result. Same template
-    // machinery as BuildErrorMessage: {charIndex} / {tokenIndex} / {line} /
-    // {column} plus a {character} placeholder that renders the offending
-    // element through DisplayEscape, so a lone surrogate comes out as
-    // "U+D800" rather than a raw, unrenderable code unit. The default
-    // MalformedInputTemplate only mentions {charIndex}, so the {character}
-    // delegate (and the O(n) position scans) stay unevaluated unless a
-    // custom template asks for them.
+    // machinery as BuildErrorMessage: the shared position placeholders
+    // ({charIndex} / {tokenIndex} / {line} / {charColumn} / {tokenColumn} /
+    // {lineNumber} / {charColumnNumber} / {tokenColumnNumber}) plus a {character}
+    // placeholder that renders the offending element through DisplayEscape, so a
+    // lone surrogate comes out as "U+D800" rather than a raw, unrenderable code
+    // unit. The default MalformedInputTemplate mentions {lineNumber} /
+    // {tokenColumnNumber} and {character}, so building it pays one line scan plus
+    // one grapheme-cluster count on the failure path.
     internal static string BuildMalformedInputMessage(int badIndex, string input, ParseOptions options)
     {
         return FormatTemplate(options.MalformedInputTemplate,
@@ -1249,20 +1258,33 @@ public abstract class Rule
         return -1;
     }
 
-    // The four placeholders shared by every default template:
-    //   {charIndex}  - failure position in chars (UTF-16 code units),
-    //                  matching ParseResult.ErrorCharIndex.
-    //   {tokenIndex} - matching ParseResult.ErrorTokenIndex.
-    //   {line}       - zero-based, matching ParseResult.ErrorLine.
-    //   {column}     - zero-based, matching ParseResult.ErrorColumn.
-    // {line} and {column} are zero-based, following the Language Server
-    // Protocol convention.
+    // The position placeholders shared by every default template:
+    //   {charIndex}          - failure position in chars (UTF-16 code units),
+    //                          matching ParseResult.ErrorCharIndex.
+    //   {tokenIndex}         - matching ParseResult.ErrorTokenIndex.
+    //   {line}               - zero-based, matching ParseResult.ErrorLine.
+    //   {charColumn}         - zero-based char column, matching ParseResult.ErrorCharColumn.
+    //   {tokenColumn}        - zero-based token (grapheme) column, matching
+    //                          ParseResult.ErrorTokenColumn.
+    //   {lineNumber}         - one-based ({line} + 1), for human-facing messages.
+    //   {charColumnNumber}   - one-based char column ({charColumn} + 1).
+    //   {tokenColumnNumber}  - one-based token column ({tokenColumn} + 1).
+    // The zero-based placeholders match the ParseResult fields. The *Number
+    // variants are the same positions counted from 1, which is what a person
+    // reading an editor expects. The char columns ({charColumn} / {charColumnNumber})
+    // follow the Language Server Protocol's UTF-16 code-unit convention. The
+    // token columns ({tokenColumn} / {tokenColumnNumber}) count grapheme
+    // clusters, so an emoji or combining sequence earlier on the line counts as
+    // one, matching the character a person sees. The default messages use
+    // {lineNumber} and {tokenColumnNumber} for that reason. The fields stay as
+    // they are; only the *Number placeholders shift by one.
     //
-    // The Func<string> delegates exist because each token-index /
-    // line-column conversion walks the input once, so we only want to pay
-    // for the ones whose placeholder actually appears in the template the
-    // caller chose. The default templates only use {charIndex}, so by
-    // default we never run the O(n) scans.
+    // The Func<string> delegates exist because each token-index / line-column /
+    // token-column conversion walks the input once, so we only want to pay for
+    // the ones whose placeholder actually appears in the template the caller
+    // chose. The default templates use {lineNumber} and {tokenColumnNumber}, so a
+    // failed parse pays one line scan plus one grapheme-cluster count when its
+    // message is built.
     private static (string Key, Func<string> ValueProvider)[] PositionPlaceholders(int charIndex, string input)
     {
         return new (string, Func<string>)[]
@@ -1274,17 +1296,31 @@ public abstract class Rule
                 SourcePositionConverter.ToLineColumn(input, charIndex, out int line, out _);
                 return line.ToString();
             }),
-            ("column", () =>
+            ("charColumn", () =>
             {
                 SourcePositionConverter.ToLineColumn(input, charIndex, out _, out int column);
                 return column.ToString();
             }),
+            ("tokenColumn", () => SourcePositionConverter.ToTokenColumn(input, charIndex).ToString()),
+            ("lineNumber", () =>
+            {
+                SourcePositionConverter.ToLineColumn(input, charIndex, out int line, out _);
+                return (line + 1).ToString();
+            }),
+            ("charColumnNumber", () =>
+            {
+                SourcePositionConverter.ToLineColumn(input, charIndex, out _, out int column);
+                return (column + 1).ToString();
+            }),
+            ("tokenColumnNumber", () => (SourcePositionConverter.ToTokenColumn(input, charIndex) + 1).ToString()),
         };
     }
 
     // Substitute {name}-style placeholders in a user-supplied template
-    // string. positionPlaceholders are the four every template shares
-    // ({charIndex}, {tokenIndex}, {line}, {column}). extraPlaceholders are the
+    // string. positionPlaceholders are the ones every template shares
+    // ({charIndex}, {tokenIndex}, {line}, {charColumn}, {tokenColumn}, and the
+    // one-based {lineNumber} / {charColumnNumber} / {tokenColumnNumber}).
+    // extraPlaceholders are the
     // ones specific to one template ({timeout}, {limit}, {character}), which is
     // why it's params: the templates that need none pass nothing. Each
     // placeholder's value is computed lazily via its Func<string> only when the

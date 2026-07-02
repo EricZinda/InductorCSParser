@@ -29,12 +29,13 @@ BenchmarkDotNet.Artifacts/
 src/InductorParser.Tests/Unity/Assets/Plugins/InductorParser.dll
 
 # DocFX documentation build outputs. Only the hand-authored config
-# (docfx/docfx.json, docfx/toc.yml) is tracked. build-docs.sh regenerates
-# everything below: the API metadata, the staged copy of the curated docs,
-# the staged benchmark chart, the readme-derived home page, and the rendered
-# site, which the GitHub Actions workflow deploys to GitHub Pages.
-docfx/_site/
-docfx/api/
-docfx/docs/
-docfx/images/
-docfx/index.md
+# (docs/docfx/docfx.json, docs/docfx/toc.yml) is tracked. build-docs.sh
+# regenerates everything below: the API metadata, the staged copy of the
+# curated docs, the staged benchmark chart, the readme-derived home page,
+# and the rendered site, which the GitHub Actions workflow deploys to
+# GitHub Pages.
+docs/docfx/_site/
+docs/docfx/api/
+docs/docfx/docs/
+docs/docfx/images/
+docs/docfx/index.md

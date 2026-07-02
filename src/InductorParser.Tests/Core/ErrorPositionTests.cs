@@ -7,7 +7,7 @@ using static InductorParser.Tests.UnicodeExamples;
 namespace InductorParser.Tests;
 
 // Tests for the derived error-position properties on ParseResult:
-// ErrorLine, ErrorColumn, ErrorTokenIndex. The underlying
+// ErrorLine, ErrorCharColumn, ErrorTokenIndex. The underlying
 // ErrorCharIndex is covered by the per-rule test fixtures. This file
 // exercises the char-index -> (line, column, grapheme) conversions
 // specifically.
@@ -16,7 +16,7 @@ namespace InductorParser.Tests;
 // rules. The Language Server Protocol is the JSON-RPC protocol VS Code,
 // Neovim, JetBrains, and essentially every modern editor use to talk to
 // language tooling for diagnostics, completion, go-to-definition, etc.
-// ErrorLine / ErrorColumn on ParseResult follow its position conventions
+// ErrorLine / ErrorCharColumn on ParseResult follow its position conventions
 // end-to-end so a caller forwarding a parse error into an editor diagnostic
 // can just use the value. The expected values in this file may look off
 // until you remember:
@@ -72,7 +72,7 @@ public class ErrorPositionTests
         Assert.That(result.Success, Is.True);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(0));
     }
 
@@ -84,7 +84,7 @@ public class ErrorPositionTests
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(0));
     }
 
@@ -96,7 +96,7 @@ public class ErrorPositionTests
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(3));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(3));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(3));
     }
 
@@ -108,7 +108,7 @@ public class ErrorPositionTests
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(3));
     }
 
@@ -125,7 +125,7 @@ public class ErrorPositionTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(2));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(2));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(2));
     }
 
@@ -137,7 +137,7 @@ public class ErrorPositionTests
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
         // \r not followed by \n is its own grapheme cluster.
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(3));
     }
@@ -151,7 +151,7 @@ public class ErrorPositionTests
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(6));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(3));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(3));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(6));
     }
 
@@ -164,7 +164,7 @@ public class ErrorPositionTests
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(4));
         Assert.That(result.ErrorLine, Is.EqualTo(3));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(4));
     }
 
@@ -176,7 +176,7 @@ public class ErrorPositionTests
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(3));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(3));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(3));
     }
 
@@ -190,7 +190,7 @@ public class ErrorPositionTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(2));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(2));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(1));
     }
 
@@ -213,7 +213,7 @@ public class ErrorPositionTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(2));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(2));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(1));
     }
 
@@ -233,7 +233,7 @@ public class ErrorPositionTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(5));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(2));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(2));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(5));
     }
 
@@ -247,7 +247,7 @@ public class ErrorPositionTests
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(0));
     }
 
@@ -301,7 +301,7 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
         Assert.That(result.ErrorLine, Is.EqualTo(1),
             "after EndOfLine consumes NEL, the next position is on line 1");
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
     }
 
     [Test]
@@ -315,7 +315,7 @@ public class ErrorPositionTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
     }
 
     [Test]
@@ -329,7 +329,7 @@ public class ErrorPositionTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
     }
 
     [Test]
@@ -342,7 +342,7 @@ public class ErrorPositionTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
     }
 
     [Test]
@@ -355,7 +355,7 @@ public class ErrorPositionTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
     }
 
 }

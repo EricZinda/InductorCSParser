@@ -114,7 +114,7 @@ Second, where the natural grammar *does* reject (an unterminated string, a
 bad escape letter, a raw control character), the position it reports is
 already right, because InductorParser reports its deepest failure and that's
 a good pointer here, but every message is the mechanical fallback
-"unexpected 'x'". A recognizer with a caret, not a diagnostic. This is the
+"Unexpected 'x' at line L, column C". A recognizer with a caret, not a diagnostic. This is the
 same finding the Pep508 sample reached.
 
 Two different gaps, then. The surrogate errors need new *rules* (the grammar

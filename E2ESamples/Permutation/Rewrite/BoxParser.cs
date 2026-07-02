@@ -80,11 +80,19 @@ public static class BoxParser
     public static bool TryParse(string input, out Box box, out BoxError? error)
     {
         box = default;
-        var result = BoxParser.Box.Parse(input);
+        // BoxError surfaces position through its Line / Column fields, so the
+        // message text stays position-less.
+        var options = new ParseOptions
+        {
+            WithErrorTemplate = "{message}",
+            PositionalErrorTemplate = "unexpected '{character}'.",
+            EndOfInputErrorTemplate = "unexpected end of input.",
+        };
+        var result = BoxParser.Box.Parse(input, options);
         if (!result.Success)
         {
             error = new BoxError(
-                result.ErrorMessage, result.ErrorCharIndex, result.ErrorLine, result.ErrorColumn);
+                result.ErrorMessage, result.ErrorCharIndex, result.ErrorLine, result.ErrorCharColumn);
             return false;
         }
 

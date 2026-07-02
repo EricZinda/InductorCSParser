@@ -25,7 +25,7 @@ public class WithErrorTests
         var result = document.Parse("1 = ;");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("Expected a setting name"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("Expected a setting name at line 1, column 1."));
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
     }
 
@@ -72,7 +72,7 @@ public class WithErrorTests
         var result = rule.Parse("#x");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("need digits"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need digits at line 1, column 2."));
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     }
 
@@ -95,7 +95,7 @@ public class WithErrorTests
         var result = rule.Parse("\"hello");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("unterminated string"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("unterminated string at line 1, column 7."));
         Assert.That(result.ErrorCharIndex, Is.EqualTo("\"hello".Length));
     }
 
@@ -121,7 +121,7 @@ public class WithErrorTests
         var result = rule.Parse("\"hello");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected one of: string, x"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected one of: string, x at line 1, column 7."));
         Assert.That(result.ErrorCharIndex, Is.EqualTo("\"hello".Length));
     }
 
@@ -144,7 +144,7 @@ public class WithErrorTests
         // anchors at the deepest position its subtree reached, also 2.
         // Two forced failures at the same depth: the first one recorded
         // wins, and the inner recorded before the outer.
-        Assert.That(result.ErrorMessage, Is.EqualTo("forced inner"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("forced inner at line 1, column 3."));
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
     }
 

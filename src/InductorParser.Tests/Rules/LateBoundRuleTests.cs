@@ -92,7 +92,7 @@ public class LateBoundRuleTests
     {
         // All the modifier methods would silently do nothing on a
         // LateBoundRule because the rule is transparent at parse time.
-        // Fail loudly instead.
+        // They throw instead.
         var expression = new LateBoundRule("expression");
 
         Assert.Throws<InvalidOperationException>(() => expression.As("someOtherName"));

@@ -7,3 +7,5 @@ docs/primer1.md
 docs/primer2.md
 docs/primer3.md
 docs/primer4.md
+docs/primerFailure.md
+docs/tutorial-peek.md
