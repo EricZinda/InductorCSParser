@@ -155,9 +155,13 @@ internal sealed class IdentifierRule : Rule
     // that SPACE head and a literal leading space are the same U+0020 in
     // the stream. Keeping such a head would let a bare leading space start
     // an identifier, so the head check rejects it unless the caller opts
-    // the head in. Body side: every NFKx piece of an extra body rune must
-    // land in (XidContinue | extraBodyRunes). Any check failing throws
-    // with a message that names the offender and the fix.
+    // the head in. The same applies when the whole NFKx is a single rune
+    // (U+00A0 NO-BREAK SPACE decomposes to a bare SPACE, U+00B2
+    // SUPERSCRIPT TWO to a plain digit): that one converted rune is what
+    // ends up in the start set, so it gets the same check. Body side:
+    // every NFKx piece of an extra body rune must land in
+    // (XidContinue | extraBodyRunes). Any check failing throws with a
+    // message that names the offender and the fix.
     //
     // The walker in ValidateNormalizationAll visits parents before
     // children, so by the time it recurses into the embedded OneOfRules
@@ -199,6 +203,9 @@ internal sealed class IdentifierRule : Rule
                 _extraStartRunes, form, TokenSet.XidStart | _extraStartRunes, NfkxPieceScope.Head,
                 out string headOffendingStart, out string headConversion, out string offendingHead))
         {
+            // This wording holds whether the conversion is one rune or
+            // several: for a one-rune conversion the "first character" is
+            // the whole conversion.
             throw new InvalidOperationException(
                 $"Identifier can't compile under {form}: the extraStartRunes entry " +
                 $"\"{headOffendingStart}\" becomes \"{headConversion}\", and its first " +
@@ -221,6 +228,8 @@ internal sealed class IdentifierRule : Rule
                 _extraBodyRunes, form, TokenSet.XidContinue | _extraBodyRunes, NfkxPieceScope.All,
                 out string offendingBody, out string bodyConversion, out string bodyMissingPiece))
         {
+            // Like the head check, this wording holds whether the conversion
+            // is one rune or several.
             throw new InvalidOperationException(
                 $"Identifier can't compile under {form}: the extraBodyRunes entry " +
                 $"\"{offendingBody}\" becomes \"{bodyConversion}\", and \"{bodyMissingPiece}\" " +
@@ -345,10 +354,14 @@ internal sealed class IdentifierRule : Rule
     // XidStart, the rest land in XidContinue, verified by
     // XidIdentifierTests.XidStart_compatibility_continuations_are_all_in_XidContinue),
     // so their own ~130K entries are guaranteed and don't need re-checking.
-    // Entries that are form-stable or whose NFKx is a single rune pass
-    // trivially: TryGetMultiRuneConversion returns false and there's nothing
-    // to check (for a single-rune entry the only piece is its own head,
-    // which the caller already listed).
+    // Entries that are form-stable pass trivially: TryGetConversion returns
+    // false and there's nothing to check. Every entry that changes under the
+    // form is checked, whether its conversion is one rune or several.
+    // AddProjectedRunes puts the converted runes of every such entry into
+    // the sets the compiled rule matches against, so a one-rune conversion
+    // needs the same membership test a multi-rune head does. U+00A0
+    // converts to a bare SPACE, and skipping that check would put SPACE in
+    // the start set with no opt-in.
     private static bool AllCompatibilityPiecesIn(
         TokenSet extras, NormalizationForm form, TokenSet allowedRunes, NfkxPieceScope scope,
         out string entry, out string expansion, out string offendingPiece)
@@ -379,7 +392,7 @@ internal sealed class IdentifierRule : Rule
     {
         expansion = "";
         offendingPiece = "";
-        if (!TryGetMultiRuneConversion(entry, form, out string? converted))
+        if (!TryGetConversion(entry, form, out string? converted))
             return true;
         bool isHead = true;
         foreach (int rune in RuneHelpers.EnumerateRuneValues(converted))
@@ -406,11 +419,14 @@ internal sealed class IdentifierRule : Rule
         return true;
     }
 
-    // Returns true and sets `converted` if `entry`'s NFKx is a multi-rune
-    // sequence. Returns false when the entry is form-stable, when the
-    // conversion is single-rune, or when Normalize throws (in practice, an
-    // unpaired surrogate). Short-circuits the rune count at 2.
-    private static bool TryGetMultiRuneConversion(
+    // Returns true and sets `converted` if `entry` changes under the form,
+    // whether the conversion is a single rune or several. Returns false when
+    // the entry is form-stable, when the conversion comes back empty, or
+    // when Normalize throws (in practice, an unpaired surrogate). This
+    // deliberately mirrors AddProjectedRunes: every conversion this reports
+    // is one that would land in the start / body sets, so every one gets
+    // checked.
+    private static bool TryGetConversion(
         string entry, NormalizationForm form,
         [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? converted)
     {
@@ -419,13 +435,9 @@ internal sealed class IdentifierRule : Rule
         {
             if (entry.IsNormalized(form)) return false;
             string normalized = entry.Normalize(form);
-            int count = 0;
-            foreach (int _ in RuneHelpers.EnumerateRuneValues(normalized))
-            {
-                count++;
-                if (count > 1) { converted = normalized; return true; }
-            }
-            return false;
+            if (normalized.Length == 0) return false;
+            converted = normalized;
+            return true;
         }
         catch (ArgumentException)
         {
