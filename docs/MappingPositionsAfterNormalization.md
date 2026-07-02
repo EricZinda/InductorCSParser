@@ -40,7 +40,7 @@ The §3 quote names two specific normalized forms, but the same guarantee covers
 
 So for canonical forms, the algorithm walks both strings side by side with `StringInfo.GetNextTextElement`, one grapheme at a time. When the normalized pointer reaches the failure position, the original pointer is at the right spot.
 
-Compatibility forms (FormKC, FormKD) don't get this guarantee. They can produce sequences that recompose into a different grapheme count. In Unicode 16 the only such case is the Korean compatibility-jamo example above. To handle it, the algorithm verifies at each grapheme boundary that the side-by-side walk hasn't drifted.
+Compatibility forms (FormKC, FormKD) don't get this guarantee, and it's worth being precise about what actually breaks. Grapheme counts change all the time under these forms: the "ﬁ" ligature becomes the two graphemes "fi", and Thai "กำ" (KO KAI followed by SARA AM, one grapheme) splits into two when SARA AM decomposes. Those cases are harmless, because each original grapheme still converts, on its own, to a matching piece of the normalized string. What breaks the side-by-side walk is the Korean example above: the conversions of *adjacent original graphemes* merge into one grapheme, so normalizing the original one grapheme at a time stops lining up with the normalized string. In Unicode 16 the only characters that do this are Korean jamo, both the compatibility jamo the example uses (U+3131, U+314F) and their halfwidth siblings (U+FFA1, U+FFC2). To catch the merge, the algorithm verifies at each grapheme boundary that the side-by-side walk hasn't drifted.
 
 ## The algorithm
 
@@ -83,7 +83,7 @@ TranslatePosition(original, normalized, normalizedPosition, F):
 
 For canonical forms, the check always passes (per the §3 guarantee above). The chunk is always one grapheme. O(N) total work.
 
-For compatibility forms, the check fails for a couple of iterations whenever compatibility decomposition produces one of the rare grapheme-count-changing cases. The chunk absorbs the extra graphemes until the region ends and the check passes again. These multi-grapheme regions are tiny in practice (two graphemes for Korean compatibility jamo), so the extra cost is small.
+For compatibility forms, the check fails for a couple of iterations whenever the conversions of adjacent original graphemes merge (the rare Korean-jamo case). The chunk absorbs the extra graphemes until the region ends and the check passes again. These multi-grapheme regions are tiny in practice (two graphemes for Korean jamo), so the extra cost is small. A lone grapheme that expands, like "ﬁ" becoming "fi", never triggers this. Its conversion matches the normalized string on the first try, so the check passes and the walk moves on without absorbing anything.
 
 Worst case is O(N²) if every grapheme were part of one giant multi-grapheme region. Real text doesn't look like that, and the walker runs only on parse failure (off the hot path), so even the pathological cost is acceptable.
 
@@ -106,8 +106,8 @@ We checked the [Unicode 16 character database](https://www.unicode.org/Public/16
 - For Tulu-Tigalari and Gurung Khema, the second decomposed character is a combining mark. UAX #29 keeps a combining mark inside the same grapheme as the preceding character.
 - For Kirat Rai, the second decomposed character is a Hangul-style vowel, which UAX #29 also keeps inside the same grapheme.
 
-So none of these add new multi-grapheme cases. As of Unicode 16, Korean compatibility jamo are still the only case where compatibility normalization changes the grapheme count.
+So none of these add new multi-grapheme cases. As of Unicode 16, Korean jamo (compatibility and halfwidth forms) are still the only characters where compatibility normalization merges adjacent original graphemes into one. That's a much narrower claim than "the grapheme count never changes otherwise". Count changes are common under FormKC and FormKD: "ﬁ" becomes the two-grapheme "fi", Thai "กำ" splits into two graphemes, and the Arabic ligature U+FDFA expands into an 18-grapheme phrase. Each of those converts one original grapheme to a matching piece of the normalized string, so the per-boundary check passes and the walker handles them with no absorption. The regression tests in `InductorParser.Tests/DocExamples/MappingPositionsAfterNormalizationExamples.cs` keep these counterexamples on record.
 
 Sample code points to verify against when a future Unicode version ships: U+1138E TULU-TIGALARI LETTER AI, U+113C7 TULU-TIGALARI VOWEL SIGN OO, U+16D69 KIRAT RAI VOWEL SIGN O, U+16121 GURUNG KHEMA VOWEL SIGN U.
 
-If a future Unicode release does introduce a real new grapheme-count-changing composite, it just works. The runtime check on each grapheme boundary detects any kind of grapheme-count change, not just the Korean case it was designed for. No code change needed.
+If a future Unicode release does introduce a real new boundary-merging composite, it just works. The runtime check on each grapheme boundary detects any drift between the side-by-side walk and the normalized string, not just the Korean case it was designed for. No code change needed.

@@ -21,14 +21,20 @@ namespace InductorParser.Lexing;
 //   * Compatibility forms (FormKC, FormKD): walk the original
 //     grapheme by grapheme, verify at each boundary that normalizing
 //     the chunk-since-the-last-verified-boundary matches the next
-//     portion of the normalized string. When the check fails (Korean
-//     compatibility jamo is the known case), the chunk absorbs the
-//     next grapheme and the check is tried again. The check is
-//     general: it catches any grapheme-count change, so correctness
-//     doesn't depend on which script triggered it. Korean jamo being
-//     the only such case in Unicode 16 just keeps the absorbed chunks
-//     small. See docs/MappingPositionsAfterNormalization.md for why
-//     this per-boundary check is correct.
+//     portion of the normalized string. The check fails when the
+//     conversions of adjacent original graphemes merge into one
+//     grapheme, which in Unicode 16 only Korean jamo sequences do
+//     (compatibility and halfwidth forms). The chunk then absorbs
+//     the next grapheme and the check is tried again. A lone
+//     grapheme that expands (the fi ligature becoming "fi", Thai
+//     SARA AM splitting in two) passes the check on the first try
+//     and never needs absorption. The check is general: it catches
+//     any drift between the per-grapheme walk and the normalized
+//     string, so correctness doesn't depend on which script
+//     triggered it. Korean jamo being the only merge case in
+//     Unicode 16 just keeps the absorbed chunks small. See
+//     docs/MappingPositionsAfterNormalization.md for why this
+//     per-boundary check is correct.
 //
 // When the position lands inside a grapheme (or multi-grapheme region)
 // that got rewritten, the walker snaps back to the start of that

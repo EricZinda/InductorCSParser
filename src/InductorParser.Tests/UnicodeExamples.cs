@@ -582,6 +582,19 @@ internal static class UnicodeExamples
     // Compatibility Jamo block. NFKC folds to U+1161 (JUNGSEONG A).
     public static readonly string HangulLetterAGrapheme = Canary("ㅏ", "hangul letter a (compatibility jamo)", 0x314F);
 
+    // U+FFA1 HALFWIDTH HANGUL LETTER KIYEOK. Halfwidth jamo from the
+    // Halfwidth and Fullwidth Forms block. NFKC converts it to U+1100
+    // (CHOSEONG KIYEOK), the same conjoining jamo the compatibility
+    // jamo U+3131 above converts to.
+    public static readonly string HalfwidthHangulKiyeokGrapheme = Canary("ﾡ", "halfwidth hangul letter kiyeok", 0xFFA1);
+
+    // U+FFC2 HALFWIDTH HANGUL LETTER A. Halfwidth jamo. NFKC converts
+    // it to U+1161 (JUNGSEONG A), the same conjoining jamo the
+    // compatibility jamo U+314F above converts to, so a halfwidth
+    // kiyeok + a pair composes to U+AC00 (가) under FormKC exactly
+    // like the compatibility pair does.
+    public static readonly string HalfwidthHangulAGrapheme = Canary("ￂ", "halfwidth hangul letter a", 0xFFC2);
+
     // U+304B HIRAGANA LETTER KA. Used as a base in tests of
     // Katakana-Hiragana voiced-sound-mark interactions.
     public static readonly string HiraganaKaGrapheme = Canary("か", "hiragana letter ka", 0x304B);
