@@ -1506,7 +1506,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     }
 
     // InlineWhitespace is "whitespace within a line": every rune that
-    // char.IsWhiteSpace accepts minus the seven UAX #18 single-rune line
+    // char.IsWhiteSpace accepts minus the seven UTS #18 single-rune line
     // terminators (LF, VT, FF, CR, NEL, LS, PS). It doesn't decompose
     // cleanly into UnicodeCategory values, so it's built by a predicate
     // scan rather than CategoriesUnion. For line terminators see
@@ -1539,11 +1539,11 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     /// <summary>
     /// Intra-line whitespace: every rune char.IsWhiteSpace accepts except the
-    /// UAX #18 line terminators. See <see cref="LineTerminators"/> for those.
+    /// UTS #18 line terminators. See <see cref="LineTerminators"/> for those.
     /// </summary>
     public static TokenSet InlineWhitespace => _inlineWhitespace.Value;
 
-    // The seven single-rune line terminators (UAX #18 Annex C). The single
+    // The seven single-rune line terminators (UTS #18 §1.6, RL1.6). The single
     // source of truth: IsLineTerminator and the LineTerminators set below both
     // derive from this list, so the two can't drift apart. A plain int[], not a
     // TokenSet, so IsLineTerminator stays usable from InlineWhitespace's lazy
@@ -1560,7 +1560,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     };
 
     /// <summary>
-    /// The line terminators defined by UAX #18 Annex C: the seven single-rune
+    /// The line terminators defined by UTS #18 §1.6 (RL1.6): the seven single-rune
     /// terminators LF (U+000A), VT (U+000B), FF (U+000C), CR (U+000D), NEL
     /// (U+0085), LINE SEPARATOR (U+2028), PARAGRAPH SEPARATOR (U+2029), plus the
     /// two-rune CRLF (which UAX #29 keeps glued together as one
@@ -1586,7 +1586,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     }
 
     /// <summary>
-    /// Full-Unicode intra-line whitespace plus every UAX #18 line terminator
+    /// Full-Unicode intra-line whitespace plus every UTS #18 line terminator
     /// (the seven single-rune terminators and the two-rune CRLF). Use
     /// this for grammars that treat any whitespace as an ordinary separator. For
     /// ASCII-only whitespace use <see cref="Ascii.AnyWhitespace"/>.
@@ -1632,7 +1632,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         /// </summary>
         /// <remarks>
         /// VT (U+000B) and FF (U+000C) look like ordinary whitespace, but
-        /// UAX #18 counts them as line terminators. That's why they're in
+        /// UTS #18 counts them as line terminators. That's why they're in
         /// <see cref="TokenSet.LineTerminators"/>, why Rules.EndOfLine()
         /// consumes them, and why <see cref="InlineWhitespace"/> (SPACE and TAB)
         /// leaves them out. Use this set for grammars that treat newlines as
@@ -1699,7 +1699,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     /// <summary>
     /// True when <paramref name="c"/> is one of the single-rune line terminators
-    /// UAX #18 Annex C defines: LF (U+000A), VT (U+000B), FF (U+000C),
+    /// UTS #18 §1.6 (RL1.6) defines: LF (U+000A), VT (U+000B), FF (U+000C),
     /// CR (U+000D), NEL (U+0085), LINE SEPARATOR (U+2028), or PARAGRAPH SEPARATOR
     /// (U+2029).
     /// </summary>
@@ -1715,7 +1715,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     /// <summary>
     /// True when <paramref name="codepoint"/> is one of the single-rune line
-    /// terminators UAX #18 Annex C defines. See <see cref="IsLineTerminator(char)"/>.
+    /// terminators UTS #18 §1.6 (RL1.6) defines. See <see cref="IsLineTerminator(char)"/>.
     /// </summary>
     public static bool IsLineTerminator(int codepoint)
     {

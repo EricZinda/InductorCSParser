@@ -101,7 +101,7 @@ public readonly struct ParseResult
     /// <see cref="ErrorCharIndex"/> and the original input.
     /// </summary>
     /// <remarks>
-    /// Line breaks follow UAX #18 Annex C, the same set Rules.EndOfLine()
+    /// Line breaks follow UTS #18 §1.6 (RL1.6), the same set Rules.EndOfLine()
     /// accepts: LF, CRLF (one break, not two), lone CR, VT, FF, NEL (U+0085),
     /// LS (U+2028), PS (U+2029). That's a superset of the LF, CRLF, and lone CR
     /// a Language Server Protocol client recognizes, so the number matches an

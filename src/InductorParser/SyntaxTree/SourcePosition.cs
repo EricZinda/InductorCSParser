@@ -8,7 +8,7 @@ namespace InductorParser.SyntaxTree;
 /// <remarks>
 /// Line and CharColumn are zero-based. CharColumn counts UTF-16 code units, the same unit as
 /// <see cref="CharIndex"/>, matching the Language Server Protocol convention editor diagnostics
-/// use. <see cref="TokenColumn"/> is the grapheme-based counterpart, for human-facing output. Line breaks follow UAX #18 Annex C, the same set Rules.EndOfLine() accepts: LF, CRLF (one
+/// use. <see cref="TokenColumn"/> is the grapheme-based counterpart, for human-facing output. Line breaks follow UTS #18 §1.6 (RL1.6), the same set Rules.EndOfLine() accepts: LF, CRLF (one
 /// break, not two), lone CR, VT, FF, NEL (U+0085), LS (U+2028), PS (U+2029). Keeping the two sets
 /// aligned matters for grammars that use EndOfLine() on Unicode input: every terminator the grammar
 /// consumes also bumps the reported line. That set is a superset of the LF, CRLF, and lone CR a
@@ -95,7 +95,7 @@ public readonly struct SourcePosition
     /// to (not including) the next line terminator, taken from <see cref="Input"/>.
     /// </summary>
     /// <remarks>
-    /// The line boundaries are the UAX #18 terminators the parser counts for
+    /// The line boundaries are the UTS #18 terminators the parser counts for
     /// <see cref="Line"/> (see <see cref="TokenSet.IsLineTerminator(char)"/>), so
     /// this stays consistent with <see cref="Line"/> / <see cref="CharColumn"/> and
     /// handles CRLF and the rarer terminators that splitting the input on '\n'

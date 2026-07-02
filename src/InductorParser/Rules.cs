@@ -742,7 +742,7 @@ public static class Rules
     /// <item><description>End-of-input, but only when <paramref name="eofIsEol"/> is <c>true</c></description></item>
     /// </list>
     /// Those line terminators are the ones defined by the Unicode regex
-    /// spec (UAX #18, Annex C). CRLF is tried first so a CR immediately
+    /// spec (UTS #18 §1.6, RL1.6). CRLF is tried first so a CR immediately
     /// followed by an LF is consumed as one terminator rather than split
     /// into two.
     /// </remarks>

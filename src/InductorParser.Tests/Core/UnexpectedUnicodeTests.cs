@@ -1094,7 +1094,7 @@ public class UnexpectedUnicodeTests
     [Test]
     public void Line_separator_U_2028_is_a_token_not_matched_by_Token_LF()
     {
-        // U+2028 LINE SEPARATOR. UAX #18 line terminator, but a
+        // U+2028 LINE SEPARATOR. UTS #18 line terminator, but a
         // distinct rune from LF. The famous ECMAScript / JSON
         // mismatch bug: pre-ES2019 JavaScript string literals
         // disallowed U+2028 and U+2029 as unescaped characters
@@ -1159,7 +1159,7 @@ public class UnexpectedUnicodeTests
     public void Next_line_U_0085_is_a_token_not_matched_by_Token_LF()
     {
         // U+0085 NEXT LINE (NEL). C1 control imported from EBCDIC
-        // for round-tripping with IBM mainframe text. UAX #18
+        // for round-tripping with IBM mainframe text. UTS #18
         // line terminator. Real-world quirk: Java's BufferedReader
         // treats NEL as a line terminator on some JVMs but not
         // others, and XML 1.1 added it to the newline list while

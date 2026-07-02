@@ -11,7 +11,7 @@ namespace InductorParser.Tests;
 //
 // Two things under test:
 //
-//   1. UAX #18 Annex C coverage: every single-rune terminator (LF, VT,
+//   1. UTS #18 §1.6 (RL1.6) coverage: every single-rune terminator (LF, VT,
 //      FF, CR, NEL, LS, PS) is accepted, and the two-rune CRLF is
 //      consumed as a single terminator rather than split.
 //   2. The eofIsEol flag and Optional wrapping compose as advertised:
@@ -109,7 +109,7 @@ public class EndOfLineRuleTests
     public void Rejects_ordinary_whitespace()
     {
         // Space (U+0020) and tab (U+0009) are Whitespace but NOT line
-        // terminators under UAX #18 Annex C.
+        // terminators under UTS #18 §1.6 (RL1.6).
         var spaceResult = EndOfLine().Parse(Ch(0x0020));
         Assert.That(spaceResult.Success, Is.False);
 

@@ -301,10 +301,10 @@ public class TokenSetTests
     }
 
     [Test]
-    public void IsLineTerminator_matches_the_UAX18_single_rune_terminators()
+    public void IsLineTerminator_matches_the_UTS18_single_rune_terminators()
     {
         // The public predicate the docs use to scan for line ends. True for the
-        // seven single-rune terminators UAX #18 defines, false for ordinary content.
+        // seven single-rune terminators UTS #18 defines, false for ordinary content.
         foreach (char terminator in new[]
                  {
                      '\n', '\r',
@@ -1088,7 +1088,7 @@ public class TokenSetTests
     public void InlineWhitespace_contains_intra_line_whitespace_only()
     {
         // Built via char.IsWhiteSpace predicate over the BMP, MINUS the
-        // seven UAX #18 single-rune line terminators. Includes the
+        // seven UTS #18 single-rune line terminators. Includes the
         // obvious ASCII intra-line whitespace plus a few Unicode-only
         // runes that are also intra-line.
         Assert.That(TokenSet.InlineWhitespace.ContainsRune(' '), Is.True);
@@ -1132,7 +1132,7 @@ public class TokenSetTests
     public void AnyWhitespace_contains_inline_whitespace_and_line_terminators()
     {
         // The full-Unicode "regex \s" set: every rune that's intra-line
-        // whitespace OR a UAX #18 single-rune line terminator.
+        // whitespace OR a UTS #18 single-rune line terminator.
         Assert.That(TokenSet.AnyWhitespace.ContainsRune(' '), Is.True);
         Assert.That(TokenSet.AnyWhitespace.ContainsRune('\t'), Is.True);
         Assert.That(TokenSet.AnyWhitespace.ContainsRune('\r'), Is.True);
@@ -1190,7 +1190,7 @@ public class TokenSetTests
         Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\t'), Is.True);
         Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\r'), Is.True);
         Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\n'), Is.True);
-        // VT and FF are ASCII line terminators (UAX #18 / TokenSet.LineTerminators),
+        // VT and FF are ASCII line terminators (UTS #18 / TokenSet.LineTerminators),
         // so they're in this set too.
         Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\v'), Is.True);   // vertical tab
         Assert.That(TokenSet.Ascii.AnyWhitespace.ContainsRune('\f'), Is.True);   // form feed

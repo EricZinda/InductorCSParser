@@ -278,7 +278,7 @@ public class ErrorPositionTests
     }
 
     // Char(codepoint) returns a string holding one Unicode scalar value
-    // for the UAX #18 line-terminator tests below. Embedding control runes
+    // for the UTS #18 line-terminator tests below. Embedding control runes
     // (NEL U+0085, LS U+2028, PS U+2029, VT U+000B, FF U+000C) as literal
     // characters in the source would either get stripped by editors or
     // break the C# compiler's line scanner (LS / PS terminate logical lines
@@ -288,7 +288,7 @@ public class ErrorPositionTests
     [Test]
     public void NEL_consumed_by_EndOfLine_bumps_ErrorLine()
     {
-        // Rules.EndOfLine() accepts NEL (U+0085) per UAX #18 Annex C as a
+        // Rules.EndOfLine() accepts NEL (U+0085) per UTS #18 §1.6 (RL1.6) as a
         // line terminator. The line/column counter has to recognize the same
         // terminator set or the reported position drifts off-by-one-line for
         // any grammar that uses EndOfLine() on non-LF/CR input. Pre-fix,
@@ -307,7 +307,7 @@ public class ErrorPositionTests
     [Test]
     public void Line_separator_consumed_by_EndOfLine_bumps_ErrorLine()
     {
-        // LINE SEPARATOR (U+2028) is in UAX #18 Annex C and matched by
+        // LINE SEPARATOR (U+2028) is in UTS #18 §1.6 (RL1.6) and matched by
         // EndOfLine(). Same alignment requirement as NEL.
         var rule = And(EndOfLine(), Token('X'), Eof());
         var result = rule.Parse(Char(0x2028) + "Y");
@@ -321,7 +321,7 @@ public class ErrorPositionTests
     [Test]
     public void Paragraph_separator_consumed_by_EndOfLine_bumps_ErrorLine()
     {
-        // PARAGRAPH SEPARATOR (U+2029) is in UAX #18 Annex C and matched by
+        // PARAGRAPH SEPARATOR (U+2029) is in UTS #18 §1.6 (RL1.6) and matched by
         // EndOfLine(). Same alignment requirement.
         var rule = And(EndOfLine(), Token('X'), Eof());
         var result = rule.Parse(Char(0x2029) + "Y");
@@ -335,7 +335,7 @@ public class ErrorPositionTests
     [Test]
     public void Vertical_tab_consumed_by_EndOfLine_bumps_ErrorLine()
     {
-        // VT (U+000B) is in UAX #18 Annex C and matched by EndOfLine().
+        // VT (U+000B) is in UTS #18 §1.6 (RL1.6) and matched by EndOfLine().
         var rule = And(EndOfLine(), Token('X'), Eof());
         var result = rule.Parse(Char(0x000B) + "Y");
 
@@ -348,7 +348,7 @@ public class ErrorPositionTests
     [Test]
     public void Form_feed_consumed_by_EndOfLine_bumps_ErrorLine()
     {
-        // FF (U+000C) is in UAX #18 Annex C and matched by EndOfLine().
+        // FF (U+000C) is in UTS #18 §1.6 (RL1.6) and matched by EndOfLine().
         var rule = And(EndOfLine(), Token('X'), Eof());
         var result = rule.Parse(Char(0x000C) + "Y");
 
