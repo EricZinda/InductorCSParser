@@ -745,6 +745,19 @@ public static class Rules
     /// spec (UTS #18 §1.6, RL1.6). CRLF is tried first so a CR immediately
     /// followed by an LF is consumed as one terminator rather than split
     /// into two.
+    /// <para>
+    /// Why CRLF is a Literal and not just a set member: on .NET 5+ the
+    /// lexer hands CRLF back as one token, and
+    /// <see cref="TokenSet.LineTerminators"/> carries CRLF as a multi-rune
+    /// entry, so the OneOf alternative would match it as a unit on its
+    /// own. But on legacy runtimes (.NET Framework, .NET Core 3.x, Unity's
+    /// Mono) StringInfo predates the Unicode rule that glues CR to LF, so
+    /// CR and LF arrive as two separate tokens. A OneOf reads exactly one
+    /// token, so alone it would match the CR and leave the LF to count as
+    /// a second terminator. A Literal matches its text across token
+    /// boundaries, so the Literal("\r\n") alternative consumes the pair
+    /// as one terminator on every runtime.
+    /// </para>
     /// </remarks>
     /// <param name="eofIsEol">
     /// When <c>true</c>, end-of-input counts as an end-of-line. The

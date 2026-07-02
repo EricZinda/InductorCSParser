@@ -1,32 +1,27 @@
 # Unicode Gotchas
 
-Most Unicode surprises live outside the "what is a token?" question the lexer answers, so the fix is usually caller-side preprocessing (clean the input before parsing) or grammar-design (pick the right `TokenSet`, add explicit tolerance rules). A few gotchas below are about how `OneOf` / `NoneOf` / `Literal` interact with multi-rune tokens, and those sections call that out directly.
-
-This doc lists the common gotchas, what goes wrong, and the idiomatic workaround for each. For lexer internals (how tokens are detected, how positions are tracked), see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md).
+This doc lists the common gotchas, what goes wrong, and the idiomatic workaround for each. For lexer internals (how tokens are detected, how positions are tracked), see [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). Unicode used as a deliberate attack (invisible characters, homoglyph lookalikes, variation selectors, combining-mark tricks) is covered in the security primer, [Primer4.md](Primer4.md), with the attack and the defense for each.
 
 ## Identifier Matching
 
-Matching "an identifier" the way a programming language does is a solved Unicode problem, but each language still gets to define its own profile. UAX #31 defines two useful properties, `XID_Start` and `XID_Continue`, and the default identifier shape is `XID_Start XID_Continue*`. Python and Rust build on this shape; C#, ECMAScript, Java, and Swift have similar but not identical rules. The parser exposes the UAX #31-shaped rule as `Rules.Identifier()`:
+The identifier rule every tutorial writes, a letter then letters or digits, fails on real-world input in two ways. Hand-rolled as `And(OneOf(TokenSet.Letters), ZeroOrMore(OneOf(TokenSet.Letters | TokenSet.Digits)))`, it rejects Hindi `हिन्दी` and Thai `กำ`. In those scripts one visible letter is several runes (a base character plus a vowel mark), the lexer hands that letter back as one multi-rune token, and a rune set like `TokenSet.Letters` never contains a multi-rune token. Letter-or-digit is also the wrong test character by character: it turns away `foo_bar` (underscore is legal after the first character in virtually every language) and lets in the Arabic ligature `ﷺ` (U+FDFA), a letter by Unicode's General_Category that identifier specs exclude on purpose, because its compatibility decomposition is a full multi-word phrase.
+
+**Fix.** Use `Rules.Identifier()`. Matching "an identifier" the way a programming language does is a solved Unicode problem, but each programming language still gets to define its own profile. Unicode Standard Annex #31 (UAX #31), the identifier spec, defines two useful properties, `XID_Start` (can begin an identifier) and `XID_Continue` (can appear after the first character), and the default identifier shape is `XID_Start XID_Continue*`. Python and Rust build on this shape. C#, ECMAScript, Java, and Swift have similar but not identical rules. The parser exposes the UAX #31-shaped rule as `Rules.Identifier()`:
 
 ```csharp
 var name = Identifier().As("name");
 ```
 
-That accepts `foo`, `café`, `καλημέρα`, `ℼ`, and rejects `2foo`, `_foo` (underscore is not in XID_Start in the base UAX #31 profile), and the Arabic ligature `ﷺ` (U+FDFA, which is a letter by General_Category but excluded because its NFKC decomposition is a full multi-word phrase).
+That accepts `foo`, `foo_bar`, `café`, `καλημέρα`, `ℼ`, and rejects `2foo`, `_foo` (underscore can continue an identifier but not start one in the base UAX #31 profile), and the ligature `ﷺ`.
 
-Two quiet wins you get for free:
-
-- **NFC equivalence (UAX #31 R4).** Compiling a grammar with `Rule.Compile()` defaults to `NormalizationForm.FormC`, so `café` precomposed (U+00E9) and `café` as `e` + combining acute (U+0301) normalize to the same string before the lexer sees them, and both parse to the same identifier. You don't write any code for this.
-
-- **Runtime-backed `XID_Start` and `XID_Continue` tables.** Yes: `TokenSet.XidStart` and `TokenSet.XidContinue` are the Unicode XID properties used by UAX #31's default identifier shape, not custom Inductor-specific character classes. The version caveat is where the Unicode data comes from. Most of each set comes from Unicode General_Category data exposed by the .NET runtime: letters and letter numbers for start characters, plus combining marks, decimal digits, and connector punctuation for continuation characters. `TokenSet.Xid.cs` stores only the small UAX #31 add/remove lists needed on top of those categories, such as `U+2118` SCRIPT CAPITAL P and the Arabic ligatures excluded for NFKC stability. Exact code point coverage follows the Unicode version exposed by the runtime's category tables plus those stored exception tables.
-
-Identifier matching works across the scripts covered by the runtime's Unicode data, including scripts where a "letter" is a base character plus a vowel mark (Devanagari, Thai, Arabic-with-vowels). When `StringInfo` bundles those clusters into single tokens, `Identifier()` uses [`WithinToken`](#withintoken-general-purpose-sub-grapheme-matching) internally to walk each token's runes and check them individually against the identifier rules:
+It also accepts the Hindi and Thai identifiers the hand-rolled rule rejected. The identifier properties are defined per rune, not per token, so `Identifier()` uses [`WithinToken`](#withintoken-general-purpose-sub-grapheme-matching) internally to look inside each token and check its runes one at a time:
 
 ```csharp
 Identifier().Parse("हिन्दी");   // matches: Devanagari conjunct as one token
 Identifier().Parse("กำ");        // Thai with SARA AM: also matches
 Identifier().Parse("καλημέρα"); // Greek: matches
 ```
+To understand why this is necessary, see the comments on IdentifierRule.cs. 
 
 ### WithinToken: general-purpose sub-grapheme matching
 
@@ -100,19 +95,21 @@ Java identifiers use `Character.isJavaIdentifierStart` and `Character.isJavaIden
 
 Swift has its own enumerated list of ranges that resembles XID but isn't a property reference. Not reproducible via `Identifier` parameters alone.
 
-If you are restricting to a specific script for security reasons (mixed-script phishing, homoglyph attacks), see the Homoglyph Confusables section below. `Identifier()` is the general-purpose match, not a script-restricted one.
+If you are restricting to a specific script for security reasons (mixed-script phishing, homoglyph attacks), see the "Homoglyphs" section of the security primer, [Primer4.md](Primer4.md#homoglyphs). `Identifier()` is the general-purpose match, not a script-restricted one.
 
 ## Case-Insensitive Matching Beyond ASCII
 
-The `LiteralIgnoreAsciiCase` leaf does ASCII case-insensitive matching (A ↔ a) and is all most grammars need. Full Unicode case-insensitive matching has script-specific surprises the lexer doesn't handle: German `ß` uppercases to `SS` (one character becomes two), Turkish has dotted-i and dotless-i as distinct letters, Greek final sigma (ς) pairs with regular sigma only at word boundaries. The leaf is ASCII-only on purpose. Extending it to full Unicode silently produces wrong results on Turkish, Greek, and German text.
+The `LiteralIgnoreAsciiCase` leaf does ASCII case-insensitive matching (A ↔ a) and is all most grammars need. Full Unicode case-insensitive matching has script-specific surprises the lexer doesn't handle: German `ß` uppercases to `SS` (one character becomes two), Turkish has dotted-i and dotless-i as distinct letters, Greek final sigma (ς) pairs with regular sigma only at word boundaries. The leaf is ASCII-only on purpose. Extending it to full Unicode is a much bigger piece of work that was out of scope for now.
 
-**Fix.** Use the built-in leaf and accept that case-insensitive matching of non-ASCII text isn't supported:
+**Fix.** For ASCII keywords, the built-in leaf is the cheap path:
 
 ```csharp
 public static readonly Rule SelectKeyword = LiteralIgnoreAsciiCase("select");
 ```
 
-Don't try to extend this to full Unicode case-insensitive matching. It'll get subtly wrong for Turkish, Greek, and German.
+When a grammar genuinely needs case-insensitive matching of non-ASCII text, do it with the real algorithm. The Unicode Standard defines full case-insensitive matching in section 5.18 "Case Mappings" of the core spec (the operation it calls caseless matching), and .NET ships the tables: `CompareInfo.IsPrefix(remaining, pattern, CompareOptions.IgnoreCase, out int matchLength)` (.NET 5+) answers "does the input start with this pattern, ignoring case, and how many chars did it consume". A user-defined `Rule` subclass can build a leaf on that primitive (see the `Rule` class docs for how to subclass).
+
+`CompareInfo` is .NET's culture-aware string comparer, and the culture you take it from decides which characters count as the same letter in different cases. Take it from `CultureInfo.InvariantCulture` by default. Those rules are culture-neutral and identical on every machine. Don't use the machine's current culture, or the same grammar parses differently depending on the OS language of whoever runs it. The one reason to pick a specific culture is a grammar for that language's text. Turkish is the classic example: it pairs `i` with dotted `İ` and dotless `ı` with `I`, so a case-insensitive Turkish keyword only matches correctly with the Turkish culture's `CompareInfo`, while the invariant culture pairs `i` with `I` the English way.
 
 ## BOM At File Start
 
@@ -125,93 +122,13 @@ var cleaned = input.TrimStart('\uFEFF');
 var result = grammar.Parse(cleaned);
 ```
 
-## Zero-Width and Invisible Format Characters
-
-U+200B (zero-width space), U+200C (zero-width non-joiner), U+200D (zero-width joiner), U+00AD (soft hyphen), and similar runes appear as characters in the input but render as nothing or render conditionally. A string like `"ap\u00ADple"` looks like `"apple"` in an editor but doesn't match `Literal("apple")` because the soft hyphen is a real character in the token stream.
-
-On modern .NET, the lexer handles ZWJ correctly inside emoji sequences (`StringInfo` groups them into one token per UAX #29). Outside emoji contexts, the two joiner characters still attach to whatever comes before them rather than standing on their own. ZWJ (U+200D) and ZWNJ (U+200C) carry UAX #29 grapheme-break properties (ZWJ and Extend), so rule GB9 glues them onto the preceding character. The string `a` then U+200D then `b` lexes as two tokens, the joiner riding along with `a`, then `b`, not three separate tokens. A joiner only comes through on its own when nothing precedes it, like one at the very start of the input. The format characters that genuinely break are the ones with no such gluing rule: U+200B (zero-width space), U+00AD (soft hyphen), and friends each lex as their own single-rune token, which is what makes the soft hyphen above break `Literal("apple")`. Legacy `StringInfo` runtimes have broader ZWJ gaps covered in [Pre-.NET 5 Token Segmentation](#pre-net-5-token-segmentation).
-
-**Fix.** The caller strips them before parsing, or the grammar's character classes tolerate them explicitly. For stripping:
-
-```csharp
-static readonly HashSet<int> InvisibleFormat = new()
-{
-    0x200B,  // zero-width space
-    0x200C,  // zero-width non-joiner
-    0x200D,  // zero-width joiner (keep if you care about emoji ZWJ sequences!)
-    0x00AD,  // soft hyphen
-    0xFEFF,  // BOM / zero-width no-break space
-};
-
-var cleaned = string.Concat(input.EnumerateRunes()
-    .Where(r => !InvisibleFormat.Contains(r.Value)));
-
-var result = grammar.Parse(cleaned);
-```
-
-If your grammar processes emoji sequences, don't strip ZWJ (U+200D) indiscriminately. You'll break 👨‍👩‍👧‍👦 and similar sequences.
-
-## Homoglyph Confusables
-
-Cyrillic `а` (U+0430) and Latin `a` (U+0061) render identically in most fonts but are different code points (different integers in the Unicode standard). A grammar using `TokenSet.Ascii.Letters` rejects Cyrillic `а` even though the user "sees" a Latin `a`. A grammar using `TokenSet.Letters` accepts both and doesn't distinguish them. The lexer treats the code points exactly as they are. They really are different runes.
-
-This is a grammar-design decision. For security-sensitive grammars (mixed-script identifier detection, phishing-resistance) it's a *feature*: refusing homoglyphs protects against visual-spoofing attacks. For forgiving grammars it's a gotcha.
-
-**Fix.** Pick the character class that matches your threat model:
-
-```csharp
-// Latin script only: Basic Latin letters plus the Latin-1 Supplement
-// letters. Rejects Cyrillic а, Greek ο, and other confusables. A
-// code-point range like U+00C0..U+00FF isn't solidly letters: Unicode
-// parked × (U+00D7 MULTIPLICATION SIGN) and ÷ (U+00F7 DIVISION SIGN)
-// between the accented-letter runs, so a bare Range(0x00C0, 0x00FF) would
-// quietly admit × and ÷ as identifier characters. Intersecting the range
-// with TokenSet.Letters lets the General_Category letter classes do the
-// filtering: it drops the two signs and tracks whatever Unicode version
-// the runtime ships. The Greek set below does the same thing.
-static readonly TokenSet LatinLetters =
-    (TokenSet.Ascii.Letters | TokenSet.Range(new Rune(0x00C0), new Rune(0x00FF)))
-    & TokenSet.Letters;
-
-// Greek and Coptic block, letters only, the same intersect-with-Letters
-// trick. This block is even more riddled with non-letters: U+037E GREEK
-// QUESTION MARK (renders as ';') and U+0387 GREEK ANO TELEIA (renders as
-// '·') are punctuation, U+0375/U+0384/U+0385 are symbols, and several code
-// points are unassigned. A bare Range(0x0370, 0x03FF) would admit all of
-// those, which is the opposite of what a confusable-resistant set wants.
-// TokenSet.Letters keeps only the actual letters.
-static readonly TokenSet Greek =
-    TokenSet.Range(new Rune(0x0370), new Rune(0x03FF)) & TokenSet.Letters;
-
-public static readonly Rule LatinIdentifier =
-    OneOrMore(OneOf(LatinLetters | TokenSet.Ascii.Digits | TokenSet.Runes("_")));
-```
-
-For full UAX #31 Script_Extensions-based detection (the standard algorithm for "is this identifier mixing scripts in a suspicious way"), use a dedicated library. The parser's `TokenSet` is the coarse-grained control.
-
-## Variation Selectors
-
-U+FE00..U+FE0F and U+E0100..U+E01EF are invisible runes that select alternate glyph forms for the preceding character. U+FE0F is the one you are most likely to encounter: it flips emoji between text-style (`❤`) and emoji-style (`❤️`) rendering. Two strings that visually look identical can contain or omit a variation selector, which makes exact string matching fail. The lexer doesn't strip them.
-
-**Fix.** The caller strips them if the grammar doesn't care about glyph selection:
-
-```csharp
-var cleaned = string.Concat(input.EnumerateRunes()
-    .Where(r => r.Value is not (>= 0xFE00 and <= 0xFE0F)
-             && r.Value is not (>= 0xE0100 and <= 0xE01EF)));
-
-var result = grammar.Parse(cleaned);
-```
-
-If you are doing emoji-sensitive parsing, be careful: variation selectors are part of the encoded form of some emoji (the emoji-style heart, some keycap sequences), and stripping them can change which emoji the user sees.
-
 ## CRLF Line Endings
 
 Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 rule GB3), so the lexer hands the parser one two-char token whenever it sees a Windows line ending. This breaks any line-based grammar that tries to match or stop on a bare `\n`:
 
-- `Token('\n')` matches a one-element token whose content is exactly `'\n'`. The CRLF token has content `"\r\n"`, so `Token('\n')` does *not* match it.
-- `OneOf(TokenSet.Runes("\n"))` matches when the next token is one of the scalars in the set. The CRLF token has two runes, and `TokenSet.Runes("\n")` is rune-only, so the cluster isn't in the set. To register the CRLF cluster as one multi-rune entry, use `TokenSet.Graphemes("\r\n")`; a "any line terminator" set then unions CR, LF, VT, FF, NEL, LS, PS, *and* the CRLF cluster, which is what `EndOfLine()` is for.
-- `NoneOf(TokenSet.Runes("\n"))` is the dual: a multi-rune token isn't in any rune-only set, so a `NoneOf` over a rune-only set passes CRLF through. `ZeroOrMore(NoneOf(stopSet))` used to scan "everything up to a newline" will greedily swallow the terminating CRLF as body content instead of stopping at it, then the terminator fails because there is nothing left.
+- `Token('\n')` matches one token whose text is exactly `\n`. The CRLF token's text is `\r\n`. No match.
+- `OneOf(TokenSet.Runes("\n"))` matches one token that is a single rune from the set. The CRLF token is two runes, so it's never in a rune set. No match.
+- `NoneOf(TokenSet.Runes("\n"))` fails the other way around: CRLF isn't in the set, so `NoneOf` *matches* it. A scan like `ZeroOrMore(NoneOf(...))` that's supposed to stop at the line break swallows the CRLF as content, and the line-terminator rule that was supposed to match next finds it already eaten.
 
 **Fix.** Use the built-in `EndOfLine()` rule. It is `Or(Literal("\r\n"), OneOf(TokenSet.LineTerminators))` under the hood, so the CRLF token is tried as a unit before the single-rune terminators (LF, CR, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR per UTS #18 §1.6, RL1.6). Pass `eofIsEol: true` for the "line terminator here, or end of input" case, and wrap with `Optional` for "line terminator here, or none at all". Anywhere a grammar cares about line breaks, use these instead of building one with `Token('\n')` or a `OneOf` over a rune set:
 
@@ -267,15 +184,10 @@ NoneOf(TokenSet.Letters).Compile(null).Parse(loneSurrogate).Success;   // True
 
 **Fix.** Decide whether you actually want lone surrogates. If you're sweeping raw or possibly-malformed content under `Compile(null)` (WTF-8 round-tripping, lenient handling of unpaired surrogates), `NoneOf` admitting them is usually exactly what you want, so leave it. If you want to exclude them, match against the surrogate-free scalar universe instead: `OneOf(TokenSet.Universe - stopSet)`. `Universe` leaves out the surrogate block, so a lone surrogate isn't a member and the rule won't match it. And remember it only matters under `Compile(null)`: the default `FormC` compile rejects the malformed input upstream, before the rule runs.
 
-## The Common Thread
-
-Most of these are Unicode surprises that live *outside* the lexer's tokenization decision. They fix either upstream (caller-side input preprocessing) or sideways (grammar-design choice of character classes and tolerance rules).
-
-If you want the parser to handle any of these natively someday, the "Open Questions" section of [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md) tracks which ones might eventually become first-class.
 
 ## Pre-.NET 5 Token Segmentation
 
-This one is different from the gotchas above. It isn't an input-side surprise the caller can preprocess away, and it isn't a grammar-design choice. It's the runtime under your feet behaving differently depending on which .NET you're on.
+This one is different from the gotchas above. It isn't an input-side surprise the caller can preprocess away, and it isn't a grammar-design choice. It's the runtime behaving differently depending on which .NET you're on.
 
 The lexer calls `System.Globalization.StringInfo.GetNextTextElement` to find the next token boundary. On .NET 5 and later this is UAX #29 conformant, because the BCL switched to ICU for globalization. On .NET Framework, .NET Core 3.x, and the Mono runtime that Unity ships (which IL2CPP compiles from), `StringInfo` still uses an algorithm Microsoft wrote before UAX #29 stabilized. It's roughly "Unicode 3.x grapheme cluster": base character plus combining marks, surrogate pairs as one unit, Hangul syllable basics. It's not extended-grapheme-cluster aware.
 
@@ -292,6 +204,7 @@ What breaks:
 - Emoji plus skin-tone modifier. 👋🏽 splits into two.
 - Regional indicator pairs (flag emoji). 🇺🇸 splits into two.
 - Thai SARA AM. "kam" (ก + ํา) splits.
+- CRLF. The legacy walker predates the UAX #29 rule that glues CR to LF (GB3), so `\r\n` lexes as two tokens instead of one. `EndOfLine()` is built to absorb this: its `Literal("\r\n")` alternative matches across token boundaries, so the pair is one terminator on either runtime. Grammars that match the pair another way (`Token("\r\n")`, a bare `OneOf(TokenSet.LineTerminators)`) see it split.
 - Other extended-grapheme-cluster rules added after about 2003 (Prepend characters, Extended_Pictographic sequences).
 
 The common thread is timing. Combining marks have been in Unicode since the start, so the legacy walker handles them. Everything UAX #29 added later, especially the emoji rules from 2014 onward, the legacy walker doesn't know about. Microsoft updated `StringInfo` to ICU in .NET 5. Unity's Mono didn't follow, and IL2CPP compiles from that Mono.
@@ -299,6 +212,6 @@ The common thread is timing. Combining marks have been in Unicode since the star
 **Fix.** Two options, in order of effort:
 
 1. If the grammar doesn't actually need to tokenize emoji or complex-script text at the user-perceived character level, do nothing. ASCII, source code, config files, and most DSLs are unaffected.
-2. Add a custom UAX #29 implementation into the parser. Tracked under [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md#open-questions), "Fixing the Unicode version for the lexer." Gives full conformance everywhere, at the cost of maintaining Unicode data in the repository.
+2. Implement a custom UAX #29 implementation into the parser. Gives full conformance everywhere, at the cost of maintaining Unicode data in the repository.
 
 The repo's test suite documents the broken cases explicitly. Look for tests gated behind `#if !UNITY_INCLUDE_TESTS` in [GraphemeRuleTests.cs](../src/InductorParser.Tests/Rules/GraphemeRuleTests.cs). Each one is a category that the legacy walker mishandles.

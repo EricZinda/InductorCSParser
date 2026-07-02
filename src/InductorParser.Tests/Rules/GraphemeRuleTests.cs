@@ -309,6 +309,21 @@ public class GraphemeRuleTests
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
+
+    [Test]
+    public void Grapheme_with_crlf_matches_one_grapheme_on_uax29_runtime()
+    {
+        // CRLF: CR + LF is one grapheme cluster. UAX #29 rule GB3. Two
+        // runes, one grapheme on UAX #29. Legacy splits, so this Token
+        // throws at construction there. Line-based grammars survive the
+        // split anyway when they use EndOfLine(), whose Literal("\r\n")
+        // alternative matches across token boundaries (see
+        // EndOfLineRuleTests for the mechanism).
+        var rule = Token("\r\n");
+        var result = rule.Parse("\r\n");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
 #endif
 
     [Test]

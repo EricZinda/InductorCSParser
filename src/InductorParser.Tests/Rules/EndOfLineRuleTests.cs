@@ -223,6 +223,35 @@ public class EndOfLineRuleTests
     }
 
     [Test]
+    public void Literal_crlf_spans_a_two_token_crlf_where_OneOf_stops_at_the_cr()
+    {
+        // Why EndOfLine() is Or(Literal("\r\n"), OneOf(TokenSet.LineTerminators))
+        // rather than the OneOf alone: on legacy runtimes (.NET Framework,
+        // .NET Core 3.x, Unity's Mono) StringInfo predates the UAX #29 rule
+        // that glues CR to LF, so the lexer hands CR and LF back as two
+        // separate tokens. OneOf reads exactly one token, so there it would
+        // match the CR alone and leave the LF to count as a second
+        // terminator. Literal matches its text across token boundaries, so
+        // it consumes the pair as one terminator on every runtime.
+        //
+        // A UAX #29 runtime never serves CRLF as two tokens at the top
+        // level, so this test recreates that stream shape with WithinToken:
+        // its sub-lexer hands the inner rule the outer CRLF token one rune
+        // per Read, the same two-token stream the legacy lexer serves, and
+        // requires the inner rule to consume every rune.
+
+        // Literal("\r\n") consumes both one-rune tokens as one match.
+        var literalResult = WithinToken(Literal(CRLF)).Parse(CRLF);
+        Assert.That(literalResult.Success, Is.True, literalResult.ErrorMessage);
+
+        // OneOf(LineTerminators) matches the CR token and stops, leaving
+        // the LF unconsumed, so WithinToken rejects the partial match.
+        var oneOfResult = WithinToken(OneOf(TokenSet.LineTerminators)).Parse(CRLF);
+        Assert.That(oneOfResult.Success, Is.False,
+            "OneOf reads exactly one token, so it matches the CR and leaves the LF behind");
+    }
+
+    [Test]
     public void ScanUntil_LineTerminators_stops_at_CRLF_cluster()
     {
         // The line-comment shape: ScanUntil(LineTerminators) walks body

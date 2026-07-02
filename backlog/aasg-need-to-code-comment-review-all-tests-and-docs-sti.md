@@ -9,3 +9,5 @@ docs/primer3.md
 docs/primer4.md
 docs/primerFailure.md
 docs/tutorial-peek.md
+docs/UnicodeGotchas.md
+docs/UnicodeInternalsArchitecure.md
