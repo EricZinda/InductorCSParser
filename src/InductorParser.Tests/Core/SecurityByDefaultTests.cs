@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using NUnit.Framework;
@@ -377,5 +378,106 @@ public class SecurityByDefaultTests
             "classic Unicode-security issue the parser does NOT defend " +
             "against by default. Use a script-restricted TokenSet " +
             "(see UnicodeGotchasExamples) when this matters.");
+    }
+
+    // Verifies the Primer4 "Invisible characters" widened-set recipe:
+    // UnicodeCategory.Format is NOT the full set of invisible
+    // characters, so a Format-only filter has an exploitable hole. The
+    // clearest example is U+3164 HANGUL FILLER, which renders as blank
+    // width but is category Letter (Lo), so it passes both a
+    // Format-only filter and a "letters only" rule. The variation
+    // selectors and COMBINING GRAPHEME JOINER are category Mark (Mn),
+    // also outside Format. The widened set unions Format with those
+    // strays and closes the hole.
+    [Test]
+    public void Invisible_HangulFiller_escapes_a_Format_only_filter_but_the_widened_set_catches_it()
+    {
+        var formatOnly = TokenSet.Category(UnicodeCategory.Format);
+
+        var invisibles =
+            TokenSet.Category(UnicodeCategory.Format)
+            | TokenSet.FromRanges(new (int Low, int High)[]
+              {
+                  (0x034F, 0x034F),    // COMBINING GRAPHEME JOINER
+                  (0x115F, 0x1160),    // Hangul choseong / jungseong fillers
+                  (0x3164, 0x3164),    // HANGUL FILLER
+                  (0xFFA0, 0xFFA0),    // halfwidth Hangul filler
+                  (0xFE00, 0xFE0F),    // variation selectors 1-16
+                  (0xE0100, 0xE01EF),  // variation selectors 17-256
+              });
+
+        // The hole: a Format-only filter doesn't contain these invisibles.
+        Assert.That(formatOnly.ContainsRune(0x3164), Is.False,
+            "HANGUL FILLER is category Letter (Lo), not Format, so a Format-only filter misses it");
+        Assert.That(formatOnly.ContainsRune(0x034F), Is.False,
+            "COMBINING GRAPHEME JOINER is category Mark (Mn), not Format");
+        Assert.That(formatOnly.ContainsRune(0xFE0F), Is.False,
+            "VARIATION SELECTOR-16 is category Mark (Mn), not Format");
+
+        // The widened set catches every one of them, including the
+        // supplementary variation selectors above the BMP.
+        Assert.That(invisibles.ContainsRune(0x3164), Is.True);
+        Assert.That(invisibles.ContainsRune(0x034F), Is.True);
+        Assert.That(invisibles.ContainsRune(0xFE0F), Is.True);
+        Assert.That(invisibles.ContainsRune(0xE0100), Is.True);
+
+        // Why HANGUL FILLER is especially dangerous: it's a Letter, so
+        // a "letters only" rule accepts it too.
+        Assert.That(TokenSet.Letters.ContainsRune(0x3164), Is.True,
+            "HANGUL FILLER is a Letter, so OneOf(TokenSet.Letters) would accept it");
+
+        // End to end: a username rule that rejects invisibles with the
+        // Format-only set lets the blank-width filler through, while the
+        // widened set rejects it.
+        var withFormatOnly = And(OneOrMore(NoneOf(formatOnly)), Eof()).Compile();
+        var withWidened = And(OneOrMore(NoneOf(invisibles)), Eof()).Compile();
+
+        string smuggled = "ad" + (char)0x3164 + "min";   // U+3164 HANGUL FILLER: displays close to "admin"
+        Assert.That(withFormatOnly.Parse(smuggled).Success, Is.True,
+            "the Format-only filter is the hole: it accepts the HANGUL FILLER");
+        Assert.That(withWidened.Parse(smuggled).Success, Is.False,
+            "the widened Invisibles set rejects the HANGUL FILLER");
+    }
+
+    // Verifies the Primer4 "Trojan Source" narrower filter: for
+    // human-language text, reject only the twelve bidi control
+    // characters instead of all of Format (which would also remove
+    // ZWNJ / ZWJ that Persian, Indic scripts, and emoji need). This
+    // asserts the set is exactly the twelve controls with nothing
+    // adjacent swept in.
+    [Test]
+    public void BidiControls_set_covers_the_twelve_bidi_format_characters()
+    {
+        var bidiControls = TokenSet.FromRanges(new (int Low, int High)[]
+        {
+            (0x202A, 0x202E),   // LRE, RLE, PDF, LRO, RLO
+            (0x2066, 0x2069),   // LRI, RLI, FSI, PDI
+            (0x200E, 0x200F),   // LRM, RLM
+            (0x061C, 0x061C),   // ALM
+        });
+
+        int[] theTwelve =
+        {
+            0x202A, 0x202B, 0x202C, 0x202D, 0x202E,   // embeddings, PDF, overrides
+            0x2066, 0x2067, 0x2068, 0x2069,           // isolates + PDI
+            0x200E, 0x200F,                           // LRM, RLM
+            0x061C,                                   // ALM
+        };
+        foreach (int codepoint in theTwelve)
+            Assert.That(bidiControls.ContainsRune(codepoint), Is.True,
+                $"U+{codepoint:X4} is a bidi control and must be in the set");
+
+        // Boundaries: characters just outside each range aren't swept in.
+        Assert.That(bidiControls.ContainsRune(0x2029), Is.False, "PARAGRAPH SEPARATOR is not a bidi control");
+        Assert.That(bidiControls.ContainsRune(0x2065), Is.False, "just below the isolate range");
+        Assert.That(bidiControls.ContainsRune(0x206A), Is.False, "just above the isolate range");
+        Assert.That(bidiControls.ContainsRune('a'), Is.False, "an ordinary letter is not a bidi control");
+
+        // End to end: a rule that rejects bidi controls stops the
+        // RIGHT-TO-LEFT OVERRIDE while accepting clean text.
+        var noBidi = And(OneOrMore(NoneOf(bidiControls)), Eof()).Compile();
+        Assert.That(noBidi.Parse("grant").Success, Is.True);
+        Assert.That(noBidi.Parse("gr" + (char)0x202E + "ant").Success, Is.False,
+            "the RLO (U+202E) is rejected by the bidi-control filter");
     }
 }
