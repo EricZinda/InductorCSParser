@@ -83,7 +83,7 @@ Sometimes names do matter though: trace output, error messages, serialization. T
 
 Here are different ways you can name rules:
 
-**`.As(nameof(X))` on a rule held in a field.** This is the standard form for grammars organized as a class. The C# compiler checks the `nameof` against the field name, so a rename via IDE refactor updates the string automatically:
+**`.As(nameof(X))` on a rule held in a field.** This is the standard form for grammars organized as a class. The C# compiler checks the `nameof` against the field name, so a rename using an IDE refactor will update the string automatically:
 
 ```csharp
 public static readonly Rule SettingName =
