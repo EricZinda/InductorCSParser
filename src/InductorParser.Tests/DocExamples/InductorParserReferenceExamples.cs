@@ -213,16 +213,19 @@ public class InductorParserReferenceExamples
     {
         var key = Identifier(extraStartRunes: TokenSet.Runes("_")).As("key");
 
-        // Build a separate identifier-shaped alternative for valueAtom:
-        // this spot needs a flattened, unnamed identifier, and `key` is
-        // named (so Preserve). Calling .Flatten(FlattenType.Flatten) on
-        // it would throw rather than silently override the .As choice.
+        // Named so each matched value survives as its own node under
+        // `values` (the name flips the Or's default Flatten to Preserve).
+        // The identifier-shaped alternative is built fresh rather than
+        // reusing `key`: this spot needs a flattened, unnamed identifier,
+        // and `key` is named (so Preserve). Calling
+        // .Flatten(FlattenType.Flatten) on it would throw rather than
+        // silently override the .As choice.
         var valueAtom = Or(
             Float().Flatten(FlattenType.Flatten),
             Integer().Flatten(FlattenType.Flatten),
             Identifier(extraStartRunes: TokenSet.Runes("_"))
                 .Flatten(FlattenType.Flatten)
-        );
+        ).As("value");
 
         var values = And(
             valueAtom,
@@ -265,10 +268,18 @@ public class InductorParserReferenceExamples
         var pairs = result.Tree!.FindAll(pair).ToList();
         Assert.That(pairs.Count, Is.EqualTo(3));
 
-        // pair[0]: colors = red, green, blue
+        // pair[0]: colors = red, green, blue. Each value is its own
+        // [value] node because valueAtom is named, which is the doc's
+        // tree-diagram shape.
         Assert.That(pairs[0].Find(key)!.ToString(), Is.EqualTo("colors"));
-        Assert.That(pairs[0].Find(values)!.ToString(), Is.EqualTo("redgreenblue"),
-            "values' ToString concatenates leaves; the comma delimiters Delete-flatten away");
+        var colorsValues = pairs[0].Find(values)!;
+        Assert.That(colorsValues.Children.Select(c => c.ToString()).ToArray(),
+            Is.EqualTo(new[] { "red", "green", "blue" }),
+            "each value survives as its own node because valueAtom is named");
+        Assert.That(colorsValues.Children.All(c => c.Is(valueAtom)), Is.True,
+            "every child of values comes from the valueAtom rule");
+        Assert.That(colorsValues.ToString(), Is.EqualTo("redgreenblue"),
+            "values' ToString still concatenates all descendant leaves (the commas are Delete'd)");
 
         // pair[1]: difficulty = hard
         Assert.That(pairs[1].Find(key)!.ToString(), Is.EqualTo("difficulty"));
@@ -278,20 +289,18 @@ public class InductorParserReferenceExamples
         Assert.That(pairs[2].Find(key)!.ToString(), Is.EqualTo("retries"));
         Assert.That(pairs[2].Find(values)!.ToString(), Is.EqualTo("3"));
 
-        // The doc's tree diagram for this example can't label the integer
-        // value node "[integerExpression]". No grammar rule is named that, and
-        // Integer() is flattened (.Flatten(FlattenType.Flatten)) inside valueAtom,
-        // so "3" reaches the tree as a bare rune leaf, exactly like the letters
-        // of "hard", with no named node around it. (Asserting the opposite,
-        // Has.Some.EqualTo("integerExpression"), fails, which is what proved the
-        // doc diagram wrong.)
+        // The value nodes all carry valueAtom's .As name. No rule is named
+        // "integerExpression", so no node can carry that label, and the
+        // integer value sits under a [value] node exactly like the other
+        // atoms.
         var allLabels = result.Tree!.Walk().Select(s => result.DisplayName(s)).ToList();
         Assert.That(allLabels, Has.None.EqualTo("integerExpression"),
-            "No rule is named 'integerExpression'; the doc tree diagram must not show one.");
+            "No rule is named 'integerExpression', so the tree can't contain that label.");
         var retriesValues = pairs[2].Find(values)!;
         Assert.That(retriesValues.Children.Select(c => c.ToString()).ToArray(),
             Is.EqualTo(new[] { "3" }),
-            "The integer value flattens to one bare rune leaf under values, like the other atoms.");
+            "the retries values list holds one [value] node whose text is 3");
+        Assert.That(retriesValues.Children.Single().Is(valueAtom), Is.True);
     }
 
     // "LINQ on the Symbol Tree": the doc lists four LINQ entry points
