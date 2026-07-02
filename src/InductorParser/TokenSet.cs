@@ -94,10 +94,6 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // of this set. Single-rune members contribute themselves,
     // multi-rune members contribute their first rune. Returns "this"
     // unchanged when there are no multi-rune entries.
-    //
-    // Used by primitives that operate strictly on rune intervals and
-    // can't query multi-rune entries directly: the scanner-skip path
-    // (Lexer.AdvanceUntilRuneIn requires a rune-only set). 
     internal TokenSet LookaheadFirstRunes
     {
         get
