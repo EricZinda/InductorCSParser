@@ -61,7 +61,7 @@
 // char count, so this isn't worked around at the rule level. See the backlog
 // item "No primitive to advance the cursor by a fixed code-unit (or byte)
 // count" for the underlying gap. For ASCII payloads, the common case for the
-// text protocols these target, none of this bites: one char per rune per
+// text protocols these target, none of this matters: one char per rune per
 // grapheme, and byte / code-unit / code-point counts all agree.
 //
 // These rules are still a great sample, though, just not exactly what the original did.

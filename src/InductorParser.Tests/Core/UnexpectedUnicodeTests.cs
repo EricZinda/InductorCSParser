@@ -1448,11 +1448,12 @@ public class UnexpectedUnicodeTests
         // with dot above) and ToLower("I") is "ı" (U+0131,
         // dotless small i), not the ASCII forms. Locale-aware
         // case-insensitive comparisons therefore disagree
-        // depending on the user's system locale. Bit Spotify in
-        // 2013 (Turkish iOS users couldn't log in if their email
-        // had 'I' in it), .NET Framework's String.Compare without
-        // an explicit culture, Win32 CompareString, Java's
-        // String.toLowerCase, and many others.
+        // depending on the user's system locale. It hurt Spotify
+        // in 2013 (Turkish iOS users couldn't log in if their
+        // email had 'I' in it), and it affects .NET Framework's
+        // String.Compare without an explicit culture, Win32
+        // CompareString, Java's String.toLowerCase, and many
+        // others.
         //
         // The parser's LiteralIgnoreAsciiCase is ASCII-only by
         // design specifically to avoid this. ASCII 'I' folds only

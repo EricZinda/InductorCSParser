@@ -106,8 +106,9 @@ No surprise there, and it was smooth.
 
 ## Where the friction was
 
-Getting those eleven messages right was *not* smooth. Three things bit
-us, and the order matters because the first one is the interesting one.
+Getting those eleven messages right was *not* smooth. Three things
+tripped us up, and the order matters because the first one is the
+interesting one.
 
 ### 1. A `.WithError` on a comma-list element fires when the comma is simply absent
 
