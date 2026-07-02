@@ -49,14 +49,14 @@ x = 42andy=0
 ```
 
 Original: `position 6: trailing characters: andy=0`
-Rewrite: `line 1, column 10: Parse failed at offset 9: unexpected 'y'.`
+Rewrite: `line 1, column 10: unexpected 'y'.`
 
 ```
 AAAA between 0:15:30
 ```
 
 Original: `position 17: trailing characters: :30`
-Rewrite: `line 1, column 18: Parse failed at offset 17: unexpected ':'.`
+Rewrite: `line 1, column 18: unexpected ':'.`
 
 ## Layout
 
@@ -123,7 +123,7 @@ RewriteAnd(
 For an input like `unread = "yes` (missing closing quote), the rewrite produces:
 
 ```
-line 1, column 10: Parse failed at offset 9: unexpected end of input.
+line 1, column 10: unexpected end of input.
 ```
 
 The Original parser produces:

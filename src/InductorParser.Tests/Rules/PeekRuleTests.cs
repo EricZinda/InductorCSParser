@@ -43,7 +43,7 @@ public class PeekRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected an 'a' ahead"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected an 'a' ahead at line 1, column 1."));
     }
 
     [Test]
@@ -69,7 +69,7 @@ public class PeekRuleTests
         // anchored at 0, with the user-supplied friendly message. Anything
         // else means the inner's exploration leaked past Peek's rollback.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'ab' ahead"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'ab' ahead at line 1, column 1."));
     }
 
     [Test]
@@ -94,7 +94,7 @@ public class PeekRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'xy' after 'abc'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'xy' after 'abc' at line 1, column 4."));
     }
 
     [Test]

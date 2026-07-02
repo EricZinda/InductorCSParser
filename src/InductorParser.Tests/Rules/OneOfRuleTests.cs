@@ -33,7 +33,7 @@ public class OneOfRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Does.StartWith("Parse failed at offset 0"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("Unexpected '1' at line 1, column 1."));
     }
 
     [Test]
@@ -48,7 +48,7 @@ public class OneOfRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need a letter"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need a letter at line 1, column 1."));
     }
 
     [Test]
@@ -62,7 +62,7 @@ public class OneOfRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need a letter"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need a letter at line 1, column 1."));
     }
 
     [Test]
@@ -83,7 +83,7 @@ public class OneOfRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected ';'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected ';' at line 1, column 4."));
     }
 
     [Test]

@@ -32,7 +32,7 @@ public class NoneOfRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("no digits here"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("no digits here at line 1, column 1."));
     }
 
     [Test]
@@ -44,7 +44,7 @@ public class NoneOfRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("wanted a non-digit"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("wanted a non-digit at line 1, column 1."));
     }
 
     [Test]

@@ -112,7 +112,7 @@ public class UnicodeAsAndWithErrorTests
         var result = rule.Parse("123");
 
         Assert.That(result.Success, Is.False, $"parse fails [{label}]");
-        Assert.That(result.ErrorMessage, Is.EqualTo(message), $"ErrorMessage [{label}]");
+        Assert.That(result.ErrorMessage, Is.EqualTo(message + " at line 1, column 1."), $"ErrorMessage [{label}]");
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0), $"ErrorCharIndex [{label}]");
     }
 
@@ -355,7 +355,7 @@ public class UnicodeAsAndWithErrorTests
         var result = rule.Parse("#x");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo(deep));
+        Assert.That(result.ErrorMessage, Is.EqualTo(deep + " at line 1, column 2."));
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     }
 
@@ -377,7 +377,7 @@ public class UnicodeAsAndWithErrorTests
         var result = rule.Parse("\"hello");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo(outerMessage));
+        Assert.That(result.ErrorMessage, Is.EqualTo(outerMessage + " at line 1, column 7."));
     }
 
     [TestCaseSource(nameof(UnicodeStringCatalog))]
@@ -437,7 +437,7 @@ public class UnicodeAsAndWithErrorTests
         // Unicode error message.
         var failure = word.Parse("123");
         Assert.That(failure.Success, Is.False);
-        Assert.That(failure.ErrorMessage, Is.EqualTo(errorMessage));
+        Assert.That(failure.ErrorMessage, Is.EqualTo(errorMessage + " at line 1, column 1."));
         Assert.That(failure.ErrorCharIndex, Is.EqualTo(0));
     }
 

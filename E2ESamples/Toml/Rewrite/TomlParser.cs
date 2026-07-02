@@ -39,7 +39,7 @@ public static class TomlParser
                 $"TOML parse error: {result.ErrorMessage}",
                 result.ErrorCharIndex,
                 result.ErrorLine,
-                result.ErrorColumn);
+                result.ErrorCharColumn);
         }
 
         var root = new TomlTable();

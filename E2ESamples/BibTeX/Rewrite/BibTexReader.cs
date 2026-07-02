@@ -38,11 +38,19 @@ public static class BibTexReader
 {
     public static IReadOnlyList<BibTexEntry> Parse(string input)
     {
-        var result = BibTexGrammar.Document.Parse(input);
+        // This sample renders the failure position itself (see the error type's
+        // formatting), so the message text stays position-less.
+        var options = new ParseOptions
+        {
+            WithErrorTemplate = "{message}",
+            PositionalErrorTemplate = "unexpected '{character}'.",
+            EndOfInputErrorTemplate = "unexpected end of input.",
+        };
+        var result = BibTexGrammar.Document.Parse(input, options);
         if (!result.Success)
         {
             int line = result.ErrorLine + 1;
-            int column = result.ErrorColumn + 1;
+            int column = result.ErrorCharColumn + 1;
             throw new FormatException($"line {line}, column {column}: {result.ErrorMessage}");
         }
         var entries = new List<BibTexEntry>();

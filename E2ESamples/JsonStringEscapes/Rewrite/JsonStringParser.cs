@@ -11,6 +11,7 @@
 using System;
 using System.Globalization;
 using System.Text;
+using InductorParser;
 
 namespace JsonStringEscapes.Rewrite;
 
@@ -37,14 +38,22 @@ public static class JsonStringParser
     {
         value = null;
 
-        var result = JsonStringGrammar.JsonString.Parse(literal);
+        // This sample renders the failure position itself (see the error type's
+        // formatting), so the message text stays position-less.
+        var options = new ParseOptions
+        {
+            WithErrorTemplate = "{message}",
+            PositionalErrorTemplate = "unexpected '{character}'.",
+            EndOfInputErrorTemplate = "unexpected end of input.",
+        };
+        var result = JsonStringGrammar.JsonString.Parse(literal, options);
         if (!result.Success)
         {
             error = new JsonStringParseError(
                 result.ErrorMessage,
                 result.ErrorCharIndex,
                 result.ErrorLine,
-                result.ErrorColumn,
+                result.ErrorCharColumn,
                 literal);
             return false;
         }

@@ -1697,13 +1697,32 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         return new TokenSet(list.ToArray());
     }
 
-    // True for the seven single-rune line terminators. Reads the shared
-    // LineTerminatorScalars list (not the LineTerminators TokenSet) so it stays
-    // usable from InlineWhitespace's lazy build without depending on TokenSet
-    // field initialization order. LineTerminators is built from the same list,
-    // so the predicate and the set can't disagree.
-    internal static bool IsLineTerminator(int codepoint)
+    /// <summary>
+    /// True when <paramref name="c"/> is one of the single-rune line terminators
+    /// UAX #18 Annex C defines: LF (U+000A), VT (U+000B), FF (U+000C),
+    /// CR (U+000D), NEL (U+0085), LINE SEPARATOR (U+2028), or PARAGRAPH SEPARATOR
+    /// (U+2029).
+    /// </summary>
+    /// <remarks>
+    /// This is the same set <see cref="LineTerminators"/> and Rules.EndOfLine()
+    /// recognize, so scanning raw input with it agrees with the line the parser
+    /// reports (ParseResult.ErrorLine, SourcePosition.Line). It tests one code
+    /// point, so the two-rune CRLF grapheme isn't matched as a unit, but the CR
+    /// of a CRLF is itself a terminator, so a char-by-char scan still stops a line
+    /// at the right place.
+    /// </remarks>
+    public static bool IsLineTerminator(char c) => IsLineTerminator((int)c);
+
+    /// <summary>
+    /// True when <paramref name="codepoint"/> is one of the single-rune line
+    /// terminators UAX #18 Annex C defines. See <see cref="IsLineTerminator(char)"/>.
+    /// </summary>
+    public static bool IsLineTerminator(int codepoint)
     {
+        // Reads the shared LineTerminatorScalars list (not the LineTerminators
+        // TokenSet) so it stays usable from InlineWhitespace's lazy build without
+        // depending on TokenSet field initialization order. LineTerminators is
+        // built from the same list, so the predicate and the set can't disagree.
         foreach (int terminator in LineTerminatorScalars)
             if (terminator == codepoint) return true;
         return false;

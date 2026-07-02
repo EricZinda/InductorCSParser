@@ -20,9 +20,9 @@ namespace InductorParser;
 /// The error-position family reports the same point (where the parse got
 /// furthest before failing) in different units: <see cref="ErrorCharIndex"/>
 /// (chars, i.e. UTF-16 code units), <see cref="ErrorTokenIndex"/> (tokens, where a
-/// token is one Unicode Grapheme), and the <see cref="ErrorLine"/>
-/// / <see cref="ErrorColumn"/> pair (zero-based line and column, the Language
-/// Server Protocol convention).
+/// token is one Unicode Grapheme), <see cref="ErrorLine"/>, and the column in
+/// either unit, <see cref="ErrorCharColumn"/> (chars, the Language Server Protocol
+/// convention) or <see cref="ErrorTokenColumn"/> (graphemes). All zero-based.
 /// Pick whichever matches the unit the caller will use the number in.
 /// <see cref="ErrorPosition"/> returns all four bundled into one SourcePosition
 /// struct, so callers that want more than one unit only pay for one walk of the
@@ -51,7 +51,7 @@ public readonly struct ParseResult
     /// </summary>
     /// <remarks>
     /// On GrammarMismatch, either the innermost WithError message set by the
-    /// grammar or a generated "Parse failed at offset N" fallback. On
+    /// grammar or a generated "Unexpected 'x' at line L, column C" fallback. On
     /// MalformedInput, the message from
     /// <see cref="ParseOptions.MalformedInputTemplate"/>. On a budget abort, the
     /// matching "Parse aborted: ..." string. See: docs/ErrorArchitecture.md
@@ -120,10 +120,11 @@ public readonly struct ParseResult
     }
 
     /// <summary>
-    /// Error position's zero-based column within the line, measured in chars (UTF-16 code units).
-    /// Computed lazily from <see cref="ErrorCharIndex"/> and the original input.
+    /// Error position's zero-based column within the line, measured in chars (UTF-16
+    /// code units, the Language Server Protocol unit). Computed lazily from
+    /// <see cref="ErrorCharIndex"/> and the original input.
     /// </summary>
-    public int ErrorColumn
+    public int ErrorCharColumn
     {
         get
         {
@@ -131,6 +132,23 @@ public readonly struct ParseResult
             return column;
         }
     }
+
+    /// <summary>
+    /// Error position's zero-based column within the line, measured in tokens
+    /// (Unicode graphemes). Computed lazily from <see cref="ErrorCharIndex"/> and
+    /// the original input.
+    /// </summary>
+    /// <remarks>
+    /// The human-facing counterpart to <see cref="ErrorCharColumn"/>: an emoji, a
+    /// flag, or a base character plus a combining mark earlier on the line counts
+    /// as one column, not as its several UTF-16 code units, so the number matches
+    /// the character a person sees. This is the unit the default error message
+    /// reports (via the {tokenColumnNumber} template placeholder). Use
+    /// <see cref="ErrorCharColumn"/> instead to match an editor or a Language
+    /// Server Protocol client, which count columns in chars.
+    /// </remarks>
+    public int ErrorTokenColumn =>
+        SourcePositionConverter.ToTokenColumn(_input ?? string.Empty, ErrorCharIndex);
 
     /// <summary>
     /// Error position in tokens (Unicode graphemes), using the

@@ -94,21 +94,21 @@ Here's what the bare grammar produced. "pos" is the caret offset.
 ```
 input                      natural grammar                       pos  ideal pos
 ""                         Unexpected end of input.                0    0  ok
-==1.0                      unexpected '='.                         0    0  ok
-.foo                       unexpected '.'.                         0    0  ok
-requests<>1.0              unexpected '>'.                          9    9  ok
+==1.0                      Unexpected '='.                         0    0  ok
+.foo                       Unexpected '.'.                         0    0  ok
+requests<>1.0              Unexpected '>'.                          9    9  ok
 requests>=                 Unexpected end of input.               10   10  ok
 requests >=                Unexpected end of input.               12   12  ok
-requests[extra1 extra2]    unexpected 'e'.                        16   16  ok
-requests[extra1,]          unexpected ']'.                        16   16  ok
+requests[extra1 extra2]    Unexpected 'e'.                        16   16  ok
+requests[extra1,]          Unexpected ']'.                        16   16  ok
 requests[extra1            Unexpected end of input.               15   15  ok
 requests(>=1.0             Unexpected end of input.               14   14  ok
 requests@                  Unexpected end of input.                9    9  ok
 requests @                 Unexpected end of input.               11   11  ok
-requests==1.0 oops         unexpected 'o'.                        14   14  ok
-requests oops              unexpected 'o'.                         9    9  ok
-requests=1.0               unexpected '1'.                         9    9  ok
-requests>=1.0,             unexpected ','.                        13   13  ok
+requests==1.0 oops         Unexpected 'o'.                        14   14  ok
+requests oops              Unexpected 'o'.                         9    9  ok
+requests=1.0               Unexpected '1'.                         9    9  ok
+requests>=1.0,             Unexpected ','.                        13   13  ok
 ```
 
 Two findings.
@@ -126,8 +126,10 @@ back to char 8, which `docs/ErrorArchitecture.md` and backlog item 0a04
 explain was the wrong call.)
 
 **Every message is useless.** All 16 are the mechanical fallback:
-"unexpected 'x'" or "Unexpected end of input." Not one of them tells the
-user they were missing a comma, or a version, or a closing bracket. The
+"Unexpected 'x'" or "Unexpected end of input." The table trims each to the
+part that varies. The real default appends " at line 1, column N", the same
+spot the pos column marks. Not one of them tells the user they were missing
+a comma, or a version, or a closing bracket. The
 natural grammar is a recognizer with a position, not a diagnostic.
 
 ### Step 4: fix it the way the docs say

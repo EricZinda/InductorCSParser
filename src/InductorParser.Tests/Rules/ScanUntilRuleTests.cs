@@ -1047,7 +1047,7 @@ public class ScanUntilRuleTests
         var result = rule.Parse("\\x\"");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("invalid escape character"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("invalid escape character at line 1, column 2."));
     }
 
     [Test]

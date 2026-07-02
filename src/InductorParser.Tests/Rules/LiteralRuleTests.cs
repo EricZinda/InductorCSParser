@@ -61,7 +61,7 @@ public class LiteralRuleTests
         var result = rule.Parse("xajor");
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'major'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'major' at line 1, column 1."));
     }
 
     [Test]
@@ -73,7 +73,7 @@ public class LiteralRuleTests
         var result = rule.Parse("majxr");
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'major'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'major' at line 1, column 4."));
     }
 
     [Test]
@@ -85,7 +85,7 @@ public class LiteralRuleTests
         var result = rule.Parse("maj");
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'major'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'major' at line 1, column 4."));
     }
 
     [Test]
@@ -95,7 +95,7 @@ public class LiteralRuleTests
         var result = rule.Parse("");
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'hi'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'hi' at line 1, column 1."));
     }
 
     [Test]
@@ -128,7 +128,7 @@ public class LiteralRuleTests
         var result = rule.Parse("select XXXX");
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(7));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'FROM'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'FROM' at line 1, column 8."));
     }
 
     [Test]
@@ -221,7 +221,7 @@ public class LiteralRuleTests
         var result = rule.Parse("maJxr");
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'major'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'major' at line 1, column 4."));
     }
 
     [Test]
@@ -404,9 +404,9 @@ public class LiteralRuleTests
 
         var range = result.Tree!.SourceRange!.Value;
         Assert.That(range.Start.Line, Is.EqualTo(0));
-        Assert.That(range.Start.Column, Is.EqualTo(0));
+        Assert.That(range.Start.CharColumn, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(5));
         Assert.That(range.End.Line, Is.EqualTo(1));
-        Assert.That(range.End.Column, Is.EqualTo(2));
+        Assert.That(range.End.CharColumn, Is.EqualTo(2));
     }
 }

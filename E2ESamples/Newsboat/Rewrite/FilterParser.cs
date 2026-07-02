@@ -62,14 +62,23 @@ public static class FilterParser
     public static bool TryParse(string input, out RewriteExpression? expression, out FilterParseError? error)
     {
         expression = null;
-        var result = Filter.Parse(input);
+        // This sample builds its own "line L, column C:" prefix from the
+        // ErrorLine / ErrorCharColumn fields (see FilterParseError.ToString), so the
+        // message stays position-less to avoid repeating the position.
+        var options = new ParseOptions
+        {
+            PositionalErrorTemplate = "unexpected '{character}'.",
+            EndOfInputErrorTemplate = "unexpected end of input.",
+            WithErrorTemplate = "{message}",
+        };
+        var result = Filter.Parse(input, options);
         if (!result.Success)
         {
             error = new FilterParseError(
                 result.ErrorMessage,
                 result.ErrorCharIndex,
                 result.ErrorLine,
-                result.ErrorColumn);
+                result.ErrorCharColumn);
             return false;
         }
 

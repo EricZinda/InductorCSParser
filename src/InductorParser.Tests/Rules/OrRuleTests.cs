@@ -34,7 +34,7 @@ public class OrRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Does.StartWith("Parse failed at offset 0"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("Unexpected 'x' at line 1, column 1."));
     }
 
     [Test]
@@ -52,7 +52,7 @@ public class OrRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a' at line 1, column 1."));
     }
 
     [Test]
@@ -74,7 +74,7 @@ public class OrRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a' at line 1, column 1."));
     }
 
     [Test]
@@ -92,7 +92,7 @@ public class OrRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need 'c'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need 'c' at line 1, column 3."));
     }
 
     [Test]
@@ -318,7 +318,7 @@ public class OrRuleTests
         var result = rule.Parse("!!");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected operator"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected operator at line 1, column 2."));
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     }
 
@@ -344,7 +344,7 @@ public class OrRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected one of the three forms"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected one of the three forms at line 1, column 4."));
     }
 
     [Test]

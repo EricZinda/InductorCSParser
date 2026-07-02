@@ -42,7 +42,7 @@ public class ScanWhileRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need a letter"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need a letter at line 1, column 1."));
     }
 
     [Test]
@@ -57,7 +57,7 @@ public class ScanWhileRuleTests
         // (position 3, the '!'), independent of whether .WithError is
         // attached. See ErrorArchitecture.md.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need four letters"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need four letters at line 1, column 4."));
     }
 
     [Test]
