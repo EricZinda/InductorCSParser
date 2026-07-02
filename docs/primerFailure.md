@@ -42,14 +42,14 @@ Your custom text flows through the template, `WithErrorTemplate`, which by defau
 
 The example above attaches `.WithError(...)` to a `Token('=')` that's constructed right there in the `And(...)`, so the message is bound to that one caller. But what if the rule you want to decorate is being used in several places? Setting `.WithError("...")` on the shared rule means it will be used everywhere that rule is shared.
 
-`AliasRule` is designed for this scenario. It runs the same inner rule but gives it a new identity, its own `.WithError(...)` slot, and its own `FlattenType`:
+`Alias(...)` is designed for this scenario. It wraps the shared rule in an alias that runs the same inner rule but has a new identity, its own `.WithError(...)` slot, and its own `FlattenType`:
 
 ```CSharp
 // shared, no error message
 var comma = Token(',').Flatten(FlattenType.Delete);  
 
 // At the one caller that wants a message:
-new AliasRule(comma).WithError("expected ',' after citation key")
+Alias(comma).WithError("expected ',' after citation key")
 ```
 
 The alias defaults to `FlattenType.Flatten`, so it contributes no tree node, which is what you want for a delimiter. The shared `comma` stays untouched everywhere else it's referenced. 

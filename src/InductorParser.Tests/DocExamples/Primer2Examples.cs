@@ -185,11 +185,11 @@ public class Primer2Examples
         Assert.That(flattened.All(s => s is Symbol), Is.True);
     }
 
-    // primer2.md "When the parse fails": the doc claims that
+    // primerFailure.md opening example: the doc claims that
     //   config.Parse("[server]\nport oops\n")
-    // fails at "line 1, column 5" with an error message that surfaces
-    // somewhere in the parse. (Language Server Protocol: 0-based line means
-    // line 1 in the doc corresponds to ErrorLine == 1.)
+    // reports "Unexpected 'o' at line 2, column 6." and that ErrorLine /
+    // ErrorCharColumn carry the zero-based Language Server Protocol
+    // values (line 1, column 5).
     [Test]
     public void Parse_failure_reports_line_and_column()
     {
@@ -202,12 +202,12 @@ public class Primer2Examples
             "Second line of input is line 1 in Language Server Protocol-style 0-based lines");
         Assert.That(result.ErrorCharColumn, Is.EqualTo(5),
             "The space-then-'o' fails where the '=' should be at col 5");
-        Assert.That(result.ErrorMessage, Is.Not.Empty);
+        Assert.That(result.ErrorMessage, Is.EqualTo("Unexpected 'o' at line 2, column 6."));
     }
 
-    // primer2.md "To upgrade it, attach .WithError(...) to the rule
-    // that's most likely to be where the user went wrong". Re-runs the
-    // same input with WithError and asserts the custom message surfaces.
+    // primerFailure.md "attach .WithError(...) to the rule that's most
+    // likely to be where the user went wrong". Re-runs the same input
+    // with WithError and asserts the custom message surfaces.
     [Test]
     public void WithError_message_surfaces_on_missing_equals()
     {
@@ -254,10 +254,12 @@ public class Primer2Examples
             Is.EqualTo("Expected '=' after the setting name at line 2, column 6."));
     }
 
-    // primer2.md "ParseOptions carries a set of templates with {name}-
-    // style placeholders". The doc swaps the catch-all default messages
-    // for French versions and shows the resulting ErrorMessage. Verifies
-    // both the rendered output and the placeholder substitution.
+    // primerFailure.md "suppose you want the catch-all rendered in
+    // French": the doc swaps the default messages for French templates
+    // and claims the output is
+    //   "Erreur à la ligne 2, colonne 6: caractère 'o' inattendu."
+    // The template string matches the doc's exactly (accents built from
+    // the UnicodeExamples constants so source encoding can't drift it).
     [Test]
     public void Templates_render_French_default_message()
     {
@@ -265,7 +267,7 @@ public class Primer2Examples
 
         var options = new ParseOptions
         {
-            PositionalErrorTemplate = $"Erreur {UnicodeExamples.LatinSmallAWithGraveGrapheme} la position {{charIndex}}: caract{UnicodeExamples.LatinSmallEWithGraveGrapheme}re '{{character}}' inattendu.",
+            PositionalErrorTemplate = $"Erreur {UnicodeExamples.LatinSmallAWithGraveGrapheme} la ligne {{lineNumber}}, colonne {{tokenColumnNumber}}: caract{UnicodeExamples.LatinSmallEWithGraveGrapheme}re '{{character}}' inattendu.",
             EndOfInputErrorTemplate = $"Fin d'entr{UnicodeExamples.LatinEAcutePrecomposedGrapheme}e inattendue.",
         };
 
@@ -273,7 +275,7 @@ public class Primer2Examples
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage,
-            Is.EqualTo($"Erreur {UnicodeExamples.LatinSmallAWithGraveGrapheme} la position 14: caract{UnicodeExamples.LatinSmallEWithGraveGrapheme}re 'o' inattendu."));
+            Is.EqualTo($"Erreur {UnicodeExamples.LatinSmallAWithGraveGrapheme} la ligne 2, colonne 6: caract{UnicodeExamples.LatinSmallEWithGraveGrapheme}re 'o' inattendu."));
     }
 
     // primer2.md "Unicode and where the error actually is". The doc claims
