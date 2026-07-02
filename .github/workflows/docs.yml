@@ -1,0 +1,76 @@
+# Builds the DocFX documentation site and deploys it to GitHub Pages on every
+# push to master that touches the docs, the library, or the build setup. This
+# is the only path that publishes the live site. build-docs.sh is just for
+# local preview.
+#
+# Setup (already done): repo Settings -> Pages -> Source -> "GitHub Actions".
+# The site deploys straight from the build artifact, so no gh-pages branch is
+# involved.
+name: Build and deploy docs
+
+on:
+  push:
+    branches: [master]
+    # Only rebuild when something that affects the docs changes.
+    paths:
+      - "src/InductorParser/**"
+      - "docs/**"
+      - "readme.md"
+      - "build-docs.sh"
+      - ".config/dotnet-tools.json"
+      - ".github/workflows/docs.yml"
+  # Allow running it by hand from the Actions tab.
+  workflow_dispatch:
+
+# Permissions the deploy needs: read the repo, publish Pages via OIDC.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One Pages deploy at a time; let a newer run cancel an in-flight one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          # 8 covers the net8.0 target; 9 keeps "LangVersion latest" happy if
+          # the code uses a newer C# than the .NET 8 compiler accepts.
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      # docfx metadata restores on its own, but doing it up front gives a
+      # clearer error if a package is missing.
+      - name: Restore the library
+        run: dotnet restore src/InductorParser/InductorParser.csproj
+
+      - name: Build the docs site
+        run: bash build-docs.sh
+
+      - name: Upload the site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/docfx/_site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

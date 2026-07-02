@@ -1095,21 +1095,21 @@ internal sealed class LoweringContext
         // would split multi-rune graphemes under grapheme tokenization,
         // so it's gone. The bridge handles every shape the rune-mode
         // path used to handle.
-        if (rule.LoweringStopperRule != null)
+        if (rule.StopperRule != null)
             return LowerViaBridge(rule, onSuccess, onFailure);
-        if (rule.LoweringHasEscape && rule.LoweringEscapeStartRule != null)
+        if (rule.HasEscape && rule.EscapeStartRule != null)
             return LowerViaBridge(rule, onSuccess, onFailure);
 
-        int stopperSetIdx = InternTokenSet(rule.LoweringStopperSet);
-        int escapeStartRune = rule.LoweringHasEscape ? rule.LoweringEscapeStartRune : -1;
+        int stopperSetIdx = InternTokenSet(rule.StopperSet);
+        int escapeStartRune = rule.HasEscape ? rule.EscapeStartRune : -1;
 
         // Lower escape-end as a subprogram so the scan loop's escape
         // path can Call it and resume scanning afterward. Does not
         // require the escape-end rule to be cyclic; the subprogram
         // shape is what the Call/Return mechanism needs.
         int escapeEndEntry = -1;
-        if (rule.LoweringHasEscape)
-            escapeEndEntry = GetOrCreateSubprogram(rule.LoweringEscapeEnd!);
+        if (rule.HasEscape)
+            escapeEndEntry = GetOrCreateSubprogram(rule.EscapeEnd!);
 
         // The leaf-emit / no-emit decision lives inline in the lowering
         // path. Delete-effective ScanUntil bypasses the EmitScanUntilLeaf
@@ -1119,7 +1119,7 @@ internal sealed class LoweringContext
         // cheap.
         var effective = ResolveEffective(rule.FlattenType);
         bool emitLeaf = effective != FlattenType.Delete;
-        int metadataIndex = (emitLeaf || !rule.LoweringEofIsTerminator)
+        int metadataIndex = (emitLeaf || !rule.EofIsTerminator)
             ? AddSymbolMetadata(rule)
             : -1;
 
@@ -1148,12 +1148,12 @@ internal sealed class LoweringContext
         // ErrorMessage) call so the deepest-failure heuristic surfaces
         // the right message. For tolerant ScanUntil, the EOF exit goes
         // to OnSuccess inside the opcode and never visits this path.
-        int onEofFailState = rule.LoweringEofIsTerminator
+        int onEofFailState = rule.EofIsTerminator
             ? outerFail
             : AddState(LoweredOpCode.RecordRuleFailure, metadataIndex, outerFail, outerFail);
 
-        int specIdx = AddScanUntilSpec(stopperSetIdx, escapeStartRune, rule.LoweringHasEscape, escapeEndEntry,
-            rule.LoweringEofIsTerminator, onEofFailState);
+        int specIdx = AddScanUntilSpec(stopperSetIdx, escapeStartRune, rule.HasEscape, escapeEndEntry,
+            rule.EofIsTerminator, onEofFailState);
 
         // The scan state. OnFailure points to the escape-call setup,
         // which is wired below.
@@ -1165,11 +1165,11 @@ internal sealed class LoweringContext
         // Mirrors the recursive evaluator passing outputSymbols=null
         // when invoking escape-end.
         int escapeCall = -1;
-        if (rule.LoweringHasEscape)
+        if (rule.HasEscape)
             escapeCall = AddState(LoweredOpCode.CallSuppressOutputs, escapeEndEntry, scanState, outerFail);
 
         FillState(scanState, LoweredOpCode.ScanUntilFast, specIdx, afterScan,
-            rule.LoweringHasEscape ? escapeCall : outerFail);
+            rule.HasEscape ? escapeCall : outerFail);
 
         // Outer push: snapshots entry-time lexer position so
         // EmitScanUntilLeaf can read the start, and so outerFail can

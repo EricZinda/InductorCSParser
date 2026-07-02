@@ -713,6 +713,18 @@ internal static class UnicodeExamples
     public static readonly string CherokeeLetterAGrapheme = Canary(
         "Ꭰ", "cherokee letter A (homoglyph for latin caps in some fonts)", 0x13A0);
 
+    // U+000B VERTICAL TAB (VT). C0 control that renders like whitespace,
+    // but UAX #18 counts it as a line terminator, so the parser does too
+    // (it's in TokenSet.LineTerminators; Token('\n') doesn't catch it).
+    public static readonly string VerticalTabText = Canary(
+        "\u000B", "vertical tab (UAX #18 line terminator)", 0x000B);
+
+    // U+000C FORM FEED (FF). The classic page-break control. C0 control,
+    // UAX #18 line terminator, treated as one ordinary token the parser
+    // counts as a line break.
+    public static readonly string FormFeedText = Canary(
+        "\u000C", "form feed (UAX #18 line terminator)", 0x000C);
+
     // U+2028 LINE SEPARATOR. UAX #14 line break, UAX #18 line terminator.
     // Famous JavaScript bug: ECMAScript source disallowed U+2028 and U+2029
     // as unescaped characters in string literals, but JSON.parse allowed

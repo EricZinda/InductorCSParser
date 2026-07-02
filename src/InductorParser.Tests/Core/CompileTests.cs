@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
@@ -89,6 +90,27 @@ public class CompileTests
     }
 
     [Test]
+    public void SetTraceName_throws_after_the_rule_is_sealed()
+    {
+        // SetTraceName is a protected construction-time builder: it writes
+        // _ruleTraceName, which feeds the trace label, the NameOf fallback for
+        // an unnamed rule, and diagnostic text. ThrowIfSealed makes that a
+        // build-time-only setting so a subclass can't rename a rule out from
+        // under a live, compiled grammar. The built-in constructor callers run
+        // before Compile seals the rule, so they're unaffected; this covers the
+        // after-Compile case a public subclass could otherwise hit.
+        var rule = new RenamableRule();
+        Assert.DoesNotThrow(() => rule.Rename("BeforeCompile"),
+            "renaming before Compile should be allowed");
+
+        rule.Compile();
+
+        Assert.That(() => rule.Rename("AfterCompile"),
+            Throws.InvalidOperationException,
+            "renaming after Compile sealed the rule should throw");
+    }
+
+    [Test]
     public void Concurrent_parsing_of_a_compiled_grammar_is_thread_safe()
     {
         // The documented guarantee (docs/InductorParserReference.md "Thread
@@ -160,4 +182,16 @@ public class CompileTests
         return Or(list, atom).As("root");
     }
 
+    // A minimal Rule that exposes the protected SetTraceName so the seal
+    // check can be exercised from a test.
+    private sealed class RenamableRule : Rule
+    {
+        public RenamableRule() : base(FlattenType.Delete, emitsLeaf: false) { }
+
+        public void Rename(string name) => SetTraceName(name);
+
+        protected override Symbol? TryParseRule(
+            Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols)
+            => Symbol.Discarded;
+    }
 }

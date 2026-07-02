@@ -228,7 +228,7 @@ public class BetweenInclusiveRuleTests
         // the position the user needs to fix, not the rule's overall start.
         // See docs/ErrorArchitecture.md.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need 2 to 4 a's"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need 2 to 4 a's at line 1, column 2."));
     }
 
     [Test]
@@ -247,7 +247,7 @@ public class BetweenInclusiveRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a' at line 1, column 1."));
     }
 
     [Test]
@@ -264,7 +264,7 @@ public class BetweenInclusiveRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("want at least one 'a'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("want at least one 'a' at line 1, column 1."));
     }
 
     [Test]
@@ -311,7 +311,7 @@ public class BetweenInclusiveRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a' at line 1, column 1."));
     }
 
     [Test]
@@ -331,7 +331,7 @@ public class BetweenInclusiveRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a' at line 1, column 1."));
     }
 
     [Test]
@@ -351,7 +351,7 @@ public class BetweenInclusiveRuleTests
         var result = rule.Parse("y");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a' at line 1, column 2."));
     }
 
     [Test]
@@ -383,7 +383,7 @@ public class BetweenInclusiveRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need 'c'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need 'c' at line 1, column 3."));
     }
 
     [Test]
@@ -955,7 +955,7 @@ public class BetweenInclusiveRuleTests
         var range = result.Tree!.SourceRange!.Value;
         Assert.That(range.Start.CharIndex, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(9));
-        Assert.That(range.End.Column, Is.EqualTo(9));
+        Assert.That(range.End.CharColumn, Is.EqualTo(9));
     }
 
 }

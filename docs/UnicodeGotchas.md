@@ -247,29 +247,25 @@ ZeroOrMore(NoneOf(TokenSet.Single('\n')))           // swallows the CRLF termina
 
 If a grammar is a port of regex semantics that explicitly targets LF-only (some Markdown-style formats, for instance), the failure on CRLF is faithful to the source and you can leave `Token('\n')` as-is. Mark the grammar with a comment so the next reader knows the LF-only behavior is intentional, not an oversight.
 
-## Lone Surrogates: `OneOf(~set)` and `NoneOf(set)` Disagree
+## Lone Surrogates: `NoneOf` Admits Them Under `Compile(null)`
 
 A lone surrogate is an unpaired UTF-16 code unit in U+D800..U+DFFF, the kind you get from truncated or malformed UTF-16 (a high surrogate with no low surrogate after it). It isn't a Unicode scalar value, so it can't be a member of any `TokenSet` you build with `Single` / `Range` / `Runes` (those reject surrogate arguments). The only way one enters a set is through the explicit `TokenSet.Surrogates` constant or `TokenSet.SurrogateRange`.
 
-Under the default `Compile(NormalizationForm.FormC)` you never see this, because .NET's `string.Normalize` rejects malformed UTF-16. `Parse` normalizes before the lexer runs, so any input with a lone surrogate throws `ArgumentException` before tokenization. The gotcha only shows up under `Compile(null)`, which skips normalization and lets the lexer surface a lone surrogate as a one-char token (with no scalar value).
+Under the default `Compile(NormalizationForm.FormC)` you never see this, because .NET's `string.Normalize` rejects malformed UTF-16. `Parse` normalizes before the lexer runs, so any input with a lone surrogate fails the parse with a `MalformedInput` outcome before tokenization (the parser catches the rejection and reports it as a result you can localize, rather than letting an `ArgumentException` escape). The gotcha only shows up under `Compile(null)`, which skips normalization and lets the lexer surface a lone surrogate as a one-char token (with no scalar value).
 
-When that token reaches the parser, two ways of spelling "a single token that isn't a letter" disagree:
+When that token reaches the parser, `NoneOf(set)` admits it:
 
 ```csharp
 string loneSurrogate = "\uD800";   // build at runtime; a string literal may get sanitized to U+FFFD
 
-// ~Letters is surrogate-free (complement never fabricates surrogates),
-// so the lone surrogate isn't a member and the rule does NOT match it.
-OneOf(~TokenSet.Letters).Compile(null).Parse(loneSurrogate).Success;   // False
-
-// NoneOf is a direct non-membership test, not OneOf(~Letters). The lone
-// surrogate isn't in Letters, so NoneOf admits it.
+// NoneOf is a direct non-membership test: the lone surrogate isn't in
+// Letters, so NoneOf admits it.
 NoneOf(TokenSet.Letters).Compile(null).Parse(loneSurrogate).Success;   // True
 ```
 
-Why the split: `~` complements over scalar values only and never adds surrogates to a set, so a grammar that never names `Surrogates` or `SurrogateRange` never matches one through `~`. That keeps `OneOf(~set)` surrogate-free. `NoneOf(set)` doesn't go through `~` at all (it matches any token whose value isn't in `set`), so a lone surrogate, not being in `set`, passes it. The two aren't interchangeable on this one input.
+`NoneOf(set)` matches any token whose value isn't in `set`. A lone surrogate isn't in `set`, so it passes.
 
-**Fix.** Decide whether you actually want lone surrogates. If you're sweeping raw or possibly-malformed content under `Compile(null)` (WTF-8 round-tripping, lenient handling of unpaired surrogates), `NoneOf` admitting them is usually exactly what you want, so leave it. If you want to exclude them, write the stop condition as `OneOf(~stopSet)` instead of `NoneOf(stopSet)`, since the surrogate-free complement won't pass them. And remember it only matters under `Compile(null)`: the default `FormC` compile rejects the malformed input upstream, before either rule runs.
+**Fix.** Decide whether you actually want lone surrogates. If you're sweeping raw or possibly-malformed content under `Compile(null)` (WTF-8 round-tripping, lenient handling of unpaired surrogates), `NoneOf` admitting them is usually exactly what you want, so leave it. If you want to exclude them, match against the surrogate-free scalar universe instead: `OneOf(TokenSet.Universe - stopSet)`. `Universe` leaves out the surrogate block, so a lone surrogate isn't a member and the rule won't match it. And remember it only matters under `Compile(null)`: the default `FormC` compile rejects the malformed input upstream, before the rule runs.
 
 ## The Common Thread
 

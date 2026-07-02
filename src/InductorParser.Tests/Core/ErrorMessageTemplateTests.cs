@@ -145,7 +145,7 @@ public class ErrorMessageTemplateTests
         var options = new ParseOptions
         {
             PositionalErrorTemplate =
-                "char={charIndex} grapheme={tokenIndex} line={line} col={column}",
+                "char={charIndex} grapheme={tokenIndex} line={line} col={charColumn}",
         };
         var result = rule.Parse(UnicodeExamples.MathematicalBoldCapitalAGrapheme + "\nbx", options);
 
@@ -156,7 +156,74 @@ public class ErrorMessageTemplateTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(4));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(1));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void One_based_placeholders_are_line_and_column_plus_one()
+    {
+        // {lineNumber} / {charColumnNumber} are the human-facing one-based
+        // counterparts of the zero-based {line} / {charColumn}. Same failure
+        // point as the test above: char 4, line 1, column 1 (zero-based), so
+        // lineNumber 2, charColumnNumber 2.
+        var rule = And(
+            Token(0x1D400),
+            Token('\n'),
+            Token('b'),
+            Token('y'));
+        var options = new ParseOptions
+        {
+            PositionalErrorTemplate =
+                "line={line} charColumn={charColumn} lineNumber={lineNumber} charColumnNumber={charColumnNumber}",
+        };
+        var result = rule.Parse(UnicodeExamples.MathematicalBoldCapitalAGrapheme + "\nbx", options);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage,
+            Is.EqualTo("line=1 charColumn=1 lineNumber=2 charColumnNumber=2"));
+        // The one-based placeholders are exactly the zero-based fields + 1.
+        Assert.That(result.ErrorLine + 1, Is.EqualTo(2));
+        Assert.That(result.ErrorCharColumn + 1, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Default_message_column_counts_graphemes_not_chars()
+    {
+        // Bold-A (U+1D400) is one grapheme but two UTF-16 chars. Token(0x1D400)
+        // matches it, then Token('a') fails on 'x' at char index 2. Counting
+        // chars, 'x' sits at column 3 (one-based); counting what a person sees,
+        // it's the 2nd character, column 2. The default message reports the
+        // grapheme column, so it says column 2.
+        var rule = And(Token(0x1D400), Token('a'));
+        var result = rule.Parse(UnicodeExamples.MathematicalBoldCapitalAGrapheme + "x");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("Unexpected 'x' at line 1, column 2."));
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(2), "char column: the bold-A is two UTF-16 code units");
+        Assert.That(result.ErrorTokenColumn, Is.EqualTo(1), "grapheme column: the bold-A is one character");
+    }
+
+    [Test]
+    public void Char_and_token_column_placeholders_diverge_on_a_wide_character()
+    {
+        // Same bold-A setup. {charColumn} / {charColumnNumber} count UTF-16 chars;
+        // {tokenColumn} / {tokenColumnNumber} count graphemes. With the two-char
+        // bold-A ahead of the failing 'x', the two units disagree.
+        var rule = And(Token(0x1D400), Token('a'));
+        var options = new ParseOptions
+        {
+            PositionalErrorTemplate =
+                "charColumn={charColumn} charColumnNumber={charColumnNumber} tokenColumn={tokenColumn} tokenColumnNumber={tokenColumnNumber}",
+        };
+        var result = rule.Parse(UnicodeExamples.MathematicalBoldCapitalAGrapheme + "x", options);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage,
+            Is.EqualTo("charColumn=2 charColumnNumber=3 tokenColumn=1 tokenColumnNumber=2"));
+        // The placeholders mirror the ParseResult fields they're named for.
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(2));
+        Assert.That(result.ErrorTokenColumn, Is.EqualTo(1));
     }
 
     [Test]
@@ -224,7 +291,7 @@ public class ErrorMessageTemplateTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage,
-            Is.EqualTo($"Parse failed at offset 0: unexpected '{boldA}'."));
+            Is.EqualTo($"Unexpected '{boldA}' at line 1, column 1."));
     }
 
     [Test]
@@ -242,7 +309,7 @@ public class ErrorMessageTemplateTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage,
-            Is.EqualTo($"Parse failed at offset 0: unexpected '{eAcute}'."));
+            Is.EqualTo($"Unexpected '{eAcute}' at line 1, column 1."));
     }
 
     [Test]
@@ -250,6 +317,7 @@ public class ErrorMessageTemplateTests
     {
         var options = new ParseOptions();
 
+        Assert.Throws<ArgumentNullException>(() => options.WithErrorTemplate = null!);
         Assert.Throws<ArgumentNullException>(() => options.PositionalErrorTemplate = null!);
         Assert.Throws<ArgumentNullException>(() => options.EndOfInputErrorTemplate = null!);
         Assert.Throws<ArgumentNullException>(() => options.TimeoutAbortTemplate = null!);
@@ -259,18 +327,24 @@ public class ErrorMessageTemplateTests
     }
 
     [Test]
-    public void Default_templates_match_pre_change_strings()
+    public void Default_templates_match_expected_strings()
     {
         // Locks in the exact default wording so callers who depend on the
-        // current strings (and the existing tests scattered through the
-        // suite that assert on them with Does.StartWith / Is.EqualTo)
-        // notice if the defaults ever drift.
+        // current strings (and the other tests in the suite that assert on
+        // them with Does.StartWith / Is.EqualTo) notice if the defaults ever
+        // drift. The positional, end-of-input, and malformed defaults report
+        // the failure as one-based line/column so the out-of-the-box message
+        // reads the way a person counts position in an editor.
         var options = new ParseOptions();
 
+        Assert.That(options.WithErrorTemplate,
+            Is.EqualTo("{message} at line {lineNumber}, column {tokenColumnNumber}."));
         Assert.That(options.PositionalErrorTemplate,
-            Is.EqualTo("Parse failed at offset {charIndex}: unexpected '{character}'."));
+            Is.EqualTo("Unexpected '{character}' at line {lineNumber}, column {tokenColumnNumber}."));
         Assert.That(options.EndOfInputErrorTemplate,
-            Is.EqualTo("Unexpected end of input."));
+            Is.EqualTo("Unexpected end of input at line {lineNumber}, column {tokenColumnNumber}."));
+        Assert.That(options.MalformedInputTemplate,
+            Is.EqualTo("Malformed input at line {lineNumber}, column {tokenColumnNumber}: '{character}' isn't valid Unicode and can't be normalized."));
         Assert.That(options.TimeoutAbortTemplate,
             Is.EqualTo("Parse aborted: timeout exceeded."));
         Assert.That(options.RuleCountLimitAbortTemplate,
@@ -279,6 +353,36 @@ public class ErrorMessageTemplateTests
             Is.EqualTo("Parse aborted: maximum recursion depth exceeded."));
         Assert.That(options.CancellationAbortTemplate,
             Is.EqualTo("Parse aborted: cancellation requested."));
+    }
+
+    [Test]
+    public void WithError_message_carries_position_by_default()
+    {
+        // A .WithError message goes through WithErrorTemplate, which by default
+        // appends the failure position, so a custom message reads the same
+        // shape as the mechanical default. Token('b') fails on 'x' at column 2.
+        var rule = And(Token('a'), Token('b').WithError("expected a 'b' here"));
+        var result = rule.Parse("ax");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected a 'b' here at line 1, column 2."));
+    }
+
+    [Test]
+    public void Custom_WithErrorTemplate_reshapes_or_strips_the_position()
+    {
+        var rule = And(Token('a'), Token('b').WithError("expected a 'b' here"));
+
+        // Position-first custom shape, with {message} carrying the author's text.
+        var reshaped = rule.Parse("ax", new ParseOptions
+        {
+            WithErrorTemplate = "line {lineNumber} col {tokenColumnNumber}: {message}",
+        });
+        // "{message}" alone hands back the raw .WithError string with no position.
+        var raw = rule.Parse("ax", new ParseOptions { WithErrorTemplate = "{message}" });
+
+        Assert.That(reshaped.ErrorMessage, Is.EqualTo("line 1 col 2: expected a 'b' here"));
+        Assert.That(raw.ErrorMessage, Is.EqualTo("expected a 'b' here"));
     }
 
     [Test]
@@ -297,7 +401,7 @@ public class ErrorMessageTemplateTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage,
-            Is.EqualTo($"Parse failed at offset 0: unexpected '{UnicodeExamples.FullwidthDigitOneGrapheme}'."));
+            Is.EqualTo($"Unexpected '{UnicodeExamples.FullwidthDigitOneGrapheme}' at line 1, column 1."));
     }
 
     [Test]
@@ -313,7 +417,7 @@ public class ErrorMessageTemplateTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage,
-            Is.EqualTo($"Parse failed at offset 0: unexpected '{UnicodeExamples.FiLigatureGrapheme}'."));
+            Is.EqualTo($"Unexpected '{UnicodeExamples.FiLigatureGrapheme}' at line 1, column 1."));
     }
 
     [Test]
@@ -333,7 +437,7 @@ public class ErrorMessageTemplateTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage,
-            Is.EqualTo("Parse failed at offset 1: unexpected 'U+000A'."));
+            Is.EqualTo("Unexpected 'U+000A' at line 1, column 2."));
     }
 
     [Test]
@@ -351,7 +455,7 @@ public class ErrorMessageTemplateTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage,
-            Is.EqualTo("Parse failed at offset 1: unexpected 'U+2028'."));
+            Is.EqualTo("Unexpected 'U+2028' at line 1, column 2."));
     }
 
     [Test]
@@ -368,7 +472,7 @@ public class ErrorMessageTemplateTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage,
-            Is.EqualTo("Parse failed at offset 0: unexpected 'U+D800'."));
+            Is.EqualTo("Unexpected 'U+D800' at line 1, column 1."));
     }
 
     [Test]

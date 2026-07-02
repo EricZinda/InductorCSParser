@@ -242,7 +242,7 @@ public class NormalizationTests
             "exactly double the precomposed reference; equal to it would mean the " +
             "normalized offset leaked out untranslated");
         Assert.That(result.ErrorLine, Is.EqualTo(0), "input has no newlines");
-        Assert.That(result.ErrorColumn, Is.EqualTo(result.ErrorCharIndex),
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(result.ErrorCharIndex),
             "single-line input means column equals char index");
         var position = result.ErrorPosition;
         Assert.That(position, Is.Not.Null);
@@ -827,9 +827,9 @@ public class NormalizationTests
 
         var exception = Assert.Throws<InvalidOperationException>(
             () => rule.Compile(NormalizationForm.FormKC));
-        Assert.That(exception!.Message, Does.StartWith("Compile failed: 1 rule has"),
-            "one offending rule with many convertible members reads as '1 rule has', not 'N rules have'");
-        Assert.That(exception.Message, Does.Not.Contain("rules have"),
+        Assert.That(exception!.Message, Does.StartWith("Compile failed: 1 rule holds"),
+            "one offending rule with many convertible members reads as '1 rule holds', not 'N rules hold'");
+        Assert.That(exception.Message, Does.Not.Contain("rules hold"),
             "a single offending rule must not be reported in the plural");
     }
 
@@ -843,8 +843,8 @@ public class NormalizationTests
 
         var exception = Assert.Throws<InvalidOperationException>(
             () => rule.Compile(NormalizationForm.FormKC));
-        Assert.That(exception!.Message, Does.StartWith("Compile failed: 2 rules have"),
-            "two distinct offending rules read as '2 rules have', regardless of how many entries each contributes");
+        Assert.That(exception!.Message, Does.StartWith("Compile failed: 2 rules hold"),
+            "two distinct offending rules read as '2 rules hold', regardless of how many entries each contributes");
     }
 
     [Test]

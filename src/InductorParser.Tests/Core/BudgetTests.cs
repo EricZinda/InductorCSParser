@@ -542,7 +542,7 @@ public class BudgetTests
         // entered. DeepestFailurePosition and Position are both genuinely 0 at
         // that instant, so the frozen "deepest at abort" is 0. The two
         // sibling tests (RuleCountLimit, Timeout) reach depth 146 only
-        // because neither can trip at invocation 0 by construction.
+        // because neither can trip at invocation 0.
         Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.Canceled));
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
     }

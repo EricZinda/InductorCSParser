@@ -69,7 +69,7 @@ public class LookbehindRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("nothing precedes the start"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("nothing precedes the start at line 1, column 1."));
     }
 
     [Test]
@@ -80,7 +80,7 @@ public class LookbehindRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'b' behind"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'b' behind at line 1, column 2."));
     }
 
     [Test]

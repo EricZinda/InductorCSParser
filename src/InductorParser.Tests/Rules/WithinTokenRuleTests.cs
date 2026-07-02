@@ -109,7 +109,7 @@ public class WithinTokenRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("wanted a grapheme"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("wanted a grapheme at line 1, column 1."));
     }
 
     [Test]
@@ -124,7 +124,7 @@ public class WithinTokenRuleTests
         var result = rule.Parse("c");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("inner literal failed"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("inner literal failed at line 1, column 1."));
     }
 
     [Test]
@@ -326,11 +326,11 @@ public class WithinTokenRuleTests
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(0),
             "input has exactly one token; an index of 1 is past-the-end");
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
         Assert.That(result.ErrorPosition!.Value.CharIndex, Is.EqualTo(0));
         Assert.That(result.ErrorPosition!.Value.TokenIndex, Is.EqualTo(0));
         Assert.That(result.ErrorMessage,
-            Is.EqualTo("Parse failed at offset 0: unexpected '" + LatinEAcuteGrapheme + "'."));
+            Is.EqualTo("Unexpected '" + LatinEAcuteGrapheme + "' at line 1, column 1."));
     }
 
     [Test]
@@ -351,9 +351,9 @@ public class WithinTokenRuleTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(0));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
         Assert.That(result.ErrorMessage,
-            Is.EqualTo("Parse failed at offset 0: unexpected '" + LatinEAcuteGrapheme + "'."));
+            Is.EqualTo("Unexpected '" + LatinEAcuteGrapheme + "' at line 1, column 1."));
     }
 
     [Test]
@@ -518,7 +518,7 @@ public class WithinTokenRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected z at end"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected z at end at line 1, column 4."));
     }
 
     // --- Forced .WithError carried across the WithinToken boundary -------
@@ -544,7 +544,7 @@ public class WithinTokenRuleTests
         var result = reaction.Parse(char.ConvertFromUtf32(ThumbsDown));
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("a reaction must be a thumbs-up emoji"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("a reaction must be a thumbs-up emoji at line 1, column 1."));
     }
 
     [Test]
@@ -568,7 +568,7 @@ public class WithinTokenRuleTests
         var result = Or(reaction, command).Parse("+" + char.ConvertFromUtf32(ThumbsDown));
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("a reaction must be a thumbs-up emoji"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("a reaction must be a thumbs-up emoji at line 1, column 2."));
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     }
 
@@ -588,7 +588,7 @@ public class WithinTokenRuleTests
         var result = reaction.Parse(char.ConvertFromUtf32(ThumbsDown));
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("not a recognized reaction"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("not a recognized reaction at line 1, column 1."));
     }
 
     [Test]
@@ -611,7 +611,7 @@ public class WithinTokenRuleTests
         var result = rule.Parse(LatinEAcuteGrapheme);
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected ex"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected ex at line 1, column 1."));
     }
 
     [Test]
@@ -634,7 +634,7 @@ public class WithinTokenRuleTests
         var result = rule.Parse(LatinEAcuteGrapheme);
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected ex"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected ex at line 1, column 1."));
     }
 
     [Test]

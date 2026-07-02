@@ -1,7 +1,9 @@
+- Was great for fine tuning that would have taken forever and probably not gotten fixed. Things like better error messages that touched 250 tests.
 - Did claude bug hunting. specific focus on security, or unicode, or edge cases
 - Did claude app building by rewriting MIT licensed apps
 - Did claude performance tuning, ended up removing some
 
+Doing a doc and comment scrub was a TON of work
 Linting rules about text was way better than saying up front
 some things like commands with ";" NEVER WENT AWAY <!-- style-lint-ok: literal ";" character reference -->
 

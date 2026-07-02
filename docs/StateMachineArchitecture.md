@@ -108,6 +108,6 @@ A rough map of `src/InductorParser/StateMachine/`:
 
 ## What This Document Is Not
 
-This is not the place to learn how to write a grammar (see `primer1.md`, `primer2.md`, `Primer3.md`, and `Primer4.md`), or how the recursive evaluator works (see `CodeArchitecture.md` and the `Rule.cs` header comment), or what the test-coverage bar is (see `TestArchitecture.md`). It is a sketch of how the second evaluator is laid out so the next person reading the code knows which file to open first.
+This is not the place to learn how to write a grammar (see `primer1.md`, `primer2.md`, `primerFailure.md`, `Primer3.md`, and `Primer4.md`), or how the recursive evaluator works (see `CodeArchitecture.md` and the `Rule.cs` header comment), or what the test-coverage bar is (see `TestArchitecture.md`). It is a sketch of how the second evaluator is laid out so the next person reading the code knows which file to open first.
 
 There are gaps. Budget enforcement (`RuleCountLimit`, `MaxDepth`, `Timeout`, `Cancellation`) only fires inside the recursive evaluator's `EnterRule` today, so the state machine path does not honor them outside the bridge. Tracing is not wired into the state machine the way it is in the recursive evaluator. Both are known. Neither has bitten anyone yet.

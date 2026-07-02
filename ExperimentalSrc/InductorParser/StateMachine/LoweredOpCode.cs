@@ -137,8 +137,8 @@ internal enum LoweredOpCode : byte
     // AnyToken on every non-candidate rune. state.Data indexes into
     // CompiledProgram.ScannerSkipSpecs. Always succeeds (advances the
     // lexer; never fails). Mirrors the recursive evaluator's ScannerSkip
-    // in BetweenInclusiveRule. Inert by construction when the lowerer
-    // doesn't recognize the shape (the opcode is just never emitted).
+    // in BetweenInclusiveRule. Inert when the lowerer doesn't
+    // recognize the shape (the opcode is just never emitted).
     ScannerSkipAdvance,
 
     // Record a rule's WithError("...") message at the current lexer

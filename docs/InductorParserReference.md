@@ -4,14 +4,15 @@ This document is a reference document and is more technical and detailed than th
 
 In this library a *rule* is a C# object. You build rules by calling factory functions like `And(...)`, `Or(...)`, `Token('=')`, you compose them into a grammar, and you call `.Parse(input)` on the root rule to get a tree back.
 
-The library implements a [Parsing Expression Grammar (PEG)](https://en.wikipedia.org/wiki/Parsing_expression_grammar) parser. In PEG terms, `And` is sequence (match a, then b, then c), `Or` is ordered choice (try each alternative in order, the first match wins, so grammars are unambiguous by construction), `OneOrMore` and `ZeroOrMore` are greedy repetition, and `Peek` and `Not` are the lookahead predicates. Matching is recursive-descent with backtracking on failure, but greedy repetition never gives input back once it has matched, so grammars are written with that in mind.
+The library implements a [Parsing Expression Grammar (PEG)](https://en.wikipedia.org/wiki/Parsing_expression_grammar) parser. In PEG terms, `And` is sequence (match a, then b, then c), `Or` is ordered choice (try each alternative in order, the first match wins, so grammars can't be ambiguous), `OneOrMore` and `ZeroOrMore` are greedy repetition, and `Peek` and `Not` are the lookahead predicates. Matching is recursive-descent with backtracking on failure, but greedy repetition never gives input back once it has matched.
 
 Primers:
 
-- [Primer 1: Getting Started](primer1.md): build a grammar that consumes everything up to a stop sequence, parse some input, look at the tree.
-- [Primer 2: Walking the Tree](primer2.md): a tiny INI-style config grammar with typed values, a tree walker, and Unicode-aware error positions.
-- [Primer 3: Unicode in the Inductor Parser](Primer3.md): how the parser handles Unicode normalization, error positions, ill-formed input, and unexpected characters.
-- [Primer 4: Security-Related Concerns](Primer4.md): parser defenses against pathological input (ReDoS, recursion limits) and Unicode-based attacks (Trojan Source, lookalikes, homoglyphs, invisible characters).
+- [Primer: Building a Grammar](primer1.md): build a grammar that consumes everything up to a stop sequence, parse some input, look at the tree.
+- [Primer: Parsing and Processing](primer2.md): a tiny INI-style config grammar with typed values, a tree walker, semantic validation, and Unicode-aware source positions.
+- [Primer: Parsing Errors](primerFailure.md): what the parser reports when input doesn't match: failure positions, custom `.WithError` messages, and reshaping or localizing the default text.
+- [Primer: Unicode in the Inductor Parser](Primer3.md): how the parser handles Unicode normalization, error positions, ill-formed input, and unexpected characters.
+- [Primer: Security-Related Concerns](Primer4.md): parser defenses against pathological input (ReDoS, recursion limits) and Unicode-based attacks (Trojan Source, lookalikes, homoglyphs, invisible characters).
 - [Tutorial: Peek](tutorial-peek.md): a password-validation regex translated into the parser, using `Peek` for non-consuming lookahead.
 - [Recipes](Recipes.md): small patterns that come up often when writing grammars. Each recipe shows the natural-but-wrong translation and walks through what actually works.
 
@@ -76,13 +77,13 @@ Two things happen automatically in this example but are worth knowing about for 
 
 Most rules don't need a name. `Find(someRule)` matches on the rule object itself, so as long as you have a reference to the rule you want to locate, you can find its nodes in the tree.
 
-One caveat: `Find(rule)` only hits rules with `FlattenType.Preserve`. Rules with the default `FlattenType.Flatten` (every `And`, `Or`, `OneOrMore`, `ZeroOrMore`, `Optional`, `BetweenInclusive`) or `FlattenType.Delete` (every `Token`, `Literal`, `Eof`, `Not`, `Peek`) have their wrapper removed from `ParseResult.Tree`, so Find can't locate them. The fix is one of two things: name the rule with `.As(...)` (which automatically flips an unset policy to `Preserve` for exactly this reason), or set `FlattenType.Preserve` directly on an unnamed rule with the `.Preserve()` shortcut. For debugging, `ParseOptions.PreserveAllSymbols` turns the lift-up off globally so the tree matches the grammar one-to-one.
+One caveat: `Find(rule)` only hits rules with `FlattenType.Preserve`. Rules with the default `FlattenType.Flatten` (every `And`, `Or`, `OneOrMore`, `ZeroOrMore`, `Optional`, `BetweenInclusive`) or `FlattenType.Delete` (every `Token`, `Literal`, `Eof`, `Not`, `Peek`) have their Symbol removed from `ParseResult.Tree`, so Find can't locate them. The fix is one of two things: name the rule with `.As(...)` (which automatically flips an unset policy to `Preserve` for exactly this reason), or set `FlattenType.Preserve` directly on an unnamed rule with the `.Preserve()` shortcut. For debugging, `ParseOptions.PreserveAllSymbols` turns flattening off globally so the tree matches the grammar one-to-one.
 
 Sometimes names do matter though: trace output, error messages, serialization. Trace output prints rule names to show which rule was tried at each position. Error messages quote the "deepest rule" that failed. Without an explicit name, these fall back to a class-derived label like `And`, `OneOrMore`, or `BetweenInclusive[1..3]`, which tells you the rule's shape but not what it represents in your grammar.
 
 Here are different ways you can name rules:
 
-**`.As(nameof(X))` on a rule held in a field.** This is the standard form for grammars organized as a class. The C# compiler checks the `nameof` against the field name, so a rename via IDE refactor updates the string automatically:
+**`.As(nameof(X))` on a rule held in a field.** This is the standard form for grammars organized as a class. The C# compiler checks the `nameof` against the field name, so a rename using an IDE refactor will update the string automatically:
 
 ```csharp
 public static readonly Rule SettingName =
@@ -178,7 +179,7 @@ Built-in symbol ids live in a static class and use a numbering space chosen so t
 
 The parser operates on Unicode text, not raw bytes. By default the lexer reads one .NET `StringInfo` text element per step. On modern .NET that means extended grapheme clusters, so `👨‍👩‍👧‍👦` is one token rather than seven scalar values. The full lexer story, including legacy-runtime caveats and how to opt into rune-level lexing instead, lives in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). For grammar-authoring purposes, you can ignore the distinction until you hit emoji or combining-mark input, at which point the Unicode doc has the answer.
 
-`TokenSet` is a composable value type for character sets. The full API surface (built-ins, factory methods, and the `|`, `&`, `-`, `~` operators) lives in [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md). The grammar-authoring shorthand is that you build a class out of built-ins and factory calls and combine them with `|` for union, `&` for intersection, `-` for difference ("a minus b"), and `~` for complement.
+`TokenSet` is a composable value type for character sets. The full API surface (built-ins, factory methods, and the `|`, `&`, `-` operators) lives in [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md). The grammar-authoring shorthand is that you build a class out of built-ins and factory calls and combine them with `|` for union, `&` for intersection, and `-` for difference ("a minus b").
 
 Grammar code reads like:
 
@@ -313,7 +314,7 @@ public readonly struct ParseResult
     // for a human-facing error message.
     public int  ErrorCharIndex         { get; }   // UTF-16 char index; use for input[...]
     public int  ErrorLine              { get; }   // 0-based line number (LSP)
-    public int  ErrorColumn            { get; }   // 0-based column in UTF-16 chars (LSP)
+    public int  ErrorCharColumn        { get; }   // 0-based column in UTF-16 chars (LSP)
 
     // For callers that count in tokens (user-perceived characters). Derived lazily.
     public int  ErrorTokenIndex        { get; }
@@ -335,9 +336,9 @@ public enum ParseOutcome
 }
 ```
 
-Putting the error position into the result directly removes an entire class of C++ pitfall where you forgot to ask the lexer for the error before it went out of scope. `ErrorLine` and `ErrorColumn` are computed lazily from `ErrorCharIndex` and the original input string. The char-based trio (`ErrorCharIndex`, `ErrorLine`, `ErrorColumn`) uses the same conventions the Language Server Protocol uses, so a caller forwarding a parse error into an editor through LSP does no arithmetic in between. See [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md) for the full rationale. `ErrorTokenIndex` is there for callers that count in user-perceived characters (a `^^^` underline a human will look at). It is computed lazily from the char index and costs nothing unless used.
+Putting the error position into the result directly removes an entire class of C++ pitfall where you forgot to ask the lexer for the error before it went out of scope. `ErrorLine` and `ErrorCharColumn` are computed lazily from `ErrorCharIndex` and the original input string. The char-based trio (`ErrorCharIndex`, `ErrorLine`, `ErrorCharColumn`) uses the same units and zero-based indexing the Language Server Protocol uses, so a caller forwarding a parse error into an editor through LSP does no arithmetic in between. One nuance on `ErrorLine`: the parser counts line breaks by the full UAX #18 set (LF, CRLF, lone CR, plus VT, FF, NEL, LS, PS), a superset of the LF, CRLF, and lone CR an LSP client recognizes, so the line matches an editor on ordinary source and diverges only on input containing the rarer terminators. See [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md) for the full rationale. `ErrorTokenIndex` is there for callers that count in user-perceived characters (a `^^^` underline a human will look at). It is computed lazily from the char index and costs nothing unless used.
 
-`Symbol.SourceRange` uses the same machinery for any node in the parse tree, not just the error point. Each `SourcePosition` (the type returned by `Start` and `End`) carries the same `CharIndex`, `TokenIndex`, `Line`, and `Column` fields, so a tool reporting "duplicate section on line 7" or "value out of range at char 42" reads from the symbol with the same semantics LSP and `string.Substring` already use.
+`Symbol.SourceRange` uses the same machinery for any node in the parse tree, not just the error point. Each `SourcePosition` (the type returned by `Start` and `End`) carries the same `CharIndex`, `TokenIndex`, `Line`, and `CharColumn` fields, so a tool reporting "duplicate section on line 7" or "value out of range at char 42" reads from the symbol with the same semantics LSP and `string.Substring` already use.
 
 The `Outcome` field distinguishes "the grammar didn't match" from "we ran out of budget." A grammar mismatch means the input is invalid and you should show the user where. A timeout or rule-count-limit exhaustion means the input might be valid but we couldn't decide in the budget we were given, and the caller might want to reject it as suspicious, retry with a looser budget, or show a different error to the user. See the "Catastrophic Backtracking and Timeouts" section below for the mechanics.
 

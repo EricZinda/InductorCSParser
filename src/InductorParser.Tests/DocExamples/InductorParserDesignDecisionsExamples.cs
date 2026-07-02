@@ -29,7 +29,7 @@ public class InductorParserDesignDecisionsExamples
     //   OneOrMore(Token('a')).Parse("aabb")
     //   result.Success == false
     //   result.ErrorCharIndex == 2
-    //   result.ErrorMessage starts with "Parse failed at offset 2"
+    //   result.ErrorMessage == "Unexpected 'b' at line 1, column 3."
     [Test]
     public void Parse_requires_consuming_all_input()
     {
@@ -38,7 +38,7 @@ public class InductorParserDesignDecisionsExamples
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
-        Assert.That(result.ErrorMessage, Does.StartWith("Parse failed at offset 2"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("Unexpected 'b' at line 1, column 3."));
     }
 
     // "Where Errors Get Positioned" / "Walk through the smallest case":

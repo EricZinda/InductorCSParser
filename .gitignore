@@ -27,3 +27,15 @@ BenchmarkDotNet.Artifacts/
 # -f netstandard2.1` before opening the Unity Editor interactively.
 # The .meta file IS tracked so Unity's GUID stays stable.
 src/InductorParser.Tests/Unity/Assets/Plugins/InductorParser.dll
+
+# DocFX documentation build outputs. Only the hand-authored config
+# (docs/docfx/docfx.json, docs/docfx/toc.yml) is tracked. build-docs.sh
+# regenerates everything below: the API metadata, the staged copy of the
+# curated docs, the staged benchmark chart, the readme-derived home page,
+# and the rendered site, which the GitHub Actions workflow deploys to
+# GitHub Pages.
+docs/docfx/_site/
+docs/docfx/api/
+docs/docfx/docs/
+docs/docfx/images/
+docs/docfx/index.md

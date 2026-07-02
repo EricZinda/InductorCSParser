@@ -104,7 +104,7 @@ var result = ConventionalCommitParserRewrite.ParseHeader("feat broadcast $destro
 
 result.Success;          // false
 result.ErrorCharIndex;   // 4 — position of the space, where ": " was expected
-result.ErrorMessage;     // "Parse failed at offset 4: unexpected ' '."
+result.ErrorMessage;     // "Unexpected ' ' at line 1, column 5."
 ```
 
 ## Running the tests

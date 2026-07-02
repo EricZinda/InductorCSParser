@@ -34,7 +34,7 @@ public class AndRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
-        Assert.That(result.ErrorMessage, Does.StartWith("Parse failed at offset 1"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("Unexpected 'x' at line 1, column 2."));
     }
 
     [Test]
@@ -49,7 +49,7 @@ public class AndRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need an 'a'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need an 'a' at line 1, column 1."));
     }
 
     [Test]
@@ -66,7 +66,7 @@ public class AndRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need a 'b'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need a 'b' at line 1, column 2."));
     }
 
     [Test]
@@ -408,7 +408,7 @@ public class AndRuleTests
         Assert.That(range.End.CharIndex, Is.EqualTo(4));
         Assert.That(range.End.TokenIndex, Is.EqualTo(4));
         Assert.That(range.End.Line, Is.EqualTo(0));
-        Assert.That(range.End.Column, Is.EqualTo(4));
+        Assert.That(range.End.CharColumn, Is.EqualTo(4));
     }
 
     [Test]
@@ -442,7 +442,7 @@ public class AndRuleTests
         var result = rule.Parse("axyz");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected ab!"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected ab! at line 1, column 2."));
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     }
 

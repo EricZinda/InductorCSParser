@@ -204,7 +204,7 @@ raw-source-text accessor).
 Honest accounting, because it wasn't all friction.
 
 Positioned errors needed zero ceremony. `result.ErrorCharIndex`,
-`ErrorLine`, `ErrorColumn` are right there on the parse result, and
+`ErrorLine`, `ErrorCharColumn` are right there on the parse result, and
 `Symbol.SourceRange` gives the same thing for any node you reach in
 post-parse validation. The four-line `ErrorAt(symbol, message)` helper
 in `CronParser.cs` is all the position plumbing this sample needed.

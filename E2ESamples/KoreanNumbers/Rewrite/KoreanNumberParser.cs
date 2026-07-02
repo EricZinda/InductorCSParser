@@ -104,14 +104,22 @@ public static class KoreanNumberParser
         error = null;
         var trimmed = EnsureText(text);
 
-        var result = KoreanNumber.Parse(trimmed);
+        // This sample renders the failure position itself (see the error type's
+        // formatting), so the message text stays position-less.
+        var options = new ParseOptions
+        {
+            WithErrorTemplate = "{message}",
+            PositionalErrorTemplate = "unexpected '{character}'.",
+            EndOfInputErrorTemplate = "unexpected end of input.",
+        };
+        var result = KoreanNumber.Parse(trimmed, options);
         if (!result.Success)
         {
             error = new KoreanNumberParseError(
                 result.ErrorMessage,
                 result.ErrorCharIndex,
                 result.ErrorLine,
-                result.ErrorColumn);
+                result.ErrorCharColumn);
             return false;
         }
 
