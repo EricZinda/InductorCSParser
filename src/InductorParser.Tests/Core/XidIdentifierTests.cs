@@ -543,6 +543,74 @@ public class XidIdentifierTests
 
     [TestCase(NormalizationForm.FormKC)]
     [TestCase(NormalizationForm.FormKD)]
+    public void Identifier_rejects_start_extra_whose_single_rune_NFKx_is_not_a_start_character(NormalizationForm form)
+    {
+        // Same head-leak shape as U+00A8, but through a SINGLE-rune NFKx.
+        // U+00A0 NO-BREAK SPACE normalizes to a bare U+0020 SPACE (one rune,
+        // not a sequence). Whatever an extra converts to under the form is
+        // what ends up in the start set, one rune or many, so the head check
+        // has to cover one-rune conversions too: SPACE isn't a valid start
+        // character, and letting it through would make " x" lex as a single
+        // identifier and a lone " " a complete one.
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            Identifier(extraStartRunes: TokenSet.Single(0x00A0)).Compile(form));
+        Assert.That(exception!.Message, Does.Contain("extraStartRunes"));
+        Assert.That(exception.Message, Does.Contain(" "),
+            "error message names the offending converted character (a SPACE)");
+
+        // The digit flavor of the same rule: U+00B2 SUPERSCRIPT TWO
+        // normalizes to plain DIGIT TWO, which is XidContinue but not
+        // XidStart. Letting it through would let identifiers start with a
+        // digit ("2x" matching whole).
+        Assert.Throws<InvalidOperationException>(() =>
+            Identifier(extraStartRunes: TokenSet.Single(0x00B2)).Compile(form));
+
+        // Sanity: a start extra whose one-rune conversion IS a valid start
+        // character is accepted. U+2126 OHM SIGN normalizes to U+03A9 GREEK
+        // CAPITAL LETTER OMEGA, an ordinary XidStart letter.
+        Assert.DoesNotThrow(() =>
+            Identifier(extraStartRunes: TokenSet.Single(0x2126)).Compile(form));
+
+        // Explicit opt-in: adding the converted rune (U+0020) to
+        // extraStartRunes declares the caller really does want it startable,
+        // same shape as the U+309B opt-in. The compile then succeeds and
+        // U+00A0 matches.
+        var optInRule = Identifier(
+            extraStartRunes: TokenSet.Single(0x00A0) | TokenSet.Single(0x20));
+        Assert.DoesNotThrow(() => optInRule.Compile(form));
+        var result = optInRule.Parse("\u00A0foo");
+        Assert.That(result.Success, Is.True,
+            $"with U+0020 opted into start, U+00A0 should match under {form}: {result.ErrorMessage}");
+    }
+
+    [TestCase(NormalizationForm.FormKC)]
+    [TestCase(NormalizationForm.FormKD)]
+    public void Identifier_rejects_body_extra_whose_single_rune_NFKx_is_not_a_body_character(NormalizationForm form)
+    {
+        // Body-side twin of the start check above. U+00A0 NO-BREAK SPACE in
+        // extraBodyRunes normalizes to plain SPACE, which isn't a valid body
+        // character. The body check has to cover one-rune conversions the
+        // same way it covers U+FDFA's eighteen-rune phrase: letting SPACE
+        // into the body set would make "a b" parse as ONE identifier.
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            Identifier(extraBodyRunes: TokenSet.Single(0x00A0)).Compile(form));
+        Assert.That(exception!.Message, Does.Contain("extraBodyRunes"));
+        Assert.That(exception.Message, Does.Contain(" "),
+            "error message names the offending converted character (a SPACE)");
+
+        // Sanity: a body extra whose one-rune conversion IS a valid body
+        // character is accepted, and the pre-normalization character
+        // matches in body position. U+00B2 SUPERSCRIPT TWO normalizes to
+        // DIGIT TWO, an ordinary XidContinue digit.
+        var rule = Identifier(extraBodyRunes: TokenSet.Single(0x00B2));
+        Assert.DoesNotThrow(() => rule.Compile(form));
+        var result = rule.Parse("a\u00B2b");
+        Assert.That(result.Success, Is.True,
+            $"U+00B2 normalizes to '2', a valid body digit, under {form}: {result.ErrorMessage}");
+    }
+
+    [TestCase(NormalizationForm.FormKC)]
+    [TestCase(NormalizationForm.FormKD)]
     public void Identifier_body_extra_with_single_grapheme_multi_rune_NFKx_pieces_validated(NormalizationForm form)
     {
         // Symmetric body-side check. U+0344 COMBINING GREEK DIALYTIKA TONOS
