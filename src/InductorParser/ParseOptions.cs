@@ -131,8 +131,9 @@ public sealed class ParseOptions
     /// The default (false) requires every token of the input to be consumed by
     /// the grammar before Parse returns success: trailing characters that the grammar
     /// didn't match turns the parse into a failure positioned at the first
-    /// unconsumed token. See docs/InductorParserDesignDecisions.md "Parse
-    /// Requires Consuming All Input" for why the default is strict.
+    /// unconsumed token. The default is strict because silently accepting
+    /// trailing input would mask the "grammar accepted something it
+    /// shouldn't have" bugs grammar authors care most about catching.
     /// <para>
     /// Turn this on for prefix parsing: matching one record at the front of a
     /// longer stream, testing a sub-rule against an input longer than the rule

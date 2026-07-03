@@ -40,7 +40,7 @@ namespace InductorParser;
 public static class Invariant
 {
     // AggressiveInlining on the check, NoInlining on the throw. Same
-    // pattern as Lexer.ThrowBudgetExceeded: a method that throws is
+    // pattern as ParseBudget.ThrowBudgetExceeded: a method that throws is
     // poison to the JIT's inliner, and pulling the throw into its own
     // method keeps the caller's hot path branch-only. The check
     // disappears into the caller when the condition holds, which is

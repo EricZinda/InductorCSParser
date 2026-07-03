@@ -104,11 +104,13 @@ public sealed partial class Lexer
     /// <summary>The current read cursor as a UTF-16 offset into <see cref="Input"/>.</summary>
     public int Position => _position;
 
-    // Exclusive upper bound on _position. Defaults to _input.Length. Sub-lexer
-    // constructors bound this to a lower value so WithinToken can run inner
-    // rules over part of the shared string without allocating a Substring.
-    // Tokens still carry absolute offsets into _input, so error positions
-    // don't need translation.
+    // Exclusive upper bound on _position. Defaults to _input.Length. The
+    // internal bounded constructor sets a lower value to read only a portion
+    // of a shared string, with tokens still carrying absolute offsets into
+    // _input so error positions don't need translation. WithinToken's
+    // sub-lexer doesn't use that path: it owns a Substring of the outer
+    // token's text on purpose, so Input.Length, Position, and IsEof all
+    // agree about the readable range (see WithinTokenRule for why).
     private int _endPosition;
 
     internal int EndPosition => _endPosition;

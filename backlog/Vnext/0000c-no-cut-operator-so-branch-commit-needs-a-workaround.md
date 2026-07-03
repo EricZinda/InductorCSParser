@@ -24,7 +24,7 @@ This is the same kind of friction the leading-zero recipe in `docs/Recipes.md` a
 
 ## Fix
 
-`docs/InductorParserDesignDecisions.md` already lists "the cut operator" as a future idea under the catastrophic-backtracking section. This item is the concrete grammar case the sample hit, plus a sketch of what the rewrite would look like with the operator in hand:
+A grammar-level `Cut()` operator is the PEG community's standard tool for committing past a point so a later failure propagates up instead of retrying earlier alternatives. This item is the concrete grammar case the sample hit, plus a sketch of what the rewrite would look like with the operator in hand:
 
 ```csharp
 var leadingSurrogatePair = And(

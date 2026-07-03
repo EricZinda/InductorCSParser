@@ -627,8 +627,8 @@ public class TokenSetTests
     public void Intersection_narrows_Letters_to_a_script_block()
     {
         // Cyrillic block 0x0400..0x04FF intersected with Unicode Letters. The
-        // motivating use case from docs/InductorParserDesignDecisions.md: narrow a semantic
-        // class (Letters) by a script-range restriction.
+        // motivating use case for intersection: narrow a semantic class
+        // (Letters) by a script-range restriction.
         var cyrillicLetters = TokenSet.Letters & TokenSet.Range(0x0400, 0x04FF);
 
         // ж (U+0436) is a Cyrillic letter (in both sets).

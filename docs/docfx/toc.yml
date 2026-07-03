@@ -29,8 +29,6 @@
       href: docs/UnicodeInternalsArchitecture.md
 - name: Architecture
   items:
-    - name: Design Decisions
-      href: docs/InductorParserDesignDecisions.md
     - name: Code Architecture
       href: docs/CodeArchitecture.md
     - name: Error Reporting Architecture

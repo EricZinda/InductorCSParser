@@ -18,8 +18,7 @@ Test files in all three folders share the same `namespace InductorParser.Tests;`
 
 Related docs:
 
-- [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md): the error-position principle the tests lock in.
-- [ErrorArchitecture.md](ErrorArchitecture.md): the depth-primary error-resolution model (failures are mechanical, named, or forced, and the deepest wins, with forced as the override) that WithError tests verify.
+- [ErrorArchitecture.md](ErrorArchitecture.md): the depth-primary error-resolution model (failures are mechanical, named, or forced, and the deepest wins, with forced as the override) that WithError tests verify, and the error-position principle the tests lock in.
 - [InductorParserReference.md](InductorParserReference.md): the public API tests exercise.
 
 ## Universal Requirements

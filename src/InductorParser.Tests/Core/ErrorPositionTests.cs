@@ -39,7 +39,7 @@ namespace InductorParser.Tests;
 //     'X' in "aa\nX" is (line 1, column 0), NOT column 3 of some
 //     flat counter. Column is line-relative, not absolute.
 //
-// See docs/InductorParserDesignDecisions.md "LSP Position Semantics" for the full
+// See docs/InductorParserReference.md "The Parse Result" for the full
 // rationale.
 [TestFixture]
 public class ErrorPositionTests
@@ -50,8 +50,8 @@ public class ErrorPositionTests
     // newlines and the outer Eof fails at the offset of the first 'X',
     // which is where the tests below want the deepest failure recorded.
     //
-    // Library doesn't yet ship NoneOf / AnyToken, so the set is spelled
-    // out explicitly. Tests that need a non-'a' prefix char inline their
+    // The set is spelled out explicitly so the helper depends only on
+    // OneOf. Tests that need a non-'a' prefix char inline their
     // own grammar.
     private static Rule AtFailureRule() =>
         And(ZeroOrMore(OneOf(TokenSet.Single('a') | TokenSet.Single('\r') | TokenSet.Single('\n'))), Eof());

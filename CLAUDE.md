@@ -4,7 +4,7 @@
 
 When you'd otherwise write a silent fixup like `if (len <= 0) len = 1; // defensive` or a verbose `throw new InvalidOperationException("Internal: ...")`, use `Invariant.That(condition, message)` (defined in `src/InductorParser/Invariant.cs`). Failure throws an `InductorParserBugException` whose message starts with "Invariant violated:" and ends with "This is an invariant assertion that should never happen." `Invariant` is public so a user-defined rule can assert its own invariants the same way, which is why the message stays neutral instead of blaming InductorParser.
 
-The check is `[MethodImpl(AggressiveInlining)]` and the throw is `[MethodImpl(NoInlining)]`, same hot-path pattern as `Lexer.ThrowBudgetExceeded`, so it's safe on the parser's inner loops.
+The check is `[MethodImpl(AggressiveInlining)]` and the throw is `[MethodImpl(NoInlining)]`, same hot-path pattern as `ParseBudget.ThrowBudgetExceeded`, so it's safe on the parser's inner loops.
 
 The message is an `[InterpolatedStringHandler]` parameter, same shape as `Lexer.Trace`. When the condition holds, the compiler skips every `AppendLiteral` / `AppendFormatted` inside the `$"..."`, so a call like `Invariant.That(len > 0, $"len={len} at {_position}")` pays nothing for the formatting on the success path. Use `$"..."` freely to include state like positions, lengths, or rule names that would help debug a real bug if it ever fires. A plain string literal works too (resolves to the string overload), but lose nothing by writing `$"..."` even when there are no holes. There's a regression test in `InductorParser.Tests/Core/InvariantTests.cs` that puts an `Interlocked.Increment` inside the interpolation hole to prove the deferral really happens.
 

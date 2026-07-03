@@ -46,7 +46,6 @@ curated_docs=(
     Primer4.md
     tutorial-peek.md
     InductorParserReference.md
-    InductorParserDesignDecisions.md
     CodeArchitecture.md
     ErrorArchitecture.md
     TestArchitecture.md

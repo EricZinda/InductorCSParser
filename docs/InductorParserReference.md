@@ -17,7 +17,6 @@ Primers:
 
 Related docs:
 
-- [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md): design and architecture of the library. Why it's shaped the way it's, what tradeoffs were made.
 - [Terminology.md](Terminology.md): library-specific meaning of terms used throughout these docs (leaf, composite, syntax tree, debug tree, AST, FlattenType writing conventions).
 - [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md): lexer internals (code units, runes, graphemes, normalization).
 - [UnicodeGotchas.md](UnicodeGotchas.md): caller-side Unicode concerns the lexer can't fix (case-insensitive matching, BOMs, homoglyphs, etc.).
@@ -130,11 +129,15 @@ Rule 'Expression' is a LateBoundRule that was never bound. Call
 .Bind(targetRule) before calling Parse or Compile.
 ```
 
-**3. Freeze the rule graph.** After `Compile` returns, every rule in the graph is sealed. Calling `.As(...)`, `.Flatten(...)`, `.WithError(...)`, or any other modification method on a sealed rule throws `InvalidOperationException`. 
+Failing at compile time is deliberate. Without the check, the forgotten bind would surface as a `NullReferenceException` deep inside a later parse, far from the original mistake.
 
-**4. Validate against obvious mistakes.** A handful of cheap sanity checks worth running once rather than discovering at parse time: `LateBoundRule` bound to itself or a trivial cycle, and rule-specific construction invariants (each rule class gets a validation hook that `Compile` calls once per rule). Unreachable rules are *not* flagged because a user might legitimately be building standalone rules to use elsewhere. Explicit `SymbolId` slots are reserved so anonymous and named rules don't steal them, and two reachable rules given the same explicit `SymbolId` are rejected at compile time with an error. 
+**3. Freeze the rule graph.** After `Compile` returns, every rule in the graph is sealed. Calling `.As(...)`, `.Flatten(...)`, `.WithError(...)`, or any other modification method on a sealed rule throws `InvalidOperationException`. This makes the "effectively immutable" claim enforced rather than implicit, and it stops user code from accidentally mutating a shared rule after parsing has started. 
+
+**4. Validate against obvious mistakes.** A handful of cheap sanity checks worth running once rather than discovering at parse time: `LateBoundRule` bound to itself or a trivial cycle, and rule-specific construction invariants (each rule class gets a validation hook that `Compile` calls once per rule). Unreachable rules are *not* flagged because a user might legitimately be building standalone rules to use elsewhere. Explicit `SymbolId` slots are reserved so anonymous and named rules don't steal them, and two reachable rules given the same explicit `SymbolId` are rejected at compile time with an error. Letting duplicates through would make parse-tree lookups by raw `SymbolId` ambiguous and would make `Rule.NameOf` depend on graph-walk order. 
 
 **5. Convert every literal to the chosen normalization form.** When `Compile` is given a non-null form, every rule's expected text is converted to that form in place: `Literal` and `Token` rewrite their stored text, and the `TokenSet`-bearing rules (`OneOf`, `NoneOf`, `ScanWhile`, `ScanUntil`, and `Identifier`'s extra start/body sets) convert their set entries the same way. You can type a literal in whatever form is convenient and it will still match, because it will be converted to the form the lexer is reading automatically. `Compile` throws only when text can't be represented in the chosen form: an unpaired surrogate that `string.Normalize` rejects, or a one-grapheme slot (a `Token`, a set entry) whose conversion produces more than one grapheme (the ligature `ﬁ` becomes the two-grapheme `fi` under `FormKC`). Those failures are collected across the whole grammar and thrown as a single `InvalidOperationException` listing each rule, its original text, and how to fix it. The pass is skipped when the form is `null` (the author opted out of normalization).
+
+Bundling the five jobs into one `Compile` call is a design choice. Internally it takes several walks over the same graph (explicit ids have to be collected before named and anonymous ids can probe around them, and the normalization pass needs ids in place), but they all run inside the one call, so a grammar is either fully compiled or untouched. The alternative was separate user-visible passes, which would just push those ordering rules onto the caller.
 
 ### SymbolId
 
@@ -155,7 +158,7 @@ public readonly struct SymbolId : IEquatable<SymbolId>
 
 `SymbolId` is intentionally a single-field struct. It is the size of an int (4 bytes), fits in a single register, and every comparison is a single integer compare. Every `Symbol` node in a parse tree carries one of these, so keeping them small pays off on big trees.
 
-Notice what the struct does *not* carry: a human name. Names live on the grammar side, not on the id itself. Name lookup happens through the rule that knows the grammar context:
+Notice what the struct does *not* carry: a human name. Names live on the grammar side, not on the id itself, so two different grammars loaded in the same process don't fight over a global namespace. Name lookup happens through the rule that knows the grammar context:
 
 ```csharp
 public abstract class Rule
@@ -179,11 +182,13 @@ The id numbering space is split into three ranges so the kinds of symbol id neve
 0x200000..           Custom symbols: explicit ids, name-hash ids, and anonymous rule ids
 ```
 
+Rune symbols live at the bottom because single-rune leaf symbols use the code point as their id, and a rune can be anywhere from 0 to 0x10FFFF. The reserved built-in range sits just above the Unicode range so a built-in id could never collide with a rune, and custom ids live above both. This is a deviation from the C++ numbering (which starts built-ins at 256 and customs at 16000), chosen because both of those ranges fall inside Unicode and would collide with rune ids once the parser started seeing non-ASCII code points. Trace output prints the symbol name rather than the number, so the C++ reference traces still match textually.
+
 ## Characters and TokenSet
 
-The parser operates on Unicode text, not raw bytes. By default the lexer reads one .NET `StringInfo` text element per step. On modern .NET that means extended grapheme clusters, so `👨‍👩‍👧‍👦` is one token rather than seven scalar values. The full lexer story, including legacy-runtime caveats and how to opt into rune-level lexing instead, lives in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md). For grammar-authoring purposes, you can ignore the distinction until you hit emoji or combining-mark input, at which point the Unicode doc has the answer.
+The parser operates on Unicode text, not raw bytes. The lexer reads one .NET `StringInfo` text element per step. On modern .NET that means extended grapheme clusters, so `👨‍👩‍👧‍👦` is one token rather than seven scalar values. The full lexer story, including legacy-runtime caveats, lives in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md), and `WithinToken(...)` (covered below) is the escape hatch for matching the runes inside one token. For grammar-authoring purposes, you can ignore the distinction until you hit emoji or combining-mark input, at which point the Unicode doc has the answer.
 
-`TokenSet` is a composable value type for character sets. The full API surface (built-ins, factory methods, and the `|`, `&`, `-` operators) lives in [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md). The grammar-authoring shorthand is that you build a class out of built-ins and factory calls and combine them with `|` for union, `&` for intersection, and `-` for difference ("a minus b").
+`TokenSet` is a composable value type for character sets. You build a class out of built-ins and factory calls and combine them with `|` for union, `&` for intersection, and `-` for difference ("a minus b"). The full API sketch is in "The TokenSet API" below.
 
 Grammar code reads like:
 
@@ -218,6 +223,92 @@ Token(new Rune(0x1F3B8))         // U+1F3B8 guitar emoji, above U+FFFF
 Token(0x1F3B8)                   // same via int overload
 Token("👋🏽")                      // multi-rune grapheme, still one token
 ```
+
+### The TokenSet API
+
+```csharp
+public readonly struct TokenSet : IEquatable<TokenSet>
+{
+    // Built-in sets
+    public static TokenSet Letters          { get; }  // what char.IsLetter / Rune.IsLetter consider letters
+    public static TokenSet Digits           { get; }  // the characters Unicode classifies as decimal digits
+    public static TokenSet InlineWhitespace { get; }  // whitespace except the UTS #18 line terminators
+    public static readonly TokenSet LineTerminators;  // LF, VT, FF, CR, NEL, LS, PS, plus the two-rune CRLF
+    public static TokenSet AnyWhitespace    { get; }  // InlineWhitespace | LineTerminators
+    public static TokenSet XidStart         { get; }  // may begin an identifier per UAX #31 (XID_Start)
+    public static TokenSet XidContinue      { get; }  // may continue an identifier per UAX #31 (XID_Continue)
+    public static readonly TokenSet Universe;         // every scalar 0..0x10FFFF except surrogates
+    public static readonly TokenSet Replacement;      // U+FFFD REPLACEMENT CHARACTER
+
+    // ASCII-restricted versions of the built-in sets, for grammars that
+    // want only the 0x00..0x7F range
+    public static class Ascii
+    {
+        public static readonly TokenSet Letters          = Range('A', 'Z') | Range('a', 'z');
+        public static readonly TokenSet Digits           = Range('0', '9');
+        public static readonly TokenSet HexDigits        = Digits | Range('a', 'f') | Range('A', 'F');
+        public static readonly TokenSet InlineWhitespace = Runes(" \t");
+        public static readonly TokenSet AnyWhitespace    = InlineWhitespace
+            | Single('\n') | Single('\v') | Single('\f') | Single('\r') | Graphemes("\r\n");
+    }
+
+    // Factories. Single and Range also have Rune and int overloads.
+    public static TokenSet Single(char c);
+    public static TokenSet Range(char low, char high);           // splits around the surrogate block
+    public static TokenSet Runes(string text);                   // one member per rune (a multi-rune
+                                                                 // cluster throws, use Graphemes)
+    public static TokenSet Graphemes(params string[] clusters);  // one member per grapheme cluster
+    public static TokenSet Category(UnicodeCategory category);   // every scalar in the category
+
+    public static TokenSet operator |(TokenSet a, TokenSet b);   // union
+    public static TokenSet operator &(TokenSet a, TokenSet b);   // intersection
+    public static TokenSet operator -(TokenSet a, TokenSet b);   // difference
+
+    // The membership tests OneOf / NoneOf resolve to, public so
+    // user-defined rules can reuse them. ContainsToken tests a whole
+    // token and has a string overload. ContainsRune tests one scalar
+    // and has char and Rune overloads.
+    public bool ContainsToken(ReadOnlySpan<char> grapheme);
+    public bool ContainsRune(int codepoint);
+}
+```
+
+The sketch is trimmed: the surrogate members (`Surrogates`, `SurrogateRange`) are covered in "Surrogates" below, and the type also carries `Empty`, enumeration helpers, and the equality members.
+
+Union is the workhorse (`TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_-")`) and every grammar uses it. The other two operators are rarer but earn their spot because when you do need them, hand-enumerating the result goes stale the moment Unicode adds a new letter to the base class.
+
+**`&` (intersection)** narrows one semantic set by another. It shines when one operand is a big Unicode-tracking class like `Letters` and the other is a script or script-block restriction:
+
+```csharp
+// Cyrillic letters only: letters AND in the Cyrillic block.
+// The composition stays correct as Unicode adds new Cyrillic letters.
+TokenSet.Letters & TokenSet.Range(new Rune(0x0400), new Rune(0x04FF))
+
+// Hex-digit-like ASCII letters (a-f, A-F, without the 0-9).
+TokenSet.Ascii.Letters & TokenSet.Ascii.HexDigits
+```
+
+**`-` (difference)** expresses "this class minus those elements" without hand-enumerating the result:
+
+```csharp
+// Letters except vowels. No pre-built class. You build it by subtracting.
+TokenSet.Ascii.Letters - TokenSet.Runes("aeiouAEIOU")
+
+// Identifier-body characters except underscore, for a language where '_' is reserved.
+TokenSet.XidContinue - TokenSet.Runes("_")
+```
+
+`a - b` keeps `a`'s multi-rune grapheme members (CRLF, a skin-toned emoji) that `b` doesn't contain, so subtracting a rune from a set leaves its clusters alone. For "everything except these categories," subtract from `TokenSet.Universe`, the surrogate-free scalar universe:
+
+```csharp
+// Any printable non-whitespace character: all runes minus the
+// categories you don't want.
+TokenSet.Universe - (TokenSet.InlineWhitespace | TokenSet.LineTerminators | TokenSet.Category(UnicodeCategory.Control))
+```
+
+One caveat on `Universe`: it holds single scalar values only, never a multi-rune cluster (the set of all clusters is effectively infinite, so a "universe" only makes sense at the scalar level). That means `OneOf(Universe - X)` never matches a multi-rune token like CRLF or a skin-toned emoji, while the rule-level `NoneOf(X)` matches any token that isn't in X, multi-rune included. Pick `NoneOf` when "everything except" needs to cover arbitrary clusters, and `Universe - X` when you want a class you can keep composing with `|`, `&`, and `-`.
+
+Internally a `TokenSet` is a sorted array of rune ranges plus a sorted array of multi-rune graphemes. Intersection and difference are single linear passes over the sorted arrays, and union re-sorts the combined range list. Compound expressions are evaluated at construction, so `Letters | Digits | Runes("_")` is one flat structure by the time a `OneOf` rule sees it. Membership testing scans the first few ranges linearly and binary-searches the rest, which matters because the built-ins are bigger than they look: `Letters` is about 660 ranges.
 
 ### How Rules React to the Lexer
 
@@ -331,7 +422,50 @@ If you find yourself writing `OneOrMore(Optional(X))` or `AtLeast(N, Optional(X)
 - Emit trace output in the same format as built-in rules when `ParseOptions.TraceSink` is set, so grammar-wide traces remain readable.
 - `Compile` needs nothing special from a custom rule: like every reachable rule, it gets an id and gets sealed automatically. The one policy decision the subclass makes is its default `FlattenType`, passed to the base constructor (that's how `Token` defaults to `Delete` and `And` to `Flatten`). 
 
-The full details, including method signatures and the lexer API, are documented in [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md) under "Tokens and Leaves" and "How a Rule's Match Method Looks". For grammars that compose existing leaves (which is most grammars) you never need to derive. The built-in composites cover the usual ways rules are combined: run these rules in order, try these alternatives, repeat this rule, or check ahead without consuming input. The built-in leaves cover the character-class cases. User-defined rules matter when you are adding behavior the composites can't express, for example a rule that consumes until a specific UTF-16 offset, a grammar-context-aware matcher that queries external state, or a custom character-boundary detector.
+The method to override, with its rules condensed from the XML docs:
+
+```csharp
+public abstract class Rule
+{
+    // Match at the lexer's current position. startPosition is the lexer
+    // position captured when the outer transaction opened: use it for
+    // failure positions and for the ReadOnlyMemory span of any Symbol you
+    // build. On failure return null (the base class rolls the lexer back)
+    // and call lexer.RecordFailure(...) so "deepest failure wins" error
+    // reporting can surface your rule's message. On success the return
+    // depends on effectiveFlattenType: for Delete return Symbol.Discarded,
+    // for Flatten append your child Symbols to outputSymbols (non-null
+    // only in this mode) and return Symbol.Discarded, and for Preserve
+    // build and return the Symbol itself.
+    protected abstract Symbol? TryParseRule(
+        Lexer lexer,
+        int startPosition,
+        FlattenType effectiveFlattenType,
+        List<Symbol>? outputSymbols);
+}
+```
+
+What a matching method uses on the lexer: `Read()` returns the next token and advances the cursor, `Position` / `IsEof` / `Input` say where it is, `RecordFailure(position, message, forced)` reports where the match failed (leaves record the failing token's start), `BeginProbe()` runs throwaway lookahead that restores the position and the failure state when disposed, and `SetPosition(offset)` bulk-advances for rules that consume to a computed offset. The token `Read()` returns:
+
+```csharp
+public readonly ref struct Token
+{
+    public string               Source    { get; }   // original input string
+    public int                  Offset    { get; }   // UTF-16 offset where the token starts
+    public int                  Length    { get; }   // UTF-16 code-unit length
+    public bool                 IsEof     { get; }
+    public ReadOnlySpan<char>   Chars     { get; }   // Source.AsSpan(Offset, Length)
+    public ReadOnlyMemory<char> Memory    { get; }   // heap-safe view of the same text, for Symbols
+    public int                  RuneValue { get; }   // a one-rune token's code point, else -1
+                                                     // (EOF, multi-rune, lone surrogate)
+
+    public Token(string source, int offset, int length, bool isEof);
+}
+```
+
+Leaf rules store `Token.Memory` (or a span of `lexer.Input`) on the Symbols they build, so matching never copies substrings out of the input.
+
+For grammars that compose existing leaves (which is most grammars) you never need to derive. The built-in composites cover the usual ways rules are combined: run these rules in order, try these alternatives, repeat this rule, or check ahead without consuming input. The built-in leaves cover the character-class cases. User-defined rules matter when you are adding behavior the composites can't express, for example a rule that consumes until a specific UTF-16 offset, a grammar-context-aware matcher that queries external state, or a custom character-boundary detector.
 
 ## The Parse Result
 
@@ -357,9 +491,8 @@ public readonly struct ParseResult
 
     // Position of the error. Line/column follow LSP conventions end-to-end:
     // 0-based line, 0-based column in UTF-16 code units, \r\n as one
-    // atomic break. See InductorParserDesignDecisions.md "LSP Position Semantics" for
-    // why 0-based and why UTF-16. Add 1 at the edge if you want 1-based
-    // for a human-facing error message.
+    // atomic break (the rationale is right below the sketch). Add 1 at
+    // the edge if you want 1-based for a human-facing error message.
     public int  ErrorCharIndex         { get; }   // UTF-16 char index; use for input[...]
     public int  ErrorLine              { get; }   // 0-based line number (LSP)
     public int  ErrorCharColumn        { get; }   // 0-based column in UTF-16 chars (LSP)
@@ -388,7 +521,9 @@ public enum ParseOutcome
 }
 ```
 
-The char-based trio (`ErrorCharIndex`, `ErrorLine`, `ErrorCharColumn`) uses the same units and zero-based indexing the Language Server Protocol uses, so a caller forwarding a parse error into an editor through LSP does no arithmetic in between. One nuance on `ErrorLine`: the parser counts line breaks by the full UTS #18 set (LF, CRLF, lone CR, plus VT, FF, NEL, LS, PS), a superset of the LF, CRLF, and lone CR an LSP client recognizes, so the line matches an editor on ordinary source and diverges only on input containing the rarer terminators. See [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md) for the full rationale. `ErrorTokenIndex` is there for callers that count in user-perceived characters (a `^^^` underline a human will look at). It is computed lazily from the char index and costs nothing unless used.
+The char-based trio (`ErrorCharIndex`, `ErrorLine`, `ErrorCharColumn`) uses the same units and zero-based indexing the Language Server Protocol uses, so a caller forwarding a parse error into an editor through LSP does no arithmetic in between. One nuance on `ErrorLine`: the parser counts line breaks by the full UTS #18 set (LF, CRLF, lone CR, plus VT, FF, NEL, LS, PS), a superset of the LF, CRLF, and lone CR an LSP client recognizes, so the line matches an editor on ordinary source and diverges only on input containing the rarer terminators. `ErrorTokenIndex` is there for callers that count in user-perceived characters (a `^^^` underline a human will look at). It is computed lazily from the char index and costs nothing unless used.
+
+The LSP conventions are deliberate. LSP is the protocol VS Code, Neovim, JetBrains IDEs, and essentially every modern editor use to talk to language tooling, so a caller forwarding a parse error into an editor builds its `Diagnostic` range straight from these fields. Lines are 0-based because these fields are machine-to-machine handoff, not display text: editors show 1-based to humans, and a human-facing message adds 1 at the edge, which is what the default error templates do. Columns count UTF-16 code units because that's the LSP default encoding (LSP 3.17 made it negotiable via `PositionEncodingKind`, but UTF-16 is the one every implementation ships with), so a token like 👋🏽 (two runes, four UTF-16 chars, one visible character) contributes four to the column, same as what VS Code's own buffer sees. And `\r\n` counts as one line break: LSP treats the pair atomically, and the lexer already tokenizes CRLF as one text element, so an `ErrorCharIndex` from a normal parse never lands inside the pair.
 
 `Symbol.SourceRange` uses the same machinery for any node in the parse tree, not just the error point. Each `SourcePosition` (the type returned by `Start` and `End`) carries the same `CharIndex`, `TokenIndex`, `Line`, `CharColumn`, and `TokenColumn` fields (plus 1-based `LineNumber` / `CharColumnNumber` / `TokenColumnNumber` conveniences for human-facing messages), so a tool reporting "duplicate section on line 7" or "value out of range at char 42" reads from the symbol with the same semantics LSP and `string.Substring` already use.
 
@@ -739,8 +874,10 @@ public sealed class ParseOptions
     /// command off the start and handing the rest to another parser. A
     /// rule failing inside the grammar still reports its own position
     /// the same way; the flag only relaxes the post-rule "must have
-    /// reached EOF" check. See InductorParserDesignDecisions.md "Parse Requires
-    /// Consuming All Input" for the rationale.
+    /// reached EOF" check. The default is strict because silently
+    /// accepting trailing input would mask the "grammar accepted
+    /// something it shouldn't have" bugs grammar authors care most
+    /// about catching.
     public bool AllowTrailingInput { get; set; } = false;
 }
 ```
@@ -754,4 +891,4 @@ public sealed class ParseOptions
 
 When a budget trips, the parse returns a `ParseResult` with `Outcome` set to `Timeout`, `RuleCountLimitExceeded`, `DepthLimitExceeded`, or `Canceled` (not `GrammarMismatch`). Callers who need to distinguish "input was invalid" from "we ran out of budget" switch on `Outcome`.
 
-For the design rationale behind these choices (why three budgets and not one, why `Timeout` is opt-in but the others default on, why cancellation uses `ParseCancellation` instead of relying on `CancellationTokenSource.CancelAfter`, and future ideas like the cut operator and packrat memoization), see [InductorParserDesignDecisions.md](InductorParserDesignDecisions.md).
+The design rationale in brief. The budgets are separate because they answer different questions: exponential backtracking burns rule invocations while revisiting the same cursor positions (which is why the work budget counts invocations, not character reads), and deeply nested input overflows the call stack long before any count trips. `Timeout` is opt-in because a wall-clock limit is hardware-dependent, the same input passing on a fast machine and failing on a slow CI agent, while the rule-count and depth limits are deterministic (same input, same trip point, every machine) and can safely default on. And cancellation is the manually-canceled `ParseCancellation` rather than a `CancellationTokenSource.CancelAfter` deadline because `CancelAfter` fires from a timer thread, which WebGL doesn't have: a tight synchronous parse loop there would never observe the token. The parser instead polls all of its budgets synchronously from inside the parse loop, which works on every platform.

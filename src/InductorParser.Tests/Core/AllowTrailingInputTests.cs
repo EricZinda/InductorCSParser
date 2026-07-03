@@ -100,11 +100,10 @@ public class AllowTrailingInputTests
         // Or tries Literal("hello") which matches four chars before
         // failing on 'z' at offset 4, then falls back to Token('h') and
         // succeeds at offset 0 (consuming one char). Parsing stops at
-        // offset 1 with trailing "ellz" unconsumed. The doc contract
-        // (InductorParserDesignDecisions.md "Trailing Input Is a Failure")
-        // is that ErrorCharIndex is the first leftover character (offset
-        // 1, the 'e'), not a position from a rolled-back alternative
-        // (offset 4, the 'z' that the abandoned Literal hit and that
+        // offset 1 with trailing "ellz" unconsumed. ErrorCharIndex must
+        // be the first leftover character (offset 1, the 'e'), not a
+        // position from a rolled-back alternative (offset 4, the 'z'
+        // that the abandoned Literal hit and that
         // lexer.DeepestFailurePosition still records).
         var rule = Or(Literal("hello"), Token('h'));
         var result = rule.Parse("hellz");
