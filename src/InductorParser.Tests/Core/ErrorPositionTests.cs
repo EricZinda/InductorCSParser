@@ -249,6 +249,10 @@ public class ErrorPositionTests
         Assert.That(result.ErrorLine, Is.EqualTo(0));
         Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(0));
+
+        // ErrorMessage coalesces to the empty string the same way, so
+        // `result.ErrorMessage.Contains(...)` can't NRE on a default value.
+        Assert.That(result.ErrorMessage, Is.EqualTo(string.Empty));
     }
 
     [Test]

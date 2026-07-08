@@ -36,7 +36,8 @@ public sealed class ParseOptions
     /// <summary>
     /// Caps how many work units the parse may consume before giving up. The
     /// parse aborts with <see cref="ParseOutcome.RuleCountLimitExceeded"/> when
-    /// the counter exceeds this limit. Set to 0 to disable.
+    /// a periodic check (see remarks) finds the counter has exceeded this
+    /// limit. Set to 0 to disable.
     /// </summary>
     /// <remarks>
     /// Each rule invocation counts as one unit, and each iteration of a
@@ -47,6 +48,17 @@ public sealed class ParseOptions
     /// default of 10,000,000 lets well-formed parses through (a 1 MB file
     /// often runs through low millions) and catches both
     /// catastrophic-backtracking shapes and bulk-scan denial of service.
+    /// <para>
+    /// The limit is checked at periodic checkpoints (every 1024 work units),
+    /// not on every unit, which keeps the per-unit cost at one mask and one
+    /// compare. An abort lands at the first checkpoint after
+    /// the counter crosses the limit, so the parse can run up to 1023 units
+    /// past it. And a parse that finishes before the first checkpoint never
+    /// aborts at all, no matter how small the limit, so a limit below 1024
+    /// can't make a small parse fail. The checkpoint schedule is fixed, so
+    /// the run-to-run determinism above still holds. Treat this as a backstop
+    /// against runaway parses, not a precise budget.
+    /// </para>
     /// </remarks>
     public long RuleCountLimit { get; set; } = 10_000_000L;
 
@@ -89,9 +101,11 @@ public sealed class ParseOptions
     /// its normal result instead of aborting. The
     /// deadline is there to stop a long-running or runaway parse, and a parse
     /// long enough to matter runs long enough to hit a check. Don't rely on
-    /// Timeout to trip on a tiny grammar against a tiny input. If you need a
-    /// hard, count-based cap that trips deterministically regardless of input
-    /// size, use <see cref="RuleCountLimit"/> instead.
+    /// Timeout to trip on a tiny grammar against a tiny input. For a cap that
+    /// trips at the same point on every run regardless of hardware, use
+    /// <see cref="RuleCountLimit"/> instead. It's polled at the same periodic
+    /// checkpoints, so it shares the granularity caveat described in its
+    /// remarks, but a count is repeatable where a clock isn't.
     /// </para>
     /// </remarks>
     public TimeSpan Timeout { get; set; } = TimeSpan.Zero;

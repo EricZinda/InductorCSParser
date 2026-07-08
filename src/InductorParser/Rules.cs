@@ -316,8 +316,11 @@ public static class Rules
     /// use <see cref="ScanUntilEof"/> instead.
     /// </para>
     /// <code>
-    /// // CSV field body: scan until the next comma or LF (strict)
-    /// var field = ScanUntil(TokenSet.Runes(",\n"));
+    /// // CSV field body: scan until the next comma or line terminator
+    /// // (strict). LineTerminators rather than Runes(",\n") because a
+    /// // CRLF arrives from the lexer as one two-rune token, which a set
+    /// // holding only a bare LF wouldn't stop at.
+    /// var field = ScanUntil(TokenSet.Runes(",") | TokenSet.LineTerminators);
     ///
     /// // Line comment body: stops at any line break or EOF
     /// var lineCommentBody = ScanUntil(TokenSet.LineTerminators,

@@ -37,6 +37,7 @@ public readonly struct ParseResult
     private readonly string? _input;
     private readonly Rule? _grammar;
     private readonly IReadOnlyList<Symbol>? _symbols;
+    private readonly string? _errorMessage;
 
     /// <summary>
     /// Returns the shape of this result: success, grammar mismatch, or
@@ -47,7 +48,8 @@ public readonly struct ParseResult
     public ParseOutcome Outcome { get; }
 
     /// <summary>
-    /// Human-readable description of what went wrong. Empty string on success.
+    /// Human-readable description of what went wrong. Empty string on success
+    /// and on a default-constructed ParseResult.
     /// </summary>
     /// <remarks>
     /// On GrammarMismatch, either the innermost WithError message set by the
@@ -55,8 +57,14 @@ public readonly struct ParseResult
     /// MalformedInput, the message from
     /// <see cref="ParseOptions.MalformedInputTemplate"/>. On a budget abort, the
     /// matching "Parse aborted: ..." string. See: docs/ErrorArchitecture.md
+    /// <para>
+    /// The coalesce below matches how <see cref="Symbols"/> and
+    /// <see cref="ToString"/> treat a default-constructed ParseResult (a zeroed
+    /// array element, a FirstOrDefault on an empty list): every member returns
+    /// a usable value rather than null.
+    /// </para>
     /// </remarks>
-    public string ErrorMessage { get; }
+    public string ErrorMessage => _errorMessage ?? string.Empty;
 
     /// <summary>
     /// The top-level Symbols produced by the parse. For a failed or aborted
@@ -91,8 +99,10 @@ public readonly struct ParseResult
     /// <remarks>
     /// This is the unit string.Substring, Range and Span use, and the unit the Language
     /// Server Protocol uses for editor diagnostics. Always in [0, input.Length]
-    /// (enforced at construction), so callers can index into the original input
-    /// string without bounds-checking.
+    /// (enforced at construction). Note the top of that range: a parse that
+    /// fails at end of input reports input.Length, one past the last char, and
+    /// that's the most common failure position there is. Check for it before
+    /// indexing into the input string with this value.
     /// </remarks>
     public int ErrorCharIndex { get; }
 
@@ -317,7 +327,7 @@ public readonly struct ParseResult
     {
         Outcome = outcome;
         _symbols = symbols;
-        ErrorMessage = errorMessage ?? throw new ArgumentNullException(nameof(errorMessage));
+        _errorMessage = errorMessage ?? throw new ArgumentNullException(nameof(errorMessage));
         if (input == null) throw new ArgumentNullException(nameof(input));
         if (grammar == null) throw new ArgumentNullException(nameof(grammar));
         int inputLength = input.Length;
