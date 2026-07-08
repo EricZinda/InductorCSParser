@@ -11,3 +11,4 @@ docs/primerFailure.md
 docs/tutorial-peek.md
 docs/UnicodeGotchas.md
 docs/UnicodeInternalsArchitecure.md
+docs/CodeArchitecture.md

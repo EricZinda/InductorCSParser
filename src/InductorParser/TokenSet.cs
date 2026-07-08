@@ -623,8 +623,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     // Binary search the sorted multi-rune array for a span equal to
     // `target`. Returns the index on hit, or ~insertionPoint on miss
-    // (the standard Array.BinarySearch convention so callers like the
-    // sorted-merge in operator| can reuse this). Each step compares with
+    // (the standard Array.BinarySearch convention). Each step compares with
     // SequenceCompareTo, which orders the two char spans by raw char value
     // (ordinal) the same way the array is sorted, and allocates nothing.
     private int BinarySearchMultiRuneGrapheme(ReadOnlySpan<char> target)
