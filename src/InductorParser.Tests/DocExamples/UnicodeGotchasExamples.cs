@@ -8,7 +8,9 @@ using static InductorParser.Rules;
 using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests.DocExamples;
 
-// Verifies the runnable code examples in docs/UnicodeGotchas.md.
+// Verifies the runnable code examples in docs/UnicodeGotchas.md, plus
+// the invisible-character, homoglyph, and variation-selector recipes
+// that live in docs/Primer4.md (the security primer).
 [TestFixture]
 public class UnicodeGotchasExamples
 {
@@ -24,7 +26,7 @@ public class UnicodeGotchasExamples
         Assert.That(name.Parse(UnicodeExamples.CafePrecomposedGrapheme).Success, Is.True);
         Assert.That(name.Parse(UnicodeExamples.GreekKalimeraIdentifier).Success, Is.True);
         Assert.That(name.Parse(UnicodeExamples.DoubleStruckSmallPiGrapheme).Success, Is.True,
-            "U+2118 / nearby script-letter additions per UAX #31");
+            "U+213C DOUBLE-STRUCK SMALL PI is a lowercase letter (Ll), so it's in XID_Start");
 
         Assert.That(name.Parse("2foo").Success, Is.False);
         Assert.That(name.Parse("_foo").Success, Is.False,
@@ -157,7 +159,7 @@ public class UnicodeGotchasExamples
         Assert.That(grammar.Parse(cleaned).Success, Is.True);
     }
 
-    // "Zero-Width and Invisible Format Characters": stripping them
+    // Primer4.md "Invisible characters": stripping them
     // before parsing. Soft hyphen (U+00AD) inside "ap­ple" makes
     // it not match Literal("apple") until the soft hyphen is stripped.
     [Test]
@@ -183,7 +185,7 @@ public class UnicodeGotchasExamples
         Assert.That(grammar.Parse(cleaned).Success, Is.True);
     }
 
-    // "Zero-Width and Invisible Format Characters": the joiner
+    // Primer4.md "Invisible characters": the joiner
     // characters ZWJ (U+200D) and ZWNJ (U+200C) don't come through as
     // their own tokens after a base character. They carry UAX #29
     // grapheme-break properties (ZWJ and Extend), so rule GB9 glues them
@@ -233,8 +235,9 @@ public class UnicodeGotchasExamples
             "soft hyphen (U+00AD) is its own token");
     }
 
-    // "Homoglyph Confusables": the LatinLetters set rejects Cyrillic а
-    // (U+0430) but accepts Latin a (U+0061).
+    // Primer4.md "Homoglyphs": restricting a rule to one script's
+    // letters. A custom Latin set rejects Cyrillic а (U+0430) but
+    // accepts Latin a (U+0061).
     [Test]
     public void Homoglyph_LatinLetters_set_rejects_Cyrillic_a()
     {
@@ -261,12 +264,12 @@ public class UnicodeGotchasExamples
             "U+00F7 DIVISION SIGN is not a letter and must not be in LatinLetters");
     }
 
-    // "Homoglyph Confusables": the Greek set is documented as a
+    // Primer4.md "Homoglyphs": a single-script letter set built as a
     // confusable-resistant identifier character class, so it must reject
     // the non-letters that sit inside the U+0370..U+03FF Greek and Coptic
     // block. U+037E GREEK QUESTION MARK (Po) renders as ';' and U+0387
     // GREEK ANO TELEIA (Po) renders as '·': both are punctuation
-    // confusables, exactly the kind of character this section promises to
+    // confusables, exactly the kind of character that section promises to
     // keep out of identifiers. A naive Range(0x0370, 0x03FF) admits them.
     [Test]
     public void Homoglyph_Greek_set_rejects_non_letters()
@@ -290,9 +293,10 @@ public class UnicodeGotchasExamples
             "U+0387 GREEK ANO TELEIA is punctuation, not a letter, and must not be in the Greek set");
     }
 
-    // "Variation Selectors": stripping U+FE00..U+FE0F before parsing
-    // removes the emoji-style variation selector that would otherwise
-    // make exact string matching fail.
+    // Primer4.md "Invisible characters" (the variation-selector entries
+    // in the widened Invisibles set): stripping U+FE00..U+FE0F before
+    // parsing removes the emoji-style variation selector that would
+    // otherwise make exact string matching fail.
     [Test]
     public void Variation_selector_strip_recipe()
     {

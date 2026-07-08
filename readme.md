@@ -107,9 +107,9 @@ document.Parse("你好 = '1'");    // name: "你好",     value: "1"
 
 // é written as e + U+0301 (accent mark) is two C# chars that
 // form one user-perceived grapheme. The parser accepts it
-document.Parse("café = '5'");    // (é = e + U+0301) name: "café", value: "5"
+document.Parse("café = '5'");    // (é = e + U+0301) name: "café", value: "5"
 
-// In a Devanagari language example, each grapheme is a consonant
+// In a Devanagari language example, a grapheme can be a consonant
 // joined to a virama or vowel sign, sometimes many C# chars long
 document.Parse("नमस्ते = '1'"); // name: "नमस्ते", value: "1"
 
@@ -142,11 +142,11 @@ var result = document.Parse("नमस्ते = ");
 // (2 of the name's 4 letters take 2 chars each)
 ```
 
-The same multi-unit positioning is available for every Symbol in the parse tree on success. Every Symbol carries a `SourceRange` that exposes the same four fields (`CharIndex`, `TokenIndex`, `Line`, `Column`) for both `Start` and `End`:
+The same multi-unit positioning is available for every Symbol in the parse tree on success. Every Symbol has a `SourceRange` that exposes the same four fields (`CharIndex`, `TokenIndex`, `Line`, `CharColumn`) for both `Start` and `End`:
 
 ```CSharp
 var result = document.Parse("motto = '👨‍👩‍👧'");
-var range = result.Tree!.Find(quotedString)!.SourceRange!.Value;
+var range = result.Find(quotedString)!.SourceRange!.Value;
 // Width of the matched value:
 //   range.End.CharIndex  - range.Start.CharIndex  == 10  // 8 for the family + 2 quotes
 //   range.End.TokenIndex - range.Start.TokenIndex ==  3  // 1 for the family + 2 quotes
@@ -162,7 +162,7 @@ Regex expressions can sometimes introduce [denial-of-service attacks](https://en
 
 `^([a-zA-Z0-9]+)*@example.com$`
 
-A simple email-ish validator. Feed it `"aaaaaaaaaaaaaaaaaaaaa!"` and .NET Regex will happily burn seconds trying to find a match. The problem is the nested `+` inside `*`: when the match fails, the engine has to try every way to split the a's across the two quantifiers before giving up. Add another a or two and the time doubles.
+A simple email-ish validator. Feed it `"aaaaaaaaaaaaaaaaaaaaaaaaa!"` (25 a's) and .NET Regex will happily burn seconds trying to find a match. The problem is the nested `+` inside `*`: when the match fails, the engine has to try every way to split the a's across the two quantifiers before giving up. Add another a or two and the time doubles.
 
 The Inductor Parser avoids this and is more readable as well:
 
@@ -178,7 +178,7 @@ var validator = And(
 
 Backtracking isn't the only way to hang. A 100 MB input file, a grammar that recurses 10,000 levels deep on nested parenthesis, or untrusted input in a web handler can all do it, too. The parser has three ways to handle these scenarios:
 
-- `RuleCountLimit` (default 10M) caps how many rule invocations a parse can do.
+- `RuleCountLimit` (default 10M) caps how much work a parse can do (rule invocations plus bulk-scan steps).
 - `MaxDepth` (default 1000) caps the recursion depth. 
 - `Timeout` (default off) caps wall-clock time spent (done without a thread to support WebGL).
 

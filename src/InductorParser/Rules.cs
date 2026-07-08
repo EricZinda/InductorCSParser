@@ -837,7 +837,7 @@ public static class Rules
     /// <param name="extraStartRunes">
     /// Extra characters to allow as the first character, on top of the
     /// base Unicode identifier-start set (<see cref="TokenSet.XidStart"/>).
-    /// UAX #31 calls this a "profile extension". Typical value for a
+    /// UAX #31 calls this a "profile". Typical value for a
     /// programming-language grammar is <c>TokenSet.Runes("_")</c>. Python
     /// and Rust use this shape. C# also permits leading underscores, though
     /// its full identifier specification differs. Defaults to

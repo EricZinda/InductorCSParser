@@ -8,7 +8,7 @@ In this case:
 "Anything"
 "Until I hit this sequence of characters"
 ```
-There are rules that consume text units, like `Token` (one user-perceived character), `Literal` (an sequence of those tokens, aka a string) and `Integer`. These are your basic building blocks. In this example, let's replace the second part with:
+There are rules that consume text units, like `Token` (one user-perceived character), `Literal` (a sequence of those tokens, aka a string) and `Integer`. These are your basic building blocks. In this example, let's replace the second part with:
 
 ```
 "Anything"
@@ -34,7 +34,7 @@ var target = Literal("this sequence of characters");
 ZeroOrMore(And(Not(target), AnyToken()))
 target
 ```
-Instead of just consuming `AnyToken`, we now start by checking to see if it's `Not` what we want to end with. We glue those together with `And` which requires that all of the rules you pass it succeed, in the order they're given.  We have to put `Not` first for the same greedy reason: If `AnyToken()` was first it would consume all the characters before we ever get to `Not`.
+Instead of just consuming `AnyToken`, we now start by checking to see if it's `Not` what we want to end with. We glue those together with `And` which requires that all of the rules you pass it succeed, in the order they're given.  We have to put `Not` first so the check runs before the character is consumed: if `AnyToken()` was first, each pass through the loop would consume a character and then check the position *after* it, so the loop would stop one character short of the stop text and the parse would fail.
 
 But this won't actually compile, yet. The second and third lines aren't valid C#, we need to combine them and assign them to a variable. 
 
@@ -111,7 +111,7 @@ And: "How can I match anything up until this sequence of characters"
     And: "o"
       Not: ""
       'o'
-    [... 32 more And/Not/char triples, one per consumed token ...]
+    [... 31 more And/Not/char triples, one per consumed token ...]
     And: " "
       Not: ""
       ' '
@@ -119,7 +119,7 @@ And: "How can I match anything up until this sequence of characters"
 ```
 First, each symbol is shown indented based on where in the tree it was, followed by ":" and what `ToString()` would return for it. This means the root node should always show the full document.
 
-Next, `Token` just prints out its value without `Token` in front of it. This is why you see bare `'H'` and `'o'` in the output.
+Next, symbols holding a single token (the ones `AnyToken()` made here) just print out their value with no rule name in front. This is why you see bare `'H'` and `'o'` in the output.
 
 Note that `Not` doesn't actually consume anything so it has nothing to print out. It just ensures that whatever is inside it isn't coming up.
 
@@ -154,7 +154,7 @@ If you want to define a set of characters that includes an emoji alongside ordin
 var letterOrFamily = OneOf(TokenSet.Letters | TokenSet.Graphemes("👨‍👩‍👧"));
 ```
 
-`TokenSet.Graphemes(...)` adds whatever the runtime treats as one user-visible character to the set, so each argument is one on-screen character. `OneOf` then checks each token in the input against the whole set.
+`TokenSet.Graphemes(...)` adds whatever the runtime treats as one user-visible character to the set, so each argument is one on-screen character. `OneOf` then checks one token of the input against the whole set.
 
 This matters because the most common Unicode bug in parsers is silently splitting one of these multi-piece characters apart. A grammar that grabbed only the first piece of 👨‍👩‍👧 and stopped would leave the rest dangling for the next rule to trip over. The lexer avoids this by walking the input one user-perceived character at a time. If you want to look *inside* a token (to inspect accent marks individually, say) there's a `WithinToken(...)` helper. But for normal text processing, you don't have to think about any of this. The grammar above already does the right thing on emoji, accented letters, and complex scripts.
 

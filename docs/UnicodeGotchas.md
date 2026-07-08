@@ -53,9 +53,9 @@ Caveats: the inner rule runs against a fresh sub-lexer that doesn't share trace 
 
 ### Matching specific languages
 
-`Identifier` takes two optional `TokenSet` parameters, `extraStartRunes` and `extraBodyRunes`, that get unioned into `XID_Start` and `XID_Continue` respectively. UAX #31 calls this a "profile extension." Combined with the normalization form chosen at `Compile` time, these cover the real-world identifier rules of most languages that are built on UAX #31.
+`Identifier` takes two optional `TokenSet` parameters, `extraStartRunes` and `extraBodyRunes`, that get unioned into `XID_Start` and `XID_Continue` respectively. UAX #31 calls this a "profile." Combined with the normalization form chosen at `Compile` time, these cover the real-world identifier rules of most languages that are built on UAX #31.
 
-Strict UAX #31 (the reference spec, no language-specific additions). Raku is the closest mainstream match.
+Strict UAX #31 (the reference spec, no language-specific additions). No mainstream language ships this exact profile (nearly all add at least the underscore), so treat it as the baseline the recipes below extend.
 
 ```csharp
 Identifier();  // base UAX #31-style form
@@ -79,7 +79,7 @@ var rust = Identifier(extraStartRunes: TokenSet.Runes("_"))
 var result = rust.Parse(input);
 ```
 
-ECMAScript-style identifiers (JavaScript, TypeScript), per [ECMA-262 §12.7](https://tc39.es/ecma262/#sec-names-and-keywords). The shape is right (add `_` and `$` to both positions, no normalization), but note the caveat: ECMAScript officially uses `ID_Start` and `ID_Continue`, not the X variants. The parser only exposes the XID sets, which are a strict subset, so this recipe accepts slightly less than a spec-conformant JS engine would. The difference is a handful of exotic code points that almost never appear in real source.
+ECMAScript-style identifiers (JavaScript, TypeScript), per [ECMA-262 §12.7](https://tc39.es/ecma262/#sec-names-and-keywords). The shape is close (add `_` and `$` to both positions, no normalization), but note two caveats. ECMAScript officially uses `ID_Start` and `ID_Continue`, not the X variants. The parser only exposes the XID sets, which are a strict subset, so this recipe accepts slightly less than a spec-conformant JS engine would. The difference is a couple dozen exotic code points that almost never appear in real source. ECMAScript also allows ZWNJ (U+200C) and ZWJ (U+200D) after the first character, which this recipe doesn't cover.
 
 ```csharp
 var ecmascript = Identifier(
@@ -89,7 +89,7 @@ var ecmascript = Identifier(
 var result = ecmascript.Parse(input);
 ```
 
-C# identifiers, per [ECMA-334 §7.4.3](https://www.ecma-international.org/publications-and-standards/standards/ecma-334/). C# allows `_` in Start and uses category-based rules rather than XID directly. For grammars, `Identifier(extraStartRunes: TokenSet.Runes("_"))` with default NFC is a close approximation for ordinary source. It isn't a spec-exact C# lexer.
+C# identifiers, per [ECMA-334 §6.4.3](https://www.ecma-international.org/publications-and-standards/standards/ecma-334/). C# allows `_` in Start and uses category-based rules rather than XID directly. For grammars, `Identifier(extraStartRunes: TokenSet.Runes("_"))` with default NFC is a close approximation for ordinary source. It isn't a spec-exact C# lexer.
 
 Java identifiers use `Character.isJavaIdentifierStart` and `Character.isJavaIdentifierPart`, which are their own rule. Not reproducible via `Identifier` parameters alone; a Java-conforming grammar would compose against a custom `TokenSet` built from those predicates.
 
@@ -99,7 +99,7 @@ If you are restricting to a specific script for security reasons (mixed-script p
 
 ## Case-Insensitive Matching Beyond ASCII
 
-The `LiteralIgnoreAsciiCase` leaf does ASCII case-insensitive matching (A ↔ a) and is all most grammars need. Full Unicode case-insensitive matching has script-specific surprises the lexer doesn't handle: German `ß` uppercases to `SS` (one character becomes two), Turkish has dotted-i and dotless-i as distinct letters, Greek final sigma (ς) pairs with regular sigma only at word boundaries. The leaf is ASCII-only on purpose. Extending it to full Unicode is a much bigger piece of work that was out of scope for now.
+The `LiteralIgnoreAsciiCase` leaf does ASCII case-insensitive matching (A ↔ a) and is all most grammars need. Full Unicode case-insensitive matching has script-specific surprises the lexer doesn't handle: German `ß` uppercases to `SS` (one character becomes two), Turkish has dotted-i and dotless-i as distinct letters, Greek capital sigma (Σ) lowercases to final sigma (ς) at the end of a word and to regular sigma (σ) everywhere else. The leaf is ASCII-only on purpose. Extending it to full Unicode is a much bigger piece of work that was out of scope for now.
 
 **Fix.** For ASCII keywords, the built-in leaf is the cheap path:
 
@@ -159,6 +159,7 @@ The three anti-patterns to avoid in any line-based grammar:
 ```csharp
 // BROKEN on Windows line endings.
 And(..., Token('\n'))                             // fails on CRLF input
+OneOf(TokenSet.Runes("\n"))                         // CRLF is two runes, never in a rune set
 ZeroOrMore(NoneOf(TokenSet.Single('\n')))           // swallows the CRLF terminator
 ```
 
@@ -173,7 +174,7 @@ Under the default `Compile(NormalizationForm.FormC)` you never see this, because
 When that token reaches the parser, `NoneOf(set)` admits it:
 
 ```csharp
-string loneSurrogate = "\uD800";   // build at runtime; a string literal may get sanitized to U+FFFD
+string loneSurrogate = "\uD800";   // the \uD800 escape is plain ASCII in source (a raw pasted surrogate could get mangled to U+FFFD)
 
 // NoneOf is a direct non-membership test: the lone surrogate isn't in
 // Letters, so NoneOf admits it.
@@ -189,7 +190,7 @@ NoneOf(TokenSet.Letters).Compile(null).Parse(loneSurrogate).Success;   // True
 
 This one is different from the gotchas above. It isn't an input-side surprise the caller can preprocess away, and it isn't a grammar-design choice. It's the runtime behaving differently depending on which .NET you're on.
 
-The lexer calls `System.Globalization.StringInfo.GetNextTextElement` to find the next token boundary. On .NET 5 and later this is UAX #29 conformant, because the BCL switched to ICU for globalization. On .NET Framework, .NET Core 3.x, and the Mono runtime that Unity ships (which IL2CPP compiles from), `StringInfo` still uses an algorithm Microsoft wrote before UAX #29 stabilized. It's roughly "Unicode 3.x grapheme cluster": base character plus combining marks, surrogate pairs as one unit, Hangul syllable basics. It's not extended-grapheme-cluster aware.
+The lexer calls `System.Globalization.StringInfo.GetNextTextElement` to find the next token boundary. On .NET 5 and later this is UAX #29 conformant, because .NET 5 replaced the old custom logic with a full UAX #29 implementation. On .NET Framework, .NET Core 3.x, and the Mono runtime that Unity ships (which IL2CPP compiles from), `StringInfo` still uses an algorithm Microsoft wrote before UAX #29 stabilized. It's roughly "Unicode 3.x grapheme cluster": base character plus combining marks, surrogate pairs as one unit, Hangul syllable basics. It's not extended-grapheme-cluster aware.
 
 What still works on the legacy runtimes:
 
@@ -203,11 +204,11 @@ What breaks:
 - Emoji ZWJ sequences. The family 👨‍👩‍👧‍👦 splits at every ZWJ.
 - Emoji plus skin-tone modifier. 👋🏽 splits into two.
 - Regional indicator pairs (flag emoji). 🇺🇸 splits into two.
-- Thai SARA AM. "kam" (ก + ํา) splits.
+- Thai SARA AM. "kam" (ก + ำ) splits.
 - CRLF. The legacy walker predates the UAX #29 rule that glues CR to LF (GB3), so `\r\n` lexes as two tokens instead of one. `EndOfLine()` is built to absorb this: its `Literal("\r\n")` alternative matches across token boundaries, so the pair is one terminator on either runtime. Grammars that match the pair another way (`Token("\r\n")`, a bare `OneOf(TokenSet.LineTerminators)`) see it split.
 - Other extended-grapheme-cluster rules added after about 2003 (Prepend characters, Extended_Pictographic sequences).
 
-The common thread is timing. Combining marks have been in Unicode since the start, so the legacy walker handles them. Everything UAX #29 added later, especially the emoji rules from 2014 onward, the legacy walker doesn't know about. Microsoft updated `StringInfo` to ICU in .NET 5. Unity's Mono didn't follow, and IL2CPP compiles from that Mono.
+The common thread is timing. Combining marks have been in Unicode since the start, so the legacy walker handles them. Everything UAX #29 added later, especially the emoji rules (regional indicators in 2012, skin tones and ZWJ sequences in 2016), the legacy walker doesn't know about. Microsoft rewrote `StringInfo` to follow UAX #29 in .NET 5. Unity's Mono didn't follow, and IL2CPP compiles from that Mono.
 
 **Fix.** Two options, in order of effort:
 

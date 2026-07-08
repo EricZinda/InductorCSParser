@@ -6,7 +6,7 @@ Regex expressions can sometimes introduce [denial-of-service attacks](https://en
 
 `^([a-zA-Z0-9]+)*@example.com$`
 
-A simple email-ish validator. Feed it `"aaaaaaaaaaaaaaaaaaaaa!"` and .NET Regex will happily burn seconds trying to find a match. The problem is the nested `+` inside `*`: when the match fails, the engine has to try every way to split the a's across the two quantifiers before giving up. Add another a or two and the time doubles.
+A simple email-ish validator. Feed it `"aaaaaaaaaaaaaaaaaaaaa!"` and .NET Regex will happily burn a couple hundred milliseconds trying to find a match. The problem is the nested `+` inside `*`: when the match fails, the engine has to try every way to split the a's across the two quantifiers before giving up. Add another a or two and the time doubles.
 
 The Inductor Parser version avoids this and is more readable as well:
 
@@ -32,7 +32,7 @@ Backtracking isn't the only way to hang. A 100 MB input file, a grammar that rec
 
 The parser has three ways to handle these scenarios:
 
-- `RuleCountLimit` (default 10M) caps how many rule invocations a parse can do. The benchmark's JSON parser on a 1 MB input (1,081,666 chars) does about 1.4M invocations and parses in ~55 ms, so the default has comfortable headroom for well-formed input. Deterministic across hardware, so the same input trips at the same count on every machine.
+- `RuleCountLimit` (default 10M) caps how much work a parse can do: each rule invocation and each bulk-scan step counts as one unit. The benchmark's JSON parser on a 1 MB input (1,081,666 chars) uses about 4.1M units and parses in ~220 ms, so the default has comfortable headroom for well-formed input. Deterministic across hardware, so the same input trips at the same count on every machine.
 - `MaxDepth` (default 1000) caps the recursion depth. 10,000 nested open parenthesis fail cleanly instead of killing the process with an uncatchable `StackOverflowException`.
 - `Timeout` (default off) caps wall-clock time spent (done without a thread to support WebGL). Off by default because the other two handle safety issues and wall-clock limits make tests flaky across hardware. Still worth turning on for untrusted input in a request handler.
 
@@ -101,9 +101,9 @@ Attack: Some characters look almost identical to common letters but are differen
 There are two kinds of lookalike, described next.
 
 #### Unicode Compatibility Lookalikes
-Attack: A site reserves the name `admin` for public posts to a forum so nobody can impersonate staff, and enforces it by checking each new username against a blocklist. An attacker signs up as `𝐚dmin`, spelling the first letter with math-bold `𝐚` (`U+1D400`). The blocklist compares raw code points, sees a string that isn't `admin`, and lets the registration through. Now every comment and support reply the attacker posts shows a name that reads as `admin`, and they can pose as staff to anyone who trusts the label.
+Attack: A site reserves the name `admin` for public posts to a forum so nobody can impersonate staff, and enforces it by checking each new username against a blocklist. An attacker signs up as `𝐚dmin`, spelling the first letter with math-bold `𝐚` (`U+1D41A`). The blocklist compares raw code points, sees a string that isn't `admin`, and lets the registration through. Now every comment and support reply the attacker posts shows a name that reads as `admin`, and they can pose as staff to anyone who trusts the label.
 
-Unicode compatibility lookalikes are stylistic or formatting variants of the same base character. Math-bold `𝐀` (`U+1D400`), fullwidth `Ａ` (`U+FF21`), small caps, superscripts, ligatures: Unicode declares them compatibility-equivalent to plain `A`, and `FormKC` [normalization](Primer3.md#compatibility-vs-canonical) converts them all to that plain `A`. Whether you want that conversion depends on your rule. For "allowed" rules the default `FormC` rejects the versions you didn't write down explicitly, which is what you want:
+Unicode compatibility lookalikes are stylistic or formatting variants of the same base character. Math-bold `𝐀` (`U+1D400`), fullwidth `Ａ` (`U+FF21`), superscripts, ligatures: Unicode declares them compatibility-equivalent to the plain letters they represent, and `FormKC` [normalization](Primer3.md#compatibility-vs-canonical) converts them back to those plain letters. Whether you want that conversion depends on your rule. For "allowed" rules the default `FormC` rejects the versions you didn't write down explicitly, which is what you want:
 
 ```csharp
 // A rule that accepts only the exact "admin" you wrote down
@@ -225,7 +225,7 @@ The other thing combining marks enable is bulk. Unicode lets you stack an unboun
 ### Case-insensitive matching tricks
 Attack: a signup system reserves the name `admin`. It lowercases the input first so `ADMIN` and `Admin` are caught too, then checks the blocklist. On a server whose culture is Turkish, `"ADMIN".ToLower()` is `admın`, with a dotless `ı` (`U+0131`), because Turkish `I` lowercases to the dotless letter. `admın` isn't `admin`, so the check misses it, and the attacker registers a capitalized `ADMIN` that everyone else's machine lowercases straight back to `admin`. The mirror image is just as bad: the Kelvin sign `K` (`U+212A`) lowercases to an ordinary `k`, so "lowercase then compare" makes two different strings equal. That canonicalize-then-compare collision is a known source of real password-reset account takeovers: request a reset for a name spelled with a colliding character, the backend canonicalizes it to the victim's name, and the reset email lands in the attacker's inbox.
 
-Defense: the trap is `String.ToLower` and `String.ToUpper`, which depend on the ambient culture and convert characters across scripts. The parser only supplies one case insensitive rule:  `LiteralIgnoreAsciiCase`, which matches case-insensitively across exactly the 26 ASCII letters and nothing else:
+Defense: the trap is `String.ToLower` and `String.ToUpper`, which depend on the ambient culture and can turn a character into a different letter entirely. The parser only supplies one case insensitive rule:  `LiteralIgnoreAsciiCase`, which matches case-insensitively across exactly the 26 ASCII letters and nothing else:
 
 ```csharp
 var blocker = And(LiteralIgnoreAsciiCase("admin"), Eof()).Compile();
@@ -238,7 +238,7 @@ blocker.Parse("Admin").Success;   // true
 Because the case-insensitivity is scoped to ASCII, there's no culture to configure and no cross-script collision to exploit. If you genuinely need case-insensitive matching over non-ASCII letters, know that there's no correct one-liner in .NET. `String.ToLowerInvariant` (which does at least sidestep the culture-sensitive `ToLower`'s Turkish-`ı` trap) is only a lowercase mapping, not case-insensitive matching: it leaves `ß` as `ß` while `SS` lowercases to `ss`, so the two never match, and it keeps the Greek final sigma `ς` distinct from medial `σ`. Even .NET's culture-aware `StringComparison.InvariantCultureIgnoreCase` is uneven, treating `ς` and `σ` as equal but still not `ß` and `ss`. Full Unicode case-insensitive matching (where `ß` equals `ss`) isn't something .NET exposes, so you either use a library like ICU or apply Unicode's mappings yourself. The [Unicode case-mapping FAQ](https://unicode.org/faq/casemap_charprop.html) lays out the traps. Normalization matters on top of case, too, since canonically equivalent spellings like the Angstrom sign `Å` (`U+212B`) and precomposed `Å` (`U+00C5`) are the same letter and only compare equal once you normalize.
 
 ### Digits from other scripts
-Attack: a checkout form reads a quantity with a digit rule and multiplies it by a price. The rule uses `TokenSet.Digits`, which by design is every Unicode decimal digit, not just `0-9`. An attacker types the quantity in Arabic-Indic digits, `٢٣` (that's 23). The grammar matches, because those really are decimal digits. Then the downstream arithmetic goes wrong: `int.Parse("٢٣")` either throws (the invariant culture and most others), which is an unhandled exception on attacker-controlled input, or in a culture that recognizes the digits quietly accepts a value the ASCII-only code around it never expected. A hand-rolled `rune - '0'` is worse, it silently computes nonsense, because `٢` is nowhere near `2` in code-point order.
+Attack: a checkout form reads a quantity with a digit rule and multiplies it by a price. The rule uses `TokenSet.Digits`, which by design is every Unicode decimal digit, not just `0-9`. An attacker types the quantity in Arabic-Indic digits, `٢٣` (that's 23). The grammar matches, because those really are decimal digits. Then the downstream arithmetic goes wrong: `int.Parse("٢٣")` throws no matter the culture (.NET's number parsing only recognizes the ASCII digits `0-9`), which is an unhandled exception on attacker-controlled input. A hand-rolled `rune - '0'` is worse, it silently computes nonsense, because `٢` is nowhere near `2` in code-point order.
 
 Defense: if the value flows into ASCII arithmetic or an ASCII-only parser downstream, match ASCII digits at the grammar so the mismatch never forms:
 
