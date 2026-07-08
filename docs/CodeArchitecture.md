@@ -12,33 +12,33 @@ This document is about the constraints that decision forces on us, and what the 
 
 Unity imposes a cascade of constraints, each one narrowing what "C#" means. If the port ignores any of them, it'll work on desktop and fail on iOS or WebGL.
 
-IL2CPP everywhere. Unity has two scripting backends: Mono (a small .NET VM shipped with the app, JIT-compiles IL at runtime) and IL2CPP (converts C# to C++ at build time, then compiles to native). iOS forbids runtime JIT by Apple policy, so Mono isn't an option there. WebGL runs in a browser as WebAssembly and has no VM to ship, so it also needs ahead-of-time compilation. Two of four targets are IL2CPP-only, so the library has to be written to survive IL2CPP on all targets. The cost is that reflection-heavy patterns, dynamic code generation, and anything that relies on the JIT producing code at runtime simply won't work.
+IL2CPP everywhere: Unity has [two scripting backends](https://docs.unity3d.com/Manual/scripting-backends.html): Mono (a small .NET VM shipped with the app that JIT-compiles IL at runtime) and IL2CPP (converts C# to C++ at build time and then compiles to native). iOS forbids runtime code generation (the [kernel prevents an app from generating code dynamically](https://learn.microsoft.com/en-us/previous-versions/xamarin/ios/internals/limitations), it's not just store policy), so Mono isn't an option there. WebGL runs in a browser as WebAssembly and has no VM to ship, so [it's an AOT platform too](https://docs.unity3d.com/Manual/webgl-technical-overview.html). Two of four targets are IL2CPP-only, so the library has to be written to survive IL2CPP on all targets. The cost is that reflection-heavy patterns, dynamic code generation, and anything that relies on the JIT producing code at runtime won't work (Unity's [scripting restrictions](https://docs.unity3d.com/Manual/scripting-restrictions.html) page has the full list).
 
-WebGL is single-threaded. Browsers run JavaScript (and therefore WebAssembly) on one thread. That means no `Task.Run`, no `Thread`, no `ThreadPool`, no blocking waits. A parser mostly doesn't care about this, because parsing is CPU-bound synchronous work, but it matters for anything async that touches I/O. The library has to avoid spawning threads internally and has to avoid any async primitive that schedules onto a thread pool.
+WebGL is single-threaded: [Managed C# threads aren't supported on the Web platform](https://docs.unity3d.com/Manual/webgl-technical-overview.html) because WebAssembly has no multithreaded garbage collection for the scripting runtime to use. That means no `Task.Run`, `Thread`, `ThreadPool`, or blocking waits. A parser mostly doesn't care about this, because parsing is CPU-bound synchronous work, but it matters for anything async that touches I/O. The library has to avoid spawning threads internally and has to avoid any async primitive that schedules onto a thread pool.
 
-No `System.Net.Http` on iOS or WebGL. Not relevant for the parser itself, but it rules out any "helper" that wants to fetch grammars or include files over HTTP. Any I/O the library does has to be against an abstraction that the host can fill in.
+No `System.Net` on WebGL: The browser sandbox has no socket access, so Unity [doesn't support any class in the `System.Net` namespace on the Web platform](https://docs.unity3d.com/Manual/webgl-networking.html). On iOS `System.Net.Http` exists but has a history of IL2CPP trouble (like [HttpClient hanging on Arm64 devices](https://issuetracker.unity3d.com/issues/il2cpp-android-ios-httpclient-content-stream-freezes-with-no-error-in-arm64-devices)), and Unity's answer on both platforms is `UnityWebRequest`. Not relevant for the parser itself, but it rules out any "helper" that wants to fetch grammars or include files over HTTP. Any I/O the library does has to be against an abstraction that the host can fill in.
 
-No real file system on WebGL. Also mostly not a parser problem, but the current C++ `Compiler` class knows how to load files from disk. That functionality has to move behind an interface that the host provides, or it has to go away. The core library can't call `System.IO.File.OpenRead` and expect it to work on WebGL.
+No real file system on WebGL: The browser sandbox has no direct disk access. Emscripten gives the app [a virtual file system that lives in memory](https://emscripten.org/docs/porting/files/file_systems_overview.html), and anything that needs to persist [goes to the browser's IndexedDB](https://docs.unity3d.com/ScriptReference/Application-persistentDataPath.html). Also mostly not a parser problem, but the current C++ `Compiler` class knows how to load files from disk. That functionality has to move behind an interface that the host provides, or it has to go away. The core library can't call `System.IO.File.OpenRead` on the user's files and expect it to work on WebGL.
 
-Memory limits. Browsers cap WebAssembly memory (typically 2 GB). The parser is unlikely to hit this, but it's a reminder that the port shouldn't hold references forever or build unbounded caches.
+Memory limits: A 32-bit WebAssembly module can address at most 4 GB, and browsers [only started allowing the full 4 GB in 2020](https://v8.dev/blog/4gb-wasm-memory) (the cap was 2 GB before that). 64-bit WebAssembly [shipped in Chrome 133 and Firefox 134](https://spidermonkey.dev/blog/2025/01/15/is-memory64-actually-worth-using.html), but Unity builds 32-bit modules and caps the heap with the [Maximum Memory Size player setting](https://docs.unity3d.com/ScriptReference/PlayerSettings.WebGL-maximumMemorySize.html), which [defaults to 2 GB and can go up to 4 GB](https://docs.unity3d.com/Manual/webgl-memory.html). Mobile browsers hand out considerably less. The parser is unlikely to hit any of this, but it's a reminder that the port shouldn't hold references forever or build unbounded caches.
 
 ## Target Surface: .NET Standard 2.1
 
-The library targets `netstandard2.1`. Unity's scripting runtime exposes .NET Standard 2.1 as its API compatibility level, and IL2CPP compiles against that surface area. A library targeting `net8.0` or `net6.0` would pull in APIs and runtime features IL2CPP doesn't provide, and it would either fail to load in Unity or fail at build time.
+The library targets `netstandard2.1`: Unity's scripting runtime exposes .NET Standard 2.1 as its API compatibility level, and IL2CPP compiles against that surface area. A library targeting `net8.0` or `net6.0` would pull in APIs and runtime features IL2CPP doesn't provide, and it would either fail to load in Unity or fail at build time.
 
-This is the single most important rule and it colors a lot of the smaller decisions. For example, .NET Standard 2.1 has `ReadOnlySpan<T>` and `Memory<T>`, so the lexer can work over spans instead of copying substrings around. It doesn't have `System.Text.Json` source generators, `[RequiresAssemblyFiles]`, C# 11 `required` members, or any of the .NET 7+ numeric abstractions. If a feature sounds new and shiny, assume it isn't available and check before using it.
+This is the single most important rule and it colors a lot of the smaller decisions. For example, .NET Standard 2.1 has `ReadOnlySpan<T>` and `Memory<T>`, so the lexer can work over spans instead of copying substrings around. It doesn't have `System.Text.Json` source generators, `[RequiresAssemblyFiles]`, C# 11 `required` members, or any of the .NET 7+ numeric abstractions. If a feature sounds new, assume it isn't available and check before using it.
 
-Test projects are different. `InductorParser.Tests` can target `net8.0` because it only runs under `dotnet test` and is never loaded by Unity. That's the standard split: library is `netstandard2.1`, tests are `net8.0`.
+Test projects are different: `InductorParser.Tests` can target `net8.0` because it only runs under `dotnet test` and is never loaded by Unity. So, the library is `netstandard2.1` and tests are `net8.0`.
 
 ## What the Port Can't Do
 
 These are capabilities the C++ version has that the C# port will deliberately drop or push out to the host.
 
-No file loading inside the core library. The C++ `Compiler::CompileDocument` takes a file path and opens it. The C# version can't do this on WebGL, so file loading becomes the host's job. The current core API takes a decoded `string` through `Rule.Parse`. The host is responsible for getting bytes off disk (or out of IndexedDB, or off the network), decoding them, and handing the resulting text in.
+No file loading inside the core library: The C++ `Compiler::CompileDocument` takes a file path and opens it. The C# version can't do this on WebGL, so file loading becomes the host's job. The current core API takes a decoded `string` through `Rule.Parse`. The host is responsible for getting bytes off disk (or out of IndexedDB or off the network), decoding them, and handing the resulting text in.
 
-No native debug logging hooks. The C++ version has `iOS/` and `Win/` platform directories for debug output. In C# that's replaced by a `TextWriter?` on `ParseOptions` that the host wires up to whatever logging it has. Unity can adapt this to `Debug.Log`, `dotnet test` can use `Console.Out` or a `StringWriter`, and the library doesn't need to know the difference.
+No native debug logging hooks: The C++ version has `iOS/` and `Win/` platform directories for debug output. In C# that's replaced by a `TextWriter?` on `ParseOptions` that the host wires up to whatever logging it has. Unity can adapt this to `Debug.Log`, `dotnet test` can use `Console.Out` or a `StringWriter`, and the library doesn't need to know the difference.
 
-No `FailFastAssert` that aborts the process. Aborting the process is fine in a game binary that owns its main function, but a library embedded in the Unity Editor can't take down the host. Assertions become exceptions. The library throws on invalid arguments and lets the host decide what to do.
+No `FailFastAssert` that aborts the process. Aborting the process is fine in a game binary that owns its main function, but a library embedded in the Unity Editor can't take down the host. Internal assertions become `Invariant.That(...)` calls (in `src/InductorParser/Invariant.cs`) that throw `InductorParserBugException` when an internal invariant breaks. Bugs in the user's grammar throw `InvalidOperationException` with a message that points at the fix. Either way the host decides what happens instead of the process dying.
 
 No threads spawned by the parser. The C++ version is already single-threaded for a typical parse, so this isn't a hard change, but it needs to stay that way. The port must not introduce any worker threads or background tasks inside the library.
 
@@ -56,13 +56,19 @@ Preserve the error reporting heuristic. The "deepest failure wins" heuristic is 
 
 ```
 src/
-  InductorParser/                      # netstandard2.1 class library (no Unity)
-    InductorParser.csproj              #   lexer, parser rules, syntax tree, tracing
-  InductorParser.Tests/                # net8.0, dotnet test only
+  InductorParser/                          # netstandard2.1 class library (no Unity)
+    InductorParser.csproj                  #   lexer, parser rules, syntax tree, tracing
+  InductorParser.Tests/                    # net8.0, dotnet test only
     InductorParser.Tests.csproj
+  InductorParser.ExternalContractTests/    # net8.0, dotnet test only
+    InductorParser.ExternalContractTests.csproj
+  Benchmarks/                              # net8.0 BenchmarkDotNet console app
+    Benchmarks.csproj
 ```
 
-One library, one test project. The C++ version has `FXPlatform` utilities (FailFast, NanoTrace, Utilities, Logger, etc.) that were shared with other Inductor projects. In C# most of those disappear: strings are strings, assertions are exceptions, logging is an interface. Anything that genuinely needs to be shared with a hypothetical C# port of InductorProlog lives in its own assembly later, not on day one.
+One library, three consumers. `InductorParser.Tests` is the main test project. `InductorParser.ExternalContractTests` is a second test project that's deliberately left off the library's `InternalsVisibleTo` list: it recompiles the built-in rule sources against only the public and protected surface, so if a rule ever uses an internal member (or the extension surface narrows), that build breaks. `Benchmarks` is a BenchmarkDotNet console app that compares the parser against other .NET parsing libraries (Parlot, Pidgin, Sprache, Superpower, Pegasus) and regenerates the performance charts in the docs.
+
+The C++ version has `FXPlatform` utilities (FailFast, NanoTrace, Utilities, Logger, etc.) that were shared with other Inductor projects. In C# most of those disappear: strings are strings, assertions are exceptions, logging is an interface. 
 
 The built DLL is copied into the Unity project's `Assets/Plugins/` folder by a `CopyToUnity` msbuild target on the `.csproj`, following the UnityTabs convention. Unity picks up plugins in that folder automatically and makes them available to runtime and editor code.
 
