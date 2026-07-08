@@ -109,7 +109,8 @@ public sealed class ParseOptions
     /// Parse returns a tree whose shape matches the grammar
     /// one-to-one: every FlattenType.Flatten Symbol, every FlattenType.Delete
     /// node, and every individual leaf symbol is present exactly where the
-    /// grammar placed it.
+    /// grammar placed it. Alias subtrees are the one exception, described
+    /// in the remarks.
     /// </summary>
     /// <remarks>
     /// Turn this on to debug or inspect a grammar, to PrintTree the full
@@ -120,6 +121,15 @@ public sealed class ParseOptions
     /// FlattenType.Preserve Symbols remain as findable nodes. That's the shape
     /// most callers actually want to walk (i.e. what the grammar was designed for).
     /// This setting is for debugging.
+    /// <para>
+    /// The alias exception: an alias substitutes its identity for its inner's
+    /// even here, exactly as it does in the production tree. An alias over a
+    /// named rule shows the match under the alias's id with the inner's own
+    /// Symbol gone, and a FlattenType.Delete rule directly under an alias
+    /// still contributes nothing. The debug tree mirrors the alias's
+    /// production behavior so that flattening the debug tree gives exactly
+    /// the tree a normal parse returns.
+    /// </para>
     /// </remarks>
     public bool PreserveAllSymbols { get; set; } = false;
 
