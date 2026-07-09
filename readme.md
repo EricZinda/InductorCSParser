@@ -162,7 +162,7 @@ Regex expressions can sometimes introduce [denial-of-service attacks](https://en
 
 `^([a-zA-Z0-9]+)*@example.com$`
 
-A simple email-ish validator. Feed it `"aaaaaaaaaaaaaaaaaaaaaaaaa!"` (25 a's) and .NET Regex will happily burn seconds trying to find a match. The problem is the nested `+` inside `*`: when the match fails, the engine has to try every way to split the a's across the two quantifiers before giving up. Add another a or two and the time doubles.
+A simple email-ish validator. Feed it `"aaaaaaaaaaaaaaaaaaaaaaaaa!"` (25 a's) and .NET Regex will burn seconds trying to find a match. The problem is the nested `+` inside `*`: when the match fails, the engine has to try every way to split the a's across the two quantifiers before giving up. Add another a or two and the time doubles.
 
 The Inductor Parser avoids this and is more readable as well:
 
