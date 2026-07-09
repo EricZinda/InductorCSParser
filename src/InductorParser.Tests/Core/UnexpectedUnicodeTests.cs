@@ -1697,7 +1697,7 @@ public class UnexpectedUnicodeTests
         // fresh cluster. "U + S + F" therefore splits into the
         // US flag (U + S) and a lone trailing F, not into one
         // garbled three-letter cluster. Common parser bug:
-        // assuming any run of regional indicators is one cluster
+        // assuming any sequence of regional indicators is one cluster
         // and rendering them as a single (invalid) flag, or
         // attempting to interpret the third indicator as part of
         // the country code instead of the start of something

@@ -48,7 +48,7 @@ namespace InductorParser;
 /// </remarks>
 public readonly partial struct TokenSet : IEquatable<TokenSet>
 {
-    // The closed interval [Low, High]: one contiguous run of Unicode code points, 
+    // The closed interval [Low, High]: one contiguous range of Unicode code points,
     // inclusive on both ends.
     // A TokenSet's rune part is represented
     // as a sorted, non-overlapping, non-adjacent array of these runs. Named

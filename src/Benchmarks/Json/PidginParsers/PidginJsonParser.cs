@@ -50,7 +50,7 @@ public static class PidginJsonParser
     private static readonly Parser<char, char> EscapedChar =
         Char('\\').Then(EscapeSuffix.Or(UnicodeEscape));
 
-    // Bulk run of literal string-body chars. AtLeastOnceString so the outer
+    // Bulk match of literal string-body chars. AtLeastOnceString so the outer
     // LiteralRun.Or(EscapeAsString).Many() can't loop forever on an empty
     // match. 3% of chars are escapes, so most iterations of the outer loop
     // consume a LiteralRun of ~30 chars in a single tight Token-predicate

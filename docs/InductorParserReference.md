@@ -61,7 +61,7 @@ else
 }
 ```
 
-The `.Preserve()` on the root keeps the whole document under a single wrapper Symbol, which is what `result.Tree` returns. Without it, `And`'s default `FlattenType.Flatten` lifts every child up to the top level and `result.Tree` is null because there's more than one top-level Symbol; in that case use `result.Symbols` to walk the bubbled-up children directly.
+The `.Preserve()` on the root keeps the whole document under a single root Symbol, which is what `result.Tree` returns. Without it, `And`'s default `FlattenType.Flatten` lifts every child up to the top level and `result.Tree` is null because there's more than one top-level Symbol. In that case use `result.Symbols` to walk the bubbled-up children directly.
 
 The factories in this example do what their names suggest. `Identifier()` matches a programming-language identifier: a name that starts with a letter (or other identifier-start character) and continues with letters, digits, and the like, following the Unicode identifier rules (UAX #31). `Integer()` is an optional leading + or - followed by one or more decimal digits. `Float()` is the same with a literal '.' and more digits in the middle (no exponents or scientific notation, grammars that need those compose their own). `AnyWhitespace()` matches one *or more* whitespace tokens, including line terminators, which is why every use above wraps it as `Optional(AnyWhitespace())`: that's the "skip whitespace here, possibly none" shape.
 
@@ -69,13 +69,13 @@ Three variables hold rules, one call to `.Parse(...)` returns a tree, and `resul
 
 Compare that side by side with the C++ version from `GettingStarted.md` and you can see they line up rule by rule. Every C++ template instantiation becomes a C# factory call, and the trailing template parameters (flatten policy, symbol id, error message) become fluent method calls on the returned `Rule`. The `MySymbolID` class and the symbol-id template parameters from the C++ tutorial are gone: lookups use the rule reference you already have in scope.
 
-The `using static InductorParser.Rules;` at the top is what lets us write `And(...)` and `Or(...)` and `Token('=')` without a class qualifier. It is the C# moral equivalent of `using namespace FXPlat;` in the C++ version. Grammars that want a cleaner look use this import. Grammars that want to be explicit can write `Rules.And(...)`.
+The `using static InductorParser.Rules;` at the top is what lets us write `And(...)` and `Or(...)` and `Token('=')` without a class qualifier. It's the C# moral equivalent of `using namespace FXPlat;` in the C++ version. Grammars that want a cleaner look use this import. Grammars that want to be explicit can write `Rules.And(...)`.
 
-Two things happen automatically in this example but are worth knowing about for when you want more control. First, the rule graph is finalized (validated, frozen, ids stamped on every reachable rule) on the first call to `.Parse(...)`. You can force this earlier by calling `.Compile()` on the root rule explicitly, which is useful when you want grammar-construction errors to surface at program startup rather than on first use. Second, nothing in this example has a user-supplied name: the rules are anonymous. Parsing works fine, `Find(someRule)` works fine (it matches on the id the rule carries), but trace output and tree printing will fall back to class-derived labels like `And` or `OneOrMore`, which tell you the rule's shape but not what it represents in your grammar. Adding explicit `.As(nameof(...))` calls for better names is covered in the next section for grammars that want them.
+Two things happen automatically in this example but are worth knowing about for when you want more control. First, the rule graph is finalized (validated, frozen, ids stamped on every reachable rule) on the first call to `.Parse(...)`. You can force this earlier by calling `.Compile()` on the root rule explicitly, which is useful when you want grammar-construction errors to surface at program startup rather than on first use. Second, nothing in this example has a user-supplied name: the rules are anonymous. Parsing works fine, `Find(someRule)` works fine (it matches on the rule's id), but trace output and tree printing will fall back to class-derived labels like `And` or `OneOrMore`, which tell you the rule's shape but not what it represents in your grammar. Adding explicit `.As(nameof(...))` calls for better names is covered in the next section for grammars that want them.
 
 ## Naming Rules
 
-Most rules don't need a name. `Find(someRule)` takes the rule object you already hold, so as long as you have a reference to the rule you want to locate, you can find its nodes in the tree. What `Find` compares under the covers is the `SymbolId` stamped on the rule, not the object reference. For named rules and compiled composites the id is unique to the rule, so it behaves like identity. Anonymous single-rune leaves are the exception: `Token('a')` carries the rune's code point as its id, so two anonymous `Token('a')` rules look like the same rule to `Find`, and an anonymous `OneOf(...)` labels each leaf with whichever rune matched rather than with the rule's own id. Naming a leaf with `.As(...)` gives it a unique id and removes both wrinkles.
+Most rules don't need a name. `Find(someRule)` takes the rule object you already hold, so as long as you have a reference to the rule you want to locate, you can find its nodes in the tree. What `Find` compares under the covers is the `SymbolId` stamped on the rule, not the object reference. For named rules and compiled composites the id is unique to the rule, so it behaves like identity. Anonymous single-rune leaves are the exception: `Token('a')` uses the rune's code point as its id, so two anonymous `Token('a')` rules look like the same rule to `Find`, and an anonymous `OneOf(...)` labels each leaf with whichever rune matched rather than with the rule's own id. Naming a leaf with `.As(...)` gives it a unique id and removes both wrinkles.
 
 Sometimes names do matter though: trace output, tree printing, serialization. Trace output prints rule names to show which rule was tried at each position. `Symbol.DisplayName` labels each node when you print a parse tree. Without an explicit name, these fall back to a class-derived label like `And`, `OneOrMore`, or `BetweenInclusive[1..3]`, which tells you the rule's shape but not what it represents in your grammar. Error messages are a separate mechanism entirely: a failed parse reports the `.WithError("...")` text of the deepest rule that failed, or the generic "Unexpected 'x' at line L, column C." default when there isn't one (or "Unexpected end of input at line L, column C." when the failure is at the end). Rule names never appear in error messages, so naming a rule doesn't change what a failed parse reports. See [Primer: Parsing Errors](primerFailure.md) for how error reporting works.
 
@@ -95,7 +95,7 @@ var settingName = Identifier();
 settingName = settingName.As(nameof(settingName));
 ```
 
-The rule's id is derived deterministically from the string, and the name carries through into trace output. 
+The rule's id is derived deterministically from the string, and the name shows up in trace output. 
 
 **`.As("some label")` on inline rules that don't live in a variable.** If you want to label a chunk of rule tree that isn't pulled out into its own variable, pass a string literal:
 
@@ -120,7 +120,7 @@ Calling `.Compile()` on a rule walks the rule graph using that rule as the root 
 
 `Compile` has an overload that takes a Unicode normalization form: `Compile(NormalizationForm? normalizeInput)`. The default is `NormalizationForm.FormC`. Pass `null` to opt out of normalization. The form is part of the grammar's identity and is committed at first compile: a subsequent `Compile` with a different form throws `InvalidOperationException`. The chosen form is readable on the compiled rule via the public `NormalizationForm` property.
 
-**1. Assign symbol ids.** Rules with an explicit id (via `.As(new SymbolId(SymbolRanges.CustomRangeStart + 42))`) get their explicit id first, so explicit ids never shift. Rules named with a string (via `.As("name")` or `.As(nameof(X))`) get an id by hashing the name into the custom range. If the hash lands on a slot that is already in use, the id linear-probes from the hash slot upward until it finds an empty slot. Anonymous rules get ids based on their position in the graph and probe the same way. Every input to this pass is deterministic: the name hash is FNV-1a (a fixed byte-level algorithm, not .NET's `string.GetHashCode`, which is randomized per process) and the walk visits children in declaration order. So a given grammar produces the same ids on every run of the program, not just within one run. The catch is that "a given grammar" means the whole graph. Adding, removing, or renaming any rule can shift hashed ids (a new hash collision moves where the probe lands) and anonymous ids (they're positional). Explicit ids are the exception, which is why grammars that serialize parse trees across versions use them.
+**1. Assign symbol ids.** Rules with an explicit id (via `.As(new SymbolId(SymbolRanges.CustomRangeStart + 42))`) get their explicit id first, so explicit ids never shift. Rules named with a string (via `.As("name")` or `.As(nameof(X))`) get an id by hashing the name into the custom range. If the hash lands on a slot that's already in use, the id linear-probes from the hash slot upward until it finds an empty slot. Anonymous rules get ids based on their position in the graph and probe the same way. Every input to this pass is deterministic: the name hash is FNV-1a (a fixed byte-level algorithm, not .NET's `string.GetHashCode`, which is randomized per process) and the walk visits children in declaration order. So a given grammar produces the same ids on every run of the program, not just within one run. The catch is that "a given grammar" means the whole graph. Adding, removing, or renaming any rule can shift hashed ids (a new hash collision moves where the probe lands) and anonymous ids (they're positional). Explicit ids are the exception, which is why grammars that serialize parse trees across versions use them.
 
 **2. Resolve every `LateBoundRule`.** Mutually recursive grammars use a `LateBoundRule` placeholder (`var expression = new LateBoundRule("Expression");`, the one rule you construct with `new` rather than through a factory) that gets a target attached via a separate `.Bind(...)` call. The optional debug name is what error messages call it. A `LateBoundRule` is transparent at parse time, it just forwards to its target, so `.As`, `.Flatten`, and `.WithError` are not supported on it: put those on the target rule instead. If a grammar forgets to bind one, `Compile` throws with a message naming the unbound rule:
 
@@ -156,9 +156,9 @@ public readonly struct SymbolId : IEquatable<SymbolId>
 }
 ```
 
-`SymbolId` is intentionally a single-field struct. It is the size of an int (4 bytes), fits in a single register, and every comparison is a single integer compare. Every `Symbol` node in a parse tree carries one of these, so keeping them small pays off on big trees.
+`SymbolId` is intentionally a single-field struct. It's the size of an int (4 bytes), fits in a single register, and every comparison is a single integer compare. Every `Symbol` node in a parse tree stores one of these, so keeping them small pays off on big trees.
 
-Notice what the struct does *not* carry: a human name. Names live on the grammar side, not on the id itself, so two different grammars loaded in the same process don't fight over a global namespace. Name lookup happens through the rule that knows the grammar context:
+Notice what the struct does *not* store: a human name. Names live on the grammar side, not on the id itself, so two different grammars loaded in the same process don't fight over a global namespace. Name lookup happens through the rule that knows the grammar context:
 
 ```csharp
 public abstract class Rule
@@ -273,9 +273,9 @@ public readonly struct TokenSet : IEquatable<TokenSet>
 }
 ```
 
-The sketch is trimmed: the surrogate members (`Surrogates`, `SurrogateRange`) are covered in "Surrogates" below, and the type also carries `Empty`, enumeration helpers, and the equality members.
+The sketch is trimmed: the surrogate members (`Surrogates`, `SurrogateRange`) are covered in "Surrogates" below, and the type also includes `Empty`, enumeration helpers, and the equality members.
 
-Union is the workhorse (`TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_-")`) and every grammar uses it. The other two operators are rarer but earn their spot because when you do need them, hand-enumerating the result goes stale the moment Unicode adds a new letter to the base class.
+Union is the workhorse (`TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_-")`) and every grammar uses it. The other two operators are rarer but worth having because when you do need them, hand-enumerating the result goes stale the moment Unicode adds a new letter to the base class.
 
 **`&` (intersection)** narrows one semantic set by another. It shines when one operand is a big Unicode-tracking class like `Letters` and the other is a script or script-block restriction:
 
@@ -322,7 +322,7 @@ The parser's token is a `StringInfo` text element: one user-perceived character.
 
 This is right for almost every grammar that handles user-supplied text, because "one character" in the user's mental model is usually one user-perceived character. An emoji programming language works naturally on .NET 5 and later. Identifiers that include combining marks work naturally. Keywords like `function` parse the same way they always did (all ASCII, all single-rune text elements).
 
-When a grammar genuinely needs to look inside one token (walk combining marks individually, validate each rune of a token), wrap the inner rule in `WithinToken(innerRule)`. The outer parse reads one full token; the inner rule walks its runes one at a time.
+When a grammar genuinely needs to look inside one token (walk combining marks individually, validate each rune of a token), wrap the inner rule in `WithinToken(innerRule)`. The outer parse reads one full token. The inner rule walks its runes one at a time.
 
 ### Surrogates
 
@@ -338,7 +338,7 @@ Matching one on purpose is opt-in. The built-in sets and the scalar factories ca
 var loneSurrogate = OneOf(TokenSet.Surrogates);   // matches only ill-formed code units
 ```
 
-The set operators carry surrogate members along like any other member, so `TokenSet.Surrogates - TokenSet.SurrogateRange(0xD800, 0xDBFF)` is the low (trailing) half of the block. One wrinkle to know about: in the default grapheme lexing mode, a lone surrogate followed by a combining mark fuses with it into one multi-rune token (the same joining rule normal graphemes follow), and that fused token is no longer a bare surrogate, so a surrogate set won't match it. This wrinkle only exists under `Compile(null)`. A normalizing `Compile` rejects a lone surrogate as `MalformedInput` whether it's bare or fused, since `string.Normalize` refuses the input either way. For the full ill-formed-input story, including the other kinds of "unexpected" Unicode a grammar can meet, see [Primer3.md](Primer3.md).
+The set operators treat surrogate members like any other member, so `TokenSet.Surrogates - TokenSet.SurrogateRange(0xD800, 0xDBFF)` is the low (trailing) half of the block. One wrinkle to know about: in the default grapheme lexing mode, a lone surrogate followed by a combining mark fuses with it into one multi-rune token (the same joining rule normal graphemes follow), and that fused token is no longer a bare surrogate, so a surrogate set won't match it. This wrinkle only exists under `Compile(null)`. A normalizing `Compile` rejects a lone surrogate as `MalformedInput` whether it's bare or fused, since `string.Normalize` refuses the input either way. For the full ill-formed-input story, including the other kinds of "unexpected" Unicode a grammar can meet, see [Primer3.md](Primer3.md).
 
 ## Rule Construction Is Fluent
 
@@ -384,7 +384,7 @@ var settingName = Identifier()
 
 Rules are mutable up until `Compile` runs and then sealed. `.As(...)`, `.Flatten(...)`, `.WithError(...)` mutate the rule in place and return the same rule for chaining, so `var rule = Identifier(); rule.Flatten(FlattenType.Preserve);` and `var rule = Identifier().Flatten(FlattenType.Preserve);` produce the same end state on the same object. The practical consequence: if you keep a reference to a rule and reuse it in multiple places, calling `.Flatten(...)` on one of those references changes the policy at every other use site too. 
 
-To reuse one shape under two different settings, wrap it in an alias. An alias is a lightweight rule with its own identity, so it takes any modifier a normal rule does: `digitSequence.AliasedAs("year")` and `digitSequence.AliasedAs("month")` reuse one rule under two names, and the bare `Alias(digitSequence)` form can carry its own flatten policy, id, or error message instead. A factory function that returns a fresh rule each call does the same job with no alias in the middle, which reads better when the reuses outnumber the shared definition.
+To reuse one shape under two different settings, wrap it in an alias. An alias is a lightweight rule with its own identity, so it takes any modifier a normal rule does: `digitSequence.AliasedAs("year")` and `digitSequence.AliasedAs("month")` reuse one rule under two names, and the bare `Alias(digitSequence)` form can have its own flatten policy, id, or error message instead. A factory function that returns a fresh rule each call does the same job with no alias in the middle, which reads better when the reuses outnumber the shared definition.
 
 The modifier methods catch accidental sharing bugs. `.As(string)`, `.As(SymbolId)`, and `.WithError(...)` are each set-once: calling the same one twice on the same instance throws instead of silently overwriting. (Chaining `.As("major")` / `.As("minor")` / `.As("patch")` onto one shared rule would otherwise leave it named "patch" everywhere.) One of each is fine, `.As(explicitId).As("name")` composes. And after `Compile` returns the whole graph is sealed, so every mutation method throws `InvalidOperationException`.
 
@@ -465,7 +465,7 @@ public readonly ref struct Token
 
 Leaf rules store `Token.Memory` (or a span of `lexer.Input`) on the Symbols they build, so matching never copies substrings out of the input.
 
-For grammars that compose existing leaves (which is most grammars) you never need to derive. The built-in composites cover the usual ways rules are combined: run these rules in order, try these alternatives, repeat this rule, or check ahead without consuming input. The built-in leaves cover the character-class cases. User-defined rules matter when you are adding behavior the composites can't express, for example a rule that consumes until a specific UTF-16 offset, a grammar-context-aware matcher that queries external state, or a custom character-boundary detector.
+For grammars that compose existing leaves (which is most grammars) you never need to derive. The built-in composites cover the usual ways rules are combined: run these rules in order, try these alternatives, repeat this rule, or check ahead without consuming input. The built-in leaves cover the character-class cases. User-defined rules matter when you're adding behavior the composites can't express, for example a rule that consumes until a specific UTF-16 offset, a grammar-context-aware matcher that queries external state, or a custom character-boundary detector.
 
 ## The Parse Result
 
@@ -521,11 +521,11 @@ public enum ParseOutcome
 }
 ```
 
-The char-based trio (`ErrorCharIndex`, `ErrorLine`, `ErrorCharColumn`) uses the same units and zero-based indexing the Language Server Protocol uses, so a caller forwarding a parse error into an editor through LSP does no arithmetic in between. One nuance on `ErrorLine`: the parser counts line breaks by the full UTS #18 set (LF, CRLF, lone CR, plus VT, FF, NEL, LS, PS), a superset of the LF, CRLF, and lone CR an LSP client recognizes, so the line matches an editor on ordinary source and diverges only on input containing the rarer terminators. `ErrorTokenIndex` is there for callers that count in user-perceived characters (a `^^^` underline a human will look at). It is computed lazily from the char index and costs nothing unless used.
+The char-based trio (`ErrorCharIndex`, `ErrorLine`, `ErrorCharColumn`) uses the same units and zero-based indexing the Language Server Protocol uses, so a caller forwarding a parse error into an editor through LSP does no arithmetic in between. One nuance on `ErrorLine`: the parser counts line breaks by the full UTS #18 set (LF, CRLF, lone CR, plus VT, FF, NEL, LS, PS), a superset of the LF, CRLF, and lone CR an LSP client recognizes, so the line matches an editor on ordinary source and diverges only on input containing the rarer terminators. `ErrorTokenIndex` is there for callers that count in user-perceived characters (a `^^^` underline a human will look at). It's computed lazily from the char index and costs nothing unless used.
 
 The LSP conventions are deliberate. LSP is the protocol VS Code, Neovim, JetBrains IDEs, and essentially every modern editor use to talk to language tooling, so a caller forwarding a parse error into an editor builds its `Diagnostic` range straight from these fields. Lines are 0-based because these fields are machine-to-machine handoff, not display text: editors show 1-based to humans, and a human-facing message adds 1 at the edge, which is what the default error templates do. Columns count UTF-16 code units because that's the LSP default encoding (LSP 3.17 made it negotiable via `PositionEncodingKind`, but UTF-16 is the one every implementation ships with), so a token like 👋🏽 (two runes, four UTF-16 chars, one visible character) contributes four to the column, same as what VS Code's own buffer sees. And `\r\n` counts as one line break: LSP treats the pair atomically, and the lexer already tokenizes CRLF as one text element, so an `ErrorCharIndex` from a normal parse never lands inside the pair.
 
-`Symbol.SourceRange` uses the same machinery for any node in the parse tree, not just the error point. Each `SourcePosition` (the type returned by `Start` and `End`) carries the same `CharIndex`, `TokenIndex`, `Line`, `CharColumn`, and `TokenColumn` fields (plus 1-based `LineNumber` / `CharColumnNumber` / `TokenColumnNumber` conveniences for human-facing messages), so a tool reporting "duplicate section on line 7" or "value out of range at char 42" reads from the symbol with the same semantics LSP and `string.Substring` already use.
+`Symbol.SourceRange` uses the same machinery for any node in the parse tree, not just the error point. Each `SourcePosition` (the type returned by `Start` and `End`) has the same `CharIndex`, `TokenIndex`, `Line`, `CharColumn`, and `TokenColumn` fields (plus 1-based `LineNumber` / `CharColumnNumber` / `TokenColumnNumber` conveniences for human-facing messages), so a tool reporting "duplicate section on line 7" or "value out of range at char 42" reads from the symbol with the same semantics LSP and `string.Substring` already use.
 
 The `Outcome` field distinguishes "the grammar didn't match" from "we ran out of budget." A grammar mismatch means the input is invalid and you should show the user where. A timeout or rule-count-limit exhaustion means the input might be valid but we couldn't decide in the budget we were given, and the caller might want to reject it as suspicious, retry with a looser budget, or show a different error to the user. See the "Catastrophic Backtracking and Timeouts" section below for the mechanics.
 
@@ -539,7 +539,7 @@ public sealed class Symbol
     public SymbolId Id { get; }
     public FlattenType FlattenType { get; }
     public IReadOnlyList<Symbol> Children { get; }
-    public bool IsLeaf { get; }                    // true for a leaf carrying matched text, false for a
+    public bool IsLeaf { get; }                    // true for a leaf with matched text, false for a
                                                    // composite (even one with zero children)
     public string? DisplayName { get; }            // .As(...) name if set, else the class-derived label,
                                                    // else the matched rune's own text
@@ -577,7 +577,7 @@ public sealed class Symbol
 
 `Find` and `FindAll` are depth-first searches over the subtree: `Find` returns the first Symbol the rule produced (or null if there isn't one), `FindAll` yields every one. They're the alternative to walking the tree with raw child indexing (`tree.Children[0].Children[3]` style), which breaks the moment the grammar adds an optional element. Searching by rule reference survives grammar changes, and it plays nicely with IDE refactors: renaming the rule field updates every `Find(...)` call automatically.
 
-`ToString()` concatenates the leaves that survived flattening, in order. Text that `Delete`'d rules matched is gone (a subtree that matched `"XXX"` through Delete leaves returns `""`), so it is not a verbatim copy of the input. When you want the exact original text for a subtree, read `SourceText`, which spans the input the Symbol consumed no matter what flattening did to the children.
+`ToString()` concatenates the leaves that survived flattening, in order. Text that `Delete`'d rules matched is gone (a subtree that matched `"XXX"` through Delete leaves returns `""`), so it isn't a verbatim copy of the input. When you want the exact original text for a subtree, read `SourceText`, which spans the input the Symbol consumed no matter what flattening did to the children.
 
 ### LINQ on the Symbol Tree
 
@@ -656,11 +656,11 @@ else
     Console.WriteLine($"Parse failed: {error}");
 ```
 
-If you have several compilers that share the same scaffolding, or you want a consistent `TryCompile(out TResult, out string error)` contract on a public API, it's worth writing a small reusable base class once and inheriting from it. The library doesn't ship one because the right shape depends on use (return nullable vs out-parameter vs throw, whether to forward `ParseOptions`, and so on). For one-off compilers, the plain function shown above is simpler.
+If you have several compilers that share the same scaffolding, or you want a consistent `TryCompile(out TResult, out string error)` shape on a public API, it's worth writing a small reusable base class once and inheriting from it. The library doesn't ship one because the right shape depends on use (return nullable vs out-parameter vs throw, whether to forward `ParseOptions`, and so on). For one-off compilers, the plain function shown above is simpler.
 
 ## A Bigger Example: Nested Rules
 
-To show how this scales, here is a mini settings file grammar where a document can have multiple settings and settings can have multiple values:
+To show how this scales, here's a mini settings file grammar where a document can have multiple settings and settings can have multiple values:
 
 ```csharp
 using static InductorParser.Rules;

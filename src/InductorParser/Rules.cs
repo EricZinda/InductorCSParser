@@ -168,7 +168,7 @@ public static class Rules
     /// </summary>
     /// <remarks>
     /// A token is one character as the user sees it (a grapheme
-    /// cluster). Literal matches a run of them in order, so the
+    /// cluster). Literal matches a sequence of them in order, so the
     /// string is the exact text to match.
     /// For a one-token match use <see cref="Token(string)"/>.
     /// Literal is the N-token generalization and collapses what
@@ -843,7 +843,7 @@ public static class Rules
     /// <param name="extraStartRunes">
     /// Extra characters to allow as the first character, on top of the
     /// base Unicode identifier-start set (<see cref="TokenSet.XidStart"/>).
-    /// UAX #31 calls this a "profile extension". Typical value for a
+    /// UAX #31 calls this a "profile". Typical value for a
     /// programming-language grammar is <c>TokenSet.Runes("_")</c>. Python
     /// and Rust use this shape. C# also permits leading underscores, though
     /// its full identifier specification differs. Defaults to

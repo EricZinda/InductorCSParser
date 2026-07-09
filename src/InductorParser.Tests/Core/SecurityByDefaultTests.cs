@@ -229,10 +229,10 @@ public class SecurityByDefaultTests
         // help. Literal("apple") doesn't match "ap<ZWS>ple",
         // so the block never fires and the bypass works.
         //
-        // UNLIKE the lookalike case, FormKC doesn't fix this.
-        // No normalization form strips invisibles. The fix is
-        // to strip them yourself before calling Parse. The
-        // recipe is in UnicodeGotchasExamples.cs at
+        // Unlike the lookalike case, FormKC doesn't fix this.
+        // No normalization form strips invisibles. Strip them
+        // yourself before calling Parse. The recipe is in
+        // UnicodeGotchasExamples.cs at
         // Invisible_format_character_strip_recipe.
 
         var blocker = And(Literal("apple"), Eof()).Compile();

@@ -7,7 +7,7 @@ namespace InductorParser;
 // like variables, functions, and keywords, across all of Unicode rather than
 // just ASCII.
 //
-// In ASCII an identifier is "a letter or underscore, then any run of letters,
+// In ASCII an identifier is "a letter or underscore, then any sequence of letters,
 // digits, or underscores" (foo, _count, Bar2). Unicode generalizes that to
 // every script (Greek, Cyrillic, Han, Devanagari, and so on) in UAX #31,
 // which defines two character sets:

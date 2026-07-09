@@ -462,7 +462,7 @@ public class BudgetTests
     }
 
     // Regression tests: the bulk-scan rules (ScanWhile, ScanUntil) collapse
-    // a run of N matching tokens into one Rule invocation. Without an inner
+    // a sequence of N matching tokens into one Rule invocation. Without an inner
     // budget tick, an attacker who points such a rule at a long matching
     // input (a string body, a CSV field, an identifier run) pins the
     // parser for the whole run, ignoring Timeout / Cancellation /

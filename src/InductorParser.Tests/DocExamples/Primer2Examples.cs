@@ -21,24 +21,24 @@ public class Primer2Examples
     private static (Rule config, Rule section, Rule keyValue, Rule key,
                     Rule value, Rule integerValue) BuildGrammar()
     {
-        var lineEndRunes = TokenSet.LineTerminators;
+        var lineTerminators = TokenSet.LineTerminators;
         // Every single-rune whitespace, line terminators included, for
         // NoneOf stop sets. TokenSet.InlineWhitespace is intra-line only,
-        // so unioning with lineEndRunes restores "any whitespace rune."
-        var anySpaceRunes = TokenSet.InlineWhitespace | lineEndRunes;
+        // so unioning with lineTerminators restores "any whitespace rune."
+        var anyWhitespace = TokenSet.InlineWhitespace | lineTerminators;
 
-        var name = OneOrMore(NoneOf(TokenSet.Runes("]") | anySpaceRunes)).As("name");
-        var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes)).As("key");
+        var name = OneOrMore(NoneOf(TokenSet.Single(']') | anyWhitespace)).As("name");
+        var key = OneOrMore(NoneOf(TokenSet.Single('=') | anyWhitespace)).As("key");
 
         var section = And(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
             .As("section");
 
         var quotedString = And(
             Token('"'),
-            ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
+            ZeroOrMore(NoneOf(TokenSet.Single('"') | lineTerminators)),
             Token('"')).As("quotedString");
 
-        var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\""))).As("bareWord");
+        var bareWord = OneOrMore(NoneOf(anyWhitespace | TokenSet.Single('"'))).As("bareWord");
 
         var floatValue = Float().As("float");
         var integerValue = Integer().As("integer");
@@ -211,21 +211,21 @@ public class Primer2Examples
     [Test]
     public void WithError_message_surfaces_on_missing_equals()
     {
-        var lineEndRunes = TokenSet.LineTerminators;
-        var anySpaceRunes = TokenSet.InlineWhitespace | lineEndRunes;
+        var lineTerminators = TokenSet.LineTerminators;
+        var anyWhitespace = TokenSet.InlineWhitespace | lineTerminators;
 
-        var name = OneOrMore(NoneOf(TokenSet.Runes("]") | anySpaceRunes)).As("name");
-        var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes)).As("key");
+        var name = OneOrMore(NoneOf(TokenSet.Single(']') | anyWhitespace)).As("name");
+        var key = OneOrMore(NoneOf(TokenSet.Single('=') | anyWhitespace)).As("key");
 
         var section = And(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
             .As("section");
 
         var quotedString = And(
             Token('"'),
-            ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
+            ZeroOrMore(NoneOf(TokenSet.Single('"') | lineTerminators)),
             Token('"')).As("quotedString");
 
-        var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\""))).As("bareWord");
+        var bareWord = OneOrMore(NoneOf(anyWhitespace | TokenSet.Single('"'))).As("bareWord");
 
         var value = Or(
             Float().As("float"),

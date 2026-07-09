@@ -83,7 +83,7 @@ public class GraphemeBreakConformanceTests
     // Layer 1: per-line grammar, parsed with InductorParser itself.
     // ============================================================
 
-    // Captures one hex code point as a contiguous run of ASCII hex
+    // Captures one hex code point as a contiguous sequence of ASCII hex
     // digits. Preserve()d so the parsed Symbol survives flattening and
     // its raw text is available for int.Parse.
     private static readonly Rule HexCodepointRule =

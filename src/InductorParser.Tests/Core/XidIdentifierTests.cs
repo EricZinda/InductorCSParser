@@ -102,7 +102,8 @@ public class XidIdentifierTests
     [Test]
     public void Thai_identifier_with_sara_am_matches()
     {
-        // Thai 'kam' is KO KAI (Lo) + SARA AM (Mc), which the lexer bundles
+        // Thai 'kam' is KO KAI (Lo) + SARA AM (also Lo, with grapheme
+        // cluster break property SpacingMark), which the lexer bundles
         // into a single two-rune grapheme. Identifier accepts KO KAI as
         // Start and SARA AM as Continue inside the same grapheme.
         var word = UnicodeExamples.ThaiKamGrapheme;
@@ -963,8 +964,8 @@ public class XidIdentifierTests
     // "Recipe to regenerate" block in its comment. These tests run those
     // recipes against the live UCD files and assert the hand-typed
     // contents match. If a test fails, the failure message lists the
-    // code points that disagree; the fix is to update the hand-typed
-    // constant per the recipe in its comment.
+    // code points that disagree. Update the hand-typed constant per
+    // the recipe in its comment.
     //
     // The General_Category half of BuildXidStart / BuildXidContinue is
     // the .NET BCL's responsibility, and the BCL tracks whatever Unicode

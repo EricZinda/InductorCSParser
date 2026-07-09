@@ -9,7 +9,7 @@ Let's build something that confirms a password conforms to a set of rules (from 
 - cannot be your old password
 - cannot contain your username, "password", or "websitename"
 
-The best marked answer at the time of this writing is:
+The best marked answer at the time of this writing lists several variants, the last of which is:
 
 ```Regex
 "^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,10}$"
@@ -19,8 +19,8 @@ But in order to actually meet the OP's requirements it had several gaps:
 
 - Missing the username, website, previous password, and `"password"` substring checks.
 - Capped the password length at 10. The OP said "at least 8" with no upper bound.
-- Restricted the body to only the required-set characters. The OP said what MUST appear, not what MAY appear.
-- Used `\d`, which matches all Unicode digits (Arabic-Indic, Devanagari, etc.), while `[a-z]` and `[A-Z]` are ASCII-only. 
+- Restricted the body to only the required-set characters. The OP said what *must* appear, not what *may* appear.
+- Used `\d`, which in .NET regex matches all Unicode decimal digits (Arabic-Indic, Devanagari, etc.), while `[a-z]` and `[A-Z]` are ASCII-only. 
 
 Here's the fixed version in C# regex, formatted to be a bit more readable:
 ```CSharp
@@ -42,7 +42,7 @@ To do this in Inductor Parser, we can start by thinking about how to scan a stri
 ```CSharp
 ScanUntil(TokenSet.Range('0', '9'))
 ```
-`ScanUntil` fails if it reaches end-of-input without ever matching its stopper, so on its own it already answers "did the input contain a digit?" — success means yes, failure means no. To make it more readable for how we're using it, we can wrap it in our own rule:
+`ScanUntil` fails if it reaches end-of-input without ever matching its stopper, so on its own it already answers "did the input contain a digit?" (success means yes, failure means no). To make it more readable for how we're using it, we can wrap it in our own rule:
 
 ```CSharp
 Rule Contains(TokenSet options) =>
@@ -153,7 +153,7 @@ var pattern =
 
 bool isValid = pattern.Parse(input).Success;
 ```
-Compare that to the top suggested Regex solution from the StackOverflow post:
+Compare that to the fixed version of the top suggested Regex solution from the StackOverflow post:
 
 ```CSharp
 var originalPassword = ... get password ...;
