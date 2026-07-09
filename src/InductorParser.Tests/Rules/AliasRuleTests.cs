@@ -12,7 +12,9 @@ namespace InductorParser.Tests;
 // it a fresh name/Id, and at parse time produces a Symbol carrying the
 // alias's identity over the inner's matched content. When the inner is
 // Preserve, the alias substitutes its Symbol for the inner's rather than
-// nesting it. Error behavior follows docs/ErrorArchitecture.md: the
+// nesting it. Until .As(...) names it, the alias is transparent: it
+// delegates to the inner and the tree comes out as if the alias weren't
+// written. Error behavior follows docs/ErrorArchitecture.md: the
 // alias records at its own start (the Or / Peek / Not category), the
 // identity substitution is success-only and never touches failures.
 [TestFixture]
@@ -193,6 +195,171 @@ public class AliasRuleTests
 
         Assert.That(result.Find(year)!.ToString(), Is.EqualTo("2026"));
         Assert.That(result.Find(month)!.ToString(), Is.EqualTo("05"));
+    }
+
+    // --- Transparency (unnamed alias) --------------------------------------
+    //
+    // An alias's own policy is Flatten until .As(...) names it. In that
+    // state it asserts no identity in the tree, so it delegates wholly to
+    // the inner, LateBoundRule style: the tree comes out exactly as if
+    // the alias weren't written. These tests lock the defining property
+    // in from both directions: a named inner survives a transparent
+    // alias, and a transparent middle changes nothing about how an outer
+    // alias substitutes.
+
+    [Test]
+    public void Unnamed_alias_over_a_named_composite_is_transparent()
+    {
+        // A named composite inner used to dissolve through an unnamed
+        // alias: the alias lifted the composite's children into the
+        // parent and dropped the composite's own node, so Find(word)
+        // returned null. A transparent alias surfaces the inner whole.
+        var word = OneOrMore(OneOf(TokenSet.Digits)).As("word");
+        var grammar = And(Alias(word), Eof()).Preserve();
+
+        var result = grammar.Parse("123");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.Children.Count, Is.EqualTo(1),
+            "The word node itself is the And's child, not its spilled-out leaves.");
+        Assert.That(result.Tree.Children[0].Is(word), Is.True,
+            "The named composite inner survives a transparent alias intact.");
+        Assert.That(result.Find(word)!.ToString(), Is.EqualTo("123"));
+    }
+
+    [Test]
+    public void Unnamed_alias_over_a_named_leaf_is_transparent()
+    {
+        // The leaf flavor of the same property, kept agreeing with the
+        // composite case above.
+        var digit = OneOf(TokenSet.Digits).As("digit");
+        var grammar = And(Alias(digit), Eof()).Preserve();
+
+        var result = grammar.Parse("7");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.Children.Count, Is.EqualTo(1));
+        Assert.That(result.Tree.Children[0].Is(digit), Is.True,
+            "The named leaf inner survives a transparent alias intact.");
+        Assert.That(result.Find(digit)!.ToString(), Is.EqualTo("7"));
+    }
+
+    [Test]
+    public void Alias_of_an_unnamed_alias_of_a_leaf_collapses_like_a_single_alias()
+    {
+        // The defining equation of transparency: Alias(Alias(x)).As("b")
+        // builds the same tree as Alias(x).As("b"), for any x. Leaf
+        // flavor: both collapse to one leaf with b's identity.
+        var direct = Alias(OneOf(TokenSet.Digits).Preserve()).As("b");
+        var nested = Alias(Alias(OneOf(TokenSet.Digits).Preserve())).As("b");
+
+        var directResult = direct.Parse("5");
+        var nestedResult = nested.Parse("5");
+
+        Assert.That(directResult.Success, Is.True, directResult.ErrorMessage);
+        Assert.That(nestedResult.Success, Is.True, nestedResult.ErrorMessage);
+        Assert.That(nestedResult.Tree!.Is(nested), Is.True);
+        Assert.That(Serialize(nestedResult.Tree!), Is.EqualTo(Serialize(directResult.Tree!)),
+            "The transparent middle alias changes nothing about the tree.");
+        Assert.That(nestedResult.Tree.Children.Count, Is.EqualTo(0),
+            "Both collapse to a single leaf, no composite wrapper.");
+    }
+
+    [Test]
+    public void Alias_of_an_unnamed_alias_of_a_composite_lifts_children_like_a_single_alias()
+    {
+        // Composite flavor of the same equation. The outer named alias
+        // substitutes onto the composite exactly as if the transparent
+        // middle weren't written: the composite's children lift up under
+        // b, and the composite's own identity is hidden.
+        var directWord = OneOrMore(OneOf(TokenSet.Digits)).As("word");
+        var direct = Alias(directWord).As("b");
+        var nestedWord = OneOrMore(OneOf(TokenSet.Digits)).As("word");
+        var nested = Alias(Alias(nestedWord)).As("b");
+
+        var directResult = direct.Parse("12");
+        var nestedResult = nested.Parse("12");
+
+        Assert.That(directResult.Success, Is.True, directResult.ErrorMessage);
+        Assert.That(nestedResult.Success, Is.True, nestedResult.ErrorMessage);
+        Assert.That(nestedResult.Tree!.Is(nested), Is.True);
+        Assert.That(nestedResult.Find(nestedWord), Is.Null,
+            "The outer alias substitutes for word through the transparent middle.");
+        Assert.That(Serialize(nestedResult.Tree!), Is.EqualTo(Serialize(directResult.Tree!)),
+            "The transparent middle alias changes nothing about the tree.");
+    }
+
+    [Test]
+    public void Unnamed_alias_over_a_named_composite_flattens_back_to_the_default_tree()
+    {
+        // PreserveAllSymbols must agree with production about the abfy
+        // shape too: a transparent alias adds no node in either mode, so
+        // the captured debug tree collapses back to the production tree.
+        var word = OneOrMore(OneOf(TokenSet.Digits)).As("word");
+        var grammar = And(Alias(word), Eof()).Preserve();
+        grammar.Compile();
+
+        var def = grammar.Parse("123");
+        var debug = grammar.Parse("123", new ParseOptions { PreserveAllSymbols = true });
+        Assert.That(def.Success, Is.True, def.ErrorMessage);
+        Assert.That(debug.Success, Is.True, debug.ErrorMessage);
+
+        string defTree = SerializeForest(def.Symbols);
+        string flattenedDebug = SerializeForest(debug.Symbols.SelectMany(s => s.Flatten()));
+        Assert.That(flattenedDebug, Is.EqualTo(defTree),
+            "PreserveAllSymbols+Flatten must reproduce the default parse tree for a transparent alias over a named composite");
+    }
+
+    [Test]
+    public void Unnamed_alias_WithError_still_fires_when_the_inner_fails()
+    {
+        // The one behavior a transparent alias keeps for itself: its own
+        // .WithError records when the aliased match fails as a whole,
+        // anchored at the alias's start. The inner Token only records a
+        // mechanical failure, so the alias's named message wins the
+        // same-depth tie-break.
+        var alias = Alias(Token('a')).WithError("expected an a");
+        var result = alias.Parse("b");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected an a at line 1, column 1."));
+    }
+
+    [Test]
+    public void Unnamed_alias_reports_its_inner_FlattenType()
+    {
+        // A transparent alias has no flatten policy of its own, so the
+        // FlattenType property forwards the inner's, the same way
+        // LateBoundRule reports its bound target's. Naming the alias
+        // flips its own policy to Preserve and ends the forwarding.
+        Assert.That(Alias(Token('a').Preserve()).FlattenType, Is.EqualTo(FlattenType.Preserve));
+        Assert.That(Alias(Token('a').Delete()).FlattenType, Is.EqualTo(FlattenType.Delete));
+        Assert.That(Alias(Token('a').Flatten()).FlattenType, Is.EqualTo(FlattenType.Flatten));
+
+        var named = Alias(Token('a').Delete()).As("x");
+        Assert.That(named.FlattenType, Is.EqualTo(FlattenType.Preserve),
+            "A named alias reports its own Preserve, not the inner's Delete.");
+
+        var deleted = Alias(Token('a').Preserve()).Delete();
+        Assert.That(deleted.FlattenType, Is.EqualTo(FlattenType.Delete),
+            "A Delete alias reports its own Delete, not the inner's Preserve.");
+    }
+
+    [Test]
+    public void Unnamed_alias_in_a_LateBound_cycle_fails_Compile_with_the_loop_error()
+    {
+        // Both links are transparent: the LateBoundRule forwards to the
+        // alias and the unnamed alias forwards to the LateBoundRule, so
+        // no rule in the loop has a FlattenType of its own. Compile's
+        // resolver walks through both kinds of stand-in and reports the
+        // loop instead of recursing forever.
+        var lateBound = new LateBoundRule("loop");
+        var alias = Alias(lateBound);
+        lateBound.Bind(alias);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => alias.Compile());
+        Assert.That(exception!.Message, Does.Contain("loops"));
     }
 
     // --- Failure position ------------------------------------------------
@@ -408,6 +575,56 @@ public class AliasRuleTests
     }
 
     [Test]
+    public void Naming_an_alias_over_an_unbound_LateBound_does_not_read_the_inner_FlattenType()
+    {
+        // Recursive grammars name the alias before the LateBoundRule
+        // gets bound, so .As(...) doesn't read the alias's FlattenType
+        // because the unnamed alias forwards it to the inner, and an
+        // unbound LateBoundRule would throw on that read.
+        var lateBound = new LateBoundRule("placeholder");
+
+        Assert.DoesNotThrow(() => Alias(lateBound).As("expr"));
+    }
+
+    [Test]
+    public void Unnamed_alias_over_a_LateBound_bound_after_construction_is_transparent()
+    {
+        // The unnamed alias wraps the LateBoundRule while it's still
+        // unbound, the grammar is assembled around it, and the Bind
+        // happens last. Both layers are transparent: the alias forwards
+        // to the LateBoundRule and the LateBoundRule forwards to its
+        // target, so the named target surfaces in the tree exactly as if
+        // it were written in the alias's place.
+        var lateBound = new LateBoundRule("placeholder");
+        var grammar = And(Alias(lateBound), Eof()).Preserve();
+        var digits = OneOrMore(OneOf(TokenSet.Digits)).As("digits");
+        lateBound.Bind(digits);
+
+        var result = grammar.Parse("123");
+
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+        Assert.That(result.Tree!.Children.Count, Is.EqualTo(1));
+        Assert.That(result.Tree.Children[0].Is(digits), Is.True,
+            "The named target surfaces whole through both transparent layers.");
+        Assert.That(result.Find(digits)!.ToString(), Is.EqualTo("123"));
+    }
+
+    [Test]
+    public void Unnamed_alias_over_an_uncompiled_LateBound_defers_FlattenType_reads_like_the_LateBound()
+    {
+        // A transparent alias forwards FlattenType to its inner. When the
+        // inner is a LateBoundRule that hasn't been compiled yet, the
+        // read inherits the LateBoundRule's policy: throw rather than
+        // guess a value that could turn out wrong once the target is
+        // attached and resolved.
+        var lateBound = new LateBoundRule("placeholder");
+        var alias = Alias(lateBound);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => _ = alias.FlattenType);
+        Assert.That(exception!.Message, Does.Contain("no FlattenType of its own"));
+    }
+
+    [Test]
     public void LateBound_bound_to_an_Alias_forwards_and_keeps_the_alias_identity()
     {
         // The mirror of the test above: instead of an alias wrapping a
@@ -580,13 +797,10 @@ public class AliasRuleTests
         // faithful representation.
         //
         // The specific case: an unnamed alias is FlattenType.Flatten
-        // (transparent) in the regular parse, so the inner OneOf leaf
-        // surfaces in the parent with its rune id. PreserveAllSymbols
-        // captures the alias as Preserve; a careless implementation
-        // substituted the alias's custom id onto the leaf during capture,
-        // and because a FlattenType.Flatten leaf survives post-hoc
-        // Flatten() unchanged, the captured tree no longer flattened back
-        // to the rune-id leaf that the regular parse produced.
+        // (transparent), so it delegates to the inner and adds no node in
+        // either mode. The inner OneOf leaf surfaces in the parent with
+        // its rune id, and the debug capture holds exactly that same leaf
+        // rather than anything substituted or wrapped by the alias.
         var grammar = OneOrMore(Alias(OneOf(TokenSet.Runes("ab")))).Preserve();
         grammar.Compile();
 
@@ -672,6 +886,24 @@ public class AliasRuleTests
         string flattenedDebug = SerializeForest(debug.Symbols.SelectMany(s => s.Flatten()));
         Assert.That(flattenedDebug, Is.EqualTo(defTree),
             "PreserveAllSymbols+Flatten must reproduce the default parse tree for an alias over a Delete leaf inner");
+    }
+
+    [Test]
+    public void PreserveAllSymbols_keeps_a_Delete_inner_node_under_the_alias()
+    {
+        // The debug tree keeps every node, the same way And keeps a
+        // default-Delete Token leaf among its children. The node keeps
+        // FlattenType.Delete, so the post-hoc Flatten pass drops it and
+        // reproduces the empty production alias (the round-trip test
+        // above asserts that half).
+        var alias = Token('a').Flatten(FlattenType.Delete).AliasedAs("x");
+
+        var debug = alias.Parse("a", new ParseOptions { PreserveAllSymbols = true });
+
+        Assert.That(debug.Success, Is.True, debug.ErrorMessage);
+        Assert.That(debug.Tree!.Children.Count, Is.EqualTo(1),
+            "PreserveAllSymbols keeps the Delete inner's node under the alias.");
+        Assert.That(debug.Tree.Children[0].FlattenType, Is.EqualTo(FlattenType.Delete));
     }
 
     [Test]
@@ -838,10 +1070,44 @@ public class AliasRuleTests
     [Test]
     public void SourceText_on_Alias_returns_matched_text_under_every_FlattenType()
     {
-        SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
-            ruleBuilder: () => Alias(Literal("abc")),
-            input: "abc",
-            expectedSourceText: "abc");
+        // AliasRule can't use SourceTextFlattenTypeMatrixHelper: the
+        // helper's Flatten case asserts the target emits its own Flatten
+        // Symbol under PreserveAllSymbols, and a Flatten alias is
+        // transparent (it delegates to the inner and emits no Symbol of
+        // its own, even in debug mode). Delete and Preserve run the
+        // helper's exact steps below. The Flatten case asserts the
+        // transparent shape instead: the inner's Symbol surfaces in the
+        // alias's place, and SourceText reads the matched text off it.
+        foreach (var flattenType in new[] { FlattenType.Delete, FlattenType.Preserve })
+        {
+            var target = Alias(Literal("abc")).Flatten(flattenType);
+            var grammar = And(target).Preserve();
+            var result = grammar.Parse("abc", new ParseOptions { PreserveAllSymbols = true });
+
+            Assert.That(result.Success, Is.True,
+                $"FlattenType.{flattenType}: parse failed at offset {result.ErrorCharIndex}: {result.ErrorMessage}");
+            Assert.That(result.Tree!.Children.Count, Is.EqualTo(1),
+                $"FlattenType.{flattenType}: expected exactly one child under the wrapper And.");
+            var symbol = result.Tree.Children[0];
+            Assert.That(symbol.FlattenType, Is.EqualTo(flattenType),
+                $"FlattenType.{flattenType}: target Symbol should carry the declared FlattenType.");
+            Assert.That(symbol.SourceText, Is.EqualTo("abc"),
+                $"FlattenType.{flattenType}: SourceText should be \"abc\" regardless of FlattenType.");
+        }
+
+        var inner = Literal("abc");
+        var transparent = Alias(inner).Flatten(FlattenType.Flatten);
+        var transparentGrammar = And(transparent).Preserve();
+        var transparentResult = transparentGrammar.Parse("abc", new ParseOptions { PreserveAllSymbols = true });
+
+        Assert.That(transparentResult.Success, Is.True, transparentResult.ErrorMessage);
+        Assert.That(transparentResult.Tree!.Children.Count, Is.EqualTo(1),
+            "FlattenType.Flatten: the inner's Symbol stands in the alias's position.");
+        var innerSymbol = transparentResult.Tree.Children[0];
+        Assert.That(innerSymbol.FlattenType, Is.EqualTo(inner.FlattenType),
+            "FlattenType.Flatten: the surfaced Symbol is the inner's, with the inner's declared FlattenType.");
+        Assert.That(innerSymbol.SourceText, Is.EqualTo("abc"),
+            "FlattenType.Flatten: SourceText still reads the matched text off the inner's Symbol.");
     }
 
     [Test]

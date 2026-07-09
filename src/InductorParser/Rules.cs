@@ -504,9 +504,12 @@ public static class Rules
     /// </code>
     /// The fluent equivalent is <see cref="Rule.AliasedAs(string)"/>.
     /// <para>
-    /// The alias replaces the inner's identity, so aliasing an
-    /// already-named (Preserve) inner shows the match under the alias's
-    /// name instead of the inner's, not nested under it.
+    /// Once named, the alias replaces the inner's identity, so aliasing
+    /// an already-named (Preserve) inner shows the match under the
+    /// alias's name instead of the inner's, not nested under it. Until
+    /// .As(...) names it, the alias is transparent: it delegates to the
+    /// inner and the parse tree comes out exactly as if the alias weren't
+    /// written, so a named inner is still findable through it.
     /// </para>
     /// <para>
     /// Errors: the inner's own <c>.WithError</c> fires from inside it as
