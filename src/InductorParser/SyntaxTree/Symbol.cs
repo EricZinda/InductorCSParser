@@ -58,8 +58,8 @@ public sealed class Symbol
     private readonly bool _isLeaf;
 
     /// <summary>
-    /// True when this Symbol is a leaf carrying matched text, false when it's a composite
-    /// carrying child Symbols. A composite with an empty <see cref="Children"/> list still
+    /// True when this Symbol is a leaf with matched text, false when it's a composite
+    /// with child Symbols. A composite with an empty <see cref="Children"/> list still
     /// reports false: zero children is not the same shape as a leaf.
     /// </summary>
     public bool IsLeaf => _isLeaf;

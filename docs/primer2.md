@@ -97,7 +97,7 @@ config
         └── integer ── "8080"
 ```
 
-The `'['`, `']'`, `'='`, the surrounding quotes of a quotedString, and the line terminator are all gone after flattening (their default flatten policy is Delete, the flatten process is covered in [Primer: Building a Grammar](primer1.md)). The `Optional(InlineWhitespace())` around `=` are gone too. What's left is the structure we care about: each `value` carries one named child indicating which alternative matched.
+The `'['`, `']'`, `'='`, the surrounding quotes of a quotedString, and the line terminator are all gone after flattening (their default flatten policy is Delete, the flatten process is covered in [Primer: Building a Grammar](primer1.md)). The `Optional(InlineWhitespace())` around `=` are gone too. What's left is the structure we care about: each `value` has one named child indicating which alternative matched.
 
 The INI grammar doesn't nest sections. The `[server]` header and the keys that belong to it are siblings under the root. To find "the keys belonging to section X" we just look for siblings after the section that are keyValues.
 
@@ -190,7 +190,7 @@ For our setting-lookup problem we aren't using FindAll, because we care about wh
 
 # Walking the tree with LINQ
 
-Every accessor that finds things on `Symbol` is a direct LINQ target because they are typed as `IReadOnlyList<Symbol>` or `IEnumerable<Symbol>`. Three accessors exist for things you usually want to do with a Symbol tree:
+Every accessor that finds things on `Symbol` is a direct LINQ target because they're typed as `IReadOnlyList<Symbol>` or `IEnumerable<Symbol>`. Three accessors exist for things you usually want to do with a Symbol tree:
 
 ```CSharp
 // Direct children only (no recursion)

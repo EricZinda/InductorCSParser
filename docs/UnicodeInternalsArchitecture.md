@@ -10,10 +10,10 @@ Unicode has a bunch of concepts a parser could engage with. They fall into three
 
 ### Unicode Representation Hierarchy
 
-You need to pick one as the parser's token. Here is the stack, from the lowest physical layer up, with each layer built from one or more of the layer below:
+You need to pick one as the parser's token. Here's the stack, from the lowest physical layer up, with each layer built from one or more of the layer below:
 
 - **Code units** (physical encoding): the fixed-width pieces a string is stored as. UTF-16 uses 16-bit code units. UTF-8 uses 8-bit code units (bytes). In .NET, `string` is a sequence of UTF-16 code units and `char` holds one code unit. One Unicode code point (see next layer) can span multiple code units (surrogate pairs in UTF-16, multi-byte sequences in UTF-8). In UTF-16 one code point is one or two code units. In UTF-8 one code point is one to four code units.
-- **Code points** (the atoms of Unicode): a code point is a number in the Unicode code space: 0 to 0x10FFFF. The code points that are valid standalone characters are called *scalar values*; they exclude UTF-16 surrogate halves (U+D800..U+DFFF). Scalar values are what .NET's `System.Text.Rune` holds, and the parser uses the term *rune* for them throughout.
+- **Code points** (the atoms of Unicode): a code point is a number in the Unicode code space: 0 to 0x10FFFF. The code points that are valid standalone characters are called *scalar values*. They exclude UTF-16 surrogate halves (U+D800..U+DFFF). Scalar values are what .NET's `System.Text.Rune` holds, and the parser uses the term *rune* for them throughout.
 - **Grapheme clusters** (human-perceived characters): built from one or more code points via the segmentation rules in Unicode Standard Annex #29. A grapheme is what a human perceives as one character. It can be a single code point, like `p`. Also valid: `é` as `e` + "combining acute" is one grapheme built from two code points. 👨‍👩‍👧‍👦 is one grapheme built from seven code points. 👋🏽 is one grapheme built from two code points. The parser calls these *tokens* because each one is what the lexer hands back per `Read()` call.
 
 Each layer is a composition over the one below, so any string has a code-unit count, a code-point count, and a token count, and the counts only diverge when the composition is non-trivial. Some examples:
@@ -113,11 +113,11 @@ public readonly struct ParseResult
 
 Each field is one of the units above with an `Error` prefix. `ErrorLine` + `ErrorCharColumn` are what an editor or Language Server Protocol client asks for (see [InductorParserReference.md](InductorParserReference.md) "The Parse Result" for why the protocol's units run end-to-end). `ErrorTokenIndex` and `ErrorTokenColumn` are there for callers whose mental model counts tokens (the `^^^` underline a human will look at and recognize as covering one thing). `ErrorPosition` bundles every unit into one `SourcePosition`, for a caller that wants several units without paying for several walks of the input.
 
-`Symbol.SourceRange` reuses the same conversion routines for any node in the parse tree. The leaf's `ReadOnlyMemory<char>` carries an offset back into the input string (recovered via `MemoryMarshal.TryGetString`). A composite walks to its leftmost and rightmost leaves and stitches their ends. The result is a `SourceRange` with `Start` and `End` `SourcePosition`s, the same struct `ErrorPosition` returns, so both ends carry every unit above plus a `SourceLine()` helper that returns the text of the line the position falls on. "Where in the source is this symbol?" and "where in the source did the parse fail?" answer in the same vocabulary.
+`Symbol.SourceRange` reuses the same conversion routines for any node in the parse tree. The leaf's `ReadOnlyMemory<char>` has an offset back into the input string (recovered via `MemoryMarshal.TryGetString`). A composite walks to its leftmost and rightmost leaves and stitches their ends. The result is a `SourceRange` with `Start` and `End` `SourcePosition`s, the same struct `ErrorPosition` returns, so both ends include every unit above plus a `SourceLine()` helper that returns the text of the line the position falls on. "Where in the source is this symbol?" and "where in the source did the parse fail?" answer in the same vocabulary.
 
 ## Encoding Happens First
 
-The parser takes a `string`. Encoding is handled before the parser is ever called. If your document lives on disk as UTF-8, UTF-16, or some legacy codepage, decode it into a `string` with the appropriate `Encoding` class (`File.ReadAllText(path, Encoding.UTF8)`, `Encoding.Unicode.GetString(bytes)`, `Encoding.GetEncoding("Windows-1252").GetString(bytes)`, etc.) before calling `.Parse(...)`. By the time the parser sees the input it is a .NET `string` with no encoding tag. Everything below is about how the lexer iterates those characters.
+The parser takes a `string`. Encoding is handled before the parser is ever called. If your document lives on disk as UTF-8, UTF-16, or some legacy codepage, decode it into a `string` with the appropriate `Encoding` class (`File.ReadAllText(path, Encoding.UTF8)`, `Encoding.Unicode.GetString(bytes)`, `Encoding.GetEncoding("Windows-1252").GetString(bytes)`, etc.) before calling `.Parse(...)`. By the time the parser sees the input it's a .NET `string` with no encoding tag. Everything below is about how the lexer iterates those characters.
 
 ```
 Disk/network      Caller                                                                    Parser
@@ -127,7 +127,7 @@ UTF-16 bytes   ─→ Encoding.Unicode                     ─→ string (UTF-16
 Win-1252 bytes ─→ Encoding.GetEncoding("Windows-1252") ─→ string          ─→ .Parse(...) ─→ Lexer ─→ token stream
 ```
 
-Unicode is the character set, a numbered list of characters. UTF-8, UTF-16, and UTF-32 are different ways to represent those numbers as bytes. A document stored as UTF-8 and a document stored as UTF-16 can carry the same Unicode content. They differ only in how the text is laid out on disk. By the time the parser sees a `string` the original on-disk encoding is gone and irrelevant. .NET's `string` type holds Unicode content internally as UTF-16 code units.
+Unicode is the character set, a numbered list of characters. UTF-8, UTF-16, and UTF-32 are different ways to represent those numbers as bytes. A document stored as UTF-8 and a document stored as UTF-16 can contain the same Unicode content. They differ only in how the text is laid out on disk. By the time the parser sees a `string` the original on-disk encoding is gone and irrelevant. .NET's `string` type holds Unicode content internally as UTF-16 code units.
 
 If the caller doesn't know the encoding of a file, they figure it out upstream (byte-order-mark sniffing, content-type headers, ask the user) and feed the parser a properly-decoded `string`.
 
@@ -157,7 +157,7 @@ One consequence to know about: when the failure lands inside a combining charact
 
 ## Problems The Lexer Doesn't Solve
 
-Some Unicode surprises can't be fixed by the lexer's tokenization. Case-insensitive matching beyond ASCII, byte order marks, zero-width and invisible format characters, homoglyph confusables, variation selectors. They are caller-side preprocessing concerns or grammar-design concerns, not lexer concerns. See [UnicodeGotchas.md](UnicodeGotchas.md) for the mechanical ones (case-insensitive matching, byte order marks, CRLF) and the security primer, [Primer4.md](Primer4.md), for the ones an attacker sends on purpose (invisible characters, homoglyph lookalikes, variation selectors).
+Some Unicode surprises can't be fixed by the lexer's tokenization: case-insensitive matching beyond ASCII, byte order marks, zero-width and invisible format characters, homoglyph confusables, variation selectors. They're caller-side preprocessing concerns or grammar-design concerns, not lexer concerns. See [UnicodeGotchas.md](UnicodeGotchas.md) for the mechanical ones (case-insensitive matching, byte order marks, CRLF) and the security primer, [Primer4.md](Primer4.md), for the ones an attacker sends on purpose (invisible characters, homoglyph lookalikes, variation selectors).
 
 ## Going Below The Token: WithinToken
 

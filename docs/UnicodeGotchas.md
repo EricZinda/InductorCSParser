@@ -91,11 +91,11 @@ var result = ecmascript.Parse(input);
 
 C# identifiers, per [ECMA-334 §7.4.3](https://www.ecma-international.org/publications-and-standards/standards/ecma-334/). C# allows `_` in Start and uses category-based rules rather than XID directly. For grammars, `Identifier(extraStartRunes: TokenSet.Runes("_"))` with default NFC is a close approximation for ordinary source. It isn't a spec-exact C# lexer.
 
-Java identifiers use `Character.isJavaIdentifierStart` and `Character.isJavaIdentifierPart`, which are their own rule. Not reproducible via `Identifier` parameters alone; a Java-conforming grammar would compose against a custom `TokenSet` built from those predicates.
+Java identifiers use `Character.isJavaIdentifierStart` and `Character.isJavaIdentifierPart`, which are their own rule, not reproducible via `Identifier` parameters alone. A Java-conforming grammar would compose against a custom `TokenSet` built from those predicates.
 
-Swift has its own enumerated list of ranges that resembles XID but isn't a property reference. Not reproducible via `Identifier` parameters alone.
+Swift has its own enumerated list of ranges that resembles XID but isn't a property reference, so it isn't reproducible via `Identifier` parameters alone either.
 
-If you are restricting to a specific script for security reasons (mixed-script phishing, homoglyph attacks), see the "Homoglyphs" section of the security primer, [Primer4.md](Primer4.md#homoglyphs). `Identifier()` is the general-purpose match, not a script-restricted one.
+If you're restricting to a specific script for security reasons (mixed-script phishing, homoglyph attacks), see the "Homoglyphs" section of the security primer, [Primer4.md](Primer4.md#homoglyphs). `Identifier()` is the general-purpose match, not a script-restricted one.
 
 ## Case-Insensitive Matching Beyond ASCII
 
@@ -127,10 +127,10 @@ var result = grammar.Parse(cleaned);
 Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 rule GB3), so the lexer hands the parser one two-char token whenever it sees a Windows line ending. This breaks any line-based grammar that tries to match or stop on a bare `\n`:
 
 - `Token('\n')` matches one token whose text is exactly `\n`. The CRLF token's text is `\r\n`. No match.
-- `OneOf(TokenSet.Runes("\n"))` matches one token that is a single rune from the set. The CRLF token is two runes, so it's never in a rune set. No match.
+- `OneOf(TokenSet.Runes("\n"))` matches one token that's a single rune from the set. The CRLF token is two runes, so it's never in a rune set. No match.
 - `NoneOf(TokenSet.Runes("\n"))` fails the other way around: CRLF isn't in the set, so `NoneOf` *matches* it. A scan like `ZeroOrMore(NoneOf(...))` that's supposed to stop at the line break swallows the CRLF as content, and the line-terminator rule that was supposed to match next finds it already eaten.
 
-**Fix.** Use the built-in `EndOfLine()` rule. It is `Or(Literal("\r\n"), OneOf(TokenSet.LineTerminators))` under the hood, so the CRLF token is tried as a unit before the single-rune terminators (LF, CR, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR per UTS #18 §1.6, RL1.6). Pass `eofIsEol: true` for the "line terminator here, or end of input" case, and wrap with `Optional` for "line terminator here, or none at all". Anywhere a grammar cares about line breaks, use these instead of building one with `Token('\n')` or a `OneOf` over a rune set:
+**Fix.** Use the built-in `EndOfLine()` rule. It's `Or(Literal("\r\n"), OneOf(TokenSet.LineTerminators))` under the hood, so the CRLF token is tried as a unit before the single-rune terminators (LF, CR, VT, FF, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR per UTS #18 §1.6, RL1.6). Pass `eofIsEol: true` for the "line terminator here, or end of input" case, and wrap with `Optional` for "line terminator here, or none at all". Anywhere a grammar cares about line breaks, use these instead of building one with `Token('\n')` or a `OneOf` over a rune set:
 
 ```csharp
 // Match a Unicode line terminator (CRLF, LF, CR, NEL, LS, PS, VT, FF).

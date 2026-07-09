@@ -19,7 +19,7 @@ But in order to actually meet the OP's requirements it had several gaps:
 
 - Missing the username, website, previous password, and `"password"` substring checks.
 - Capped the password length at 10. The OP said "at least 8" with no upper bound.
-- Restricted the body to only the required-set characters. The OP said what MUST appear, not what MAY appear.
+- Restricted the body to only the required-set characters. The OP said what *must* appear, not what *may* appear.
 - Used `\d`, which matches all Unicode digits (Arabic-Indic, Devanagari, etc.), while `[a-z]` and `[A-Z]` are ASCII-only. 
 
 Here's the fixed version in C# regex, formatted to be a bit more readable:
@@ -42,7 +42,7 @@ To do this in Inductor Parser, we can start by thinking about how to scan a stri
 ```CSharp
 ScanUntil(TokenSet.Range('0', '9'))
 ```
-`ScanUntil` fails if it reaches end-of-input without ever matching its stopper, so on its own it already answers "did the input contain a digit?" — success means yes, failure means no. To make it more readable for how we're using it, we can wrap it in our own rule:
+`ScanUntil` fails if it reaches end-of-input without ever matching its stopper, so on its own it already answers "did the input contain a digit?" (success means yes, failure means no). To make it more readable for how we're using it, we can wrap it in our own rule:
 
 ```CSharp
 Rule Contains(TokenSet options) =>

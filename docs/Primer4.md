@@ -39,7 +39,7 @@ The parser has three ways to handle these scenarios:
 ## Unicode Attacks
 Unicode opens up a few classic ways to attack a parser. The good news is that grammars written naturally already block most of them. 
 
-When thinking about these attacks and how to defend against them, it is useful to think about whether your grammar defines what's *allowed* (your grammar must match for input to be accepted) or what's *blocked* (your grammar must match for input to be rejected). The default Inductor Parser behavior protects you for "allowed" rules. For "blocked" rules, you sometimes need to do a little extra work.
+When thinking about these attacks and how to defend against them, it's useful to think about whether your grammar defines what's *allowed* (your grammar must match for input to be accepted) or what's *blocked* (your grammar must match for input to be rejected). The default Inductor Parser behavior protects you for "allowed" rules. For "blocked" rules, you sometimes need to do a little extra work.
 
 Two pieces of background make the rest of this section easier. 
 
@@ -66,7 +66,7 @@ The `#` isn't where the reviewer saw it. `grant("write")` is a live rule now, an
 
 Defense: This one's different from the rest, because the parser was never the thing being fooled. It reads the raw code points in logical order and builds exactly the rule the bytes describe, the live `grant("write")` included. The victim is the human who reviewed the visual rendering and signed off on a rule that reads one way and parses another. So "the grammar sees the true order" isn't the defense here, it's the problem: the parser faithfully carries out an intent the reviewer never saw.
 
-That also means you can't fix it at the grammar level the way you fix lookalikes (show below). A strict "allowed" grammar rejects a bidi control that lands somewhere it isn't permitted, but these characters hide inside comments and string literals, which accept almost anything, and there the parser takes them without complaint. The fix is to close the gap between what the reviewer sees and what the parser does. [UAX #9, the Unicode Bidirectional Algorithm](https://www.unicode.org/reports/tr9/), enumerates the bidi formatting characters, and they're all General Category `Cf` (Format), the same category as the other invisibles, so one `TokenSet` recognizes the whole class, and you can refuse any input that carries one before it reaches a reviewer or the parser:
+That also means you can't fix it at the grammar level the way you fix lookalikes (show below). A strict "allowed" grammar rejects a bidi control that lands somewhere it isn't permitted, but these characters hide inside comments and string literals, which accept almost anything, and there the parser takes them without complaint. The fix is to close the gap between what the reviewer sees and what the parser does. [UAX #9, the Unicode Bidirectional Algorithm](https://www.unicode.org/reports/tr9/), enumerates the bidi formatting characters, and they're all General Category `Cf` (Format), the same category as the other invisibles, so one `TokenSet` recognizes the whole class, and you can refuse any input that contains one before it reaches a reviewer or the parser:
 
 ```csharp
 static readonly TokenSet FormatControls = TokenSet.Category(UnicodeCategory.Format);
@@ -188,7 +188,7 @@ safeUsername.Parse("admin").Success;             // true
 safeUsername.Parse("ad\u200Bmin").Success;       // false: the ZWS fails NoneOf(Invisibles)
 ```
 
-One thing to know about `Format`: it includes `U+200D` (ZWJ), so emoji families like `👨‍👩‍👧` split into their components after the filter. That's fine for a banned-text check. If your input can carry emoji you want to keep whole, take the `Format` category and subtract ZWJ with the `-` (difference) operator:
+One thing to know about `Format`: it includes `U+200D` (ZWJ), so emoji families like `👨‍👩‍👧` split into their components after the filter. That's fine for a banned-text check. If your input can contain emoji you want to keep whole, take the `Format` category and subtract ZWJ with the `-` (difference) operator:
 
 ```csharp
 static readonly TokenSet Invisibles =
@@ -216,11 +216,11 @@ static string StripMarks(string input) =>
         .Where(rune => !InvisiblesAndMarks.ContainsRune(rune)));
 ```
 
-The `FormKD` step is what makes this work. A precomposed letter like `é` (`U+00E9`) carries no separate mark to strip until you decompose it into `e` plus a combining accent, so without that step the accented forms slip through. After it, every accented form collapses to its base letter and `kïll`, `ki<CGJ>ll`, and plain `kill` all become the same string.
+The `FormKD` step is what makes this work. A precomposed letter like `é` (`U+00E9`) has no separate mark to strip until you decompose it into `e` plus a combining accent, so without that step the accented forms slip through. After it, every accented form collapses to its base letter and `kïll`, `ki<CGJ>ll`, and plain `kill` all become the same string.
 
-This is the right hammer for a banned-word check, where you want `résumé` and `resume` to compare equal and you don't care about losing the accents. It's the wrong hammer for a field where the marks carry meaning. Stripping marks from Arabic, Hebrew, or Indic text destroys it, and a name like `José` turns into `Jose`. Use it only where the field is supposed to be mark-free, the same way you'd restrict a username to ASCII letters.
+This is the right hammer for a banned-word check, where you want `résumé` and `resume` to compare equal and you don't care about losing the accents. It's the wrong hammer for a field where the marks have meaning. Stripping marks from Arabic, Hebrew, or Indic text destroys it, and a name like `José` turns into `Jose`. Use it only where the field is supposed to be mark-free, the same way you'd restrict a username to ASCII letters.
 
-The other thing combining marks enable is bulk. Unicode lets you stack an unbounded number of marks on one base character. Stack a few dozen and you get what the internet calls "Zalgo" text: every letter sprouts a tower of accents above it and another below, spilling over the neighboring lines until the word looks like it's melting down the page. A single letter carrying a few hundred marks is a small denial-of-service against anything that has to render or shape it, and a way to run up the character count behind a length check. The mark filter above drops all of them, and the parser's own `RuleCountLimit` from the pathological-input section caps the parsing work regardless.
+The other thing combining marks enable is bulk. Unicode lets you stack an unbounded number of marks on one base character. Stack a few dozen and you get what the internet calls "Zalgo" text: every letter sprouts a tower of accents above it and another below, spilling over the neighboring lines until the word looks like it's melting down the page. A single letter with a few hundred marks is a small denial-of-service against anything that has to render or shape it, and a way to run up the character count behind a length check. The mark filter above drops all of them, and the parser's own `RuleCountLimit` from the pathological-input section caps the parsing work regardless.
 
 ### Case-insensitive matching tricks
 Attack: a signup system reserves the name `admin`. It lowercases the input first so `ADMIN` and `Admin` are caught too, then checks the blocklist. On a server whose culture is Turkish, `"ADMIN".ToLower()` is `admın`, with a dotless `ı` (`U+0131`), because Turkish `I` lowercases to the dotless letter. `admın` isn't `admin`, so the check misses it, and the attacker registers a capitalized `ADMIN` that everyone else's machine lowercases straight back to `admin`. The mirror image is just as bad: the Kelvin sign `K` (`U+212A`) lowercases to an ordinary `k`, so "lowercase then compare" makes two different strings equal. That canonicalize-then-compare collision is a known source of real password-reset account takeovers: request a reset for a name spelled with a colliding character, the backend canonicalizes it to the victim's name, and the reset email lands in the attacker's inbox.
@@ -249,7 +249,7 @@ quantity.Parse("23").Success;    // true
 quantity.Parse("٢٣").Success;    // false: Arabic-Indic digits aren't ASCII 0-9
 ```
 
-`TokenSet.Ascii.Digits` is exactly `0-9`. If you do want to accept the world's digits (a search box, a display field), keep `TokenSet.Digits`, but convert each rune by its real Unicode numeric value (`CharUnicodeInfo.GetDecimalDigitValue`) instead of subtracting `'0'`, and never hand the raw string to a consumer that assumes ASCII. Digits from different scripts can even share a shape while carrying different values, so a rule that mixes digit scripts is a spoofing surface on its own (see [UTR #36 §2.7](https://www.unicode.org/reports/tr36/tr36-15.html), which gives a digit string that reads as `89` but evaluates to 42).
+`TokenSet.Ascii.Digits` is exactly `0-9`. If you do want to accept the world's digits (a search box, a display field), keep `TokenSet.Digits`, but convert each rune by its real Unicode numeric value (`CharUnicodeInfo.GetDecimalDigitValue`) instead of subtracting `'0'`, and never hand the raw string to a consumer that assumes ASCII. Digits from different scripts can even share a shape but have different values, so a rule that mixes digit scripts is a spoofing surface on its own (see [UTR #36 §2.7](https://www.unicode.org/reports/tr36/tr36-15.html), which gives a digit string that reads as `89` but evaluates to 42).
 
 ### Normalization ordering
 The last few defenses lean on normalization, so it's worth being clear about a trap that comes from doing a check on one form of a string and consuming another.
@@ -268,7 +268,7 @@ A .NET `string` is just a sequence of UTF-16 code units with no validity rule at
 ```csharp
 var grammar = And(Literal("hello"), Eof()).Compile();   // default FormC
 
-// A string carrying a lone high surrogate never reaches the grammar
+// A string with a lone high surrogate never reaches the grammar
 grammar.Parse(loneSurrogateInput).Outcome;   // ParseOutcome.MalformedInput
 ```
 
@@ -278,7 +278,7 @@ The related attack is decoder tampering. Every .NET decoder is permissive by def
 var grammar = And(OneOrMore(NoneOf(TokenSet.Replacement)), Eof()).Compile();
 
 grammar.Parse("hi").Success;          // true: clean input
-grammar.Parse(tamperedInput).Success; // false: carries a U+FFFD from a lenient decode
+grammar.Parse(tamperedInput).Success; // false: contains a U+FFFD from a lenient decode
 ```
 
 Better still, stop the substitution at the source by decoding strictly, so malformed bytes throw at decode time instead of becoming a silent `U+FFFD`:
