@@ -137,8 +137,18 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// indexing) and should be preferred when the caller doesn't need
     /// either of those features.
     /// </summary>
-    public IEnumerable<string> EnumerateMultiRuneGraphemes() =>
-        _multiRuneGraphemes ?? Array.Empty<string>();
+    public IEnumerable<string> EnumerateMultiRuneGraphemes()
+    {
+        // Yield the entries rather than returning _multiRuneGraphemes
+        // itself. The set operators share grapheme arrays between sets on
+        // their fast paths, so if the array got out here a caller could
+        // cast the IEnumerable back to string[] and write through it,
+        // corrupting every set that shares the array.
+        var multiRuneGraphemes = _multiRuneGraphemes;
+        if (multiRuneGraphemes == null) yield break;
+        for (int index = 0; index < multiRuneGraphemes.Length; index++)
+            yield return multiRuneGraphemes[index];
+    }
 
     // Number of intervals ContainsRune scans linearly before switching to
     // binary search. The first few intervals of every built-in set hold the

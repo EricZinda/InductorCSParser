@@ -263,6 +263,33 @@ public class TokenSetTests
     }
 
     [Test]
+    public void EnumerateMultiRuneGraphemes_does_not_expose_the_internal_array()
+    {
+        // The set operators share grapheme arrays between sets on their
+        // fast paths (a union where one side contributes no graphemes
+        // reuses the other side's array). If EnumerateMultiRuneGraphemes
+        // returned that array directly, a caller could cast the result back
+        // to string[] and write through it, corrupting every set that
+        // shares the array. So casting the enumerable back to a mutable
+        // array has to fail.
+        var mine = TokenSet.Graphemes("\r\n");
+        var union = mine | TokenSet.Runes(",");
+        Assert.That(union.ContainsToken("\r\n"), Is.True);
+
+        Assert.That(mine.EnumerateMultiRuneGraphemes(), Is.Not.InstanceOf<string[]>());
+        Assert.Throws<InvalidCastException>(() =>
+        {
+            var stolen = (string[])mine.EnumerateMultiRuneGraphemes();
+            stolen[0] = "zz";
+        });
+
+        // Membership in both sets survives the attempted cast-and-write,
+        // including the union that shares mine's grapheme array.
+        Assert.That(mine.ContainsToken("\r\n"), Is.True);
+        Assert.That(union.ContainsToken("\r\n"), Is.True);
+    }
+
+    [Test]
     public void SurrogateRange_rejects_non_surrogate_endpoints()
     {
         // Mixing semantics is rejected at construction so the spelling
