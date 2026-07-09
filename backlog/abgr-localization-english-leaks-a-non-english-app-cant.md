@@ -23,4 +23,4 @@ Options to consider:
 
 `TokenSet.ToString()` ends an over-long render with `,...+5 more` (TokenSet.cs). The word "more" is hardcoded. This is mostly a debug / trace rendering and isn't on the default end-user error path, so it's the lowest priority of the three, but it's a public method and an app that surfaces a character-set constraint to users would show English. If we ever make the truncation suffix configurable, this goes away.
 
-See docs/BugSearchLog/2026-06-26-localization-english-leaks-non-english-apps-cant-replace.md for the full sweep, including the verified non-findings (the NormalizedPositionMap Normalize call is not a second throw site, and the per-rule trace strings are debug-only).
+See docs/BugSearchLog/2026-06-26-localization-english-leaks-non-english-apps-cant-replace.md for the full sweep, including the verified non-findings (the NormalizedPositionMap Normalize call isn't a second throw site, and the per-rule trace strings are debug-only).

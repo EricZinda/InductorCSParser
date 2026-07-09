@@ -209,7 +209,7 @@ public static class HtmlGrammar
 
     // Normal character element: StartTag (Element | (not-"<")+)* EndTag.
     // The inner Or tries element recursion first. If we're not sitting
-    // on a "<", the OneOrMore(not-"<") sweeps up a run of text instead.
+    // on a "<", the OneOrMore(not-"<") sweeps up the text up to the next "<" instead.
     public static readonly Rule NormalCharacterElement = And(
         StartTag,
         ZeroOrMore(Or(

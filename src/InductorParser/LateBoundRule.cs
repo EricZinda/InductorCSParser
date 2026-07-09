@@ -16,9 +16,9 @@ namespace InductorParser;
 // top-to-bottom, so whichever one is declared first sees the other as
 // null.
 //
-// The fix is a LateBoundRule: a Rule that stands in for the real target
+// A LateBoundRule is a Rule that stands in for the real target
 // during construction and gets its target attached later via .Bind(...).
-// The canonical pattern:
+// The canonical pattern is:
 //
 //     static readonly LateBoundRule Expression = new LateBoundRule("expression");
 //     static readonly Rule Term = Or(Integer(), And(Token('('), Expression, Token(')')));

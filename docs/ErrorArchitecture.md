@@ -228,7 +228,7 @@ var relativePath = And(
 var document = And(relativePath, Eof());
 ```
 
-A `relativePath` is a run of path characters, accepted only if the input isn't an absolute `https://` URL. The `Not(Literal("https://"))` is the check.
+A `relativePath` is a sequence of path characters, accepted only if the input isn't an absolute `https://` URL. The `Not(Literal("https://"))` is the check.
 
 Input: `https:X`.
 
@@ -240,7 +240,9 @@ If the probe's failure at position 6 were kept, it would be deeper than the real
 
 ## What forced is for
 
-Forced (`.WithError("msg", forced: true)`) is uncommon. Depth-first ranking usually does the right thing on its own: the deepest failure is the most specific spot, and a `.WithError` there reads well. The case where forced earns its place:
+Forced (`.WithError("msg", forced: true)`) is uncommon. Depth-first ranking usually does the right thing on its own: the deepest failure is the most specific spot, and a `.WithError` there provides a good specific message. 
+
+Here's a case where forced is the right tool:
 
 ```
 Or(

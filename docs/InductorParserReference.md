@@ -275,7 +275,7 @@ public readonly struct TokenSet : IEquatable<TokenSet>
 
 The sketch is trimmed: the surrogate members (`Surrogates`, `SurrogateRange`) are covered in "Surrogates" below, and the type also includes `Empty`, enumeration helpers, and the equality members.
 
-Union is the workhorse (`TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_-")`) and every grammar uses it. The other two operators are rarer but earn their spot because when you do need them, hand-enumerating the result goes stale the moment Unicode adds a new letter to the base class.
+Union is the workhorse (`TokenSet.Letters | TokenSet.Digits | TokenSet.Runes("_-")`) and every grammar uses it. The other two operators are rarer but worth having because when you do need them, hand-enumerating the result goes stale the moment Unicode adds a new letter to the base class.
 
 **`&` (intersection)** narrows one semantic set by another. It shines when one operand is a big Unicode-tracking class like `Letters` and the other is a script or script-block restriction:
 

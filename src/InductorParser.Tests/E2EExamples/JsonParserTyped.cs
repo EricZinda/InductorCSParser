@@ -110,7 +110,7 @@ public static class JsonParserTyped
     // have to pay for it."
     //
     // So the consumer does the decoding. The side-grammar below emits
-    // named pieces (LiteralChunk for runs of unescaped characters plus
+    // named pieces (LiteralChunk for sequences of unescaped characters plus
     // one rule per escape kind). DecodeEscapes re-parses the raw body
     // through that grammar and concatenates each piece's decoded form.
     private static readonly Rule LiteralChunk = OneOrMore(NoneOf("\\")).As("literalChunk");

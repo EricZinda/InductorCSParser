@@ -168,7 +168,7 @@ public static class Rules
     /// </summary>
     /// <remarks>
     /// A token is one character as the user sees it (a grapheme
-    /// cluster). Literal matches a run of them in order, so the
+    /// cluster). Literal matches a sequence of them in order, so the
     /// string is the exact text to match.
     /// For a one-token match use <see cref="Token(string)"/>.
     /// Literal is the N-token generalization and collapses what
