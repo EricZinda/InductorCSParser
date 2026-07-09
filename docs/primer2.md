@@ -97,7 +97,7 @@ config
         └── integer ── "8080"
 ```
 
-The `'['`, `']'`, `'='`, the surrounding quotes of a quotedString, and the line terminator are all gone after flattening (their default flatten policy is Delete, the flatten process is covered in [Primer: Building a Grammar](primer1.md)). The `Optional(InlineWhitespace())` around `=` are gone too. What's left is the structure we care about: each `value` has one named child indicating which alternative matched.
+The `'['`, `']'`, `'='`, the surrounding quotes of a quotedString, and the line terminator are all gone after flattening (their default flatten policy is Delete, the flatten process is covered in [Primer: Building a Grammar](primer1.md)). The `Optional(InlineWhitespace())` around `=` are gone too. What's left is the structure we care about: each `value` has one named child indicating which alternative matched. The drawing does simplify one thing: a node like `name` really holds one child Symbol per matched character (`NoneOf` and `OneOf` matches default to Preserve), and `ToString()` concatenates them back into "server". The drawing collapses those runs into the string they spell.
 
 The INI grammar doesn't nest sections. The `[server]` header and the keys that belong to it are siblings under the root. To find "the keys belonging to section X" we just look for siblings after the section that are keyValues.
 
@@ -129,7 +129,7 @@ public static Symbol? FindSetting(Symbol config, string sectionName, string keyN
 
 `symbol.Is(rule)` checks whether the symbol was produced by the rule in the `rule` variable. 
 
-`symbol.Children` is the list of children that survived flattening. For a section, that's a single `name` leaf, so `child.Children[0].ToString()` gives the section's name as a string. For a keyValue, the children are `[key, value]`, so index 0 is the key and index 1 is the value's container.
+`symbol.Children` is the list of children that survived flattening. For a section, that's a single `name` child, so `child.Children[0].ToString()` gives the section's name as a string. For a keyValue, the children are `[key, value]`, so index 0 is the key and index 1 is the value's container.
 
 We return the whole `Symbol` object so the caller can still read the type of the child. To do this with `[server]/port` you'd write code like this:
 
@@ -176,7 +176,7 @@ quoted.SourceText
 
 Two helpers are available if you want to find symbols in the tree regardless of context:
 
-- `symbol.Find(rule)` does a depth-first search and returns the first matching descendant (or null). Use it when you expect one match in a known position.
+- `symbol.Find(rule)` does a depth-first search, starting with the symbol itself, and returns the first match (or null). Use it when you expect one match in a known position.
 - `symbol.FindAll(rule)` does the same but yields every match. Use it for "give me every section" or "every keyValue."
 
 ```CSharp
@@ -203,7 +203,7 @@ result.Tree!.Walk().Where(s => s.Is(integerValue))
 result.Tree!.FindAll(keyValue).Select(kv => kv.Children[0].ToString())
 ```
 
-`Symbol` itself doesn't implement `IEnumerable<Symbol>` on purpose, because iterating a tree node would have to silently pick one of children. Naming the traversal you want keeps the code unambiguous.
+`Symbol` itself doesn't implement `IEnumerable<Symbol>` on purpose, because iterating a tree node would have to silently pick one of the traversals. Naming the traversal you want keeps the code unambiguous.
 
 # Semantic errors
 
@@ -274,11 +274,11 @@ port oops
 
 That's a section name made of a single family emoji, then a malformed key/value line. The family emoji is the demo's whole point: it's one of the few characters that pulls chars and tokens apart by a wide margin. A bare guitar emoji 🎸 is 2 chars but 1 token (one user-visible character). The family emoji is 8 chars but still 1 token. So the char count and the token count give very different numbers.
 
-The section header itself parses fine: `name` only rejects whitespace and accepts anything else. The parser gets past the header and fails on line 2 at the same spot it would for an ASCII version: where the `=` should be.
+The section header itself parses fine: `name` only rejects whitespace and `]`, and accepts anything else. The parser gets past the header and fails on line 2 at the same spot it would for an ASCII version: where the `=` should be.
 
 But the position numbers diverge. To a human, the family is one character and the failure happens 5 characters into the second line. In memory, the family is eight UTF-16 code units (each emoji is a surrogate pair, plus two code units for the two ZWJs). So which "position" should the parser report?
 
-Inductor Parser reports it three ways plus line/column, because the right unit depends on what the caller is going to do with the number:
+Inductor Parser reports it two ways plus line/column, because the right unit depends on what the caller is going to do with the number:
 
 ```CSharp
 result.ErrorCharIndex    // 16 - UTF-16 code units, what string.Substring uses
@@ -288,7 +288,7 @@ result.ErrorCharColumn   // 5  - char column, the unit the Language Server Proto
 result.ErrorTokenColumn  // 5  - grapheme column; matches ErrorCharColumn here since line 2 is ASCII
 ```
 
-All four point at the same place in the input. They just count it in different units.
+All five point at the same place in the input. They just count it in different units.
 
 Use `ErrorCharIndex` (or `ErrorCharColumn`) when you're going to feed the number into something that thinks in chars: `string.Substring`, `ReadOnlySpan<char>.Slice`, a Language Server Protocol diagnostic, a regex offset. That's most production code, because chars are the unit .NET strings index in.
 
@@ -302,7 +302,7 @@ The same multi-unit story applies to every Symbol's SourceRange, not just to err
 
 ```CSharp
 var result = config.Parse("[👨‍👩‍👧]\n");
-var sectionName = result.Tree!.Find(section)!.Children[0];  // the "name" leaf
+var sectionName = result.Tree!.Find(section)!.Children[0];  // the "name" node
 var range = sectionName.SourceRange!.Value;
 int charWidth  = range.End.CharIndex  - range.Start.CharIndex;   // 8
 int tokenWidth = range.End.TokenIndex - range.Start.TokenIndex;  // 1

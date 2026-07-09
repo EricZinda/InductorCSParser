@@ -316,8 +316,11 @@ public static class Rules
     /// use <see cref="ScanUntilEof"/> instead.
     /// </para>
     /// <code>
-    /// // CSV field body: scan until the next comma or LF (strict)
-    /// var field = ScanUntil(TokenSet.Runes(",\n"));
+    /// // CSV field body: scan until the next comma or line terminator
+    /// // (strict). LineTerminators rather than Runes(",\n") because a
+    /// // CRLF arrives from the lexer as one two-rune token, which a set
+    /// // holding only a bare LF wouldn't stop at.
+    /// var field = ScanUntil(TokenSet.Runes(",") | TokenSet.LineTerminators);
     ///
     /// // Line comment body: stops at any line break or EOF
     /// var lineCommentBody = ScanUntil(TokenSet.LineTerminators,
@@ -837,7 +840,7 @@ public static class Rules
     /// <param name="extraStartRunes">
     /// Extra characters to allow as the first character, on top of the
     /// base Unicode identifier-start set (<see cref="TokenSet.XidStart"/>).
-    /// UAX #31 calls this a "profile extension". Typical value for a
+    /// UAX #31 calls this a "profile". Typical value for a
     /// programming-language grammar is <c>TokenSet.Runes("_")</c>. Python
     /// and Rust use this shape. C# also permits leading underscores, though
     /// its full identifier specification differs. Defaults to

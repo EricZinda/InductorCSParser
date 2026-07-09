@@ -1,4 +1,5 @@
 - Running linting at checkin time was WAY more effective at fixing verbal ticks than telling claude up front.  Lots always bled through.
+- Claude will create infinite tests and documentation. You have to think hard about what you want covered if you plan to actually review it all (as I did)
 - I let claude write all the commit messages. These I didn't review.
 - Was great for fine tuning that would have taken forever and probably not gotten fixed. Things like better error messages that touched 250 tests.
 - Did claude bug hunting. specific focus on security, or unicode, or edge cases

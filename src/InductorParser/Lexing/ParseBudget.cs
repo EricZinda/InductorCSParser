@@ -42,8 +42,13 @@ internal sealed class ParseBudget
     private ParseBudget? _parent;
 
     // The Lexer this budget belongs to. ThrowBudgetExceeded reads its
-    // position when building the exception, so each budget reports its
-    // own lexer's position even when it delegates bookkeeping to a parent.
+    // position when building the exception. On a sub-budget this field is
+    // never read: every limit check forwards to the parent, so the throw
+    // always runs on the root budget and reports the root lexer's
+    // position. That's the coordinate the catch handler in
+    // Rule.ParseRecursive needs, since a sub-lexer's positions are
+    // 0-based on its WithinToken substring and translating one against
+    // the outer parse input would land the abort at the wrong spot.
     private readonly Lexer _lexer;
 
     // Periodic check fires every BudgetCheckInterval rule invocations.

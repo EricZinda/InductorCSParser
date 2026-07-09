@@ -102,7 +102,8 @@ public class XidIdentifierTests
     [Test]
     public void Thai_identifier_with_sara_am_matches()
     {
-        // Thai 'kam' is KO KAI (Lo) + SARA AM (Mc), which the lexer bundles
+        // Thai 'kam' is KO KAI (Lo) + SARA AM (also Lo, with grapheme
+        // cluster break property SpacingMark), which the lexer bundles
         // into a single two-rune grapheme. Identifier accepts KO KAI as
         // Start and SARA AM as Continue inside the same grapheme.
         var word = UnicodeExamples.ThaiKamGrapheme;

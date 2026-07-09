@@ -40,7 +40,7 @@ list = OneOrMore(todoLine);
 ```
 ## Arbitrary Unicode In Content
 Even though we didn't have to think about Unicode, the built-in rules we've used here support someone including any Unicode text in their todo list:
-- `InlineWhitespace()`: All forms of Unicode whitespace are accepted
+- `InlineWhitespace()`: All forms of Unicode whitespace within a line are accepted (line terminators are handled by `EndOfLine()`)
 - `EndOfLine()`: All Unicode single character and multi-char ("\r\n") end of lines are supported
 - `AnyToken()`: Accepts all Unicode input, so they're free to write any Unicode characters in their todo item
 
@@ -60,7 +60,7 @@ priority = Or(Literal("máx"),
            .As("priority");
 
 ```
-The normal Unicode gotcha here is that many accented characters (and all of the Spanish ones) can be written as a single character like `á` (`U+00E1`) or by starting with the base `a` (U+0061) and following with the accent (`U+0301`) like this: `á`. It looks the same but is really two Unicode code points, and that's the gotcha. Do you have to put both in every rule? Or just one? Which one?
+The normal Unicode gotcha here is that many accented characters (and all of the Spanish ones) can be written as a single character like `á` (`U+00E1`) or by starting with the base `a` (U+0061) and following with the accent (`U+0301`) like this: `á`. It looks the same but is really two Unicode code points, and that's the gotcha. Do you have to put both in every rule? Or just one? Which one?
 
 The Inductor Parser ensures you don't introduce bugs by:
 1) Normalizing the incoming text to a "composed" (i.e. single character) form by default
@@ -121,7 +121,7 @@ But Korean also has 2 *more* ways to write a character that is "equivalent", but
 
 When a rule fails (or when you walk the parse tree on success) the parser tells you where in the *original input* things happened. 
 
-These examples use the original todo grammar from the top of the page, the one with the English `top`/`med`/`low` keywords, which is why the priority is `[top]` again rather than a localized one. "Where" can mean two different things, because tokens are what the user sees as characters but the input is a .NET `string` of UTF-16 chars. The parser reports both. For plain ASCII, and for everyday letters in most scripts including Korean Hangul, the two match: one char is one token. They only pull apart once the input holds a character that takes more than one UTF-16 char, like `𠮷` (one character to a reader, two .NET `chars`) or a multi-char grapheme like Devanagari `क्ष`. The item text below drops in `𠮷` on purpose so you can watch the two counts diverge.
+These examples use the original todo grammar from the top of the page, the one with the English `top`/`med`/`low` keywords, which is why the priority is `[top]` again rather than a localized one. "Where" can mean two different things, because tokens are what the user sees as characters but the input is a .NET `string` of UTF-16 chars. The parser reports both. For plain ASCII, and for everyday letters in most scripts including Korean Hangul, the two match: one char is one token. They only pull apart once the input holds a character that takes more than one UTF-16 char, like `𠮷` (one character to a reader, two .NET `chars`) or a multi-char grapheme like Devanagari `हि`. The item text below drops in `𠮷` on purpose so you can watch the two counts diverge.
 
 ```csharp
 var result = list.Parse("[top] 𠮷田 broke\nBAD");
@@ -156,7 +156,7 @@ The parser takes a .Net `String`. If you created your string from a file or a se
 
 ```CSharp
 string text = File.ReadAllText(path, new UTF8Encoding());
-string text = Encoding.UTF32.GetString(bytes)
+string text = Encoding.UTF32.GetString(bytes);
 
 ```
 ... then .Net already made sure any illegal Unicode characters are replaced with a special Unicode character called a "replacement character" (`U+FFFD`). 
