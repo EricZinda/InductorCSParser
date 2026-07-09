@@ -135,10 +135,36 @@ public abstract class Rule
     /// <see cref="SyntaxTree.FlattenType"/> enum for what each value means.
     /// </summary>
     /// <remarks>
-    /// Virtual so <see cref="LateBoundRule"/> can report its bound target's
-    /// FlattenType. A LateBoundRule has no flatten policy of its own.
+    /// Virtual so a rule that stands in for another rule can report that
+    /// rule's value: <see cref="LateBoundRule"/> reports its bound
+    /// target's, and an unnamed AliasRule reports its inner's. Neither has
+    /// a flatten policy of its own in that state.
     /// </remarks>
-    public virtual FlattenType FlattenType { get; private set; }
+    public virtual FlattenType FlattenType
+    {
+        get => _declaredFlattenType;
+        private set => _declaredFlattenType = value;
+    }
+
+    private FlattenType _declaredFlattenType;
+
+    /// <summary>
+    /// The FlattenType stored on this rule itself, bypassing a getter
+    /// override that forwards another rule's value. Rules that don't
+    /// override <see cref="FlattenType"/> can ignore this: for them the
+    /// two are the same value.
+    /// </summary>
+    /// <remarks>
+    /// A rule that stands in for another rule (an unnamed AliasRule
+    /// forwarding its inner) overrides the FlattenType getter, and then
+    /// needs this to read what was set on the rule itself. .As(...) reads
+    /// it (via ApplyIdentificationFlattenPolicy) to decide whether it
+    /// still needs to flip the policy to Preserve: on an unnamed alias
+    /// over a Preserve inner the virtual getter already reports Preserve
+    /// while the alias's own policy is still Flatten, and skipping the
+    /// flip there would leave the alias transparent with a dead name.
+    /// </remarks>
+    protected FlattenType DeclaredFlattenType => _declaredFlattenType;
 
     /// <summary>
     /// The static error message set via .WithError("..."), or null if none.
@@ -527,12 +553,15 @@ public abstract class Rule
     // set a contradicting non-Preserve policy.
     private void ApplyIdentificationFlattenPolicy(string callerMethod, string identifier)
     {
-        if (FlattenType == FlattenType.Preserve) return;
+        // The virtual FlattenType getter won't work here because an unnamed alias
+        // forwards it from its inner, so Alias(preserveRule).As("name")
+        // would read Preserve and skip the flip the alias itself needs.
+        if (DeclaredFlattenType == FlattenType.Preserve) return;
         if (_flattenPolicyExplicitlySet)
         {
             throw new InvalidOperationException(
                 $".{callerMethod}(\"{identifier}\") can't be applied to this rule: " +
-                $"its flatten policy was explicitly set to FlattenType.{FlattenType}, " +
+                $"its flatten policy was explicitly set to FlattenType.{DeclaredFlattenType}, " +
                 $"so its wrapper Symbol won't appear in the parse tree and Tree.Find " +
                 $"can't reach it. Set the flatten policy to FlattenType.Preserve, or " +
                 $"remove the .{callerMethod}(...) call.");

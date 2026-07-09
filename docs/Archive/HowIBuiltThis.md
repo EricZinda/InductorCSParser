@@ -1,3 +1,5 @@
+- The check I had to do on code review was to explain the code that was written and my comments. If I didn't understand it (or agree with it), I pair programmed it with claude until I did. A few times this took a LOT of time, including a couple of optimizations that I had to cut because I really couldn't get my head around what it was doing.  Maybe thats a failing on my part or maybe claude was wrong.
+
 - Running linting at checkin time was WAY more effective at fixing verbal ticks than telling claude up front.  Lots always bled through.
     - Fixing all of the verbal ticks is really expensive later, you need the lint to be good up front so they don't get introduced
 - Claude will create infinite tests and documentation. You have to think hard about what you want covered if you plan to actually review it all (as I did)
