@@ -58,7 +58,7 @@ so they show up in the test's output.
 
 You can run just this file with the test script at the repo root:
 
-    ./test.sh recursive --filter "FullyQualifiedName~ScratchGrammar"
+    ./test.sh --filter "FullyQualifiedName~ScratchGrammar"
 
 For learning the API the `Debug Test` CodeLens is the faster path, but the
 filter is handy for a quick green/red check.
