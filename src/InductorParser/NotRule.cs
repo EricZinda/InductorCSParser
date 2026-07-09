@@ -41,7 +41,7 @@ internal sealed class NotRule : Rule
             // no failure, and BeginProbe discarded its internal ones anyway.
             // So Not records its own failure at startPosition, the lookahead
             // point where the user would change the input to make the Not
-            // succeed, carrying its .WithError if it has one. See
+            // succeed, including its .WithError if it has one. See
             // docs/ErrorArchitecture.md.
             lexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);
             return null;

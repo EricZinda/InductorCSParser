@@ -45,7 +45,7 @@ public class RecipesExamples
         // The guitar emoji belongs to a text node before the bold, and
         // the CJK belongs to a text node between bold and code.
         // ToString() reassembles each node losslessly, meaning each
-        // text/bold/code Symbol carries its content back as text.
+        // text/bold/code Symbol gives its content back as text.
         var texts = result.Tree!.FindAll(text).Select(t => t.ToString()).ToList();
         Assert.That(texts.Any(t => t.Contains(UnicodeExamples.GuitarGrapheme)), Is.True,
             "guitar emoji lives in some text node");
@@ -61,7 +61,7 @@ public class RecipesExamples
         Assert.That(result.Tree!.FindAll(code).Single().ToString(), Is.EqualTo("code"));
     }
 
-    // Stopping at a multi-character terminator:
+    // Stopping at a multi-char terminator:
     // ZeroOrMore(And(Not(stop), AnyToken())) followed by stop matches
     // a block comment without prematurely consuming the close marker.
     [Test]
@@ -77,7 +77,7 @@ public class RecipesExamples
         Assert.That(result.Success, Is.True, result.ErrorMessage);
 
         // The comment delimiters Token('/'), Token('*') default to
-        // FlattenType.Delete, so result.Tree.ToString() carries only
+        // FlattenType.Delete, so result.Tree.ToString() includes only
         // the body text. The parse succeeds and consumes the trailing
         // close marker.
         Assert.That(result.Tree!.ToString(), Is.EqualTo(" hello world "));
@@ -265,7 +265,7 @@ public class RecipesExamples
     {
         // Build the Or shape once, then give each position its own
         // identity with AliasedAs. .As is set-once, so naming the same
-        // instance three times would throw; AliasedAs wraps the shared
+        // instance three times would throw. AliasedAs wraps the shared
         // shape in a fresh alias on each call, so no factory is needed.
         var numericCore = Or(
             Token('0'),

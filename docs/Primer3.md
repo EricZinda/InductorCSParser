@@ -1,11 +1,11 @@
 # Unicode in the Inductor Parser
 When you build grammars in the Inductor Parser you don't need to worry about the encoding complexities of Unicode, you build rules around the characters you care about and the engine ensures that:
 
-1) The text stream is normalized into a form that is canonical. Invalid Unicode fails with a `MalformedInput` result.
+1) The text stream is normalized into a form that's canonical. Invalid Unicode fails with a `MalformedInput` result.
 2) Characters you type in your rules are translated to the same normalized form so they match properly. A character that can't be translated throws at compile time rather than being silently ignored.
 3) Tokens given to your rules are always characters the user (and you!) perceives as a single character (i.e. a Unicode grapheme cluster) and match exactly that character in the text.
 
-It is designed so you can safely write grammars over Unicode text without having to be a Unicode expert. 
+It's designed so you can safely write grammars over Unicode text without having to be a Unicode expert. 
 
 Let's imagine we're building a parser for a todo list program that has three priority levels: `top`, `med`, and `low`. Todo items are one per line:
 
@@ -41,8 +41,8 @@ list = OneOrMore(todoLine);
 ## Arbitrary Unicode In Content
 Even though we didn't have to think about Unicode, the built-in rules we've used here support someone including any Unicode text in their todo list:
 - `InlineWhitespace()`: All forms of Unicode whitespace within a line are accepted (line terminators are handled by `EndOfLine()`)
-- `EndOfLine()`: All Unicode single character and multi-character ("\r\n") end of lines are supported
-- `AnyToken()`: Accepts all Unicode input, so they are free to write any Unicode characters in their todo item
+- `EndOfLine()`: All Unicode single character and multi-char ("\r\n") end of lines are supported
+- `AnyToken()`: Accepts all Unicode input, so they're free to write any Unicode characters in their todo item
 
 ## Arbitrary Unicode in Rules
 If we wanted to localize our app into other languages, the built-in rules make sure the specific keyword characters our grammar looks for will match properly.
@@ -91,7 +91,7 @@ Examples:
 ｶ	→	カ
 i⁹	→	i9
 ```
-You can see it is a weaker type of equivalence that attempts to get at "meaning" more. The parser doesn't choose this by default because it would allow matching of characters that look very different. The standard recommends care when deciding to use it for this reason, but you can choose it as an option.
+You can see it's a weaker type of equivalence that attempts to get at "meaning" more. The parser doesn't choose this by default because it would allow matching of characters that look very different. The standard recommends care when deciding to use it for this reason, but you can choose it as an option.
 
 Canonical and Compatible can be combined to create 4 different ways to normalize the text: 
 
@@ -169,17 +169,17 @@ In that case, when you call .Parse() using the defaults, the parse fails with a 
 
 If you decide to go without Normalization at all by calling `Compile(null)` and then `Parse()`, the engine will treat ill-formed code points as separate tokens that you can match specifically by using any Rule that matches specific tokens (e.g. `Token`), or collect them with a range of "any" text in tokens like `AnyToken` that match literally anything. 
 
-All of these together ensure that your Grammar won't get "confused" by ill-formed input (and will fail if it exists) unless you are truly testing for it or allowing it.
+All of these together ensure that your Grammar won't get "confused" by ill-formed input (and will fail if it exists) unless you're truly testing for it or allowing it.
 
 ### Unexpected (Often Non-visible) Characters
 There are many characters that are perfectly valid in a Unicode document but might be unexpected to most developers. These surface as their own stand-alone token in the parser and thus will never match any rules looking for *particular* text in your grammar. For example: `Token(' ')` (a normal space) won't match a non-breaking space in a document. 
 
-Here is a survey of things that might be unexpected to those new to Unicode:
+Here's a survey of things that might be unexpected to those new to Unicode:
 
 - Bare attaching characters: characters meant to combine with the one before or after, but appearing alone. Examples: a stray combining accent (`U+0301`) without a letter under it, a Zero Width Joiner (`U+200D`) without emoji to glue together, an unpaired regional indicator (the things that compose country flags).
 - Invisible formatting characters: don't render as a glyph but still take a position in the text. Examples: zero-width space (`U+200B`), soft hyphen (`U+00AD`), byte-order mark (`U+FEFF`), bidi-direction controls (the characters behind "Trojan Source" attacks).
 - Unexpected whitespace: characters that render like a normal space but aren't the ASCII space `U+0020`. A literal `Token(' ')` misses them, though the Unicode-aware `AnyWhitespace()` still matches. Examples: non-breaking space (`U+00A0`, common in text pasted from a word processor or scraped from HTML), ideographic space (`U+3000`).
-- Control characters: legal in a .NET string but rarely expected in text, like the NULL byte (`U+0000`). They surface as ordinary tokens, so a strict grammar just fails at them like any other unexpected character. The parser won't choke on a NULL, an empty string, or a very long run of them.
+- Control characters: legal in a .NET string but rarely expected in text, like the NULL byte (`U+0000`). They surface as ordinary tokens, so a strict grammar just fails at them like any other unexpected character. The parser won't choke on a NULL, an empty string, or a very long sequence of them.
 - Noncharacters: code points Unicode reserved for internal use, not supposed to appear in real text. Examples: `U+FFFE`, `U+FFFF`, and the block `U+FDD0`..`U+FDEF`. One special case: parsing input containing `U+FFFE` under default normalization fails with a `MalformedInput` result, because .NET treats it as a sign of byte-order confusion upstream.
 - Private use: code points Unicode set aside for private agreements between apps, with no assigned meaning. Examples: Apple's logo at `U+F8FF`, corporate logo fonts, game icon fonts. Main block is `U+E000`..`U+F8FF`.
 - Replacement: a single character, `U+FFFD` (often shown as � or a question mark in a box), inserted by .NET decoders for bytes that weren't valid in the source encoding. Its presence means an upstream decoder swallowed something. The parser exposes `TokenSet.Replacement` to detect or reject these.

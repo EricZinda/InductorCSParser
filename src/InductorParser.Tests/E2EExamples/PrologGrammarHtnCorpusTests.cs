@@ -9,7 +9,7 @@ namespace InductorParser.Tests;
 // Corpus tests ported from InductorHtn's HTN-flavored test files
 // (https://github.com/EricZinda/InductorHtn). The C# basic parser tests
 // already cover everything in InductorProlog's PrologCompilerTests.cpp
-// (https://github.com/EricZinda/InductorProlog); this file pulls in the
+// (https://github.com/EricZinda/InductorProlog). This file pulls in the
 // parser inputs that the C++ HTN tests rely on but that the existing
 // corpus doesn't reach.
 //
@@ -48,7 +48,7 @@ public class PrologGrammarHtnCorpusTests
         // Two methods that loop on each other.
         "test(?A) :- if(true), do( foo(?A) ). \r\nfoo(?A) :- if(true), do( test(?A) ). \r\n",
 
-        // Three-way loop with try() wrappers.
+        // Three-way loop with try() around each task.
         "test(?A) :- if(true), do( try(foo(?A)) ). \r\nfoo(?A) :- if(true), do( try(bar(?A)) ). \r\nbar(?A) :- if(true), do( try(test(?A)) ). \r\n",
 
         // Mixed Prolog rules and HTN methods in the same document.

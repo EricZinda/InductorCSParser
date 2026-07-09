@@ -10,7 +10,7 @@ namespace InductorParser.Tests;
 // `Rules/*Tests.cs`. Each per-rule test parameterizes
 // AssertTargetAfterLiteralPrefix below over
 // NormalizationExamples.RowFormPairs and supplies its own target
-// leaf — every leaf-construction path gets the same translation
+// leaf, so every leaf-construction path gets the same translation
 // assertion under every (row, form) pair without repeating the
 // build-grammar / parse / assert / skip-on-lone-surrogate
 // boilerplate per rule.
@@ -32,7 +32,7 @@ public static class SourceRangeMatrixHelper
     // the target captures. `extraInput` and `afterTarget` cover
     // shapes like `ScanUntil(TokenSet.Runes("!"))` where the target
     // matches a body and a stopper has to be consumed by something
-    // else; pass the stopper string as `extraInput` and the rule
+    // else. Pass the stopper string as `extraInput` and the rule
     // that eats it as `afterTarget`.
     //
     // Lone-surrogate rows are skipped: `Literal(row.Source).Compile(form)`

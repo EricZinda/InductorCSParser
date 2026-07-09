@@ -134,7 +134,7 @@ public class ChordGrammarTests
         "Chorus",
         "Intro",
         "tabbed",           // lowercase 't' starts real text
-        "On",               // starts with O (not a valid root); should fail
+        "On",               // starts with O (not a valid root), should fail
         "Warm",
         "cool",
     };
@@ -216,7 +216,7 @@ public class ChordGrammarTests
     //     Transaction, and when Inner.Advance is Always and the peek
     //     isn't in Inner.FirstConsumedTokens, skips the Inner.TryParse
     //     entirely. Chord grammar has several Optional(...) and
-    //     ZeroOrMore(...) wrappers around keyword-starting patterns.
+    //     ZeroOrMore(...) rules around keyword-starting patterns.
     //     Whenever the next rune proves Inner can't match, the skip
     //     collapses a full interpreter frame (EnterRule /
     //     BeginTransaction / Read / set-contains / RecordFailure /
@@ -224,7 +224,7 @@ public class ChordGrammarTests
     //   - Remaining gap to 2x: transaction / allocation overhead on
     //     the inner path where rules DO match. The outer And(...)
     //     still opens a transaction for every Optional / ZeroOrMore
-    //     wrapper even when those happen to consume zero runes.
+    //     rule even when those happen to consume zero runes.
     //     Closing this needs work at the transaction / emitter tier:
     //     lazier transaction opening (skip when the child is a
     //     zero-width success), fewer per-iteration allocations, or a

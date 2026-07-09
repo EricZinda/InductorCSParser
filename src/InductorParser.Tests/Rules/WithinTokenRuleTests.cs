@@ -378,7 +378,7 @@ public class WithinTokenRuleTests
     [Test]
     public void Named_rule_is_findable_for_both_single_and_multi_rune_inputs_consistently()
     {
-        // Same rule, different inputs. The leaf carries the rule's own
+        // Same rule, different inputs. The leaf gets the rule's own
         // Id regardless of whether the matched grapheme is one rune
         // (ASCII "a") or several (Devanagari "हि"), so Find resolves
         // the same way in both cases.
@@ -401,7 +401,7 @@ public class WithinTokenRuleTests
     public void WithinToken_with_explicit_SymbolId_uses_explicit_id_for_single_rune_outer_token()
     {
         // .As(SymbolId) is the user's "set a stable id" signal, parallel
-        // to .As("name") for findability. The leaf has to carry the
+        // to .As("name") for findability. The leaf has to keep the
         // explicit id so Tree.Find / Tree.Is resolve through the user's
         // explicit reference. Same shape as the OneOf explicit-id test.
         var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 103);
@@ -419,7 +419,7 @@ public class WithinTokenRuleTests
     public void WithinToken_with_multi_rune_match_uses_rule_id_regardless_of_naming()
     {
         // For a multi-rune outer token (Token.RuneValue == -1), the leaf
-        // carries the rule's own Id regardless of naming. Locks the
+        // gets the rule's own Id regardless of naming. Locks the
         // multi-rune branch so Find resolves through rule.Id for unnamed
         // rules too.
         var unnamedRule = WithinToken(And(OneOf(TokenSet.XidStart), OneOf(TokenSet.XidContinue)));
@@ -442,13 +442,13 @@ public class WithinTokenRuleTests
     public void Or_WithinToken_does_not_skip_when_inner_negative_rule_walks_a_multi_rune_cluster()
     {
         // A TokenSet whose only member is the CRLF grapheme cluster. \r
-        // and \n are NOT members on their own — only the two-rune "\r\n"
+        // and \n aren't members on their own, only the two-rune "\r\n"
         // cluster is.
         var crlfCluster = TokenSet.Graphemes("\r\n");
 
         // WithinToken runs OneOrMore(NoneOf(...)) against the runes
         // inside one outer token. On the "\r\n" cluster the inner rule
-        // sees \r and \n one rune at a time; neither is a member of
+        // sees \r and \n one rune at a time, and neither is a member of
         // crlfCluster, so the inner NoneOf accepts both and WithinToken
         // consumes the whole cluster. Standalone, it matches:
         var standalone = WithinToken(OneOrMore(NoneOf(crlfCluster)));
@@ -460,7 +460,7 @@ public class WithinTokenRuleTests
         // the WithinToken's published first-token requirement whether
         // the branch can match. WithinToken forwards the inner NoneOf's
         // MustNotBeIn fail-set { "\r\n" } unchanged, so the shortcut sees
-        // the peek cluster IS in the fail-set and skips the branch — even
+        // the peek cluster sitting in the fail-set and skips the branch, even
         // though the branch would have matched.
         var rule = Or(WithinToken(OneOrMore(NoneOf(crlfCluster))), Literal("ZZ"));
         var result = rule.Parse("\r\n");
@@ -521,7 +521,7 @@ public class WithinTokenRuleTests
         Assert.That(result.ErrorMessage, Is.EqualTo("expected z at end at line 1, column 4."));
     }
 
-    // --- Forced .WithError carried across the WithinToken boundary -------
+    // --- Forced .WithError kept across the WithinToken boundary ----------
     //
     // A skin-tone-modified emoji is one grapheme cluster: a base emoji
     // rune followed by a modifier rune. A grammar that validates such a
@@ -535,7 +535,7 @@ public class WithinTokenRuleTests
     public void Forced_inner_WithError_surfaces_when_WithinToken_fails()
     {
         // A reaction is a thumbs-up emoji, optionally skin-toned. The
-        // inner check carries a forced .WithError, so a wrong emoji is
+        // inner check has a forced .WithError, so a wrong emoji is
         // reported with that message rather than a rune-level default.
         var reaction = WithinToken(
             And(Token(ThumbsUp), Optional(OneOf(SkinToneModifiers)))
@@ -551,7 +551,7 @@ public class WithinTokenRuleTests
     public void Forced_WithError_inside_WithinToken_keeps_its_forced_flag()
     {
         // A message is an emoji reaction (a '+' then the emoji) or a
-        // slash-command. Each form carries a forced .WithError summary.
+        // slash-command. Each form has a forced .WithError summary.
         // On a '+' followed by the wrong emoji, the reaction branch
         // consumes the '+' and fails at offset 1, the command branch at
         // offset 0. Forced failures rank by depth, so the deeper one (the
@@ -575,8 +575,8 @@ public class WithinTokenRuleTests
     [Test]
     public void WithinToken_own_forced_WithError_outranks_an_inner_named_hint()
     {
-        // The inner emoji check carries a plain (named) .WithError hint.
-        // The WithinToken carries a forced summary. A forced failure
+        // The inner emoji check has a plain (named) .WithError hint.
+        // The WithinToken has a forced summary. A forced failure
         // outranks a named one, so the summary is what surfaces.
         // WithinToken has to record its own .WithError for ranking to
         // pick it over the inner hint.

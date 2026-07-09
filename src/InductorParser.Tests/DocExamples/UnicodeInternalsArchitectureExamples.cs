@@ -7,7 +7,7 @@ namespace InductorParser.Tests.DocExamples;
 
 // Verifies the runnable claims in docs/UnicodeInternalsArchitecture.md's
 // "Normalization" section: the Compile(form) overloads, SourceText as the
-// verbatim accessor (tree.ToString() is not, it drops Delete content and
+// verbatim accessor (tree.ToString() isn't, it drops Delete content and
 // returns normalized characters under a normalizing form), what
 // Compile(null) buys, and error positions reporting in original-input
 // coordinates.
@@ -36,7 +36,7 @@ public class UnicodeInternalsArchitectureExamples
         Assert.That(unnormalized.Parse("hi").Success, Is.True);
     }
 
-    // SourceText is the verbatim accessor. tree.ToString() is not: it
+    // SourceText is the verbatim accessor. tree.ToString() isn't: it
     // rebuilds text only from the nodes left in the tree, so it drops
     // whatever the Delete rules matched (and Token / Literal default to
     // Delete), even under Compile(null).
@@ -77,7 +77,7 @@ public class UnicodeInternalsArchitectureExamples
     }
 
     // What Compile(null) actually buys: the tree's leaf text (and so
-    // ToString on a content-preserving grammar) carries the original
+    // ToString on a content-preserving grammar) keeps the original
     // characters instead of the normalized ones. AnyToken is Preserve, so
     // OneOrMore(AnyToken()) preserves everything it matches.
     [Test]
@@ -91,7 +91,7 @@ public class UnicodeInternalsArchitectureExamples
         Assert.That(unnormalized.Success, Is.True, unnormalized.ErrorMessage);
         Assert.That(compatibility.Success, Is.True, compatibility.ErrorMessage);
 
-        // null: ToString carries the original ligature; FormKC normalizes it.
+        // null: ToString keeps the original ligature. FormKC normalizes it.
         Assert.That(unnormalized.Tree!.ToString(), Is.EqualTo(LigatureFiInput));
         Assert.That(compatibility.Tree!.ToString(), Is.EqualTo("afib"));
 
@@ -114,7 +114,7 @@ public class UnicodeInternalsArchitectureExamples
 
         var result = grammar.Parse(decomposed);
         Assert.That(result.Success, Is.False);
-        // The '!' sits at index 5 in the ORIGINAL (decomposed) string:
+        // The '!' sits at index 5 in the original (decomposed) string:
         // c a f e U+0301 ! -> indices 0..5. A position into the recomposed
         // "café!" ("café" is 4 chars) would report 4 instead.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(5));

@@ -57,12 +57,6 @@ public readonly struct ParseResult
     /// MalformedInput, the message from
     /// <see cref="ParseOptions.MalformedInputTemplate"/>. On a budget abort, the
     /// matching "Parse aborted: ..." string. See: docs/ErrorArchitecture.md
-    /// <para>
-    /// The coalesce below matches how <see cref="Symbols"/> and
-    /// <see cref="ToString"/> treat a default-constructed ParseResult (a zeroed
-    /// array element, a FirstOrDefault on an empty list): every member returns
-    /// a usable value rather than null.
-    /// </para>
     /// </remarks>
     public string ErrorMessage => _errorMessage ?? string.Empty;
 
@@ -354,7 +348,7 @@ public readonly struct ParseResult
 
     /// <summary>
     /// Build a grammar-mismatch result. Outcome is GrammarMismatch, the error
-    /// fields carry the deepest-failure message and position.
+    /// fields have the deepest-failure message and position.
     /// </summary>
     public static ParseResult Failed(int errorCharIndex, string message, string input, Rule grammar) =>
         new ParseResult(ParseOutcome.GrammarMismatch, null, message, errorCharIndex, input, grammar);
@@ -362,7 +356,7 @@ public readonly struct ParseResult
     /// <summary>
     /// Build a malformed-input result. Outcome is MalformedInput: the input
     /// couldn't be normalized to the grammar's form because it isn't well-formed
-    /// Unicode. The error fields carry the localized message and the offending
+    /// Unicode. The error fields have the localized message and the offending
     /// character index. Rule.Parse builds this in place of letting .NET's
     /// string.Normalize throw. It's public so a custom parse driver that does its
     /// own normalization can report the same shape.
@@ -373,7 +367,7 @@ public readonly struct ParseResult
     /// <summary>
     /// Build a budget-abort result. Outcome is one of Timeout,
     /// RuleCountLimitExceeded, DepthLimitExceeded, or Canceled. The error fields
-    /// carry the matching "Parse aborted: ..." message and the deepest-failure
+    /// have the matching "Parse aborted: ..." message and the deepest-failure
     /// position so callers still get a "how far did we get" hint.
     /// </summary>
     public static ParseResult Aborted(ParseOutcome outcome, int errorCharIndex, string message, string input, Rule grammar)

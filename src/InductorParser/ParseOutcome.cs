@@ -18,7 +18,7 @@ public enum ParseOutcome
     /// </summary>
     /// <remarks>
     /// <see cref="ParseResult.ErrorMessage"/> and
-    /// <see cref="ParseResult.ErrorCharIndex"/> carry the deepest-failure
+    /// <see cref="ParseResult.ErrorCharIndex"/> have the deepest-failure
     /// details.
     /// </remarks>
     GrammarMismatch,
@@ -32,11 +32,11 @@ public enum ParseOutcome
     /// </summary>
     /// <remarks>
     /// <see cref="ParseResult.ErrorCharIndex"/> points at the offending
-    /// character and <see cref="ParseResult.ErrorMessage"/> carries the
+    /// character and <see cref="ParseResult.ErrorMessage"/> is the
     /// message rendered from <see cref="ParseOptions.MalformedInputTemplate"/>,
     /// so a non-English app can localize it the same way it localizes every
     /// other failure. Only reachable when the grammar was compiled with a
-    /// normalization form (the default); <c>Compile(null)</c> skips
+    /// normalization form (the default). <c>Compile(null)</c> skips
     /// normalization and surfaces ill-formed code units as ordinary tokens
     /// instead, which a grammar can decide how to handle
     /// <see cref="GrammarMismatch"/>.

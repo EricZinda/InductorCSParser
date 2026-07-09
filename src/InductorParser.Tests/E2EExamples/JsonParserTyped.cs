@@ -19,7 +19,7 @@ namespace InductorParser.Tests;
 // Parlot) all build a typed IJson per value during parsing.
 //
 // The walker is compact because JsonGrammar already did the work at
-// the grammar layer: every value-carrying rule is
+// the grammar layer: every value-producing rule is
 // FlattenType.Preserve, so the parse tree is a clean spine of named
 // nodes that map one-to-one onto the JsonValue subtypes.
 //
@@ -36,8 +36,8 @@ public static class JsonParserTyped
         if (!result.Success)
             throw new FormatException(result.ErrorMessage);
 
-        // result.Tree is the single top-level Preserve wrapper. Master's
-        // parse model flattens during parse (Flatten-typed wrappers are
+        // result.Tree is the single top-level Preserve Symbol. Master's
+        // parse model flattens during parse (Flatten-typed Symbols are
         // lifted into their parent's children list as the parse runs),
         // so no post-hoc .Flatten() call is needed.
         return ConvertToValue(result.Tree!);
@@ -110,7 +110,7 @@ public static class JsonParserTyped
     // have to pay for it."
     //
     // So the consumer does the decoding. The side-grammar below emits
-    // named pieces (LiteralChunk for runs of unescaped characters plus
+    // named pieces (LiteralChunk for sequences of unescaped characters plus
     // one rule per escape kind). DecodeEscapes re-parses the raw body
     // through that grammar and concatenates each piece's decoded form.
     private static readonly Rule LiteralChunk = OneOrMore(NoneOf("\\")).As("literalChunk");
@@ -186,7 +186,7 @@ public abstract record JsonValue
     // instead of ((JsonStringValue)root["name"]).Value, and
     // root["address"]["city"] instead of the equivalent chain of casts.
     // Modeled on Newtonsoft.Json.Linq.JToken, which uses the same tricks
-    // to hide its JValue/JObject/JArray wrapper types behind "looks like
+    // to hide its JValue/JObject/JArray types behind "looks like
     // you're reading a primitive" syntax.
 
     // Primitive casts. Each dispatches on the concrete subtype of the
@@ -228,7 +228,7 @@ public abstract record JsonValue
 
     // Virtual indexers on the base so chained access (root["x"]["y"][0])
     // compiles and dispatches at runtime. Subtypes that aren't
-    // indexable throw; the string / int split mirrors how JObject
+    // indexable throw. The string / int split mirrors how JObject
     // and JArray in Newtonsoft specialize the same pattern.
     public virtual JsonValue this[string key] =>
         throw new InvalidOperationException($"{GetType().Name} isn't a JSON object (can't index by string).");

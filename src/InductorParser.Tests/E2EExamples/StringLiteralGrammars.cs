@@ -10,7 +10,7 @@ namespace InductorParser.Tests;
 // ScanUntilRule.cs's header comment, built out as runnable grammars
 // so the tests can feed real inputs through them.
 //
-// Each grammar parses ONE complete string literal (opening delimiter,
+// Each grammar parses one complete string literal (opening delimiter,
 // body, closing delimiter) and nothing else. Callers that want to
 // embed these inside a larger grammar can wrap them the usual way.
 //

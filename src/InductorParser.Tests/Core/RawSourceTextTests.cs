@@ -35,7 +35,7 @@ public class RawSourceTextTests
         // a long match. Five Delete-flattened punctuation chars (`-`,
         // `-`, `:`, `:`) sit between preserved digit groups. Symbol.ToString
         // walks only the preserved children and collapses to
-        // "19790527T073200Z" — DateTimeOffset.Parse rejects that.
+        // "19790527T073200Z", which DateTimeOffset.Parse rejects.
         // SourceText returns the verbatim "1979-05-27T07:32:00Z" because
         // the engine recorded the consumed span on the composite at
         // parse time, independent of which children survived flattening.

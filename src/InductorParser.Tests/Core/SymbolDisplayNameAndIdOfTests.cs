@@ -9,8 +9,8 @@ namespace InductorParser.Tests;
 //
 //   * Symbol.DisplayName: a human-readable label for the rule, resolved
 //                        through the parse-time ParseContext.
-//   * Symbol.Is(string) — the string-keyed variant of Symbol.Is(Rule).
-//   * Rule.IdOf(string) — name-to-SymbolId reverse lookup so a projection
+//   * Symbol.Is(string): the string-keyed variant of Symbol.Is(Rule).
+//   * Rule.IdOf(string): name-to-SymbolId reverse lookup so a projection
 //                        can cache the id once and dispatch on int compare.
 //
 // These three together let a tree walker dispatch on named productions
@@ -21,7 +21,7 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class SymbolDisplayNameAndIdOfTests
 {
-    // A small grammar reused by most cases. "letter" matches one letter;
+    // A small grammar reused by most cases. "letter" matches one letter.
     // "word" wraps OneOrMore(letter) so the parse tree has both a named
     // composite and a named leaf to interrogate.
     private static Rule BuildLetterAndWordGrammar(out Rule letter, out Rule word)
@@ -80,7 +80,7 @@ public class SymbolDisplayNameAndIdOfTests
         // must surface as ArgumentNullException, matching ParseResult.Find /
         // FindAll and the rest of the public API, not a bare
         // NullReferenceException. (Symbol.Is(string) already takes the
-        // lenient null-as-no-match path above; the Rule overload is the one
+        // lenient null-as-no-match path above. The Rule overload is the one
         // that dereferences a reference the caller is responsible for.)
         Assert.That(() => symbol.Find((Rule)null!), Throws.ArgumentNullException);
         // FindAll forwards via an arrow body, so the dereference happens
@@ -105,7 +105,7 @@ public class SymbolDisplayNameAndIdOfTests
     [Test]
     public void Symbol_DisplayName_returns_rune_text_on_anonymous_rune_leaf()
     {
-        // Token('a') with no .As(...) — the leaf's Id is the rune code
+        // Token('a') with no .As(...): the leaf's Id is the rune code
         // point. Per NameOf's fallback, the label should render as the
         // rune's text ("a").
         var rule = OneOrMore(Token('a').Preserve());
@@ -149,7 +149,7 @@ public class SymbolDisplayNameAndIdOfTests
     [Test]
     public void Symbol_DisplayName_returns_null_on_hand_built_symbol_with_no_context()
     {
-        // Symbols constructed by hand (test fixtures, mock trees) carry
+        // Symbols constructed by hand (test fixtures, mock trees) have
         // no ParseContext, so there's no grammar to resolve the id
         // against. Symbol.DisplayName returns null rather than throwing.
         var orphan = new Symbol(new SymbolId(0x100000), FlattenType.Preserve, children: null);

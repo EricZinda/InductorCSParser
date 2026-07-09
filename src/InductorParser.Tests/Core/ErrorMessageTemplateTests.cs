@@ -88,7 +88,7 @@ public class ErrorMessageTemplateTests
     [Test]
     public void DepthLimitAbortTemplate_custom_substitutes_limit()
     {
-        // Recursive balanced-parens grammar from BudgetTests; recurses
+        // Recursive balanced-parens grammar from BudgetTests. It recurses
         // once per open paren until the depth budget trips.
         var nested = new LateBoundRule("nested");
         nested.Bind(Or(
@@ -191,7 +191,7 @@ public class ErrorMessageTemplateTests
     {
         // Bold-A (U+1D400) is one grapheme but two UTF-16 chars. Token(0x1D400)
         // matches it, then Token('a') fails on 'x' at char index 2. Counting
-        // chars, 'x' sits at column 3 (one-based); counting what a person sees,
+        // chars, 'x' sits at column 3 (one-based). Counting what a person sees,
         // it's the 2nd character, column 2. The default message reports the
         // grapheme column, so it says column 2.
         var rule = And(Token(0x1D400), Token('a'));
@@ -207,7 +207,7 @@ public class ErrorMessageTemplateTests
     [Test]
     public void Char_and_token_column_placeholders_diverge_on_a_wide_character()
     {
-        // Same bold-A setup. {charColumn} / {charColumnNumber} count UTF-16 chars;
+        // Same bold-A setup. {charColumn} / {charColumnNumber} count UTF-16 chars.
         // {tokenColumn} / {tokenColumnNumber} count graphemes. With the two-char
         // bold-A ahead of the failing 'x', the two units disagree.
         var rule = And(Token(0x1D400), Token('a'));
@@ -373,7 +373,7 @@ public class ErrorMessageTemplateTests
     {
         var rule = And(Token('a'), Token('b').WithError("expected a 'b' here"));
 
-        // Position-first custom shape, with {message} carrying the author's text.
+        // Position-first custom shape, where {message} is the author's text.
         var reshaped = rule.Parse("ax", new ParseOptions
         {
             WithErrorTemplate = "line {lineNumber} col {tokenColumnNumber}: {message}",
@@ -448,7 +448,7 @@ public class ErrorMessageTemplateTests
         // Cc / Zl / Zp, so the error message escapes it to U+2028 rather
         // than embedding the raw separator (which terminates a logical
         // line the same way LF does). Built via (char)0x2028 so the
-        // source file itself carries no literal line separator.
+        // source file itself has no literal line separator.
         var rule = And(Token('a'), Token('b'));
         string input = "a" + (char)0x2028 + "b";
         var result = rule.Parse(input);

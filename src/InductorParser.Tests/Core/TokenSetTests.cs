@@ -15,10 +15,10 @@ namespace InductorParser.Tests;
 public class TokenSetTests
 {
     // Asserts both value equality and hash-code equality for two TokenSets.
-    // The standard contract is that equal values must hash the same. Using
+    // The standard rule is that equal values must hash the same. Using
     // this helper everywhere two TokenSets are compared bakes the hash check
     // into every equality assertion, so any drift between Equals and
-    // GetHashCode shows up at whichever call site triggered it rather than
+    // GetHashCode shows up at whichever call triggered it rather than
     // being caught only by a single dedicated test.
     private static void AssertEqual(TokenSet actual, TokenSet expected)
     {
@@ -38,7 +38,7 @@ public class TokenSetTests
     [Test]
     public void Single_int_out_of_range_throws()
     {
-        // Valid Unicode scalar values are 0x0000..0x10FFFF; anything outside is not a code point.
+        // Valid Unicode scalar values are 0x0000..0x10FFFF, anything outside isn't a code point.
         Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Single(-1));
         Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Single(0x110000));
     }
@@ -56,7 +56,7 @@ public class TokenSetTests
     {
         // A range entirely inside the surrogate block has no valid scalar endpoints.
         Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Range(0xD800, 0xDFFF));
-        // Endpoints below 0 or above 0x10FFFF are not valid Unicode scalar values.
+        // Endpoints below 0 or above 0x10FFFF aren't valid Unicode scalar values.
         Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Range(-1, 100));
         Assert.Throws<ArgumentOutOfRangeException>(() => TokenSet.Range(100, 0x110000));
     }
@@ -190,8 +190,8 @@ public class TokenSetTests
     [Test]
     public void EnumerateRunes_skips_surrogate_gap_EnumerateSurrogates_yields_them()
     {
-        // EnumerateRunes is documented as scalar-values only; the surrogate
-        // gap (U+D800..U+DFFF) is excluded. EnumerateSurrogates is the
+        // EnumerateRunes is documented as scalar-values only, so the
+        // surrogate gap (U+D800..U+DFFF) is excluded. EnumerateSurrogates is the
         // companion accessor a rule iterates to walk the surrogate portion.
         // Together with MultiRuneGraphemes the three accessors cover every
         // member of the set with no overlap.
@@ -208,7 +208,7 @@ public class TokenSetTests
         }));
 
         // A set with no surrogate entries yields an empty surrogate
-        // enumeration. The built-ins are surrogate-free; confirm one of
+        // enumeration. The built-ins are surrogate-free, so confirm one of
         // the big ones (XidStart) to lock in the spec subtraction.
         Assert.That(TokenSet.XidStart.EnumerateSurrogates(), Is.Empty);
     }
@@ -244,7 +244,7 @@ public class TokenSetTests
     public void EnumerateMultiRuneGraphemes_yields_the_same_entries_as_the_Span()
     {
         // Iterator-shaped companion to the ReadOnlySpan property. Same
-        // entries, same order; the difference is just that the IEnumerable
+        // entries, same order. The difference is just that the IEnumerable
         // composes with LINQ and crosses yield boundaries, where the Span
         // can't. Both are public so callers pick the shape that fits.
         // Each Graphemes argument has to be exactly one cluster, so use
@@ -258,7 +258,7 @@ public class TokenSetTests
         Assert.That(set.EnumerateMultiRuneGraphemes(), Is.EqualTo(spanCopy));
 
         // Empty for a set with no multi-rune content. Single-rune-only
-        // sets are the common case; confirm that's the empty story.
+        // sets are the common case, so confirm that's the empty story.
         Assert.That(TokenSet.Letters.EnumerateMultiRuneGraphemes(), Is.Empty);
     }
 
@@ -343,7 +343,7 @@ public class TokenSetTests
     [Test]
     public void Graphemes_with_lone_surrogate_after_valid_cluster_reports_invalid_scalar()
     {
-        // The element is not a valid single Graphemes entry, but the first
+        // The element isn't a valid single Graphemes entry, but the first
         // problem users need to fix is the malformed UTF-16 at offset 2.
         // Reporting only "more than one cluster" points them at Runes(),
         // which rejects the same lone surrogate too.
@@ -480,7 +480,7 @@ public class TokenSetTests
     public void Default_TokenSet_is_empty()
     {
         // Sanity: a default-constructed TokenSet has no intervals and matches
-        // no codepoint. Contains relies on the null-ranges guard. IsEmpty
+        // no codepoint. Contains relies on the null-ranges check. IsEmpty
         // reports the same state directly.
         var set = default(TokenSet);
 
@@ -498,7 +498,7 @@ public class TokenSetTests
         AssertEqual(TokenSet.Runes("abc"), TokenSet.Range('a', 'c'));
         AssertEqual(TokenSet.Single('a') | TokenSet.Single('b'),
             TokenSet.Range('a', 'b'));
-        // Different membership compares unequal. (Unequal objects MAY share
+        // Different membership compares unequal. (Unequal objects may share
         // hash codes, so don't add a hash check on this side.)
         Assert.That(TokenSet.Single('a'), Is.Not.EqualTo(TokenSet.Single('b')));
         // default and an explicit empty set are equal (both have no intervals).
@@ -1098,7 +1098,7 @@ public class TokenSetTests
         Assert.That(TokenSet.InlineWhitespace.ContainsRune(0x2003), Is.True); // EM SPACE
         Assert.That(TokenSet.InlineWhitespace.ContainsRune(0x202F), Is.True); // NARROW NO-BREAK SPACE
         Assert.That(TokenSet.InlineWhitespace.ContainsRune(0x3000), Is.True); // IDEOGRAPHIC SPACE
-        // Line terminators are NOT in InlineWhitespace; they live in
+        // Line terminators aren't in InlineWhitespace. They live in
         // LineTerminators / EndOfLine().
         Assert.That(TokenSet.InlineWhitespace.ContainsRune('\r'), Is.False);
         Assert.That(TokenSet.InlineWhitespace.ContainsRune('\n'), Is.False);
@@ -1161,7 +1161,7 @@ public class TokenSetTests
     [Test]
     public void AnyWhitespace_returns_the_same_cached_instance_on_repeat_calls()
     {
-        // Property is lazy-initialized; same value object on every call.
+        // Property is lazy-initialized, same value object on every call.
         Assert.That(TokenSet.AnyWhitespace, Is.EqualTo(TokenSet.AnyWhitespace));
         // A computed expression that produces the same value also compares equal,
         // verifying structural equality (the underlying lazy may or may not
@@ -1230,7 +1230,7 @@ public class TokenSetTests
     public void Ascii_Letters_excludes_non_ascii_letters()
     {
         // The Ascii-qualified built-ins are the "only ASCII" versions. They
-        // must not drift into full Unicode by accident.
+        // shouldn't drift into full Unicode by accident.
         Assert.That(TokenSet.Ascii.Letters.ContainsRune('a'), Is.True);
         Assert.That(TokenSet.Ascii.Letters.ContainsRune('Z'), Is.True);
         Assert.That(TokenSet.Ascii.Letters.ContainsRune(0x00E9), Is.False); // é
@@ -1421,7 +1421,7 @@ public class TokenSetTests
     public void Difference_from_a_mixed_set_keeps_clusters_the_subtrahend_lacks()
     {
         // a - b keeps a mixed input's clusters automatically: subtracting
-        // rune-only vowels from a set carrying the US flag leaves the flag
+        // rune-only vowels from a set that includes the US flag leaves the flag
         // in place, no manual union-back-in needed.
         var lettersWithFlag = TokenSet.Letters | TokenSet.Graphemes(USFlagGrapheme);
         var withoutVowelsKeepingFlag = lettersWithFlag - TokenSet.Runes("aeiou");
@@ -1480,7 +1480,7 @@ public class TokenSetTests
     public void ToString_truncation_counts_multi_rune_entries_as_entries()
     {
         // 7 single-rune ranges + 2 multi-rune entries = 9 total. The
-        // first 8 render in full; the trailing entry shows "+1 more".
+        // first 8 render in full, and the trailing entry shows "+1 more".
         // Multi-rune entries land at the end of the entry list, so
         // the truncation falls on one of them.
         var set = TokenSet.Runes("acegikm")
@@ -1493,7 +1493,7 @@ public class TokenSetTests
     [Test]
     public void ToString_escapes_control_chars_in_multi_rune_grapheme_entries()
     {
-        // LineTerminators carries the CRLF cluster ("\r\n") as a
+        // LineTerminators includes the CRLF cluster ("\r\n") as a
         // multi-rune entry. ToString renders single-rune control
         // characters as U+XXXX (via RenderCodepoint), but multi-rune
         // entries were appended verbatim, so a raw CR and LF leaked into
@@ -1510,7 +1510,7 @@ public class TokenSetTests
         Assert.That(rendered, Does.Contain("U+000D"));
         Assert.That(rendered, Does.Contain("U+000A"));
 
-        // Ascii.AnyWhitespace carries the same CRLF cluster.
+        // Ascii.AnyWhitespace includes the same CRLF cluster.
         string asciiRendered = TokenSet.Ascii.AnyWhitespace.ToString();
         Assert.That(asciiRendered, Does.Not.Contain("\r"));
         Assert.That(asciiRendered, Does.Not.Contain("\n"));

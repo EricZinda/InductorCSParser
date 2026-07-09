@@ -108,7 +108,7 @@ public class EndOfLineRuleTests
     [Test]
     public void Rejects_ordinary_whitespace()
     {
-        // Space (U+0020) and tab (U+0009) are Whitespace but NOT line
+        // Space (U+0020) and tab (U+0009) are Whitespace but aren't line
         // terminators under UTS #18 §1.6 (RL1.6).
         var spaceResult = EndOfLine().Parse(Ch(0x0020));
         Assert.That(spaceResult.Success, Is.False);
@@ -196,7 +196,7 @@ public class EndOfLineRuleTests
     public void TokenSet_LineTerminators_contains_CRLF_cluster()
     {
         // CRLF is one user-perceived character (UAX #29 GB3 keeps CR and
-        // LF in the same grapheme cluster). LineTerminators carries it
+        // LF in the same grapheme cluster). LineTerminators includes it
         // as a multi-rune entry so OneOf, NoneOf, ScanUntil, and
         // ScanWhile all treat the cluster as one terminator. Without
         // this entry, ScanUntil(LineTerminators) (which is
@@ -306,7 +306,7 @@ public class EndOfLineRuleTests
     // -----------------------------------------------------------------
     // Naming and flatten policy on factory-built EndOfLine rules.
 
-    // EndOfLine().As(name) names the rule, and the named wrapper is
+    // EndOfLine().As(name) names the rule, and the named rule's Symbol is
     // findable in the parse tree.
     [Test]
     public void EndOfLine_factory_supports_As_for_tree_find()
@@ -331,7 +331,7 @@ public class EndOfLineRuleTests
 
     // A user-written factory that sets its flatten policy with
     // FlattenByDefault can still be named with .As(name) by its caller,
-    // and the named wrapper is findable.
+    // and the named rule's Symbol is findable.
     [Test]
     public void User_factory_using_FlattenByDefault_stays_nameable()
     {

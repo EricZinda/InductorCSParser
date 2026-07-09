@@ -10,7 +10,7 @@ namespace InductorParser.Tests.DocExamples;
 // Each test mirrors a code block from the doc and asserts the documented
 // behavior. Snippets that just describe API shape (the Rule class
 // surface, the SymbolId struct, the ParseResult struct) are spot-checked
-// elsewhere by reflection or by being used implicitly here; this file
+// elsewhere by reflection or by being used implicitly here. This file
 // covers the runnable user-code examples.
 [TestFixture]
 public class InductorParserReferenceExamples
@@ -193,7 +193,7 @@ public class InductorParserReferenceExamples
         var (document, settingName, settingValue) = BuildWalkthroughGrammar();
 
         // Missing semicolon: the doc claims an error result whose message
-        // already carries a 1-based position from the default template.
+        // already includes a 1-based position from the default template.
         var (setting, error) = CompileSetting(document, settingName, settingValue, "x = 5");
 
         Assert.That(setting, Is.Null);
@@ -289,8 +289,8 @@ public class InductorParserReferenceExamples
         Assert.That(pairs[2].Find(key)!.ToString(), Is.EqualTo("retries"));
         Assert.That(pairs[2].Find(values)!.ToString(), Is.EqualTo("3"));
 
-        // The value nodes all carry valueAtom's .As name. No rule is named
-        // "integerExpression", so no node can carry that label, and the
+        // The value nodes all have valueAtom's .As name. No rule is named
+        // "integerExpression", so no node can have that label, and the
         // integer value sits under a [value] node exactly like the other
         // atoms.
         var allLabels = result.Tree!.Walk().Select(s => result.DisplayName(s)).ToList();

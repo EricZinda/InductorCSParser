@@ -5,7 +5,7 @@ namespace InductorParser.SyntaxTree;
 
 // Name-aware debug helpers for raw Symbol trees. Most callers will
 // use ParseResult.PrintTree() rather than this extension, since
-// ParseResult already carries the grammar reference implicitly. This
+// ParseResult already has the grammar reference implicitly. This
 // extension exists for the occasional case where someone has a bare
 // Symbol and the Rule it came from but not the ParseResult (e.g.
 // inside a rule's own ChildRules traversal).
@@ -66,7 +66,7 @@ public static class SymbolExtensions
         {
             string? name = rule.NameOf(symbol.Id) ?? "<unknown>";
             // Same escape as the character-leaf name branch above: a
-            // .As("...") name carrying a control / line-separator char must
+            // .As("...") name with a control / line-separator char must
             // not break this node's single line.
             DisplayEscape.AppendEscaped(builder, name);
             builder.Append(": \"");

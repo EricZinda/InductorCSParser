@@ -71,7 +71,7 @@ internal sealed class ScanWhileRule : Rule
         // one transaction and one Symbol allocation regardless of the
         // run's length, versus one of each per token in the OneOf form.
         // Dispatch on whether the set has multi-rune entries: rune-only
-        // sets stay on the inline-rune fast path; mixed sets pull a
+        // sets stay on the inline-rune fast path. Mixed sets pull a
         // full token per iteration so a multi-rune token that's a
         // member of the set can be part of the run.
         int count = _set.HasMultiRuneGraphemes

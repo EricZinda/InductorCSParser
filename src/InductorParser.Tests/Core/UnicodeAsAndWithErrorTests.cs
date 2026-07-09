@@ -9,9 +9,9 @@ using static InductorParser.Tests.TraceTestHelpers;
 
 namespace InductorParser.Tests;
 
-// Do .As(string) and .WithError(string) carry non-ASCII text through
+// Do .As(string) and .WithError(string) preserve non-ASCII text through
 // every path they touch? The other Unicode fixtures cover literals,
-// TokenSets, and the lexer; this one covers the two fluent modifiers
+// TokenSets, and the lexer. This one covers the two fluent modifiers
 // whose argument is a free-form string the grammar author types.
 //
 // .As(name) is used in three places: the FNV-1a name hash that assigns
@@ -52,10 +52,10 @@ namespace InductorParser.Tests;
 // trace tests verbatim-lock a whole trace format around the string. The
 // end-to-end test gives one grammar several string roles at once.
 //
-// Catalog entries are carried as int[] UTF-16 code units and rebuilt
+// Catalog entries are passed as int[] UTF-16 code units and rebuilt
 // into a string inside the test. NUnit puts test-case arguments into the
 // generated test name, and a lone surrogate in a test name is invalid
-// XML for the result file; an int[] sidesteps that. The constant's field
+// XML for the result file. An int[] sidesteps that. The constant's field
 // name is a separate, ASCII-only argument used as the readable label.
 [TestFixture]
 public class UnicodeAsAndWithErrorTests
@@ -69,7 +69,7 @@ public class UnicodeAsAndWithErrorTests
     private static readonly string EmojiName = UnicodeExamples.GuitarGrapheme;                 // supplementary plane (surrogate pair)
 
     // The whole UnicodeExamples corpus turned into test cases: the field
-    // name is the readable label, the value is carried as int[] code
+    // name is the readable label, the value is passed as int[] code
     // units (see CodeUnits). UnicodeExamples.AllStringConstants does the
     // reflection, so a Unicode example added to that file for any reason
     // automatically becomes an .As name and a .WithError message case.
@@ -267,8 +267,8 @@ public class UnicodeAsAndWithErrorTests
     [TestCaseSource(nameof(UnicodeStringCatalog))]
     public void Named_single_rune_Token_with_a_unicode_name_returns_that_name(string label, int[] codeUnits)
     {
-        // Token('a') carries its rune code point (0x61) as its id by
-        // construction. .As(name) clears that auto-assigned id so Compile
+        // Token('a') gets its rune code point (0x61) assigned as its id
+        // in the constructor. .As(name) clears that auto-assigned id so Compile
         // hands the rule a fresh hash-derived custom-range id, and NameOf
         // returns the user name rather than the rune text. Any Unicode
         // name on a single-rune Token behaves the same.
@@ -283,8 +283,8 @@ public class UnicodeAsAndWithErrorTests
     [TestCaseSource(nameof(UnicodeStringCatalog))]
     public void Unicode_name_composes_with_an_explicit_SymbolId(string label, int[] codeUnits)
     {
-        // .As(string) writes Name; .As(SymbolId) writes Id. They compose:
-        // a rule can carry both a Unicode display name and an explicit id.
+        // .As(string) writes Name, .As(SymbolId) writes Id. They compose:
+        // a rule can have both a Unicode display name and an explicit id.
         // After compile the explicit id stands and NameOf still resolves
         // it to the Unicode name.
         string name = BuildString(codeUnits);
@@ -316,9 +316,9 @@ public class UnicodeAsAndWithErrorTests
     public void Unicode_rule_name_appears_in_the_trace_label()
     {
         // The trace label is "{Name}:{ruleClassName}". The name flows
-        // through the TraceInterpolatedStringHandler into the sink; a
+        // through the TraceInterpolatedStringHandler into the sink, and a
         // Unicode name has to land in the label byte-for-byte. Input is
-        // ASCII so only the final label line carries the Unicode text.
+        // ASCII so only the final label line contains the Unicode text.
         var sink = NewSink();
         var rule = OneOrMore(OneOf(TokenSet.Ascii.Letters)).As(GreekName);
         rule.Parse("foo", new ParseOptions { TraceSink = sink });
@@ -400,7 +400,7 @@ public class UnicodeAsAndWithErrorTests
     {
         // On a failure line the WithError message is appended in quotes
         // after the trace body. The message flows through the
-        // TraceInterpolatedStringHandler; its Unicode text has to reach
+        // TraceInterpolatedStringHandler, and its Unicode text has to reach
         // the sink unchanged.
         string message = "expected " + GreekName;
         var sink = NewSink();
@@ -417,17 +417,17 @@ public class UnicodeAsAndWithErrorTests
     [Test]
     public void Unicode_named_grammar_with_a_unicode_error_handles_unicode_input()
     {
-        // One grammar carrying a Unicode name and a Unicode error message,
+        // One grammar with a Unicode name and a Unicode error message,
         // exercised on both the success and failure paths with Unicode
         // input. The root is named with an emoji and its WithError message
-        // names a Devanagari rule; the success input is Greek letters.
+        // names a Devanagari rule, and the success input is Greek letters.
         string errorMessage = "expected " + DevanagariName;
         var word = OneOrMore(OneOf(TokenSet.Letters))
             .As(EmojiName)
             .WithError(errorMessage);
 
         // Greek "καλημέρα" is eight letters: the grammar matches all of
-        // them and the parsed root carries the emoji display name.
+        // them and the parsed root has the emoji display name.
         var success = word.Parse(GreekName);
         Assert.That(success.Success, Is.True);
         Assert.That(success.Tree!.DisplayName, Is.EqualTo(EmojiName));

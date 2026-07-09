@@ -95,7 +95,7 @@ public class UnicodeGotchasExamples
 
     // "Matching specific languages" / "Rust identifiers" recipe. Adds `_`
     // to Start like Python 3, but Rust normalizes identifiers with NFC, not
-    // NFKC (Rust Reference "Identifiers"; RFC 2457), so the form is FormC,
+    // NFKC (Rust Reference "Identifiers", RFC 2457), so the form is FormC,
     // not FormKC. Added as its own test because the Rust example sits in its
     // own code block in UnicodeGotchas.md.
     [Test]
@@ -116,8 +116,8 @@ public class UnicodeGotchasExamples
     }
 
     // Locks in that Identifier's form-aware set expansion runs at
-    // Compile time. The caller only writes the form on Compile; Identifier
-    // itself doesn't take a form. Compatibility-equivalent entries in
+    // Compile time. The caller only writes the form on Compile, and
+    // Identifier itself doesn't take a form. Compatibility-equivalent entries in
     // XidStart and XidContinue (ligatures, fullwidth Latin, math-bold)
     // are expanded into their grapheme pieces by IdentifierRule before
     // the form-validation pass runs, so this no longer throws.
@@ -187,10 +187,10 @@ public class UnicodeGotchasExamples
 
     // Primer4.md "Invisible characters": the joiner
     // characters ZWJ (U+200D) and ZWNJ (U+200C) don't come through as
-    // their own tokens after a base character. They carry UAX #29
+    // their own tokens after a base character. They have UAX #29
     // grapheme-break properties (ZWJ and Extend), so rule GB9 glues them
     // onto the preceding character. ZWSP (U+200B) and the soft hyphen
-    // (U+00AD) carry no such rule and lex as their own single-rune
+    // (U+00AD) have no such rule and lex as their own single-rune
     // tokens. This is the coverage the doc's tokenization claim needs:
     // the strip recipe test above only exercises the soft hyphen.
     [Test]
@@ -254,7 +254,7 @@ public class UnicodeGotchasExamples
         // The set is documented as "Latin-1 Supplement letters", so it must
         // reject the two non-letters that sit inside the U+00C0..U+00FF block:
         // U+00D7 MULTIPLICATION SIGN and U+00F7 DIVISION SIGN (both Sm). A
-        // bare Range(0x00C0, 0x00FF) wrongly admits them; intersecting with
+        // bare Range(0x00C0, 0x00FF) wrongly admits them. Intersecting with
         // TokenSet.Letters drops them.
         string timesInput = Canary("a×b", "ASCII a, U+00D7 MULTIPLICATION SIGN, ASCII b", 0x61, 0xD7, 0x62);
         string divideInput = Canary("a÷b", "ASCII a, U+00F7 DIVISION SIGN, ASCII b", 0x61, 0xF7, 0x62);

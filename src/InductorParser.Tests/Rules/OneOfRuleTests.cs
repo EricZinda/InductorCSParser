@@ -191,7 +191,7 @@ public class OneOfRuleTests
         // OneOf(set) where set has multi-rune entries: the lexer
         // hands back the whole grapheme as one token with RuneValue
         // == -1, and OneOf uses the multi-rune-array path to match it.
-        // NormalizeInput stays default; the test inputs aren't
+        // NormalizeInput stays default, the test inputs aren't
         // affected by NFC.
         var rule = OneOf(TokenSet.Graphemes(USFlagGrapheme, WomanShruggingGrapheme));
 
@@ -224,7 +224,7 @@ public class OneOfRuleTests
         // The documented unnamed-OneOf optimization: tree consumers can
         // switch on which rune matched without going through a synthetic
         // per-OneOf id. An unnamed rule has Name == null, so the leaf
-        // carries the rune's code point directly.
+        // uses the rune's code point directly.
         var rule = OneOf(TokenSet.Ascii.Letters);
         var result = rule.Parse("a");
 
@@ -236,7 +236,7 @@ public class OneOfRuleTests
     [Test]
     public void Named_OneOf_uses_rule_id_so_Find_resolves_the_named_rule()
     {
-        // A named OneOf carries the rule's Id on every leaf. Tree.Find,
+        // A named OneOf puts the rule's Id on every leaf. Tree.Find,
         // Tree.Is, and NameOf all resolve through the rule reference.
         var letter = OneOf(TokenSet.Ascii.Letters).As("letter");
         var result = letter.Parse("a");
@@ -249,7 +249,7 @@ public class OneOfRuleTests
     [Test]
     public void OneOf_with_multi_rune_match_uses_rule_id_regardless_of_naming()
     {
-        // For a multi-rune match (Token.RuneValue == -1), the leaf carries
+        // For a multi-rune match (Token.RuneValue == -1), the leaf gets
         // the rule's own Id either way: there's no rune code point that
         // fits in one int, so the rune-as-leaf-id branch can't fire.
         // Find and Is resolve through rule.Id for both unnamed and named
@@ -279,7 +279,7 @@ public class OneOfRuleTests
         // sees input runes in the same form (Parse normalizes the input
         // first), so a token of U+00C5 should match the projected set.
         //
-        // The bug: ComputeRuleStartAll runs BEFORE the normalization-form
+        // The bug: ComputeRuleStartAll runs before the normalization-form
         // pass that mutates _set, so OneOfRule.FirstConsumedTokens stays
         // fixed to the pre-projection set {0x212B}. OneOrMore's lookahead
         // shortcut peeks the input's first rune (0x00C5), checks it
@@ -297,7 +297,7 @@ public class OneOfRuleTests
     {
         // .As(SymbolId) is the user's "set a stable id on this rule"
         // signal, used for serialized parse trees and cross-version id
-        // stability. The leaf has to carry that explicit id so
+        // stability. The leaf has to keep that explicit id so
         // Tree.Find(rule), Tree.Is(rule), and any downstream lookup keyed
         // off SymbolId resolve back to the user's explicit value. The same
         // gate that respects .As("name") should respect .As(SymbolId)
@@ -318,7 +318,7 @@ public class OneOfRuleTests
     //
     // See GraphemeRuleTests for the full matrix rationale. OneOf's
     // matching data lives in OneOfRule._set rather than a string of
-    // expected text; the same shape staleness bugs apply.
+    // expected text, and the same shape staleness bugs apply.
     // -----------------------------------------------------------------
 
     [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
@@ -356,7 +356,7 @@ public class OneOfRuleTests
         {
             // TokenSet.Runes validates each rune at construction and
             // rejects lone surrogates before any rule wraps it. The
-            // form parameter is irrelevant; the throw is from
+            // form parameter is irrelevant, the throw is from
             // TokenSet.Runes itself.
             Assert.Throws<ArgumentException>(() => TokenSet.Graphemes(row.Source));
             return;
@@ -453,7 +453,7 @@ public class OneOfRuleTests
     [Test]
     public void OneOf_with_surrogate_covering_range_matches_a_lone_surrogate_input()
     {
-        // The lexer reads a lone surrogate as a 1-char token; OneOfRule
+        // The lexer reads a lone surrogate as a 1-char token, and OneOfRule
         // routes it through TokenSet.ContainsToken, whose surrogate-code-
         // unit branch matches a set that holds surrogates. Pair test:
         // TokenSetTests.Contains_string_agrees_with_int_for_lone_surrogate_on_set_holding_surrogates

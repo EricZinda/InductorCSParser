@@ -142,12 +142,12 @@ public class PrologGrammarTests
 
     private static readonly string[] HtnOnlyInvalid =
     {
-        // Under HTN, a lowercase-leading bare atom IS a valid functor
+        // Under HTN, a lowercase-leading bare atom is a valid functor
         // but "likes(x, pizza)" is a valid statement under both flavors
         // (x is an atom either way). So there isn't much that's valid
         // under standard but invalid under HTN. Both share most of
         // the grammar. The interesting divergence is that in HTN,
-        // a ? prefix MUST be followed by an atom. "?." has nothing
+        // a ? prefix must be followed by an atom. "?." has nothing
         // after the ? so it fails.
         "foo(?).",
     };

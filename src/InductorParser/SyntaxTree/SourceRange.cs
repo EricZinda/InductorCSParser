@@ -6,7 +6,7 @@ namespace InductorParser.SyntaxTree;
 /// equals the matched length in chars.
 /// </summary>
 /// <remarks>
-/// Both endpoints carry the source string they point into (via <see cref="SourcePosition.Input"/>),
+/// Both endpoints keep the source string they point into (via <see cref="SourcePosition.Input"/>),
 /// so <see cref="SubstringOfInput"/> can produce the matched text without the consumer having to know
 /// which input the range came from.
 /// </remarks>

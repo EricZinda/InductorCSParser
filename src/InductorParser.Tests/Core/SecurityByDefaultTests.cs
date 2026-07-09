@@ -16,7 +16,7 @@ namespace InductorParser.Tests;
 // attack class, shows what an unaware author's grammar looks like,
 // and proves the parser handles the attack correctly.
 //
-// The last section ("Issues NOT handled by default") is the 
+// The last section ("Issues not handled by default") is the
 // counterpart: a small number of attacks do require the grammar
 // author to opt into a defense. Those are called out explicitly
 // with a pointer to the recipe in UnicodeGotchasExamples.cs.
@@ -27,7 +27,7 @@ namespace InductorParser.Tests;
 //   3. Invisible content       (zero-width space, soft hyphen, BOM)
 //   4. Encoding injection      (ill-formed UTF-16 in .NET strings)
 //   5. Upstream tampering      (U+FFFD as a permissive-decoder signal)
-//   6. (Counterexample)        homoglyphs — NOT defended by default
+//   6. (Counterexample)        homoglyphs, not defended by default
 //
 // Each test is small on purpose. The comment block above each test
 // is the reason the test exists, and is meant to read on its own
@@ -47,7 +47,7 @@ public class SecurityByDefaultTests
         // (U+202E RIGHT-TO-LEFT OVERRIDE, or related LRO / PDF /
         // RLI / LRI / FSI) into source code or input. An editor
         // reorders the visual display so a reviewer sees one
-        // identifier; the compiler / parser sees the original
+        // identifier. The compiler / parser sees the original
         // logical sequence and acts on something different. This
         // is the published "Trojan Source" attack family.
         //
@@ -56,7 +56,7 @@ public class SecurityByDefaultTests
         // sequence in the input. U+202E isn't in XID_Continue per
         // UAX #31, so a naive Identifier() grammar rejects any
         // input that contains it. No attacker-aware logic in the
-        // grammar — the rule just doesn't match.
+        // grammar, the rule just doesn't match.
         var grammar = And(Identifier(), Eof()).Compile();
 
         string trojanInput = $"ab{UnicodeExamples.RightToLeftOverrideText}cd";  // logical order: a, b, RLO, c, d
@@ -164,9 +164,9 @@ public class SecurityByDefaultTests
     public void Invisible_character_inside_a_keyword_breaks_a_strict_literal()
     {
         // Threat: an attacker hides characters that don't render
-        // — zero-width space, soft hyphen, byte-order mark —
+        // (zero-width space, soft hyphen, byte-order mark)
         // inside text that looks like a regular word. Anyone
-        // reading the result sees "apple"; the actual character
+        // reading the result sees "apple". The actual character
         // sequence is "ap<invisible>ple". Same kinds of attacks
         // as the lookalike-character case above:
         //
@@ -202,8 +202,8 @@ public class SecurityByDefaultTests
         //     filter looking for a banned word), the default
         //     is bad. The attacker's version doesn't match the
         //     rule either, so the block doesn't fire and the
-        //     input gets through. UNLIKE the lookalike case,
-        //     no normalization form strips invisibles — they're
+        //     input gets through. Unlike the lookalike case,
+        //     no normalization form strips invisibles. They're
         //     real characters with their own purpose, just non-
         //     rendering ones. You have to strip them yourself
         //     before parsing. See the next test for the shape.
@@ -229,10 +229,10 @@ public class SecurityByDefaultTests
         // help. Literal("apple") doesn't match "ap<ZWS>ple",
         // so the block never fires and the bypass works.
         //
-        // UNLIKE the lookalike case, FormKC doesn't fix this.
-        // No normalization form strips invisibles. The fix is
-        // to strip them yourself before calling Parse. The
-        // recipe is in UnicodeGotchasExamples.cs at
+        // Unlike the lookalike case, FormKC doesn't fix this.
+        // No normalization form strips invisibles. Strip them
+        // yourself before calling Parse. The recipe is in
+        // UnicodeGotchasExamples.cs at
         // Invisible_format_character_strip_recipe.
 
         var blocker = And(Literal("apple"), Eof()).Compile();
@@ -284,7 +284,7 @@ public class SecurityByDefaultTests
         // rejects ill-formed UTF-16, and Parse reports that as a
         // MalformedInput result rather than running any grammar
         // rule against the input. No rule ever sees the ill-formed
-        // input, so it can never silently match; the caller learns
+        // input, so it can never silently match. The caller learns
         // the input was corrupt by checking Outcome.
         var grammar = And(Literal("hello"), Eof()).Compile();  // default FormC
 
@@ -313,7 +313,7 @@ public class SecurityByDefaultTests
         // grammar that would have rejected the original bytes.
         //
         // Default safety: the parser doesn't strip or rewrite
-        // U+FFFD; it surfaces each one as an ordinary token. A
+        // U+FFFD. It surfaces each one as an ordinary token. A
         // grammar that wants to refuse tampered input adds
         // NoneOf(TokenSet.Replacement) to its character classes
         // (or checks post-parse). This is opt-in: most grammars
@@ -324,7 +324,7 @@ public class SecurityByDefaultTests
         Assert.That(tampered, Does.Contain(UnicodeExamples.ReplacementCharacterText),
             "the .NET UTF-8 decoder substituted U+FFFD for the invalid byte");
 
-        // A grammar that refuses ANY input that's been through a
+        // A grammar that refuses any input that's been through a
         // permissive decoder. The author opts in by writing
         // NoneOf(TokenSet.Replacement) where they would otherwise
         // have written AnyToken or NoneOf(...).
@@ -339,7 +339,7 @@ public class SecurityByDefaultTests
     }
 
     // ============================================================
-    // 6. Issues NOT handled by default (things to watch for counterexamples)
+    // 6. Issues not handled by default (things to watch for counterexamples)
     // ============================================================
 
     [Test]
@@ -354,7 +354,7 @@ public class SecurityByDefaultTests
         // parser, and a string comparison against an authoritative
         // list of reserved names misses it.
         //
-        // The default Identifier() rule does NOT defend against
+        // The default Identifier() rule doesn't defend against
         // this attack. Both Latin a and Cyrillic а are
         // XID_Continue per UAX #31, and UAX #31 places no script
         // restriction on identifiers. So Identifier() accepts the
@@ -366,8 +366,8 @@ public class SecurityByDefaultTests
         // See UnicodeGotchasExamples.Homoglyph_LatinLetters_set_rejects_Cyrillic_a
         // for the recipe.
         //
-        // NOT every
-        // Unicode-related security issue is handled automatically.
+        // Not every Unicode-related security issue is handled
+        // automatically.
         // The homoglyph case is the main one where the grammar
         // author has to think about it.
         var grammar = And(Identifier(), Eof()).Compile();
@@ -381,7 +381,7 @@ public class SecurityByDefaultTests
     }
 
     // Verifies the Primer4 "Invisible characters" widened-set recipe:
-    // UnicodeCategory.Format is NOT the full set of invisible
+    // UnicodeCategory.Format isn't the full set of invisible
     // characters, so a Format-only filter has an exploitable hole. The
     // clearest example is U+3164 HANGUL FILLER, which renders as blank
     // width but is category Letter (Lo), so it passes both a

@@ -16,7 +16,7 @@ namespace InductorParser.Tests;
 //
 // Symbol.FlattenInto / Symbol.Flatten() are the post-hoc path. The
 // real-user scenario is parsing with ParseOptions.PreserveAllSymbols
-// = true: every rule wrapper survives into the tree carrying its real
+// = true: every rule's Symbol survives into the tree with its real
 // FlattenType, so a caller that wants the full debug shape and the
 // collapsed shape from one parse can call .Flatten() on the preserved
 // tree to get the latter back without re-parsing.
@@ -28,7 +28,7 @@ public class DiscardedAtParseTimeTests
     {
         // A specific guarantee the performance story depends on: every
         // Optional(InlineWhitespace()) match, with or without actual whitespace
-        // in the input, costs zero wrapper and zero leaf Symbol allocations
+        // in the input, costs zero Symbol allocations, composite or leaf,
         // that survive into the tree.
         var rule = Optional(InlineWhitespace());
         rule.Compile();
@@ -94,7 +94,7 @@ public class DiscardedAtParseTimeTests
     public void PreserveAllSymbols_disables_parse_time_Delete_filtering()
     {
         // Same grammar as the leaves-filter test, but with the debug
-        // flag on: every rule wrapper around and between the letters
+        // flag on: every rule's Symbol around and between the letters
         // should survive into the tree so PrintTree and Find queries
         // see a shape that matches the grammar as written. Comparing
         // the full PrintTree rendering in one shot is easier to read
@@ -122,9 +122,9 @@ public class DiscardedAtParseTimeTests
         // The critical FlattenInto scenario: parse twice with the
         // same grammar and input, once with PreserveAllSymbols off (the
         // parse-time filter drops Delete and lifts Flatten on the way)
-        // and once with it on (every wrapper survives, each carrying its
+        // and once with it on (every Symbol survives, each with its
         // real FlattenType). Calling .Flatten() on the preserved tree
-        // walks FlattenInto, which drops the Delete-typed wrappers and
+        // walks FlattenInto, which drops the Delete-typed Symbols and
         // lifts the Flatten-typed ones, and should recover the same
         // shape the parse-time filter produced. Useful when a caller
         // wants the debug-friendly tree for diagnostics and the
@@ -132,7 +132,7 @@ public class DiscardedAtParseTimeTests
         //
         // Grammar choice: OneOf(Letters) defaults to Preserve so its
         // leaves survive both ways, Optional(InlineWhitespace()) gives a
-        // Flatten wrapper (Optional) around a Delete wrapper (InlineWhitespace),
+        // Flatten Symbol (Optional) around a Delete Symbol (InlineWhitespace),
         // and And is Flatten. All three flatten policies are exercised
         // in one tree.
         var letter = OneOf(TokenSet.Ascii.Letters);
@@ -144,7 +144,7 @@ public class DiscardedAtParseTimeTests
         Assert.That(normal.Success, Is.True, normal.ErrorMessage);
         Assert.That(preserved.Success, Is.True, preserved.ErrorMessage);
 
-        // preserved.Tree is the And wrapper (Flatten-typed). FlattenInto
+        // preserved.Tree is the And's Symbol (Flatten-typed). FlattenInto
         // lifts its children, so the result is the lifted child list.
         var flattened = preserved.Tree!.Flatten();
 
@@ -199,12 +199,12 @@ public class DiscardedAtParseTimeTests
     [Test]
     public void FlattenInto_Delete_branch_drops_a_hand_built_Delete_node()
     {
-        // Low-level guard for the Delete branch of Symbol.FlattenInto.
+        // Low-level test of the Delete branch of Symbol.FlattenInto.
         // The PreserveAllSymbols round-trip test above is the real-user
-        // scenario; this one drives FlattenInto directly with a Symbol
+        // scenario. This one drives FlattenInto directly with a Symbol
         // tree built by hand so the assertion is on FlattenInto's own
-        // behavior and doesn't rely on whatever wrapper FlattenTypes the
-        // parser happens to produce. Useful as a regression guard if
+        // behavior and doesn't rely on whatever FlattenTypes the
+        // parser happens to produce. Useful as a regression test if
         // Symbol.FlattenInto is edited in isolation.
         var leaf = new Symbol(new SymbolId(1), FlattenType.Delete, "x".AsMemory());
         var kept = new Symbol(new SymbolId(2), FlattenType.Preserve, "y".AsMemory());

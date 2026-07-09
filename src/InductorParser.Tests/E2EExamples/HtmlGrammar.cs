@@ -209,7 +209,7 @@ public static class HtmlGrammar
 
     // Normal character element: StartTag (Element | (not-"<")+)* EndTag.
     // The inner Or tries element recursion first. If we're not sitting
-    // on a "<", the OneOrMore(not-"<") sweeps up a run of text instead.
+    // on a "<", the OneOrMore(not-"<") sweeps up the text up to the next "<" instead.
     public static readonly Rule NormalCharacterElement = And(
         StartTag,
         ZeroOrMore(Or(
@@ -239,7 +239,7 @@ public static class HtmlGrammar
     // is satisfied for tests that call .Parse on sub-rules (Comment,
     // Attribute) AND on Document in the same fixture run. Without this,
     // whichever .Parse fires first auto-compiles its own subtree, sealing
-    // the shared sub-rules; subsequent Compile of Document then walks
+    // the shared sub-rules. A subsequent Compile of Document then walks
     // into a sealed sub-rule and throws. Eager compile here seals every
     // rule reachable from Document once, and each sub-rule's .Parse
     // afterward sees `_sealed=true` and short-circuits the recompile.
