@@ -104,7 +104,7 @@ public class SymbolTraversalTests
     [Test]
     public void FindAll_matches_reference_order_with_repeats_at_varied_depth()
     {
-        // Id 7 appears three times at different depths and positions; the
+        // Id 7 appears three times at different depths and positions. The
         // iterative walk must surface them in the same pre-order the
         // recursive form did.
         var root = Composite(1,

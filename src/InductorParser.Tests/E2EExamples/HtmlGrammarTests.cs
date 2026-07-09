@@ -74,9 +74,9 @@ public class HtmlGrammarTests
         // Mismatched close tag. The grammar itself only checks structural
         // form, not tag-name matching, but EndTag expects "</TagName>",
         // and if the TagName doesn't appear at all or is just wrong-cased
-        // nothing closes the outer element. However, this grammar IS
+        // nothing closes the outer element. However, this grammar is
         // tolerant of tag-name mismatches (see XmlGrammarTests for the
-        // tag-match version). So this entry is here to guard true
+        // tag-match version). So this entry is here to test true
         // structural errors, not name mismatches.
         "<p>unclosed",
         "<p></p",
@@ -86,7 +86,7 @@ public class HtmlGrammarTests
 
         // Void element with extra junk.
         "<br / >",     // space between / and > isn't allowed in void
-        "<br>",         // normal start needs a matching end; no </br>
+        "<br>",         // normal start needs a matching end, no </br>
 
         // Attribute quote mismatch.
         "<p a=\"x'></p>",
@@ -158,7 +158,7 @@ public class HtmlGrammarTests
     public void Style_block_ignores_html_looking_content()
     {
         // The body of <style> is non-replaceable: a "<span>" inside should
-        // NOT be treated as a real element. If the grammar tried to parse
+        // not be treated as a real element. If the grammar tried to parse
         // it as one, the body rule would never reach </style>.
         var doc = "<style>/* note: <span> is not a tag here */ a { }</style>";
         Assert.That(HtmlGrammar.Document.Parse(doc).Success, Is.True);

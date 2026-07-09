@@ -31,7 +31,7 @@ public class AllowTrailingInputTests
         // on, the OneOrMore claims "aa" and the parse returns success
         // instead of failing at offset 2 on the unconsumed "bb". Token
         // defaults to FlattenType.Delete, so .Preserve() the inner token
-        // to keep its leaf in the tree; that's what makes the consumed
+        // to keep its leaf in the tree. That's what makes the consumed
         // text observable below.
         var rule = OneOrMore(Token('a').Preserve());
         var result = rule.Parse("aabb", new ParseOptions { AllowTrailingInput = true });

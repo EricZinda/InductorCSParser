@@ -5,7 +5,7 @@ using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
-// Matches an exact multi-character string in a single transaction. This is
+// Matches an exact multi-char string in a single transaction. This is
 // the N-character generalization of GraphemeRule. GraphemeRule stores exactly
 // one token (one character as the user sees it) at construction time and
 // matches it as one read. LiteralRule stores any non-empty string and uses

@@ -21,8 +21,8 @@ namespace InductorParser.Tests;
 // escape sequences (\" \\ \/ \b \f \n \r \t and \uXXXX). It skips only
 // the fiddlier spec corners (leading-zero checks on numbers, surrogate-
 // pair validation on \u escapes). The benchmark
-// InductorJsonParser in src/Benchmarks/Json is the perf-tuned variant;
-// this one is optimized for readability of the consumer story.
+// InductorJsonParser in src/Benchmarks/Json is the perf-tuned variant.
+// This one is optimized for readability of the consumer story.
 public static class JsonGrammar
 {
     public static readonly Rule Json;

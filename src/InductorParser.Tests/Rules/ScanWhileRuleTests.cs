@@ -76,7 +76,7 @@ public class ScanWhileRuleTests
         // zero-width and ToString() is the empty string. This is the
         // shape grammars want for "optional sequence of body chars" (TOML
         // literal-string body, optional text fields): one leaf always
-        // emitted, no Optional wrapper that changes the parent's
+        // emitted, no Optional layer that changes the parent's
         // child count.
         var rule = ScanWhile(TokenSet.Ascii.Letters, minimumCount: 0);
         var result = rule.Parse("", new ParseOptions { AllowTrailingInput = true });
@@ -266,7 +266,7 @@ public class ScanWhileRuleTests
     // Compile-form normalization matrix
     //
     // See GraphemeRuleTests for the full matrix rationale. ScanWhile's
-    // matching data is the same TokenSet shape OneOf / NoneOf carry,
+    // matching data is the same TokenSet shape OneOf / NoneOf hold,
     // and the same OneOfRule.NormalizeAndValidate helper handles the
     // Compile-time projection. Default minimumCount=1 means the rule
     // isn't zero-matchable, so a stale set surfaces as outright

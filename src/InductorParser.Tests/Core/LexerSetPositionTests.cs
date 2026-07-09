@@ -75,8 +75,8 @@ public class LexerSetPositionTests
     [Test]
     public void SetPosition_inside_surrogate_pair_throws_in_grapheme_mode()
     {
-        // The emoji is one grapheme cluster of two chars; offset 1 is not a
-        // cluster start.
+        // The emoji is one grapheme cluster of two chars, so offset 1
+        // isn't a cluster start.
         var lexer = new Lexer(GrinningFaceEmojiGrapheme);
         Assert.Throws<ArgumentException>(() => lexer.SetPosition(1));
         Assert.DoesNotThrow(() => lexer.SetPosition(0));

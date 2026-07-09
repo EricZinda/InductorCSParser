@@ -51,7 +51,7 @@ public class SymbolExtensionsTests
     [Test]
     public void PrintTree_indents_nested_subtrees()
     {
-        // Two levels of named And wrappers so the printed tree has real
+        // Two levels of named And composites so the printed tree has real
         // depth beyond just a root plus leaves. Token leaves default to
         // FlattenType.Delete. PreserveAllSymbols keeps them so the
         // printed tree shows both the composites and their Token children.
@@ -118,7 +118,7 @@ public class SymbolExtensionsTests
     [Test]
     public void PrintTree_escapes_control_character_rune_in_short_form()
     {
-        // A leaf rule on a single control character (LF, U+000A) carries
+        // A leaf rule on a single control character (LF, U+000A) has
         // id 0x0A from GraphemeRule's auto-rune-id pass. The compact
         // `'c'` form would splice a literal newline into the printed
         // tree, breaking the one-leaf-per-line layout that lines up with
@@ -188,7 +188,7 @@ public class SymbolExtensionsTests
     {
         // A composite Symbol's ToString concatenates its leaves' matched
         // text. When that text spans a control or line-separator char,
-        // the long-form `name: "text"` line carries the raw char into
+        // the long-form `name: "text"` line puts the raw char into
         // the output and the layout collapses, even though the child
         // leaves themselves render correctly (the short-form fix from
         // 2026-05-27 escapes the LF child leaf).
@@ -207,8 +207,8 @@ public class SymbolExtensionsTests
     [Test]
     public void PrintTree_escapes_control_character_in_user_supplied_name_on_character_leaf()
     {
-        // The other PrintTree escape tests cover the matched TEXT. The
-        // rule NAME from .As("...") is rendered too, and .As(string)
+        // The other PrintTree escape tests cover the matched text. The
+        // rule name from .As("...") is rendered too, and .As(string)
         // accepts any string, including one with a control / line-
         // separator char. A named single-rune Token routes through the
         // long-form `name: "text"` branch, so an LF inside the name
@@ -226,7 +226,7 @@ public class SymbolExtensionsTests
     {
         // The composite path resolves the name through NameOf (not
         // UserNameOf), a separate Append site that has to run the same
-        // escape. A `.As("x\ny")` on a composite would otherwise carry
+        // escape. A `.As("x\ny")` on a composite would otherwise put
         // the raw LF into the `name: "text"` line and break the layout.
         var body = OneOrMore(AnyToken()).As("x\ny");
         var result = body.Parse("ab");

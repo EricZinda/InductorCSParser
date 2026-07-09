@@ -12,7 +12,7 @@ namespace InductorParser.Lexing;
 /// </summary>
 /// <remarks>
 /// This is the rune layer. Its grapheme-cluster counterpart is
-/// <c>GraphemeHelpers</c>; the two stay separate because runes and UAX #29
+/// <c>GraphemeHelpers</c>. The two stay separate because runes and UAX #29
 /// clusters are different units, and the lexer's rune-mode / grapheme-mode
 /// split rests on keeping them apart.
 /// </remarks>
@@ -34,9 +34,9 @@ public static class RuneHelpers
 
     /// <summary>
     /// Span overload of
-    /// <see cref="IsSurrogatePairAt(string, int)"/>. Same semantics; exists
-    /// so span callers don't pay an <c>.AsSpan()</c> round-trip on what
-    /// they already have.
+    /// <see cref="IsSurrogatePairAt(string, int)"/> with the same semantics.
+    /// It exists so span callers don't pay an <c>.AsSpan()</c> round-trip on
+    /// what they already have.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsSurrogatePairAt(ReadOnlySpan<char> input, int pos)
@@ -48,7 +48,7 @@ public static class RuneHelpers
     /// Enumerate the Unicode scalar values (rune code points) of
     /// <paramref name="text"/>, decoding each well-formed surrogate pair
     /// into one value. A lone surrogate yields its own code-unit value.
-    /// Allocates an iterator, so it's for cold paths; hot paths that
+    /// Allocates an iterator, so it's for cold paths. Hot paths that
     /// already walk chars should decode inline with
     /// <see cref="IsSurrogatePairAt(string, int)"/> rather than enumerate.
     /// </summary>
@@ -75,8 +75,8 @@ public static class RuneHelpers
     /// lexer's one-rune-per-token Read: a well-formed high+low surrogate
     /// pair is one rune, and any stray surrogate is one rune. Allocates
     /// nothing, so it's fine on a warm path. To count a prefix, pass a
-    /// span over just that range (e.g. <c>input.AsSpan(0, position)</c>);
-    /// a high surrogate at the end of the span has no paired low inside
+    /// span over just that range (e.g. <c>input.AsSpan(0, position)</c>).
+    /// A high surrogate at the end of the span has no paired low inside
     /// it, so it counts as one rune, matching how the lexer reads a
     /// cluster's runes.
     /// </summary>

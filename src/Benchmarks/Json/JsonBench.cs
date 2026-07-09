@@ -197,7 +197,7 @@ public class JsonBench
     // * 0% (upstream's default) never exercises the escape path, so we'd
     //   be measuring escape-code cache behavior instead of steady-state
     //   throughput.
-    // * Representative JSON carrying natural text (log messages, product
+    // * Representative JSON with natural text (log messages, product
     //   descriptions, user names with the occasional quoted phrase)
     //   typically contains 1-5% escape-worthy characters. Clean data
     //   payloads (numerical / ID-heavy API responses) sit at roughly 0%.

@@ -18,7 +18,7 @@ public class AtMostRuleTests
     public void AtMost_factory_wires_atLeast_0_and_atMost_N_with_AtMost_trace_name()
     {
         // Trace label "AtMost[3]" proves the named factory was used and
-        // the upper bound was carried into the trace label. count= 3
+        // the upper bound shows up in the trace label. count= 3
         // with no fourth probe inside the AtMost segment proves
         // atMost = 3 (the loop stopped because count == atMost, not
         // because the inner rule failed). The follow-up Token('a')

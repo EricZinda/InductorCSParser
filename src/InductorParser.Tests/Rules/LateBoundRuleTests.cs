@@ -136,10 +136,10 @@ public class LateBoundRuleTests
     {
         // Regression: LateBoundRule's own FlattenType is Flatten, but when
         // it forwards to a target that's FlattenType.Preserve the target's
-        // wrapper Symbol has to reach the enclosing composite's children
+        // Symbol has to reach the enclosing composite's children
         // list. If the proxy drops it, a grammar like
         //   And(X, lateBound, Y)
-        // silently loses the Preserve wrapper between X and Y. Every
+        // silently loses the Preserve Symbol between X and Y. Every
         // in-tree grammar happens to bind LateBoundRule to a Flatten
         // target (Or/And defaults), so this case was uncovered until
         // ArithmeticGrammar hit it.
@@ -160,7 +160,7 @@ public class LateBoundRuleTests
     {
         // Regression: an arithmetic-style grammar where `factor` references
         // `expression` via a LateBoundRule and `expression` is Preserve.
-        // Without the LateBoundRule fix, the nested expression wrapper
+        // Without the LateBoundRule fix, the nested expression Symbol
         // disappears from `factor`'s children, so a parenthesized
         // sub-expression leaves no Symbol behind and an evaluator that
         // dispatches on expression.Id can't see the inner expression at
@@ -176,8 +176,8 @@ public class LateBoundRuleTests
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree, Is.Not.Null);
 
-        // Expect two expression-id Symbols: the outer root wrapper and
-        // the nested wrapper for "1+2" inside the parens.
+        // Expect two expression-id Symbols: the outer root Symbol and
+        // the nested Symbol for "1+2" inside the parens.
         int expressionSymbols = 0;
         foreach (var symbol in result.Tree!.Walk())
             if (symbol.Id == expressionDef.Id) expressionSymbols++;
@@ -229,7 +229,7 @@ public class LateBoundRuleTests
         // Same regression as LateBoundRule_keeps_Preserve_target_symbol_in_
         // parent_children, but the Preserve target sits behind TWO
         // LateBoundRule layers. Each layer's transparent forwarding has to
-        // re-add the target's wrapper to the parent list, or the wrapper
+        // re-add the target's Symbol to the parent list, or the Symbol
         // is lost somewhere in the chain.
         var named = And(Token('1'), Token('2')).As("named").Flatten(FlattenType.Preserve);
         var middle = new LateBoundRule("middle");
@@ -323,7 +323,7 @@ public class LateBoundRuleTests
     [Test]
     public void LateBoundRule_reports_its_bound_targets_FlattenType()
     {
-        // A LateBoundRule has no FlattenType of its own; after Compile it
+        // A LateBoundRule has no FlattenType of its own. After Compile it
         // reports the bound target's. This is what lets a LateBoundRule
         // compose into And / Or / Alias exactly as the target rule would.
         var preserveTarget = And(Token('1'), Token('2')).As("named");   // .As flips to Preserve

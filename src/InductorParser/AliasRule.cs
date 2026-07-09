@@ -60,7 +60,7 @@ internal sealed class AliasRule : Rule
     // leaf in an extra composite level and leave the inner alias's identity
     // findable in the tree, both of which break the tenet above. Returning
     // the live condition below instead keeps `leaf.AliasedAs("a").AliasedAs("b")`
-    // collapsing to one leaf carrying b's identity, exactly as a single alias
+    // collapsing to one leaf with b's identity, exactly as a single alias
     // of the leaf would.
     public override bool EmitsLeaf =>
         _inner.EmitsLeaf
@@ -120,7 +120,7 @@ internal sealed class AliasRule : Rule
             // inner to act Preserve.
             if (EmitsLeaf)
             {
-                // This alias emits one leaf carrying its own identity. Its
+                // This alias emits one leaf with its own identity. Its
                 // text is rebuilt from matchedSpan below (matchStart..
                 // lexer.Position covers the same characters the inner
                 // matched), so the inner's leaf in outputSymbols is
@@ -152,7 +152,7 @@ internal sealed class AliasRule : Rule
                     // A declared-Delete inner. In production it contributes
                     // nothing, so contribute nothing here too. Skipping it
                     // keeps the debug tree flattening back to the production
-                    // tree instead of carrying children production drops.
+                    // tree instead of keeping children production drops.
                 }
             }
             else

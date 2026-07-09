@@ -16,7 +16,7 @@ namespace InductorParser.Tests;
 // every leaf rule uniformly.
 //
 // Each row records what the source text normalizes to under each of the
-// four forms. FormC and FormKC are the "compose" forms; FormD and FormKD
+// four forms. FormC and FormKC are the "compose" forms. FormD and FormKD
 // are the "decompose" forms. The compatibility forms (FormKC and FormKD)
 // additionally rewrite ligatures, fullwidth letters, and other
 // presentation variants into their plain equivalents.
@@ -51,7 +51,7 @@ public static class NormalizationExamples
         // FormD = "e" + U+0301. The textbook canonical-equivalence case.
         PrecomposedDecomposesUnderD,
 
-        // Source is a base rune followed by combining marks; FormC and FormKC
+        // Source is a base rune followed by combining marks. FormC and FormKC
         // compose them into a single precomposed rune. Source = "e" + U+0301.
         // FormC = "é".
         DecomposedComposesUnderC,
@@ -59,7 +59,7 @@ public static class NormalizationExamples
         // Source is a base rune followed by two or more combining marks
         // whose canonical combining classes (CCC) differ AND whose
         // declared order isn't the canonical one (lower CCC first).
-        // FormD reorders the marks into canonical order; FormC reorders
+        // FormD reorders the marks into canonical order. FormC reorders
         // and may then compose into a precomposed rune. The textbook
         // case is Vietnamese ậ written as base + circumflex (CCC=230)
         // + dot-below (CCC=220): the canonical order is dot-below then
@@ -77,7 +77,7 @@ public static class NormalizationExamples
         // combination involved. NFD/NFC reorder the marks into
         // canonical order without composing. Example: "q" + U+0307
         // (dot above, CCC=230) + U+0323 (dot below, CCC=220) reorders
-        // to "q" + U+0323 + U+0307 under EVERY form (no precomposed
+        // to "q" + U+0323 + U+0307 under every form (no precomposed
         // q-with-dot-above or q-with-dot-below to compose to).
         // Distinct from NonCanonicalCombiningMarkOrderReordersUnderD
         // because the FormC result is multi-rune, not a single
@@ -86,7 +86,7 @@ public static class NormalizationExamples
         CombiningMarksReorderWithoutComposing,
 
         // Source is a precomposed character that ALREADY has a
-        // combining mark in its decomposition; appending an additional
+        // combining mark in its decomposition. Appending an additional
         // mark in non-canonical order causes NFC to recompose with a
         // DIFFERENT base+mark pair than the source. UAX #15's worked
         // example: U+1E0A (Ḋ, "D with dot above") + U+0323 (combining
@@ -94,7 +94,7 @@ public static class NormalizationExamples
         // U+0307 (combining dot above) under FormC/FormKC. Under
         // FormD the source decomposes fully to D + U+0323 + U+0307
         // (canonical order: dot-below CCC=220 before dot-above
-        // CCC=230). The composite "won" by NFC is U+1E0C, not U+1E0A —
+        // CCC=230). The composite "won" by NFC is U+1E0C, not U+1E0A:
         // canonical reordering shuffled the marks and the FIRST mark
         // (dot-below) found a different precomposed pairing.
         // Distinct because the precomposed character in the FormC
@@ -109,7 +109,7 @@ public static class NormalizationExamples
         // under every form. Unicode explicitly lists U+0344 as the
         // example of a non-starter decomposition (the source is a
         // non-starter and so are its decomposition pieces). Distinct
-        // from DefectiveCombiningMarkAlone because the source DOES
+        // from DefectiveCombiningMarkAlone because the source does
         // have a decomposition (it's not normalization-identity), and
         // distinct from CompositionExcludedDecomposesUnderBoth because
         // the source is itself a non-starter rather than a base+mark
@@ -144,7 +144,7 @@ public static class NormalizationExamples
         // a further canonical decomposition: substitutes under FormC to
         // a precomposed rune, but under FormD that precomposed rune
         // decomposes again into base + combining marks. U+212B ANGSTROM
-        // → U+00C5 LATIN A WITH RING under FormC; U+212B → "A" + U+030A
+        // → U+00C5 LATIN A WITH RING under FormC, and U+212B → "A" + U+030A
         // combining ring above under FormD. Two-step substitution makes
         // this the most interesting singleton shape: a grammar literal
         // for the Angstrom compiled with FormD ends up matching a
@@ -206,21 +206,21 @@ public static class NormalizationExamples
         // decomposition U+1138B U+113C2.
         Unicode16ContextSensitiveCompositionPlaceholder,
 
-        // Source is a precomposed Hangul syllable; FormD decomposes it
+        // Source is a precomposed Hangul syllable. FormD decomposes it
         // into its constituent conjoining jamo. The decomposition is
         // either two jamo (initial consonant + vowel, e.g., U+AC00 →
         // U+1100 + U+1161) or three (initial consonant + vowel + final
         // consonant, e.g., U+AC01 → U+1100 + U+1161 + U+11A8). Per the
         // Unicode text-segmentation rules, conjoining jamo sequences
-        // cluster as ONE grapheme regardless of whether they came from
+        // cluster as one grapheme regardless of whether they came from
         // a precomposed syllable or were typed as jamo directly. So a
         // row's FormD column is multi-rune but still single-grapheme.
         //
         // Hangul has other normalization behaviors that fit elsewhere:
         // a typed jamo sequence composing back into a syllable under
-        // FormC is the DecomposedComposesUnderC shape; a compatibility
+        // FormC is the DecomposedComposesUnderC shape. A compatibility
         // jamo (U+3131 HANGUL LETTER KIYEOK → U+1100 conjoining jamo
-        // ONLY under FormKC, stable under FormC) is the
+        // only under FormKC, stable under FormC) is the
         // CompatibilitySingletonRune shape.
         // This category is for the syllable-decomposition direction
         // specifically.
@@ -263,18 +263,18 @@ public static class NormalizationExamples
         // because the source is morphologically dependent (a
         // combining mark) rather than a complete base rune: a rule
         // that expects "starts with a base letter" can't accept this
-        // even though the cluster IS a single grapheme.
+        // even though the cluster is a single grapheme.
         DefectiveCombiningMarkAlone,
 
         // Source is a lone surrogate code unit (a UTF-16 high surrogate
         // U+D800..U+DBFF or low surrogate U+DC00..U+DFFF that isn't
         // paired with its other half). Lone surrogates don't represent
         // a Unicode scalar value, so string.Normalize throws
-        // ArgumentException for ALL four normalization forms. The only
+        // ArgumentException for all four normalization forms. The only
         // way to use a lone surrogate in a grammar is Compile(null)
         // (skip normalization entirely). Under Compile(null) the lexer
         // surfaces the lone surrogate as a one-char token with
-        // RuneValue == -1; rules that use TryPeekRune get false back
+        // RuneValue == -1. Rules that use TryPeekRune get false back
         // and have to handle it explicitly.
         //
         // What works for matching a lone surrogate (Compile(null)):
@@ -313,8 +313,8 @@ public static class NormalizationExamples
         // unrelated runes that are EACH individually meaningful single
         // graphemes (CR alone is a grapheme, LF alone is a grapheme,
         // both are common line terminators). ZWJ-emoji components are
-        // joiners or modifiers; regional-indicator components only have
-        // flag meaning when paired; combining marks are dependent by
+        // joiners or modifiers. Regional-indicator components only have
+        // flag meaning when paired. Combining marks are dependent by
         // definition. CRLF is the one a grammar author might reasonably
         // try to match individually (Token('\r'), OneOf("\r\n"), etc.),
         // so cluster-boundary surprises are a common bug source.
@@ -333,7 +333,7 @@ public static class NormalizationExamples
         string Description);
 
     // Resolve the post-normalization text for a given form. Centralized so
-    // the matrix tests don't switch on the form value at every call site.
+    // the matrix tests don't switch on the form value at every call.
     public static string Project(NormalizationCase row, NormalizationForm form) =>
         form switch
         {
@@ -380,7 +380,7 @@ public static class NormalizationExamples
     }
 
     // Hex render for diagnostics. ToString on a multi-rune grapheme like
-    // "👨‍👩‍👧" doesn't tell you the code points; the hex view does, so
+    // "👨‍👩‍👧" doesn't tell you the code points. The hex view does, so
     // a failure on that row points at the right text in the table.
     public static string Hex(string text)
     {
@@ -400,13 +400,13 @@ public static class NormalizationExamples
     // pipeline.
 
     // Multi-rune values built by concatenating (char) casts. Splitting
-    // ensures no editor or text-processing layer can NFC-fold the
+    // ensures no editor or text-processing layer can NFC-convert the
     // sequence back into a precomposed character.
 
     // Lone surrogate. \u escape works here because invalid scalar values
     // can't be normalized into actual chars by any text-processing layer.
 
-    // Supplementary-plane sequences. Each rune is a UTF-16 surrogate pair;
+    // Supplementary-plane sequences. Each rune is a UTF-16 surrogate pair.
     // \u escapes for the surrogates themselves survive the tooling pipeline
     // and the C# compiler reassembles them into the real codepoint.
 
@@ -415,7 +415,7 @@ public static class NormalizationExamples
     // won't compose any of these. 31 non-starters exceeds the Unicode
     // Stream-Safe Format limit of 30 non-starters per cluster.
     // Standard NFC/NFD don't insert a U+034F COMBINING GRAPHEME JOINER
-    // here; only the separate Stream-Safe transformation does. So the
+    // here. Only the separate Stream-Safe transformation does. So the
     // long sequence stays the same length under all four normalization
     // forms, and the lexer sees it as one grapheme cluster of 32 runes.
     private static readonly string StreamSafeBoundaryLongSequence =
@@ -470,7 +470,7 @@ public static class NormalizationExamples
             Description: "U+2126 OHM, singleton to U+03A9, target rune is stable"),
 
         new NormalizationCase(
-            Source: UnicodeExamples.KelvinGrapheme,                                 // looks like K (U+212A KELVIN, NOT ASCII K)
+            Source: UnicodeExamples.KelvinGrapheme,                                 // looks like K (U+212A KELVIN, not ASCII K)
             FormC: "K",                                         // ASCII K (U+004B)
             FormD: "K",
             FormKC: "K",

@@ -31,7 +31,7 @@ namespace InductorParser;
 // already constructed.
 //
 // A LateBoundRule is transparent. At parse time it just forwards
-// TryParse to its target, and the Symbol that flows up carries the
+// TryParse to its target, and the Symbol that flows up has the
 // target's Id, not the LateBoundRule's. Transparency also covers
 // FlattenType: a LateBoundRule has no flatten policy of its own, so the
 // FlattenType property reports the target's, resolved through any chain
@@ -89,7 +89,7 @@ public sealed class LateBoundRule : Rule
     // A LateBoundRule has no FlattenType of its own: it reports the
     // bound target's, resolved through any chain of LateBoundRules to
     // the first concrete rule. The value is computed once during Compile
-    // while the graph walk is single-threaded; afterwards this getter is
+    // while the graph walk is single-threaded. Afterwards this getter is
     // a plain field read, so concurrent parses of the compiled grammar
     // need no synchronization. Reading it before Compile throws rather
     // than guessing a value that would later turn out wrong.
@@ -130,7 +130,7 @@ public sealed class LateBoundRule : Rule
         "bound shape an explicit id, set it on the target rule instead " +
         "(target.As(new SymbolId(...))).");
 
-    // Flatten on LateBoundRule is rejected because its FlattenType is not
+    // Flatten on LateBoundRule is rejected because its FlattenType isn't
     // its own: the property forwards to the bound target. A value set
     // here would be shadowed by that forward and never take effect. Set
     // .Flatten(...) on the target rule instead.

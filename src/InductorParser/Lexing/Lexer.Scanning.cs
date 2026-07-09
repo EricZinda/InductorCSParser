@@ -5,7 +5,7 @@ namespace InductorParser.Lexing;
 
 // Bulk-consume scanners exposed to ScanWhileRule and to user-defined
 // Rule subclasses. AdvanceWhileRuneIn walks one rune at a time and
-// checks each against a rune-only TokenSet; AdvanceWhileTokenIn walks
+// checks each against a rune-only TokenSet. AdvanceWhileTokenIn walks
 // one grapheme cluster at a time so multi-rune entries (CRLF, ZWJ-glued
 // emoji sequences, etc.) can match too.
 public sealed partial class Lexer
@@ -45,12 +45,12 @@ public sealed partial class Lexer
             _budget.TickPeriodic();
 
             int tokenLength = NextTokenLength(_position);
-            // NextTokenLength is bounded by _input.Length; sub-lexers
+            // NextTokenLength is bounded by _input.Length. Sub-lexers
             // hold a substring copy, so _input.Length == _endPosition
             // and this stays in bounds. Asserted, not assumed.
             Invariant.That(tokenLength >= 1 && _position + tokenLength <= _endPosition,
                 $"NextTokenLength returned {tokenLength} at _position={_position} with _endPosition={_endPosition}.");
-            // A single rune is at most 2 chars (surrogate pair); longer
+            // A single rune is at most 2 chars (surrogate pair). Longer
             // means a multi-rune cluster, which a rune-only run can't match.
             if (tokenLength > 2)
                 break;

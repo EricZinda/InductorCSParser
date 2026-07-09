@@ -64,14 +64,14 @@ public readonly struct SourcePosition
 
     /// <summary>
     /// One-based line number (<see cref="Line"/> + 1), the way a person reading an
-    /// editor counts lines. Use this for human-facing messages; use
+    /// editor counts lines. Use this for human-facing messages. Use
     /// <see cref="Line"/> for the zero-based Language Server Protocol value.
     /// </summary>
     public int LineNumber => Line + 1;
 
     /// <summary>
     /// One-based char column (<see cref="CharColumn"/> + 1). Use this for
-    /// human-facing messages; use <see cref="CharColumn"/> for the zero-based
+    /// human-facing messages. Use <see cref="CharColumn"/> for the zero-based
     /// Language Server Protocol value.
     /// </summary>
     public int CharColumnNumber => CharColumn + 1;

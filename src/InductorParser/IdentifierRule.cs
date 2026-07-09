@@ -218,7 +218,7 @@ internal sealed class IdentifierRule : Rule
         // Mirror check on the body side: every piece of each extra body
         // rune's NFKx must land in the allowed set
         // (XidContinue | extraBodyRunes). XidContinue covers the spec
-        // body; the caller's own body extras cover the caller's explicit
+        // body. The caller's own body extras cover the caller's explicit
         // opt-in. A piece outside both throws with a message naming the
         // offender and the missing piece. The canonical rejection is
         // U+FDFA ARABIC LIGATURE SALLALLAHOU ALAYHE WASALLAM, whose NFKC
@@ -253,9 +253,9 @@ internal sealed class IdentifierRule : Rule
     // body OneOf rewrite) or validate that NFKx pieces stay in an allowed
     // set (used by the user-extra checks). They live here rather than on
     // TokenSet because the head-stays-X, tail-stays-Y NFKx-closure shape is
-    // specific to UAX #31 identifiers; no other Unicode concept needs the
+    // specific to UAX #31 identifiers. No other Unicode concept needs the
     // same projection. TokenSet's public surface treats it as a SET
-    // (membership) plus whole-set transforms; rune-by-rune enumeration is
+    // (membership) plus whole-set transforms. Rune-by-rune enumeration is
     // exposed via TokenSet.EnumerateRunes and TokenSet.MultiRuneGraphemes,
     // and bulk construction via TokenSet.FromRanges, which together let
     // these helpers stay in pure rule code without privileged access.
@@ -268,7 +268,7 @@ internal sealed class IdentifierRule : Rule
     //
     // "Multi-rune" covers both multi-grapheme outputs (e.g. U+0140 → "l +
     // U+00B7", 2 clusters) and single-grapheme multi-rune outputs
-    // (e.g. U+309B → SPACE + U+3099, one cluster); both need the head
+    // (e.g. U+309B → SPACE + U+3099, one cluster). Both need the head
     // kept and the tail dropped since the sub-lexer reads runes one at a
     // time regardless of cluster structure.
     private static TokenSet WithCompatibilityHeadRuneEquivalents(
@@ -299,7 +299,7 @@ internal sealed class IdentifierRule : Rule
         // rejects them as endpoints. Unlike TokenSet.WithCompatibilityEquivalents,
         // which preserves them for general callers, ProjectByRunes runs only
         // under FormKC / FormKD, where the lexer rejects lone surrogates from
-        // input before a rule sees one, so a surrogate carried here could never
+        // input before a rule sees one, so a surrogate kept here could never
         // match. Dropping them keeps this path free of unreachable, untestable
         // work rather than mirroring WithCompatibilityEquivalents for its own
         // sake.

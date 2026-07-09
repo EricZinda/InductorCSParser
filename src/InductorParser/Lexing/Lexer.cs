@@ -70,7 +70,7 @@ public sealed partial class Lexer
     // use and cached for the rest of this lexer's life. Resolving through
     // GraphemeClusterIndex.For shares one instance per input string with
     // the post-parse position converters (SourcePositionConverter). Only
-    // grapheme-mode code paths touch this; one-rune-per-token sub-lexers
+    // grapheme-mode code paths touch this. One-rune-per-token sub-lexers
     // never reach it, which is what makes the lazy build pay off.
     private GraphemeClusterIndex GraphemeIndex => _graphemeIndex ??= GraphemeClusterIndex.For(_input);
 
@@ -91,7 +91,7 @@ public sealed partial class Lexer
     /// <remarks>
     /// For a top-level lexer this is what the caller passed to Parse. For a
     /// sub-lexer (the one WithinTokenRule builds over the runes of one outer
-    /// token) this is the substring covering just those runes; the sub-lexer's
+    /// token) this is the substring covering just those runes. The sub-lexer's
     /// Position, IsEof, DeepestFailurePosition, and Read / Token offsets are all
     /// expressed in coordinates of this string. Rule code can bound its own
     /// loops on Input.Length safely either way: the lexer's readable range and
@@ -106,7 +106,7 @@ public sealed partial class Lexer
 
     // Exclusive upper bound on _position. Defaults to _input.Length. The
     // internal bounded constructor sets a lower value to read only a portion
-    // of a shared string, with tokens still carrying absolute offsets into
+    // of a shared string, with tokens still storing absolute offsets into
     // _input so error positions don't need translation. WithinToken's
     // sub-lexer doesn't use that path: it owns a Substring of the outer
     // token's text on purpose, so Input.Length, Position, and IsEof all
@@ -213,7 +213,7 @@ public sealed partial class Lexer
     // Constructor used to build sub-lexers that read only a portion
     // of a shared input string. startPosition is the initial read cursor and
     // endPosition is the exclusive upper bound (IsEof fires when _position
-    // reaches endPosition). Tokens still carry absolute offsets into the
+    // reaches endPosition). Tokens still store absolute offsets into the
     // shared string so the outer parse's error-position reporting works
     // uniformly whether positions come from the main lexer or a sub-lexer.
     //
@@ -294,7 +294,7 @@ public sealed partial class Lexer
     /// <c>cursor + PeekTokenLength(cursor)</c> always satisfy both.
     /// </summary>
     /// <remarks>
-    /// This moves only the read cursor. It is safe with respect to the two
+    /// This moves only the read cursor. It's safe with respect to the two
     /// pieces of parse state a rule author might worry about:
     /// <list type="bullet">
     /// <item><b>Error tracking</b> is unaffected. RecordFailure /
@@ -370,7 +370,7 @@ public sealed partial class Lexer
     // readable range.
     //
     // Invariants: always returns >= 1 and never throws. In rune mode, returns
-    // 2 only for a well-formed surrogate pair (high then low); stray surrogates
+    // 2 only for a well-formed surrogate pair (high then low). Stray surrogates
     // in any position return 1. See the class doc for the full malformed-UTF-16
     // rules.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -443,9 +443,9 @@ public sealed partial class Lexer
     /// cluster in normal mode, or one rune in the WithinToken sub-lexer mode.
     /// </summary>
     /// <remarks>
-    /// Cheap: <see cref="Token"/> is a stack-only ref struct carrying offset
-    /// and length into the input string, with no allocation and no substring
-    /// copying. On malformed UTF-16 (stray surrogates), Read advances by one
+    /// Cheap: <see cref="Token"/> is a stack-only ref struct that stores an
+    /// offset and length pointing into the input string, with no allocation
+    /// and no substring copying. On malformed UTF-16 (stray surrogates), Read advances by one
     /// char and returns a one-char token rather than throwing. See the class
     /// doc for the full rules.
     /// </remarks>
@@ -460,7 +460,7 @@ public sealed partial class Lexer
         Invariant.That(len > 0, $"NextTokenLength returned <= 0 on a non-EOF read at position {_position} (endPosition {_endPosition}). Read would advance zero and loop.");
         Token t = new Token(_input, _position, len, isEof: false);
         _position += len;
-        // The token text is spliced raw here; TraceInterpolatedStringHandler
+        // The token text is spliced raw here. TraceInterpolatedStringHandler
         // routes every interpolation hole through DisplayEscape, so control /
         // line-separator chars (CRLF, Token('\n').Preserve(), and so on) can't
         // break this line apart. Keeping the escape in the handler instead of

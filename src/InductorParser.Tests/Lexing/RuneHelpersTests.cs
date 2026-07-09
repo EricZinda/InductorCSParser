@@ -57,7 +57,7 @@ public class RuneHelpersTests
     {
         // The WithinToken use: count runes consumed so far by slicing the
         // input up to the consumed char offset. 👍🏽 is two astral runes
-        // (four chars); a span over the first two chars is one rune.
+        // (four chars). A span over the first two chars is one rune.
         string cluster = char.ConvertFromUtf32(0x1F44D) + char.ConvertFromUtf32(0x1F3FD);
         Assert.That(RuneHelpers.RuneCount(cluster.AsSpan(0, 2)), Is.EqualTo(1));
         Assert.That(RuneHelpers.RuneCount(cluster.AsSpan()), Is.EqualTo(2));

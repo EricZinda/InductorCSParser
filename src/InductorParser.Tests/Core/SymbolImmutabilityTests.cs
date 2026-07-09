@@ -87,7 +87,7 @@ public class SymbolImmutabilityTests
     // A user-defined Rule, living in this separate test assembly, that builds
     // a composite Symbol through the protected CreateCompositeFromOwnedChildren
     // helper. Its mere existence proves the helper is reachable from a Rule
-    // subclass outside InductorParser; BuildComposite exposes the result so the
+    // subclass outside InductorParser. BuildComposite exposes the result so the
     // test can inspect the published Children.
     private sealed class CompositeBuildingRule : Rule
     {

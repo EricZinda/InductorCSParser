@@ -53,7 +53,7 @@ public class OptionalRuleTests
     [Test]
     public void Optional_that_matched_zero_times_has_empty_SourceText()
     {
-        // Optional matched zero times — the inner rule wasn't entered.
+        // Optional matched zero times: the inner rule wasn't entered.
         // The preserved Optional Symbol records a zero-width consumed
         // span at its anchor offset, so SourceText is the empty string
         // and SourceRange is a zero-width range. Consumers that
@@ -73,11 +73,11 @@ public class OptionalRuleTests
     [Test]
     public void Optional_that_matched_once_returns_the_matched_SourceText()
     {
-        // Optional matched once — the inner rule produced a leaf. The
+        // Optional matched once: the inner rule produced a leaf. The
         // Optional composite's consumed span covers what the inner
         // consumed ("X"), so SourceText returns "X" and SourceRange
-        // spans [0, 1). Inner doesn't need .Preserve() — even with
-        // Literal's Delete-by-factory default the wrapper still
+        // spans [0, 1). Inner doesn't need .Preserve(). Even with
+        // Literal defaulting to Delete, the Optional composite still
         // recovers the matched text.
         var optional = Optional(Literal("X")).As("opt");
         var rule = And(optional, Literal("Y").Preserve()).Preserve();
@@ -94,15 +94,15 @@ public class OptionalRuleTests
     public void Optional_wrapping_a_zero_width_Preserve_Not_keeps_the_inner_wrapper_in_the_tree()
     {
         // A Preserve'd zero-width inner (Not / Peek / Eof, or any composite
-        // that succeeds without consuming) returns a real wrapper Symbol the
+        // that succeeds without consuming) returns a real Symbol the
         // parent is supposed to put in the tree. Without Optional, the And
         // path already does that: see NotRuleTests.SourceRange_on_Not_reports_
         // zero_width_at_its_anchor. With Optional in the way, the inner
-        // wrapper went missing because BetweenInclusive's zero-width-match
-        // guard broke out of the loop before adding the child to its
+        // Symbol went missing because BetweenInclusive's zero-width-match
+        // check broke out of the loop before adding the child to its
         // outputSymbols. Find(guard) returned null even though Not's
         // assertion held, so a grammar that uses Optional(Not(X).Preserve())
-        // as an "if this is not X, mark it" idiom couldn't find the mark.
+        // as an "if this isn't X, mark it" idiom couldn't find the mark.
         var guard = Not(Literal("Z")).As("guard").Preserve();
         var rule = And(Literal("ab"), Optional(guard), Literal("X").Preserve()).Preserve();
         var result = rule.Parse("abX");

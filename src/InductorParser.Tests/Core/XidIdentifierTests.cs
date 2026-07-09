@@ -158,7 +158,7 @@ public class XidIdentifierTests
         // marks. RTL text is stored in logical (reading) order and the
         // parser walks it in that same order, so the match text comes
         // back byte-for-byte equal to the input. The parser doesn't apply
-        // the Unicode Bidirectional Algorithm; there is no visual
+        // the Unicode Bidirectional Algorithm, so there's no visual
         // reordering to undo.
         var word = UnicodeExamples.HebrewIvritIdentifier;
         var result = Identifier().Parse(word);
@@ -355,7 +355,7 @@ public class XidIdentifierTests
     {
         // Rules.Identifier expands each XID_Start character's compatibility
         // decomposition into the start set but keeps only the first rune in
-        // start position; every later rune is matched against the body set.
+        // start position. Every later rune is matched against the body set.
         // That split is sound only if those later runes are all XID_Continue.
         // UAX #31 Section 5.1.3 "Identifier Closure Under Normalization"
         // guarantees exactly that. This verifies the guarantee against the
@@ -460,8 +460,8 @@ public class XidIdentifierTests
             "error message names the offending piece (a SPACE separator inside the Arabic-phrase decomposition)");
 
         // Sanity: a body extra whose entire decomposition stays in XidContinue
-        // is accepted. The Latin small ligature fi (U+FB01) decomposes to "fi";
-        // both 'f' and 'i' are ordinary XidContinue letters, so the compile
+        // is accepted. The Latin small ligature fi (U+FB01) decomposes to "fi".
+        // Both 'f' and 'i' are ordinary XidContinue letters, so the compile
         // doesn't throw.
         Assert.DoesNotThrow(() =>
             Identifier(extraBodyRunes:
@@ -485,7 +485,7 @@ public class XidIdentifierTests
     {
         // U+309B KATAKANA-HIRAGANA VOICED SOUND MARK is removed from
         // XID_Start by NFKx closure because its NFKx is SPACE + U+3099. The
-        // decomposition is two RUNES but only ONE grapheme cluster (SPACE
+        // decomposition is two runes but only one grapheme cluster (SPACE
         // followed by an Extend combining mark joins into one cluster per
         // UAX #29 GB9).
         //
@@ -503,9 +503,9 @@ public class XidIdentifierTests
         Assert.That(exception.Message, Does.Contain(" "),
             "error message names the offending head piece (a SPACE)");
 
-        // Sanity: an extra start rune whose NFKx head IS a valid start
-        // character is accepted. The IJ ligature U+0132 decomposes to "IJ";
-        // the head 'I' is an ordinary XID_Start letter and the tail 'J' is a
+        // Sanity: an extra start rune whose NFKx head is a valid start
+        // character is accepted. The IJ ligature U+0132 decomposes to "IJ".
+        // The head 'I' is an ordinary XID_Start letter and the tail 'J' is a
         // valid body character, so the compile doesn't throw.
         Assert.DoesNotThrow(() =>
             Identifier(extraStartRunes: TokenSet.Single(0x0132)).Compile(form));
@@ -566,7 +566,7 @@ public class XidIdentifierTests
         Assert.Throws<InvalidOperationException>(() =>
             Identifier(extraStartRunes: TokenSet.Single(0x00B2)).Compile(form));
 
-        // Sanity: a start extra whose one-rune conversion IS a valid start
+        // Sanity: a start extra whose one-rune conversion is a valid start
         // character is accepted. U+2126 OHM SIGN normalizes to U+03A9 GREEK
         // CAPITAL LETTER OMEGA, an ordinary XidStart letter.
         Assert.DoesNotThrow(() =>
@@ -592,14 +592,14 @@ public class XidIdentifierTests
         // extraBodyRunes normalizes to plain SPACE, which isn't a valid body
         // character. The body check has to cover one-rune conversions the
         // same way it covers U+FDFA's eighteen-rune phrase: letting SPACE
-        // into the body set would make "a b" parse as ONE identifier.
+        // into the body set would make "a b" parse as one identifier.
         var exception = Assert.Throws<InvalidOperationException>(() =>
             Identifier(extraBodyRunes: TokenSet.Single(0x00A0)).Compile(form));
         Assert.That(exception!.Message, Does.Contain("extraBodyRunes"));
         Assert.That(exception.Message, Does.Contain(" "),
             "error message names the offending converted character (a SPACE)");
 
-        // Sanity: a body extra whose one-rune conversion IS a valid body
+        // Sanity: a body extra whose one-rune conversion is a valid body
         // character is accepted, and the pre-normalization character
         // matches in body position. U+00B2 SUPERSCRIPT TWO normalizes to
         // DIGIT TWO, an ordinary XidContinue digit.
@@ -629,7 +629,7 @@ public class XidIdentifierTests
             "U+0344's NFKx pieces are both XidContinue; compile should accept");
 
         // Sanity: an identifier with the decomposed mid-token form still
-        // parses. "ä́b" under FormKD becomes "ä́b"; the cluster
+        // parses. "ä́b" under FormKD becomes "ä́b". The cluster
         // "a + diaeresis + acute" sits between the two ASCII letters.
         var input = "a" + UnicodeExamples.DialytikaTonosPrecomposedGrapheme + "b";
         var result = rule.Parse(input);
@@ -666,8 +666,8 @@ public class XidIdentifierTests
         // match in any position. Passing one as an extra is a grammar bug,
         // and Identifier rejects it at build time rather than silently
         // building a rule with a dead entry. LatinEAcuteGrapheme is the
-        // canonical two-rune / one-grapheme fixture (e + combining acute);
-        // its Canary check catches an editor normalizing the literal to
+        // canonical two-rune / one-grapheme fixture (e + combining acute).
+        // Its Canary check catches an editor normalizing the literal to
         // precomposed U+00E9.
         var grapheme = TokenSet.Graphemes(UnicodeExamples.LatinEAcuteGrapheme);
         Assert.That(grapheme.HasMultiRuneGraphemes, Is.True,
@@ -797,7 +797,7 @@ public class XidIdentifierTests
         // every entry XidStartAdds claims to contribute is actually present,
         // range endpoints included so a fat-fingered range gets caught.
         // U+309B and U+309C aren't here because NFKC closure drops them
-        // from XID_Start; see Katakana_voicing_marks_are_excluded_by_NFKC_closure.
+        // from XID_Start, see Katakana_voicing_marks_are_excluded_by_NFKC_closure.
         var startSet = TokenSet.XidStart;
         Assert.That(startSet.ContainsRune(0x1885), Is.True, "MONGOLIAN LETTER ALI GALI BALUDA (Mn, range low)");
         Assert.That(startSet.ContainsRune(0x1886), Is.True, "MONGOLIAN LETTER ALI GALI THREE BALUDA (Mn, range high)");
@@ -851,10 +851,10 @@ public class XidIdentifierTests
     public void Katakana_voiced_sound_mark_309B_is_a_symbol_not_a_letter()
     {
         // U+309B reaches ID_Start through Other_ID_Start as a Modifier
-        // Symbol (Sk), NOT through the letter categories. Other_ID_Start
+        // Symbol (Sk), not through the letter categories. Other_ID_Start
         // exists precisely to pull in identifier-start characters that the
         // letter/Nl categories miss, so the fact that 309B is listed there
-        // is the tell that it is not a letter. This locks in that
+        // is the tell that it isn't a letter. This locks in that
         // categorization, the reasoning the TokenSet.Xid.cs file header
         // gives for why NFKC closure later drops 309B from XID_Start.
         char katakanaVoicedSoundMark = (char)UnicodeExamples.KatakanaHiraganaVoicedSoundMarkRune;
@@ -895,15 +895,15 @@ public class XidIdentifierTests
 
         // Symbol-category Other_ID_Start members that survive NFKC closure
         // (XID_Start is a subset of XID_Continue, so they show up here too).
-        // U+309B and U+309C are deliberately NOT in this list because NFKC
-        // closure drops them from XID_Continue; see
+        // U+309B and U+309C are deliberately not in this list because NFKC
+        // closure drops them from XID_Continue, see
         // Katakana_voicing_marks_are_excluded_by_NFKC_closure.
         Assert.That(continueSet.ContainsRune(0x2118), Is.True, "SCRIPT CAPITAL P (Sm)");
         Assert.That(continueSet.ContainsRune(0x212E), Is.True, "ESTIMATED SYMBOL (So)");
 
         // The "already in the union" claim in XidContinueAdds' comment: the
         // one non-symbol Other_ID_Start member, U+1885..1886 (Mn), is in
-        // XidContinue via the Mn category base, NOT via the adds table.
+        // XidContinue via the Mn category base, not via the adds table.
         Assert.That(continueSet.ContainsRune(0x1885), Is.True, "MONGOLIAN LETTER ALI GALI BALUDA (Mn, range low)");
         Assert.That(continueSet.ContainsRune(0x1886), Is.True, "MONGOLIAN LETTER ALI GALI THREE BALUDA (Mn, range high)");
     }
@@ -1049,7 +1049,7 @@ public class XidIdentifierTests
 
     // Verifies that the formula's "- Pattern_Syntax - Pattern_White_Space"
     // step is realized in TokenSet.XidStart and TokenSet.XidContinue. The
-    // build doesn't subtract those two properties directly; it relies on
+    // build doesn't subtract those two properties directly. It relies on
     // IdCategoriesInPatternSyntax for the Pattern_Syntax portion and on
     // Pattern_White_Space being disjoint from the identifier base. This
     // test asserts both halves against the actual built sets: every code
@@ -1150,7 +1150,7 @@ public class XidIdentifierTests
     // Data line shape: "HEX[..HEX] ; SecondColumn # ThirdColumn trailing".
     // The SecondColumn is what the calling helper filters on. In
     // DerivedCoreProperties.txt and PropList.txt it's a property name
-    // (e.g. "XID_Start", "Other_ID_Continue"); in DerivedGeneralCategory.txt
+    // (e.g. "XID_Start", "Other_ID_Continue"). In DerivedGeneralCategory.txt
     // it's a General_Category label (e.g. "Lu", "L&"). The trailing text
     // (which includes the ThirdColumn and the name comment) is consumed
     // and discarded by a body-up-to-end-of-line scan.
@@ -1200,8 +1200,8 @@ public class XidIdentifierTests
 
     // Parse data lines from any UCD property file (DerivedCoreProperties.txt,
     // PropList.txt, or DerivedGeneralCategory.txt). One Parse call for the
-    // whole file; FindAll the data lines; pull the captured pieces out of
-    // each. Yields (low, high, secondColumn) for each data line.
+    // whole file, FindAll the data lines, then pull the captured pieces out
+    // of each. Yields (low, high, secondColumn) for each data line.
     private static IEnumerable<(int Low, int High, string SecondColumn)> ParseUcdLines(string ucd)
     {
         var result = _ucdFile.Parse(ucd);
@@ -1246,7 +1246,7 @@ public class XidIdentifierTests
         return set;
     }
 
-    // Compare two sets of code points; report at most 20 differences in each
+    // Compare two sets of code points and report at most 20 differences in each
     // direction so a mass divergence produces a readable failure rather than
     // an unbounded dump.
     private static void AssertSetsEqual(string label, HashSet<int> expected, HashSet<int> actual)

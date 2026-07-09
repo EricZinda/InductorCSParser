@@ -29,7 +29,7 @@ namespace InductorParser;
 // If the expected token is exactly one rune (the common case for
 // ASCII, emoji that fit in a single code point, CJK, etc.), the Id is
 // set to that code point so Symbol leaves produced by this rule
-// carry the "id == rune" shape. For multi-rune tokens the Id comes
+// have the "id == rune" shape. For multi-rune tokens the Id comes
 // from Compile's custom-range assignment.
 internal sealed class GraphemeRule : Rule
 {

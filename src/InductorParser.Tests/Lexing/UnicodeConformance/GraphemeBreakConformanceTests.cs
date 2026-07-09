@@ -99,8 +99,8 @@ public class GraphemeBreakConformanceTests
         OneOrMore(OneOf(TokenSet.Ascii.InlineWhitespace));
 
     // One test line. Shape: ÷ (cp marker)+ comment?
-    // The leading ÷ marks the always-present start-of-text break; the
-    // trailing marker for each cp captures whether the boundary AFTER
+    // The leading ÷ marks the always-present start-of-text break. The
+    // trailing marker for each cp captures whether the boundary after
     // that cp is a break (÷) or not (×). The optional comment starts
     // with # and runs to end of line.
     private static readonly Rule LineGrammar = BuildLineGrammar();
@@ -288,7 +288,7 @@ public class GraphemeBreakConformanceTests
     // Fixture A: GraphemeClusterIndex itself.
     //   The lowest-level check: did the index pick up the same boundary
     //   offsets the spec gives? Every other fixture below depends on
-    //   this being right; isolating it makes debugging easier when
+    //   this being right, so isolating it makes debugging easier when
     //   something fails.
     // ============================================================
     [TestCaseSource(nameof(Cases))]
@@ -394,7 +394,7 @@ public class GraphemeBreakConformanceTests
     //   ASCII cases.
     //
     //   Multi-rune clusters (woman shrugging, ZWJ sequences, keycap)
-    //   have no single RuneValue; OneOf doesn't match them. Those
+    //   have no single RuneValue, so OneOf doesn't match them. Those
     //   lines call Assert.Ignore via the SingleRune shortcut.
     // ============================================================
 
@@ -471,7 +471,7 @@ public class GraphemeBreakConformanceTests
         int rune = testCase!.FirstClusterSingleRune;
         if (rune < 0) Assert.Ignore("Multi-rune first cluster; TokenSet doesn't apply.");
 
-        // Mirror case: a set that DOES include the rune should make
+        // Mirror case: a set that does include the rune should make
         // NoneOf reject. Negative coverage on the same code-point pool
         // so both directions of the OneOf / NoneOf membership check
         // get exercised on every spec code point.

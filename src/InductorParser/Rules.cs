@@ -29,7 +29,7 @@ namespace InductorParser;
 /// compose several rules instead of forwarding to a single rule type,
 /// because every grammar ends up wanting them.
 ///
-/// Every rule carries a default <see cref="FlattenType"/> that
+/// Every rule has a default <see cref="FlattenType"/> that
 /// controls how the match contributes to the parse tree: Delete
 /// drops the node, Flatten lifts its children into the parent,
 /// Preserve keeps the rule's Symbol. Each factory's summary names its
@@ -179,7 +179,7 @@ public static class Rules
 
     /// <summary>
     /// ASCII-case-insensitive variant of <see cref="Literal"/>. The
-    /// pattern must be ASCII-only; construction throws on any char
+    /// pattern must be ASCII-only. Construction throws on any char
     /// outside <c>0x00..0x7F</c>. Default <see cref="FlattenType"/>:
     /// <see cref="FlattenType.Delete"/>.
     /// </summary>
@@ -222,7 +222,7 @@ public static class Rules
 
     /// <summary>
     /// Shortcut for the common "one of these literal runes" case. The
-    /// input is walked rune by rune; each scalar becomes a set member.
+    /// input is walked rune by rune. Each scalar becomes a set member.
     /// Throws at construction if any two consecutive runes in the input
     /// form one grapheme cluster (CRLF, NFD accent, ZWJ emoji, etc.). If you want sets that 
     /// include multi-char tokens, build the <see cref="TokenSet"/> with
@@ -253,7 +253,7 @@ public static class Rules
 
     /// <summary>
     /// Shortcut for "any rune except these specific ones." The
-    /// input is walked rune by rune; each scalar becomes a set member.
+    /// input is walked rune by rune. Each scalar becomes a set member.
     /// Throws at construction if any two consecutive runes in the input
     /// form one grapheme cluster (CRLF, NFD accent, ZWJ emoji, etc.). If
     /// you want sets that include multi-char tokens, build the
@@ -751,7 +751,7 @@ public static class Rules
     /// <para>
     /// Why CRLF is a Literal and not just a set member: on .NET 5+ the
     /// lexer hands CRLF back as one token, and
-    /// <see cref="TokenSet.LineTerminators"/> carries CRLF as a multi-rune
+    /// <see cref="TokenSet.LineTerminators"/> includes CRLF as a multi-rune
     /// entry, so the OneOf alternative would match it as a unit on its
     /// own. But on legacy runtimes (.NET Framework, .NET Core 3.x, Unity's
     /// Mono) StringInfo predates the Unicode rule that glues CR to LF, so
@@ -800,7 +800,7 @@ public static class Rules
     /// One leaf Symbol is emitted per successful match, representing the
     /// whole token. Inner-rule symbols are discarded. With tracing turned
     /// on, the inner rule's per-rune steps don't show up in the trace,
-    /// since the sub-lexer that walks the token doesn't carry the trace
+    /// since the sub-lexer that walks the token doesn't have the trace
     /// sink. WithinToken still logs its own line for whether the token
     /// matched, so you see the outcome but not the steps inside. The inner
     /// parse is bounded to the token's rune span. The sub-lexer's recursion,
@@ -813,7 +813,7 @@ public static class Rules
     /// </remarks>
     /// <param name="innerRule">
     /// The rule to run against the token's runes. Must consume every
-    /// rune of the token on success; a rule that matches only a
+    /// rune of the token on success. A rule that matches only a
     /// prefix causes the whole <c>WithinToken</c> to fail. Any rule
     /// composition is allowed inside (<see cref="And"/>, <see cref="Or"/>,
     /// <c>OneOf</c>, etc.).
