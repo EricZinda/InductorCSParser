@@ -57,12 +57,6 @@ public readonly struct ParseResult
     /// MalformedInput, the message from
     /// <see cref="ParseOptions.MalformedInputTemplate"/>. On a budget abort, the
     /// matching "Parse aborted: ..." string. See: docs/ErrorArchitecture.md
-    /// <para>
-    /// The coalesce below matches how <see cref="Symbols"/> and
-    /// <see cref="ToString"/> treat a default-constructed ParseResult (a zeroed
-    /// array element, a FirstOrDefault on an empty list): every member returns
-    /// a usable value rather than null.
-    /// </para>
     /// </remarks>
     public string ErrorMessage => _errorMessage ?? string.Empty;
 
