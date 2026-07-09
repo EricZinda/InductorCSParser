@@ -11,8 +11,8 @@ namespace InductorParser.SyntaxTree;
 /// A node in the parse tree produced by <see cref="Rule.Parse(string)"/>.
 /// </summary>
 /// <remarks>
-/// A Symbol has one of two shapes. A composite carries a list of child Symbols and comes from
-/// rules that build structure (And, Or, OneOrMore). A leaf carries a section of the original
+/// A Symbol has one of two shapes. A composite has a list of child Symbols and comes from
+/// rules that build structure (And, Or, OneOrMore). A leaf stores a section of the original
 /// input (a ReadOnlyMemory&lt;char&gt;) and comes from rules that match content (Token, Literal,
 /// OneOf, ScanUntil). The parse never copies input into a new string.
 /// <para>
@@ -58,13 +58,13 @@ public sealed class Symbol
     private readonly bool _isLeaf;
 
     /// <summary>
-    /// True when this Symbol is a leaf carrying matched text, false when it's a composite
-    /// carrying child Symbols. A composite with an empty <see cref="Children"/> list still
-    /// reports false: zero children is not the same shape as a leaf.
+    /// True when this Symbol is a leaf with matched text, false when it's a composite
+    /// with child Symbols. A composite with an empty <see cref="Children"/> list still
+    /// reports false: zero children isn't the same shape as a leaf.
     /// </summary>
     public bool IsLeaf => _isLeaf;
 
-    // Per-parse context the engine stamps onto every Symbol it builds. Carries the original
+    // Per-parse context the engine stamps onto every Symbol it builds. It stores the original
     // input, the normalized parse input, the normalization form, and the grammar root, so a
     // Symbol can translate its parseInput-relative _leafChars span back to original-input
     // coordinates (SourceRange / SourceText) and resolve its id to a rule name (DisplayName).
@@ -86,7 +86,7 @@ public sealed class Symbol
     public IReadOnlyList<Symbol> Children { get; }
 
     /// <summary>
-    /// Builds a composite Symbol carrying child Symbols.
+    /// Builds a composite Symbol with child Symbols.
     /// </summary>
     /// <remarks>
     /// <paramref name="consumedSpan"/> is every character the rule matched, including ones that
@@ -273,8 +273,8 @@ public sealed class Symbol
     }
 
     /// <summary>
-    /// Renders the text present in the tree: for a leaf, its captured text; for a composite, the
-    /// concatenated text of its children.
+    /// Renders the text present in the tree: a leaf renders its captured text, and a composite
+    /// renders the concatenated text of its children.
     /// </summary>
     /// <remarks>
     /// On the default parse path, FlattenType.Delete rules are filtered out of the tree, so the

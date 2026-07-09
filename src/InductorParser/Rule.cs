@@ -112,14 +112,14 @@ public abstract class Rule
     // Used by IdOf for callers who want to look up a rule's id at
     // grammar-construction time without holding a reference to the
     // Rule object. Populated on the first IdOf call. Only user-named
-    // entries are indexed; the class-derived trace-name fallbacks
+    // entries are indexed. The class-derived trace-name fallbacks
     // (And, OneOrMore, Token, ...) aren't, because they're not unique.
     private Dictionary<string, SymbolId>? _idByNameIndex;
 
     /// <summary>
     /// The rule's <see cref="SymbolId"/>, the integer identity parse-tree
-    /// Symbols carry. Assigned at Compile time unless set explicitly with
-    /// <see cref="As(SymbolId)"/>. Single-rune Tokens carry their code point.
+    /// Symbols store. Assigned at Compile time unless set explicitly with
+    /// <see cref="As(SymbolId)"/>. A single-rune Token's id is its code point.
     /// </summary>
     public SymbolId Id { get; private set; }
 
@@ -135,10 +135,36 @@ public abstract class Rule
     /// <see cref="SyntaxTree.FlattenType"/> enum for what each value means.
     /// </summary>
     /// <remarks>
-    /// Virtual so <see cref="LateBoundRule"/> can report its bound target's
-    /// FlattenType. A LateBoundRule has no flatten policy of its own.
+    /// Virtual so a rule that stands in for another rule can report that
+    /// rule's value: <see cref="LateBoundRule"/> reports its bound
+    /// target's, and an unnamed AliasRule reports its inner's. Neither has
+    /// a flatten policy of its own in that state.
     /// </remarks>
-    public virtual FlattenType FlattenType { get; private set; }
+    public virtual FlattenType FlattenType
+    {
+        get => _declaredFlattenType;
+        private set => _declaredFlattenType = value;
+    }
+
+    private FlattenType _declaredFlattenType;
+
+    /// <summary>
+    /// The FlattenType stored on this rule itself, bypassing a getter
+    /// override that forwards another rule's value. Rules that don't
+    /// override <see cref="FlattenType"/> can ignore this: for them the
+    /// two are the same value.
+    /// </summary>
+    /// <remarks>
+    /// A rule that stands in for another rule (an unnamed AliasRule
+    /// forwarding its inner) overrides the FlattenType getter, and then
+    /// needs this to read what was set on the rule itself. .As(...) reads
+    /// it (via ApplyIdentificationFlattenPolicy) to decide whether it
+    /// still needs to flip the policy to Preserve: on an unnamed alias
+    /// over a Preserve inner the virtual getter already reports Preserve
+    /// while the alias's own policy is still Flatten, and skipping the
+    /// flip there would leave the alias transparent with a dead name.
+    /// </remarks>
+    protected FlattenType DeclaredFlattenType => _declaredFlattenType;
 
     /// <summary>
     /// The static error message set via .WithError("..."), or null if none.
@@ -173,7 +199,7 @@ public abstract class Rule
     private readonly bool _emitsLeaf;
 
     /// <summary>
-    /// True when TryParseRule emits a single leaf Symbol carrying the matched
+    /// True when TryParseRule emits a single leaf Symbol with the matched
     /// text (terminals: OneOf, Literal, AnyToken, ScanWhile, WithinToken, ...).
     /// False when it emits a composite Symbol with children (And, Or,
     /// BetweenInclusive) or no Symbol at all because it's zero-width (Not, Peek,
@@ -435,7 +461,7 @@ public abstract class Rule
         // Clear an auto-assigned id so Compile's AssignNamedIds pass gives
         // this rule a fresh custom-range id derived from the name hash.
         // The only auto-assignment path is GraphemeRule giving a
-        // single-rune Token its code point in the constructor; two
+        // single-rune Token its code point in the constructor. Two
         // distinct Token('a').As(...) rules would otherwise silently share
         // the rune id and Tree.Find / NameOf couldn't distinguish them.
         // A user's explicit id via .As(SymbolId) stays put: that's what
@@ -507,7 +533,7 @@ public abstract class Rule
     /// <para>
     /// The substitution only happens on a successful match, so it doesn't affect
     /// error reporting. A .WithError on this rule (the one being aliased) records
-    /// its message at the point inside it where the match broke; a .WithError on
+    /// its message at the point inside it where the match broke. A .WithError on
     /// the alias records when this rule fails as a whole. If both are set, the
     /// usual deepest-failure rule decides which message the parse reports.
     /// </para>
@@ -527,12 +553,15 @@ public abstract class Rule
     // set a contradicting non-Preserve policy.
     private void ApplyIdentificationFlattenPolicy(string callerMethod, string identifier)
     {
-        if (FlattenType == FlattenType.Preserve) return;
+        // The virtual FlattenType getter won't work here because an unnamed alias
+        // forwards it from its inner, so Alias(preserveRule).As("name")
+        // would read Preserve and skip the flip the alias itself needs.
+        if (DeclaredFlattenType == FlattenType.Preserve) return;
         if (_flattenPolicyExplicitlySet)
         {
             throw new InvalidOperationException(
                 $".{callerMethod}(\"{identifier}\") can't be applied to this rule: " +
-                $"its flatten policy was explicitly set to FlattenType.{FlattenType}, " +
+                $"its flatten policy was explicitly set to FlattenType.{DeclaredFlattenType}, " +
                 $"so its wrapper Symbol won't appear in the parse tree and Tree.Find " +
                 $"can't reach it. Set the flatten policy to FlattenType.Preserve, or " +
                 $"remove the .{callerMethod}(...) call.");
@@ -828,7 +857,7 @@ public abstract class Rule
                 // the anonymous-id pass to give such a rule a fresh custom-range
                 // id, the same kind a Token that was multi-rune from the start
                 // gets. The pass only re-ids rules whose id was cleared
-                // (!_idAssigned); any rule that kept its id is left alone.
+                // (!_idAssigned). Any rule that kept its id is left alone.
                 visited.Clear();
                 AssignAnonymousIds(this, visited, usedIds, ref nextAnon);
             }
@@ -865,7 +894,7 @@ public abstract class Rule
     /// unnamed rule and returns the class-derived trace name ("And", "OneOrMore",
     /// "BetweenInclusive[1..3]").
     /// <para>
-    /// Intended for parse-tree walkers (which see Symbols carrying SymbolIds,
+    /// Intended for parse-tree walkers (which see Symbols with SymbolIds,
     /// not Rule references) and for error-message rendering that wants to quote
     /// a rule's name. Tracing has direct Rule access and doesn't need this path.
     /// </para>
@@ -1188,7 +1217,7 @@ public abstract class Rule
         // position ("... at line L, column C.") the same way the mechanical
         // messages do. A caller who wants the raw text back sets
         // WithErrorTemplate to "{message}". This branch is checked before the
-        // EOF one below, so a WithError at end of input is wrapped too; the
+        // EOF one below, so a WithError at end of input is wrapped too. The
         // position placeholders resolve to the end position.
         if (customMessage != null)
             return FormatTemplate(options.WithErrorTemplate,
@@ -1279,7 +1308,7 @@ public abstract class Rule
     // clusters, so an emoji or combining sequence earlier on the line counts as
     // one, matching the character a person sees. The default messages use
     // {lineNumber} and {tokenColumnNumber} for that reason. The fields stay as
-    // they are; only the *Number placeholders shift by one.
+    // they are. Only the *Number placeholders shift by one.
     //
     // The Func<string> delegates exist because each token-index / line-column /
     // token-column conversion walks the input once, so we only want to pay for
@@ -1610,9 +1639,9 @@ public abstract class Rule
     /// </summary>
     /// <remarks>
     /// Encapsulates the logic so a user-defined rule doesn't have to know about the internal
-    /// id machinery: the assignment is skipped when the user already pinned
+    /// id machinery: the assignment is skipped when the user already set
     /// an explicit SymbolId via .As(SymbolId) or named the rule via
-    /// .As(string). GraphemeRule uses this; a
+    /// .As(string). GraphemeRule uses this, and a
     /// third-party single-rune leaf can use it too.
     /// </remarks>
     protected void SetLeafRuneId(int runeValue)

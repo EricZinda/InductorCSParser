@@ -71,7 +71,7 @@ public class TracingTests
     public void WithError_message_in_trace_escapes_control_chars()
     {
         // The user's .WithError text is appended to the FAIL trace body
-        // by Rule.AppendErrorMessage AFTER the interpolation handler
+        // by Rule.AppendErrorMessage after the interpolation handler
         // runs, so the handler's auto-escape (which covers every $"..."
         // hole in a rule's trace body) doesn't reach it. A control char
         // in the user's message used to splice verbatim into the FAIL
@@ -193,7 +193,7 @@ public class TracingTests
         // The failure path has the same leak: OneOf's "found '<token>',
         // wanted one of '...'" line quotes the rejected token's raw text.
         // A mechanical failure at char 0 records no Lexer.RecordFailure
-        // trace line (0 is not strictly past the initial deepest of 0), so
+        // trace line (0 isn't strictly past the initial deepest of 0), so
         // the trace is just the Read line and the FAIL line. The rejected
         // LF must escape to U+XXXX so the FAIL line stays one physical line.
         var sink = NewSink();
@@ -254,7 +254,7 @@ public class TracingTests
         // The trace label is "{Name}:{ruleClassName}", where Name is the
         // user's .As("...") string spliced verbatim by WriteTraceLine.
         // .As(string) doesn't validate the name's content, so a name
-        // carrying a control / line-separator char (a name built from
+        // with a control / line-separator char (a name built from
         // data, a stray "\n" in a constant) used to dump that char
         // straight into the SUCC / FAIL line and split the
         // one-event-per-line layout. Every other dynamic text on a trace
@@ -352,7 +352,7 @@ public class TracingTests
     [RecursiveEngineOnly]
     public void Transaction_depth_returns_to_zero_after_parse()
     {
-        // Regression guard: Dispose must decrement the depth on every
+        // Regression test: Dispose must decrement the depth on every
         // exit path, including success and failure. If a commit or
         // rollback short-circuited the decrement, later parses would
         // accumulate incorrect indentation. We run the same parse
@@ -427,7 +427,7 @@ public class TracingTests
         // Proves the C# compiler actually rewrote $"..." to use our
         // TraceInterpolatedStringHandler's shouldAppend gate, not
         // eagerly-built strings. A side effect placed inside the
-        // interpolation hole must NOT run when the handler's
+        // interpolation hole never runs when the handler's
         // constructor returns shouldAppend=false.
         //
         // If this test fails with sideEffectCount == 1, the compiler

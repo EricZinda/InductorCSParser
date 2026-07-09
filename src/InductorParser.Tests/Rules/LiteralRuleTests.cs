@@ -108,7 +108,7 @@ public class LiteralRuleTests
     [Test]
     public void Literal_symbol_text_round_trips_via_ToString()
     {
-        // Leaf symbol carries a Memory range over the matched input. The
+        // Leaf symbol stores a Memory range over the matched input. The
         // ToString round-trip should produce the original literal.
         var rule = Literal("select").Flatten(SyntaxTree.FlattenType.Preserve);
         var result = rule.Parse("select");
@@ -185,7 +185,7 @@ public class LiteralRuleTests
     public void LiteralIgnoreAsciiCase_leaves_non_letter_chars_strict()
     {
         // The 0x20 bit difference between '[' and '{', '@' and '`', etc.
-        // must NOT be treated as a case-insensitive match. Only A-Za-z
+        // isn't a case-insensitive match. Only A-Za-z
         // get that treatment.
         var rule = LiteralIgnoreAsciiCase("a[b");
         Assert.That(rule.Parse("A[B").Success, Is.True);
@@ -196,10 +196,10 @@ public class LiteralRuleTests
     public void LiteralIgnoreAsciiCase_rejects_non_ascii_pattern_at_construction()
     {
         // Patterns must be ASCII-only. German sharp s in the pattern
-        // would never participate in case-folding (the rule is named
-        // LiteralIgnoreAsciiCase, and ASCII case-folding doesn't reach
-        // U+00DF), so admitting it at construction would mislead the
-        // reader. Construction throws instead, pointing at the offending
+        // would never match case-insensitively (the rule is named
+        // LiteralIgnoreAsciiCase, and the ASCII case-insensitive rule
+        // doesn't reach U+00DF), so admitting it at construction would
+        // mislead the reader. Construction throws instead, pointing at the offending
         // char. Grammars that want a non-ASCII keyword should use
         // Literal("straße") directly.
         var exception = Assert.Throws<ArgumentException>(

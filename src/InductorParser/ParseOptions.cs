@@ -123,7 +123,8 @@ public sealed class ParseOptions
     /// Parse returns a tree whose shape matches the grammar
     /// one-to-one: every FlattenType.Flatten Symbol, every FlattenType.Delete
     /// node, and every individual leaf symbol is present exactly where the
-    /// grammar placed it.
+    /// grammar placed it. Alias subtrees are the one exception, described
+    /// in the remarks.
     /// </summary>
     /// <remarks>
     /// Turn this on to debug or inspect a grammar, to PrintTree the full
@@ -134,6 +135,15 @@ public sealed class ParseOptions
     /// FlattenType.Preserve Symbols remain as findable nodes. That's the shape
     /// most callers actually want to walk (i.e. what the grammar was designed for).
     /// This setting is for debugging.
+    /// <para>
+    /// The alias exception: an alias substitutes its identity for its inner's
+    /// even here, exactly as it does in the production tree. An alias over a
+    /// named rule shows the match under the alias's id with the inner's own
+    /// Symbol gone, and a FlattenType.Delete rule directly under an alias
+    /// still contributes nothing. The debug tree mirrors the alias's
+    /// production behavior so that flattening the debug tree gives exactly
+    /// the tree a normal parse returns.
+    /// </para>
     /// </remarks>
     public bool PreserveAllSymbols { get; set; } = false;
 
@@ -163,7 +173,7 @@ public sealed class ParseOptions
     /// Template that wraps a rule's <c>.WithError("...")</c> message when that
     /// rule is the deepest failure. The author's text fills the {message}
     /// placeholder, and the position placeholders every template shares add the
-    /// location, so a custom message carries its position the way the mechanical
+    /// location, so a custom message includes its position the way the mechanical
     /// default does. Setting it to null throws.
     /// </summary>
     /// <remarks>
@@ -171,8 +181,8 @@ public sealed class ParseOptions
     /// the author's text. Set it to "{message}" to get the raw <c>.WithError</c>
     /// string back with no position, or reshape it however you like (position
     /// first, localized, and so on). See <see cref="PositionalErrorTemplate"/> for
-    /// the placeholder syntax; the per-template placeholder here is {message}, the
-    /// author's text. Unlike the mechanical templates it carries no {character},
+    /// the placeholder syntax. The per-template placeholder here is {message}, the
+    /// author's text. Unlike the mechanical templates it has no {character},
     /// since a WithError failure can sit at end of input where there's no
     /// character to name.
     /// </remarks>
@@ -214,7 +224,7 @@ public sealed class ParseOptions
     /// in an editor: an emoji or a combining sequence earlier on the line counts
     /// as one column, not as its several UTF-16 code units. Use {charColumnNumber}
     /// (or {charColumn}) instead for a Language Server Protocol client or editor,
-    /// which count columns in chars. The ParseResult fields stay zero-based; only
+    /// which count columns in chars. The ParseResult fields stay zero-based. Only
     /// the *Number placeholders are shifted.
     /// plus a per-template placeholder for the unit-specific value:
     /// <code>
@@ -263,10 +273,10 @@ public sealed class ParseOptions
     /// Template for the message when the input can't be normalized to the
     /// grammar's normalization form because it isn't well-formed Unicode (an
     /// unpaired UTF-16 surrogate, or U+FFFE). The parse returns
-    /// <see cref="ParseOutcome.MalformedInput"/> carrying this message instead
+    /// <see cref="ParseOutcome.MalformedInput"/> with this message instead
     /// of letting .NET's string.Normalize throw an ArgumentException whose text
     /// the app can't control. See <see cref="PositionalErrorTemplate"/> for the
-    /// placeholder syntax; the per-template {character} placeholder renders the
+    /// placeholder syntax. The per-template {character} placeholder renders the
     /// offending element (a lone surrogate comes out as U+D800-style text).
     /// Setting it to null throws.
     /// </summary>

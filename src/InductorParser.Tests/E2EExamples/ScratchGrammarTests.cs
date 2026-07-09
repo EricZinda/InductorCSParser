@@ -5,8 +5,8 @@ using static InductorParser.Rules;
 namespace InductorParser.Tests;
 
 // A throwaway place to try out a grammar under the debugger. Safe to
-// delete. The real coverage conventions live in docs/TestArchitecture.md;
-// this file is only meant as a starting point for experimenting.
+// delete. The real coverage conventions live in docs/TestArchitecture.md.
+// This file is only meant as a starting point for experimenting.
 [TestFixture]
 public class ScratchGrammarTests
 {

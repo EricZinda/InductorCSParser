@@ -63,9 +63,9 @@ public class WithErrorTests
         var rule = Or(letters, digits);
 
         // On "#x": the letters branch fails immediately at offset 0 ('#'
-        // is not a letter), recording "need letters" there. The digits
+        // isn't a letter), recording "need letters" there. The digits
         // branch consumes the '#', then OneOrMore(Digits) fails at offset
-        // 1 ('x' is not a digit), recording "need digits" there. Both
+        // 1 ('x' isn't a digit), recording "need digits" there. Both
         // named failures survive the failed Or. Offset 1 is deeper than
         // offset 0, so "need digits" wins. If ranking ignored depth and
         // took the first failure written, "need letters" would surface.
@@ -81,7 +81,7 @@ public class WithErrorTests
     {
         // Inner Token has its own .WithError ("unterminated string"),
         // recorded at the EOF after consuming "\"hello". The outer Or
-        // carries .WithError too; composite anchoring records it at the
+        // has .WithError too. Composite anchoring records it at the
         // same deepest position its branches reached. Two named failures
         // at the same depth: the first one recorded wins, and the inner
         // Token recorded before the outer Or, so its message surfaces.

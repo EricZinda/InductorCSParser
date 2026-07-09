@@ -3,7 +3,7 @@ using System.Text;
 namespace InductorParser.SyntaxTree;
 
 /// <summary>
-/// The per-parse runtime context every Symbol from a parse holds a reference to. Carries what's
+/// The per-parse runtime context every Symbol from a parse holds a reference to. It stores what's
 /// needed to recover a Symbol's original-input position, raw source text, and human-readable rule
 /// name.
 /// </summary>

@@ -97,7 +97,7 @@ public class CompileTests
         // an unnamed rule, and diagnostic text. ThrowIfSealed makes that a
         // build-time-only setting so a subclass can't rename a rule out from
         // under a live, compiled grammar. The built-in constructor callers run
-        // before Compile seals the rule, so they're unaffected; this covers the
+        // before Compile seals the rule, so they're unaffected. This covers the
         // after-Compile case a public subclass could otherwise hit.
         var rule = new RenamableRule();
         Assert.DoesNotThrow(() => rule.Rename("BeforeCompile"),

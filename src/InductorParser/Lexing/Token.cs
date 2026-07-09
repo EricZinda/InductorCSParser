@@ -15,7 +15,7 @@ namespace InductorParser.Lexing;
 //     on the stack or inline in whatever holds it, and returning one from a
 //     method copies its fields into the caller's storage rather than
 //     allocating. The input string is the only heap object in the picture.
-//     Every Token just carries an 8-byte pointer to it plus a few ints.
+//     Every Token just stores an 8-byte pointer to it plus a few ints.
 //
 //   * `readonly` means the Token's fields never change after construction.
 //     That lets the compiler avoid defensive copies when passing a Token

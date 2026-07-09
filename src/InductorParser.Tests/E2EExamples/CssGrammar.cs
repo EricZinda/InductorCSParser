@@ -222,7 +222,7 @@ public static class CssGrammar
 
     // Optional [property ":" value-list] followed by a terminating ";".
     // The declaration body is optional so an empty ";" still parses,
-    // matching the C++ grammar's OptionalExpression wrapper around the
+    // matching the C++ grammar's OptionalExpression around the
     // property:value part.
     public static readonly Rule Declaration = And(
         Optional(And(

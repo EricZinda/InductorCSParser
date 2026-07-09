@@ -28,7 +28,7 @@ namespace InductorParser.Tests;
 //     plane rune like the guitar emoji contributes 2 to the column
 //     count because it occupies two UTF-16 chars.
 //
-//   * "\n", "\r", and "\r\n" are all line terminators. "\r\n" is ONE
+//   * "\n", "\r", and "\r\n" are all line terminators. "\r\n" is one
 //     break, not two.
 //
 //   * A terminator char COUNTS as a column on the line it ends. In
@@ -36,7 +36,7 @@ namespace InductorParser.Tests;
 //     that line). The column doesn't skip over it.
 //
 //   * After the terminator, the next line starts at column 0. So the
-//     'X' in "aa\nX" is (line 1, column 0), NOT column 3 of some
+//     'X' in "aa\nX" is (line 1, column 0), not column 3 of some
 //     flat counter. Column is line-relative, not absolute.
 //
 // See docs/InductorParserReference.md "The Parse Result" for the full
@@ -197,7 +197,7 @@ public class ErrorPositionTests
     [Test]
     public void Multi_rune_single_grapheme_distinguishes_char_and_grapheme_counts()
     {
-        // LatinEAcuteGrapheme is e + combining acute: ONE grapheme, TWO
+        // LatinEAcuteGrapheme is e + combining acute: one grapheme, two
         // UTF-16 chars. This works on every runtime including legacy
         // StringInfo. Grammar matches the whole grapheme as one token
         // then fails on the trailing letter.
@@ -261,7 +261,7 @@ public class ErrorPositionTests
         // ParseOutcome.Success is the enum's zero value, so a zeroed
         // ParseResult has Outcome == Success even though no parse produced
         // it. Without the _grammar check in ParseResult.Success, a default
-        // struct would claim success while carrying a null Tree and empty
+        // struct would claim success while holding a null Tree and empty
         // Symbols, so the idiomatic `if (result.Success) Use(result.Tree)`
         // would treat a never-run parse as a successful one and then NRE on
         // Tree (or silently process empty data). These are the everyday ways

@@ -6,7 +6,7 @@ Regex expressions can sometimes introduce [denial-of-service attacks](https://en
 
 `^([a-zA-Z0-9]+)*@example.com$`
 
-A simple email-ish validator. Feed it `"aaaaaaaaaaaaaaaaaaaaa!"` and .NET Regex will happily burn seconds trying to find a match. The problem is the nested `+` inside `*`: when the match fails, the engine has to try every way to split the a's across the two quantifiers before giving up. Add another a or two and the time doubles.
+A simple email-ish validator. Feed it `"aaaaaaaaaaaaaaaaaaaaa!"` and .NET Regex will happily burn a couple hundred milliseconds trying to find a match. The problem is the nested `+` inside `*`: when the match fails, the engine has to try every way to split the a's across the two quantifiers before giving up. Add another a or two and the time doubles.
 
 The Inductor Parser version avoids this and is more readable as well:
 
@@ -32,14 +32,14 @@ Backtracking isn't the only way to hang. A 100 MB input file, a grammar that rec
 
 The parser has three ways to handle these scenarios:
 
-- `RuleCountLimit` (default 10M) caps how many rule invocations a parse can do. The benchmark's JSON parser on a 1 MB input (1,081,666 chars) does about 1.4M invocations and parses in ~55 ms, so the default has comfortable headroom for well-formed input. Deterministic across hardware, so the same input trips at the same count on every machine.
+- `RuleCountLimit` (default 10M) caps how much work a parse can do: each rule invocation and each bulk-scan step counts as one unit. The benchmark's JSON parser on a 1 MB input (1,081,666 chars) uses about 4.1M units and parses in ~220 ms, so the default has comfortable headroom for well-formed input. Deterministic across hardware, so the same input trips at the same count on every machine.
 - `MaxDepth` (default 1000) caps the recursion depth. 10,000 nested open parenthesis fail cleanly instead of killing the process with an uncatchable `StackOverflowException`.
 - `Timeout` (default off) caps wall-clock time spent (done without a thread to support WebGL). Off by default because the other two handle safety issues and wall-clock limits make tests flaky across hardware. Still worth turning on for untrusted input in a request handler.
 
 ## Unicode Attacks
 Unicode opens up a few classic ways to attack a parser. The good news is that grammars written naturally already block most of them. 
 
-When thinking about these attacks and how to defend against them, it is useful to think about whether your grammar defines what's *allowed* (your grammar must match for input to be accepted) or what's *blocked* (your grammar must match for input to be rejected). The default Inductor Parser behavior protects you for "allowed" rules. For "blocked" rules, you sometimes need to do a little extra work.
+When thinking about these attacks and how to defend against them, it's useful to think about whether your grammar defines what's *allowed* (your grammar must match for input to be accepted) or what's *blocked* (your grammar must match for input to be rejected). The default Inductor Parser behavior protects you for "allowed" rules. For "blocked" rules, you sometimes need to do a little extra work.
 
 Two pieces of background make the rest of this section easier. 
 
@@ -66,7 +66,7 @@ The `#` isn't where the reviewer saw it. `grant("write")` is a live rule now, an
 
 Defense: This one's different from the rest, because the parser was never the thing being fooled. It reads the raw code points in logical order and builds exactly the rule the bytes describe, the live `grant("write")` included. The victim is the human who reviewed the visual rendering and signed off on a rule that reads one way and parses another. So "the grammar sees the true order" isn't the defense here, it's the problem: the parser faithfully carries out an intent the reviewer never saw.
 
-That also means you can't fix it at the grammar level the way you fix lookalikes (show below). A strict "allowed" grammar rejects a bidi control that lands somewhere it isn't permitted, but these characters hide inside comments and string literals, which accept almost anything, and there the parser takes them without complaint. The fix is to close the gap between what the reviewer sees and what the parser does. [UAX #9, the Unicode Bidirectional Algorithm](https://www.unicode.org/reports/tr9/), enumerates the bidi formatting characters, and they're all General Category `Cf` (Format), the same category as the other invisibles, so one `TokenSet` recognizes the whole class, and you can refuse any input that carries one before it reaches a reviewer or the parser:
+That also means you can't fix it at the grammar level the way you fix lookalikes (shown below). A strict "allowed" grammar rejects a bidi control that lands somewhere it isn't permitted, but these characters hide inside comments and string literals, which accept almost anything, and there the parser takes them without complaint. To fix it, close the gap between what the reviewer sees and what the parser does. [UAX #9, the Unicode Bidirectional Algorithm](https://www.unicode.org/reports/tr9/), enumerates the bidi formatting characters, and they're all General Category `Cf` (Format), the same category as the other invisibles, so one `TokenSet` recognizes the whole class, and you can refuse any input that contains one before it reaches a reviewer or the parser:
 
 ```csharp
 static readonly TokenSet FormatControls = TokenSet.Category(UnicodeCategory.Format);
@@ -101,9 +101,9 @@ Attack: Some characters look almost identical to common letters but are differen
 There are two kinds of lookalike, described next.
 
 #### Unicode Compatibility Lookalikes
-Attack: A site reserves the name `admin` for public posts to a forum so nobody can impersonate staff, and enforces it by checking each new username against a blocklist. An attacker signs up as `𝐚dmin`, spelling the first letter with math-bold `𝐚` (`U+1D400`). The blocklist compares raw code points, sees a string that isn't `admin`, and lets the registration through. Now every comment and support reply the attacker posts shows a name that reads as `admin`, and they can pose as staff to anyone who trusts the label.
+Attack: A site reserves the name `admin` for public posts to a forum so nobody can impersonate staff, and enforces it by checking each new username against a blocklist. An attacker signs up as `𝐚dmin`, spelling the first letter with math-bold `𝐚` (`U+1D41A`). The blocklist compares raw code points, sees a string that isn't `admin`, and lets the registration through. Now every comment and support reply the attacker posts shows a name that reads as `admin`, and they can pose as staff to anyone who trusts the label.
 
-Unicode compatibility lookalikes are stylistic or formatting variants of the same base character. Math-bold `𝐀` (`U+1D400`), fullwidth `Ａ` (`U+FF21`), small caps, superscripts, ligatures: Unicode declares them compatibility-equivalent to plain `A`, and `FormKC` [normalization](Primer3.md#compatibility-vs-canonical) converts them all to that plain `A`. Whether you want that conversion depends on your rule. For "allowed" rules the default `FormC` rejects the versions you didn't write down explicitly, which is what you want:
+Unicode compatibility lookalikes are stylistic or formatting variants of the same base character. Math-bold `𝐀` (`U+1D400`), fullwidth `Ａ` (`U+FF21`), superscripts, ligatures: Unicode declares them compatibility-equivalent to the plain letters they represent, and `FormKC` [normalization](Primer3.md#compatibility-vs-canonical) converts them back to those plain letters. Whether you want that conversion depends on your rule. For "allowed" rules the default `FormC` rejects the versions you didn't write down explicitly, which is what you want:
 
 ```csharp
 // A rule that accepts only the exact "admin" you wrote down
@@ -188,7 +188,7 @@ safeUsername.Parse("admin").Success;             // true
 safeUsername.Parse("ad\u200Bmin").Success;       // false: the ZWS fails NoneOf(Invisibles)
 ```
 
-One thing to know about `Format`: it includes `U+200D` (ZWJ), so emoji families like `👨‍👩‍👧` split into their components after the filter. That's fine for a banned-text check. If your input can carry emoji you want to keep whole, take the `Format` category and subtract ZWJ with the `-` (difference) operator:
+One thing to know about `Format`: it includes `U+200D` (ZWJ), so emoji families like `👨‍👩‍👧` split into their components after the filter. That's fine for a banned-text check. If your input can contain emoji you want to keep whole, take the `Format` category and subtract ZWJ with the `-` (difference) operator:
 
 ```csharp
 static readonly TokenSet Invisibles =
@@ -216,16 +216,16 @@ static string StripMarks(string input) =>
         .Where(rune => !InvisiblesAndMarks.ContainsRune(rune)));
 ```
 
-The `FormKD` step is what makes this work. A precomposed letter like `é` (`U+00E9`) carries no separate mark to strip until you decompose it into `e` plus a combining accent, so without that step the accented forms slip through. After it, every accented form collapses to its base letter and `kïll`, `ki<CGJ>ll`, and plain `kill` all become the same string.
+The `FormKD` step is what makes this work. A precomposed letter like `é` (`U+00E9`) has no separate mark to strip until you decompose it into `e` plus a combining accent, so without that step the accented forms slip through. After it, every accented form collapses to its base letter and `kïll`, `ki<CGJ>ll`, and plain `kill` all become the same string.
 
-This is the right hammer for a banned-word check, where you want `résumé` and `resume` to compare equal and you don't care about losing the accents. It's the wrong hammer for a field where the marks carry meaning. Stripping marks from Arabic, Hebrew, or Indic text destroys it, and a name like `José` turns into `Jose`. Use it only where the field is supposed to be mark-free, the same way you'd restrict a username to ASCII letters.
+This is the right hammer for a banned-word check, where you want `résumé` and `resume` to compare equal and you don't care about losing the accents. It's the wrong hammer for a field where the marks have meaning. Stripping marks from Arabic, Hebrew, or Indic text destroys it, and a name like `José` turns into `Jose`. Use it only where the field is supposed to be mark-free, the same way you'd restrict a username to ASCII letters.
 
-The other thing combining marks enable is bulk. Unicode lets you stack an unbounded number of marks on one base character. Stack a few dozen and you get what the internet calls "Zalgo" text: every letter sprouts a tower of accents above it and another below, spilling over the neighboring lines until the word looks like it's melting down the page. A single letter carrying a few hundred marks is a small denial-of-service against anything that has to render or shape it, and a way to run up the character count behind a length check. The mark filter above drops all of them, and the parser's own `RuleCountLimit` from the pathological-input section caps the parsing work regardless.
+The other thing combining marks enable is bulk. Unicode lets you stack an unbounded number of marks on one base character. Stack a few dozen and you get what the internet calls "Zalgo" text: every letter sprouts a tower of accents above it and another below, spilling over the neighboring lines until the word looks like it's melting down the page. A single letter with a few hundred marks is a small denial-of-service against anything that has to render or shape it, and a way to run up the character count behind a length check. The mark filter above drops all of them, and the parser's own `RuleCountLimit` from the pathological-input section caps the parsing work regardless.
 
 ### Case-insensitive matching tricks
 Attack: a signup system reserves the name `admin`. It lowercases the input first so `ADMIN` and `Admin` are caught too, then checks the blocklist. On a server whose culture is Turkish, `"ADMIN".ToLower()` is `admın`, with a dotless `ı` (`U+0131`), because Turkish `I` lowercases to the dotless letter. `admın` isn't `admin`, so the check misses it, and the attacker registers a capitalized `ADMIN` that everyone else's machine lowercases straight back to `admin`. The mirror image is just as bad: the Kelvin sign `K` (`U+212A`) lowercases to an ordinary `k`, so "lowercase then compare" makes two different strings equal. That canonicalize-then-compare collision is a known source of real password-reset account takeovers: request a reset for a name spelled with a colliding character, the backend canonicalizes it to the victim's name, and the reset email lands in the attacker's inbox.
 
-Defense: the trap is `String.ToLower` and `String.ToUpper`, which depend on the ambient culture and convert characters across scripts. The parser only supplies one case insensitive rule:  `LiteralIgnoreAsciiCase`, which matches case-insensitively across exactly the 26 ASCII letters and nothing else:
+Defense: the trap is `String.ToLower` and `String.ToUpper`, which depend on the ambient culture and can turn a character into a different letter entirely. The parser only supplies one case insensitive rule:  `LiteralIgnoreAsciiCase`, which matches case-insensitively across exactly the 26 ASCII letters and nothing else:
 
 ```csharp
 var blocker = And(LiteralIgnoreAsciiCase("admin"), Eof()).Compile();
@@ -238,7 +238,7 @@ blocker.Parse("Admin").Success;   // true
 Because the case-insensitivity is scoped to ASCII, there's no culture to configure and no cross-script collision to exploit. If you genuinely need case-insensitive matching over non-ASCII letters, know that there's no correct one-liner in .NET. `String.ToLowerInvariant` (which does at least sidestep the culture-sensitive `ToLower`'s Turkish-`ı` trap) is only a lowercase mapping, not case-insensitive matching: it leaves `ß` as `ß` while `SS` lowercases to `ss`, so the two never match, and it keeps the Greek final sigma `ς` distinct from medial `σ`. Even .NET's culture-aware `StringComparison.InvariantCultureIgnoreCase` is uneven, treating `ς` and `σ` as equal but still not `ß` and `ss`. Full Unicode case-insensitive matching (where `ß` equals `ss`) isn't something .NET exposes, so you either use a library like ICU or apply Unicode's mappings yourself. The [Unicode case-mapping FAQ](https://unicode.org/faq/casemap_charprop.html) lays out the traps. Normalization matters on top of case, too, since canonically equivalent spellings like the Angstrom sign `Å` (`U+212B`) and precomposed `Å` (`U+00C5`) are the same letter and only compare equal once you normalize.
 
 ### Digits from other scripts
-Attack: a checkout form reads a quantity with a digit rule and multiplies it by a price. The rule uses `TokenSet.Digits`, which by design is every Unicode decimal digit, not just `0-9`. An attacker types the quantity in Arabic-Indic digits, `٢٣` (that's 23). The grammar matches, because those really are decimal digits. Then the downstream arithmetic goes wrong: `int.Parse("٢٣")` either throws (the invariant culture and most others), which is an unhandled exception on attacker-controlled input, or in a culture that recognizes the digits quietly accepts a value the ASCII-only code around it never expected. A hand-rolled `rune - '0'` is worse, it silently computes nonsense, because `٢` is nowhere near `2` in code-point order.
+Attack: a checkout form reads a quantity with a digit rule and multiplies it by a price. The rule uses `TokenSet.Digits`, which by design is every Unicode decimal digit, not just `0-9`. An attacker types the quantity in Arabic-Indic digits, `٢٣` (that's 23). The grammar matches, because those really are decimal digits. Then the downstream arithmetic goes wrong: `int.Parse("٢٣")` throws no matter the culture (.NET's number parsing only recognizes the ASCII digits `0-9`), which is an unhandled exception on attacker-controlled input. A hand-rolled `rune - '0'` is worse, it silently computes nonsense, because `٢` is nowhere near `2` in code-point order.
 
 Defense: if the value flows into ASCII arithmetic or an ASCII-only parser downstream, match ASCII digits at the grammar so the mismatch never forms:
 
@@ -249,7 +249,7 @@ quantity.Parse("23").Success;    // true
 quantity.Parse("٢٣").Success;    // false: Arabic-Indic digits aren't ASCII 0-9
 ```
 
-`TokenSet.Ascii.Digits` is exactly `0-9`. If you do want to accept the world's digits (a search box, a display field), keep `TokenSet.Digits`, but convert each rune by its real Unicode numeric value (`CharUnicodeInfo.GetDecimalDigitValue`) instead of subtracting `'0'`, and never hand the raw string to a consumer that assumes ASCII. Digits from different scripts can even share a shape while carrying different values, so a rule that mixes digit scripts is a spoofing surface on its own (see [UTR #36 §2.7](https://www.unicode.org/reports/tr36/tr36-15.html), which gives a digit string that reads as `89` but evaluates to 42).
+`TokenSet.Ascii.Digits` is exactly `0-9`. If you do want to accept the world's digits (a search box, a display field), keep `TokenSet.Digits`, but convert each rune by its real Unicode numeric value (`CharUnicodeInfo.GetDecimalDigitValue`) instead of subtracting `'0'`, and never hand the raw string to a consumer that assumes ASCII. Digits from different scripts can even share a shape but have different values, so a rule that mixes digit scripts is a spoofing surface on its own (see [UTR #36 §2.7](https://www.unicode.org/reports/tr36/tr36-15.html), which gives a digit string that reads as `89` but evaluates to 42).
 
 ### Normalization ordering
 The last few defenses lean on normalization, so it's worth being clear about a trap that comes from doing a check on one form of a string and consuming another.
@@ -268,7 +268,7 @@ A .NET `string` is just a sequence of UTF-16 code units with no validity rule at
 ```csharp
 var grammar = And(Literal("hello"), Eof()).Compile();   // default FormC
 
-// A string carrying a lone high surrogate never reaches the grammar
+// A string with a lone high surrogate never reaches the grammar
 grammar.Parse(loneSurrogateInput).Outcome;   // ParseOutcome.MalformedInput
 ```
 
@@ -278,7 +278,7 @@ The related attack is decoder tampering. Every .NET decoder is permissive by def
 var grammar = And(OneOrMore(NoneOf(TokenSet.Replacement)), Eof()).Compile();
 
 grammar.Parse("hi").Success;          // true: clean input
-grammar.Parse(tamperedInput).Success; // false: carries a U+FFFD from a lenient decode
+grammar.Parse(tamperedInput).Success; // false: contains a U+FFFD from a lenient decode
 ```
 
 Better still, stop the substitution at the source by decoding strictly, so malformed bytes throw at decode time instead of becoming a silent `U+FFFD`:

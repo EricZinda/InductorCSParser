@@ -39,7 +39,7 @@ internal sealed class PeekRule : Rule
             TraceFailure(lexer, $"inner didn't match");
             // Peek records one failure of its own, at the lookahead anchor
             // (its own start, where the user has to change something),
-            // carrying its .WithError if it has one. This is the
+            // including its .WithError if it has one. This is the
             // exception to composite anchoring: there is no surviving
             // descendant failure to anchor to. See docs/ErrorArchitecture.md.
             lexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);

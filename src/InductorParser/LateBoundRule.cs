@@ -16,9 +16,9 @@ namespace InductorParser;
 // top-to-bottom, so whichever one is declared first sees the other as
 // null.
 //
-// The fix is a LateBoundRule: a Rule that stands in for the real target
+// A LateBoundRule is a Rule that stands in for the real target
 // during construction and gets its target attached later via .Bind(...).
-// The canonical pattern:
+// The canonical pattern is:
 //
 //     static readonly LateBoundRule Expression = new LateBoundRule("expression");
 //     static readonly Rule Term = Or(Integer(), And(Token('('), Expression, Token(')')));
@@ -31,11 +31,12 @@ namespace InductorParser;
 // already constructed.
 //
 // A LateBoundRule is transparent. At parse time it just forwards
-// TryParse to its target, and the Symbol that flows up carries the
+// TryParse to its target, and the Symbol that flows up has the
 // target's Id, not the LateBoundRule's. Transparency also covers
 // FlattenType: a LateBoundRule has no flatten policy of its own, so the
 // FlattenType property reports the target's, resolved through any chain
-// of LateBoundRules to the first concrete rule. That's what makes
+// of LateBoundRules and unnamed aliases (the other transparent stand-in,
+// see AliasRule) to the first concrete rule. That's what makes
 // `Alias(lateBound)`, `And(x, lateBound, y)`, and every other
 // composition behave exactly as if the target rule were written in the
 // LateBoundRule's place, with no placeholder layer and no special case.
@@ -87,9 +88,10 @@ public sealed class LateBoundRule : Rule
     private FlattenType? _resolvedFlattenType;
 
     // A LateBoundRule has no FlattenType of its own: it reports the
-    // bound target's, resolved through any chain of LateBoundRules to
-    // the first concrete rule. The value is computed once during Compile
-    // while the graph walk is single-threaded; afterwards this getter is
+    // bound target's, resolved through any chain of LateBoundRules and
+    // unnamed aliases to the first concrete rule. The value is computed
+    // once during Compile while the graph walk is single-threaded.
+    // Afterwards this getter is
     // a plain field read, so concurrent parses of the compiled grammar
     // need no synchronization. Reading it before Compile throws rather
     // than guessing a value that would later turn out wrong.
@@ -130,7 +132,7 @@ public sealed class LateBoundRule : Rule
         "bound shape an explicit id, set it on the target rule instead " +
         "(target.As(new SymbolId(...))).");
 
-    // Flatten on LateBoundRule is rejected because its FlattenType is not
+    // Flatten on LateBoundRule is rejected because its FlattenType isn't
     // its own: the property forwards to the bound target. A value set
     // here would be shadowed by that forward and never take effect. Set
     // .Flatten(...) on the target rule instead.
@@ -182,32 +184,50 @@ public sealed class LateBoundRule : Rule
         _resolvedFlattenType = ResolveTargetFlattenType();
     }
 
-    // Walk the .Bind(...) chain to the first concrete (non-LateBound)
-    // rule and return its FlattenType. Throws if the chain reaches an
-    // unbound rule, or loops back on itself without ever reaching a
-    // concrete rule (a grammar that can never match anything).
+    // Walk the .Bind(...) chain to the first concrete rule and return its
+    // FlattenType. The walk follows _target and Inner fields rather than
+    // reading FlattenType on each link, because a LateBoundRule that
+    // Compile hasn't resolved yet throws on that read. Throws if the
+    // chain reaches an unbound rule, or loops back on itself without
+    // ever reaching a concrete rule (a grammar that can never match
+    // anything).
     private FlattenType ResolveTargetFlattenType()
     {
-        var visited = new HashSet<LateBoundRule> { this };
+        var visited = new HashSet<Rule> { this };
         Rule current = _target!;
-        while (current is LateBoundRule lateBound)
+        while (true)
         {
-            if (lateBound._target == null)
+            if (current is LateBoundRule lateBound)
             {
-                var label = lateBound._debugName ?? "<anonymous LateBoundRule>";
-                throw new InvalidOperationException(
-                    $"Rule '{label}' is a LateBoundRule that was never bound. " +
-                    "Call .Bind(targetRule) before calling Parse or Compile.");
+                if (lateBound._target == null)
+                {
+                    var label = lateBound._debugName ?? "<anonymous LateBoundRule>";
+                    throw new InvalidOperationException(
+                        $"Rule '{label}' is a LateBoundRule that was never bound. " +
+                        "Call .Bind(targetRule) before calling Parse or Compile.");
+                }
+                if (!visited.Add(lateBound))
+                    throw ChainLoopsForever();
+                current = lateBound._target;
             }
-            if (!visited.Add(lateBound))
-                throw new InvalidOperationException(
-                    "A LateBoundRule's .Bind(...) chain loops through LateBoundRules " +
-                    "without ever reaching a concrete rule, so it has no FlattenType " +
-                    "and can never match input. Bind one rule in the loop to a real " +
-                    "(non-LateBound) rule.");
-            current = lateBound._target;
+            else if (current is AliasRule alias && alias.IsTransparent)
+            {
+                if (!visited.Add(alias))
+                    throw ChainLoopsForever();
+                current = alias.Inner;
+            }
+            else
+            {
+                return current.FlattenType;
+            }
         }
-        return current.FlattenType;
     }
+
+    private static InvalidOperationException ChainLoopsForever() =>
+        new InvalidOperationException(
+            "A LateBoundRule's .Bind(...) chain loops through LateBoundRules " +
+            "and unnamed aliases without ever reaching a concrete rule, so it " +
+            "can never match input. Bind one rule in " +
+            "the loop to a real (non-LateBound, non-alias) rule.");
 
 }

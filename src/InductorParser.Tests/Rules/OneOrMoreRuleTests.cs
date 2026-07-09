@@ -65,7 +65,7 @@ public class OneOrMoreRuleTests
     {
         // Inner And(Letter, Letter) consumes the first letter then fails
         // on the second, recording a mechanical failure at position 1.
-        // OneOrMore carries a named WithError; composite anchoring records
+        // OneOrMore has a named WithError, and composite anchoring records
         // it at the deepest position its subtree reached (1), where it
         // ties the mechanical failure on depth and wins the named-beats-
         // mechanical tie-break. See docs/ErrorArchitecture.md.

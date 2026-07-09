@@ -133,7 +133,7 @@ public class GraphemeClusterIndexTests
     public void Indic_conjunct_matches_runtime()
     {
         // क + virama + ष. UAX #29 rev. 39 (GB9c) keeps these glued as
-        // one cluster; earlier revisions break before the trailing
+        // one cluster. Earlier revisions break before the trailing
         // consonant. Either way the index agrees with StringInfo,
         // because both walk the same enumerator. This test verifies that
         // agreement on whichever runtime is hosting the suite.
@@ -159,8 +159,8 @@ public class GraphemeClusterIndexTests
     public void IsClusterStart_at_end_of_input_is_true()
     {
         // The post-validation gate in the scanner-skip relies on this:
-        // a candidate landing at exactly input.Length is the EOF
-        // sentinel boundary, never mid-cluster.
+        // a candidate landing at exactly input.Length is the
+        // end-of-input boundary, never mid-cluster.
         var index = GraphemeClusterIndex.For("abc");
         Assert.That(index.IsClusterStart(3), Is.True);
     }
@@ -194,7 +194,7 @@ public class GraphemeClusterIndexTests
         // instance has mutable state: a TextElementEnumerator that gets
         // advanced and a bool[] _isStart array that gets written during
         // EnsureWalkedTo. Without synchronization the threads race on the
-        // enumerator and lose _isStart updates: positions that ARE
+        // enumerator and lose _isStart updates: positions that are
         // grapheme cluster starts end up unmarked, IsClusterStart returns
         // the wrong answer for them, and the next LengthAt call against
         // such a position throws the "not a cluster start" invariant
@@ -268,10 +268,10 @@ public class GraphemeClusterIndexTests
     [Test]
     public void Out_of_order_queries_still_return_correct_results()
     {
-        // Walk doesn't reset; querying near the end first should still
+        // Walk doesn't reset. Querying near the end first should still
         // give correct answers for earlier positions. Offsets in
         // "a\r\nb́c": 0=a, 1=\r, 2=\n, 3=b, 4=́, 5=c.
-        // Clusters: [a], [\r\n], [b́], [c]; boundaries at
+        // Clusters: [a], [\r\n], [b́], [c], boundaries at
         // 0, 1, 3, 5, 6.
         string input = $"a\r\nb{UnicodeExamples.CombiningAcuteText}c";
         var index = GraphemeClusterIndex.For(input);

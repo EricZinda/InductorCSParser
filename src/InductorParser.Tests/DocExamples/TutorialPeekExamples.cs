@@ -13,18 +13,17 @@ namespace InductorParser.Tests.DocExamples;
 public class TutorialPeekExamples
 {
     // tutorial-peek.md "Inductor Parser has a rule for this: ScanUntil"
-    // The first form: And(ScanUntil(set), OneOf(set)) succeeds only if
-    // the input contains a digit (consuming everything up to and including
-    // the first one).
+    // The first form: ScanUntil(set) succeeds only if the input contains
+    // a digit, consuming everything up to (but not including) the first
+    // one, and fails if it reaches end-of-input without one.
     [Test]
-    public void Contains_consuming_form_succeeds_only_when_digit_present()
+    public void ScanUntil_succeeds_only_when_digit_present()
     {
-        var rule = And(ScanUntil(TokenSet.Range('0', '9')),
-                          OneOf(TokenSet.Range('0', '9')));
+        var rule = ScanUntil(TokenSet.Range('0', '9'));
 
-        // Wrap with AnyToken+Eof so a partial match doesn't fail Parse's
-        // consume-all-input rule, since the doc presents this rule as
-        // standalone.
+        // Wrap with AnyToken+Eof so the unconsumed tail doesn't fail
+        // Parse's consume-all-input rule, since the doc presents this
+        // rule as standalone.
         var anchored = And(rule, ZeroOrMore(AnyToken()), Eof());
         Assert.That(anchored.Parse("abc1xyz").Success, Is.True);
         Assert.That(anchored.Parse("noDigitsAtAll").Success, Is.False);
@@ -36,7 +35,7 @@ public class TutorialPeekExamples
     public void Contains_peek_form_does_not_consume_input()
     {
         Rule Contains(TokenSet options) =>
-            Peek(And(ScanUntil(options), OneOf(options)));
+            Peek(ScanUntil(options));
 
         // Combine: digit, upper, lower, special. Then run a final
         // AnyToken-loop to consume the actual input. If the Peeks worked,
@@ -63,8 +62,8 @@ public class TutorialPeekExamples
     [Test]
     public void Contains_rule_overload_finds_substring()
     {
-        Rule Contains(Rule innerRule) =>
-            Peek(And(ScanUntil(innerRule), innerRule));
+        Rule Contains(Rule rule) =>
+            Peek(ScanUntil(rule));
 
         var notPassword = And(
             Not(Contains(Literal("password"))),
@@ -100,11 +99,13 @@ public class TutorialPeekExamples
     [Test]
     public void Full_pattern_validates_password()
     {
-        Rule Contains(Rule innerRule) =>
-            Peek(And(ScanUntil(innerRule), innerRule));
+        // The doc writes both of these as overloads named Contains. Local
+        // functions can't overload, so the TokenSet one is ContainsSet here.
+        Rule Contains(Rule rule) =>
+            Peek(ScanUntil(rule));
 
         Rule ContainsSet(TokenSet options) =>
-            Peek(And(ScanUntil(options), OneOf(options)));
+            Peek(ScanUntil(options));
 
         var originalPassword = "OldPwd1!";
         var username = "alice";

@@ -120,9 +120,9 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_zero_match_with_zero_lower_bound_produces_empty_symbols()
     {
         // A BetweenInclusive whose lower bound is 0 and that matched zero
-        // times has FlattenType.Flatten, so no wrapper Symbol is ever
+        // times has FlattenType.Flatten, so no composite Symbol is ever
         // produced: the empty match leaves the root Symbols list empty.
-        // No per-rune leaves, no BetweenInclusive wrapper, no children-list
+        // No per-rune leaves, no BetweenInclusive node, no children-list
         // allocation survives into the tree.
         var result = BetweenInclusive(0, int.MaxValue, Token('x')).Parse("");
 
@@ -224,7 +224,7 @@ public class BetweenInclusiveRuleTests
         Assert.That(result.Success, Is.False);
         // BetweenInclusive's WithError reports at the failing iteration's
         // start position (1, where Token('a') tried 'b' and failed). The
-        // first 'a' matched and advanced the lexer; the failure point is
+        // first 'a' matched and advanced the lexer, and the failure point is
         // the position the user needs to fix, not the rule's overall start.
         // See docs/ErrorArchitecture.md.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
@@ -302,7 +302,7 @@ public class BetweenInclusiveRuleTests
         // The fix gates the shortcut on Inner.HasErrorMessageInSubtree,
         // which is true here because Token('a').WithError is reachable
         // from the Or. The shortcut is bypassed. The loop runs the Or
-        // once; the Or's own per-child shortcut skips Token('b') (no
+        // once. The Or's own per-child shortcut skips Token('b') (no
         // WithError) but tries Token('a').WithError because its WithError
         // gates the per-child skip. "want 'a'" lands at the deepest-
         // failure slot for offset 0 and surfaces as ErrorMessage.
@@ -320,7 +320,7 @@ public class BetweenInclusiveRuleTests
         // Sibling of the OneOrMore case but for ZeroOrMore (AtLeast == 0).
         // ZeroOrMore catches inner failures and succeeds with count=0,
         // but its commit doesn't clear inner failures (count
-        // rules preserve failures about real input; see
+        // rules preserve failures about real input, see
         // docs/ErrorArchitecture.md). So the descendant Token('a')'s
         // .WithError("want 'a'") survives and is reported when the
         // outer And's Token('z') subsequently fails at the same offset.
@@ -531,7 +531,7 @@ public class BetweenInclusiveRuleTests
         var result = scanner.Parse("abxcyd");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        // NoneOf(stopSet) matches 'a','b','c','d' as Preserve leaves;
+        // NoneOf(stopSet) matches 'a','b','c','d' as Preserve leaves.
         // 'x' and 'y' fall to AnyToken().Delete() and contribute
         // nothing. The concatenated matched text must be "abcd".
         Assert.That(result.ToString(), Is.EqualTo("abcd"));
@@ -574,7 +574,7 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_scanner_skip_stops_at_a_multi_char_cluster_starting_with_a_lone_surrogate()
     {
         // A lone surrogate with a combining mark glued onto it (UAX #29
-        // GB9 keeps Extend with the preceding char) is ONE grapheme
+        // GB9 keeps Extend with the preceding char) is a single grapheme
         // cluster, two chars wide. WithinToken matches that whole
         // cluster by walking its runes, and both runes sit inside the
         // set once the user opts in to surrogates with TokenSet.Surrogates.
@@ -592,7 +592,7 @@ public class BetweenInclusiveRuleTests
 
         // Reference: WithinToken matches every cluster (each cluster's
         // runes are all inside the range), so the greedy form's matched
-        // text is the whole input. OneOrMore is not the scanner-skip
+        // text is the whole input. OneOrMore isn't the scanner-skip
         // shape, so this runs the unoptimized per-token parse.
         var reference = OneOrMore(WithinToken(OneOrMore(OneOf(set))));
         reference.Compile(null);
@@ -615,8 +615,8 @@ public class BetweenInclusiveRuleTests
     // CRLF is one grapheme cluster (UAX #29 GB3). The scanner-skip fast paths
     // in Lexer.AdvanceUntilRuneIn and Lexer.AdvanceUntilLiteralCandidateIn use
     // string.IndexOfAny / string.IndexOf, which operate on UTF-16 code units
-    // and don't know about cluster boundaries. Without a guard, they land on
-    // the LF inside CRLF, the inner Or reads a fresh one-rune "\n" token
+    // and don't know about cluster boundaries. Without a boundary check,
+    // they land on the LF inside CRLF, the inner Or reads a fresh one-rune "\n" token
     // at the mid-cluster offset, and a rule that should reject the multi-rune
     // CRLF cluster (OneOf("\n"), Literal("\nfoo"), etc.) mistakenly matches
     // it. The slow path walks one grapheme at a time and is the source of
@@ -664,7 +664,7 @@ public class BetweenInclusiveRuleTests
         // Exercises the cached single-literal path in
         // AdvanceUntilLiteralCandidateIn (literalPositions != null,
         // literals.Length == 1). IndexOf("\nfoo", ...) lands on the LF
-        // inside CRLF. Without the guard, AnyLiteralMatchesAt confirms
+        // inside CRLF. Without the boundary check, AnyLiteralMatchesAt confirms
         // the literal at the mid-cluster offset and the inner Literal
         // rule then reads "\nfoo" from that offset.
         var match = Literal("\nfoo").Flatten(SyntaxTree.FlattenType.Preserve);
@@ -686,7 +686,7 @@ public class BetweenInclusiveRuleTests
     {
         // Exercises the BMP-firstrunes IndexOfAny path in
         // AdvanceUntilLiteralCandidateIn (literalPositions == null because
-        // there are two literals; bmpFirstRunes carries '\n' for both).
+        // there are two literals, and bmpFirstRunes has '\n' for both).
         // Same mid-CRLF landing problem as the single-literal cache.
         var matchFoo = Literal("\nfoo").Flatten(SyntaxTree.FlattenType.Preserve);
         var matchBar = Literal("\nbar").Flatten(SyntaxTree.FlattenType.Preserve);
@@ -726,7 +726,7 @@ public class BetweenInclusiveRuleTests
 
     // The same byte-level-search bug shape applies to any BMP char that
     // can sit as the second-or-later rune of a multi-rune cluster.
-    // CRLF is the practical case; the others below test the broader
+    // CRLF is the practical case. The others below test the broader
     // behavior so a future regression in the IsAtMidToken
     // gate gets caught for the categories that actually appear in real
     // grammars.
@@ -813,7 +813,7 @@ public class BetweenInclusiveRuleTests
     public void BetweenInclusive_scanner_shape_indic_conjunct_agrees_with_unoptimized_path()
     {
         // Devanagari ka + virama + ssa. UAX #29 rev. 39 (GB9c) keeps
-        // these glued as one Indic conjunct cluster; earlier revisions
+        // these glued as one Indic conjunct cluster, and earlier revisions
         // break before the trailing consonant. .NET 8's StringInfo
         // currently uses the older rules, so the slow path treats this
         // as two clusters and OneOf(ssa) matches at the trailing
@@ -930,7 +930,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void SourceText_on_BetweenInclusive_returns_matched_text_under_every_FlattenType()
     {
-        // BetweenInclusive(1, 3, inner) matched against "ab" — inner
+        // BetweenInclusive(1, 3, inner) matched against "ab": inner
         // ran twice (atLeast=1 ≤ count=2 ≤ atMost=3). The shared body
         // is the same machinery OneOrMore / ZeroOrMore / Optional /
         // AtLeast / AtMost / Exactly all run, so one matrix test

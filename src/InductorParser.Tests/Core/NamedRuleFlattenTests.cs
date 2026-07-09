@@ -9,13 +9,13 @@ namespace InductorParser.Tests;
 // Tests for the .As / .Flatten interaction. The rule under test is:
 // a caller who identifies a rule with .As(name) or .As(SymbolId) almost
 // always wants Tree.Find / Tree.FindAll to surface it later, and that
-// only works if the rule's wrapper Symbol reaches the parse tree
+// only works if the rule's Symbol reaches the parse tree
 // (FlattenType.Preserve). Two behaviors fall out of that rule:
 //
 //   * .As on a rule whose flatten policy is still the class default
 //     silently flips the policy to Preserve. Token / Literal default
-//     to Delete; And / Or / OneOrMore / ZeroOrMore default to Flatten.
-//     Naming any of them used to leave their wrapper Symbol absent
+//     to Delete. And / Or / OneOrMore / ZeroOrMore default to Flatten.
+//     Naming any of them used to leave their Symbol absent
 //     from the tree, so Tree.Find returned null even when the rule
 //     matched. The auto-flip removes that silent surprise.
 //
@@ -35,7 +35,7 @@ public class NamedRuleFlattenTests
     public void As_string_on_Token_flips_default_Delete_to_Preserve()
     {
         // Token('!') defaults to FlattenType.Delete, which would
-        // remove the wrapper Symbol and make Tree.Find return null.
+        // remove the rule's Symbol and make Tree.Find return null.
         // The auto-flip is what makes the natural-looking grammar
         // (no manual .Preserve()) work for finding.
         var marker = Token('!').As("marker");
@@ -49,7 +49,7 @@ public class NamedRuleFlattenTests
     {
         // ZeroOrMore / OneOrMore default to FlattenType.Flatten,
         // which lifts children into the parent and removes the
-        // repetition's wrapper. .As(name) flips it so the wrapper
+        // repetition's Symbol. .As(name) flips it so the Symbol
         // stays in the tree as a findable node.
         var repeated = ZeroOrMore(OneOf(TokenSet.Letters)).As("letters");
 
@@ -82,8 +82,7 @@ public class NamedRuleFlattenTests
     {
         // The SymbolId overload of .As has the same identify-implies-
         // Preserve story as the string overload: an explicit id is only
-        // useful if the rule's wrapper Symbol reaches the tree to
-        // carry it.
+        // useful if the Symbol that stores it reaches the tree.
         var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 42);
         var marker = Token('!').As(explicitId);
 
@@ -100,7 +99,7 @@ public class NamedRuleFlattenTests
     {
         // The natural-looking grammar from the Versionize ConventionalCommit
         // rewrite. Pre-fix, Tree.Find(marker) returned null because Token
-        // defaults to Delete and the wrapper Symbol never reached the tree.
+        // defaults to Delete and the rule's Symbol never reached the tree.
         // After the fix, .As flips the policy and Find succeeds.
         var marker = Token('!').As("marker");
         var rule = And(Token('a'), Optional(marker), Token('b')).Preserve();
@@ -117,8 +116,8 @@ public class NamedRuleFlattenTests
     {
         // The "type" rule shape from the same Versionize grammar.
         // ZeroOrMore defaults to Flatten, so without the auto-flip
-        // its wrapper Symbol gets lifted into the parent and Find
-        // returns null. After the fix, the wrapper survives.
+        // its Symbol gets lifted into the parent and Find
+        // returns null. After the fix, the Symbol survives.
         var type = ZeroOrMore(OneOf(TokenSet.Letters)).As("type");
         var rule = And(type, Eof()).Preserve();
         rule.Compile();
@@ -135,8 +134,8 @@ public class NamedRuleFlattenTests
     [Test]
     public void As_string_after_explicit_Delete_throws()
     {
-        // The caller explicitly asked for Delete (the wrapper Symbol
-        // doesn't reach the tree) AND for the rule to be findable
+        // The caller explicitly asked for Delete (the rule's Symbol
+        // doesn't reach the tree) and for the rule to be findable
         // by name. Those two requests contradict each other, so
         // .As fails rather than silently overriding the explicit
         // .Delete() decision.
@@ -192,7 +191,7 @@ public class NamedRuleFlattenTests
     {
         // Reverse order. .As(name) ran first and auto-flipped to
         // Preserve. The caller then asks for Delete, which would
-        // remove the wrapper Symbol and break Tree.Find. .Flatten
+        // remove the rule's Symbol and break Tree.Find. .Flatten
         // refuses rather than silently undoing the implicit
         // Preserve that .As set.
         var marker = Token('!').As("marker");
@@ -229,7 +228,7 @@ public class NamedRuleFlattenTests
     public void Flatten_Preserve_after_As_string_works()
     {
         // Explicitly setting Preserve after .As is a no-op in effect
-        // (the auto-flip already set it) but doesn't throw — the
+        // (the auto-flip already set it) but doesn't throw, since the
         // caller's two requests don't contradict each other.
         var marker = Token('!').As("marker").Preserve();
 

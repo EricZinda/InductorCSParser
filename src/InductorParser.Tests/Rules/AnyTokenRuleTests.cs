@@ -144,7 +144,7 @@ public class AnyTokenRuleTests
     public void AnyToken_with_explicit_SymbolId_uses_explicit_id_for_single_rune_leaves()
     {
         // .As(SymbolId) is the user's "set a stable id" signal, parallel
-        // to .As("name") for findability. The leaf has to carry the
+        // to .As("name") for findability. The leaf has to keep the
         // explicit id so Tree.Find / Tree.Is resolve through the user's
         // explicit reference. Same shape as the OneOf explicit-id test.
         var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 102);
@@ -163,7 +163,7 @@ public class AnyTokenRuleTests
     {
         // A multi-rune cluster (regional-indicator US flag) has
         // Token.RuneValue == -1 because two runes don't fit in one int,
-        // so the leaf carries the rule's own Id whether the rule is named
+        // so the leaf gets the rule's own Id whether the rule is named
         // or not.
         var unnamedRule = AnyToken();
         var unnamedResult = unnamedRule.Parse(USFlagGrapheme);

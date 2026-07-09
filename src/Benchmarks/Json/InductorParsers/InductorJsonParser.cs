@@ -23,7 +23,7 @@ namespace InductorParser.Benchmarks.Json.InductorParsers;
 // Entry point is the bare value rule (no surrounding
 // And(Optional(AnyWhitespace()), value, Optional(AnyWhitespace()), Eof)). The harness
 // feeds clean input that starts and ends at the value, competitors
-// likewise skip a trailing-Eof wrapper, and adding one would spend
+// likewise skip a trailing Eof rule, and adding one would spend
 // time on every parse that the bench isn't trying to measure.
 public static class InductorJsonParser
 {
@@ -92,7 +92,7 @@ public static class InductorJsonParser
 
     public static ParseResult Parse(string input) => JsonRule.Parse(input, _options);
 
-    // Token-lexer is the only lexer now; ParseGrapheme is kept as
+    // Token-lexer is the only lexer now. ParseGrapheme is kept as
     // an alias of Parse so existing benchmark rows continue to call it.
     public static ParseResult ParseToken(string input) => JsonRule.Parse(input, _options);
 

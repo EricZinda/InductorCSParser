@@ -162,9 +162,9 @@ public class BudgetTests
     [Test]
     public void Null_Cancellation_does_not_abort_normal_parse()
     {
-        // The default Cancellation (null) must not look canceled to the
-        // periodic check. Verified here because if we ever forget the
-        // null guard, every parse would NRE on the IsCanceled poll.
+        // The default Cancellation (null) can't be allowed to look canceled
+        // to the periodic check. Verified here because if we ever forget the
+        // null check, every parse would NRE on the IsCanceled poll.
         var rule = OneOrMore(OneOf(TokenSet.Letters));
         var options = new ParseOptions { Cancellation = null };
         var result = rule.Parse(new string('a', 5000), options);
@@ -357,7 +357,7 @@ public class BudgetTests
     [Test]
     public void Aborted_result_reflects_deepest_progress_when_failures_recorded()
     {
-        // Regression guard for the abort-position bug: when the budget
+        // Regression test for the abort-position bug: when the budget
         // trips, every active transaction unwinds and lexer.Position
         // rolls back to 0. Rule.Parse has to use lexer.DeepestFailurePosition
         // (a high-water mark that isn't rolled back) to surface a
@@ -402,7 +402,7 @@ public class BudgetTests
     // Shared grammar: Peek(recursive inner). The inner's first Or branch
     // consumes one 'a' then fails on 'z' (so RecordFailure fires inside
     // the probe), and the second branch consumes one 'a' and recurses.
-    // The MaxDepth case trips on the depth check at level 17; the three
+    // The MaxDepth case trips on the depth check at level 17. The three
     // periodic-check cases (RuleCountLimit, Timeout, Cancellation) all
     // trip at invocation 1024, which lands on level 147 of the recursion.
 
@@ -462,7 +462,7 @@ public class BudgetTests
     }
 
     // Regression tests: the bulk-scan rules (ScanWhile, ScanUntil) collapse
-    // a run of N matching tokens into one Rule invocation. Without an inner
+    // a sequence of N matching tokens into one Rule invocation. Without an inner
     // budget tick, an attacker who points such a rule at a long matching
     // input (a string body, a CSV field, an identifier run) pins the
     // parser for the whole run, ignoring Timeout / Cancellation /

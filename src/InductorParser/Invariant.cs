@@ -106,7 +106,7 @@ public static class Invariant
 //     Invariant.That(condition, handler);
 //
 // The constructor sets shouldAppend=true only when condition is
-// FALSE, i.e. when That is about to throw and needs the formatted
+// false, i.e. when That is about to throw and needs the formatted
 // message. Every other call shouldAppend=false, so the compiler skips
 // every Append call: no boxing, no ToString, no StringBuilder. A
 // plain string literal "foo" passed in compiles to AppendLiteral("foo")
@@ -159,7 +159,7 @@ public ref struct InvariantInterpolatedStringHandler
 // Exception directly rather than from InvalidOperationException so a
 // stray `catch (InvalidOperationException)` somewhere up the stack
 // can't quietly swallow it. The user-API rejections (".As called
-// twice", etc.) are still InvalidOperationException; this one means an
+// twice", etc.) are still InvalidOperationException. This one means an
 // invariant that should never fail did, whether it was declared by
 // InductorParser itself or by a user-defined rule.
 public sealed class InductorParserBugException : Exception

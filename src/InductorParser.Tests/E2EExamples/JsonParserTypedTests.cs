@@ -83,7 +83,7 @@ public class JsonParserTypedTests
     }
 
     // Real-world script samples (Tamil, Tibetan, Hebrew RTL, Simplified
-    // and Traditional Chinese) carried verbatim through a JSON string,
+    // and Traditional Chinese) passed verbatim through a JSON string,
     // both as a bare value and inside an object key and an array element.
     // The strings are raw (unescaped) non-ASCII text, which the string-body
     // ScanUntil consumes up to the closing quote, so a roundtrip failure
@@ -135,7 +135,7 @@ public class JsonParserTypedTests
     {
         // 汉字 and 漢字 share the second character but differ in the first.
         // The parser keeps the two distinct (NFC doesn't merge them), so
-        // the projected string values are not equal.
+        // the projected string values aren't equal.
         var simplified = JsonParserTyped.Project("\"" + UnicodeExamples.ChineseSimplifiedHanziIdentifier + "\"");
         var traditional = JsonParserTyped.Project("\"" + UnicodeExamples.ChineseTraditionalHanziIdentifier + "\"");
 

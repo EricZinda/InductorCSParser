@@ -57,7 +57,7 @@ public class NotRuleTests
         //     and Or returns success.
         //
         // Inner overall succeeded, so Not fails. The deepest recorded
-        // failure (1, null) is from Or's non-taken alternative -- orphan
+        // failure (1, null) is from Or's non-taken alternative: orphan
         // information about a path the parser deliberately abandoned.
         // Not's failure is anchored at offset 0 (where Not was called),
         // so Not rolls the deepest-failure marker back to its snapshot
@@ -237,11 +237,11 @@ public class NotRuleTests
     [Test]
     public void SourceRange_on_Not_reports_zero_width_at_its_anchor()
     {
-        // Not succeeds when inner FAILS — consumes nothing either way.
+        // Not succeeds when inner fails, and consumes nothing either way.
         // The Preserve'd composite records a zero-length consumed span
         // at the negative-lookahead's anchor. SourceRange reports a
         // zero-width range there, SourceText is empty. Consumers can
-        // highlight "the parser asserted X is not here" at the right
+        // highlight "the parser asserted X isn't here" at the right
         // offset without claiming any text was matched.
         var notRule = Not(Literal("Z")).As("guard");
         var rule = And(Literal("ab"), notRule, Literal("X").Preserve()).Preserve();
@@ -261,7 +261,7 @@ public class NotRuleTests
         // Not is zero-width: it succeeds when its inner rule FAILS and
         // contributes no characters either way. SourceText is empty
         // regardless of FlattenType. Use Not(Literal("X")) against
-        // empty input — inner fails, Not succeeds, wrapper consumes
+        // empty input: inner fails, Not succeeds, the outer rule consumes
         // nothing, parse finishes cleanly.
         SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
             ruleBuilder: () => Not(Literal("X")),

@@ -13,7 +13,7 @@ public class ParseResultFactoryTests
     [Test]
     public void ErrorCharIndex_factory_rejects_out_of_range_values()
     {
-        // ErrorCharIndex must be in [0, input.Length]; out-of-range
+        // ErrorCharIndex must be in [0, input.Length]. Out-of-range
         // throws, input.Length is the inclusive upper bound.
         var grammar = Literal("hi");
         grammar.Compile();
@@ -34,8 +34,8 @@ public class ParseResultFactoryTests
     {
         // ParseResult.Aborted is for the four budget/cancellation outcomes
         // only. Accepting Success would produce a contradictory result whose
-        // Success property is true despite carrying an abort message and no
-        // symbols. 
+        // Success property is true despite holding an abort message and no
+        // symbols.
         var grammar = Literal("hi");
         grammar.Compile();
         var input = "ab";
@@ -86,7 +86,7 @@ public class ParseResultFactoryTests
     public void MalformedInput_factory_builds_a_non_success_result()
     {
         // The MalformedInput factory mirrors Failed: a non-Success result
-        // carrying a message and an offending index, but with its own outcome
+        // with a message and an offending index, but with its own outcome
         // so callers can tell "the input isn't valid Unicode" apart from a
         // plain grammar mismatch. It's public for custom parse drivers that do
         // their own normalization.

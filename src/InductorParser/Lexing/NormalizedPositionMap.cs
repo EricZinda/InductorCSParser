@@ -68,7 +68,7 @@ internal static class NormalizedPositionMap
         // cache (a bool-array lookup) rather than StringInfo.GetNextTextElement,
         // which allocates a substring for every grapheme just to read its
         // length. The normalized side's index was already built by the lexer
-        // during the parse; the original side's is built once here and reused
+        // during the parse. The original side's is built once here and reused
         // by every later position lookup on the same input. This is the whole
         // reason GraphemeClusterIndex exists (see its header), so a tree walk
         // that reads many Symbol.SourceRange / SourceText values doesn't pay a

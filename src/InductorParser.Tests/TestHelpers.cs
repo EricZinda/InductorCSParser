@@ -14,7 +14,7 @@ public enum LineBreak { Lf, Crlf }
 
 // Cross-cutting helpers shared by more than one test fixture. The
 // trace-format helpers live in TraceTestHelpers.cs (a separate file
-// because they have a distinct one-helper-pattern story); everything
+// because they have a distinct one-helper-pattern story). Everything
 // else gathers here.
 //
 // Two categories so far:
@@ -180,8 +180,8 @@ internal static class TestHelpers
     // normalization, char-index to line/column conversion, etc.) so a
     // regression in any one unit shows up as a single named assertion
     // failure. Per-rule fixtures that just spot-check ErrorCharIndex
-    // don't need this; ErrorPositionTests covers the conversion math
-    // on its own.
+    // don't need this, since ErrorPositionTests covers the conversion
+    // math on its own.
     public static void AssertErrorPosition(
         ParseResult result,
         int charIndex,

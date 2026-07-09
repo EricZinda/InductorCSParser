@@ -9,7 +9,7 @@ namespace InductorParser.Tests;
 // one or more digits, a literal '.', and one or more digits.
 //
 // Float() used to compose Integer() for both the integer and
-// fractional parts, and Integer() carries its own optional leading
+// fractional parts, and Integer() has its own optional leading
 // + or -. That made Float silently accept extra signs in the
 // fractional position and stacked at the front, which a grammar
 // using Float as a numeric literal isn't expecting. See backlog

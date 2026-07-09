@@ -52,7 +52,7 @@ public class PeekRuleTests
         // Inner is Literal("ab") which on input "ax" reads 'a' (position
         // advances to 1), then reads 'x' and mismatches against 'b'. Literal
         // records its failure at position 1 with a null message. The Peek
-        // wrapper rolls the lexer position back to 0 and rolls the deepest-
+        // rule rolls the lexer position back to 0 and rolls the deepest-
         // failure marker back the same way, then records its own failure
         // at the lookahead anchor (position 0) with the user's WithError.
         //
@@ -101,8 +101,8 @@ public class PeekRuleTests
     public void Peek_discards_inner_WithError_because_lookahead_failures_are_dropped()
     {
         // Peek runs its inner as a throwaway probe. When the probe fails,
-        // the failures it produced (including a .WithError the
-        // inner carries) are discarded: they sit at a position the
+        // the failures it produced (including a .WithError on the
+        // inner) are discarded: they sit at a position the
         // parser only probed, never consumed. With no WithError of its
         // own, Peek records a bare mechanical failure at its anchor, so the
         // user sees the generic positional template, not the inner's
@@ -257,7 +257,7 @@ public class PeekRuleTests
         // Peek's consumed span is always zero-width: it's a lookahead
         // and contributes no characters. SourceText is empty regardless
         // of FlattenType. Use Peek(Eof()) so the inner succeeds against
-        // empty input — the wrapper consumes nothing and the parse
+        // empty input: the outer rule consumes nothing and the parse
         // finishes without trailing input.
         SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
             ruleBuilder: () => Peek(Eof()),

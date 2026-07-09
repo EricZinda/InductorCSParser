@@ -21,24 +21,24 @@ public class Primer2Examples
     private static (Rule config, Rule section, Rule keyValue, Rule key,
                     Rule value, Rule integerValue) BuildGrammar()
     {
-        var lineEndRunes = TokenSet.LineTerminators;
+        var lineTerminators = TokenSet.LineTerminators;
         // Every single-rune whitespace, line terminators included, for
         // NoneOf stop sets. TokenSet.InlineWhitespace is intra-line only,
-        // so unioning with lineEndRunes restores "any whitespace rune."
-        var anySpaceRunes = TokenSet.InlineWhitespace | lineEndRunes;
+        // so unioning with lineTerminators restores "any whitespace rune."
+        var anyWhitespace = TokenSet.InlineWhitespace | lineTerminators;
 
-        var name = OneOrMore(NoneOf(TokenSet.Runes("]") | anySpaceRunes)).As("name");
-        var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes)).As("key");
+        var name = OneOrMore(NoneOf(TokenSet.Single(']') | anyWhitespace)).As("name");
+        var key = OneOrMore(NoneOf(TokenSet.Single('=') | anyWhitespace)).As("key");
 
         var section = And(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
             .As("section");
 
         var quotedString = And(
             Token('"'),
-            ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
+            ZeroOrMore(NoneOf(TokenSet.Single('"') | lineTerminators)),
             Token('"')).As("quotedString");
 
-        var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\""))).As("bareWord");
+        var bareWord = OneOrMore(NoneOf(anyWhitespace | TokenSet.Single('"'))).As("bareWord");
 
         var floatValue = Float().As("float");
         var integerValue = Integer().As("integer");
@@ -61,7 +61,7 @@ public class Primer2Examples
     //   config.Parse("[server]\nhost = \"localhost\"\nport = 8080\n")
     // produces a tree with config / section(name=server) / two keyValue
     // children. The tree shows the [], =, and quote tokens are all gone
-    // (Delete flatten), and value carries one named typed child each.
+    // (Delete flatten), and value has one named typed child each.
     [Test]
     public void Tree_shape_matches_doc_after_flatten()
     {
@@ -81,7 +81,7 @@ public class Primer2Examples
         var hostKeyValue = root.Children[1];
         Assert.That(hostKeyValue.Is(keyValue), Is.True);
         Assert.That(hostKeyValue.Children[0].ToString(), Is.EqualTo("host"));
-        // value's typed child is a quotedString carrying just the body.
+        // value's typed child is a quotedString holding just the body.
         var hostValue = hostKeyValue.Children[1];
         Assert.That(hostValue.Children[0].ToString(), Is.EqualTo("localhost"));
 
@@ -188,7 +188,7 @@ public class Primer2Examples
     // primerFailure.md opening example: the doc claims that
     //   config.Parse("[server]\nport oops\n")
     // reports "Unexpected 'o' at line 2, column 6." and that ErrorLine /
-    // ErrorCharColumn carry the zero-based Language Server Protocol
+    // ErrorCharColumn hold the zero-based Language Server Protocol
     // values (line 1, column 5).
     [Test]
     public void Parse_failure_reports_line_and_column()
@@ -211,21 +211,21 @@ public class Primer2Examples
     [Test]
     public void WithError_message_surfaces_on_missing_equals()
     {
-        var lineEndRunes = TokenSet.LineTerminators;
-        var anySpaceRunes = TokenSet.InlineWhitespace | lineEndRunes;
+        var lineTerminators = TokenSet.LineTerminators;
+        var anyWhitespace = TokenSet.InlineWhitespace | lineTerminators;
 
-        var name = OneOrMore(NoneOf(TokenSet.Runes("]") | anySpaceRunes)).As("name");
-        var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes)).As("key");
+        var name = OneOrMore(NoneOf(TokenSet.Single(']') | anyWhitespace)).As("name");
+        var key = OneOrMore(NoneOf(TokenSet.Single('=') | anyWhitespace)).As("key");
 
         var section = And(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
             .As("section");
 
         var quotedString = And(
             Token('"'),
-            ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
+            ZeroOrMore(NoneOf(TokenSet.Single('"') | lineTerminators)),
             Token('"')).As("quotedString");
 
-        var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\""))).As("bareWord");
+        var bareWord = OneOrMore(NoneOf(anyWhitespace | TokenSet.Single('"'))).As("bareWord");
 
         var value = Or(
             Float().As("float"),
@@ -329,7 +329,7 @@ public class Primer2Examples
         }
 
         Assert.That(offending, Is.Not.Null);
-        // LineNumber is the one-based human line; Start.Line is 3 in the
+        // LineNumber is the one-based human line. Start.Line is 3 in the
         // zero-based Language Server Protocol convention.
         int humanLine = offending!.SourceRange!.Value.Start.LineNumber;
         Assert.That(humanLine, Is.EqualTo(4));
@@ -354,7 +354,7 @@ public class Primer2Examples
         var range = typed.SourceRange!.Value;
         string offendingLine = range.SourceLine();
 
-        // A sourceText.Split('\n') would leave a trailing '\r'; SourceLine stops
+        // A sourceText.Split('\n') would leave a trailing '\r'. SourceLine stops
         // at the CR, so the extracted line is clean even with CRLF endings.
         Assert.That(offendingLine, Is.EqualTo("port = 99999"));
         Assert.That(range.Start.LineNumber, Is.EqualTo(2));

@@ -24,7 +24,7 @@ namespace InductorParser.Tests;
 //      the parser takes a .NET string, and .NET strings are UTF-16
 //      internally. UTF-8 / UTF-32 / legacy-codepage decoding errors
 //      get resolved upstream by the caller's Encoding.GetString call
-//      (usually as U+FFFD replacements; see Group 4) before the
+//      (usually as U+FFFD replacements, see Group 4) before the
 //      parser is ever invoked. Under default FormC, .NET's
 //      string.Normalize rejects ill-formed UTF-16. Parse catches that
 //      and returns a ParseResult whose Outcome is MalformedInput,
@@ -33,7 +33,7 @@ namespace InductorParser.Tests;
 //      way as every other failure instead of catching a BCL exception.
 //      Under Compile(null) the lexer surfaces each ill-formed code unit
 //      as a token with no RuneValue, which OneOf and similar rules
-//      predictably reject. Either path is safe; a grammar can't
+//      predictably reject. Either path is safe. A grammar can't
 //      silently match a ill-formed surrogate.
 //
 //   2. BARE ATTACHING CHARACTERS: surfaces as a normal token, so
@@ -89,14 +89,14 @@ namespace InductorParser.Tests;
 //      byte-swapped form of U+FEFF (BOM), so its presence in a
 //      string is a signal that upstream byte-order detection
 //      failed. Windows' NormalizeString refuses to process such
-//      strings on that theory. U+FFFF and U+FDD0..U+FDEF carry
+//      strings on that theory. U+FFFF and U+FDD0..U+FDEF have
 //      no such signal and pass through.
 //      The caller reads the MalformedInput outcome (or compiles with
 //      null to skip normalization). U+FFFF, U+FDD0, the rest of the Private Use
 //      Area, and U+FFFD all pass through as ordinary tokens.
 //
 //   5. NORMALIZATION EDGE CASES: compile-time normalization checks
-//      ensure literals match the chosen form; see NormalizationTests.cs
+//      ensure literals match the chosen form. See NormalizationTests.cs
 //      for the full coverage.
 //
 //   6. IDENTIFIER-RELEVANT EDGE CASES: the default Identifier rule
@@ -246,7 +246,7 @@ public class UnexpectedUnicodeTests
         // genuinely ill-formed code unit, including correctly skipping a valid
         // surrogate PAIR (two chars that can't be mistaken for two lone
         // surrogates).
-        var grammar = And(Literal("ignored"), Eof()).Compile();  // default FormC; never runs
+        var grammar = And(Literal("ignored"), Eof()).Compile();  // default FormC, never runs
 
         // "a" (1 char) + waving hand (U+1F44B, a valid surrogate pair = 2
         // chars) + a lone surrogate. The pair is skipped, so the lone
@@ -538,7 +538,7 @@ public class UnexpectedUnicodeTests
         // back to back, not a valid pair (UTF-16 pairs are HIGH then
         // LOW). The lexer treats each as a one-char token with no
         // RuneValue. WTF-8 (Simon Sapin) discusses this exact pattern.
-        // Lock in that the parser does NOT silently reorder the two
+        // Lock in that the parser doesn't silently reorder the two
         // halves into a valid pair: each surrogate stays in its
         // original position as its own token, so OneOrMore sees two
         // tokens, not one merged scalar.
@@ -585,7 +585,7 @@ public class UnexpectedUnicodeTests
         // You can also write a rule that targets U+10FFFF
         // specifically via Token(...). An unrecognized character
         // doesn't match any normal rule, so a grammar without
-        // U+10FFFF fails normally at the orphan; the positive-match
+        // U+10FFFF fails normally at the orphan. The positive-match
         // path is just for grammars that want to deliberately do
         // something with this exact code point.
         Assert.That(And(Token(UnicodeExamples.MaximumCodePointRune), Eof()).Parse(input).Success, Is.True);
@@ -598,7 +598,7 @@ public class UnexpectedUnicodeTests
     // MalformedInput result, so all four non-null forms produce the
     // same MalformedInput outcome on lone surrogates and reversed pairs.
     // The earlier per-input tests (Lone_high_surrogate_handling
-    // etc.) cover only FormC; this parameterized test fills the
+    // etc.) cover only FormC. This parameterized test fills the
     // FormD / FormKC / FormKD gap so a future runtime change that
     // diverged any of them from FormC would surface here.
     //
@@ -794,7 +794,7 @@ public class UnexpectedUnicodeTests
         // following character (end of input) it has nothing to
         // prepend to, so the mandatory end-of-text break wraps it
         // as its own one-character cluster. Normal text comes
-        // BEFORE the orphan (adding text after would pair them up).
+        // before the orphan (adding text after would pair them up).
         string input = "hello" + UnicodeExamples.ArabicNumberSignText;
 
         // (1) Naive grammar fails: Literal("hello") + Eof doesn't
@@ -854,8 +854,8 @@ public class UnexpectedUnicodeTests
 
         // (2) AnyToken at the front consumes the CGJ as a
         // wildcard. Literal() and Eof() default to FlattenType.Delete
-        // so only the AnyToken's match surfaces in the symbol list;
-        // asserting its content verifies that the leading AnyToken
+        // so only the AnyToken's match surfaces in the symbol list.
+        // Asserting its content verifies that the leading AnyToken
         // really is the CGJ alone (one cluster) and the lexer
         // didn't accidentally merge the CGJ into the following 'h'.
         var anyTokenResult = And(AnyToken(), Literal("hello"), Eof()).Parse(input);
@@ -880,7 +880,7 @@ public class UnexpectedUnicodeTests
     public void BOM_at_start_of_input_is_consumed_as_one_token()
     {
         // U+FEFF BOM. NFC keeps it. Lexer reads as one token. The
-        // parser doesn't strip BOMs; the caller does, or the grammar
+        // parser doesn't strip BOMs. The caller does, or the grammar
         // accommodates with AnyToken or Token(BOM). Textbook BOM
         // gotcha: a strict grammar fails at offset 0.
         string input = (UnicodeExamples.ByteOrderMarkText + "hello");
@@ -928,7 +928,7 @@ public class UnexpectedUnicodeTests
     {
         // U+00A0 NO-BREAK SPACE renders as a space but is its own code
         // point. UAX #29 classifies it as GCB=Other so it breaks on
-        // both sides; .NET's Unicode category is Zs (Space_Separator),
+        // both sides. .NET's Unicode category is Zs (Space_Separator),
         // the same as U+0020. The lexer sees three tokens
         // (a, NBSP, b), so a grammar matching "ab" with no NBSP
         // accommodation fails at the NBSP. Common gotcha when input is
@@ -982,7 +982,7 @@ public class UnexpectedUnicodeTests
 
         // (1) Naive a-b grammar fails. The lexer hands back the
         // ("a" + ZWNJ) cluster as one token, so Token('a') doesn't
-        // match — it expects a token whose RuneValue is 'a' alone.
+        // match, since it expects a token whose RuneValue is 'a' alone.
         Assert.That(And(Token('a'), Token('b'), Eof()).Parse(input).Success, Is.False);
 
         // (2) AnyToken consumes the ("a" + ZWNJ) cluster as a
@@ -1026,7 +1026,7 @@ public class UnexpectedUnicodeTests
         // so it just sees U+202E as one token of its own.
         // Identifier() rejects it because U+202E isn't an
         // identifier-continue character. This documents that the
-        // parser is NOT susceptible to Trojan-Source-style visual
+        // parser isn't susceptible to Trojan-Source-style visual
         // reordering tricks: what the parser sees is what's in the
         // input characters, not what a renderer might display.
         string input = ("ab" + UnicodeExamples.RightToLeftOverrideText + "cd");
@@ -1102,7 +1102,7 @@ public class UnexpectedUnicodeTests
         // these characters in user-generated content produced
         // "Unexpected token ILLEGAL" errors in the browser. ES2019
         // aligned the JS string grammar with JSON. The parser
-        // treats U+2028 as one ordinary token; a line-based
+        // treats U+2028 as one ordinary token. A line-based
         // grammar matching Token('\n') doesn't catch it, but
         // EndOfLine() (which uses TokenSet.LineTerminators) does.
         string input = "a" + UnicodeExamples.LineSeparatorText + "b";
@@ -1114,7 +1114,7 @@ public class UnexpectedUnicodeTests
         // (2) AnyToken consumes U+2028 as a wildcard between the
         // letters. Token('a') / Token('b') / Eof() default to
         // FlattenType.Delete so only the AnyToken match surfaces
-        // in the symbol list; asserting its content verifies that
+        // in the symbol list. Asserting its content verifies that
         // the middle cluster really is U+2028 (not silently dropped
         // or remapped).
         var anyTokenResult = And(Token('a'), AnyToken(), Token('b'), Eof()).Parse(input);
@@ -1164,7 +1164,7 @@ public class UnexpectedUnicodeTests
         // treats NEL as a line terminator on some JVMs but not
         // others, and XML 1.1 added it to the newline list while
         // XML 1.0 omitted it. The parser treats NEL as one
-        // ordinary token; Token('\n') doesn't catch it,
+        // ordinary token. Token('\n') doesn't catch it,
         // EndOfLine() does.
         string input = "a" + UnicodeExamples.NextLineText + "b";
 
@@ -1205,7 +1205,7 @@ public class UnexpectedUnicodeTests
         // (2) AnyToken consumes the LRI as a wildcard between the
         // two halves of the word. Literal() defaults to
         // FlattenType.Delete so the surrounding "ab" / "cd"
-        // matches don't surface; the only top-level symbol is
+        // matches don't surface. The only top-level symbol is
         // the AnyToken match. Asserting its content verifies that
         // the consumed cluster really is U+2066 and not some
         // bidi-aware reorder.
@@ -1345,7 +1345,7 @@ public class UnexpectedUnicodeTests
     {
         // U+FFFD REPLACEMENT CHARACTER is what permissive decoders
         // emit when they see invalid bytes. By the time it reaches
-        // the parser it's a perfectly valid scalar; the parser treats
+        // the parser it's a perfectly valid scalar, and the parser treats
         // it as one token. If you see U+FFFD in input, that's a
         // signal an upstream decoder swallowed something malformed.
         string input = UnicodeExamples.ReplacementCharacterText + "hello";
@@ -1416,9 +1416,9 @@ public class UnexpectedUnicodeTests
     //   expected: the default Identifier rule has no mixed-script
     //   anti-spoofing logic. Restrict via a custom script-bounded
     //   TokenSet if you care about UTS #39 homoglyph attacks.
-    //   (Other identifier behaviors — non-ASCII digits in
-    //   TokenSet.Digits, all five Letter subcategories in
-    //   TokenSet.Letters — are covered in TokenSetTests rather
+    //   (Other identifier behaviors, like non-ASCII digits in
+    //   TokenSet.Digits and all five Letter subcategories in
+    //   TokenSet.Letters, are covered in TokenSetTests rather
     //   than here.)
     // ============================================================
 
@@ -1428,7 +1428,7 @@ public class UnexpectedUnicodeTests
         // Latin 'a' (U+0061) followed by Cyrillic small letter a
         // (U+0430). Both are XidContinue characters per UAX #31, so
         // Identifier() accepts the mixed-script string. Documents
-        // that the default has NO mixed-script restriction; if you
+        // that the default has no mixed-script restriction. If you
         // care about homoglyph spoofing (UTS #39), build a script-
         // restricted TokenSet manually. The "fix" side (a custom
         // LatinLetters set rejecting Cyrillic 'а') is shown in
@@ -1456,9 +1456,10 @@ public class UnexpectedUnicodeTests
         // others.
         //
         // The parser's LiteralIgnoreAsciiCase is ASCII-only by
-        // design specifically to avoid this. ASCII 'I' folds only
-        // to ASCII 'i'; U+0130 and U+0131 are their own runes
-        // that don't participate in the fold either direction.
+        // design specifically to avoid this. ASCII 'I' matches only
+        // ASCII 'i'. U+0130 and U+0131 are their own runes that
+        // don't participate in the case-insensitive match in
+        // either direction.
         // A grammar matching LiteralIgnoreAsciiCase("size") on
         // input containing Turkish dotted I or dotless i fails
         // normally, same as any other unrecognized rune.
@@ -1697,7 +1698,7 @@ public class UnexpectedUnicodeTests
         // fresh cluster. "U + S + F" therefore splits into the
         // US flag (U + S) and a lone trailing F, not into one
         // garbled three-letter cluster. Common parser bug:
-        // assuming any run of regional indicators is one cluster
+        // assuming any sequence of regional indicators is one cluster
         // and rendering them as a single (invalid) flag, or
         // attempting to interpret the third indicator as part of
         // the country code instead of the start of something
@@ -1724,7 +1725,7 @@ public class UnexpectedUnicodeTests
             "second cluster is the lone F regional indicator");
 
         // (2) Three AnyToken positions need three clusters, but
-        // there are only two; the third AnyToken sees Eof.
+        // there are only two, so the third AnyToken sees Eof.
         Assert.That(And(AnyToken(), AnyToken(), AnyToken(), Eof()).Parse(input).Success, Is.False,
             "three AnyToken positions need three clusters; the pair counts as one");
 

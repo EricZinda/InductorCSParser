@@ -48,7 +48,7 @@ namespace InductorParser;
 /// </remarks>
 public readonly partial struct TokenSet : IEquatable<TokenSet>
 {
-    // The closed interval [Low, High]: one contiguous run of Unicode code points, 
+    // The closed interval [Low, High]: one contiguous range of Unicode code points,
     // inclusive on both ends.
     // A TokenSet's rune part is represented
     // as a sorted, non-overlapping, non-adjacent array of these runs. Named
@@ -623,8 +623,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     // Binary search the sorted multi-rune array for a span equal to
     // `target`. Returns the index on hit, or ~insertionPoint on miss
-    // (the standard Array.BinarySearch convention so callers like the
-    // sorted-merge in operator| can reuse this). Each step compares with
+    // (the standard Array.BinarySearch convention). Each step compares with
     // SequenceCompareTo, which orders the two char spans by raw char value
     // (ordinal) the same way the array is sorted, and allocates nothing.
     private int BinarySearchMultiRuneGrapheme(ReadOnlySpan<char> target)
@@ -741,8 +740,9 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         int rangesLength = ranges?.Length ?? 0;
         int multiLength = multi?.Length ?? 0;
         // Equals treats null and an empty array as the same "empty" set
-        // (both length 0) for both halves, so GetHashCode has to agree
-        // or the contract breaks. A factory like Runes("") returns a
+        // (both length 0) for both halves, so GetHashCode has to agree,
+        // otherwise equal sets could hash differently and break
+        // Dictionary / HashSet lookups. A factory like Runes("") returns a
         // TokenSet with empty arrays, which Equals reports as equal to
         // default(TokenSet) but would hash differently if we only
         // short-circuited on null.
@@ -1652,7 +1652,7 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // minus the line terminators (IsLineTerminator filters those out, since
     // EndOfLine and LineTerminators own them). Scanning U+0000..U+FFFF covers
     // every whitespace character there is: the highest one Unicode defines is
-    // U+3000 IDEOGRAPHIC SPACE, and nothing above U+FFFF carries the property.
+    // U+3000 IDEOGRAPHIC SPACE, and nothing above U+FFFF has the property.
     private static TokenSet BuildInlineWhitespace()
     {
         var list = new List<Interval>();

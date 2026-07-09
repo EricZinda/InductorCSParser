@@ -11,8 +11,8 @@ namespace InductorParser.Tests;
 // transaction multi-token compare against a stored _expected string.
 // The only difference is ASCII letters compare case-insensitively, and
 // the pattern is restricted to ASCII-only at construction. Non-ASCII
-// patterns throw ArgumentException up front because ASCII case-folding
-// doesn't apply to them and admitting them would mislead the reader.
+// patterns throw ArgumentException up front because ASCII case-insensitive
+// matching doesn't apply to them and admitting them would mislead the reader.
 [TestFixture]
 public class LiteralIgnoreAsciiCaseRuleTests
 {
@@ -25,7 +25,7 @@ public class LiteralIgnoreAsciiCaseRuleTests
     //   * Non-ASCII row: the pattern is rejected at construction, before
     //     Compile or Parse ever run.
     // The "AlreadyNormalized" category is the only one that holds pure
-    // ASCII content ("a"); every other row's Source contains at least
+    // ASCII content ("a"). Every other row's Source contains at least
     // one non-ASCII char by design (the matrix was built to exercise
     // Unicode normalization behavior). The branching below keeps both
     // halves under the same parameterized fixture so a future row that
@@ -145,7 +145,7 @@ public class LiteralIgnoreAsciiCaseRuleTests
     // Construction rejects any char outside 0x00..0x7F. Three shapes:
     // a non-ASCII letter (German sharp-s), a combining mark with an
     // ASCII base, and a lone high surrogate. All three are common
-    // failure modes for grammars that reach for LiteralIgnoreAsciiCase
+    // failure modes for grammars that use LiteralIgnoreAsciiCase
     // when they actually want Literal.
     [Test]
     public void LiteralIgnoreAsciiCase_rejects_non_ascii_letter_at_construction()

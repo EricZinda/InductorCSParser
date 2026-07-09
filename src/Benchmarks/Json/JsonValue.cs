@@ -47,7 +47,7 @@ public class JsonString : IJson
     // in the spot-check fails. Scope: the escapes the input generator can
     // emit (quote, backslash, and the five C-style control escapes). No \/
     // and no \uXXXX. The constraint is preserved here even though it was
-    // originally added because Newtonsoft canonicalized those forms; the
+    // originally added because Newtonsoft canonicalized those forms. The
     // input generator hasn't been re-evaluated since Newtonsoft was
     // removed, and tightening it now would change what the bench measures.
     public static string Escape(string value)
