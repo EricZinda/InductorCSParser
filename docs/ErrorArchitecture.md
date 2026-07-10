@@ -39,12 +39,14 @@ The cost is that a `.WithError` only surfaces when its rule's failure is the dee
 
 A **leaf** records its failure at the specific spot it got stuck:
 
-| Leaf rule                                       | Records at                      |
-| ----------------------------------------------- | -------------------------------- |
-| `Literal`, `Grapheme`, `LiteralIgnoreAsciiCase` | the first mismatched token       |
-| `OneOf`, `NoneOf`, `AnyToken`                   | the token it tried to read       |
-| `ScanWhile`                                     | the position the scan got stuck  |
-| `Eof`                                           | the lexer's current position     |
+| Leaf rule                                       | Records at                                              |
+| ----------------------------------------------- | -------------------------------------------------------- |
+| `Literal`, `Grapheme`, `LiteralIgnoreAsciiCase` | the start of the first expected grapheme that didn't match |
+| `OneOf`, `NoneOf`, `AnyToken`                   | the token it tried to read                                |
+| `ScanWhile`                                     | the position the scan got stuck                           |
+| `Eof`                                           | the lexer's current position                              |
+
+A text-matching leaf counts its progress in whole graphemes of its expected text: a partially matched grapheme isn't progress, so the recorded position is the start of the expected grapheme the compare was inside when it stopped. A grapheme is one character as the user sees it, so this keeps the report on the character the user would say failed, and it makes the position independent of the normalization form the grammar was compiled with. Canonical forms change how many runes a grapheme holds ("à" is one rune under FormC, two under FormD) but never where its boundaries sit, so counting whole graphemes agrees across forms while counting runes doesn't. For ASCII text every char is its own grapheme, so this is simply the offset of the first mismatched char. A custom Rule subclass that matches its own stored text should follow the same principle (see the `TryParseRule` documentation).
 
 A **composite** with a `.WithError` records that named (or forced) failure at the **deepest input position any rule in its subtree reached**, "where the children left off", not at the composite's own start. This holds for `And`, `Or`, `BetweenInclusive`, `Alias`, `ScanUntil`, and `WithinToken`. The lookahead rules `Peek` and `Not` are the exception and record at their own start, for the reason given just below.
 
@@ -91,7 +93,7 @@ var greeting = Literal("hello")
     .WithError("expected greeting");
 ```
 
-On input `hxyz`, the `h` matches and the parse diverges at the `x`. `Literal` records its failure and associated message, at the first mismatched token, which is position 1. There's only one failure, so it wins, and the user sees "expected greeting" at position 1.
+On input `hxyz`, the `h` matches and the parse diverges at the `x`. `Literal` records its failure and associated message at the start of the first expected grapheme that didn't match, which is position 1. There's only one failure, so it wins, and the user sees "expected greeting" at position 1.
 
 The simplest case: a `.WithError` on a leaf, the leaf failed, the message surfaces at the spot the leaf got stuck.
 

@@ -445,7 +445,7 @@ public abstract class Rule
 }
 ```
 
-What a matching method uses on the lexer: `Read()` returns the next token and advances the cursor, `Position` / `IsEof` / `Input` say where it is, `RecordFailure(position, message, forced)` reports where the match failed (leaves record the failing token's start), `BeginProbe()` runs throwaway lookahead that restores the position and the failure state when disposed, and `SetPosition(offset)` bulk-advances for rules that consume to a computed offset. The token `Read()` returns:
+What a matching method uses on the lexer: `Read()` returns the next token and advances the cursor, `Position` / `IsEof` / `Input` say where it is, `RecordFailure(position, message, forced)` reports where the match failed (a rule matching stored expected text records at a whole-grapheme boundary of that text, never partway through a grapheme, see docs/ErrorArchitecture.md "Where each rule records its failure"), `BeginProbe()` runs throwaway lookahead that restores the position and the failure state when disposed, and `SetPosition(offset)` bulk-advances for rules that consume to a computed offset. The token `Read()` returns:
 
 ```csharp
 public readonly ref struct Token

@@ -121,31 +121,28 @@ internal sealed class GraphemeRule : Rule
         // token arriving one rune at a time (WithinTokenRule's sub-lexer):
         // consumed += token.Length until it reaches _expected.Length.
         //
-        // tokenStart is the pre-read position for THIS iteration's read.
-        // Required for multi-token matches so we report the offender at
-        // the specific failing token's start, not at the start of the
-        // whole match attempt.
+        // Error positioning: the expected text is exactly one grapheme,
+        // so every failure means that single user-perceived character
+        // didn't match at startPosition, and both failure branches
+        // report there. A partially matched rune prefix doesn't count as
+        // progress, which keeps the reported position identical
+        // whichever normalization form Compile rewrote _expected into:
+        // a precomposed rune and its decomposed equivalent fail at the
+        // same spot.
         while (consumed < _expected.Length)
         {
-            int tokenStart = lexer.Position;
             var token = lexer.Read();
-            // Error Positioning: tokenStart is where the specific failing token began.
-            // For a single-token match this equals startPosition.
-            // For multi-token lockstep (a multi-rune token under the
-            // WithinToken sub-lexer's one-rune-per-token mode) it's the
-            // start of whichever token mismatched, not the start of the
-            // whole attempt.
             if (token.IsEof)
             {
                 TraceFailure(lexer, $"found '<EOF>', wanted '{_expected}'");
-                lexer.RecordFailure(tokenStart, ErrorMessage, ErrorForced);
+                lexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);
                 return null;
             }
             if (consumed + token.Length > _expected.Length
                 || !token.Chars.SequenceEqual(_expected.AsSpan(consumed, token.Length)))
             {
                 TraceFailure(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted '{_expected}'");
-                lexer.RecordFailure(tokenStart, ErrorMessage, ErrorForced);
+                lexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);
                 return null;
             }
             consumed += token.Length;

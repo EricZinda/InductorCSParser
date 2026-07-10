@@ -1480,8 +1480,17 @@ public abstract class Rule
     /// <para>
     /// On failure, return null. Rule.TryParse's transaction rolls the lexer back
     /// automatically and truncates any partial writes to outputSymbols for you.
-    /// Call lexer.RecordFailure() or lexer.RecordCompositeFailure() so the "deepest failure wins" 
+    /// Call lexer.RecordFailure() or lexer.RecordCompositeFailure() so the "deepest failure wins"
     /// error-reporting can surface your rule's message.
+    /// </para>
+    /// <para>
+    /// If your rule matches stored expected text, record failure positions only
+    /// at whole-grapheme boundaries of that text: a partially matched grapheme
+    /// isn't progress. Canonical normalization changes a grapheme's rune count
+    /// but not its boundaries, so whole-grapheme positions come out the same
+    /// whichever form the grammar was compiled with, while rune-level
+    /// positions don't. LiteralRule's FailurePosition helper shows the pattern.
+    /// See docs/ErrorArchitecture.md "Where each rule records its failure".
     /// </para>
     /// <para>
     /// On success, return a non-null Symbol whose form depends on
