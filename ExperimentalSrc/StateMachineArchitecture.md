@@ -54,7 +54,7 @@ The recursive evaluator backtracks the natural way: a `TryParseRule` that fails 
 
 The same stack stores the `BetweenInclusive` loop bookkeeping. A Between frame holds the iteration counter and the per-iteration position alongside the same restore data, so the loop can detect zero-width inner matches, decide whether the loop's exit is a success or failure, and unwind partial iterations on failure. This is why `BacktrackFrame` has a few extra fields that most frame uses leave at zero. One stack is cheaper than two.
 
-`Or` is the most common backtrack producer: each alternative pushes a frame before trying, and pops it on success or restores from it on failure. The first-rune-skip optimization lets `Or` peek one rune and jump straight to the alternative whose first-rune set matches, skipping the alternatives that can't possibly accept that rune. This is the same optimization the recursive `OrRule` does, just expressed as a couple of opcodes (`LoadPeekedRune`, `CheckPeekedRuneInSet`, and an ASCII jump-table variant `LoadPeekedRuneAndJumpAlt` for the dense case).
+`Or` is the most common backtrack producer: each alternative pushes a frame before trying, and pops it on success or restores from it on failure. The first-rune-skip optimization lets `Or` peek one rune and jump straight to the alternative whose first-rune set matches, skipping the alternatives that can't possibly accept that rune. The recursive `OrRule` has no such shortcut (it stays a plain loop over the alternatives, the reference implementation), so this optimization lives only here, expressed as a couple of opcodes (`LoadPeekedRune`, `CheckPeekedRuneInSet`, and an ASCII jump-table variant `LoadPeekedRuneAndJumpAlt` for the dense case).
 
 ## Cyclic Rules Become Subprograms
 
