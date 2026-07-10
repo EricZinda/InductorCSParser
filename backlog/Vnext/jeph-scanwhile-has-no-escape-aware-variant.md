@@ -3,7 +3,7 @@
 `ScanUntil` can scan with escapes. `ScanWhile` can't. That asymmetry is
 the gap.
 
-A common token shape is "a run of characters in some class, where a
+A common token shape is "a sequence of characters in some class, where a
 backslash escapes the next character so an otherwise-illegal character can
 appear literally." For example, an unquoted term that normally stops at a
 colon, but where `\:` keeps the colon in the token:

@@ -309,10 +309,13 @@ public class FilterErrorPositionTests
 [TestFixture]
 public class FilterSourceRangeTests
 {
-    // Verifies the source-range-per-comparison feature the rewrite adds.
-    // The Original parser carries no source spans, so a downstream UI
+    // Verifies the source-range-per-AST-node feature the rewrite adds.
+    // The Original parser has no source spans at all, so a downstream UI
     // (highlighter, query builder, refactoring tool) would have to re-
-    // parse to find them.
+    // parse to find them. Comparisons get their range straight from
+    // Symbol.SourceRange. Compound And / Or nodes synthesize theirs from
+    // their children's endpoints (new SourceRange(left.Start, right.End)),
+    // which is the reason the SourceRange constructor is public.
 
     [Test]
     public void Comparison_carries_its_own_source_range()
@@ -337,5 +340,41 @@ public class FilterSourceRangeTests
         Assert.That(rightRange, Is.Not.Null);
         Assert.That(rightRange!.Value.Start.CharIndex, Is.EqualTo(8));
         Assert.That(rightRange.Value.End.CharIndex, Is.EqualTo(11));
+    }
+
+    [Test]
+    public void And_node_spans_from_left_start_to_right_end()
+    {
+        const string input = "a=1 and b=2";
+        var expression = FilterParser.Parse(input);
+        Assert.That(expression, Is.TypeOf<RewriteAnd>());
+        var range = ((RewriteAnd)expression).Range;
+        Assert.That(range, Is.Not.Null);
+        Assert.That(range!.Value.Start.CharIndex, Is.EqualTo(0));
+        Assert.That(range.Value.End.CharIndex, Is.EqualTo(input.Length));
+        Assert.That(range.Value.SubstringOfInput(), Is.EqualTo(input));
+    }
+
+    [Test]
+    public void Compound_span_inside_a_group_excludes_the_parens()
+    {
+        // The Or's left subtree is the And built from the group's
+        // children, so both compound spans start at the "a" inside the
+        // group, not at the "(". The parens belong to the group Symbol,
+        // which isn't part of either subtree.
+        const string input = "(a=1 and b=2) or c=3";
+        var expression = FilterParser.Parse(input);
+        Assert.That(expression, Is.TypeOf<RewriteOr>());
+        var rewriteOr = (RewriteOr)expression;
+        Assert.That(rewriteOr.Left, Is.TypeOf<RewriteAnd>());
+
+        var innerRange = ((RewriteAnd)rewriteOr.Left).Range;
+        Assert.That(innerRange, Is.Not.Null);
+        Assert.That(innerRange!.Value.SubstringOfInput(), Is.EqualTo("a=1 and b=2"));
+
+        var outerRange = rewriteOr.Range;
+        Assert.That(outerRange, Is.Not.Null);
+        Assert.That(outerRange!.Value.Start.CharIndex, Is.EqualTo(1));
+        Assert.That(outerRange.Value.End.CharIndex, Is.EqualTo(input.Length));
     }
 }
