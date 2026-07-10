@@ -12,7 +12,7 @@ using static InductorParser.Tests.UnicodeExamples;
 using static InductorParser.Tests.CanaryHelper;
 namespace InductorParser.Tests;
 
-// Tests for Rules.WithinToken, the combinator that runs an inner rule
+// Tests for Rules.WithinToken, the rule that runs an inner rule
 // against the runes inside one outer token. Used by Identifier() to handle
 // Devanagari / Thai / Arabic-with-vowels under the grapheme-cluster lexer,
 // but usable by any grammar that needs to validate grapheme-internal
@@ -131,8 +131,8 @@ public class WithinTokenRuleTests
     public void Composes_into_zero_or_more_for_multi_grapheme_sequences()
     {
         // ZeroOrMore(WithinToken(letter)) walks a sequence of single-
-        // rune graphemes. Proves the combinator composes into the normal
-        // repeat combinators without special handling.
+        // rune graphemes. Proves the rule composes into ZeroOrMore (and
+        // the other repetition composites) without special handling.
         var rule = ZeroOrMore(WithinToken(OneOf(TokenSet.Ascii.Letters)))
             .Flatten(FlattenType.Preserve)
             .As("letters");

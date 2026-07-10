@@ -1,20 +1,30 @@
 # Test Architecture
 
-Run the test suite via `./test.sh` at the repo root. By default it runs the recursive engine. Pass `statemachine` to run under the state-machine engine, or `both` to run both sequentially. Extra arguments pass through to `dotnet test`, so `./test.sh statemachine --filter "FullyQualifiedName~Atom_fragment"` targets one fixture under the SM.
+Run the test suite via `./test.sh` at the repo root. Arguments pass through to `dotnet test`, so `./test.sh --filter "FullyQualifiedName~Atom_fragment"` targets one fixture.
 
 On Windows the script runs under Git Bash or WSL. WSL has no native `dotnet`, so the script falls back to the Windows `dotnet.exe` (reachable via WSL's Windows-PATH interop). If you get `dotnet.exe: command not found` from WSL, interop is turned off in your `/etc/wsl.conf`. The `.sh` scripts are kept at LF by `.gitattributes` so the `#!/usr/bin/env bash` shebang isn't broken into `bash\r` by `core.autocrlf` on checkout.
 
-By default the script passes `--logger "console;verbosity=quiet"` so the run shows only failures and the per-assembly pass/fail summary. That alone keeps the ~10,000 `[Explicit]` UnicodeConformance cases (the opt-in UAX #29 grapheme-break suite in `Lexing/UnicodeConformance/`, run via `--filter "TestCategory=UnicodeConformance"`) from flooding the console as skipped lines, but only when dotnet honors the logger. When the suite is driven through `dotnet.exe` from WSL the logger setting is ignored and the run falls back to default verbosity, which lists every explicit-skipped case. As a backstop the script also filters out lines containing the conformance fixture's `[Explicit]` reason text, so those cases stay quiet regardless of verbosity. Pass your own `--logger` to raise verbosity, for example `./test.sh recursive --logger "console;verbosity=normal"` to list every test (the conformance skip lines are still filtered).
+By default the script passes `--logger "console;verbosity=quiet"` so the run shows only failures and the per-assembly pass/fail summary. That alone keeps the ~10,000 `[Explicit]` UnicodeConformance cases (the opt-in UAX #29 grapheme-break suite in `Lexing/UnicodeConformance/`) from flooding the console as skipped lines, but only when dotnet honors the logger. When the suite is driven through `dotnet.exe` from WSL the logger setting is ignored and the run falls back to default verbosity, which lists every explicit-skipped case. As a backstop the script also filters out lines containing the conformance fixture's `[Explicit]` reason text, so those cases stay quiet regardless of verbosity. Pass your own `--logger` to raise verbosity, for example `./test.sh --logger "console;verbosity=normal"` to list every test (the conformance skip lines are still filtered).
+
+The `[Explicit]` UnicodeConformance fixtures are the one part of the suite the default run never executes. To run them, opt in by category:
+
+```
+./test.sh --filter "TestCategory=UnicodeConformance"
+```
+
+One NUnit gotcha here: `[Explicit]` only clears when the tests are picked out specifically by Name or Category. A class-level `FullyQualifiedName` filter that doesn't name a method gets discovered as "0 tests run", so use the category filter above, or name a specific test method: `./test.sh --filter "Name~GraphemeClusterIndex_boundaries_match_spec"`.
 
 This doc describes what makes a rule's test file "comprehensive" in this codebase. It's aimed at contributors adding a new rule or auditing coverage of an existing one. Use it as a checklist.
 
-Tests live in `src/InductorParser.Tests/`, organized into three subfolders:
+Tests live in `src/InductorParser.Tests/`. The rule-coverage conventions in this doc apply to three subfolders:
 
 - `Rules/`: one file per rule (`GraphemeRuleTests.cs`, `OneOfRuleTests.cs`, `AndRuleTests.cs`, etc.), each named after the rule type with a `Tests` suffix.
 - `Core/`: cross-cutting concerns that don't belong to any one rule (`WithErrorTests.cs`, `IdAssignmentTests.cs`, `TokenSetTests.cs`). Files are named after the concern.
 - `E2EExamples/`: end-to-end grammar tests that exercise full grammars built from the public API (e.g. `SettingExampleTests.cs`).
 
-Test files in all three folders share the same `namespace InductorParser.Tests;`, so the folder layout is a discoverability convention, not a namespace boundary.
+Three more folders sit alongside them: `DocExamples/` (tests that keep the runnable code examples in the markdown docs compiling and passing, one file per doc), `Lexing/` (lexer-level tests, including the opt-in UAX #29 conformance suite in `Lexing/UnicodeConformance/`), and `Unity/` (the IL2CPP scaffold covered at the end of this doc). Shared helpers (`TraceTestHelpers.cs`, `NormalizationExamples.cs`, the matrix helpers) live loose at the test project root.
+
+Files in `Rules/`, `Core/`, and `E2EExamples/` share the same `namespace InductorParser.Tests;` (a couple of `Core/` files nest theirs), so within those folders the layout is a discoverability convention, not a namespace boundary. `DocExamples/` and `Lexing/` use folder-matching namespaces.
 
 Related docs:
 
@@ -31,7 +41,7 @@ Every rule's test file, regardless of rule type, should cover these four categor
 
 **3. Failure message propagation.** At least one test where the rule has a `.WithError("...")` set and the parse failure surfaces that exact message via `result.ErrorMessage`. This verifies the rule records a named failure that the depth-primary resolution can pick (see [ErrorArchitecture.md](ErrorArchitecture.md)). Assert with `Is.EqualTo(...)`, not `Does.Contain(...)`. Contain-based assertions pass accidentally when the wrong message happens to share a substring.
 
-For a composite rule, add a second test that locks in where its `.WithError` anchors (the Newsboat operator case): construct a grammar where the composite's children record a mechanical failure deeper than the composite's own start, and assert the composite's named message surfaces at that deeper position. Composite anchoring records the message at the deepest position the subtree reached, where it ties the mechanical failure on depth and wins the named-beats-mechanical tie-break. Example: `OrRuleTests.Or_named_WithError_beats_same_depth_mechanical_branch_failures`.
+For a composite rule, add a second test that locks in where its `.WithError` anchors: construct a grammar where the composite's children record a mechanical failure deeper than the composite's own start, and assert the composite's named message surfaces at that deeper position. Composite anchoring records the message at the deepest position the subtree reached, where it ties the mechanical failure on depth and wins the named-beats-mechanical tie-break. Example: `OrRuleTests.Or_named_WithError_beats_same_depth_mechanical_branch_failures`.
 
 **4. At least one test without WithError.** To verify the positional-fallback path in `BuildErrorMessage`. Without this, the fallback code could break silently. One `Does.StartWith("Unexpected end of input")` or `Does.StartWith("Unexpected '")` test per rule file is enough.
 
@@ -59,13 +69,13 @@ When a rule is shaped this way, the universal tests above all live in the shared
 - A trace test that parses input exercising the factory's specific bounds, asserting on the verbatim trace output. The named trace label (`OneOrMore`, `Exactly[3]`, etc.) proves the factory was used. The trace's `count= N` line and any probe-past-the-bound `Lexer.Read` lines prove the bounds were wired correctly.
 - One behavior test for the bound that's hardest to read off the trace alone (typically the lower-bound failure case for the rules that have one: `OneOrMore`, `AtLeast`, `Exactly`).
 
-Each derivative's fixture opens with a comment pointing at the shared body's fixture so the reader knows where to find the full coverage. Sealed-rule rejection, WithError surfacing, deepest-failure-wins, and the scanner-skip optimization all live in `BetweenInclusiveRuleTests` and aren't duplicated per derivative.
+Each derivative's fixture opens with a comment pointing at the shared body's fixture so the reader knows where to find the full coverage. Sealed-rule rejection, WithError surfacing, deepest-failure-wins, and the scanner-skip grammar shapes all live in `BetweenInclusiveRuleTests` and aren't duplicated per derivative.
 
 ## Per-Rule-Type Requirements
 
-### Single-Token Primitive Rules
+### Single-Token Leaf Rules
 
-Rules that call `lexer.Read()` exactly once. Today: `OneOfRule`, `EofRule` (which doesn't actually read but checks `lexer.IsEof`). The single-rune case of `GraphemeRule` behaves the same way.
+Rules that call `lexer.Read()` exactly once. Today: `OneOfRule`, `NoneOfRule`, `AnyTokenRule`, and `EofRule` (which doesn't actually read but checks `lexer.IsEof`). The single-rune case of `GraphemeRule` behaves the same way.
 
 Required tests:
 
@@ -81,13 +91,16 @@ public void OneOf_mismatch_after_successful_matches_points_at_first_bad_char()
 {
     var rule = And(OneOrMore(OneOf(TokenSet.Letters)),
                    Token(';').WithError("expected ';'"));
+
     var result = rule.Parse("abc1");
+
+    Assert.That(result.Success, Is.False);
     Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-    Assert.That(result.ErrorMessage, Is.EqualTo("expected ';'"));
+    Assert.That(result.ErrorMessage, Is.EqualTo("expected ';' at line 1, column 4."));
 }
 ```
 
-### Multi-Token Primitive Rules
+### Multi-Token Leaf Rules
 
 Rules that read multiple tokens in a lockstep loop. Today: `GraphemeRule` for multi-rune graphemes, `LiteralRule`, `LiteralIgnoreAsciiCaseRule`.
 
@@ -119,9 +132,12 @@ public void And_later_child_failure_reports_at_deeper_position()
 {
     var rule = And(Token('a').WithError("need an 'a'"),
                    Token('b').WithError("need a 'b'"));
+
     var result = rule.Parse("ax");
+
+    Assert.That(result.Success, Is.False);
     Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
-    Assert.That(result.ErrorMessage, Is.EqualTo("need a 'b'"));
+    Assert.That(result.ErrorMessage, Is.EqualTo("need a 'b' at line 1, column 2."));
 }
 ```
 
@@ -131,13 +147,13 @@ Any rule (or factory) that validates its arguments and throws at build time. Tod
 
 Required tests:
 
-- **Each validation path, one test.** `Assert.Throws<ArgumentOutOfRangeException>(() => Rule.Factory(badValue))`. Cover each documented failure mode (surrogate, out-of-range-low, out-of-range-high, multi-element where single required, empty where non-empty required).
+- **Each validation path, one test, expecting the exact exception type that path throws.** The scalar paths throw `ArgumentOutOfRangeException` (`Token(char)` on a surrogate, `Token(int)` out of range, `TokenSet.Single`/`Range` on an invalid scalar). The string-shaped paths throw plain `ArgumentException` (`Token(string)` on an empty or multi-grapheme string, `TokenSet.Runes` on a lone surrogate or a multi-rune grapheme). `Assert.Throws<T>` matches the type exactly, so expecting `ArgumentOutOfRangeException` on a path that throws `ArgumentException` fails. Cover each documented failure mode (surrogate, out-of-range-low, out-of-range-high, multi-element where single required, empty where non-empty required).
 - **Boundary values.** Test the exact boundary: `0xD800` (first surrogate), `0xDFFF` (last surrogate), `0x10FFFF` (last valid), `0x110000` (first out-of-range), empty string, single-element string.
 - **Valid inputs adjacent to boundaries.** Show that the rule doesn't over-reject: `0xD7FF` (last before surrogate block) and `0xE000` (first after surrogate block) should build successfully.
 
 ### Lookahead and Forwarding Rules
 
-Rules that don't consume input or simply delegate: future `Not`, `Peek`, current `LateBoundRule`.
+Rules that don't consume input or simply delegate: `Not`, `Peek`, `LateBoundRule`, and `AliasRule`.
 
 Required tests:
 
@@ -152,13 +168,13 @@ Some tests don't belong to any one rule's file. These live in `Core/`:
 - **Cross-cutting WithError and error-resolution tests**: `Core/WithErrorTests.cs`. The depth-primary resolution semantics (a failure is mechanical, named, or forced, covered in [ErrorArchitecture.md](ErrorArchitecture.md)) belong here when the test isn't about one rule's behavior. Specifically: the deepest failure wins (named and mechanical alike), a named failure takes an exact-depth tie over a mechanical one, forced overrides every non-forced failure at any depth, forced-vs-forced uses deepest-wins, and the set-once check on `WithError`. Tests that exercise a *specific* rule's WithError behavior (Or, And, OneOrMore, Not, ScanWhile, etc.) live in that rule's own test file. See the Composite Rules section above.
 - **Id assignment (Compile)**: `Core/IdAssignmentTests.cs`. Tests that verify the three-pass id assignment (explicit, named-hash, anonymous) behaves correctly.
 - **TokenSet behavior**: `Core/TokenSetTests.cs`. Tests for the `TokenSet` data type itself (not its consumers like `OneOfRule`).
-- **Tracing (cross-cutting concerns only)**: `Core/TracingTests.cs`. Covers behaviors that aren't any one rule's property: null TraceSink is a no-op, ParseOptions defaults (null sink, Diagnostic level), the trace-label fallback chain (Name > ErrorMessage > rule class name), `TraceLevel.Normal` suppresses output, `Lexer.Read` and `Lexer.RecordFailure` emit their own diagnostic lines, transaction depth returns to zero after a parse (a regression test, since running the same parse twice must produce identical trace output), and two side-effect proof tests (`Off_path_does_not_evaluate_interpolated_arguments`, `On_path_evaluates_interpolated_arguments_exactly_once`, plus `Rule_TraceSuccess_off_path_does_not_evaluate_interpolated_arguments`) that verify the C# interpolated-string-handler rewrite. They're the critical tests for "tracing is cheap when disabled and doesn't evaluate interpolated arguments."
+- **Tracing (cross-cutting concerns only)**: `Core/TracingTests.cs`. Covers behaviors that aren't any one rule's property: null TraceSink is a no-op, ParseOptions defaults (null sink, Diagnostic level), the trace-label rule (an `.As()` name prefixes the rule class name, and `.WithError` text appears in the trace body, never in the label), `TraceLevel.Normal` suppresses output, `Lexer.Read` and `Lexer.RecordFailure` emit their own diagnostic lines, transaction depth returns to zero after a parse (a regression test, since running the same parse twice must produce identical trace output), and two side-effect proof tests (`Off_path_does_not_evaluate_interpolated_arguments`, `On_path_evaluates_interpolated_arguments_exactly_once`, plus `Rule_TraceSuccess_off_path_does_not_evaluate_interpolated_arguments`) that verify the C# interpolated-string-handler rewrite. They're the critical tests for "tracing is cheap when disabled and doesn't evaluate interpolated arguments."
 
 Rules emit their traces via two base-class helpers, `TraceSuccess(lexer, $"...")` and `TraceFailure(lexer, $"...")`, defined on `Rule`. The rule's class name (`"And"`, `"Token"`, etc.) is derived automatically from `GetType().Name` with the `"Rule"` suffix stripped and cached in the base constructor, so new rules get correct trace names without touching trace plumbing. Both helpers have explicit-level overloads (`TraceSuccess(lexer, level, $"...")`) for the rare case a rule wants to emit at something other than Diagnostic.
 
 **Per-rule trace tests live in each rule's own test file.** Every rule in `Rules/` must include at least one success-path trace test and at least one failure-path trace test (if the rule has a failure path, `ZeroOrMoreRule` has none). The tests lock in the full trace output verbatim via `Assert.That(sink.ToString(), Is.EqualTo(...))`. This way, changing a rule's trace format produces a test failure in the rule's own file, right next to the code being edited, rather than in a central file the author might not have open. Shared helpers (`NewSink()`, `Lines(params string[])`) live in `TraceTestHelpers.cs` at the test project root and are pulled in via `using static InductorParser.Tests.TraceTestHelpers;`.
 
-**Per-rule normalization-matrix tests live in each rule's own test file.** Every leaf rule whose Compile pass rewrites stored match data under a `NormalizationForm` (today: `Token`, `Literal`, `LiteralIgnoreAsciiCase`, `OneOf`, `NoneOf`, `ScanWhile`, `ScanUntil`) has a parameterized matrix in its `Rules/` test file. Each rule runs against `NormalizationExamples.RowFormPairs` (a curated table of grapheme-behavior classes crossed with the four `NormalizationForm` values) under up to four wrapping shapes: bare leaf, `OneOrMore(leaf)`, `Or(leaf, fallback)`, and `And(leaf, Eof())`. Each shape exercises a different code path. Bare leaf runs the rule's no-shortcut body. `OneOrMore` exercises `BetweenInclusiveRule.CannotMatchLookahead`'s peek-rune shortcut. `Or` with a fallback exercises `OrRule`'s separate shortcut. `And` with `Eof` catches a leaf that consumed the wrong span. The original `FirstConsumedTokens` staleness bug only got found because someone read Compile's pass ordering by hand: the grammar shape that exposes it (`OneOrMore(Token("Å"))` compiled with `FormC`, fed the canonical-singleton input) was nowhere in the existing tests. The matrix is the framework that surfaces those without an author having to predict them. Any new test that involves a normalization form should pull cases from `NormalizationExamples` rather than hand-rolling a single grapheme example. The shared data table itself lives at the test project root in `NormalizationExamples.cs`, alongside a self-check fixture that asserts every column equals what `string.Normalize` actually produces.
+**Per-rule normalization-matrix tests live in each rule's own test file.** Every leaf rule whose Compile pass rewrites stored match data under a `NormalizationForm` (today: `Token`, `Literal`, `LiteralIgnoreAsciiCase`, `OneOf`, `NoneOf`, `ScanWhile`, `ScanUntil`) has a parameterized matrix in its `Rules/` test file. Each rule runs against `NormalizationExamples.RowFormPairs` (a curated table of grapheme-behavior classes crossed with the four `NormalizationForm` values) under up to four wrapping shapes: bare leaf, `OneOrMore(leaf)`, `Or(leaf, fallback)`, and `And(leaf, Eof())`. Bare leaf runs the rule's own match body, and `And` with `Eof` catches a leaf that consumed the wrong span. The `OneOrMore` and `Or` shapes are there for composite lookahead shortcuts: a composite that peeks at precomputed first-token data to skip children that can't match is exactly the code that produces a wrong answer when normalization leaves that data stale. The recursive evaluator has no such shortcuts today (its composites just call their children), but those two shapes stay in the matrix so any future evaluator or optimization that adds one gets exercised through it. (`ScanUntil` substitutes an `And(ScanUntil(...), Token(...))` shape for the bare-leaf and `Or` slots, its fixture comment explains why.) The original `FirstConsumedTokens` staleness bug only got found because someone read Compile's pass ordering by hand: the grammar shape that exposes it (`OneOrMore(Token("Å"))` compiled with `FormC`, fed the canonical-singleton input) was nowhere in the existing tests. The matrix is the framework that surfaces those without an author having to predict them. Any new test that involves a normalization form should pull cases from `NormalizationExamples` rather than hand-rolling a single grapheme example. The shared data table itself lives at the test project root in `NormalizationExamples.cs`, alongside a self-check fixture that asserts every column equals what `string.Normalize` actually produces.
 
 **Per-rule SourceRange-matrix tests live in each rule's own test file.** Every leaf-emitting rule (today: `Token`, `OneOf`, `NoneOf`, `AnyToken`, `Literal`, `LiteralIgnoreAsciiCase`, `ScanWhile`, `ScanUntil`, `WithinToken`) has a `[TestCaseSource]`-driven `SourceRange_for_<rule>_target_after_normalized_Literal_prefix_uses_original_coords` test in its `Rules/` file. Each test wraps the leaf as the target of an `And(Literal(row.Source), target)` grammar, compiles under each of the four `NormalizationForm` values, parses `row.Source + targetText`, and asserts that `targetSymbol.SourceRange` reports `row.Source.Length` as `Start.CharIndex`. That's the position in the caller's *original* input where the target's text sits. Leaf memory points into parseInput, so without `Symbol.SourceRange` routing the offsets through `NormalizedPositionMap.TranslateToOriginal`, any (form, grapheme behavior) pair where Normalize changes the input length silently leaks parseInput coordinates. The matrix is the same `NormalizationExamples.RowFormPairs` source the matching matrix uses, so adding a new grapheme-behavior row covers position translation alongside matching for every rule at once. The lone-surrogate row is skipped because `Literal(row.Source).Compile(form)` throws before any leaf can emit. Cross-cutting SourceRange tests (composite-range stitching, position-unit derivation, FormKC per-grapheme-expansion edge cases) live in `Core/SymbolPositionTests.cs` and exercise the `Symbol.SourceRange` machinery itself rather than any one rule.
 
@@ -202,23 +218,13 @@ Each test method's name should describe the scenario, not the expected outcome. 
 
 ## Running the Suite
 
+`./test.sh` at the repo root (described at the top of this doc) runs a bare `dotnet test`, which resolves to `InductorParser.sln` and runs every project in it: `InductorParser.Tests`, `InductorParser.ExternalContractTests`, and the `E2ESamples/*` sample-grammar projects. To run just the main test project:
+
 ```
 dotnet test src/InductorParser.Tests/InductorParser.Tests.csproj
 ```
 
-The test project targets net8.0 and consumes the net8.0 build of the library. A clean suite run on net8.0 is the gate for landing a change.
-
-### Routing the Whole Suite Through the State Machine
-
-Every `Rule.Parse(...)` call in the test suite normally goes through the recursive evaluator. Setting `INDUCTOR_DEFAULT_ENGINE=statemachine` before `dotnet test` flips a process-wide default so the same fixtures run against the state-machine evaluator instead, without rewriting individual tests.
-
-```
-INDUCTOR_DEFAULT_ENGINE=statemachine dotnet test src/InductorParser.Tests/InductorParser.Tests.csproj
-```
-
-The mechanics. `EngineSelectionFixture` (a `[SetUpFixture]` at the test-project root) reads the env var once before any fixture runs and writes `true` into `ParseOptions.DefaultUseAlternativeEvaluator` when the value is `statemachine` (case-insensitive). From there the dispatcher in `Rule.Parse` resolves to the registered `Rule.AlternativeEvaluator` hook instead of `Rule.ParseRecursive`. Cross-engine compare fixtures (`StateMachineE2ECompareTests`, `StateMachineParserTests`, `StateMachineNormalizationCompareTests`, `StateMachineBudgetCompareTests`, `StateMachineGrammarCompareTests`) call `rule.ParseRecursive(...)` directly for the recursive baseline, so the comparison stays apples-to-apples even when the global default is flipped on. A `TestContext.WriteLine` at the start of the run says which engine the suite picked up.
-
-The selector lives on `ParseOptions` as the internal `UseAlternativeEvaluator` (per-call, nullable bool) and `DefaultUseAlternativeEvaluator` (process-wide static). Both are internal on purpose: this is test plumbing, not a documented user feature. Outside callers who explicitly want the state machine should keep calling `StateMachineParser.Parse` directly.
+The test projects target net8.0 and consume the net8.0 build of the library. A clean solution-wide run on net8.0 is the gate for landing a change.
 
 ## IL2CPP Test Pass
 
@@ -226,9 +232,9 @@ The selector lives on `ParseOptions` as the internal `UseAlternativeEvaluator` (
 
 The `src/InductorParser.Tests/Unity/` folder is a minimal Unity scaffold whose entire purpose is to catch that class of regression. It holds an Editor script that flips the Standalone scripting backend to IL2CPP, a run script that drives Unity in batch mode, and a PlayMode asmdef under `Assets/Tests/PlayMode/`. It lives under `InductorParser.Tests/` because it's test infrastructure for the .NET library, not a separate Unity game.
 
-The .NET test sources in `src/InductorParser.Tests/{Core,Rules,E2EExamples}/` are the single source of truth. `syncteststounity.sh` copies them into `Unity/Assets/Tests/PlayMode/Synced/`, and `runil2cpptest.sh` invokes that script before starting Unity, so the IL2CPP pass exercises the same ~90 tests that `dotnet test` does, not a hand-picked subset. The synced tree is `.gitignore`d and cleaned each run so a deletion in the .NET project can't linger in the Unity project. `syncteststounity.sh` is also safe to run on its own, handy after a fresh clone if you want to open the Unity project in the Editor and drive the Test Runner window directly (the Editor runs PlayMode tests on Mono, which is a faster iteration loop than the full batch-mode IL2CPP run but won't catch IL2CPP-only regressions).
+The .NET test sources in `src/InductorParser.Tests/{Core,Rules,E2EExamples}/` are the single source of truth. `syncteststounity.sh` copies them into `Unity/Assets/Tests/PlayMode/Synced/`, and `runil2cpptest.sh` invokes that script before starting Unity, so the IL2CPP pass exercises the same ~1,300 tests from those three folders that `dotnet test` runs, not a hand-picked subset (`DocExamples/` and `Lexing/` stay CoreCLR-only, they aren't synced). The synced tree is `.gitignore`d and cleaned each run so a deletion in the .NET project can't linger in the Unity project. `syncteststounity.sh` is also safe to run on its own, handy after a fresh clone if you want to open the Unity project in the Editor and drive the Test Runner window directly (the Editor runs PlayMode tests on Mono, which is a faster iteration loop than the full batch-mode IL2CPP run but won't catch IL2CPP-only regressions).
 
-Two wiring details that make this work. First, the library's csproj declares `InternalsVisibleTo` for both `InductorParser.Tests` (the .NET assembly) and `InductorParser.PlayModeTests` (the Unity asmdef's assembly). The tests subclass `Rule` and override its `internal TryParseRule`, so both assemblies need it. Second, `Unity/Assets/csc.rsp` sets `-langversion:latest` so the Unity Roslyn pass accepts the C# 10 interpolated-string-handler calls used by `TraceSuccess`/`TraceFailure` in the trace tests.
+Two wiring details that make this work. First, the library's csproj declares `InternalsVisibleTo` for both `InductorParser.Tests` (the .NET assembly) and `InductorParser.PlayModeTests` (the Unity asmdef's assembly). The tests use internal members of the library (`NormalizedPositionMap`, `Rule.TraceLabel`, and others), so both assemblies need the grant. (`TryParseRule` itself is `protected`, so subclassing `Rule` needs no special access.) Second, `Unity/Assets/csc.rsp` sets `-langversion:latest` so the Unity Roslyn pass accepts the C# 10 interpolated-string-handler calls used by `TraceSuccess`/`TraceFailure` in the trace tests.
 
 To run it:
 
@@ -238,8 +244,8 @@ To run it:
 
 The script builds the netstandard2.1 DLL (which the `CopyToUnity` target in `src/InductorParser/InductorParser.csproj` drops into `src/InductorParser.Tests/Unity/Assets/Plugins/`), syncs the test sources into the Unity PlayMode folder, then invokes Unity 6000.3.13f1 in batch mode with `-executeMethod InductorParser.Editor.IL2CPPTestRunner.Run`. That method sets `PlayerSettings.SetScriptingBackend(Standalone, IL2CPP)` and `SetApiCompatibilityLevel(Standalone, .NET_Standard)`, then uses `TestRunnerApi` to build a Standalone Player with IL2CPP and run the Play Mode tests on it. Results land at `test-results/il2cpp-playmode-results.xml` (at the repo root). The Unity log lands at `test-results/il2cpp-log.txt`.
 
-Requirements: Unity 6000.3.13f1 installed via Unity Hub (the version is fixed in `src/InductorParser.Tests/Unity/ProjectSettings/ProjectVersion.txt`), the IL2CPP build support module for the host platform, and Unity not currently open on the scaffold. The script preflight-checks all three and fails fast with a pointer at the fix (for example, "IL2CPP compiler not installed... Install via Unity Hub: Installs -> 6000.3.13f1 -> Add modules -> check Windows Build Support (IL2CPP)") so you don't sit through a multi-minute Unity startup only to hit "Currently selected scripting backend (IL2CPP) is not installed" at the end.
+Requirements: Unity 6000.3.13f1 installed via Unity Hub (the version is fixed in `src/InductorParser.Tests/Unity/ProjectSettings/ProjectVersion.txt`), the IL2CPP build support module for the host platform, and Unity not currently open on the scaffold. The script preflight-checks the first two and fails fast with a pointer at the fix (for example, "IL2CPP compiler not installed... Install via Unity Hub: Installs -> 6000.3.13f1 -> Add modules -> check Windows Build Support (IL2CPP)") so you don't sit through a multi-minute Unity startup only to hit "Currently selected scripting backend (IL2CPP) is not installed" at the end. There's no check for an already-open Unity, that one surfaces as Unity itself failing to start in batch mode. <!-- style-lint-ok: "is not" sits inside the quoted Unity error message -->
 
-A word on speed. This is slow. Really slow. A cold run from an empty `Unity/Library/` spends about a minute just on Unity's domain reload and package resolution before it even compiles any of our code, then another chunk on top of that to build the IL2CPP Standalone player and execute the tests on it. Running ~90 tests instead of a handful doesn't really move the needle because the cost is Unity's startup plus the player build, not per-test execution. Figure a few minutes end-to-end on a warm machine, longer on the first run after cloning the repo or after `Library/` is deleted. It's the main reason the IL2CPP test is a pre-merge check and not a primary loop: you run it before merging a risky change, not on every save. Keep the fast `dotnet test` loop for day-to-day work.
+A word on speed. This is slow. Really slow. A cold run from an empty `Unity/Library/` spends about a minute just on Unity's domain reload and package resolution before it even compiles any of our code, then another chunk on top of that to build the IL2CPP Standalone player and execute the tests on it. Running ~1,300 tests instead of a handful doesn't really move the needle because the cost is Unity's startup plus the player build, not per-test execution. Figure a few minutes end-to-end on a warm machine, longer on the first run after cloning the repo or after `Library/` is deleted. It's the main reason the IL2CPP test is a pre-merge check and not a primary loop: you run it before merging a risky change, not on every save. Keep the fast `dotnet test` loop for day-to-day work.
 
 Adding a new test. Put it in `src/InductorParser.Tests/{Core,Rules,E2EExamples}/` as usual. It will be picked up by both `dotnet test` and `runil2cpptest.sh` automatically. If the test touches something IL2CPP is known to mangle (reflection, generic virtual methods, runtime codegen), the IL2CPP pass is where you'll find out.

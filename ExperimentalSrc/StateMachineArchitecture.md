@@ -54,7 +54,7 @@ The recursive evaluator backtracks the natural way: a `TryParseRule` that fails 
 
 The same stack stores the `BetweenInclusive` loop bookkeeping. A Between frame holds the iteration counter and the per-iteration position alongside the same restore data, so the loop can detect zero-width inner matches, decide whether the loop's exit is a success or failure, and unwind partial iterations on failure. This is why `BacktrackFrame` has a few extra fields that most frame uses leave at zero. One stack is cheaper than two.
 
-`Or` is the most common backtrack producer: each alternative pushes a frame before trying, and pops it on success or restores from it on failure. The first-rune-skip optimization lets `Or` peek one rune and jump straight to the alternative whose first-rune set matches, skipping the alternatives that can't possibly accept that rune. This is the same optimization the recursive `OrRule` does, just expressed as a couple of opcodes (`LoadPeekedRune`, `CheckPeekedRuneInSet`, and an ASCII jump-table variant `LoadPeekedRuneAndJumpAlt` for the dense case).
+`Or` is the most common backtrack producer: each alternative pushes a frame before trying, and pops it on success or restores from it on failure. The first-rune-skip optimization lets `Or` peek one rune and jump straight to the alternative whose first-rune set matches, skipping the alternatives that can't possibly accept that rune. The recursive `OrRule` has no such shortcut (it stays a plain loop over the alternatives, the reference implementation), so this optimization lives only here, expressed as a couple of opcodes (`LoadPeekedRune`, `CheckPeekedRuneInSet`, and an ASCII jump-table variant `LoadPeekedRuneAndJumpAlt` for the dense case).
 
 ## Cyclic Rules Become Subprograms
 
@@ -108,6 +108,6 @@ A rough map of `src/InductorParser/StateMachine/`:
 
 ## What This Document Isn't
 
-This isn't the place to learn how to write a grammar (see `primer1.md`, `primer2.md`, `primerFailure.md`, `Primer3.md`, and `Primer4.md`), or how the recursive evaluator works (see `CodeArchitecture.md` and the `Rule.cs` header comment), or what the test-coverage bar is (see `TestArchitecture.md`). It's a sketch of how the second evaluator is laid out so the next person reading the code knows which file to open first.
+This isn't the place to learn how to write a grammar (see `primer1.md`, `primer2.md`, `primerFailure.md`, `Primer3.md`, and `Primer4.md`), or how the recursive evaluator works (see `CodeArchitecture.md` and the `Rule.cs` header comment), or what the test-coverage bar is (see `TestArchitecture.md`), or how to run the test suite against this engine (see `ExperimentalSrc/InductorParser.Tests/TestArchitecture.md`). It's a sketch of how the second evaluator is laid out so the next person reading the code knows which file to open first.
 
 There are gaps. Budget enforcement (`RuleCountLimit`, `MaxDepth`, `Timeout`, `Cancellation`) only fires inside the recursive evaluator's `EnterRule` today, so the state machine path doesn't honor them outside the bridge. Tracing isn't wired into the state machine the way it is in the recursive evaluator. Both are known. Neither has caused a real problem yet.

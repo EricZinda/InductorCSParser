@@ -2,10 +2,10 @@
 
 Where this came up: the Nunycode E2E sample under
 `E2ESamples/Nunycode/`. Upstream's `Original/AssemblyInfo.cs`
-carries `[assembly: System.CLSCompliant(true)]`. Once the rewrite
+has `[assembly: System.CLSCompliant(true)]`. Once the rewrite
 added a `public static readonly Rule Domain` field to
 `IdnGrammar`, the C# compiler emitted CS3003 ("Type of
-'IdnGrammar.Domain' is not CLS-compliant") because the
+'IdnGrammar.Domain' is not CLS-compliant") because the <!-- style-lint-ok: quotes the CS3003 message verbatim -->
 `InductorParser` assembly doesn't declare itself CLS-compliant.
 The fix for the sample was to drop the attribute, but that
 sidesteps the underlying question: should InductorParser declare
@@ -16,7 +16,7 @@ How CS3003 fires: the C# compiler walks every public member of an
 assembly marked `[assembly: CLSCompliant(true)]` and verifies that
 every type it references is itself CLS-compliant. A type counts
 as compliant if its declaring assembly is marked compliant, or if
-the type carries `[CLSCompliant(true)]` individually. Without a
+the type has `[CLSCompliant(true)]` individually. Without a
 claim on the InductorParser assembly, every type defined there
 reads as "compliance unknown," which the rule treats as
 "not compliant" for the purposes of consumers that claim

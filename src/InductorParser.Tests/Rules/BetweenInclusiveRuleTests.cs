@@ -185,8 +185,8 @@ public class BetweenInclusiveRuleTests
     public void Exactly_with_nullable_inner_accepts_count_or_count_minus_one_real_matches()
     {
         // Only one empty success is counted, so Exactly(N, Optional(a))
-        // reaches N either as (N-1) reals plus the empty terminal or as N
-        // reals before AtMost exits.
+        // reaches N either as (N-1) real matches plus the one empty
+        // success or as N real matches before AtMost exits.
         Assert.That(Exactly(2, Optional(OneOf("a"))).Parse("a").Success, Is.True);
         Assert.That(Exactly(2, Optional(OneOf("a"))).Parse("aa").Success, Is.True);
         Assert.That(Exactly(2, Optional(OneOf("a"))).Parse("").Success, Is.False);

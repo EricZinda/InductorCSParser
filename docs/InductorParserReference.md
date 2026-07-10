@@ -17,7 +17,7 @@ Primers:
 
 Related docs:
 
-- [Terminology.md](Terminology.md): library-specific meaning of terms used throughout these docs (leaf, composite, syntax tree, debug tree, AST, FlattenType writing conventions).
+- [Terminology.md](Terminology.md): library-specific meaning of terms used throughout these docs (leaf, composite, zero-width rule, token, syntax tree, debug tree, AST, and the preferred wording for FlattenType, case matching, and normalization).
 - [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md): lexer internals (code units, runes, graphemes, normalization).
 - [UnicodeGotchas.md](UnicodeGotchas.md): caller-side Unicode concerns the lexer can't fix (case-insensitive matching, BOMs, homoglyphs, etc.).
 
@@ -525,7 +525,7 @@ The char-based trio (`ErrorCharIndex`, `ErrorLine`, `ErrorCharColumn`) uses the 
 
 The LSP conventions are deliberate. LSP is the protocol VS Code, Neovim, JetBrains IDEs, and essentially every modern editor use to talk to language tooling, so a caller forwarding a parse error into an editor builds its `Diagnostic` range straight from these fields. Lines are 0-based because these fields are machine-to-machine handoff, not display text: editors show 1-based to humans, and a human-facing message adds 1 at the edge, which is what the default error templates do. Columns count UTF-16 code units because that's the LSP default encoding (LSP 3.17 made it negotiable via `PositionEncodingKind`, but UTF-16 is the one every implementation ships with), so a token like 👋🏽 (two runes, four UTF-16 chars, one visible character) contributes four to the column, same as what VS Code's own buffer sees. And `\r\n` counts as one line break: LSP treats the pair atomically, and the lexer already tokenizes CRLF as one text element, so an `ErrorCharIndex` from a normal parse never lands inside the pair.
 
-`Symbol.SourceRange` uses the same machinery for any node in the parse tree, not just the error point. Each `SourcePosition` (the type returned by `Start` and `End`) has the same `CharIndex`, `TokenIndex`, `Line`, `CharColumn`, and `TokenColumn` fields (plus 1-based `LineNumber` / `CharColumnNumber` / `TokenColumnNumber` conveniences for human-facing messages), so a tool reporting "duplicate section on line 7" or "value out of range at char 42" reads from the symbol with the same semantics LSP and `string.Substring` already use.
+`Symbol.SourceRange` uses the same machinery for any node in the parse tree, not just the error point. Each `SourcePosition` (the type returned by `Start` and `End`) has the same `CharIndex`, `TokenIndex`, `Line`, `CharColumn`, and `TokenColumn` fields (plus 1-based `LineNumber` / `CharColumnNumber` / `TokenColumnNumber` conveniences for human-facing messages), so a tool reporting "duplicate section on line 7" or "value out of range at char 42" reads from the symbol with the same semantics LSP and `string.Substring` already use. And when your own AST needs a span no single Symbol covers (an And node that joins two comparisons, say), the `SourceRange` constructor is public: `new SourceRange(left.Start, right.End)` builds the compound span from the children's endpoints. The only requirement is that both endpoints point into the same input text, which positions from the same parse always do.
 
 The `Outcome` field distinguishes "the grammar didn't match" from "we ran out of budget." A grammar mismatch means the input is invalid and you should show the user where. A timeout or rule-count-limit exhaustion means the input might be valid but we couldn't decide in the budget we were given, and the caller might want to reject it as suspicious, retry with a looser budget, or show a different error to the user. See the "Catastrophic Backtracking and Timeouts" section below for the mechanics.
 
@@ -793,8 +793,8 @@ public sealed class ParseOptions
 {
     /// Work-unit limit. Each rule invocation counts one unit, and each
     /// iteration of a bulk-scan inner loop (ScanWhile, ScanUntil, and the
-    /// other scanning primitives) counts one too, so scan-heavy parses
-    /// tick it faster than rule invocations alone would.
+    /// Lexer's AdvanceWhile* scanning loops) counts one too, so scan-heavy
+    /// parses tick it faster than rule invocations alone would.
     /// A pure count, not a wall-clock measurement, so the same input and
     /// grammar trip at exactly the same point on every run regardless of
     /// machine speed. Default catches catastrophic backtracking without
