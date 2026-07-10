@@ -1,10 +1,10 @@
 # Test Architecture
 
-Run the test suite via `./test.sh` at the repo root. By default it runs the recursive engine. Pass `statemachine` to run under the state-machine engine, or `both` to run both sequentially. Extra arguments pass through to `dotnet test`, so `./test.sh statemachine --filter "FullyQualifiedName~Atom_fragment"` targets one fixture under the SM.
+Run the test suite via `./test.sh` at the repo root. Arguments pass through to `dotnet test`, so `./test.sh --filter "FullyQualifiedName~Atom_fragment"` targets one fixture.
 
 On Windows the script runs under Git Bash or WSL. WSL has no native `dotnet`, so the script falls back to the Windows `dotnet.exe` (reachable via WSL's Windows-PATH interop). If you get `dotnet.exe: command not found` from WSL, interop is turned off in your `/etc/wsl.conf`. The `.sh` scripts are kept at LF by `.gitattributes` so the `#!/usr/bin/env bash` shebang isn't broken into `bash\r` by `core.autocrlf` on checkout.
 
-By default the script passes `--logger "console;verbosity=quiet"` so the run shows only failures and the per-assembly pass/fail summary. That alone keeps the ~10,000 `[Explicit]` UnicodeConformance cases (the opt-in UAX #29 grapheme-break suite in `Lexing/UnicodeConformance/`, run via `--filter "TestCategory=UnicodeConformance"`) from flooding the console as skipped lines, but only when dotnet honors the logger. When the suite is driven through `dotnet.exe` from WSL the logger setting is ignored and the run falls back to default verbosity, which lists every explicit-skipped case. As a backstop the script also filters out lines containing the conformance fixture's `[Explicit]` reason text, so those cases stay quiet regardless of verbosity. Pass your own `--logger` to raise verbosity, for example `./test.sh recursive --logger "console;verbosity=normal"` to list every test (the conformance skip lines are still filtered).
+By default the script passes `--logger "console;verbosity=quiet"` so the run shows only failures and the per-assembly pass/fail summary. That alone keeps the ~10,000 `[Explicit]` UnicodeConformance cases (the opt-in UAX #29 grapheme-break suite in `Lexing/UnicodeConformance/`, run via `--filter "TestCategory=UnicodeConformance"`) from flooding the console as skipped lines, but only when dotnet honors the logger. When the suite is driven through `dotnet.exe` from WSL the logger setting is ignored and the run falls back to default verbosity, which lists every explicit-skipped case. As a backstop the script also filters out lines containing the conformance fixture's `[Explicit]` reason text, so those cases stay quiet regardless of verbosity. Pass your own `--logger` to raise verbosity, for example `./test.sh --logger "console;verbosity=normal"` to list every test (the conformance skip lines are still filtered).
 
 This doc describes what makes a rule's test file "comprehensive" in this codebase. It's aimed at contributors adding a new rule or auditing coverage of an existing one. Use it as a checklist.
 
@@ -207,18 +207,6 @@ dotnet test src/InductorParser.Tests/InductorParser.Tests.csproj
 ```
 
 The test project targets net8.0 and consumes the net8.0 build of the library. A clean suite run on net8.0 is the gate for landing a change.
-
-### Routing the Whole Suite Through the State Machine
-
-Every `Rule.Parse(...)` call in the test suite normally goes through the recursive evaluator. Setting `INDUCTOR_DEFAULT_ENGINE=statemachine` before `dotnet test` flips a process-wide default so the same fixtures run against the state-machine evaluator instead, without rewriting individual tests.
-
-```
-INDUCTOR_DEFAULT_ENGINE=statemachine dotnet test src/InductorParser.Tests/InductorParser.Tests.csproj
-```
-
-The mechanics. `EngineSelectionFixture` (a `[SetUpFixture]` at the test-project root) reads the env var once before any fixture runs and writes `true` into `ParseOptions.DefaultUseAlternativeEvaluator` when the value is `statemachine` (case-insensitive). From there the dispatcher in `Rule.Parse` resolves to the registered `Rule.AlternativeEvaluator` hook instead of `Rule.ParseRecursive`. Cross-engine compare fixtures (`StateMachineE2ECompareTests`, `StateMachineParserTests`, `StateMachineNormalizationCompareTests`, `StateMachineBudgetCompareTests`, `StateMachineGrammarCompareTests`) call `rule.ParseRecursive(...)` directly for the recursive baseline, so the comparison stays apples-to-apples even when the global default is flipped on. A `TestContext.WriteLine` at the start of the run says which engine the suite picked up.
-
-The selector lives on `ParseOptions` as the internal `UseAlternativeEvaluator` (per-call, nullable bool) and `DefaultUseAlternativeEvaluator` (process-wide static). Both are internal on purpose: this is test plumbing, not a documented user feature. Outside callers who explicitly want the state machine should keep calling `StateMachineParser.Parse` directly.
 
 ## IL2CPP Test Pass
 
