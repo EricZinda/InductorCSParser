@@ -22,9 +22,9 @@
     <!-- The Unity IL2CPP smoke test asmdef produces an assembly named
          InductorParser.PlayModeTests and runs the same test sources as
          InductorParser.Tests (synced in by runil2cpptest.sh). The tests
-         subclass Rule and override its internal TryParseRule, so this
-         second IVT is required for the synced sources to compile under
-         Unity. See docs/TestArchitecture.md. -->
+         use internal members (NormalizedPositionMap, Rule.TraceLabel,
+         and others), so this second IVT is required for the synced
+         sources to compile under Unity. See docs/TestArchitecture.md. -->
     <InternalsVisibleTo Include="InductorParser.PlayModeTests" />
     <!-- The state-machine engine in ExperimentalSrc/ ships as a
          separate assembly so consumers who don't need it can ship
@@ -32,10 +32,12 @@
          Rule, Symbol, and ParseOptions because it's an alternative
          evaluator, not an external API consumer. -->
     <InternalsVisibleTo Include="InductorParser.StateMachine" />
-    <!-- Tests for the state-machine engine subclass Rule directly to
-         exercise the user-defined-rule contract, which means they need
-         to override the internal Rule.TryParseRule. Same rationale as
-         InductorParser.PlayModeTests above. -->
+    <!-- Tests for the state-machine engine need internal access too:
+         EngineSelectionFixture flips the internal
+         ParseOptions.DefaultUseAlternativeEvaluator /
+         Rule.AlternativeEvaluator hooks to route Rule.Parse through
+         the engine. Same rationale as InductorParser.PlayModeTests
+         above. -->
     <InternalsVisibleTo Include="InductorParser.StateMachine.Tests" />
     <!-- Required-literal prefilter analysis (ExperimentalSrc/InductorParser.Prefilter)
          introspects rule types from outside the core assembly to derive
