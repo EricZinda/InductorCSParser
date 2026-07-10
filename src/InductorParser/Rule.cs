@@ -200,7 +200,7 @@ public abstract class Rule
 
     /// <summary>
     /// True when TryParseRule emits a single leaf Symbol with the matched
-    /// text (terminals: OneOf, Literal, AnyToken, ScanWhile, WithinToken, ...).
+    /// text (leaves: OneOf, Literal, AnyToken, ScanWhile, WithinToken, ...).
     /// False when it emits a composite Symbol with children (And, Or,
     /// BetweenInclusive) or no Symbol at all because it's zero-width (Not, Peek,
     /// Eof).

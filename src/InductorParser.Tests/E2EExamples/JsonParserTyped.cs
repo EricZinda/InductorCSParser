@@ -37,8 +37,8 @@ public static class JsonParserTyped
             throw new FormatException(result.ErrorMessage);
 
         // result.Tree is the single top-level Preserve Symbol. Master's
-        // parse model flattens during parse (Flatten-typed Symbols are
-        // lifted into their parent's children list as the parse runs),
+        // parse model flattens during parse (FlattenType.Flatten Symbols
+        // are lifted into their parent's children list as the parse runs),
         // so no post-hoc .Flatten() call is needed.
         return ConvertToValue(result.Tree!);
     }

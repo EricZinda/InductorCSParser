@@ -388,7 +388,7 @@ public class ErrorMessageTemplateTests
     [Test]
     public void Character_placeholder_renders_user_typed_character_under_NFKC()
     {
-        // Under FormKC, fullwidth "１" (U+FF11) folds to ASCII "1" before
+        // Under FormKC, fullwidth "１" (U+FF11) converts to ASCII "1" before
         // the lexer sees it. Token('x') is stable under FormKC and rejects
         // '1' on the normalized side. The {character} placeholder in the
         // default PositionalErrorTemplate should show what the user typed
@@ -407,9 +407,9 @@ public class ErrorMessageTemplateTests
     [Test]
     public void Character_placeholder_renders_user_typed_ligature_under_NFKC()
     {
-        // U+FB01 LATIN SMALL LIGATURE FI folds to "fi" under FormKC.
+        // U+FB01 LATIN SMALL LIGATURE FI converts to "fi" under FormKC.
         // Token('a') won't accept 'f', so this fails at offset 0. The
-        // message should report the user's ligature, not the unfolded
+        // message should report the user's ligature, not the converted
         // "f" the parser saw internally.
         var rule = Token('a');
         rule.Compile(System.Text.NormalizationForm.FormKC);

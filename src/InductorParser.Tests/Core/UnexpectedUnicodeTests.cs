@@ -1470,17 +1470,19 @@ public class UnexpectedUnicodeTests
         Assert.That(rule.Parse("SIZE").Success, Is.True);
         Assert.That(rule.Parse("Size").Success, Is.True);
 
-        // Turkish dotted I (U+0130) doesn't fold to ASCII 'i'.
+        // Turkish dotted I (U+0130) doesn't match ASCII 'i' under the
+        // ASCII-only case-insensitive rule.
         string turkishCapitalI = "s" + UnicodeExamples.TurkishCapitalIWithDotGrapheme + "ze";
         Assert.That(rule.Parse(turkishCapitalI).Success, Is.False,
             $"{UnicodeExamples.TurkishCapitalIWithDotGrapheme} (U+0130) is its own rune; " +
-            "the ASCII-only fold doesn't treat it as 'i'");
+            "the ASCII-only case-insensitive compare doesn't treat it as 'i'");
 
-        // Turkish dotless i (U+0131) doesn't fold to ASCII 'I'.
+        // Turkish dotless i (U+0131) doesn't match ASCII 'I' under the
+        // ASCII-only case-insensitive rule.
         string turkishSmallDotlessI = "s" + UnicodeExamples.TurkishSmallDotlessIGrapheme + "ze";
         Assert.That(rule.Parse(turkishSmallDotlessI).Success, Is.False,
             $"{UnicodeExamples.TurkishSmallDotlessIGrapheme} (U+0131) is its own rune; " +
-            "the ASCII-only fold doesn't treat it as 'i' either");
+            "the ASCII-only case-insensitive compare doesn't treat it as 'i' either");
     }
 
     [Test]

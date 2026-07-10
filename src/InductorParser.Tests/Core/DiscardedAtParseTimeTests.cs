@@ -38,7 +38,7 @@ public class DiscardedAtParseTimeTests
 
         // Nothing survives into the tree. Optional defaults to
         // FlattenType.Flatten and InlineWhitespace() is FlattenType.Delete,
-        // so the parse-time filter drops the inner Delete-typed
+        // so the parse-time filter drops the inner FlattenType.Delete
         // InlineWhitespace match and the surrounding Optional has nothing
         // to lift, leaving the root's Symbols list empty.
         Assert.That(result.Symbols, Is.Empty);
@@ -124,8 +124,8 @@ public class DiscardedAtParseTimeTests
         // parse-time filter drops Delete and lifts Flatten on the way)
         // and once with it on (every Symbol survives, each with its
         // real FlattenType). Calling .Flatten() on the preserved tree
-        // walks FlattenInto, which drops the Delete-typed Symbols and
-        // lifts the Flatten-typed ones, and should recover the same
+        // walks FlattenInto, which drops the FlattenType.Delete Symbols
+        // and lifts the FlattenType.Flatten ones, and should recover the same
         // shape the parse-time filter produced. Useful when a caller
         // wants the debug-friendly tree for diagnostics and the
         // collapsed tree for downstream processing without re-parsing.
@@ -144,8 +144,8 @@ public class DiscardedAtParseTimeTests
         Assert.That(normal.Success, Is.True, normal.ErrorMessage);
         Assert.That(preserved.Success, Is.True, preserved.ErrorMessage);
 
-        // preserved.Tree is the And's Symbol (Flatten-typed). FlattenInto
-        // lifts its children, so the result is the lifted child list.
+        // preserved.Tree is the And's Symbol (FlattenType.Flatten).
+        // FlattenInto lifts its children, so the result is the lifted child list.
         var flattened = preserved.Tree!.Flatten();
 
         Assert.That(Fingerprint(flattened), Is.EqualTo(Fingerprint(normal.Symbols)));
@@ -177,7 +177,7 @@ public class DiscardedAtParseTimeTests
         // Real-world repro: Float() in Rules.cs uses
         // Token('-').Flatten(FlattenType.Flatten) for the optional leading
         // minus sign. Under PreserveAllSymbols=true the '-' lands in the
-        // tree as a Flatten-typed leaf. Calling .Flatten() on the preserved
+        // tree as a FlattenType.Flatten leaf. Calling .Flatten() on the preserved
         // tree to recover the normal-parse shape used to drop the '-'
         // because Symbol.FlattenInto's Flatten branch only iterated
         // Children (empty for a leaf) and never added the leaf itself.

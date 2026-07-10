@@ -17,7 +17,7 @@ Primers:
 
 Related docs:
 
-- [Terminology.md](Terminology.md): library-specific meaning of terms used throughout these docs (leaf, composite, syntax tree, debug tree, AST, FlattenType writing conventions).
+- [Terminology.md](Terminology.md): library-specific meaning of terms used throughout these docs (leaf, composite, zero-width rule, token, syntax tree, debug tree, AST, and the preferred wording for FlattenType, case matching, and normalization).
 - [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md): lexer internals (code units, runes, graphemes, normalization).
 - [UnicodeGotchas.md](UnicodeGotchas.md): caller-side Unicode concerns the lexer can't fix (case-insensitive matching, BOMs, homoglyphs, etc.).
 
@@ -793,8 +793,8 @@ public sealed class ParseOptions
 {
     /// Work-unit limit. Each rule invocation counts one unit, and each
     /// iteration of a bulk-scan inner loop (ScanWhile, ScanUntil, and the
-    /// other scanning primitives) counts one too, so scan-heavy parses
-    /// tick it faster than rule invocations alone would.
+    /// Lexer's AdvanceWhile* scanning loops) counts one too, so scan-heavy
+    /// parses tick it faster than rule invocations alone would.
     /// A pure count, not a wall-clock measurement, so the same input and
     /// grammar trip at exactly the same point on every run regardless of
     /// machine speed. Default catches catastrophic backtracking without

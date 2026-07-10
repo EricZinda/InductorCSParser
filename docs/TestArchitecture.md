@@ -63,7 +63,7 @@ Each derivative's fixture opens with a comment pointing at the shared body's fix
 
 ## Per-Rule-Type Requirements
 
-### Single-Token Primitive Rules
+### Single-Token Leaf Rules
 
 Rules that call `lexer.Read()` exactly once. Today: `OneOfRule`, `EofRule` (which doesn't actually read but checks `lexer.IsEof`). The single-rune case of `GraphemeRule` behaves the same way.
 
@@ -87,7 +87,7 @@ public void OneOf_mismatch_after_successful_matches_points_at_first_bad_char()
 }
 ```
 
-### Multi-Token Primitive Rules
+### Multi-Token Leaf Rules
 
 Rules that read multiple tokens in a lockstep loop. Today: `GraphemeRule` for multi-rune graphemes, `LiteralRule`, `LiteralIgnoreAsciiCaseRule`.
 
