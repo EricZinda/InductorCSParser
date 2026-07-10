@@ -618,11 +618,11 @@ public class XidIdentifierTests
         // decomposes under NFKx to U+0308 + U+0301, two combining marks
         // forming one cluster. Both pieces are in XidContinue (Mn), so adding
         // U+0344 to extraBodyRunes compiles without rejection: the body-side
-        // AllCompatibilityPiecesIn validation walks every NFKx rune, not
-        // just the multi-grapheme cases. After the fix, WithCompatibilityRune
-        // Equivalents on the union projects U+0344 into U+0308 and U+0301 as
-        // single-rune body entries (instead of a dead multi-rune entry that
-        // never reaches the sub-lexer).
+        // AllNormalizedPiecesIn validation walks every converted rune, not
+        // just the multi-grapheme cases. WithNormalizedRuneEquivalents on
+        // the union projects U+0344 into U+0308 and U+0301 as single-rune
+        // body entries (instead of a dead multi-rune entry that never
+        // reaches the sub-lexer).
         var rule = Identifier(
             extraBodyRunes: TokenSet.Single(0x0344));
         Assert.DoesNotThrow(() => rule.Compile(form),
@@ -635,6 +635,165 @@ public class XidIdentifierTests
         var result = rule.Parse(input);
         Assert.That(result.Success, Is.True,
             $"identifier with U+0344 mid-body should match under {form}: {result.ErrorMessage}");
+    }
+
+    [TestCase(NormalizationForm.FormD)]
+    [TestCase(NormalizationForm.FormKD)]
+    public void Identifier_rejects_body_extra_that_decomposes_under_the_form(NormalizationForm form)
+    {
+        // U+2260 (the not-equal sign) decomposes under FormD (and FormKD) to
+        // "=" + U+0338 COMBINING LONG SOLIDUS OVERLAY. The "=" piece
+        // isn't XID_Continue, so the extra could never match the
+        // normalized input. Compile rejects it under both form kinds
+        // with the same fix-it guidance, rather than building a rule
+        // where "a≠" silently never matches.
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            Identifier(extraBodyRunes: TokenSet.Single(0x2260)).Compile(form));
+        Assert.That(exception!.Message, Does.Contain("extraBodyRunes"));
+        Assert.That(exception.Message, Does.Contain("="));
+
+        // The decomposed cluster renders identically to the composed
+        // character ("≠" becomes "≠"), so the message spells the
+        // conversion out as code points.
+        Assert.That(exception.Message, Does.Contain("U+003D U+0338"));
+
+        // Explicit opt-in: adding the missing piece ("=") to
+        // extraBodyRunes clears the rejection and the pre-normalization
+        // character matches in body position.
+        var optInRule = Identifier(
+            extraBodyRunes: TokenSet.Single(0x2260) | TokenSet.Runes("="));
+        Assert.DoesNotThrow(() => optInRule.Compile(form));
+        var result = optInRule.Parse("a\u2260");
+        Assert.That(result.Success, Is.True,
+            $"with '=' opted into the body, U+2260 should match under {form}: {result.ErrorMessage}");
+    }
+
+    [Test]
+    public void Identifier_rejects_body_extra_composition_exclusion_under_default_FormC()
+    {
+        // Composition exclusions decompose even under FormC: U+2ADC
+        // FORKING normalizes to U+2ADD NONFORKING + U+0338 and stays that
+        // way (recomposition is excluded). U+2ADD isn't XID_Continue, so
+        // the extra could never match the normalized input. The default
+        // Compile() (FormC) rejects it with the add-these-runes guidance
+        // rather than building a rule where "a⫝̸" silently never matches.
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            Identifier(extraBodyRunes: TokenSet.Single(0x2ADC)).Compile());
+        Assert.That(exception!.Message, Does.Contain("extraBodyRunes"));
+        Assert.That(exception.Message, Does.Contain("\u2ADD"));
+        Assert.That(exception.Message, Does.Contain("U+2ADD U+0338"));
+
+        // Explicit opt-in: adding the U+2ADD piece clears the rejection
+        // (the U+0338 tail is already XID_Continue), and the character
+        // matches in body position.
+        var optInRule = Identifier(
+            extraBodyRunes: TokenSet.Single(0x2ADC) | TokenSet.Single(0x2ADD));
+        Assert.DoesNotThrow(() => optInRule.Compile());
+        var result = optInRule.Parse("a\u2ADC");
+        Assert.That(result.Success, Is.True,
+            $"with U+2ADD opted into the body, U+2ADC should match under the default form: {result.ErrorMessage}");
+    }
+
+    [TestCase(NormalizationForm.FormD)]
+    public void Identifier_rejects_start_extra_that_decomposes_under_a_canonical_form(NormalizationForm form)
+    {
+        // Start-side twin of the body rejection above. U+2260's FormD
+        // head is "=", which isn't a valid identifier-start character,
+        // so the head check rejects the extra at Compile time instead of
+        // leaving a start entry that never matches the decomposed input.
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            Identifier(extraStartRunes: TokenSet.Single(0x2260)).Compile(form));
+        Assert.That(exception!.Message, Does.Contain("extraStartRunes"));
+
+        // Explicit opt-in: adding the "=" head to extraStartRunes clears
+        // the rejection (the U+0338 tail is already XID_Continue), and
+        // "≠a" matches: FormD turns it into "=" + U+0338 + "a".
+        var optInRule = Identifier(
+            extraStartRunes: TokenSet.Single(0x2260) | TokenSet.Runes("="));
+        Assert.DoesNotThrow(() => optInRule.Compile(form));
+        var result = optInRule.Parse("\u2260a");
+        Assert.That(result.Success, Is.True,
+            $"with '=' opted into start, U+2260 should match under {form}: {result.ErrorMessage}");
+    }
+
+    [Test]
+    public void Body_extra_that_recomposes_under_FormC_still_matches()
+    {
+        // Counterpoint to the FormD rejection: U+2260 is FormC-stable
+        // (its decomposition recomposes), so under the default form the
+        // extra passes the checks unchanged and keeps matching.
+        var rule = Identifier(extraBodyRunes: TokenSet.Single(0x2260));
+        Assert.DoesNotThrow(() => rule.Compile());
+        var result = rule.Parse("a\u2260");
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+    }
+
+    [TestCase(NormalizationForm.FormC)]
+    [TestCase(NormalizationForm.FormD)]
+    public void Xid_sets_are_closed_under_canonical_forms(NormalizationForm form)
+    {
+        // Identifier's canonical-form path unions the caller's projected
+        // extras onto the untouched spec sets instead of re-projecting
+        // all ~270K spec entries the way FormKC / FormKD require. That's
+        // sound only if the spec sets are closed under the canonical
+        // forms: every converted rune of an XidContinue entry stays in
+        // XidContinue, and an XidStart entry's head stays in XidStart
+        // with the tail in XidContinue. UAX #31 Section 5.1.3 guarantees
+        // it. This verifies the guarantee against the runtime's actual
+        // Unicode data, the same shape as
+        // XidStart_compatibility_continuations_are_all_in_XidContinue.
+        int changedEntries = 0;
+
+        foreach (int rune in TokenSet.XidContinue.EnumerateRunes())
+        {
+            if (!TryCanonicalConversion(rune, form, out string normalized)) continue;
+            changedEntries++;
+            foreach (int piece in RuneHelpers.EnumerateRuneValues(normalized))
+            {
+                Assert.That(TokenSet.XidContinue.ContainsRune(piece), Is.True,
+                    $"U+{rune:X4} normalizes under {form} to \"{normalized}\"; piece " +
+                    $"U+{piece:X4} must be XID_Continue for Identifier to skip " +
+                    $"re-projecting the spec body set under canonical forms");
+            }
+        }
+
+        foreach (int rune in TokenSet.XidStart.EnumerateRunes())
+        {
+            if (!TryCanonicalConversion(rune, form, out string normalized)) continue;
+            changedEntries++;
+            bool firstRune = true;
+            foreach (int piece in RuneHelpers.EnumerateRuneValues(normalized))
+            {
+                var expectedSet = firstRune ? TokenSet.XidStart : TokenSet.XidContinue;
+                Assert.That(expectedSet.ContainsRune(piece), Is.True,
+                    $"U+{rune:X4} normalizes under {form} to \"{normalized}\"; " +
+                    $"{(firstRune ? "head" : "tail")} rune U+{piece:X4} must stay in " +
+                    $"{(firstRune ? "XID_Start" : "XID_Continue")} for the start/body " +
+                    $"split to stay sound");
+                firstRune = false;
+            }
+        }
+
+        // Non-vacuity: canonical decompositions exist inside the XID sets
+        // (precomposed accents under FormD, composition exclusions like
+        // U+0958 even under FormC), so a Unicode-data change that stops
+        // finding any can't quietly turn this test into a no-op.
+        Assert.That(changedEntries, Is.GreaterThan(0),
+            $"expected at least one XID entry to change under {form}");
+    }
+
+    // Normalizes one spec-set rune for the closure sweep above. Returns
+    // false for form-stable runes and for the ones Normalize rejects
+    // (unpaired surrogates can't appear here, but the runtime also
+    // rejects a few unassigned code points).
+    private static bool TryCanonicalConversion(int rune, NormalizationForm form, out string normalized)
+    {
+        normalized = "";
+        string entry = char.ConvertFromUtf32(rune);
+        if (entry.IsNormalized(form)) return false;
+        try { normalized = entry.Normalize(form); }
+        catch (ArgumentException) { return false; }
+        return true;
     }
 
     [TestCase(NormalizationForm.FormKC)]
