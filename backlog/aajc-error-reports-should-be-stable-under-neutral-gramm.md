@@ -7,5 +7,5 @@
     - Wrap the whole grammar in And(x).
     - Replace Exactly(2, x) with And(x, x).
     - Reorder Or alternatives whose first tokens can't overlap.
-- For each generated grammar and non-matching input, ErrorCharIndex and ErrorMessage must be identical before and after the rewrite. Divergences are real findings even when both answers look plausible, because callers build editor squiggles and diagnostics from these values. This composes with the differential-fuzzer harness (see backlog 0a01), pointed at failing inputs instead of trees.
+- For each generated grammar and non-matching input, ErrorCharIndex and ErrorMessage must be identical before and after the rewrite. Divergences are real findings even when both answers look plausible, because callers build editor squiggles and diagnostics from these values. This composes with the differential-fuzzer harness (see backlog aaen), pointed at failing inputs instead of trees.
 - Done when: the rewrite oracles run over generated grammars in the fuzzer harness and any divergence is minimized to a failing test and filed.
