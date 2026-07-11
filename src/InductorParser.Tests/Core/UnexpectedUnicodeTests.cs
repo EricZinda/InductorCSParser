@@ -1377,7 +1377,7 @@ public class UnexpectedUnicodeTests
 
         // Ill-formed UTF-8: 0xFF is never a valid UTF-8 lead byte,
         // so the decoder substitutes U+FFFD for it.
-        byte[] illFormedUtf8 = [0x68, 0x65, 0xFF, 0x6C, 0x6C, 0x6F];
+        byte[] illFormedUtf8 = { 0x68, 0x65, 0xFF, 0x6C, 0x6C, 0x6F };
         string fromUtf8 = Encoding.UTF8.GetString(illFormedUtf8);
         Assert.That(fromUtf8, Does.Contain(UnicodeExamples.ReplacementCharacterText),
             "UTF-8 decoder should substitute U+FFFD for the ill-formed 0xFF byte");
@@ -1385,7 +1385,7 @@ public class UnexpectedUnicodeTests
         // Ill-formed UTF-16 LE: an odd byte count leaves a
         // dangling single byte that can't be paired into a code
         // unit. The decoder substitutes U+FFFD for the orphan.
-        byte[] illFormedUtf16 = [0x68, 0x00, 0x65, 0x00, 0xFF];
+        byte[] illFormedUtf16 = { 0x68, 0x00, 0x65, 0x00, 0xFF };
         string fromUtf16 = Encoding.Unicode.GetString(illFormedUtf16);
         Assert.That(fromUtf16, Does.Contain(UnicodeExamples.ReplacementCharacterText),
             "UTF-16 decoder should substitute U+FFFD for the dangling byte");

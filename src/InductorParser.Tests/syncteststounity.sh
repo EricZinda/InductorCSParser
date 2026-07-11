@@ -1,7 +1,8 @@
 #!/bin/bash
 #
 # Copy the .NET test sources from src/InductorParser.Tests/{Core,Rules,
-# E2EExamples}/ plus TraceTestHelpers.cs and UnicodeExamples.cs into
+# E2EExamples}/ plus every root-level helper .cs file (CanaryHelper,
+# TestHelpers, NormalizationExamples, the matrix helpers, ...) into
 # src/InductorParser.Tests/Unity/Assets/Tests/PlayMode/Synced/ so Unity's
 # PlayMode asmdef picks them up.
 #
@@ -30,8 +31,10 @@ mkdir -p "$SYNCED_TESTS_DIR/E2EExamples"
 cp "$SCRIPT_DIR/Core/"*.cs "$SYNCED_TESTS_DIR/Core/"
 cp "$SCRIPT_DIR/Rules/"*.cs "$SYNCED_TESTS_DIR/Rules/"
 cp "$SCRIPT_DIR/E2EExamples/"*.cs "$SYNCED_TESTS_DIR/E2EExamples/"
-cp "$SCRIPT_DIR/TraceTestHelpers.cs" "$SYNCED_TESTS_DIR/"
-cp "$SCRIPT_DIR/UnicodeExamples.cs" "$SYNCED_TESTS_DIR/"
+# All root-level .cs files are shared helpers the synced tests use.
+# Copying them wholesale means a new helper added at the root can't
+# break the Unity compile by being missing from a hand-kept list here.
+cp "$SCRIPT_DIR/"*.cs "$SYNCED_TESTS_DIR/"
 
 echo "Synced $(find "$SYNCED_TESTS_DIR" -name '*.cs' | wc -l) .cs files to:"
 echo "  $SYNCED_TESTS_DIR"
