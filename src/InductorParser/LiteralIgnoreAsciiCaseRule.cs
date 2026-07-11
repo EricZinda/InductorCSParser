@@ -50,6 +50,13 @@ internal sealed class LiteralIgnoreAsciiCaseRule : Rule
     {
         int consumed = 0;
 
+        // The failure branches below record at tokenStart, the pre-read
+        // offset of the failing token. For this rule that's already
+        // whole-grapheme progress through the expected text: the pattern
+        // is ASCII-only, and every ASCII char is one whole grapheme in
+        // every normalization form. That's why this rule doesn't need
+        // LiteralRule's FailurePosition treatment (see LiteralRule's
+        // header for the whole-grapheme principle).
         while (consumed < _expected.Length)
         {
             int tokenStart = lexer.Position;

@@ -24,9 +24,16 @@ namespace InductorParser;
 // of chars. SequenceEqual only cares about the underlying chars lining up,
 // not how the lexer chose to group them.
 //
-// Error position on mismatch is the pre-read offset of the specific failing
-// token, not the start of the whole attempt. Same as GraphemeRule: this is what
-// "points-at-the-offender" means in a multi-token lockstep match.
+// Error position on a failure is the start of the expected grapheme the
+// compare was inside when it stopped: match progress counts in whole
+// graphemes of the expected text, so a partially matched character reports
+// at that character's start, never at a rune partway through it. For ASCII
+// literals every char is its own grapheme, so this is simply the offset of
+// the failing character. Counting whole graphemes keeps the reported
+// position identical whichever normalization form Compile rewrote the
+// literal into: canonical forms change a character's rune count but not
+// its grapheme boundaries, so "how many characters matched" agrees across
+// forms while "how many runes matched" doesn't.
 //
 // Default FlattenType is Delete, matching GraphemeRule. The common case for a
 // literal is a keyword or delimiter the grammar wants to assert is present
@@ -68,19 +75,18 @@ internal sealed class LiteralRule : Rule
 
         while (consumed < _expected.Length)
         {
-            int tokenStart = lexer.Position;
             var token = lexer.Read();
             if (token.IsEof)
             {
                 TraceFailure(lexer, $"found '<EOF>', wanted '{_expected}'");
-                lexer.RecordFailure(tokenStart, ErrorMessage, ErrorForced);
+                lexer.RecordFailure(FailurePosition(startPosition, consumed), ErrorMessage, ErrorForced);
                 return null;
             }
             if (consumed + token.Length > _expected.Length
                 || !token.Chars.SequenceEqual(_expected.AsSpan(consumed, token.Length)))
             {
                 TraceFailure(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted '{_expected}'");
-                lexer.RecordFailure(tokenStart, ErrorMessage, ErrorForced);
+                lexer.RecordFailure(FailurePosition(startPosition, consumed), ErrorMessage, ErrorForced);
                 return null;
             }
             consumed += token.Length;
@@ -98,6 +104,28 @@ internal sealed class LiteralRule : Rule
             return Symbol.Discarded;
         }
         return leafSymbol;
+    }
+
+    // Failure position for a partial match: the start of the expected
+    // grapheme the compare was inside when it stopped. `consumed` counts
+    // the chars matched so far, and the matched input chars equal the
+    // matched section of _expected char for char, so a grapheme boundary
+    // of _expected at or below `consumed` is also a valid offset from
+    // startPosition in input coordinates. See the file header for why
+    // progress counts in whole expected graphemes. The cluster index is
+    // cached per string instance, so the walk allocates nothing after
+    // the first failure against this literal.
+    private int FailurePosition(int startPosition, int consumed)
+    {
+        var expectedIndex = GraphemeClusterIndex.For(_expected);
+        int boundary = 0;
+        while (boundary < consumed)
+        {
+            int clusterLength = expectedIndex.LengthAt(boundary);
+            if (boundary + clusterLength > consumed) break;
+            boundary += clusterLength;
+        }
+        return startPosition + boundary;
     }
 
 }

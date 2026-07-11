@@ -338,4 +338,99 @@ public class LiteralRuleTests
         Assert.That(range.End.Line, Is.EqualTo(1));
         Assert.That(range.End.CharColumn, Is.EqualTo(2));
     }
+
+    [Test]
+    public void Literal_failure_report_is_identical_under_FormC_and_FormD()
+    {
+        // Literal failure positions count progress in whole graphemes of
+        // the expected text, so the report is the same whichever
+        // canonical form Compile rewrote the literal into. Under FormD
+        // the expected "à" is "a + combining grave" and the input's bare
+        // "a" matches its first rune, but a partial character isn't
+        // progress: both forms fail at offset 0 quoting the 'a'.
+        var underFormC = Literal(LatinSmallAWithGraveGrapheme).Compile(NormalizationForm.FormC);
+        var underFormD = Literal(LatinSmallAWithGraveGrapheme).Compile(NormalizationForm.FormD);
+
+        var resultFormC = underFormC.Parse("a");
+        var resultFormD = underFormD.Parse("a");
+
+        Assert.That(resultFormC.Success, Is.False);
+        Assert.That(resultFormD.Success, Is.False);
+        Assert.That(resultFormC.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(resultFormD.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(resultFormC.ErrorMessage, Is.EqualTo("Unexpected 'a' at line 1, column 1."));
+        Assert.That(resultFormD.ErrorMessage, Is.EqualTo(resultFormC.ErrorMessage));
+    }
+
+    [Test]
+    public void Literal_mismatch_after_whole_characters_points_at_the_diverging_character_in_both_forms()
+    {
+        // "àb" is two user-perceived characters. On "xaQ" the match
+        // diverges inside the first one, so both forms report at the
+        // 'a' (offset 1), the character that failed to be an 'à'. The
+        // multi-char precision stays: had "à" matched whole, the
+        // report would sit on the next character.
+        var underFormC = And(Token('x'), Literal(LatinSmallAWithGraveGrapheme + "b")).Compile(NormalizationForm.FormC);
+        var underFormD = And(Token('x'), Literal(LatinSmallAWithGraveGrapheme + "b")).Compile(NormalizationForm.FormD);
+
+        var resultFormC = underFormC.Parse("xaQ");
+        var resultFormD = underFormD.Parse("xaQ");
+
+        Assert.That(resultFormC.Success, Is.False);
+        Assert.That(resultFormD.Success, Is.False);
+        Assert.That(resultFormC.ErrorCharIndex, Is.EqualTo(1));
+        Assert.That(resultFormD.ErrorCharIndex, Is.EqualTo(1));
+        Assert.That(resultFormC.ErrorMessage, Is.EqualTo("Unexpected 'a' at line 1, column 2."));
+        Assert.That(resultFormD.ErrorMessage, Is.EqualTo(resultFormC.ErrorMessage));
+    }
+
+    [Test]
+    public void Literal_hangul_cluster_prefix_reports_at_the_cluster_start_in_both_forms()
+    {
+        // The expected "각" is one grapheme (three jamo under FormD).
+        // The decomposed two-jamo input "가" is a rune-prefix of it, so
+        // under FormD the compare consumes both jamo before running out
+        // of input. That's still zero whole expected characters, so both
+        // forms report at offset 0 quoting the input's cluster instead
+        // of claiming the input ended too soon.
+        var underFormC = Literal(HangulGagPrecomposedGrapheme).Compile(NormalizationForm.FormC);
+        var underFormD = Literal(HangulGagPrecomposedGrapheme).Compile(NormalizationForm.FormD);
+
+        var resultFormC = underFormC.Parse(HangulGaTwoJamoDecomposedText);
+        var resultFormD = underFormD.Parse(HangulGaTwoJamoDecomposedText);
+
+        Assert.That(resultFormC.Success, Is.False);
+        Assert.That(resultFormD.Success, Is.False);
+        Assert.That(resultFormC.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(resultFormD.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(resultFormC.ErrorMessage, Does.StartWith("Unexpected '"));
+        Assert.That(resultFormD.ErrorMessage, Is.EqualTo(resultFormC.ErrorMessage));
+    }
+
+    [Test]
+    public void Literal_input_ending_inside_the_expected_grapheme_reports_at_its_start()
+    {
+        // Single-form case, no FormD anywhere: q + dot-below + dot-above
+        // has no precomposed form, so the literal stays three runes (one
+        // grapheme) under FormC and under Compile(null). The input
+        // "q + dot-below" is one complete cluster that's a rune-prefix
+        // of the expected cluster. The report points at that cluster
+        // (offset 0, "the character you typed isn't the expected one"),
+        // not at end of input.
+        var underFormC = Literal(QWithDotBelowDotAboveCanonicalText).Compile(NormalizationForm.FormC);
+        var unnormalized = Literal(QWithDotBelowDotAboveCanonicalText).Compile(null);
+
+        // The first two chars of the expected cluster: q + dot-below,
+        // itself one complete grapheme.
+        string inputCluster = QWithDotBelowDotAboveCanonicalText.Substring(0, 2);
+        var resultFormC = underFormC.Parse(inputCluster);
+        var resultUnnormalized = unnormalized.Parse(inputCluster);
+
+        Assert.That(resultFormC.Success, Is.False);
+        Assert.That(resultUnnormalized.Success, Is.False);
+        Assert.That(resultFormC.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(resultUnnormalized.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(resultFormC.ErrorMessage, Is.EqualTo($"Unexpected '{inputCluster}' at line 1, column 1."));
+        Assert.That(resultUnnormalized.ErrorMessage, Is.EqualTo(resultFormC.ErrorMessage));
+    }
 }

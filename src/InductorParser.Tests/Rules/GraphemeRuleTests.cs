@@ -575,4 +575,26 @@ public class GraphemeRuleTests
         Assert.That(range.Start.CharIndex, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(1));
     }
+
+    [Test]
+    public void Grapheme_failure_report_is_identical_under_FormC_and_FormD()
+    {
+        // A Token's expected text is exactly one grapheme, so every
+        // failure anchors at the attempt's start. Under FormD the
+        // expected "à" is "a + combining grave" and the input's bare
+        // "a" matches its first rune, but a partial character isn't
+        // progress: both forms fail at offset 1 with the same message.
+        var underFormC = And(Token('x'), Token(LatinSmallAWithGraveGrapheme)).Compile(NormalizationForm.FormC);
+        var underFormD = And(Token('x'), Token(LatinSmallAWithGraveGrapheme)).Compile(NormalizationForm.FormD);
+
+        var resultFormC = underFormC.Parse("xa");
+        var resultFormD = underFormD.Parse("xa");
+
+        Assert.That(resultFormC.Success, Is.False);
+        Assert.That(resultFormD.Success, Is.False);
+        Assert.That(resultFormC.ErrorCharIndex, Is.EqualTo(1));
+        Assert.That(resultFormD.ErrorCharIndex, Is.EqualTo(1));
+        Assert.That(resultFormC.ErrorMessage, Is.EqualTo("Unexpected 'a' at line 1, column 2."));
+        Assert.That(resultFormD.ErrorMessage, Is.EqualTo(resultFormC.ErrorMessage));
+    }
 }
