@@ -102,4 +102,42 @@ public class MappingPositionsAfterNormalizationExamples
         Assert.That(NormalizedPositionMap.TranslateToOriginal(original, normalized, 1, NormalizationForm.FormKC),
             Is.EqualTo(2));
     }
+
+    // The doc's step-by-step ligature trace: the original is "x" +
+    // fi-ligature + "y", FormKC expands the ligature to "fi", and the
+    // failure sits at normalized position 2, between the 'f' and the
+    // 'i'. Both of those chars came from the one ligature char, so the
+    // walker snaps back to the ligature's start at original position 1.
+    [Test]
+    public void Walker_snaps_position_inside_expanded_fi_ligature_to_its_start()
+    {
+        string original = "x" + UnicodeExamples.FiLigatureGrapheme + "y";
+        string normalized = original.Normalize(NormalizationForm.FormKC);
+        Assert.That(normalized, Is.EqualTo("xfiy"));
+
+        Assert.That(NormalizedPositionMap.TranslateToOriginal(original, normalized, 2, NormalizationForm.FormKC),
+            Is.EqualTo(1));
+
+        // The boundary after the expansion lines up again: normalized
+        // position 3 (the 'y') maps to original position 2.
+        Assert.That(NormalizedPositionMap.TranslateToOriginal(original, normalized, 3, NormalizationForm.FormKC),
+            Is.EqualTo(2));
+    }
+
+    // The doc's step-by-step Korean trace, using the compatibility
+    // jamo block: the original is "x" + kiyeok + a + "y", FormKC
+    // composes the two jamo into the single syllable ga (U+AC00), and
+    // the failure sits at normalized position 2 (the 'y'). Both jamo
+    // chars converted into the one syllable char, so the right
+    // original answer is 3.
+    [Test]
+    public void Walker_maps_position_after_merged_compatibility_jamo_under_FormKC()
+    {
+        string original = "x" + UnicodeExamples.HangulLetterKiyeokGrapheme + UnicodeExamples.HangulLetterAGrapheme + "y";
+        string normalized = original.Normalize(NormalizationForm.FormKC);
+        Assert.That(normalized, Is.EqualTo("x" + UnicodeExamples.HangulGaPrecomposedGrapheme + "y"));
+
+        Assert.That(NormalizedPositionMap.TranslateToOriginal(original, normalized, 2, NormalizationForm.FormKC),
+            Is.EqualTo(3));
+    }
 }
