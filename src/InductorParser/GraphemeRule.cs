@@ -1,30 +1,26 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
 // Match input whose content is exactly one specified token. A token is
-// one character as the user sees it (a grapheme cluster per UAX #29 on
-// .NET 5+), possibly built from several runes underneath. The class is
+// one character as the user sees it (a UAX #29 grapheme cluster),
+// possibly built from several runes underneath. The class is
 // named GraphemeRule for that reason. The user-facing factory is
 // Rules.Token(...), which constructs one of these. The expected token
 // is stored as a string at construction and compared against the
 // lexer's output at match time.
 //
 // A token (even a multi-rune one like 👨‍👩‍👧‍👦) arrives from the lexer
-// as a single Token whose Chars span is the whole text element. The
+// as a single Token whose Chars span is the whole grapheme cluster. The
 // match is one Read and one SequenceEqual compare.
 //
 // Construction validates that the expected string is exactly one token
-// via StringInfo.GetNextTextElement. Token("ab") throws at
-// grammar-build time instead of silently failing at parse time. (Note:
-// on pre-.NET 5 runtimes StringInfo isn't UAX #29 compliant, so the
-// token count for exotic Unicode inputs can be wrong. A future vendored
-// UAX #29 grapheme-cluster implementation would make this uniform
-// across runtimes.)
+// with the same segmentation the lexer uses
+// (GraphemeHelpers.FirstClusterLength). Token("ab") throws at
+// grammar-build time instead of silently failing at parse time.
 //
 // If the expected token is exactly one rune (the common case for
 // ASCII, emoji that fit in a single code point, CJK, etc.), the Id is
@@ -49,8 +45,8 @@ internal sealed class GraphemeRule : Rule
             throw new ArgumentNullException(nameof(expectedToken));
         if (expectedToken.Length == 0)
             throw new ArgumentException("Token requires a non-empty token.", nameof(expectedToken));
-        string firstElement = StringInfo.GetNextTextElement(expectedToken, 0);
-        if (firstElement.Length != expectedToken.Length)
+        int firstClusterLength = GraphemeHelpers.FirstClusterLength(expectedToken.AsSpan());
+        if (firstClusterLength != expectedToken.Length)
             throw new ArgumentException(
                 $"Token requires exactly one user-perceived character (one grapheme cluster). Use Literal(string) to match a sequence of more than one.",
                 nameof(expectedToken));

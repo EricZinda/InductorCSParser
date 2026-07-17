@@ -156,10 +156,9 @@ public readonly struct ParseResult
 
     /// <summary>
     /// Error position in tokens (Unicode graphemes), using the
-    /// same StringInfo text-element segmentation the lexer uses. Computed lazily
+    /// same UAX #29 grapheme segmentation the lexer uses. Computed lazily
     /// from <see cref="ErrorCharIndex"/>.
     /// </summary>
-    /// <remarks>On modern .NET this follows UAX #29 extended grapheme clusters.</remarks>
     public int ErrorTokenIndex =>
         SourcePositionConverter.ToTokenIndex(_input ?? string.Empty, ErrorCharIndex);
 

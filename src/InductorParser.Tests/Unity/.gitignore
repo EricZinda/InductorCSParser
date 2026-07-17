@@ -32,6 +32,12 @@ Build/
 Assets/Tests/PlayMode/Synced/
 Assets/Tests/PlayMode/Synced.meta
 
+# Prolog fixture corpus synced in by syncteststounity.sh for
+# PrologGrammarTests, which reads it from AppContext.BaseDirectory (the
+# Unity project root under the test runner). Outside Assets/ so Unity
+# doesn't import it.
+E2EExamples/
+
 # Init scenes Unity drops into Assets/ when launching PlayMode tests in
 # batch mode. Filename has a per-run GUID; safe to ignore everywhere.
 Assets/InitTestScene*.unity

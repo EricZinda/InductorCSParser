@@ -1197,6 +1197,40 @@ public class TokenSetTests
     }
 
     [Test]
+    public void LineTerminators_equals_the_set_the_graphemes_factory_builds()
+    {
+        // LineTerminators' CRLF entry is constructed directly during
+        // TokenSet's static initialization, skipping the segmentation-based
+        // Graphemes validation so TokenSet can initialize under any
+        // segmentation implementation (see CrlfGraphemeSet in TokenSet.cs).
+        // This holds the direct construction equal to what the validating
+        // factory builds, so the two can't drift apart.
+        var expected = TokenSet.Graphemes("\r\n")
+            | TokenSet.Single('\n')   // LF
+            | TokenSet.Single('\v')   // VT
+            | TokenSet.Single('\f')   // FF
+            | TokenSet.Single('\r')   // CR
+            | TokenSet.Single(0x0085) // NEL
+            | TokenSet.Single(0x2028) // LS
+            | TokenSet.Single(0x2029); // PS
+        AssertEqual(TokenSet.LineTerminators, expected);
+    }
+
+    [Test]
+    public void Ascii_AnyWhitespace_equals_the_set_the_graphemes_factory_builds()
+    {
+        // Same sync check as the LineTerminators test above, for the other
+        // built-in whose CRLF entry is constructed directly.
+        var expected = TokenSet.Runes(" \t")
+            | TokenSet.Single('\n')
+            | TokenSet.Single('\v')
+            | TokenSet.Single('\f')
+            | TokenSet.Single('\r')
+            | TokenSet.Graphemes("\r\n");
+        AssertEqual(TokenSet.Ascii.AnyWhitespace, expected);
+    }
+
+    [Test]
     public void Ascii_Digits_contains_only_0_through_9()
     {
         Assert.That(TokenSet.Ascii.Digits.ContainsRune('0'), Is.True);

@@ -112,20 +112,12 @@ internal sealed class LiteralRule : Rule
     // matched section of _expected char for char, so a grapheme boundary
     // of _expected at or below `consumed` is also a valid offset from
     // startPosition in input coordinates. See the file header for why
-    // progress counts in whole expected graphemes. The cluster index is
-    // cached per string instance, so the walk allocates nothing after
-    // the first failure against this literal.
+    // progress counts in whole expected graphemes. FloorToClusterStart
+    // uses the per-string boundary cache, so the walk allocates nothing
+    // after the first failure against this literal.
     private int FailurePosition(int startPosition, int consumed)
     {
-        var expectedIndex = GraphemeClusterIndex.For(_expected);
-        int boundary = 0;
-        while (boundary < consumed)
-        {
-            int clusterLength = expectedIndex.LengthAt(boundary);
-            if (boundary + clusterLength > consumed) break;
-            boundary += clusterLength;
-        }
-        return startPosition + boundary;
+        return startPosition + GraphemeHelpers.FloorToClusterStart(_expected, consumed);
     }
 
 }

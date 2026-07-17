@@ -612,10 +612,13 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // such as a ligature that normalizes to several letters.
     private static void AddGraphemePieces(string text, List<Interval> intervals, List<string> graphemes)
     {
-        var enumerator = StringInfo.GetTextElementEnumerator(text);
-        while (enumerator.MoveNext())
+        int position = 0;
+        while (position < text.Length)
         {
-            AddGraphemePiece((string)enumerator.Current, intervals, graphemes);
+            int clusterLength = GraphemeSegmentation
+                .GetLengthOfFirstExtendedGraphemeCluster(text.AsSpan(position));
+            AddGraphemePiece(text.Substring(position, clusterLength), intervals, graphemes);
+            position += clusterLength;
         }
     }
 
@@ -1041,7 +1044,8 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         int index = 0;
         while (index < text.Length)
         {
-            string grapheme = StringInfo.GetNextTextElement(text, index);
+            int graphemeLength = GraphemeSegmentation
+                .GetLengthOfFirstExtendedGraphemeCluster(text.AsSpan(index));
             int rune;
             int consumed;
             if (RuneHelpers.IsSurrogatePairAt(text, index))
@@ -1059,9 +1063,9 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                     $"Runes(string) encountered an invalid Rune (i.e. Unicode scalar value), 0x{rune:X4}, at UTF-16 offset {index}. " +
                     "Lone surrogate halves aren't valid Runes.",
                     nameof(text));
-            if (grapheme.Length != consumed)
+            if (graphemeLength != consumed)
                 throw new ArgumentException(
-                    $"Runes(string) input \"{text}\" contains a multi-rune grapheme cluster (\"{grapheme}\") at UTF-16 offset {index}. " +
+                    $"Runes(string) input \"{text}\" contains a multi-rune grapheme cluster (\"{text.Substring(index, graphemeLength)}\") at UTF-16 offset {index}. " +
                     "Runes(string) makes one set member per code point, so when neighboring code points count as one character it can't tell whether you meant one member or one member per code point, and rejects rather than guess. " +
                     "To match the whole character as a single member, use Graphemes(string[]). " +
                     "To match each code point on its own, list them yourself: Single(c1) | Single(c2).",
@@ -1103,8 +1107,9 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                     $"Graphemes element at index {clusterIndex} is empty. Each element must be exactly one grapheme cluster.",
                     nameof(clusters));
             ValidateGraphemeScalars(cluster, clusterIndex, nameof(clusters));
-            string firstCluster = StringInfo.GetNextTextElement(cluster, 0);
-            if (firstCluster.Length != cluster.Length)
+            int firstClusterLength = GraphemeSegmentation
+                .GetLengthOfFirstExtendedGraphemeCluster(cluster.AsSpan());
+            if (firstClusterLength != cluster.Length)
                 throw new ArgumentException(
                     $"Graphemes element at index {clusterIndex} (\"{cluster}\") contains more than one grapheme cluster. " +
                     "Each element must be exactly one cluster. " +
@@ -1139,9 +1144,9 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     // Rejects any lone (unpaired) surrogate half in a Graphemes element by
     // walking the runes by hand. It runs before the one-grapheme check below
-    // (StringInfo.GetNextTextElement), which would otherwise accept a lone
-    // surrogate as a valid single-grapheme element and let it into the set as
-    // a bogus rune.
+    // (GraphemeSegmentation reads a lone surrogate as one U+FFFD-shaped
+    // cluster), which would otherwise accept a lone surrogate as a valid
+    // single-grapheme element and let it into the set as a bogus rune.
     private static void ValidateGraphemeScalars(string grapheme, int clusterIndex, string parameterName)
     {
         for (int runeIndex = 0; runeIndex < grapheme.Length;)
@@ -1585,11 +1590,24 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // list. Union is commutative, so the build order doesn't matter.
     private static TokenSet BuildLineTerminators()
     {
-        var set = Graphemes("\r\n"); // CRLF grapheme
+        var set = CrlfGraphemeSet();
         foreach (int terminator in LineTerminatorScalars)
             set |= Single(terminator);
         return set;
     }
+
+    // The one-member set holding the CRLF grapheme, constructed directly
+    // rather than through Graphemes("\r\n"). The result is structurally
+    // identical (TokenSetTests asserts the equality), but Graphemes'
+    // one-cluster validation asks the active segmentation implementation
+    // about "\r\n", and this runs inside TokenSet's static initializer.
+    // Building the entry directly keeps TokenSet able to initialize no
+    // matter which implementation a build's segmentation policy picked,
+    // even a legacy pre-UAX-#29 StringInfo that reads CRLF as two
+    // clusters. The entry itself is known good: CRLF is one grapheme
+    // cluster under UAX #29 rule GB3.
+    private static TokenSet CrlfGraphemeSet() =>
+        new TokenSet(Array.Empty<Interval>(), new[] { "\r\n" });
 
     /// <summary>
     /// Full-Unicode intra-line whitespace plus every UTS #18 line terminator
@@ -1653,7 +1671,9 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
             | Single('\v')       // VT
             | Single('\f')       // FF
             | Single('\r')       // CR
-            | Graphemes("\r\n");  // CRLF grapheme
+            | CrlfGraphemeSet(); // CRLF grapheme, constructed directly so
+                                 // static init skips the segmentation-based
+                                 // validation (see CrlfGraphemeSet)
         /// <summary>The ASCII hex digits 0-9, a-f, and A-F.</summary>
         public static readonly TokenSet HexDigits = Digits | Range('a', 'f') | Range('A', 'F');
     }

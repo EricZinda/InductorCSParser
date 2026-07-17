@@ -190,6 +190,7 @@ Inductor Parser is designed to be able to be used in Unity, targeting WebGL and 
 - WebGL is single-threaded, so no background timers
 - IL2CPP means no IL can be generated at runtime: No System.Reflection.Emit, no LINQ Expression.Compile, no source generators producing IL at parse time
 - .NET Standard 2.1, not .NET 5+ since Unity's IL2CPP surface is still netstandard2.1. (works fine on .NET 5+, though!)
+- Unity's runtime splits text into characters using outdated Unicode rules (emoji sequences and CRLF come apart), so the build Unity loads ships its own copy of .NET's character segmentation. [UnicodeGotchas.md](docs/UnicodeGotchas.md#token-segmentation-across-runtimes) has the details.
 
 ## Fast Enough to be Used in Production
 To evaluate performance I used open source benchmarks built by others so that I wasn't unfairly building tests that IP was good at. You can run them yourself in the src/Benchmarks folder.

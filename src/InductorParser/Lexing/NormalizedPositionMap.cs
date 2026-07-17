@@ -65,8 +65,8 @@ internal static class NormalizedPositionMap
     private static int TranslateViaLockstep(string original, string normalized, int normalizedIndex)
     {
         // Step both sides through the shared per-input grapheme-boundary
-        // cache (a bool-array lookup) rather than StringInfo.GetNextTextElement,
-        // which allocates a substring for every grapheme just to read its
+        // cache (a bool-array lookup) rather than re-segmenting each
+        // grapheme just to read its
         // length. The normalized side's index was already built by the lexer
         // during the parse. The original side's is built once here and reused
         // by every later position lookup on the same input. This is the whole
@@ -122,13 +122,13 @@ internal static class NormalizedPositionMap
 
         while (origPos < original.Length)
         {
-            // GetNextTextElement always returns at least one char at a valid
-            // position. The Invariant.That catches the impossible-zero case
-            // that would spin this loop forever.
-            string grapheme = StringInfo.GetNextTextElement(original, origPos);
-            int graphemeLength = grapheme.Length;
+            // The segmenter always returns at least one char at a valid
+            // in-range position. The Invariant.That catches the
+            // impossible-zero case that would spin this loop forever.
+            int graphemeLength = GraphemeSegmentation
+                .GetLengthOfFirstExtendedGraphemeCluster(original.AsSpan(origPos));
             Invariant.That(graphemeLength > 0,
-                $"StringInfo.GetNextTextElement returned an empty element on the original string "
+                $"GetLengthOfFirstExtendedGraphemeCluster returned an empty element on the original string "
                 + $"at position {origPos} (length {original.Length}) in TranslateViaPerGraphemeNormalize.");
             origPos += graphemeLength;
 

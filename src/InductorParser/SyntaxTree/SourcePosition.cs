@@ -30,8 +30,7 @@ public readonly struct SourcePosition
 
     /// <summary>
     /// The index of the token (i.e. a grapheme: a character as the user sees it) that <see cref="CharIndex"/> falls in,
-    /// using the same StringInfo text-element segmentation the lexer uses (UAX #29 extended grapheme
-    /// clusters on modern .NET).
+    /// using the same UAX #29 extended-grapheme-cluster segmentation the lexer uses.
     /// </summary>
     /// <remarks>
     /// A family emoji or an accented letter typed as base + accent is one token even though it's

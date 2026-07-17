@@ -1240,8 +1240,9 @@ public abstract class Rule
             PositionPlaceholders(failurePosition, input),
             ("character", () =>
             {
-                string element = StringInfo.GetNextTextElement(input, failurePosition);
-                return DisplayEscape.Escape(element, 0, element.Length);
+                int elementLength = GraphemeSegmentation
+                    .GetLengthOfFirstExtendedGraphemeCluster(input.AsSpan(failurePosition));
+                return DisplayEscape.Escape(input, failurePosition, elementLength);
             }));
     }
 
@@ -1260,8 +1261,9 @@ public abstract class Rule
             PositionPlaceholders(badIndex, input),
             ("character", () =>
             {
-                string element = StringInfo.GetNextTextElement(input, badIndex);
-                return DisplayEscape.Escape(element, 0, element.Length);
+                int elementLength = GraphemeSegmentation
+                    .GetLengthOfFirstExtendedGraphemeCluster(input.AsSpan(badIndex));
+                return DisplayEscape.Escape(input, badIndex, elementLength);
             }));
     }
 

@@ -186,7 +186,7 @@ Rune symbols live at the bottom because single-rune leaf symbols use the code po
 
 ## Characters and TokenSet
 
-The parser operates on Unicode text, not raw bytes. The lexer reads one .NET `StringInfo` text element per step. On modern .NET that means extended grapheme clusters, so `👨‍👩‍👧‍👦` is one token rather than seven scalar values. The full lexer story, including legacy-runtime caveats, lives in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md), and `WithinToken(...)` (covered below) is the escape hatch for matching the runes inside one token. For grammar-authoring purposes, you can ignore the distinction until you hit emoji or combining-mark input, at which point the Unicode doc has the answer.
+The parser operates on Unicode text, not raw bytes. The lexer reads one UAX #29 extended grapheme cluster per step: `👨‍👩‍👧‍👦` is one token rather than seven scalar values. On modern .NET the boundaries come from the runtime's `StringInfo`, and on the netstandard2.1 build Unity loads they come from the library's bundled segmenter, because Unity's runtime predates UAX #29. The full lexer story lives in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md), and `WithinToken(...)` (covered below) is the escape hatch for matching the runes inside one token. For grammar-authoring purposes, you can ignore the distinction until you hit emoji or combining-mark input, at which point the Unicode doc has the answer.
 
 `TokenSet` is a composable value type for character sets. You build a class out of built-ins and factory calls and combine them with `|` for union, `&` for intersection, and `-` for difference ("a minus b"). The full API sketch is in "The TokenSet API" below.
 
@@ -312,15 +312,15 @@ Internally a `TokenSet` is a sorted array of rune ranges plus a sorted array of 
 
 ### How Rules React to the Lexer
 
-The parser's token is a `StringInfo` text element: one user-perceived character. See [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md) for the mechanics. What that means for the leaves that compare against tokens:
+The parser's token is one UAX #29 grapheme cluster: one user-perceived character. See [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md) for the mechanics. What that means for the leaves that compare against tokens:
 
 - `Token('=')` matches the `[=]` token. Single-rune tokens compare to a single rune by identity, so ASCII and other characters that fit in a C# char literal work as you would expect.
-- `Token("👋🏽")` matches the multi-rune waving-hand-with-skin-tone token as one unit. Construction-time validation rejects arguments that aren't exactly one text element.
+- `Token("👋🏽")` matches the multi-rune waving-hand-with-skin-tone token as one unit. Construction-time validation rejects arguments that aren't exactly one grapheme cluster.
 - `OneOf(TokenSet.Letters)` tests the whole token for set membership, not the runes inside it. A rune-range member can only ever match a single-rune token, so a multi-rune token whose runes are all letters (a Devanagari conjunct) isn't in `Letters`. It matches only if the set names it as a `Graphemes(...)` member. 
 - `Literal("café")` matches four tokens, one per visible character. That count comes from grapheme clustering, not normalization: `é` typed as `e + U+0301` is one cluster, so one token, normalized or not. What the default normalization adds is that the two spellings agree: Compile converts the literal and Parse converts the input to the same form, so a precomposed `é` in the grammar matches a decomposed one in the input. Under `Compile(null)` the comparison is exact code units, so the literal only matches input typed the same way.
-- Emoji sequences (👋🏽, 🇺🇸, 👨‍👩‍👧‍👦) match as single tokens on .NET 5 and later, where `StringInfo` implements the current Unicode segmentation rules. Older runtimes (.NET Framework, old Unity Mono) split a handful of cluster shapes into several tokens. [UnicodeGotchas.md](UnicodeGotchas.md#pre-net-5-token-segmentation) lists which ones and what to do about it.
+- Emoji sequences (👋🏽, 🇺🇸, 👨‍👩‍👧‍👦) match as single tokens on every runtime the library ships for: modern .NET's own `StringInfo` follows UAX #29, and the netstandard2.1 build Unity loads bundles a UAX #29 segmenter because Unity's runtime doesn't have one. [UnicodeGotchas.md](UnicodeGotchas.md#token-segmentation-across-runtimes) has the policy.
 
-This is right for almost every grammar that handles user-supplied text, because "one character" in the user's mental model is usually one user-perceived character. An emoji programming language works naturally on .NET 5 and later. Identifiers that include combining marks work naturally. Keywords like `function` parse the same way they always did (all ASCII, all single-rune text elements).
+This is right for almost every grammar that handles user-supplied text, because "one character" in the user's mental model is usually one user-perceived character. An emoji programming language works naturally. Identifiers that include combining marks work naturally. Keywords like `function` parse the same way they always did (all ASCII, all single-rune clusters).
 
 When a grammar genuinely needs to look inside one token (walk combining marks individually, validate each rune of a token), wrap the inner rule in `WithinToken(innerRule)`. The outer parse reads one full token. The inner rule walks its runes one at a time.
 

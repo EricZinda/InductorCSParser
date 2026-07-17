@@ -12,8 +12,8 @@ internal static class SourcePositionConverter
         // Goes through GraphemeClusterIndex.For so this shares the
         // same cache the Lexer populated during the parse. After a
         // full parse the cache is typically already walked end-to-end,
-        // so this call is pure bool-array reads with no StringInfo
-        // calls and no per-cluster substring allocations.
+        // so this call is pure bool-array reads with no segmentation
+        // calls and no per-cluster allocations.
         return GraphemeClusterIndex.For(input).CountClustersUpTo(charIndex);
     }
 

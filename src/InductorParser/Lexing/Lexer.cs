@@ -41,10 +41,11 @@ namespace InductorParser.Lexing;
 /// TryPeekRune returns false on a stray, and rules that decode runes
 /// (LiteralRule, TokenSet membership, etc.) already handle that. One gotcha if
 /// you hand-write a Rule that inspects token lengths: a stray isn't always one
-/// char. In rune mode it is, but in grapheme mode a stray followed by a
-/// combining mark (or any Extend) fuses into one multi-char token, because
-/// StringInfo reads the stray as U+FFFD and UAX #29 GB9 won't break before an
-/// Extend. Read consumes the whole token either way.
+/// char. In rune mode it is, but in grapheme mode a stray plus a
+/// following combining mark is one two-char token, per the UAX #29
+/// grapheme rules
+/// (https://www.unicode.org/reports/tr29/tr29-35.html#Grapheme_Cluster_Boundary_Rules).
+/// Read consumes the whole token either way.
 /// </para>
 /// </remarks>
 public sealed partial class Lexer
