@@ -38,6 +38,26 @@ namespace InductorParser.Tests;
 //      the production tree exactly.
 //   6. On success, every node's SourceText equals the input text at its
 //      SourceRange, and every range is in bounds.
+//   7. Wrapping the whole grammar in one extra And changes nothing: the
+//      extra And matches exactly what its child matches, and its own
+//      mechanical failure record lands at the subtree's deepest failure,
+//      a position the tracker already holds.
+//   8. Exactly(n, x) and an And of n references to one shared x instance
+//      agree completely, checked when x can't succeed at zero width
+//      (for a consuming x the count rule's zero-width break never fires,
+//      so the two shapes run x the same way the same number of times).
+//   9. Reversing the alternatives of an Or whose branches provably can't
+//      compete changes nothing. Eligibility (see FuzzRewriter): every
+//      branch consumes at least one token on success, every branch has a
+//      known exact first-token set, the sets are pairwise disjoint, and
+//      no branch subtree has a .WithError. Under those rules at most one
+//      branch can match. A branch whose set doesn't hold the input's
+//      first token fails mechanically at the Or's start, the one branch
+//      whose set does hold it records the same mechanical failures in
+//      either order, and mechanical ranking is a pure max, so trial
+//      order can't show through. Oracles 7-9 are the neutral-rewrite
+//      oracles from the retired backlog item 0a02 (closed 2026-07-10,
+//      see the neutral-rewrite entry in docs/BugSearchLog/).
 //
 // Everything is deterministic per seed: grammars and inputs come from
 // seeded Random instances and the corpus enumeration is ordered, so a
@@ -67,6 +87,8 @@ internal sealed class GrammarFuzzHarness
     public long CasesChecked { get; private set; }
     public long SuccessfulParses { get; private set; }
     public long CrossFormComparisons { get; private set; }
+    public long ExactlyRewriteComparisons { get; private set; }
+    public long OrReorderComparisons { get; private set; }
 
     public void RunSeeds(int firstSeed, int seedCount)
     {
@@ -93,6 +115,14 @@ internal sealed class GrammarFuzzHarness
         bool grammarIsNfc = FuzzGenerator.AllGrammarText(blueprint).All(SafeIsNfc);
         bool formDComparable = !FuzzGenerator.ContainsRuneLevelMatching(blueprint);
 
+        // The neutral rewrites from retired backlog item 0a02. The And wrap always
+        // applies. The other two apply only where their eligibility rules
+        // hold (see FuzzRewriter), so they come back null when the
+        // blueprint has no rewritable spot.
+        var blueprintAndWrap = new FuzzListNode("And", new[] { blueprint });
+        var blueprintExactlyRewrite = FuzzRewriter.RewriteExactlyToAnd(blueprint);
+        var blueprintOrReorder = FuzzRewriter.ReverseEligibleOrAlternatives(blueprint);
+
         Rule grammarFormC, grammarNull, grammarAlias, grammarLateBound, grammarFormD;
         try
         {
@@ -105,6 +135,41 @@ internal sealed class GrammarFuzzHarness
         catch (Exception exception)
         {
             _divergences.Add($"COMPILE seed {seed}: {exception.GetType().Name}: {exception.Message}\n  grammar: {blueprint.Show()}");
+            return;
+        }
+
+        // The plain grammar compiled, so a rewrite variant that fails to
+        // compile is itself a divergence: a neutral rewrite must stay
+        // compilable. Compiled one variant per try block so the
+        // divergence names the variant and shows its expression, which
+        // together with the seed is the actual repro.
+        Rule grammarAndWrap;
+        Rule? grammarExactlyRewrite, grammarOrReorder;
+        try
+        {
+            grammarAndWrap = blueprintAndWrap.Build().Compile(NormalizationForm.FormC);
+        }
+        catch (Exception exception)
+        {
+            _divergences.Add(RewriteCompileDivergence("ANDWRAP", seed, exception, blueprint, blueprintAndWrap));
+            return;
+        }
+        try
+        {
+            grammarExactlyRewrite = blueprintExactlyRewrite?.Build().Compile(NormalizationForm.FormC);
+        }
+        catch (Exception exception)
+        {
+            _divergences.Add(RewriteCompileDivergence("EXACTLY-TO-AND", seed, exception, blueprint, blueprintExactlyRewrite!));
+            return;
+        }
+        try
+        {
+            grammarOrReorder = blueprintOrReorder?.Build().Compile(NormalizationForm.FormC);
+        }
+        catch (Exception exception)
+        {
+            _divergences.Add(RewriteCompileDivergence("OR-REORDER", seed, exception, blueprint, blueprintOrReorder!));
             return;
         }
 
@@ -152,10 +217,35 @@ internal sealed class GrammarFuzzHarness
                 }
             }
 
-            CompareTransparentWrap("ALIAS", first, withAlias, grammarFormC, grammarAlias, blueprintWithAlias, context);
-            CompareTransparentWrap("LATEBOUND", first, withLateBound, grammarFormC, grammarLateBound, blueprintWithLateBound, context);
+            CompareNeutralVariant("ALIAS", first, withAlias, grammarFormC, grammarAlias, blueprintWithAlias, context);
+            CompareNeutralVariant("LATEBOUND", first, withLateBound, grammarFormC, grammarLateBound, blueprintWithLateBound, context);
 
-            if (first.Success != debug.Success)
+            var withAndWrap = grammarAndWrap.Parse(input);
+            CompareNeutralVariant("ANDWRAP", first, withAndWrap, grammarFormC, grammarAndWrap, blueprintAndWrap, context);
+            if (withAndWrap.Success) CheckRanges(withAndWrap, input, context + " [andWrap variant]");
+
+            if (grammarExactlyRewrite != null)
+            {
+                ExactlyRewriteComparisons++;
+                var withExactlyRewrite = grammarExactlyRewrite.Parse(input);
+                // The rewrite renames the rewritten node's class-derived
+                // fallback label (Exactly becomes And), so its tree
+                // comparison uses user-assigned names only.
+                CompareNeutralVariant("EXACTLY-TO-AND", first, withExactlyRewrite, grammarFormC, grammarExactlyRewrite,
+                    blueprintExactlyRewrite!, context, compareTreesByUserNamesOnly: true);
+                if (withExactlyRewrite.Success) CheckRanges(withExactlyRewrite, input, context + " [exactlyRewrite variant]");
+            }
+
+            if (grammarOrReorder != null)
+            {
+                OrReorderComparisons++;
+                var withOrReorder = grammarOrReorder.Parse(input);
+                CompareNeutralVariant("OR-REORDER", first, withOrReorder, grammarFormC, grammarOrReorder,
+                    blueprintOrReorder!, context);
+                if (withOrReorder.Success) CheckRanges(withOrReorder, input, context + " [orReorder variant]");
+            }
+
+            if (first.Outcome != debug.Outcome)
                 _divergences.Add($"DEBUG outcome {first.Outcome} vs {debug.Outcome}\n  {context}");
             else if (!first.Success)
             {
@@ -178,29 +268,44 @@ internal sealed class GrammarFuzzHarness
         }
     }
 
-    // A transparent stand-in wrap (unnamed Alias, bound LateBoundRule)
-    // shouldn't change the outcome, the error report, or the tree. Trees
-    // compare by name because the extra wrapped rule shifts anonymous id
-    // assignment, and NameOf labels are stable across the two variants.
-    private void CompareTransparentWrap(
-        string label, ParseResult plain, ParseResult wrapped,
-        Rule plainGrammar, Rule wrappedGrammar, FuzzNode wrappedBlueprint, string context)
+    // A neutral variant (transparent stand-in wrap, whole-grammar And
+    // wrap, Exactly-to-And with a shared inner instance, eligible-Or
+    // reversal) shouldn't change the outcome, the error report, or the
+    // tree. Trees compare by name because the variant's extra or altered
+    // rules shift anonymous id assignment, and NameOf labels are stable
+    // across the two variants. The one exception is a variant that
+    // changes a rule's class (Exactly-to-And): its class-derived fallback
+    // label changes too, so that comparison passes
+    // compareTreesByUserNamesOnly to use user-assigned names only.
+    private void CompareNeutralVariant(
+        string label, ParseResult plain, ParseResult variant,
+        Rule plainGrammar, Rule variantGrammar, FuzzNode variantBlueprint, string context,
+        bool compareTreesByUserNamesOnly = false)
     {
-        if (plain.Outcome != wrapped.Outcome)
-            _divergences.Add($"{label} outcome {plain.Outcome} vs {wrapped.Outcome}\n  {context}\n  wrapped grammar: {wrappedBlueprint.Show()}");
+        if (plain.Outcome != variant.Outcome)
+            _divergences.Add($"{label} outcome {plain.Outcome} vs {variant.Outcome}\n  {context}\n  variant grammar: {variantBlueprint.Show()}");
         else if (!plain.Success)
         {
-            if (plain.ErrorCharIndex != wrapped.ErrorCharIndex || plain.ErrorMessage != wrapped.ErrorMessage)
-                _divergences.Add($"{label} error ({plain.ErrorCharIndex} \"{plain.ErrorMessage}\") vs ({wrapped.ErrorCharIndex} \"{wrapped.ErrorMessage}\")\n  {context}\n  wrapped grammar: {wrappedBlueprint.Show()}");
+            if (plain.ErrorCharIndex != variant.ErrorCharIndex || plain.ErrorMessage != variant.ErrorMessage)
+                _divergences.Add($"{label} error ({plain.ErrorCharIndex} \"{plain.ErrorMessage}\") vs ({variant.ErrorCharIndex} \"{variant.ErrorMessage}\")\n  {context}\n  variant grammar: {variantBlueprint.Show()}");
         }
         else
         {
-            string namedPlain = DumpNamed(plain.Symbols, plainGrammar);
-            string namedWrapped = DumpNamed(wrapped.Symbols, wrappedGrammar);
-            if (namedPlain != namedWrapped)
-                _divergences.Add($"{label} tree\n  plain: {namedPlain}\n  wrapped: {namedWrapped}\n  {context}\n  wrapped grammar: {wrappedBlueprint.Show()}");
+            string namedPlain = compareTreesByUserNamesOnly
+                ? DumpBySourceText(plain.Symbols, plainGrammar)
+                : DumpNamed(plain.Symbols, plainGrammar);
+            string namedVariant = compareTreesByUserNamesOnly
+                ? DumpBySourceText(variant.Symbols, variantGrammar)
+                : DumpNamed(variant.Symbols, variantGrammar);
+            if (namedPlain != namedVariant)
+                _divergences.Add($"{label} tree\n  plain: {namedPlain}\n  variant: {namedVariant}\n  {context}\n  variant grammar: {variantBlueprint.Show()}");
         }
     }
+
+    private static string RewriteCompileDivergence(
+        string label, int seed, Exception exception, FuzzNode plainBlueprint, FuzzNode variantBlueprint) =>
+        $"REWRITE-COMPILE {label} seed {seed}: {exception.GetType().Name}: {exception.Message}" +
+        $"\n  grammar: {plainBlueprint.Show()}\n  variant grammar: {variantBlueprint.Show()}";
 
     // Full comparison for variants that assign identical ids (same
     // blueprint, same Compile walk order): outcome, error report on
@@ -264,9 +369,10 @@ internal sealed class GrammarFuzzHarness
         return builder.ToString();
     }
 
-    // Name-level dump for the alias-wrap comparison: the inserted alias
-    // shifts anonymous id assignment, so labels come from NameOf, which
-    // is stable across the two variants.
+    // Name-level dump for the neutral-variant comparisons (ALIAS,
+    // LATEBOUND, ANDWRAP, OR-REORDER): a variant's inserted rule or
+    // altered Compile walk order shifts anonymous id assignment, so
+    // labels come from NameOf, which is stable across the two variants.
     private static string DumpNamed(IReadOnlyList<Symbol> symbols, Rule grammarRoot)
     {
         var builder = new StringBuilder();
@@ -284,10 +390,12 @@ internal sealed class GrammarFuzzHarness
         return builder.ToString();
     }
 
-    // Cross-form dump: user names only, because class fallbacks and rune
-    // labels are form-sensitive when FormD splits a single-rune token,
-    // and SourceText (original coordinates) instead of ToString
-    // (normalized text).
+    // Dump keyed on user names and SourceText only. Two users: the
+    // cross-form comparison, where class fallbacks and rune labels are
+    // form-sensitive when FormD splits a single-rune token and SourceText
+    // (original coordinates) sidesteps ToString (normalized text), and
+    // the Exactly-to-And comparison, where the rewrite changes the
+    // rewritten node's class-derived fallback label (Exactly becomes And).
     private static string DumpBySourceText(IReadOnlyList<Symbol> symbols, Rule grammarRoot)
     {
         var builder = new StringBuilder();
@@ -563,7 +671,15 @@ internal sealed class FuzzListNode : FuzzNode
     public override Rule BuildCore()
     {
         var built = Items.Select(i => i.Build()).ToArray();
-        return Kind == "And" ? And(built) : Or(built);
+        // Throws on an unknown Kind like every other node's switch, so a
+        // typo'd Kind can't silently build as an Or while FuzzRewriter's
+        // analyses treat it as something else.
+        return Kind switch
+        {
+            "And" => And(built),
+            "Or" => Or(built),
+            _ => throw new InvalidOperationException(Kind),
+        };
     }
     public override string ShowCore() => $"{Kind}({string.Join(", ", Items.Select(i => i.Show()))})";
 }
@@ -601,6 +717,35 @@ internal sealed class FuzzRepetitionNode : FuzzNode
         "Between" => $"BetweenInclusive({Count}, {UpperCount}, {Inner.Show()})",
         _ => $"{Kind}({Inner.Show()})",
     };
+}
+
+// The Exactly(n, x) neutral rewrite target: an And of n references to
+// one shared x instance. Build() constructs the inner once and repeats
+// the reference, because building x twice would duplicate any .As name
+// inside it, and two reachable rules sharing a name is a Compile-time
+// user error. Repeating one instance is the documented shared-rule
+// shape. Only FuzzRewriter creates these, the generator never does.
+internal sealed class FuzzSharedSequenceNode : FuzzNode
+{
+    public readonly FuzzNode Inner;
+    public readonly int RepeatCount;
+
+    public FuzzSharedSequenceNode(FuzzNode inner, int repeatCount)
+    {
+        Inner = inner;
+        RepeatCount = repeatCount;
+    }
+
+    public override IEnumerable<FuzzNode> ChildNodes => new[] { Inner };
+
+    public override Rule BuildCore()
+    {
+        var shared = Inner.Build();
+        return And(Enumerable.Repeat(shared, RepeatCount).ToArray());
+    }
+
+    public override string ShowCore() =>
+        $"AndSharedRepeat({RepeatCount}, {Inner.Show()})";
 }
 
 internal sealed class FuzzWrapNode : FuzzNode
@@ -1139,5 +1284,383 @@ internal static class FuzzGenerator
             }
             return members.ToArray();
         }
+    }
+}
+
+// The neutral rewrites from retired backlog item 0a02: transforms that can't change
+// what a grammar matches, applied so the harness can check they also
+// don't change what a failing parse reports. Each transform rebuilds
+// only the path from a rewritten node to the root and shares every
+// untouched blueprint node, which is safe because Build() constructs
+// fresh Rule instances on every call.
+//
+// Soundness is the whole game here: a rewrite the oracle applies where
+// it isn't actually neutral produces false divergences. The two
+// eligibility rules and their reasoning:
+//
+// Exactly(n, x) to And(x repeated n) needs x to consume at least one
+// token whenever it succeeds. The count rule stops its loop after one
+// zero-width success, so Exactly(2, Optional(a)) fails on empty input
+// while And(Optional(a), Optional(a)) succeeds. DefinitelyConsumes is
+// the under-approximation that keeps the rewrite away from that case:
+// it says true only when every success provably consumes.
+//
+// Reversing an Or's alternatives needs three things per branch:
+//   - The branch consumes on success. A branch that can succeed at zero
+//     width is a catch-all, and moving a catch-all changes which branch
+//     wins.
+//   - The branch has a known exact first-token set: every successful
+//     match's first consumed token is in the set. Disjoint exact sets
+//     mean at most one branch can match a given input, so trial order
+//     can't change which branch wins. A branch whose set doesn't hold
+//     the input's first token fails with all its records at the Or's
+//     start. The one branch whose set does hold it can fail deeper,
+//     but it runs to the same failure in either order, so its records
+//     are identical no matter where it sits in the trial order.
+//   - No .WithError anywhere in the branch subtree. Rejected-branch
+//     failures are then all mechanical, and the mechanical tracker is a
+//     pure position max, so recording order can't show through. (Named
+//     and forced failures break depth ties by first writer, which
+//     reordering would legitimately flip. That's by design, not a bug,
+//     so branches that could record one are excluded.)
+// FirstTokenSet may over-approximate (a superset only makes the
+// disjointness check stricter), and unknown shapes return null, which
+// excludes the Or. Members compare in FormC because the harness
+// compiles the rewritten grammars with FormC and matching is
+// insensitive to the source form. The Or's own .WithError is fine: it
+// records after every branch has failed in either order.
+internal static class FuzzRewriter
+{
+    public static FuzzNode? RewriteExactlyToAnd(FuzzNode root)
+    {
+        bool changed = false;
+        var result = Transform(root, node =>
+        {
+            // Count >= 1 because Exactly(0, x) succeeds at zero width
+            // while And() rejects an empty child list. The generator
+            // never draws 0 today, so this is here for the day it does.
+            if (node is FuzzRepetitionNode { Kind: "Exactly" } exactly
+                && exactly.Count >= 1
+                && DefinitelyConsumes(exactly.Inner))
+            {
+                changed = true;
+                return CopyModifiers(exactly, new FuzzSharedSequenceNode(exactly.Inner, exactly.Count));
+            }
+            return node;
+        });
+        return changed ? result : null;
+    }
+
+    public static FuzzNode? ReverseEligibleOrAlternatives(FuzzNode root)
+    {
+        bool changed = false;
+        var result = Transform(root, node =>
+        {
+            if (node is FuzzListNode { Kind: "Or" } alternation && IsReorderableOr(alternation))
+            {
+                changed = true;
+                return CopyModifiers(alternation, new FuzzListNode("Or", Enumerable.Reverse(alternation.Items).ToArray()));
+            }
+            return node;
+        });
+        return changed ? result : null;
+    }
+
+    // Bottom-up rebuild: transform every child first, rebuild this node
+    // only if a child actually changed, then offer the rebuilt node to
+    // the rewrite. Unchanged subtrees stay shared with the original
+    // blueprint.
+    private static FuzzNode Transform(FuzzNode node, Func<FuzzNode, FuzzNode> rewriteNode)
+    {
+        FuzzNode rebuilt;
+        switch (node)
+        {
+            case FuzzListNode list:
+            {
+                var items = new FuzzNode[list.Items.Length];
+                bool childChanged = false;
+                for (int i = 0; i < list.Items.Length; i++)
+                {
+                    items[i] = Transform(list.Items[i], rewriteNode);
+                    childChanged |= !ReferenceEquals(items[i], list.Items[i]);
+                }
+                rebuilt = childChanged ? CopyModifiers(list, new FuzzListNode(list.Kind, items)) : list;
+                break;
+            }
+            case FuzzRepetitionNode repetition:
+            {
+                var inner = Transform(repetition.Inner, rewriteNode);
+                rebuilt = ReferenceEquals(inner, repetition.Inner)
+                    ? repetition
+                    : CopyModifiers(repetition, new FuzzRepetitionNode(repetition.Kind, inner, repetition.Count, repetition.UpperCount));
+                break;
+            }
+            case FuzzWrapNode wrap:
+            {
+                var inner = Transform(wrap.Inner, rewriteNode);
+                rebuilt = ReferenceEquals(inner, wrap.Inner)
+                    ? wrap
+                    : CopyModifiers(wrap, new FuzzWrapNode(wrap.Kind, inner));
+                break;
+            }
+            case FuzzScanUntilRuleStopNode ruleStop:
+            {
+                var stopper = Transform(ruleStop.Stopper, rewriteNode);
+                rebuilt = ReferenceEquals(stopper, ruleStop.Stopper)
+                    ? ruleStop
+                    : CopyModifiers(ruleStop, new FuzzScanUntilRuleStopNode(stopper, ruleStop.EofIsTerminator, ruleStop.WithRuneEscape));
+                break;
+            }
+            case FuzzScanUntilEscapeStartRuleNode escape:
+            {
+                var escapeStart = Transform(escape.EscapeStart, rewriteNode);
+                rebuilt = ReferenceEquals(escapeStart, escape.EscapeStart)
+                    ? escape
+                    : CopyModifiers(escape, new FuzzScanUntilEscapeStartRuleNode(escape.Chars, escape.GraphemeMembers, escapeStart, escape.EofIsTerminator));
+                break;
+            }
+            case FuzzRecursionNode recursion:
+            {
+                var open = Transform(recursion.Open, rewriteNode);
+                var baseCase = Transform(recursion.BaseCase, rewriteNode);
+                var close = Transform(recursion.Close, rewriteNode);
+                rebuilt = ReferenceEquals(open, recursion.Open)
+                          && ReferenceEquals(baseCase, recursion.BaseCase)
+                          && ReferenceEquals(close, recursion.Close)
+                    ? recursion
+                    : CopyModifiers(recursion, new FuzzRecursionNode(open, baseCase, close, recursion.ViaAlias));
+                break;
+            }
+            case FuzzSharedSequenceNode shared:
+            {
+                var inner = Transform(shared.Inner, rewriteNode);
+                rebuilt = ReferenceEquals(inner, shared.Inner)
+                    ? shared
+                    : CopyModifiers(shared, new FuzzSharedSequenceNode(inner, shared.RepeatCount));
+                break;
+            }
+            default:
+                rebuilt = node;
+                break;
+        }
+        return rewriteNode(rebuilt);
+    }
+
+    private static FuzzNode CopyModifiers(FuzzNode from, FuzzNode to)
+    {
+        to.AsName = from.AsName;
+        to.ExplicitFlatten = from.ExplicitFlatten;
+        to.ErrorText = from.ErrorText;
+        to.ErrorForced = from.ErrorForced;
+        return to;
+    }
+
+    private static bool IsReorderableOr(FuzzListNode alternation)
+    {
+        var branchSets = new List<HashSet<string>>();
+        foreach (var branch in alternation.Items)
+        {
+            if (!DefinitelyConsumes(branch)) return false;
+            if (ContainsWithError(branch)) return false;
+            var firstTokens = FirstTokenSet(branch);
+            if (firstTokens == null || firstTokens.Count == 0) return false;
+            foreach (var earlier in branchSets)
+                if (earlier.Overlaps(firstTokens)) return false;
+            branchSets.Add(firstTokens);
+        }
+        return true;
+    }
+
+    private static bool ContainsWithError(FuzzNode node) =>
+        node.ErrorText != null || node.ChildNodes.Any(ContainsWithError);
+
+    // True only when every successful match consumes at least one token.
+    // Must under-approximate: unknown shapes answer false.
+    private static bool DefinitelyConsumes(FuzzNode node) => node switch
+    {
+        FuzzTokenNode => true,
+        FuzzGraphemeTokenNode => true,
+        FuzzLiteralNode literal => literal.S.Length > 0,
+        FuzzSetLeafNode set => set.Kind switch
+        {
+            "OneOf" or "NoneOf" => true,
+            "ScanWhile" => set.ScanWhileMinimum >= 1,
+            // The ScanUntil kinds match zero-width when the stopper is
+            // immediate.
+            _ => false,
+        },
+        // EndOfLine(eofIsEol: true), Eof, and ScanUntilEof succeed at
+        // zero width, so they're deliberately missing from this list.
+        FuzzSimpleLeafNode simple => simple.Kind
+            is "AnyToken" or "EndOfLine" or "InlineWhitespace" or "AnyWhitespace" or "Integer" or "Float",
+        FuzzListNode list => list.Kind switch
+        {
+            "And" => list.Items.Any(DefinitelyConsumes),
+            "Or" => list.Items.All(DefinitelyConsumes),
+            // Unknown kinds answer false per this function's rule.
+            _ => false,
+        },
+        FuzzRepetitionNode repetition => repetition.Kind switch
+        {
+            "OneOrMore" => DefinitelyConsumes(repetition.Inner),
+            "Exactly" or "AtLeast" or "Between" => repetition.Count >= 1 && DefinitelyConsumes(repetition.Inner),
+            // Optional, ZeroOrMore, and AtMost succeed at zero width.
+            _ => false,
+        },
+        FuzzWrapNode wrap => wrap.Kind switch
+        {
+            "Alias" or "LateBound" => DefinitelyConsumes(wrap.Inner),
+            // WithinToken consumes exactly one outer token on success.
+            "WithinToken" => true,
+            // Not and Peek are zero-width.
+            _ => false,
+        },
+        FuzzIdentifierNode => true,
+        // The recursion body is Or(baseCase, And(open, reference, close)),
+        // so it consumes when both arms do, and the And arm consumes
+        // whenever open does.
+        FuzzRecursionNode recursion => DefinitelyConsumes(recursion.BaseCase) && DefinitelyConsumes(recursion.Open),
+        FuzzSharedSequenceNode shared => DefinitelyConsumes(shared.Inner),
+        _ => false,
+    };
+
+    // The clusters EndOfLine can match, derived from the set EndOfLine
+    // itself is built on (TokenSet.LineTerminators) so this list can't
+    // drift when a terminator is ever added there. EndOfLine's separate
+    // Literal("\r\n") alternative is covered by the CRLF grapheme member
+    // of the same set. TokenSet has no rune enumerator, so the derivation
+    // asks ContainsRune about every code point once. That's about 1.1M
+    // short linear scans, a few milliseconds, paid one time when the
+    // first eligibility check runs.
+    private static readonly Lazy<HashSet<string>> LineTerminatorClusters = new(BuildLineTerminatorClusters);
+
+    private static HashSet<string> BuildLineTerminatorClusters()
+    {
+        var terminators = TokenSet.LineTerminators;
+        var clusters = NewSet();
+        for (int codepoint = 0; codepoint <= 0x10FFFF; codepoint++)
+        {
+            if (!terminators.ContainsRune(codepoint)) continue;
+            // A TokenSet can hold surrogate code points (TokenSet.SurrogateRange
+            // exists for matching ill-formed input), and ConvertFromUtf32
+            // throws on those, so they render as their single char.
+            string member = codepoint is >= 0xD800 and <= 0xDFFF
+                ? ((char)codepoint).ToString()
+                : char.ConvertFromUtf32(codepoint);
+            clusters.Add(Nfc(member));
+        }
+        foreach (string grapheme in terminators.EnumerateMultiRuneGraphemes())
+            clusters.Add(Nfc(grapheme));
+        return clusters;
+    }
+
+    // The exact first-token set: every successful match's first consumed
+    // token (grapheme cluster, compared in FormC) is in the returned
+    // set. null means the shape's set isn't computable here, which
+    // excludes the enclosing Or from reordering. May over-approximate
+    // (that only makes the disjointness check stricter), must never
+    // under-approximate. Zero-width shapes (Not, Peek, Eof) return the
+    // empty set: they never consume, so they contribute no first tokens.
+    private static HashSet<string>? FirstTokenSet(FuzzNode node)
+    {
+        switch (node)
+        {
+            case FuzzTokenNode token:
+                return NewSet(Nfc(token.C.ToString()));
+            case FuzzGraphemeTokenNode grapheme:
+                return NewSet(Nfc(grapheme.Grapheme));
+            case FuzzLiteralNode literal when literal.S.Length == 0:
+                return null;
+            case FuzzLiteralNode literal when literal.IgnoreCase:
+            {
+                // Generated case-insensitive literals hold ASCII letters
+                // only. Anything else is unexpected, so bail to null.
+                char first = literal.S[0];
+                if (first is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z'))
+                    return NewSet(char.ToLowerInvariant(first).ToString(), char.ToUpperInvariant(first).ToString());
+                return null;
+            }
+            case FuzzLiteralNode literal:
+                return NewSet(StringInfo.GetNextTextElement(Nfc(literal.S), 0));
+            case FuzzSetLeafNode set when set.Kind is "OneOf" or "ScanWhile":
+            {
+                var members = NewSet();
+                foreach (char c in set.Chars) members.Add(Nfc(c.ToString()));
+                foreach (string member in set.GraphemeMembers) members.Add(Nfc(member));
+                return members;
+            }
+            // NoneOf matches the complement of its members, and the
+            // ScanUntil kinds consume anything before their stopper, so
+            // neither has an enumerable set.
+            case FuzzSetLeafNode:
+                return null;
+            case FuzzSimpleLeafNode simple:
+                return simple.Kind switch
+                {
+                    "Eof" => NewSet(),
+                    "EndOfLine" or "EndOfLineEofIsEol" => new HashSet<string>(LineTerminatorClusters.Value, StringComparer.Ordinal),
+                    // AnyToken matches everything. Integer and Float
+                    // start on TokenSet.Digits, the full Unicode
+                    // decimal-digit set, and the whitespace factories on
+                    // TokenSet.InlineWhitespace. None of those member
+                    // lists are enumerable from the blueprint.
+                    _ => null,
+                };
+            case FuzzListNode { Kind: "Or" } alternation:
+            {
+                var union = NewSet();
+                foreach (var branch in alternation.Items)
+                {
+                    var branchSet = FirstTokenSet(branch);
+                    if (branchSet == null) return null;
+                    union.UnionWith(branchSet);
+                }
+                return union;
+            }
+            case FuzzListNode { Kind: "And" } sequence:
+            {
+                // Children before the first definitely-consuming one may
+                // match at zero width, so the first consumed token can
+                // come from any of them: union until the first child
+                // that always consumes. Matched on Kind "And" explicitly:
+                // an unknown list kind must fall to the null default, not
+                // get this scan, because stopping the union early is an
+                // under-approximation for anything Or-shaped.
+                var union = NewSet();
+                foreach (var child in sequence.Items)
+                {
+                    var childSet = FirstTokenSet(child);
+                    if (childSet == null) return null;
+                    union.UnionWith(childSet);
+                    if (DefinitelyConsumes(child)) return union;
+                }
+                return union;
+            }
+            // For every count, the first consumed token (if any) comes
+            // from the first inner attempt.
+            case FuzzRepetitionNode repetition:
+                return FirstTokenSet(repetition.Inner);
+            case FuzzWrapNode { Kind: "Not" or "Peek" }:
+                return NewSet();
+            case FuzzWrapNode { Kind: "Alias" or "LateBound" } wrap:
+                return FirstTokenSet(wrap.Inner);
+            case FuzzSharedSequenceNode shared:
+                return FirstTokenSet(shared.Inner);
+            // WithinToken (token acceptance depends on the rune-level
+            // inner), Identifier (the start set is the full XID table),
+            // recursion, and the rule-stopper ScanUntil shapes have no
+            // computable set.
+            default:
+                return null;
+        }
+    }
+
+    private static HashSet<string> NewSet(params string[] members) =>
+        new HashSet<string>(members, StringComparer.Ordinal);
+
+    private static string Nfc(string s)
+    {
+        try { return s.Normalize(NormalizationForm.FormC); }
+        catch (ArgumentException) { return s; }
     }
 }

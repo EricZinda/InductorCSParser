@@ -9,10 +9,14 @@ namespace InductorParser.Tests;
 // One thing to know when this fails after an unrelated-looking change:
 // the harness draws grammar text from UnicodeExamples by reflection, so
 // adding a corpus constant reshuffles which grammars the same seeds
-// produce. A new failure after a corpus addition means the fuzzer
-// surfaced a real divergence in the reshuffled coverage, not that the
-// test is flaky. Every divergence message includes the seed, the input,
-// and the grammar expression, which together are the failing repro.
+// produce. A new divergence failure after a corpus addition means the
+// fuzzer surfaced a real divergence in the reshuffled coverage, not that
+// the test is flaky. Every divergence message includes the seed, the
+// input, and the grammar expression, which together are the failing
+// repro. The volume assertions are the exception: eligible-grammar rates
+// move with the corpus, so a reshuffle alone can drop one below its
+// floor. A volume failure with zero divergences means retune the floor,
+// not hunt a bug.
 [TestFixture]
 public class GrammarFuzzTests
 {
@@ -33,10 +37,14 @@ public class GrammarFuzzTests
             "successful parses are what exercise the tree oracles");
         Assert.That(harness.CrossFormComparisons, Is.GreaterThan(5_000),
             "most grammars should be eligible for the FormC-vs-FormD oracle");
+        Assert.That(harness.ExactlyRewriteComparisons, Is.GreaterThan(500),
+            "grammars with a consuming Exactly should be common enough to exercise the rewrite oracle");
+        Assert.That(harness.OrReorderComparisons, Is.GreaterThan(100),
+            "some grammars should have an Or eligible for the reorder oracle");
     }
 
     [Test]
-    [Explicit("Deep campaign, about a minute of runtime. Run on demand when hunting, the standard test covers CI.")]
+    [Explicit("Deep campaign, about three minutes of runtime. Run on demand when hunting, the standard test covers CI.")]
     public void Fuzzer_deep_campaign_finds_no_divergences()
     {
         var harness = new GrammarFuzzHarness();
