@@ -17,19 +17,22 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
-  <!-- Grapheme segmentation policy: keep each build's Unicode
-       environment internally consistent. By default a build takes
-       segmentation from the runtime's StringInfo, the same place
+  <!-- Grapheme segmentation default: what GraphemeSegmenter.Automatic
+       means in this build. With the symbol undefined (the default),
+       Automatic means the runtime's StringInfo, the same place
        string.Normalize and character-category data come from, so a
        target framework added here tracks its own runtime with no extra
-       wiring. Defining INDUCTORPARSER_USE_BUNDLED_SEGMENTATION opts a
-       build into the library's bundled UAX #29 segmenter instead
+       wiring. Defining INDUCTORPARSER_USE_BUNDLED_SEGMENTATION makes
+       Automatic mean the library's bundled UAX #29 segmenter instead
        (Lexing/GraphemeSegmentation.cs, fixed at Unicode 15.0). The
-       netstandard2.1 build opts in because the runtimes that load it
-       (Unity's Mono, IL2CPP) ship a StringInfo that predates UAX #29
-       and would tokenize incorrectly. Consequence for callers: a client
-       and server that must agree on parse trees need to run on the same
-       runtime. -->
+       netstandard2.1 build defines it because the runtimes that load
+       that build (Unity's Mono, IL2CPP) ship a StringInfo that predates
+       UAX #29 and would tokenize incorrectly. This is only the default:
+       callers on any build can override it at startup by setting
+       GraphemeHelpers.Segmenter before building grammars or parsing.
+       Consequence for callers: a client and server that must agree on
+       parse trees either run the same runtime or both opt into the
+       bundled segmenter. -->
   <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
     <DefineConstants>$(DefineConstants);INDUCTORPARSER_USE_BUNDLED_SEGMENTATION</DefineConstants>
   </PropertyGroup>

@@ -11,13 +11,16 @@ namespace InductorParser.Lexing;
 // on every query.
 //
 // Cluster detection comes from GraphemeSegmentation. Its header covers
-// which implementation answers on which build.
+// how the implementation is chosen.
 //
 // Sharing model: GraphemeClusterIndex.For(string) returns a cached
 // instance keyed on the input string via a ConditionalWeakTable, so
 // the Lexer and post-parse callers (SourcePositionConverter) reuse the
 // same cache automatically. The CWT keeps the index alive only while
 // the string is alive, so a finished parse drops both together.
+// Keying on the string alone is valid because the segmenter choice
+// (GraphemeHelpers.Segmenter) freezes before the first index is built
+// and never changes afterward.
 //
 // The cache is populated by walking the input one cluster at a time,
 // recording each cluster start in a bool[] sized to the input. bool[]
@@ -40,6 +43,11 @@ namespace InductorParser.Lexing;
 internal sealed class GraphemeClusterIndex
 {
     private static readonly ConditionalWeakTable<string, GraphemeClusterIndex> _byInput = new();
+
+    // Test-only: drop every cached index. Only called by
+    // GraphemeSegmentation.ResetForTesting, whose comment states the
+    // concurrency requirements.
+    internal static void ResetCacheForTesting() => _byInput.Clear();
 
     private readonly string _input;
     private readonly bool[] _isStart;

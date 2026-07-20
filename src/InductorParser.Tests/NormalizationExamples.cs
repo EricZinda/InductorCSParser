@@ -348,10 +348,10 @@ public static class NormalizationExamples
     // OneOf / Token / single-grapheme rules can match these. False for the
     // compatibility-ligature rows under FormKC / FormKD (where ﬁ → "fi" is
     // two graphemes), where Compile is supposed to surface a normalization
-    // offender at the rule build. The answer comes from GraphemeHelpers
-    // (not the runtime's StringInfo) because this classification
-    // predicts what the parser will do, and GraphemeHelpers answers with
-    // the same segmentation the parser uses.
+    // offender at the rule build. The classification comes from
+    // GraphemeHelpers (not the runtime's StringInfo) because it
+    // predicts what the parser will do, and GraphemeHelpers uses the
+    // same segmentation the parser does.
     public static bool PostFormIsSingleGrapheme(NormalizationCase row, NormalizationForm form)
     {
         string projected = Project(row, form);

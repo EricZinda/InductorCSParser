@@ -18,7 +18,7 @@ Unicode lets you write the same visible character multiple ways. The letter "é"
 - `FormC` and `FormD` are the *canonical* forms. They convert between precomposed and decomposed Unicode (like "é" turning into "e" plus combining acute, or back). They don't expand ligatures, don't change ASCII width, and don't change anything visible.
 - `FormKC` and `FormKD` are the *compatibility* forms. They do everything the canonical forms do, then go further. They expand ligatures ("ﬁ" becomes "fi"), unify half-width and full-width Latin, flatten superscripts and other typographic variants, and handle other "looks similar but stored differently" cases.
 
-A *grapheme* is what a user thinks of as one character, even when it's stored as multiple chars. "é" is one grapheme whether stored as 1 char or 2. The parser's bundled UAX #29 segmenter (`GraphemeSegmentation`) walks a string one grapheme at a time.
+A *grapheme* is what a user thinks of as one character, even when it's stored as multiple chars. "é" is one grapheme whether stored as 1 char or 2. The parser's segmenter (`GraphemeSegmentation`) walks a string one grapheme at a time.
 
 ## The problem
 

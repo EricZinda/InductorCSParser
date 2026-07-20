@@ -1,6 +1,8 @@
+using System;
 using System.Text;
 using NUnit.Framework;
 using InductorParser;
+using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 
@@ -65,6 +67,20 @@ namespace InductorParser.PlayModeTests
 
             Assert.That(result.Success, Is.True, result.ErrorMessage);
             Assert.That(result.Tree!.ToString(), Is.EqualTo("hello\\n"));
+        }
+
+        [Test]
+        public void Bundled_segmenter_is_active_under_il2cpp()
+        {
+            // In the assembly Unity loads, GraphemeSegmenter.Automatic
+            // must mean the bundled segmenter, because Unity's runtimes
+            // ship a legacy StringInfo. The FirstClusterLength
+            // assertion is its own tripwire: that legacy StringInfo
+            // returns 1 for CRLF, so if Automatic wrongly picked
+            // Runtime here, this line fails before the enum check
+            // below.
+            Assert.That(GraphemeHelpers.FirstClusterLength("\r\nx".AsSpan()), Is.EqualTo(2));
+            Assert.That(GraphemeHelpers.ActiveSegmenter, Is.EqualTo(GraphemeSegmenter.Bundled));
         }
 
         [Test]

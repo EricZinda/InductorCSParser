@@ -32,8 +32,8 @@ public class GraphemeSegmentationTests
 {
     // Cluster lengths of the whole string, walked with the bundled
     // segmenter directly (not the dispatching entry point), so these
-    // tests exercise the ported state machine no matter how the
-    // INDUCTORPARSER_USE_BUNDLED_SEGMENTATION build switch is set.
+    // tests exercise the ported state machine no matter which way the
+    // process-wide segmenter setting resolves.
     private static List<int> VendoredClusterLengths(string text)
     {
         var lengths = new List<int>();
@@ -99,9 +99,8 @@ public class GraphemeSegmentationTests
     public void Runtime_backed_length_answers_like_StringInfo()
     {
         // The StringInfo-backed path, called directly so it stays
-        // working regardless of which way the
-        // INDUCTORPARSER_USE_BUNDLED_SEGMENTATION build switch points
-        // this build.
+        // working regardless of which segmenter the process-wide
+        // setting picks.
         Assert.That(GraphemeSegmentation.GetRuntimeLengthOfFirstExtendedGraphemeCluster(
             "\r\nx".AsSpan()), Is.EqualTo(2));
         Assert.That(GraphemeSegmentation.GetRuntimeLengthOfFirstExtendedGraphemeCluster(

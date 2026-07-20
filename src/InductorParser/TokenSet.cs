@@ -1602,9 +1602,11 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // one-cluster validation asks the active segmentation implementation
     // about "\r\n", and this runs inside TokenSet's static initializer.
     // Building the entry directly keeps TokenSet able to initialize no
-    // matter which implementation a build's segmentation policy picked,
-    // even a legacy pre-UAX-#29 StringInfo that reads CRLF as two
-    // clusters. The entry itself is known good: CRLF is one grapheme
+    // matter which segmenter the process-wide setting picks, even a
+    // legacy pre-UAX-#29 StringInfo that reads CRLF as two clusters. It
+    // also keeps TokenSet's static initializer from resolving and
+    // freezing GraphemeHelpers.Segmenter before user code gets a chance
+    // to set it. The entry itself is known good: CRLF is one grapheme
     // cluster under UAX #29 rule GB3.
     private static TokenSet CrlfGraphemeSet() =>
         new TokenSet(Array.Empty<Interval>(), new[] { "\r\n" });

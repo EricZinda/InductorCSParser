@@ -22,28 +22,37 @@
 // chars. The parser only ever segments C# strings, which are UTF-16,
 // so this port drops that plumbing and reads chars directly. The
 // reading happens in DecodeRuneAt at the bottom of the file, which
-// explains how its answers match upstream's. And the break type of
+// explains how its results match upstream's. And the break type of
 // a rune comes from the checked-in Unicode 15.0 table in
 // GraphemeSegmentation.Data.cs instead of CharUnicodeInfo. Everything
 // else is kept as close to upstream as possible, so diffing this file
 // against a future dotnet/runtime version shows real changes only.
 //
-// Which implementation answers is a per-target-framework policy, set
-// with the INDUCTORPARSER_USE_BUNDLED_SEGMENTATION symbol in
-// InductorParser.csproj. The default (symbol undefined) is the
+// The implementation is chosen by a process-wide setting, surfaced as
+// GraphemeHelpers.Segmenter and resolved at most once per process. The
+// dispatcher below freezes the choice on the first segmentation query.
+// The default, GraphemeSegmenter.Automatic, means the right segmenter
+// for the runtime that loaded the assembly: each target framework's
+// build bakes in its own answer, set by the
+// INDUCTORPARSER_USE_BUNDLED_SEGMENTATION symbol in
+// InductorParser.csproj, and the runtime picks which assembly it
+// loads. With the symbol undefined (the default), Automatic means the
 // runtime's StringInfo, so segmentation stays in sync with the rest of
 // the runtime's Unicode machinery: token boundaries, string.Normalize,
 // and character categories all move together, at whatever Unicode
 // version the runtime ships, and a newly added target framework gets
 // that behavior with no extra wiring. The netstandard2.1 build defines
-// the symbol and uses this bundled state machine instead, because the
-// StringInfo on the runtimes that load that build (Unity's Mono,
-// IL2CPP) predates UAX #29. The consequence for callers: parse results
-// agree across machines when the machines run the same runtime, so a
-// client and server that must agree need matching runtimes.
+// the symbol, so Automatic means this bundled state machine there,
+// because the StringInfo on the runtimes that load that build (Unity's
+// Mono, IL2CPP) predates UAX #29. Callers on any build can override
+// the default at startup by setting GraphemeHelpers.Segmenter before
+// building grammars or parsing. The consequence for callers: parse
+// results agree across machines when the machines end up on the same
+// segmenter, so a client and server that must agree either run the
+// same runtime or both opt into Bundled.
 // On .NET 8 the two implementations are verifiably identical (the
 // differential tests in GraphemeSegmentationTests hold them equal), so
-// the policy only shows once a newer runtime's Unicode data moves past
+// the choice only shows once a newer runtime's Unicode data moves past
 // 15.0.
 
 using System;
@@ -83,41 +92,158 @@ internal enum GraphemeClusterBreakType
 /// (https://www.unicode.org/reports/tr29/tr29-35.html) at Unicode 15.0,
 /// and its generated break-property table in
 /// GraphemeSegmentation.Data.cs is the other half of this partial
-/// class. Builds that don't opt into the bundled state machine route
-/// to the runtime's StringInfo instead (the file header explains the
-/// policy).
+/// class. The implementation is chosen by the process-wide setting
+/// surfaced as GraphemeHelpers.Segmenter, resolved and frozen on the
+/// first segmentation query (the file header explains the policy).
 /// </summary>
 internal static partial class GraphemeSegmentation
 {
+    // What GraphemeSegmenter.Automatic means in this build. The
+    // csproj defines the symbol for the netstandard2.1 target only, so
+    // the assembly Unity loads defaults to the bundled state machine
+    // and every other build defaults to the runtime's StringInfo.
+#if INDUCTORPARSER_USE_BUNDLED_SEGMENTATION
+    private const bool AutomaticMeansBundled = true;
+#else
+    private const bool AutomaticMeansBundled = false;
+#endif
+
+    // The requested segmenter, as set through GraphemeHelpers.Segmenter.
+    // Written only under _settingLock. Volatile so the property getter
+    // reads the latest value without taking the lock.
+    private static volatile GraphemeSegmenter _requested = GraphemeSegmenter.Automatic;
+
+    // Which implementation the dispatcher routes to. Written exactly
+    // once, inside _settingLock in ResolveAndFreeze, before the volatile
+    // _frozen write. Read on the hot path only after a volatile read of
+    // _frozen has returned true.
+    private static bool _useBundled;
+
+    // True once the choice is resolved. After it flips, _useBundled is
+    // final. Volatile for the same acquire/release reasoning spelled out
+    // on GraphemeClusterIndex._walkedTo (ECMA-335 Partition I, section
+    // 12.6.7): ResolveAndFreeze writes _useBundled first and _frozen
+    // second (the volatile write is a release, so it can't move before
+    // the _useBundled write), and the dispatcher reads _frozen first and
+    // _useBundled second (the volatile read is an acquire, so the
+    // _useBundled read can't move before it). A thread that sees
+    // _frozen == true therefore sees the final _useBundled.
+    private static volatile bool _frozen;
+
+    // Serializes the setter and the resolve, so a set racing the first
+    // segmentation query either lands before resolution (and wins) or
+    // observes _frozen under the lock (and throws). Inline-initialized
+    // on purpose: an explicit static constructor would drop the type's
+    // beforefieldinit flag and could put a type-init check ahead of
+    // every dispatcher call.
+    private static readonly object _settingLock = new object();
+
+    // The setting behind GraphemeHelpers.Segmenter, kept here next to
+    // the dispatcher that consumes it. GraphemeHelpers owns the public
+    // surface and delegates. The getter never resolves or freezes, so
+    // reading the requested value has no side effects.
+    internal static GraphemeSegmenter RequestedSegmenter
+    {
+        get => _requested;
+        set
+        {
+            if (value != GraphemeSegmenter.Automatic
+                && value != GraphemeSegmenter.Runtime
+                && value != GraphemeSegmenter.Bundled)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), value,
+                    "Not a GraphemeSegmenter value.");
+            }
+            lock (_settingLock)
+            {
+                if (_frozen)
+                {
+                    throw new InvalidOperationException(
+                        "GraphemeHelpers.Segmenter can't change after the first grapheme "
+                        + "segmentation query. Constructing a Token rule, compiling a "
+                        + "grammar, parsing, and the GraphemeHelpers methods all resolve "
+                        + "and freeze the choice, because cluster boundaries are cached "
+                        + "per input string and reused across parsing and position "
+                        + "mapping, and switching now would mix boundaries from two "
+                        + "segmenters. Set it once at startup, before building grammars "
+                        + $"or parsing. The active segmenter is {ActiveSegmenter}.");
+                }
+                _requested = value;
+            }
+        }
+    }
+
+    // The resolved choice: Runtime or Bundled, never Automatic. Reading
+    // it resolves and freezes the same way the first segmentation query
+    // does, so the answer can never be invalidated by a later change.
+    internal static GraphemeSegmenter ActiveSegmenter
+    {
+        get
+        {
+            if (!_frozen)
+                ResolveAndFreeze();
+            return _useBundled ? GraphemeSegmenter.Bundled : GraphemeSegmenter.Runtime;
+        }
+    }
+
+    private static void ResolveAndFreeze()
+    {
+        lock (_settingLock)
+        {
+            // Re-check under the lock: another thread may have resolved
+            // while this one was waiting.
+            if (_frozen)
+                return;
+            GraphemeSegmenter requested = _requested;
+            _useBundled = requested == GraphemeSegmenter.Bundled
+                || (requested == GraphemeSegmenter.Automatic && AutomaticMeansBundled);
+            // Volatile write last: the release that publishes _useBundled.
+            _frozen = true;
+        }
+    }
+
+    // Test-only: unfreeze, forget the requested segmenter, and drop
+    // every cached GraphemeClusterIndex so boundaries computed under the
+    // previous segmenter can't leak into the next test. Callers must
+    // ensure no parse is running concurrently, and shouldn't position-map
+    // a ParseResult from before the reset afterward: a Lexer or
+    // SourcePositionConverter that already holds an index keeps using
+    // the old boundaries, while a fresh one would rebuild under the new
+    // segmenter and disagree.
+    internal static void ResetForTesting()
+    {
+        lock (_settingLock)
+        {
+            _requested = GraphemeSegmenter.Automatic;
+            _useBundled = false;
+            _frozen = false;
+        }
+        GraphemeClusterIndex.ResetCacheForTesting();
+    }
+
     /// <summary>
     /// Given UTF-16 input text, returns the length (in chars) of the first
     /// extended grapheme cluster. If the input is
-    /// empty, returns 0. Answers come from the runtime's StringInfo
-    /// unless the build defines INDUCTORPARSER_USE_BUNDLED_SEGMENTATION,
-    /// which the netstandard2.1 build does (the file header explains
-    /// the policy).
+    /// empty, returns 0. The first call resolves and freezes the
+    /// process-wide segmenter choice (GraphemeHelpers.Segmenter): the
+    /// length comes from the runtime's StringInfo or the bundled state
+    /// machine below (the file header explains the policy).
     /// </summary>
     public static int GetLengthOfFirstExtendedGraphemeCluster(ReadOnlySpan<char> input)
     {
-#if INDUCTORPARSER_USE_BUNDLED_SEGMENTATION
-        return GetBundledLengthOfFirstExtendedGraphemeCluster(input);
-#else
-        return GetRuntimeLengthOfFirstExtendedGraphemeCluster(input);
-#endif
+        if (!_frozen)
+            ResolveAndFreeze();
+        return _useBundled
+            ? GetBundledLengthOfFirstExtendedGraphemeCluster(input)
+            : GetRuntimeLengthOfFirstExtendedGraphemeCluster(input);
     }
 
-    // The default half of the segmentation policy (see the file
-    // header): unless a build defines
-    // INDUCTORPARSER_USE_BUNDLED_SEGMENTATION,
-    // GetLengthOfFirstExtendedGraphemeCluster routes here and the
-    // runtime's StringInfo answers. It compiles in every build and has
-    // its own test, so the path keeps working on the netstandard2.1
-    // build too, where the symbol opts into the bundled state machine.
-    // The #if picks a more efficient StringInfo overload
-    // on newer runtimes: .NET 6+ has a span-based one that doesn't
-    // allocate, while the netstandard2.1 build has to allocate a string
-    // per call. Either way the answer is whatever segmentation the
-    // runtime's StringInfo implements (pre-UAX-#29 on Unity's Mono).
+    // The StringInfo-backed path, used when the setting picks
+    // GraphemeSegmenter.Runtime. The #if picks the span-based
+    // StringInfo overload on .NET 6+, which doesn't allocate. The
+    // netstandard2.1 build has to allocate a string per call. Either
+    // way the result is whatever segmentation the runtime's StringInfo
+    // implements (pre-UAX-#29 on Unity's Mono).
     internal static int GetRuntimeLengthOfFirstExtendedGraphemeCluster(ReadOnlySpan<char> input)
     {
         if (input.IsEmpty) return 0;
@@ -137,8 +263,8 @@ internal static partial class GraphemeSegmentation
     // decoder delegate, break types from the checked-in table). Keep
     // any future edits out of the state machine so that diff stays
     // clean. Internal (not private) so the differential tests can
-    // compare it against StringInfo directly, independent of the
-    // build-time switch.
+    // compare it against StringInfo directly, independent of how the
+    // process-wide setting resolves.
     internal static int GetBundledLengthOfFirstExtendedGraphemeCluster(ReadOnlySpan<char> input)
     {
         // Algorithm given at https://www.unicode.org/reports/tr29/#Grapheme_Cluster_Boundary_Rules.
@@ -303,13 +429,13 @@ internal static partial class GraphemeSegmentation
     // internal packed tables that don't port, so this is our own ASCII
     // fast path plus a binary search over the checked-in arrays. The
     // [Explicit] UCD re-derivation test in GraphemeSegmentationDataTests
-    // verifies its answers per code point. Callers pass Unicode scalar
+    // verifies its results per code point. Callers pass Unicode scalar
     // values. A surrogate code unit passed directly also lands on Other,
-    // the same answer upstream produces for ill-formed input via U+FFFD.
+    // the same result upstream produces for ill-formed input via U+FFFD.
     internal static GraphemeClusterBreakType GetBreakType(int codePointValue)
     {
         // Printable ASCII dominates real input and is entirely Other, so
-        // answer it with one range check instead of a binary search.
+        // handle it with one range check instead of a binary search.
         if (codePointValue >= 0x20 && codePointValue < 0x7F)
             return GraphemeClusterBreakType.Other;
 
