@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Text;
+using InductorParser.Lexing;
 using NUnit.Framework;
 
 namespace InductorParser.Tests;
@@ -279,10 +279,10 @@ public static class NormalizationExamples
         //
         // What works for matching a lone surrogate (Compile(null)):
         //
-        //   Token("\uD800")    , Token(string) goes through StringInfo
-        //                          and treats the surrogate as one text
-        //                          element. (Token(char) refuses
-        //                          surrogates at the factory.)
+        //   Token("\uD800")    , Token(string) goes through the
+        //                          segmenter, which treats the surrogate
+        //                          as one one-char cluster. (Token(char)
+        //                          refuses surrogates at the factory.)
         //   Literal("a\uD800b"), bit-exact char-by-char compare, no
         //                          rune validation.
         //   AnyToken()         , matches any cluster including a lone
@@ -348,15 +348,15 @@ public static class NormalizationExamples
     // OneOf / Token / single-grapheme rules can match these. False for the
     // compatibility-ligature rows under FormKC / FormKD (where ﬁ → "fi" is
     // two graphemes), where Compile is supposed to surface a normalization
-    // offender at the rule build.
+    // offender at the rule build. The answer comes from GraphemeHelpers
+    // (not the runtime's StringInfo) because this classification
+    // predicts what the parser will do, and GraphemeHelpers answers with
+    // the same segmentation the parser uses.
     public static bool PostFormIsSingleGrapheme(NormalizationCase row, NormalizationForm form)
     {
         string projected = Project(row, form);
         if (projected.Length == 0) return false;
-        var enumerator = StringInfo.GetTextElementEnumerator(projected);
-        if (!enumerator.MoveNext()) return false;
-        string firstElement = (string)enumerator.Current;
-        return firstElement.Length == projected.Length;
+        return GraphemeHelpers.FirstClusterLength(projected.AsSpan()) == projected.Length;
     }
 
     // The four normalization forms tests iterate.
@@ -403,8 +403,10 @@ public static class NormalizationExamples
     // ensures no editor or text-processing layer can NFC-convert the
     // sequence back into a precomposed character.
 
-    // Lone surrogate. \u escape works here because invalid scalar values
-    // can't be normalized into actual chars by any text-processing layer.
+    // Lone surrogates come from the runtime-built UnicodeExamples
+    // constants, never \u escapes: IL2CPP replaces an unpaired surrogate
+    // in a compiled string literal with U+FFFD, so a literal form never
+    // reaches the Unity test player intact.
 
     // Supplementary-plane sequences. Each rune is a UTF-16 surrogate pair.
     // \u escapes for the surrogates themselves survive the tooling pipeline

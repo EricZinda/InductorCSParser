@@ -69,7 +69,7 @@ public sealed partial class Lexer
                 // Lone surrogate: a 1-char token whose UTF-16 code unit
                 // can still be a set member if the set's intervals cover
                 // it. tokenLength == 1 excludes the normal-grapheme-mode
-                // case where StringInfo fuses a stray surrogate with a
+                // case where the segmenter fuses a stray surrogate with a
                 // following extender (combining mark, ZWJ) into one cluster.
                 inSet = tokenLength == 1 && set.ContainsRune((int)_input[_position]);
             }

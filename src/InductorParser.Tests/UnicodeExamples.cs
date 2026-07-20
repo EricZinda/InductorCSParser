@@ -196,30 +196,38 @@ internal static class UnicodeExamples
     // surrogate pair. A surrogate code unit appearing without its
     // partner isn't a valid Unicode scalar value, but .NET strings
     // can still hold one. Useful for the malformed-input tests.
+    //
+    // These are built from char values at runtime, never written as
+    // string literals: IL2CPP's string-literal conversion replaces an
+    // unpaired surrogate in a compiled literal with U+FFFD, so a
+    // literal form of these constants reaches the Unity test player
+    // corrupted and Canary fires on every corpus-dependent test. A
+    // runtime-built string has no literal to corrupt. Well-formed
+    // surrogate pairs (the emoji constants above) survive as literals.
 
     // U+D800: lowest high-surrogate code unit. "Min" of the high range.
-    public static readonly string HighSurrogateMinText = Canary("\uD800", "lone high surrogate (min, invalid scalar)", HighSurrogateMinRune);
+    public static readonly string HighSurrogateMinText = Canary(((char)HighSurrogateMinRune).ToString(), "lone high surrogate (min, invalid scalar)", HighSurrogateMinRune);
 
     // U+DBFF: highest high-surrogate code unit. "Max" of the high range.
-    public static readonly string HighSurrogateMaxText = Canary("\uDBFF", "lone high surrogate (max, invalid scalar)", HighSurrogateMaxRune);
+    public static readonly string HighSurrogateMaxText = Canary(((char)HighSurrogateMaxRune).ToString(), "lone high surrogate (max, invalid scalar)", HighSurrogateMaxRune);
 
     // U+DC00: lowest low-surrogate code unit. "Min" of the low range.
-    public static readonly string LowSurrogateMinText = Canary("\uDC00", "lone low surrogate (min, invalid scalar)", LowSurrogateMinRune);
+    public static readonly string LowSurrogateMinText = Canary(((char)LowSurrogateMinRune).ToString(), "lone low surrogate (min, invalid scalar)", LowSurrogateMinRune);
 
     // U+DFFF: highest low-surrogate code unit. "Max" of the low range.
-    public static readonly string LowSurrogateMaxText = Canary("\uDFFF", "lone low surrogate (max, invalid scalar)", LowSurrogateMaxRune);
+    public static readonly string LowSurrogateMaxText = Canary(((char)LowSurrogateMaxRune).ToString(), "lone low surrogate (max, invalid scalar)", LowSurrogateMaxRune);
 
     // U+D83D: high-surrogate code unit that starts most common emoji
     // surrogate pairs (waving hand, woman, man, etc.). Used standalone for
     // malformed-emoji tests where the low-half partner is missing.
-    public static readonly string EmojiStartHighSurrogateText = Canary("\uD83D", "lone high surrogate U+D83D (emoji start half, invalid scalar)", EmojiStartHighSurrogateRune);
+    public static readonly string EmojiStartHighSurrogateText = Canary(((char)EmojiStartHighSurrogateRune).ToString(), "lone high surrogate U+D83D (emoji start half, invalid scalar)", EmojiStartHighSurrogateRune);
 
     // U+DC00 then U+D800: a low surrogate followed by a high surrogate.
     // Pair-shaped but in the wrong order (UTF-16 pairs are high-then-low),
     // so the two never combine into a supplementary scalar and stay two
     // separate ill-formed code units. WTF-8 (Simon Sapin) discusses this
     // exact pattern.
-    public static readonly string ReversedSurrogatePairText = Canary("\uDC00\uD800", "reversed surrogate pair (low then high, invalid)", LowSurrogateMinRune, HighSurrogateMinRune);
+    public static readonly string ReversedSurrogatePairText = Canary(new string(new[] { (char)LowSurrogateMinRune, (char)HighSurrogateMinRune }), "reversed surrogate pair (low then high, invalid)", LowSurrogateMinRune, HighSurrogateMinRune);
 
     // === Format / control characters that don't render as a glyph ===
     // The names exist so test source stays readable. Inline literals like

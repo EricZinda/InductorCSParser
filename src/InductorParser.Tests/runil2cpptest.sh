@@ -10,6 +10,8 @@
 # Usage:
 #   ./runil2cpptest.sh
 #
+# On Windows this runs from Git Bash or WSL, same as test.sh.
+#
 # Requires:
 #   - dotnet SDK
 #   - Unity 6000.3.13f1 (matches Unity/ProjectSettings/ProjectVersion.txt)
@@ -56,23 +58,44 @@ if ! command -v dotnet &> /dev/null; then
 fi
 
 # --- Unity editor ---
+#
+# Git Bash mounts Windows drives at /c, WSL mounts them at /mnt/c, so
+# probe both. WSL also doesn't auto-convert POSIX path arguments for
+# Windows executables the way Git Bash does, so every path handed to
+# Unity.exe or dotnet.exe goes through to_windows_path: wslpath -w
+# where it exists (WSL), unchanged everywhere else.
+
+to_windows_path() {
+    if command -v wslpath &> /dev/null; then
+        wslpath -w "$1"
+    else
+        echo "$1"
+    fi
+}
 
 UNITY=""
 UNITY_DATA=""
-if [ -x "/c/Program Files/Unity/Hub/Editor/$UNITY_VERSION/Editor/Unity.exe" ]; then
-    UNITY="/c/Program Files/Unity/Hub/Editor/$UNITY_VERSION/Editor/Unity.exe"
-    UNITY_DATA="/c/Program Files/Unity/Hub/Editor/$UNITY_VERSION/Editor/Data"
-    IL2CPP_VARIATION="WindowsStandaloneSupport/Variations/win64_player_nondevelopment_il2cpp"
-elif [ -x "/Applications/Unity/Hub/Editor/$UNITY_VERSION/Unity.app/Contents/MacOS/Unity" ]; then
+for drive_root in "/c" "/mnt/c"; do
+    candidate="$drive_root/Program Files/Unity/Hub/Editor/$UNITY_VERSION/Editor/Unity.exe"
+    if [ -x "$candidate" ]; then
+        UNITY="$candidate"
+        UNITY_DATA="$drive_root/Program Files/Unity/Hub/Editor/$UNITY_VERSION/Editor/Data"
+        IL2CPP_VARIATION="WindowsStandaloneSupport/Variations/win64_player_nondevelopment_il2cpp"
+        break
+    fi
+done
+if [ -z "$UNITY" ] && [ -x "/Applications/Unity/Hub/Editor/$UNITY_VERSION/Unity.app/Contents/MacOS/Unity" ]; then
     UNITY="/Applications/Unity/Hub/Editor/$UNITY_VERSION/Unity.app/Contents/MacOS/Unity"
     UNITY_DATA="/Applications/Unity/Hub/Editor/$UNITY_VERSION/Unity.app/Contents"
     IL2CPP_VARIATION="PlaybackEngines/MacStandaloneSupport/Variations/macos_x64_nondevelopment_il2cpp"
-else
+fi
+if [ -z "$UNITY" ]; then
     fail "Unity $UNITY_VERSION not found" \
         "Install via Unity Hub, or edit this script to point at your install." \
         "Looked for:" \
-        "  /c/Program Files/Unity/Hub/Editor/$UNITY_VERSION/Editor/Unity.exe" \
-        "  /Applications/Unity/Hub/Editor/$UNITY_VERSION/Unity.app/Contents/MacOS/Unity"
+        "  /c/Program Files/Unity/Hub/Editor/$UNITY_VERSION/Editor/Unity.exe (Git Bash)" \
+        "  /mnt/c/Program Files/Unity/Hub/Editor/$UNITY_VERSION/Editor/Unity.exe (WSL)" \
+        "  /Applications/Unity/Hub/Editor/$UNITY_VERSION/Unity.app/Contents/MacOS/Unity (macOS)"
 fi
 
 # --- IL2CPP build support module ---
@@ -99,9 +122,18 @@ fi
 
 mkdir -p "$RESULTS_DIR"
 rm -f "$RESULTS_XML" "$UNITY_LOG"
+# wslpath -w can only convert paths that exist, and the log file is
+# handed to Unity in Windows form below, so create it empty up front.
+touch "$UNITY_LOG"
 
 echo "=== Building netstandard2.1 InductorParser.dll ==="
-$DOTNET build "$LIBRARY_CSPROJ" -c Release -f netstandard2.1
+# dotnet.exe is the Windows SDK reached through WSL interop, so it needs
+# the csproj path in Windows form. A native dotnet takes the POSIX path.
+LIBRARY_CSPROJ_ARGUMENT="$LIBRARY_CSPROJ"
+if [ "$DOTNET" = "dotnet.exe" ]; then
+    LIBRARY_CSPROJ_ARGUMENT="$(to_windows_path "$LIBRARY_CSPROJ")"
+fi
+$DOTNET build "$LIBRARY_CSPROJ_ARGUMENT" -c Release -f netstandard2.1
 
 # Mirror the .NET test sources into Unity. The .NET test project
 # (src/InductorParser.Tests/) is the single source of truth for test
@@ -124,9 +156,9 @@ echo "(This can take several minutes on a cold Library/ cache.)"
 # No -quit: the editor script schedules an async test run and calls
 # EditorApplication.Exit from the RunFinished callback.
 "$UNITY" -batchmode -nographics \
-    -projectPath "$UNITY_PROJECT" \
+    -projectPath "$(to_windows_path "$UNITY_PROJECT")" \
     -executeMethod InductorParser.Editor.IL2CPPTestRunner.Run \
-    -logFile "$UNITY_LOG" || UNITY_EXIT=$?
+    -logFile "$(to_windows_path "$UNITY_LOG")" || UNITY_EXIT=$?
 
 UNITY_EXIT=${UNITY_EXIT:-0}
 

@@ -246,8 +246,12 @@ public class SecurityByDefaultTests
             $"{UnicodeExamples.EmDashGrapheme} no normalization form strips invisibles");
 
         // Pre-strip the invisibles, then the blocker catches
-        // it. This is what the recipe in UnicodeGotchasExamples
-        // does.
+        // it. Same idea as the recipe in UnicodeGotchasExamples,
+        // which strips by rune. A char-level strip does the same
+        // job here because every invisible in the set is a single
+        // BMP char. (It also has to be char-level: this file syncs
+        // into the IL2CPP pass, whose netstandard2.1 surface has
+        // no string.EnumerateRunes.)
         var invisibles = new HashSet<int>
         {
             0x200B,  // zero-width space
@@ -257,8 +261,7 @@ public class SecurityByDefaultTests
             0xFEFF,  // BOM
         };
         string smuggled = $"ap{UnicodeExamples.ZeroWidthSpaceText}ple";
-        string stripped = string.Concat(smuggled.EnumerateRunes()
-            .Where(r => !invisibles.Contains(r.Value)));
+        string stripped = string.Concat(smuggled.Where(c => !invisibles.Contains(c)));
         Assert.That(blocker.Parse(stripped).Success, Is.True,
             "after pre-parse stripping, the blocker catches the bypass");
     }
@@ -319,7 +322,7 @@ public class SecurityByDefaultTests
         // (or checks post-parse). This is opt-in: most grammars
         // are happy to accept input with U+FFFD if the rest of
         // the structure is fine. The defense is one TokenSet away.
-        byte[] tamperedBytes = [0x68, 0xFF, 0x69]; // 'h', invalid lead 0xFF, 'i'
+        byte[] tamperedBytes = { 0x68, 0xFF, 0x69 }; // 'h', invalid lead 0xFF, 'i'
         string tampered = Encoding.UTF8.GetString(tamperedBytes);
         Assert.That(tampered, Does.Contain(UnicodeExamples.ReplacementCharacterText),
             "the .NET UTF-8 decoder substituted U+FFFD for the invalid byte");

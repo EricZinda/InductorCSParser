@@ -752,17 +752,17 @@ public static class Rules
     /// followed by an LF is consumed as one terminator rather than split
     /// into two.
     /// <para>
-    /// Why CRLF is a Literal and not just a set member: on .NET 5+ the
-    /// lexer hands CRLF back as one token, and
+    /// Why CRLF is a Literal and not just a set member: in the lexer's
+    /// normal grapheme mode CRLF arrives as one token, and
     /// <see cref="TokenSet.LineTerminators"/> includes CRLF as a multi-rune
     /// entry, so the OneOf alternative would match it as a unit on its
-    /// own. But on legacy runtimes (.NET Framework, .NET Core 3.x, Unity's
-    /// Mono) StringInfo predates the Unicode rule that glues CR to LF, so
-    /// CR and LF arrive as two separate tokens. A OneOf reads exactly one
+    /// own. But in the one-rune-per-token mode that
+    /// <see cref="WithinToken"/> switches its sub-lexer into, CR and LF
+    /// arrive as two separate tokens. A OneOf reads exactly one
     /// token, so alone it would match the CR and leave the LF to count as
     /// a second terminator. A Literal matches its text across token
     /// boundaries, so the Literal("\r\n") alternative consumes the pair
-    /// as one terminator on every runtime.
+    /// as one terminator in both token modes.
     /// </para>
     /// </remarks>
     /// <param name="eofIsEol">

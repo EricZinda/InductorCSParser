@@ -186,33 +186,17 @@ NoneOf(TokenSet.Letters).Compile(null).Parse(loneSurrogate).Success;   // True
 **Fix.** Decide whether you actually want lone surrogates. If you're sweeping raw or possibly-malformed content under `Compile(null)` (WTF-8 round-tripping, lenient handling of unpaired surrogates), `NoneOf` admitting them is usually exactly what you want, so leave it. If you want to exclude them, match against the surrogate-free scalar universe instead: `OneOf(TokenSet.Universe - stopSet)`. `Universe` leaves out the surrogate block, so a lone surrogate isn't a member and the rule won't match it. And remember it only matters under `Compile(null)`: the default `FormC` compile rejects the malformed input upstream, before the rule runs.
 
 
-## Pre-.NET 5 Token Segmentation
+## Token Segmentation Across Runtimes
 
-This one is different from the gotchas above. It isn't an input-side surprise the caller can preprocess away, and it isn't a grammar-design choice. It's the runtime behaving differently depending on which .NET you're on.
+This one is different from the gotchas above, and it's mostly a non-gotcha now. It used to be the runtime behaving differently depending on which .NET you're on.
 
-The lexer calls `System.Globalization.StringInfo.GetNextTextElement` to find the next token boundary. On .NET 5 and later this is UAX #29 conformant, because .NET 5 replaced the old custom logic with a full UAX #29 implementation. On .NET Framework, .NET Core 3.x, and the Mono runtime that Unity ships (which IL2CPP compiles from), `StringInfo` still uses an algorithm Microsoft wrote before UAX #29 stabilized. It's roughly "Unicode 3.x grapheme cluster": base character plus combining marks, surrogate pairs as one unit, Hangul syllable basics. It's not extended-grapheme-cluster aware.
+The rule the parser follows is that each build's Unicode environment stays internally consistent. The net8.0 build takes token boundaries from the runtime's `StringInfo`, the same place `string.Normalize` and the character-category data come from, so everything Unicode moves together at whatever version the runtime ships. Unity's runtime is the exception, and the problem is simple staleness: its `StringInfo` predates UAX #29, so it segments modern text wrong, which misparses real input and fails hundreds of the library's grapheme tests. So the netstandard2.1 build, the one Unity's IL2CPP player loads, ships its own segmenter instead: [GraphemeSegmentation.cs](../src/InductorParser/Lexing/GraphemeSegmentation.cs), a port of the MIT-licensed implementation inside .NET 8's `StringInfo`, with its break-property table generated from the Unicode 15.0 data files. That's an opt-in build option enabled by definining the symbol (`INDUCTORPARSER_USE_BUNDLED_SEGMENTATION`), not a hard requirement: build the netstandard2.1 target without it and the library still loads and runs on Unity, it just tokenizes by the legacy rules and all those tests fail again. 
 
-What still works on the legacy runtimes:
+What the legacy rules get wrong, concretely: on .NET Framework, .NET Core 3.x, and the Mono runtime Unity ships (which IL2CPP compiles from), `StringInfo` uses an algorithm Microsoft wrote before UAX #29 stabilized, roughly "Unicode 3.x grapheme cluster": base plus combining marks, surrogate pairs, Hangul basics. On those runtimes emoji ZWJ sequences split at every ZWJ, skin-toned emoji split in two, flag pairs split, Thai SARA AM split, and CRLF split into two tokens (the legacy walker predates rule GB3). With the bundled segmenter, none of that reaches the parser: `Token(...)` and `Graphemes(...)` validation, the lexer, and error positions all answer from the same UAX #29 implementation.
 
-- ASCII.
-- Latin with combining diacritics. `é` as `e` + U+0301 is one grapheme.
-- Single-rune emoji like 🎸. One rune, one grapheme.
-- Most simple consonant-plus-mark sequences in Devanagari, Arabic, Hebrew.
+What's left to know:
 
-What breaks:
-
-- Emoji ZWJ sequences. The family 👨‍👩‍👧‍👦 splits at every ZWJ.
-- Emoji plus skin-tone modifier. 👋🏽 splits into two.
-- Regional indicator pairs (flag emoji). 🇺🇸 splits into two.
-- Thai SARA AM. "kam" (ก + ำ) splits.
-- CRLF. The legacy walker predates the UAX #29 rule that glues CR to LF (GB3), so `\r\n` lexes as two tokens instead of one. `EndOfLine()` is built to absorb this: its `Literal("\r\n")` alternative matches across token boundaries, so the pair is one terminator on either runtime. Grammars that match the pair another way (`Token("\r\n")`, a bare `OneOf(TokenSet.LineTerminators)`) see it split.
-- Other extended-grapheme-cluster rules added after about 2003 (Prepend characters, Extended_Pictographic sequences).
-
-The common thread is timing. Combining marks have been in Unicode since the start, so the legacy walker handles them. Everything UAX #29 added later, especially the emoji rules (regional indicators in 2012, skin tones and ZWJ sequences in 2016), the legacy walker doesn't know about. Microsoft rewrote `StringInfo` to follow UAX #29 in .NET 5. Unity's Mono didn't follow, and IL2CPP compiles from that Mono.
-
-**Fix.** Two options, in order of effort:
-
-1. If the grammar doesn't actually need to tokenize emoji or complex-script text at the user-perceived character level, do nothing. ASCII, source code, config files, and most DSLs are unaffected.
-2. Implement a custom UAX #29 implementation into the parser. Gives full conformance everywhere, at the cost of maintaining Unicode data in the repository.
-
-The repo's test suite documents the broken cases explicitly. Look for tests gated behind `#if !UNITY_INCLUDE_TESTS` in [GraphemeRuleTests.cs](../src/InductorParser.Tests/Rules/GraphemeRuleTests.cs). Each one is a category that the legacy walker mishandles.
+- The bundled segmenter implements UAX #29 revision 35 at Unicode 15.0, deliberately the same revision and data version as .NET 8's `StringInfo`. That makes the two directly comparable, and the differential tests in [GraphemeSegmentationTests.cs](../src/InductorParser.Tests/Lexing/GraphemeSegmentationTests.cs) hold them equal across the whole corpus, every code point, and randomized sequences. So today the two builds also agree with each other, and they only drift apart once a newer runtime's Unicode data moves past 15.0.
+- Rule GB9c (Indic conjunct clusters) arrived in Unicode 15.1 and the bundled segmenter doesn't implement it, matching .NET 8. The conformance suite tracks the seven affected test lines in its `KnownRuntimeSkips`.
+- Upgrading the bundled segmenter's Unicode version is a deliberate step: regenerate [GraphemeSegmentation.Data.cs](../src/InductorParser/Lexing/GraphemeSegmentation.Data.cs) from newer UCD files (`GraphemeSegmentationDataTests.cs` verifies it and can re-emit it), add any new rules like GB9c to the processor, and swap in the newer `GraphemeBreakTest` data file. When a newer runtime becomes the test target, the differential tests fail on exactly the diverging cases, which is the prompt to do this.
+- Which build uses which implementation is one symbol in `InductorParser.csproj`: `INDUCTORPARSER_USE_BUNDLED_SEGMENTATION` opts a build into the bundled segmenter, and only the netstandard2.1 build defines it. The default is the runtime's `StringInfo`, so a newly added target framework tracks its own runtime without extra wiring. Building from source you can define the symbol for every build when identical boundaries across mixed runtimes matter more than tracking the runtime. Don't take it off the Unity build, though: Unity's `StringInfo` is the legacy one this whole section is about.

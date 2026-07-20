@@ -65,21 +65,8 @@ public class GraphemeRuleTests
         // subjoined consonant stacked under it. The subjoined letter has
         // Grapheme_Cluster_Break = Extend (GCB=Extend), the same UAX #29
         // class as an ordinary combining mark, so base + subjoined is one
-        // grapheme made of two runes.
-        //
-        // This test lives in the unconditional part of the file, not the
-        // "#if !UNITY_INCLUDE_TESTS" block at the bottom. That block holds
-        // the cases legacy StringInfo (pre-.NET 5 / Unity IL2CPP) splits
-        // wrongly: skin-tone modifiers, ZWJ emoji, regional-indicator flag
-        // pairs, Thai SARA AM. On the legacy walker Token(...) sees more
-        // than one grapheme in those and throws at construction, so they
-        // have to be fenced out of the legacy build.
-        //
-        // A base followed by an Extend character is different: that's the
-        // original grapheme rule, the one that predates UAX #29, and even
-        // legacy StringInfo gets it right. So this sequence segments to a
-        // single grapheme on every runtime, exactly like LatinEAcuteGrapheme
-        // (e + combining acute), and needs no #if fence.
+        // grapheme made of two runes, exactly like LatinEAcuteGrapheme
+        // (e + combining acute).
         //
         // Compile(null) for the same reason the e-acute test uses it: NFC
         // wouldn't change this sequence, but turning normalization off keeps
@@ -255,20 +242,17 @@ public class GraphemeRuleTests
         Assert.That(sink.ToString(), Is.EqualTo(expected));
     }
 
-#if !UNITY_INCLUDE_TESTS
-    // Known-broken-on-legacy-StringInfo cases. Each test documents one
-    // UAX #29 rule category that pre-.NET 5 / IL2CPP StringInfo doesn't
-    // implement. Gated to net8.0 / CoreCLR because Token(...) rejects these
-    // at construction on the legacy walker (it sees more than one grapheme
-    // and throws). See docs/UnicodeGotchas.md "Pre-.NET 5 Token
-    // Segmentation" for the broader story and the list of affected
-    // categories.
+    // One test per UAX #29 rule category that only extended grapheme
+    // clusters get right: modifier sequences, ZWJ chains, regional
+    // indicators, SpacingMark, and CRLF. Segmentation comes from
+    // GraphemeSegmentation, so these run on every runtime,
+    // including the IL2CPP pass.
 
     [Test]
-    public void Grapheme_with_skin_tone_modifier_sequence_matches_one_grapheme_on_uax29_runtime()
+    public void Grapheme_with_skin_tone_modifier_sequence_matches_one_grapheme()
     {
         // Modifier sequence: base emoji + skin-tone modifier. UAX #29 rule
-        // GB10/GB11. Two runes, one grapheme on UAX #29. Legacy splits.
+        // GB9 (the modifier is an Extend). Two runes, one grapheme.
         var rule = Token(SkinTonedWaveGrapheme);
         var result = rule.Parse(SkinTonedWaveGrapheme);
 
@@ -276,11 +260,10 @@ public class GraphemeRuleTests
     }
 
     [Test]
-    public void Grapheme_with_zwj_emoji_sequence_matches_one_grapheme_on_uax29_runtime()
+    public void Grapheme_with_zwj_emoji_sequence_matches_one_grapheme()
     {
         // ZWJ sequence: base + ZWJ + joiner + variation selector. UAX #29
-        // rule GB11 with extended pictographic. Four runes, one grapheme on
-        // UAX #29. Legacy splits at every ZWJ.
+        // rule GB11 with extended pictographic. Four runes, one grapheme.
         var rule = Token(WomanShruggingGrapheme);
         var result = rule.Parse(WomanShruggingGrapheme);
 
@@ -288,10 +271,10 @@ public class GraphemeRuleTests
     }
 
     [Test]
-    public void Grapheme_with_regional_indicator_pair_matches_one_grapheme_on_uax29_runtime()
+    public void Grapheme_with_regional_indicator_pair_matches_one_grapheme()
     {
         // Regional indicator pair: two RI code points form one flag. UAX #29
-        // rule GB12/GB13. Two runes, one grapheme on UAX #29. Legacy splits.
+        // rule GB12/GB13. Two runes, one grapheme.
         var rule = Token(USFlagGrapheme);
         var result = rule.Parse(USFlagGrapheme);
 
@@ -299,11 +282,11 @@ public class GraphemeRuleTests
     }
 
     [Test]
-    public void Grapheme_with_thai_sara_am_matches_one_grapheme_on_uax29_runtime()
+    public void Grapheme_with_thai_sara_am_matches_one_grapheme()
     {
         // Thai SARA AM: consonant + SARA AM forms one extended grapheme
         // cluster. The canonical SpacingMark case from UAX #29 rule GB9a.
-        // Two runes, one grapheme on UAX #29. Legacy splits.
+        // Two runes, one grapheme.
         var rule = Token(ThaiKamGrapheme);
         var result = rule.Parse(ThaiKamGrapheme);
 
@@ -311,20 +294,15 @@ public class GraphemeRuleTests
     }
 
     [Test]
-    public void Grapheme_with_crlf_matches_one_grapheme_on_uax29_runtime()
+    public void Grapheme_with_crlf_matches_one_grapheme()
     {
         // CRLF: CR + LF is one grapheme cluster. UAX #29 rule GB3. Two
-        // runes, one grapheme on UAX #29. Legacy splits, so this Token
-        // throws at construction there. Line-based grammars survive the
-        // split anyway when they use EndOfLine(), whose Literal("\r\n")
-        // alternative matches across token boundaries (see
-        // EndOfLineRuleTests for the mechanism).
+        // runes, one grapheme.
         var rule = Token("\r\n");
         var result = rule.Parse("\r\n");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
     }
-#endif
 
     [Test]
     public void Sealed_Grapheme_rejects_Flatten()

@@ -55,7 +55,7 @@ Nothing in this doc engages with these. They run outside the parser, on the pars
 
 ## The Lexer
 
-The parser has one lexer. It walks the input one .NET text element at a time using `System.Globalization.StringInfo` text-element segmentation (the boundaries come from a `StringInfo.GetTextElementEnumerator` walk, cached once per input string) and hands back one `Token` per `Read()` call. On modern .NET this follows the extended-grapheme-cluster behavior in Unicode Standard Annex #29. Older .NET / Unity Mono runtimes have known segmentation gaps covered in [UnicodeGotchas.md](UnicodeGotchas.md#pre-net-5-token-segmentation). Each token usually matches what a user would perceive as a single character.
+The parser has one lexer. It walks the input one grapheme cluster at a time through `GraphemeSegmentation` (with the boundaries cached once per input string by `GraphemeClusterIndex`) and hands back one `Token` per `Read()` call, following the extended-grapheme-cluster behavior in Unicode Standard Annex #29. On the net8.0 build the boundaries come from the runtime's `StringInfo`, in sync with the rest of the runtime's Unicode data. On the netstandard2.1 build Unity loads, whose runtime `StringInfo` predates UAX #29, they come from the library's bundled segmenter at Unicode 15.0. [UnicodeGotchas.md](UnicodeGotchas.md#token-segmentation-across-runtimes) has the policy and the background. Each token usually matches what a user would perceive as a single character.
 
 ```
 Input:  "🎸 = 👋🏽;"
@@ -73,7 +73,7 @@ When a rule needs to look *inside* one token (inspect combining marks individual
 The lexer indexes by UTF-16 char offset because that's the unit a .NET string uses. `ParseResult` and `Symbol.SourceRange` derive the other position units from that char index when a caller asks for them:
 
 - **Char index**: UTF-16 code unit offset into the original input (matches `string[i]`, `Substring`, and the Language Server Protocol).
-- **Token index**: grapheme offset into the input, using the same `StringInfo` logic the lexer uses.
+- **Token index**: grapheme offset into the input, using the same segmentation the lexer uses.
 - **Line**: zero-based line number, the Language Server Protocol convention. Line breaks follow the same set `Rules.EndOfLine()` accepts, so every terminator a grammar consumes also bumps the reported line.
 - **Char column**: zero-based column within the line, in UTF-16 chars. This is the count an editor or a Language Server Protocol client uses.
 - **Token column**: zero-based column within the line, in tokens. The human-facing counterpart: an emoji earlier on the line counts as one column, not as its several UTF-16 code units.
@@ -102,7 +102,7 @@ public readonly struct ParseResult
     public int ErrorTokenColumn { get; }
 
     // Error position in tokens (Unicode graphemes), using the same
-    // StringInfo text-element segmentation the lexer uses.
+    // UAX #29 grapheme segmentation the lexer uses.
     public int ErrorTokenIndex { get; }
 
     // The error position bundled into a SourcePosition struct. Returns
@@ -175,9 +175,7 @@ var asciiOnlyLetter = WithinToken(OneOf(TokenSet.Ascii.Letters));
 
 ## Open Questions
 
-Three Unicode-adjacent questions the first real grammar will need to answer.
-
-**Fixing the Unicode version for the lexer.** Token boundaries are defined by Unicode Standard Annex #29, which Unicode updates with every release (new emoji, new zero-width-joiner rules, occasional boundary changes). The lexer uses `StringInfo` text-element segmentation, which pulls its behavior from the .NET runtime. Same grammar parsing the same input can produce different trees on different .NET versions. For most grammars this is tolerable.
+Two Unicode-adjacent questions the first real grammar will need to answer. (A third, fixing the Unicode version for the lexer, is answered by policy: each build's Unicode environment stays internally consistent, with the net8.0 build tracking the runtime's `StringInfo` and the netstandard2.1 build pinned to the bundled segmenter at Unicode 15.0, so machines that must agree on parse trees run the same runtime. [UnicodeGotchas.md](UnicodeGotchas.md#token-segmentation-across-runtimes) has the details.)
 
 **Full Unicode case-insensitive matching.** The ASCII `LiteralIgnoreAsciiCase` leaf covers HTTP headers, SQL keywords, HTML tag names, and most real needs. A full-Unicode version would handle Turkish dotless-i, German `ß`, Greek final sigma, and the rest of the locale-specific edge cases, at the cost of a big lookup table and locale awareness.
 

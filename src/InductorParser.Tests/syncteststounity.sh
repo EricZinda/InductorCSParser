@@ -1,7 +1,8 @@
 #!/bin/bash
 #
 # Copy the .NET test sources from src/InductorParser.Tests/{Core,Rules,
-# E2EExamples}/ plus TraceTestHelpers.cs and UnicodeExamples.cs into
+# E2EExamples}/ plus every root-level helper .cs file (CanaryHelper,
+# TestHelpers, NormalizationExamples, the matrix helpers, ...) into
 # src/InductorParser.Tests/Unity/Assets/Tests/PlayMode/Synced/ so Unity's
 # PlayMode asmdef picks them up.
 #
@@ -30,8 +31,25 @@ mkdir -p "$SYNCED_TESTS_DIR/E2EExamples"
 cp "$SCRIPT_DIR/Core/"*.cs "$SYNCED_TESTS_DIR/Core/"
 cp "$SCRIPT_DIR/Rules/"*.cs "$SYNCED_TESTS_DIR/Rules/"
 cp "$SCRIPT_DIR/E2EExamples/"*.cs "$SYNCED_TESTS_DIR/E2EExamples/"
-cp "$SCRIPT_DIR/TraceTestHelpers.cs" "$SYNCED_TESTS_DIR/"
-cp "$SCRIPT_DIR/UnicodeExamples.cs" "$SYNCED_TESTS_DIR/"
+# All root-level .cs files are shared helpers the synced tests use.
+# Copying them wholesale means a new helper added at the root can't
+# break the Unity compile by being missing from a hand-kept list here.
+cp "$SCRIPT_DIR/"*.cs "$SYNCED_TESTS_DIR/"
+
+# PrologGrammarTests reads its .pl / .htn fixture corpus from
+# AppContext.BaseDirectory + E2EExamples/PrologFixtures at run time
+# (dotnet test gets them via the csproj CopyToOutputDirectory entry).
+# Under the Unity test runner BaseDirectory is the Unity project root,
+# so the fixtures are copied there. The directory sits outside Assets/
+# on purpose: it's data for File.ReadAllText, not an asset for Unity to
+# import, and it's .gitignored like Synced/.
+FIXTURES_DIR="$UNITY_PROJECT/E2EExamples/PrologFixtures"
+rm -rf "$UNITY_PROJECT/E2EExamples"
+mkdir -p "$FIXTURES_DIR"
+cp "$SCRIPT_DIR/E2EExamples/PrologFixtures/"*.pl "$FIXTURES_DIR/"
+cp "$SCRIPT_DIR/E2EExamples/PrologFixtures/"*.htn "$FIXTURES_DIR/"
 
 echo "Synced $(find "$SYNCED_TESTS_DIR" -name '*.cs' | wc -l) .cs files to:"
 echo "  $SYNCED_TESTS_DIR"
+echo "Synced $(find "$FIXTURES_DIR" -type f | wc -l) Prolog fixture files to:"
+echo "  $FIXTURES_DIR"

@@ -23,10 +23,13 @@ namespace InductorParser.PlayModeTests
         [Test]
         public void Parses_integer_setting_under_il2cpp()
         {
-            var settingName = OneOrMore(OneOf(TokenSet.Letters));
+            // Preserve on the name, value, and document so the parse
+            // tree exists for the Find calls below, matching the
+            // grammar shape in E2EExamples/SettingExampleTests.cs.
+            var settingName = Identifier();
             var settingValue = Or(
-                Float().Flatten(FlattenType.Flatten),
-                Integer().Flatten(FlattenType.Flatten),
+                Float(),
+                Integer(),
                 OneOrMore(OneOf(TokenSet.Letters))
             ).Flatten(FlattenType.Preserve);
             var document = And(
@@ -37,7 +40,7 @@ namespace InductorParser.PlayModeTests
                 settingValue,
                 Optional(AnyWhitespace()),
                 Token(';')
-            );
+            ).Flatten(FlattenType.Preserve);
 
             var result = document.Parse("setting = 5;");
 
@@ -74,9 +77,11 @@ namespace InductorParser.PlayModeTests
 
             var result = rule.Parse("abc1");
 
+            // The default template appends the position to a WithError
+            // message, so the full rendered form is asserted here.
             Assert.That(result.Success, Is.False);
             Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-            Assert.That(result.ErrorMessage, Is.EqualTo("expected ';'"));
+            Assert.That(result.ErrorMessage, Is.EqualTo("expected ';' at line 1, column 4."));
         }
     }
 }

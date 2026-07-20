@@ -207,7 +207,11 @@ public class LiteralIgnoreAsciiCaseRuleTests
     [Test]
     public void LiteralIgnoreAsciiCase_rejects_surrogate_at_construction()
     {
-        string surrogatePrefix = "\uD800X";
+        // The corpus constant is runtime-built, which matters here:
+        // IL2CPP rewrites an unpaired surrogate in a compiled string
+        // literal to U+FFFD, and this test asserts the real code unit
+        // shows up in the message.
+        string surrogatePrefix = UnicodeExamples.HighSurrogateMinText + "X";
         var exception = Assert.Throws<ArgumentException>(() => LiteralIgnoreAsciiCase(surrogatePrefix));
         Assert.That(exception!.Message, Does.Contain("ASCII-only"));
         Assert.That(exception.Message, Does.Contain("U+D800"));

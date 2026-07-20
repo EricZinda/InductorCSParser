@@ -56,7 +56,8 @@ namespace InductorParser.Tests;
 //      whose set does hold it records the same mechanical failures in
 //      either order, and mechanical ranking is a pure max, so trial
 //      order can't show through. Oracles 7-9 are the neutral-rewrite
-//      oracles from backlog 0a02.
+//      oracles from the retired backlog item 0a02 (closed 2026-07-10,
+//      see the neutral-rewrite entry in docs/BugSearchLog/).
 //
 // Everything is deterministic per seed: grammars and inputs come from
 // seeded Random instances and the corpus enumeration is ordered, so a
@@ -72,7 +73,7 @@ namespace InductorParser.Tests;
 // what isn't: .As(SymbolId) explicit ids, FlattenByDefault, built-in
 // TokenSets (Letters, Digits, the Xid sets) as set sources,
 // Identifier extras beyond the underscore profile,
-// Compile(FormKC / FormKD), and non-default ParseOptions. Backlog 0a01
+// Compile(FormKC / FormKD), and non-default ParseOptions. Backlog aaen
 // tracks growing the coverage.
 internal sealed class GrammarFuzzHarness
 {
@@ -114,7 +115,7 @@ internal sealed class GrammarFuzzHarness
         bool grammarIsNfc = FuzzGenerator.AllGrammarText(blueprint).All(SafeIsNfc);
         bool formDComparable = !FuzzGenerator.ContainsRuneLevelMatching(blueprint);
 
-        // The neutral rewrites from backlog 0a02. The And wrap always
+        // The neutral rewrites from retired backlog item 0a02. The And wrap always
         // applies. The other two apply only where their eligibility rules
         // hold (see FuzzRewriter), so they come back null when the
         // blueprint has no rewritable spot.
@@ -1286,7 +1287,7 @@ internal static class FuzzGenerator
     }
 }
 
-// The neutral rewrites from backlog 0a02: transforms that can't change
+// The neutral rewrites from retired backlog item 0a02: transforms that can't change
 // what a grammar matches, applied so the harness can check they also
 // don't change what a failing parse reports. Each transform rebuilds
 // only the path from a rewritten node to the root and shares every

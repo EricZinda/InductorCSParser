@@ -211,7 +211,7 @@ public sealed class ParseOptions
     /// their code already uses:
     /// <code>
     ///   {charIndex}          ParseResult.ErrorCharIndex   (UTF-16 code units)
-    ///   {tokenIndex}         ParseResult.ErrorTokenIndex  (StringInfo text elements)
+    ///   {tokenIndex}         ParseResult.ErrorTokenIndex  (grapheme clusters)
     ///   {line}               ParseResult.ErrorLine        (zero-based, Language Server Protocol convention)
     ///   {charColumn}         ParseResult.ErrorCharColumn  (zero-based char column)
     ///   {tokenColumn}        ParseResult.ErrorTokenColumn (zero-based grapheme column)

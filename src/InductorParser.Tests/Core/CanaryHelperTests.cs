@@ -36,7 +36,12 @@ public class CanaryHelperTests
     [Test]
     public void Canary_ReturnsLiteral_WhenLoneHighSurrogateMatchesCodeUnit()
     {
-        var literal = Canary("\uD800", "lone high surrogate (min)", 0xD800);
+        // Built from a char at runtime, not written as a "\uD800"
+        // literal: IL2CPP replaces an unpaired surrogate in a compiled
+        // string literal with U+FFFD, and this test is about Canary
+        // accepting a genuine lone surrogate, not about literal
+        // corruption.
+        var literal = Canary(((char)0xD800).ToString(), "lone high surrogate (min)", 0xD800);
         Assert.That(literal.Length, Is.EqualTo(1));
         Assert.That((int)literal[0], Is.EqualTo(0xD800));
     }

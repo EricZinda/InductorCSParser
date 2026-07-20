@@ -33,7 +33,7 @@ namespace InductorParser.Lexing;
 
 /// <summary>
 /// One chunk of input the lexer just consumed: a Unicode grapheme (i.e. one
-/// StringInfo grapheme cluster, possibly several runes wide) or the EOF token
+/// UAX #29 grapheme cluster, possibly several runes wide) or the EOF token
 /// at the end of the input. Rather than copying the matched text into a new
 /// string, a Token keeps a reference to the original input plus an offset and
 /// a length.

@@ -53,12 +53,13 @@ namespace InductorParser.Tests.Lexing.UnicodeConformance;
 // [Category("UnicodeConformance")] on the fixture below is what makes
 // the category-filter opt-in path work.
 //
-// When a vendored UAX #29 implementation replaces StringInfo, this
-// test runs against the new implementation unchanged. When Unicode
-// publishes a new version, drop in the new GraphemeBreakTest-X.Y.Z.txt,
-// update the path below, and rerun. Any newly-failing cases either
-// reflect a runtime gap (Unicode versions ahead of .NET's bundled ICU)
-// or a regression in whatever implementation is hosting the suite.
+// The implementation hosting this suite is GraphemeSegmentation, the
+// same segmentation the parser uses. When Unicode publishes a new
+// version, drop in the new
+// GraphemeBreakTest-X.Y.Z.txt, update the path below, regenerate
+// GraphemeSegmentation.Data.cs, and rerun. Any newly-failing cases
+// either reflect a rule the segmenter doesn't implement yet (GB9c is
+// the current known one) or a regression in the segmenter.
 [TestFixture]
 [Explicit("UAX #29 conformance suite. ~10,000 cases total; opt in via dotnet test --filter TestCategory=UnicodeConformance.")]
 [Category("UnicodeConformance")]
@@ -68,11 +69,14 @@ public class GraphemeBreakConformanceTests
         "Lexing/UnicodeConformance/GraphemeBreakTest-15.1.0.txt";
 
     // Lines in GraphemeBreakTest-15.1.0.txt that test UAX #29 rule GB9c
-    // (Indic Conjunct Cluster), introduced in revision 39 alongside
-    // Unicode 15.1. .NET 8's StringInfo enumerator implements an
-    // earlier revision and breaks these clusters differently than the
-    // spec expects. A future vendored UAX #29 implementation can drop
-    // this skip set and the conformance test will start asserting
+    // (Indic Conjunct Cluster), introduced in revision 43 alongside
+    // Unicode 15.1. The bundled segmenter implements revision 35 at
+    // Unicode 15.0, deliberately matching .NET 8's StringInfo so the
+    // differential tests in GraphemeSegmentationTests can compare the
+    // two exactly, and revision 35 breaks these clusters differently
+    // than the 15.1 test data expects. Adding GB9c to the segmenter
+    // (part of a Unicode version bump, see GraphemeSegmentation.Data.cs)
+    // drops this skip set and the conformance test will start asserting
     // these lines for real.
     private static readonly HashSet<int> KnownRuntimeSkips = new()
     {
