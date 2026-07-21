@@ -156,17 +156,41 @@ public static class StateMachineParser
                 return ParseResult.Aborted(budget.Outcome, abortPos, Rule.BuildBudgetMessage(budget.Outcome, abortPos, input, options), input, rootRule);
             }
 
-            // AllowTrailingInput relaxes the post-rule EOF check: the
-            // grammar's own success condition still has to be met
-            // (succeeded == true), but unconsumed input past where the
-            // rule stopped is fine. Mirrors the recursive engine's
-            // post-success check at Rule.Parse.
-            bool trailingInputForbidden = !options.AllowTrailingInput && !lexer.IsEof;
-            if (!succeeded || trailingInputForbidden)
+            // The root rule didn't match, a genuine grammar mismatch. Report
+            // the deepest position any rule reached (a high-water mark not
+            // affected by rollback), falling back to the rolled-back
+            // lexer.Position when nothing was recorded, and surface the
+            // deepest failure's WithError message. Mirrors the first failure
+            // branch in Rule.ParseRecursive.
+            if (!succeeded)
             {
                 int failurePosition = System.Math.Max(machine.DeepestFailure, lexer.Position);
                 int reportedPosition = NormalizedPositionMap.TranslateToOriginal(input, parseInput, failurePosition, rootRule.NormalizationForm);
                 string message = Rule.BuildErrorMessage(machine.DeepestFailureMessage, failurePosition, parseInput, reportedPosition, input, options);
+                return ParseResult.Failed(reportedPosition, message, input, rootRule);
+            }
+
+            // AllowTrailingInput relaxes the post-rule EOF check: the
+            // grammar's own success condition was met (succeeded == true),
+            // but unconsumed input remains past where the rule stopped.
+            // This is a separate branch from the genuine-mismatch one above,
+            // matching Rule.ParseRecursive: the trailing-input failure points
+            // at lexer.Position (the first leftover character, the start of
+            // the unconsumed tail), not Math.Max(DeepestFailure, Position).
+            // A sibling alternative the success path rolled back can have
+            // explored deeper than where the root stopped consuming, and that
+            // abandoned position isn't the leftover character the user needs
+            // to look at. The message is the generic positional one
+            // (customMessage: null), not a WithError from a rolled-back rule
+            // that isn't on the success path. See
+            // docs/InductorParserDesignDecisions.md "Parse Requires Consuming
+            // All Input" and the 2026-05-05 recursive-engine fix (backlog h4tn)
+            // that split these two branches there.
+            if (!options.AllowTrailingInput && !lexer.IsEof)
+            {
+                int trailingPosition = lexer.Position;
+                int reportedPosition = NormalizedPositionMap.TranslateToOriginal(input, parseInput, trailingPosition, rootRule.NormalizationForm);
+                string message = Rule.BuildErrorMessage(customMessage: null, trailingPosition, parseInput, reportedPosition, input, options);
                 return ParseResult.Failed(reportedPosition, message, input, rootRule);
             }
 
