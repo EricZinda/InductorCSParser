@@ -7,7 +7,7 @@ using static InductorParser.Tests.UnicodeExamples;
 namespace InductorParser.Tests;
 
 // Tests for the derived error-position properties on ParseResult:
-// ErrorLine, ErrorColumn, ErrorTokenIndex. The underlying
+// ErrorLine, ErrorCharColumn, ErrorTokenIndex. The underlying
 // ErrorCharIndex is covered by the per-rule test fixtures. This file
 // exercises the char-index -> (line, column, grapheme) conversions
 // specifically.
@@ -16,7 +16,7 @@ namespace InductorParser.Tests;
 // rules. The Language Server Protocol is the JSON-RPC protocol VS Code,
 // Neovim, JetBrains, and essentially every modern editor use to talk to
 // language tooling for diagnostics, completion, go-to-definition, etc.
-// ErrorLine / ErrorColumn on ParseResult follow its position conventions
+// ErrorLine / ErrorCharColumn on ParseResult follow its position conventions
 // end-to-end so a caller forwarding a parse error into an editor diagnostic
 // can just use the value. The expected values in this file may look off
 // until you remember:
@@ -28,7 +28,7 @@ namespace InductorParser.Tests;
 //     plane rune like the guitar emoji contributes 2 to the column
 //     count because it occupies two UTF-16 chars.
 //
-//   * "\n", "\r", and "\r\n" are all line terminators. "\r\n" is ONE
+//   * "\n", "\r", and "\r\n" are all line terminators. "\r\n" is one
 //     break, not two.
 //
 //   * A terminator char COUNTS as a column on the line it ends. In
@@ -36,10 +36,10 @@ namespace InductorParser.Tests;
 //     that line). The column doesn't skip over it.
 //
 //   * After the terminator, the next line starts at column 0. So the
-//     'X' in "aa\nX" is (line 1, column 0), NOT column 3 of some
+//     'X' in "aa\nX" is (line 1, column 0), not column 3 of some
 //     flat counter. Column is line-relative, not absolute.
 //
-// See docs/InductorParserDesignDecisions.md "LSP Position Semantics" for the full
+// See docs/InductorParserReference.md "The Parse Result" for the full
 // rationale.
 [TestFixture]
 public class ErrorPositionTests
@@ -50,8 +50,8 @@ public class ErrorPositionTests
     // newlines and the outer Eof fails at the offset of the first 'X',
     // which is where the tests below want the deepest failure recorded.
     //
-    // Library doesn't yet ship NoneOf / AnyToken, so the set is spelled
-    // out explicitly. Tests that need a non-'a' prefix char inline their
+    // The set is spelled out explicitly so the helper depends only on
+    // OneOf. Tests that need a non-'a' prefix char inline their
     // own grammar.
     private static Rule AtFailureRule() =>
         And(ZeroOrMore(OneOf(TokenSet.Single('a') | TokenSet.Single('\r') | TokenSet.Single('\n'))), Eof());
@@ -72,7 +72,7 @@ public class ErrorPositionTests
         Assert.That(result.Success, Is.True);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(0));
     }
 
@@ -84,7 +84,7 @@ public class ErrorPositionTests
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(0));
     }
 
@@ -96,7 +96,7 @@ public class ErrorPositionTests
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(3));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(3));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(3));
     }
 
@@ -108,7 +108,7 @@ public class ErrorPositionTests
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(3));
     }
 
@@ -125,7 +125,7 @@ public class ErrorPositionTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(2));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(2));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(2));
     }
 
@@ -137,7 +137,7 @@ public class ErrorPositionTests
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
         // \r not followed by \n is its own grapheme cluster.
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(3));
     }
@@ -151,7 +151,7 @@ public class ErrorPositionTests
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(6));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(3));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(3));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(6));
     }
 
@@ -164,7 +164,7 @@ public class ErrorPositionTests
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(4));
         Assert.That(result.ErrorLine, Is.EqualTo(3));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(4));
     }
 
@@ -176,7 +176,7 @@ public class ErrorPositionTests
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(3));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(3));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(3));
     }
 
@@ -190,14 +190,14 @@ public class ErrorPositionTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(2));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(2));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(1));
     }
 
     [Test]
     public void Multi_rune_single_grapheme_distinguishes_char_and_grapheme_counts()
     {
-        // LatinEAcuteGrapheme is e + combining acute: ONE grapheme, TWO
+        // LatinEAcuteGrapheme is e + combining acute: one grapheme, two
         // UTF-16 chars. This works on every runtime including legacy
         // StringInfo. Grammar matches the whole grapheme as one token
         // then fails on the trailing letter.
@@ -213,7 +213,7 @@ public class ErrorPositionTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(2));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(2));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(1));
     }
 
@@ -233,7 +233,7 @@ public class ErrorPositionTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(5));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(2));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(2));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(5));
     }
 
@@ -247,8 +247,12 @@ public class ErrorPositionTests
 
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
         Assert.That(result.ErrorLine, Is.EqualTo(0));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(0));
+
+        // ErrorMessage coalesces to the empty string the same way, so
+        // `result.ErrorMessage.Contains(...)` can't NRE on a default value.
+        Assert.That(result.ErrorMessage, Is.EqualTo(string.Empty));
     }
 
     [Test]
@@ -257,7 +261,7 @@ public class ErrorPositionTests
         // ParseOutcome.Success is the enum's zero value, so a zeroed
         // ParseResult has Outcome == Success even though no parse produced
         // it. Without the _grammar check in ParseResult.Success, a default
-        // struct would claim success while carrying a null Tree and empty
+        // struct would claim success while holding a null Tree and empty
         // Symbols, so the idiomatic `if (result.Success) Use(result.Tree)`
         // would treat a never-run parse as a successful one and then NRE on
         // Tree (or silently process empty data). These are the everyday ways
@@ -278,7 +282,7 @@ public class ErrorPositionTests
     }
 
     // Char(codepoint) returns a string holding one Unicode scalar value
-    // for the UAX #18 line-terminator tests below. Embedding control runes
+    // for the UTS #18 line-terminator tests below. Embedding control runes
     // (NEL U+0085, LS U+2028, PS U+2029, VT U+000B, FF U+000C) as literal
     // characters in the source would either get stripped by editors or
     // break the C# compiler's line scanner (LS / PS terminate logical lines
@@ -288,7 +292,7 @@ public class ErrorPositionTests
     [Test]
     public void NEL_consumed_by_EndOfLine_bumps_ErrorLine()
     {
-        // Rules.EndOfLine() accepts NEL (U+0085) per UAX #18 Annex C as a
+        // Rules.EndOfLine() accepts NEL (U+0085) per UTS #18 §1.6 (RL1.6) as a
         // line terminator. The line/column counter has to recognize the same
         // terminator set or the reported position drifts off-by-one-line for
         // any grammar that uses EndOfLine() on non-LF/CR input. Pre-fix,
@@ -301,13 +305,13 @@ public class ErrorPositionTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
         Assert.That(result.ErrorLine, Is.EqualTo(1),
             "after EndOfLine consumes NEL, the next position is on line 1");
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
     }
 
     [Test]
     public void Line_separator_consumed_by_EndOfLine_bumps_ErrorLine()
     {
-        // LINE SEPARATOR (U+2028) is in UAX #18 Annex C and matched by
+        // LINE SEPARATOR (U+2028) is in UTS #18 §1.6 (RL1.6) and matched by
         // EndOfLine(). Same alignment requirement as NEL.
         var rule = And(EndOfLine(), Token('X'), Eof());
         var result = rule.Parse(Char(0x2028) + "Y");
@@ -315,13 +319,13 @@ public class ErrorPositionTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
     }
 
     [Test]
     public void Paragraph_separator_consumed_by_EndOfLine_bumps_ErrorLine()
     {
-        // PARAGRAPH SEPARATOR (U+2029) is in UAX #18 Annex C and matched by
+        // PARAGRAPH SEPARATOR (U+2029) is in UTS #18 §1.6 (RL1.6) and matched by
         // EndOfLine(). Same alignment requirement.
         var rule = And(EndOfLine(), Token('X'), Eof());
         var result = rule.Parse(Char(0x2029) + "Y");
@@ -329,33 +333,33 @@ public class ErrorPositionTests
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
     }
 
     [Test]
     public void Vertical_tab_consumed_by_EndOfLine_bumps_ErrorLine()
     {
-        // VT (U+000B) is in UAX #18 Annex C and matched by EndOfLine().
+        // VT (U+000B) is in UTS #18 §1.6 (RL1.6) and matched by EndOfLine().
         var rule = And(EndOfLine(), Token('X'), Eof());
         var result = rule.Parse(Char(0x000B) + "Y");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
     }
 
     [Test]
     public void Form_feed_consumed_by_EndOfLine_bumps_ErrorLine()
     {
-        // FF (U+000C) is in UAX #18 Annex C and matched by EndOfLine().
+        // FF (U+000C) is in UTS #18 §1.6 (RL1.6) and matched by EndOfLine().
         var rule = And(EndOfLine(), Token('X'), Eof());
         var result = rule.Parse(Char(0x000C) + "Y");
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(0));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(0));
     }
 
 }

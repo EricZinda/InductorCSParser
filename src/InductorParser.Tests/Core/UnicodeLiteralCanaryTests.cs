@@ -9,9 +9,9 @@ namespace InductorParser.Tests.Core;
 
 // Source-bytes sweep. Walks every .cs file in the test project and reports
 // any non-ASCII byte (>= 0x80) inside a string literal or char literal that
-// isn't wrapped in a Canary(...) call. Non-ASCII inside comments is fine;
-// non-ASCII inside a Canary call's arguments is fine (Canary's runtime
-// check is the guard).
+// isn't wrapped in a Canary(...) call. Non-ASCII inside comments is fine.
+// Non-ASCII inside a Canary call's arguments is fine too, since Canary's
+// runtime check catches a rewritten glyph there.
 //
 // The detection is a small state machine over the file bytes. The C# spec
 // lets us tokenize using ASCII characters only (the structural characters
@@ -51,8 +51,8 @@ public class UnicodeLiteralCanaryTests
     // the same literal is LF on a Linux checkout and CRLF on a Windows
     // one, and a test built on it silently exercises a different input
     // per platform. A multi-line test input must be built from
-    // single-line literals plus an explicit line break — see
-    // TestHelpers.Lines — so the fixture is identical on every checkout.
+    // single-line literals plus an explicit line break (see
+    // TestHelpers.Lines) so the fixture is identical on every checkout.
     [Test]
     public void NoCrossLineStringLiterals()
     {
@@ -307,8 +307,8 @@ public class UnicodeLiteralCanaryTests
                             quoteRun++;
                         if (quoteRun >= rawStringQuoteCount)
                         {
-                            // Closing fence is exactly rawStringQuoteCount quotes;
-                            // any extra leading quotes are content. Consume only
+                            // Closing fence is exactly rawStringQuoteCount quotes.
+                            // Any extra leading quotes are content. Consume only
                             // the matching number.
                             int leading = quoteRun - rawStringQuoteCount;
                             AdvanceColumn(ref column, quoteRun);

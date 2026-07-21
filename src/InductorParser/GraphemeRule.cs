@@ -1,35 +1,31 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using InductorParser.Lexing;
 using InductorParser.SyntaxTree;
 
 namespace InductorParser;
 
 // Match input whose content is exactly one specified token. A token is
-// one character as the user sees it (a grapheme cluster per UAX #29 on
-// .NET 5+), possibly built from several runes underneath. The class is
+// one character as the user sees it (a UAX #29 grapheme cluster),
+// possibly built from several runes underneath. The class is
 // named GraphemeRule for that reason. The user-facing factory is
 // Rules.Token(...), which constructs one of these. The expected token
 // is stored as a string at construction and compared against the
 // lexer's output at match time.
 //
 // A token (even a multi-rune one like 👨‍👩‍👧‍👦) arrives from the lexer
-// as a single Token whose Chars span is the whole text element. The
+// as a single Token whose Chars span is the whole grapheme cluster. The
 // match is one Read and one SequenceEqual compare.
 //
 // Construction validates that the expected string is exactly one token
-// via StringInfo.GetNextTextElement. Token("ab") throws at
-// grammar-build time instead of silently failing at parse time. (Note:
-// on pre-.NET 5 runtimes StringInfo isn't UAX #29 compliant, so the
-// token count for exotic Unicode inputs can be wrong. A future vendored
-// UAX #29 grapheme-cluster implementation would make this uniform
-// across runtimes.)
+// with the same segmentation the lexer uses
+// (GraphemeHelpers.FirstClusterLength). Token("ab") throws at
+// grammar-build time instead of silently failing at parse time.
 //
 // If the expected token is exactly one rune (the common case for
 // ASCII, emoji that fit in a single code point, CJK, etc.), the Id is
 // set to that code point so Symbol leaves produced by this rule
-// carry the "id == rune" shape. For multi-rune tokens the Id comes
+// have the "id == rune" shape. For multi-rune tokens the Id comes
 // from Compile's custom-range assignment.
 internal sealed class GraphemeRule : Rule
 {
@@ -49,10 +45,10 @@ internal sealed class GraphemeRule : Rule
             throw new ArgumentNullException(nameof(expectedToken));
         if (expectedToken.Length == 0)
             throw new ArgumentException("Token requires a non-empty token.", nameof(expectedToken));
-        string firstElement = StringInfo.GetNextTextElement(expectedToken, 0);
-        if (firstElement.Length != expectedToken.Length)
+        int firstClusterLength = GraphemeHelpers.FirstClusterLength(expectedToken.AsSpan());
+        if (firstClusterLength != expectedToken.Length)
             throw new ArgumentException(
-                $"Token requires exactly one user-perceived character (one StringInfo text element / grapheme cluster). Use Literal(string) for multi-token matches.",
+                $"Token requires exactly one user-perceived character (one grapheme cluster). Use Literal(string) to match a sequence of more than one.",
                 nameof(expectedToken));
 
         _expected = expectedToken;
@@ -63,7 +59,7 @@ internal sealed class GraphemeRule : Rule
         // construction the user hasn't named or set an explicit id yet, so
         // SetLeafRuneId always takes effect here. It re-checks those
         // conditions itself for the re-id during the normalization pass below.
-        if (TokenSet.TrySingleRune(expectedToken, out int runeValue))
+        if (RuneHelpers.TrySingleRune(expectedToken, out int runeValue))
             SetLeafRuneId(runeValue);
     }
 
@@ -92,7 +88,7 @@ internal sealed class GraphemeRule : Rule
 
         _expected = normalized;
         // Re-id for the converted text.
-        if (TokenSet.TrySingleRune(_expected, out int runeValue))
+        if (RuneHelpers.TrySingleRune(_expected, out int runeValue))
         {
             // Still one rune after the conversion (canonical-singleton
             // substitutions like U+2126 -> U+03A9): keep the rune-as-id
@@ -121,31 +117,28 @@ internal sealed class GraphemeRule : Rule
         // token arriving one rune at a time (WithinTokenRule's sub-lexer):
         // consumed += token.Length until it reaches _expected.Length.
         //
-        // tokenStart is the pre-read position for THIS iteration's read.
-        // Required for multi-token matches so we report the offender at
-        // the specific failing token's start, not at the start of the
-        // whole match attempt.
+        // Error positioning: the expected text is exactly one grapheme,
+        // so every failure means that single user-perceived character
+        // didn't match at startPosition, and both failure branches
+        // report there. A partially matched rune prefix doesn't count as
+        // progress, which keeps the reported position identical
+        // whichever normalization form Compile rewrote _expected into:
+        // a precomposed rune and its decomposed equivalent fail at the
+        // same spot.
         while (consumed < _expected.Length)
         {
-            int tokenStart = lexer.Position;
             var token = lexer.Read();
-            // Error Positioning: tokenStart is where the specific failing token began.
-            // For a single-token match this equals startPosition.
-            // For multi-token lockstep (a multi-rune token under the
-            // WithinToken sub-lexer's one-rune-per-token mode) it's the
-            // start of whichever token mismatched, not the start of the
-            // whole attempt.
             if (token.IsEof)
             {
                 TraceFailure(lexer, $"found '<EOF>', wanted '{_expected}'");
-                lexer.RecordFailure(tokenStart, ErrorMessage, ErrorForced);
+                lexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);
                 return null;
             }
             if (consumed + token.Length > _expected.Length
                 || !token.Chars.SequenceEqual(_expected.AsSpan(consumed, token.Length)))
             {
                 TraceFailure(lexer, $"found '{lexer.Input.Substring(token.Offset, token.Length)}', wanted '{_expected}'");
-                lexer.RecordFailure(tokenStart, ErrorMessage, ErrorForced);
+                lexer.RecordFailure(startPosition, ErrorMessage, ErrorForced);
                 return null;
             }
             consumed += token.Length;

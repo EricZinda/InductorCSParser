@@ -72,7 +72,7 @@ public class ValidUnicodeTests
         // Stacking two unrelated variation selectors after one base isn't
         // a registered variation sequence (UTS #37 defines those), but
         // that's a glyph-rendering concern, not an encoding one. The
-        // string is valid; the lexer follows UAX #29 and hands back one
+        // string is valid. The lexer follows UAX #29 and hands back one
         // multi-rune token.
         string input = "a" + UnicodeExamples.EmojiVariationSelectorText + UnicodeExamples.EmojiVariationSelectorText;
 

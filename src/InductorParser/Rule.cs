@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
 using InductorParser.Lexing;
+using InductorParser.Lexing.Unicode;
 using InductorParser.SyntaxTree;
 using InductorParser.Tracing;
 
@@ -58,22 +59,19 @@ public abstract class Rule
     private bool _sealed;
     private bool _idAssigned;
     // True iff the user explicitly chose this rule's SymbolId via .As(SymbolId).
-    // Distinct from _idAssigned (also set by GraphemeRule's constructor when it
-    // auto-assigns a single-rune Token its code point, and by Compile's named /
-    // anonymous id passes). Gates the duplicate-id conflict check in
-    // CollectExplicitIds, the leaf-id shortcut in ResolveLeafId, GraphemeRule's
-    // post-normalization id re-assignment, and .As(string)'s auto-assigned-id
-    // reset. Not set by .As(string), which only writes Name and lets Compile
+    // Narrower than _idAssigned, which is also true for ids assigned automatically
+    // (GraphemeRule's single-rune Token code point, Compile's name/anonymous
+    // passes). .As(string) doesn't set this: it only writes Name and lets Compile
     // derive an Id from the name hash.
     private bool _idUserExplicit;
+    // Both set by .WithError(message, forced). _errorMessage is the user's exact
+    // text (null means no .WithError, a "mechanical" failure). _errorForced marks
+    // the message as one that beats every non-forced failure at any depth.
+    // See docs/ErrorArchitecture.md for how these feed error selection.
     private string? _errorMessage;
     private bool _errorForced;
 
-    // Has this rule been compiled yet? An alternative evaluator checks
-    // this before calling Compile() so a caller who already compiled the
-    // rule with a specific normalization form (or with null to opt out)
-    // doesn't get an InvalidOperationException from the engine forcing
-    // the FormC default.
+    // Has this rule been compiled yet? 
     internal bool IsCompiled => _sealed;
 
     // Set when a Compile attempt fails after entering the mutating phase.
@@ -89,12 +87,7 @@ public abstract class Rule
     // committed at first compile. A subsequent Compile call with a different
     // form throws (see Compile for the conflict check).
     //
-    // NormalizationForm is a property of the grammar, not the parse, because
-    // every literal-bearing rule (Token / Literal / LiteralIgnoreAsciiCase)
-    // commits to a specific form the moment its expected text is written
-    // into source. Switching forms between parses on the same compiled
-    // grammar would silently break match behavior, so the form is locked in
-    // at Compile time and validated against every literal in the graph.
+    // It belongs to the grammar, not the parse.
     private System.Text.NormalizationForm? _normalizationForm = System.Text.NormalizationForm.FormC;
 
     /// <summary>
@@ -107,7 +100,7 @@ public abstract class Rule
 
     // Lazily-built reverse index from SymbolId to human-readable name
     // for every rule reachable from this root. Populated on the first
-    // NameOf call. Grammars that never ask never pay the allocation.
+    // NameOf call. Grammars that never ask never pay for building it.
     // The IsUserSupplied flag distinguishes entries set by the user via
     // .As("name") from the class-derived trace-name fallback (And,
     // OneOrMore, Token, etc.). NameOf uses the flag to decide whether
@@ -120,14 +113,14 @@ public abstract class Rule
     // Used by IdOf for callers who want to look up a rule's id at
     // grammar-construction time without holding a reference to the
     // Rule object. Populated on the first IdOf call. Only user-named
-    // entries are indexed; the class-derived trace-name fallbacks
+    // entries are indexed. The class-derived trace-name fallbacks
     // (And, OneOrMore, Token, ...) aren't, because they're not unique.
     private Dictionary<string, SymbolId>? _idByNameIndex;
 
     /// <summary>
     /// The rule's <see cref="SymbolId"/>, the integer identity parse-tree
-    /// Symbols carry. Assigned at Compile time unless set explicitly with
-    /// <see cref="As(SymbolId)"/>. Single-rune Tokens carry their code point.
+    /// Symbols store. Assigned at Compile time unless set explicitly with
+    /// <see cref="As(SymbolId)"/>. A single-rune Token's id is its code point.
     /// </summary>
     public SymbolId Id { get; private set; }
 
@@ -143,25 +136,59 @@ public abstract class Rule
     /// <see cref="SyntaxTree.FlattenType"/> enum for what each value means.
     /// </summary>
     /// <remarks>
-    /// Virtual so <see cref="LateBoundRule"/> can report its bound target's
-    /// FlattenType. A LateBoundRule has no flatten policy of its own.
+    /// Virtual so a rule that stands in for another rule can report that
+    /// rule's value: <see cref="LateBoundRule"/> reports its bound
+    /// target's, and an unnamed AliasRule reports its inner's. Neither has
+    /// a flatten policy of its own in that state.
     /// </remarks>
-    public virtual FlattenType FlattenType { get; private set; }
+    public virtual FlattenType FlattenType
+    {
+        get => _declaredFlattenType;
+        private set => _declaredFlattenType = value;
+    }
 
-    // The static error message set via .WithError("..."), or null if none.
-    // Subclasses pass this to lexer.RecordFailure on the failure path so
-    // the depth-primary resolution can surface it: a failure with a message
-    // is "named", one without is "mechanical".
+    private FlattenType _declaredFlattenType;
+
+    /// <summary>
+    /// The FlattenType stored on this rule itself, bypassing a getter
+    /// override that forwards another rule's value. Rules that don't
+    /// override <see cref="FlattenType"/> can ignore this: for them the
+    /// two are the same value.
+    /// </summary>
+    /// <remarks>
+    /// A rule that stands in for another rule (an unnamed AliasRule
+    /// forwarding its inner) overrides the FlattenType getter, and then
+    /// needs this to read what was set on the rule itself. .As(...) reads
+    /// it (via ApplyIdentificationFlattenPolicy) to decide whether it
+    /// still needs to flip the policy to Preserve: on an unnamed alias
+    /// over a Preserve inner the virtual getter already reports Preserve
+    /// while the alias's own policy is still Flatten, and skipping the
+    /// flip there would leave the alias transparent with a dead name.
+    /// </remarks>
+    protected FlattenType DeclaredFlattenType => _declaredFlattenType;
+
+    /// <summary>
+    /// The static error message set via .WithError("..."), or null if none.
+    /// </summary>
+    /// <remarks>
+    /// Subclasses pass this to lexer.RecordFailure on the failure path so
+    /// the depth-primary resolution can surface it: a failure with a message
+    /// is "named", one without is "mechanical". See docs/ErrorArchitecture.md.
+    /// </remarks>
     protected internal string? ErrorMessage => _errorMessage;
 
-    // True when the message was set via .WithError("...", forced: true). A
-    // forced failure is a hard override: it beats every non-forced failure at
-    // any depth (and loses only to a deeper forced failure).
+    /// <summary>
+    /// True when the message was set via .WithError("...", forced: true). A
+    /// forced failure is a hard override: it beats every non-forced failure at
+    /// any depth (and loses only to a deeper forced failure).
+    /// </summary>
     protected internal bool ErrorForced => _errorForced;
 
-    // emitsLeaf is required (no default overload) so a new rule can't
-    // silently get the wrong shape. See the EmitsLeaf property for what
-    // it means and how to choose it.
+    /// <summary>
+    /// emitsLeaf is required (no default overload) so a new rule can't
+    /// silently get the wrong shape. See the EmitsLeaf property for what
+    /// it means and how to choose it.
+    /// </summary>
     protected Rule(FlattenType defaultFlatten, bool emitsLeaf, params Rule[]? children)
     {
         FlattenType = defaultFlatten;
@@ -173,8 +200,8 @@ public abstract class Rule
     private readonly bool _emitsLeaf;
 
     /// <summary>
-    /// True when TryParseRule emits a single leaf Symbol carrying the matched
-    /// text (terminals: OneOf, Literal, AnyToken, ScanWhile, WithinToken, ...).
+    /// True when TryParseRule emits a single leaf Symbol with the matched
+    /// text (leaves: OneOf, Literal, AnyToken, ScanWhile, WithinToken, ...).
     /// False when it emits a composite Symbol with children (And, Or,
     /// BetweenInclusive) or no Symbol at all because it's zero-width (Not, Peek,
     /// Eof).
@@ -201,11 +228,9 @@ public abstract class Rule
     // type-derived default.
     private string _ruleTraceName;
 
-    // Compose the full trace label: "{Name}:{ruleName}" when the rule
-    // has a .As(name) set, else just "{ruleName}". Only .As() is used
-    // here. .WithError() sets the user-facing error message, not a
-    // rule identity, so it belongs in the trace line's body (see
-    // AppendErrorMessage) rather than as a label prefix.
+    // The trace label: "{Name}:{ruleName}" when the rule has a .As(name),
+    // else just "{ruleName}". .WithError()'s message 
+    // goes in the trace line's body (see AppendErrorMessage), not here.
     private string BuildTraceLabel() =>
         Name != null ? $"{Name}:{_ruleTraceName}" : _ruleTraceName;
 
@@ -224,21 +249,13 @@ public abstract class Rule
     // there's no error to report so the WithError message is
     // omitted.
     //
-    // The body-length check drops the body-separator space when the
-    // body is empty. OrRule's failure trace is the only caller that
-    // hits this path (its body is $"" because there's no per-child
-    // detail to surface once all alternatives failed); without the
-    // check, WriteTraceLine's own ": " plus the leading space in the
-    // format string would render "Or:  \"...\"" with a double space.
-    //
-    // DisplayEscape.Escape rewrites Cc/Zl/Zp chars in the message to
-    // U+XXXX for the trace render. AppendErrorMessage runs after the
-    // TraceInterpolatedStringHandler builds `body`, so the handler's
-    // own auto-escape doesn't reach the WithError text. Without this
-    // a user's WithError("line1\nline2") would split the FAIL line.
-    // The stored _errorMessage stays the user's exact text so
-    // ParseResult.ErrorMessage still surfaces it verbatim for callers
-    // who want the literal multi-line message.
+    // DisplayEscape.Escape rewrites control characters and line/paragraph
+    // separators to U+XXXX so a WithError("line1\nline2") can't split the
+    // FAIL line. The trace's interpolated `body` was already escaped by
+    // TraceInterpolatedStringHandler, but that auto-escape only covers the
+    // $"..." holes, not this WithError text appended after `body` is built,
+    // hence the explicit escape here. _errorMessage keeps the user's exact
+    // text, so ParseResult.ErrorMessage still surfaces it verbatim.
     private string AppendErrorMessage(string body)
     {
         if (_errorMessage == null) return body;
@@ -248,11 +265,16 @@ public abstract class Rule
             : $"\"{escapedMessage}\"";
     }
 
-    // Short-form trace helpers called from a rule's TryParse on the
-    // success or failure path. [AggressiveInlining] + the
-    // TraceInterpolatedStringHandler parameter together make trace
-    // calls cost nothing when tracing is off. See
-    // TraceInterpolatedStringHandler for the full story.
+    /// <summary>
+    /// Short-form trace helpers called from a rule's TryParse on the
+    /// success or failure path.
+    /// </summary>
+    /// <remarks>
+    /// [AggressiveInlining] + the
+    /// TraceInterpolatedStringHandler parameter together make trace
+    /// calls cost nothing when tracing is off. See
+    /// TraceInterpolatedStringHandler for the full story.
+    /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected void TraceSuccess(
         Lexer lexer,
@@ -275,11 +297,10 @@ public abstract class Rule
         lexer.WriteTraceLine(BuildTraceLabel(), TraceOutcome.Failure, AppendErrorMessage(formatted));
     }
 
-    // Explicit-level overloads. Use when a trace should fire at a
-    // level other than Diagnostic (e.g. a summary line at Normal). The
-    // InterpolatedStringHandlerArgument on the message parameter is
-    // what routes `level` to the handler when the compiler rewrites
-    // the call (see TraceInterpolatedStringHandler for how that works).
+    /// <summary>
+    /// Explicit-level overloads. Use when a trace should fire at a
+    /// level other than Diagnostic (e.g. a summary line at Normal).
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected void TraceSuccess(
         Lexer lexer,
@@ -324,10 +345,15 @@ public abstract class Rule
     /// </remarks>
     public IReadOnlyList<Rule> Children { get; private set; }
 
-    // Replace this rule's children. The only production use is LateBoundRule,
-    // which needs to install its target after construction. Throws if the
-    // rule has already been compiled, so late-binding is a grammar-build-time
-    // operation and no rule can sprout new children mid-parse.
+    /// <summary>
+    /// Replace this rule's children. The only production use is LateBoundRule,
+    /// which needs to install its target after construction.
+    /// </summary>
+    /// <remarks>
+    /// Throws if the
+    /// rule has already been compiled, so late-binding is a grammar-build-time
+    /// operation and no rule can sprout new children mid-parse.
+    /// </remarks>
     protected void SetChildren(params Rule[] children)
     {
         ThrowIfSealed();
@@ -353,21 +379,28 @@ public abstract class Rule
         return Array.AsReadOnly(copy);
     }
 
-    // Replace this rule's trace label. Intended for use only from subclass
-    // constructors that need to bake construction-time parameters (like
-    // BetweenInclusiveRule's bounds) into the label. No ThrowIfSealed check
-    // here because at constructor time the rule isn't reachable from
-    // grammar code yet, so it can't have been compiled and sealed.
-    // Trace output reads _ruleTraceName as a field load, so renaming
-    // here stays a one-time cost.
-    protected void SetTraceName(string name) => _ruleTraceName = name;
+    /// <summary>
+    /// Replace this rule's trace label. Intended for use only from subclass
+    /// constructors that need to bake construction-time parameters (like
+    /// BetweenInclusiveRule's bounds) into the label.
+    /// </summary>
+    /// <remarks>
+    /// ThrowIfSealed keeps the trace name a grammar-construction-time setting:
+    /// once the grammar is compiled and sealed, a rename throws rather than
+    /// silently changing the trace label, the NameOf fallback for an unnamed
+    /// rule, and diagnostic text under a live grammar. The constructor callers
+    /// run before Compile seals the rule, so they pass the check. Trace output
+    /// reads _ruleTraceName as a plain field load, so setting it stays a
+    /// one-time cost.
+    /// </remarks>
+    protected void SetTraceName(string name)
+    {
+        ThrowIfSealed();
+        _ruleTraceName = name;
+    }
 
     // Strip the "Rule" suffix so the trace label reads "And" instead
-    // of "AndRule". GetType() in a base constructor returns the
-    // derived runtime type (C# guarantee), so this resolves correctly
-    // for every subclass. Called once per rule instance in the ctor.
-    // The result is cached in _ruleTraceName so trace output just
-    // reads a field.
+    // of "AndRule". Called once per rule instance in the ctor.
     private static string DeriveRuleTraceName(Type t)
     {
         string name = t.Name;
@@ -376,9 +409,11 @@ public abstract class Rule
             : name;
     }
 
-    // Hook for subclass-specific grammar-validity checks. Called once per
-    // rule during Compile. Default is no-op. LateBoundRule uses it to fail
-    // when a forward-reference was never bound.
+    /// <summary>
+    /// Hook for subclass-specific grammar-validity checks. Called once per
+    /// rule during Compile. Default is no-op. LateBoundRule uses it to fail
+    /// when a forward-reference was never bound.
+    /// </summary>
     protected virtual void ValidateCompiled() { }
 
     /// <summary>
@@ -390,19 +425,12 @@ public abstract class Rule
     /// </summary>
     /// <remarks>
     /// Naming a rule only works if its Symbol reaches the parse tree, which
-    /// happens under FlattenType.Preserve. If the flatten policy is still the
-    /// rule's class default (Token defaults to Delete, And to Flatten), .As
-    /// silently flips it to Preserve. If the caller already set a non-Preserve
+    /// happens under FlattenType.Preserve. So, if the flatten policy is anything else, .As
+    /// tries to change it to Preserve. However, if the caller already set a non-Preserve
     /// policy explicitly via .Flatten(...) / .Delete() / .Flatten(), .As throws
-    /// rather than silently overriding a choice that contradicts it.
+    /// rather than silently overriding that choice.
     /// <para>
-    /// Set-once on Name: a rule that already has a name can't be renamed.
-    /// .As(name) mutates the rule in place and returns it, so a second
-    /// .As(string) with a different name would silently make the last call win,
-    /// and the bug would surface only later when consumers dispatch on which
-    /// name matched. A second call throws instead.
-    /// </para>
-    /// <para>
+    /// Set-once for the string Name overload: a rule that already has a name can't be renamed. A second call throws instead.
     /// <see cref="As(SymbolId)"/> writes a different field (Id, not Name) and
     /// composes with this: a rule with an explicit id can still pick up a name,
     /// and a named rule can still pick up an explicit id. Only same-overload
@@ -411,12 +439,13 @@ public abstract class Rule
     /// </remarks>
     public virtual Rule As(string name)
     {
-        // Null check runs before every state mutation: ThrowIfSealed,
-        // the Name != null set-once check, and the FlattenType auto-flip
-        // in ApplyIdentificationFlattenPolicy. Without it, .As(null!) on
-        // a rule whose Name is still null would skip the set-once check,
-        // silently flip FlattenType to Preserve, leave Name unset, and
-        // let a later legitimate .As(...) still succeed.
+        // Reject a null name first, before anything below runs. Otherwise
+        // .As(null!) on a still-unnamed rule would pass the Name != null
+        // set-once check (Name is null), flip FlattenType to Preserve in
+        // ApplyIdentificationFlattenPolicy, then store null back into Name.
+        // That leaves the rule half-changed: its flatten policy is already
+        // Preserve but Name is still null, so a later real .As(...) wrongly
+        // succeeds instead of throwing "already named".
         if (name == null) throw new ArgumentNullException(nameof(name));
         ThrowIfSealed();
         if (Name != null)
@@ -433,7 +462,7 @@ public abstract class Rule
         // Clear an auto-assigned id so Compile's AssignNamedIds pass gives
         // this rule a fresh custom-range id derived from the name hash.
         // The only auto-assignment path is GraphemeRule giving a
-        // single-rune Token its code point in the constructor; two
+        // single-rune Token its code point in the constructor. Two
         // distinct Token('a').As(...) rules would otherwise silently share
         // the rune id and Tree.Find / NameOf couldn't distinguish them.
         // A user's explicit id via .As(SymbolId) stays put: that's what
@@ -447,20 +476,21 @@ public abstract class Rule
     /// Set an explicit <see cref="SymbolId"/> on this rule, for stable numbering
     /// across versions (useful when serializing parse trees). Returns the same
     /// Rule for fluent chaining. Throws if already compiled, or if an explicit
-    /// id was already set (set-once).
+    /// id was already set.
     /// </summary>
     /// <remarks>
-    /// Same identify-implies-Preserve story as <see cref="As(string)"/>: an
-    /// explicit id is only useful if the rule's Symbol reaches the tree to carry
-    /// it, so the flatten-policy auto-flip / contradiction-throw applies here
-    /// too.
+    /// Setting an id for a rule only works if its Symbol reaches the parse tree, which
+    /// happens under FlattenType.Preserve. So, if the flatten policy is anything else, .As
+    /// tries to change it to Preserve. However, if the caller already set a non-Preserve
+    /// policy explicitly via .Flatten(...) / .Flatten() / .Delete(), .As throws
+    /// rather than silently overriding that choice.
     /// <para>
-    /// The value must land in the custom range (&gt;= CustomRangeStart). Lower
-    /// values are reserved: 0..0x10FFFF for Unicode rune leaves (Token('a')
-    /// already carries id 0x61 by construction) and 0x110000..0x1FFFFF for
-    /// built-in expression ids. An id in either reserved range produces silent
-    /// identity collisions, since Tree.Find / Tree.Is / NameOf disambiguate by
-    /// integer id only.
+    /// The value must land in the custom range (&gt;= CustomRangeStart). A lower
+    /// value throws. The ranges below it would collide with auto-assigned ids
+    /// if a rule reused one: 0..0x10FFFF go to Unicode rune
+    /// leaves (e.g. Token('a')), and 0x110000..0x1FFFFF is reserved for future
+    /// built-in ids and is unused today (anonymous rules get custom-range ids
+    /// at Compile).
     /// </para>
     /// </remarks>
     public virtual Rule As(SymbolId id)
@@ -491,36 +521,29 @@ public abstract class Rule
     }
 
     /// <summary>
-    /// Wrap this rule in an alias that can be given its own name, to reuse one
-    /// rule shape under several names without a factory function for each.
+    /// Wrap this rule in an alias that will have the name specified. This allows for reusing one
+    /// rule shape without a factory function for each.
     /// </summary>
     /// <remarks>
-    /// The alias parses by forwarding to this rule and produces a Symbol
-    /// carrying the alias's own Id, with this rule's matched content as that
-    /// Symbol's children.
     /// <code>
     ///     var digitSequence = OneOrMore(OneOf(TokenSet.Digits));
     ///     var year  = digitSequence.AliasedAs("year");
     ///     var month = digitSequence.AliasedAs("month");
     /// </code>
-    /// If this rule is itself Preserve (the default for any named rule),
-    /// aliasing replaces this rule's Symbol with the alias's Symbol rather than
-    /// nesting them: this rule's identity is hidden when accessed through this
-    /// alias path. From other parts of the grammar that use this rule directly,
-    /// Tree.Find on its name still works.
+    /// The alias's Symbol replaces its Symbol rather than nesting it. 
     /// <para>
-    /// Errors: the identity substitution is success-only, so it doesn't change
-    /// error attribution. A .WithError on this rule still fires from inside it.
-    /// A .WithError on the alias fires when this rule fails to match anywhere
-    /// within it. If both are set, the standard deepest-failure tie-breaking
-    /// picks the surfaced message.
+    /// The substitution only happens on a successful match, so it doesn't affect
+    /// error reporting. A .WithError on this rule (the one being aliased) records
+    /// its message at the point inside it where the match broke. A .WithError on
+    /// the alias records when this rule fails as a whole. If both are set, the
+    /// usual deepest-failure rule decides which message the parse reports.
     /// </para>
     /// </remarks>
     public Rule AliasedAs(string name) => new AliasRule(this).As(name);
 
     /// <summary>
     /// Explicit-<see cref="SymbolId"/> variant of
-    /// <see cref="AliasedAs(string)"/>: a fresh alias around this rule, with the
+    /// <see cref="AliasedAs(string)"/>: create a fresh alias around this rule, with the
     /// explicit id on the alias.
     /// </summary>
     public Rule AliasedAs(SymbolId id) => new AliasRule(this).As(id);
@@ -531,12 +554,15 @@ public abstract class Rule
     // set a contradicting non-Preserve policy.
     private void ApplyIdentificationFlattenPolicy(string callerMethod, string identifier)
     {
-        if (FlattenType == FlattenType.Preserve) return;
+        // The virtual FlattenType getter won't work here because an unnamed alias
+        // forwards it from its inner, so Alias(preserveRule).As("name")
+        // would read Preserve and skip the flip the alias itself needs.
+        if (DeclaredFlattenType == FlattenType.Preserve) return;
         if (_flattenPolicyExplicitlySet)
         {
             throw new InvalidOperationException(
                 $".{callerMethod}(\"{identifier}\") can't be applied to this rule: " +
-                $"its flatten policy was explicitly set to FlattenType.{FlattenType}, " +
+                $"its flatten policy was explicitly set to FlattenType.{DeclaredFlattenType}, " +
                 $"so its wrapper Symbol won't appear in the parse tree and Tree.Find " +
                 $"can't reach it. Set the flatten policy to FlattenType.Preserve, or " +
                 $"remove the .{callerMethod}(...) call.");
@@ -544,29 +570,27 @@ public abstract class Rule
         FlattenType = FlattenType.Preserve;
     }
 
-    // Set by .As(SymbolId) and only by .As(SymbolId). Two consumers,
-    // both checking for "user explicitly identified this rule by id":
-    //   * Auto-assignment sites (SetIdInternal callers like
-    //     GraphemeRule.ValidateNormalization) skip the
-    //     auto-assignment so a user's explicit id survives normalization.
-    //   * Leaf-emitting rules with the rune-as-leaf-id optimization
-    //     (OneOfRule / NoneOfRule / AnyTokenRule / WithinTokenRule, via
-    //     ResolveLeafId below) skip the optimization so leaves carry the
-    //     user's explicit id and Tree.Find / Tree.Is resolve through the
-    //     user's reference.
-    // Parallel to Name (set by .As(string)) for the second consumer:
-    // either user-identification path disables the rune-as-leaf-id
-    // shortcut.
+    // Set only by .As(SymbolId): "did the user explicitly set this rule's id?"
+    // Two consumers check it:
+    //   * Auto-assignment sites (e.g.
+    //     GraphemeRule.ValidateNormalization) skip auto-assignment so a
+    //     user's explicit id survives normalization.
+    //   * Leaf rules that set a rune as the ID automatically (OneOfRule /
+    //     NoneOfRule / AnyTokenRule / WithinTokenRule) 
+    //     skip the optimization so leaves get the explicitly set id.
     internal bool IsUserSymbolIdExplicit => _idUserExplicit;
 
-    // Picks the leaf id for OneOfRule / NoneOfRule / AnyTokenRule /
-    // WithinTokenRule. An anonymous single-rune match uses the rune's code
-    // point as its id, so consumers can dispatch on `leaf.Id == 'a'`. If the
-    // user named the rule (.As(string)) or gave it an explicit id
-    // (.As(SymbolId)), the leaf uses the rule's own Id instead. A
-    // multi-rune token passes runeValue == -1 and also falls back to Id,
-    // since one int can't hold more than one code point. Centralized here so
-    // the four rules stay in sync.
+    /// <summary>
+    /// Picks the leaf id for rules that can match a single rune (e.g. OneOfRule / NoneOfRule / AnyTokenRule /
+    /// WithinTokenRule). An anonymous single-rune match uses the rune's code
+    /// point as its id, so consumers can dispatch on `leaf.Id == 'a'`.
+    /// </summary>
+    /// <remarks>
+    /// If the
+    /// user named the rule (.As(string)) or gave it an explicit id
+    /// (.As(SymbolId)), returns the chosen Id instead. A
+    /// multi-rune token passes runeValue == -1 and thus also falls back to the set Id.
+    /// </remarks>
     protected SymbolId ResolveLeafId(int runeValue) =>
         (Name == null && !IsUserSymbolIdExplicit && runeValue >= 0)
             ? new SymbolId(runeValue)
@@ -579,11 +603,9 @@ public abstract class Rule
     /// <see cref="SyntaxTree.FlattenType"/> enum for what each value means.
     /// </summary>
     /// <remarks>
-    /// Setting a non-Preserve policy on a rule already identified with
-    /// .As(name) or .As(SymbolId) throws: identification and "this rule's Symbol
-    /// is absent from the tree" contradict each other, since the whole point of
-    /// .As is to make the Symbol findable. Setting Preserve, or any policy on an
-    /// unidentified rule, is fine.
+    /// Setting to anything but Preserve on a rule already identified with
+    /// .As(name) or .As(SymbolId) throws since the whole point of
+    /// them is to make the Symbol findable. 
     /// </remarks>
     public virtual Rule Flatten(FlattenType type)
     {
@@ -593,10 +615,8 @@ public abstract class Rule
         return this;
     }
 
-    // Shared precondition for Flatten and FlattenByDefault: a rule
+    // Shared test for Flatten and FlattenByDefault: a rule
     // identified with .As(name) / .As(SymbolId) can only be Preserve.
-    // Flatten or Delete drops its node from the parse tree, leaving
-    // nothing for Tree.Find to return.
     private void CheckFlattenChangeAllowed(FlattenType type, string callerMethod)
     {
         ThrowIfSealed();
@@ -613,11 +633,8 @@ public abstract class Rule
         }
     }
 
-    // True once the caller has called .Flatten(...), .Preserve(), .Delete(),
-    // or .Flatten(). Stays false while the rule still carries its class
-    // default. .As(name) checks this to decide whether to silently flip
-    // FlattenType to Preserve (default still in place) or throw (caller
-    // already set a contradicting non-Preserve policy).
+    // True once the caller has explicitly set a flatten policy via .Flatten(...),
+    // .Preserve(), .Delete(), or .Flatten(). Read by ApplyIdentificationFlattenPolicy.
     private bool _flattenPolicyExplicitlySet;
 
     /// <summary>Shortcut for <see cref="Flatten(FlattenType)"/> with FlattenType.Preserve.</summary>
@@ -630,25 +647,18 @@ public abstract class Rule
     public Rule Flatten() => Flatten(FlattenType.Flatten);
 
     /// <summary>
-    /// Set the FlattenType as an overridable default rather than an explicit,
-    /// locked-in choice. For writing composing factories: a factory that wraps
-    /// Or / And / OneOrMore (class default FlattenType.Flatten) but wants its
-    /// result to default to Delete calls FlattenByDefault(FlattenType.Delete)
-    /// rather than Flatten(FlattenType.Delete).
+    /// Set the FlattenType as an overridable default, the way a rule's class
+    /// default behaves, rather than the locked-in choice
+    /// <see cref="Flatten(FlattenType)"/> records. Meant for composing factories.
     /// </summary>
     /// <remarks>
-    /// The difference is what happens to the factory's caller.
-    /// <see cref="Flatten(FlattenType)"/> records the policy as user-explicit,
-    /// so a later .As(name) on the returned rule throws. The factory's caller
-    /// never wrote .Flatten / .Delete and can't anticipate that. FlattenByDefault
-    /// sets the same FlattenType value but leaves the policy overridable, so
-    /// .As(name) and a later .Flatten(...) behave exactly as they would on a
-    /// rule still carrying its class default.
-    /// <para>
-    /// The built-in composing factories (Rules.EndOfLine, InlineWhitespace,
-    /// AnyWhitespace) use this. User-written factories that compose rules and
-    /// want a non-default flatten policy should use it for the same reason.
-    /// </para>
+    /// The difference is for the factory's caller. Flatten(...) marks the policy
+    /// user-explicit, so a later .As(name) on the returned rule throws, which the
+    /// caller (who never wrote .Flatten / .Delete) can't anticipate.
+    /// FlattenByDefault sets the same value but stays overridable, so .As(name)
+    /// and a later .Flatten(...) work as they would on a rule at its class
+    /// default. The built-in composing factories (Rules.EndOfLine,
+    /// InlineWhitespace, AnyWhitespace) use it.
     /// </remarks>
     public virtual Rule FlattenByDefault(FlattenType type)
     {
@@ -658,8 +668,7 @@ public abstract class Rule
     }
 
     /// <summary>
-    /// Attach a static error message. If this rule's failure wins the
-    /// depth-primary resolution when a parse fails,
+    /// Attach a static error message. If this rule has the deepest failure when a parse fails,
     /// <see cref="ParseResult.ErrorMessage"/> is this string instead of the
     /// generic "unexpected 'x'" fallback. Returns the same Rule for fluent
     /// chaining. Throws if already compiled.
@@ -668,21 +677,13 @@ public abstract class Rule
     /// Useful for user-friendly messages like "Expected a setting name" at the
     /// spots most likely to be where the author went wrong.
     /// <para>
-    /// A rule with no .WithError produces a "mechanical" failure (position
-    /// only). .WithError("msg") produces a "named" failure. .WithError("msg",
-    /// forced: true) produces a "forced" failure. At error-report time a forced
-    /// failure overrides everything at any depth. Otherwise the deepest failure
-    /// wins, named and mechanical alike. At an exact-depth tie a named failure
-    /// beats a mechanical one, and a same-kind tie goes to the first recorded.
-    /// So .WithError chooses the words and tips an exact-depth tie, but it never
-    /// pulls the reported position off the parser's deepest failure. See
-    /// docs/ErrorArchitecture.md.
+    /// Only used if this rule is the deepest failure. To make a shallow failure win
+    /// over a deeper one, set forced = true.
+    /// See docs/ErrorArchitecture.md.
     /// </para>
     /// </remarks>
-    /// <param name="errorMessage">The message to surface. Set-once; a second
-    /// call throws.</param>
-    /// <param name="forced">When true, this failure beats every non-forced
-    /// failure at any depth, losing only to a deeper forced failure.</param>
+    /// <param name="errorMessage">The message to surface. </param>
+    /// <param name="forced">When true, this failure always wins, losing only to a deeper forced failure.</param>
     public virtual Rule WithError(string errorMessage, bool forced = false)
     {
         // Null check runs before every state mutation: ThrowIfSealed,
@@ -698,7 +699,7 @@ public abstract class Rule
                 $".WithError(\"{errorMessage}\") can't be applied to this rule: " +
                 $"it already has the error message \"{_errorMessage}\". " +
                 $".WithError(...) is set-once. To attach a different error to the " +
-                $"same rule shape at multiple call sites, wrap it with Alias(...) " +
+                $"same rule shape in more than one place, wrap it with Alias(...) " +
                 $"to get a fresh wrapper that can carry its own error: " +
                 $"Alias(rule).WithError(\"{errorMessage}\"). Or build a factory " +
                 $"function that returns a fresh rule each call.");
@@ -708,50 +709,51 @@ public abstract class Rule
     }
 
     /// <summary>
-    /// Finalize the grammar: walk the rule graph from this Rule, assign a
-    /// <see cref="SymbolId"/> to every rule that doesn't have one yet, validate
-    /// each rule, and seal the graph against further modification. Idempotent,
-    /// and auto-invoked on the first <see cref="Parse(string)"/>. Returns the
-    /// same Rule for chaining.
+    /// Finalize the grammar using the default Unicode FormC normalization, shorthand for
+    /// <see cref="Compile(NormalizationForm?)"/> with FormC.
     /// </summary>
-    /// <remarks>
-    /// Call it explicitly when you want grammar-construction errors to surface
-    /// at program startup rather than at first parse. Uses the FormC
-    /// normalization default; use <see cref="Compile(NormalizationForm?)"/> to
-    /// pick a different form or opt out.
-    /// <para>
-    /// Id assignment runs in three passes. First, explicit ids: rules that
-    /// called .As(SymbolId) keep the id they were given, and two reachable rules
-    /// sharing one explicit id are rejected here, since downstream lookups by
-    /// raw SymbolId can't disambiguate duplicates. Second, named rules get a
-    /// hash-of-name id in the custom range, linear-probing upward if the slot is
-    /// taken. Same name produces the same slot every run, so a named rule's id
-    /// is stable across program executions absent grammar changes. Third,
-    /// anonymous rules get sequential ids from CustomRangeStart, probing past
-    /// anything passes one and two claimed.
-    /// </para>
-    /// </remarks>
     public Rule Compile() => Compile(System.Text.NormalizationForm.FormC);
 
     /// <summary>
-    /// Compile with an explicit normalization form. Pass null to opt out of
-    /// normalization entirely. The form is committed at first compile and
-    /// applies to every parse afterward. See <see cref="Compile()"/> for the
-    /// id-assignment passes.
+    /// Finalize the grammar with an explicit Unicode normalization form: walk the
+    /// rule graph from this Rule, assign a <see cref="SymbolId"/> to every rule
+    /// that doesn't have one yet, validate each rule, convert its literal text to
+    /// the chosen form, and seal the graph against further modification. Pass null
+    /// to opt out of normalization entirely. Idempotent, and auto-invoked on the
+    /// first <see cref="Parse(string)"/>. Returns the same Rule for chaining.
     /// </summary>
     /// <remarks>
-    /// A subsequent Compile call with a different form throws
-    /// InvalidOperationException. The form is part of the grammar's identity,
-    /// not a per-parse knob.
+    /// Call it explicitly when you want grammar-construction errors to surface at
+    /// a particular location rather than at first parse, or if you are parsing on 
+    /// multiple threads. The normalization form is committed at
+    /// first compile and applies to every parse afterward. A subsequent Compile
+    /// call with a different form throws InvalidOperationException: the form is
+    /// part of the grammar's identity, not a per-parse option. Compilation is
+    /// single-threaded, parsing is multi-threaded.
     /// <para>
-    /// When form is non-null, every reachable Token / Literal /
-    /// LiteralIgnoreAsciiCase rule's expected text is checked against its
-    /// normalization in the chosen form. If any literal isn't already in that
-    /// form, Compile throws with a message listing every offender and the
-    /// suggested normalized text. This catches the silent "rule never matches"
-    /// failure mode where an author wrote a decomposed 'é' but the grammar runs
-    /// against FormC-normalized input that only ever produces the precomposed
-    /// 'é' as a token.
+    /// Id assignment runs in three passes. First, explicit ids: rules that called
+    /// .As(SymbolId) keep the id they were given. Second, named rules get a
+    /// hash-of-name id in the custom range, linear-probing upward if the slot is
+    /// taken. The same name produces the same slot every run, so a named rule's id
+    /// is stable across program executions absent grammar changes. Third, anonymous
+    /// rules get sequential ids from CustomRangeStart, probing past anything passes
+    /// one and two claimed.
+    /// </para>
+    /// <para>
+    /// When normalization form is non-null, every rule's expected text is converted into the
+    /// chosen form in place. An author can type a literal in whatever form is
+    /// convenient and it will be converted to the form chosen here for matching. 
+    /// A precomposed 'é' written into the grammar will match a decomposed 'é' in
+    /// the input if FormD is chosen, because Compile rewrites the literal to match. This
+    /// removes the silent "rule never matches" failure mode where the literal's
+    /// form and the input's form disagree.
+    /// </para>
+    /// <para>
+    /// Compile only throws when a literal can't be represented in the chosen
+    /// form: an unpaired surrogate that string.Normalize rejects, or a
+    /// single-grapheme slot (a OneOf / NoneOf set member or a single-rune Token)
+    /// whose conversion produces more than one grapheme (the single grapheme ligature 'ﬁ' becomes
+    /// a two grapheme "fi" under FormKC). The exception lists every offender and how to fix it.
     /// </para>
     /// </remarks>
     public Rule Compile(NormalizationForm? normalizeInput)
@@ -775,14 +777,17 @@ public abstract class Rule
             return this;
         }
 
-        // Every rule reachable from this root has to be unsealed. Compile
-        // commits each rule's id, FirstConsumedTokens, projected literal
-        // text, and normalization form, and the per-pass mutators don't
-        // re-check `_sealed`; walking into one already-sealed rule would
-        // silently corrupt its previous compile's state. Trade-off: a
-        // static sub-rule shared across grammars stops working once one
-        // of them has been Parsed or Compiled. Expose shared shapes via
-        // factory functions that return a fresh instance per call.
+        // Walk the whole graph first and refuse the Compile if any reachable
+        // rule is already sealed. This is the only place sealedness is
+        // checked, so it has to cover every rule before we touch anything.
+        // The rest of Compile is a chain of passes (assign ids, normalize
+        // literal text, stamp the form, then seal) that blindly mutate each
+        // rule they visit and never look at `_sealed`. 
+        // 
+        // A static sub-rule shared across grammars makes the second grammar's
+        // Compile (or Parse, which Compiles) throw once the first grammar has
+        // sealed it. Expose shared shapes via factory functions that return a
+        // fresh instance per call.
         var freshTreeVisited = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
         CheckNoSealedReachableRules(this, freshTreeVisited);
 
@@ -797,7 +802,7 @@ public abstract class Rule
         CheckNameUniqueness(this, visited, namedRules);
 
         var compileTouched = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
-        MarkCompileTouched(this, compileTouched);
+        CollectReachableRules(this, compileTouched);
 
         try
         {
@@ -811,22 +816,25 @@ public abstract class Rule
             visited.Clear();
             ValidateAll(this, visited);
 
-            // Validate every literal-bearing rule against the chosen normalization
+            // Convert every literal-bearing rule's stored text into the chosen
+            // form in place: Token / Literal / LiteralIgnoreAsciiCase text and
+            // OneOf / NoneOf sets are rewritten when they aren't already in the
             // form. Skipped when normalizeInput is null (the author opted out).
-            // Throws one InvalidOperationException listing every offender so
-            // grammar authors fix all mismatches in one pass instead of one at
-            // a time. The pass mutates literal-bearing rules' stored text
-            // (Token / Literal / LiteralIgnoreAsciiCase) and OneOf / NoneOf
-            // sets when the original entries aren't already in the chosen
-            // form.
+            // The only literals that can't be converted are collected as
+            // offenders, and Compile then throws one InvalidOperationException
+            // listing all of them so grammar authors fix every one in a single
+            // pass. A literal is un-convertible when
+            // string.Normalize rejects it (an unpaired surrogate) or when its
+            // conversion produces more than one grapheme for a slot that holds
+            // exactly one (a OneOf / NoneOf member or a single-rune Token).
             if (normalizeInput.HasValue)
             {
                 var offenders = new List<(Rule rule, string original, string normalized)>();
                 // Captures any ArgumentException string.Normalize throws for
-                // literals it can't normalize (in practice, unpaired surrogates).
+                // literals it can't normalize.
                 // We aggregate these as InnerException on the thrown
                 // InvalidOperationException so a programmatic caller can walk
-                // the runtime causes; the user-facing message stays the
+                // the runtime causes. The user-facing message stays the
                 // multi-rule offender list BuildNormalizationErrorMessage emits.
                 var normalizeFailures = new List<ArgumentException>();
                 var reporter = new CompileNormalizationReporter(offenders, normalizeFailures);
@@ -842,14 +850,15 @@ public abstract class Rule
                         inner);
                 }
 
-                // The normalization pass can turn a single-rune Token into a
-                // multi-rune cluster (Token('é'), U+00E9, becomes "e + U+0301"
-                // under FormD). Such a rule dropped its constructor-assigned rune
-                // id in ValidateNormalization (a multi-rune leaf can't carry a
-                // character-range id), so re-run the anonymous-id pass to hand it
-                // a custom-range id, matching a Token built multi-rune from the
-                // start. The pass only touches rules whose id was cleared
-                // (!_idAssigned); every rule whose id survived keeps it.
+                // A Token('é') starts as one rune (U+00E9) and gets that rune's
+                // code point as its id: the character-range id that means "match
+                // exactly this rune." Under FormD the normalization pass splits it
+                // into two runes ("e + U+0301"). A two-rune leaf can't keep a
+                // character-range id, so ValidateNormalization cleared it. Re-run
+                // the anonymous-id pass to give such a rule a fresh custom-range
+                // id, the same kind a Token that was multi-rune from the start
+                // gets. The pass only re-ids rules whose id was cleared
+                // (!_idAssigned). Any rule that kept its id is left alone.
                 visited.Clear();
                 AssignAnonymousIds(this, visited, usedIds, ref nextAnon);
             }
@@ -879,14 +888,14 @@ public abstract class Rule
     /// hasn't been compiled yet, since ids aren't stable until Compile runs.
     /// </summary>
     /// <remarks>
-    /// Two sources, tried in order. First, the rune range (0..0x10FFFF): render
-    /// the code point as a single-rune string, so a leaf with id 0x41 comes back
-    /// as "A" and 0x1F3B8 as "🎸" (surrogate halves return null). Second, a
-    /// per-grammar rule index keyed on every reachable rule: a rule created with
-    /// .As("foo") returns "foo", and an unnamed rule returns its class-derived
-    /// trace name ("And", "OneOrMore", "BetweenInclusive[1..3]").
+    /// NameOf tries three things in order. A name from .As("foo") wins, whatever
+    /// the id is. Otherwise an id in the rune range (0..0x10FFFF) is a Unicode
+    /// code point and returns that one character (0x41 returns "A", 0x1F3B8
+    /// returns "🎸", a lone surrogate half returns null). Otherwise it's an
+    /// unnamed rule and returns the class-derived trace name ("And", "OneOrMore",
+    /// "BetweenInclusive[1..3]").
     /// <para>
-    /// Intended for parse-tree walkers (which see Symbols carrying SymbolIds,
+    /// Intended for parse-tree walkers (which see Symbols with SymbolIds,
     /// not Rule references) and for error-message rendering that wants to quote
     /// a rule's name. Tracing has direct Rule access and doesn't need this path.
     /// </para>
@@ -919,9 +928,8 @@ public abstract class Rule
 
     /// <summary>
     /// Return the user-supplied .As("name") name for <paramref name="id"/>, or
-    /// null if the id has no user name (an anonymous rule, or one whose name
-    /// comes from the rune-text / class-trace-name fallback <see cref="NameOf"/>
-    /// uses). Auto-compiles, since ids aren't stable until Compile runs.
+    /// null if the id has no user name. 
+    /// Auto-compiles, since ids aren't stable until Compile runs.
     /// </summary>
     /// <remarks>
     /// Lets a tree walker distinguish "the user named this rule" from "NameOf
@@ -954,18 +962,19 @@ public abstract class Rule
     /// worrying about ordering relative to the first Parse.
     /// </summary>
     /// <remarks>
-    /// Typed-AST projections use this to dispatch by name without exposing one
-    /// public static Rule field per named production on the grammar class:
+    /// Resolve a name to its id once, then compare ids while walking the tree.
+    /// An id compare is an int compare, so it's faster than Symbol.Is(string),
+    /// which interns and looks up a string for every node. Use IdOf when you'll
+    /// branch on the same name across many nodes. Use Symbol.Is(string) when
+    /// readability matters more than speed.
     /// <code>
     ///     private static readonly SymbolId NumberId =
     ///         MyGrammar.Root.IdOf("number")!.Value;
     ///     ...
     ///     if (child.Id == NumberId) ProjectNumber(...);
     /// </code>
-    /// Equivalent to Symbol.Is(string), but faster on the hot path of a tree
-    /// walker (a SymbolId compare is an int compare, no string intern lookup per
-    /// node). Use IdOf when you'll dispatch on the same name in a loop. Use
-    /// Symbol.Is(string) when readability matters more.
+    /// Looking the id up once also means you don't need a public Rule field for
+    /// every named rule just to recognize its nodes.
     /// </remarks>
     public SymbolId? IdOf(string ruleName)
     {
@@ -984,7 +993,7 @@ public abstract class Rule
     }
 
     // Forward-index counterpart to CollectNames. Only user-supplied
-    // names go in; class-derived trace names are skipped because they
+    // names go in. Class-derived trace names are skipped because they
     // aren't unique (many rules surface as just "And" / "OneOrMore"
     // and we'd lose the round-trip property). The duplicate-name check
     // that runs during Compile guarantees user names are unique per
@@ -998,15 +1007,10 @@ public abstract class Rule
             CollectIdsByName(child, visited, map);
     }
 
-    // Populate the reverse index by walking the sealed rule graph once.
-    // Each entry tracks both the resolved name (the user-supplied .As
-    // name when set, otherwise the class-derived trace name) and whether
-    // the user supplied it. NameOf reads the flag to decide whether the
-    // entry should override the rune-string default for character-range
-    // ids. A user-supplied name on one rule wins over a trace-name
-    // fallback on a different rule that happens to share the same id
-    // (single-rune Tokens use the rune's code point as their Id, so
-    // multiple Token rules in the same grammar share an id).
+    // Build the id -> name reverse index by walking the graph once.
+    // Several rules can share one Id (single-rune Tokens use the rune's
+    // code point as their Id), so when ids collide the second half of the
+    // if lets a user-supplied .As name win over a trace-name fallback.
     private static void CollectNames(Rule r, HashSet<Rule> visited, Dictionary<SymbolId, (string Name, bool IsUserSupplied)> map)
     {
         if (!visited.Add(r)) return;
@@ -1029,15 +1033,6 @@ public abstract class Rule
     /// Run the grammar against an input string with the given options.
     /// Auto-compiles on the first call.
     /// </summary>
-    /// <remarks>
-    /// Routes to the recursive evaluator by default. An alternative-evaluator
-    /// implementation can register itself at startup, after which the routing
-    /// can be flipped process-wide via
-    /// ParseOptions.DefaultUseAlternativeEvaluator or per-call via
-    /// ParseOptions.UseAlternativeEvaluator, so the same fixtures can run through
-    /// either engine without per-test rewrites. Without a registered
-    /// alternative, the flag is inert and every parse takes the recursive path.
-    /// </remarks>
     public ParseResult Parse(string input, ParseOptions options)
     {
         if (input == null) throw new ArgumentNullException(nameof(input));
@@ -1048,7 +1043,7 @@ public abstract class Rule
         // pre-canceled signal. Pre-flight it here.
         if (options.Cancellation != null && options.Cancellation.IsCanceled)
         {
-            string message = BuildBudgetMessage(ParseOutcome.Canceled, abortPos: 0, input, options);
+            string message = BuildBudgetMessage(ParseOutcome.Canceled, abortPosition: 0, input, options);
             return ParseResult.Aborted(ParseOutcome.Canceled, errorCharIndex: 0, message, input, this);
         }
         return options.ResolveUseAlternativeEvaluator() && AlternativeEvaluator is { } hook
@@ -1056,50 +1051,90 @@ public abstract class Rule
             : ParseRecursive(input, options);
     }
 
-    // Module-wide alternative-evaluator hook. Set by an alternative engine
-    // implementation at startup (typically from a test fixture's
-    // OneTimeSetUp). Null in a recursive-only build, which is the default.
-    // The hook receives the rule, the input, and the same ParseOptions
-    // the caller passed to Parse, and returns the same ParseResult shape
-    // ParseRecursive would.
+    // Module-wide hook for an alternative parse engine. InductorParser's
+    // default engine is the recursive-descent evaluator in ParseRecursive.
+    // An alternative engine (for example an in-development state-machine
+    // evaluator) is a separate implementation of the same parsing behavior: given
+    // the same rule, input, and ParseOptions it returns the same ParseResult
+    // the recursive engine would. Keeping it behind a hook lets that engine
+    // run the existing grammars and test fixtures and have its output checked
+    // against the recursive baseline, without rewriting any tests.
+    //
+    // An alternative engine installs itself here at startup (typically from a
+    // test fixture's OneTimeSetUp). The field is null in a normal build, where
+    // the default is recursive-only. When it's set and a parse opts in through
+    // ParseOptions (see Parse), Parse routes through this hook instead of
+    // calling ParseRecursive directly.
     internal static Func<Rule, string, ParseOptions, ParseResult>? AlternativeEvaluator;
 
-    // The recursive evaluator's body. Compare fixtures that need a
-    // guaranteed recursive-engine baseline (so an alternative evaluator's
-    // run can compare its own output against a stable control) call this
-    // directly instead of going through Parse.
+    // The main parser body. Parse routes to whichever engine the options
+    // and the global hook select, so under the alternative engine it returns
+    // that engine's output, not a recursive result. A test that
+    // needs to know what the recursive engine would have done to compare 
+    // against can call this directly.
     internal ParseResult ParseRecursive(string input, ParseOptions options)
     {
-        // Auto-compile preserves whatever form the grammar is already
-        // compiled with. If the caller hasn't compiled yet, fall back
-        // to the FormC default that matches Compile()'s zero-argument
-        // overload. This avoids a spurious form-conflict throw when a
-        // grammar was explicitly compiled with a non-FormC form (or
-        // null) and then parsed without re-specifying it.
         if (!_sealed) Compile();
 
-        // Normalize before the lexer sees the input so grammars written
-        // against one composition form also match the other. The common
-        // case (input already in the target form, essentially all typed
-        // and web-sourced text) is usually just a normalization scan. If
-        // normalization returns the original string reference, downstream position
-        // translation is skipped. Null means "skip normalization entirely,"
-        // which trades the safety net for character-exact round-trippability.
-        // The form was committed at Compile time and is part of the
-        // grammar's identity; see Compile(NormalizationForm?) for the rationale.
+        // Normalize the input to the grammar's form so a literal matches the
+        // input even when the two were typed in different Unicode forms (a
+        // precomposed 'é' in the grammar against a decomposed 'e + accent' in
+        // the input).
         NormalizationForm? normalizeInput = _normalizationForm;
-        string parseInput = normalizeInput.HasValue
-            ? input.Normalize(normalizeInput.Value)
-            : input;
+        string parseInput;
+        if (normalizeInput.HasValue)
+        {
+            // Input the normalizers reject can't proceed: an unpaired
+            // UTF-16 surrogate (ill-formed UTF-16), or U+FFFE (a
+            // noncharacter .NET's string.Normalize refuses, matched here
+            // so every runtime agrees). The parser scans
+            // for it directly rather than relying on the runtime's
+            // string.Normalize to throw, because not every runtime throws:
+            // .NET's does, but Unity's Mono returns the string unchanged,
+            // which would let ill-formed input flow on into the lexer. The
+            // scan turns it into a MalformedInput result positioned at the
+            // offending character, with a message the author can localize
+            // via ParseOptions.MalformedInputTemplate, so a non-English app
+            // reports it the same way it reports every other failure.
+            // Callers that deliberately want surrogate-bearing input as
+            // tokens opt out with Compile(null), which skips normalization
+            // and never runs the scan.
+            int scanBadIndex = UnicodeNormalization.FindFirstUnnormalizableIndex(input);
+            if (scanBadIndex >= 0)
+            {
+                string scanMessage = BuildMalformedInputMessage(scanBadIndex, input, options);
+                return ParseResult.MalformedInput(scanBadIndex, scanMessage, input, this);
+            }
+            try
+            {
+                parseInput = UnicodeNormalization.Normalize(input, normalizeInput.Value);
+            }
+            catch (ArgumentException)
+            {
+                // Backstop: the runtime rejected something the scan doesn't
+                // know about. The scan covers everything .NET's Normalize
+                // is known to throw on, so no input reaches this path on a
+                // known runtime. If one ever does, report MalformedInput at
+                // offset 0 rather than letting the exception escape the
+                // ParseResult model.
+                string malformedMessage = BuildMalformedInputMessage(0, input, options);
+                return ParseResult.MalformedInput(0, malformedMessage, input, this);
+            }
+        }
+        else
+        {
+            parseInput = input;
+        }
 
         // Per-parse context every Symbol the engine builds will hold
         // a reference to. Lets Symbol.SourceRange / Symbol.SourceText
         // translate parseInput offsets back to original-input
-        // coordinates without the consumer having to thread the
+        // coordinates without the consumer having to pass the
         // ParseResult.
         var parseContext = new ParseContext(input, parseInput, normalizeInput, this);
         Lexer lexer = new Lexer(parseInput, parseContext, options.TraceSink, options.TraceLevel);
         lexer.ConfigureOptions(options);
+        
         Symbol? result;
         // Pre-allocate a root list so a root with FlattenType.Flatten
         // has somewhere to merge into. If root is FlattenType.Preserve,
@@ -1113,51 +1148,38 @@ public abstract class Rule
         }
         catch (ParseBudgetExceeded budget)
         {
-            // The throw rode up through every active rule's transaction
-            // (the `using var transaction` in Rule.TryParse), which
-            // rolled the lexer position back frame by frame, so
-            // lexer.Position is now back at 0. An active lookahead Probe
-            // also restores the failure tracker on its way out (see
-            // Lexer.Probe), so lexer.DeepestFailurePosition would no longer
-            // reflect how far the probe explored either. Lexer.ThrowBudgetExceeded
-            // freezes the "how far did the parser get" reading at throw
-            // time (Math.Max(DeepestFailurePosition, Position) before any
-            // restoration runs) and parks it on the exception, so we
-            // read it back unchanged here.
-            int abortRaw = budget.DeepestPositionAtAbort;
-            int abortPos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, abortRaw, normalizeInput);
-            return ParseResult.Aborted(budget.Outcome, abortPos, BuildBudgetMessage(budget.Outcome, abortPos, input, options), input, this);
+            // By now the throw has unwound through every rule's transaction,
+            // rolling the lexer's position and failure tracker back, so the
+            // lexer no longer knows how far the parse got. ThrowBudgetExceeded
+            // captured that distance at throw time and parked it on the
+            // exception, so read it from there instead of off the lexer.
+            int abortPositionInParseInput = budget.DeepestPositionAtAbort;
+            int abortPosition = NormalizedPositionMap.TranslateToOriginal(input, parseInput, abortPositionInParseInput, normalizeInput);
+            return ParseResult.Aborted(budget.Outcome, abortPosition, BuildBudgetMessage(budget.Outcome, abortPosition, input, options), input, this);
         }
         if (result == null && rootList.Count == 0)
         {
-            var pos = Math.Max(lexer.DeepestFailurePosition, lexer.Position);
-            int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, normalizeInput);
-            return ParseResult.Failed(failurePos, BuildErrorMessage(lexer.DeepestFailureMessage, pos, parseInput, failurePos, input, options), input, this);
+            var positionInParseInput = Math.Max(lexer.DeepestFailurePosition, lexer.Position);
+            int failurePosition = NormalizedPositionMap.TranslateToOriginal(input, parseInput, positionInParseInput, normalizeInput);
+            return ParseResult.Failed(failurePosition, BuildErrorMessage(lexer.DeepestFailureMessage, positionInParseInput, parseInput, failurePosition, input, options), input, this);
         }
         if (!options.AllowTrailingInput && !lexer.IsEof)
         {
-            // Trailing-input branch: the parse succeeded but the rule
-            // didn't claim everything. Report at lexer.Position (the
-            // start of the unconsumed tail), not the high-water
-            // DeepestFailurePosition that the two branches above use.
-            // Position is meaningful and DeepestFailurePosition is
-            // from a sibling alternative the parser deliberately
-            // abandoned. Same reason for passing customMessage: null
-            // instead of DeepestFailureMessage. A WithError on a
-            // rolled-back rule isn't relevant to "you have leftover
-            // input"; let the standard PositionalErrorTemplate
-            // describe the trailing tail.
-            int pos = lexer.Position;
-            int failurePos = NormalizedPositionMap.TranslateToOriginal(input, parseInput, pos, normalizeInput);
-            return ParseResult.Failed(failurePos, BuildErrorMessage(customMessage: null, pos, parseInput, failurePos, input, options), input, this);
+            // The parse succeeded but left input unconsumed. Report at
+            // lexer.Position, the start of the leftover, not the
+            // DeepestFailurePosition the two branches above use: that
+            // high-water mark belongs to an alternative the parse abandoned
+            // and has nothing to do with the trailing tail. For the same
+            // reason pass customMessage: null and let the default template
+            // describe the tail, rather than a WithError from a rolled-back
+            // rule.
+            int positionInParseInput = lexer.Position;
+            int failurePosition = NormalizedPositionMap.TranslateToOriginal(input, parseInput, positionInParseInput, normalizeInput);
+            return ParseResult.Failed(failurePosition, BuildErrorMessage(customMessage: null, positionInParseInput, parseInput, failurePosition, input, options), input, this);
         }
-        // Three success shapes:
-        //   * Preserve root: result is its Symbol, rootList is empty.
-        //     Symbols = [result].
-        //   * Flatten root: result is Discarded, rootList has content.
-        //     Symbols = rootList.
-        //   * Delete root: result is Discarded, rootList is empty.
-        //     Symbols = [] (unusual but consistent).
+        // A real (non-Discarded) result is a Preserve root, returned as a
+        // single-element list. The else covers both a Flatten root (rootList
+        // holds the flattened children) and a Delete root (rootList empty).
         IReadOnlyList<Symbol> symbols;
         if (!ReferenceEquals(result, Symbol.Discarded) && result != null)
             symbols = new[] { result };
@@ -1166,102 +1188,126 @@ public abstract class Rule
         return ParseResult.Succeeded(symbols, input, this);
     }
 
-    internal static string BuildBudgetMessage(ParseOutcome outcome, int abortPos, string input, ParseOptions options)
+    internal static string BuildBudgetMessage(ParseOutcome outcome, int abortPosition, string input, ParseOptions options)
     {
         switch (outcome)
         {
             case ParseOutcome.Timeout:
                 return FormatTemplate(options.TimeoutAbortTemplate,
-                    PositionPlaceholders(abortPos, input),
+                    PositionPlaceholders(abortPosition, input),
                     ("timeout", () => options.Timeout.ToString()));
             case ParseOutcome.RuleCountLimitExceeded:
                 return FormatTemplate(options.RuleCountLimitAbortTemplate,
-                    PositionPlaceholders(abortPos, input),
+                    PositionPlaceholders(abortPosition, input),
                     ("limit", () => options.RuleCountLimit.ToString()));
             case ParseOutcome.DepthLimitExceeded:
                 return FormatTemplate(options.DepthLimitAbortTemplate,
-                    PositionPlaceholders(abortPos, input),
+                    PositionPlaceholders(abortPosition, input),
                     ("limit", () => options.MaxDepth.ToString()));
             case ParseOutcome.Canceled:
                 return FormatTemplate(options.CancellationAbortTemplate,
-                    PositionPlaceholders(abortPos, input));
+                    PositionPlaceholders(abortPosition, input));
             default:
-                // ParseOutcome values outside the four budget kinds shouldn't
-                // reach the abort path. The "Parse aborted." fallback stays
-                // hardcoded because there's no template to consult and no
-                // placeholders that would matter.
-                return "Parse aborted.";
+                // The four cases above are the only outcomes that abort a parse,
+                // and ParseBudgetExceeded is only ever thrown with one of them, so
+                // this branch is unreachable. Throw if a new ParseOutcome is
+                // ever wired into the abort path without a case here, rather than
+                // returning a vague string that hides the omission.
+                throw Invariant.Fail(
+                    $"BuildBudgetMessage reached its default branch with outcome '{outcome}'.");
         }
     }
 
-    // Every engine ends up here for the generic-failure path so default
-    // error messages stay consistent and ParseOptions templates apply
-    // uniformly. customMessage is the deepest-failure message the engine
-    // recorded (lexer.DeepestFailureMessage on the recursive path).
-    // posInParseInput indexes into parseInput (the post-normalization input)
-    // for the EOF check and the {character} substitution; failurePos is
-    // the same position translated back to the original input for the
-    // user-facing placeholders.
-    internal static string BuildErrorMessage(string? customMessage, int posInParseInput, string parseInput, int failurePos, string input, ParseOptions options)
+    // The generic-failure path both engines funnel into. Its two int
+    // parameters are different coordinate systems: positionInParseInput
+    // indexes into parseInput (post-normalization) for the EOF check and the
+    // {character} lookup. failurePosition is that position mapped back to the
+    // original input for the user-facing placeholders.
+    internal static string BuildErrorMessage(string? customMessage, int positionInParseInput, string parseInput, int failurePosition, string input, ParseOptions options)
     {
-        // Prefer the error message the user attached to the rule that failed
-        // at the deepest position (via .WithError("...")). That's the
-        // "expected a setting name"-style message grammar authors write for
-        // the spots most likely to be where a user goes wrong. Fall back to
-        // the generic position-based message only when no rule at the
-        // deepest failure had a WithError set.
+        // customMessage is a rule's .WithError("...") text for the deepest
+        // failure. When set it wins over the generic message, but it still goes
+        // through WithErrorTemplate so the author's text picks up the failure
+        // position ("... at line L, column C.") the same way the mechanical
+        // messages do. A caller who wants the raw text back sets
+        // WithErrorTemplate to "{message}". This branch is checked before the
+        // EOF one below, so a WithError at end of input is wrapped too. The
+        // position placeholders resolve to the end position.
         if (customMessage != null)
-            return customMessage;
+            return FormatTemplate(options.WithErrorTemplate,
+                PositionPlaceholders(failurePosition, input),
+                ("message", () => customMessage));
 
-        // posInParseInput == parseInput.Length happens when the grammar
-        // wanted more characters than the input had. Example: parsing
-        // "setting = 5" against a grammar that requires a trailing ';'.
-        // The lexer reaches EOF, the rule for ';' fails and records the
-        // failure at the end position. We have to handle this both to
-        // give a useful error message ("end of input" rather than
-        // "unexpected ';'" pointing at a character that isn't there) and
-        // to avoid the parseInput[pos] indexing on the next line throwing
-        // IndexOutOfRangeException.
-        if (posInParseInput >= parseInput.Length)
+        // At EOF (positionInParseInput == parseInput.Length) there's no
+        // character to point at, so give an "end of input" message instead of
+        // indexing past the end of parseInput on the default path below.
+        if (positionInParseInput >= parseInput.Length)
             return FormatTemplate(options.EndOfInputErrorTemplate,
-                PositionPlaceholders(failurePos, input));
-        // Default path: the parse failed at a real character in the input.
-        // Render the positional template with the offending character and
-        // its position. {character} reads from the original input rather
-        // than parseInput so the message quotes what the user typed, even
-        // when normalization rewrote it (FormKC folds fullwidth, ligatures,
-        // and math letters to ASCII; the user is still looking at the
-        // unfolded form). The EOF guard above ensures failurePos is in
-        // range for the GetNextTextElement call.
-        //
-        // Route the character through DisplayEscape so a control / line-
-        // separator char (a bare LF, U+2028, etc.) renders as U+XXXX
-        // rather than splicing a raw newline into the one-line error
-        // message and splitting it across two lines in a log or terminal.
-        // This is the same Cc / Zl / Zp escape every other diagnostic-
-        // render site uses (TokenSet.ToString, PrintTree, the Lexer.Read
-        // trace); printable characters (including fullwidth, ligatures,
-        // and supplementary-plane runes) still render verbatim.
+                PositionPlaceholders(failurePosition, input));
+        // {character} reads from the original input, not parseInput, so the
+        // message quotes what the user actually typed even when normalization
+        // rewrote it (FormKC converts fullwidth, ligatures, and math letters to
+        // ASCII). DisplayEscape renders a control or line-separator char (a bare
+        // LF, U+2028) as U+XXXX rather than inserting a raw newline into the
+        // one-line message. Printable characters still render verbatim.
         return FormatTemplate(options.PositionalErrorTemplate,
-            PositionPlaceholders(failurePos, input),
+            PositionPlaceholders(failurePosition, input),
             ("character", () =>
             {
-                string element = StringInfo.GetNextTextElement(input, failurePos);
-                return DisplayEscape.Escape(element, 0, element.Length);
+                int elementLength = GraphemeSegmentation
+                    .GetLengthOfFirstExtendedGraphemeCluster(input.AsSpan(failurePosition));
+                return DisplayEscape.Escape(input, failurePosition, elementLength);
             }));
     }
 
-    // The four position placeholders shared by every default template.
-    // {charIndex} is the failure position in chars (UTF-16 code units),
-    // matching ParseResult.ErrorCharIndex. {tokenIndex} mirrors
-    // ErrorTokenIndex. {line} and {column} are zero-based, matching
-    // ErrorLine and ErrorColumn (Language Server Protocol convention).
+    // Build the message for a MalformedInput result. Same template
+    // machinery as BuildErrorMessage: the shared position placeholders
+    // ({charIndex} / {tokenIndex} / {line} / {charColumn} / {tokenColumn} /
+    // {lineNumber} / {charColumnNumber} / {tokenColumnNumber}) plus a {character}
+    // placeholder that renders the offending element through DisplayEscape, so a
+    // lone surrogate comes out as "U+D800" rather than a raw, unrenderable code
+    // unit. The default MalformedInputTemplate mentions {lineNumber} /
+    // {tokenColumnNumber} and {character}, so building it pays one line scan plus
+    // one grapheme-cluster count on the failure path.
+    internal static string BuildMalformedInputMessage(int badIndex, string input, ParseOptions options)
+    {
+        return FormatTemplate(options.MalformedInputTemplate,
+            PositionPlaceholders(badIndex, input),
+            ("character", () =>
+            {
+                int elementLength = GraphemeSegmentation
+                    .GetLengthOfFirstExtendedGraphemeCluster(input.AsSpan(badIndex));
+                return DisplayEscape.Escape(input, badIndex, elementLength);
+            }));
+    }
+
+    // The position placeholders shared by every default template:
+    //   {charIndex}          - failure position in chars (UTF-16 code units),
+    //                          matching ParseResult.ErrorCharIndex.
+    //   {tokenIndex}         - matching ParseResult.ErrorTokenIndex.
+    //   {line}               - zero-based, matching ParseResult.ErrorLine.
+    //   {charColumn}         - zero-based char column, matching ParseResult.ErrorCharColumn.
+    //   {tokenColumn}        - zero-based token (grapheme) column, matching
+    //                          ParseResult.ErrorTokenColumn.
+    //   {lineNumber}         - one-based ({line} + 1), for human-facing messages.
+    //   {charColumnNumber}   - one-based char column ({charColumn} + 1).
+    //   {tokenColumnNumber}  - one-based token column ({tokenColumn} + 1).
+    // The zero-based placeholders match the ParseResult fields. The *Number
+    // variants are the same positions counted from 1, which is what a person
+    // reading an editor expects. The char columns ({charColumn} / {charColumnNumber})
+    // follow the Language Server Protocol's UTF-16 code-unit convention. The
+    // token columns ({tokenColumn} / {tokenColumnNumber}) count grapheme
+    // clusters, so an emoji or combining sequence earlier on the line counts as
+    // one, matching the character a person sees. The default messages use
+    // {lineNumber} and {tokenColumnNumber} for that reason. The fields stay as
+    // they are. Only the *Number placeholders shift by one.
     //
-    // The Func<string> delegates are deliberate: each token-index /
-    // line-column conversion walks the input once, so we only want to pay
-    // for the ones whose placeholder actually appears in the template the
-    // caller chose. The default templates only use {charIndex}, so by
-    // default we never run the O(n) scans.
+    // The Func<string> delegates exist because each token-index / line-column /
+    // token-column conversion walks the input once, so we only want to pay for
+    // the ones whose placeholder actually appears in the template the caller
+    // chose. The default templates use {lineNumber} and {tokenColumnNumber}, so a
+    // failed parse pays one line scan plus one grapheme-cluster count when its
+    // message is built.
     private static (string Key, Func<string> ValueProvider)[] PositionPlaceholders(int charIndex, string input)
     {
         return new (string, Func<string>)[]
@@ -1273,21 +1319,37 @@ public abstract class Rule
                 SourcePositionConverter.ToLineColumn(input, charIndex, out int line, out _);
                 return line.ToString();
             }),
-            ("column", () =>
+            ("charColumn", () =>
             {
                 SourcePositionConverter.ToLineColumn(input, charIndex, out _, out int column);
                 return column.ToString();
             }),
+            ("tokenColumn", () => SourcePositionConverter.ToTokenColumn(input, charIndex).ToString()),
+            ("lineNumber", () =>
+            {
+                SourcePositionConverter.ToLineColumn(input, charIndex, out int line, out _);
+                return (line + 1).ToString();
+            }),
+            ("charColumnNumber", () =>
+            {
+                SourcePositionConverter.ToLineColumn(input, charIndex, out _, out int column);
+                return (column + 1).ToString();
+            }),
+            ("tokenColumnNumber", () => (SourcePositionConverter.ToTokenColumn(input, charIndex) + 1).ToString()),
         };
     }
 
     // Substitute {name}-style placeholders in a user-supplied template
-    // string. Each placeholder's value is computed lazily via its
-    // Func<string> only when the placeholder actually appears in the
-    // template, so callers don't pay for an O(n) rune-index walk if their
-    // template only mentions {charIndex}. Unknown placeholder names pass
-    // through verbatim, so a typo in a custom template is visible in the
-    // resulting message rather than throwing on every parse failure.
+    // string. positionPlaceholders are the ones every template shares
+    // ({charIndex}, {tokenIndex}, {line}, {charColumn}, {tokenColumn}, and the
+    // one-based {lineNumber} / {charColumnNumber} / {tokenColumnNumber}).
+    // extraPlaceholders are the
+    // ones specific to one template ({timeout}, {limit}, {character}), which is
+    // why it's params: the templates that need none pass nothing. Each
+    // placeholder's value is computed lazily via its Func<string> only when the
+    // placeholder actually appears in the template, so callers don't pay for an
+    // O(n) rune-index walk if their template only mentions {charIndex}. Unknown
+    // placeholder names pass through verbatim.
     private static string FormatTemplate(
         string template,
         (string Key, Func<string> ValueProvider)[] positionPlaceholders,
@@ -1319,7 +1381,7 @@ public abstract class Rule
     // TryParseRule inherit catastrophic-backtracking protection with no
     // extra work.
     //
-    // TryParse also normalizes the subclass's view: it computes
+    // TryParse also normalizes what the subclass deals with: it computes
     // effectiveFlattenType (collapsing PreserveAllSymbols), and makes
     // outputSymbols non-null only in Flatten mode. Subclasses don't have
     // to re-check FlattenType or PreserveAllSymbols, they implement
@@ -1329,8 +1391,8 @@ public abstract class Rule
         lexer.Budget.EnterRule();
         try
         {
-            // effectiveFlattenType collapses FlattenType +
-            // PreserveAllSymbols. Debug mode treats every rule
+            // effectiveFlattenType collapses FlattenType and
+            // PreserveAllSymbols. PreserveAllSymbols treats every rule
             // as Preserve.
             FlattenType effectiveFlattenType =
                 lexer.PreserveAllSymbols ? FlattenType.Preserve : FlattenType;
@@ -1341,12 +1403,12 @@ public abstract class Rule
             else if (outputSymbols == null)
             {
                 // A rule with FlattenType.Flatten expects its caller to pass a list
-                // for it to write children into. When the caller passed
-                // null (Not/Peek throwing away inner's output, a Flatten
-                // root that didn't get a rootList, etc.), we allocate a
-                // throwaway list here. Inner writes into it but nobody
-                // reads it, and the list goes out of scope when this call
-                // returns. Keeps subclasses simple: they always get a
+                // for it to write children into. When the caller passed null
+                // because it has nowhere to put the children (Not/Peek throwing
+                // away inner's output, a Flatten root that didn't get a rootList,
+                // etc.), we allocate a throwaway list here. Inner writes into it
+                // but nobody reads it, and the list goes out of scope when this
+                // call returns. Keeps subclasses simple: they always get a
                 // list to write into.
                 outputSymbols = new List<Symbol>();
             }
@@ -1355,15 +1417,8 @@ public abstract class Rule
             Symbol? result;
             if (OpensTransaction)
             {
-                // The rule-owned outer transaction is automatic. Opening
-                // it here instead of in every TryParseRule means a
-                // subclass can't forget the Commit on its success path:
-                // Rule.TryParse commits iff TryParseRule returns a
-                // non-null Symbol, and every non-commit exit (failure
-                // return, a thrown exception, a tripped budget) rolls
-                // back through the `using`. The transaction opens inside
-                // this `try`, after Budget.EnterRule, so a depth-limit
-                // throw from EnterRule can't leak a transaction.
+                // Opening the outer transaction here, instead of in every
+                // TryParseRule, means a subclass can't forget to commit
                 using var transaction = lexer.BeginTransaction();
                 result = TryParseRule(lexer, transaction.StartPosition, effectiveFlattenType, outputSymbols);
                 if (result != null)
@@ -1402,122 +1457,139 @@ public abstract class Rule
         }
     }
 
-    // The matching method every subclass implements. Contract:
-    //   * Rule.TryParse owns the outer transaction. It opens one before
-    //     calling this method and commits it iff this method returns a
-    //     non-null Symbol, so a subclass never calls BeginTransaction or
-    //     Commit for its own outer scope and can't forget the commit.
-    //     `startPosition` is the lexer position captured the moment that
-    //     transaction opened. Use it for failure anchors and for the
-    //     ReadOnlyMemory span of any Symbol you build.
-    //   * On failure: return null. Rule.TryParse's transaction rolls the
-    //     lexer back automatically, and Rule.TryParse truncates any
-    //     partial writes to outputSymbols for you. Call
-    //     lexer.RecordFailure() (or lexer.RecordCompositeFailure() for a
-    //     composite's own .WithError) so the "deepest failure wins"
-    //     error-reporting heuristic can surface your rule's message.
-    //   * On success: return a non-null Symbol. What exactly you return
-    //     depends on `effectiveFlattenType`:
-    //       - Delete: emit nothing, return Symbol.Discarded.
-    //       - Flatten: append each Symbol you would have collected to
-    //         `outputSymbols` (the caller's list, guaranteed non-null)
-    //         and return Symbol.Discarded. For a composite, that's each
-    //         matched child's Symbol. For a leaf, that's the leaf Symbol
-    //         itself.
-    //       - Preserve: build a Symbol around your matched
-    //         children (or leaf content) and return it.
-    //   * For speculative lookahead inside the rule (positive or negative
-    //     lookahead, probing a stopper), open a lexer.BeginProbe() rather
-    //     than a transaction: a Probe restores the failure tracker and the
-    //     subtree-extent mark on rollback as well as the position, so an
-    //     off-path probe failure can't leak into error reporting.
-    //   * `outputSymbols` is the caller's list in Flatten mode. It's
-    //     non-null by contract (callers of Flatten rules are required to
-    //     provide one), and null otherwise.
-    //   * Subclass construction: pass child rules to the base constructor
-    //     via `base(flattenType, children)`. The `Children` property is
-    //     populated automatically and Compile walks it to assign ids and
-    //     seal the graph.
-    // `protected` so a Rule subclass in any assembly overrides it with a
-    // plain `protected override`. It's never called cross-instance from
-    // outside the type (Rule.TryParse invokes it on `this`; a rule that
-    // drives another rule goes through ParseChild), so it
-    // needs no `internal` half. The built-in rules and external subclasses
-    // both compile from identical source against this declaration. See
-    // src/InductorParser.ExternalContractTests for external subclasses, and
-    // the BuiltIn/ linked copies of the built-in rules, that exercise this.
+    /// <summary>
+    /// The matching method every subclass implements.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Rule.TryParse owns the outer transaction. It opens one before calling
+    /// this method and commits it only when this method returns a non-null
+    /// Symbol, so a subclass never calls BeginTransaction or Commit for its own
+    /// outer scope and can't forget the commit. `startPosition` is the lexer
+    /// position captured the moment that transaction opened. Use it for failure
+    /// error positions and for the ReadOnlyMemory span of any Symbol you build.
+    /// </para>
+    /// <para>
+    /// On failure, return null. Rule.TryParse's transaction rolls the lexer back
+    /// automatically and truncates any partial writes to outputSymbols for you.
+    /// Call lexer.RecordFailure() or lexer.RecordCompositeFailure() so the "deepest failure wins"
+    /// error-reporting can surface your rule's message.
+    /// </para>
+    /// <para>
+    /// If your rule matches stored expected text, record failure positions only
+    /// at whole-grapheme boundaries of that text: a partially matched grapheme
+    /// isn't progress. Canonical normalization changes a grapheme's rune count
+    /// but not its boundaries, so whole-grapheme positions come out the same
+    /// whichever form the grammar was compiled with, while rune-level
+    /// positions don't. LiteralRule's FailurePosition helper shows the pattern.
+    /// See docs/ErrorArchitecture.md "Where each rule records its failure".
+    /// </para>
+    /// <para>
+    /// On success, return a non-null Symbol whose form depends on
+    /// `effectiveFlattenType`. For Delete, emit nothing and return
+    /// Symbol.Discarded. For Flatten, append each Symbol you would have
+    /// collected to `outputSymbols` (the caller's list, guaranteed non-null) and
+    /// return Symbol.Discarded. For a composite that would be each child's
+    /// Symbol, and for a leaf it's the leaf Symbol itself. For Preserve, build a
+    /// Symbol that wraps your matched child Symbols (or, for a leaf, the span of
+    /// input you consumed) and return it.
+    /// </para>
+    /// <para>
+    /// To look at what comes next without consuming it,
+    /// open a lexer.BeginProbe() and read inside it. 
+    /// The Probe rolls the position back when disposed without a commit, but it
+    /// also throws away any failures recorded inside it, so a peek that fails
+    /// doesn't show up in the final error message. 
+    /// </para>
+    /// <para>
+    /// `outputSymbols` is non-null only in Flatten mode, where it's the
+    /// caller's list for you to append your child Symbols to. In Delete and
+    /// Preserve mode it's null.
+    /// </para>
+    /// <para>
+    /// If your rule wraps child rules, pass them to the base constructor as
+    /// `base(flattenType, children)`. The base stores them in the `Children`
+    /// property, which is how Compile discovers the grammar: it walks `Children`
+    /// to assign ids and seal every reachable rule. A child you don't pass to
+    /// base is invisible to Compile.
+    /// </para>
+    /// </remarks>
     protected abstract Symbol? TryParseRule(Lexer lexer, int startPosition, FlattenType effectiveFlattenType, List<Symbol>? outputSymbols);
 
-    // Whether Rule.TryParse opens an automatic outer transaction around
-    // this rule's TryParseRule. True for every rule that speculatively
-    // reads input, which is almost all of them: a rule that reads tokens
-    // and then fails must be able to roll back. EofRule and LateBoundRule
-    // set this false in their constructors. Eof never moves the cursor,
-    // and LateBound delegates wholly to its target rule, which owns its
-    // own transaction. Skipping the transaction for those two keeps the
-    // recursion hot path (LateBound sits at every recursive grammar
-    // reference) free of a transaction it would never use.
-    //
-    // A plain field, not a virtual property: Rule.TryParse reads it on
-    // every rule invocation, so a virtual dispatch there would be
-    // hot-path overhead. A field read plus a well-predicted branch is
-    // effectively free.
-    //
-    // `protected internal` so external Rule subclasses can also opt out
-    // of the auto-managed transaction when they own their own probe /
-    // transaction scope. The default (true) is what almost every shape
-    // wants.
+    /// <summary>
+    /// Whether Rule.TryParse opens an automatic outer transaction around
+    /// this rule's TryParseRule. True for every rule that speculatively
+    /// reads input, which is almost all of them: a rule that reads tokens
+    /// and then fails must be able to roll back. EofRule and LateBoundRule
+    /// set this false in their constructors. Eof never moves the cursor,
+    /// and LateBound delegates wholly to its target rule, which owns its
+    /// own transaction.
+    /// </summary>
+    /// <remarks>
+    /// A plain field, not a virtual property: Rule.TryParse reads it on
+    /// every rule invocation, so a virtual dispatch there would be
+    /// hot-path overhead. A field read plus a well-predicted branch is
+    /// effectively free.
+    /// <para>
+    /// `protected internal` so external Rule subclasses can also opt out
+    /// of the auto-managed transaction when they own their own probe /
+    /// transaction scope. The default (true) is what almost every shape
+    /// wants.
+    /// </para>
+    /// </remarks>
     protected internal bool OpensTransaction = true;
 
-    // Helper for a rule to run an inner rule with the transaction and budget
-    // wrapping every rule gets, forwarding `outputSymbols` to it. Used both by
-    // composites assembling their children (And, Or, Alias, ...) and by rules
-    // that drive an inner rule as a lookahead or subroutine (Not, Peek,
-    // ScanUntil, WithinToken).
-    //
-    // `outputSymbols` is the list the inner writes its Flatten-mode children
-    // into: the caller's collecting list, or null to discard them (a
-    // lookahead or probe passes null). The caller doesn't have to gate this
-    // list on the inner's FlattenType. TryParse nulls it for any inner whose
-    // effective FlattenType isn't Flatten, so handing a list to a Preserve or
-    // Delete inner is harmless.
-    //
-    // Forwards to the internal TryParse so user-defined rules don't need
-    // internal access to the parse entry point.
+    /// <summary>
+    /// Helper for a rule to run an inner rule with the transaction and budget
+    /// wrapping every rule gets, forwarding `outputSymbols` to it. Used both by
+    /// composites assembling their children (And, Or, Alias, ...) and by rules
+    /// that drive an inner rule as a lookahead or subroutine (Not, Peek,
+    /// ScanUntil, WithinToken).
+    /// </summary>
+    /// <remarks>
+    /// Pass the list the inner should append its Flatten-mode children to, or
+    /// null to discard them (lookahead and probes pass null). You don't have to
+    /// check the inner's FlattenType first: TryParse ignores the list unless the
+    /// inner is Flatten, so passing one to a Preserve or Delete inner is harmless.
+    /// </remarks>
     protected Symbol? ParseChild(Rule child, Lexer lexer, List<Symbol>? outputSymbols)
         => child.TryParse(lexer, outputSymbols);
 
-    // Builds the composite Symbol a rule returns from TryParseRule, taking
-    // ownership of the children collection instead of copying it. Prefer this
-    // over `new Symbol(Id, FlattenType, children, ...)` on the parse hot path.
-    // The public constructor defensively copies the collection because it can't
-    // trust an arbitrary caller to stop touching it, but a rule that built
-    // `children` fresh for this one match and hands it straight off here skips
-    // that array copy, paying only to publish the existing collection read-only.
-    //
-    // The promise the caller makes: `children` must be a collection this rule
-    // built for this match and will never read or mutate again. The returned
-    // Symbol wraps it directly (a List or array goes through AsReadOnly, so
-    // Symbol.Children still can't be cast back to a mutable type). Keep a
-    // reference and mutate the collection after this call and you've mutated the
-    // supposedly-immutable tree, so don't. When you can't make that promise, use
-    // the public Symbol constructor, which copies.
+    /// <summary>
+    /// Builds the composite Symbol a rule returns from TryParseRule, taking
+    /// ownership of the children collection instead of copying it. Prefer this
+    /// over `new Symbol(Id, FlattenType, children, ...)` on the parse hot path.
+    /// That public constructor defensively copies the collection because it can't
+    /// trust an arbitrary caller to stop touching it, but a rule that built
+    /// `children` fresh for this one match and hands it straight off here skips
+    /// that array copy, paying only to publish the existing collection read-only.
+    /// </summary>
+    /// <remarks>
+    /// `children` must be a collection this rule
+    /// built for this match and will never read or mutate again. The returned
+    /// Symbol wraps it directly (a List or array goes through AsReadOnly, so
+    /// Symbol.Children still can't be cast back to a mutable type). When you can't make that promise, use
+    /// the public Symbol constructor, which copies.
+    /// </remarks>
     protected Symbol CreateCompositeFromOwnedChildren(IReadOnlyList<Symbol>? children, ReadOnlyMemory<char> consumedSpan, ParseContext? context)
         => Symbol.FromOwnedChildren(Id, FlattenType, children, consumedSpan, context);
 
-    // Subclass hook for Compile-time normalization-form validation. Each
-    // rule that holds user-supplied text the parser will compare against
-    // normalized input overrides this to walk its own data: it reports any
-    // text whose normalization can't be represented under the chosen form
-    // via reporter.ReportOffender, and may convert its own stored text or
-    // set to the normalized form in place (those mutations are the rule
-    // writing its own private state, so they don't go through the
-    // reporter). Default no-op covers composites, zero-width predicates,
-    // and any rule whose match doesn't depend on stored fixed text.
-    // Compile's static walker (below) calls this on every reachable rule
-    // and recurses into Children. Public so a user-defined rule that holds
-    // fixed text can participate in the same validation the built-in
-    // literal rules do.
+    /// <summary>
+    /// Subclass hook for Compile-time normalization-form validation. Each
+    /// rule that holds user-supplied text the parser will compare against
+    /// normalized input overrides this to walk its own data: it reports any
+    /// text whose normalization can't be represented under the chosen form
+    /// via reporter.ReportOffender, and may convert its own stored text or
+    /// set to the normalized form in place (those mutations are the rule
+    /// writing its own private state, so they don't go through the
+    /// reporter).
+    /// </summary>
+    /// <remarks>
+    /// Default no-op: a rule with no fixed text of its own has nothing to
+    /// validate.
+    /// Compile's static walker (below) calls this on every reachable rule
+    /// and recurses into Children. 
+    /// </remarks>
     protected virtual void ValidateNormalization(
         NormalizationForm form,
         INormalizationReporter reporter)
@@ -1525,24 +1597,38 @@ public abstract class Rule
         // default no-op
     }
 
-    // Helper for rules that have one fixed expected string. Tries to
-    // convert `text` to `form`. Returns the normalized text on success.
-    // On ArgumentException (in practice an unpaired surrogate, which
-    // string.Normalize rejects regardless of which form was requested),
-    // reports the failure to the reporter (which surfaces it as the thrown
-    // exception's InnerException and records a matching offender), then
-    // returns null. Callers that get a non-null result should replace
-    // their stored expected text with it; the auto-convert behavior makes
-    // the rule's match-time view canonically equivalent to the user's
-    // typed text under any form.
+    /// <summary>
+    /// Helper for rules that have one fixed expected string. Tries to
+    /// convert `text` to `form`. Returns the normalized text on success.
+    /// </summary>
+    /// <remarks>
+    /// Text that can't be normalized (an unpaired surrogate, or U+FFFE,
+    /// the two things the rejection scan flags) is reported to the
+    /// reporter (which surfaces
+    /// it as the thrown exception's InnerException and records a matching
+    /// offender), and the method returns null. The scan runs before the
+    /// conversion because not every runtime's string.Normalize throws on
+    /// such text, and the catch stays as a backstop for anything a runtime
+    /// rejects beyond the scan. Callers that get a non-null result should
+    /// replace their stored expected text with it. This behavior makes
+    /// the rule's match-time view canonically equivalent to the user's
+    /// typed text under any form.
+    /// </remarks>
     protected static string? TryConvertToForm(
         Rule rule, string text,
         NormalizationForm form,
         INormalizationReporter reporter)
     {
+        int badIndex = UnicodeNormalization.FindFirstUnnormalizableIndex(text);
+        if (badIndex >= 0)
+        {
+            reporter.ReportNormalizeFailure(rule, text,
+                UnicodeNormalization.CreateUnnormalizableTextException(text, badIndex));
+            return null;
+        }
         try
         {
-            return text.Normalize(form);
+            return UnicodeNormalization.Normalize(text, form);
         }
         catch (ArgumentException exception)
         {
@@ -1557,33 +1643,34 @@ public abstract class Rule
         _idAssigned = true;
     }
 
-    // Protected hook for a single-rune leaf rule that wants its id to be
-    // the rune's code point (the "id == rune" shape that gives
-    // Symbol.Is(Token('x')) its meaning). Encapsulates the safe-assignment
-    // rule so a user-defined rule doesn't have to know about the internal
-    // id machinery: the assignment is skipped when the user already pinned
-    // an explicit SymbolId via .As(SymbolId) or named the rule via
-    // .As(string), since their explicit or name-hashed id is what keeps
-    // numbering stable. GraphemeRule (the built-in Token) uses this; a
-    // third-party single-rune leaf can use it too.
+    /// <summary>
+    /// Protected hook for a single-rune leaf rule that wants its id to be
+    /// the rune's code point (the "id == rune" shape that gives
+    /// Symbol.Is(Token('x')) its meaning).
+    /// </summary>
+    /// <remarks>
+    /// Encapsulates the logic so a user-defined rule doesn't have to know about the internal
+    /// id machinery: the assignment is skipped when the user already set
+    /// an explicit SymbolId via .As(SymbolId) or named the rule via
+    /// .As(string). GraphemeRule uses this, and a
+    /// third-party single-rune leaf can use it too.
+    /// </remarks>
     protected void SetLeafRuneId(int runeValue)
     {
         if (!IsUserSymbolIdExplicit && Name == null)
             SetIdInternal(new SymbolId(runeValue));
     }
 
-    // Counterpart to SetLeafRuneId for a single-rune leaf rule whose stored
-    // text turned multi-rune during the normalization pass (Token('é'),
-    // U+00E9, decomposing to "e + U+0301" under FormD). The constructor
-    // assigned that rule its precomposed rune's code point as the Id, a
-    // character-range id (0..0x10FFFF) the SymbolRanges layout documents as
-    // "the match is exactly that one rune." A multi-rune leaf can't honor
-    // that, so drop the stale auto-assigned id. Compile re-runs the
-    // anonymous-id pass after normalization, handing this rule a
-    // custom-range id, the same shape a Token built multi-rune from the
-    // start already carries. Like SetLeafRuneId, this leaves a user's
-    // explicit .As(SymbolId) id or a name-hashed id untouched: those
-    // numbering hooks win over the rune-as-id default.
+    /// <summary>
+    /// Counterpart to SetLeafRuneId for a single-rune leaf rule whose stored
+    /// text turned multi-rune during the normalization pass (Token('é'),
+    /// U+00E9, decomposing to "e + U+0301" under FormD).
+    /// </summary>
+    /// <remarks>
+    /// The constructor gave this rule the rune's code point as its Id which is the
+    /// character-range id (0..0x10FFFF) that means "match exactly this one
+    /// rune." A two-rune leaf can't use that kind of id, so clear it here.
+    /// </remarks>
     protected void ClearLeafRuneId()
     {
         if (!IsUserSymbolIdExplicit && Name == null)
@@ -1591,27 +1678,15 @@ public abstract class Rule
     }
 
     // Pass 1. Walk the graph and stash any user-set explicit ids so the
-    // later passes know which slots are off limits, and reject two
-    // reachable rules whose .As(SymbolId) explicit ids land on the same id
-    // with a compile-time error that names both rules.
+    // later passes know which slots are off limits, and reject duplicate .As(SymbolId).
     //
-    // The gate is `_idUserExplicit`, set only by `.As(SymbolId)` (and
-    // persisting through sealing). `As(SymbolId)` itself enforces that
-    // explicit ids land in the custom range, so reaching this method with
-    // `_idUserExplicit=true` already implies a custom-range id. Two kinds
-    // of assigned ids correctly fall through to just reserving the slot
-    // in `usedIds`:
-    //
-    //   * Rune-range pre-assigned ids. Every single-rune Token has its
-    //     code point assigned in its constructor, not by the user. A
-    //     grammar that mentions Token('a') twice has two rules sharing id
-    //     97 by design; NameOf short-circuits the rune range to the rune
-    //     string and there's no name ambiguity to resolve.
-    //
-    //   * Custom-range ids stamped by the anonymous pass. A sub-rule
-    //     that was compiled standalone and is now reached from a larger
-    //     grammar has `_idAssigned=true` but `_idUserExplicit=false`, so
-    //     it doesn't compete for the conflict slot.
+    // The conflict check is gated on `_idUserExplicit`, set only by
+    // `.As(SymbolId)`, not on `_idAssigned`. Non-user ids are allowed to
+    // collide and just reserve their slot in `usedIds`. A grammar that mentions
+    // Token('a') twice has two rules sharing rune id 97 by design. That's
+    // harmless: a rune-range id identifies a character, not a rule (NameOf
+    // returns "a" for 97 without consulting the rule set), so duplicates can't
+    // make any id lookup ambiguous the way two equal .As(SymbolId) ids would.
     private static void CollectExplicitIds(Rule r, HashSet<Rule> visited, HashSet<int> usedIds, Dictionary<int, Rule> explicitRules)
     {
         if (!visited.Add(r)) return;
@@ -1621,8 +1696,8 @@ public abstract class Rule
             if (r._idUserExplicit && explicitRules.TryGetValue(idValue, out var existing))
             {
                 throw new InvalidOperationException(
-                    $"Two reachable rules use the explicit SymbolId({idValue}): " +
-                    $"'{DescribeExplicitRule(existing)}' and '{DescribeExplicitRule(r)}'. " +
+                    $"Two rules use the explicit SymbolId({idValue}): " +
+                    $"'{DescribeRule(existing)}' and '{DescribeRule(r)}'. " +
                     $"Each .As(new SymbolId(...)) explicit id must be unique within a grammar.");
             }
             if (r._idUserExplicit)
@@ -1633,16 +1708,13 @@ public abstract class Rule
             CollectExplicitIds(child, visited, usedIds, explicitRules);
     }
 
-    private static string DescribeExplicitRule(Rule r) => r.Name ?? r._ruleTraceName;
+    private static string DescribeRule(Rule r) => r.Name ?? r._ruleTraceName;
 
     // Reject grammars where two distinct reachable rules share an .As(string)
     // name. A name is meant to identify a single rule in NameOf, parse-tree
     // lookups, and trace output, so duplicates would silently make those
     // resolutions ambiguous. This is the parallel of the explicit-id
     // collision check in CollectExplicitIds, just for names instead of SymbolIds.
-    //
-    // The visited set guarantees we walk each rule once, so the dictionary
-    // only ever sees the second instance under a given name.
     private static void CheckNameUniqueness(Rule r, HashSet<Rule> visited, Dictionary<string, Rule> namedRules)
     {
         if (!visited.Add(r)) return;
@@ -1651,7 +1723,7 @@ public abstract class Rule
             if (namedRules.ContainsKey(r.Name))
             {
                 throw new InvalidOperationException(
-                    $"Two reachable rules share the name '{r.Name}'. " +
+                    $"Two rules share the name '{r.Name}'. " +
                     $"Each .As(string) name must be unique within a grammar.");
             }
             namedRules[r.Name] = r;
@@ -1672,6 +1744,12 @@ public abstract class Rule
         {
             int slot = HashNameToCustomRange(r.Name);
             while (!usedIds.Add(slot)) slot++;
+            // The probe only stops on overflow if every slot from the hash up
+            // through int.MaxValue is taken (~2 billion ids), where slot++ wraps
+            // to a negative value below the custom range. Unreachable in any real
+            // grammar, but fail rather than hand out a corrupt id.
+            Invariant.That(slot >= SymbolRanges.CustomRangeStart,
+                $"Named-id probe for rule '{r.Name}' overflowed the custom range.");
             r.Id = new SymbolId(slot);
             r._idAssigned = true;
         }
@@ -1688,6 +1766,11 @@ public abstract class Rule
         if (!r._idAssigned)
         {
             while (!usedIds.Add(nextAnon)) nextAnon++;
+            // Same overflow case as AssignNamedIds: nextAnon wraps negative only
+            // after ~2 billion ids are claimed. Unreachable in practice, but
+            // fail rather than hand out a corrupt id.
+            Invariant.That(nextAnon >= SymbolRanges.CustomRangeStart,
+                "Anonymous-id probe overflowed the custom range.");
             r.Id = new SymbolId(nextAnon);
             nextAnon++;
             r._idAssigned = true;
@@ -1751,9 +1834,9 @@ public abstract class Rule
     // supplied text against the chosen normalization form. Each rule
     // overrides the instance-level ValidateNormalization to do
     // the right thing for its own data shape: literal-bearing rules
-    // normalize one fixed string, set-bearing rules walk their entries,
+    // normalize their one fixed string, set-bearing rules walk their entries,
     // composites no-op (this walker recurses into Children separately).
-    // Reports every offender through the reporter; the caller throws one
+    // Reports every offender through the reporter and the caller throws one
     // combined exception.
     private static void ValidateNormalizationAll(
         Rule r,
@@ -1767,12 +1850,13 @@ public abstract class Rule
             ValidateNormalizationAll(child, visited, form, reporter);
     }
 
-    // The Compile-time INormalizationReporter. Accumulates into the same
-    // offenders / failures lists the throw path reads, so the thrown
-    // InvalidOperationException carries the BuildNormalizationErrorMessage
-    // text and an AggregateException InnerException. ReportNormalizeFailure
-    // records both the ArgumentException (for the InnerException) and a
-    // synthetic offender, so the rule still shows up in the user-facing list.
+    // The only INormalizationReporter implementation. Compile creates it for the
+    // normalization pass, where it collects two lists, offenders and failures.
+    // After the pass, Compile builds the thrown InvalidOperationException from
+    // them: offenders become its message text, failures become an
+    // AggregateException InnerException. A normalize failure goes into both
+    // lists, so its rule still shows up in the user-facing message, not only the
+    // InnerException.
     private sealed class CompileNormalizationReporter : INormalizationReporter
     {
         private readonly List<(Rule rule, string original, string normalized)> _offenders;
@@ -1793,17 +1877,33 @@ public abstract class Rule
         {
             _failures.Add(failure);
             _offenders.Add((rule, original,
-                $"<string.Normalize rejected this literal: {failure.Message} " +
+                $"<this literal can't be normalized: {failure.Message} " +
                 $"This is usually an unpaired surrogate. Use Compile(null) to keep " +
                 $"surrogate-bearing literals as-is.>"));
         }
     }
 
-    // Build the multi-rule error message. One header line names the form,
-    // then one line per offender with the rule's display name, the
-    // original literal, and the suggested normalized form. Authors copy
-    // the suggested text back into source to fix every offender in one
-    // edit pass.
+    // Build the multi-rule error message, e.g.:
+    //
+    //   Compile failed: 2 rules hold text that can't be converted to FormKC.
+    //   Compile normalizes each rule's text to the chosen form, so it will
+    //   match the form the input gets converted to. These rules can't be
+    //   converted that way, either because the text isn't valid Unicode or
+    //   because converting it splits one grapheme into several where the
+    //   rule matches exactly one. Fix each rule as noted below, or pass a
+    //   different normalization form to Compile (or null to turn
+    //   normalization off):
+    //     - Token (GraphemeRule): 'U+FB01' <Token converts to multi-grapheme
+    //       sequence "fi" under FormKC. Token matches exactly one grapheme.
+    //       Use Literal("fi") or And(Token-per-grapheme) instead.>
+    //     - letter (OneOfRule): 'U+FB01' <converts under FormKC to the
+    //       multi-grapheme sequence "fi", but a TokenSet member has to be
+    //       exactly one grapheme. ...>
+    //
+    // (U+FB01 is the "ﬁ" ligature. FormatLiteralForError renders non-ASCII
+    // runes as U+XXXX, since the difference is often invisible. The detail
+    // after each literal is the offender description the reporting rule
+    // supplied, not a drop-in replacement value.)
     private static string BuildNormalizationErrorMessage(
         NormalizationForm form,
         List<(Rule rule, string original, string normalized)> offenders)
@@ -1814,7 +1914,7 @@ public abstract class Rule
         // one rule with hundreds of convertible members, not hundreds of
         // rules. The header sentence is about rules ("a rule whose expected
         // text is in a different form will never match"), so it has to count
-        // rules; the per-entry detail still gets one line each below.
+        // rules. The per-entry detail still gets one line each below.
         var distinctRules = new HashSet<Rule>(ReferenceComparer<Rule>.Instance);
         foreach (var (offendingRule, _, _) in offenders)
             distinctRules.Add(offendingRule);
@@ -1823,14 +1923,17 @@ public abstract class Rule
         var builder = new StringBuilder();
         builder.Append("Compile failed: ")
                .Append(ruleCount)
-               .Append(ruleCount == 1 ? " rule has" : " rules have")
-               .Append(" expected text that isn't in ")
+               .Append(ruleCount == 1 ? " rule holds" : " rules hold")
+               .Append(" text that can't be converted to ")
                .Append(FormatNormalizationForm(form))
-               .AppendLine(". The parser normalizes input to this form before")
-               .AppendLine("matching, so a rule whose expected text is in a different form will")
-               .AppendLine("never match. Use the suggested form below or pass a different");
-        builder.AppendLine("normalization form to Compile (or null to disable normalization):");
-        foreach (var (rule, original, normalized) in offenders)
+               .Append(". Compile normalizes each rule's text to the chosen form, so it ")
+               .Append("will match the form the input gets converted to. ")
+               .Append(ruleCount == 1 ? "This rule" : "These rules")
+               .Append(" can't be converted that way, either because the text isn't valid ")
+               .Append("Unicode or because converting it splits one grapheme into several ")
+               .Append("where the rule matches exactly one. Fix each rule as noted below, or ")
+               .AppendLine("pass a different normalization form to Compile (or null to turn normalization off):");
+        foreach (var (rule, original, detail) in offenders)
         {
             string displayName = rule.Name ?? rule._ruleTraceName;
             string ruleType = rule.GetType().Name;
@@ -1840,8 +1943,8 @@ public abstract class Rule
                    .Append(ruleType)
                    .Append("): ")
                    .Append(FormatLiteralForError(original))
-                   .Append(" should be ")
-                   .Append(FormatLiteralForError(normalized))
+                   .Append(' ')
+                   .Append(detail)
                    .AppendLine();
         }
         return builder.ToString().TrimEnd();
@@ -1888,8 +1991,8 @@ public abstract class Rule
         form.HasValue ? form.Value.ToString() : "no normalization (null)";
 
     // Walk the graph and stamp the form on every rule, so a later
-    // Compile call landing on any rule in the graph can run its
-    // conflict check. Only the root's value is read at parse time.
+    // Compile call landing on any rule in the graph can make sure it doesn't change. 
+    // Only the root's value is read at parse time.
     private static void StampNormalizationForm(Rule r, HashSet<Rule> visited, NormalizationForm? form)
     {
         if (!visited.Add(r)) return;
@@ -1898,11 +2001,16 @@ public abstract class Rule
             StampNormalizationForm(child, visited, form);
     }
 
-    private static void MarkCompileTouched(Rule r, HashSet<Rule> visited)
+    // Collect every rule reachable from this root into `visited` (the caller's
+    // `compileTouched` set). This builds a roster only, it sets no per-rule
+    // flag. Compile gathers it before mutating anything so that if a later pass
+    // throws, the catch can invalidate the whole reachable graph through
+    // MarkInvalidAfterFailedCompile, not just the rules reached before the throw.
+    private static void CollectReachableRules(Rule r, HashSet<Rule> visited)
     {
         if (!visited.Add(r)) return;
         foreach (var child in r.Children)
-            MarkCompileTouched(child, visited);
+            CollectReachableRules(child, visited);
     }
 
     private static void MarkInvalidAfterFailedCompile(HashSet<Rule> rules, string reason)
@@ -1914,8 +2022,8 @@ public abstract class Rule
     // Walk the graph and reject this Compile if any reachable rule has
     // already been compiled or was invalidated by a failed compile attempt.
     // See the caller in Compile for the full rationale. The short version is
-    // that a rule's compile bakes in its identity (ids, FirstConsumedTokens,
-    // projected literal text, normalization form), and the per-pass mutators
+    // that a rule's compile bakes in its identity (ids, literal text,
+    // normalization form), and the per-pass mutators
     // inside Compile don't re-check `_sealed`. This walk is the one check
     // that makes those passes safe. Without it, a second Compile from a new
     // root would silently corrupt a sealed or invalidated sub-rule's state.
@@ -1927,7 +2035,7 @@ public abstract class Rule
             string ruleLabel = r.Name ?? r._ruleTraceName;
             throw new InvalidOperationException(
                 $"Rule '{ruleLabel}' can't be compiled because a previous Compile " +
-                $"attempt failed after mutating this rule graph. Build a fresh " +
+                $"attempt failed after it had already changed these rules. Build a fresh " +
                 $"grammar instance before compiling again. Previous failure: " +
                 $"{r._invalidCompileReason}");
         }

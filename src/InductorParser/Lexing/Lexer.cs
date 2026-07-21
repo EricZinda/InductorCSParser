@@ -13,22 +13,39 @@ namespace InductorParser.Lexing;
 /// <remarks>
 /// <para>
 /// Cluster boundaries come from the GraphemeClusterIndex on the input string. One
-/// sub-lexer mode, selected by an internal constructor and used only by
-/// WithinTokenRule, walks one rune per token instead. That sub-lexer reads a
-/// bounded range of the same shared input string and lets the inner rule walk the
-/// runes inside one outer token.
+/// sub-lexer mode, selected by the public Lexer(string, bool oneRunePerToken)
+/// constructor, walks one rune per token instead. The built-in WithinToken uses
+/// it, and so can a user-defined Rule that needs to run an inner rule against the
+/// runes inside a single token. The sub-lexer lexes a substring holding just that
+/// token's text, so the inner rule sees each rune of the outer token as its own
+/// token.
 /// </para>
 /// <para>
 /// Malformed UTF-16: stray surrogates (a high surrogate without a paired low,
-/// or a low surrogate in any position) are walked one char at a time in both
-/// modes and never throw. In rune mode the surrogate-pair check returns 1 for
-/// any stray by construction; in grapheme mode the walk delegates to
-/// StringInfo, which treats unpaired surrogates as 1-char text elements. Read
-/// produces a one-char token over the stray and the read cursor keeps moving.
-/// Deciding whether each position represents a valid Unicode character is left
-/// to rune-level callers: TryPeekRune returns false on a stray, and rules that
-/// decode runes (LiteralRule, TokenSet membership, etc.) handle the false case
-/// explicitly.
+/// or a low surrogate in any position) never crash the lexer. They're
+/// tokenized like any other content and never throw, so most grammars need to
+/// do nothing about them. They won't accidentally match rules that specify literals
+/// and they will be consumed safely by rules that match "anytext" like AnyToken.
+///
+/// One caveat: that tolerance is the unnormalized Compile (Compile(null)) story.
+/// A normalizing Compile (FormC/FormD/FormKC/FormKD) runs string.Normalize over
+/// the whole input before the lexer ever sees it, and string.Normalize rejects
+/// any lone surrogate, bare or fused with a following combining mark. Parse
+/// catches that and returns a MalformedInput ParseResult, so under a normalizing
+/// grammar malformed input never reaches the lexer at all. A grammar that has to
+/// accept malformed UTF-16 stays on Compile(null).
+///
+/// If you
+/// want to detect or reject malformed input, Compile with no normalization and 
+/// do it at the rune level:
+/// TryPeekRune returns false on a stray, and rules that decode runes
+/// (LiteralRule, TokenSet membership, etc.) already handle that. One gotcha if
+/// you hand-write a Rule that inspects token lengths: a stray isn't always one
+/// char. In rune mode it is, but in grapheme mode a stray plus a
+/// following combining mark is one two-char token, per the UAX #29
+/// grapheme rules
+/// (https://www.unicode.org/reports/tr29/tr29-41.html#Grapheme_Cluster_Boundary_Rules).
+/// Read consumes the whole token either way.
 /// </para>
 /// </remarks>
 public sealed partial class Lexer
@@ -54,7 +71,7 @@ public sealed partial class Lexer
     // use and cached for the rest of this lexer's life. Resolving through
     // GraphemeClusterIndex.For shares one instance per input string with
     // the post-parse position converters (SourcePositionConverter). Only
-    // grapheme-mode code paths touch this; one-rune-per-token sub-lexers
+    // grapheme-mode code paths touch this. One-rune-per-token sub-lexers
     // never reach it, which is what makes the lazy build pay off.
     private GraphemeClusterIndex GraphemeIndex => _graphemeIndex ??= GraphemeClusterIndex.For(_input);
 
@@ -75,7 +92,7 @@ public sealed partial class Lexer
     /// <remarks>
     /// For a top-level lexer this is what the caller passed to Parse. For a
     /// sub-lexer (the one WithinTokenRule builds over the runes of one outer
-    /// token) this is the substring covering just those runes; the sub-lexer's
+    /// token) this is the substring covering just those runes. The sub-lexer's
     /// Position, IsEof, DeepestFailurePosition, and Read / Token offsets are all
     /// expressed in coordinates of this string. Rule code can bound its own
     /// loops on Input.Length safely either way: the lexer's readable range and
@@ -88,11 +105,13 @@ public sealed partial class Lexer
     /// <summary>The current read cursor as a UTF-16 offset into <see cref="Input"/>.</summary>
     public int Position => _position;
 
-    // Exclusive upper bound on _position. Defaults to _input.Length. Sub-lexer
-    // constructors bound this to a lower value so WithinToken can run inner
-    // rules over part of the shared string without allocating a Substring.
-    // Tokens still carry absolute offsets into _input, so error positions
-    // don't need translation.
+    // Exclusive upper bound on _position. Defaults to _input.Length. The
+    // internal bounded constructor sets a lower value to read only a portion
+    // of a shared string, with tokens still storing absolute offsets into
+    // _input so error positions don't need translation. WithinToken's
+    // sub-lexer doesn't use that path: it owns a Substring of the outer
+    // token's text on purpose, so Input.Length, Position, and IsEof all
+    // agree about the readable range (see WithinTokenRule for why).
     private int _endPosition;
 
     internal int EndPosition => _endPosition;
@@ -195,7 +214,7 @@ public sealed partial class Lexer
     // Constructor used to build sub-lexers that read only a portion
     // of a shared input string. startPosition is the initial read cursor and
     // endPosition is the exclusive upper bound (IsEof fires when _position
-    // reaches endPosition). Tokens still carry absolute offsets into the
+    // reaches endPosition). Tokens still store absolute offsets into the
     // shared string so the outer parse's error-position reporting works
     // uniformly whether positions come from the main lexer or a sub-lexer.
     //
@@ -276,7 +295,7 @@ public sealed partial class Lexer
     /// <c>cursor + PeekTokenLength(cursor)</c> always satisfy both.
     /// </summary>
     /// <remarks>
-    /// This moves only the read cursor. It is safe with respect to the two
+    /// This moves only the read cursor. It's safe with respect to the two
     /// pieces of parse state a rule author might worry about:
     /// <list type="bullet">
     /// <item><b>Error tracking</b> is unaffected. RecordFailure /
@@ -352,7 +371,7 @@ public sealed partial class Lexer
     // readable range.
     //
     // Invariants: always returns >= 1 and never throws. In rune mode, returns
-    // 2 only for a well-formed surrogate pair (high then low); stray surrogates
+    // 2 only for a well-formed surrogate pair (high then low). Stray surrogates
     // in any position return 1. See the class doc for the full malformed-UTF-16
     // rules.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -425,9 +444,9 @@ public sealed partial class Lexer
     /// cluster in normal mode, or one rune in the WithinToken sub-lexer mode.
     /// </summary>
     /// <remarks>
-    /// Cheap: <see cref="Token"/> is a stack-only ref struct carrying offset
-    /// and length into the input string, with no allocation and no substring
-    /// copying. On malformed UTF-16 (stray surrogates), Read advances by one
+    /// Cheap: <see cref="Token"/> is a stack-only ref struct that stores an
+    /// offset and length pointing into the input string, with no allocation
+    /// and no substring copying. On malformed UTF-16 (stray surrogates), Read advances by one
     /// char and returns a one-char token rather than throwing. See the class
     /// doc for the full rules.
     /// </remarks>
@@ -442,7 +461,7 @@ public sealed partial class Lexer
         Invariant.That(len > 0, $"NextTokenLength returned <= 0 on a non-EOF read at position {_position} (endPosition {_endPosition}). Read would advance zero and loop.");
         Token t = new Token(_input, _position, len, isEof: false);
         _position += len;
-        // The token text is spliced raw here; TraceInterpolatedStringHandler
+        // The token text is spliced raw here. TraceInterpolatedStringHandler
         // routes every interpolation hole through DisplayEscape, so control /
         // line-separator chars (CRLF, Token('\n').Preserve(), and so on) can't
         // break this line apart. Keeping the escape in the handler instead of

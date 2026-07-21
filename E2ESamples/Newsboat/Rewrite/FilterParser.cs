@@ -4,10 +4,13 @@
 //   Failure position  char index                      char index + line/column
 //   Error message     attribute / operator / value    same, named via WithError
 //   AST shape         OriginalAnd/Or/Comparison       RewriteAnd/Or/Comparison
-//   Source map        none                            SourceRange on each comparison
+//   Source map        none                            SourceRange on every AST node
 //
-// The rewrite carries the original source range on every comparison,
-// so a downstream tool (a Newsboat config editor, a syntax highlighter,
+// The rewrite keeps the original source range on every AST node.
+// Comparisons read theirs straight from Symbol.SourceRange, and a
+// compound And / Or spans from the start of its left subtree to the
+// end of its right one (new SourceRange(left.Start, right.End)). A
+// downstream tool (a Newsboat config editor, a syntax highlighter,
 // a query builder UI) can highlight or rewrite individual sub-
 // expressions without re-parsing. Each AST node's text comes from
 // Symbol.SourceText, which is a verbatim section of the user's input,
@@ -38,11 +41,13 @@ public enum RewriteOperator
     NotContains,
 }
 
-public abstract record RewriteExpression;
-public sealed record RewriteAnd(RewriteExpression Left, RewriteExpression Right) : RewriteExpression;
-public sealed record RewriteOr(RewriteExpression Left, RewriteExpression Right) : RewriteExpression;
+public abstract record RewriteExpression(SourceRange? Range);
+public sealed record RewriteAnd(RewriteExpression Left, RewriteExpression Right, SourceRange? Range)
+    : RewriteExpression(Range);
+public sealed record RewriteOr(RewriteExpression Left, RewriteExpression Right, SourceRange? Range)
+    : RewriteExpression(Range);
 public sealed record RewriteComparison(string Attribute, RewriteOperator Op, string ValueLiteral, SourceRange? Range)
-    : RewriteExpression;
+    : RewriteExpression(Range);
 
 public sealed record FilterParseError(string Message, int CharIndex, int Line, int Column)
 {
@@ -62,14 +67,23 @@ public static class FilterParser
     public static bool TryParse(string input, out RewriteExpression? expression, out FilterParseError? error)
     {
         expression = null;
-        var result = Filter.Parse(input);
+        // This sample builds its own "line L, column C:" prefix from the
+        // ErrorLine / ErrorCharColumn fields (see FilterParseError.ToString), so the
+        // message stays position-less to avoid repeating the position.
+        var options = new ParseOptions
+        {
+            PositionalErrorTemplate = "unexpected '{character}'.",
+            EndOfInputErrorTemplate = "unexpected end of input.",
+            WithErrorTemplate = "{message}",
+        };
+        var result = Filter.Parse(input, options);
         if (!result.Success)
         {
             error = new FilterParseError(
                 result.ErrorMessage,
                 result.ErrorCharIndex,
                 result.ErrorLine,
-                result.ErrorColumn);
+                result.ErrorCharColumn);
             return false;
         }
 
@@ -91,12 +105,22 @@ public static class FilterParser
         {
             var left = BuildPrimary(children[index]);
             var op = children[index + 1];
+            var range = JoinRanges(left.Range, rightmost.Range);
             rightmost = op.Is(AndKeyword)
-                ? new RewriteAnd(left, rightmost)
-                : new RewriteOr(left, rightmost);
+                ? new RewriteAnd(left, rightmost, range)
+                : new RewriteOr(left, rightmost, range);
         }
         return rightmost;
     }
+
+    // A compound node spans from the start of its left subtree to the end
+    // of its right one. When the left subtree came from a parenthesized
+    // group, the span starts at the first comparison inside the group, not
+    // at the "(", because the parens aren't part of either subtree.
+    private static SourceRange? JoinRanges(SourceRange? left, SourceRange? right) =>
+        left.HasValue && right.HasValue
+            ? new SourceRange(left.Value.Start, right.Value.End)
+            : null;
 
     private static RewriteExpression BuildPrimary(Symbol symbol)
     {

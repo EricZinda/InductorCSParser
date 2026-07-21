@@ -52,19 +52,52 @@ public class SymbolPositionTests
         // char 13, line 2, column 0.
         Assert.That(range.Start.CharIndex, Is.EqualTo(13));
         Assert.That(range.Start.Line, Is.EqualTo(2));
-        Assert.That(range.Start.Column, Is.EqualTo(0));
+        Assert.That(range.Start.CharColumn, Is.EqualTo(0));
 
         // End: char 19 (13 + 6), still on line 2, column 6.
         Assert.That(range.End.CharIndex, Is.EqualTo(19));
         Assert.That(range.End.Line, Is.EqualTo(2));
-        Assert.That(range.End.Column, Is.EqualTo(6));
+        Assert.That(range.End.CharColumn, Is.EqualTo(6));
+    }
+
+    [Test]
+    public void LineNumber_and_ColumnNumber_are_one_based()
+    {
+        // The zero-based Line / Column follow the Language Server Protocol. The
+        // *Number accessors are the same positions counted from 1 for humans.
+        // "a\nbcd", char 3 is 'c': line 1, column 1 (zero-based).
+        var position = SourcePosition.From("a\nbcd", 3);
+
+        Assert.That(position.Line, Is.EqualTo(1));
+        Assert.That(position.CharColumn, Is.EqualTo(1));
+        Assert.That(position.LineNumber, Is.EqualTo(position.Line + 1));
+        Assert.That(position.CharColumnNumber, Is.EqualTo(position.CharColumn + 1));
+        Assert.That(position.LineNumber, Is.EqualTo(2));
+        Assert.That(position.CharColumnNumber, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void SourceLine_extracts_the_line_across_terminators()
+    {
+        // SourceLine returns the line the position is on, terminator excluded,
+        // for any terminator the parser counts, not just '\n'. "a\r\nbb\rccc" is
+        // three lines: "a" (ends CRLF), "bb" (ends lone CR), "ccc" (no
+        // terminator). A '\n' split would keep the '\r' on "a" and never split
+        // "bb\rccc".
+        string crMix = "a\r\nbb\rccc";
+        Assert.That(SourcePosition.From(crMix, 0).SourceLine(), Is.EqualTo("a"),
+            "first line, CRLF terminator excluded");
+        Assert.That(SourcePosition.From(crMix, 3).SourceLine(), Is.EqualTo("bb"),
+            "middle line reached across CRLF, lone-CR terminator excluded");
+        Assert.That(SourcePosition.From(crMix, 6).SourceLine(), Is.EqualTo("ccc"),
+            "last line, no trailing terminator");
     }
 
     [Test]
     public void Range_starts_on_later_line_when_named_rule_begins_after_newline()
     {
         // The named rule's first preserved leaf sits on line 2. Verify
-        // Start carries the right line and a line-relative column even
+        // Start has the right line and a line-relative column even
         // though the outer parse started at line 0.
         var target = Literal("hi").As("target");
         var rule = And(Literal("first\nsecond\n  "), target);
@@ -74,16 +107,16 @@ public class SymbolPositionTests
         // "first\n" = 6, "second\n" = 7, "  " = 2. Target at char 15.
         Assert.That(range.Start.CharIndex, Is.EqualTo(15));
         Assert.That(range.Start.Line, Is.EqualTo(2));
-        Assert.That(range.Start.Column, Is.EqualTo(2));
+        Assert.That(range.Start.CharColumn, Is.EqualTo(2));
         Assert.That(range.End.Line, Is.EqualTo(2));
-        Assert.That(range.End.Column, Is.EqualTo(4));
+        Assert.That(range.End.CharColumn, Is.EqualTo(4));
     }
 
     [Test]
     public void Range_treats_CRLF_as_one_line_break()
     {
         // CRLF is a single Language Server Protocol line terminator and a single UAX #29
-        // grapheme. End.Line bumps by exactly 1; End.TokenIndex is 5
+        // grapheme. End.Line bumps by exactly 1, and End.TokenIndex is 5
         // (a, b, \r\n, c, d).
         var rule = Literal("ab\r\ncd").Preserve();
         var result = rule.Parse("ab\r\ncd");
@@ -91,7 +124,7 @@ public class SymbolPositionTests
         var range = result.Tree!.SourceRange!.Value;
         Assert.That(range.End.CharIndex, Is.EqualTo(6));
         Assert.That(range.End.Line, Is.EqualTo(1));
-        Assert.That(range.End.Column, Is.EqualTo(2));
+        Assert.That(range.End.CharColumn, Is.EqualTo(2));
         Assert.That(range.End.TokenIndex, Is.EqualTo(5));
     }
 
@@ -107,7 +140,7 @@ public class SymbolPositionTests
         var range = result.Tree!.SourceRange!.Value;
         Assert.That(range.End.CharIndex, Is.EqualTo(3));
         Assert.That(range.End.Line, Is.EqualTo(1));
-        Assert.That(range.End.Column, Is.EqualTo(0));
+        Assert.That(range.End.CharColumn, Is.EqualTo(0));
     }
 
     [Test]
@@ -128,7 +161,7 @@ public class SymbolPositionTests
         Assert.That(range.Start.CharIndex, Is.EqualTo(8));
         Assert.That(range.Start.TokenIndex, Is.EqualTo(1));
         Assert.That(range.Start.Line, Is.EqualTo(0));
-        Assert.That(range.Start.Column, Is.EqualTo(8));
+        Assert.That(range.Start.CharColumn, Is.EqualTo(8));
 
         // End: family emoji + "ab" = 10 chars / 3 graphemes.
         Assert.That(range.End.CharIndex, Is.EqualTo(10));
@@ -153,7 +186,7 @@ public class SymbolPositionTests
     [Test]
     public void Identifier_range_diverges_grapheme_from_rune_for_combining_mark()
     {
-        // "réx" is r + (e + combining acute) + x — three graphemes,
+        // "réx" is r + (e + combining acute) + x: three graphemes,
         // four runes, four UTF-16 chars. With normalization disabled
         // (default NFC would compose to "e-acute" and collapse to 3
         // chars), Identifier consumes all of it via WithinToken
@@ -175,7 +208,7 @@ public class SymbolPositionTests
     public void SourcePosition_From_mid_cluster_char_index_lands_on_the_containing_token()
     {
         // The grinning-face emoji (U+1F600) is one grapheme cluster that
-        // occupies two UTF-16 chars, [0,2); 'x' is the next token at
+        // occupies two UTF-16 chars, [0,2). 'x' is the next token at
         // char 2. Char index 1 is the emoji's low surrogate, a position
         // INSIDE token 0. Converting that char index to a token index
         // has to report token 0, the cluster that contains it. Reporting
@@ -212,7 +245,7 @@ public class SymbolPositionTests
         Assert.That(position!.Value.CharIndex, Is.EqualTo(1));
         Assert.That(position.Value.TokenIndex, Is.EqualTo(1));
         Assert.That(position.Value.Line, Is.EqualTo(0));
-        Assert.That(position.Value.Column, Is.EqualTo(1));
+        Assert.That(position.Value.CharColumn, Is.EqualTo(1));
     }
 
     // -------------------------------------------------------------
@@ -224,7 +257,7 @@ public class SymbolPositionTests
     // TestArchitecture.md.
     //
     // The tests below exercise the position-translator's machinery
-    // without focusing on any one rule type — composite endpoint
+    // without focusing on any one rule type: composite endpoint
     // translation, Column / TokenIndex translation, and the FormKC
     // per-grapheme-expansion edge case where one source cluster
     // spawns multiple parseInput leaves. Keeping them centralized
@@ -268,8 +301,8 @@ public class SymbolPositionTests
     {
         // Column for the FormC + decomposed case differs by one
         // (parseInput is one char shorter than original on the same
-        // line). TokenIndex differs only when graphemes are ADDED or
-        // REMOVED — covered by the FormKC ligature test below. Line
+        // line). TokenIndex differs only when graphemes are added or
+        // removed, covered by the FormKC ligature test below. Line
         // never differs.
         string input = DecomposedCafePrefix + "X";
         var target = Token('X').As("x");
@@ -277,9 +310,9 @@ public class SymbolPositionTests
         var result = rule.Parse(input);
 
         var range = result.Tree!.Find(target)!.SourceRange!.Value;
-        Assert.That(range.Start.Column, Is.EqualTo(5),
+        Assert.That(range.Start.CharColumn, Is.EqualTo(5),
             "Column at the X should reflect original-input position (5), not parseInput position (4).");
-        Assert.That(range.End.Column, Is.EqualTo(6));
+        Assert.That(range.End.CharColumn, Is.EqualTo(6));
     }
 
     [Test]
@@ -287,7 +320,7 @@ public class SymbolPositionTests
     {
         // The ligature U+FB01 is one grapheme in original (1 char) but
         // expands to "fi" (2 chars / 2 graphemes) under FormKC. Two
-        // parse-time leaves come from one source cluster — both should
+        // parse-time leaves come from one source cluster, so both should
         // map back into the original ligature span [0, 1).
         // NormalizedPositionMap's per-grapheme walker maps any
         // parseInput offset INSIDE the rewritten run back to the start

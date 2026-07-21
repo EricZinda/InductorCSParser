@@ -7,7 +7,7 @@
 // locally compiled rule types directly (not the Rules.* factories, which
 // return the referenced DLL's copies) so the local copy's TryParseRule
 // actually runs once, catching a hand-edit that compiles but diverges in
-// behavior. They are deliberately thin; the exhaustive per-rule suites
+// behavior. They're deliberately thin. The exhaustive per-rule suites
 // live in InductorParser.Tests/Rules.
 //
 // LateBoundRule is absent on purpose: it's a public type, so a local copy
@@ -40,7 +40,7 @@ public class LinkedBuiltInRuleTests
     [Test]
     public void NotRule_and_AnyTokenRule_match_a_single_non_a_character()
     {
-        // Not('a') is zero-width; pair it with AnyToken so the And consumes
+        // Not('a') is zero-width, so pair it with AnyToken so the And consumes
         // one character that isn't 'a'.
         var notA = new AndRule(new Rule[] { new NotRule(new GraphemeRule("a")), new AnyTokenRule() });
         Assert.That(notA.Parse("b").Success, Is.True);

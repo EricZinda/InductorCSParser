@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using NUnit.Framework;
@@ -15,7 +16,7 @@ namespace InductorParser.Tests;
 // attack class, shows what an unaware author's grammar looks like,
 // and proves the parser handles the attack correctly.
 //
-// The last section ("Issues NOT handled by default") is the 
+// The last section ("Issues not handled by default") is the
 // counterpart: a small number of attacks do require the grammar
 // author to opt into a defense. Those are called out explicitly
 // with a pointer to the recipe in UnicodeGotchasExamples.cs.
@@ -26,7 +27,7 @@ namespace InductorParser.Tests;
 //   3. Invisible content       (zero-width space, soft hyphen, BOM)
 //   4. Encoding injection      (ill-formed UTF-16 in .NET strings)
 //   5. Upstream tampering      (U+FFFD as a permissive-decoder signal)
-//   6. (Counterexample)        homoglyphs — NOT defended by default
+//   6. (Counterexample)        homoglyphs, not defended by default
 //
 // Each test is small on purpose. The comment block above each test
 // is the reason the test exists, and is meant to read on its own
@@ -46,7 +47,7 @@ public class SecurityByDefaultTests
         // (U+202E RIGHT-TO-LEFT OVERRIDE, or related LRO / PDF /
         // RLI / LRI / FSI) into source code or input. An editor
         // reorders the visual display so a reviewer sees one
-        // identifier; the compiler / parser sees the original
+        // identifier. The compiler / parser sees the original
         // logical sequence and acts on something different. This
         // is the published "Trojan Source" attack family.
         //
@@ -55,7 +56,7 @@ public class SecurityByDefaultTests
         // sequence in the input. U+202E isn't in XID_Continue per
         // UAX #31, so a naive Identifier() grammar rejects any
         // input that contains it. No attacker-aware logic in the
-        // grammar — the rule just doesn't match.
+        // grammar, the rule just doesn't match.
         var grammar = And(Identifier(), Eof()).Compile();
 
         string trojanInput = $"ab{UnicodeExamples.RightToLeftOverrideText}cd";  // logical order: a, b, RLO, c, d
@@ -163,9 +164,9 @@ public class SecurityByDefaultTests
     public void Invisible_character_inside_a_keyword_breaks_a_strict_literal()
     {
         // Threat: an attacker hides characters that don't render
-        // — zero-width space, soft hyphen, byte-order mark —
+        // (zero-width space, soft hyphen, byte-order mark)
         // inside text that looks like a regular word. Anyone
-        // reading the result sees "apple"; the actual character
+        // reading the result sees "apple". The actual character
         // sequence is "ap<invisible>ple". Same kinds of attacks
         // as the lookalike-character case above:
         //
@@ -201,8 +202,8 @@ public class SecurityByDefaultTests
         //     filter looking for a banned word), the default
         //     is bad. The attacker's version doesn't match the
         //     rule either, so the block doesn't fire and the
-        //     input gets through. UNLIKE the lookalike case,
-        //     no normalization form strips invisibles — they're
+        //     input gets through. Unlike the lookalike case,
+        //     no normalization form strips invisibles. They're
         //     real characters with their own purpose, just non-
         //     rendering ones. You have to strip them yourself
         //     before parsing. See the next test for the shape.
@@ -228,10 +229,10 @@ public class SecurityByDefaultTests
         // help. Literal("apple") doesn't match "ap<ZWS>ple",
         // so the block never fires and the bypass works.
         //
-        // UNLIKE the lookalike case, FormKC doesn't fix this.
-        // No normalization form strips invisibles. The fix is
-        // to strip them yourself before calling Parse. The
-        // recipe is in UnicodeGotchasExamples.cs at
+        // Unlike the lookalike case, FormKC doesn't fix this.
+        // No normalization form strips invisibles. Strip them
+        // yourself before calling Parse. The recipe is in
+        // UnicodeGotchasExamples.cs at
         // Invisible_format_character_strip_recipe.
 
         var blocker = And(Literal("apple"), Eof()).Compile();
@@ -245,8 +246,12 @@ public class SecurityByDefaultTests
             $"{UnicodeExamples.EmDashGrapheme} no normalization form strips invisibles");
 
         // Pre-strip the invisibles, then the blocker catches
-        // it. This is what the recipe in UnicodeGotchasExamples
-        // does.
+        // it. Same idea as the recipe in UnicodeGotchasExamples,
+        // which strips by rune. A char-level strip does the same
+        // job here because every invisible in the set is a single
+        // BMP char. (It also has to be char-level: this file syncs
+        // into the IL2CPP pass, whose netstandard2.1 surface has
+        // no string.EnumerateRunes.)
         var invisibles = new HashSet<int>
         {
             0x200B,  // zero-width space
@@ -256,8 +261,7 @@ public class SecurityByDefaultTests
             0xFEFF,  // BOM
         };
         string smuggled = $"ap{UnicodeExamples.ZeroWidthSpaceText}ple";
-        string stripped = string.Concat(smuggled.EnumerateRunes()
-            .Where(r => !invisibles.Contains(r.Value)));
+        string stripped = string.Concat(smuggled.Where(c => !invisibles.Contains(c)));
         Assert.That(blocker.Parse(stripped).Success, Is.True,
             "after pre-parse stripping, the blocker catches the bypass");
     }
@@ -267,7 +271,7 @@ public class SecurityByDefaultTests
     // ============================================================
 
     [Test]
-    public void Ill_formed_UTF16_throws_at_normalization_before_any_grammar_runs()
+    public void Ill_formed_UTF16_reported_as_MalformedInput_before_any_grammar_runs()
     {
         // Threat: an attacker constructs a .NET string with
         // ill-formed UTF-16 (lone surrogate, reversed pair, and
@@ -280,22 +284,20 @@ public class SecurityByDefaultTests
         // Default safety: every non-null normalization form
         // (FormC, FormD, FormKC, FormKD) routes input through
         // String.Normalize before the lexer runs. Normalize
-        // throws ArgumentException on ill-formed UTF-16, and the
-        // exception propagates out of Parse. The caller learns
-        // the input was corrupt; no grammar rule ever sees the
-        // ill-formed input and never silently matches against it.
+        // rejects ill-formed UTF-16, and Parse reports that as a
+        // MalformedInput result rather than running any grammar
+        // rule against the input. No rule ever sees the ill-formed
+        // input, so it can never silently match. The caller learns
+        // the input was corrupt by checking Outcome.
         var grammar = And(Literal("hello"), Eof()).Compile();  // default FormC
 
-        string loneHigh = BuildString(0xD800);
-        Assert.Throws<ArgumentException>(
-            () => grammar.Parse(loneHigh),
-            "lone high surrogate throws at normalization, before the " +
-            "lexer runs");
+        string loneHigh = UnicodeExamples.HighSurrogateMinText;
+        Assert.That(grammar.Parse(loneHigh).Outcome, Is.EqualTo(ParseOutcome.MalformedInput),
+            "lone high surrogate is rejected at normalization, before the lexer runs");
 
-        string reversedPair = BuildString(0xDC00, 0xD800);  // low followed by high
-        Assert.Throws<ArgumentException>(
-            () => grammar.Parse(reversedPair),
-            "reversed surrogate pair throws the same way");
+        string reversedPair = UnicodeExamples.ReversedSurrogatePairText;  // low followed by high
+        Assert.That(grammar.Parse(reversedPair).Outcome, Is.EqualTo(ParseOutcome.MalformedInput),
+            "reversed surrogate pair is rejected the same way");
     }
 
     // ============================================================
@@ -314,18 +316,18 @@ public class SecurityByDefaultTests
         // grammar that would have rejected the original bytes.
         //
         // Default safety: the parser doesn't strip or rewrite
-        // U+FFFD; it surfaces each one as an ordinary token. A
+        // U+FFFD. It surfaces each one as an ordinary token. A
         // grammar that wants to refuse tampered input adds
         // NoneOf(TokenSet.Replacement) to its character classes
         // (or checks post-parse). This is opt-in: most grammars
         // are happy to accept input with U+FFFD if the rest of
         // the structure is fine. The defense is one TokenSet away.
-        byte[] tamperedBytes = [0x68, 0xFF, 0x69]; // 'h', invalid lead 0xFF, 'i'
+        byte[] tamperedBytes = { 0x68, 0xFF, 0x69 }; // 'h', invalid lead 0xFF, 'i'
         string tampered = Encoding.UTF8.GetString(tamperedBytes);
         Assert.That(tampered, Does.Contain(UnicodeExamples.ReplacementCharacterText),
             "the .NET UTF-8 decoder substituted U+FFFD for the invalid byte");
 
-        // A grammar that refuses ANY input that's been through a
+        // A grammar that refuses any input that's been through a
         // permissive decoder. The author opts in by writing
         // NoneOf(TokenSet.Replacement) where they would otherwise
         // have written AnyToken or NoneOf(...).
@@ -340,7 +342,7 @@ public class SecurityByDefaultTests
     }
 
     // ============================================================
-    // 6. Issues NOT handled by default (things to watch for counterexamples)
+    // 6. Issues not handled by default (things to watch for counterexamples)
     // ============================================================
 
     [Test]
@@ -355,7 +357,7 @@ public class SecurityByDefaultTests
         // parser, and a string comparison against an authoritative
         // list of reserved names misses it.
         //
-        // The default Identifier() rule does NOT defend against
+        // The default Identifier() rule doesn't defend against
         // this attack. Both Latin a and Cyrillic а are
         // XID_Continue per UAX #31, and UAX #31 places no script
         // restriction on identifiers. So Identifier() accepts the
@@ -367,8 +369,8 @@ public class SecurityByDefaultTests
         // See UnicodeGotchasExamples.Homoglyph_LatinLetters_set_rejects_Cyrillic_a
         // for the recipe.
         //
-        // NOT every
-        // Unicode-related security issue is handled automatically.
+        // Not every Unicode-related security issue is handled
+        // automatically.
         // The homoglyph case is the main one where the grammar
         // author has to think about it.
         var grammar = And(Identifier(), Eof()).Compile();
@@ -381,13 +383,104 @@ public class SecurityByDefaultTests
             "(see UnicodeGotchasExamples) when this matters.");
     }
 
-    // Helper: build a string from raw UTF-16 code units, preserving
-    // ill-formed sequences. Used for tests that need to feed lone
-    // surrogates or reversed pairs through the parser.
-    private static string BuildString(params int[] codeUnits)
+    // Verifies the Primer4 "Invisible characters" widened-set recipe:
+    // UnicodeCategory.Format isn't the full set of invisible
+    // characters, so a Format-only filter has an exploitable hole. The
+    // clearest example is U+3164 HANGUL FILLER, which renders as blank
+    // width but is category Letter (Lo), so it passes both a
+    // Format-only filter and a "letters only" rule. The variation
+    // selectors and COMBINING GRAPHEME JOINER are category Mark (Mn),
+    // also outside Format. The widened set unions Format with those
+    // strays and closes the hole.
+    [Test]
+    public void Invisible_HangulFiller_escapes_a_Format_only_filter_but_the_widened_set_catches_it()
     {
-        var chars = new char[codeUnits.Length];
-        for (int i = 0; i < codeUnits.Length; i++) chars[i] = (char)codeUnits[i];
-        return new string(chars);
+        var formatOnly = TokenSet.Category(UnicodeCategory.Format);
+
+        var invisibles =
+            TokenSet.Category(UnicodeCategory.Format)
+            | TokenSet.FromRanges(new (int Low, int High)[]
+              {
+                  (0x034F, 0x034F),    // COMBINING GRAPHEME JOINER
+                  (0x115F, 0x1160),    // Hangul choseong / jungseong fillers
+                  (0x3164, 0x3164),    // HANGUL FILLER
+                  (0xFFA0, 0xFFA0),    // halfwidth Hangul filler
+                  (0xFE00, 0xFE0F),    // variation selectors 1-16
+                  (0xE0100, 0xE01EF),  // variation selectors 17-256
+              });
+
+        // The hole: a Format-only filter doesn't contain these invisibles.
+        Assert.That(formatOnly.ContainsRune(0x3164), Is.False,
+            "HANGUL FILLER is category Letter (Lo), not Format, so a Format-only filter misses it");
+        Assert.That(formatOnly.ContainsRune(0x034F), Is.False,
+            "COMBINING GRAPHEME JOINER is category Mark (Mn), not Format");
+        Assert.That(formatOnly.ContainsRune(0xFE0F), Is.False,
+            "VARIATION SELECTOR-16 is category Mark (Mn), not Format");
+
+        // The widened set catches every one of them, including the
+        // supplementary variation selectors above the BMP.
+        Assert.That(invisibles.ContainsRune(0x3164), Is.True);
+        Assert.That(invisibles.ContainsRune(0x034F), Is.True);
+        Assert.That(invisibles.ContainsRune(0xFE0F), Is.True);
+        Assert.That(invisibles.ContainsRune(0xE0100), Is.True);
+
+        // Why HANGUL FILLER is especially dangerous: it's a Letter, so
+        // a "letters only" rule accepts it too.
+        Assert.That(TokenSet.Letters.ContainsRune(0x3164), Is.True,
+            "HANGUL FILLER is a Letter, so OneOf(TokenSet.Letters) would accept it");
+
+        // End to end: a username rule that rejects invisibles with the
+        // Format-only set lets the blank-width filler through, while the
+        // widened set rejects it.
+        var withFormatOnly = And(OneOrMore(NoneOf(formatOnly)), Eof()).Compile();
+        var withWidened = And(OneOrMore(NoneOf(invisibles)), Eof()).Compile();
+
+        string smuggled = "ad" + (char)0x3164 + "min";   // U+3164 HANGUL FILLER: displays close to "admin"
+        Assert.That(withFormatOnly.Parse(smuggled).Success, Is.True,
+            "the Format-only filter is the hole: it accepts the HANGUL FILLER");
+        Assert.That(withWidened.Parse(smuggled).Success, Is.False,
+            "the widened Invisibles set rejects the HANGUL FILLER");
+    }
+
+    // Verifies the Primer4 "Trojan Source" narrower filter: for
+    // human-language text, reject only the twelve bidi control
+    // characters instead of all of Format (which would also remove
+    // ZWNJ / ZWJ that Persian, Indic scripts, and emoji need). This
+    // asserts the set is exactly the twelve controls with nothing
+    // adjacent swept in.
+    [Test]
+    public void BidiControls_set_covers_the_twelve_bidi_format_characters()
+    {
+        var bidiControls = TokenSet.FromRanges(new (int Low, int High)[]
+        {
+            (0x202A, 0x202E),   // LRE, RLE, PDF, LRO, RLO
+            (0x2066, 0x2069),   // LRI, RLI, FSI, PDI
+            (0x200E, 0x200F),   // LRM, RLM
+            (0x061C, 0x061C),   // ALM
+        });
+
+        int[] theTwelve =
+        {
+            0x202A, 0x202B, 0x202C, 0x202D, 0x202E,   // embeddings, PDF, overrides
+            0x2066, 0x2067, 0x2068, 0x2069,           // isolates + PDI
+            0x200E, 0x200F,                           // LRM, RLM
+            0x061C,                                   // ALM
+        };
+        foreach (int codepoint in theTwelve)
+            Assert.That(bidiControls.ContainsRune(codepoint), Is.True,
+                $"U+{codepoint:X4} is a bidi control and must be in the set");
+
+        // Boundaries: characters just outside each range aren't swept in.
+        Assert.That(bidiControls.ContainsRune(0x2029), Is.False, "PARAGRAPH SEPARATOR is not a bidi control");
+        Assert.That(bidiControls.ContainsRune(0x2065), Is.False, "just below the isolate range");
+        Assert.That(bidiControls.ContainsRune(0x206A), Is.False, "just above the isolate range");
+        Assert.That(bidiControls.ContainsRune('a'), Is.False, "an ordinary letter is not a bidi control");
+
+        // End to end: a rule that rejects bidi controls stops the
+        // RIGHT-TO-LEFT OVERRIDE while accepting clean text.
+        var noBidi = And(OneOrMore(NoneOf(bidiControls)), Eof()).Compile();
+        Assert.That(noBidi.Parse("grant").Success, Is.True);
+        Assert.That(noBidi.Parse("gr" + (char)0x202E + "ant").Success, Is.False,
+            "the RLO (U+202E) is rejected by the bidi-control filter");
     }
 }

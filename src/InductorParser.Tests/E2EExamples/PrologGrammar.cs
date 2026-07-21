@@ -19,7 +19,7 @@ public static class PrologGrammar
     // CR and LF as two separate scalars (not the CRLF grapheme
     // cluster). The line-break rule below wants either rune to match
     // on its own. Built from Singles because Runes("\r\n") would
-    // throw — adjacent CR+LF form the CRLF cluster under UAX #29.
+    // throw: adjacent CR+LF form the CRLF cluster under UAX #29.
     private static readonly TokenSet CrlfChars = TokenSet.Single('\r') | TokenSet.Single('\n');
     private static readonly TokenSet LetterChars = TokenSet.Ascii.Letters;
     private static readonly TokenSet CapitalChars = TokenSet.Range('A', 'Z');
@@ -283,8 +283,8 @@ public static class PrologGrammar
         );
 
         // Query = ws FunctorList ws "." ws Eof
-        // Queries are a single statement terminated by '.', no
-        // OneOrMore wrapper, unlike Document.
+        // Queries are a single statement terminated by '.', with no
+        // OneOrMore around them, unlike Document.
         var query = And(
             OptionalWhitespace,
             functorList,

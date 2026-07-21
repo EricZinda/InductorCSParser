@@ -11,7 +11,7 @@ namespace InductorParser.Tests;
 //
 // Two things under test:
 //
-//   1. UAX #18 Annex C coverage: every single-rune terminator (LF, VT,
+//   1. UTS #18 §1.6 (RL1.6) coverage: every single-rune terminator (LF, VT,
 //      FF, CR, NEL, LS, PS) is accepted, and the two-rune CRLF is
 //      consumed as a single terminator rather than split.
 //   2. The eofIsEol flag and Optional wrapping compose as advertised:
@@ -108,8 +108,8 @@ public class EndOfLineRuleTests
     [Test]
     public void Rejects_ordinary_whitespace()
     {
-        // Space (U+0020) and tab (U+0009) are Whitespace but NOT line
-        // terminators under UAX #18 Annex C.
+        // Space (U+0020) and tab (U+0009) are Whitespace but aren't line
+        // terminators under UTS #18 §1.6 (RL1.6).
         var spaceResult = EndOfLine().Parse(Ch(0x0020));
         Assert.That(spaceResult.Success, Is.False);
 
@@ -196,7 +196,7 @@ public class EndOfLineRuleTests
     public void TokenSet_LineTerminators_contains_CRLF_cluster()
     {
         // CRLF is one user-perceived character (UAX #29 GB3 keeps CR and
-        // LF in the same grapheme cluster). LineTerminators carries it
+        // LF in the same grapheme cluster). LineTerminators includes it
         // as a multi-rune entry so OneOf, NoneOf, ScanUntil, and
         // ScanWhile all treat the cluster as one terminator. Without
         // this entry, ScanUntil(LineTerminators) (which is
@@ -220,6 +220,35 @@ public class EndOfLineRuleTests
         var result = rule.Parse("\r\n");
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         Assert.That(result.Tree!.ToString(), Is.EqualTo("\r\n"));
+    }
+
+    [Test]
+    public void Literal_crlf_spans_a_two_token_crlf_where_OneOf_stops_at_the_cr()
+    {
+        // Why EndOfLine() is Or(Literal("\r\n"), OneOf(TokenSet.LineTerminators))
+        // rather than the OneOf alone: on legacy runtimes (.NET Framework,
+        // .NET Core 3.x, Unity's Mono) StringInfo predates the UAX #29 rule
+        // that glues CR to LF, so the lexer hands CR and LF back as two
+        // separate tokens. OneOf reads exactly one token, so there it would
+        // match the CR alone and leave the LF to count as a second
+        // terminator. Literal matches its text across token boundaries, so
+        // it consumes the pair as one terminator on every runtime.
+        //
+        // A UAX #29 runtime never serves CRLF as two tokens at the top
+        // level, so this test recreates that stream shape with WithinToken:
+        // its sub-lexer hands the inner rule the outer CRLF token one rune
+        // per Read, the same two-token stream the legacy lexer serves, and
+        // requires the inner rule to consume every rune.
+
+        // Literal("\r\n") consumes both one-rune tokens as one match.
+        var literalResult = WithinToken(Literal(CRLF)).Parse(CRLF);
+        Assert.That(literalResult.Success, Is.True, literalResult.ErrorMessage);
+
+        // OneOf(LineTerminators) matches the CR token and stops, leaving
+        // the LF unconsumed, so WithinToken rejects the partial match.
+        var oneOfResult = WithinToken(OneOf(TokenSet.LineTerminators)).Parse(CRLF);
+        Assert.That(oneOfResult.Success, Is.False,
+            "OneOf reads exactly one token, so it matches the CR and leaves the LF behind");
     }
 
     [Test]
@@ -277,7 +306,7 @@ public class EndOfLineRuleTests
     // -----------------------------------------------------------------
     // Naming and flatten policy on factory-built EndOfLine rules.
 
-    // EndOfLine().As(name) names the rule, and the named wrapper is
+    // EndOfLine().As(name) names the rule, and the named rule's Symbol is
     // findable in the parse tree.
     [Test]
     public void EndOfLine_factory_supports_As_for_tree_find()
@@ -302,7 +331,7 @@ public class EndOfLineRuleTests
 
     // A user-written factory that sets its flatten policy with
     // FlattenByDefault can still be named with .As(name) by its caller,
-    // and the named wrapper is findable.
+    // and the named rule's Symbol is findable.
     [Test]
     public void User_factory_using_FlattenByDefault_stays_nameable()
     {

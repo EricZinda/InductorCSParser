@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.Text;
+using InductorParser.Lexing.Unicode;
 
 namespace InductorParser.Lexing;
 
@@ -21,14 +22,20 @@ namespace InductorParser.Lexing;
 //   * Compatibility forms (FormKC, FormKD): walk the original
 //     grapheme by grapheme, verify at each boundary that normalizing
 //     the chunk-since-the-last-verified-boundary matches the next
-//     portion of the normalized string. When the check fails (Korean
-//     compatibility jamo is the known case), the chunk absorbs the
-//     next grapheme and the check is tried again. The check is
-//     general: it catches any grapheme-count change, so correctness
-//     doesn't depend on which script triggered it. Korean jamo being
-//     the only such case in Unicode 16 just keeps the absorbed chunks
-//     small. See docs/MappingPositionsAfterNormalization.md for why
-//     this per-boundary check is correct.
+//     portion of the normalized string. The check fails when the
+//     conversions of adjacent original graphemes merge into one
+//     grapheme, which only Korean jamo sequences are known to do
+//     (compatibility and halfwidth forms). The chunk then absorbs
+//     the next grapheme and the check is tried again. A lone
+//     grapheme that expands (the fi ligature becoming "fi", Thai
+//     SARA AM splitting in two) passes the check on the first try
+//     and never needs absorption. The check is general: it catches
+//     any drift between the per-grapheme walk and the normalized
+//     string, so correctness doesn't depend on which script
+//     triggered it. Korean jamo being the only known merge case
+//     just keeps the absorbed chunks small. See
+//     docs/MappingPositionsAfterNormalization.md for why this
+//     per-boundary check is correct.
 //
 // When the position lands inside a grapheme (or multi-grapheme region)
 // that got rewritten, the walker snaps back to the start of that
@@ -59,10 +66,10 @@ internal static class NormalizedPositionMap
     private static int TranslateViaLockstep(string original, string normalized, int normalizedIndex)
     {
         // Step both sides through the shared per-input grapheme-boundary
-        // cache (a bool-array lookup) rather than StringInfo.GetNextTextElement,
-        // which allocates a substring for every grapheme just to read its
+        // cache (a bool-array lookup) rather than re-segmenting each
+        // grapheme just to read its
         // length. The normalized side's index was already built by the lexer
-        // during the parse; the original side's is built once here and reused
+        // during the parse. The original side's is built once here and reused
         // by every later position lookup on the same input. This is the whole
         // reason GraphemeClusterIndex exists (see its header), so a tree walk
         // that reads many Symbol.SourceRange / SourceText values doesn't pay a
@@ -116,18 +123,18 @@ internal static class NormalizedPositionMap
 
         while (origPos < original.Length)
         {
-            // GetNextTextElement always returns at least one char at a valid
-            // position. The Invariant.That catches the impossible-zero case
-            // that would spin this loop forever.
-            string grapheme = StringInfo.GetNextTextElement(original, origPos);
-            int graphemeLength = grapheme.Length;
+            // The segmenter always returns at least one char at a valid
+            // in-range position. The Invariant.That catches the
+            // impossible-zero case that would spin this loop forever.
+            int graphemeLength = GraphemeSegmentation
+                .GetLengthOfFirstExtendedGraphemeCluster(original.AsSpan(origPos));
             Invariant.That(graphemeLength > 0,
-                $"StringInfo.GetNextTextElement returned an empty element on the original string "
+                $"GetLengthOfFirstExtendedGraphemeCluster returned an empty element on the original string "
                 + $"at position {origPos} (length {original.Length}) in TranslateViaPerGraphemeNormalize.");
             origPos += graphemeLength;
 
             string chunk = original[lastSafeOrigPos..origPos];
-            string chunkNormalized = chunk.Normalize(form);
+            string chunkNormalized = UnicodeNormalization.Normalize(chunk, form);
 
             if (normPos + chunkNormalized.Length <= normalized.Length
                 && string.CompareOrdinal(normalized, normPos, chunkNormalized, 0, chunkNormalized.Length) == 0)

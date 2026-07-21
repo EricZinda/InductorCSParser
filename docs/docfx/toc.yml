@@ -1,0 +1,45 @@
+# Top navigation for the Inductor Parser docs site.
+# The build copies the curated docs/ markdown into docs/docfx/docs/ (see
+# build-docs.sh), so every href below is a real file at build time and
+# DocFX rewrites the .md links to .html in the output. The capitalized
+# Primer3/Primer4 names match the actual filenames on disk.
+- name: Home
+  href: index.md
+- name: Guides
+  items:
+    - name: Primer - Building a Grammar
+      href: docs/primer1.md
+    - name: Primer - Parsing and Processing
+      href: docs/primer2.md
+    - name: Primer - Parsing Errors
+      href: docs/primerFailure.md
+    - name: Primer - Unicode
+      href: docs/Primer3.md
+    - name: Primer - Security
+      href: docs/Primer4.md
+    - name: Tutorial - Peek
+      href: docs/tutorial-peek.md
+- name: Reference
+  items:
+    - name: Inductor Parser Reference
+      href: docs/InductorParserReference.md
+    - name: Unicode Gotchas
+      href: docs/UnicodeGotchas.md
+    - name: Unicode Internals
+      href: docs/UnicodeInternalsArchitecture.md
+- name: Architecture
+  items:
+    - name: Code Architecture
+      href: docs/CodeArchitecture.md
+    - name: Error Reporting Architecture
+      href: docs/ErrorArchitecture.md
+    - name: Test Architecture
+      href: docs/TestArchitecture.md
+    - name: Terminology
+      href: docs/Terminology.md
+    - name: Mapping Positions After Normalization
+      href: docs/MappingPositionsAfterNormalization.md
+- name: API
+  href: api/index.md
+- name: GitHub
+  href: https://github.com/EricZinda/InductorCSParser

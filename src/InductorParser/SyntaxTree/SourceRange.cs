@@ -1,3 +1,5 @@
+using System;
+
 namespace InductorParser.SyntaxTree;
 
 /// <summary>
@@ -6,7 +8,7 @@ namespace InductorParser.SyntaxTree;
 /// equals the matched length in chars.
 /// </summary>
 /// <remarks>
-/// Both endpoints carry the source string they point into (via <see cref="SourcePosition.Input"/>),
+/// Both endpoints keep the source string they point into (via <see cref="SourcePosition.Input"/>),
 /// so <see cref="SubstringOfInput"/> can produce the matched text without the consumer having to know
 /// which input the range came from.
 /// </remarks>
@@ -18,13 +20,34 @@ public readonly struct SourceRange
     /// <summary>The end of the range, one past the last character matched.</summary>
     public SourcePosition End { get; }
 
-    internal SourceRange(SourcePosition start, SourcePosition end)
+    /// <summary>
+    /// Builds a range from two existing endpoints. The typical use is synthesizing the span of
+    /// a compound AST node from its children's spans: <c>new SourceRange(left.Start, right.End)</c>
+    /// covers everything from the start of the left child to the end of the right one.
+    /// </summary>
+    /// <remarks>
+    /// Both endpoints must point into the same input text, because <see cref="SubstringOfInput"/>
+    /// indexes <c>Start.Input</c> with <c>End.CharIndex</c>. Positions from the same parse always
+    /// do. Two separate string instances with equal content count as the same input too, so
+    /// positions built by <see cref="SourcePosition.From"/> over two copies of the same text
+    /// also work.
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    /// The endpoints point into different input strings, or <paramref name="end"/> comes before
+    /// <paramref name="start"/>.
+    /// </exception>
+    public SourceRange(SourcePosition start, SourcePosition end)
     {
-        Invariant.That(ReferenceEquals(start.Input, end.Input),
-            $"SourceRange endpoints point into different strings (Start.Input length "
-            + $"{start.Input.Length}, End.Input length {end.Input.Length}). Both must come "
-            + "from the same parse's original input, since SubstringOfInput indexes Start.Input "
-            + "with End.CharIndex.");
+        if (start.Input != end.Input)
+            throw new ArgumentException(
+                "SourceRange endpoints point into different input strings. Both positions must "
+                + "come from the same input (typically the same parse), because SubstringOfInput "
+                + "reads the matched text out of Start.Input using End.CharIndex.", nameof(end));
+        if (end.CharIndex < start.CharIndex)
+            throw new ArgumentException(
+                $"SourceRange end (char index {end.CharIndex}) comes before its start (char index "
+                + $"{start.CharIndex}). Start is the first character matched and End is one past "
+                + "the last, so End must be at or after Start.", nameof(end));
         Start = start;
         End = end;
     }
@@ -38,4 +61,17 @@ public readonly struct SourceRange
     /// </remarks>
     public string SubstringOfInput() =>
         Start.Input.Substring(Start.CharIndex, End.CharIndex - Start.CharIndex);
+
+    /// <summary>
+    /// The full text of the line <see cref="Start"/> falls on, terminator excluded.
+    /// </summary>
+    /// <remarks>
+    /// Shorthand for <c>Start.SourceLine()</c>. Use it with
+    /// <see cref="SourcePosition.CharColumn"/> to draw a compiler-style caret under
+    /// this span: the line for context, the column to indent the caret. On a
+    /// range that spans more than one line this returns the first line, the one
+    /// <see cref="Start"/> is on. See <see cref="SourcePosition.SourceLine"/> for
+    /// how the line boundaries are found.
+    /// </remarks>
+    public string SourceLine() => Start.SourceLine();
 }

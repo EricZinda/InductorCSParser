@@ -3,7 +3,32 @@ using System.Globalization;
 
 namespace InductorParser;
 
-// XID identifier support for TokenSet (UAX #31 R1's XID_Start and XID_Continue).
+// What this file is for: matching programming-language identifiers, names
+// like variables, functions, and keywords, across all of Unicode rather than
+// just ASCII.
+//
+// In ASCII an identifier is "a letter or underscore, then any sequence of letters,
+// digits, or underscores" (foo, _count, Bar2). Unicode generalizes that to
+// every script (Greek, Cyrillic, Han, Devanagari, and so on) in UAX #31,
+// which defines two character sets:
+//   XID_Start    - characters allowed as the first character (letters and a
+//                  few letter-like things)
+//   XID_Continue - characters allowed after it (XID_Start plus digits,
+//                  combining marks, and underscore-like connectors)
+// Rules.Identifier() matches one XID_Start character followed by zero or more
+// XID_Continue characters, so this file builds TokenSet.XidStart and
+// TokenSet.XidContinue from the Unicode data to back it.
+//
+// Why "XID" and not plain "ID": Unicode often encodes the same-looking text
+// more than one way (the single character ﬁ ligature versus the two character "fi", fullwidth Ａ
+// versus plain A). Normalization rewrites text into one canonical form so
+// those match. NFKC and NFKD are the two forms that expand such
+// look-alikes, and "NFKx" means either of them. Plain ID_Start / ID_Continue
+// aren't stable under that rewrite: a character can be a valid identifier
+// until normalization turns it into something that isn't. XID_Start and
+// XID_Continue drop those characters, so normalizing a valid identifier
+// always leaves a valid one (this is UAX #31 R1). The rest of this header
+// explains how the two sets are derived from the Unicode data files.
 //
 // Sources:
 //   UAX #31 §2:             https://www.unicode.org/reports/tr31/#Default_Identifier_Syntax
@@ -12,7 +37,7 @@ namespace InductorParser;
 //   DerivedCoreProperties:  https://www.unicode.org/Public/17.0.0/ucd/DerivedCoreProperties.txt
 //   DerivedGeneralCategory: https://www.unicode.org/Public/17.0.0/ucd/extracted/DerivedGeneralCategory.txt
 // 
-// Here are the definitions from the DerivedCoreProperties.txt header (described right after).
+// Here are the definitions from the DerivedCoreProperties.txt header (they are described next).
 //
 //   ID_Start     = Lu + Ll + Lt + Lm + Lo + Nl
 //                + Other_ID_Start
@@ -40,46 +65,68 @@ namespace InductorParser;
 //    above. DerivedCoreProperties.txt publishes the computed lists,
 //    and matching them is what this file is for.
 //
-// What "closed under NFKx" means: if you take an identifier and apply
-// NFKC or NFKD to it, the result is still a valid identifier. To make
-// that property hold, XID_Start drops any character whose decomposed
-// form wouldn't itself be a valid identifier start. U+309B (a Japanese
-// voicing mark) is the canonical case: it's a Modifier Symbol (Sk),
-// not a letter, and reaches ID_Start through Other_ID_Start (the
-// OtherIdStart table below lists it with that category). But it
-// decomposes to "space + combining mark", and an identifier can't
-// start with a space, so XID_Start excludes 309B. The same filter on
-// the continue side gives XID_Continue.
+// An example of a character the closure drops: U+309B (a Japanese voicing
+// mark) is a Modifier Symbol (Sk), not a letter, and reaches ID_Start
+// through Other_ID_Start (the OtherIdStart table below lists it with that
+// category). But it decomposes to "space + combining mark", and an
+// identifier can't start with a space, so XID_Start excludes 309B. The same
+// filter on the continue side gives XID_Continue.
 //
-// How we get the list of dropped characters without running NFKx
-// ourselves: Unicode publishes both ID_Start and XID_Start as separate
-// lists in DerivedCoreProperties.txt, so the closure-removed
-// characters are just (ID_Start minus XID_Start). The
-// NfkxClosureRemovedFromXidStart and NfkxClosureRemovedFromXidContinue
-// constants below are that subtraction, and their matches_UCD tests
-// fetch both lists from DerivedCoreProperties.txt and verify it.
-//
-// Sources: UAX #15 (https://www.unicode.org/reports/tr15/) defines the
-// K-form normalizations (NFKC and NFKD; "NFKx" is the spec's shorthand
-// for either one). UAX #31 (cited below) defines XID as their closure.
-//
-// Where each piece comes from:
-//   * The General_Category sets (Lu..Nl, Mn, Mc, Nd, Pc) come from the .NET
-//     BCL via CategoriesUnion (so they track whatever Unicode version the
-//     BCL ships).
-//   * Other_ID_Start and Other_ID_Continue: hand-typed below, verbatim
-//     from PropList.txt at Unicode 17.0.
-//   * NFKx closure removals: hand-typed below as
-//     NfkxClosureRemovedFromXidStart and NfkxClosureRemovedFromXidContinue,
-//     computed as (ID_X minus XID_X) per DerivedCoreProperties.txt.
-//   * "- Pattern_Syntax - Pattern_White_Space" from the formula. The
-//     identifier-base overlaps with these two properties are captured
-//     as IdCategoriesInPatternSyntax and IdCategoriesInPatternWhiteSpace
-//     (the latter is empty at Unicode 17.0). Each constant has its own
-//     matches_UCD test, and the build applies both subtractions.
+// UAX #15 (https://www.unicode.org/reports/tr15/) defines NFKC and NFKD.
+// UAX #31 (cited below) defines XID.
 //
 public readonly partial struct TokenSet
 {
+    // ============================================================
+    // Build methods: combine the spec constants with the BCL's
+    // CategoriesUnion to produce the final XID sets.
+    // ============================================================
+
+    // Each Build method below is a direct translation of one line from
+    // the formula at the top of this file. The "|" operator is "+", and
+    // "-" is set difference. The General_Category operands (Lu..Nl, Mn, Mc,
+    // Nd, Pc) come through CategoriesUnion, which reads the BCL's category
+    // data, so they track whatever Unicode version the BCL ships. Every other
+    // operand is a hand-typed constant below, fixed at Unicode 17.0.
+
+    // ID_Start = Lu + Ll + Lt + Lm + Lo + Nl + Other_ID_Start
+    //          - Pattern_Syntax - Pattern_White_Space
+    private static TokenSet BuildIdStart()
+    {
+        var lettersAndLetterNumber = CategoriesUnion(
+            UnicodeCategory.UppercaseLetter,
+            UnicodeCategory.LowercaseLetter,
+            UnicodeCategory.TitlecaseLetter,
+            UnicodeCategory.ModifierLetter,
+            UnicodeCategory.OtherLetter,
+            UnicodeCategory.LetterNumber);
+        return (lettersAndLetterNumber | FromRanges(OtherIdStart))
+            - FromRanges(IdCategoriesInPatternSyntax)
+            - FromRanges(IdCategoriesInPatternWhiteSpace);
+    }
+
+    // ID_Continue = ID_Start + Mn + Mc + Nd + Pc + Other_ID_Continue
+    //             - Pattern_Syntax - Pattern_White_Space
+    private static TokenSet BuildIdContinue()
+    {
+        var continueExtraCategories = CategoriesUnion(
+            UnicodeCategory.NonSpacingMark,
+            UnicodeCategory.SpacingCombiningMark,
+            UnicodeCategory.DecimalDigitNumber,
+            UnicodeCategory.ConnectorPunctuation);
+        return (BuildIdStart() | continueExtraCategories | FromRanges(OtherIdContinue))
+            - FromRanges(IdCategoriesInPatternSyntax)
+            - FromRanges(IdCategoriesInPatternWhiteSpace);
+    }
+
+    // XID_Start = ID_Start, closed under NFKx
+    private static TokenSet BuildXidStart() =>
+        BuildIdStart() - FromRanges(NfkxClosureRemovedFromXidStart);
+
+    // XID_Continue = ID_Continue, closed under NFKx
+    private static TokenSet BuildXidContinue() =>
+        BuildIdContinue() - FromRanges(NfkxClosureRemovedFromXidContinue);
+
     // ============================================================
     // Spec-named source constants
     // ============================================================
@@ -116,8 +163,10 @@ public readonly partial struct TokenSet
     };
 
     // Code points that NFKx closure drops on the way from ID_Start to
-    // XID_Start, at Unicode 17.0. See the closure-rule explanation at the
-    // top of this file.
+    // XID_Start, at Unicode 17.0 (the closure rule is explained at the top of
+    // this file). We don't run NFKx to find these: Unicode publishes ID_Start
+    // and XID_Start as separate lists, so they're just ID_Start minus
+    // XID_Start, per the recipe below.
     //
     // Recipe to regenerate: take every "; ID_Start" range from
     // DerivedCoreProperties.txt and every "; XID_Start" range, and
@@ -222,55 +271,7 @@ public readonly partial struct TokenSet
     /// </summary>
     /// <remarks>
     /// Includes everything in <see cref="XidStart"/> plus combining marks,
-    /// decimal digits, and connector punctuation (so "_" is already in
-    /// XidContinue regardless of the start-side profile).
+    /// decimal digits, and connector punctuation (e.g. "_").
     /// </remarks>
     public static TokenSet XidContinue => _xidContinue.Value;
-
-    // ============================================================
-    // Build methods: combine the spec constants with the BCL's
-    // CategoriesUnion to produce the final XID sets.
-    // ============================================================
-
-    // Each Build method below is a direct translation of one line from
-    // the formula at the top of this file. The "|" operator is "+", the
-    // "& ~" pair is "-".
-
-    // ID_Start = Lu + Ll + Lt + Lm + Lo + Nl + Other_ID_Start
-    //          - Pattern_Syntax - Pattern_White_Space
-    private static TokenSet BuildIdStart()
-    {
-        var lettersAndLetterNumber = CategoriesUnion(
-            UnicodeCategory.UppercaseLetter,
-            UnicodeCategory.LowercaseLetter,
-            UnicodeCategory.TitlecaseLetter,
-            UnicodeCategory.ModifierLetter,
-            UnicodeCategory.OtherLetter,
-            UnicodeCategory.LetterNumber);
-        return (lettersAndLetterNumber | FromRanges(OtherIdStart))
-            & ~FromRanges(IdCategoriesInPatternSyntax)
-            & ~FromRanges(IdCategoriesInPatternWhiteSpace);
-    }
-
-    // ID_Continue = ID_Start + Mn + Mc + Nd + Pc + Other_ID_Continue
-    //             - Pattern_Syntax - Pattern_White_Space
-    private static TokenSet BuildIdContinue()
-    {
-        var continueExtraCategories = CategoriesUnion(
-            UnicodeCategory.NonSpacingMark,
-            UnicodeCategory.SpacingCombiningMark,
-            UnicodeCategory.DecimalDigitNumber,
-            UnicodeCategory.ConnectorPunctuation);
-        return (BuildIdStart() | continueExtraCategories | FromRanges(OtherIdContinue))
-            & ~FromRanges(IdCategoriesInPatternSyntax)
-            & ~FromRanges(IdCategoriesInPatternWhiteSpace);
-    }
-
-    // XID_Start = ID_Start, closed under NFKx
-    private static TokenSet BuildXidStart() =>
-        BuildIdStart() & ~FromRanges(NfkxClosureRemovedFromXidStart);
-
-    // XID_Continue = ID_Continue, closed under NFKx
-    private static TokenSet BuildXidContinue() =>
-        BuildIdContinue() & ~FromRanges(NfkxClosureRemovedFromXidContinue);
 }

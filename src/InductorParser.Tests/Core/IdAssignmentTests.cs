@@ -70,7 +70,7 @@ public class IdAssignmentTests
     public void Same_named_rule_referenced_twice_in_a_grammar_compiles()
     {
         // Reachability is per-rule, not per-edge. A single rule reached via
-        // two parents is still one rule, so its name should not be flagged.
+        // two parents is still one rule, so its name shouldn't be flagged.
         var sharedRule = OneOrMore(OneOf(TokenSet.Letters)).As("shared");
         var doc = And(sharedRule, sharedRule);
 
@@ -123,8 +123,8 @@ public class IdAssignmentTests
     public void Named_Token_leaves_carry_the_rule_id_not_the_rune_id()
     {
         // Companion to Two_named_single_rune_Tokens_of_the_same_rune_get_distinct_ids.
-        // The parse-tree leaf a named single-rune Token emits has to
-        // carry the rule's (new custom-range) id, otherwise Tree.Find
+        // The parse-tree leaf a named single-rune Token emits needs
+        // the rule's (new custom-range) id, otherwise Tree.Find
         // against the rule wouldn't reach it. The leaf id is what tree
         // walkers compare against, so the rule.Id == leaf.Id symmetry
         // is what makes the distinct-id fix observable.
@@ -190,7 +190,7 @@ public class IdAssignmentTests
         // any reachable rule that's already sealed. A pre-compiled rule
         // reused as a child of a new composite has its id assignment,
         // FirstConsumedTokens, projected literal text, etc., already
-        // committed; the new Compile's passes don't revisit those fields,
+        // committed. The new Compile's passes don't revisit those fields,
         // so reusing the sealed rule would silently corrupt one grammar
         // or the other. The walk catches it.
         var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 5678);

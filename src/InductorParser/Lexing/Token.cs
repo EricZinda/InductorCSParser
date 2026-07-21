@@ -15,7 +15,7 @@ namespace InductorParser.Lexing;
 //     on the stack or inline in whatever holds it, and returning one from a
 //     method copies its fields into the caller's storage rather than
 //     allocating. The input string is the only heap object in the picture.
-//     Every Token just carries an 8-byte pointer to it plus a few ints.
+//     Every Token just stores an 8-byte pointer to it plus a few ints.
 //
 //   * `readonly` means the Token's fields never change after construction.
 //     That lets the compiler avoid defensive copies when passing a Token
@@ -33,7 +33,7 @@ namespace InductorParser.Lexing;
 
 /// <summary>
 /// One chunk of input the lexer just consumed: a Unicode grapheme (i.e. one
-/// StringInfo grapheme cluster, possibly several runes wide) or the EOF token
+/// UAX #29 grapheme cluster, possibly several runes wide) or the EOF token
 /// at the end of the input. Rather than copying the matched text into a new
 /// string, a Token keeps a reference to the original input plus an offset and
 /// a length.

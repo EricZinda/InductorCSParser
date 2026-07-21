@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text;
 using InductorParser.Lexing;
+using InductorParser.Lexing.Unicode;
 using InductorParser.SyntaxTree;
 
 namespace InductorParser.StateMachine;
@@ -103,7 +104,7 @@ public static class StateMachineParser
         // a huge pre-canceled input doesn't pay the normalize cost either.
         if (options.Cancellation != null && options.Cancellation.IsCanceled)
         {
-            string canceledMessage = Rule.BuildBudgetMessage(ParseOutcome.Canceled, abortPos: 0, input, options);
+            string canceledMessage = Rule.BuildBudgetMessage(ParseOutcome.Canceled, abortPosition: 0, input, options);
             return ParseResult.Aborted(ParseOutcome.Canceled, errorCharIndex: 0, canceledMessage, input, rootRule);
         }
 
@@ -390,13 +391,16 @@ public static class StateMachineParser
     }
 
     // Normalize the caller's input string into the form the lexer should
-    // see. When the input is already in the target form, String.Normalize
-    // returns the same reference and the downstream position-translation
-    // step is a pointer-equality pass-through. A null form skips
-    // normalization entirely. The form is read from the compiled rule
-    // (Rule.NormalizationForm), where it's committed at Compile time.
+    // see, through the same process-wide normalizer the recursive engine
+    // uses (UnicodeNormalization), so the two engines always agree on
+    // what the lexer sees. When the input is already in the target form,
+    // the normalizer returns the same reference and the downstream
+    // position-translation step is a pointer-equality pass-through. A
+    // null form skips normalization entirely. The form is read from the
+    // compiled rule (Rule.NormalizationForm), where it's committed at
+    // Compile time.
     private static string NormalizeIfRequested(string input, NormalizationForm? form) =>
-        form.HasValue ? input.Normalize(form.Value) : input;
+        form.HasValue ? UnicodeNormalization.Normalize(input, form.Value) : input;
 
     private static long ReduceCountMatches(List<OutputOp> ops, string input, SymbolId matchId, long _)
     {

@@ -124,8 +124,9 @@ internal readonly record struct RuleStartRequirements(
     // publish.
     //
     // "My rule NEVER ADVANCES": examines the lookahead but doesn't
-    // consume it. Advance.Never excludes the rule from the shortcut
-    // by construction. Use for: Eof, Not, Peek.
+    // consume it. Advance.Never keeps the rule out of the shortcut
+    // entirely (only Advance.Always rules get filtered). Use for:
+    // Eof, Not, Peek.
     public static readonly RuleStartRequirements NeverAdvances =
         new(TokenSet.Empty, Advance.Never, Polarity.MustBeIn);
 
@@ -138,7 +139,7 @@ internal readonly record struct RuleStartRequirements(
 
     // "My rule MAY ADVANCE BY ANY TOKENS": may consume zero or more
     // tokens, no upfront filter on what's accepted. Advance.Sometimes
-    // excludes the rule from the shortcut by construction. Use for:
+    // keeps the rule out of the shortcut entirely. Use for:
     // ScanUntil.
     public static readonly RuleStartRequirements MayAdvanceByAnyTokens =
         new(TokenSet.Universe, Advance.Sometimes, Polarity.MustBeIn);
@@ -357,7 +358,7 @@ internal readonly record struct RuleStartRequirements(
         TokenSet positiveRunes = positiveSet.HasMultiRuneGraphemes
             ? positiveSet.RunesOnlyPart
             : positiveSet;
-        TokenSet difference = negativeSet & ~positiveRunes;
+        TokenSet difference = negativeSet & (TokenSet.Universe - positiveRunes);
         return (difference, Polarity.MustNotBeIn);
     }
 }

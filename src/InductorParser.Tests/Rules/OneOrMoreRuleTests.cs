@@ -65,7 +65,7 @@ public class OneOrMoreRuleTests
     {
         // Inner And(Letter, Letter) consumes the first letter then fails
         // on the second, recording a mechanical failure at position 1.
-        // OneOrMore carries a named WithError; composite anchoring records
+        // OneOrMore has a named WithError, and composite anchoring records
         // it at the deepest position its subtree reached (1), where it
         // ties the mechanical failure on depth and wins the named-beats-
         // mechanical tie-break. See docs/ErrorArchitecture.md.
@@ -75,7 +75,7 @@ public class OneOrMoreRuleTests
         var result = rule.Parse("a1");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected letter pairs"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected letter pairs at line 1, column 2."));
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     }
 }

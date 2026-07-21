@@ -42,7 +42,7 @@ public class ScanWhileRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need a letter"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need a letter at line 1, column 1."));
     }
 
     [Test]
@@ -57,7 +57,7 @@ public class ScanWhileRuleTests
         // (position 3, the '!'), independent of whether .WithError is
         // attached. See ErrorArchitecture.md.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need four letters"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need four letters at line 1, column 4."));
     }
 
     [Test]
@@ -74,9 +74,9 @@ public class ScanWhileRuleTests
         // minimumCount: 0 makes the rule always succeed. With no
         // matching tokens at the current position, the leaf is
         // zero-width and ToString() is the empty string. This is the
-        // shape grammars want for "optional run of body chars" (TOML
+        // shape grammars want for "optional sequence of body chars" (TOML
         // literal-string body, optional text fields): one leaf always
-        // emitted, no Optional wrapper that changes the parent's
+        // emitted, no Optional layer that changes the parent's
         // child count.
         var rule = ScanWhile(TokenSet.Ascii.Letters, minimumCount: 0);
         var result = rule.Parse("", new ParseOptions { AllowTrailingInput = true });
@@ -152,7 +152,7 @@ public class ScanWhileRuleTests
         // rendering, Compile's normalization pass mutates _set onto
         // the lexer-normalized form (U+212A KELVIN -> U+004B 'K'
         // under FormC), and the cache used to keep the pre-projection
-        // entry. ScanWhile consumes a run of matching runes, so this
+        // entry. ScanWhile consumes a sequence of matching runes, so this
         // exercises the SUCC trace path with a single Lexer step.
         var sink = NewSink();
         // KelvinGrapheme is U+212A wrapped in Canary so an editor
@@ -197,10 +197,10 @@ public class ScanWhileRuleTests
     {
         // Sibling of the OneOf / NoneOf / AnyToken / WithinToken explicit-
         // SymbolId tests added in p1nd. ScanWhile emits one leaf per
-        // matched run with the rule's Id directly (no rune-as-leaf-id
-        // shortcut, since a run of multiple tokens doesn't have one
-        // distinguished rune to carry). .As(SymbolId) writes the user's
-        // explicit value into Id, so the leaf carries it by construction.
+        // matched span with the rule's Id directly (no rune-as-leaf-id
+        // shortcut, since a match of multiple tokens doesn't have one
+        // distinguished rune to use as the id). .As(SymbolId) writes the
+        // user's explicit value into Id, so the leaf gets it automatically.
         // Test locks in the matrix so a future leaf-id refactor that
         // routes ScanWhile through ResolveLeafId or a similar helper has
         // to keep .As(SymbolId) honored.
@@ -266,7 +266,7 @@ public class ScanWhileRuleTests
     // Compile-form normalization matrix
     //
     // See GraphemeRuleTests for the full matrix rationale. ScanWhile's
-    // matching data is the same TokenSet shape OneOf / NoneOf carry,
+    // matching data is the same TokenSet shape OneOf / NoneOf hold,
     // and the same OneOfRule.NormalizeAndValidate helper handles the
     // Compile-time projection. Default minimumCount=1 means the rule
     // isn't zero-matchable, so a stale set surfaces as outright

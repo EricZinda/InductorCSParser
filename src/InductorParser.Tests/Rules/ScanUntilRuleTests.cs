@@ -29,7 +29,7 @@ public class ScanUntilRuleTests
     // \, escape end is one of "/\bfnrt. Matches the grammar the
     // benchmark uses in InductorJsonParser, minus the delimiters.
     // eofIsTerminator: true so these tests can drive bodies that don't
-    // include the closing quote; the focus is the escape handling and
+    // include the closing quote. The focus is the escape handling and
     // body composition, not the stopper-required check (which has its
     // own dedicated tests).
     private static Rule JsonLike()
@@ -105,7 +105,7 @@ public class ScanUntilRuleTests
         //
         // Asserts the user-visible consequence: the escape should fire
         // on the decomposed cluster and run the escape-end on the next
-        // token. Here escape end is Token('x'); the input has 'Y'
+        // token. Here escape end is Token('x'), and the input has 'Y'
         // after the e-acute, so when the escape fires the escape-end
         // fails and the whole ScanUntil fails. Without the fix the
         // escape is silently skipped, the cluster is consumed as body,
@@ -131,8 +131,8 @@ public class ScanUntilRuleTests
         // Happy-path sibling of the test above: same shape, but the
         // input has the matching 'x' after the e-acute so the escape
         // sequence completes. Without the fix the escape silently
-        // never fires and the cluster + 'x' are consumed as body too;
-        // with the fix the escape fires, escape-end matches 'x', and
+        // never fires and the cluster + 'x' are consumed as body too.
+        // With the fix the escape fires, escape-end matches 'x', and
         // scanning resumes for the rest of the body. Either way the
         // outer And succeeds (the cursor reaches the same '|'), so
         // success alone isn't the discriminator. The trace is.
@@ -241,7 +241,7 @@ public class ScanUntilRuleTests
         var result = rule.Parse(@"hello\n");
 
         Assert.That(result.Success, Is.True, result.ErrorMessage);
-        // The leaf carries the raw source text, backslash and all.
+        // The leaf keeps the raw source text, backslash and all.
         // Lazy decode is deliberate: the primitive doesn't materialize
         // the decoded form.
         Assert.That(result.Tree!.ToString(), Is.EqualTo(@"hello\n"));
@@ -359,8 +359,8 @@ public class ScanUntilRuleTests
         // SymbolId tests added in p1nd. ScanUntil emits one leaf per
         // body run with the rule's Id directly (no rune-as-leaf-id
         // shortcut, since a body of multiple tokens doesn't have one
-        // distinguished rune to carry). .As(SymbolId) writes the user's
-        // explicit value into Id, so the leaf carries it by construction.
+        // distinguished rune to use). .As(SymbolId) writes the user's
+        // explicit value into Id, so the leaf gets it automatically.
         // Test locks in the matrix so a future leaf-id refactor that
         // routes ScanUntil through ResolveLeafId or a similar helper has
         // to keep .As(SymbolId) honored.
@@ -381,8 +381,8 @@ public class ScanUntilRuleTests
         // Tree shape matters because the performance win of this
         // primitive is "one Symbol per run, not one per rune." Lock
         // in the shape so a future change that accidentally splits
-        // the leaf back into per-rune pieces fails loudly. Tolerant
-        // variant so the no-pipe input still parses; the leaf shape
+        // the leaf back into per-rune pieces fails this test. Tolerant
+        // variant so the no-pipe input still parses. The leaf shape
         // is the same under either eofIsTerminator setting.
         var result = StopOnPipeOrEof().Parse("hello");
         Assert.That(result.Success, Is.True);
@@ -398,7 +398,7 @@ public class ScanUntilRuleTests
         // Start is the two-rune sequence "$$". Stopper is '|'. End
         // is one letter. Matches "abc$$X" up through the end. The
         // input has no '|' so eofIsTerminator: true lets the body run
-        // to EOF; this test exercises escape behavior, not the
+        // to EOF. This test exercises escape behavior, not the
         // stopper-required check.
         var start = Literal("$$");
         var end = OneOf(TokenSet.Ascii.Letters);
@@ -450,7 +450,7 @@ public class ScanUntilRuleTests
         // Pathological grammar: both the start and the end match
         // zero-width. A naive scan would treat that as "matched an
         // escape, continue" and spin forever on the same rune. The
-        // zero-width guard in the hot loop catches it and breaks
+        // zero-width check in the hot loop catches it and breaks
         // the scan cleanly, same pattern as BetweenInclusiveRule
         // uses for the same reason. A per-case timeout would be a
         // belt-and-suspenders backstop, but the core assertion here
@@ -461,7 +461,7 @@ public class ScanUntilRuleTests
 
         // Input contains no 'z' and no '|'. Every iteration would see
         // 'a' as non-stopper, zeroWidthStart matches empty, zeroWidthEnd
-        // matches empty. The guard fires and we break without consuming.
+        // matches empty. The check fires and we break without consuming.
         var result = rule.Parse("aaa");
 
         // Result: zero-char match, EOF check fails because 'aaa' is
@@ -536,7 +536,7 @@ public class ScanUntilRuleTests
         // rolls back the POSITION, not the failure tracker, so a stopper
         // probe's RecordFailure survives the rollback. Peek / Not avoid
         // this by snapshotting and restoring the failure state around
-        // their inner probe; the stopper probe has to do the same.
+        // their inner probe, and the stopper probe has to do the same.
         //
         // Stopper "-->" scanning "----->" (five dashes then '>'): the
         // stopper matches at offset 3. While scanning, the probe at
@@ -584,7 +584,7 @@ public class ScanUntilRuleTests
     public void ScanUntil_rule_based_stopper_with_escape_start()
     {
         // C++-raw-string wouldn't have an escape, but Python
-        // triple-quote DOES process escapes. Verify the combination
+        // triple-quote does process escapes. Verify the combination
         // works: multi-rune stop boundary AND a backslash escape.
         var stopper = Literal("\"\"\"");
         var escapeEnd = OneOf(TokenSet.Runes("\"\\nt"));
@@ -630,8 +630,8 @@ public class ScanUntilRuleTests
         // ScanUntil consumes 'a', 'b', 'c', the lone surrogate, 'x',
         // 'y', 'z' as body and stops at the '|' stopper. Outer
         // Token('|') then matches the '|' and the parse succeeds.
-        // The body Symbol's text equals the input slice byte-for-
-        // byte, lone surrogate included.
+        // The body Symbol's text equals that part of the input byte-
+        // for-byte, lone surrogate included.
         string input = "abc" + new string(loneSurrogate, 1) + "xyz|";
         var rule = InductorParser.Rules.And(StopOnPipe(), Token('|'));
         rule.Compile(null);
@@ -665,7 +665,7 @@ public class ScanUntilRuleTests
     public void ScanUntil_lone_surrogate_round_trips_through_ToString()
     {
         // Round-trip property: the leaf Symbol's Memory is a zero-copy
-        // slice of the input string, so whatever code units were in
+        // range over the input string, so whatever code units were in
         // the input come out of ToString() unchanged. This includes
         // unpaired surrogate halves, which .NET's System.String holds
         // verbatim (a String is any sequence of UTF-16 code units, no
@@ -684,7 +684,7 @@ public class ScanUntilRuleTests
         Assert.That(result.Success, Is.True, result.ErrorMessage);
         string body = result.Tree!.ToString();
 
-        // Round-trip: ToString() reproduces the input slice exactly.
+        // Round-trip: ToString() reproduces the matched portion of the input exactly.
         Assert.That(body, Is.EqualTo("before" + UnicodeExamples.EmojiStartHighSurrogateText + "after"));
         // Length and the specific code unit at each position survive
         // unchanged. The lone-surrogate code unit at position 6 still
@@ -703,7 +703,7 @@ public class ScanUntilRuleTests
     {
         // The complement of the "surrogate flows through as body" tests
         // above. When the stopper set is built with TokenSet.Surrogates
-        // (the WTF-8 / unpaired-surrogate opt-in), a lone surrogate IS a
+        // (the WTF-8 / unpaired-surrogate opt-in), a lone surrogate really is a
         // member of the set, so ScanUntil stops at it instead of
         // consuming it. ContainsToken's lone-surrogate branch is what
         // makes the surrogate code unit a member, the same branch OneOf /
@@ -1047,7 +1047,7 @@ public class ScanUntilRuleTests
         var result = rule.Parse("\\x\"");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("invalid escape character"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("invalid escape character at line 1, column 2."));
     }
 
     [Test]
@@ -1128,7 +1128,7 @@ public class ScanUntilRuleTests
     [Test]
     public void ScanUntilEof_round_trips_lone_surrogate_at_end_of_input()
     {
-        // The whole-input-as-one-leaf path needs to carry through
+        // The whole-input-as-one-leaf path needs to pass through
         // unpaired surrogates the same way the stoppered variant does
         // (matches the round-trip property already verified for
         // StopOnPipe with a trailing surrogate).
@@ -1149,7 +1149,7 @@ public class ScanUntilRuleTests
     {
         // Regression: ScanUntil used to check the stopper set before the
         // escape start. When the escape-start rune is also a member of
-        // the stopper set, that ordering made the escape unreachable —
+        // the stopper set, that ordering made the escape unreachable:
         // the scan terminated at the escape character instead of
         // consuming the escape sequence. This is the exact grammar shape
         // the Rules.cs XML-doc example for the single-rune-escape
@@ -1184,7 +1184,7 @@ public class ScanUntilRuleTests
             escapeStart: Literal("${"),
             escapeEnd: And(OneOrMore(NoneOf("}")), Token('}')));
 
-        // "${name}" is consumed as an escape; the body runs to the quote.
+        // "${name}" is consumed as an escape, and the body runs to the quote.
         var withInterpolation = body.Parse("ab${name}cd\"",
             new ParseOptions { AllowTrailingInput = true });
         Assert.That(withInterpolation.Success, Is.True, withInterpolation.ErrorMessage);
@@ -1270,7 +1270,7 @@ public class ScanUntilRuleTests
     {
         // Sibling case to the TokenSet-stopper test above. The
         // rule-mode stopper rendering captures `stopAt.Name ?? stopAt.GetType().Name`
-        // at construction. If the inner rule gets .As(name) AFTER the
+        // at construction. If the inner rule gets .As(name) after the
         // ScanUntil was built but before Compile (a static-init pattern
         // where the stopper field is named in the static ctor after
         // every field initializer has run, or a refactor that named a

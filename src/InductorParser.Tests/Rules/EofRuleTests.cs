@@ -33,7 +33,7 @@ public class EofRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected end of input"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected end of input at line 1, column 2."));
     }
 
     [Test]
@@ -47,7 +47,7 @@ public class EofRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
-        Assert.That(result.ErrorMessage, Does.StartWith("Parse failed at offset 1"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("Unexpected 'b' at line 1, column 2."));
     }
 
     [Test]
@@ -91,7 +91,7 @@ public class EofRuleTests
         // two UTF-16 chars (a surrogate pair), so input[position] is the
         // lone high surrogate and rendering that lies about what the
         // parser actually saw. Same shape as the {character}-placeholder
-        // bug fixed in BuildErrorMessage; trace lines that quote the
+        // bug fixed in BuildErrorMessage. Trace lines that quote the
         // current token are the next instance documented in
         // PotentialBugSources.md "Char-unit rendering in user-facing strings."
         var sink = NewSink();
@@ -175,8 +175,8 @@ public class EofRuleTests
     {
         // Eof is zero-width: it succeeds only at end-of-input and
         // consumes nothing. SourceText is empty regardless of
-        // FlattenType. Parse against empty input — Eof immediately
-        // succeeds, wrapper consumes nothing.
+        // FlattenType. Parse against empty input: Eof immediately
+        // succeeds and the outer rule consumes nothing.
         SourceTextFlattenTypeMatrixHelper.AssertSourceTextUnderEveryFlattenType(
             ruleBuilder: () => Eof(),
             input: "",

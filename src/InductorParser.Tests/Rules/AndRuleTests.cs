@@ -34,7 +34,7 @@ public class AndRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
-        Assert.That(result.ErrorMessage, Does.StartWith("Parse failed at offset 1"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("Unexpected 'x' at line 1, column 2."));
     }
 
     [Test]
@@ -49,7 +49,7 @@ public class AndRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need an 'a'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need an 'a' at line 1, column 1."));
     }
 
     [Test]
@@ -66,7 +66,7 @@ public class AndRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need a 'b'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need a 'b' at line 1, column 2."));
     }
 
     [Test]
@@ -177,9 +177,9 @@ public class AndRuleTests
     {
         // Mix of Preserve and Delete: the leading Literal("ab") is
         // Preserve, the trailing Literal("cd") is Delete (factory
-        // default). SourceText covers ALL 4 chars even though
+        // default). SourceText covers all 4 chars even though
         // ToString returns just "ab". Mirror with leading Delete +
-        // trailing Preserve flipped, to show the symmetry — leading
+        // trailing Preserve flipped, to show the symmetry: leading
         // Delete content doesn't push the start past offset 0, and
         // trailing Delete content does extend the end.
         var trailingDelete = And(Literal("ab").Preserve(), Literal("cd")).As("trail");
@@ -253,7 +253,7 @@ public class AndRuleTests
         // Mirror of the leading case: trailing "cd" is consumed but
         // Delete-flattened. The composite's range still covers all 4
         // chars. This is the TOML "Token('-').Preserve() + Literal('inf')"
-        // shape with inf Delete — recovers the full "-inf" span instead
+        // shape with inf Delete. It recovers the full "-inf" span instead
         // of just the "-" the surviving leaf points at.
         var rule = And(Literal("ab").Preserve(), Literal("cd")).As("composite");
         var result = rule.Parse("abcd");
@@ -304,7 +304,7 @@ public class AndRuleTests
     {
         // Mirror of the middle/trailing empty-leaf cases: a LEADING
         // zero-width leaf doesn't change the range. ScanUntil with the
-        // stopper at the cursor produces an empty leaf at offset 0;
+        // stopper at the cursor produces an empty leaf at offset 0, and
         // Literal("a") follows. Range is [0, 1).
         var rule = And(
             ScanUntil(TokenSet.Runes("a")).Preserve(),
@@ -359,7 +359,7 @@ public class AndRuleTests
     {
         // Outer And -> inner And -> empty leaf. Each composite reports
         // the span IT consumed, not the union of preserved leaves below
-        // it. Inner consumed 0 chars; outer consumed 1 (inner's 0 +
+        // it. Inner consumed 0 chars, outer consumed 1 (inner's 0 +
         // Token('a')'s 1).
         var inner = And(ScanUntil(TokenSet.Runes("a")).Preserve()).As("inner");
         var rule = And(inner, Token('a')).As("outer");
@@ -378,7 +378,7 @@ public class AndRuleTests
     public void And_Find_on_inner_composite_returns_inner_range_not_outer()
     {
         // Two named composites, one nested in the other. The outer's
-        // range spans the whole match; the inner's range spans only
+        // range spans the whole match, the inner's range spans only
         // its own children. Verifies Find + SourceRange together don't
         // leak the outer range.
         var inner = And(Token('x').Preserve(), Token('y').Preserve()).As("inner");
@@ -408,13 +408,13 @@ public class AndRuleTests
         Assert.That(range.End.CharIndex, Is.EqualTo(4));
         Assert.That(range.End.TokenIndex, Is.EqualTo(4));
         Assert.That(range.End.Line, Is.EqualTo(0));
-        Assert.That(range.End.Column, Is.EqualTo(4));
+        Assert.That(range.End.CharColumn, Is.EqualTo(4));
     }
 
     [Test]
     public void And_outer_composite_spans_what_it_consumed_when_inner_subtree_is_Flatten_with_Delete_children()
     {
-        // The first And is Flatten with two Delete children — it
+        // The first And is Flatten with two Delete children, so it
         // contributes no surviving Children to the outer. But the
         // outer And consumed all 6 chars: its 4-char Flatten prefix
         // plus the 2-char preserved tail. The outer's recorded span
@@ -432,8 +432,8 @@ public class AndRuleTests
     public void And_named_WithError_anchors_at_deepest_child_failure()
     {
         // Literal("ab") reads 'a' then mismatches the second char,
-        // recording a mechanical failure at position 1. The And carries a
-        // named WithError; composite anchoring records it at the deepest
+        // recording a mechanical failure at position 1. The And has a
+        // named WithError, and composite anchoring records it at the deepest
         // position its subtree reached (1), where it ties the mechanical
         // failure on depth and wins the named-beats-mechanical tie-break.
         // See docs/ErrorArchitecture.md.
@@ -442,7 +442,7 @@ public class AndRuleTests
         var result = rule.Parse("axyz");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected ab!"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected ab! at line 1, column 2."));
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     }
 

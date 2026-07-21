@@ -140,21 +140,20 @@ public class Primer1Examples
         Assert.That(result.ErrorMessage, Is.Not.Empty);
     }
 
-    // primer1.md "What about Unicode?" section: a character class that
-    // includes a multi-rune token (the US flag emoji) alongside ordinary
-    // letter ranges:
-    //   var letterOrUSFlag = OneOf(TokenSet.Letters | TokenSet.Graphemes("🇺🇸"));
-    // The flag 🇺🇸 is a regional-indicator pair (two runes forming one
-    // grapheme cluster), so it has to enter the set through Graphemes(...),
+    // primer1.md "If you want to define a set of characters that includes
+    // an emoji alongside ordinary letter ranges":
+    //   var letterOrFamily = OneOf(TokenSet.Letters | TokenSet.Graphemes("👨‍👩‍👧"));
+    // The family 👨‍👩‍👧 is five runes (man, ZWJ, woman, ZWJ, girl) forming one
+    // grapheme cluster, so it has to enter the set through Graphemes(...),
     // which holds multi-rune cluster members. Runes(...) walks rune by rune
     // and throws on a cluster, so the doc has to name Graphemes here.
     [Test]
-    public void Letter_class_includes_multirune_USFlag_token()
+    public void Letter_class_includes_multirune_family_token()
     {
-        var letterOrUSFlag = OneOf(TokenSet.Letters | TokenSet.Graphemes(UnicodeExamples.USFlagGrapheme));
+        var letterOrFamily = OneOf(TokenSet.Letters | TokenSet.Graphemes(UnicodeExamples.FamilyManWomanGirlGrapheme));
 
-        Assert.That(letterOrUSFlag.Parse("A").Success, Is.True);
-        Assert.That(letterOrUSFlag.Parse(UnicodeExamples.USFlagGrapheme).Success, Is.True);
-        Assert.That(letterOrUSFlag.Parse("3").Success, Is.False);
+        Assert.That(letterOrFamily.Parse("A").Success, Is.True);
+        Assert.That(letterOrFamily.Parse(UnicodeExamples.FamilyManWomanGirlGrapheme).Success, Is.True);
+        Assert.That(letterOrFamily.Parse("3").Success, Is.False);
     }
 }

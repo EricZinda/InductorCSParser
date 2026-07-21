@@ -61,7 +61,7 @@ public class LiteralRuleTests
         var result = rule.Parse("xajor");
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'major'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'major' at line 1, column 1."));
     }
 
     [Test]
@@ -73,7 +73,7 @@ public class LiteralRuleTests
         var result = rule.Parse("majxr");
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'major'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'major' at line 1, column 4."));
     }
 
     [Test]
@@ -85,7 +85,7 @@ public class LiteralRuleTests
         var result = rule.Parse("maj");
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'major'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'major' at line 1, column 4."));
     }
 
     [Test]
@@ -95,7 +95,7 @@ public class LiteralRuleTests
         var result = rule.Parse("");
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'hi'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'hi' at line 1, column 1."));
     }
 
     [Test]
@@ -108,7 +108,7 @@ public class LiteralRuleTests
     [Test]
     public void Literal_symbol_text_round_trips_via_ToString()
     {
-        // Leaf symbol carries a Memory range over the matched input. The
+        // Leaf symbol stores a Memory range over the matched input. The
         // ToString round-trip should produce the original literal.
         var rule = Literal("select").Flatten(SyntaxTree.FlattenType.Preserve);
         var result = rule.Parse("select");
@@ -128,7 +128,7 @@ public class LiteralRuleTests
         var result = rule.Parse("select XXXX");
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(7));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'FROM'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'FROM' at line 1, column 8."));
     }
 
     [Test]
@@ -162,77 +162,6 @@ public class LiteralRuleTests
             "   FAIL | Literal: found 'x', wanted 'hi'"
         );
         Assert.That(sink.ToString(), Is.EqualTo(expected));
-    }
-
-    [Test]
-    public void LiteralIgnoreAsciiCase_matches_same_case()
-    {
-        var rule = LiteralIgnoreAsciiCase("SELECT");
-        var result = rule.Parse("SELECT");
-        Assert.That(result.Success, Is.True, result.ErrorMessage);
-    }
-
-    [Test]
-    public void LiteralIgnoreAsciiCase_matches_different_case()
-    {
-        var rule = LiteralIgnoreAsciiCase("SELECT");
-        Assert.That(rule.Parse("select").Success, Is.True);
-        Assert.That(rule.Parse("Select").Success, Is.True);
-        Assert.That(rule.Parse("sElEcT").Success, Is.True);
-    }
-
-    [Test]
-    public void LiteralIgnoreAsciiCase_leaves_non_letter_chars_strict()
-    {
-        // The 0x20 bit difference between '[' and '{', '@' and '`', etc.
-        // must NOT be treated as a case-insensitive match. Only A-Za-z
-        // get that treatment.
-        var rule = LiteralIgnoreAsciiCase("a[b");
-        Assert.That(rule.Parse("A[B").Success, Is.True);
-        Assert.That(rule.Parse("A{B").Success, Is.False);
-    }
-
-    [Test]
-    public void LiteralIgnoreAsciiCase_rejects_non_ascii_pattern_at_construction()
-    {
-        // Patterns must be ASCII-only. German sharp s in the pattern
-        // would never participate in case-folding (the rule is named
-        // LiteralIgnoreAsciiCase, and ASCII case-folding doesn't reach
-        // U+00DF), so admitting it at construction would mislead the
-        // reader. Construction throws instead, pointing at the offending
-        // char. Grammars that want a non-ASCII keyword should use
-        // Literal("straße") directly.
-        var exception = Assert.Throws<ArgumentException>(
-            () => LiteralIgnoreAsciiCase($"stra{UnicodeExamples.LatinSmallSharpSGrapheme}e"));
-        Assert.That(exception!.Message, Does.Contain("ASCII-only"));
-        Assert.That(exception.Message, Does.Contain("U+00DF"));
-    }
-
-    [Test]
-    public void LiteralIgnoreAsciiCase_rejects_empty_string_at_construction()
-    {
-        Assert.Throws<ArgumentException>(() => LiteralIgnoreAsciiCase(""));
-    }
-
-    [Test]
-    public void LiteralIgnoreAsciiCase_records_failure_at_failing_token_position()
-    {
-        var rule = LiteralIgnoreAsciiCase("major").WithError("expected 'major'");
-        var result = rule.Parse("maJxr");
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'major'"));
-    }
-
-    [Test]
-    [RecursiveEngineOnly]
-    public void LiteralIgnoreAsciiCase_trace_uses_LiteralIgnoreAsciiCase_label()
-    {
-        // The trace label must read "LiteralIgnoreAsciiCase", not "Literal",
-        // so a reader can tell the two rule kinds apart in a mixed trace.
-        var sink = NewSink();
-        LiteralIgnoreAsciiCase("hi").Parse("HI", new ParseOptions { TraceSink = sink });
-        Assert.That(sink.ToString(), Does.Contain("LiteralIgnoreAsciiCase"));
     }
 
     [Test]
@@ -404,9 +333,104 @@ public class LiteralRuleTests
 
         var range = result.Tree!.SourceRange!.Value;
         Assert.That(range.Start.Line, Is.EqualTo(0));
-        Assert.That(range.Start.Column, Is.EqualTo(0));
+        Assert.That(range.Start.CharColumn, Is.EqualTo(0));
         Assert.That(range.End.CharIndex, Is.EqualTo(5));
         Assert.That(range.End.Line, Is.EqualTo(1));
-        Assert.That(range.End.Column, Is.EqualTo(2));
+        Assert.That(range.End.CharColumn, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Literal_failure_report_is_identical_under_FormC_and_FormD()
+    {
+        // Literal failure positions count progress in whole graphemes of
+        // the expected text, so the report is the same whichever
+        // canonical form Compile rewrote the literal into. Under FormD
+        // the expected "à" is "a + combining grave" and the input's bare
+        // "a" matches its first rune, but a partial character isn't
+        // progress: both forms fail at offset 0 quoting the 'a'.
+        var underFormC = Literal(LatinSmallAWithGraveGrapheme).Compile(NormalizationForm.FormC);
+        var underFormD = Literal(LatinSmallAWithGraveGrapheme).Compile(NormalizationForm.FormD);
+
+        var resultFormC = underFormC.Parse("a");
+        var resultFormD = underFormD.Parse("a");
+
+        Assert.That(resultFormC.Success, Is.False);
+        Assert.That(resultFormD.Success, Is.False);
+        Assert.That(resultFormC.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(resultFormD.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(resultFormC.ErrorMessage, Is.EqualTo("Unexpected 'a' at line 1, column 1."));
+        Assert.That(resultFormD.ErrorMessage, Is.EqualTo(resultFormC.ErrorMessage));
+    }
+
+    [Test]
+    public void Literal_mismatch_after_whole_characters_points_at_the_diverging_character_in_both_forms()
+    {
+        // "àb" is two user-perceived characters. On "xaQ" the match
+        // diverges inside the first one, so both forms report at the
+        // 'a' (offset 1), the character that failed to be an 'à'. The
+        // multi-char precision stays: had "à" matched whole, the
+        // report would sit on the next character.
+        var underFormC = And(Token('x'), Literal(LatinSmallAWithGraveGrapheme + "b")).Compile(NormalizationForm.FormC);
+        var underFormD = And(Token('x'), Literal(LatinSmallAWithGraveGrapheme + "b")).Compile(NormalizationForm.FormD);
+
+        var resultFormC = underFormC.Parse("xaQ");
+        var resultFormD = underFormD.Parse("xaQ");
+
+        Assert.That(resultFormC.Success, Is.False);
+        Assert.That(resultFormD.Success, Is.False);
+        Assert.That(resultFormC.ErrorCharIndex, Is.EqualTo(1));
+        Assert.That(resultFormD.ErrorCharIndex, Is.EqualTo(1));
+        Assert.That(resultFormC.ErrorMessage, Is.EqualTo("Unexpected 'a' at line 1, column 2."));
+        Assert.That(resultFormD.ErrorMessage, Is.EqualTo(resultFormC.ErrorMessage));
+    }
+
+    [Test]
+    public void Literal_hangul_cluster_prefix_reports_at_the_cluster_start_in_both_forms()
+    {
+        // The expected "각" is one grapheme (three jamo under FormD).
+        // The decomposed two-jamo input "가" is a rune-prefix of it, so
+        // under FormD the compare consumes both jamo before running out
+        // of input. That's still zero whole expected characters, so both
+        // forms report at offset 0 quoting the input's cluster instead
+        // of claiming the input ended too soon.
+        var underFormC = Literal(HangulGagPrecomposedGrapheme).Compile(NormalizationForm.FormC);
+        var underFormD = Literal(HangulGagPrecomposedGrapheme).Compile(NormalizationForm.FormD);
+
+        var resultFormC = underFormC.Parse(HangulGaTwoJamoDecomposedText);
+        var resultFormD = underFormD.Parse(HangulGaTwoJamoDecomposedText);
+
+        Assert.That(resultFormC.Success, Is.False);
+        Assert.That(resultFormD.Success, Is.False);
+        Assert.That(resultFormC.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(resultFormD.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(resultFormC.ErrorMessage, Does.StartWith("Unexpected '"));
+        Assert.That(resultFormD.ErrorMessage, Is.EqualTo(resultFormC.ErrorMessage));
+    }
+
+    [Test]
+    public void Literal_input_ending_inside_the_expected_grapheme_reports_at_its_start()
+    {
+        // Single-form case, no FormD anywhere: q + dot-below + dot-above
+        // has no precomposed form, so the literal stays three runes (one
+        // grapheme) under FormC and under Compile(null). The input
+        // "q + dot-below" is one complete cluster that's a rune-prefix
+        // of the expected cluster. The report points at that cluster
+        // (offset 0, "the character you typed isn't the expected one"),
+        // not at end of input.
+        var underFormC = Literal(QWithDotBelowDotAboveCanonicalText).Compile(NormalizationForm.FormC);
+        var unnormalized = Literal(QWithDotBelowDotAboveCanonicalText).Compile(null);
+
+        // The first two chars of the expected cluster: q + dot-below,
+        // itself one complete grapheme.
+        string inputCluster = QWithDotBelowDotAboveCanonicalText.Substring(0, 2);
+        var resultFormC = underFormC.Parse(inputCluster);
+        var resultUnnormalized = unnormalized.Parse(inputCluster);
+
+        Assert.That(resultFormC.Success, Is.False);
+        Assert.That(resultUnnormalized.Success, Is.False);
+        Assert.That(resultFormC.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(resultUnnormalized.ErrorCharIndex, Is.EqualTo(0));
+        Assert.That(resultFormC.ErrorMessage, Is.EqualTo($"Unexpected '{inputCluster}' at line 1, column 1."));
+        Assert.That(resultUnnormalized.ErrorMessage, Is.EqualTo(resultFormC.ErrorMessage));
     }
 }

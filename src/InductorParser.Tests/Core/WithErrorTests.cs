@@ -25,7 +25,7 @@ public class WithErrorTests
         var result = document.Parse("1 = ;");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("Expected a setting name"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("Expected a setting name at line 1, column 1."));
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
     }
 
@@ -63,16 +63,16 @@ public class WithErrorTests
         var rule = Or(letters, digits);
 
         // On "#x": the letters branch fails immediately at offset 0 ('#'
-        // is not a letter), recording "need letters" there. The digits
+        // isn't a letter), recording "need letters" there. The digits
         // branch consumes the '#', then OneOrMore(Digits) fails at offset
-        // 1 ('x' is not a digit), recording "need digits" there. Both
+        // 1 ('x' isn't a digit), recording "need digits" there. Both
         // named failures survive the failed Or. Offset 1 is deeper than
         // offset 0, so "need digits" wins. If ranking ignored depth and
         // took the first failure written, "need letters" would surface.
         var result = rule.Parse("#x");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("need digits"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need digits at line 1, column 2."));
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     }
 
@@ -81,7 +81,7 @@ public class WithErrorTests
     {
         // Inner Token has its own .WithError ("unterminated string"),
         // recorded at the EOF after consuming "\"hello". The outer Or
-        // carries .WithError too; composite anchoring records it at the
+        // has .WithError too. Composite anchoring records it at the
         // same deepest position its branches reached. Two named failures
         // at the same depth: the first one recorded wins, and the inner
         // Token recorded before the outer Or, so its message surfaces.
@@ -95,7 +95,7 @@ public class WithErrorTests
         var result = rule.Parse("\"hello");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("unterminated string"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("unterminated string at line 1, column 7."));
         Assert.That(result.ErrorCharIndex, Is.EqualTo("\"hello".Length));
     }
 
@@ -121,7 +121,7 @@ public class WithErrorTests
         var result = rule.Parse("\"hello");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected one of: string, x"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected one of: string, x at line 1, column 7."));
         Assert.That(result.ErrorCharIndex, Is.EqualTo("\"hello".Length));
     }
 
@@ -144,23 +144,23 @@ public class WithErrorTests
         // anchors at the deepest position its subtree reached, also 2.
         // Two forced failures at the same depth: the first one recorded
         // wins, and the inner recorded before the outer.
-        Assert.That(result.ErrorMessage, Is.EqualTo("forced inner"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("forced inner at line 1, column 3."));
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
     }
 
     [Test]
     public void WithError_rejects_null_message_at_construction()
     {
-        Assert.Multiple(() =>
-        {
-            var namedException = Assert.Throws<ArgumentNullException>(
-                () => Token('a').WithError(null!));
-            Assert.That(namedException!.ParamName, Is.EqualTo("errorMessage"));
+        // Sequential asserts, not Assert.Multiple: this file syncs into
+        // the IL2CPP pass, and Unity's bundled NUnit predates
+        // Assert.Multiple.
+        var namedException = Assert.Throws<ArgumentNullException>(
+            () => Token('a').WithError(null!));
+        Assert.That(namedException!.ParamName, Is.EqualTo("errorMessage"));
 
-            var forcedException = Assert.Throws<ArgumentNullException>(
-                () => Token('a').WithError(null!, forced: true));
-            Assert.That(forcedException!.ParamName, Is.EqualTo("errorMessage"));
-        });
+        var forcedException = Assert.Throws<ArgumentNullException>(
+            () => Token('a').WithError(null!, forced: true));
+        Assert.That(forcedException!.ParamName, Is.EqualTo("errorMessage"));
     }
 
     [Test]

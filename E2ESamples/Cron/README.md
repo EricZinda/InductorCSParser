@@ -101,13 +101,14 @@ no `TokenSet` for "a number between 0 and 23". So `CronParser` walks
 the parse tree afterward, pulls each numeric node, and checks it,
 reading `Symbol.SourceRange` to point the error at the right token.
 That's the same "validate after parsing" pattern the SemVer sample uses
-for its Int32 range check, and `docs/Recipes.md` already documents it.
+for its Int32 range check.
 No surprise there, and it was smooth.
 
 ## Where the friction was
 
-Getting those eleven messages right was *not* smooth. Three things bit
-us, and the order matters because the first one is the interesting one.
+Getting those eleven messages right was *not* smooth. Three things
+tripped us up, and the order matters because the first one is the
+interesting one.
 
 ### 1. A `.WithError` on a comma-list element fires when the comma is simply absent
 
@@ -204,7 +205,7 @@ raw-source-text accessor).
 Honest accounting, because it wasn't all friction.
 
 Positioned errors needed zero ceremony. `result.ErrorCharIndex`,
-`ErrorLine`, `ErrorColumn` are right there on the parse result, and
+`ErrorLine`, `ErrorCharColumn` are right there on the parse result, and
 `Symbol.SourceRange` gives the same thing for any node you reach in
 post-parse validation. The four-line `ErrorAt(symbol, message)` helper
 in `CronParser.cs` is all the position plumbing this sample needed.

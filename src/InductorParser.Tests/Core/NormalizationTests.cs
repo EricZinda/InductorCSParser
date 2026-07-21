@@ -26,11 +26,11 @@ namespace InductorParser.Tests;
 //      "é" typed in code is exactly the precomposed form the normalizer
 //      produces. A grammar that hand-builds decomposed literals out of
 //      explicit escapes (Token("e\u0301")) under the default NFC
-//      normalization will not match, since the input gets composed out
+//      normalization won't match, since the input gets composed out
 //      from under it.
 //
 //   2. Positions reported in ParseResult (ErrorCharIndex and its derived
-//      properties) index into the CALLER'S ORIGINAL input string, never
+//      properties) index into the caller's original input string, never
 //      into the normalized form. An editor forwarding the error straight
 //      into a Language Server Protocol diagnostic sees offsets that line up
 //      with the document
@@ -103,7 +103,7 @@ public class NormalizationTests
         // In NORMALIZED coordinates the failure is at index 4 (the 'x'
         // sitting right after the composed 'é'). If the parser leaked that
         // index out, callers would scratch their heads: input[4] is
-        // '\u0301', not 'x'. The contract is original coordinates, so the
+        // '\u0301', not 'x'. Positions use original coordinates, so the
         // reported index has to be 5 (the 'x' in the caller's input).
         string input = CafeDecomposed + "xyz";
         var rule = And(CafeRule(), Token('1'), Eof());
@@ -200,21 +200,21 @@ public class NormalizationTests
     {
         // Budget-abort path shares the same position-translation code as
         // grammar-mismatch failure. Prove the abort offset is reported in
-        // the caller's ORIGINAL coordinates, not the lexer's normalized
+        // the caller's original coordinates, not the lexer's normalized
         // coordinates.
         //
         // The trick is two parses that are identical after normalization.
-        // Decomposed "e" + combining acute is 2 chars per grapheme;
-        // precomposed "é" (U+00E9) is 1. Under the default FormC both
-        // normalize to the SAME string (U+00E9 repeated), so the lexer does
+        // Decomposed "e" + combining acute is 2 chars per grapheme.
+        // Precomposed "é" (U+00E9) is 1. Under the default FormC both
+        // normalize to the same string (U+00E9 repeated), so the lexer does
         // identical work and aborts at the same normalized offset after the
         // same number of rule invocations (the count is a pure function of
-        // grammar + normalized input; see Lexer.BudgetCheckInterval). Both
+        // grammar + normalized input, see Lexer.BudgetCheckInterval). Both
         // inputs are long enough for the invocation count to cross
         // BudgetCheckInterval (1024) and trip the periodic rule-count check.
         //
         // For precomposed input original == normalized, so its
-        // ErrorCharIndex IS that normalized abort offset. For decomposed
+        // ErrorCharIndex is that normalized abort offset. For decomposed
         // input every grapheme is two original chars, so the correctly-
         // translated abort offset is exactly double it. A parser that
         // leaked the normalized offset straight out would report the same
@@ -242,7 +242,7 @@ public class NormalizationTests
             "exactly double the precomposed reference; equal to it would mean the " +
             "normalized offset leaked out untranslated");
         Assert.That(result.ErrorLine, Is.EqualTo(0), "input has no newlines");
-        Assert.That(result.ErrorColumn, Is.EqualTo(result.ErrorCharIndex),
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(result.ErrorCharIndex),
             "single-line input means column equals char index");
         var position = result.ErrorPosition;
         Assert.That(position, Is.Not.Null);
@@ -281,7 +281,7 @@ public class NormalizationTests
         // Input is the ligature (1 char) followed by "sh" (2 chars),
         // 3 chars total. Normalized is "fish" (4 chars). Grammar matches
         // f, i, then expects 'X' and sees 's'. Failure in NORMALIZED
-        // coordinates is at index 2 (the 's'). In ORIGINAL coordinates
+        // coordinates is at index 2 (the 's'). In original coordinates
         // 's' sits at index 1, right after the 1-char ligature.
         string input = UnicodeExamples.FiLigatureGrapheme + "sh";
         var rule = And(Token('f'), Token('i'), Token('X'));
@@ -354,10 +354,11 @@ public class NormalizationTests
     }
 
     // Compile-time validation pass tests. The form chosen at Compile is
-    // checked against every literal-bearing rule's expected text. A rule
+    // applied to every literal-bearing rule's expected text. A rule
     // whose text isn't already in that form would silently never match
     // (the lexer normalizes input, so the literal would be looking for
-    // bytes the lexer can't produce). Compile catches that at startup.
+    // bytes the lexer can't produce). Compile rewrites the stored text
+    // into the form so the rule matches what the lexer produces.
 
     [Test]
     public void Compile_auto_converts_literal_to_FormC()
@@ -366,7 +367,8 @@ public class NormalizationTests
         // acute, two runes that render as one user-visible character).
         // Default Compile uses FormC, which composes the two runes into
         // U+00E9. The lexer would never produce a two-rune "e+acute" for
-        // this rule to match. Compile catches that at grammar-build time.
+        // this rule to match. Compile rewrites the literal to U+00E9 at
+        // grammar-build time.
         var rule = Token(CafeDecomposed[3..]);  // a one-grapheme decomposed form
         Assert.DoesNotThrow(() => rule.Compile());
         Assert.That(rule.Parse(CafePrecomposed[3..]).Success, Is.True);
@@ -386,7 +388,7 @@ public class NormalizationTests
     [Test]
     public void Compile_FormD_accepts_decomposed()
     {
-        // The decomposed literal IS in FormD already, so compiling
+        // The decomposed literal is in FormD already, so compiling
         // against FormD passes validation.
         var rule = Token(CafeDecomposed[3..]);
         Assert.DoesNotThrow(() => rule.Compile(NormalizationForm.FormD));
@@ -403,7 +405,7 @@ public class NormalizationTests
         var rule = And(firstLiteral, secondLiteral);
 
         Assert.DoesNotThrow(() => rule.Compile());
-        // Parse a precomposed-form input — the auto-converted literals match.
+        // Parse a precomposed-form input, the auto-converted literals match.
         Assert.That(rule.Parse(CafePrecomposed[3..] + CafePrecomposed[3..]).Success, Is.True);
     }
 
@@ -416,7 +418,7 @@ public class NormalizationTests
             LiteralIgnoreAsciiCase("HELLO").Compile());
 
         // Mixed ASCII + non-ASCII patterns throw at construction.
-        // ASCII case-folding doesn't apply to non-ASCII code points,
+        // ASCII case-insensitive matching doesn't apply to non-ASCII code points,
         // so a non-ASCII char in a LiteralIgnoreAsciiCase pattern would
         // silently behave as a bit-exact compare and mislead the reader.
         // Grammars that want a non-ASCII keyword should use Literal(...).
@@ -492,7 +494,7 @@ public class NormalizationTests
     public void Compile_with_same_form_is_idempotent()
     {
         // Re-Compile with the same form is a no-op (matching the
-        // existing _sealed early-return contract). Important because
+        // existing _sealed early-return behavior). Important because
         // Parse triggers an auto-Compile that should never throw on
         // an already-compiled grammar.
         var rule = And(Token('a'), Token('b'));
@@ -553,7 +555,7 @@ public class NormalizationTests
         Assert.That(ruleKD.Parse("foo").Success, Is.True, "FormKD accepts plain ASCII");
 
         // "café" with precomposed é matches under both canonical forms.
-        // FormC sees U+00E9, FormD sees "e + combining acute" — both are
+        // FormC sees U+00E9, FormD sees "e + combining acute". Both are
         // canonically equivalent and both are valid identifiers.
         Assert.That(ruleC.Parse(CafePrecomposed).Success, Is.True);
         Assert.That(ruleD.Parse(CafePrecomposed).Success, Is.True);
@@ -565,7 +567,7 @@ public class NormalizationTests
         // the resulting trees. If they match, the input has no
         // presentation variants the chosen forms disagree on. If they
         // diverge, the input is a candidate for review. The scanner
-        // doesn't need to know the input ahead of time; the divergence
+        // doesn't need to know the input ahead of time. The divergence
         // is the signal.
         var asciiViaC = ruleC.Parse("foo");
         var asciiViaKC = ruleKC.Parse("foo");
@@ -654,7 +656,7 @@ public class NormalizationTests
     public void OneOf_with_singleton_decomposing_rune_matches_normalized_form()
     {
         // U+2126 OHM SIGN canonically decomposes to U+03A9 GREEK CAPITAL
-        // LETTER OMEGA — both single runes. Under FormC the lexer
+        // LETTER OMEGA (both single runes). Under FormC the lexer
         // produces U+03A9 from input U+2126. Without set normalization,
         // OneOf(Ohm) wouldn't match because its set has only U+2126.
         // Compile-time set normalization covers this case (entries
@@ -754,8 +756,8 @@ public class NormalizationTests
         // The unnamed case re-assigns Id to the post-normalization rune,
         // which is desired (leaf-id consistency between Token('Ω') and
         // Token('Ω').Compile(FormC)). But when the user set an
-        // explicit SymbolId via .As(new SymbolId(...)), Compile must NOT
-        // overwrite it. .As(SymbolId) is documented as the
+        // explicit SymbolId via .As(new SymbolId(...)), Compile has to
+        // leave it alone. .As(SymbolId) is documented as the
         // stable-numbering hook, useful for serialized parse trees, and
         // a silent re-assignment under normalization defeats that promise.
         int explicitId = SymbolRanges.CustomRangeStart + 0x100;
@@ -816,7 +818,7 @@ public class NormalizationTests
     [Test]
     public void Normalization_offender_header_counts_rules_not_offending_entries()
     {
-        // OneOf(TokenSet.Letters) is ONE rule. Under FormKC many of its
+        // OneOf(TokenSet.Letters) is one rule. Under FormKC many of its
         // members (ligatures like U+FB01, fullwidth letters, math-bold, ...)
         // each convert to a multi-grapheme sequence, and the offender
         // mechanism reports one offender per such member. The header counts
@@ -827,9 +829,9 @@ public class NormalizationTests
 
         var exception = Assert.Throws<InvalidOperationException>(
             () => rule.Compile(NormalizationForm.FormKC));
-        Assert.That(exception!.Message, Does.StartWith("Compile failed: 1 rule has"),
-            "one offending rule with many convertible members reads as '1 rule has', not 'N rules have'");
-        Assert.That(exception.Message, Does.Not.Contain("rules have"),
+        Assert.That(exception!.Message, Does.StartWith("Compile failed: 1 rule holds"),
+            "one offending rule with many convertible members reads as '1 rule holds', not 'N rules hold'");
+        Assert.That(exception.Message, Does.Not.Contain("rules hold"),
             "a single offending rule must not be reported in the plural");
     }
 
@@ -843,8 +845,8 @@ public class NormalizationTests
 
         var exception = Assert.Throws<InvalidOperationException>(
             () => rule.Compile(NormalizationForm.FormKC));
-        Assert.That(exception!.Message, Does.StartWith("Compile failed: 2 rules have"),
-            "two distinct offending rules read as '2 rules have', regardless of how many entries each contributes");
+        Assert.That(exception!.Message, Does.StartWith("Compile failed: 2 rules hold"),
+            "two distinct offending rules read as '2 rules hold', regardless of how many entries each contributes");
     }
 
     [Test]
@@ -953,7 +955,7 @@ public class NormalizationTests
         // An entry that isn't already in the target form gets replaced in
         // the result by its normalized version. U+212B ANGSTROM SIGN
         // normalizes under FormC to U+00C5, so the result has to contain
-        // U+00C5: that's the rune FormC-normalized input will carry.
+        // U+00C5: that's the rune FormC-normalized input will contain.
         var angstrom = TokenSet.Single(UnicodeExamples.AngstromRune);
         var expanded = angstrom.WithCompatibilityEquivalents(NormalizationForm.FormC);
         Assert.That(expanded.ContainsRune(0x00C5), Is.True,
@@ -1004,7 +1006,7 @@ public class NormalizationTests
         // matches input regardless of which order the author used,
         // because NFC composes both orderings to the same
         // precomposed character. (Same-class marks like acute +
-        // circumflex are NOT reordered and would NOT have this
+        // circumflex aren't reordered and wouldn't have this
         // property.)
         var precomposedRule = And(Token(UnicodeExamples.VietnameseACircumflexDotBelowRune), Eof());
 
@@ -1025,9 +1027,8 @@ public class NormalizationTests
         // uses non-canonical mark order would silently never match
         // any input under FormC, because every input gets canonicalized
         // before the lexer sees it. The Compile validation pass
-        // catches this and throws so the author fixes the literal at
-        // grammar-build time instead of debugging silent match
-        // failures.
+        // rewrites the literal into canonical order so the rule
+        // matches both spellings of the input.
         var rule = Token(UnicodeExamples.VietnameseACircumflexDotBelowReorderedText);
 
         // Compile auto-converts the non-canonical mark order to canonical order.
@@ -1061,7 +1062,8 @@ public class NormalizationTests
         // decomposed-jamo form would silently never match any input
         // under FormC, because every input gets canonicalized
         // (composed back to U+D55C) before the lexer sees it. The
-        // Compile validation pass catches this.
+        // Compile validation pass rewrites the literal to the
+        // precomposed form.
         var rule = Token(UnicodeExamples.HangulHanDecomposedText);
 
         // Compile auto-converts the decomposed jamo to its precomposed form.
@@ -1077,8 +1079,7 @@ public class NormalizationTests
         // CAPITAL LETTER A WITH RING ABOVE. NFC rewrites the Angstrom
         // form to U+00C5 before the lexer sees the input. So a grammar
         // with Token("Å") under FormC would silently never match.
-        // The new compile-time validation pass catches this and tells
-        // the author to use U+00C5 instead.
+        // The Compile validation pass rewrites the literal to U+00C5.
         var rule = Token(UnicodeExamples.AngstromGrapheme);
         // Compile auto-converts U+212B to U+00C5 at Compile.
         Assert.DoesNotThrow(() => rule.Compile());
@@ -1097,11 +1098,10 @@ public class NormalizationTests
     [Test]
     public void Compile_auto_converts_Angstrom_singleton_under_FormD()
     {
-        // Under FormD the Angstrom decomposes to A + combining ring,
-        // and the literal text U+212B matches its own FormD only by
-        // accident. Actually NFD of U+212B is "Å" (A + ring),
-        // so the literal does NOT match its own FormD. Lock in the
-        // Compile-time error here.
+        // Under FormD the Angstrom singleton decomposes to A +
+        // combining ring, so the literal text U+212B doesn't match
+        // its own FormD. The Compile validation pass rewrites the
+        // literal to the decomposed pair.
         var rule = Token(UnicodeExamples.AngstromGrapheme);
         // Compile auto-converts U+212B to its NFD form ("A" + combining ring).
         Assert.DoesNotThrow(() => rule.Compile(NormalizationForm.FormD));
@@ -1165,7 +1165,7 @@ public class NormalizationTests
         // U+2329 LEFT-POINTING ANGLE BRACKET is a canonical singleton:
         // canonically decomposes to U+3008 LEFT ANGLE BRACKET (the
         // CJK angle bracket). NFC rewrites U+2329 to U+3008. The
-        // less-famous canonical singleton; not a Latin/Greek
+        // less-famous canonical singleton, not a Latin/Greek
         // duplicate but the same mechanism.
         var rule = Token(UnicodeExamples.LeftPointingAngleBracketGrapheme);
         // Compile auto-converts U+2329 to U+3008 at Compile.
@@ -1202,8 +1202,8 @@ public class NormalizationTests
         // FormKC, NFKC also applies compatibility decompositions,
         // so U+2102 normalizes to U+0043 plain C. A grammar literal
         // in the source character would silently never match. The
-        // Compile validation pass catches this exactly the same way
-        // it catches canonical singletons under FormC.
+        // Compile validation pass rewrites it exactly the same way
+        // it rewrites canonical singletons under FormC.
         var rule = Token(UnicodeExamples.DoubleStruckCGrapheme);
         // Compile auto-converts U+2102 to U+0043 (the NFKC conversion) at Compile.
         Assert.DoesNotThrow(() => rule.Compile(NormalizationForm.FormKC));
@@ -1271,7 +1271,7 @@ public class NormalizationTests
     public void Translator_agrees_with_whole_string_for_two_defective_marks_at_start()
     {
         // Two combining marks at the start (no base). UAX #29 GB9
-        // keeps them in ONE grapheme cluster (no break before
+        // keeps them in one grapheme cluster (no break before
         // Extend), so per-grapheme normalization runs on the
         // whole "̣́" sequence at once. Whole-string
         // normalization reorders by combining class (ccc 230 then
@@ -1288,7 +1288,7 @@ public class NormalizationTests
         // two combining marks (U+0308 + U+0301). The grammar
         // matches that single grapheme via Token, then expects Y
         // and sees Z. ErrorCharIndex must point at the Z in the
-        // ORIGINAL input, which is index 1 (the two-char expansion
+        // original input, which is index 1 (the two-char expansion
         // lives only in the normalized form).
         string original = Canary("̈́Z", "combining greek dialytika tonos + latin capital letter z", 0x0344, 0x005A);
         var rule = And(Token(UnicodeExamples.DialytikaTonosPrecomposedGrapheme), Token('Y'));
@@ -1337,7 +1337,7 @@ public class NormalizationTests
         // syllable) under FormKC. Original has 2 chars for the
         // jamo, normalized has 1 char for the syllable. The grammar
         // matches the syllable then expects 'Y' and sees 'Z'.
-        // ErrorCharIndex must point at the 'Z' in the ORIGINAL
+        // ErrorCharIndex must point at the 'Z' in the original
         // (index 2, after both compatibility-jamo chars), not at
         // the failure position in normalized space (index 1, right
         // after the single syllable).
@@ -1385,7 +1385,7 @@ public class NormalizationTests
         // grapheme, the normalized one, so the offsets genuinely differ too.
         const int length = 20000;
         string original = string.Concat(Enumerable.Repeat("e\u0301", length));
-        string normalized = original.Normalize(NormalizationForm.FormC);
+        string normalized = NormalizationHelpers.Normalize(original, NormalizationForm.FormC);
         Assert.That(ReferenceEquals(original, normalized), Is.False,
             "non-NFC input must not take the reference-equal fast path, "
             + "or this test would prove nothing about the grapheme walker");
@@ -1427,7 +1427,8 @@ public class NormalizationTests
     private static void AssertTranslatorAgreesWithWholeString(
         string original, NormalizationForm form)
     {
-        string normalized = new string(original.Normalize(form).ToCharArray());
+        string normalized = new string(
+            NormalizationHelpers.Normalize(original, form).ToCharArray());
         for (int i = 0; i <= normalized.Length; i++)
         {
             int translatorAnswer = NormalizedPositionMap.TranslateToOriginal(
@@ -1448,11 +1449,15 @@ public class NormalizationTests
     // The brute force re-normalizes the full prefix every iteration
     // (no chunk-since-last-verified optimization), which makes the
     // implementation obviously correct at the cost of being O(N²).
-    // It's only used as a reference in tests; the walker in
-    // NormalizedPositionMap has the linear-amortized version.
+    // It's only used as a reference in tests. The walker in
+    // NormalizedPositionMap has the linear-amortized version. The walk
+    // segments and normalizes through the parser's own helpers
+    // (GraphemeHelpers, NormalizationHelpers), so the reference and the
+    // walker under test always answer from the same implementations,
+    // on every runtime this test syncs to.
     private static int WholeStringPositionMap(string original, int normalizedIndex, NormalizationForm form)
     {
-        string normalized = original.Normalize(form);
+        string normalized = NormalizationHelpers.Normalize(original, form);
         if (normalizedIndex <= 0) return 0;
         if (normalizedIndex >= normalized.Length) return original.Length;
 
@@ -1460,11 +1465,11 @@ public class NormalizationTests
         int origPos = 0;
         while (origPos < original.Length)
         {
-            int step = StringInfo.GetNextTextElement(original, origPos).Length;
+            int step = GraphemeHelpers.FirstClusterLength(original.AsSpan(origPos));
             if (step <= 0) step = 1;
             origPos += step;
 
-            string prefixNormalized = original[..origPos].Normalize(form);
+            string prefixNormalized = NormalizationHelpers.Normalize(original[..origPos], form);
 
             // Safe boundary check: prefixNormalized must be an actual
             // prefix of the full normalized string (not just length-
@@ -1496,7 +1501,7 @@ public class NormalizationTests
         // two-rune cluster and the leaf it emits is two runes wide. A
         // character-range SymbolId (0..0x10FFFF) is documented to mean "the
         // matched content is exactly that one rune" (SymbolRanges), so a
-        // two-rune leaf can't carry one. Compile has to drop the stale
+        // two-rune leaf can't have one. Compile has to drop the stale
         // rune id and hand the rule a custom-range id, exactly like a Token
         // built multi-rune from the start.
         const int eacute = 0x00E9;

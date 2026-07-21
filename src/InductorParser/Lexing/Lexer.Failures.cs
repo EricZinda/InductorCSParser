@@ -27,7 +27,7 @@ public sealed partial class Lexer
     // BeginTransaction saves and zeroes this, and the matching Dispose
     // merges it back into the enclosing window with Math.Max. A composite
     // rule's RecordCompositeFailure reads it once its children have run,
-    // so a .WithError it carries anchors at the deepest position its
+    // so its .WithError anchors at the deepest position its
     // subtree reached rather than at the composite's own start.
     private int _subtreeDeepestFailure;
 
@@ -54,7 +54,7 @@ public sealed partial class Lexer
 
     /// <summary>
     /// The error message that would be reported if the parse ended now,
-    /// or null if the deepest failure carries no message.
+    /// or null if the deepest failure has no message.
     /// </summary>
     /// <remarks>
     /// See docs/ErrorArchitecture.md.
@@ -94,7 +94,7 @@ public sealed partial class Lexer
     public void RecordFailure(int position, string? errorMessage = null, bool forced = false)
     {
         Invariant.That(!forced || errorMessage != null,
-            $"RecordFailure(forced: true) requires a non-null errorMessage; got null at position {position}.");
+            $"RecordFailure(forced: true) requires a non-null errorMessage. Got null at position {position}.");
         // Every failure, whatever its precedence, advances the subtree-extent
         // high-water mark so an enclosing composite can anchor its own
         // .WithError at the deepest position its subtree reached.
@@ -117,7 +117,7 @@ public sealed partial class Lexer
                 // ForcedPosition is still its int default 0, and the
                 // outer condition guarantees position <= 0, so position
                 // is also 0. The write to ForcedPosition is a no-op
-                // (0 to 0); the meaningful change is filling in the
+                // (0 to 0). The meaningful change is filling in the
                 // message.
                 _failureState.ForcedPosition = position;
                 _failureState.ForcedMessage = errorMessage;

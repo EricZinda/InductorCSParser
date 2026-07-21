@@ -340,13 +340,13 @@ internal static class BenchmarkRegistry
     // the CRLF cluster and throw. Set membership is order-independent.
     private static readonly TokenSet AsciiRegexWhitespace = TokenSet.Runes(" \t\r\f\n\v");
     private static readonly TokenSet CodeSeparator = TokenSet.Runes(",") | AsciiRegexWhitespace;
-    private static readonly TokenSet NotNewline = ~(TokenSet.Single('\r') | TokenSet.Single('\n'));
-    private static readonly TokenSet NotUppercase = ~AsciiUpper;
-    private static readonly TokenSet NotSpace = ~TokenSet.Runes(" ");
-    private static readonly TokenSet NotSemicolon = ~TokenSet.Runes(";");
-    private static readonly TokenSet NotBracket = ~TokenSet.Runes("]");
-    private static readonly TokenSet NotParen = ~TokenSet.Runes(")");
-    private static readonly TokenSet NotCurly = ~TokenSet.Runes("}");
+    private static readonly TokenSet NotNewline = TokenSet.Universe - (TokenSet.Single('\r') | TokenSet.Single('\n'));
+    private static readonly TokenSet NotUppercase = TokenSet.Universe - AsciiUpper;
+    private static readonly TokenSet NotSpace = TokenSet.Universe - TokenSet.Runes(" ");
+    private static readonly TokenSet NotSemicolon = TokenSet.Universe - TokenSet.Runes(";");
+    private static readonly TokenSet NotBracket = TokenSet.Universe - TokenSet.Runes("]");
+    private static readonly TokenSet NotParen = TokenSet.Universe - TokenSet.Runes(")");
+    private static readonly TokenSet NotCurly = TokenSet.Universe - TokenSet.Runes("}");
     private static readonly TokenSet B64Char = AsciiAlpha | TokenSet.Ascii.Digits | TokenSet.Runes("+/");
     private static readonly TokenSet UcdField9 = TokenSet.Ascii.Digits | TokenSet.Runes("-/");
     private static readonly TokenSet LevelChar = TokenSet.Runes("DIWEF");
@@ -544,7 +544,7 @@ internal static class BenchmarkRegistry
         Rule wordBody = P(ScanWhile(AsciiWord, minimumLength));
         var word = And(
             wordBody,
-            Or(Peek(OneOf(~AsciiWord)), Eof())
+            Or(Peek(OneOf(TokenSet.Universe - AsciiWord)), Eof())
         );
         return new PatternGrammar(word, Array.Empty<Rule>());
     }

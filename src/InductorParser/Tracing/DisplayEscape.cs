@@ -23,7 +23,7 @@ namespace InductorParser.Tracing;
 // Control, LineSeparator, and ParagraphSeparator, plus unpaired surrogate
 // halves.
 //
-// Format characters such as ZWJ are deliberately NOT included. ZWJ is the
+// Format characters such as ZWJ are deliberately not included. ZWJ is the
 // invisible glue inside emoji ZWJ families and similar clusters we want
 // rendered as the user-perceived character, and it doesn't break the line.
 // Valid surrogate pairs fall through to the verbatim path as a pair,

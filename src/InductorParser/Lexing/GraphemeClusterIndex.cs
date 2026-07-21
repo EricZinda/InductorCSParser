@@ -1,6 +1,6 @@
 using System;
-using System.Globalization;
 using System.Runtime.CompilerServices;
+using InductorParser.Lexing.Unicode;
 
 namespace InductorParser.Lexing;
 
@@ -8,42 +8,34 @@ namespace InductorParser.Lexing;
 // lazily as positions are queried. The single source of truth for
 // "where does one user-visible character end and the next begin" in
 // this parser. Caching the boundaries once means reading a cluster
-// length is a bool-array lookup rather than a
-// StringInfo.GetNextTextElement call, which allocates a substring on
-// every query.
+// length is a bool-array lookup rather than a fresh segmentation call
+// on every query.
 //
-// Runtime caveat: cluster detection delegates to
-// System.Globalization.StringInfo, which is UAX #29 rev. 35 compliant
-// on .NET 5 and later but uses pre-UAX29 custom logic on .NET
-// Framework, .NET Core 3.x, and the Mono runtimes Unity ships. On
-// those older runtimes some real grapheme clusters split incorrectly
-// (Thai "kam", multi-codepoint emoji like the woman-shrugging
-// sequence). Replacing this with a bundled UAX #29 implementation
-// would make the behavior uniform across runtimes. Until then, this
-// class uses the StringInfo the runtime ships with. Grammars that
-// operate on ASCII-only or single-UTF-16-char content (the Setting
-// example, most config-file grammars) are unaffected.
+// Cluster detection comes from GraphemeSegmentation. Its header covers
+// how the implementation is chosen.
 //
 // Sharing model: GraphemeClusterIndex.For(string) returns a cached
 // instance keyed on the input string via a ConditionalWeakTable, so
 // the Lexer and post-parse callers (SourcePositionConverter) reuse the
 // same cache automatically. The CWT keeps the index alive only while
 // the string is alive, so a finished parse drops both together.
+// Keying on the string alone is valid because the implementation
+// choice (UnicodeEnvironment.Implementation) freezes before the first
+// index is built and never changes afterward.
 //
-// The cache is populated by walking a TextElementEnumerator one
-// MoveNext at a time, recording each cluster start in a bool[] sized
-// to the input. bool[] gives O(1) IsClusterStart lookups. LengthAt
-// scans forward by at most one cluster's worth of bool reads after
-// the enumerator has been advanced past the position. After the
-// enumerator is exhausted (the input has been fully walked once),
-// every query becomes pure bool-array work.
+// The cache is populated by walking the input one cluster at a time,
+// recording each cluster start in a bool[] sized to the input. bool[]
+// gives O(1) IsClusterStart lookups. LengthAt scans forward by at most
+// one cluster's worth of bool reads after the walk has passed the
+// position. After the walk is exhausted (the input has been fully
+// walked once), every query becomes pure bool-array work.
 //
 // Thread safety: the cache is keyed on the input string instance, so
 // multiple parses of the same string (interned literals, cached
 // config text, identical request bodies in a web server) share one
-// index instance. The walk that fills _isStart is locked because
-// TextElementEnumerator's MoveNext isn't thread-safe. 
-// The lock is per-instance (one
+// index instance. The walk that fills _isStart is locked because it
+// advances shared state (_nextWalkPosition), and two threads stepping
+// that concurrently would corrupt the walk. The lock is per-instance (one
 // per input string), so concurrent parses of different inputs don't
 // contend. The two fast-path reads (the _exhausted check and the
 // _walkedTo check at the top of EnsureWalkedTo) skip the lock once
@@ -53,10 +45,17 @@ internal sealed class GraphemeClusterIndex
 {
     private static readonly ConditionalWeakTable<string, GraphemeClusterIndex> _byInput = new();
 
+    // Test-only: drop every cached index. Only called by
+    // UnicodeEnvironment.ResetForTesting, whose comment states the
+    // concurrency requirements.
+    internal static void ResetCacheForTesting() => _byInput.Clear();
+
     private readonly string _input;
     private readonly bool[] _isStart;
     private readonly object _walkLock = new();
-    private TextElementEnumerator? _enumerator;
+    // The next cluster start the walk hasn't processed yet. Only read
+    // and written under _walkLock.
+    private int _nextWalkPosition;
     private volatile bool _exhausted;
     // How far the walk has reached: the highest position any MoveNext
     // has marked so far, or -1 before the first one. It doubles as a
@@ -103,12 +102,16 @@ internal sealed class GraphemeClusterIndex
         _input = input;
         _isStart = new bool[input.Length + 1];
         if (input.Length > 0)
+        {
             _isStart[0] = true;
-        // EOF is always a boundary, but the walk never lands on it: the
-        // enumerator's ElementIndex only reaches the last cluster start,
-        // never input.Length. The constructor marks it here so
-        // IsClusterStart(input.Length) returns true instead of false.
-        _isStart[input.Length] = true;
+            // For non-empty text, end-of-text is a UAX #29 boundary, but
+            // the walk never lands on it: it only marks cluster starts
+            // inside the input. Mark it here so
+            // IsClusterStart(input.Length) returns true. GB1/GB2 explicitly
+            // exempt empty text, so the sole slot stays false when length
+            // is zero.
+            _isStart[input.Length] = true;
+        }
     }
 
     // Get-or-create the cached index for `input`. Same string instance
@@ -154,9 +157,10 @@ internal sealed class GraphemeClusterIndex
     }
 
     // True iff `position` is a UAX #29 grapheme cluster boundary.
-    // Position 0 (when input is non-empty) and position input.Length
-    // are always boundaries. The scanner fast paths use it to reject
-    // mid-cluster IndexOf / IndexOfAny landings before they advance.
+    // For non-empty input, position 0 and position input.Length are
+    // boundaries. Empty input has no boundary, per the GB1/GB2 empty-text
+    // exception. The scanner fast paths use this to reject mid-cluster
+    // IndexOf / IndexOfAny landings before they advance.
     public bool IsClusterStart(int position)
     {
         if (position < 0 || position > _input.Length) return false;
@@ -170,8 +174,9 @@ internal sealed class GraphemeClusterIndex
     //
     // A cluster counts only once its end boundary is at or before
     // charIndex. Those end boundaries are the cluster starts past
-    // position 0 plus the always-marked input.Length boundary, so the
-    // count is the number of true _isStart entries in [1, charIndex].
+    // position 0 plus the marked input.Length boundary for non-empty
+    // text, so the count is the number of true _isStart entries in
+    // [1, charIndex].
     // When charIndex sits inside a multi-char cluster, that range stops
     // short of the cluster's own end, so the cluster the char belongs
     // to is left out of the count.
@@ -199,8 +204,8 @@ internal sealed class GraphemeClusterIndex
         if (target < 0) target = 0;
         if (target > _input.Length) target = _input.Length;
 
-        // TextElementEnumerator.MoveNext isn't thread-safe, so the walk
-        // runs under a lock.
+        // The walk advances shared state (_nextWalkPosition), so it runs
+        // under a lock.
         lock (_walkLock)
         {
             // Re-check after acquiring the lock: another thread may have
@@ -209,26 +214,25 @@ internal sealed class GraphemeClusterIndex
             if (_exhausted) return;
             if (target <= _walkedTo) return;
 
-            // The Lexer's NextTokenLength path queries this index on every
-            // Read, so for any non-empty parse the enumerator gets created
-            // on the first read. The null-coalescing init still pays off in
-            // the corner cases that don't query: empty inputs, and pooled
-            // sub-lexers that get a fresh For() call but operate in rune
-            // mode and never go through LengthAt / IsClusterStart.
-            _enumerator ??= StringInfo.GetTextElementEnumerator(_input);
-
-            // Walk until we've passed `target` or run out. After MoveNext
-            // returns idx, _isStart[idx] has its final value. Keep going
-            // while idx < target so target itself gets marked.
+            // Walk until we've passed `target` or run out. After a cluster
+            // start idx is marked, _isStart[idx] has its final value, and
+            // so does every position before the next cluster start. Keep
+            // going while idx < target so target itself gets marked.
             while (true)
             {
-                if (!_enumerator.MoveNext())
+                if (_nextWalkPosition >= _input.Length)
                 {
                     _exhausted = true;
                     return;
                 }
-                int idx = _enumerator.ElementIndex;
+                int idx = _nextWalkPosition;
                 _isStart[idx] = true;
+                int clusterLength = GraphemeSegmentation
+                    .GetLengthOfFirstExtendedGraphemeCluster(_input.AsSpan(idx));
+                Invariant.That(clusterLength > 0,
+                    $"GetLengthOfFirstExtendedGraphemeCluster returned {clusterLength} at "
+                    + $"position {idx} of a non-empty remainder (input length {_input.Length}).");
+                _nextWalkPosition = idx + clusterLength;
                 // Set the flag after the _isStart write above, never
                 // before. The _walkedTo field comment explains why the
                 // order matters.

@@ -11,8 +11,8 @@ namespace InductorParser.SyntaxTree;
 /// A node in the parse tree produced by <see cref="Rule.Parse(string)"/>.
 /// </summary>
 /// <remarks>
-/// A Symbol has one of two shapes. A composite carries a list of child Symbols and comes from
-/// rules that build structure (And, Or, OneOrMore). A leaf carries a section of the original
+/// A Symbol has one of two shapes. A composite has a list of child Symbols and comes from
+/// rules that build structure (And, Or, OneOrMore). A leaf stores a section of the original
 /// input (a ReadOnlyMemory&lt;char&gt;) and comes from rules that match content (Token, Literal,
 /// OneOf, ScanUntil). The parse never copies input into a new string.
 /// <para>
@@ -58,13 +58,13 @@ public sealed class Symbol
     private readonly bool _isLeaf;
 
     /// <summary>
-    /// True when this Symbol is a leaf carrying matched text, false when it's a composite
-    /// carrying child Symbols. A composite with an empty <see cref="Children"/> list still
-    /// reports false: zero children is not the same shape as a leaf.
+    /// True when this Symbol is a leaf with matched text, false when it's a composite
+    /// with child Symbols. A composite with an empty <see cref="Children"/> list still
+    /// reports false: zero children isn't the same shape as a leaf.
     /// </summary>
     public bool IsLeaf => _isLeaf;
 
-    // Per-parse context the engine stamps onto every Symbol it builds. Carries the original
+    // Per-parse context the engine stamps onto every Symbol it builds. It stores the original
     // input, the normalized parse input, the normalization form, and the grammar root, so a
     // Symbol can translate its parseInput-relative _leafChars span back to original-input
     // coordinates (SourceRange / SourceText) and resolve its id to a rule name (DisplayName).
@@ -86,7 +86,7 @@ public sealed class Symbol
     public IReadOnlyList<Symbol> Children { get; }
 
     /// <summary>
-    /// Builds a composite Symbol carrying child Symbols.
+    /// Builds a composite Symbol with child Symbols.
     /// </summary>
     /// <remarks>
     /// <paramref name="consumedSpan"/> is every character the rule matched, including ones that
@@ -273,8 +273,8 @@ public sealed class Symbol
     }
 
     /// <summary>
-    /// Renders the text present in the tree: for a leaf, its captured text; for a composite, the
-    /// concatenated text of its children.
+    /// Renders the text present in the tree: a leaf renders its captured text, and a composite
+    /// renders the concatenated text of its children.
     /// </summary>
     /// <remarks>
     /// On the default parse path, FlattenType.Delete rules are filtered out of the tree, so the
@@ -283,6 +283,11 @@ public sealed class Symbol
     /// matched do still appear. To get the exact input verbatim, keep the string you passed to
     /// Parse, read <see cref="SourceText"/>, or set ParseOptions.PreserveAllSymbols to keep every
     /// grammar node (including Delete ones) in the tree.
+    /// <para>
+    /// When the grammar normalized the input (any form other than <c>Compile(null)</c>), a leaf's
+    /// text comes from the normalized parse input, so this renders the normalized form the parser
+    /// matched, not the user's original spelling. <see cref="SourceText"/> returns the original.
+    /// </para>
     /// </remarks>
     public override string ToString()
     {
@@ -362,8 +367,9 @@ public sealed class Symbol
     /// </summary>
     /// <remarks>
     /// Unlike <see cref="ToString"/>, which concatenates the text of the leaves present in the
-    /// tree, this reaches back to the original input by character range, so it includes characters
-    /// matched by FlattenType.Delete leaves (the default for Token, Literal, EndOfLine) that
+    /// tree and renders it in the normalized form the parser matched, this reaches back to the
+    /// original input by character range, so it includes characters matched by FlattenType.Delete
+    /// leaves (the default for Token, Literal, EndOfLine) that
     /// aren't in the tree for <see cref="ToString"/> to render. When the grammar normalized the
     /// input, the parse-input offsets are translated back to the original before the section is
     /// taken, so the result is always a piece of the user's original input.
@@ -392,8 +398,8 @@ public sealed class Symbol
     /// Preserve.
     /// </summary>
     /// <remarks>
-    /// Flattens a tree after the fact, for example one parsed with ParseOptions.PreserveAllSymbols.
-    /// <see cref="Flatten"/> is the convenience entry point.
+    /// Flattens a tree after it has been parsed with ParseOptions.PreserveAllSymbols which ignores the default flattening.
+    /// Does nothing to a tree that has already been flattened. <see cref="Flatten"/> is the convenience entry point.
     /// </remarks>
     public void FlattenInto(List<Symbol> result)
     {
@@ -438,6 +444,10 @@ public sealed class Symbol
     /// Returns a flattened copy of this subtree: Delete nodes dropped and Flatten nodes' children
     /// lifted into their parents. See <see cref="FlattenInto"/>.
     /// </summary>
+    /// <remarks>
+    /// Flattens a tree after it has been parsed with ParseOptions.PreserveAllSymbols which ignores the default flattening.
+    /// Does nothing to a tree that has already been flattened.
+    /// </remarks>
     public IReadOnlyList<Symbol> Flatten()
     {
         var list = new List<Symbol>();

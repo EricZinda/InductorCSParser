@@ -36,7 +36,8 @@ public sealed class ParseOptions
     /// <summary>
     /// Caps how many work units the parse may consume before giving up. The
     /// parse aborts with <see cref="ParseOutcome.RuleCountLimitExceeded"/> when
-    /// the counter exceeds this limit. Set to 0 to disable.
+    /// a periodic check (see remarks) finds the counter has exceeded this
+    /// limit. Set to 0 to disable.
     /// </summary>
     /// <remarks>
     /// Each rule invocation counts as one unit, and each iteration of a
@@ -47,6 +48,17 @@ public sealed class ParseOptions
     /// default of 10,000,000 lets well-formed parses through (a 1 MB file
     /// often runs through low millions) and catches both
     /// catastrophic-backtracking shapes and bulk-scan denial of service.
+    /// <para>
+    /// The limit is checked at periodic checkpoints (every 1024 work units),
+    /// not on every unit, which keeps the per-unit cost at one mask and one
+    /// compare. An abort lands at the first checkpoint after
+    /// the counter crosses the limit, so the parse can run up to 1023 units
+    /// past it. And a parse that finishes before the first checkpoint never
+    /// aborts at all, no matter how small the limit, so a limit below 1024
+    /// can't make a small parse fail. The checkpoint schedule is fixed, so
+    /// the run-to-run determinism above still holds. Treat this as a backstop
+    /// against runaway parses, not a precise budget.
+    /// </para>
     /// </remarks>
     public long RuleCountLimit { get; set; } = 10_000_000L;
 
@@ -89,9 +101,11 @@ public sealed class ParseOptions
     /// its normal result instead of aborting. The
     /// deadline is there to stop a long-running or runaway parse, and a parse
     /// long enough to matter runs long enough to hit a check. Don't rely on
-    /// Timeout to trip on a tiny grammar against a tiny input. If you need a
-    /// hard, count-based cap that trips deterministically regardless of input
-    /// size, use <see cref="RuleCountLimit"/> instead.
+    /// Timeout to trip on a tiny grammar against a tiny input. For a cap that
+    /// trips at the same point on every run regardless of hardware, use
+    /// <see cref="RuleCountLimit"/> instead. It's polled at the same periodic
+    /// checkpoints, so it shares the granularity caveat described in its
+    /// remarks, but a count is repeatable where a clock isn't.
     /// </para>
     /// </remarks>
     public TimeSpan Timeout { get; set; } = TimeSpan.Zero;
@@ -109,7 +123,8 @@ public sealed class ParseOptions
     /// Parse returns a tree whose shape matches the grammar
     /// one-to-one: every FlattenType.Flatten Symbol, every FlattenType.Delete
     /// node, and every individual leaf symbol is present exactly where the
-    /// grammar placed it.
+    /// grammar placed it. Alias subtrees are the one exception, described
+    /// in the remarks.
     /// </summary>
     /// <remarks>
     /// Turn this on to debug or inspect a grammar, to PrintTree the full
@@ -120,6 +135,15 @@ public sealed class ParseOptions
     /// FlattenType.Preserve Symbols remain as findable nodes. That's the shape
     /// most callers actually want to walk (i.e. what the grammar was designed for).
     /// This setting is for debugging.
+    /// <para>
+    /// The alias exception: an alias substitutes its identity for its inner's
+    /// even here, exactly as it does in the production tree. An alias over a
+    /// named rule shows the match under the alias's id with the inner's own
+    /// Symbol gone, and a FlattenType.Delete rule directly under an alias
+    /// still contributes nothing. The debug tree mirrors the alias's
+    /// production behavior so that flattening the debug tree gives exactly
+    /// the tree a normal parse returns.
+    /// </para>
     /// </remarks>
     public bool PreserveAllSymbols { get; set; } = false;
 
@@ -131,8 +155,9 @@ public sealed class ParseOptions
     /// The default (false) requires every token of the input to be consumed by
     /// the grammar before Parse returns success: trailing characters that the grammar
     /// didn't match turns the parse into a failure positioned at the first
-    /// unconsumed token. See docs/InductorParserDesignDecisions.md "Parse
-    /// Requires Consuming All Input" for why the default is strict.
+    /// unconsumed token. The default is strict because silently accepting
+    /// trailing input would mask the "grammar accepted something it
+    /// shouldn't have" bugs grammar authors care most about catching.
     /// <para>
     /// Turn this on for prefix parsing: matching one record at the front of a
     /// longer stream, testing a sub-rule against an input longer than the rule
@@ -142,8 +167,33 @@ public sealed class ParseOptions
     /// </remarks>
     public bool AllowTrailingInput { get; set; } = false;
 
+    private string _withErrorTemplate =
+        "{message} at line {lineNumber}, column {tokenColumnNumber}.";
+    /// <summary>
+    /// Template that wraps a rule's <c>.WithError("...")</c> message when that
+    /// rule is the deepest failure. The author's text fills the {message}
+    /// placeholder, and the position placeholders every template shares add the
+    /// location, so a custom message includes its position the way the mechanical
+    /// default does. Setting it to null throws.
+    /// </summary>
+    /// <remarks>
+    /// The default appends " at line {lineNumber}, column {tokenColumnNumber}." to
+    /// the author's text. Set it to "{message}" to get the raw <c>.WithError</c>
+    /// string back with no position, or reshape it however you like (position
+    /// first, localized, and so on). See <see cref="PositionalErrorTemplate"/> for
+    /// the placeholder syntax. The per-template placeholder here is {message}, the
+    /// author's text. Unlike the mechanical templates it has no {character},
+    /// since a WithError failure can sit at end of input where there's no
+    /// character to name.
+    /// </remarks>
+    public string WithErrorTemplate
+    {
+        get => _withErrorTemplate;
+        set => _withErrorTemplate = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
     private string _positionalErrorTemplate =
-        "Parse failed at offset {charIndex}: unexpected '{character}'.";
+        "Unexpected '{character}' at line {lineNumber}, column {tokenColumnNumber}.";
     /// <summary>
     /// Template for the default message when the parser rejects a specific
     /// input character and no .WithError("...") was attached at the deepest
@@ -156,28 +206,45 @@ public sealed class ParseOptions
     /// rather than throwing.
     /// <para>
     /// Every template (this one and the abort templates below) supports the
-    /// same four position placeholders, named to match the ParseResult.ErrorXxx
+    /// same position placeholders, named to match the ParseResult.ErrorXxx
     /// properties so a template author can mirror whatever unit the rest of
     /// their code already uses:
     /// <code>
-    ///   {charIndex}    ParseResult.ErrorCharIndex   (UTF-16 code units)
-    ///   {tokenIndex}   ParseResult.ErrorTokenIndex  (StringInfo text elements)
-    ///   {line}         ParseResult.ErrorLine        (zero-based, Language Server Protocol convention)
-    ///   {column}       ParseResult.ErrorColumn      (zero-based, in chars)
+    ///   {charIndex}          ParseResult.ErrorCharIndex   (UTF-16 code units)
+    ///   {tokenIndex}         ParseResult.ErrorTokenIndex  (grapheme clusters)
+    ///   {line}               ParseResult.ErrorLine        (zero-based, Language Server Protocol convention)
+    ///   {charColumn}         ParseResult.ErrorCharColumn  (zero-based char column)
+    ///   {tokenColumn}        ParseResult.ErrorTokenColumn (zero-based grapheme column)
+    ///   {lineNumber}         ErrorLine + 1                (one-based line)
+    ///   {charColumnNumber}   ErrorCharColumn + 1          (one-based char column)
+    ///   {tokenColumnNumber}  ErrorTokenColumn + 1         (one-based grapheme column)
     /// </code>
+    /// The default templates use {lineNumber} and {tokenColumnNumber} so the
+    /// out-of-the-box message reads the way a person counts lines and characters
+    /// in an editor: an emoji or a combining sequence earlier on the line counts
+    /// as one column, not as its several UTF-16 code units. Use {charColumnNumber}
+    /// (or {charColumn}) instead for a Language Server Protocol client or editor,
+    /// which count columns in chars. The ParseResult fields stay zero-based. Only
+    /// the *Number placeholders are shifted.
     /// plus a per-template placeholder for the unit-specific value:
     /// <code>
+    ///   WithErrorTemplate            {message}    (the rule's .WithError text)
     ///   PositionalErrorTemplate      {character}  (the unexpected input character)
+    ///   MalformedInputTemplate       {character}  (the offending element, e.g. U+D800)
     ///   TimeoutAbortTemplate         {timeout}    (options.Timeout as a TimeSpan string)
     ///   RuleCountLimitAbortTemplate  {limit}      (options.RuleCountLimit)
     ///   DepthLimitAbortTemplate      {limit}      (options.MaxDepth)
     /// </code>
     /// </para>
     /// <para>
-    /// The token-index and line/column conversions each walk the input once, so
-    /// they're computed lazily and only paid for when the corresponding
-    /// placeholder appears in the template. The default templates only mention
-    /// {charIndex}, so by default the O(n) scans never run.
+    /// The token-index, line/column, and token-column conversions each walk the
+    /// input once, so they're computed lazily and only paid for when the
+    /// corresponding placeholder appears in the template. The default templates
+    /// use {lineNumber} and {tokenColumnNumber}, so building a default failure
+    /// message pays one line scan plus one grapheme-cluster count of the input.
+    /// That runs only on the failure path (a successful parse builds no message).
+    /// A caller who wants the message built with no scan at all can set the
+    /// templates to a {charIndex}-only string.
     /// </para>
     /// </remarks>
     public string PositionalErrorTemplate
@@ -186,7 +253,8 @@ public sealed class ParseOptions
         set => _positionalErrorTemplate = value ?? throw new ArgumentNullException(nameof(value));
     }
 
-    private string _endOfInputErrorTemplate = "Unexpected end of input.";
+    private string _endOfInputErrorTemplate =
+        "Unexpected end of input at line {lineNumber}, column {tokenColumnNumber}.";
     /// <summary>
     /// Template for the default message when the parser fails at end of input
     /// and no .WithError("...") was attached. See
@@ -197,6 +265,27 @@ public sealed class ParseOptions
     {
         get => _endOfInputErrorTemplate;
         set => _endOfInputErrorTemplate = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    private string _malformedInputTemplate =
+        "Malformed input at line {lineNumber}, column {tokenColumnNumber}: '{character}' can't be normalized.";
+    /// <summary>
+    /// Template for the message when the input can't be normalized to the
+    /// grammar's normalization form: an unpaired UTF-16 surrogate (which is
+    /// ill-formed UTF-16), or U+FFFE (a noncharacter .NET's string.Normalize
+    /// rejects, and the parser rejects the same way on every runtime). The
+    /// parse returns
+    /// <see cref="ParseOutcome.MalformedInput"/> with this message instead
+    /// of letting .NET's string.Normalize throw an ArgumentException whose text
+    /// the app can't control. See <see cref="PositionalErrorTemplate"/> for the
+    /// placeholder syntax. The per-template {character} placeholder renders the
+    /// offending element (a lone surrogate comes out as U+D800-style text).
+    /// Setting it to null throws.
+    /// </summary>
+    public string MalformedInputTemplate
+    {
+        get => _malformedInputTemplate;
+        set => _malformedInputTemplate = value ?? throw new ArgumentNullException(nameof(value));
     }
 
     private string _timeoutAbortTemplate = "Parse aborted: timeout exceeded.";

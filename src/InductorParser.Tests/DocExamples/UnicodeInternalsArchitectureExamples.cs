@@ -5,17 +5,12 @@ using static InductorParser.Rules;
 
 namespace InductorParser.Tests.DocExamples;
 
-// Verifies the runnable claims in docs/UnicodeInternalsArchitecture.md.
-// Like UnicodeModel.md before it, this doc had no backing example test,
-// which let its "Normalization" section repeat the same drifted round-trip
-// claim: that compiling with null makes tree.ToString() match the original
-// input character for character. That's wrong. tree.ToString() rebuilds
-// text only from the nodes left in the tree, so it drops whatever the
-// Delete rules matched, and Token / Literal default to Delete. The
-// verbatim accessor is Symbol.SourceText, and it round-trips under every
-// form, not just null. What null actually buys is that the tree's leaf
-// text (and so ToString on a content-preserving grammar) carries the
-// original characters instead of the normalized ones.
+// Verifies the runnable claims in docs/UnicodeInternalsArchitecture.md's
+// "Normalization" section: the Compile(form) overloads, SourceText as the
+// verbatim accessor (tree.ToString() isn't, it drops Delete content and
+// returns normalized characters under a normalizing form), what
+// Compile(null) buys, and error positions reporting in original-input
+// coordinates.
 //
 // Non-ASCII test data is built from hex code points (no raw glyphs in
 // source) so the UnicodeLiteralCanary scanner stays happy.
@@ -41,12 +36,10 @@ public class UnicodeInternalsArchitectureExamples
         Assert.That(unnormalized.Parse("hi").Success, Is.True);
     }
 
-    // The corrected round-trip claim. The doc's "Normalization" section
-    // said callers who want character-exact round-trippability (where
-    // tree.ToString() matches the original input character for character)
-    // compile with null. That's wrong: ToString() drops Delete content
-    // (the default for Token / Literal), so even under Compile(null) it is
-    // not a verbatim round-trip. SourceText is the verbatim accessor.
+    // SourceText is the verbatim accessor. tree.ToString() isn't: it
+    // rebuilds text only from the nodes left in the tree, so it drops
+    // whatever the Delete rules matched (and Token / Literal default to
+    // Delete), even under Compile(null).
     [Test]
     public void SourceText_is_the_verbatim_accessor_ToString_drops_Delete_content()
     {
@@ -61,15 +54,30 @@ public class UnicodeInternalsArchitectureExamples
         // SourceText gives the verbatim original input back.
         Assert.That(result.Tree!.SourceText, Is.EqualTo("hello,world"));
 
-        // ToString() drops every Delete child, so it is NOT a verbatim
-        // round-trip even under Compile(null). The old doc claim
-        // ("compile with null and tree.ToString() matches character for
-        // character") asserts the opposite and would fail here.
+        // ToString() drops every Delete child, so it isn't a verbatim
+        // round-trip even under Compile(null).
         Assert.That(result.Tree!.ToString(), Is.EqualTo(string.Empty));
     }
 
+    // SourceText round-trips under a normalizing form too, not just null:
+    // it always returns the caller's original characters. ToString under
+    // a normalizing form returns the normalized characters.
+    [Test]
+    public void SourceText_round_trips_under_a_normalizing_form()
+    {
+        var id = Identifier().As("id").Compile(NormalizationForm.FormKC);
+
+        var result = id.Parse(LigatureFiInput); // "a" + U+FB01 + "b"
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+
+        // SourceText is the original, ligature intact.
+        Assert.That(result.Tree!.SourceText, Is.EqualTo(LigatureFiInput));
+        // ToString reflects the normalized (compatibility-expanded) text.
+        Assert.That(result.Tree!.ToString(), Is.EqualTo("afib"));
+    }
+
     // What Compile(null) actually buys: the tree's leaf text (and so
-    // ToString on a content-preserving grammar) carries the original
+    // ToString on a content-preserving grammar) keeps the original
     // characters instead of the normalized ones. AnyToken is Preserve, so
     // OneOrMore(AnyToken()) preserves everything it matches.
     [Test]
@@ -83,7 +91,7 @@ public class UnicodeInternalsArchitectureExamples
         Assert.That(unnormalized.Success, Is.True, unnormalized.ErrorMessage);
         Assert.That(compatibility.Success, Is.True, compatibility.ErrorMessage);
 
-        // null: ToString carries the original ligature; FormKC normalizes it.
+        // null: ToString keeps the original ligature. FormKC normalizes it.
         Assert.That(unnormalized.Tree!.ToString(), Is.EqualTo(LigatureFiInput));
         Assert.That(compatibility.Tree!.ToString(), Is.EqualTo("afib"));
 
@@ -106,7 +114,7 @@ public class UnicodeInternalsArchitectureExamples
 
         var result = grammar.Parse(decomposed);
         Assert.That(result.Success, Is.False);
-        // The '!' sits at index 5 in the ORIGINAL (decomposed) string:
+        // The '!' sits at index 5 in the original (decomposed) string:
         // c a f e U+0301 ! -> indices 0..5. A position into the recomposed
         // "café!" ("café" is 4 chars) would report 4 instead.
         Assert.That(result.ErrorCharIndex, Is.EqualTo(5));

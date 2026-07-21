@@ -34,7 +34,7 @@ public class OrRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Does.StartWith("Parse failed at offset 0"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("Unexpected 'x' at line 1, column 1."));
     }
 
     [Test]
@@ -52,7 +52,7 @@ public class OrRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a' at line 1, column 1."));
     }
 
     [Test]
@@ -63,7 +63,7 @@ public class OrRuleTests
         // The outer Or's per-child shortcut consults each child's
         // HasErrorMessageInSubtree gate. The inner Or itself has no .WithError,
         // but Token('a').WithError lives in its subtree, so the gate is true
-        // and the shortcut is bypassed for that child. The inner Or runs;
+        // and the shortcut is bypassed for that child. The inner Or runs,
         // its own per-child shortcut tries Token('a').WithError and skips
         // Token('b'). "want 'a'" lands at the deepest-failure slot for
         // offset 0 and surfaces as ErrorMessage. Pre-fix the gate was
@@ -74,7 +74,7 @@ public class OrRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("want 'a' at line 1, column 1."));
     }
 
     [Test]
@@ -92,7 +92,7 @@ public class OrRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
-        Assert.That(result.ErrorMessage, Is.EqualTo("need 'c'"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("need 'c' at line 1, column 3."));
     }
 
     [Test]
@@ -241,7 +241,7 @@ public class OrRuleTests
         // This verifies the lookahead-shortcut soundness story for an And
         // whose first child is Optional(NoneOf(...)). The Optional can
         // either match zero (so the next sibling sees the lookahead) or
-        // match a single token NOT in the NoneOf's set, so the And's
+        // match a single token that's outside the NoneOf's set, so the And's
         // true first-token set is "anything in {a,b,c} OR anything not
         // in {x,y}" = anything except {x,y} \ {a,b,c} = anything except
         // nothing-here = Universe.
@@ -272,7 +272,7 @@ public class OrRuleTests
     [Test]
     public void SourceText_on_Or_returns_the_winning_alternative_text()
     {
-        // Or is Flatten by default; wrapping with .As("choice")
+        // Or is Flatten by default, and naming it with .As("choice")
         // gives it a surviving composite Symbol. The composite's
         // consumed span covers what the winning alternative matched
         // (here "second"), and SourceText returns that verbatim regardless
@@ -303,7 +303,7 @@ public class OrRuleTests
     {
         // Branches share the leading '!' prefix and each Literal records
         // a mechanical failure at the mid-read position (1). The Or
-        // carries a named WithError; composite anchoring records it at
+        // has a named WithError, and composite anchoring records it at
         // the position its branches reached (1), where it ties the
         // mechanical failures on depth and wins the named-beats-
         // mechanical tie-break. (The Newsboat operator case from
@@ -318,7 +318,7 @@ public class OrRuleTests
         var result = rule.Parse("!!");
 
         Assert.That(result.Success, Is.False);
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected operator"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected operator at line 1, column 2."));
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
     }
 
@@ -344,7 +344,7 @@ public class OrRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(3));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected one of the three forms"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected one of the three forms at line 1, column 4."));
     }
 
     [Test]
@@ -354,8 +354,8 @@ public class OrRuleTests
         // The email branch matches "alice@" then fails wanting a domain,
         // recording its WithError at position 6 (EOF). The username
         // branch succeeds and the Or commits to it. The rejected email
-        // branch's failure is NOT cleared: it is a real near-miss, and at
-        // position 6 it is deeper than the eventual failure of the
+        // branch's failure isn't cleared: it's a real near-miss, and at
+        // position 6 it's deeper than the eventual failure of the
         // trailing '.' (position 5), so depth-primary ranking surfaces it.
         var letters = OneOf(TokenSet.Letters);
         var email = And(

@@ -6,7 +6,7 @@
 //   AST               four capture groups    walkable parse tree
 //
 // Major/minor/patch leading-zero checks run in the grammar via the
-// reject-first pattern (see SemVerGrammar.cs and docs/Recipes.md), so
+// reject-first pattern (see SemVerGrammar.cs), so
 // only the Int32 range check stays here for those positions. The
 // numeric pre-release ident leading-zero check still runs as a
 // post-parse check because the pre-release ident rule mixes numeric
@@ -60,11 +60,19 @@ public static class SemVerParser
     public static bool TryParse(string input, out RewriteSemVer? version, out SemVerParseError? error)
     {
         version = null;
-        var result = SemVer.Parse(input);
+        // This sample renders the failure position itself (see the error type's
+        // formatting), so the message text stays position-less.
+        var options = new ParseOptions
+        {
+            WithErrorTemplate = "{message}",
+            PositionalErrorTemplate = "unexpected '{character}'.",
+            EndOfInputErrorTemplate = "unexpected end of input.",
+        };
+        var result = SemVer.Parse(input, options);
         if (!result.Success)
         {
             error = new SemVerParseError(
-                result.ErrorMessage, result.ErrorCharIndex, result.ErrorLine, result.ErrorColumn);
+                result.ErrorMessage, result.ErrorCharIndex, result.ErrorLine, result.ErrorCharColumn);
             return false;
         }
 
@@ -122,6 +130,6 @@ public static class SemVerParser
         return new SemVerParseError(message,
             range?.Start.CharIndex ?? 0,
             range?.Start.Line ?? 0,
-            range?.Start.Column ?? 0);
+            range?.Start.CharColumn ?? 0);
     }
 }

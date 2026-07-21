@@ -6,7 +6,7 @@ using InductorParser.SyntaxTree;
 namespace InductorParser;
 
 // Scan forward while tokens are in a TokenSet, returning the whole run
-// as one leaf Symbol. The optimization story: AtLeast(n, OneOf(set))
+// as one leaf Symbol. This exists because AtLeast(n, OneOf(set))
 // produces the same matched text but pays one transaction and one
 // per-token leaf Symbol for every token in the run, which the tree then
 // has to flatten away. ScanWhileRule opens one transaction at the
@@ -14,15 +14,9 @@ namespace InductorParser;
 // lexer.AdvanceWhileTokenIn (sets with multi-rune entries) for the
 // inner loop, and emits one leaf Symbol over the whole matched span.
 //
-// minimumCount is the minimum number of tokens the run must contain
-// to succeed. The default of 1 keeps every successful match consuming
-// at least one first-set token, which lets an enclosing rule skip
-// this one via a first-token lookahead when the next token isn't in
-// the set. Passing 0 makes the rule always succeed: an empty run
-// produces a zero-width leaf at the current position. The zero-min
-// case can't promise it always advances, so that lookahead skip is
-// disabled, the same downgrade BetweenInclusiveRule does for
-// AtLeast == 0 (Optional / ZeroOrMore).
+// minimumCount is the fewest tokens the run must have to succeed. The
+// default of 1 fails on an empty run. Passing 0 makes the rule always
+// succeed, producing a zero-width leaf on an empty run. 
 //
 // Pairs with ScanUntilRule, which is the inverse stop condition: scan
 // while tokens aren't a stopper. Both are leaf-shaped scanners that
@@ -77,7 +71,7 @@ internal sealed class ScanWhileRule : Rule
         // one transaction and one Symbol allocation regardless of the
         // run's length, versus one of each per token in the OneOf form.
         // Dispatch on whether the set has multi-rune entries: rune-only
-        // sets stay on the inline-rune fast path; mixed sets pull a
+        // sets stay on the inline-rune fast path. Mixed sets pull a
         // full token per iteration so a multi-rune token that's a
         // member of the set can be part of the run.
         int count = _set.HasMultiRuneGraphemes

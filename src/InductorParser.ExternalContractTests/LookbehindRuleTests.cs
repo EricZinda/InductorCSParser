@@ -1,6 +1,6 @@
 // Why this project exists
 //
-// This assembly is deliberately NOT named in any InternalsVisibleTo grant
+// This assembly is deliberately not named in any InternalsVisibleTo grant
 // in src/InductorParser/InductorParser.csproj, so it sees only the public +
 // protected surface of InductorParser, exactly as a third-party consumer
 // would. Most of the checking is the build itself: the built-in rule
@@ -37,7 +37,7 @@ public class LookbehindRuleTests
     [Test]
     public void Lookbehind_succeeds_when_the_previous_token_matches()
     {
-        // After Token('a') the cursor is at offset 1; the lookbehind confirms
+        // After Token('a') the cursor is at offset 1. The lookbehind confirms
         // 'a' is behind it, then Token('b') consumes 'b'. The lookbehind
         // contributes nothing to the tree.
         var rule = And(Token('a'), new LookbehindRule(Token('a')), Token('b'));
@@ -69,7 +69,7 @@ public class LookbehindRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("nothing precedes the start"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("nothing precedes the start at line 1, column 1."));
     }
 
     [Test]
@@ -80,7 +80,7 @@ public class LookbehindRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1));
-        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'b' behind"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("expected 'b' behind at line 1, column 2."));
     }
 
     [Test]

@@ -58,7 +58,7 @@ public sealed partial class Lexer
     //      returns immediately without doing any indent/write work.
     //      The Rule.TraceSuccess / TraceFailure helpers do the same
     //      thing one layer up.
-    //   2. Trace carries [MethodImpl(MethodImplOptions.AggressiveInlining)],
+    //   2. Trace has [MethodImpl(MethodImplOptions.AggressiveInlining)],
     //      so in Release builds the JIT folds the body into the caller.
     //      What looks like a method call in the IL becomes a handful
     //      of inline machine instructions.

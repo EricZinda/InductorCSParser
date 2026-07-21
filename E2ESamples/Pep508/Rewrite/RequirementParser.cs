@@ -21,6 +21,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using InductorParser;
 
 namespace Pep508Sample.Rewrite;
 
@@ -55,14 +56,22 @@ public static class RequirementParser
     public static bool TryParse(string input, out Requirement? requirement, out RequirementParseError? error)
     {
         requirement = null;
-        var result = RequirementGrammar.Requirement.Parse(input);
+        // This sample renders the failure position itself (see the error type's
+        // formatting), so the message text stays position-less.
+        var options = new ParseOptions
+        {
+            WithErrorTemplate = "{message}",
+            PositionalErrorTemplate = "unexpected '{character}'.",
+            EndOfInputErrorTemplate = "unexpected end of input.",
+        };
+        var result = RequirementGrammar.Requirement.Parse(input, options);
         if (!result.Success)
         {
             error = new RequirementParseError(
                 result.ErrorMessage,
                 result.ErrorCharIndex,
                 result.ErrorLine,
-                result.ErrorColumn,
+                result.ErrorCharColumn,
                 input);
             return false;
         }

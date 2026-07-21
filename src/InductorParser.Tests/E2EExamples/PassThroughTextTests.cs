@@ -67,7 +67,7 @@ public class PassThroughTextTests
     public void Block_comment_grammar_stops_at_multi_character_terminator()
     {
         // Rule-based stop: ZeroOrMore(And(Not(stopRule), AnyToken())) is
-        // how you express "match until a multi-character terminator
+        // how you express "match until a multi-char terminator
         // would fire." A simple NoneOf can't express this because
         // the stop condition spans two characters.
         var closeMarker = And(Token('*'), Token('/'));

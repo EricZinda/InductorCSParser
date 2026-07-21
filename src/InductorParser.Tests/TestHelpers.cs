@@ -14,7 +14,7 @@ public enum LineBreak { Lf, Crlf }
 
 // Cross-cutting helpers shared by more than one test fixture. The
 // trace-format helpers live in TraceTestHelpers.cs (a separate file
-// because they have a distinct one-helper-pattern story); everything
+// because they have a distinct one-helper-pattern story). Everything
 // else gathers here.
 //
 // Two categories so far:
@@ -174,14 +174,14 @@ internal static class TestHelpers
 
     // Assert that result describes a failure at the expected position in
     // every unit ParseResult exposes: ErrorCharIndex, ErrorLine,
-    // ErrorColumn, ErrorTokenIndex, plus the bundled ErrorPosition
+    // ErrorCharColumn, ErrorTokenIndex, plus the bundled ErrorPosition
     // struct. Use this in tests where error-position
     // behavior is the actual subject (position translation through
     // normalization, char-index to line/column conversion, etc.) so a
     // regression in any one unit shows up as a single named assertion
     // failure. Per-rule fixtures that just spot-check ErrorCharIndex
-    // don't need this; ErrorPositionTests covers the conversion math
-    // on its own.
+    // don't need this, since ErrorPositionTests covers the conversion
+    // math on its own.
     public static void AssertErrorPosition(
         ParseResult result,
         int charIndex,
@@ -191,14 +191,14 @@ internal static class TestHelpers
     {
         Assert.That(result.ErrorCharIndex, Is.EqualTo(charIndex), nameof(result.ErrorCharIndex));
         Assert.That(result.ErrorLine, Is.EqualTo(line), nameof(result.ErrorLine));
-        Assert.That(result.ErrorColumn, Is.EqualTo(column), nameof(result.ErrorColumn));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(column), nameof(result.ErrorCharColumn));
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(TokenIndex), nameof(result.ErrorTokenIndex));
 
         var position = result.ErrorPosition;
         Assert.That(position, Is.Not.Null, nameof(result.ErrorPosition));
         Assert.That(position!.Value.CharIndex, Is.EqualTo(charIndex), "ErrorPosition.CharIndex");
         Assert.That(position.Value.Line, Is.EqualTo(line), "ErrorPosition.Line");
-        Assert.That(position.Value.Column, Is.EqualTo(column), "ErrorPosition.Column");
+        Assert.That(position.Value.CharColumn, Is.EqualTo(column), "ErrorPosition.CharColumn");
         Assert.That(position.Value.TokenIndex, Is.EqualTo(TokenIndex), "ErrorPosition.TokenIndex");
     }
 
@@ -210,7 +210,7 @@ internal static class TestHelpers
     {
         Assert.That(actual.ErrorCharIndex, Is.EqualTo(expected.ErrorCharIndex), nameof(actual.ErrorCharIndex));
         Assert.That(actual.ErrorLine, Is.EqualTo(expected.ErrorLine), nameof(actual.ErrorLine));
-        Assert.That(actual.ErrorColumn, Is.EqualTo(expected.ErrorColumn), nameof(actual.ErrorColumn));
+        Assert.That(actual.ErrorCharColumn, Is.EqualTo(expected.ErrorCharColumn), nameof(actual.ErrorCharColumn));
         Assert.That(actual.ErrorTokenIndex, Is.EqualTo(expected.ErrorTokenIndex), nameof(actual.ErrorTokenIndex));
         Assert.That(actual.ErrorPosition, Is.EqualTo(expected.ErrorPosition), nameof(actual.ErrorPosition));
     }

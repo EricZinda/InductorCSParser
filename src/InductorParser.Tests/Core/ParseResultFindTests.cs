@@ -10,7 +10,7 @@ namespace InductorParser.Tests;
 // Tests for the ParseResult-level Find / FindAll helpers. These walk
 // every top-level Symbol so a grammar author can extract named
 // children without first figuring out whether the root rule kept its
-// wrapper (FlattenType.Preserve) or lifted its children up
+// Symbol (FlattenType.Preserve) or lifted its children up
 // (FlattenType.Flatten). The flatten-root case is the one that
 // previously surprised users: result.Tree returns null there, and
 // result.Tree.Find blows up with a NullReferenceException.

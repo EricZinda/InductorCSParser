@@ -1,7 +1,7 @@
 // A user-defined Rule subclass: lookbehind. Succeeds, consuming nothing,
 // when the inner rule matches the input ending exactly at the current
 // position. The mirror image of the built-in Peek (which asserts content
-// ahead); InductorParser ships no lookbehind of its own.
+// ahead). InductorParser ships no lookbehind of its own.
 //
 // Ported from LPeg's lpeg.B(patt) lookbehind predicate
 // (https://www.inf.puc-rio.br/~roberto/lpeg/, by Roberto Ierusalimschy):
@@ -13,7 +13,7 @@
 // LPeg is distributed under the MIT license, Copyright (c) 2007-2023
 // Lua.org, PUC-Rio. This is an independent C# reimplementation written
 // from LPeg's documented behavior (the manual text quoted above), not a
-// translation of LPeg's C source, so no LPeg code is included here; the
+// translation of LPeg's C source, so no LPeg code is included here. The
 // attribution is for the rule's design.
 //
 // `inner` should match a fixed length (a Literal, a single Token / OneOf,
@@ -21,7 +21,7 @@
 // match must start by walking token boundaries backward from the current
 // position and running `inner` from each, succeeding on the first whose
 // match ends exactly at the current position. A fixed-length inner has one
-// candidate that can match; a variable-length inner matches the shortest
+// candidate that can match. A variable-length inner matches the shortest
 // preceding span, which is rarely intended.
 //
 // It uses only the public surface (no internal members), which the no-IVT
@@ -29,7 +29,7 @@
 // earlier token boundary, ParseChild runs `inner` there, and
 // Lexer.PeekTokenLength walks the boundaries.
 //
-// Negative lookbehind ("NOT preceded by X") composes with the built-in
+// Negative lookbehind ("not preceded by X") composes with the built-in
 // Not: Not(new LookbehindRule(X)).
 
 using System;

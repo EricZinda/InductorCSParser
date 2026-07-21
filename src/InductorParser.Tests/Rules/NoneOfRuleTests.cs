@@ -32,7 +32,7 @@ public class NoneOfRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("no digits here"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("no digits here at line 1, column 1."));
     }
 
     [Test]
@@ -44,7 +44,7 @@ public class NoneOfRuleTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(0));
-        Assert.That(result.ErrorMessage, Is.EqualTo("wanted a non-digit"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("wanted a non-digit at line 1, column 1."));
     }
 
     [Test]
@@ -134,12 +134,12 @@ public class NoneOfRuleTests
         // rendering, Compile's normalization pass mutates _set onto
         // the lexer-normalized form (U+212A KELVIN -> U+004B 'K'
         // under FormC), and the cache used to keep the pre-projection
-        // entry. NoneOf fails when the token IS in the set, so this
+        // entry. NoneOf fails when the token really is in the set, so this
         // exercises the FAIL trace path.
         var sink = NewSink();
         // KelvinGrapheme is U+212A wrapped in Canary so an editor
         // can't silently swap it for ASCII 'K'. Parse input is real
-        // ASCII 'K', which IS in the projected set after Compile.
+        // ASCII 'K', which lands in the projected set after Compile.
         NoneOf(KelvinGrapheme).Parse("K", new ParseOptions { TraceSink = sink });
 
         string expected = Lines(
@@ -255,7 +255,7 @@ public class NoneOfRuleTests
     public void NoneOf_with_explicit_SymbolId_uses_explicit_id_for_single_rune_leaves()
     {
         // .As(SymbolId) is the user's "set a stable id" signal, parallel
-        // to .As("name") for findability. The leaf has to carry the
+        // to .As("name") for findability. The leaf has to keep the
         // explicit id so Tree.Find / Tree.Is resolve through the user's
         // explicit reference. Same shape as the OneOf explicit-id test.
         var explicitId = new SymbolId(SymbolRanges.CustomRangeStart + 101);
@@ -273,7 +273,7 @@ public class NoneOfRuleTests
     public void NoneOf_with_multi_rune_match_uses_rule_id_regardless_of_naming()
     {
         // The matched cluster (regional-indicator US flag) is multi-rune,
-        // so Token.RuneValue == -1 and the leaf carries the rule's own Id
+        // so Token.RuneValue == -1 and the leaf gets the rule's own Id
         // whether the rule is named or not.
         var unnamedRule = NoneOf(TokenSet.Ascii.Digits);
         var unnamedResult = unnamedRule.Parse(USFlagGrapheme);
@@ -296,8 +296,8 @@ public class NoneOfRuleTests
         // OrRule peeks the next token (one grapheme cluster) and asks
         // each child CannotMatchLookahead. NoneOf publishes
         // Polarity.MustNotBeIn with its set as the fail-set: skip iff
-        // peek IS in the set. The peek "a"+combining-acute is one
-        // multi-rune cluster under Compile(null); ContainsToken on the
+        // peek is in the set. The peek "a"+combining-acute is one
+        // multi-rune cluster under Compile(null), and ContainsToken on the
         // rune-only set {'a'} returns false (cluster isn't in the
         // multi-rune entries, isn't single-rune 'a' either), so the
         // shortcut doesn't skip and NoneOf actually runs and matches.
@@ -333,8 +333,8 @@ public class NoneOfRuleTests
     [Test]
     public void Or_NoneOf_skips_when_peek_is_strictly_in_set()
     {
-        // The other direction: when peek IS strictly in NoneOf's
-        // fail-set, the shortcut SHOULD skip. Here peek is the
+        // The other direction: when peek really is strictly in NoneOf's
+        // fail-set, the shortcut should skip. Here peek is the
         // single-rune cluster 'a', NoneOf({'a'}) would fail at
         // runtime, and the shortcut precisely skips it. Wrap in
         // Or with a literal fallback so we can observe that
@@ -352,7 +352,7 @@ public class NoneOfRuleTests
     // See GraphemeRuleTests for the full matrix rationale. NoneOf has
     // the inverse polarity of OneOf: feeding the source through a rule
     // that rejects exactly the source's runes should FAIL after a
-    // correct Compile (the post-form rune IS in the post-form stop
+    // correct Compile (the post-form rune lands in the post-form stop
     // set). The staleness bug surfaces as NoneOf wrongly succeeding
     // because the cached set still holds the pre-form entry while the
     // input arrives in the post-form shape.

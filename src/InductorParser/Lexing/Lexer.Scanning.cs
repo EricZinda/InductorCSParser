@@ -5,7 +5,7 @@ namespace InductorParser.Lexing;
 
 // Bulk-consume scanners exposed to ScanWhileRule and to user-defined
 // Rule subclasses. AdvanceWhileRuneIn walks one rune at a time and
-// checks each against a rune-only TokenSet; AdvanceWhileTokenIn walks
+// checks each against a rune-only TokenSet. AdvanceWhileTokenIn walks
 // one grapheme cluster at a time so multi-rune entries (CRLF, ZWJ-glued
 // emoji sequences, etc.) can match too.
 public sealed partial class Lexer
@@ -15,10 +15,11 @@ public sealed partial class Lexer
     /// Returns the number of tokens consumed.
     /// </summary>
     /// <remarks>
-    /// <paramref name="set"/> must be rune-only. For sets that contain
+    /// <paramref name="set"/> must be rune-only. For a set that contains
     /// multi-rune entries (CRLF, ZWJ emoji, etc.), use
-    /// <see cref="AdvanceWhileTokenIn"/>. Branch on
-    /// <see cref="TokenSet.HasMultiRuneGraphemes"/> to pick.
+    /// <see cref="AdvanceWhileTokenIn"/> instead, or check
+    /// <see cref="TokenSet.HasMultiRuneGraphemes"/> yourself and call
+    /// whichever one fits.
     /// </remarks>
     /// <exception cref="ArgumentException">
     /// <paramref name="set"/> contains a multi-rune grapheme entry.
@@ -28,8 +29,8 @@ public sealed partial class Lexer
         if (set.HasMultiRuneGraphemes)
             throw new ArgumentException(
                 "AdvanceWhileRuneIn requires a rune-only set. " +
-                "Use AdvanceWhileTokenIn for sets with multi-rune entries, " +
-                "or branch on TokenSet.HasMultiRuneGraphemes to pick.",
+                "For a set with multi-rune entries, use AdvanceWhileTokenIn instead, " +
+                "or check set.HasMultiRuneGraphemes yourself and call whichever one fits.",
                 nameof(set));
 
         int count = 0;
@@ -44,12 +45,12 @@ public sealed partial class Lexer
             _budget.TickPeriodic();
 
             int tokenLength = NextTokenLength(_position);
-            // NextTokenLength is bounded by _input.Length; sub-lexers
+            // NextTokenLength is bounded by _input.Length. Sub-lexers
             // hold a substring copy, so _input.Length == _endPosition
             // and this stays in bounds. Asserted, not assumed.
             Invariant.That(tokenLength >= 1 && _position + tokenLength <= _endPosition,
                 $"NextTokenLength returned {tokenLength} at _position={_position} with _endPosition={_endPosition}.");
-            // A single rune is at most 2 chars (surrogate pair); longer
+            // A single rune is at most 2 chars (surrogate pair). Longer
             // means a multi-rune cluster, which a rune-only run can't match.
             if (tokenLength > 2)
                 break;
@@ -68,7 +69,7 @@ public sealed partial class Lexer
                 // Lone surrogate: a 1-char token whose UTF-16 code unit
                 // can still be a set member if the set's intervals cover
                 // it. tokenLength == 1 excludes the normal-grapheme-mode
-                // case where StringInfo fuses a stray surrogate with a
+                // case where the segmenter fuses a stray surrogate with a
                 // following extender (combining mark, ZWJ) into one cluster.
                 inSet = tokenLength == 1 && set.ContainsRune((int)_input[_position]);
             }

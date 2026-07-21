@@ -15,24 +15,26 @@ namespace InductorParser.Tests;
 //
 // The categories are grouped into seven buckets:
 //
-//   1. ENCODING-LEVEL ILL-FORMED INPUT: throws cleanly or surfaces
-//      as an untyped token, never silently corrupts.
-//      These are (the only) cases truly defined as "ill formed" 
-//      by the Unicode standard and are all examples where 
+//   1. ENCODING-LEVEL ILL-FORMED INPUT: reported as MalformedInput
+//      or surfaces as an untyped token, never silently corrupts.
+//      These are (the only) cases truly defined as "ill formed"
+//      by the Unicode standard and are all examples where
 //      UTF-16 invariants are broken: lone surrogates, reversed surrogate
 //      pairs, the U+10FFFF maximum boundary. Only UTF-16 here because
 //      the parser takes a .NET string, and .NET strings are UTF-16
 //      internally. UTF-8 / UTF-32 / legacy-codepage decoding errors
 //      get resolved upstream by the caller's Encoding.GetString call
-//      (usually as U+FFFD replacements; see Group 4) before the
+//      (usually as U+FFFD replacements, see Group 4) before the
 //      parser is ever invoked. Under default FormC, .NET's
-//      string.Normalize rejects ill-formed UTF-16 by throwing
-//      ArgumentException out of Parse() — the caller sees the
-//      problem before any grammar runs. Under Compile(null) the
-//      lexer surfaces each ill-formed code unit as a token with no
-//      RuneValue, which OneOf and similar rules predictably reject.
-//      Either path is safe; a grammar can't silently match a
-//      ill-formed surrogate.
+//      string.Normalize rejects ill-formed UTF-16. Parse catches that
+//      and returns a ParseResult whose Outcome is MalformedInput,
+//      positioned at the offending character with a message the
+//      grammar author can localize, so the caller handles it the same
+//      way as every other failure instead of catching a BCL exception.
+//      Under Compile(null) the lexer surfaces each ill-formed code unit
+//      as a token with no RuneValue, which OneOf and similar rules
+//      predictably reject. Either path is safe. A grammar can't
+//      silently match a ill-formed surrogate.
 //
 //   2. BARE ATTACHING CHARACTERS: surfaces as a normal token, so
 //      grammar mismatches produce a normal error.
@@ -70,7 +72,7 @@ namespace InductorParser.Tests;
 //
 //   4. NONCHARACTERS, PRIVATE USE, REPLACEMENT: surfaces as a
 //      normal token, so grammar mismatches produce a normal error
-//      (one .NET-specific exception throws cleanly).
+//      (one .NET-specific case, U+FFFE, surfaces as MalformedInput).
 //      Not technically "ill formed" but can be unexpected and should
 //      be handled consistently and transparently. These are:
 //      Code points designated never-a-character (FFFE/FFFF,
@@ -82,19 +84,19 @@ namespace InductorParser.Tests;
 //      doesn't recognize produces a normal error. The exception: .NET's
 //      string.Normalize rejects U+FFFE specifically as "invalid
 //      Unicode code points," so default FormC parsing of input
-//      containing U+FFFE throws ArgumentException out of Parse().
+//      containing U+FFFE returns a MalformedInput result out of Parse().
 //      Why U+FFFE and not the other noncharacters: U+FFFE is the
 //      byte-swapped form of U+FEFF (BOM), so its presence in a
 //      string is a signal that upstream byte-order detection
 //      failed. Windows' NormalizeString refuses to process such
-//      strings on that theory. U+FFFF and U+FDD0..U+FDEF carry
+//      strings on that theory. U+FFFF and U+FDD0..U+FDEF have
 //      no such signal and pass through.
-//      The caller can catch and translate, or compile with null to skip
-//      normalization. U+FFFF, U+FDD0, the rest of the Private Use
+//      The caller reads the MalformedInput outcome (or compiles with
+//      null to skip normalization). U+FFFF, U+FDD0, the rest of the Private Use
 //      Area, and U+FFFD all pass through as ordinary tokens.
 //
 //   5. NORMALIZATION EDGE CASES: compile-time normalization checks
-//      ensure literals match the chosen form; see NormalizationTests.cs
+//      ensure literals match the chosen form. See NormalizationTests.cs
 //      for the full coverage.
 //
 //   6. IDENTIFIER-RELEVANT EDGE CASES: the default Identifier rule
@@ -135,7 +137,10 @@ public class UnexpectedUnicodeTests
     {
         // .NET's string.Normalize rejects malformed UTF-16. Under
         // default FormC the parser calls Normalize before the lexer
-        // ever runs, so any grammar throws ArgumentException.
+        // ever runs. Rather than let that ArgumentException escape,
+        // Parse returns a MalformedInput result positioned at the
+        // offending surrogate, with a message the grammar author can
+        // localize (see Ill_formed_input_returns_localizable_MalformedInput_result).
         // Compile(null) skips normalization, the lexer's TryPeekRune
         // treats a surrogate half as "no rune here" and Read() emits
         // a one-char token with no RuneValue. Grammars that need to
@@ -152,9 +157,11 @@ public class UnexpectedUnicodeTests
         // round-tripping or unpaired-surrogate handling in JSON).
         string input = UnicodeExamples.HighSurrogateMinText + "hello";
 
-        // (0) Default FormC throws out of Parse before the lexer
-        // runs.
-        Assert.Throws<ArgumentException>(() => And(Literal("hello"), Eof()).Parse(input));
+        // (0) Default FormC reports a MalformedInput result at the lone
+        // surrogate (index 0) instead of throwing.
+        var malformed = And(Literal("hello"), Eof()).Parse(input);
+        Assert.That(malformed.Outcome, Is.EqualTo(ParseOutcome.MalformedInput));
+        Assert.That(malformed.ErrorCharIndex, Is.EqualTo(0));
 
         // (1) Compile(null) + naive grammar fails normally:
         // Literal("hello") doesn't match a surrogate followed by 'h'.
@@ -185,8 +192,11 @@ public class UnexpectedUnicodeTests
         // surrogate path treats high and low halves symmetrically.
         string input = UnicodeExamples.LowSurrogateMaxText + "hello";
 
-        // (0) Default FormC throws.
-        Assert.Throws<ArgumentException>(() => And(Literal("hello"), Eof()).Parse(input));
+        // (0) Default FormC reports a MalformedInput result at the lone
+        // surrogate (index 0) instead of throwing.
+        var malformed = And(Literal("hello"), Eof()).Parse(input);
+        Assert.That(malformed.Outcome, Is.EqualTo(ParseOutcome.MalformedInput));
+        Assert.That(malformed.ErrorCharIndex, Is.EqualTo(0));
 
         // (1) Compile(null) + naive grammar fails normally.
         var naiveRule = And(Literal("hello"), Eof());
@@ -202,6 +212,67 @@ public class UnexpectedUnicodeTests
         var targetedRule = And(Token(UnicodeExamples.LowSurrogateMaxText), Literal("hello"), Eof());
         targetedRule.Compile(null);
         Assert.That(targetedRule.Parse(input).Success, Is.True);
+    }
+
+    [Test]
+    public void Ill_formed_input_returns_localizable_MalformedInput_result()
+    {
+        // The whole point of MalformedInput over a thrown ArgumentException:
+        // a non-English app can replace the wording through
+        // ParseOptions.MalformedInputTemplate, the same way it localizes
+        // every other parse failure. The position placeholders work, and so
+        // does {character}, which renders the offending element (a lone
+        // surrogate comes out as U+D800, routed through DisplayEscape).
+        string input = "ok" + UnicodeExamples.HighSurrogateMinText;
+        var rule = And(Literal("ok"), Eof()).Compile();
+
+        var options = new ParseOptions
+        {
+            MalformedInputTemplate = "entrada no valida en {charIndex}: {character}",
+        };
+        var result = rule.Parse(input, options);
+
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.MalformedInput));
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(2), "the lone surrogate sits at index 2");
+        Assert.That(result.ErrorMessage, Is.EqualTo("entrada no valida en 2: U+D800"));
+    }
+
+    [Test]
+    public void Malformed_input_position_points_at_the_first_offending_char_not_just_zero()
+    {
+        // Checks the position-finder doesn't degenerate to "always report
+        // index 0". It has to walk past valid content and land on the first
+        // genuinely ill-formed code unit, including correctly skipping a valid
+        // surrogate PAIR (two chars that can't be mistaken for two lone
+        // surrogates).
+        var grammar = And(Literal("ignored"), Eof()).Compile();  // default FormC, never runs
+
+        // "a" (1 char) + waving hand (U+1F44B, a valid surrogate pair = 2
+        // chars) + a lone surrogate. The pair is skipped, so the lone
+        // surrogate is the first ill-formed unit, at index 3.
+        string afterValidPair = "a" + UnicodeExamples.WavingHandGrapheme + UnicodeExamples.HighSurrogateMinText;
+        var afterPairResult = grammar.Parse(afterValidPair);
+        Assert.That(afterPairResult.Outcome, Is.EqualTo(ParseOutcome.MalformedInput));
+        Assert.That(afterPairResult.ErrorCharIndex, Is.EqualTo(3),
+            "the valid surrogate pair is skipped; the lone surrogate is at index 3");
+
+        // A lone surrogate in the MIDDLE, with valid text after it, still
+        // reports the surrogate's position (index 2), proving the finder stops
+        // at the first offender rather than running to the end.
+        string surrogateInMiddle = "ab" + UnicodeExamples.HighSurrogateMinText + "cd";
+        var middleResult = grammar.Parse(surrogateInMiddle);
+        Assert.That(middleResult.Outcome, Is.EqualTo(ParseOutcome.MalformedInput));
+        Assert.That(middleResult.ErrorCharIndex, Is.EqualTo(2),
+            "the lone surrogate between 'ab' and 'cd' is at index 2");
+
+        // The non-surrogate branch (U+FFFE) is found at a non-zero position
+        // too, mirroring the index-0 coverage in Noncharacter_FFFE_handling.
+        string fffeAfterPrefix = "abc" + UnicodeExamples.NoncharacterFFFEText;
+        var fffeResult = grammar.Parse(fffeAfterPrefix);
+        Assert.That(fffeResult.Outcome, Is.EqualTo(ParseOutcome.MalformedInput));
+        Assert.That(fffeResult.ErrorCharIndex, Is.EqualTo(3),
+            "U+FFFE is found at index 3, after the ASCII prefix");
     }
 
     [Test]
@@ -251,7 +322,7 @@ public class UnexpectedUnicodeTests
         // before the form-validation pass ever runs. Token and Literal
         // still defer to the form-validation pass, which is the right
         // shape for them: they accept any string content, and the
-        // string.Normalize call inside Compile is what trips on the
+        // ill-formed-text scan inside Compile is what rejects the
         // surrogate.
         var exception = Assert.Throws<ArgumentException>(() =>
             LiteralIgnoreAsciiCase(UnicodeExamples.HighSurrogateMinText + "x"));
@@ -261,18 +332,72 @@ public class UnexpectedUnicodeTests
     [Test]
     public void Multiple_surrogate_literals_under_default_Compile_aggregate_inner_exceptions()
     {
-        // Every literal-bearing rule that trips string.Normalize contributes
-        // one ArgumentException to the AggregateException. The grammar author
-        // sees a single multi-rule message in InvalidOperationException.Message
-        // and can walk InnerExceptions for the per-rule runtime cause.
-        // LiteralIgnoreAsciiCase isn't part of this aggregate because it
-        // rejects non-ASCII at construction, before Compile runs.
+        // Every literal-bearing rule whose text fails the ill-formed scan
+        // contributes one ArgumentException to the AggregateException. The
+        // grammar author sees a single multi-rule message in
+        // InvalidOperationException.Message and can walk InnerExceptions for
+        // the per-rule cause. LiteralIgnoreAsciiCase isn't part of this
+        // aggregate because it rejects non-ASCII at construction, before
+        // Compile runs.
         var rule = And(
             Token(UnicodeExamples.HighSurrogateMinText),
             Literal(UnicodeExamples.HighSurrogateMinText + "X"));
 
         var exception = Assert.Throws<InvalidOperationException>(() => rule.Compile());
         Assert.That(exception!.InnerException, Is.InstanceOf<AggregateException>());
+        var aggregate = (AggregateException)exception.InnerException!;
+        Assert.That(aggregate.InnerExceptions, Has.Count.EqualTo(2));
+        Assert.That(aggregate.InnerExceptions, Has.All.InstanceOf<ArgumentException>());
+    }
+
+    [Test]
+    public void Token_with_noncharacter_FFFE_under_default_Compile_throws_clear_error()
+    {
+        // U+FFFE is the other code unit the ill-formed scan rejects, next to
+        // unpaired surrogates. The scan runs inside Compile on every runtime,
+        // so a U+FFFE literal is reported the same way everywhere, including
+        // runtimes whose string.Normalize accepts it. The message names the
+        // offending code unit so the author can find it in text where it
+        // renders as nothing.
+        var rule = Token(UnicodeExamples.NoncharacterFFFEText);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => rule.Compile());
+        Assert.That(exception!.Message, Does.Contain("U+FFFE"),
+            "Compile error should name the offending code unit.");
+        Assert.That(exception.Message, Does.Contain("Compile(null)"),
+            "Compile error should suggest Compile(null) as the documented path.");
+        Assert.That(exception.InnerException, Is.InstanceOf<AggregateException>());
+        var aggregate = (AggregateException)exception.InnerException!;
+        Assert.That(aggregate.InnerExceptions, Has.Count.EqualTo(1));
+        Assert.That(aggregate.InnerExceptions[0], Is.InstanceOf<ArgumentException>());
+    }
+
+    [Test]
+    public void Literal_with_noncharacter_FFFE_under_default_Compile_throws_clear_error()
+    {
+        // Same shape as Token, applied to LiteralRule, mirroring the
+        // stray-surrogate pair of tests above.
+        var rule = Literal("a" + UnicodeExamples.NoncharacterFFFEText + "b");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => rule.Compile());
+        Assert.That(exception!.Message, Does.Contain("U+FFFE"));
+        Assert.That(exception.InnerException, Is.InstanceOf<AggregateException>());
+    }
+
+    [Test]
+    public void Surrogate_and_FFFE_literals_under_default_Compile_aggregate_inner_exceptions()
+    {
+        // Both flavors of ill-formed text in one grammar: each offender
+        // contributes its own ArgumentException, same as the two-surrogate
+        // aggregation above.
+        var rule = And(
+            Token(UnicodeExamples.HighSurrogateMinText),
+            Literal(UnicodeExamples.NoncharacterFFFEText + "X"));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => rule.Compile());
+        Assert.That(exception!.Message, Does.Contain("surrogate"));
+        Assert.That(exception.Message, Does.Contain("U+FFFE"));
+        Assert.That(exception.InnerException, Is.InstanceOf<AggregateException>());
         var aggregate = (AggregateException)exception.InnerException!;
         Assert.That(aggregate.InnerExceptions, Has.Count.EqualTo(2));
         Assert.That(aggregate.InnerExceptions, Has.All.InstanceOf<ArgumentException>());
@@ -467,7 +592,7 @@ public class UnexpectedUnicodeTests
         // back to back, not a valid pair (UTF-16 pairs are HIGH then
         // LOW). The lexer treats each as a one-char token with no
         // RuneValue. WTF-8 (Simon Sapin) discusses this exact pattern.
-        // Lock in that the parser does NOT silently reorder the two
+        // Lock in that the parser doesn't silently reorder the two
         // halves into a valid pair: each surrogate stays in its
         // original position as its own token, so OneOrMore sees two
         // tokens, not one merged scalar.
@@ -514,7 +639,7 @@ public class UnexpectedUnicodeTests
         // You can also write a rule that targets U+10FFFF
         // specifically via Token(...). An unrecognized character
         // doesn't match any normal rule, so a grammar without
-        // U+10FFFF fails normally at the orphan; the positive-match
+        // U+10FFFF fails normally at the orphan. The positive-match
         // path is just for grammars that want to deliberately do
         // something with this exact code point.
         Assert.That(And(Token(UnicodeExamples.MaximumCodePointRune), Eof()).Parse(input).Success, Is.True);
@@ -523,10 +648,11 @@ public class UnexpectedUnicodeTests
     // Coverage matrix: every non-null normalization form routes
     // input through String.Normalize before the lexer runs, and
     // Normalize rejects ill-formed UTF-16 by throwing
-    // ArgumentException. So all four non-null forms produce the
-    // same Parse-time throw on lone surrogates and reversed pairs.
+    // ArgumentException. Parse catches that and returns a
+    // MalformedInput result, so all four non-null forms produce the
+    // same MalformedInput outcome on lone surrogates and reversed pairs.
     // The earlier per-input tests (Lone_high_surrogate_handling
-    // etc.) cover only FormC; this parameterized test fills the
+    // etc.) cover only FormC. This parameterized test fills the
     // FormD / FormKC / FormKD gap so a future runtime change that
     // diverged any of them from FormC would surface here.
     //
@@ -534,28 +660,31 @@ public class UnexpectedUnicodeTests
     // string inside the test, because NUnit's [TestCase] attribute
     // serializes parameters in a way that drops or reinterprets
     // lone surrogates. Building from code points side-steps that.
-    [TestCase(NormalizationForm.FormC, new[] { 0xD800 }, TestName = "FormC + lone high surrogate U+D800")]
-    [TestCase(NormalizationForm.FormC, new[] { 0xDFFF }, TestName = "FormC + lone low surrogate U+DFFF")]
-    [TestCase(NormalizationForm.FormC, new[] { 0xDC00, 0xD800 }, TestName = "FormC + reversed surrogate pair (low,high)")]
-    [TestCase(NormalizationForm.FormD, new[] { 0xD800 }, TestName = "FormD + lone high surrogate U+D800")]
-    [TestCase(NormalizationForm.FormD, new[] { 0xDFFF }, TestName = "FormD + lone low surrogate U+DFFF")]
-    [TestCase(NormalizationForm.FormD, new[] { 0xDC00, 0xD800 }, TestName = "FormD + reversed surrogate pair (low,high)")]
-    [TestCase(NormalizationForm.FormKC, new[] { 0xD800 }, TestName = "FormKC + lone high surrogate U+D800")]
-    [TestCase(NormalizationForm.FormKC, new[] { 0xDFFF }, TestName = "FormKC + lone low surrogate U+DFFF")]
-    [TestCase(NormalizationForm.FormKC, new[] { 0xDC00, 0xD800 }, TestName = "FormKC + reversed surrogate pair (low,high)")]
-    [TestCase(NormalizationForm.FormKD, new[] { 0xD800 }, TestName = "FormKD + lone high surrogate U+D800")]
-    [TestCase(NormalizationForm.FormKD, new[] { 0xDFFF }, TestName = "FormKD + lone low surrogate U+DFFF")]
-    [TestCase(NormalizationForm.FormKD, new[] { 0xDC00, 0xD800 }, TestName = "FormKD + reversed surrogate pair (low,high)")]
-    public void Ill_formed_input_throws_under_every_non_null_normalization_form(
+    [TestCase(NormalizationForm.FormC, new[] { UnicodeExamples.HighSurrogateMinRune }, TestName = "FormC + lone high surrogate U+D800")]
+    [TestCase(NormalizationForm.FormC, new[] { UnicodeExamples.LowSurrogateMaxRune }, TestName = "FormC + lone low surrogate U+DFFF")]
+    [TestCase(NormalizationForm.FormC, new[] { UnicodeExamples.LowSurrogateMinRune, UnicodeExamples.HighSurrogateMinRune }, TestName = "FormC + reversed surrogate pair (low,high)")]
+    [TestCase(NormalizationForm.FormD, new[] { UnicodeExamples.HighSurrogateMinRune }, TestName = "FormD + lone high surrogate U+D800")]
+    [TestCase(NormalizationForm.FormD, new[] { UnicodeExamples.LowSurrogateMaxRune }, TestName = "FormD + lone low surrogate U+DFFF")]
+    [TestCase(NormalizationForm.FormD, new[] { UnicodeExamples.LowSurrogateMinRune, UnicodeExamples.HighSurrogateMinRune }, TestName = "FormD + reversed surrogate pair (low,high)")]
+    [TestCase(NormalizationForm.FormKC, new[] { UnicodeExamples.HighSurrogateMinRune }, TestName = "FormKC + lone high surrogate U+D800")]
+    [TestCase(NormalizationForm.FormKC, new[] { UnicodeExamples.LowSurrogateMaxRune }, TestName = "FormKC + lone low surrogate U+DFFF")]
+    [TestCase(NormalizationForm.FormKC, new[] { UnicodeExamples.LowSurrogateMinRune, UnicodeExamples.HighSurrogateMinRune }, TestName = "FormKC + reversed surrogate pair (low,high)")]
+    [TestCase(NormalizationForm.FormKD, new[] { UnicodeExamples.HighSurrogateMinRune }, TestName = "FormKD + lone high surrogate U+D800")]
+    [TestCase(NormalizationForm.FormKD, new[] { UnicodeExamples.LowSurrogateMaxRune }, TestName = "FormKD + lone low surrogate U+DFFF")]
+    [TestCase(NormalizationForm.FormKD, new[] { UnicodeExamples.LowSurrogateMinRune, UnicodeExamples.HighSurrogateMinRune }, TestName = "FormKD + reversed surrogate pair (low,high)")]
+    public void Ill_formed_input_returns_malformed_input_under_every_non_null_normalization_form(
         NormalizationForm form, int[] illFormedCodeUnits)
     {
         string illFormedInput = BuildStringFromCodeUnits(illFormedCodeUnits);
         var rule = And(Literal("hello"), Eof());
         rule.Compile(form);
 
-        Assert.Throws<ArgumentException>(() => rule.Parse(illFormedInput),
-            $"{form} should route input through String.Normalize, " +
-            $"which rejects ill-formed UTF-16 with ArgumentException");
+        var result = rule.Parse(illFormedInput);
+        Assert.That(result.Outcome, Is.EqualTo(ParseOutcome.MalformedInput),
+            $"{form} should route input through String.Normalize, which rejects " +
+            $"ill-formed UTF-16, and Parse should report that as MalformedInput");
+        Assert.That(result.ErrorCharIndex, Is.EqualTo(0),
+            "the first ill-formed code unit is at index 0 in every case");
     }
 
     [TestCase(new[] { 0xD800 }, TestName = "Compile(null) accepts lone high surrogate U+D800")]
@@ -719,7 +848,7 @@ public class UnexpectedUnicodeTests
         // following character (end of input) it has nothing to
         // prepend to, so the mandatory end-of-text break wraps it
         // as its own one-character cluster. Normal text comes
-        // BEFORE the orphan (adding text after would pair them up).
+        // before the orphan (adding text after would pair them up).
         string input = "hello" + UnicodeExamples.ArabicNumberSignText;
 
         // (1) Naive grammar fails: Literal("hello") + Eof doesn't
@@ -779,8 +908,8 @@ public class UnexpectedUnicodeTests
 
         // (2) AnyToken at the front consumes the CGJ as a
         // wildcard. Literal() and Eof() default to FlattenType.Delete
-        // so only the AnyToken's match surfaces in the symbol list;
-        // asserting its content verifies that the leading AnyToken
+        // so only the AnyToken's match surfaces in the symbol list.
+        // Asserting its content verifies that the leading AnyToken
         // really is the CGJ alone (one cluster) and the lexer
         // didn't accidentally merge the CGJ into the following 'h'.
         var anyTokenResult = And(AnyToken(), Literal("hello"), Eof()).Parse(input);
@@ -805,7 +934,7 @@ public class UnexpectedUnicodeTests
     public void BOM_at_start_of_input_is_consumed_as_one_token()
     {
         // U+FEFF BOM. NFC keeps it. Lexer reads as one token. The
-        // parser doesn't strip BOMs; the caller does, or the grammar
+        // parser doesn't strip BOMs. The caller does, or the grammar
         // accommodates with AnyToken or Token(BOM). Textbook BOM
         // gotcha: a strict grammar fails at offset 0.
         string input = (UnicodeExamples.ByteOrderMarkText + "hello");
@@ -853,7 +982,7 @@ public class UnexpectedUnicodeTests
     {
         // U+00A0 NO-BREAK SPACE renders as a space but is its own code
         // point. UAX #29 classifies it as GCB=Other so it breaks on
-        // both sides; .NET's Unicode category is Zs (Space_Separator),
+        // both sides. .NET's Unicode category is Zs (Space_Separator),
         // the same as U+0020. The lexer sees three tokens
         // (a, NBSP, b), so a grammar matching "ab" with no NBSP
         // accommodation fails at the NBSP. Common gotcha when input is
@@ -907,7 +1036,7 @@ public class UnexpectedUnicodeTests
 
         // (1) Naive a-b grammar fails. The lexer hands back the
         // ("a" + ZWNJ) cluster as one token, so Token('a') doesn't
-        // match — it expects a token whose RuneValue is 'a' alone.
+        // match, since it expects a token whose RuneValue is 'a' alone.
         Assert.That(And(Token('a'), Token('b'), Eof()).Parse(input).Success, Is.False);
 
         // (2) AnyToken consumes the ("a" + ZWNJ) cluster as a
@@ -951,7 +1080,7 @@ public class UnexpectedUnicodeTests
         // so it just sees U+202E as one token of its own.
         // Identifier() rejects it because U+202E isn't an
         // identifier-continue character. This documents that the
-        // parser is NOT susceptible to Trojan-Source-style visual
+        // parser isn't susceptible to Trojan-Source-style visual
         // reordering tricks: what the parser sees is what's in the
         // input characters, not what a renderer might display.
         string input = ("ab" + UnicodeExamples.RightToLeftOverrideText + "cd");
@@ -1019,7 +1148,7 @@ public class UnexpectedUnicodeTests
     [Test]
     public void Line_separator_U_2028_is_a_token_not_matched_by_Token_LF()
     {
-        // U+2028 LINE SEPARATOR. UAX #18 line terminator, but a
+        // U+2028 LINE SEPARATOR. UTS #18 line terminator, but a
         // distinct rune from LF. The famous ECMAScript / JSON
         // mismatch bug: pre-ES2019 JavaScript string literals
         // disallowed U+2028 and U+2029 as unescaped characters
@@ -1027,7 +1156,7 @@ public class UnexpectedUnicodeTests
         // these characters in user-generated content produced
         // "Unexpected token ILLEGAL" errors in the browser. ES2019
         // aligned the JS string grammar with JSON. The parser
-        // treats U+2028 as one ordinary token; a line-based
+        // treats U+2028 as one ordinary token. A line-based
         // grammar matching Token('\n') doesn't catch it, but
         // EndOfLine() (which uses TokenSet.LineTerminators) does.
         string input = "a" + UnicodeExamples.LineSeparatorText + "b";
@@ -1039,7 +1168,7 @@ public class UnexpectedUnicodeTests
         // (2) AnyToken consumes U+2028 as a wildcard between the
         // letters. Token('a') / Token('b') / Eof() default to
         // FlattenType.Delete so only the AnyToken match surfaces
-        // in the symbol list; asserting its content verifies that
+        // in the symbol list. Asserting its content verifies that
         // the middle cluster really is U+2028 (not silently dropped
         // or remapped).
         var anyTokenResult = And(Token('a'), AnyToken(), Token('b'), Eof()).Parse(input);
@@ -1084,12 +1213,12 @@ public class UnexpectedUnicodeTests
     public void Next_line_U_0085_is_a_token_not_matched_by_Token_LF()
     {
         // U+0085 NEXT LINE (NEL). C1 control imported from EBCDIC
-        // for round-tripping with IBM mainframe text. UAX #18
+        // for round-tripping with IBM mainframe text. UTS #18
         // line terminator. Real-world quirk: Java's BufferedReader
         // treats NEL as a line terminator on some JVMs but not
         // others, and XML 1.1 added it to the newline list while
         // XML 1.0 omitted it. The parser treats NEL as one
-        // ordinary token; Token('\n') doesn't catch it,
+        // ordinary token. Token('\n') doesn't catch it,
         // EndOfLine() does.
         string input = "a" + UnicodeExamples.NextLineText + "b";
 
@@ -1130,7 +1259,7 @@ public class UnexpectedUnicodeTests
         // (2) AnyToken consumes the LRI as a wildcard between the
         // two halves of the word. Literal() defaults to
         // FlattenType.Delete so the surrounding "ab" / "cd"
-        // matches don't surface; the only top-level symbol is
+        // matches don't surface. The only top-level symbol is
         // the AnyToken match. Asserting its content verifies that
         // the consumed cluster really is U+2066 and not some
         // bidi-aware reorder.
@@ -1151,8 +1280,8 @@ public class UnexpectedUnicodeTests
     // ============================================================
     // Group 4: Noncharacters, Private Use, Replacement
     //   expected: surfaces as a normal token, so grammar mismatches
-    //   produce a normal error (one .NET-specific exception throws
-    //   cleanly).
+    //   produce a normal error (one .NET-specific case, U+FFFE,
+    //   surfaces as a MalformedInput result instead).
     // ============================================================
 
     [Test]
@@ -1161,17 +1290,19 @@ public class UnexpectedUnicodeTests
         // U+FFFE is a Unicode noncharacter. .NET's string.Normalize
         // rejects FFFE specifically as "invalid Unicode code points".
         // Under default FormC the parser calls Normalize before the
-        // lexer ever runs, so any grammar throws ArgumentException.
-        // Compile(null) skips normalization, the noncharacter survives
-        // as one token, and grammars that need to handle it follow
-        // the same 4-part pattern as the other noncharacter tests.
+        // lexer ever runs. Rather than let that ArgumentException
+        // escape, Parse returns a MalformedInput result. Compile(null)
+        // skips normalization, the noncharacter survives as one token,
+        // and grammars that need to handle it follow the same 4-part
+        // pattern as the other noncharacter tests.
         string input = UnicodeExamples.NoncharacterFFFEText + "hello";
 
-        // (0) Default FormC throws out of Parse before the lexer
-        // runs. The exception propagates to the caller; callers
-        // whose input might contain U+FFFE either strip it upstream
-        // or compile with null.
-        Assert.Throws<ArgumentException>(() => And(Literal("hello"), Eof()).Parse(input));
+        // (0) Default FormC reports MalformedInput at the U+FFFE
+        // (index 0) instead of throwing. Callers whose input might
+        // contain U+FFFE either strip it upstream or compile with null.
+        var malformed = And(Literal("hello"), Eof()).Parse(input);
+        Assert.That(malformed.Outcome, Is.EqualTo(ParseOutcome.MalformedInput));
+        Assert.That(malformed.ErrorCharIndex, Is.EqualTo(0));
 
         // (1) Compile(null) + naive grammar fails normally:
         // Literal("hello") doesn't match a noncharacter followed
@@ -1268,7 +1399,7 @@ public class UnexpectedUnicodeTests
     {
         // U+FFFD REPLACEMENT CHARACTER is what permissive decoders
         // emit when they see invalid bytes. By the time it reaches
-        // the parser it's a perfectly valid scalar; the parser treats
+        // the parser it's a perfectly valid scalar, and the parser treats
         // it as one token. If you see U+FFFD in input, that's a
         // signal an upstream decoder swallowed something malformed.
         string input = UnicodeExamples.ReplacementCharacterText + "hello";
@@ -1300,7 +1431,7 @@ public class UnexpectedUnicodeTests
 
         // Ill-formed UTF-8: 0xFF is never a valid UTF-8 lead byte,
         // so the decoder substitutes U+FFFD for it.
-        byte[] illFormedUtf8 = [0x68, 0x65, 0xFF, 0x6C, 0x6C, 0x6F];
+        byte[] illFormedUtf8 = { 0x68, 0x65, 0xFF, 0x6C, 0x6C, 0x6F };
         string fromUtf8 = Encoding.UTF8.GetString(illFormedUtf8);
         Assert.That(fromUtf8, Does.Contain(UnicodeExamples.ReplacementCharacterText),
             "UTF-8 decoder should substitute U+FFFD for the ill-formed 0xFF byte");
@@ -1308,7 +1439,7 @@ public class UnexpectedUnicodeTests
         // Ill-formed UTF-16 LE: an odd byte count leaves a
         // dangling single byte that can't be paired into a code
         // unit. The decoder substitutes U+FFFD for the orphan.
-        byte[] illFormedUtf16 = [0x68, 0x00, 0x65, 0x00, 0xFF];
+        byte[] illFormedUtf16 = { 0x68, 0x00, 0x65, 0x00, 0xFF };
         string fromUtf16 = Encoding.Unicode.GetString(illFormedUtf16);
         Assert.That(fromUtf16, Does.Contain(UnicodeExamples.ReplacementCharacterText),
             "UTF-16 decoder should substitute U+FFFD for the dangling byte");
@@ -1339,9 +1470,9 @@ public class UnexpectedUnicodeTests
     //   expected: the default Identifier rule has no mixed-script
     //   anti-spoofing logic. Restrict via a custom script-bounded
     //   TokenSet if you care about UTS #39 homoglyph attacks.
-    //   (Other identifier behaviors — non-ASCII digits in
-    //   TokenSet.Digits, all five Letter subcategories in
-    //   TokenSet.Letters — are covered in TokenSetTests rather
+    //   (Other identifier behaviors, like non-ASCII digits in
+    //   TokenSet.Digits and all five Letter subcategories in
+    //   TokenSet.Letters, are covered in TokenSetTests rather
     //   than here.)
     // ============================================================
 
@@ -1351,7 +1482,7 @@ public class UnexpectedUnicodeTests
         // Latin 'a' (U+0061) followed by Cyrillic small letter a
         // (U+0430). Both are XidContinue characters per UAX #31, so
         // Identifier() accepts the mixed-script string. Documents
-        // that the default has NO mixed-script restriction; if you
+        // that the default has no mixed-script restriction. If you
         // care about homoglyph spoofing (UTS #39), build a script-
         // restricted TokenSet manually. The "fix" side (a custom
         // LatinLetters set rejecting Cyrillic 'а') is shown in
@@ -1371,16 +1502,18 @@ public class UnexpectedUnicodeTests
         // with dot above) and ToLower("I") is "ı" (U+0131,
         // dotless small i), not the ASCII forms. Locale-aware
         // case-insensitive comparisons therefore disagree
-        // depending on the user's system locale. Bit Spotify in
-        // 2013 (Turkish iOS users couldn't log in if their email
-        // had 'I' in it), .NET Framework's String.Compare without
-        // an explicit culture, Win32 CompareString, Java's
-        // String.toLowerCase, and many others.
+        // depending on the user's system locale. It hurt Spotify
+        // in 2013 (Turkish iOS users couldn't log in if their
+        // email had 'I' in it), and it affects .NET Framework's
+        // String.Compare without an explicit culture, Win32
+        // CompareString, Java's String.toLowerCase, and many
+        // others.
         //
         // The parser's LiteralIgnoreAsciiCase is ASCII-only by
-        // design specifically to avoid this. ASCII 'I' folds only
-        // to ASCII 'i'; U+0130 and U+0131 are their own runes
-        // that don't participate in the fold either direction.
+        // design specifically to avoid this. ASCII 'I' matches only
+        // ASCII 'i'. U+0130 and U+0131 are their own runes that
+        // don't participate in the case-insensitive match in
+        // either direction.
         // A grammar matching LiteralIgnoreAsciiCase("size") on
         // input containing Turkish dotted I or dotless i fails
         // normally, same as any other unrecognized rune.
@@ -1391,17 +1524,19 @@ public class UnexpectedUnicodeTests
         Assert.That(rule.Parse("SIZE").Success, Is.True);
         Assert.That(rule.Parse("Size").Success, Is.True);
 
-        // Turkish dotted I (U+0130) doesn't fold to ASCII 'i'.
+        // Turkish dotted I (U+0130) doesn't match ASCII 'i' under the
+        // ASCII-only case-insensitive rule.
         string turkishCapitalI = "s" + UnicodeExamples.TurkishCapitalIWithDotGrapheme + "ze";
         Assert.That(rule.Parse(turkishCapitalI).Success, Is.False,
             $"{UnicodeExamples.TurkishCapitalIWithDotGrapheme} (U+0130) is its own rune; " +
-            "the ASCII-only fold doesn't treat it as 'i'");
+            "the ASCII-only case-insensitive compare doesn't treat it as 'i'");
 
-        // Turkish dotless i (U+0131) doesn't fold to ASCII 'I'.
+        // Turkish dotless i (U+0131) doesn't match ASCII 'I' under the
+        // ASCII-only case-insensitive rule.
         string turkishSmallDotlessI = "s" + UnicodeExamples.TurkishSmallDotlessIGrapheme + "ze";
         Assert.That(rule.Parse(turkishSmallDotlessI).Success, Is.False,
             $"{UnicodeExamples.TurkishSmallDotlessIGrapheme} (U+0131) is its own rune; " +
-            "the ASCII-only fold doesn't treat it as 'i' either");
+            "the ASCII-only case-insensitive compare doesn't treat it as 'i' either");
     }
 
     [Test]
@@ -1619,7 +1754,7 @@ public class UnexpectedUnicodeTests
         // fresh cluster. "U + S + F" therefore splits into the
         // US flag (U + S) and a lone trailing F, not into one
         // garbled three-letter cluster. Common parser bug:
-        // assuming any run of regional indicators is one cluster
+        // assuming any sequence of regional indicators is one cluster
         // and rendering them as a single (invalid) flag, or
         // attempting to interpret the third indicator as part of
         // the country code instead of the start of something
@@ -1646,7 +1781,7 @@ public class UnexpectedUnicodeTests
             "second cluster is the lone F regional indicator");
 
         // (2) Three AnyToken positions need three clusters, but
-        // there are only two; the third AnyToken sees Eof.
+        // there are only two, so the third AnyToken sees Eof.
         Assert.That(And(AnyToken(), AnyToken(), AnyToken(), Eof()).Parse(input).Success, Is.False,
             "three AnyToken positions need three clusters; the pair counts as one");
 

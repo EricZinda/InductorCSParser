@@ -1,14 +1,14 @@
 namespace InductorParser.SyntaxTree;
 
 /// <summary>
-/// A point in a source string, expressed in four units. <see cref="CharIndex"/> is the canonical
+/// A point in a source string, expressed in several units. <see cref="CharIndex"/> is the canonical
 /// one (UTF-16 code units, what string.Substring uses). The others are derived from it by walking
 /// the input from offset 0.
 /// </summary>
 /// <remarks>
-/// Line and Column are zero-based. Column counts UTF-16 code units, the same unit as
+/// Line and CharColumn are zero-based. CharColumn counts UTF-16 code units, the same unit as
 /// <see cref="CharIndex"/>, matching the Language Server Protocol convention editor diagnostics
-/// use. Line breaks follow UAX #18 Annex C, the same set Rules.EndOfLine() accepts: LF, CRLF (one
+/// use. <see cref="TokenColumn"/> is the grapheme-based counterpart, for human-facing output. Line breaks follow UTS #18 §1.6 (RL1.6), the same set Rules.EndOfLine() accepts: LF, CRLF (one
 /// break, not two), lone CR, VT, FF, NEL (U+0085), LS (U+2028), PS (U+2029). Keeping the two sets
 /// aligned matters for grammars that use EndOfLine() on Unicode input: every terminator the grammar
 /// consumes also bumps the reported line. That set is a superset of the LF, CRLF, and lone CR a
@@ -30,8 +30,7 @@ public readonly struct SourcePosition
 
     /// <summary>
     /// The index of the token (i.e. a grapheme: a character as the user sees it) that <see cref="CharIndex"/> falls in,
-    /// using the same StringInfo text-element segmentation the lexer uses (UAX #29 extended grapheme
-    /// clusters on modern .NET).
+    /// using the same UAX #29 extended-grapheme-cluster segmentation the lexer uses.
     /// </summary>
     /// <remarks>
     /// A family emoji or an accented letter typed as base + accent is one token even though it's
@@ -44,9 +43,44 @@ public readonly struct SourcePosition
     public int Line { get; }
 
     /// <summary>
-    /// Zero-based column within the line, in UTF-16 code units (same unit as <see cref="CharIndex"/>).
+    /// Zero-based column within the line, measured in chars (UTF-16 code units, the
+    /// same unit as <see cref="CharIndex"/> and the Language Server Protocol).
     /// </summary>
-    public int Column { get; }
+    public int CharColumn { get; }
+
+    /// <summary>
+    /// Zero-based column within the line, measured in tokens (Unicode graphemes).
+    /// Computed lazily from <see cref="CharIndex"/> and <see cref="Input"/>.
+    /// </summary>
+    /// <remarks>
+    /// The human-facing counterpart to <see cref="CharColumn"/>: an emoji, a flag,
+    /// or a base character plus a combining mark earlier on the line counts as one
+    /// column, not as its several UTF-16 code units, so it matches the character a
+    /// person sees. Use <see cref="CharColumn"/> to match an editor or a Language
+    /// Server Protocol client, which count columns in chars.
+    /// </remarks>
+    public int TokenColumn => SourcePositionConverter.ToTokenColumn(Input, CharIndex);
+
+    /// <summary>
+    /// One-based line number (<see cref="Line"/> + 1), the way a person reading an
+    /// editor counts lines. Use this for human-facing messages. Use
+    /// <see cref="Line"/> for the zero-based Language Server Protocol value.
+    /// </summary>
+    public int LineNumber => Line + 1;
+
+    /// <summary>
+    /// One-based char column (<see cref="CharColumn"/> + 1). Use this for
+    /// human-facing messages. Use <see cref="CharColumn"/> for the zero-based
+    /// Language Server Protocol value.
+    /// </summary>
+    public int CharColumnNumber => CharColumn + 1;
+
+    /// <summary>
+    /// One-based token (grapheme) column (<see cref="TokenColumn"/> + 1), the count
+    /// a person makes of the characters they see. This is the column the default
+    /// error message reports.
+    /// </summary>
+    public int TokenColumnNumber => TokenColumn + 1;
 
     /// <summary>
     /// The source string <see cref="CharIndex"/> is an offset into, always the user's original input
@@ -55,13 +89,34 @@ public readonly struct SourcePosition
     /// </summary>
     public string Input { get; }
 
-    internal SourcePosition(string input, int charIndex, int tokenIndex, int line, int column)
+    /// <summary>
+    /// The text of the line this position falls on: from the start of the line up
+    /// to (not including) the next line terminator, taken from <see cref="Input"/>.
+    /// </summary>
+    /// <remarks>
+    /// The line boundaries are the UTS #18 terminators the parser counts for
+    /// <see cref="Line"/> (see <see cref="TokenSet.IsLineTerminator(char)"/>), so
+    /// this stays consistent with <see cref="Line"/> / <see cref="CharColumn"/> and
+    /// handles CRLF and the rarer terminators that splitting the input on '\n'
+    /// would get wrong. Pair it with <see cref="CharColumn"/> to indent a
+    /// compiler-style caret under a token.
+    /// </remarks>
+    public string SourceLine()
+    {
+        int lineStart = CharIndex - CharColumn;
+        int lineEnd = lineStart;
+        while (lineEnd < Input.Length && !TokenSet.IsLineTerminator(Input[lineEnd]))
+            lineEnd++;
+        return Input.Substring(lineStart, lineEnd - lineStart);
+    }
+
+    internal SourcePosition(string input, int charIndex, int tokenIndex, int line, int charColumn)
     {
         Input = input ?? string.Empty;
         CharIndex = charIndex;
         TokenIndex = tokenIndex;
         Line = line;
-        Column = column;
+        CharColumn = charColumn;
     }
 
     /// <summary>

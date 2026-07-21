@@ -21,7 +21,7 @@ public class AllowTrailingInputTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorCharIndex, Is.EqualTo(2));
-        Assert.That(result.ErrorMessage, Does.StartWith("Parse failed at offset 2"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("Unexpected 'b' at line 1, column 3."));
     }
 
     [Test]
@@ -31,7 +31,7 @@ public class AllowTrailingInputTests
         // on, the OneOrMore claims "aa" and the parse returns success
         // instead of failing at offset 2 on the unconsumed "bb". Token
         // defaults to FlattenType.Delete, so .Preserve() the inner token
-        // to keep its leaf in the tree; that's what makes the consumed
+        // to keep its leaf in the tree. That's what makes the consumed
         // text observable below.
         var rule = OneOrMore(Token('a').Preserve());
         var result = rule.Parse("aabb", new ParseOptions { AllowTrailingInput = true });
@@ -100,11 +100,10 @@ public class AllowTrailingInputTests
         // Or tries Literal("hello") which matches four chars before
         // failing on 'z' at offset 4, then falls back to Token('h') and
         // succeeds at offset 0 (consuming one char). Parsing stops at
-        // offset 1 with trailing "ellz" unconsumed. The doc contract
-        // (InductorParserDesignDecisions.md "Trailing Input Is a Failure")
-        // is that ErrorCharIndex is the first leftover character (offset
-        // 1, the 'e'), not a position from a rolled-back alternative
-        // (offset 4, the 'z' that the abandoned Literal hit and that
+        // offset 1 with trailing "ellz" unconsumed. ErrorCharIndex must
+        // be the first leftover character (offset 1, the 'e'), not a
+        // position from a rolled-back alternative (offset 4, the 'z'
+        // that the abandoned Literal hit and that
         // lexer.DeepestFailurePosition still records).
         var rule = Or(Literal("hello"), Token('h'));
         var result = rule.Parse("hellz");
@@ -113,7 +112,7 @@ public class AllowTrailingInputTests
         Assert.That(result.ErrorCharIndex, Is.EqualTo(1),
             "trailing input begins at offset 1; the 'z' at offset 4 belongs to a rolled-back alternative");
         Assert.That(result.ErrorMessage,
-            Is.EqualTo("Parse failed at offset 1: unexpected 'e'."));
+            Is.EqualTo("Unexpected 'e' at line 1, column 2."));
     }
 
     [Test]
@@ -130,7 +129,7 @@ public class AllowTrailingInputTests
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage,
-            Is.EqualTo("Parse failed at offset 1: unexpected 'e'."),
+            Is.EqualTo("Unexpected 'e' at line 1, column 2."),
             "WithError on a rolled-back alternative shouldn't surface as the trailing-input message");
     }
 

@@ -20,7 +20,7 @@ namespace InductorParser.Tests;
 // failure that names what was supposed to be there. See Canary.cs.
 //
 // One rule keeps the two field types from being a coin toss: every
-// example has a string constant (XxxGrapheme or XxxText). That is the
+// example has a string constant (XxxGrapheme or XxxText). That's the
 // canonical form and the whole corpus, the thing AllStringConstants()
 // returns. An XxxRune int constant is an optional sibling, added only
 // when a caller needs the codepoint as an int (Token(int),
@@ -59,7 +59,7 @@ internal static class UnicodeExamples
     public static readonly string MediumSkinToneText = Canary(
         "🏽", "medium skin tone modifier", MediumSkinToneRune);
 
-    // Waving hand + medium skin tone. ONE grapheme made of TWO runes
+    // Waving hand + medium skin tone. One grapheme made of two runes
     // (4 UTF-16 chars total). The lexer reads the whole sequence as a
     // single token.
     public static readonly string SkinTonedWaveGrapheme = Canary("👋🏽", "medium-skin-tone waving hand",
@@ -80,8 +80,8 @@ internal static class UnicodeExamples
     // to form a multi-rune grapheme. Not a standalone grapheme.
     public static readonly string CombiningAcuteText = Canary("́", "combining acute (attaches to preceding base)", 0x0301);
 
-    // é as e + combining acute. The textbook multi-rune Token: TWO runes,
-    // ONE grapheme (2 UTF-16 chars total). Works on every runtime including
+    // é as e + combining acute. The textbook multi-rune Token: two runes,
+    // one grapheme (2 UTF-16 chars total). Works on every runtime including
     // legacy StringInfo because the base+combining-mark rule predates UAX #29.
     // Use this when a test needs a multi-rune grapheme that segments the same
     // way on .NET 5+ and on Unity Mono / IL2CPP.
@@ -94,7 +94,7 @@ internal static class UnicodeExamples
     public static readonly string LatinEAcutePrecomposedGrapheme = Canary("é", "latin small letter e with acute (precomposed)", LatinEAcuteRune);
 
     // Woman shrugging. ZWJ emoji sequence: base shrug rune + ZWJ +
-    // female sign + emoji variation selector. UAX #29 sees ONE grapheme.
+    // female sign + emoji variation selector. UAX #29 sees one grapheme.
     // Legacy StringInfo splits it. Use this to test the ZWJ rule.
     public static readonly string WomanShruggingGrapheme = Canary(
         "🤷‍♀️",
@@ -102,13 +102,13 @@ internal static class UnicodeExamples
         0x1F937, 0x200D, 0x2640, 0xFE0F);
 
     // US flag. Two regional indicator code points (U + S). UAX #29 sees
-    // ONE grapheme. Legacy StringInfo splits it. Use this to test the
+    // one grapheme. Legacy StringInfo splits it. Use this to test the
     // regional-indicator pairing rule.
     public static readonly string USFlagGrapheme = Canary("🇺🇸", "us flag emoji (regional indicator pair)", RegionalIndicatorURune, 0x1F1F8);
 
     // Thai "kam". SARA AM is the canonical extended-grapheme-cluster
     // case (a vowel sign that visually composes with the preceding consonant).
-    // UAX #29 sees ONE grapheme. Legacy StringInfo splits it. Use this to
+    // UAX #29 sees one grapheme. Legacy StringInfo splits it. Use this to
     // test the SARA AM rule.
     public static readonly string ThaiKamGrapheme = Canary("กำ", "Thai ko kai + sara am (kam)", 0x0E01, 0x0E33);
 
@@ -196,30 +196,38 @@ internal static class UnicodeExamples
     // surrogate pair. A surrogate code unit appearing without its
     // partner isn't a valid Unicode scalar value, but .NET strings
     // can still hold one. Useful for the malformed-input tests.
+    //
+    // These are built from char values at runtime, never written as
+    // string literals: IL2CPP's string-literal conversion replaces an
+    // unpaired surrogate in a compiled literal with U+FFFD, so a
+    // literal form of these constants reaches the Unity test player
+    // corrupted and Canary fires on every corpus-dependent test. A
+    // runtime-built string has no literal to corrupt. Well-formed
+    // surrogate pairs (the emoji constants above) survive as literals.
 
     // U+D800: lowest high-surrogate code unit. "Min" of the high range.
-    public static readonly string HighSurrogateMinText = Canary("\uD800", "lone high surrogate (min, invalid scalar)", HighSurrogateMinRune);
+    public static readonly string HighSurrogateMinText = Canary(((char)HighSurrogateMinRune).ToString(), "lone high surrogate (min, invalid scalar)", HighSurrogateMinRune);
 
     // U+DBFF: highest high-surrogate code unit. "Max" of the high range.
-    public static readonly string HighSurrogateMaxText = Canary("\uDBFF", "lone high surrogate (max, invalid scalar)", HighSurrogateMaxRune);
+    public static readonly string HighSurrogateMaxText = Canary(((char)HighSurrogateMaxRune).ToString(), "lone high surrogate (max, invalid scalar)", HighSurrogateMaxRune);
 
     // U+DC00: lowest low-surrogate code unit. "Min" of the low range.
-    public static readonly string LowSurrogateMinText = Canary("\uDC00", "lone low surrogate (min, invalid scalar)", LowSurrogateMinRune);
+    public static readonly string LowSurrogateMinText = Canary(((char)LowSurrogateMinRune).ToString(), "lone low surrogate (min, invalid scalar)", LowSurrogateMinRune);
 
     // U+DFFF: highest low-surrogate code unit. "Max" of the low range.
-    public static readonly string LowSurrogateMaxText = Canary("\uDFFF", "lone low surrogate (max, invalid scalar)", LowSurrogateMaxRune);
+    public static readonly string LowSurrogateMaxText = Canary(((char)LowSurrogateMaxRune).ToString(), "lone low surrogate (max, invalid scalar)", LowSurrogateMaxRune);
 
     // U+D83D: high-surrogate code unit that starts most common emoji
     // surrogate pairs (waving hand, woman, man, etc.). Used standalone for
     // malformed-emoji tests where the low-half partner is missing.
-    public static readonly string EmojiStartHighSurrogateText = Canary("\uD83D", "lone high surrogate U+D83D (emoji start half, invalid scalar)", EmojiStartHighSurrogateRune);
+    public static readonly string EmojiStartHighSurrogateText = Canary(((char)EmojiStartHighSurrogateRune).ToString(), "lone high surrogate U+D83D (emoji start half, invalid scalar)", EmojiStartHighSurrogateRune);
 
     // U+DC00 then U+D800: a low surrogate followed by a high surrogate.
     // Pair-shaped but in the wrong order (UTF-16 pairs are high-then-low),
     // so the two never combine into a supplementary scalar and stay two
     // separate ill-formed code units. WTF-8 (Simon Sapin) discusses this
     // exact pattern.
-    public static readonly string ReversedSurrogatePairText = Canary("\uDC00\uD800", "reversed surrogate pair (low then high, invalid)", LowSurrogateMinRune, HighSurrogateMinRune);
+    public static readonly string ReversedSurrogatePairText = Canary(new string(new[] { (char)LowSurrogateMinRune, (char)HighSurrogateMinRune }), "reversed surrogate pair (low then high, invalid)", LowSurrogateMinRune, HighSurrogateMinRune);
 
     // === Format / control characters that don't render as a glyph ===
     // The names exist so test source stays readable. Inline literals like
@@ -331,7 +339,7 @@ internal static class UnicodeExamples
     // when they appear in non-canonical order, then composes to
     // U+1EAD. This is the test case for "NFC reorders marks of
     // different classes". Same-class marks (e.g. acute+circumflex,
-    // both ccc=230) are NOT reordered, so input order matters there.
+    // both ccc=230) aren't reordered, so input order matters there.
     public const int VietnameseACircumflexDotBelowRune = 0x1EAD;
     public static readonly string VietnameseACircumflexDotBelowGrapheme = Canary("ậ", "Latin a with circumflex and dot-below (precomposed)", VietnameseACircumflexDotBelowRune);
 
@@ -359,7 +367,7 @@ internal static class UnicodeExamples
     // NFC composes the three jamo back to U+D55C.
     public static readonly string HangulHanDecomposedText = Canary("한", "Hangul han decomposed (hieuh + a + nieun jamo)", 0x1112, 0x1161, 0x11AB);
 
-    // U+212B ANGSTROM SIGN. Canonical singleton; NFC converts to U+00C5.
+    // U+212B ANGSTROM SIGN. Canonical singleton. NFC converts to U+00C5.
     // Renders identically to U+00C5 LATIN CAPITAL LETTER A WITH RING ABOVE.
     public static readonly string AngstromGrapheme = Canary("Å", "Angstrom sign (canonical singleton to U+00C5)", AngstromRune);
 
@@ -429,7 +437,7 @@ internal static class UnicodeExamples
     public static readonly string RomanNumeralEightGrapheme = Canary("Ⅷ", "Roman numeral eight VIII (compatibility, expands to \"VIII\" under FormKC)", 0x2167);
 
     // U+FF21 FULLWIDTH LATIN CAPITAL LETTER A. Compatibility
-    // singleton; NFKC substitutes it for plain ASCII 'A'. Used for
+    // singleton. NFKC substitutes it for plain ASCII 'A'. Used for
     // homoglyph / fullwidth-spoofing tests.
     public static readonly string FullwidthAGrapheme = Canary("Ａ", "fullwidth Latin capital A (substitutes to ASCII A under FormKC)", 0xFF21);
 
@@ -570,17 +578,30 @@ internal static class UnicodeExamples
     public static readonly string ArabicLigatureSallallahouGrapheme = Canary("ﷺ", "arabic ligature sallallahou alayhe wasallam", 0xFDFA);
 
     // U+FF11 FULLWIDTH DIGIT ONE. Compatibility-ASCII digit.
-    // NFKC folds to ASCII '1'.
+    // NFKC converts to ASCII '1'.
     public static readonly string FullwidthDigitOneGrapheme = Canary("１", "fullwidth digit one", 0xFF11);
 
     // U+3131 HANGUL LETTER KIYEOK. Compatibility jamo from the
-    // Hangul Compatibility Jamo block. NFKC folds to U+1100
+    // Hangul Compatibility Jamo block. NFKC converts to U+1100
     // (CHOSEONG KIYEOK).
     public static readonly string HangulLetterKiyeokGrapheme = Canary("ㄱ", "hangul letter kiyeok (compatibility jamo)", 0x3131);
 
     // U+314F HANGUL LETTER A. Compatibility jamo from the Hangul
-    // Compatibility Jamo block. NFKC folds to U+1161 (JUNGSEONG A).
+    // Compatibility Jamo block. NFKC converts to U+1161 (JUNGSEONG A).
     public static readonly string HangulLetterAGrapheme = Canary("ㅏ", "hangul letter a (compatibility jamo)", 0x314F);
+
+    // U+FFA1 HALFWIDTH HANGUL LETTER KIYEOK. Halfwidth jamo from the
+    // Halfwidth and Fullwidth Forms block. NFKC converts it to U+1100
+    // (CHOSEONG KIYEOK), the same conjoining jamo the compatibility
+    // jamo U+3131 above converts to.
+    public static readonly string HalfwidthHangulKiyeokGrapheme = Canary("ﾡ", "halfwidth hangul letter kiyeok", 0xFFA1);
+
+    // U+FFC2 HALFWIDTH HANGUL LETTER A. Halfwidth jamo. NFKC converts
+    // it to U+1161 (JUNGSEONG A), the same conjoining jamo the
+    // compatibility jamo U+314F above converts to, so a halfwidth
+    // kiyeok + a pair composes to U+AC00 (가) under FormKC exactly
+    // like the compatibility pair does.
+    public static readonly string HalfwidthHangulAGrapheme = Canary("ￂ", "halfwidth hangul letter a", 0xFFC2);
 
     // U+304B HIRAGANA LETTER KA. Used as a base in tests of
     // Katakana-Hiragana voiced-sound-mark interactions.
@@ -602,7 +623,7 @@ internal static class UnicodeExamples
     public static readonly string HeavyBlackHeartGrapheme = Canary("❤", "heavy black heart", 0x2764);
 
     // U+1D400 MATHEMATICAL BOLD CAPITAL A. Supplementary-plane
-    // letter that NFKC folds to ASCII 'A'. Homoglyph spoofing test.
+    // letter that NFKC converts to ASCII 'A'. Homoglyph spoofing test.
     public static readonly string MathematicalBoldCapitalAGrapheme = Canary("𝐀", "mathematical bold capital a", 0x1D400);
 
     // U+1F600 GRINNING FACE. Supplementary-plane emoji used in
@@ -619,7 +640,7 @@ internal static class UnicodeExamples
     public static readonly string CafeDecomposedText = Canary("café", "cafe with decomposed e + combining acute", 0x0063, 0x0061, 0x0066, 0x0065, 0x0301);
 
     // Greek "καλημέρα" ("good morning"). All eight codepoints are Ll
-    // (Letter, Lowercase) — pure XID_Start territory.
+    // (Letter, Lowercase), pure XID_Start territory.
     public static readonly string GreekKalimeraIdentifier = Canary("καλημέρα", "greek 'good morning' identifier (kalimera)", 0x03BA, 0x03B1, 0x03BB, 0x03B7, 0x03BC, 0x03AD, 0x03C1, 0x03B1);
 
     // Devanagari "हिन्दी" ("hindi"). Six runes that the lexer
@@ -628,28 +649,28 @@ internal static class UnicodeExamples
     public static readonly string DevanagariHindiIdentifier = Canary("हिन्दी", "devanagari 'hindi' identifier (ha + i + na + virama + da + ii)", 0x0939, 0x093F, 0x0928, 0x094D, 0x0926, 0x0940);
 
     // Fullwidth Latin "ｆｏｏ" (U+FF46 + U+FF4F + U+FF4F). NFKC
-    // folds each to plain ASCII, so it matches ASCII "foo" under
+    // converts each to plain ASCII, so it matches ASCII "foo" under
     // FormKC but not under FormC.
     public static readonly string FullwidthFooGrapheme = Canary("ｆｏｏ", "fullwidth latin 'foo' (f + o + o)", 0xFF46, 0xFF4F, 0xFF4F);
 
     // U+FB01 LATIN SMALL LIGATURE FI followed by two ASCII 'o'.
-    // NFKC folds the ligature to two ASCII letters, yielding
+    // NFKC converts the ligature to two ASCII letters, yielding
     // "fioo".
     public static readonly string FiLigaturePlusOoText = Canary("ﬁoo", "fi-ligature + o + o (folds to 'fioo' under NFKC)", 0xFB01, 0x006F, 0x006F);
 
     // U+FB00 LATIN SMALL LIGATURE FF followed by two ASCII 'o'.
-    // NFKC folds the ligature to two ASCII letters, yielding
+    // NFKC converts the ligature to two ASCII letters, yielding
     // "ffoo".
     public static readonly string FfLigaturePlusOoText = Canary("ﬀoo", "ff-ligature + o + o (folds to 'ffoo' under NFKC)", 0xFB00, 0x006F, 0x006F);
 
     // Mathematical Bold "𝐟𝐨𝐨". Three supplementary-plane runes
-    // that NFKC folds to ASCII "foo". Locks in that the homoglyph
+    // that NFKC converts to ASCII "foo". Locks in that the homoglyph
     // table reaches past the surrogate gap.
     public static readonly string MathBoldFooIdentifier = Canary("𝐟𝐨𝐨", "mathematical bold 'foo' (f + o + o)", 0x1D41F, 0x1D428, 0x1D428);
 
-    // Fullwidth Latin "ｓｅｌｅｃｔ" (six runes, each NFKC-folding to
-    // its ASCII counterpart). Used in the SQL-keyword homoglyph
-    // bypass test.
+    // Fullwidth Latin "ｓｅｌｅｃｔ" (six runes, each converting to
+    // its ASCII counterpart under NFKC). Used in the SQL-keyword
+    // homoglyph bypass test.
     public static readonly string FullwidthSelectIdentifier = Canary("ｓｅｌｅｃｔ", "fullwidth latin 'select'", 0xFF53, 0xFF45, 0xFF4C, 0xFF45, 0xFF43, 0xFF54);
 
 
@@ -697,8 +718,8 @@ internal static class UnicodeExamples
         "İ", "latin capital I with dot above (Turkish dotted I)", 0x0130);
 
     // U+0131 LATIN SMALL LETTER DOTLESS I. The lowercase form of Turkish
-    // capital 'I' under Turkish locale rules. Its own rune; doesn't fold
-    // to ASCII 'i' under LiteralIgnoreAsciiCase.
+    // capital 'I' under Turkish locale rules. Its own rune, and it
+    // doesn't fold to ASCII 'i' under LiteralIgnoreAsciiCase.
     public static readonly string TurkishSmallDotlessIGrapheme = Canary(
         "ı", "latin small dotless i (Turkish dotless i)", 0x0131);
 
@@ -709,9 +730,21 @@ internal static class UnicodeExamples
     // Used in the Microsoft 2018 phishing campaign where attacker
     // hostnames mixed Cherokee letters with Latin to spoof legitimate
     // names. Category Lo, so Identifier() accepts it under the default
-    // UAX #31 profile; a Latin-only TokenSet rejects it.
+    // UAX #31 profile. A Latin-only TokenSet rejects it.
     public static readonly string CherokeeLetterAGrapheme = Canary(
         "Ꭰ", "cherokee letter A (homoglyph for latin caps in some fonts)", 0x13A0);
+
+    // U+000B VERTICAL TAB (VT). C0 control that renders like whitespace,
+    // but UAX #18 counts it as a line terminator, so the parser does too
+    // (it's in TokenSet.LineTerminators, but Token('\n') doesn't catch it).
+    public static readonly string VerticalTabText = Canary(
+        "\u000B", "vertical tab (UAX #18 line terminator)", 0x000B);
+
+    // U+000C FORM FEED (FF). The classic page-break control. C0 control,
+    // UAX #18 line terminator, treated as one ordinary token the parser
+    // counts as a line break.
+    public static readonly string FormFeedText = Canary(
+        "\u000C", "form feed (UAX #18 line terminator)", 0x000C);
 
     // U+2028 LINE SEPARATOR. UAX #14 line break, UAX #18 line terminator.
     // Famous JavaScript bug: ECMAScript source disallowed U+2028 and U+2029
@@ -719,7 +752,7 @@ internal static class UnicodeExamples
     // them. JSONP responses containing these characters in user content
     // produced "Unexpected token ILLEGAL" errors in the browser. Fixed in
     // ES2019 (string-literal grammar updated to allow them). The Inductor
-    // parser treats U+2028 as one ordinary token; a grammar matching
+    // parser treats U+2028 as one ordinary token. A grammar matching
     // Token('\n') doesn't catch it, but EndOfLine() does (it's in
     // TokenSet.LineTerminators).
     public static readonly string LineSeparatorText = Canary(
@@ -733,9 +766,9 @@ internal static class UnicodeExamples
     // crossed into Unicode for round-tripping with IBM mainframe text. C0
     // control (Cc), UAX #18 line terminator. Real-world bug: Java's
     // BufferedReader.readLine treats NEL as a line terminator on some
-    // JVMs but not others; XML 1.1 explicitly added it to the newline
+    // JVMs but not others. XML 1.1 explicitly added it to the newline
     // characters list (XML 1.0 didn't). The Inductor parser treats NEL
-    // as one ordinary token; Token('\n') doesn't catch it, EndOfLine()
+    // as one ordinary token. Token('\n') doesn't catch it, EndOfLine()
     // does.
     public static readonly string NextLineText = Canary(
         "\u0085", "next line / NEL (EBCDIC heritage line terminator)", 0x0085);
@@ -745,7 +778,7 @@ internal static class UnicodeExamples
     // original Trojan Source paper (CVE-2021-42574) demonstrates source
     // code attacks using the directional formatting characters, including
     // these isolates as well as the older RLO. Treated by the parser as
-    // an ordinary token; the parser doesn't apply Unicode's Bidirectional
+    // an ordinary token. The parser doesn't apply Unicode's Bidirectional
     // Algorithm, so a Trojan Source string can't trick the grammar into
     // matching something different from what's in the input.
     public static readonly string LeftToRightIsolateText = Canary(
@@ -807,7 +840,7 @@ internal static class UnicodeExamples
     // FLAG + tag chars for "gbeng" + CANCEL TAG. UAX #29 GB10 keeps the
     // whole sequence (7 runes, 14 UTF-16 chars) as a single grapheme
     // cluster. Renderers that recognize the sequence display the
-    // St George's Cross; renderers that don't show a black flag followed
+    // St George's Cross. Renderers that don't show a black flag followed
     // by the tag letters or nothing at all.
     public static readonly string EnglandFlagGrapheme = Canary(
         "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "england flag emoji (waving black flag + GBENG tag sequence)",
@@ -850,8 +883,8 @@ internal static class UnicodeExamples
         0x0F56, 0x0F7C, 0x0F51);
 
     // Tibetan stacked syllable: KA (Lo) + SUBJOINED LETTER SSA (Mn).
-    // Tibetan stacks a subjoined consonant under its base; the subjoined
-    // letter is GCB=Extend, so base + subjoined is ONE grapheme made of
+    // Tibetan stacks a subjoined consonant under its base. The subjoined
+    // letter is GCB=Extend, so base + subjoined is one grapheme made of
     // two runes. The textbook Tibetan grapheme-cluster case, parallel to
     // Devanagari conjuncts but using a dedicated subjoined code point
     // rather than a virama linker.

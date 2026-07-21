@@ -124,7 +124,7 @@ public static class RequirementGrammar
         Specifier = Or(parenthesizedSpecifier, versionMany).As("specifier");
 
         // urlspec: '@' then whitespace then a run of non-whitespace.
-        UrlReference = ScanWhile(~TokenSet.Runes(" \t"), minimumCount: 1)
+        UrlReference = ScanWhile(TokenSet.Universe - TokenSet.Runes(" \t"), minimumCount: 1)
             .As("url")
             .WithError("expected a URL after '@'");
         Url = And(Token('@'), whitespace, UrlReference).As("urlSpec");

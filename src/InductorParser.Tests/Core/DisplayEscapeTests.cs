@@ -186,7 +186,7 @@ public class DisplayEscapeTests
     public void AppendEscaped_escapes_unpaired_surrogate_halves()
     {
         // Valid surrogate pairs should keep rendering as the actual
-        // supplementary character, but a lone high or low half is not a
+        // supplementary character, but a lone high or low half isn't a
         // valid Unicode scalar value. If it reaches a one-line diagnostic
         // raw, encoders can replace it with U+FFFD or fail, hiding the
         // exact code unit the parser saw.
@@ -210,11 +210,11 @@ public class DisplayEscapeTests
     [Test]
     public void AppendEscaped_keeps_ZWJ_verbatim_inside_an_emoji_family()
     {
-        // Format (Cf) chars like ZWJ are deliberately NOT escaped so
+        // Format (Cf) chars like ZWJ are deliberately not escaped so
         // emoji ZWJ families render as the user-perceived character.
         // Without that exception, every ZWJ family in a trace line
         // would explode into "head U+200D head U+200D head ...". This
-        // test pins the policy at the helper layer.
+        // test locks in the policy at the helper layer.
         // Man + ZWJ + Woman (U+1F468 U+200D U+1F469). The ZWJ in the
         // middle has to come through unchanged.
         string family = ManEmojiGrapheme + ZeroWidthJoinerText + WomanEmojiGrapheme;
@@ -322,7 +322,7 @@ public class DisplayEscapeTests
     public void Escape_escapes_a_surrogate_pair_half_when_the_range_splits_the_pair()
     {
         // Escape works on the requested range, not on the whole source
-        // string. A valid pair in the larger source is not valid if the
+        // string. A valid pair in the larger source isn't valid if the
         // range exposes only one half.
         string guitar = GuitarGrapheme;
 

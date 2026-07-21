@@ -16,9 +16,9 @@ namespace InductorParser;
 // top-to-bottom, so whichever one is declared first sees the other as
 // null.
 //
-// The fix is a LateBoundRule: a Rule that stands in for the real target
+// A LateBoundRule is a Rule that stands in for the real target
 // during construction and gets its target attached later via .Bind(...).
-// The canonical pattern:
+// The canonical pattern is:
 //
 //     static readonly LateBoundRule Expression = new LateBoundRule("expression");
 //     static readonly Rule Term = Or(Integer(), And(Token('('), Expression, Token(')')));
@@ -31,11 +31,12 @@ namespace InductorParser;
 // already constructed.
 //
 // A LateBoundRule is transparent. At parse time it just forwards
-// TryParse to its target, and the Symbol that flows up carries the
+// TryParse to its target, and the Symbol that flows up has the
 // target's Id, not the LateBoundRule's. Transparency also covers
 // FlattenType: a LateBoundRule has no flatten policy of its own, so the
 // FlattenType property reports the target's, resolved through any chain
-// of LateBoundRules to the first concrete rule. That's what makes
+// of LateBoundRules and unnamed aliases (the other transparent stand-in,
+// see AliasRule) to the first concrete rule. That's what makes
 // `Alias(lateBound)`, `And(x, lateBound, y)`, and every other
 // composition behave exactly as if the target rule were written in the
 // LateBoundRule's place, with no placeholder layer and no special case.
@@ -87,18 +88,19 @@ public sealed class LateBoundRule : Rule
     private FlattenType? _resolvedFlattenType;
 
     // A LateBoundRule has no FlattenType of its own: it reports the
-    // bound target's, resolved through any chain of LateBoundRules to
-    // the first concrete rule. The value is computed once during Compile
-    // while the graph walk is single-threaded; afterwards this getter is
+    // bound target's, resolved through any chain of LateBoundRules and
+    // unnamed aliases to the first concrete rule. The value is computed
+    // once during Compile while the graph walk is single-threaded.
+    // Afterwards this getter is
     // a plain field read, so concurrent parses of the compiled grammar
     // need no synchronization. Reading it before Compile throws rather
     // than guessing a value that would later turn out wrong.
     public override FlattenType FlattenType =>
         _resolvedFlattenType
         ?? throw new InvalidOperationException(
-            "LateBoundRule.FlattenType was read before Compile resolved it from " +
-            "the bound target. A LateBoundRule has no FlattenType of its own. " +
-            "Compile the grammar first (Parse compiles automatically).");
+            "A LateBoundRule has no FlattenType of its own. It takes the FlattenType " +
+            "of the rule you Bind it to, worked out when the grammar is compiled. " +
+            "Compile the grammar first, then read FlattenType (Parse compiles for you).");
 
     // LateBoundRule forwards EmitsLeaf to its bound target the same way
     // it forwards FlattenType: a LateBoundRule wrapping a leaf-emitting
@@ -110,24 +112,27 @@ public sealed class LateBoundRule : Rule
     public override bool EmitsLeaf =>
         _target?.EmitsLeaf
         ?? throw new InvalidOperationException(
-            "LateBoundRule.EmitsLeaf was read before Bind attached a target. " +
-            "A LateBoundRule has no EmitsLeaf value of its own; bind the rule " +
-            "first (Compile / Parse will report this as a 'never bound' error).");
+            "A LateBoundRule has no EmitsLeaf value of its own. It takes the value " +
+            "from the rule you Bind it to. Bind it first, then read EmitsLeaf.");
 
     // Naming a LateBoundRule is a bug: the name would derive a Name
     // and (via hashing) an Id, but neither is ever visible at parse time.
     // Fail instead of letting users build a rule whose Find
     // silently returns null. Pass the debug name to the constructor.
     public override Rule As(string name) => throw new InvalidOperationException(
-        "LateBoundRule.As(string) isn't supported: the rule is transparent at parse " +
-        "time, so Find() would never match it. Pass a debug name to the constructor: " +
-        "new LateBoundRule(\"name\").");
+        "LateBoundRule.As(string) isn't supported: a LateBoundRule is transparent at " +
+        "parse time, so no Symbol carries its name and Find() can never match it. To " +
+        "make the bound shape findable under a name, name the target rule instead " +
+        "(target.As(\"name\")). The constructor's name is only a label for traces and " +
+        "error messages, not a findable name: new LateBoundRule(\"name\").");
 
     public override Rule As(SymbolId id) => throw new InvalidOperationException(
-        "LateBoundRule.As(SymbolId) isn't supported: the rule is transparent at parse " +
-        "time, so no Symbol in the parse tree will carry this Id.");
+        "LateBoundRule.As(SymbolId) isn't supported: a LateBoundRule is transparent at " +
+        "parse time, so no Symbol in the parse tree will carry this Id. To give the " +
+        "bound shape an explicit id, set it on the target rule instead " +
+        "(target.As(new SymbolId(...))).");
 
-    // Flatten on LateBoundRule is rejected because its FlattenType is not
+    // Flatten on LateBoundRule is rejected because its FlattenType isn't
     // its own: the property forwards to the bound target. A value set
     // here would be shadowed by that forward and never take effect. Set
     // .Flatten(...) on the target rule instead.
@@ -179,32 +184,50 @@ public sealed class LateBoundRule : Rule
         _resolvedFlattenType = ResolveTargetFlattenType();
     }
 
-    // Walk the .Bind(...) chain to the first concrete (non-LateBound)
-    // rule and return its FlattenType. Throws if the chain reaches an
-    // unbound rule, or loops back on itself without ever reaching a
-    // concrete rule (a grammar that can never match anything).
+    // Walk the .Bind(...) chain to the first concrete rule and return its
+    // FlattenType. The walk follows _target and Inner fields rather than
+    // reading FlattenType on each link, because a LateBoundRule that
+    // Compile hasn't resolved yet throws on that read. Throws if the
+    // chain reaches an unbound rule, or loops back on itself without
+    // ever reaching a concrete rule (a grammar that can never match
+    // anything).
     private FlattenType ResolveTargetFlattenType()
     {
-        var visited = new HashSet<LateBoundRule> { this };
+        var visited = new HashSet<Rule> { this };
         Rule current = _target!;
-        while (current is LateBoundRule lateBound)
+        while (true)
         {
-            if (lateBound._target == null)
+            if (current is LateBoundRule lateBound)
             {
-                var label = lateBound._debugName ?? "<anonymous LateBoundRule>";
-                throw new InvalidOperationException(
-                    $"Rule '{label}' is a LateBoundRule that was never bound. " +
-                    "Call .Bind(targetRule) before calling Parse or Compile.");
+                if (lateBound._target == null)
+                {
+                    var label = lateBound._debugName ?? "<anonymous LateBoundRule>";
+                    throw new InvalidOperationException(
+                        $"Rule '{label}' is a LateBoundRule that was never bound. " +
+                        "Call .Bind(targetRule) before calling Parse or Compile.");
+                }
+                if (!visited.Add(lateBound))
+                    throw ChainLoopsForever();
+                current = lateBound._target;
             }
-            if (!visited.Add(lateBound))
-                throw new InvalidOperationException(
-                    "A LateBoundRule's .Bind(...) chain loops through LateBoundRules " +
-                    "without ever reaching a concrete rule, so it has no FlattenType " +
-                    "and can never match input. Bind one rule in the loop to a real " +
-                    "(non-LateBound) rule.");
-            current = lateBound._target;
+            else if (current is AliasRule alias && alias.IsTransparent)
+            {
+                if (!visited.Add(alias))
+                    throw ChainLoopsForever();
+                current = alias.Inner;
+            }
+            else
+            {
+                return current.FlattenType;
+            }
         }
-        return current.FlattenType;
     }
+
+    private static InvalidOperationException ChainLoopsForever() =>
+        new InvalidOperationException(
+            "A LateBoundRule's .Bind(...) chain loops through LateBoundRules " +
+            "and unnamed aliases without ever reaching a concrete rule, so it " +
+            "can never match input. Bind one rule in " +
+            "the loop to a real (non-LateBound, non-alias) rule.");
 
 }

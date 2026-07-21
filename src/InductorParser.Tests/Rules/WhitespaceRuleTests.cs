@@ -7,16 +7,16 @@ namespace InductorParser.Tests;
 // Tests for Rules.InlineWhitespace() and Rules.AnyWhitespace().
 //
 // Pairs with EndOfLineRuleTests, which covers the line-terminator side of
-// the same split. The split's contract:
+// the same split. How the split works:
 //
 //   - InlineWhitespace() matches intra-line whitespace runes only and
 //     rejects every line terminator (\n, \r, NEL, LS, PS, VT, FF) and
 //     CRLF.
 //   - EndOfLine() matches every line terminator including CRLF as a unit.
-//   - AnyWhitespace() is the union; it accepts both kinds.
+//   - AnyWhitespace() is the union, it accepts both kinds.
 //
 // Test inputs use char.ConvertFromUtf32 rather than inline escapes so the
-// source file doesn't carry any literal control characters.
+// source file doesn't hold any literal control characters.
 [TestFixture]
 public class WhitespaceRuleTests
 {

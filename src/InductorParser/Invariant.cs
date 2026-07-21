@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -39,7 +40,7 @@ namespace InductorParser;
 public static class Invariant
 {
     // AggressiveInlining on the check, NoInlining on the throw. Same
-    // pattern as Lexer.ThrowBudgetExceeded: a method that throws is
+    // pattern as ParseBudget.ThrowBudgetExceeded: a method that throws is
     // poison to the JIT's inliner, and pulling the throw into its own
     // method keeps the caller's hot path branch-only. The check
     // disappears into the caller when the condition holds, which is
@@ -69,6 +70,20 @@ public static class Invariant
             Throw(message);
     }
 
+    // Build (don't throw) the bug exception for a branch that should be
+    // unreachable: a switch default that can't be hit, an exhaustive if/else,
+    // a case the type system can't rule out but the logic can. The caller
+    // writes `throw Invariant.Fail(...)`. Returning the exception and throwing
+    // at the call keeps the compiler's control-flow analysis happy, so a switch
+    // default or exhaustive else needs no dummy return after it. (A plain
+    // [DoesNotReturn] void call wouldn't: C# only uses [DoesNotReturn] for
+    // nullable flow, not for definite-return, so the method would still demand
+    // a return.) Plain string, not the deferred handler That uses, since an
+    // unreachable branch never runs and so never pays the formatting cost.
+    public static Exception Fail(string message) =>
+        new InductorParserBugException(message);
+
+    [DoesNotReturn]
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void Throw(string message)
     {
@@ -91,7 +106,7 @@ public static class Invariant
 //     Invariant.That(condition, handler);
 //
 // The constructor sets shouldAppend=true only when condition is
-// FALSE, i.e. when That is about to throw and needs the formatted
+// false, i.e. when That is about to throw and needs the formatted
 // message. Every other call shouldAppend=false, so the compiler skips
 // every Append call: no boxing, no ToString, no StringBuilder. A
 // plain string literal "foo" passed in compiles to AppendLiteral("foo")
@@ -144,7 +159,7 @@ public ref struct InvariantInterpolatedStringHandler
 // Exception directly rather than from InvalidOperationException so a
 // stray `catch (InvalidOperationException)` somewhere up the stack
 // can't quietly swallow it. The user-API rejections (".As called
-// twice", etc.) are still InvalidOperationException; this one means an
+// twice", etc.) are still InvalidOperationException. This one means an
 // invariant that should never fail did, whether it was declared by
 // InductorParser itself or by a user-defined rule.
 public sealed class InductorParserBugException : Exception

@@ -12,18 +12,19 @@ namespace InductorParser;
 /// </summary>
 /// <remarks>
 /// <see cref="Outcome"/> distinguishes "the grammar rejected the input"
-/// (GrammarMismatch) from "a budget tripped" (Timeout, RuleCountLimitExceeded,
+/// (GrammarMismatch) from "the input can't be normalized" (MalformedInput)
+/// from "a budget tripped" (Timeout, RuleCountLimitExceeded,
 /// DepthLimitExceeded, Canceled) so callers can show different messages to the
 /// user in each case.
 /// <para>
 /// The error-position family reports the same point (where the parse got
 /// furthest before failing) in different units: <see cref="ErrorCharIndex"/>
 /// (chars, i.e. UTF-16 code units), <see cref="ErrorTokenIndex"/> (tokens, where a
-/// token is one Unicode Grapheme), and the <see cref="ErrorLine"/>
-/// / <see cref="ErrorColumn"/> pair (zero-based line and column, the Language
-/// Server Protocol convention).
+/// token is one Unicode Grapheme), <see cref="ErrorLine"/>, and the column in
+/// either unit, <see cref="ErrorCharColumn"/> (chars, the Language Server Protocol
+/// convention) or <see cref="ErrorTokenColumn"/> (graphemes). All zero-based.
 /// Pick whichever matches the unit the caller will use the number in.
-/// <see cref="ErrorPosition"/> returns all four bundled into one SourcePosition
+/// <see cref="ErrorPosition"/> returns all of these bundled into one SourcePosition
 /// struct, so callers that want more than one unit only pay for one walk of the
 /// input. The same conversion is available on Symbol.SourceRange for any node
 /// in the parse tree.
@@ -36,6 +37,7 @@ public readonly struct ParseResult
     private readonly string? _input;
     private readonly Rule? _grammar;
     private readonly IReadOnlyList<Symbol>? _symbols;
+    private readonly string? _errorMessage;
 
     /// <summary>
     /// Returns the shape of this result: success, grammar mismatch, or
@@ -46,14 +48,17 @@ public readonly struct ParseResult
     public ParseOutcome Outcome { get; }
 
     /// <summary>
-    /// Human-readable description of what went wrong. Empty string on success.
+    /// Human-readable description of what went wrong. Empty string on success
+    /// and on a default-constructed ParseResult.
     /// </summary>
     /// <remarks>
     /// On GrammarMismatch, either the innermost WithError message set by the
-    /// grammar or a generated "Parse failed at offset N" fallback. On a budget
-    /// abort, the matching "Parse aborted: ..." string. See: docs/ErrorArchitecture.md
+    /// grammar or a generated "Unexpected 'x' at line L, column C" fallback. On
+    /// MalformedInput, the message from
+    /// <see cref="ParseOptions.MalformedInputTemplate"/>. On a budget abort, the
+    /// matching "Parse aborted: ..." string. See: docs/ErrorArchitecture.md
     /// </remarks>
-    public string ErrorMessage { get; }
+    public string ErrorMessage => _errorMessage ?? string.Empty;
 
     /// <summary>
     /// The top-level Symbols produced by the parse. For a failed or aborted
@@ -88,8 +93,10 @@ public readonly struct ParseResult
     /// <remarks>
     /// This is the unit string.Substring, Range and Span use, and the unit the Language
     /// Server Protocol uses for editor diagnostics. Always in [0, input.Length]
-    /// (enforced at construction), so callers can index into the original input
-    /// string without bounds-checking.
+    /// (enforced at construction). Note the top of that range: a parse that
+    /// fails at end of input reports input.Length, one past the last char, and
+    /// that's the most common failure position there is. Check for it before
+    /// indexing into the input string with this value.
     /// </remarks>
     public int ErrorCharIndex { get; }
 
@@ -98,7 +105,7 @@ public readonly struct ParseResult
     /// <see cref="ErrorCharIndex"/> and the original input.
     /// </summary>
     /// <remarks>
-    /// Line breaks follow UAX #18 Annex C, the same set Rules.EndOfLine()
+    /// Line breaks follow UTS #18 §1.6 (RL1.6), the same set Rules.EndOfLine()
     /// accepts: LF, CRLF (one break, not two), lone CR, VT, FF, NEL (U+0085),
     /// LS (U+2028), PS (U+2029). That's a superset of the LF, CRLF, and lone CR
     /// a Language Server Protocol client recognizes, so the number matches an
@@ -117,10 +124,11 @@ public readonly struct ParseResult
     }
 
     /// <summary>
-    /// Error position's zero-based column within the line, measured in chars (UTF-16 code units).
-    /// Computed lazily from <see cref="ErrorCharIndex"/> and the original input.
+    /// Error position's zero-based column within the line, measured in chars (UTF-16
+    /// code units, the Language Server Protocol unit). Computed lazily from
+    /// <see cref="ErrorCharIndex"/> and the original input.
     /// </summary>
-    public int ErrorColumn
+    public int ErrorCharColumn
     {
         get
         {
@@ -130,11 +138,27 @@ public readonly struct ParseResult
     }
 
     /// <summary>
+    /// Error position's zero-based column within the line, measured in tokens
+    /// (Unicode graphemes). Computed lazily from <see cref="ErrorCharIndex"/> and
+    /// the original input.
+    /// </summary>
+    /// <remarks>
+    /// The human-facing counterpart to <see cref="ErrorCharColumn"/>: an emoji, a
+    /// flag, or a base character plus a combining mark earlier on the line counts
+    /// as one column, not as its several UTF-16 code units, so the number matches
+    /// the character a person sees. This is the unit the default error message
+    /// reports (via the {tokenColumnNumber} template placeholder). Use
+    /// <see cref="ErrorCharColumn"/> instead to match an editor or a Language
+    /// Server Protocol client, which count columns in chars.
+    /// </remarks>
+    public int ErrorTokenColumn =>
+        SourcePositionConverter.ToTokenColumn(_input ?? string.Empty, ErrorCharIndex);
+
+    /// <summary>
     /// Error position in tokens (Unicode graphemes), using the
-    /// same StringInfo text-element segmentation the lexer uses. Computed lazily
+    /// same UAX #29 grapheme segmentation the lexer uses. Computed lazily
     /// from <see cref="ErrorCharIndex"/>.
     /// </summary>
-    /// <remarks>On modern .NET this follows UAX #29 extended grapheme clusters.</remarks>
     public int ErrorTokenIndex =>
         SourcePositionConverter.ToTokenIndex(_input ?? string.Empty, ErrorCharIndex);
 
@@ -296,7 +320,7 @@ public readonly struct ParseResult
     {
         Outcome = outcome;
         _symbols = symbols;
-        ErrorMessage = errorMessage ?? throw new ArgumentNullException(nameof(errorMessage));
+        _errorMessage = errorMessage ?? throw new ArgumentNullException(nameof(errorMessage));
         if (input == null) throw new ArgumentNullException(nameof(input));
         if (grammar == null) throw new ArgumentNullException(nameof(grammar));
         int inputLength = input.Length;
@@ -323,15 +347,26 @@ public readonly struct ParseResult
 
     /// <summary>
     /// Build a grammar-mismatch result. Outcome is GrammarMismatch, the error
-    /// fields carry the deepest-failure message and position.
+    /// fields have the deepest-failure message and position.
     /// </summary>
     public static ParseResult Failed(int errorCharIndex, string message, string input, Rule grammar) =>
         new ParseResult(ParseOutcome.GrammarMismatch, null, message, errorCharIndex, input, grammar);
 
     /// <summary>
+    /// Build a malformed-input result. Outcome is MalformedInput: the input
+    /// couldn't be normalized to the grammar's form because it isn't well-formed
+    /// Unicode. The error fields have the localized message and the offending
+    /// character index. Rule.Parse builds this in place of letting .NET's
+    /// string.Normalize throw. It's public so a custom parse driver that does its
+    /// own normalization can report the same shape.
+    /// </summary>
+    public static ParseResult MalformedInput(int errorCharIndex, string message, string input, Rule grammar) =>
+        new ParseResult(ParseOutcome.MalformedInput, null, message, errorCharIndex, input, grammar);
+
+    /// <summary>
     /// Build a budget-abort result. Outcome is one of Timeout,
     /// RuleCountLimitExceeded, DepthLimitExceeded, or Canceled. The error fields
-    /// carry the matching "Parse aborted: ..." message and the deepest-failure
+    /// have the matching "Parse aborted: ..." message and the deepest-failure
     /// position so callers still get a "how far did we get" hint.
     /// </summary>
     public static ParseResult Aborted(ParseOutcome outcome, int errorCharIndex, string message, string input, Rule grammar)

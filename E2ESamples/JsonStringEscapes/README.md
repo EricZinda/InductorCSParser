@@ -26,7 +26,7 @@ already reflect the post-0000a grammar.
 ## Why this parser
 
 We went looking for real code that has to deal with **lone surrogates**, and
-JSON string escapes are where that problem actually bites people. A JSON
+JSON string escapes are where that problem actually hurts people. A JSON
 `\uXXXX` escape can name any UTF-16 code unit, including the surrogate halves
 `U+D800..U+DFFF`. A character outside the Basic Multilingual Plane is written
 as two escapes, a leading surrogate then a trailing one. When a `\uXXXX`
@@ -114,7 +114,7 @@ Second, where the natural grammar *does* reject (an unterminated string, a
 bad escape letter, a raw control character), the position it reports is
 already right, because InductorParser reports its deepest failure and that's
 a good pointer here, but every message is the mechanical fallback
-"unexpected 'x'". A recognizer with a caret, not a diagnostic. This is the
+"Unexpected 'x' at line L, column C". A recognizer with a caret, not a diagnostic. This is the
 same finding the Pep508 sample reached.
 
 Two different gaps, then. The surrogate errors need new *rules* (the grammar

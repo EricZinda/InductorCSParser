@@ -21,24 +21,24 @@ public class Primer2Examples
     private static (Rule config, Rule section, Rule keyValue, Rule key,
                     Rule value, Rule integerValue) BuildGrammar()
     {
-        var lineEndRunes = TokenSet.LineTerminators;
+        var lineTerminators = TokenSet.LineTerminators;
         // Every single-rune whitespace, line terminators included, for
         // NoneOf stop sets. TokenSet.InlineWhitespace is intra-line only,
-        // so unioning with lineEndRunes restores "any whitespace rune."
-        var anySpaceRunes = TokenSet.InlineWhitespace | lineEndRunes;
+        // so unioning with lineTerminators restores "any whitespace rune."
+        var anyWhitespace = TokenSet.InlineWhitespace | lineTerminators;
 
-        var name = OneOrMore(NoneOf(TokenSet.Runes("]") | anySpaceRunes)).As("name");
-        var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes)).As("key");
+        var name = OneOrMore(NoneOf(TokenSet.Single(']') | anyWhitespace)).As("name");
+        var key = OneOrMore(NoneOf(TokenSet.Single('=') | anyWhitespace)).As("key");
 
         var section = And(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
             .As("section");
 
         var quotedString = And(
             Token('"'),
-            ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
+            ZeroOrMore(NoneOf(TokenSet.Single('"') | lineTerminators)),
             Token('"')).As("quotedString");
 
-        var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\""))).As("bareWord");
+        var bareWord = OneOrMore(NoneOf(anyWhitespace | TokenSet.Single('"'))).As("bareWord");
 
         var floatValue = Float().As("float");
         var integerValue = Integer().As("integer");
@@ -61,7 +61,7 @@ public class Primer2Examples
     //   config.Parse("[server]\nhost = \"localhost\"\nport = 8080\n")
     // produces a tree with config / section(name=server) / two keyValue
     // children. The tree shows the [], =, and quote tokens are all gone
-    // (Delete flatten), and value carries one named typed child each.
+    // (Delete flatten), and value has one named typed child each.
     [Test]
     public void Tree_shape_matches_doc_after_flatten()
     {
@@ -81,7 +81,7 @@ public class Primer2Examples
         var hostKeyValue = root.Children[1];
         Assert.That(hostKeyValue.Is(keyValue), Is.True);
         Assert.That(hostKeyValue.Children[0].ToString(), Is.EqualTo("host"));
-        // value's typed child is a quotedString carrying just the body.
+        // value's typed child is a quotedString holding just the body.
         var hostValue = hostKeyValue.Children[1];
         Assert.That(hostValue.Children[0].ToString(), Is.EqualTo("localhost"));
 
@@ -185,11 +185,11 @@ public class Primer2Examples
         Assert.That(flattened.All(s => s is Symbol), Is.True);
     }
 
-    // primer2.md "When the parse fails": the doc claims that
+    // primerFailure.md opening example: the doc claims that
     //   config.Parse("[server]\nport oops\n")
-    // fails at "line 1, column 5" with an error message that surfaces
-    // somewhere in the parse. (Language Server Protocol: 0-based line means
-    // line 1 in the doc corresponds to ErrorLine == 1.)
+    // reports "Unexpected 'o' at line 2, column 6." and that ErrorLine /
+    // ErrorCharColumn hold the zero-based Language Server Protocol
+    // values (line 1, column 5).
     [Test]
     public void Parse_failure_reports_line_and_column()
     {
@@ -200,32 +200,32 @@ public class Primer2Examples
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorLine, Is.EqualTo(1),
             "Second line of input is line 1 in Language Server Protocol-style 0-based lines");
-        Assert.That(result.ErrorColumn, Is.EqualTo(5),
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(5),
             "The space-then-'o' fails where the '=' should be at col 5");
-        Assert.That(result.ErrorMessage, Is.Not.Empty);
+        Assert.That(result.ErrorMessage, Is.EqualTo("Unexpected 'o' at line 2, column 6."));
     }
 
-    // primer2.md "To upgrade it, attach .WithError(...) to the rule
-    // that's most likely to be where the user went wrong". Re-runs the
-    // same input with WithError and asserts the custom message surfaces.
+    // primerFailure.md "attach .WithError(...) to the rule that's most
+    // likely to be where the user went wrong". Re-runs the same input
+    // with WithError and asserts the custom message surfaces.
     [Test]
     public void WithError_message_surfaces_on_missing_equals()
     {
-        var lineEndRunes = TokenSet.LineTerminators;
-        var anySpaceRunes = TokenSet.InlineWhitespace | lineEndRunes;
+        var lineTerminators = TokenSet.LineTerminators;
+        var anyWhitespace = TokenSet.InlineWhitespace | lineTerminators;
 
-        var name = OneOrMore(NoneOf(TokenSet.Runes("]") | anySpaceRunes)).As("name");
-        var key = OneOrMore(NoneOf(TokenSet.Runes("=") | anySpaceRunes)).As("key");
+        var name = OneOrMore(NoneOf(TokenSet.Single(']') | anyWhitespace)).As("name");
+        var key = OneOrMore(NoneOf(TokenSet.Single('=') | anyWhitespace)).As("key");
 
         var section = And(Token('['), name, Token(']'), Optional(InlineWhitespace()), EndOfLine())
             .As("section");
 
         var quotedString = And(
             Token('"'),
-            ZeroOrMore(NoneOf(TokenSet.Runes("\"") | lineEndRunes)),
+            ZeroOrMore(NoneOf(TokenSet.Single('"') | lineTerminators)),
             Token('"')).As("quotedString");
 
-        var bareWord = OneOrMore(NoneOf(anySpaceRunes | TokenSet.Runes("\""))).As("bareWord");
+        var bareWord = OneOrMore(NoneOf(anyWhitespace | TokenSet.Single('"'))).As("bareWord");
 
         var value = Or(
             Float().As("float"),
@@ -251,13 +251,15 @@ public class Primer2Examples
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage,
-            Is.EqualTo("Expected '=' after the setting name"));
+            Is.EqualTo("Expected '=' after the setting name at line 2, column 6."));
     }
 
-    // primer2.md "ParseOptions carries a set of templates with {name}-
-    // style placeholders". The doc swaps the catch-all default messages
-    // for French versions and shows the resulting ErrorMessage. Verifies
-    // both the rendered output and the placeholder substitution.
+    // primerFailure.md "suppose you want the catch-all rendered in
+    // French": the doc swaps the default messages for French templates
+    // and claims the output is
+    //   "Erreur à la ligne 2, colonne 6: caractère 'o' inattendu."
+    // The template string matches the doc's exactly (accents built from
+    // the UnicodeExamples constants so source encoding can't drift it).
     [Test]
     public void Templates_render_French_default_message()
     {
@@ -265,7 +267,7 @@ public class Primer2Examples
 
         var options = new ParseOptions
         {
-            PositionalErrorTemplate = $"Erreur {UnicodeExamples.LatinSmallAWithGraveGrapheme} la position {{charIndex}}: caract{UnicodeExamples.LatinSmallEWithGraveGrapheme}re '{{character}}' inattendu.",
+            PositionalErrorTemplate = $"Erreur {UnicodeExamples.LatinSmallAWithGraveGrapheme} la ligne {{lineNumber}}, colonne {{tokenColumnNumber}}: caract{UnicodeExamples.LatinSmallEWithGraveGrapheme}re '{{character}}' inattendu.",
             EndOfInputErrorTemplate = $"Fin d'entr{UnicodeExamples.LatinEAcutePrecomposedGrapheme}e inattendue.",
         };
 
@@ -273,7 +275,7 @@ public class Primer2Examples
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.ErrorMessage,
-            Is.EqualTo($"Erreur {UnicodeExamples.LatinSmallAWithGraveGrapheme} la position 14: caract{UnicodeExamples.LatinSmallEWithGraveGrapheme}re 'o' inattendu."));
+            Is.EqualTo($"Erreur {UnicodeExamples.LatinSmallAWithGraveGrapheme} la ligne 2, colonne 6: caract{UnicodeExamples.LatinSmallEWithGraveGrapheme}re 'o' inattendu."));
     }
 
     // primer2.md "Unicode and where the error actually is". The doc claims
@@ -282,7 +284,7 @@ public class Primer2Examples
     //   ErrorCharIndex      == 16 (UTF-16 code units)
     //   ErrorTokenIndex  == 9  (graphemes)
     //   ErrorLine           == 1
-    //   ErrorColumn         == 5  (UTF-16 chars, Language Server Protocol)
+    //   ErrorCharColumn     == 5  (UTF-16 chars, Language Server Protocol)
     [Test]
     public void Family_emoji_position_divergence_matches_doc()
     {
@@ -301,7 +303,7 @@ public class Primer2Examples
         Assert.That(result.ErrorTokenIndex, Is.EqualTo(9),
             "1 grapheme for family + '[' + ']' + '\\n' + 4 graphemes 'port' + ' ' = 9");
         Assert.That(result.ErrorLine, Is.EqualTo(1));
-        Assert.That(result.ErrorColumn, Is.EqualTo(5));
+        Assert.That(result.ErrorCharColumn, Is.EqualTo(5));
     }
 
     // primer2.md "you might want to disallow duplicate section names":
@@ -327,9 +329,36 @@ public class Primer2Examples
         }
 
         Assert.That(offending, Is.Not.Null);
-        // "Line 4" in the doc's 1-based human form is line 3 in the 0-based
-        // Language Server Protocol convention.
-        int humanLine = offending!.SourceRange!.Value.Start.Line + 1;
+        // LineNumber is the one-based human line. Start.Line is 3 in the
+        // zero-based Language Server Protocol convention.
+        int humanLine = offending!.SourceRange!.Value.Start.LineNumber;
         Assert.That(humanLine, Is.EqualTo(4));
+    }
+
+    // primer2.md "draw a compiler-style underline": the index-based line
+    // extraction (CharIndex - Column for the start, TokenSet.IsLineTerminator to
+    // the end) and the LineNumber / Column caret math. Uses CRLF endings to prove
+    // the extraction doesn't depend on '\n' the way the old sourceText.Split('\n')
+    // version did.
+    [Test]
+    public void Out_of_range_underline_extracts_the_line_by_index()
+    {
+        var (config, section, keyValue, _, _, _) = BuildGrammar();
+
+        string sourceText = "[server]\r\nport = 99999\r\n";
+        var result = config.Parse(sourceText);
+        Assert.That(result.Success, Is.True, result.ErrorMessage);
+
+        var value = FindSetting(result.Tree!, section, keyValue, "server", "port");
+        var typed = value!.Children[0];
+        var range = typed.SourceRange!.Value;
+        string offendingLine = range.SourceLine();
+
+        // A sourceText.Split('\n') would leave a trailing '\r'. SourceLine stops
+        // at the CR, so the extracted line is clean even with CRLF endings.
+        Assert.That(offendingLine, Is.EqualTo("port = 99999"));
+        Assert.That(range.Start.LineNumber, Is.EqualTo(2));
+        Assert.That(range.Start.CharColumn, Is.EqualTo(7));                    // "port = ".Length
+        Assert.That(range.End.CharColumn - range.Start.CharColumn, Is.EqualTo(5)); // "99999".Length
     }
 }
