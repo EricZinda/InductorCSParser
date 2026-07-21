@@ -812,7 +812,7 @@ public class BetweenInclusiveRuleTests
     [Test]
     public void BetweenInclusive_scanner_shape_indic_conjunct_agrees_with_unoptimized_path()
     {
-        // Devanagari ka + virama + ssa. UAX #29 rev. 39 (GB9c) keeps
+        // Devanagari ka + virama + ssa. UAX #29 rev. 43 (GB9c) keeps
         // these glued as one Indic conjunct cluster, and earlier revisions
         // break before the trailing consonant. .NET 8's StringInfo
         // currently uses the older rules, so the slow path treats this

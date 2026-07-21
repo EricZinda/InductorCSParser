@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
+using InductorParser.Lexing.Unicode;
 
 namespace InductorParser.Lexing;
 
@@ -18,9 +19,9 @@ namespace InductorParser.Lexing;
 // the Lexer and post-parse callers (SourcePositionConverter) reuse the
 // same cache automatically. The CWT keeps the index alive only while
 // the string is alive, so a finished parse drops both together.
-// Keying on the string alone is valid because the segmenter choice
-// (GraphemeHelpers.Segmenter) freezes before the first index is built
-// and never changes afterward.
+// Keying on the string alone is valid because the implementation
+// choice (UnicodeEnvironment.Implementation) freezes before the first
+// index is built and never changes afterward.
 //
 // The cache is populated by walking the input one cluster at a time,
 // recording each cluster start in a bool[] sized to the input. bool[]
@@ -45,7 +46,7 @@ internal sealed class GraphemeClusterIndex
     private static readonly ConditionalWeakTable<string, GraphemeClusterIndex> _byInput = new();
 
     // Test-only: drop every cached index. Only called by
-    // GraphemeSegmentation.ResetForTesting, whose comment states the
+    // UnicodeEnvironment.ResetForTesting, whose comment states the
     // concurrency requirements.
     internal static void ResetCacheForTesting() => _byInput.Clear();
 
@@ -101,12 +102,16 @@ internal sealed class GraphemeClusterIndex
         _input = input;
         _isStart = new bool[input.Length + 1];
         if (input.Length > 0)
+        {
             _isStart[0] = true;
-        // EOF is always a boundary, but the walk never lands on it: it
-        // only marks cluster starts inside the input, never
-        // input.Length. The constructor marks it here so
-        // IsClusterStart(input.Length) returns true instead of false.
-        _isStart[input.Length] = true;
+            // For non-empty text, end-of-text is a UAX #29 boundary, but
+            // the walk never lands on it: it only marks cluster starts
+            // inside the input. Mark it here so
+            // IsClusterStart(input.Length) returns true. GB1/GB2 explicitly
+            // exempt empty text, so the sole slot stays false when length
+            // is zero.
+            _isStart[input.Length] = true;
+        }
     }
 
     // Get-or-create the cached index for `input`. Same string instance
@@ -152,9 +157,10 @@ internal sealed class GraphemeClusterIndex
     }
 
     // True iff `position` is a UAX #29 grapheme cluster boundary.
-    // Position 0 (when input is non-empty) and position input.Length
-    // are always boundaries. The scanner fast paths use it to reject
-    // mid-cluster IndexOf / IndexOfAny landings before they advance.
+    // For non-empty input, position 0 and position input.Length are
+    // boundaries. Empty input has no boundary, per the GB1/GB2 empty-text
+    // exception. The scanner fast paths use this to reject mid-cluster
+    // IndexOf / IndexOfAny landings before they advance.
     public bool IsClusterStart(int position)
     {
         if (position < 0 || position > _input.Length) return false;
@@ -168,8 +174,9 @@ internal sealed class GraphemeClusterIndex
     //
     // A cluster counts only once its end boundary is at or before
     // charIndex. Those end boundaries are the cluster starts past
-    // position 0 plus the always-marked input.Length boundary, so the
-    // count is the number of true _isStart entries in [1, charIndex].
+    // position 0 plus the marked input.Length boundary for non-empty
+    // text, so the count is the number of true _isStart entries in
+    // [1, charIndex].
     // When charIndex sits inside a multi-char cluster, that range stops
     // short of the cluster's own end, so the cluster the char belongs
     // to is left out of the count.

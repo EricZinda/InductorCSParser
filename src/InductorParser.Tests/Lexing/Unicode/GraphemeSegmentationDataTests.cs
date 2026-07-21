@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using InductorParser.Lexing;
+using InductorParser.Lexing.Unicode;
 using NUnit.Framework;
 
 namespace InductorParser.Tests;
@@ -120,13 +121,78 @@ public class GraphemeSegmentationDataTests
             + "Run Emit_regenerated_data_file_test to produce a fresh copy.");
     }
 
+    [Test]
+    public void Checked_in_data_file_matches_what_the_emitter_produces()
+    {
+        // Round-trip drift check, no network: rebuild the emitter's
+        // input from the checked-in table itself (GetBreakType per code
+        // point, run-length encoded exactly the way the regeneration
+        // tool does), run the emitter, and require the result to equal
+        // the checked-in file line for line. This catches a hand-edit
+        // to the table or the header prose that the emitter wouldn't
+        // produce, and an emitter change nobody copied into the
+        // checked-in file. The [Explicit] UCD test above answers a
+        // different question (does the table match unicode.org), this
+        // one answers whether the file matches the tool that claims to
+        // produce it.
+        var starts = new List<int>();
+        var values = new List<byte>();
+        byte previous = 0;
+        for (int codePoint = 0; codePoint <= 0x10FFFF; codePoint++)
+        {
+            byte value = (byte)GraphemeSegmentation.GetBreakType(codePoint);
+            if (codePoint == 0 || value != previous)
+            {
+                starts.Add(codePoint);
+                values.Add(value);
+            }
+            previous = value;
+        }
+
+        AssertEmitterReproducesCheckedInFile(
+            EmitDataFile(starts, values), "GraphemeSegmentation.Data.cs");
+    }
+
+    // Compares the emitter's in-memory output against the checked-in
+    // file, copied to the test output directory by the csproj. Line
+    // splitting sidesteps line-ending differences between the emit
+    // (Environment.NewLine) and however git checked the file out.
+    private static void AssertEmitterReproducesCheckedInFile(string emitted, string fileName)
+    {
+        string path = Path.Combine(
+            TestContext.CurrentContext.TestDirectory, "CheckedInData", fileName);
+        Assert.That(File.Exists(path), Is.True,
+            $"{fileName} was not copied to the test output directory (see the csproj)");
+
+        string[] emittedLines = emitted
+            .Replace("\r\n", "\n").TrimEnd('\n').Split('\n');
+        string[] checkedInLines = File.ReadAllLines(path);
+
+        int shared = Math.Min(emittedLines.Length, checkedInLines.Length);
+        for (int index = 0; index < shared; index++)
+        {
+            if (emittedLines[index] != checkedInLines[index])
+            {
+                Assert.Fail(
+                    $"{fileName} drifted from the emitter at line {index + 1}.\n"
+                    + $"  checked in: {checkedInLines[index]}\n"
+                    + $"  emitter:    {emittedLines[index]}\n"
+                    + "Run Emit_regenerated_data_file_test and copy the result over the "
+                    + "checked-in file, or update the emitter to match a deliberate edit.");
+            }
+        }
+        Assert.That(emittedLines.Length, Is.EqualTo(checkedInLines.Length),
+            $"{fileName}: line count differs from the emitter's output");
+    }
+
     // Regeneration tool, deliberately not discoverable as a test: even
     // an [Explicit] test runs when a name or category filter selects
     // it, and this one overwrites nothing itself but shouldn't burn
     // network and disk by accident. To regenerate
     // GraphemeSegmentation.Data.cs, restore the attribute below, run
     // this method, and copy the emitted file over
-    // src/InductorParser/Lexing/GraphemeSegmentation.Data.cs. The body
+    // src/InductorParser/Lexing/Unicode/GraphemeSegmentation.Data.cs.
+    // The body
     // stays compiled so it can't rot.
     // [Test, Explicit("Fetches the UCD files and writes a regenerated GraphemeSegmentation.Data.cs to the temp directory.")]
     public async Task Emit_regenerated_data_file_test()
@@ -244,10 +310,9 @@ public class GraphemeSegmentationDataTests
         "section says the Grapheme_Cluster_Break assignments \"are explicitly",
         "listed in the corresponding data file\" (GraphemeBreakProperty.txt)",
         "and that \"the values in that file are the normative property values\",",
-        "and its boundary-rules section says the Extended_Pictographic values",
-        "used by rule GB11 \"are provided as a part of the Emoji data\"",
-        "(emoji-data.txt). See",
-        "https://www.unicode.org/reports/tr29/tr29-35.html#Grapheme_Cluster_Break_Property_Values.",
+        "and the Extended_Pictographic property rule GB11 uses is defined by",
+        "the emoji data files (emoji-data.txt, per UTS #51). See",
+        "https://www.unicode.org/reports/tr29/tr29-41.html#Grapheme_Cluster_Break_Property_Values.",
         "Everything neither file lists defaults to Other, per the @missing",
         "declaration in GraphemeBreakProperty.txt's own header (it assigns",
         "Other to the whole code point range up front, and the listed",
@@ -262,8 +327,8 @@ public class GraphemeSegmentationDataTests
         "GraphemeSegmentation.GetBreakType does the binary search.",
         "",
         "To verify against the UCD files, run the [Explicit] test in",
-        "InductorParser.Tests/Lexing/GraphemeSegmentationDataTests.cs. To",
-        "regenerate, restore the commented-out [Test] attribute on",
+        "InductorParser.Tests/Lexing/Unicode/GraphemeSegmentationDataTests.cs.",
+        "To regenerate, restore the commented-out [Test] attribute on",
         "Emit_regenerated_data_file_test there and run it.",
         "Upgrading the Unicode version means regenerating this file from the",
         "newer UCD, teaching the processor any new rules (GB9c arrived in",
@@ -283,7 +348,7 @@ public class GraphemeSegmentationDataTests
         builder.AppendLine();
         builder.AppendLine("using System;");
         builder.AppendLine();
-        builder.AppendLine("namespace InductorParser.Lexing;");
+        builder.AppendLine("namespace InductorParser.Lexing.Unicode;");
         builder.AppendLine();
         builder.AppendLine("internal static partial class GraphemeSegmentation");
         builder.AppendLine("{");

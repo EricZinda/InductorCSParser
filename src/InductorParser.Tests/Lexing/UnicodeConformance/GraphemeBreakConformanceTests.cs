@@ -61,7 +61,7 @@ namespace InductorParser.Tests.Lexing.UnicodeConformance;
 // either reflect a rule the segmenter doesn't implement yet (GB9c is
 // the current known one) or a regression in the segmenter.
 [TestFixture]
-[Explicit("UAX #29 conformance suite. ~10,000 cases total; opt in via dotnet test --filter TestCategory=UnicodeConformance.")]
+[Explicit("UAX #29 conformance suite. ~16,600 cases total; opt in via dotnet test --filter TestCategory=UnicodeConformance.")]
 [Category("UnicodeConformance")]
 public class GraphemeBreakConformanceTests
 {
@@ -70,10 +70,10 @@ public class GraphemeBreakConformanceTests
 
     // Lines in GraphemeBreakTest-15.1.0.txt that test UAX #29 rule GB9c
     // (Indic Conjunct Cluster), introduced in revision 43 alongside
-    // Unicode 15.1. The bundled segmenter implements revision 35 at
+    // Unicode 15.1. The bundled segmenter implements revision 41 at
     // Unicode 15.0, deliberately matching .NET 8's StringInfo so the
     // differential tests in GraphemeSegmentationTests can compare the
-    // two exactly, and revision 35 breaks these clusters differently
+    // two exactly, and revision 41 breaks these clusters differently
     // than the 15.1 test data expects. Adding GB9c to the segmenter
     // (part of a Unicode version bump, see GraphemeSegmentation.Data.cs)
     // drops this skip set and the conformance test will start asserting
@@ -281,7 +281,8 @@ public class GraphemeBreakConformanceTests
         {
             Assert.Ignore(
                 $"UAX #29 GB9c (Indic Conjunct Cluster) case not implemented by .NET 8 StringInfo. " +
-                $"Will pass once a vendored UAX #29 implementation replaces StringInfo. " +
+                $"Intentionally skipped while segmentation is locked to .NET 8 / Unicode 15.0; " +
+                $"remove this skip during a Unicode 15.1+ upgrade that implements GB9c. " +
                 $"Source: {testCase.RawLine}");
             return true;
         }

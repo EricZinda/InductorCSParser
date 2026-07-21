@@ -268,11 +268,13 @@ public sealed class ParseOptions
     }
 
     private string _malformedInputTemplate =
-        "Malformed input at line {lineNumber}, column {tokenColumnNumber}: '{character}' isn't valid Unicode and can't be normalized.";
+        "Malformed input at line {lineNumber}, column {tokenColumnNumber}: '{character}' can't be normalized.";
     /// <summary>
     /// Template for the message when the input can't be normalized to the
-    /// grammar's normalization form because it isn't well-formed Unicode (an
-    /// unpaired UTF-16 surrogate, or U+FFFE). The parse returns
+    /// grammar's normalization form: an unpaired UTF-16 surrogate (which is
+    /// ill-formed UTF-16), or U+FFFE (a noncharacter .NET's string.Normalize
+    /// rejects, and the parser rejects the same way on every runtime). The
+    /// parse returns
     /// <see cref="ParseOutcome.MalformedInput"/> with this message instead
     /// of letting .NET's string.Normalize throw an ArgumentException whose text
     /// the app can't control. See <see cref="PositionalErrorTemplate"/> for the

@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.Text;
+using InductorParser.Lexing.Unicode;
 
 namespace InductorParser.Lexing;
 
@@ -23,7 +24,7 @@ namespace InductorParser.Lexing;
 //     the chunk-since-the-last-verified-boundary matches the next
 //     portion of the normalized string. The check fails when the
 //     conversions of adjacent original graphemes merge into one
-//     grapheme, which in Unicode 16 only Korean jamo sequences do
+//     grapheme, which only Korean jamo sequences are known to do
 //     (compatibility and halfwidth forms). The chunk then absorbs
 //     the next grapheme and the check is tried again. A lone
 //     grapheme that expands (the fi ligature becoming "fi", Thai
@@ -31,8 +32,8 @@ namespace InductorParser.Lexing;
 //     and never needs absorption. The check is general: it catches
 //     any drift between the per-grapheme walk and the normalized
 //     string, so correctness doesn't depend on which script
-//     triggered it. Korean jamo being the only merge case in
-//     Unicode 16 just keeps the absorbed chunks small. See
+//     triggered it. Korean jamo being the only known merge case
+//     just keeps the absorbed chunks small. See
 //     docs/MappingPositionsAfterNormalization.md for why this
 //     per-boundary check is correct.
 //
@@ -133,7 +134,7 @@ internal static class NormalizedPositionMap
             origPos += graphemeLength;
 
             string chunk = original[lastSafeOrigPos..origPos];
-            string chunkNormalized = chunk.Normalize(form);
+            string chunkNormalized = UnicodeNormalization.Normalize(chunk, form);
 
             if (normPos + chunkNormalized.Length <= normalized.Length
                 && string.CompareOrdinal(normalized, normPos, chunkNormalized, 0, chunkNormalized.Length) == 0)

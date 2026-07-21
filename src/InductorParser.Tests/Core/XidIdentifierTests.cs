@@ -235,10 +235,15 @@ public class XidIdentifierTests
         Assert.That(syllableResult.Tree!.ToString(), Is.EqualTo(syllables));
 
         // Same word in NFD (eight conjoining jamo), derived from the
-        // Canary-protected constant so the decomposition can't drift.
-        // Default-FormC normalization composes it back to the three
-        // syllables before the identifier rules run, so it still matches.
-        var decomposedJamo = syllables.Normalize(System.Text.NormalizationForm.FormD);
+        // Canary-protected constant through NormalizationHelpers, which
+        // resolves to whichever implementation the process-wide setting
+        // picked. Parse resolves to that same choice, so the derived
+        // input and the parse below always agree, on every runtime this
+        // test syncs to. Default-FormC normalization composes it back
+        // to the three syllables before the identifier rules run, so it
+        // still matches.
+        var decomposedJamo = NormalizationHelpers.Normalize(
+            syllables, System.Text.NormalizationForm.FormD);
         Assert.That(Identifier().Parse(decomposedJamo).Success, Is.True,
             "decomposed conjoining jamo recompose to syllables under FormC");
     }
@@ -359,17 +364,18 @@ public class XidIdentifierTests
         // That split is sound only if those later runes are all XID_Continue.
         // UAX #31 Section 5.1.3 "Identifier Closure Under Normalization"
         // guarantees exactly that. This verifies the guarantee against the
-        // runtime's actual Unicode data, so Identifier can rely on it without
-        // re-checking ~130K code points on every grammar build. The comment
-        // in Rules.Identifier references this test by name.
+        // Unicode data of the normalizer Identifier actually uses on this
+        // runtime, so Identifier can rely on it without re-checking ~130K
+        // code points on every grammar build. The comment in
+        // Rules.Identifier references this test by name.
         var continueSet = TokenSet.XidContinue;
         int multiGraphemeStarts = 0;
         foreach (int rune in TokenSet.XidStart.EnumerateRunes())
         {
             string entry = char.ConvertFromUtf32(rune);
-            if (entry.IsNormalized(form)) continue;
+            if (NormalizationHelpers.IsNormalized(entry, form)) continue;
             string normalized;
-            try { normalized = entry.Normalize(form); }
+            try { normalized = NormalizationHelpers.Normalize(entry, form); }
             catch (ArgumentException) { continue; }
             if (GraphemeHelpers.Count(normalized) <= 1) continue;
             multiGraphemeStarts++;
@@ -650,7 +656,15 @@ public class XidIdentifierTests
         var exception = Assert.Throws<InvalidOperationException>(() =>
             Identifier(extraBodyRunes: TokenSet.Single(0x2260)).Compile(form));
         Assert.That(exception!.Message, Does.Contain("extraBodyRunes"));
-        Assert.That(exception.Message, Does.Contain("="));
+
+        // Ordinal Contains rather than Does.Contain: Unity's bundled
+        // NUnit resolves Does.Contain through a culture-sensitive
+        // IndexOf, and Mono's collation misses the bare "=" in a
+        // message where "=" also appears with the combining overlay
+        // attached. The char overload of string.Contains is always
+        // ordinal, so it reports the same answer on every runtime.
+        Assert.That(exception.Message.Contains('='), Is.True,
+            "the message should show the offending piece");
 
         // The decomposed cluster renders identically to the composed
         // character ("≠" becomes "≠"), so the message spells the
@@ -782,16 +796,20 @@ public class XidIdentifierTests
             $"expected at least one XID entry to change under {form}");
     }
 
-    // Normalizes one spec-set rune for the closure sweep above. Returns
-    // false for form-stable runes and for the ones Normalize rejects
-    // (unpaired surrogates can't appear here, but the runtime also
-    // rejects a few unassigned code points).
+    // Normalizes one spec-set rune for the closure sweep above, through
+    // NormalizationHelpers, which resolves to the same process-wide
+    // implementation Identifier itself uses, so the sweep verifies the
+    // closure property against whichever one this process picked.
+    // Returns false for form-stable runes and for the
+    // ones the normalizer rejects (unpaired surrogates can't appear
+    // here, but a runtime can also reject a few unassigned code
+    // points).
     private static bool TryCanonicalConversion(int rune, NormalizationForm form, out string normalized)
     {
         normalized = "";
         string entry = char.ConvertFromUtf32(rune);
-        if (entry.IsNormalized(form)) return false;
-        try { normalized = entry.Normalize(form); }
+        if (NormalizationHelpers.IsNormalized(entry, form)) return false;
+        try { normalized = NormalizationHelpers.Normalize(entry, form); }
         catch (ArgumentException) { return false; }
         return true;
     }

@@ -39,7 +39,7 @@ public class GraphemeClusterIndexTests
 
         for (int i = 0; i <= input.Length; i++)
         {
-            bool expected = asSet.Contains(i) && (input.Length > 0 || i == 0);
+            bool expected = input.Length > 0 && asSet.Contains(i);
             Assert.That(index.IsClusterStart(i), Is.EqualTo(expected),
                 $"IsClusterStart({i}) for input length {input.Length}");
         }
@@ -77,9 +77,17 @@ public class GraphemeClusterIndexTests
     {
         AssertMatchesReference(string.Empty);
         var index = GraphemeClusterIndex.For(string.Empty);
-        Assert.That(index.IsClusterStart(0), Is.True, "EOF is always a boundary");
         Assert.That(index.LengthAt(0), Is.EqualTo(0));
         Assert.That(index.CountClustersUpTo(0), Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Empty_input_has_no_UAX29_boundary()
+    {
+        // GB1 and GB2 break at the start and end of text unless the text
+        // is empty. Position zero is both start and end here, but the
+        // explicit empty-text exception means it isn't a boundary.
+        Assert.That(GraphemeClusterIndex.For(string.Empty).IsClusterStart(0), Is.False);
     }
 
     [Test]
@@ -132,7 +140,7 @@ public class GraphemeClusterIndexTests
     [Test]
     public void Indic_conjunct_matches_runtime()
     {
-        // क + virama + ष. UAX #29 rev. 39 (GB9c) keeps these glued as
+        // क + virama + ष. UAX #29 rev. 43 (GB9c) keeps these glued as
         // one cluster. Earlier revisions break before the trailing
         // consonant. Either way the index agrees with StringInfo,
         // because both walk the same enumerator. This test verifies that

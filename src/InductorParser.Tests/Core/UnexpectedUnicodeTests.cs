@@ -322,7 +322,7 @@ public class UnexpectedUnicodeTests
         // before the form-validation pass ever runs. Token and Literal
         // still defer to the form-validation pass, which is the right
         // shape for them: they accept any string content, and the
-        // string.Normalize call inside Compile is what trips on the
+        // ill-formed-text scan inside Compile is what rejects the
         // surrogate.
         var exception = Assert.Throws<ArgumentException>(() =>
             LiteralIgnoreAsciiCase(UnicodeExamples.HighSurrogateMinText + "x"));
@@ -332,18 +332,72 @@ public class UnexpectedUnicodeTests
     [Test]
     public void Multiple_surrogate_literals_under_default_Compile_aggregate_inner_exceptions()
     {
-        // Every literal-bearing rule that trips string.Normalize contributes
-        // one ArgumentException to the AggregateException. The grammar author
-        // sees a single multi-rule message in InvalidOperationException.Message
-        // and can walk InnerExceptions for the per-rule runtime cause.
-        // LiteralIgnoreAsciiCase isn't part of this aggregate because it
-        // rejects non-ASCII at construction, before Compile runs.
+        // Every literal-bearing rule whose text fails the ill-formed scan
+        // contributes one ArgumentException to the AggregateException. The
+        // grammar author sees a single multi-rule message in
+        // InvalidOperationException.Message and can walk InnerExceptions for
+        // the per-rule cause. LiteralIgnoreAsciiCase isn't part of this
+        // aggregate because it rejects non-ASCII at construction, before
+        // Compile runs.
         var rule = And(
             Token(UnicodeExamples.HighSurrogateMinText),
             Literal(UnicodeExamples.HighSurrogateMinText + "X"));
 
         var exception = Assert.Throws<InvalidOperationException>(() => rule.Compile());
         Assert.That(exception!.InnerException, Is.InstanceOf<AggregateException>());
+        var aggregate = (AggregateException)exception.InnerException!;
+        Assert.That(aggregate.InnerExceptions, Has.Count.EqualTo(2));
+        Assert.That(aggregate.InnerExceptions, Has.All.InstanceOf<ArgumentException>());
+    }
+
+    [Test]
+    public void Token_with_noncharacter_FFFE_under_default_Compile_throws_clear_error()
+    {
+        // U+FFFE is the other code unit the ill-formed scan rejects, next to
+        // unpaired surrogates. The scan runs inside Compile on every runtime,
+        // so a U+FFFE literal is reported the same way everywhere, including
+        // runtimes whose string.Normalize accepts it. The message names the
+        // offending code unit so the author can find it in text where it
+        // renders as nothing.
+        var rule = Token(UnicodeExamples.NoncharacterFFFEText);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => rule.Compile());
+        Assert.That(exception!.Message, Does.Contain("U+FFFE"),
+            "Compile error should name the offending code unit.");
+        Assert.That(exception.Message, Does.Contain("Compile(null)"),
+            "Compile error should suggest Compile(null) as the documented path.");
+        Assert.That(exception.InnerException, Is.InstanceOf<AggregateException>());
+        var aggregate = (AggregateException)exception.InnerException!;
+        Assert.That(aggregate.InnerExceptions, Has.Count.EqualTo(1));
+        Assert.That(aggregate.InnerExceptions[0], Is.InstanceOf<ArgumentException>());
+    }
+
+    [Test]
+    public void Literal_with_noncharacter_FFFE_under_default_Compile_throws_clear_error()
+    {
+        // Same shape as Token, applied to LiteralRule, mirroring the
+        // stray-surrogate pair of tests above.
+        var rule = Literal("a" + UnicodeExamples.NoncharacterFFFEText + "b");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => rule.Compile());
+        Assert.That(exception!.Message, Does.Contain("U+FFFE"));
+        Assert.That(exception.InnerException, Is.InstanceOf<AggregateException>());
+    }
+
+    [Test]
+    public void Surrogate_and_FFFE_literals_under_default_Compile_aggregate_inner_exceptions()
+    {
+        // Both flavors of ill-formed text in one grammar: each offender
+        // contributes its own ArgumentException, same as the two-surrogate
+        // aggregation above.
+        var rule = And(
+            Token(UnicodeExamples.HighSurrogateMinText),
+            Literal(UnicodeExamples.NoncharacterFFFEText + "X"));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => rule.Compile());
+        Assert.That(exception!.Message, Does.Contain("surrogate"));
+        Assert.That(exception.Message, Does.Contain("U+FFFE"));
+        Assert.That(exception.InnerException, Is.InstanceOf<AggregateException>());
         var aggregate = (AggregateException)exception.InnerException!;
         Assert.That(aggregate.InnerExceptions, Has.Count.EqualTo(2));
         Assert.That(aggregate.InnerExceptions, Has.All.InstanceOf<ArgumentException>());

@@ -23,7 +23,7 @@ if ! command -v dotnet >/dev/null 2>&1; then
     dotnet_command=dotnet.exe
 fi
 
-# The [Explicit] UnicodeConformance fixture expands to ~10,000 discovered
+# The [Explicit] UnicodeConformance fixtures expand to ~16,600 discovered
 # cases. They never run by default, but the console logger lists every one
 # as skipped, which buries the real summary. The logger reports skipped
 # tests at "warning" level, so minimal still prints them. Quiet drops them

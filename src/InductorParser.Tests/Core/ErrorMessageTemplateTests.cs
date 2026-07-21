@@ -344,7 +344,7 @@ public class ErrorMessageTemplateTests
         Assert.That(options.EndOfInputErrorTemplate,
             Is.EqualTo("Unexpected end of input at line {lineNumber}, column {tokenColumnNumber}."));
         Assert.That(options.MalformedInputTemplate,
-            Is.EqualTo("Malformed input at line {lineNumber}, column {tokenColumnNumber}: '{character}' isn't valid Unicode and can't be normalized."));
+            Is.EqualTo("Malformed input at line {lineNumber}, column {tokenColumnNumber}: '{character}' can't be normalized."));
         Assert.That(options.TimeoutAbortTemplate,
             Is.EqualTo("Parse aborted: timeout exceeded."));
         Assert.That(options.RuleCountLimitAbortTemplate,

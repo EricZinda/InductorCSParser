@@ -12,7 +12,7 @@ namespace InductorParser;
 /// </summary>
 /// <remarks>
 /// <see cref="Outcome"/> distinguishes "the grammar rejected the input"
-/// (GrammarMismatch) from "the input isn't valid Unicode" (MalformedInput)
+/// (GrammarMismatch) from "the input can't be normalized" (MalformedInput)
 /// from "a budget tripped" (Timeout, RuleCountLimitExceeded,
 /// DepthLimitExceeded, Canceled) so callers can show different messages to the
 /// user in each case.

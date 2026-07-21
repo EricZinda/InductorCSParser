@@ -70,17 +70,25 @@ namespace InductorParser.PlayModeTests
         }
 
         [Test]
-        public void Bundled_segmenter_is_active_under_il2cpp()
+        public void Bundled_unicode_implementations_are_active_under_il2cpp()
         {
-            // In the assembly Unity loads, GraphemeSegmenter.Automatic
-            // must mean the bundled segmenter, because Unity's runtimes
-            // ship a legacy StringInfo. The FirstClusterLength
-            // assertion is its own tripwire: that legacy StringInfo
-            // returns 1 for CRLF, so if Automatic wrongly picked
-            // Runtime here, this line fails before the enum check
-            // below.
+            // In the assembly Unity loads, UnicodeImplementation.Automatic
+            // must mean the bundled segmenter and normalizer, because
+            // Unity's runtimes ship a legacy StringInfo and a
+            // string.Normalize that misses mappings. Each behavior
+            // assertion is its own tripwire: the legacy StringInfo
+            // returns 1 for CRLF, and Mono leaves the fi ligature
+            // (U+FB01) unexpanded under FormKC, so if Automatic wrongly
+            // picked Runtime here, those lines fail before the enum
+            // check below. The ligature is built from its code point so
+            // no tooling can renormalize the source literal.
             Assert.That(GraphemeHelpers.FirstClusterLength("\r\nx".AsSpan()), Is.EqualTo(2));
-            Assert.That(GraphemeHelpers.ActiveSegmenter, Is.EqualTo(GraphemeSegmenter.Bundled));
+            string ligature = ((char)0xFB01).ToString();
+            Assert.That(
+                NormalizationHelpers.Normalize(ligature, NormalizationForm.FormKC),
+                Is.EqualTo("fi"));
+            Assert.That(UnicodeEnvironment.ActiveImplementation,
+                Is.EqualTo(UnicodeImplementation.Bundled));
         }
 
         [Test]

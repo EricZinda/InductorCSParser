@@ -12,10 +12,9 @@
 // section says the Grapheme_Cluster_Break assignments "are explicitly
 // listed in the corresponding data file" (GraphemeBreakProperty.txt)
 // and that "the values in that file are the normative property values",
-// and its boundary-rules section says the Extended_Pictographic values
-// used by rule GB11 "are provided as a part of the Emoji data"
-// (emoji-data.txt). See
-// https://www.unicode.org/reports/tr29/tr29-35.html#Grapheme_Cluster_Break_Property_Values.
+// and the Extended_Pictographic property rule GB11 uses is defined by
+// the emoji data files (emoji-data.txt, per UTS #51). See
+// https://www.unicode.org/reports/tr29/tr29-41.html#Grapheme_Cluster_Break_Property_Values.
 // Everything neither file lists defaults to Other, per the @missing
 // declaration in GraphemeBreakProperty.txt's own header (it assigns
 // Other to the whole code point range up front, and the listed
@@ -30,8 +29,8 @@
 // GraphemeSegmentation.GetBreakType does the binary search.
 //
 // To verify against the UCD files, run the [Explicit] test in
-// InductorParser.Tests/Lexing/GraphemeSegmentationDataTests.cs. To
-// regenerate, restore the commented-out [Test] attribute on
+// InductorParser.Tests/Lexing/Unicode/GraphemeSegmentationDataTests.cs.
+// To regenerate, restore the commented-out [Test] attribute on
 // Emit_regenerated_data_file_test there and run it.
 // Upgrading the Unicode version means regenerating this file from the
 // newer UCD, teaching the processor any new rules (GB9c arrived in
@@ -41,7 +40,7 @@
 
 using System;
 
-namespace InductorParser.Lexing;
+namespace InductorParser.Lexing.Unicode;
 
 internal static partial class GraphemeSegmentation
 {

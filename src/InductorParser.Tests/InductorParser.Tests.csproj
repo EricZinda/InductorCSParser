@@ -56,4 +56,18 @@
     <None Include="Lexing\UnicodeConformance\*.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- The checked-in generated Unicode data files, copied (not
+       compiled, they already compile inside InductorParser) so the
+       data-table fixtures can run the embedded emitter against the
+       checked-in tables and require the output to reproduce each file
+       line for line. That round-trip catches drift between a data
+       file and the generator that claims to produce it, with no
+       network. See Checked_in_data_file_matches_what_the_emitter_produces
+       in UnicodeNormalizationDataTests.cs and
+       GraphemeSegmentationDataTests.cs. -->
+  <ItemGroup>
+    <None Include="..\InductorParser\Lexing\Unicode\UnicodeNormalization.Data.cs" Link="CheckedInData\UnicodeNormalization.Data.cs" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\InductorParser\Lexing\Unicode\GraphemeSegmentation.Data.cs" Link="CheckedInData\GraphemeSegmentation.Data.cs" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

@@ -352,7 +352,9 @@ internal sealed class IdentifierRule : Rule
         string projected;
         try
         {
-            projected = entry.IsNormalized(form) ? entry : entry.Normalize(form);
+            projected = NormalizationHelpers.IsNormalized(entry, form)
+                ? entry
+                : NormalizationHelpers.Normalize(entry, form);
         }
         catch (ArgumentException) { return; }
         if (projected.Length == 0) return;
@@ -473,8 +475,8 @@ internal sealed class IdentifierRule : Rule
         converted = null;
         try
         {
-            if (entry.IsNormalized(form)) return false;
-            string normalized = entry.Normalize(form);
+            if (NormalizationHelpers.IsNormalized(entry, form)) return false;
+            string normalized = NormalizationHelpers.Normalize(entry, form);
             if (normalized.Length == 0) return false;
             converted = normalized;
             return true;

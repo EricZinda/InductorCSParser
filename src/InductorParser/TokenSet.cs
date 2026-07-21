@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using InductorParser.Lexing;
+using InductorParser.Lexing.Unicode;
 using InductorParser.Tracing;
 
 namespace InductorParser;
@@ -382,12 +383,12 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                     string normalized;
                     try
                     {
-                        if (runeString.IsNormalized(form))
+                        if (UnicodeNormalization.IsNormalized(runeString, form))
                         {
                             newIntervals.Add(new Interval(rune, rune));
                             continue;
                         }
-                        normalized = runeString.Normalize(form);
+                        normalized = UnicodeNormalization.Normalize(runeString, form);
                     }
                     catch (ArgumentException)
                     {
@@ -408,12 +409,12 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
                 string normalized;
                 try
                 {
-                    if (entry.IsNormalized(form))
+                    if (UnicodeNormalization.IsNormalized(entry, form))
                     {
                         newGraphemes.Add(entry);
                         continue;
                     }
-                    normalized = entry.Normalize(form);
+                    normalized = UnicodeNormalization.Normalize(entry, form);
                 }
                 catch (ArgumentException)
                 {
@@ -461,6 +462,13 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<
         (TokenSet Source, NormalizationForm Form), CachedProjection> _normalizedCache = new();
+
+    // Test-only, called by UnicodeEnvironment.ResetForTesting: the
+    // cached projections were computed by whichever normalizer was
+    // active, so switching implementations between tests has to drop
+    // them or a set projected under the old implementation would
+    // satisfy a lookup under the new one.
+    internal static void ResetNormalizedCacheForTesting() => _normalizedCache.Clear();
 
     // Helper: place `normalized` into the right bucket (intervals for
     // single-rune, graphemes for multi-rune-but-single-grapheme), or report
@@ -573,8 +581,8 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
         converted = null;
         try
         {
-            if (entry.IsNormalized(form)) return false;
-            converted = entry.Normalize(form);
+            if (UnicodeNormalization.IsNormalized(entry, form)) return false;
+            converted = UnicodeNormalization.Normalize(entry, form);
             return true;
         }
         catch (ArgumentException)
@@ -1605,9 +1613,9 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     // matter which segmenter the process-wide setting picks, even a
     // legacy pre-UAX-#29 StringInfo that reads CRLF as two clusters. It
     // also keeps TokenSet's static initializer from resolving and
-    // freezing GraphemeHelpers.Segmenter before user code gets a chance
-    // to set it. The entry itself is known good: CRLF is one grapheme
-    // cluster under UAX #29 rule GB3.
+    // freezing UnicodeEnvironment.Implementation before user code gets
+    // a chance to set it. The entry itself is known good: CRLF is one
+    // grapheme cluster under UAX #29 rule GB3.
     private static TokenSet CrlfGraphemeSet() =>
         new TokenSet(Array.Empty<Interval>(), new[] { "\r\n" });
 

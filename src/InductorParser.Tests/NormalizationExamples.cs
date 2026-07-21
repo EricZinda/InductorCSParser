@@ -424,9 +424,9 @@ public static class NormalizationExamples
         "a" + new string((char)UnicodeExamples.CombiningGraveBelowRune, 31);
 
     // The full table. The NormalizationExamplesSelfCheck fixture below
-    // asserts each column equals string.Normalize(Source, form), so a
-    // typo here gets caught at test time rather than producing a
-    // passing-but-wrong assertion downstream.
+    // asserts each column equals what the parser's normalizer produces
+    // for (Source, form), so a typo here gets caught at test time
+    // rather than producing a passing-but-wrong assertion downstream.
     public static IReadOnlyList<NormalizationCase> All { get; } = new[]
     {
         new NormalizationCase(
@@ -645,12 +645,17 @@ public static class NormalizationExamples
 }
 
 // Self-check on the NormalizationExamples table itself: every
-// hand-written FormC/FormD/FormKC/FormKD column equals what the .NET
-// runtime's string.Normalize(form) actually produces. Catches typos
-// in the table before they pass-but-mislead any downstream test that
-// relies on those columns. Lives next to the table rather than with
-// the rule-behavior tests because what it verifies is a property of
-// the data, not of any rule.
+// hand-written FormC/FormD/FormKC/FormKD column equals what
+// NormalizationHelpers actually produces, resolved through the same
+// process-wide choice Compile and Parse use.
+// Catches typos in the table before they pass-but-mislead any
+// downstream test that relies on those columns. On CoreCLR the
+// normalizer resolves to the runtime's string.Normalize, so this
+// checks the table against .NET. On Unity it resolves to the bundled
+// UAX #15 normalizer, so the same rows double as an IL2CPP check of
+// the bundled tables. Lives next to the table rather than with the
+// rule-behavior tests because what it verifies is a property of the
+// data, not of any rule.
 [TestFixture]
 public class NormalizationExamplesSelfCheck
 {
@@ -663,21 +668,20 @@ public class NormalizationExamplesSelfCheck
         string actual;
         try
         {
-            actual = row.Source.Normalize(form);
+            actual = NormalizationHelpers.Normalize(row.Source, form);
         }
         catch (ArgumentException)
         {
-            // The lone-surrogate row's Source can't be passed to
-            // string.Normalize for any form (ArgumentException), so
-            // those four cases are recorded as Inconclusive rather
-            // than asserting against a column that's never reachable
-            // through the runtime.
+            // The lone-surrogate row's Source can't be normalized under
+            // any form (ArgumentException), so those four cases are
+            // recorded as Inconclusive rather than asserting against a
+            // column that's never reachable through the normalizer.
             Assert.Inconclusive("Source isn't normalizable under this form.");
             return;
         }
 
         Assert.That(actual, Is.EqualTo(expected),
             $"{row.Description} under {form}: table says \"{NormalizationExamples.Hex(expected)}\", " +
-            $"runtime says \"{NormalizationExamples.Hex(actual)}\".");
+            $"the normalizer says \"{NormalizationExamples.Hex(actual)}\".");
     }
 }

@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
 using InductorParser.Lexing;
+using InductorParser.Lexing.Unicode;
 using InductorParser.SyntaxTree;
 using InductorParser.Tracing;
 
@@ -1083,28 +1084,41 @@ public abstract class Rule
         string parseInput;
         if (normalizeInput.HasValue)
         {
+            // Input the normalizers reject can't proceed: an unpaired
+            // UTF-16 surrogate (ill-formed UTF-16), or U+FFFE (a
+            // noncharacter .NET's string.Normalize refuses, matched here
+            // so every runtime agrees). The parser scans
+            // for it directly rather than relying on the runtime's
+            // string.Normalize to throw, because not every runtime throws:
+            // .NET's does, but Unity's Mono returns the string unchanged,
+            // which would let ill-formed input flow on into the lexer. The
+            // scan turns it into a MalformedInput result positioned at the
+            // offending character, with a message the author can localize
+            // via ParseOptions.MalformedInputTemplate, so a non-English app
+            // reports it the same way it reports every other failure.
+            // Callers that deliberately want surrogate-bearing input as
+            // tokens opt out with Compile(null), which skips normalization
+            // and never runs the scan.
+            int scanBadIndex = UnicodeNormalization.FindFirstUnnormalizableIndex(input);
+            if (scanBadIndex >= 0)
+            {
+                string scanMessage = BuildMalformedInputMessage(scanBadIndex, input, options);
+                return ParseResult.MalformedInput(scanBadIndex, scanMessage, input, this);
+            }
             try
             {
-                parseInput = input.Normalize(normalizeInput.Value);
+                parseInput = UnicodeNormalization.Normalize(input, normalizeInput.Value);
             }
             catch (ArgumentException)
             {
-                // .NET's string.Normalize rejects input that isn't well-formed
-                // Unicode (an unpaired UTF-16 surrogate, or U+FFFE) by throwing
-                // ArgumentException whose message comes from the BCL in the
-                // runtime's culture, not the grammar author's. That's the one
-                // parse-time failure mode that would otherwise escape the
-                // ParseResult model. Turn it into a MalformedInput result
-                // positioned at the offending character, with a message the
-                // author can localize via ParseOptions.MalformedInputTemplate,
-                // so a non-English app reports it the same way it reports every
-                // other failure. Callers that deliberately want surrogate-bearing
-                // input as tokens opt out with Compile(null), which skips
-                // normalization and never reaches this catch.
-                int badIndex = FindFirstUnnormalizableIndex(input);
-                if (badIndex < 0) badIndex = 0;
-                string malformedMessage = BuildMalformedInputMessage(badIndex, input, options);
-                return ParseResult.MalformedInput(badIndex, malformedMessage, input, this);
+                // Backstop: the runtime rejected something the scan doesn't
+                // know about. The scan covers everything .NET's Normalize
+                // is known to throw on, so no input reaches this path on a
+                // known runtime. If one ever does, report MalformedInput at
+                // offset 0 rather than letting the exception escape the
+                // ParseResult model.
+                string malformedMessage = BuildMalformedInputMessage(0, input, options);
+                return ParseResult.MalformedInput(0, malformedMessage, input, this);
             }
         }
         else
@@ -1265,30 +1279,6 @@ public abstract class Rule
                     .GetLengthOfFirstExtendedGraphemeCluster(input.AsSpan(badIndex));
                 return DisplayEscape.Escape(input, badIndex, elementLength);
             }));
-    }
-
-    // Find the first index string.Normalize would reject: an unpaired UTF-16
-    // surrogate, or U+FFFE (the byte-swapped BOM .NET refuses to normalize).
-    // Valid surrogate pairs are skipped, so any surrogate we reach is
-    // genuinely unpaired. Returns -1 if it finds none. That shouldn't happen
-    // on the catch path (Normalize only throws when one is present), but the
-    // caller falls back to offset 0 if it does, rather than trusting the
-    // index baked into the BCL exception message (which is localized to the
-    // runtime's culture and would have to be string-scraped to read).
-    private static int FindFirstUnnormalizableIndex(string input)
-    {
-        for (int i = 0; i < input.Length; i++)
-        {
-            if (RuneHelpers.IsSurrogatePairAt(input, i))
-            {
-                i++;
-                continue;
-            }
-            char c = input[i];
-            if (char.IsSurrogate(c)) return i;
-            if (c == (char)0xFFFE) return i;
-        }
-        return -1;
     }
 
     // The position placeholders shared by every default template:
@@ -1612,12 +1602,15 @@ public abstract class Rule
     /// convert `text` to `form`. Returns the normalized text on success.
     /// </summary>
     /// <remarks>
-    /// On ArgumentException (in practice an unpaired surrogate, which
-    /// string.Normalize rejects regardless of which form was requested),
-    /// reports the failure to the reporter (which surfaces it as the thrown
-    /// exception's InnerException and records a matching offender), then
-    /// returns null. Callers that get a non-null result should replace
-    /// their stored expected text with it. This behavior makes
+    /// Text that can't be normalized (an unpaired surrogate, or U+FFFE,
+    /// the two things the rejection scan flags) is reported to the
+    /// reporter (which surfaces
+    /// it as the thrown exception's InnerException and records a matching
+    /// offender), and the method returns null. The scan runs before the
+    /// conversion because not every runtime's string.Normalize throws on
+    /// such text, and the catch stays as a backstop for anything a runtime
+    /// rejects beyond the scan. Callers that get a non-null result should
+    /// replace their stored expected text with it. This behavior makes
     /// the rule's match-time view canonically equivalent to the user's
     /// typed text under any form.
     /// </remarks>
@@ -1626,9 +1619,16 @@ public abstract class Rule
         NormalizationForm form,
         INormalizationReporter reporter)
     {
+        int badIndex = UnicodeNormalization.FindFirstUnnormalizableIndex(text);
+        if (badIndex >= 0)
+        {
+            reporter.ReportNormalizeFailure(rule, text,
+                UnicodeNormalization.CreateUnnormalizableTextException(text, badIndex));
+            return null;
+        }
         try
         {
-            return text.Normalize(form);
+            return UnicodeNormalization.Normalize(text, form);
         }
         catch (ArgumentException exception)
         {
@@ -1877,7 +1877,7 @@ public abstract class Rule
         {
             _failures.Add(failure);
             _offenders.Add((rule, original,
-                $"<string.Normalize rejected this literal: {failure.Message} " +
+                $"<this literal can't be normalized: {failure.Message} " +
                 $"This is usually an unpaired surrogate. Use Compile(null) to keep " +
                 $"surrogate-bearing literals as-is.>"));
         }

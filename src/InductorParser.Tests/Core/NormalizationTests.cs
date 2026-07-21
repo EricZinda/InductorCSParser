@@ -1385,7 +1385,7 @@ public class NormalizationTests
         // grapheme, the normalized one, so the offsets genuinely differ too.
         const int length = 20000;
         string original = string.Concat(Enumerable.Repeat("e\u0301", length));
-        string normalized = original.Normalize(NormalizationForm.FormC);
+        string normalized = NormalizationHelpers.Normalize(original, NormalizationForm.FormC);
         Assert.That(ReferenceEquals(original, normalized), Is.False,
             "non-NFC input must not take the reference-equal fast path, "
             + "or this test would prove nothing about the grapheme walker");
@@ -1427,7 +1427,8 @@ public class NormalizationTests
     private static void AssertTranslatorAgreesWithWholeString(
         string original, NormalizationForm form)
     {
-        string normalized = new string(original.Normalize(form).ToCharArray());
+        string normalized = new string(
+            NormalizationHelpers.Normalize(original, form).ToCharArray());
         for (int i = 0; i <= normalized.Length; i++)
         {
             int translatorAnswer = NormalizedPositionMap.TranslateToOriginal(
@@ -1449,10 +1450,14 @@ public class NormalizationTests
     // (no chunk-since-last-verified optimization), which makes the
     // implementation obviously correct at the cost of being O(N²).
     // It's only used as a reference in tests. The walker in
-    // NormalizedPositionMap has the linear-amortized version.
+    // NormalizedPositionMap has the linear-amortized version. The walk
+    // segments and normalizes through the parser's own helpers
+    // (GraphemeHelpers, NormalizationHelpers), so the reference and the
+    // walker under test always answer from the same implementations,
+    // on every runtime this test syncs to.
     private static int WholeStringPositionMap(string original, int normalizedIndex, NormalizationForm form)
     {
-        string normalized = original.Normalize(form);
+        string normalized = NormalizationHelpers.Normalize(original, form);
         if (normalizedIndex <= 0) return 0;
         if (normalizedIndex >= normalized.Length) return original.Length;
 
@@ -1460,11 +1465,11 @@ public class NormalizationTests
         int origPos = 0;
         while (origPos < original.Length)
         {
-            int step = StringInfo.GetNextTextElement(original, origPos).Length;
+            int step = GraphemeHelpers.FirstClusterLength(original.AsSpan(origPos));
             if (step <= 0) step = 1;
             origPos += step;
 
-            string prefixNormalized = original[..origPos].Normalize(form);
+            string prefixNormalized = NormalizationHelpers.Normalize(original[..origPos], form);
 
             // Safe boundary check: prefixNormalized must be an actual
             // prefix of the full normalized string (not just length-

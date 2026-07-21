@@ -838,9 +838,10 @@ public sealed class ParseOptions
         = "Unexpected end of input at line {lineNumber}, column {tokenColumnNumber}.";
 
     /// Template for the message when the input can't be normalized to the
-    /// grammar's normalization form because it isn't well-formed Unicode.
+    /// grammar's normalization form (an unpaired UTF-16 surrogate, or the
+    /// noncharacter U+FFFE).
     public string MalformedInputTemplate { get; set; }
-        = "Malformed input at line {lineNumber}, column {tokenColumnNumber}: '{character}' isn't valid Unicode and can't be normalized.";
+        = "Malformed input at line {lineNumber}, column {tokenColumnNumber}: '{character}' can't be normalized.";
 
     /// Templates for the default messages when a budget aborts the parse
     /// ("Parse aborted: timeout exceeded." and so on).

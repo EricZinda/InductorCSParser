@@ -44,7 +44,7 @@ namespace InductorParser.Lexing;
 /// char. In rune mode it is, but in grapheme mode a stray plus a
 /// following combining mark is one two-char token, per the UAX #29
 /// grapheme rules
-/// (https://www.unicode.org/reports/tr29/tr29-35.html#Grapheme_Cluster_Boundary_Rules).
+/// (https://www.unicode.org/reports/tr29/tr29-41.html#Grapheme_Cluster_Boundary_Rules).
 /// Read consumes the whole token either way.
 /// </para>
 /// </remarks>
