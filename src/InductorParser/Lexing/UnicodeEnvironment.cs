@@ -13,7 +13,7 @@ public static class UnicodeEnvironment
 {
     // What UnicodeImplementation.Automatic means in this build. The
     // csproj defines the symbol for the netstandard2.1 target only, so
-    // the assembly Unity loads defaults to the bundled implementations
+    // the assembly Unity loads defaults to the built-in implementations
     // and every other build defaults to the runtime's.
 #if INDUCTORPARSER_USE_BUNDLED_UNICODE
     private const bool AutomaticMeansBundled = true;
@@ -68,7 +68,7 @@ public static class UnicodeEnvironment
     /// <summary>
     /// Which Unicode implementation this process uses, for both
     /// segmentation and normalization. Defaults to
-    /// <see cref="UnicodeImplementation.Automatic"/>: the bundled
+    /// <see cref="UnicodeImplementation.Automatic"/>: the built-in
     /// implementations on Unity, the runtime's StringInfo and
     /// string.Normalize everywhere else. Set it once at startup,
     /// before building grammars or parsing. The first segmentation or

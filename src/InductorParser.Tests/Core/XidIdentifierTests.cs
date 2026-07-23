@@ -103,7 +103,7 @@ public class XidIdentifierTests
     public void Thai_identifier_with_sara_am_matches()
     {
         // Thai 'kam' is KO KAI (Lo) + SARA AM (also Lo, with grapheme
-        // cluster break property SpacingMark), which the lexer bundles
+        // cluster break property SpacingMark), which the lexer groups
         // into a single two-rune grapheme. Identifier accepts KO KAI as
         // Start and SARA AM as Continue inside the same grapheme.
         var word = UnicodeExamples.ThaiKamGrapheme;
@@ -171,9 +171,9 @@ public class XidIdentifierTests
     {
         // Hebrew 'shalom' with niqqud: SHIN + QAMATS + SHIN DOT + LAMED +
         // VAV + HOLAM + FINAL MEM. The vowel points are Mn combining marks
-        // (XID_Continue) that bundle with their base letters into four
+        // (XID_Continue) that combine with their base letters into four
         // graphemes. RTL plus combining marks in one word: the lexer's
-        // grapheme bundling and the identifier rules both have to handle
+        // grapheme grouping and the identifier rules both have to handle
         // the points mid-word.
         var word = UnicodeExamples.HebrewShalomWithNiqqudIdentifier;
         var result = Identifier().Parse(word);
@@ -657,7 +657,7 @@ public class XidIdentifierTests
             Identifier(extraBodyRunes: TokenSet.Single(0x2260)).Compile(form));
         Assert.That(exception!.Message, Does.Contain("extraBodyRunes"));
 
-        // Ordinal Contains rather than Does.Contain: Unity's bundled
+        // Ordinal Contains rather than Does.Contain: Unity's included
         // NUnit resolves Does.Contain through a culture-sensitive
         // IndexOf, and Mono's collation misses the bare "=" in a
         // message where "=" also appears with the combining overlay

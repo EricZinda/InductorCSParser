@@ -8,17 +8,21 @@ using NUnit.Framework;
 
 namespace InductorParser.Tests;
 
-// Tests for the bundled UAX #15 normalizer (UnicodeNormalization), in
+// Tests for the built-in UAX #15 normalizer (UnicodeNormalization), in
 // two layers, mirroring GraphemeSegmentationTests. The first layer
 // asserts expected normalization shapes directly, driving the
 // NormalizationExamples table plus named edge cases (composition
 // exclusions, composite shifts, Hangul arithmetic, the same-instance
-// return). The second layer is differential: the bundled normalizer
-// deliberately matches .NET 8's string.Normalize (ICU-backed, Unicode
-// 15.0-era data), so the runtime is an oracle this test project can
-// compare against on every string it can build. These tests run on
-// CoreCLR only (Lexing/ doesn't sync to Unity), which is exactly where
-// the oracle is valid.
+// return). The second layer is differential: the built-in normalizer
+// deliberately matches .NET 8's string.Normalize, so the runtime is an
+// oracle this test project can compare against on every string it can
+// build. string.Normalize hands the work to ICU (the Unicode library
+// the OS normally supplies), so the test project ships its own ICU
+// 72.1 (same Unicode 15.0 data as the built-in tables) and
+// GlobalizationOracleFixture refuses to run the suite on anything
+// else, keeping the oracle from drifting with the host. These tests
+// run on CoreCLR only (Lexing/ doesn't sync to Unity), which is
+// exactly where the oracle is valid.
 //
 // Non-ASCII text in this file comes from the canary-protected
 // UnicodeExamples corpus, the NormalizationExamples table, or is built
@@ -39,7 +43,7 @@ public class UnicodeNormalizationTests
     private static string DumpCodeUnits(string text) =>
         string.Join(" ", text.Select(codeUnit => $"U+{(int)codeUnit:X4}"));
 
-    // Compare the bundled implementation against the runtime oracle on
+    // Compare the built-in implementation against the runtime oracle on
     // one input, both output and throw behavior.
     private static void AssertNormalizesLikeRuntime(string text, NormalizationForm form, string label)
     {
@@ -55,11 +59,11 @@ public class UnicodeNormalizationTests
         if (runtimeError != null || bundledError != null)
         {
             Assert.That(bundledError, Is.Not.Null,
-                $"{label} ({form}): runtime threw ArgumentException, bundled returned "
+                $"{label} ({form}): runtime threw ArgumentException, built-in returned "
                 + $"{(bundledResult == null ? "<null>" : DumpCodeUnits(bundledResult))} "
                 + $"for {DumpCodeUnits(text)}");
             Assert.That(runtimeError, Is.Not.Null,
-                $"{label} ({form}): bundled threw ArgumentException, runtime returned "
+                $"{label} ({form}): built-in threw ArgumentException, runtime returned "
                 + $"{(runtimeResult == null ? "<null>" : DumpCodeUnits(runtimeResult))} "
                 + $"for {DumpCodeUnits(text)}");
             return;
@@ -68,14 +72,14 @@ public class UnicodeNormalizationTests
         if (!string.Equals(bundledResult, runtimeResult, StringComparison.Ordinal))
         {
             Assert.Fail(
-                $"{label} ({form}): bundled {DumpCodeUnits(bundledResult!)}, "
+                $"{label} ({form}): built-in {DumpCodeUnits(bundledResult!)}, "
                 + $"runtime {DumpCodeUnits(runtimeResult!)} for {DumpCodeUnits(text)}");
         }
     }
 
     // ----- Layer one: expected shapes -----
 
-    // Every row of the NormalizationExamples table, against the bundled
+    // Every row of the NormalizationExamples table, against the built-in
     // implementation directly. The lone-surrogate row throws instead of
     // projecting, matching .NET.
     [Test, TestCaseSource(typeof(NormalizationExamples), nameof(NormalizationExamples.RowFormPairs))]
@@ -266,7 +270,7 @@ public class UnicodeNormalizationTests
     {
         // .NET's string.Normalize rejects values outside the four
         // defined forms. The dispatcher validates before either
-        // implementation runs, so the bundled pipeline can't quietly
+        // implementation runs, so the built-in pipeline can't quietly
         // treat an unknown value as FormD. The defined values are 1, 2,
         // 5, and 6, so 0, 3, 4, and 7 sit inside and around them.
         foreach (int formValue in new[] { 0, 3, 4, 7, -1, 999 })
@@ -343,16 +347,15 @@ public class UnicodeNormalizationTests
     [Test]
     public void Ill_formed_text_throws_from_both_implementations()
     {
-        // Lone surrogate halves, a reversed pair, and U+FFFE. The
-        // bundled implementation matches .NET's throw behavior so the
-        // backstop catch in Rule.ParseRecursive means the same thing
-        // under both.
+        // Lone surrogate halves and a reversed pair. The built-in
+        // implementation matches .NET's throw behavior so the backstop
+        // catch in Rule.ParseRecursive means the same thing under
+        // both.
         string[] illFormed =
         {
             UnicodeExamples.HighSurrogateMinText,
             UnicodeExamples.LowSurrogateMaxText,
             UnicodeExamples.ReversedSurrogatePairText,
-            UnicodeExamples.NoncharacterFFFEText,
             "a" + UnicodeExamples.HighSurrogateMinText + "b",
         };
         foreach (string text in illFormed)
@@ -361,11 +364,35 @@ public class UnicodeNormalizationTests
             {
                 Assert.Throws<ArgumentException>(
                     () => UnicodeNormalization.NormalizeWithBundledImplementation(text, form),
-                    $"bundled accepted {DumpCodeUnits(text)} under {form}");
+                    $"built-in accepted {DumpCodeUnits(text)} under {form}");
                 Assert.Throws<ArgumentException>(
                     () => UnicodeNormalization.NormalizeWithRuntime(text, form),
                     $"runtime accepted {DumpCodeUnits(text)} under {form}");
             }
+        }
+    }
+
+    [Test]
+    public void Noncharacter_FFFE_throws_from_both_as_a_deliberate_runtime_quirk()
+    {
+        // U+FFFE is a noncharacter but still well-formed Unicode: a
+        // valid scalar value that pure UAX #15 normalizes to itself
+        // (Corrigendum #9 says noncharacters don't make text
+        // ill-formed). .NET's string.Normalize rejects exactly it and
+        // no other noncharacter, and the built-in implementation
+        // mirrors that quirk deliberately so behavior is identical on
+        // every runtime. This test records a compatibility choice, not
+        // a claim that U+FFFE is ill-formed.
+        foreach (NormalizationForm form in NormalizationExamples.AllForms)
+        {
+            Assert.Throws<ArgumentException>(
+                () => UnicodeNormalization.NormalizeWithBundledImplementation(
+                    UnicodeExamples.NoncharacterFFFEText, form),
+                $"built-in accepted U+FFFE under {form}");
+            Assert.Throws<ArgumentException>(
+                () => UnicodeNormalization.NormalizeWithRuntime(
+                    UnicodeExamples.NoncharacterFFFEText, form),
+                $"runtime accepted U+FFFE under {form}");
         }
     }
 

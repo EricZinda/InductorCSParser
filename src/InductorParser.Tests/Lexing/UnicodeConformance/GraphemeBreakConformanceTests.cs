@@ -70,7 +70,7 @@ public class GraphemeBreakConformanceTests
 
     // Lines in GraphemeBreakTest-15.1.0.txt that test UAX #29 rule GB9c
     // (Indic Conjunct Cluster), introduced in revision 43 alongside
-    // Unicode 15.1. The bundled segmenter implements revision 41 at
+    // Unicode 15.1. The built-in segmenter implements revision 41 at
     // Unicode 15.0, deliberately matching .NET 8's StringInfo so the
     // differential tests in GraphemeSegmentationTests can compare the
     // two exactly, and revision 41 breaks these clusters differently

@@ -194,9 +194,9 @@ Unity is the odd one out because the `StringInfo` in its Mono runtime (and in .N
 
 What's left to know:
 
-- The bundled segmenter is a deliberate match for .NET 8's, and the differential tests in [GraphemeSegmentationTests.cs](../src/InductorParser.Tests/Lexing/Unicode/GraphemeSegmentationTests.cs) hold the two equal. They only start disagreeing once a future runtime ships newer Unicode data, and catching the bundled one up is a manual step (the regeneration tooling lives in `GraphemeSegmentationDataTests.cs`).
-- The first known rule-level gap is Unicode 15.1's rule GB9c, which keeps Indic conjuncts (Devanagari क्षि, for example) together as one grapheme cluster where the 15.0 rules split them. As of mid-2026 .NET hasn't implemented GB9c either ([dotnet/runtime#111546](https://github.com/dotnet/runtime/issues/111546)), so the bundled segmenter and every current .NET runtime still agree. Environments that have moved to the newer rules (ICU 74 and later, browsers, Swift) segment those conjuncts differently, so a grammar that tokenizes Indic text will see different token boundaries here than in those environments.
-- A net8.0 server that must agree on parse trees with a Unity client can opt into the bundled implementations at startup, before building grammars:
+- The built-in segmenter is a deliberate match for .NET 8's, and the differential tests in [GraphemeSegmentationTests.cs](../src/InductorParser.Tests/Lexing/Unicode/GraphemeSegmentationTests.cs) make sure the two are equal. `StringInfo`'s Unicode data is compiled into the runtime itself (not ICU), so the test suite refuses to run on any runtime major other than 8, the one the segmenter is verified against ([GlobalizationOracleFixture.cs](../src/InductorParser.Tests/Lexing/Unicode/GlobalizationOracleFixture.cs)). The test will break if a future  runtime ships newer Unicode data, and catching the built-in one up is a manual regeneration step (the tooling lives in `GraphemeSegmentationDataTests.cs`).
+- The first known rule-level gap is Unicode 15.1's rule GB9c, which keeps Indic conjuncts (Devanagari क्षि, for example) together as one grapheme cluster where the 15.0 rules split them. As of mid-2026 .NET hasn't implemented GB9c either ([dotnet/runtime#111546](https://github.com/dotnet/runtime/issues/111546)), so the built-in segmenter and every current .NET runtime still agree. Environments that have moved to the newer rules (ICU 74 and later, browsers, Swift) segment those conjuncts differently, so a grammar that tokenizes Indic text will see different token boundaries here than in those environments.
+- A net8.0 server that must agree on parse trees with a Unity client can opt into the built-in implementations at startup, before building grammars:
 
   ```csharp
   UnicodeEnvironment.Implementation = UnicodeImplementation.Bundled;
@@ -212,8 +212,8 @@ Unity is the odd one out again because its Mono runtime's `string.Normalize` is 
 
 What's left to know:
 
-- The bundled normalizer deliberately matches .NET 8's `string.Normalize`, which doesn't implement normalization itself: it hands the work to ICU (International Components for Unicode, the open-source library most operating systems and browsers use for Unicode algorithms). So matching .NET here means matching the industry-standard implementation. The differential tests in [UnicodeNormalizationTests.cs](../src/InductorParser.Tests/Lexing/Unicode/UnicodeNormalizationTests.cs) hold the two equal on every code point, the whole corpus, and randomized sequences, throw behavior included. The official ~18,800-line `NormalizationTest.txt` conformance suite runs against it too.
-- A net8.0 server that must agree on parse trees with a Unity client opts into the bundled implementations with the one line from the segmentation section:
+- The built-in normalizer deliberately matches .NET 8's `string.Normalize`, which doesn't implement normalization itself: it hands the work to ICU (International Components for Unicode, the open-source library most operating systems and browsers use for Unicode algorithms). So matching .NET here means matching the industry-standard implementation. Which ICU a host has is a moving target though (Linux uses the distro's, Windows uses the OS icu.dll, both change with OS updates, and Windows NLS or invariant globalization can replace ICU entirely), so the test project ships its own ICU 72.1, built from the same Unicode 15.0 data as the built-in tables, and refuses to run against anything else ([GlobalizationOracleFixture.cs](../src/InductorParser.Tests/Lexing/Unicode/GlobalizationOracleFixture.cs)). The differential tests in [UnicodeNormalizationTests.cs](../src/InductorParser.Tests/Lexing/Unicode/UnicodeNormalizationTests.cs) make sure the two are equal on every code point, the whole corpus, and randomized sequences, throw behavior included. That's the compatibility claim: the built-in normalizer matches one known .NET environment. Standards conformance is a separate claim, made by running the official ~18,800-line `NormalizationTest.txt` conformance suite against the built-in implementation.
+- A net8.0 server that must agree on parse trees with a Unity client can opt into the built-in implementations with the one line of code:
 
   ```csharp
   UnicodeEnvironment.Implementation = UnicodeImplementation.Bundled;
@@ -221,3 +221,33 @@ What's left to know:
 
 - Setting `UnicodeImplementation.Runtime` on Unity brings back Mono's broken normalization this section is about, along with the broken segmentation from the previous one. Don't set `Runtime` on Unity.
 - Input the normalizers reject is caught by the parser's own scan before either normalizer runs, so `MalformedInput` reporting is identical on every runtime regardless of this setting. The scan rejects two things: an unpaired surrogate, which is ill-formed UTF-16, and U+FFFE, a noncharacter that pure UAX #15 would normalize to itself but .NET's `string.Normalize` refuses. Rejecting U+FFFE is a deliberate match for .NET, not a Unicode requirement.
+
+## Host Globalization Settings
+
+Everything the previous two sections said about the Runtime implementation assumed the runtime's globalization is in its normal state. .NET has process-wide settings that change it, and because the parser normalizes with `string.Normalize` on every non-Unity build by default, and `string.Normalize` hands the work to ICU (International Components for Unicode, the open-source library most operating systems supply for Unicode algorithms), these settings change what the parser does. None of them are parser settings. They belong to the host app, so a parser embedded in someone else's app inherits whatever that app chose.
+
+Three of them matter:
+
+- Invariant globalization strips ICU out of the process entirely. It exists for deployments that want small images and no ICU dependency (trimmed containers, machines with no ICU installed), where the app promises it never does culture-aware work. It's turned on with the `InvariantGlobalization` project property, the `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1` environment variable, or the `System.Globalization.Invariant` runtimeconfig switch. Under it, `string.Normalize` returns its input unchanged and `IsNormalized` always says true. Here's what that looks like on .NET 8:
+
+  ```
+  Normalize(FormC) of A + U+0301:  A + U+0301   (unchanged, should be U+00C1)
+  IsNormalized(FormD) of U+00C1:   True         (should be False)
+  Normalize(FormC) of U+FFFE:      U+FFFE       (should throw)
+  ```
+
+  So a default-normalizing grammar silently stops normalizing: decomposed input no longer matches precomposed literals, and FormKC/FormKD grammars stop applying compatibility mappings. Nothing throws. The parse quietly produces different results.
+
+- Windows NLS (National Language Support, Windows' native globalization API) makes `string.Normalize` use Windows' own normalization data instead of ICU. It's a backward-compatibility escape hatch: .NET used NLS on Windows until .NET 5 switched to ICU, and that switch changed comparison and sort results, so apps with data sorted under the old rules (database indexes, for example) can ask for the old behavior back with `DOTNET_SYSTEM_GLOBALIZATION_USENLS=1` or the `System.Globalization.UseNls` runtimeconfig switch. It behaves correctly on the common cases, but its data moves with Windows servicing and can lag the ICU everyone else uses, so two machines can disagree on edge cases.
+
+- App-local ICU makes the app supply a specific ICU instead of using the OS one: a `Microsoft.ICU.ICU4C.Runtime` package reference plus the `System.Globalization.AppLocalIcu` runtimeconfig option. This is the one that makes normalization *more* predictable, and it's what the parser's own test project does to keep its comparison target from moving (see the comment in InductorParser.Tests.csproj).
+
+Two things stay unaffected. Segmentation: `StringInfo`'s Unicode data is compiled into the runtime itself, so token boundaries are identical under all three settings. Malformed-input reporting: the parser's own scan rejects unpaired surrogates and U+FFFE before any normalizer runs, so `MalformedInput` errors don't change even under invariant globalization, where `string.Normalize` itself would accept U+FFFE.
+
+What to do about it depends on which setting is on. Under invariant globalization a normalizing grammar is simply broken, so opt into the built-in implementations at startup, the same line from the previous sections:
+
+```csharp
+UnicodeEnvironment.Implementation = UnicodeImplementation.Bundled;
+```
+
+Under NLS you have a choice because normalization still works. Leave the parser on Runtime if you turned NLS on deliberately and want the parser to agree with the rest of your process. Opt into `Bundled` if you'd rather have the parser parse identically on every machine than match the host's NLS data. The built-in normalizer and segmenter run from their own tables and never touch the host's globalization, so the parser behaves the same no matter what the app or container chose.

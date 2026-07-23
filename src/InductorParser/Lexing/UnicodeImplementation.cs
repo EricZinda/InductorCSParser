@@ -32,7 +32,7 @@ public enum UnicodeImplementation
     Runtime,
 
     /// <summary>
-    /// Use the library's bundled UAX #29 segmenter and UAX #15 normalizer,
+    /// Use the library's built-in UAX #29 segmenter and UAX #15 normalizer,
     /// fixed at Unicode 15.0. Boundaries and normalized forms are
     /// identical on every runtime, so use this when a client and
     /// server on different runtimes must agree on parse trees.

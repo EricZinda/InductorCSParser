@@ -26,7 +26,7 @@
        character-category data comes from, so a target framework added
        here tracks its own runtime with no extra wiring.
        INDUCTORPARSER_USE_BUNDLED_UNICODE makes Automatic mean the
-       library's bundled UAX #29 segmenter and UAX #15 normalizer
+       library's built-in UAX #29 segmenter and UAX #15 normalizer
        instead (Lexing/Unicode/GraphemeSegmentation.cs and
        Lexing/Unicode/UnicodeNormalization.cs, both fixed at
        Unicode 15.0). The
