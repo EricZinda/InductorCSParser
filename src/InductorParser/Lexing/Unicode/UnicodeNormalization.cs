@@ -24,12 +24,18 @@ namespace InductorParser.Lexing.Unicode;
 /// canonical mappings, and accepts ill-formed UTF-16, all of which
 /// .NET's implementation gets right.
 /// <para>
-/// The built-in normalizer has no quick-check tables: it always
-/// decomposes, reorders, and recomposes, then hands back the original
-/// string instance when the result is content-identical. Quick-check
-/// (the NFC_QC / NFD_QC properties) is the next optimization if
-/// profiling ever shows the rebuild hurting, at the cost of a third
-/// generated table family and the subtle maybe-resolution logic.
+/// The built-in normalizer runs the UAX #15 quick-check scan first:
+/// when every scalar's quick-check property (NFC_QC and friends, a
+/// fourth generated table family) is Yes for the requested form and
+/// the combining classes are already in canonical order, the input is
+/// returned unchanged with one scan and no allocation. UAX #15 notes
+/// that much text is already NFC
+/// (https://www.unicode.org/reports/tr15/#Description_Norm), making
+/// this an important common case. Quick-check No proves the input
+/// needs normalization, while Maybe (a scalar that might compose with
+/// a preceding character) requires a full check. Normalize rebuilds
+/// in either case, then still hands back the original string instance
+/// when the result is content-identical.
 /// </para>
 /// </remarks>
 internal static partial class UnicodeNormalization
@@ -141,7 +147,13 @@ internal static partial class UnicodeNormalization
     internal static bool IsNormalizedWithRuntime(string input, NormalizationForm form) =>
         input.IsNormalized(form);
 
-    // The built-in UAX #15 pipeline: reject text the scan flags (see
+    // The built-in UAX #15 pipeline. The quick-check scan settles the
+    // common case first: input whose scalars all have quick-check Yes
+    // for the form and whose combining classes are already in canonical
+    // order comes back unchanged after one scan with no allocation
+    // (all-ASCII input always lands here, since ASCII has no
+    // decompositions and no combining marks). Everything else takes the
+    // full rebuild: reject text the scan flags (see
     // FindFirstUnnormalizableIndex), decompose
     // (canonically, or fully for the K forms), put combining marks in
     // canonical order, recompose for the composing forms, and hand back
@@ -151,11 +163,13 @@ internal static partial class UnicodeNormalization
     // implementation's behavior.
     internal static string NormalizeWithBundledImplementation(string input, NormalizationForm form)
     {
-        // ASCII is invariant under all four forms, and an all-ASCII
-        // string can't contain a surrogate or U+FFFE, so the common case
-        // is one scan with no allocation.
-        if (IsAllAscii(input)) return input;
+        if (QuickCheck(input, form) == QuickCheckResult.Yes) return input;
 
+        return NormalizeAfterQuickCheck(input, form);
+    }
+
+    private static string NormalizeAfterQuickCheck(string input, NormalizationForm form)
+    {
         int badIndex = FindFirstUnnormalizableIndex(input);
         if (badIndex >= 0) throw CreateUnnormalizableTextException(input, badIndex);
 
@@ -172,19 +186,115 @@ internal static partial class UnicodeNormalization
         return string.Equals(result, input, StringComparison.Ordinal) ? input : result;
     }
 
-    internal static bool IsNormalizedWithBundledImplementation(string input, NormalizationForm form) =>
-        ReferenceEquals(NormalizeWithBundledImplementation(input, form), input);
-
-    private static bool IsAllAscii(string input)
+    internal static bool IsNormalizedWithBundledImplementation(string input, NormalizationForm form)
     {
-        foreach (char c in input)
+        return QuickCheck(input, form) switch
         {
-            if (c >= 0x80) return false;
-        }
-        return true;
+            QuickCheckResult.Yes => true,
+            QuickCheckResult.No => false,
+            _ => ReferenceEquals(NormalizeAfterQuickCheck(input, form), input),
+        };
     }
 
-    // Decode the UTF-16 input (well-formed after the scan above) and
+    // The UAX #15 quick-check scan (section 9,
+    // https://www.unicode.org/reports/tr15/#Detecting_Normalization_Forms).
+    // Yes proves the input is normalized. No proves it isn't: one of
+    // its scalars has the form's No property, or its combining classes
+    // are out of canonical order. Maybe means only a context-sensitive
+    // composition can settle the answer. Invalid covers an unpaired
+    // surrogate or U+FFFE, which the full pipeline reports with the
+    // usual index and message. The scan continues after No and Maybe
+    // so a later invalid code unit still takes precedence, preserving
+    // the normalizer's exception behavior.
+    private static QuickCheckResult QuickCheck(string input, NormalizationForm form)
+    {
+        byte noFlag;
+        byte maybeFlag;
+        switch (form)
+        {
+            case NormalizationForm.FormC:
+                noFlag = NfcQuickCheckNo;
+                maybeFlag = NfcQuickCheckMaybe;
+                break;
+            case NormalizationForm.FormD:
+                noFlag = NfdQuickCheckNo;
+                maybeFlag = 0;
+                break;
+            case NormalizationForm.FormKC:
+                noFlag = NfkcQuickCheckNo;
+                maybeFlag = NfkcQuickCheckMaybe;
+                break;
+            default:
+                noFlag = NfkdQuickCheckNo;
+                maybeFlag = 0;
+                break;
+        }
+
+        QuickCheckResult result = QuickCheckResult.Yes;
+        int lastCombiningClass = 0;
+        for (int index = 0; index < input.Length; index++)
+        {
+            char first = input[index];
+            // Code units below 0x80 are ASCII: quick-check Yes under
+            // every form and combining class 0, so skip both lookups.
+            if (first < 0x80)
+            {
+                lastCombiningClass = 0;
+                continue;
+            }
+
+            int scalar;
+            if (RuneHelpers.IsSurrogatePairAt(input, index))
+            {
+                scalar = char.ConvertToUtf32(first, input[index + 1]);
+                // The pair is two code units. This step covers the low
+                // surrogate, and the loop header's increment supplies
+                // the second step to the next code unit.
+                index += 1;
+            }
+            else if (char.IsSurrogate(first))
+            {
+                return QuickCheckResult.Invalid;
+            }
+            else
+            {
+                scalar = first;
+                if (scalar == 0xFFFE) return QuickCheckResult.Invalid;
+            }
+
+            byte flags = GetQuickCheckFlags(scalar);
+            if ((flags & noFlag) != 0)
+            {
+                result = QuickCheckResult.No;
+            }
+            else if (result == QuickCheckResult.Yes && (flags & maybeFlag) != 0)
+            {
+                result = QuickCheckResult.Maybe;
+            }
+            if ((flags & NonzeroCombiningClassFlag) != 0)
+            {
+                byte combiningClass = GetCanonicalCombiningClass(scalar);
+                if (lastCombiningClass > combiningClass)
+                    result = QuickCheckResult.No;
+                lastCombiningClass = combiningClass;
+            }
+            else
+            {
+                lastCombiningClass = 0;
+            }
+        }
+        return result;
+    }
+
+    private enum QuickCheckResult : byte
+    {
+        Yes,
+        No,
+        Maybe,
+        Invalid,
+    }
+
+    // Decode the UTF-16 input (well-formed after the validation above) and
     // append each scalar's full decomposition.
     private static List<int> Decompose(string input, bool useCompatibility)
     {
@@ -461,6 +571,49 @@ internal static partial class UnicodeNormalization
             }
         }
         return builder.ToString();
+    }
+
+    // The bits of a quick-check flag byte. The generator in
+    // UnicodeNormalizationDataTests packs the table's bytes with these
+    // same constants, so renumbering a bit means regenerating
+    // UnicodeNormalization.Data.cs. Bits 0 through 5 are the four
+    // NFx_QC properties from DerivedNormalizationProps.txt: a set bit
+    // means the property is No (or Maybe where one exists), and Yes is
+    // the absence of both, so an unlisted code point's byte is 0. The
+    // last bit records that the canonical combining class is nonzero,
+    // letting QuickCheck skip the combining class
+    // lookup for starters, which is nearly every scalar in real text.
+    internal const byte NfdQuickCheckNo = 1 << 0;
+    internal const byte NfcQuickCheckNo = 1 << 1;
+    internal const byte NfcQuickCheckMaybe = 1 << 2;
+    internal const byte NfkdQuickCheckNo = 1 << 3;
+    internal const byte NfkcQuickCheckNo = 1 << 4;
+    internal const byte NfkcQuickCheckMaybe = 1 << 5;
+    internal const byte NonzeroCombiningClassFlag = 1 << 6;
+
+    // Quick-check flag lookup in the generated transition arrays. Same
+    // search shape as GetCanonicalCombiningClass below.
+    internal static byte GetQuickCheckFlags(int codePointValue)
+    {
+        // ASCII has no decompositions and no combining marks, so
+        // handle it with one range check instead of a binary search.
+        if ((uint)codePointValue < 0x80) return 0;
+
+        int low = 0;
+        int high = QuickCheckRangeStarts.Length - 1;
+        while (low < high)
+        {
+            int middle = (low + high + 1) >> 1;
+            if (QuickCheckRangeStarts[middle] <= codePointValue)
+            {
+                low = middle;
+            }
+            else
+            {
+                high = middle - 1;
+            }
+        }
+        return QuickCheckRangeValues[low];
     }
 
     // Canonical combining class lookup in the generated transition

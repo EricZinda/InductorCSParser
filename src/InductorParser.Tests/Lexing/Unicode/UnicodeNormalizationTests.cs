@@ -103,9 +103,10 @@ public class UnicodeNormalizationTests
     public void Already_normalized_input_comes_back_as_the_same_instance()
     {
         // NormalizedPositionMap's ReferenceEquals fast path depends on
-        // this, and the runtime implementation behaves the same way. The
-        // ASCII case exercises the all-ASCII fast path, the precomposed
-        // é the full rebuild-and-compare path.
+        // this, and the runtime implementation behaves the same way.
+        // Both cases land on the quick-check scan's Yes path: ASCII
+        // through its per-char shortcut, the precomposed é through the
+        // flag table.
         string ascii = "plain ascii";
         string precomposed = UnicodeExamples.LatinEAcutePrecomposedGrapheme;
         foreach (NormalizationForm form in NormalizationExamples.AllForms)
@@ -125,6 +126,25 @@ public class UnicodeNormalizationTests
             UnicodeNormalization.IsNormalizedWithBundledImplementation(
                 precomposed, NormalizationForm.FormD),
             Is.False);
+    }
+
+    [Test]
+    public void Quick_check_Maybe_input_still_comes_back_as_the_same_instance()
+    {
+        // q followed by a combining acute is already NFC (no q-acute
+        // exists to compose), but U+0301 is quick-check Maybe, so the
+        // scan can't confirm it and the full rebuild runs. The rebuild
+        // proves the content identical and must still return the
+        // original instance.
+        string input = "q" + FromCodePoints(0x0301);
+        Assert.That(
+            UnicodeNormalization.NormalizeWithBundledImplementation(
+                input, NormalizationForm.FormC),
+            Is.SameAs(input));
+        Assert.That(
+            UnicodeNormalization.IsNormalizedWithBundledImplementation(
+                input, NormalizationForm.FormC),
+            Is.True);
     }
 
     [Test]
@@ -357,6 +377,10 @@ public class UnicodeNormalizationTests
             UnicodeExamples.LowSurrogateMaxText,
             UnicodeExamples.ReversedSurrogatePairText,
             "a" + UnicodeExamples.HighSurrogateMinText + "b",
+            // The precomposed é has NfdQuickCheckNo set. A definite No
+            // before invalid UTF-16 mustn't hide the later exception.
+            UnicodeExamples.LatinEAcutePrecomposedGrapheme
+                + UnicodeExamples.HighSurrogateMinText,
         };
         foreach (string text in illFormed)
         {
@@ -368,6 +392,12 @@ public class UnicodeNormalizationTests
                 Assert.Throws<ArgumentException>(
                     () => UnicodeNormalization.NormalizeWithRuntime(text, form),
                     $"runtime accepted {DumpCodeUnits(text)} under {form}");
+                Assert.Throws<ArgumentException>(
+                    () => UnicodeNormalization.IsNormalizedWithBundledImplementation(text, form),
+                    $"built-in IsNormalized accepted {DumpCodeUnits(text)} under {form}");
+                Assert.Throws<ArgumentException>(
+                    () => UnicodeNormalization.IsNormalizedWithRuntime(text, form),
+                    $"runtime IsNormalized accepted {DumpCodeUnits(text)} under {form}");
             }
         }
     }

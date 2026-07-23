@@ -32,10 +32,14 @@ public class UnicodeNormalizationDataTests
     private const string UnicodeVersion = "15.0.0";
 
     // Everything the generator derives from the two UCD files, in raw
-    // per-code-point form before table encoding.
+    // per-code-point form before table encoding. QuickCheckFlags holds
+    // only the six property bits from DerivedNormalizationProps.txt.
+    // The nonzero-combining-class bit is merged in at emit time from
+    // CanonicalCombiningClasses so the two can't disagree.
     private sealed class DerivedNormalizationData
     {
         public byte[] CanonicalCombiningClasses = new byte[0x110000];
+        public byte[] QuickCheckFlags = new byte[0x110000];
         public Dictionary<int, (int[] Expansion, bool IsCompatibility)> Decompositions = new();
         public SortedSet<int> FullCompositionExclusions = new();
     }
@@ -171,6 +175,169 @@ public class UnicodeNormalizationDataTests
     }
 
     [Test]
+    public void QuickCheck_table_starts_are_strictly_ascending_from_zero()
+    {
+        int[] starts = ReadPrivateIntArray("QuickCheckRangeStarts");
+        Assert.That(starts.Length, Is.GreaterThan(0));
+        Assert.That(starts[0], Is.EqualTo(0), "the first transition must cover code point 0");
+        for (int index = 1; index < starts.Length; index++)
+        {
+            Assert.That(starts[index], Is.GreaterThan(starts[index - 1]),
+                $"QuickCheckRangeStarts[{index}] must be greater than [{index - 1}]");
+        }
+        Assert.That(starts[^1], Is.LessThanOrEqualTo(0x10FFFF));
+    }
+
+    [Test]
+    public void QuickCheck_flag_constants_are_distinct_single_bits()
+    {
+        // The generator ORs these constants into the table's bytes and
+        // the scan tests them individually, so a constant with zero
+        // bits, two bits, or a bit another constant already uses would
+        // corrupt every byte it touches. The tests below all assume
+        // this holds (definedBits is the OR of the seven).
+        byte[] flagConstants =
+        {
+            UnicodeNormalization.NfdQuickCheckNo,
+            UnicodeNormalization.NfcQuickCheckNo,
+            UnicodeNormalization.NfcQuickCheckMaybe,
+            UnicodeNormalization.NfkdQuickCheckNo,
+            UnicodeNormalization.NfkcQuickCheckNo,
+            UnicodeNormalization.NfkcQuickCheckMaybe,
+            UnicodeNormalization.NonzeroCombiningClassFlag,
+        };
+        int combined = 0;
+        foreach (byte flag in flagConstants)
+        {
+            Assert.That(flag, Is.Not.Zero, "a flag constant is zero");
+            Assert.That(flag & (flag - 1), Is.Zero,
+                $"0x{flag:X2} sets more than one bit");
+            Assert.That(combined & flag, Is.Zero,
+                $"0x{flag:X2} overlaps another flag constant");
+            combined |= flag;
+        }
+    }
+
+    [Test]
+    public void QuickCheck_flags_use_defined_bits_and_track_the_combining_classes()
+    {
+        // Every flag byte may only use the seven defined bits, and the
+        // nonzero-combining-class bit must agree with the combining
+        // class table at every code point, since the scan trusts it to
+        // skip the combining class lookup.
+        const byte definedBits = UnicodeNormalization.NfdQuickCheckNo
+            | UnicodeNormalization.NfcQuickCheckNo
+            | UnicodeNormalization.NfcQuickCheckMaybe
+            | UnicodeNormalization.NfkdQuickCheckNo
+            | UnicodeNormalization.NfkcQuickCheckNo
+            | UnicodeNormalization.NfkcQuickCheckMaybe
+            | UnicodeNormalization.NonzeroCombiningClassFlag;
+        var disagreements = new List<string>();
+        for (int codePoint = 0; codePoint <= 0x10FFFF && disagreements.Count < 25; codePoint++)
+        {
+            byte flags = UnicodeNormalization.GetQuickCheckFlags(codePoint);
+            if ((flags & ~definedBits) != 0)
+                disagreements.Add($"U+{codePoint:X4}: undefined flag bits in 0x{flags:X2}");
+            bool flaggedNonzero =
+                (flags & UnicodeNormalization.NonzeroCombiningClassFlag) != 0;
+            if (flaggedNonzero
+                != (UnicodeNormalization.GetCanonicalCombiningClass(codePoint) != 0))
+            {
+                disagreements.Add(
+                    $"U+{codePoint:X4}: combining class bit disagrees with the class table");
+            }
+        }
+        Assert.That(disagreements, Is.Empty);
+    }
+
+    [Test]
+    public void QuickCheck_No_bits_agree_with_the_decomposition_data()
+    {
+        // A form's No bit marks the characters that don't survive
+        // normalizing to that form: the output has something else
+        // where they were. Which characters those are follows from the
+        // decomposition tables, so this test re-derives the bit from
+        // them and a bad regeneration can't ship the two families
+        // disagreeing. NFD replaces a character when it has a
+        // canonical decomposition and leaves every other character
+        // alone. NFKD works the same way, but compatibility
+        // decompositions count too. Both also replace the Hangul
+        // syllables, which decompose but aren't in the table. NFC
+        // replaces the characters whose decomposition never comes back
+        // on recomposition, which happens two ways: the mapping is a
+        // single character (recomposition only rebuilds pairs), or the
+        // character is composition-excluded. NFKC has no simple rule
+        // (U+1E9B survives NFC but not NFKC, because its long-s piece
+        // turns into plain s under the K forms), so its No bit only
+        // gets bounds: at least NFC's No set plus the compatibility
+        // decompositions, at most NFKD's No set.
+        var disagreements = new List<string>();
+        for (int codePoint = 0; codePoint <= 0x10FFFF && disagreements.Count < 25; codePoint++)
+        {
+            bool hasMapping = UnicodeNormalization.TryGetDecomposition(
+                codePoint, out ReadOnlySpan<int> expansion, out bool isCompatibility);
+            bool hasCanonical = hasMapping && !isCompatibility;
+            bool isHangulSyllable = codePoint is >= 0xAC00 and <= 0xD7A3;
+            byte flags = UnicodeNormalization.GetQuickCheckFlags(codePoint);
+
+            bool nfdNo = (flags & UnicodeNormalization.NfdQuickCheckNo) != 0;
+            if (nfdNo != (hasCanonical || isHangulSyllable))
+                disagreements.Add($"U+{codePoint:X4}: NFD_QC No bit disagrees");
+
+            bool nfkdNo = (flags & UnicodeNormalization.NfkdQuickCheckNo) != 0;
+            if (nfkdNo != (hasMapping || isHangulSyllable))
+                disagreements.Add($"U+{codePoint:X4}: NFKD_QC No bit disagrees");
+
+            bool nfcNo = (flags & UnicodeNormalization.NfcQuickCheckNo) != 0;
+            bool unrecomposable = hasCanonical
+                && (expansion.Length == 1
+                    || UnicodeNormalization.IsFullCompositionExclusion(codePoint));
+            if (nfcNo != unrecomposable)
+                disagreements.Add($"U+{codePoint:X4}: NFC_QC No bit disagrees");
+
+            bool nfkcNo = (flags & UnicodeNormalization.NfkcQuickCheckNo) != 0;
+            if ((nfcNo || (hasMapping && isCompatibility)) && !nfkcNo)
+                disagreements.Add($"U+{codePoint:X4}: NFKC_QC No bit missing");
+            if (nfkcNo && !nfkdNo)
+                disagreements.Add($"U+{codePoint:X4}: NFKC_QC No without NFKD_QC No");
+        }
+        Assert.That(disagreements, Is.Empty);
+    }
+
+    [Test]
+    public void QuickCheck_Maybe_bits_are_the_pair_second_elements_and_composing_jamo()
+    {
+        // Maybe marks exactly the scalars that might compose with a
+        // preceding character: the second element of every derived
+        // composition pair, plus the Hangul vowel and trailing jamo the
+        // arithmetic composes. The two composing forms share one
+        // composition step, so their Maybe sets must be identical.
+        var field = typeof(UnicodeNormalization).GetField(
+            "CompositionPairs", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.That(field, Is.Not.Null, "UnicodeNormalization.CompositionPairs field not found");
+        var pairs = (Lazy<Dictionary<long, int>>)field!.GetValue(null)!;
+        var composable = new HashSet<int>();
+        foreach (long key in pairs.Value.Keys)
+            composable.Add((int)(key & 0xFFFFFFFF));
+        for (int vowelJamo = 0x1161; vowelJamo <= 0x1175; vowelJamo++)
+            composable.Add(vowelJamo);
+        for (int trailingJamo = 0x11A8; trailingJamo <= 0x11C2; trailingJamo++)
+            composable.Add(trailingJamo);
+
+        var disagreements = new List<string>();
+        for (int codePoint = 0; codePoint <= 0x10FFFF && disagreements.Count < 25; codePoint++)
+        {
+            byte flags = UnicodeNormalization.GetQuickCheckFlags(codePoint);
+            bool nfcMaybe = (flags & UnicodeNormalization.NfcQuickCheckMaybe) != 0;
+            if (nfcMaybe != composable.Contains(codePoint))
+                disagreements.Add($"U+{codePoint:X4}: NFC_QC Maybe bit disagrees");
+            if (nfcMaybe != ((flags & UnicodeNormalization.NfkcQuickCheckMaybe) != 0))
+                disagreements.Add($"U+{codePoint:X4}: NFC and NFKC Maybe bits differ");
+        }
+        Assert.That(disagreements, Is.Empty);
+    }
+
+    [Test]
     public void Derived_composition_pair_count_matches_the_pinned_constant()
     {
         // Forces the lazy pair build (which runs the starter and
@@ -200,6 +367,11 @@ public class UnicodeNormalizationDataTests
         {
             derived.CanonicalCombiningClasses[codePoint] =
                 UnicodeNormalization.GetCanonicalCombiningClass(codePoint);
+            // Mask off the combining class bit: the emitter re-derives
+            // it from the classes reconstructed above.
+            derived.QuickCheckFlags[codePoint] = (byte)(
+                UnicodeNormalization.GetQuickCheckFlags(codePoint)
+                & ~UnicodeNormalization.NonzeroCombiningClassFlag);
         }
         foreach (int key in ReadPrivateIntArray("DecompositionCodePoints"))
         {
@@ -278,6 +450,14 @@ public class UnicodeNormalizationDataTests
             {
                 disagreements.Add($"U+{codePoint:X4}: Full_Composition_Exclusion disagrees with the UCD");
             }
+
+            byte expectedQuickCheck = (byte)(expected.QuickCheckFlags[codePoint]
+                | (expected.CanonicalCombiningClasses[codePoint] != 0
+                    ? UnicodeNormalization.NonzeroCombiningClassFlag : 0));
+            if (UnicodeNormalization.GetQuickCheckFlags(codePoint) != expectedQuickCheck)
+            {
+                disagreements.Add($"U+{codePoint:X4}: quick-check flags disagree with the UCD");
+            }
         }
         Assert.That(disagreements, Is.Empty,
             "UnicodeNormalization.Data.cs disagrees with the pinned UCD files. "
@@ -328,9 +508,10 @@ public class UnicodeNormalizationDataTests
     // generator does: UnicodeData.txt contributes field 3 (canonical
     // combining class) and field 5 (decomposition type and mapping),
     // DerivedNormalizationProps.txt contributes Full_Composition_Exclusion
-    // and nothing else. First/Last range-shorthand lines (the CJK, Hangul,
-    // surrogate, and private-use blocks) must have combining class 0 and
-    // no decomposition, so the ranges they abbreviate need no table rows.
+    // and the four normalization forms' Quick_Check properties. First/Last
+    // range-shorthand lines (the CJK, Hangul, surrogate, and private-use
+    // blocks) must have combining class 0 and no decomposition, so the
+    // ranges they abbreviate need no table rows.
     private static async Task<DerivedNormalizationData> DeriveFromUcdAsync()
     {
         var derived = new DerivedNormalizationData();
@@ -421,24 +602,47 @@ public class UnicodeNormalizationDataTests
             if (line.Length == 0) continue;
 
             string[] parts = line.Split(';');
-            if (parts[1].Trim() != "Full_Composition_Exclusion") continue;
-
-            string rangeText = parts[0].Trim();
-            int first, last;
-            int dotsIndex = rangeText.IndexOf("..", StringComparison.Ordinal);
-            if (dotsIndex >= 0)
+            string propertyName = parts[1].Trim();
+            if (propertyName == "Full_Composition_Exclusion")
             {
-                first = Convert.ToInt32(rangeText.Substring(0, dotsIndex), 16);
-                last = Convert.ToInt32(rangeText.Substring(dotsIndex + 2), 16);
+                (int first, int last) = ParseCodePointRange(parts[0]);
+                for (int codePoint = first; codePoint <= last; codePoint++)
+                    derived.FullCompositionExclusions.Add(codePoint);
             }
-            else
+            else if (propertyName is "NFD_QC" or "NFC_QC" or "NFKD_QC" or "NFKC_QC")
             {
-                first = last = Convert.ToInt32(rangeText, 16);
+                // The file lists only the non-default values: N for all
+                // four properties, plus M for the two composing forms.
+                // Yes is every code point the file doesn't mention.
+                byte flag = (propertyName, parts[2].Trim()) switch
+                {
+                    ("NFD_QC", "N") => UnicodeNormalization.NfdQuickCheckNo,
+                    ("NFC_QC", "N") => UnicodeNormalization.NfcQuickCheckNo,
+                    ("NFC_QC", "M") => UnicodeNormalization.NfcQuickCheckMaybe,
+                    ("NFKD_QC", "N") => UnicodeNormalization.NfkdQuickCheckNo,
+                    ("NFKC_QC", "N") => UnicodeNormalization.NfkcQuickCheckNo,
+                    ("NFKC_QC", "M") => UnicodeNormalization.NfkcQuickCheckMaybe,
+                    _ => throw new InvalidOperationException(
+                        $"unexpected quick-check value: {rawLine}"),
+                };
+                (int first, int last) = ParseCodePointRange(parts[0]);
+                for (int codePoint = first; codePoint <= last; codePoint++)
+                    derived.QuickCheckFlags[codePoint] |= flag;
             }
-
-            for (int codePoint = first; codePoint <= last; codePoint++)
-                derived.FullCompositionExclusions.Add(codePoint);
         }
+    }
+
+    private static (int First, int Last) ParseCodePointRange(string rangeText)
+    {
+        rangeText = rangeText.Trim();
+        int dotsIndex = rangeText.IndexOf("..", StringComparison.Ordinal);
+        if (dotsIndex < 0)
+        {
+            int single = Convert.ToInt32(rangeText, 16);
+            return (single, single);
+        }
+        return (Convert.ToInt32(rangeText.Substring(0, dotsIndex), 16),
+            Convert.ToInt32(rangeText.Substring(dotsIndex + 2), 16));
     }
 
     // The emitted file's header text, stored without the comment marker.
@@ -459,15 +663,25 @@ public class UnicodeNormalizationDataTests
         "tables:",
         "",
         "  https://www.unicode.org/Public/15.0.0/ucd/UnicodeData.txt (field 3 canonical combining class, field 5 decomposition)",
-        "  https://www.unicode.org/Public/15.0.0/ucd/DerivedNormalizationProps.txt (Full_Composition_Exclusion only)",
+        "  https://www.unicode.org/Public/15.0.0/ucd/DerivedNormalizationProps.txt (Full_Composition_Exclusion and the NFD_QC / NFC_QC / NFKD_QC / NFKC_QC quick-check properties)",
         "",
-        "Three tables live here. The combining classes are transition",
-        "arrays: entry i covers code points from",
+        "Four table families live here. The combining classes are",
+        "transition arrays: entry i covers code points from",
         "CanonicalCombiningClassRangeStarts[i] up to but not including",
         "CanonicalCombiningClassRangeStarts[i + 1], all with class",
         "CanonicalCombiningClassRangeValues[i], and the last entry runs",
         "through U+10FFFF. GetCanonicalCombiningClass does the binary",
         "search.",
+        "",
+        "The quick-check flags are transition arrays of the same shape,",
+        "one byte per range. Bits 0 through 5 say which of the four",
+        "forms' quick-check properties are No or Maybe for the range's",
+        "code points (Yes is the absence of both), and bit 6 records a",
+        "nonzero canonical combining class, so the scan in",
+        "QuickCheck only needs the combining class",
+        "lookup for non-starters. The bit assignments are the",
+        "NfdQuickCheckNo family of constants in UnicodeNormalization.cs,",
+        "and GetQuickCheckFlags does the binary search.",
         "",
         "The decomposition mappings are stored single-level, exactly as",
         "UnicodeData.txt states them, and recursive expansion happens at",
@@ -528,6 +742,23 @@ public class UnicodeNormalizationDataTests
             {
                 combiningClassStarts.Add(codePoint);
                 combiningClassValues.Add(combiningClass);
+            }
+        }
+
+        // Run-length encode the quick-check flags into the same
+        // transition shape, merging in the nonzero-combining-class bit
+        // from the classes derived above.
+        var quickCheckStarts = new List<int>();
+        var quickCheckValues = new List<byte>();
+        for (int codePoint = 0; codePoint <= 0x10FFFF; codePoint++)
+        {
+            byte flags = (byte)(derived.QuickCheckFlags[codePoint]
+                | (derived.CanonicalCombiningClasses[codePoint] != 0
+                    ? UnicodeNormalization.NonzeroCombiningClassFlag : 0));
+            if (quickCheckStarts.Count == 0 || flags != quickCheckValues[^1])
+            {
+                quickCheckStarts.Add(codePoint);
+                quickCheckValues.Add(flags);
             }
         }
 
@@ -600,6 +831,19 @@ public class UnicodeNormalizationDataTests
         builder.AppendLine("    {");
         AppendHexIntRows(builder, derived.FullCompositionExclusions.ToList(), perLine: 8);
         builder.AppendLine("    };");
+        builder.AppendLine();
+        builder.AppendLine($"    {CommentMarker} {quickCheckStarts.Count} transitions covering U+0000..U+10FFFF.");
+        builder.AppendLine("    private static readonly int[] QuickCheckRangeStarts =");
+        builder.AppendLine("    {");
+        AppendHexIntRows(builder, quickCheckStarts, perLine: 8);
+        builder.AppendLine("    };");
+        builder.AppendLine();
+        builder.AppendLine($"    {CommentMarker} Values are quick-check flag bytes. The bit assignments are the");
+        builder.AppendLine($"    {CommentMarker} NfdQuickCheckNo family of constants in UnicodeNormalization.cs.");
+        builder.AppendLine("    private static ReadOnlySpan<byte> QuickCheckRangeValues => new byte[]");
+        builder.AppendLine("    {");
+        AppendHexByteRows(builder, quickCheckValues, perLine: 16);
+        builder.AppendLine("    };");
         builder.AppendLine("}");
         return builder.ToString();
     }
@@ -611,6 +855,17 @@ public class UnicodeNormalizationDataTests
             var line = new StringBuilder("        ");
             for (int column = index; column < Math.Min(index + perLine, values.Count); column++)
                 line.Append($"0x{values[column]:X6}, ");
+            builder.AppendLine(line.ToString().TrimEnd());
+        }
+    }
+
+    private static void AppendHexByteRows(StringBuilder builder, List<byte> values, int perLine)
+    {
+        for (int index = 0; index < values.Count; index += perLine)
+        {
+            var line = new StringBuilder("        ");
+            for (int column = index; column < Math.Min(index + perLine, values.Count); column++)
+                line.Append($"0x{values[column]:X2}, ");
             builder.AppendLine(line.ToString().TrimEnd());
         }
     }

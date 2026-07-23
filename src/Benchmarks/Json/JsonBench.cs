@@ -171,22 +171,29 @@ public class JsonBench
     public object WideJson_SystemTextJson() => System.Text.Json.JsonDocument.Parse(_wideJson);
 
     public static IJson BuildJson(int length, int depth, int width)
+        => BuildJson(length, depth, width, RandomString);
+
+    // Same tree shape with caller-supplied string content. The generator
+    // gets the requested length and returns the key or value text.
+    // UnicodeJsonBench passes generators that draw from non-ASCII pools.
+    // The overload above keeps the upstream ASCII generator.
+    public static IJson BuildJson(int length, int depth, int width, Func<int, string> randomString)
         => new JsonArray(
             Enumerable.Repeat(1, length)
-                .Select(_ => BuildObject(depth, width))
+                .Select(_ => BuildObject(depth, width, randomString))
                 .ToArray()
         );
 
-    private static IJson BuildObject(int depth, int width)
+    private static IJson BuildObject(int depth, int width, Func<int, string> randomString)
     {
         if (depth == 0)
         {
-            return new JsonString(RandomString(6));
+            return new JsonString(randomString(6));
         }
         return new JsonObject(
             new Dictionary<string, IJson>(
                 Enumerable.Repeat(1, width)
-                .Select(_ => new KeyValuePair<string, IJson>(RandomString(5), BuildObject(depth - 1, width)))
+                .Select(_ => new KeyValuePair<string, IJson>(randomString(5), BuildObject(depth - 1, width, randomString)))
             )
         );
     }
