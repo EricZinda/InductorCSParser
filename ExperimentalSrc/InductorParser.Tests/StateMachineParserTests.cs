@@ -350,6 +350,44 @@ public class StateMachineParserTests
         Assert.That(stateMachine.ErrorCharIndex, Is.GreaterThanOrEqualTo(2));
     }
 
+    [Test]
+    public void Trailing_input_reports_first_leftover_character_like_recursive()
+    {
+        // The grammar succeeds matching nothing (Optional bails out when
+        // its inner partially matches then fails), so the whole input is
+        // unconsumed trailing tail. docs/InductorParserDesignDecisions.md
+        // ("Parse Requires Consuming All Input") says Parse "returns
+        // failure pointing at the first leftover character", which is
+        // lexer.Position (0 here), not the deepest read the rolled-back
+        // inner reached.
+        //
+        // The recursive engine fixed this on 2026-05-05: its trailing-input
+        // branch reports lexer.Position with a generic message, separate
+        // from the genuine-failure branch's Math.Max(DeepestFailure, Position)
+        // / WithError message. The state-machine engine must match.
+        //
+        // With Optional(Literal("ab")) on "ac", Literal reads 'a' (position
+        // 0 to 1), fails on 'c' at position 1, and Optional rolls back and
+        // succeeds with zero matches at position 0. machine.DeepestFailure
+        // is 1 and lexer.Position is 0.
+        var rule = Optional(Literal("ab"));
+        var options = new ParseOptions { AllowTrailingInput = false };
+
+        var recursive = rule.ParseRecursive("ac", options);
+        var stateMachine = StateMachineParser.Parse(rule, "ac", options);
+
+        Assert.That(recursive.Success, Is.False);
+        Assert.That(stateMachine.Success, Is.False);
+        // Recursive points at the first leftover character (offset 0).
+        Assert.That(recursive.ErrorCharIndex, Is.EqualTo(0), recursive.ErrorMessage);
+        // The state-machine engine must agree.
+        Assert.That(stateMachine.ErrorCharIndex, Is.EqualTo(recursive.ErrorCharIndex),
+            $"state-machine trailing-input position diverges: recursive={recursive.ErrorCharIndex} ({recursive.ErrorMessage}), state-machine={stateMachine.ErrorCharIndex} ({stateMachine.ErrorMessage})");
+        // And the message should be the generic positional one, not a
+        // deepest-failure message from the rolled-back inner.
+        Assert.That(stateMachine.ErrorMessage, Is.EqualTo(recursive.ErrorMessage));
+    }
+
     // ---- ScanUntil ----
 
     [Test]
