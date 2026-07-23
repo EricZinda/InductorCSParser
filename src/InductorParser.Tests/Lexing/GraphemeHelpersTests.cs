@@ -76,4 +76,16 @@ public class GraphemeHelpersTests
         Assert.Throws<ArgumentNullException>(
             () => GraphemeHelpers.FloorToClusterStart(null!, 0));
     }
+
+    [Test]
+    public void Count_rejects_null_text()
+    {
+        // Without the explicit check, text.AsSpan() maps null to an
+        // empty span and Count returns 0, which is indistinguishable
+        // from the empty string and hides the caller's bug. The other
+        // string-typed helpers on this surface (FloorToClusterStart
+        // above, NormalizationHelpers.Normalize / IsNormalized) all
+        // throw for null.
+        Assert.Throws<ArgumentNullException>(() => GraphemeHelpers.Count(null!));
+    }
 }

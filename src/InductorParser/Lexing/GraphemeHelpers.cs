@@ -23,6 +23,7 @@ public static class GraphemeHelpers
     /// </summary>
     public static int Count(string text)
     {
+        if (text == null) throw new ArgumentNullException(nameof(text));
         ReadOnlySpan<char> remaining = text.AsSpan();
         int count = 0;
         while (!remaining.IsEmpty)
