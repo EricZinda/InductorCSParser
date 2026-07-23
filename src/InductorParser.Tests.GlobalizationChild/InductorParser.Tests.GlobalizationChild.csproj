@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Child process for HostGlobalizationChildProcessTests in
+       InductorParser.Tests. The globalization mode of a .NET process is
+       fixed at process start, so a test that wants to see the parser
+       under DOTNET_SYSTEM_GLOBALIZATION_INVARIANT or
+       DOTNET_SYSTEM_GLOBALIZATION_USENLS has to launch a fresh process
+       with the variable set, and this is that process. Deliberately no
+       app-local ICU here, unlike InductorParser.Tests: this child must
+       see plain host globalization plus whatever the launching test put
+       in its environment. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!-- No platform-specific apphost .exe: the tests launch the dll
+         with `dotnet exec`, which behaves the same on every OS. -->
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\InductorParser\InductorParser.csproj" />
+  </ItemGroup>
+
+</Project>

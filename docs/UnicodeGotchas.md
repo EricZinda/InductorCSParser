@@ -248,7 +248,9 @@ What's left to know:
 
 Everything the previous two sections said about the Runtime implementation assumed the runtime's globalization is in its normal state. .NET has process-wide settings that change it, and because the parser normalizes with `string.Normalize` on every non-Unity build by default, and `string.Normalize` hands the work to ICU (International Components for Unicode, the open-source library most operating systems supply for Unicode algorithms), these settings change what the parser does. None of them are parser settings. They belong to the host app, so a parser embedded in someone else's app inherits whatever that app chose.
 
-Three of them matter:
+The parser checks for the two damaging settings instead of trusting the host. When the Runtime implementation is chosen and the process is running invariant globalization or Windows NLS, the first normalizing `Compile` or `Parse` throws an `InvalidOperationException` that names the detected mode and both ways out: opt into the built-in implementations, or accept the host's globalization deliberately. The rest of this section walks through the settings themselves, exactly when the check fires, and which way out fits which situation.
+
+Three of the settings matter:
 
 - Invariant globalization strips ICU out of the process entirely. It exists for deployments that want small images and no ICU dependency (trimmed containers, machines with no ICU installed), where the app promises it never does culture-aware work. It's turned on with the `InvariantGlobalization` project property, the `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1` environment variable, or the `System.Globalization.Invariant` runtimeconfig switch. Under it, `string.Normalize` returns its input unchanged and `IsNormalized` always says true. Here's what that looks like on .NET 8:
 
@@ -258,18 +260,28 @@ Three of them matter:
   Normalize(FormC) of U+FFFE:      U+FFFE       (should throw)
   ```
 
-  So a default-normalizing grammar silently stops normalizing: decomposed input no longer matches precomposed literals, and FormKC/FormKD grammars stop applying compatibility mappings. Nothing throws. The parse quietly produces different results.
+  So a default-normalizing grammar silently stops normalizing: decomposed input no longer matches precomposed literals, and FormKC/FormKD grammars stop applying compatibility mappings. This is the setting the check mainly exists for. Without the check nothing would throw, and the parse would just quietly produce different results.
 
-- Windows NLS (National Language Support, Windows' native globalization API) makes `string.Normalize` use Windows' own normalization data instead of ICU. It's a backward-compatibility escape hatch: .NET used NLS on Windows until .NET 5 switched to ICU, and that switch changed comparison and sort results, so apps with data sorted under the old rules (database indexes, for example) can ask for the old behavior back with `DOTNET_SYSTEM_GLOBALIZATION_USENLS=1` or the `System.Globalization.UseNls` runtimeconfig switch. It behaves correctly on the common cases, but its data moves with Windows servicing and can lag the ICU everyone else uses, so two machines can disagree on edge cases.
+- Windows NLS (National Language Support, Windows' native globalization API) makes `string.Normalize` use Windows' own normalization data instead of ICU. It's a backward-compatibility escape hatch: .NET used NLS on Windows until .NET 5 switched to ICU, and that switch changed comparison and sort results, so apps with data sorted under the old rules (database indexes, for example) can ask for the old behavior back with `DOTNET_SYSTEM_GLOBALIZATION_USENLS=1` or the `System.Globalization.UseNls` runtimeconfig switch. It behaves correctly on the common cases, but its data moves with Windows servicing and can lag the ICU everyone else uses, so two machines can disagree on edge cases. The check throws for NLS too, because machines quietly disagreeing about the same input is exactly what it exists to catch. If NLS is what you want, the opt-out below keeps it.
 
 - App-local ICU makes the app supply a specific ICU instead of using the OS one: a `Microsoft.ICU.ICU4C.Runtime` package reference plus the `System.Globalization.AppLocalIcu` runtimeconfig option. This is the one that makes normalization *more* predictable, and it's what the parser's own test project does to keep its comparison target from moving (see the comment in InductorParser.Tests.csproj).
 
 Two things stay unaffected. Segmentation: `StringInfo`'s Unicode data is compiled into the runtime itself, so token boundaries are identical under all three settings. Malformed-input reporting: the parser's own scan rejects unpaired surrogates and [U+FFFE](#ufffe-rejected-under-normalization-to-match-net) before any normalizer runs, so `MalformedInput` errors don't change even under invariant globalization, where `string.Normalize` itself would accept U+FFFE.
 
-What to do about it depends on which setting is on. Under invariant globalization a normalizing grammar is simply broken, so opt into the built-in implementations at startup, the same line from the previous sections:
+The check only fires where the settings actually matter: when the Runtime implementation is active and a grammar actually normalizes. `Bundled` never consults it, segmentation-only grammars never consult it, and a grammar compiled with `Compile(null)` turned normalization off, so it never consults the check either. Detection is mostly plain behavior: normalize a decomposed e plus combining acute to FormC and see whether it composes. That catches invariant globalization directly, and it keeps working in trimmed apps, where reflection can find nothing. NLS normalizes that example correctly, so for NLS the parser reads the runtime's internal GlobalizationMode flags instead, which also lets the exception name the exact mode (there's no public .NET API for these modes). The code is [HostGlobalizationCheck.cs](../src/InductorParser/Lexing/Unicode/HostGlobalizationCheck.cs).
+
+What to do about the exception depends on which setting is on. Under invariant globalization a normalizing grammar is simply broken, so opt into the built-in implementations at startup, the same line from the previous sections:
 
 ```csharp
 UnicodeEnvironment.Implementation = UnicodeImplementation.Bundled;
 ```
 
-Under NLS you have a choice because normalization still works. Leave the parser on Runtime if you turned NLS on deliberately and want the parser to agree with the rest of your process. Opt into `Bundled` if you'd rather have the parser parse identically on every machine than match the host's NLS data. The built-in normalizer and segmenter run from their own tables and never touch the host's globalization, so the parser behaves the same no matter what the app or container chose.
+The built-in normalizer and segmenter run from their own tables and never touch the host's globalization, so the parser behaves the same no matter what the app or container chose.
+
+Under NLS you have a real choice because normalization still works. Opt into `Bundled` if you'd rather have the parser parse identically on every machine than match the host's NLS data. Or keep the parser on Runtime if you turned NLS on deliberately and want the parser to agree with the rest of your process:
+
+```csharp
+UnicodeEnvironment.AcceptHostGlobalization = true;
+```
+
+That line says the host's globalization is understood and the runtime implementations are wanted anyway. It suppresses the check under both modes, including invariant globalization, where it deliberately buys back the silent do-nothing normalization described above, so use it under invariant mode only if the grammars in the process genuinely don't depend on normalization. Both properties follow the same freeze rule: set them at startup, before building grammars or parsing. By the time the exception fires, the first normalization query has already frozen the choice, so the fix goes in startup code, not in a catch block around the parse.
