@@ -1153,10 +1153,12 @@ public class XidIdentifierTests
     // maintainer's job (the spec constants) with the BCL's Unicode
     // version (out of our control).
     //
-    // [Explicit] because they hit unicode.org. Run them on demand when
-    // reviewing the constants or bumping the Unicode version. Locking to
-    // a specific version (not "latest") keeps them stable across Unicode
-    // releases.
+    // [Explicit] because they hit unicode.org, with
+    // [Category("RequiresNetwork")] so ./test.sh --all can select
+    // them and an offline run knows what to exclude. Run them on
+    // demand when reviewing the constants or bumping the Unicode
+    // version. Locking to a specific version (not "latest") keeps
+    // them stable across Unicode releases.
 
     private const string UnicodeVersion = "17.0.0";
     private static readonly HashSet<string> IDStartBaseCategories =
@@ -1164,7 +1166,7 @@ public class XidIdentifierTests
     private static readonly HashSet<string> IDContinueBaseCategories =
         new(IDStartBaseCategories) { "Mn", "Mc", "Nd", "Pc" };
 
-    [Test, Explicit("Fetches PropList.txt from unicode.org. Run on demand or when bumping the Unicode version the spec constants track.")]
+    [Test, Explicit("Fetches PropList.txt from unicode.org. Run on demand or when bumping the Unicode version the spec constants track."), Category("RequiresNetwork")]
     public async Task OtherIdStart_matches_UCD_test()
     {
         string propList = await FetchPropListAsync();
@@ -1173,7 +1175,7 @@ public class XidIdentifierTests
         AssertSetsEqual("OtherIdStart", expected, actual);
     }
 
-    [Test, Explicit("Fetches PropList.txt from unicode.org.")]
+    [Test, Explicit("Fetches PropList.txt from unicode.org."), Category("RequiresNetwork")]
     public async Task OtherIdContinue_matches_UCD_test()
     {
         string propList = await FetchPropListAsync();
@@ -1182,7 +1184,7 @@ public class XidIdentifierTests
         AssertSetsEqual("OtherIdContinue", expected, actual);
     }
 
-    [Test, Explicit("Fetches DerivedCoreProperties.txt from unicode.org.")]
+    [Test, Explicit("Fetches DerivedCoreProperties.txt from unicode.org."), Category("RequiresNetwork")]
     public async Task NfkxClosureRemovedFromXidStart_matches_UCD_test()
     {
         string coreProps = await FetchDerivedCorePropertiesAsync();
@@ -1192,7 +1194,7 @@ public class XidIdentifierTests
         AssertSetsEqual("NfkxClosureRemovedFromXidStart", expected, actual);
     }
 
-    [Test, Explicit("Fetches DerivedCoreProperties.txt from unicode.org.")]
+    [Test, Explicit("Fetches DerivedCoreProperties.txt from unicode.org."), Category("RequiresNetwork")]
     public async Task NfkxClosureRemovedFromXidContinue_matches_UCD_test()
     {
         string coreProps = await FetchDerivedCorePropertiesAsync();
@@ -1202,7 +1204,7 @@ public class XidIdentifierTests
         AssertSetsEqual("NfkxClosureRemovedFromXidContinue", expected, actual);
     }
 
-    [Test, Explicit("Fetches PropList.txt and DerivedGeneralCategory.txt from unicode.org.")]
+    [Test, Explicit("Fetches PropList.txt and DerivedGeneralCategory.txt from unicode.org."), Category("RequiresNetwork")]
     public async Task IdCategoriesInPatternSyntax_matches_UCD_test()
     {
         string propList = await FetchPropListAsync();
@@ -1213,7 +1215,7 @@ public class XidIdentifierTests
         AssertSetsEqual("IdCategoriesInPatternSyntax", expected, actual);
     }
 
-    [Test, Explicit("Fetches PropList.txt and DerivedGeneralCategory.txt from unicode.org.")]
+    [Test, Explicit("Fetches PropList.txt and DerivedGeneralCategory.txt from unicode.org."), Category("RequiresNetwork")]
     public async Task IdCategoriesInPatternWhiteSpace_matches_UCD_test()
     {
         string propList = await FetchPropListAsync();
@@ -1233,7 +1235,7 @@ public class XidIdentifierTests
     // point in (identifier base ∩ Pattern_Syntax) or (identifier base ∩
     // Pattern_White_Space) at Unicode 17.0 must be absent from XidStart
     // and XidContinue.
-    [Test, Explicit("Fetches PropList.txt and DerivedGeneralCategory.txt from unicode.org.")]
+    [Test, Explicit("Fetches PropList.txt and DerivedGeneralCategory.txt from unicode.org."), Category("RequiresNetwork")]
     public async Task Pattern_Syntax_and_Pattern_White_Space_subtractions_apply_test()
     {
         string propList = await FetchPropListAsync();

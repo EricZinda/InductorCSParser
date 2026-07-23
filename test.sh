@@ -2,7 +2,8 @@
 # test.sh: run the test suite.
 #
 # Usage:
-#   ./test.sh                                              # whole suite
+#   ./test.sh                                              # everyday suite
+#   ./test.sh --all                                        # everything (slow, needs network + Unity)
 #   ./test.sh --filter "FullyQualifiedName~Atom_fragment"  # one fixture
 #
 # All arguments pass through to dotnet test.
@@ -13,6 +14,26 @@ set -euo pipefail
 # pattern as build-docs.sh.
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$repo_root"
+
+# --all: absolutely everything. The everyday suite, then every
+# [Explicit] suite, then the Unity IL2CPP pass, stopping at the first
+# failure (set -e). Expect it to take a long time (the conformance
+# corpora, the deep campaigns, and a full Unity player build), and it
+# needs network access (the RequiresNetwork tests download UCD files
+# from unicode.org) plus Unity installed (runil2cpptest.sh
+# preflight-checks the exact version). The [Explicit] suites are
+# selected by category because NUnit only runs an [Explicit] test when
+# the filter picks it out by name or category.
+# ExplicitTestConventionTests in the test project keeps the category
+# list complete: an [Explicit] test outside the categories named here
+# fails the everyday suite.
+if [ "${1:-}" = "--all" ]; then
+    shift
+    "$repo_root/test.sh" "$@"
+    "$repo_root/test.sh" --filter "TestCategory=UnicodeConformance|TestCategory=DeepCampaign|TestCategory=RequiresNetwork" "$@"
+    "$repo_root/src/InductorParser.Tests/runil2cpptest.sh"
+    exit 0
+fi
 
 # WSL has no native `dotnet` but can call the Windows SDK via interop.
 # Fall back to dotnet.exe when dotnet isn't on PATH. On Linux CI and Git

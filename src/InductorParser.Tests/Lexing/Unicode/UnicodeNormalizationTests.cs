@@ -480,7 +480,7 @@ public class UnicodeNormalizationTests
             withTrailingMarks: false);
     }
 
-    [Test, Explicit("Full four-form sweep of every code point, alone and with trailing combining marks. Run on demand when changing the normalizer or its tables.")]
+    [Test, Explicit("Full four-form sweep of every code point, alone and with trailing combining marks. Run on demand when changing the normalizer or its tables."), Category("DeepCampaign")]
     public void Every_scalar_normalizes_like_runtime_under_all_forms_test()
     {
         SweepEveryScalar(NormalizationExamples.AllForms, withTrailingMarks: true);
@@ -520,7 +520,7 @@ public class UnicodeNormalizationTests
     // classes, composition-excluded characters, and compatibility
     // sources. Any failure prints the code units, which reproduce it
     // exactly.
-    [Test, Explicit("Randomized differential sweep against the runtime's string.Normalize. Run on demand when changing the normalizer or its tables.")]
+    [Test, Explicit("Randomized differential sweep against the runtime's string.Normalize. Run on demand when changing the normalizer or its tables."), Category("DeepCampaign")]
     public void Random_sequences_normalize_like_runtime_test()
     {
         string[] extraPieces =
