@@ -174,7 +174,7 @@ internal static class TestHelpers
 
     // Assert that result describes a failure at the expected position in
     // every unit ParseResult exposes: ErrorCharIndex, ErrorLine,
-    // ErrorCharColumn, ErrorTokenIndex, plus the bundled ErrorPosition
+    // ErrorCharColumn, ErrorTokenIndex, plus the all-in-one ErrorPosition
     // struct. Use this in tests where error-position
     // behavior is the actual subject (position translation through
     // normalization, char-index to line/column conversion, etc.) so a

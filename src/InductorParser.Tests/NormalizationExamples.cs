@@ -193,14 +193,15 @@ public static class NormalizationExamples
         // be NFC-stable by itself but change when preceded by certain
         // other characters in the same script. UAX #15 calls these
         // out as a new normalization category in Unicode 16. Not yet
-        // testable here: .NET 8's string.Normalize ships with whatever
-        // Unicode version the runtime ICU has (Unicode 15 in .NET 8),
-        // so adding rows now would either silently behave as identity
-        // (misleading the matrix's self-check) or fail differently
-        // across runtimes. Adding the category as a placeholder so
-        // future runtime upgrades surface this gap.
-        // TODO: add concrete rows once the .NET runtime supports
-        // Unicode 16. Inferred concrete shape: U+1138B U+113C7 in
+        // testable here: the test project ships app-local ICU 72.1 as
+        // the string.Normalize oracle (Unicode 15.0 data, matching the
+        // built-in tables), so adding rows now would silently behave as
+        // identity, misleading the matrix's self-check. Adding the
+        // category as a placeholder so a future oracle upgrade
+        // surfaces this gap.
+        // TODO: add concrete rows once the oracle moves to Unicode 16
+        // data (a newer app-local ICU plus matching built-in tables).
+        // Inferred concrete shape: U+1138B U+113C7 in
         // Tulu-Tigalari should normalize across the boundary because
         // U+113C7 has decomposition U+113C2 U+113B8 and U+1138E has
         // decomposition U+1138B U+113C2.
@@ -651,9 +652,9 @@ public static class NormalizationExamples
 // Catches typos in the table before they pass-but-mislead any
 // downstream test that relies on those columns. On CoreCLR the
 // normalizer resolves to the runtime's string.Normalize, so this
-// checks the table against .NET. On Unity it resolves to the bundled
+// checks the table against .NET. On Unity it resolves to the built-in
 // UAX #15 normalizer, so the same rows double as an IL2CPP check of
-// the bundled tables. Lives next to the table rather than with the
+// the built-in tables. Lives next to the table rather than with the
 // rule-behavior tests because what it verifies is a property of the
 // data, not of any rule.
 [TestFixture]

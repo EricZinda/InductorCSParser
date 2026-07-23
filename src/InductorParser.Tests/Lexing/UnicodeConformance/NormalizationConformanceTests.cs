@@ -14,7 +14,7 @@ using static InductorParser.Rules;
 namespace InductorParser.Tests.Lexing.UnicodeConformance;
 
 // UAX #15 normalization conformance against the official
-// NormalizationTest.txt suite from unicode.org, run against the bundled
+// NormalizationTest.txt suite from unicode.org, run against the built-in
 // normalizer (UnicodeNormalization). Each data line holds five columns
 // of hex code point sequences, c1 through c5 (source, NFC, NFD, NFKC,
 // NFKD), and the file's header states the invariants every conformant
@@ -213,7 +213,7 @@ public class NormalizationConformanceTests
                 (c5, c1), (c5, c2), (c5, c3), (c5, c4), (c5, c5));
         }
         Assert.That(disagreements, Is.Empty,
-            "the bundled normalizer disagrees with NormalizationTest.txt");
+            "the built-in normalizer disagrees with NormalizationTest.txt");
     }
 
     private static void CheckInvariant(
@@ -237,11 +237,11 @@ public class NormalizationConformanceTests
     public void Code_points_not_listed_in_Part1_normalize_to_themselves()
     {
         // The file's Part1 corollary. Surrogate code points are outside
-        // it: they aren't scalar values, and both the bundled and
+        // it: they aren't scalar values, and both the built-in and
         // runtime implementations throw on them (covered in
         // UnicodeNormalizationTests). U+FFFE is skipped for the same
         // reason: pure UAX #15 normalizes it to itself, but .NET's
-        // string.Normalize rejects it, and the bundled implementation
+        // string.Normalize rejects it, and the built-in implementation
         // deliberately matches .NET (the throw-parity differential in
         // UnicodeNormalizationTests locks the two together).
         var listedInPart1 = new HashSet<int>();

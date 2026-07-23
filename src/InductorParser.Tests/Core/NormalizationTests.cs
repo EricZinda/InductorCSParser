@@ -247,7 +247,7 @@ public class NormalizationTests
         var position = result.ErrorPosition;
         Assert.That(position, Is.Not.Null);
         Assert.That(position!.Value.CharIndex, Is.EqualTo(result.ErrorCharIndex),
-            "ErrorPosition bundle must agree with ErrorCharIndex");
+            "ErrorPosition struct must agree with ErrorCharIndex");
     }
 
     // Compatibility-form tests. FormKC and FormKD convert ligatures, circled

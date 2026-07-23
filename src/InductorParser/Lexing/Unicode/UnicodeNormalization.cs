@@ -11,20 +11,20 @@ namespace InductorParser.Lexing.Unicode;
 /// </summary>
 /// <remarks>
 /// This class chooses between two implementations: the runtime's
-/// string.Normalize, and a bundled UAX #15 normalizer
+/// string.Normalize, and a built-in UAX #15 normalizer
 /// (https://www.unicode.org/reports/tr15/) whose generated tables in
 /// UnicodeNormalization.Data.cs are the other half of this partial
-/// class and are fixed at Unicode 15.0 like the bundled segmenter's table.
+/// class and are fixed at Unicode 15.0 like the built-in segmenter's table.
 /// The implementation is chosen by the process-wide setting surfaced
 /// as UnicodeEnvironment.Implementation, which governs this normalizer
 /// and the segmenter together (they can never diverge) and is resolved
-/// and frozen on the first query from either. The bundled
+/// and frozen on the first query from either. The built-in
 /// implementation exists because Unity's Mono runtime ships a
 /// string.Normalize that doesn't apply compatibility mappings, misses
 /// canonical mappings, and accepts ill-formed UTF-16, all of which
 /// .NET's implementation gets right.
 /// <para>
-/// The bundled normalizer has no quick-check tables: it always
+/// The built-in normalizer has no quick-check tables: it always
 /// decomposes, reorders, and recomposes, then hands back the original
 /// string instance when the result is content-identical. Quick-check
 /// (the NFC_QC / NFD_QC properties) is the next optimization if
@@ -39,7 +39,7 @@ internal static partial class UnicodeNormalization
     /// The first call resolves and freezes the process-wide
     /// implementation choice (UnicodeEnvironment.Implementation): the
     /// normalized string comes from the runtime's string.Normalize or
-    /// the bundled UAX #15 implementation below.
+    /// the built-in UAX #15 implementation below.
     /// </summary>
     public static string Normalize(string input, NormalizationForm form)
     {
@@ -59,7 +59,7 @@ internal static partial class UnicodeNormalization
 
     // Reject values outside the four defined forms before dispatching,
     // with one culture-stable message. .NET's string.Normalize throws on
-    // an out-of-range value itself, but the bundled pipeline selects its
+    // an out-of-range value itself, but the built-in pipeline selects its
     // decompose and compose steps by comparing against the K and C
     // forms, so without this check an out-of-range value would quietly
     // run as FormD there and the two implementations would disagree.
@@ -124,14 +124,14 @@ internal static partial class UnicodeNormalization
     }
 
     // The runtime-backed implementation. Internal (not private) so the
-    // differential tests can compare it against the bundled one directly.
+    // differential tests can compare it against the built-in one directly.
     internal static string NormalizeWithRuntime(string input, NormalizationForm form) =>
         input.Normalize(form);
 
     internal static bool IsNormalizedWithRuntime(string input, NormalizationForm form) =>
         input.IsNormalized(form);
 
-    // The bundled UAX #15 pipeline: reject text the scan flags (see
+    // The built-in UAX #15 pipeline: reject text the scan flags (see
     // FindFirstUnnormalizableIndex), decompose
     // (canonically, or fully for the K forms), put combining marks in
     // canonical order, recompose for the composing forms, and hand back

@@ -287,7 +287,7 @@ internal static class UnicodeExamples
     public static readonly string DevanagariSsaGrapheme = Canary("ष", "Devanagari letter ssa", 0x0937);
 
     // U+0939 + U+093F: Devanagari "hi" (HA + I VOWEL SIGN). The lexer
-    // bundles these into a single multi-rune grapheme cluster.
+    // groups these into a single multi-rune grapheme cluster.
     public static readonly string DevanagariHiGrapheme = Canary("हि", "Devanagari ha + i vowel sign", 0x0939, 0x093F);
 
     // U+E0001 LANGUAGE TAG. Used inside emoji tag sequences for subdivision
@@ -875,7 +875,7 @@ internal static class UnicodeExamples
         0x0BA4, 0x0BAE, 0x0BBF, 0x0BB4, 0x0BCD);
 
     // Tibetan "བོད" (the word "Tibet", romanized "bod"). Three runes:
-    // BA (Lo) + VOWEL SIGN O (Mn) + DA (Lo). The vowel sign bundles
+    // BA (Lo) + VOWEL SIGN O (Mn) + DA (Lo). The vowel sign combines
     // with the preceding consonant into one grapheme, giving two
     // graphemes total.
     public static readonly string TibetanBodIdentifier = Canary(
@@ -903,7 +903,7 @@ internal static class UnicodeExamples
     // Hebrew "שָׁלוֹם" (shalom, "peace") written with niqqud (vowel
     // points). Seven runes: SHIN (Lo) + QAMATS (Mn) + SHIN DOT (Mn) +
     // LAMED (Lo) + VAV (Lo) + HOLAM (Mn) + FINAL MEM (Lo). The points
-    // are combining marks (XID_Continue) that bundle with their base
+    // are combining marks (XID_Continue) that combine with their base
     // letters, giving four graphemes from seven runes. RTL plus
     // combining marks in one word.
     public static readonly string HebrewShalomWithNiqqudIdentifier = Canary(

@@ -23,7 +23,7 @@ namespace InductorParser.Tests;
 // regeneration tool below it has its [Test] attribute commented out so
 // no filter can run it by accident. The version is pinned (not
 // "latest") so the tests stay stable across Unicode releases: these
-// tables deliberately match the Unicode version of the bundled
+// tables deliberately match the Unicode version of the built-in
 // segmenter's table, and bumping it is a separate decision (see the
 // header of UnicodeNormalization.Data.cs).
 [TestFixture]
@@ -449,9 +449,9 @@ public class UnicodeNormalizationDataTests
 
     private static readonly string[] DataFileHeaderLines =
     {
-        "Generated file. The Unicode normalization data behind the bundled",
+        "Generated file. The Unicode normalization data behind the built-in",
         "UAX #15 normalizer, at Unicode 15.0.0, the same version as the",
-        "bundled segmenter's break-property table. The values come from the",
+        "built-in segmenter's break-property table. The values come from the",
         "Unicode Character Database (the \"UCD\", Unicode's machine-readable",
         "property data, https://www.unicode.org/ucd/) and are copyright",
         "Unicode, Inc., used under the Unicode License v3",

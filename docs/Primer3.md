@@ -187,5 +187,20 @@ Here's a survey of things that might be unexpected to those new to Unicode:
 Just like ill-formed tokens above, the only way you can match these is by putting them in a Rule that matches specific tokens (e.g. `Token`), or by using a rule designed to match literally "any" text like `AnyToken`.
 
 
+## Choosing Which Unicode to Use
+The parser can do its Unicode work (splitting text into graphemes, normalizing it) in one of two ways: using what .NET provides, or using its own built-in copy of the Unicode rules. By default, it picks for you: regular .NET apps use .NET's, and Unity apps use the built-in copy (because Unity's version of .NET has outdated Unicode support). Most apps never need to think about this.
+
+One line, run once at startup before building grammars, overrides the choice:
+
+```CSharp
+UnicodeEnvironment.Implementation = UnicodeImplementation.Bundled;
+```
+
+There are two situations where you'd want that line:
+- A server that has to agree with a Unity client about exactly how text parses. Put both on `Bundled` and they can't drift apart.
+- Your app or container changes .NET's globalization settings (some deployments do, to shrink images or keep old Windows behavior). Those settings quietly change how the parser normalizes. `Bundled` makes the parser immune to them.
+
+[Unicode Gotchas](UnicodeGotchas.md) covers all of this in depth, including exactly what those settings do.
+
 ## Security-related Concerns
 Unicode opens up a few classic ways to attack a parser, see [primer 4](Primer4.md) for a walkthrough.

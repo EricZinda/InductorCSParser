@@ -1,6 +1,6 @@
-// Generated file. The Unicode normalization data behind the bundled
+// Generated file. The Unicode normalization data behind the built-in
 // UAX #15 normalizer, at Unicode 15.0.0, the same version as the
-// bundled segmenter's break-property table. The values come from the
+// built-in segmenter's break-property table. The values come from the
 // Unicode Character Database (the "UCD", Unicode's machine-readable
 // property data, https://www.unicode.org/ucd/) and are copyright
 // Unicode, Inc., used under the Unicode License v3

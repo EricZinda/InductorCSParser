@@ -14,7 +14,7 @@ namespace InductorParser.Tests;
 // SetUp and TearDown both restore a fresh unfrozen Automatic through
 // UnicodeEnvironment.ResetForTesting.
 //
-// On .NET 8 the bundled and runtime implementations produce identical
+// On .NET 8 the built-in and runtime implementations produce identical
 // results (the differential tests in GraphemeSegmentationTests and
 // UnicodeNormalizationTests hold each pair equal), so no input can
 // tell them apart here, and these tests check ActiveImplementation
@@ -23,7 +23,7 @@ namespace InductorParser.Tests;
 // GraphemeSegmentation and UnicodeNormalization read when they choose
 // which implementation to run, and there is no second copy of that
 // state to drift out of sync, so when it says Bundled the next
-// segmentation or normalization call runs the bundled code.
+// segmentation or normalization call runs the built-in code.
 [TestFixture]
 // NonParallelizable because every test in the process shares the one
 // UnicodeEnvironment, and this fixture is the only one that mutates
@@ -194,8 +194,8 @@ public class UnicodeEnvironmentSettingTests
         // startup, then compile and parse normally. The grammar's
         // literal is precomposed e-acute, the input arrives decomposed
         // (e + combining acute), and the default FormC compile makes
-        // them match, with the bundled normalizer doing the converting
-        // and the bundled segmenter doing the tokenizing. Everything
+        // them match, with the built-in normalizer doing the converting
+        // and the built-in segmenter doing the tokenizing. Everything
         // else in this project runs these paths under the runtime
         // implementations, so this is the one CoreCLR test of the whole
         // pipeline under an explicit Bundled.
@@ -210,7 +210,7 @@ public class UnicodeEnvironmentSettingTests
         Assert.That(UnicodeEnvironment.ActiveImplementation,
             Is.EqualTo(UnicodeImplementation.Bundled));
 
-        // A failure position maps back through the bundled normalizer's
+        // A failure position maps back through the built-in normalizer's
         // output to the caller's decomposed coordinates: the missing
         // semicolon after the two-char decomposed e-acute is at char
         // index 2.

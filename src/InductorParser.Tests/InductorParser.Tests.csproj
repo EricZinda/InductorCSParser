@@ -14,6 +14,26 @@
     <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
   </ItemGroup>
 
+  <!-- The normalization oracle. The tests compare the built-in
+       normalizer against string.Normalize, which hands the work to
+       whatever ICU the machine has (system ICU on Linux, the OS
+       icu.dll on Windows), and that data moves with OS updates. This
+       package puts ICU 72.1's native DLLs in the test output (under
+       runtimes/<platform>/native/), and the AppLocalIcu option makes
+       the runtime load that copy instead of the OS one, so every test
+       run normalizes from the same bytes. The version matters: ICU
+       72.1 is built from Unicode 15.0 data, exactly what the built-in
+       tables use, while ICU 68 (Unicode 13) would fail the
+       full-scalar sweeps on characters added in Unicode 14 and 15.
+       GlobalizationOracleFixture refuses to run the suite if this ICU
+       isn't the one actually loaded. The RuntimeHostConfigurationOption
+       flows into the generated runtimeconfig.json, which the test
+       host honors. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" Version="72.1.0.3" />
+    <RuntimeHostConfigurationOption Include="System.Globalization.AppLocalIcu" Value="72.1.0.3" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\InductorParser\InductorParser.csproj" />
   </ItemGroup>

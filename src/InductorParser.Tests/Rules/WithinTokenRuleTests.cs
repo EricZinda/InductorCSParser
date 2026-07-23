@@ -222,7 +222,7 @@ public class WithinTokenRuleTests
     {
         // "كَ" is one grapheme, two runes: U+0643 ARABIC LETTER KAF (Lo) +
         // U+064E ARABIC FATHA (Mn). Represents the common case of Arabic
-        // text written with the optional vowel diacritics, which bundle
+        // text written with the optional vowel diacritics, which combine
         // with their preceding consonant under grapheme clustering.
         var rule = WithinToken(And(
             OneOf(TokenSet.XidStart),

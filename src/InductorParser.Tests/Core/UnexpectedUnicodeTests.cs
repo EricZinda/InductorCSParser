@@ -1666,7 +1666,7 @@ public class UnexpectedUnicodeTests
     [Test]
     public void Parser_doesnt_crash_on_long_run_of_combining_marks()
     {
-        // 100 combining acutes in a row. UAX #29 bundles them into
+        // 100 combining acutes in a row. UAX #29 groups them into
         // one cluster (no base, all Extend). One big token.
         var rule = AnyToken();
         string input = new string(UnicodeExamples.CombiningAcuteText[0], 100);

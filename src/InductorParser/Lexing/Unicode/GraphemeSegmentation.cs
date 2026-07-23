@@ -12,8 +12,8 @@
 // inside StringInfo, but Unity's Mono and IL2CPP runtimes ship a legacy
 // pre-UAX-#29 implementation that segments differently (it splits CRLF,
 // ZWJ emoji sequences, regional-indicator flags, and more). This
-// bundled segmenter exists so those runtimes tokenize correctly, at
-// Unicode 15.0 (the version .NET 8 bundles). It's only used for those
+// built-in segmenter exists so those runtimes tokenize correctly, at
+// Unicode 15.0 (the version .NET 8 ships). It's only used for those
 // runtimes by default, the others use .NET's implementation.
 //
 // This port differs from the upstream file in two deliberate ways.
@@ -44,7 +44,7 @@
 // and character categories all move together, at whatever Unicode
 // version the runtime ships, and a newly added target framework gets
 // that behavior with no extra wiring. The netstandard2.1 build defines
-// the symbol, so Automatic means this bundled state machine there,
+// the symbol, so Automatic means this built-in state machine there,
 // because the StringInfo on the runtimes that load that build (Unity's
 // Mono, IL2CPP) predates UAX #29. Callers on any build can override
 // the default at startup by setting UnicodeEnvironment.Implementation
@@ -89,7 +89,7 @@ internal enum GraphemeClusterBreakType
 
 /// <summary>
 /// Computes UAX #29 extended grapheme cluster boundaries
-/// (https://www.unicode.org/reports/tr29/). The bundled state machine
+/// (https://www.unicode.org/reports/tr29/). The built-in state machine
 /// is compliant per Rev. 41
 /// (https://www.unicode.org/reports/tr29/tr29-41.html), the Unicode
 /// 15.0 edition of the spec,
@@ -108,7 +108,7 @@ internal static partial class GraphemeSegmentation
     /// empty, returns 0. The first call resolves and freezes the
     /// process-wide implementation choice
     /// (UnicodeEnvironment.Implementation): the length comes from the
-    /// runtime's StringInfo or the bundled state machine below (the
+    /// runtime's StringInfo or the built-in state machine below (the
     /// file header explains the policy).
     /// </summary>
     public static int GetLengthOfFirstExtendedGraphemeCluster(ReadOnlySpan<char> input)
@@ -134,7 +134,7 @@ internal static partial class GraphemeSegmentation
 #endif
     }
 
-    // The bundled segmenter. The body below is a near-literal paste of
+    // The built-in segmenter. The body below is a near-literal paste of
     // GetLengthOfFirstExtendedGraphemeCluster from dotnet/runtime's
     // TextSegmentationUtility.cs, comments included. Compare against
     // the original at

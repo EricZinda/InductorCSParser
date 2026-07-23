@@ -73,7 +73,7 @@ namespace InductorParser.PlayModeTests
         public void Bundled_unicode_implementations_are_active_under_il2cpp()
         {
             // In the assembly Unity loads, UnicodeImplementation.Automatic
-            // must mean the bundled segmenter and normalizer, because
+            // must mean the built-in segmenter and normalizer, because
             // Unity's runtimes ship a legacy StringInfo and a
             // string.Normalize that misses mappings. Each behavior
             // assertion is its own tripwire: the legacy StringInfo

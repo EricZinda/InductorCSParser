@@ -152,7 +152,7 @@ public class WithErrorTests
     public void WithError_rejects_null_message_at_construction()
     {
         // Sequential asserts, not Assert.Multiple: this file syncs into
-        // the IL2CPP pass, and Unity's bundled NUnit predates
+        // the IL2CPP pass, and Unity's included NUnit predates
         // Assert.Multiple.
         var namedException = Assert.Throws<ArgumentNullException>(
             () => Token('a').WithError(null!));

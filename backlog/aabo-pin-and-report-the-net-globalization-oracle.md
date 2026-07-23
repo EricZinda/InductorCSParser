@@ -1,0 +1,7 @@
+# Pin and report the .NET globalization oracle
+
+The test suite now enforces its globalization oracle at startup. InductorParser.Tests ships app-local ICU 72.1 (the same Unicode 15.0 data as the built-in tables) as the string.Normalize backend, and GlobalizationOracleFixture refuses to run the suite on any other ICU, on Windows NLS, on invariant globalization, or on a runtime major other than 8, with a diagnostic naming what it found and how to fix it. What remains is CI. Nothing runs the tests in CI today (docs.yml only builds documentation), so the enforced configuration is only exercised when someone runs test.sh locally.
+
+Create the first test-running workflow with one canonical job: a pinned ubuntu image version rather than ubuntu-latest (an image that silently moves is exactly the drift the startup checks exist to catch), a pinned .NET 8 SDK version, and a plain bash test.sh run. The oracle needs no extra CI configuration. The startup checks enforce it wherever the tests run, so a wrong image or SDK fails the run with the fixture's diagnostic. If Windows NLS ever becomes a supported deployment, give it a named job of its own instead of letting a host select NLS silently (the suite currently rejects NLS outright).
+
+Done when CI runs the test suite green on a pinned image and SDK, and a deliberately wrong configuration (for example DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 on the same job) fails with the fixture's diagnostic instead of passing.

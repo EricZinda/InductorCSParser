@@ -137,7 +137,7 @@ Failing at compile time is deliberate. Without the check, the forgotten bind wou
 
 **5. Convert every literal to the chosen normalization form.** When `Compile` is given a non-null form, every rule's expected text is converted to that form in place: `Literal` and `Token` rewrite their stored text, and the `TokenSet`-bearing rules (`OneOf`, `NoneOf`, `ScanWhile`, `ScanUntil`, and `Identifier`'s extra start/body sets) convert their set entries the same way. You can type a literal in whatever form is convenient and it will still match, because it will be converted to the form the lexer is reading automatically. `Compile` throws only when text can't be represented in the chosen form: an unpaired surrogate that `string.Normalize` rejects, or a one-grapheme slot (a `Token`, a set entry) whose conversion produces more than one grapheme (the ligature `ﬁ` becomes the two-grapheme `fi` under `FormKC`). Those failures are collected across the whole grammar and thrown as a single `InvalidOperationException` listing each rule, its original text, and how to fix it. The pass is skipped when the form is `null` (the author opted out of normalization).
 
-Bundling the five jobs into one `Compile` call is a design choice. Internally it takes several walks over the same graph (explicit ids have to be collected before named and anonymous ids can probe around them, and the normalization pass needs ids in place), but they all run inside the one call, so a grammar is either fully compiled or untouched. The alternative was separate user-visible passes, which would just push those ordering rules onto the caller.
+Combining the five jobs into one `Compile` call is a design choice. Internally it takes several walks over the same graph (explicit ids have to be collected before named and anonymous ids can probe around them, and the normalization pass needs ids in place), but they all run inside the one call, so a grammar is either fully compiled or untouched. The alternative was separate user-visible passes, which would just push those ordering rules onto the caller.
 
 ### SymbolId
 
@@ -186,7 +186,7 @@ Rune symbols live at the bottom because single-rune leaf symbols use the code po
 
 ## Characters and TokenSet
 
-The parser operates on Unicode text, not raw bytes. The lexer reads one UAX #29 extended grapheme cluster per step: `👨‍👩‍👧‍👦` is one token rather than seven scalar values. On modern .NET the boundaries come from the runtime's `StringInfo`, and on the netstandard2.1 build Unity loads they come from the library's bundled segmenter, because Unity's runtime predates UAX #29. The full lexer story lives in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md), and `WithinToken(...)` (covered below) is the escape hatch for matching the runes inside one token. For grammar-authoring purposes, you can ignore the distinction until you hit emoji or combining-mark input, at which point the Unicode doc has the answer.
+The parser operates on Unicode text, not raw bytes. The lexer reads one UAX #29 extended grapheme cluster per step: `👨‍👩‍👧‍👦` is one token rather than seven scalar values. On modern .NET the boundaries come from the runtime's `StringInfo`, and on the netstandard2.1 build Unity loads, they come from the library's built-in segmenter, because Unity's runtime predates UAX #29. The full lexer story lives in [UnicodeInternalsArchitecture.md](UnicodeInternalsArchitecture.md), and `WithinToken(...)` (covered below) is the escape hatch for matching the runes inside one token. For grammar-authoring purposes, you can ignore the distinction until you hit emoji or combining-mark input, at which point the Unicode doc has the answer.
 
 `TokenSet` is a composable value type for character sets. You build a class out of built-ins and factory calls and combine them with `|` for union, `&` for intersection, and `-` for difference ("a minus b"). The full API sketch is in "The TokenSet API" below.
 
@@ -318,7 +318,7 @@ The parser's token is one UAX #29 grapheme cluster: one user-perceived character
 - `Token("👋🏽")` matches the multi-rune waving-hand-with-skin-tone token as one unit. Construction-time validation rejects arguments that aren't exactly one grapheme cluster.
 - `OneOf(TokenSet.Letters)` tests the whole token for set membership, not the runes inside it. A rune-range member can only ever match a single-rune token, so a multi-rune token whose runes are all letters (a Devanagari conjunct) isn't in `Letters`. It matches only if the set names it as a `Graphemes(...)` member. 
 - `Literal("café")` matches four tokens, one per visible character. That count comes from grapheme clustering, not normalization: `é` typed as `e + U+0301` is one cluster, so one token, normalized or not. What the default normalization adds is that the two spellings agree: Compile converts the literal and Parse converts the input to the same form, so a precomposed `é` in the grammar matches a decomposed one in the input. Under `Compile(null)` the comparison is exact code units, so the literal only matches input typed the same way.
-- Emoji sequences (👋🏽, 🇺🇸, 👨‍👩‍👧‍👦) match as single tokens on every runtime the library ships for: modern .NET's own `StringInfo` follows UAX #29, and the netstandard2.1 build Unity loads bundles a UAX #29 segmenter because Unity's runtime doesn't have one. [UnicodeGotchas.md](UnicodeGotchas.md#token-segmentation-across-runtimes) has the policy.
+- Emoji sequences (👋🏽, 🇺🇸, 👨‍👩‍👧‍👦) match as single tokens on every runtime the library ships for: modern .NET's own `StringInfo` follows UAX #29, and the netstandard2.1 build Unity loads includes a UAX #29 segmenter because Unity's runtime doesn't have one. [UnicodeGotchas.md](UnicodeGotchas.md#token-segmentation-across-runtimes) has the policy.
 
 This is right for almost every grammar that handles user-supplied text, because "one character" in the user's mental model is usually one user-perceived character. An emoji programming language works naturally. Identifiers that include combining marks work naturally. Keywords like `function` parse the same way they always did (all ASCII, all single-rune clusters).
 
@@ -503,7 +503,7 @@ public readonly struct ParseResult
     public int  ErrorTokenIndex        { get; }
     public int  ErrorTokenColumn       { get; }
 
-    // The error position bundled into a SourcePosition. Null on success.
+    // The error position packed into a SourcePosition. Null on success.
     // Use this when you want all five units in one shot (one walk of the
     // input instead of several lazy ones).
     public SourcePosition? ErrorPosition { get; }
