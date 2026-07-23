@@ -307,9 +307,10 @@ public class UnicodeNormalizationTests
     [Test]
     public void Hangul_syllable_round_trips_through_jamo()
     {
-        // U+D4DB is the syllable the UAX #15 spec itself uses to
-        // illustrate the arithmetic: it decomposes to three jamo and
-        // composes back through the LV intermediate.
+        // U+D4DB is the syllable The Unicode Standard uses to
+        // illustrate the arithmetic, in the conjoining-jamo section
+        // (3.12) that defines it: the syllable decomposes to three
+        // jamo and composes back through the LV intermediate.
         string syllable = FromCodePoints(0xD4DB);
         string jamo = FromCodePoints(0x1111, 0x1171, 0x11B6);
         Assert.That(
@@ -515,6 +516,27 @@ public class UnicodeNormalizationTests
         SweepEveryScalar(
             new[] { NormalizationForm.FormC, NormalizationForm.FormD },
             withTrailingMarks: false);
+    }
+
+    [Test]
+    public void Quick_check_Yes_path_does_not_allocate_for_nonAscii_input()
+    {
+        string input = string.Concat(Enumerable.Repeat(
+            UnicodeExamples.LatinEAcutePrecomposedGrapheme, 1000));
+        UnicodeNormalization.NormalizeWithBundledImplementation(
+            input, NormalizationForm.FormC);
+
+        bool allSame = true;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int iteration = 0; iteration < 100; iteration++)
+            allSame &= ReferenceEquals(
+                UnicodeNormalization.NormalizeWithBundledImplementation(
+                    input, NormalizationForm.FormC),
+                input);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.That(allSame, Is.True);
+        Assert.That(allocated, Is.LessThan(1024));
     }
 
     [Test, Explicit("Full four-form sweep of every code point, alone and with trailing combining marks. Run on demand when changing the normalizer or its tables."), Category("DeepCampaign")]
