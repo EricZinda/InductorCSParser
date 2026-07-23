@@ -30,7 +30,7 @@ namespace InductorParser.Lexing.Unicode;
 /// the combining classes are already in canonical order, the input is
 /// returned unchanged with one scan and no allocation. UAX #15 notes
 /// that much text is already NFC
-/// (https://www.unicode.org/reports/tr15/#Description_Norm), making
+/// (https://www.unicode.org/reports/tr15/#Norm_Forms), making
 /// this an important common case. Quick-check No proves the input
 /// needs normalization, while Maybe (a scalar that might compose with
 /// a preceding character) requires a full check. Normalize rebuilds
@@ -323,7 +323,9 @@ internal static partial class UnicodeNormalization
     // buffer. The table stores mappings single-level, exactly as
     // UnicodeData.txt states them, so a mapped piece can have a mapping
     // of its own (U+01D5 maps to U+00DC + U+0304, and U+00DC maps
-    // further). The chains are short, five levels at most. For the
+    // further). The chains are short: three levels at the deepest
+    // (polytonic Greek like U+1F82, whose pieces expand twice more), a
+    // bound the data tests assert against the tables. For the
     // canonical forms only canonical mappings apply. For the K forms both
     // kinds apply, and every canonical piece is re-checked because it can
     // have a compatibility mapping of its own (U+1E9B's piece U+017F, the

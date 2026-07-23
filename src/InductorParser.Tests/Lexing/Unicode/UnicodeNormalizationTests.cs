@@ -307,9 +307,10 @@ public class UnicodeNormalizationTests
     [Test]
     public void Hangul_syllable_round_trips_through_jamo()
     {
-        // U+D4DB is the syllable the UAX #15 spec itself uses to
-        // illustrate the arithmetic: it decomposes to three jamo and
-        // composes back through the LV intermediate.
+        // U+D4DB is the syllable The Unicode Standard uses to
+        // illustrate the arithmetic, in the conjoining-jamo section
+        // (3.12) that defines it: the syllable decomposes to three
+        // jamo and composes back through the LV intermediate.
         string syllable = FromCodePoints(0xD4DB);
         string jamo = FromCodePoints(0x1111, 0x1171, 0x11B6);
         Assert.That(

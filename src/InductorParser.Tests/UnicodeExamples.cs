@@ -165,7 +165,7 @@ internal static class UnicodeExamples
     // selector + COMBINING ENCLOSING KEYCAP), one grapheme. The
     // canonical keycap sequence: a base character followed by VS16 to
     // select emoji presentation and the combining enclosing keycap to
-    // wrap it. UAX #29 GB9 / GB9a keep the Extend characters glued to
+    // wrap it. UAX #29 GB9 keeps the Extend characters glued to
     // the base. Distinct from the family ZWJ sequence (which uses
     // emoji + ZWJ + emoji links) so the test covers the
     // base + variation-selector + combining-mark shape.
@@ -538,7 +538,11 @@ internal static class UnicodeExamples
     public static readonly string LatinSmallEWithGraveGrapheme = Canary("è", "latin small letter e with grave", 0x00E8);
 
     // U+00DF LATIN SMALL LETTER SHARP S. The German 'eszett'.
-    // Uppercase folds to "SS" under FormKC.
+    // Normalization leaves it unchanged under all four forms. The
+    // famous "SS" expansion is Unicode's full uppercase mapping
+    // (SpecialCasing.txt), a case mapping that normalization never
+    // applies, and .NET's ToUpperInvariant doesn't apply it either
+    // (the eszett comes back unchanged).
     public static readonly string LatinSmallSharpSGrapheme = Canary("ß", "latin small letter sharp s (eszett)", 0x00DF);
 
     // U+00F8 LATIN SMALL LETTER O WITH STROKE. Half-diminished
@@ -836,12 +840,13 @@ internal static class UnicodeExamples
     public static readonly string CancelTagText = Canary(
         "󠁿", "cancel tag (end of emoji tag sequence)", 0xE007F);
 
-    // England flag emoji as a UAX #29 emoji tag sequence: WAVING BLACK
-    // FLAG + tag chars for "gbeng" + CANCEL TAG. UAX #29 GB10 keeps the
-    // whole sequence (7 runes, 14 UTF-16 chars) as a single grapheme
-    // cluster. Renderers that recognize the sequence display the
-    // St George's Cross. Renderers that don't show a black flag followed
-    // by the tag letters or nothing at all.
+    // England flag emoji as an emoji tag sequence (UTS #51): WAVING
+    // BLACK FLAG + tag chars for "gbeng" + CANCEL TAG. UAX #29 rule GB9
+    // keeps the whole sequence (7 runes, 14 UTF-16 chars) as a single
+    // grapheme cluster, because every tag character (cancel tag
+    // included) is GCB=Extend. Renderers that recognize the sequence
+    // display the St George's Cross. Renderers that don't show a black
+    // flag followed by the tag letters or nothing at all.
     public static readonly string EnglandFlagGrapheme = Canary(
         "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "england flag emoji (waving black flag + GBENG tag sequence)",
         BlackFlagRune, 0xE0067, 0xE0062, 0xE0065, 0xE006E, 0xE0067, 0xE007F);

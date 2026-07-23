@@ -1705,12 +1705,12 @@ public class UnexpectedUnicodeTests
     [Test]
     public void England_flag_tag_sequence_is_one_token()
     {
-        // The England flag emoji is encoded as a UAX #29 emoji
-        // tag sequence (GB10): WAVING BLACK FLAG U+1F3F4,
+        // The England flag emoji is encoded as an emoji tag
+        // sequence (UTS #51): WAVING BLACK FLAG U+1F3F4,
         // followed by tag characters for the ISO 3166-2
         // subdivision code "gbeng", terminated by CANCEL TAG
         // U+E007F. Seven runes total, 14 UTF-16 chars. UAX #29
-        // keeps the whole sequence as a single grapheme cluster:
+        // rule GB9 keeps the whole sequence as a single cluster:
         // each tag character is GCB=Extend and the cluster
         // extends from the base black flag through the cancel
         // tag. Common parser bug: software that doesn't know
