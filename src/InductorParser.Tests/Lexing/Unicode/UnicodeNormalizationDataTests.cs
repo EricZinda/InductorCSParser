@@ -464,7 +464,7 @@ public class UnicodeNormalizationDataTests
             $"{fileName}: line count differs from the emitter's output");
     }
 
-    [Test, Explicit("Fetches UnicodeData.txt and DerivedNormalizationProps.txt from unicode.org. Run on demand when reviewing the generated tables or bumping the Unicode version.")]
+    [Test, Explicit("Fetches UnicodeData.txt and DerivedNormalizationProps.txt from unicode.org. Run on demand when reviewing the generated tables or bumping the Unicode version."), Category("RequiresNetwork")]
     public async Task Table_matches_the_pinned_UCD_files_test()
     {
         DerivedNormalizationData expected = await DeriveFromUcdAsync();
@@ -530,7 +530,7 @@ public class UnicodeNormalizationDataTests
     // src/InductorParser/Lexing/Unicode/UnicodeNormalization.Data.cs.
     // The body
     // stays compiled so it can't rot.
-    // [Test, Explicit("Fetches the UCD files and writes a regenerated UnicodeNormalization.Data.cs to the temp directory.")]
+    // [Test, Explicit("Fetches the UCD files and writes a regenerated UnicodeNormalization.Data.cs to the temp directory."), Category("RequiresNetwork")]
     public async Task Emit_regenerated_data_file_test()
     {
         DerivedNormalizationData derived = await DeriveFromUcdAsync();
@@ -747,8 +747,8 @@ public class UnicodeNormalizationDataTests
         "",
         "FullCompositionExclusions holds the code points UAX #15 excludes",
         "from canonical composition, sorted. The composition pair table",
-        "is derived from these tables once at static init rather than",
-        "stored, so it can't drift from the decomposition data.",
+        "is derived lazily from these tables on the first composition lookup",
+        "rather than stored, so it can't drift from the decomposition data.",
         "",
         "Hangul is the one script whose decompositions are deliberately",
         "missing. Every precomposed Hangul syllable (U+AC00..U+D7A3, all",

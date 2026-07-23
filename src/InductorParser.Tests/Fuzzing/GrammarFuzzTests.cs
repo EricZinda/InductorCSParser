@@ -45,6 +45,7 @@ public class GrammarFuzzTests
 
     [Test]
     [Explicit("Deep campaign, about three minutes of runtime. Run on demand when hunting, the standard test covers CI.")]
+    [Category("DeepCampaign")]
     public void Fuzzer_deep_campaign_finds_no_divergences()
     {
         var harness = new GrammarFuzzHarness();
