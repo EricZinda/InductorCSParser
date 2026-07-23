@@ -38,6 +38,19 @@
     <ProjectReference Include="..\InductorParser\InductorParser.csproj" />
   </ItemGroup>
 
+  <!-- Build-order only: HostGlobalizationChildProcessTests launches
+       this console app with dotnet exec from the child's own output
+       folder, where its dll, deps.json, and runtimeconfig.json are
+       guaranteed to sit together (whether a referenced exe's
+       runtimeconfig gets copied here has varied across SDK versions,
+       so the tests don't rely on this project's output at all).
+       ReferenceOutputAssembly=false keeps the child's types out of
+       this assembly while still making every build of the tests build
+       the child first. -->
+  <ItemGroup>
+    <ProjectReference Include="..\InductorParser.Tests.GlobalizationChild\InductorParser.Tests.GlobalizationChild.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
   <!-- The state-machine test project in ExperimentalSrc/ shares
        fixtures from this project (TraceTestHelpers, UnicodeExamples,
        ChordGrammar, BacklogGrammar) which are internal. Granting it

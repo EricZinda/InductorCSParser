@@ -27,6 +27,12 @@ public static class UnicodeEnvironment
     private static volatile UnicodeImplementation _requested =
         UnicodeImplementation.Automatic;
 
+    // The opt-in from AcceptHostGlobalization. Written only under
+    // _settingLock, volatile for the same lock-free getter reason as
+    // _requested. HostGlobalizationCheck reads it after the freeze, and
+    // the setter throws once frozen, so the value it reads is final.
+    private static volatile bool _acceptHostGlobalization;
+
     // Which implementation the dispatchers route to. Written exactly
     // once, inside _settingLock in ResolveAndFreeze, before the
     // volatile _frozen write. Read on the hot path only after a
@@ -120,6 +126,46 @@ public static class UnicodeEnvironment
     }
 
     /// <summary>
+    /// Opt-in acceptance of the host's globalization configuration when
+    /// the Runtime implementation is active. Defaults to false: when
+    /// the parser is normalizing with the runtime's string.Normalize
+    /// and the process is running under invariant globalization (which
+    /// makes string.Normalize return its input unchanged) or Windows
+    /// NLS (which normalizes from Windows' own data instead of ICU),
+    /// the first normalizing Compile or Parse throws
+    /// <see cref="InvalidOperationException"/>, because a normalizing
+    /// grammar would silently produce different parses than on a
+    /// normally configured host. Set this to true at startup, before
+    /// building grammars or parsing, to say the host's globalization is
+    /// understood and the runtime implementations are wanted anyway.
+    /// Same freeze rule as <see cref="Implementation"/>: the first
+    /// segmentation or normalization query freezes it, and setting it
+    /// after that throws. It has no effect when the built-in
+    /// implementations are active, since they never touch host
+    /// globalization.
+    /// </summary>
+    public static bool AcceptHostGlobalization
+    {
+        get => _acceptHostGlobalization;
+        set
+        {
+            lock (_settingLock)
+            {
+                if (_frozen)
+                {
+                    throw new InvalidOperationException(
+                        "UnicodeEnvironment.AcceptHostGlobalization can't change after "
+                        + "the first segmentation or normalization query, the same "
+                        + "freeze rule as UnicodeEnvironment.Implementation (its "
+                        + "exception message has the full reasoning). Set it once at "
+                        + "startup, before building grammars or parsing.");
+                }
+                _acceptHostGlobalization = value;
+            }
+        }
+    }
+
+    /// <summary>
     /// The implementation being used. It's one of
     /// <see cref="UnicodeImplementation.Runtime"/> or
     /// <see cref="UnicodeImplementation.Bundled"/>, never Automatic.
@@ -159,13 +205,15 @@ public static class UnicodeEnvironment
         }
     }
 
-    // Test-only: unfreeze, forget the requested implementation, and
-    // drop every cache whose entries were computed under the previous
-    // choice: the per-string cluster-boundary indexes and TokenSet's
-    // normalized projections. Callers must ensure no parse is running
-    // concurrently, and shouldn't reuse anything built before the
-    // reset afterward: a grammar compiled under the old implementation
-    // keeps its rewritten literals, and a Lexer or
+    // Test-only: unfreeze, forget the requested implementation and the
+    // host-globalization opt-in, and drop every cache whose entries
+    // were computed under the previous choice: the per-string
+    // cluster-boundary indexes, TokenSet's normalized projections, and
+    // the host-globalization verdict (a status forced by one fixture
+    // shouldn't leak into the next). Callers must ensure no parse is
+    // running concurrently, and shouldn't reuse anything built before
+    // the reset afterward: a grammar compiled under the old
+    // implementation keeps its rewritten literals, and a Lexer or
     // SourcePositionConverter that already holds a cluster index keeps
     // using the old boundaries, while fresh ones would rebuild under
     // the new implementation and disagree.
@@ -174,10 +222,12 @@ public static class UnicodeEnvironment
         lock (_settingLock)
         {
             _requested = UnicodeImplementation.Automatic;
+            _acceptHostGlobalization = false;
             _useBundled = false;
             _frozen = false;
         }
         GraphemeClusterIndex.ResetCacheForTesting();
         TokenSet.ResetNormalizedCacheForTesting();
+        Unicode.HostGlobalizationCheck.ResetForTesting();
     }
 }

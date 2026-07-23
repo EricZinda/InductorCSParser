@@ -44,17 +44,24 @@ internal static partial class UnicodeNormalization
     public static string Normalize(string input, NormalizationForm form)
     {
         ValidateForm(form);
-        return UnicodeEnvironment.ResolveUseBundled()
-            ? NormalizeWithBundledImplementation(input, form)
-            : NormalizeWithRuntime(input, form);
+        if (UnicodeEnvironment.ResolveUseBundled())
+            return NormalizeWithBundledImplementation(input, form);
+        HostGlobalizationCheck.EnsureRuntimeNormalizationIsTrustworthy();
+        return NormalizeWithRuntime(input, form);
     }
 
+    // The host-globalization check runs on IsNormalized too, not just
+    // Normalize, because invariant globalization makes IsNormalized
+    // always report true, and the callers that check IsNormalized
+    // before normalizing would then silently skip the Normalize call
+    // and never reach its check.
     public static bool IsNormalized(string input, NormalizationForm form)
     {
         ValidateForm(form);
-        return UnicodeEnvironment.ResolveUseBundled()
-            ? IsNormalizedWithBundledImplementation(input, form)
-            : IsNormalizedWithRuntime(input, form);
+        if (UnicodeEnvironment.ResolveUseBundled())
+            return IsNormalizedWithBundledImplementation(input, form);
+        HostGlobalizationCheck.EnsureRuntimeNormalizationIsTrustworthy();
+        return IsNormalizedWithRuntime(input, form);
     }
 
     // Reject values outside the four defined forms before dispatching,
@@ -125,6 +132,9 @@ internal static partial class UnicodeNormalization
 
     // The runtime-backed implementation. Internal (not private) so the
     // differential tests can compare it against the built-in one directly.
+    // Deliberately without the host-globalization check: these are the
+    // raw runtime oracle for those tests, and every library caller goes
+    // through the checked dispatchers above.
     internal static string NormalizeWithRuntime(string input, NormalizationForm form) =>
         input.Normalize(form);
 
