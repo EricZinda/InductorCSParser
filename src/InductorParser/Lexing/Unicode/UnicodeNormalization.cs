@@ -52,7 +52,7 @@ internal static partial class UnicodeNormalization
         ValidateForm(form);
         if (UnicodeEnvironment.ResolveUseBundled())
             return NormalizeWithBundledImplementation(input, form);
-        HostGlobalizationCheck.EnsureRuntimeNormalizationIsTrustworthy();
+        HostGlobalizationCheck.EnsureRuntimeNormalizationIsTrustworthy(input);
         return NormalizeWithRuntime(input, form);
     }
 
@@ -66,7 +66,7 @@ internal static partial class UnicodeNormalization
         ValidateForm(form);
         if (UnicodeEnvironment.ResolveUseBundled())
             return IsNormalizedWithBundledImplementation(input, form);
-        HostGlobalizationCheck.EnsureRuntimeNormalizationIsTrustworthy();
+        HostGlobalizationCheck.EnsureRuntimeNormalizationIsTrustworthy(input);
         return IsNormalizedWithRuntime(input, form);
     }
 

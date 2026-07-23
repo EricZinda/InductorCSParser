@@ -161,6 +161,25 @@ public class HostGlobalizationCheckTests
             () => NormalizationHelpers.Normalize("abc", (NormalizationForm)999));
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public void Unnormalizable_text_is_an_argument_error_even_when_the_check_would_throw(
+        bool useIsNormalized)
+    {
+        HostGlobalizationCheck.ForceStatusForTesting(HostGlobalizationStatus.Invariant);
+        string text = char.ConvertFromUtf32(0x1F600) + "\uD800";
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+        {
+            if (useIsNormalized)
+                NormalizationHelpers.IsNormalized(text, NormalizationForm.FormC);
+            else
+                NormalizationHelpers.Normalize(text, NormalizationForm.FormC);
+        });
+        Assert.That(exception!.Message, Does.Contain("index 2"));
+        Assert.That(exception.Message, Does.Contain("unpaired surrogate"));
+    }
+
     [Test]
     public void The_opt_out_defaults_to_false_and_keeps_the_last_write_before_the_freeze()
     {
