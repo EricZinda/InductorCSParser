@@ -122,6 +122,28 @@ var cleaned = input.TrimStart('\uFEFF');
 var result = grammar.Parse(cleaned);
 ```
 
+## U+FFFE: Rejected Under Normalization To Match .NET
+
+U+FFFE is the byte-swapped twin of the BOM from the previous section, and where the BOM is merely invisible, this one gets your input rejected. Under the default `Compile(NormalizationForm.FormC)`, input containing U+FFFE fails with a `MalformedInput` outcome positioned at the offending code unit, and a `Literal` or `Token` containing it fails at `Compile` with an error naming the character. Every other noncharacter passes through as an ordinary token: U+FFFF, the U+FDD0..U+FDEF block, and the 32 supplementary-plane noncharacters like U+1FFFE. Only U+FFFE is singled out.
+
+That looks arbitrary, and by the Unicode standard it is. U+FFFE is a noncharacter but still a valid scalar value. Corrigendum #9 (2013) says noncharacters don't make text ill-formed, and UAX #15 requires all four normalization forms to leave U+FFFE unchanged. A strictly conformant normalizer accepts it.
+
+The parser rejects it anyway because .NET does. `string.Normalize` and `IsNormalized` throw `ArgumentException` on exactly U+FFFE and no other noncharacter. Surprisingly, the rejection isn't in the normalizer itself: modern .NET hands normalization to ICU, and ICU accepts U+FFFE just fine. The throw comes from a managed pre-scan (`HasInvalidUnicodeSequence` in the runtime's [Normalization.Icu.cs](https://github.com/dotnet/runtime/blob/main/src/libraries/System.Private.CoreLib/src/System/Globalization/Normalization.Icu.cs)) that .NET added when it moved from Windows NLS to ICU, so the exception behavior wouldn't change out from under existing apps. The comment in the .NET source says it plainly: "ICU does not signal an error during normalization if the input string has invalid unicode, unlike Windows (which uses the ERROR_NO_UNICODE_TRANSLATION error value to signal an error). We walk the string ourselves looking for these bad sequences so we can continue to throw ArgumentException in these cases."<!-- style-lint-ok: verbatim quote from the .NET runtime source -->
+
+Follow the trail one step further back and you reach the Win32 `NormalizeString` function, which returns ERROR_NO_UNICODE_TRANSLATION when it sees U+FFFE. Windows flags it because U+FFFE is the byte-swapped byte order mark: when it shows up in decoded UTF-16 text, the likely explanation is that the bytes were decoded with the wrong endianness, which means the rest of the string is probably garbage too. So this was never a policy about noncharacters. It's a "your decoder was probably misconfigured" heuristic from the Unicode 4.0 era, before Corrigendum #9 settled that noncharacters are legal in interchange, and it's why exactly one of the 66 noncharacters gets rejected. The check also looks only at the single UTF-16 code unit 0xFFFE, which is why supplementary noncharacters like U+1FFFE (encoded as a surrogate pair) sail through.
+
+So why does the parser copy a twenty-year-old Windows heuristic instead of following the standard? Because the parser promises identical behavior on every runtime, and .NET's behavior is the one it matches. The Runtime implementation is a thin call to `string.Normalize`, and .NET throws. Accepting U+FFFE would mean working around .NET on every normalize call, a built-in normalizer that diverges from the runtime it's differentially tested against, and throw-parity tests that no longer assert parity. Matching .NET keeps the implementation simple and the compatibility claim exact: the built-in normalizer matches .NET 8, throw behavior included, and the parser's own pre-parse scan makes the rejection identical even on runtimes whose `string.Normalize` wouldn't throw at all (Unity's Mono, or .NET under invariant globalization). The cost is a documented standards exception: the UAX #15 conformance suite's "everything unlisted normalizes to itself" corollary runs with U+FFFE skipped, and the skip's comment in [NormalizationConformanceTests.cs](../src/InductorParser.Tests/Lexing/UnicodeConformance/NormalizationConformanceTests.cs) points back at this same story.
+
+**Fix.** If your input can legitimately contain U+FFFE, strip it before parsing the way the previous section strips the BOM, or compile without normalization, where U+FFFE is an ordinary one-char token:
+
+```csharp
+var cleaned = input.Replace("\uFFFE", "");   // strip it up front
+// or
+var grammar = rule.Compile(null);            // no normalization: U+FFFE is a plain token
+```
+
+And if U+FFFE genuinely shows up in your decoded text, consider taking the hint the heuristic was built to give: check the byte order of whatever decoded the stream, because the real problem is usually upstream of the parser.
+
 ## CRLF Line Endings
 
 Unicode text segmentation treats `\r\n` as a single grapheme cluster (UAX #29 rule GB3), so the lexer hands the parser one two-char token whenever it sees a Windows line ending. This breaks any line-based grammar that tries to match or stop on a bare `\n`:
@@ -169,7 +191,7 @@ If a grammar is a port of regex semantics that explicitly targets LF-only (some 
 
 A lone surrogate is an unpaired UTF-16 code unit in U+D800..U+DFFF, the kind you get from truncated or malformed UTF-16 (a high surrogate with no low surrogate after it). It isn't a Unicode scalar value, so it can't be a member of any `TokenSet` you build with `Single` / `Range` / `Runes` (those reject surrogate arguments). The only way one enters a set is through the explicit `TokenSet.Surrogates` constant or `TokenSet.SurrogateRange`.
 
-Under the default `Compile(NormalizationForm.FormC)` you never see this, because the parser runs its own rejection scan before normalizing. Any input with a lone surrogate (which is ill-formed UTF-16) or the noncharacter U+FFFE (valid Unicode, but .NET's `string.Normalize` rejects it and the parser matches that behavior) fails the parse with a `MalformedInput` outcome before tokenization, positioned at the offending code unit, as a result you can localize. The scan is the parser's own, so the behavior is identical on every runtime and doesn't depend on whether that runtime's `string.Normalize` rejects malformed text (.NET's does, Unity's Mono doesn't). The gotcha only shows up under `Compile(null)`, which skips normalization and lets the lexer surface a lone surrogate as a one-char token (with no scalar value).
+Under the default `Compile(NormalizationForm.FormC)` you never see this, because the parser runs its own rejection scan before normalizing. Any input with a lone surrogate (which is ill-formed UTF-16) or the noncharacter U+FFFE (valid Unicode, but .NET's `string.Normalize` rejects it and the parser [matches that behavior](#ufffe-rejected-under-normalization-to-match-net)) fails the parse with a `MalformedInput` outcome before tokenization, positioned at the offending code unit, as a result you can localize. The scan is the parser's own, so the behavior is identical on every runtime and doesn't depend on whether that runtime's `string.Normalize` rejects malformed text (.NET's does, Unity's Mono doesn't). The gotcha only shows up under `Compile(null)`, which skips normalization and lets the lexer surface a lone surrogate as a one-char token (with no scalar value).
 
 When that token reaches the parser, `NoneOf(set)` admits it:
 
@@ -220,7 +242,7 @@ What's left to know:
   ```
 
 - Setting `UnicodeImplementation.Runtime` on Unity brings back Mono's broken normalization this section is about, along with the broken segmentation from the previous one. Don't set `Runtime` on Unity.
-- Input the normalizers reject is caught by the parser's own scan before either normalizer runs, so `MalformedInput` reporting is identical on every runtime regardless of this setting. The scan rejects two things: an unpaired surrogate, which is ill-formed UTF-16, and U+FFFE, a noncharacter that pure UAX #15 would normalize to itself but .NET's `string.Normalize` refuses. Rejecting U+FFFE is a deliberate match for .NET, not a Unicode requirement.
+- Input the normalizers reject is caught by the parser's own scan before either normalizer runs, so `MalformedInput` reporting is identical on every runtime regardless of this setting. The scan rejects two things: an unpaired surrogate, which is ill-formed UTF-16, and U+FFFE, a noncharacter that pure UAX #15 would normalize to itself but .NET's `string.Normalize` refuses. Rejecting U+FFFE is a deliberate match for .NET, not a Unicode requirement. The [U+FFFE section](#ufffe-rejected-under-normalization-to-match-net) above has the full story.
 
 ## Host Globalization Settings
 
@@ -242,7 +264,7 @@ Three of them matter:
 
 - App-local ICU makes the app supply a specific ICU instead of using the OS one: a `Microsoft.ICU.ICU4C.Runtime` package reference plus the `System.Globalization.AppLocalIcu` runtimeconfig option. This is the one that makes normalization *more* predictable, and it's what the parser's own test project does to keep its comparison target from moving (see the comment in InductorParser.Tests.csproj).
 
-Two things stay unaffected. Segmentation: `StringInfo`'s Unicode data is compiled into the runtime itself, so token boundaries are identical under all three settings. Malformed-input reporting: the parser's own scan rejects unpaired surrogates and U+FFFE before any normalizer runs, so `MalformedInput` errors don't change even under invariant globalization, where `string.Normalize` itself would accept U+FFFE.
+Two things stay unaffected. Segmentation: `StringInfo`'s Unicode data is compiled into the runtime itself, so token boundaries are identical under all three settings. Malformed-input reporting: the parser's own scan rejects unpaired surrogates and [U+FFFE](#ufffe-rejected-under-normalization-to-match-net) before any normalizer runs, so `MalformedInput` errors don't change even under invariant globalization, where `string.Normalize` itself would accept U+FFFE.
 
 What to do about it depends on which setting is on. Under invariant globalization a normalizing grammar is simply broken, so opt into the built-in implementations at startup, the same line from the previous sections:
 
