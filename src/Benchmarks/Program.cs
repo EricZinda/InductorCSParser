@@ -133,6 +133,13 @@ public class Program
     // Runs in milliseconds, not a bench.
     private static int SpotCheck()
     {
+        // Which Unicode implementation this process resolved to (the
+        // INDUCTORPARSER_UNICODE_IMPLEMENTATION environment variable can
+        // force it, see UnicodeImplementationOverride). Printed so a
+        // spot-check run doubles as verification that the override took.
+        var activeImplementation = global::InductorParser.Lexing.UnicodeEnvironment.ActiveImplementation;
+        Console.WriteLine($"Unicode implementation: {activeImplementation}");
+
         var shapes = new (string name, string input)[]
         {
             ("Big",  JsonBench.BuildJson(4, 4, 3).ToString()!),

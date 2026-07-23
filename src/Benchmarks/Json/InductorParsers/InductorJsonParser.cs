@@ -4,27 +4,13 @@ using System.Globalization;
 using System.Text;
 using global::InductorParser;
 using global::InductorParser.SyntaxTree;
-using static global::InductorParser.Rules;
 
 namespace InductorParser.Benchmarks.Json.InductorParsers;
 
-// JSON grammar for the shape the JsonBench harness generates: strings,
-// objects, and arrays only. No numbers, booleans, or nulls, because the
-// harness doesn't generate them (see JsonBench.BuildObject) and because
-// every competitor in the bench (Pidgin, Sprache, Superpower, Pegasus,
-// Parlot) also stops there. Including them here would make the comparison
-// unfair on inputs competitors can't handle, and would also measure a
-// code path that the competitors don't exercise.
-//
-// String bodies handle the full set of JSON escapes (\", \\, \/, \b, \f,
-// \n, \r, \t, and \uXXXX) to match what the competitors do, so the
-// string-parsing hot path is apples-to-apples.
-//
-// Entry point is the bare value rule (no surrounding
-// And(Optional(AnyWhitespace()), value, Optional(AnyWhitespace()), Eof)). The harness
-// feeds clean input that starts and ends at the value, competitors
-// likewise skip a trailing Eof rule, and adding one would spend
-// time on every parse that the bench isn't trying to measure.
+// The compiled JSON grammar the benchmark rows parse with, plus the
+// typed-tree building the InductorParserTyped rows measure. The grammar
+// itself lives in InductorJsonGrammar, whose file comment covers the
+// scope and shape decisions.
 public static class InductorJsonParser
 {
     public static readonly Rule JsonRule;
@@ -35,49 +21,12 @@ public static class InductorJsonParser
 
     static InductorJsonParser()
     {
-        var simpleEscapeEnd = OneOf(TokenSet.Runes("\"\\/bfnrt"));
-        var hexDigit = OneOf(TokenSet.Ascii.HexDigits);
-        var unicodeEscapeEnd = And(Token('u'), hexDigit, hexDigit, hexDigit, hexDigit);
-        var escapeEnd = Or(simpleEscapeEnd, unicodeEscapeEnd).Flatten(FlattenType.Delete);
-        var stringBody = ScanUntil(stopAt: TokenSet.Runes("\""), escapeStart: new Rune('\\'), escapeEnd: escapeEnd);
-        JsonStringRule = And(Token('"'), stringBody, Token('"')).As("string");
-
-        var value = new LateBoundRule("value");
-
-        JsonMemberRule = And(
-            JsonStringRule,
-            Optional(AnyWhitespace()),
-            Token(':'),
-            Optional(AnyWhitespace()),
-            value
-        ).As("member");
-
-        JsonObjectRule = And(
-            Token('{'),
-            Optional(AnyWhitespace()),
-            Optional(And(
-                JsonMemberRule,
-                ZeroOrMore(And(Optional(AnyWhitespace()), Token(','), Optional(AnyWhitespace()), JsonMemberRule))
-            )),
-            Optional(AnyWhitespace()),
-            Token('}')
-        ).As("object");
-
-        JsonArrayRule = And(
-            Token('['),
-            Optional(AnyWhitespace()),
-            Optional(And(
-                value,
-                ZeroOrMore(And(Optional(AnyWhitespace()), Token(','), Optional(AnyWhitespace()), value))
-            )),
-            Optional(AnyWhitespace()),
-            Token(']')
-        ).As("array");
-
-        var valueBody = Or(JsonStringRule, JsonObjectRule, JsonArrayRule);
-        value.Bind(valueBody);
-
-        JsonRule = value;
+        var grammar = InductorJsonGrammar.Build();
+        JsonRule = grammar.RootRule;
+        JsonStringRule = grammar.StringRule;
+        JsonArrayRule = grammar.ArrayRule;
+        JsonObjectRule = grammar.ObjectRule;
+        JsonMemberRule = grammar.MemberRule;
         JsonRule.Compile();
     }
 
