@@ -480,6 +480,27 @@ public class UnicodeNormalizationTests
             withTrailingMarks: false);
     }
 
+    [Test]
+    public void Quick_check_Yes_path_does_not_allocate_for_nonAscii_input()
+    {
+        string input = string.Concat(Enumerable.Repeat(
+            UnicodeExamples.LatinEAcutePrecomposedGrapheme, 1000));
+        UnicodeNormalization.NormalizeWithBundledImplementation(
+            input, NormalizationForm.FormC);
+
+        bool allSame = true;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int iteration = 0; iteration < 100; iteration++)
+            allSame &= ReferenceEquals(
+                UnicodeNormalization.NormalizeWithBundledImplementation(
+                    input, NormalizationForm.FormC),
+                input);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.That(allSame, Is.True);
+        Assert.That(allocated, Is.LessThan(1024));
+    }
+
     [Test, Explicit("Full four-form sweep of every code point, alone and with trailing combining marks. Run on demand when changing the normalizer or its tables.")]
     public void Every_scalar_normalizes_like_runtime_under_all_forms_test()
     {

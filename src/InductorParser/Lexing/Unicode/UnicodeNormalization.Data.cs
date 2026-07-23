@@ -46,8 +46,8 @@
 //
 // FullCompositionExclusions holds the code points UAX #15 excludes
 // from canonical composition, sorted. The composition pair table
-// is derived from these tables once at static init rather than
-// stored, so it can't drift from the decomposition data.
+// is derived lazily from these tables on the first composition lookup
+// rather than stored, so it can't drift from the decomposition data.
 //
 // Hangul is the one script whose decompositions are deliberately
 // missing. Every precomposed Hangul syllable (U+AC00..U+D7A3, all
