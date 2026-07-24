@@ -14,11 +14,14 @@ namespace InductorParser.Tests;
 // SetUp and TearDown both restore a fresh unfrozen Automatic through
 // UnicodeEnvironment.ResetForTesting.
 //
-// On .NET 8 the built-in and runtime implementations produce identical
-// results (the differential tests in GraphemeSegmentationTests and
-// UnicodeNormalizationTests hold each pair equal), so no input can
-// tell them apart here, and these tests check ActiveImplementation
-// instead of parser output. That check proves what it looks like it
+// On .NET 10 the built-in and runtime segmentations produce identical
+// results, and the normalizations differ only on the code points
+// Unicode 16.0 added (the runtime normalizes through the suite's
+// app-local ICU 72.1, which predates them). The differential tests in
+// GraphemeSegmentationTests and UnicodeNormalizationTests hold each
+// pair equal everywhere they compare, so ordinary input can't tell
+// the implementations apart here, and these tests check
+// ActiveImplementation instead of parser output. That check proves what it looks like it
 // proves: ActiveImplementation reports the same resolved value that
 // GraphemeSegmentation and UnicodeNormalization read when they choose
 // which implementation to run, and there is no second copy of that
@@ -50,12 +53,12 @@ public class UnicodeEnvironmentSettingTests
             Is.EqualTo(UnicodeImplementation.Automatic));
 
         // Under dotnet test this always runs on CoreCLR against the
-        // net8.0 library build, where Automatic means the runtime's
-        // StringInfo and string.Normalize: the test csproj is
-        // single-target net8.0, and the only other way test sources
-        // run (the Unity PlayMode sync) copies Core/, Rules/, and
-        // E2EExamples/ plus the root files, never Lexing/, so this
-        // fixture stays off Unity. That placement can't drift
+        // net8.0 library build (the highest target the library offers,
+        // consumed by the net10.0 test csproj), where Automatic means
+        // the runtime's StringInfo and string.Normalize. The only
+        // other way test sources run (the Unity PlayMode sync) copies
+        // Core/, Rules/, and E2EExamples/ plus the root files, never
+        // Lexing/, so this fixture stays off Unity. That placement can't drift
         // silently: if this file ever reached the netstandard2.1
         // build, Automatic would resolve to Bundled there and this
         // assert would fail the IL2CPP pass.
@@ -189,7 +192,7 @@ public class UnicodeEnvironmentSettingTests
     [Test]
     public void Compile_and_parse_work_end_to_end_under_an_explicit_bundled_opt_in()
     {
-        // The scenario the docs recommend to a net8.0 server that must
+        // The scenario the docs recommend to a CoreCLR server that must
         // agree on parse trees with a Unity client: opt into Bundled at
         // startup, then compile and parse normally. The grammar's
         // literal is precomposed e-acute, the input arrives decomposed
@@ -223,7 +226,7 @@ public class UnicodeEnvironmentSettingTests
     public void Helper_methods_answer_with_the_active_implementation()
     {
         // Both implementations agree on these inputs (the differential
-        // suites hold them equal), so this is a smoke check that the
+        // suites ensure it), so this is a smoke check that the
         // public passthroughs dispatch at all under an explicit
         // Bundled: decomposed e + acute composes under FormC, and CRLF
         // is one two-char cluster, from the same single setting.

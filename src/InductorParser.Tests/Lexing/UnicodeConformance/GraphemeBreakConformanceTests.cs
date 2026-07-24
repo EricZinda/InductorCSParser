@@ -36,7 +36,7 @@ namespace InductorParser.Tests.Lexing.UnicodeConformance;
 //      GraphemeClusterIndexTests / ValidUnicodeTests / Unexpected-
 //      UnicodeTests.
 //
-// Marked [Explicit] because the suite expands to ~1180 cases per
+// Marked [Explicit] because the suite expands to ~1090 cases per
 // leaf-rule fixture (around fifteen fixtures total). Default `dotnet
 // test` runs skip the whole fixture. Two opt-in patterns:
 //
@@ -61,27 +61,27 @@ namespace InductorParser.Tests.Lexing.UnicodeConformance;
 // either reflect a rule the segmenter doesn't implement yet (GB9c is
 // the current known one) or a regression in the segmenter.
 [TestFixture]
-[Explicit("UAX #29 conformance suite. ~16,600 cases total; opt in via dotnet test --filter TestCategory=UnicodeConformance.")]
+[Explicit("UAX #29 conformance suite. ~16,000 cases total; opt in via dotnet test --filter TestCategory=UnicodeConformance.")]
 [Category("UnicodeConformance")]
 public class GraphemeBreakConformanceTests
 {
     private const string TestDataRelativePath =
-        "Lexing/UnicodeConformance/GraphemeBreakTest-15.1.0.txt";
+        "Lexing/UnicodeConformance/GraphemeBreakTest-16.0.0.txt";
 
-    // Lines in GraphemeBreakTest-15.1.0.txt that test UAX #29 rule GB9c
-    // (Indic Conjunct Cluster), introduced in revision 43 alongside
-    // Unicode 15.1. The built-in segmenter implements revision 41 at
-    // Unicode 15.0, deliberately matching .NET 8's StringInfo so the
-    // differential tests in GraphemeSegmentationTests can compare the
-    // two exactly, and revision 41 breaks these clusters differently
-    // than the 15.1 test data expects. Adding GB9c to the segmenter
-    // (part of a Unicode version bump, see GraphemeSegmentation.Data.cs)
-    // drops this skip set and the conformance test will start asserting
-    // these lines for real.
-    private static readonly HashSet<int> KnownRuntimeSkips = new()
-    {
-        1202, 1203, 1204, 1205, 1206, 1207, 1211,
-    };
+    // The rule annotation GraphemeBreakTest.txt puts in each line's
+    // comment for UAX #29 rule GB9c (Indic Conjunct Break), introduced
+    // in revision 43 alongside Unicode 15.1. The built-in segmenter
+    // deliberately doesn't implement GB9c because .NET 10's StringInfo
+    // doesn't either (dotnet/runtime#111546), and the differential
+    // tests in GraphemeSegmentationTests compare the two exactly.
+    // SkipIfKnownRuntimeDivergence ignores any test line whose comment
+    // cites this rule, the same way dotnet/runtime's own tests skip
+    // rule [9.3] lines when reading this file. Filtering on the
+    // annotation instead of hardcoded line numbers survives future
+    // file swaps without re-counting. When the segmenter and the
+    // runtime both grow GB9c, drop the filter and these lines assert
+    // for real.
+    private const string GB9cRuleAnnotation = "[9.3]";
 
     // ============================================================
     // Layer 1: per-line grammar, parsed with InductorParser itself.
@@ -277,12 +277,13 @@ public class GraphemeBreakConformanceTests
             Assert.Fail("Test case wasn't constructed; see fixture setup for the parse error.");
             return true;
         }
-        if (KnownRuntimeSkips.Contains(testCase.LineNumber))
+        if (testCase.RawLine.Contains(GB9cRuleAnnotation, StringComparison.Ordinal))
         {
             Assert.Ignore(
-                $"UAX #29 GB9c (Indic Conjunct Cluster) case not implemented by .NET 8 StringInfo. " +
-                $"Intentionally skipped while segmentation is locked to .NET 8 / Unicode 15.0; " +
-                $"remove this skip during a Unicode 15.1+ upgrade that implements GB9c. " +
+                $"UAX #29 GB9c (Indic Conjunct Break) case, deliberately not implemented " +
+                $"because .NET 10's StringInfo doesn't implement it either " +
+                $"(dotnet/runtime#111546, milestone Future) and the segmenter matches " +
+                $"StringInfo exactly. Remove the [9.3] filter when both grow GB9c. " +
                 $"Source: {testCase.RawLine}");
             return true;
         }

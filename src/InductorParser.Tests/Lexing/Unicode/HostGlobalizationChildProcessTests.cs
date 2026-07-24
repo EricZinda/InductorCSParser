@@ -153,8 +153,8 @@ public class HostGlobalizationChildProcessTests
     // The child's dll in the child's own build output, located by
     // reusing this assembly's own path segments so configuration and
     // target framework can never disagree:
-    // .../src/InductorParser.Tests/bin/<Config>/net8.0/ maps to
-    // .../src/InductorParser.Tests.GlobalizationChild/bin/<Config>/net8.0/.
+    // .../src/InductorParser.Tests/bin/<Config>/net10.0/ maps to
+    // .../src/InductorParser.Tests.GlobalizationChild/bin/<Config>/net10.0/.
     private static string ChildAssemblyPath()
     {
         var targetFrameworkDirectory =

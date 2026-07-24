@@ -191,20 +191,21 @@ public static class NormalizationExamples
         // Unicode 16+ context-sensitive NFC composites for Kirat Rai,
         // Tulu-Tigalari, and Gurung Khema scripts: a character can
         // be NFC-stable by itself but change when preceded by certain
-        // other characters in the same script. UAX #15 calls these
-        // out as a new normalization category in Unicode 16. Not yet
-        // testable here: the test project ships app-local ICU 72.1 as
-        // the string.Normalize oracle (Unicode 15.0 data, matching the
-        // built-in tables), so adding rows now would silently behave as
-        // identity, misleading the matrix's self-check. Adding the
-        // category as a placeholder so a future oracle upgrade
-        // surfaces this gap.
-        // TODO: add concrete rows once the oracle moves to Unicode 16
-        // data (a newer app-local ICU plus matching built-in tables).
-        // Inferred concrete shape: U+1138B U+113C7 in
-        // Tulu-Tigalari should normalize across the boundary because
-        // U+113C7 has decomposition U+113C2 U+113B8 and U+1138E has
-        // decomposition U+1138B U+113C2.
+        // other characters in the same script. UAX #15 section 9.2
+        // calls these out as a new normalization category in Unicode
+        // 16. The built-in tables now hold the 16.0 data, and
+        // Unicode16_context_sensitive_composite_changes_after_a_preceding_letter
+        // in UnicodeNormalizationTests locks in the concrete shape
+        // (U+1138B U+113C7 recomposes to U+1138E U+113B8) through the
+        // built-in implementation directly. Still not testable as
+        // matrix rows: this matrix resolves through the
+        // process-default runtime normalizer, and the test project
+        // ships app-local ICU 72.1 (Unicode 15.0 data) as the
+        // string.Normalize oracle, so a 16.0-behavior row would fail
+        // the matrix's self-check and every rule fixture built on it.
+        // TODO: add concrete rows once the runtime oracle reaches
+        // Unicode 16 data (a newer app-local ICU package than 72.1,
+        // none exists as of mid-2026).
         Unicode16ContextSensitiveCompositionPlaceholder,
 
         // Source is a precomposed Hangul syllable. FormD decomposes it

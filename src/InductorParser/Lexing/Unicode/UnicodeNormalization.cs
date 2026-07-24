@@ -14,7 +14,7 @@ namespace InductorParser.Lexing.Unicode;
 /// string.Normalize, and a built-in UAX #15 normalizer
 /// (https://www.unicode.org/reports/tr15/) whose generated tables in
 /// UnicodeNormalization.Data.cs are the other half of this partial
-/// class and are fixed at Unicode 15.0 like the built-in segmenter's table.
+/// class and hold the Unicode 16.0 data, like the built-in segmenter's table.
 /// The implementation is chosen by the process-wide setting surfaced
 /// as UnicodeEnvironment.Implementation, which governs this normalizer
 /// and the segmenter together (they can never diverge) and is resolved

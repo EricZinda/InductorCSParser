@@ -17,11 +17,11 @@ cwd = "../../.."
 
 [engine.version]
 bin = "dotnet"
-args = ["./src/Benchmarks/Rebar/bin/Release/net8.0/InductorParser.RebarRunner.dll", "--version"]
+args = ["./src/Benchmarks/Rebar/bin/Release/net10.0/InductorParser.RebarRunner.dll", "--version"]
 
 [engine.run]
 bin = "dotnet"
-args = ["./src/Benchmarks/Rebar/bin/Release/net8.0/InductorParser.RebarRunner.dll", "inductorparser"]
+args = ["./src/Benchmarks/Rebar/bin/Release/net10.0/InductorParser.RebarRunner.dll", "inductorparser"]
 
 [[engine.build]]
 bin = "dotnet"
@@ -37,11 +37,11 @@ cwd = "../../.."
 
 [engine.version]
 bin = "dotnet"
-args = ["./src/Benchmarks/Rebar/bin/Release/net8.0/InductorParser.RebarRunner.dll", "--version"]
+args = ["./src/Benchmarks/Rebar/bin/Release/net10.0/InductorParser.RebarRunner.dll", "--version"]
 
 [engine.run]
 bin = "dotnet"
-args = ["./src/Benchmarks/Rebar/bin/Release/net8.0/InductorParser.RebarRunner.dll", "inductorparser-statemachine"]
+args = ["./src/Benchmarks/Rebar/bin/Release/net10.0/InductorParser.RebarRunner.dll", "inductorparser-statemachine"]
 
 [[engine.build]]
 bin = "dotnet"

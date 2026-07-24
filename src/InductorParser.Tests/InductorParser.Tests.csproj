@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="NUnit" Version="4.2.2" />
     <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
   </ItemGroup>
@@ -21,10 +21,13 @@
        package puts ICU 72.1's native DLLs in the test output (under
        runtimes/<platform>/native/), and the AppLocalIcu option makes
        the runtime load that copy instead of the OS one, so every test
-       run normalizes from the same bytes. The version matters: ICU
-       72.1 is built from Unicode 15.0 data, exactly what the built-in
-       tables use, while ICU 68 (Unicode 13) would fail the
-       full-scalar sweeps on characters added in Unicode 14 and 15.
+       run normalizes from the same bytes. ICU 72.1 is Unicode 15.0
+       data while the built-in tables are Unicode 16.0. It stays the
+       oracle because no newer app-local ICU package exists, and the
+       normalization stability policy makes the two versions agree on
+       every code point assigned through 15.0. The sweeps skip the
+       code points 16.0 added (UnicodeVersionDelta), and the
+       NormalizationTest-16.0.0.txt conformance suite covers those.
        GlobalizationOracleFixture refuses to run the suite if this ICU
        isn't the one actually loaded. The RuntimeHostConfigurationOption
        flows into the generated runtimeconfig.json, which the test
