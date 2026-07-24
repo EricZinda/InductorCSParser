@@ -13,9 +13,12 @@ namespace InductorParser.Tests;
 // asserts expected normalization shapes directly, driving the
 // NormalizationExamples table plus named edge cases (composition
 // exclusions, composite shifts, Hangul arithmetic, the same-instance
-// return). The second layer is differential: string.Normalize is an
-// oracle this test project can compare against on every string it can
-// build. string.Normalize hands the work to ICU (the Unicode library
+// return). The second layer is differential: string.Normalize and
+// string.IsNormalized are oracles this test project can compare
+// against on every string it can build, and every differential case
+// checks both entry points (see AssertNormalizesLikeRuntime for why
+// Normalize alone isn't enough). string.Normalize hands the work to
+// ICU (the Unicode library
 // the OS normally supplies), so the test project ships its own ICU
 // 72.1 and GlobalizationOracleFixture refuses to run the suite on
 // anything else, keeping the oracle from drifting with the host. ICU
@@ -47,7 +50,14 @@ public class UnicodeNormalizationTests
         string.Join(" ", text.Select(codeUnit => $"U+{(int)codeUnit:X4}"));
 
     // Compare the built-in implementation against the runtime oracle on
-    // one input, both output and throw behavior.
+    // one input: Normalize output, IsNormalized verdict, and the throw
+    // behavior of both. The two entry points are compared together
+    // because IsNormalized has a failure mode Normalize can't reveal: a
+    // quick-check flag wrongly marked No makes the built-in IsNormalized
+    // report false for normalized text, while Normalize takes the full
+    // rebuild and still produces identical output, so a Normalize-only
+    // comparison would pass. Checking both here puts every differential
+    // case in this file on both entry points.
     private static void AssertNormalizesLikeRuntime(string text, NormalizationForm form, string label)
     {
         string? bundledResult = null;
@@ -69,14 +79,41 @@ public class UnicodeNormalizationTests
                 $"{label} ({form}): built-in threw ArgumentException, runtime returned "
                 + $"{(runtimeResult == null ? "<null>" : DumpCodeUnits(runtimeResult))} "
                 + $"for {DumpCodeUnits(text)}");
-            return;
         }
-
-        if (!string.Equals(bundledResult, runtimeResult, StringComparison.Ordinal))
+        else if (!string.Equals(bundledResult, runtimeResult, StringComparison.Ordinal))
         {
             Assert.Fail(
                 $"{label} ({form}): built-in {DumpCodeUnits(bundledResult!)}, "
                 + $"runtime {DumpCodeUnits(runtimeResult!)} for {DumpCodeUnits(text)}");
+        }
+
+        bool? bundledVerdict = null;
+        bool? runtimeVerdict = null;
+        ArgumentException? bundledVerdictError = null;
+        ArgumentException? runtimeVerdictError = null;
+        try { bundledVerdict = UnicodeNormalization.IsNormalizedWithBundledImplementation(text, form); }
+        catch (ArgumentException error) { bundledVerdictError = error; }
+        try { runtimeVerdict = UnicodeNormalization.IsNormalizedWithRuntime(text, form); }
+        catch (ArgumentException error) { runtimeVerdictError = error; }
+
+        if (runtimeVerdictError != null || bundledVerdictError != null)
+        {
+            Assert.That(bundledVerdictError, Is.Not.Null,
+                $"{label} ({form}): runtime IsNormalized threw ArgumentException, built-in "
+                + $"returned {(bundledVerdict == null ? "<null>" : bundledVerdict.ToString())} "
+                + $"for {DumpCodeUnits(text)}");
+            Assert.That(runtimeVerdictError, Is.Not.Null,
+                $"{label} ({form}): built-in IsNormalized threw ArgumentException, runtime "
+                + $"returned {(runtimeVerdict == null ? "<null>" : runtimeVerdict.ToString())} "
+                + $"for {DumpCodeUnits(text)}");
+            return;
+        }
+
+        if (bundledVerdict != runtimeVerdict)
+        {
+            Assert.Fail(
+                $"{label} ({form}): built-in IsNormalized {bundledVerdict}, "
+                + $"runtime IsNormalized {runtimeVerdict} for {DumpCodeUnits(text)}");
         }
     }
 
@@ -309,9 +346,10 @@ public class UnicodeNormalizationTests
     [Test]
     public void Hangul_syllable_round_trips_through_jamo()
     {
-        // U+D4DB is the syllable the UAX #15 spec itself uses to
-        // illustrate the arithmetic: it decomposes to three jamo and
-        // composes back through the LV intermediate.
+        // U+D4DB is the syllable The Unicode Standard uses to
+        // illustrate the arithmetic, in the conjoining-jamo section
+        // (3.12) that defines it: the syllable decomposes to three
+        // jamo and composes back through the LV intermediate.
         string syllable = FromCodePoints(0xD4DB);
         string jamo = FromCodePoints(0x1111, 0x1171, 0x11B6);
         Assert.That(
@@ -519,7 +557,28 @@ public class UnicodeNormalizationTests
             withTrailingMarks: false);
     }
 
-    [Test, Explicit("Full four-form sweep of every code point, alone and with trailing combining marks. Run on demand when changing the normalizer or its tables.")]
+    [Test]
+    public void Quick_check_Yes_path_does_not_allocate_for_nonAscii_input()
+    {
+        string input = string.Concat(Enumerable.Repeat(
+            UnicodeExamples.LatinEAcutePrecomposedGrapheme, 1000));
+        UnicodeNormalization.NormalizeWithBundledImplementation(
+            input, NormalizationForm.FormC);
+
+        bool allSame = true;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int iteration = 0; iteration < 100; iteration++)
+            allSame &= ReferenceEquals(
+                UnicodeNormalization.NormalizeWithBundledImplementation(
+                    input, NormalizationForm.FormC),
+                input);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.That(allSame, Is.True);
+        Assert.That(allocated, Is.LessThan(1024));
+    }
+
+    [Test, Explicit("Full four-form sweep of every code point, alone and with trailing combining marks. Run on demand when changing the normalizer or its tables."), Category("DeepCampaign")]
     public void Every_scalar_normalizes_like_runtime_under_all_forms_test()
     {
         SweepEveryScalar(NormalizationExamples.AllForms, withTrailingMarks: true);
@@ -573,7 +632,7 @@ public class UnicodeNormalizationTests
     // classes, composition-excluded characters, and compatibility
     // sources. Any failure prints the code units, which reproduce it
     // exactly.
-    [Test, Explicit("Randomized differential sweep against the runtime's string.Normalize. Run on demand when changing the normalizer or its tables.")]
+    [Test, Explicit("Randomized differential sweep against the runtime's string.Normalize. Run on demand when changing the normalizer or its tables."), Category("DeepCampaign")]
     public void Random_sequences_normalize_like_runtime_test()
     {
         string[] extraPieces =

@@ -1,14 +1,42 @@
 # Test Architecture
 
-Run the test suite with `./test.sh` at the repo root. It runs everything in `InductorParser.sln` (the main test project, the external-API tests, and the `E2ESamples/*` grammars), and a clean run is the gate for landing a change. Arguments pass through to `dotnet test`, so `./test.sh --filter "FullyQualifiedName~Atom_fragment"` runs one fixture, and `dotnet test src/InductorParser.Tests/InductorParser.Tests.csproj` runs just the main project. The script works from Git Bash or WSL and keeps the output quiet. How it does both is explained in comments in `test.sh` itself.
-
-The ~10,000-case UAX #29 conformance suite is the one part the default run skips. Opt in by category:
+Here's every way to run the tests, all in one place:
 
 ```
+# The everyday suite. A clean run is the gate for landing a change.
+./test.sh
+
+# Everything: the everyday suite, every [Explicit] suite, and the Unity
+# IL2CPP pass. Takes a long time, downloads UCD files from unicode.org,
+# and needs Unity installed.
+./test.sh --all
+
+# Just the official Unicode conformance suites (tens of thousands of
+# checks, skipped by default).
 ./test.sh --filter "TestCategory=UnicodeConformance"
+
+# Just the deep campaigns: the grammar fuzzer plus the exhaustive
+# Unicode differential sweeps (several minutes, skipped by default).
+./test.sh --filter "TestCategory=DeepCampaign"
+
+# The UCD verification tests. These download data files from unicode.org
+# and only matter when bumping the Unicode version.
+./test.sh --filter "TestCategory=RequiresNetwork"
+
+# The Unity IL2CPP pass (needs Unity installed, takes a few minutes).
+./src/InductorParser.Tests/runil2cpptest.sh
+
+# The performance benchmarks.
+dotnet run -c Release --project src/Benchmarks/Benchmarks.csproj -- --filter *Json* --exporters GitHub
 ```
 
-NUnit's `[Explicit]` only clears when tests are picked out by Name or Category, so a class-level `FullyQualifiedName` filter discovers "0 tests run".
+`./test.sh` runs every test in `InductorParser.sln` (the main test project, the external-API tests, and the `E2ESamples/*` grammars) except the `[Explicit]` suites, which are what the filter commands above opt into. Arguments pass through to `dotnet test`, so `./test.sh --filter "FullyQualifiedName~Atom_fragment"` runs one fixture, and `dotnet test src/InductorParser.Tests/InductorParser.Tests.csproj` runs just the main project. The script works from Git Bash or WSL and keeps the output quiet. How it does both is explained in comments in `test.sh` itself.
+
+The skipped-by-default suites are marked with NUnit's `[Explicit]` attribute, and it has a gotcha. An `[Explicit]` test only runs when the filter picks it out specifically, by method name (`Name~...`) or by category (`TestCategory=...`). Matching its class name doesn't count: `--filter "FullyQualifiedName~GraphemeBreakConformanceTests"` discovers the fixture, skips every test in it, and reports "0 tests run". It looks like a broken filter, but the tests were found and deliberately skipped. That's why the opt-in commands above use `TestCategory`.
+
+`dotnet test` itself has no flag that adds the explicit tests to a normal run, so `./test.sh --all` chains three steps: the everyday suite, a run filtered to the three opt-in categories, and the Unity IL2CPP pass. That's the "run absolutely everything" command, and the cost is what you'd expect. It takes a long time, it needs network access for the RequiresNetwork tests, and it needs Unity installed for the final step. The category list can't silently go stale, either: `ExplicitTestConventionTests` in `Core/` fails the everyday suite if an `[Explicit]` test ever shows up without a category `test.sh --all` knows about.
+
+The Unity pass is covered in detail in "The IL2CPP Pass" at the bottom of this doc. The benchmarks live in their own solution so the main solution never has to restore BenchmarkDotNet and the competitor parsers, and `src/Benchmarks/README.md` explains what the numbers mean.
 
 The rest of this doc answers one question: what does a rule's test file need before its coverage counts as comprehensive? It's a checklist for anyone adding a new rule or auditing an existing one.
 

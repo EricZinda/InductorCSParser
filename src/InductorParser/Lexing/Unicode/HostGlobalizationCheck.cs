@@ -83,15 +83,23 @@ internal static class HostGlobalizationCheck
     /// globalization configuration makes the runtime's string.Normalize
     /// untrustworthy and
     /// <see cref="UnicodeEnvironment.AcceptHostGlobalization"/> hasn't
-    /// opted in. Called on the Runtime branch of the normalization
-    /// dispatchers only: the built-in implementations never touch host
-    /// globalization, and segmentation is unaffected either way. After
-    /// the first pass this is one volatile bool read.
+    /// opted in. Unnormalizable <paramref name="input"/> throws the
+    /// public API's <see cref="ArgumentException"/> instead, so argument
+    /// validation wins over host state, the same precedence the
+    /// undefined-form check already gets. Called on the Runtime branch
+    /// of the normalization dispatchers only: the built-in
+    /// implementations never touch host globalization, and segmentation
+    /// is unaffected either way. After the first pass this is one
+    /// volatile bool read, and the runtime normalizer itself rejects
+    /// bad input.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void EnsureRuntimeNormalizationIsTrustworthy()
+    public static void EnsureRuntimeNormalizationIsTrustworthy(string input)
     {
         if (_accepted) return;
+        int badIndex = UnicodeNormalization.FindFirstUnnormalizableIndex(input);
+        if (badIndex >= 0)
+            throw UnicodeNormalization.CreateUnnormalizableTextException(input, badIndex);
         PassOrThrow();
     }
 

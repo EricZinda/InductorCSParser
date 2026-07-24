@@ -156,6 +156,52 @@ public class UnicodeNormalizationDataTests
     }
 
     [Test]
+    public void Decomposition_chains_are_at_most_three_levels_deep()
+    {
+        // AppendDecomposition in UnicodeNormalization.cs recurses
+        // through single-level mappings and its comment states the
+        // chains top out at three levels (polytonic Greek like U+1F82,
+        // which expands through U+1F02 and U+1F00 before reaching
+        // U+03B1 plus marks). This computes the true maximum over
+        // every scalar in both the canonical-only and the K-form
+        // modes, so a regenerated table that deepens a chain (a
+        // Unicode version bump, say) updates that comment instead of
+        // quietly outdating it.
+        int canonicalMax = 0;
+        int compatibilityMax = 0;
+        for (int codePoint = 0; codePoint <= 0x10FFFF; codePoint++)
+        {
+            if (codePoint is >= 0xD800 and <= 0xDFFF) continue;
+            canonicalMax = Math.Max(
+                canonicalMax, ChainDepth(codePoint, useCompatibility: false));
+            compatibilityMax = Math.Max(
+                compatibilityMax, ChainDepth(codePoint, useCompatibility: true));
+        }
+        Assert.That(canonicalMax, Is.EqualTo(3), "deepest canonical mapping chain");
+        Assert.That(compatibilityMax, Is.EqualTo(3), "deepest K-form mapping chain");
+    }
+
+    // Depth of the single-level mapping chain starting at codePoint: 0
+    // for no applicable mapping, otherwise 1 plus the deepest piece.
+    // Hangul syllables count as 1, matching AppendHangulDecomposition's
+    // single arithmetic step to jamo (which have no mappings of their
+    // own).
+    private static int ChainDepth(int codePoint, bool useCompatibility)
+    {
+        if (codePoint is >= 0xAC00 and <= 0xD7A3) return 1;
+        if (!UnicodeNormalization.TryGetDecomposition(
+                codePoint, out ReadOnlySpan<int> expansion, out bool isCompatibility)
+            || (isCompatibility && !useCompatibility))
+        {
+            return 0;
+        }
+        int deepest = 0;
+        foreach (int piece in expansion)
+            deepest = Math.Max(deepest, ChainDepth(piece, useCompatibility));
+        return 1 + deepest;
+    }
+
+    [Test]
     public void Full_composition_exclusions_are_sorted_and_all_have_canonical_decompositions()
     {
         int[] exclusions = ReadPrivateIntArray("FullCompositionExclusions");
@@ -456,7 +502,7 @@ public class UnicodeNormalizationDataTests
             $"{fileName}: line count differs from the emitter's output");
     }
 
-    [Test, Explicit("Fetches UnicodeData.txt and DerivedNormalizationProps.txt from unicode.org. Run on demand when reviewing the generated tables or bumping the Unicode version.")]
+    [Test, Explicit("Fetches UnicodeData.txt and DerivedNormalizationProps.txt from unicode.org. Run on demand when reviewing the generated tables or bumping the Unicode version."), Category("RequiresNetwork")]
     public async Task Table_matches_the_pinned_UCD_files_test()
     {
         DerivedNormalizationData expected = await DeriveFromUcdAsync();
@@ -522,7 +568,7 @@ public class UnicodeNormalizationDataTests
     // src/InductorParser/Lexing/Unicode/UnicodeNormalization.Data.cs.
     // The body
     // stays compiled so it can't rot.
-    // [Test, Explicit("Fetches the UCD files and writes a regenerated UnicodeNormalization.Data.cs to the temp directory.")]
+    // [Test, Explicit("Fetches the UCD files and writes a regenerated UnicodeNormalization.Data.cs to the temp directory."), Category("RequiresNetwork")]
     public async Task Emit_regenerated_data_file_test()
     {
         DerivedNormalizationData derived = await DeriveFromUcdAsync();
@@ -739,8 +785,8 @@ public class UnicodeNormalizationDataTests
         "",
         "FullCompositionExclusions holds the code points UAX #15 excludes",
         "from canonical composition, sorted. The composition pair table",
-        "is derived from these tables once at static init rather than",
-        "stored, so it can't drift from the decomposition data.",
+        "is derived lazily from these tables on the first composition lookup",
+        "rather than stored, so it can't drift from the decomposition data.",
         "",
         "Hangul is the one script whose decompositions are deliberately",
         "missing. Every precomposed Hangul syllable (U+AC00..U+D7A3, all",

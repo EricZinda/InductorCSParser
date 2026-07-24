@@ -101,7 +101,7 @@ public class GraphemeSegmentationDataTests
         }
     }
 
-    [Test, Explicit("Fetches GraphemeBreakProperty.txt and emoji-data.txt from unicode.org. Run on demand when reviewing the generated table or bumping the Unicode version.")]
+    [Test, Explicit("Fetches GraphemeBreakProperty.txt and emoji-data.txt from unicode.org. Run on demand when reviewing the generated table or bumping the Unicode version."), Category("RequiresNetwork")]
     public async Task Table_matches_the_pinned_UCD_files_test()
     {
         byte[] expected = await DeriveTableFromUcdAsync();
@@ -194,7 +194,7 @@ public class GraphemeSegmentationDataTests
     // src/InductorParser/Lexing/Unicode/GraphemeSegmentation.Data.cs.
     // The body
     // stays compiled so it can't rot.
-    // [Test, Explicit("Fetches the UCD files and writes a regenerated GraphemeSegmentation.Data.cs to the temp directory.")]
+    // [Test, Explicit("Fetches the UCD files and writes a regenerated GraphemeSegmentation.Data.cs to the temp directory."), Category("RequiresNetwork")]
     public async Task Emit_regenerated_data_file_test()
     {
         byte[] table = await DeriveTableFromUcdAsync();

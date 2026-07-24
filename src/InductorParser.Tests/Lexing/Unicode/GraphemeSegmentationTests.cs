@@ -316,7 +316,7 @@ public class GraphemeSegmentationTests
     // in automatically) plus the break-class pieces the corpus has no
     // standalone constant for. Any failure prints the seed and the code
     // units, which reproduce it exactly.
-    [Test, Explicit("Randomized differential sweep against StringInfo. Run on demand when changing the segmenter or its table.")]
+    [Test, Explicit("Randomized differential sweep against StringInfo. Run on demand when changing the segmenter or its table."), Category("DeepCampaign")]
     public void Random_sequences_segment_like_runtime_StringInfo_test()
     {
         string[] extraPieces =
