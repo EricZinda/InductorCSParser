@@ -75,8 +75,9 @@ public static class UnicodeEnvironment
     /// Which Unicode implementation this process uses, for both
     /// segmentation and normalization. Defaults to
     /// <see cref="UnicodeImplementation.Automatic"/>: the built-in
-    /// implementations on Unity, the runtime's StringInfo and
-    /// string.Normalize everywhere else. Set it once at startup,
+    /// implementations in the netstandard2.1 assembly (the build Unity
+    /// and other pre-net8.0 hosts load), the runtime's StringInfo and
+    /// string.Normalize in the net8.0 assembly. Set it once at startup,
     /// before building grammars or parsing. The first segmentation or
     /// normalization query (constructing a Token rule, compiling a
     /// grammar, parsing, mapping positions, or calling any
@@ -179,7 +180,8 @@ public static class UnicodeEnvironment
             : UnicodeImplementation.Runtime;
 
     // The dispatchers' entry point: resolve on first use, then answer
-    // from the frozen choice. Two volatile reads on the hot path, same
+    // from the frozen choice. One volatile read plus one plain read
+    // (_useBundled, ordered by the acquire above) on the hot path, same
     // cost as the check the segmenter's dispatcher paid when it owned
     // this state itself.
     internal static bool ResolveUseBundled()

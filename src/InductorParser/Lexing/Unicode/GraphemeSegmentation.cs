@@ -145,9 +145,19 @@ internal static partial class GraphemeSegmentation
     // and expect only the two differences the file header lists (no
     // decoder delegate, break types from the checked-in table). Keep
     // any future edits out of the state machine so that diff stays
-    // clean. Internal (not private) so the differential tests can
-    // compare it against StringInfo directly, independent of how the
-    // process-wide setting resolves.
+    // clean.
+    //
+    // One pasted comment below is stale, and stays stale on purpose.
+    // The "Algorithm given at" line links tr29 with no version number,
+    // and unicode.org now serves a newer revision there that added
+    // rule GB9c. This machine implements the older rev 41 rule set
+    // (the class doc above explains that choice and links tr29-41).
+    // Correcting the pasted line would break the diff against
+    // upstream, so it stays exactly as dotnet/runtime wrote it.
+    //
+    // Internal (not private) so the differential tests can compare it
+    // against StringInfo directly, independent of how the process-wide
+    // setting resolves.
     internal static int GetBundledLengthOfFirstExtendedGraphemeCluster(ReadOnlySpan<char> input)
     {
         // Algorithm given at https://www.unicode.org/reports/tr29/#Grapheme_Cluster_Boundary_Rules.

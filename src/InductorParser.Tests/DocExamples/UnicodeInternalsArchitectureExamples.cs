@@ -2,6 +2,7 @@ using System.Text;
 using NUnit.Framework;
 using InductorParser;
 using static InductorParser.Rules;
+using static InductorParser.Tests.TestHelpers;
 
 namespace InductorParser.Tests.DocExamples;
 
@@ -116,7 +117,10 @@ public class UnicodeInternalsArchitectureExamples
         Assert.That(result.Success, Is.False);
         // The '!' sits at index 5 in the original (decomposed) string:
         // c a f e U+0301 ! -> indices 0..5. A position into the recomposed
-        // "café!" ("café" is 4 chars) would report 4 instead.
-        Assert.That(result.ErrorCharIndex, Is.EqualTo(5));
+        // "café!" ("café" is 4 chars) would report 4 instead. The doc's
+        // claim covers every position unit, so assert them all: char 5,
+        // line 0, char column 5, and token 4 (e + combining acute is one
+        // grapheme, so the '!' is the fifth cluster).
+        AssertErrorPosition(result, charIndex: 5, line: 0, column: 5, TokenIndex: 4);
     }
 }

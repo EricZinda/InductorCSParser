@@ -29,8 +29,10 @@ namespace InductorParser.Tests;
 // segmentation or normalization call runs the built-in code.
 [TestFixture]
 // NonParallelizable because every test in the process shares the one
-// UnicodeEnvironment, and this fixture is the only one that mutates
-// it. A fixture running at the same time could have the setting frozen
+// UnicodeEnvironment, and this fixture and HostGlobalizationCheckTests
+// are the two that mutate it (this one sets Implementation, that one
+// sets AcceptHostGlobalization, and both reset it around each test).
+// A fixture running at the same time could have the setting frozen
 // out from under this one mid-test (any parse freezes it, so this
 // fixture's next set would throw), could itself resolve to a Bundled
 // value this fixture set a moment earlier instead of the build's

@@ -13,10 +13,13 @@ namespace InductorParser;
 //     the offender and returns. Compile collects every offender across the
 //     whole grammar and throws one InvalidOperationException at the end.
 //
-//   * ReportNormalizeFailure: string.Normalize threw (in practice an
-//     unpaired surrogate, which it rejects regardless of form). The
-//     exception is surfaced as the thrown InvalidOperationException's
-//     InnerException. The engine also records a matching offender so the
+//   * ReportNormalizeFailure: converting the stored text to `form` failed
+//     because the text can't be normalized: an unpaired surrogate, or
+//     U+FFFE, the two things the rejection scan flags (string.Normalize
+//     itself throwing is only the backstop case). The reported exceptions
+//     are gathered into an AggregateException that becomes the thrown
+//     InvalidOperationException's InnerException, even when there's just
+//     one. The engine also records a matching offender so the
 //     rule still appears in the user-facing list. TryConvertToForm calls
 //     this for you, so most rules never call it directly.
 public interface INormalizationReporter

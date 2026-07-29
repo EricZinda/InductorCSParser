@@ -5,8 +5,9 @@ namespace InductorParser.Tests;
 
 // The code points Unicode 16.0 added, as sorted inclusive ranges
 // hand-transcribed from the Age=V16_0 section of
-// https://www.unicode.org/Public/16.0.0/ucd/DerivedAge.txt (47 ranges,
-// 5,185 code points, both counts stated by the file itself).
+// https://www.unicode.org/Public/16.0.0/ucd/DerivedAge.txt (47 range
+// lines counted by hand, 5,185 code points per the section's own
+// "Total code points" footer).
 //
 // Why the differential tests need this: the built-in normalizer's
 // tables are Unicode 16.0, but the runtime oracle the sweeps compare
@@ -21,10 +22,11 @@ namespace InductorParser.Tests;
 // points is proven by the NormalizationTest-16.0.0.txt conformance
 // suite and the [Explicit] UCD re-derivation test instead.
 //
-// Unicode 15.1 needs no entries: it added only CJK Extension I, which
-// has no normalization behavior (no decompositions, no combining
-// classes, no quick-check flags), so ICU 72.1 and the 16.0 tables
-// already agree there.
+// Unicode 15.1 needs no entries: it added CJK Extension I plus five
+// ideographic description characters, and none of them have any
+// normalization behavior (no decompositions, no combining classes,
+// no quick-check flags), so ICU 72.1 and the 16.0 tables already
+// agree there.
 //
 // The file sits under Lexing/Unicode/ because that folder never syncs
 // to the Unity test project.

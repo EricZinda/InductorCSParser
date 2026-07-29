@@ -158,7 +158,7 @@ static string StripInvisibles(string input) =>
 var result = blockedWords.Parse(StripInvisibles(userInput));
 ```
 
-`TokenSet.Category(UnicodeCategory.Format)` catches most invisibles (zero-width space, the joiners, word joiner, soft hyphen, BOM, the bidi controls) but not all of them. The Unicode property for "invisible" is `Default_Ignorable_Code_Point`, and it covers more than the Format category. The biggest issue is `U+3164` HANGUL FILLER: it renders as blank width but is category *Letter*, so it slips past a Format filter and a "letters only" rule alike. .NET doesn't expose that property, so add the strays to the Format set yourself:
+`TokenSet.Category(UnicodeCategory.Format)` catches most invisibles (zero-width space, the joiners, word joiner, soft hyphen, BOM, the bidi controls) but not all of them. The Unicode property for "invisible" is `Default_Ignorable_Code_Point`. It isn't a Format superset, it trades in both directions: it adds invisibles from other categories (variation selectors, the Hangul fillers) while leaving out the Format characters that are actually visible (the Arabic number signs and the other prepended concatenation marks). The biggest issue is `U+3164` HANGUL FILLER: it renders as blank width but is category *Letter*, so it slips past a Format filter and a "letters only" rule alike. .NET doesn't expose that property, so add the strays to the Format set yourself:
 
 ```csharp
 static readonly TokenSet Invisibles =

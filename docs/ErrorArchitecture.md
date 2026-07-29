@@ -41,7 +41,7 @@ A **leaf** records its failure at the specific spot it got stuck:
 
 | Leaf rule                                       | Records at                                              |
 | ----------------------------------------------- | -------------------------------------------------------- |
-| `Literal`, `Grapheme`, `LiteralIgnoreAsciiCase` | the start of the first expected grapheme that didn't match |
+| `Literal`, `Token`, `LiteralIgnoreAsciiCase`    | the start of the first expected grapheme that didn't match |
 | `OneOf`, `NoneOf`, `AnyToken`                   | the token it tried to read                                |
 | `ScanWhile`                                     | the position the scan got stuck                           |
 | `Eof`                                           | the lexer's current position                              |

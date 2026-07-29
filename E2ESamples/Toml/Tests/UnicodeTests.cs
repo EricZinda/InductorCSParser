@@ -15,9 +15,10 @@ namespace InductorParser.E2ESamples.Toml.Tests;
 //      scalar value. The grammar accepts any 4 or 8 hex digits. The
 //      decoder rejects surrogates (U+D800..U+DFFF) and values above
 //      U+10FFFF.
-//   3. Keys are normalized to NFC by the scanner before the consumer
-//      sees them. Same-looking keys in NFC and NFD form therefore
-//      collide as duplicates, which diverges from Tomlyn.
+//   3. Keys are stored exactly as the source bytes wrote them: NFC
+//      stays NFC, NFD stays NFD, so same-looking keys in the two
+//      forms are distinct keys, matching Tomlyn. The Angle 3 tests
+//      lock that byte fidelity in.
 //
 // Non-ASCII code points are constructed from numeric values
 // (char.ConvertFromUtf32) rather than written as glyphs in the source,

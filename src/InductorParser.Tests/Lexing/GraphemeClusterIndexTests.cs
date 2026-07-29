@@ -199,14 +199,14 @@ public class GraphemeClusterIndexTests
     {
         // GraphemeClusterIndex.For caches by string instance, so multiple
         // threads parsing the same input share one index instance. The
-        // instance has mutable state: a TextElementEnumerator that gets
-        // advanced and a bool[] _isStart array that gets written during
-        // EnsureWalkedTo. Without synchronization the threads race on the
-        // enumerator and lose _isStart updates: positions that are
-        // grapheme cluster starts end up unmarked, IsClusterStart returns
-        // the wrong answer for them, and the next LengthAt call against
-        // such a position throws the "not a cluster start" invariant
-        // violation.
+        // instance has mutable state: the walk cursor (_nextWalkPosition)
+        // advances one cluster at a time through the segmenter and the
+        // bool[] _isStart array gets written during EnsureWalkedTo.
+        // Without the walk lock the threads race on the cursor and lose
+        // _isStart updates: positions that are grapheme cluster starts
+        // end up unmarked, IsClusterStart returns the wrong answer for
+        // them, and the next LengthAt call against such a position throws
+        // the "not a cluster start" invariant violation.
         //
         // This is a DoS / correctness concern, not just a perf one. An
         // application that parses the same interned or cached string from
@@ -221,9 +221,10 @@ public class GraphemeClusterIndexTests
         // Trial-loop and fresh-per-trial input mean each trial starts
         // with an empty cache and a long enough walk that the threads
         // overlap inside EnsureWalkedTo, which is where the race lives.
-        // The mixed-cluster shape (CRLF and ASCII alternated) forces
-        // StringInfo to compute real cluster lengths so each MoveNext
-        // does observable work the race can interfere with.
+        // The mixed-cluster shape (CRLF and ASCII alternated) makes
+        // every step compute a real two-char cluster length for the
+        // CRLF pairs, so each walk step does observable work the race
+        // can interfere with.
         for (int trial = 0; trial < 20; trial++)
         {
             string input = string.Concat(Enumerable.Range(0, 4000)

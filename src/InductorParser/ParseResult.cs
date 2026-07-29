@@ -25,9 +25,9 @@ namespace InductorParser;
 /// convention) or <see cref="ErrorTokenColumn"/> (graphemes). All zero-based.
 /// Pick whichever matches the unit the caller will use the number in.
 /// <see cref="ErrorPosition"/> returns all of these packed into one SourcePosition
-/// struct, so callers that want more than one unit only pay for one walk of the
-/// input. The same conversion is available on Symbol.SourceRange for any node
-/// in the parse tree.
+/// struct, so callers that want more than one unit share the position work
+/// instead of paying a separate walk per property read. The same conversion is
+/// available on Symbol.SourceRange for any node in the parse tree.
 /// </para>
 /// </remarks>
 public readonly struct ParseResult

@@ -7,6 +7,7 @@ using System.Text;
 using NUnit.Framework;
 using InductorParser;
 using InductorParser.Lexing;
+using InductorParser.Lexing.Unicode;
 using InductorParser.SyntaxTree;
 using static InductorParser.Rules;
 
@@ -53,13 +54,21 @@ namespace InductorParser.Tests.Lexing.UnicodeConformance;
 // [Category("UnicodeConformance")] on the fixture below is what makes
 // the category-filter opt-in path work.
 //
-// The implementation hosting this suite is GraphemeSegmentation, the
-// same segmentation the parser uses. When Unicode publishes a new
-// version, drop in the new
+// Two implementations meet this corpus. Fixture A and the rule-based
+// fixtures (B onward) drive GraphemeClusterIndex and the parser
+// stack, which dispatch through UnicodeEnvironment: on this CoreCLR
+// test host Automatic resolves to Runtime, so those fixtures
+// conformance-test .NET's StringInfo. Fixture A2 calls the built-in
+// state machine directly
+// (GetBundledLengthOfFirstExtendedGraphemeCluster), the same way
+// NormalizationConformanceTests targets the built-in normalizer, so
+// the corpus also proves the table-driven segmenter itself rather
+// than only its differential agreement with StringInfo. When Unicode
+// publishes a new version, drop in the new
 // GraphemeBreakTest-X.Y.Z.txt, update the path below, regenerate
 // GraphemeSegmentation.Data.cs, and rerun. Any newly-failing cases
-// either reflect a rule the segmenter doesn't implement yet (GB9c is
-// the current known one) or a regression in the segmenter.
+// either reflect a rule neither implementation has yet (GB9c is the
+// current known one) or a regression.
 [TestFixture]
 [Explicit("UAX #29 conformance suite. ~16,000 cases total; opt in via dotnet test --filter TestCategory=UnicodeConformance.")]
 [Category("UnicodeConformance")]
@@ -246,11 +255,13 @@ public class GraphemeBreakConformanceTests
         }
 
         int lineNumber = 0;
+        int dataLineCount = 0;
         foreach (string rawLine in File.ReadLines(path, Encoding.UTF8))
         {
             lineNumber++;
             string trimmed = rawLine.TrimStart();
             if (trimmed.Length == 0 || trimmed[0] == '#') continue;
+            dataLineCount++;
 
             if (!TryParseLine(rawLine, out string input, out int[] expectedBreaks, out string error))
             {
@@ -267,6 +278,16 @@ public class GraphemeBreakConformanceTests
                 ExpectedBreaks = expectedBreaks,
             };
             yield return new TestCaseData(conformanceCase).SetName(conformanceCase.ToString());
+        }
+
+        // GraphemeBreakTest-16.0.0.txt holds 1,093 data lines. A short
+        // read (a truncated checkout, a bad merge) would otherwise
+        // silently shrink the corpus and pass, the same failure mode
+        // NormalizationConformanceTests floors against.
+        if (dataLineCount < 1000)
+        {
+            yield return new TestCaseData((ConformanceCase?)null)
+                .SetName($"GraphemeBreakTest.txt looks truncated: {dataLineCount} data lines, expected about 1,093");
         }
     }
 
@@ -309,6 +330,41 @@ public class GraphemeBreakConformanceTests
 
         Assert.That(actualBreaks, Is.EqualTo(testCase.ExpectedBreaks),
             $"GraphemeClusterIndex boundaries diverge from UAX #29 spec.\n" +
+            $"Source: {testCase.RawLine}");
+    }
+
+    // ============================================================
+    // Fixture A2: the built-in state machine, directly.
+    //   Fixture A goes through GraphemeClusterIndex, whose walk
+    //   dispatches through UnicodeEnvironment and on this CoreCLR test
+    //   host resolves to Runtime, so fixture A conformance-tests
+    //   .NET's StringInfo. This fixture is the built-in side of the
+    //   same corpus: it walks each line's input with the table-driven
+    //   state machine and asserts the same spec boundaries, so a table
+    //   regeneration or a state-machine regression fails here even
+    //   though the everyday differential suites only compare the two
+    //   implementations to each other.
+    // ============================================================
+    [TestCaseSource(nameof(Cases))]
+    public void Built_in_segmenter_boundaries_match_spec(ConformanceCase? testCase)
+    {
+        if (SkipIfKnownRuntimeDivergence(testCase)) return;
+
+        var actualBreaks = new List<int> { 0 };
+        int position = 0;
+        while (position < testCase!.Input.Length)
+        {
+            int length = GraphemeSegmentation.GetBundledLengthOfFirstExtendedGraphemeCluster(
+                testCase.Input.AsSpan(position));
+            Assert.That(length, Is.GreaterThan(0),
+                $"built-in segmenter returned a non-positive cluster length at " +
+                $"{position}. Source: {testCase.RawLine}");
+            position += length;
+            actualBreaks.Add(position);
+        }
+
+        Assert.That(actualBreaks, Is.EqualTo(testCase.ExpectedBreaks),
+            $"built-in segmenter boundaries diverge from UAX #29 spec.\n" +
             $"Source: {testCase.RawLine}");
     }
 

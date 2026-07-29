@@ -30,7 +30,7 @@ namespace InductorParser.Lexing.Unicode;
 /// the combining classes are already in canonical order, the input is
 /// returned unchanged with one scan and no allocation. UAX #15 notes
 /// that much text is already NFC
-/// (https://www.unicode.org/reports/tr15/#Norm_Forms), making
+/// (https://www.unicode.org/reports/tr15/#Description_Norm), making
 /// this an important common case. Quick-check No proves the input
 /// needs normalization, while Maybe (a scalar that might compose with
 /// a preceding character) requires a full check. Normalize rebuilds

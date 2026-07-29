@@ -32,9 +32,12 @@ namespace InductorParser.Lexing;
 //     on every Chars access.
 
 /// <summary>
-/// One chunk of input the lexer just consumed: a Unicode grapheme (i.e. one
-/// UAX #29 grapheme cluster, possibly several runes wide) or the EOF token
-/// at the end of the input. Rather than copying the matched text into a new
+/// One chunk of input the lexer just consumed, or the EOF token at the end
+/// of the input. In the default grapheme mode a token is one Unicode
+/// grapheme (i.e. one UAX #29 grapheme cluster, possibly several runes
+/// wide). In the one-rune-per-token sub-lexer mode (WithinToken) it's one
+/// rune, which can be a fragment of a cluster, and under Compile(null) it
+/// can be a lone surrogate. Rather than copying the matched text into a new
 /// string, a Token keeps a reference to the original input plus an offset and
 /// a length.
 /// </summary>
@@ -88,8 +91,9 @@ public readonly ref struct Token
 
     /// <summary>
     /// The Unicode scalar value when this token is exactly one rune, or -1
-    /// otherwise. End-of-input, empty, and multi-rune tokens (the family
-    /// emoji 👨‍👩‍👧‍👦, for example) all return -1, so single-rune tests like
+    /// otherwise. End-of-input, empty, multi-rune tokens (the family
+    /// emoji 👨‍👩‍👧‍👦, for example), and lone-surrogate tokens (a stray isn't a
+    /// scalar value) all return -1, so single-rune tests like
     /// GraphemeRule and OneOfRule fail correctly without each caller having
     /// to special-case the multi-rune path.
     /// </summary>

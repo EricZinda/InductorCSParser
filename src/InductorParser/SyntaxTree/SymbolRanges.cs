@@ -21,8 +21,10 @@ public static class SymbolRanges
     public const int CharacterRangeEnd = 0x110000;
 
     /// <summary>
-    /// First id for built-in expression symbols (And, Or, OneOrMore, Integer,
-    /// Float, InlineWhitespace, Eof). Sits just past the Unicode range.
+    /// Start of the range reserved for future built-in symbol ids, just past
+    /// the Unicode range. Unused today: anonymous rules (And, Or, OneOrMore,
+    /// and the rest) get custom-range ids assigned at Compile, so no Symbol
+    /// currently has an id in this range.
     /// </summary>
     public const int BuiltinRangeStart = 0x110000;
 

@@ -42,13 +42,14 @@ The rest of this doc answers one question: what does a rule's test file need bef
 
 ## Where Tests Live
 
-`src/InductorParser.Tests/` has six folders:
+`src/InductorParser.Tests/` has seven folders:
 
 - `Rules/`: one file per rule, named `<RuleType>Tests.cs`.
 - `Core/`: cross-cutting concerns, named after the concern (`WithErrorTests.cs`, `TracingTests.cs`).
 - `E2EExamples/`: full grammars built from the public API. These double as documentation for what a real grammar looks like, so new ones should be realistic use cases, not rule showcases.
 - `DocExamples/`: keeps the code samples in the markdown docs compiling and passing.
 - `Lexing/`: lexer-level tests, including the conformance suite above.
+- `Fuzzing/`: the grammar fuzzer, one of the two `DeepCampaign` suites.
 - `Unity/`: the IL2CPP scaffold (last section).
 
 Shared helpers (`TraceTestHelpers.cs`, `NormalizationExamples.cs`, the matrix helpers) sit loose at the project root. Files in the first three folders all use `namespace InductorParser.Tests;`.
@@ -196,7 +197,7 @@ The child app deliberately ships no app-local ICU. That makes its clean-environm
 ./src/InductorParser.Tests/runil2cpptest.sh
 ```
 
-The script syncs the test sources from `{Core,Rules,E2EExamples}/` (plus the Prolog fixture corpus) into the Unity project and runs them, about 7,200 tests once the corpus-driven matrices expand, on an IL2CPP Standalone player it builds. `DocExamples/` and `Lexing/` don't sync and stay CoreCLR-only (`Lexing/` holds the differential tests that compare the built-in segmenter and normalizer against CoreCLR's `StringInfo` and `string.Normalize`, which only mean something on CoreCLR). Results land in `test-results/` at the repo root. It needs Unity 6000.3.13f1 (the version in `ProjectVersion.txt`) with the IL2CPP module installed, and it preflight-checks both before spending minutes on Unity's startup.
+The script syncs the test sources from `{Core,Rules,E2EExamples}/` (plus the Prolog fixture corpus) into the Unity project and runs them, about 7,200 tests once the corpus-driven matrices expand, on an IL2CPP Standalone player it builds. `DocExamples/`, `Fuzzing/`, and `Lexing/` don't sync and stay CoreCLR-only (`Lexing/` holds the differential tests that compare the built-in segmenter and normalizer against CoreCLR's `StringInfo` and `string.Normalize`, which only mean something on CoreCLR). Results land in `test-results/` at the repo root. It needs Unity 6000.3.13f1 (the version in `ProjectVersion.txt`) with the IL2CPP module installed, and it preflight-checks both before spending minutes on Unity's startup.
 
 The same tests behave the same on both platforms because both platforms segment and normalize the same way. On CoreCLR the tests run against the runtime's `StringInfo` and `string.Normalize`. Under IL2CPP they run against the library's built-in segmenter and normalizer. And the differential tests ensure each pair is the same on .NET 10 (normalization compared everywhere except the code points Unicode 16.0 added), so a grapheme-heavy or normalization-heavy test can't pass on one platform and fail on the other over Unicode data.
 

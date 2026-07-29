@@ -8,13 +8,16 @@
 //   https://www.unicode.org/Public/16.0.0/ucd/auxiliary/GraphemeBreakProperty.txt
 //   https://www.unicode.org/Public/16.0.0/ucd/emoji/emoji-data.txt (Extended_Pictographic only)
 //
-// That pairing is what UAX #29 itself prescribes. Its property-values
-// section says the Grapheme_Cluster_Break assignments "are explicitly
-// listed in the corresponding data file" (GraphemeBreakProperty.txt)
-// and that "the values in that file are the normative property values",
-// and the Extended_Pictographic property rule GB11 uses is defined by
-// the emoji data files (emoji-data.txt, per UTS #51). See
-// https://www.unicode.org/reports/tr29/tr29-41.html#Grapheme_Cluster_Break_Property_Values.
+// The GraphemeBreakProperty.txt half of that pairing is what UAX #29
+// itself prescribes: its property-values section says the
+// Grapheme_Cluster_Break assignments "are explicitly listed in the
+// corresponding data file" and that "the values in that file are the
+// normative property values"
+// (https://www.unicode.org/reports/tr29/tr29-41.html#Grapheme_Cluster_Break_Property_Values).
+// The Extended_Pictographic property rule GB11 uses is defined by the
+// emoji data files instead: emoji-data.txt, whose own header labels it
+// "Emoji Data for UTS #51" (tr29 references the property only from
+// its rule tables).
 // Everything neither file lists defaults to Other, per the @missing
 // declaration in GraphemeBreakProperty.txt's own header (it assigns
 // Other to the whole code point range up front, and the listed

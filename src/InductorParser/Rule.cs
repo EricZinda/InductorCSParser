@@ -749,8 +749,8 @@ public abstract class Rule
     /// form and the input's form disagree.
     /// </para>
     /// <para>
-    /// Compile only throws when a literal can't be represented in the chosen
-    /// form: an unpaired surrogate that string.Normalize rejects, or a
+    /// The normalization pass throws when a literal can't be represented in the
+    /// chosen form: text the rejection scan flags (an unpaired surrogate, or U+FFFE), or a
     /// single-grapheme slot (a OneOf / NoneOf set member or a single-rune Token)
     /// whose conversion produces more than one grapheme (the single grapheme ligature 'ﬁ' becomes
     /// a two grapheme "fi" under FormKC). The exception lists every offender and how to fix it.
@@ -1783,8 +1783,8 @@ public abstract class Rule
     // collisions are fine because pass 2 probes upward.
     //
     // Uses FNV-1a 32-bit rather than string.GetHashCode because
-    // string.GetHashCode is randomized per .NET process (since .NET Core
-    // 3.0) and varies across runtimes. FNV-1a is a fixed byte-level
+    // string.GetHashCode is randomized per .NET process (on every .NET
+    // Core version) and varies across runtimes. FNV-1a is a fixed byte-level
     // algorithm: same name produces the same hash on every process, every
     // .NET runtime (CoreCLR, Mono, IL2CPP), every version. That means a
     // grammar's named-rule ids are stable run-to-run, which is what

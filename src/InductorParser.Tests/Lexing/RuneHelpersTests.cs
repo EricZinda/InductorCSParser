@@ -62,4 +62,15 @@ public class RuneHelpersTests
         Assert.That(RuneHelpers.RuneCount(cluster.AsSpan(0, 2)), Is.EqualTo(1));
         Assert.That(RuneHelpers.RuneCount(cluster.AsSpan()), Is.EqualTo(2));
     }
+
+    [Test]
+    public void EnumerateRuneValues_null_throws_at_the_call_not_at_MoveNext()
+    {
+        // The public method checks null eagerly and hands off to a
+        // private iterator. Without that split, calling with null would
+        // return normally and a NullReferenceException would surface at
+        // the first MoveNext instead. Same regression shape as the
+        // GraphemeHelpers.Count null test.
+        Assert.Throws<ArgumentNullException>(() => RuneHelpers.EnumerateRuneValues(null!));
+    }
 }

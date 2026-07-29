@@ -18,7 +18,7 @@ You need to pick one as the parser's token. Here's the stack, from the lowest ph
 
 Each layer is a composition over the one below, so any string has a code-unit count, a code-point count, and a token count, and the counts only diverge when the composition is non-trivial. Some examples:
 - For ASCII, all three are equal.
-- For text that stays inside the first 65,536 code points (U+0000..U+FFFF) with no combining marks and no CRLF line endings (that pair is one token), all three are still equal.
+- For text inside the first 65,536 code points (U+0000..U+FFFF), all three are still equal as long as no code points cluster together. That takes more than avoiding combining marks and CRLF (that pair is one token): conjoining Hangul jamo (U+1100 + U+1161 is two code points, one token), halfwidth voicing marks, and prepend characters like U+0600 also join their neighbors.
 - For a rune above U+FFFF with no modifier (a lone 🎸, say), UTF-16 uses a surrogate pair so the code-unit count doubles while the code-point and token counts stay the same.
 - For combining-mark text or emoji sequences (👋🏽, 👨‍👩‍👧‍👦), multiple code points form one token, so the token count falls below the code-point count.
 
@@ -153,7 +153,7 @@ Which implementation does the converting mirrors segmentation: by default the ne
 
 When you need the exact characters the user typed back out, read `Symbol.SourceText` (or just keep the string you passed to `Parse`). `SourceText` returns the verbatim original section a rule matched no matter which form the grammar compiled under, because it translates the match back to the original input. `tree.ToString()` isn't the verbatim accessor: it rebuilds text only from the nodes left in the tree, so it drops whatever the `Delete` rules matched, and under a normalizing form the characters it does keep come back normalized. 
 
-Positions reported in `ParseResult` (`ErrorCharIndex` and its derived line/column/token properties) are always into the caller's original input string, never into the normalized form. The parser normalizes internally for the lexer to operate on, then maps any failure offset back to original coordinates at the boundary. The mapping runs only on failure or budget-abort paths, never on success, and even then it's skipped when normalization was a no-op and the normalizer handed back the original string reference (both the runtime's and the built-in implementation do).
+Positions reported in `ParseResult` (`ErrorCharIndex` and its derived line/column/token properties) are always into the caller's original input string, never into the normalized form. The parser normalizes internally for the lexer to operate on, then maps any failure offset back to original coordinates at the boundary. The same mapping serves `Symbol.SourceRange` and `SourceText` on successful parses. Either way it runs on demand when a position is read, not during the parse, and it's skipped when normalization was a no-op and the normalizer handed back the original string reference (both the runtime's and the built-in implementation do).
 
 One consequence to know about: when the failure lands inside a combining character sequence that got composed (or vice-versa), the reported position is the start of that sequence in the original string, not a phantom position mid-sequence. That matches what an editor wants for highlight-the-bad-token diagnostics anyway. You can't put a caret between an 'e' and its combining acute in any reasonable editor.
 
