@@ -85,6 +85,59 @@ public class StateMachineNormalizationCompareTests
         AssertEvaluatorsAgree(CafeRule(), input, normalizationForm: null, expectSuccess);
     }
 
+    // Input the normalizers reject: an unpaired UTF-16 surrogate
+    // (ill-formed UTF-16), or U+FFFE (the noncharacter .NET's
+    // string.Normalize refuses). A normalizing parse turns it into a
+    // MalformedInput result positioned at the offending code unit.
+    // SetArgDisplayNames keeps the raw code units out of the generated
+    // test names: a name containing an unpaired surrogate breaks the
+    // VSTest discovery-to-execution handoff, and the whole case list
+    // silently never runs.
+    private static IEnumerable<TestCaseData> MalformedInputCases()
+    {
+        yield return new TestCaseData(CafePrecomposed + "\uD800", 4)
+            .SetArgDisplayNames("cafe + unpaired high surrogate", "4");
+        yield return new TestCaseData("ca\uDC00fé", 2)
+            .SetArgDisplayNames("unpaired low surrogate inside cafe", "2");
+        yield return new TestCaseData(CafePrecomposed + (char)0xFFFE, 4)
+            .SetArgDisplayNames("cafe + U+FFFE", "4");
+    }
+
+    [TestCaseSource(nameof(MalformedInputCases))]
+    public void MalformedInput_agrees_with_recursive_evaluator(string input, int expectedIndex)
+    {
+        var rule = CafeRule();
+        rule.Compile(NormalizationForm.FormC);
+        var options = new ParseOptions();
+
+        var legacy = rule.ParseRecursive(input, options);
+        Assert.That(legacy.Outcome, Is.EqualTo(ParseOutcome.MalformedInput),
+            $"recursive outcome: {legacy.ErrorMessage}");
+        Assert.That(legacy.ErrorCharIndex, Is.EqualTo(expectedIndex), "recursive ErrorCharIndex");
+
+        var stateMachine = StateMachineParser.Parse(rule, input, options);
+        Assert.That(stateMachine.Outcome, Is.EqualTo(ParseOutcome.MalformedInput),
+            $"state-machine outcome: {stateMachine.ErrorMessage}");
+        Assert.That(stateMachine.ErrorCharIndex, Is.EqualTo(legacy.ErrorCharIndex),
+            "state-machine ErrorCharIndex");
+        Assert.That(stateMachine.ErrorMessage, Is.EqualTo(legacy.ErrorMessage),
+            "state-machine ErrorMessage");
+    }
+
+    // The matcher and counter entry points collapse every non-success
+    // outcome to their failure value (TryMatch's doc says "same
+    // accept/reject answer as Parse, just bool instead of
+    // ParseResult"), so malformed input reads as "didn't match"
+    // there, never as an exception escaping the call.
+    [TestCaseSource(nameof(MalformedInputCases))]
+    public void MalformedInput_TryMatch_returns_false(string input, int expectedIndex)
+    {
+        var rule = CafeRule();
+        rule.Compile(NormalizationForm.FormC);
+
+        Assert.That(StateMachineParser.TryMatch(rule, input, new ParseOptions()), Is.False);
+    }
+
     private static void AssertEvaluatorsAgree(Rule rule, string input, NormalizationForm? normalizationForm, bool expectSuccess)
     {
         // Normalization is committed at Compile time. Under Option 1

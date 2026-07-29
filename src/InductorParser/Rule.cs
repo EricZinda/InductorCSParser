@@ -698,11 +698,14 @@ public abstract class Rule
             throw new InvalidOperationException(
                 $".WithError(\"{errorMessage}\") can't be applied to this rule: " +
                 $"it already has the error message \"{_errorMessage}\". " +
-                $".WithError(...) is set-once. To attach a different error to the " +
-                $"same rule shape in more than one place, wrap it with Alias(...) " +
-                $"to get a fresh wrapper that can carry its own error: " +
-                $"Alias(rule).WithError(\"{errorMessage}\"). Or build a factory " +
-                $"function that returns a fresh rule each call.");
+                $".WithError(...) is set-once. To override the existing message " +
+                $"at one use of this rule, wrap that use with a forced alias: " +
+                $"Alias(rule).WithError(\"{errorMessage}\", forced: true). To " +
+                $"give each use its own message, remove the message from the " +
+                $"shared rule and wrap every use: Alias(rule).WithError(...). " +
+                $"Or build a factory function that returns a fresh rule each " +
+                $"call. docs/ErrorArchitecture.md explains which message " +
+                $"surfaces when several apply.");
         _errorMessage = errorMessage;
         _errorForced = forced;
         return this;

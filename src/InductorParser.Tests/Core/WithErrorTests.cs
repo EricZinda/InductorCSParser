@@ -182,6 +182,27 @@ public class WithErrorTests
     }
 
     [Test]
+    public void WithError_set_once_advice_recommends_a_pattern_that_works()
+    {
+        // The set-once exception suggests how to attach a different error
+        // to the same rule shape. The suggestion has to be a pattern that
+        // actually surfaces the new message. A plain
+        // Alias(rule).WithError("second") can't: the inner's existing
+        // message wins the exact-depth tie as first writer, so the
+        // alias's message never appears
+        // (Alias_plain_WithError_does_not_override_an_inner_WithError in
+        // AliasRuleTests proves it). The override that works is marking
+        // the alias's .WithError forced
+        // (Alias_forced_WithError_overrides_an_inner_WithError), so the
+        // advice must include forced: true.
+        var rule = OneOrMore(OneOf(TokenSet.Letters)).WithError("need letters");
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => rule.WithError("need an identifier"));
+        Assert.That(exception!.Message, Does.Contain("forced: true"));
+    }
+
+    [Test]
     public void WithError_rejects_null_message()
     {
         // .WithError(null!, forced: true) rejects the null at the API
