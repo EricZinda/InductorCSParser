@@ -14,7 +14,7 @@ namespace InductorParser.Lexing.Unicode;
 /// string.Normalize, and a built-in UAX #15 normalizer
 /// (https://www.unicode.org/reports/tr15/) whose generated tables in
 /// UnicodeNormalization.Data.cs are the other half of this partial
-/// class and are fixed at Unicode 15.0 like the built-in segmenter's table.
+/// class and hold the Unicode 16.0 data, like the built-in segmenter's table.
 /// The implementation is chosen by the process-wide setting surfaced
 /// as UnicodeEnvironment.Implementation, which governs this normalizer
 /// and the segmenter together (they can never diverge) and is resolved
@@ -30,7 +30,7 @@ namespace InductorParser.Lexing.Unicode;
 /// the combining classes are already in canonical order, the input is
 /// returned unchanged with one scan and no allocation. UAX #15 notes
 /// that much text is already NFC
-/// (https://www.unicode.org/reports/tr15/#Description_Norm), making
+/// (https://www.unicode.org/reports/tr15/#Norm_Forms), making
 /// this an important common case. Quick-check No proves the input
 /// needs normalization, while Maybe (a scalar that might compose with
 /// a preceding character) requires a full check. Normalize rebuilds
@@ -52,7 +52,7 @@ internal static partial class UnicodeNormalization
         ValidateForm(form);
         if (UnicodeEnvironment.ResolveUseBundled())
             return NormalizeWithBundledImplementation(input, form);
-        HostGlobalizationCheck.EnsureRuntimeNormalizationIsTrustworthy();
+        HostGlobalizationCheck.EnsureRuntimeNormalizationIsTrustworthy(input);
         return NormalizeWithRuntime(input, form);
     }
 
@@ -66,7 +66,7 @@ internal static partial class UnicodeNormalization
         ValidateForm(form);
         if (UnicodeEnvironment.ResolveUseBundled())
             return IsNormalizedWithBundledImplementation(input, form);
-        HostGlobalizationCheck.EnsureRuntimeNormalizationIsTrustworthy();
+        HostGlobalizationCheck.EnsureRuntimeNormalizationIsTrustworthy(input);
         return IsNormalizedWithRuntime(input, form);
     }
 
@@ -323,7 +323,9 @@ internal static partial class UnicodeNormalization
     // buffer. The table stores mappings single-level, exactly as
     // UnicodeData.txt states them, so a mapped piece can have a mapping
     // of its own (U+01D5 maps to U+00DC + U+0304, and U+00DC maps
-    // further). The chains are short, five levels at most. For the
+    // further). The chains are short: three levels at the deepest
+    // (polytonic Greek like U+1F82, whose pieces expand twice more), a
+    // bound the data tests assert against the tables. For the
     // canonical forms only canonical mappings apply. For the K forms both
     // kinds apply, and every canonical piece is re-checked because it can
     // have a compatibility mapping of its own (U+1E9B's piece U+017F, the

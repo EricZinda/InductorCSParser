@@ -87,7 +87,8 @@ public readonly partial struct TokenSet
     // "-" is set difference. The General_Category operands (Lu..Nl, Mn, Mc,
     // Nd, Pc) come through CategoriesUnion, which reads the BCL's category
     // data, so they track whatever Unicode version the BCL ships. Every other
-    // operand is a hand-typed constant below, fixed at Unicode 17.0.
+    // operand is a hand-typed constant below, transcribed from the
+    // Unicode 17.0 UCD.
 
     // ID_Start = Lu + Ll + Lt + Lm + Lo + Nl + Other_ID_Start
     //          - Pattern_Syntax - Pattern_White_Space

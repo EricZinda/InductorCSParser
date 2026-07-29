@@ -814,8 +814,9 @@ public class BetweenInclusiveRuleTests
     {
         // Devanagari ka + virama + ssa. UAX #29 rev. 43 (GB9c) keeps
         // these glued as one Indic conjunct cluster, and earlier revisions
-        // break before the trailing consonant. .NET 8's StringInfo
-        // currently uses the older rules, so the slow path treats this
+        // break before the trailing consonant. .NET 10's StringInfo
+        // still uses the older rules (dotnet/runtime#111546), so the
+        // slow path treats this
         // as two clusters and OneOf(ssa) matches at the trailing
         // consonant. What this test verifies is that the scanner-skip fast
         // path agrees with the slow path on whichever runtime is

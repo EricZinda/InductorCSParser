@@ -28,8 +28,8 @@
        INDUCTORPARSER_USE_BUNDLED_UNICODE makes Automatic mean the
        library's built-in UAX #29 segmenter and UAX #15 normalizer
        instead (Lexing/Unicode/GraphemeSegmentation.cs and
-       Lexing/Unicode/UnicodeNormalization.cs, both fixed at
-       Unicode 15.0). The
+       Lexing/Unicode/UnicodeNormalization.cs, both implementing
+       Unicode 16.0). The
        netstandard2.1 build defines it because the runtimes that load
        that build (Unity's Mono, IL2CPP) ship a StringInfo that
        predates UAX #29 and would tokenize incorrectly, and a

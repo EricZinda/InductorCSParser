@@ -13,7 +13,7 @@ namespace InductorParser.PlayModeTests
     // src/InductorParser and copied into Assets/Plugins/. It's the "does
     // the whole thing work under IL2CPP at all" tripwire, not a
     // comprehensive test pass. Comprehensive coverage is in
-    // src/InductorParser.Tests (net8.0 CoreCLR).
+    // src/InductorParser.Tests (net10.0 CoreCLR).
     //
     // The grammar mirrors E2EExamples/SettingExampleTests.cs because it
     // exercises the pieces most likely to trip IL2CPP: generics in the

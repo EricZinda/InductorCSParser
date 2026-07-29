@@ -13,14 +13,15 @@ namespace InductorParser.Tests;
 // layers. The first layer asserts expected cluster shapes directly: CRLF,
 // Hangul jamo, ZWJ sequences, regional-indicator flags, keycaps, Thai
 // SARA AM, prepends, controls, and lone surrogates. The second layer is
-// differential: the segmenter deliberately matches .NET 8's StringInfo
-// (same algorithm, same Unicode 15.0 data), so StringInfo is an oracle
-// this test project can compare against on every string it can build.
-// StringInfo's Unicode data is compiled into the runtime itself, not
-// ICU, so GlobalizationOracleFixture refuses to run the suite on any
-// runtime major other than 8, the one this segmenter is verified
-// against. These tests run on CoreCLR only (Lexing/ doesn't sync to
-// Unity), which is exactly where the oracle is valid.
+// differential: the segmenter deliberately matches .NET 10's StringInfo
+// (same algorithm, same Unicode 16.0 data, and neither side implements
+// GB9c), so StringInfo is an oracle this test project can compare
+// against on every string it can build. StringInfo's Unicode data is
+// compiled into the runtime itself, not ICU, so
+// GlobalizationOracleFixture refuses to run the suite on any runtime
+// major other than 10, the one this segmenter is verified against.
+// These tests run on CoreCLR only (Lexing/ doesn't sync to Unity),
+// which is exactly where the oracle is valid.
 //
 // Non-ASCII text in this file comes from the canary-protected
 // UnicodeExamples corpus or is built at runtime from code point values
@@ -55,7 +56,7 @@ public class GraphemeSegmentationTests
     }
 
     // Cluster lengths of the whole string, walked with the runtime's
-    // StringInfo (the .NET 8 oracle the vendored segmenter must match).
+    // StringInfo (the .NET 10 oracle the vendored segmenter must match).
     private static List<int> RuntimeClusterLengths(string text)
     {
         var lengths = new List<int>();
