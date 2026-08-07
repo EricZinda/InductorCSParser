@@ -89,7 +89,7 @@ important question is whether that match could be accidental: could accepting
 it leave a suffix of `Z` that isn't the normalization of the remaining suffix
 of `O`? The proof below shows that this can't happen.
 
-## Proof of correctness
+### Proof of correctness
 
 The theorem to prove is that the algorithm terminates and produces chunks:
 
@@ -109,7 +109,7 @@ normalize to the remaining suffix of `Z`. This stronger statement rules out
 accidental prefix matches and allows the same operation to be repeated
 iteratively on each remaining suffix until the end of the string.
 
-## Results used by the proof
+### Results used by the proof
 
 The proof uses these results. Their Unicode derivations and citations are in
 [Appendix A](#appendix-a-unicode-details-behind-the-comparison-proof):
@@ -151,7 +151,7 @@ The proof uses these results. Their Unicode derivations and citations are in
    It proves that, if the complete normalized prefix is unchanged, any such
    interaction can't leave a different normalized suffix behind.
 
-## The invariant
+### The invariant
 
 Throughout the proof, `+` means string concatenation. A vertical bar `|` marks
 the boundary between the same concatenated strings. It isn't part of either
@@ -176,7 +176,7 @@ to repeat the same process on `U` to find the remaining pairs of boundaries.
 The invariant is true before the first iteration. At that point `P` is empty,
 `U = O`, `N(P)` is empty, and `Z = N(O)`.
 
-## A successful comparison preserves the invariant
+### A successful comparison preserves the invariant
 
 The algorithm chooses a candidate `C` from the beginning of `U`, initially one
 whole grapheme, and lets `R` be everything after it:
@@ -364,7 +364,7 @@ become invisible, as the
 shows. The unchanged-prefix lemma is precisely what makes the conclusion valid
 without tracking where each code point came from.
 
-## The search can't get stuck
+### The search can't get stuck
 
 After a failed comparison, the algorithm adds one nonempty original grapheme
 to `C` and tries again. If every shorter candidate fails, `C` eventually
@@ -385,7 +385,7 @@ original grapheme boundary. Boundaries inside an original grapheme are
 deliberately not candidates because we want the mapper to return user-facing
 grapheme boundaries.
 
-## Proof summary
+### Proof summary
 
 Initially the invariant is true. Every successful comparison preserves it at
 a later pair of boundaries, and a successful candidate is always eventually
@@ -404,7 +404,7 @@ accepted pair of boundaries is valid, every accepted original span is locally
 shortest among the whole-grapheme candidates, and the algorithm consumes all of
 `O` and `Z`.
 
-## Turning the paired boundaries into a position
+### Turning the paired boundaries into a position
 
 If the requested position in `Z` is exactly an accepted boundary, the mapper
 returns its paired boundary in `O`. If it lies strictly inside an accepted
