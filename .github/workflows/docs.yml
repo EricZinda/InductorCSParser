@@ -42,11 +42,12 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
         with:
-          # 8 covers the net8.0 target; 9 keeps "LangVersion latest" happy if
-          # the code uses a newer C# than the .NET 8 compiler accepts.
+          # 8 covers the net8.0 target and the net8-targeting docfx tool; 10
+          # matches the SDK the repo develops on, so "LangVersion latest"
+          # compiles the same C# the local builds do.
           dotnet-version: |
             8.0.x
-            9.0.x
+            10.0.x
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

@@ -19,9 +19,12 @@ namespace InductorParser.Lexing;
 // the Lexer and post-parse callers (SourcePositionConverter) reuse the
 // same cache automatically. The CWT keeps the index alive only while
 // the string is alive, so a finished parse drops both together.
-// Keying on the string alone is valid because the implementation
-// choice (UnicodeEnvironment.Implementation) freezes before the first
-// index is built and never changes afterward.
+// Keying on the string alone is valid because a cached index can't
+// mix implementations: the constructor only marks the
+// implementation-independent boundaries (position 0 and input.Length),
+// and every implementation-dependent mark is written by a walk step,
+// whose first segmentation call resolves and freezes the process-wide
+// choice (UnicodeEnvironment.Implementation) before the mark lands.
 //
 // The cache is populated by walking the input one cluster at a time,
 // recording each cluster start in a bool[] sized to the input. bool[]
@@ -83,13 +86,15 @@ internal sealed class GraphemeClusterIndex
     // volatile in ECMA-335 (CLI), Partition I, section 12.6.7 "Volatile
     // reads and writes". Verbatim:
     //
-    //   "A volatile read has 'acquire semantics'; that is, it is
-    //    guaranteed to occur prior to any references to [any] memory that occur
-    //    after it in the instruction sequence."
+    //   "A volatile read has 'acquire semantics' meaning that the read
+    //    is guaranteed to occur prior to any references to memory that
+    //    occur after the read instruction in the CIL instruction
+    //    sequence."
     //
-    //   "A volatile write has 'release semantics'; that is, it is
-    //    guaranteed to happen after any memory references prior to the
-    //    write instruction in the instruction sequence."
+    //   "A volatile write has 'release semantics' meaning that the
+    //    write is guaranteed to happen after any memory references
+    //    prior to the write instruction in the CIL instruction
+    //    sequence."
     //
     // Applied here: the volatile write of _walkedTo (release) will always happen after
     // the _isStart write that precedes it, and the volatile read of

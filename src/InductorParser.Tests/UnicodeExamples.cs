@@ -290,10 +290,13 @@ internal static class UnicodeExamples
     // groups these into a single multi-rune grapheme cluster.
     public static readonly string DevanagariHiGrapheme = Canary("हि", "Devanagari ha + i vowel sign", 0x0939, 0x093F);
 
-    // U+E0001 LANGUAGE TAG. Used inside emoji tag sequences for subdivision
-    // flags. UAX #29 GCB=Extend.
+    // U+E0001 LANGUAGE TAG (Cf), a deprecated tag character. Emoji tag
+    // sequences use only U+E0020..U+E007E plus the U+E007F CANCEL TAG
+    // (UTS #51), so this one appears in no modern sequence. Its UAX #29
+    // break class is Control (the E0020..E007F tags are Extend), so it
+    // always segments as its own single-character cluster.
     public const int LanguageTagRune = 0xE0001;
-    public static readonly string LanguageTagText = Canary("󠀁", "language tag (emoji subdivision flag base)", LanguageTagRune);
+    public static readonly string LanguageTagText = Canary("󠀁", "language tag (deprecated tag character)", LanguageTagRune);
 
     // U+180E MONGOLIAN VOWEL SEPARATOR. Property has shifted across Unicode
     // versions (Cf, then Whitespace, now Cf again depending on the runtime's

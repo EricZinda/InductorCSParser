@@ -17,7 +17,7 @@ namespace InductorParser.Tests;
 // GraphemeSegmentationDataTests. The default tests check the tables'
 // structure (the binary searches silently return wrong answers if the
 // keys ever come out of order). The [Explicit] verification test
-// re-derives the tables from the pinned Unicode 15.0.0 UCD files and
+// re-derives the tables from the pinned Unicode 16.0.0 UCD files and
 // asserts the checked-in data matches. [Explicit] because it hits
 // unicode.org, following the XidIdentifierTests precedent. The
 // regeneration tool below it has its [Test] attribute commented out so
@@ -29,7 +29,7 @@ namespace InductorParser.Tests;
 [TestFixture]
 public class UnicodeNormalizationDataTests
 {
-    private const string UnicodeVersion = "15.0.0";
+    private const string UnicodeVersion = "16.0.0";
 
     // Everything the generator derives from the two UCD files, in raw
     // per-code-point form before table encoding. QuickCheckFlags holds
@@ -44,11 +44,11 @@ public class UnicodeNormalizationDataTests
         public SortedSet<int> FullCompositionExclusions = new();
     }
 
-    // The derived composition pair count at Unicode 15.0.0, printed by
+    // The derived composition pair count at Unicode 16.0.0, printed by
     // the emit run and asserted structurally below so a bad regeneration
     // (truncated download, botched merge) can't shrink the pair table
     // unnoticed.
-    private const int ExpectedCompositionPairCount = 941;
+    private const int ExpectedCompositionPairCount = 961;
 
     [Test]
     public void CombiningClass_table_starts_are_strictly_ascending_from_zero()
@@ -351,13 +351,31 @@ public class UnicodeNormalizationDataTests
     }
 
     [Test]
-    public void QuickCheck_Maybe_bits_are_the_pair_second_elements_and_composing_jamo()
+    public void QuickCheck_Maybe_bits_are_the_composables_and_context_sensitive_composites()
     {
-        // Maybe marks exactly the scalars that might compose with a
+        // Maybe marks the scalars whose presence means a quick scan
+        // can't trust the text to already be composed. Through Unicode
+        // 15.0 that was exactly the scalars that might compose with a
         // preceding character: the second element of every derived
-        // composition pair, plus the Hangul vowel and trailing jamo the
-        // arithmetic composes. The two composing forms share one
-        // composition step, so their Maybe sets must be identical.
+        // composition pair, plus the Hangul vowel and trailing jamo
+        // the arithmetic composes. Unicode 16.0 added the
+        // context-sensitive composites (UAX #15 section 9.2, the
+        // Tulu-Tigalari, Kirat Rai, and Gurung Khema scripts): a
+        // composite whose own canonical decomposition starts with a
+        // maybe-composable character gets rewritten by NFC when the
+        // right character precedes it. Example: U+113C7 decomposes to
+        // <U+113C2, U+113B8>, so in <U+113C2, U+113C7> the
+        // decomposition exposes two adjacent U+113C2s, they compose to
+        // U+113C5, and the NFC result is <U+113C5, U+113B8> with the
+        // original U+113C7 gone. The UCD therefore marks such
+        // composites Maybe as well, and one composite qualifying can
+        // qualify another whose decomposition starts with it (Kirat
+        // Rai chains this two deep), so the derivation below repeats
+        // until the set stops growing. Before 16.0 the rule added
+        // nothing because every such composite (U+0344, the Tibetan
+        // two-mark vowels) was composition-excluded. The two composing
+        // forms share one composition step, so their Maybe sets must
+        // be identical.
         var field = typeof(UnicodeNormalization).GetField(
             "CompositionPairs", BindingFlags.NonPublic | BindingFlags.Static);
         Assert.That(field, Is.Not.Null, "UnicodeNormalization.CompositionPairs field not found");
@@ -369,6 +387,26 @@ public class UnicodeNormalizationDataTests
             composable.Add(vowelJamo);
         for (int trailingJamo = 0x11A8; trailingJamo <= 0x11C2; trailingJamo++)
             composable.Add(trailingJamo);
+
+        bool grew = true;
+        while (grew)
+        {
+            grew = false;
+            for (int codePoint = 0; codePoint <= 0x10FFFF; codePoint++)
+            {
+                if (composable.Contains(codePoint)) continue;
+                if (!UnicodeNormalization.TryGetDecomposition(
+                        codePoint, out ReadOnlySpan<int> expansion, out bool isCompatibility))
+                    continue;
+                if (isCompatibility || expansion.Length != 2) continue;
+                if (UnicodeNormalization.IsFullCompositionExclusion(codePoint)) continue;
+                if (composable.Contains(expansion[0]))
+                {
+                    composable.Add(codePoint);
+                    grew = true;
+                }
+            }
+        }
 
         var disagreements = new List<string>();
         for (int codePoint = 0; codePoint <= 0x10FFFF && disagreements.Count < 25; codePoint++)
@@ -700,7 +738,7 @@ public class UnicodeNormalizationDataTests
     private static readonly string[] DataFileHeaderLines =
     {
         "Generated file. The Unicode normalization data behind the built-in",
-        "UAX #15 normalizer, at Unicode 15.0.0, the same version as the",
+        "UAX #15 normalizer, at Unicode 16.0.0, the same version as the",
         "built-in segmenter's break-property table. The values come from the",
         "Unicode Character Database (the \"UCD\", Unicode's machine-readable",
         "property data, https://www.unicode.org/ucd/) and are copyright",
@@ -708,8 +746,8 @@ public class UnicodeNormalizationDataTests
         "(LICENSE-UNICODE.txt next to this file). Two UCD files feed the",
         "tables:",
         "",
-        "  https://www.unicode.org/Public/15.0.0/ucd/UnicodeData.txt (field 3 canonical combining class, field 5 decomposition)",
-        "  https://www.unicode.org/Public/15.0.0/ucd/DerivedNormalizationProps.txt (Full_Composition_Exclusion and the NFD_QC / NFC_QC / NFKD_QC / NFKC_QC quick-check properties)",
+        "  https://www.unicode.org/Public/16.0.0/ucd/UnicodeData.txt (field 3 canonical combining class, field 5 decomposition)",
+        "  https://www.unicode.org/Public/16.0.0/ucd/DerivedNormalizationProps.txt (Full_Composition_Exclusion and the NFD_QC / NFC_QC / NFKD_QC / NFKC_QC quick-check properties)",
         "",
         "Four table families live here. The combining classes are",
         "transition arrays: entry i covers code points from",

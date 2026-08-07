@@ -32,22 +32,22 @@ namespace InductorParser.Tests.Lexing.UnicodeConformance;
 // (LineGrammar below), not by ad-hoc string-splitting, following the
 // GraphemeBreakConformanceTests dogfooding pattern. Unlike that suite,
 // the assertions run inside a few looping tests rather than one NUnit
-// case per line: the file has ~18,800 data lines, and per-line
+// case per line: the 16.0.0 file has 19,965 data lines, and per-line
 // TestCaseData at that scale slows test discovery for every dotnet
 // test run, opted-in or not. A failure still names the line number and
 // the disagreeing form.
 //
 // The data file version matches the generated tables exactly (both
-// 15.0.0), so there is no known-skip set here. When Unicode publishes
+// 16.0.0), so there is no known-skip set here. When Unicode publishes
 // a new version, drop in the new NormalizationTest-X.Y.Z.txt, update
 // the path below, regenerate UnicodeNormalization.Data.cs, and rerun.
 [TestFixture]
-[Explicit("UAX #15 conformance suite. ~18,800 lines; opt in via dotnet test --filter TestCategory=UnicodeConformance.")]
+[Explicit("UAX #15 conformance suite. ~20,000 lines; opt in via dotnet test --filter TestCategory=UnicodeConformance.")]
 [Category("UnicodeConformance")]
 public class NormalizationConformanceTests
 {
     private const string TestDataRelativePath =
-        "Lexing/UnicodeConformance/NormalizationTest-15.0.0.txt";
+        "Lexing/UnicodeConformance/NormalizationTest-16.0.0.txt";
 
     // ============================================================
     // Layer 1: per-line grammar, parsed with InductorParser itself.
@@ -176,7 +176,7 @@ public class NormalizationConformanceTests
         }
 
         Assert.That(lines.Count, Is.GreaterThan(18000),
-            "the conformance file should hold ~18,800 data lines; a short read means a truncated file");
+            "the 16.0.0 conformance file holds 19,965 data lines; a short read means a truncated file");
         return lines;
     }
 

@@ -211,7 +211,7 @@ public static class PerformanceChart
 <body>
 
 <h1>JSON parser performance by shape</h1>
-<div class="subtitle">Mean parse time in microseconds. Lower is better. BenchmarkDotNet ShortRun, .NET 8.0.25 on Arm64. Four lines, one per input shape (Big, Deep, Long, Wide). Regenerated automatically on every benchmark run. <strong>Run: __RUN_DATE__</strong></div>
+<div class="subtitle">Mean parse time in microseconds. Lower is better. BenchmarkDotNet ShortRun, .NET 10 on Arm64. Four lines, one per input shape (Big, Deep, Long, Wide). Regenerated automatically on every benchmark run. <strong>Run: __RUN_DATE__</strong></div>
 
 <div class="chart-wrapper">
   <canvas id="chart"></canvas>

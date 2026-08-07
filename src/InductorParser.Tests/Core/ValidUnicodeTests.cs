@@ -50,9 +50,9 @@ public class ValidUnicodeTests
         // 1 + VS16 + COMBINING ENCLOSING KEYCAP. Canonical keycap
         // sequence: an ASCII digit followed by the emoji variation
         // selector to pick emoji presentation and the combining
-        // enclosing keycap to wrap a box around it. UAX #29 GB9 / GB9a
-        // glue the two Extend characters to the digit base, so the
-        // whole three-rune sequence is one cluster.
+        // enclosing keycap to wrap a box around it. Both VS16 and the
+        // keycap are GCB=Extend, so UAX #29 GB9 glues them to the digit
+        // base and the whole three-rune sequence is one cluster.
         string input = UnicodeExamples.DigitOneKeycapGrapheme;
 
         Assert.That(And(AnyToken(), Eof()).Parse(input).Success, Is.True);

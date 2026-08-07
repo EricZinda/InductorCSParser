@@ -16,19 +16,19 @@ namespace InductorParser.Tests;
 // in GraphemeSegmentation.Data.cs. The default tests check the table's
 // structure (the binary search silently returns wrong answers if the
 // starts ever come out of order). The [Explicit] verification test
-// re-derives the table from the pinned Unicode 15.0.0 UCD files, the
+// re-derives the table from the pinned Unicode 16.0.0 UCD files, the
 // same two files dotnet/runtime's GenUnicodeProp merges, and asserts
 // the checked-in data matches. [Explicit] because it hits unicode.org,
 // following the XidIdentifierTests precedent. The regeneration tool
 // below it has its [Test] attribute commented out so no filter can run
 // it by accident. The version is pinned (not "latest") so the tests stay
 // stable across Unicode releases: this table deliberately tracks the
-// Unicode version .NET 8 ships, and bumping it is a separate decision
+// Unicode version .NET 10 ships, and bumping it is a separate decision
 // (see the header of GraphemeSegmentation.Data.cs).
 [TestFixture]
 public class GraphemeSegmentationDataTests
 {
-    private const string UnicodeVersion = "15.0.0";
+    private const string UnicodeVersion = "16.0.0";
 
     // Property-name-to-value map matching the generator: names are the
     // UCD's, values are GraphemeClusterBreakType's (whose last member is
@@ -297,22 +297,25 @@ public class GraphemeSegmentationDataTests
     private static readonly string[] DataFileHeaderLines =
     {
         "Generated file. The grapheme cluster break property of every Unicode",
-        "code point, at Unicode 15.0.0, the version .NET 8 ships. The values",
+        "code point, at Unicode 16.0.0, the version .NET 10 ships. The values",
         "come from the Unicode Character Database (the \"UCD\", Unicode's",
         "machine-readable property data, https://www.unicode.org/ucd/) and are",
         "copyright Unicode, Inc., used under the Unicode License v3",
         "(LICENSE-UNICODE.txt next to this file). Two UCD files feed the table:",
         "",
-        "  https://www.unicode.org/Public/15.0.0/ucd/auxiliary/GraphemeBreakProperty.txt",
-        "  https://www.unicode.org/Public/15.0.0/ucd/emoji/emoji-data.txt (Extended_Pictographic only)",
+        "  https://www.unicode.org/Public/16.0.0/ucd/auxiliary/GraphemeBreakProperty.txt",
+        "  https://www.unicode.org/Public/16.0.0/ucd/emoji/emoji-data.txt (Extended_Pictographic only)",
         "",
-        "That pairing is what UAX #29 itself prescribes. Its property-values",
-        "section says the Grapheme_Cluster_Break assignments \"are explicitly",
-        "listed in the corresponding data file\" (GraphemeBreakProperty.txt)",
-        "and that \"the values in that file are the normative property values\",",
-        "and the Extended_Pictographic property rule GB11 uses is defined by",
-        "the emoji data files (emoji-data.txt, per UTS #51). See",
-        "https://www.unicode.org/reports/tr29/tr29-41.html#Grapheme_Cluster_Break_Property_Values.",
+        "The GraphemeBreakProperty.txt half of that pairing is what UAX #29",
+        "itself prescribes: its property-values section says the",
+        "Grapheme_Cluster_Break assignments \"are explicitly listed in the",
+        "corresponding data file\" and that \"the values in that file are the",
+        "normative property values\"",
+        "(https://www.unicode.org/reports/tr29/tr29-41.html#Grapheme_Cluster_Break_Property_Values).",
+        "The Extended_Pictographic property rule GB11 uses is defined by the",
+        "emoji data files instead: emoji-data.txt, whose own header labels it",
+        "\"Emoji Data for UTS #51\" (tr29 references the property only from",
+        "its rule tables).",
         "Everything neither file lists defaults to Other, per the @missing",
         "declaration in GraphemeBreakProperty.txt's own header (it assigns",
         "Other to the whole code point range up front, and the listed",
@@ -330,11 +333,15 @@ public class GraphemeSegmentationDataTests
         "InductorParser.Tests/Lexing/Unicode/GraphemeSegmentationDataTests.cs.",
         "To regenerate, restore the commented-out [Test] attribute on",
         "Emit_regenerated_data_file_test there and run it.",
-        "Upgrading the Unicode version means regenerating this file from the",
-        "newer UCD, teaching the processor any new rules (GB9c arrived in",
-        "Unicode 15.1), swapping in the newer GraphemeBreakTest data file, and",
-        "accepting divergence from .NET 8's StringInfo in the differential",
-        "tests. Until then this table deliberately matches .NET 8.",
+        "The one rule gap is deliberate: GB9c (Indic Conjunct Break, arrived",
+        "in Unicode 15.1) isn't implemented because .NET 10's StringInfo",
+        "doesn't implement it either (dotnet/runtime#111546), so the",
+        "segmenter and StringInfo agree on every input and the GB9c lines of",
+        "GraphemeBreakTest are skipped. Upgrading the Unicode version again",
+        "means regenerating this file from the newer UCD, swapping in the",
+        "newer GraphemeBreakTest data file, and re-checking the rule set",
+        "against the .NET runtime the differential tests run on. Until then",
+        "this table deliberately matches .NET 10.",
     };
 
     private static string EmitDataFile(List<int> starts, List<byte> values)

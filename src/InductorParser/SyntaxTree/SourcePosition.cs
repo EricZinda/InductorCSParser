@@ -123,8 +123,9 @@ public readonly struct SourcePosition
     /// Computes all four position units from a character index into <paramref name="input"/>.
     /// </summary>
     /// <remarks>
-    /// Walks the string from 0 to <paramref name="charIndex"/> once, counting tokens and line breaks
-    /// along the way (O(charIndex)). Out-of-range values are clamped to [0, input.Length].
+    /// Walks the string from 0 to <paramref name="charIndex"/>: one pass counting tokens and one
+    /// counting line breaks, O(charIndex) total (the token column adds a third, lazy
+    /// walk on first access). Out-of-range values are clamped to [0, input.Length].
     /// </remarks>
     public static SourcePosition From(string input, int charIndex)
     {

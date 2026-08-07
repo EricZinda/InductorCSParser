@@ -213,7 +213,8 @@ public static class Rules
     /// // ASCII consonant: ASCII letter minus vowels
     /// var consonant = OneOf(TokenSet.Ascii.Letters - TokenSet.Runes("aeiouAEIOU"));
     ///
-    /// // Printable non-whitespace: letters and digits only, in Latin script
+    /// // Latin-script letters and digits: the category sets intersected
+    /// // with the Basic Latin through Latin Extended-B blocks
     /// var latinAlnum = OneOf(
     ///     (TokenSet.Letters | TokenSet.Digits) &amp; TokenSet.Range(0x0000, 0x024F));
     /// </code>
@@ -827,10 +828,11 @@ public static class Rules
     /// Match a programming-language identifier: a name that starts with a
     /// letter (or other identifier-start character) and continues with
     /// letters, digits, and the like. Follows the Unicode rules for
-    /// identifiers (UAX #31, "Unicode Identifier and Pattern Syntax").
+    /// identifiers (UAX #31, "Unicode Identifiers and Syntax").
     /// Default <see cref="FlattenType"/>: <see cref="FlattenType.Preserve"/>,
-    /// so the match appears in the tree as one named node whose
-    /// children are the per-rune leaves.
+    /// so the match appears in the tree as one node whose children are
+    /// one leaf per matched character (a leaf covers the character's
+    /// whole grapheme cluster, which may span several runes).
     /// </summary>
     /// <remarks>
     /// <para>

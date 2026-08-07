@@ -1203,8 +1203,8 @@ public class TokenSetTests
         // TokenSet's static initialization, skipping the segmentation-based
         // Graphemes validation so TokenSet can initialize under any
         // segmentation implementation (see CrlfGraphemeSet in TokenSet.cs).
-        // This holds the direct construction equal to what the validating
-        // factory builds, so the two can't drift apart.
+        // This ensures the direct construction is the same as what the
+        // validating factory builds, so the two can't drift apart.
         var expected = TokenSet.Graphemes("\r\n")
             | TokenSet.Single('\n')   // LF
             | TokenSet.Single('\v')   // VT

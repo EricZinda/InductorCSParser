@@ -163,8 +163,12 @@ internal static class HostGlobalizationCheck
 
         // NLS normalizes this input correctly, so the behavior check
         // can't see it and only the flag can. The UseNls property only
-        // exists in Windows builds of the runtime, and a missing
-        // property means the flag can't be on.
+        // exists in Windows builds of the runtime, so a missing
+        // property is read as flag-off. That inference also swallows
+        // the case where a trimmer stripped GlobalizationMode's
+        // metadata on a Windows NLS host, which would skip the throw.
+        // Accepted: NLS and aggressive trimming are both explicit
+        // opt-ins, and NLS has no behavioral probe to fall back on.
         return ReadGlobalizationModeFlag("UseNls")
             ? HostGlobalizationStatus.WindowsNls
             : HostGlobalizationStatus.RuntimeNormalizes;
@@ -179,8 +183,9 @@ internal static class HostGlobalizationCheck
     // AppContext. Exposing the flags publicly is an open API proposal
     // (https://github.com/dotnet/runtime/issues/81429), so until that
     // ships, reflection is what there is. Everything is null-safe and
-    // try/catch wrapped so a runtime that renamed the internals (Mono
-    // and IL2CPP already lack this type name) degrades to "not
+    // try/catch wrapped so a runtime that renamed the internals
+    // (Unity's Mono and IL2CPP already lack this type name, while the
+    // .NET-flavor Mono behind Blazor and MAUI has it) degrades to "not
     // detected" instead of throwing.
     private static bool ReadGlobalizationModeFlag(string propertyName)
     {

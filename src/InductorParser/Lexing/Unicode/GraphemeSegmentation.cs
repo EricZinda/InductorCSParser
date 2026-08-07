@@ -13,7 +13,7 @@
 // pre-UAX-#29 implementation that segments differently (it splits CRLF,
 // ZWJ emoji sequences, regional-indicator flags, and more). This
 // built-in segmenter exists so those runtimes tokenize correctly, at
-// Unicode 15.0 (the version .NET 8 ships). It's only used for those
+// Unicode 16.0 (the version .NET 10 ships). It's only used for those
 // runtimes by default, the others use .NET's implementation.
 //
 // This port differs from the upstream file in two deliberate ways.
@@ -23,7 +23,7 @@
 // so this port drops that plumbing and reads chars directly. The
 // reading happens in DecodeRuneAt at the bottom of the file, which
 // explains how its results match upstream's. And the break type of
-// a rune comes from the checked-in Unicode 15.0 table in
+// a rune comes from the checked-in Unicode 16.0 table in
 // GraphemeSegmentation.Data.cs instead of CharUnicodeInfo. Everything
 // else is kept as close to upstream as possible, so diffing this file
 // against a future dotnet/runtime version shows real changes only.
@@ -52,10 +52,11 @@
 // parse results agree across machines when the machines end up on the
 // same implementation, so a client and server that must agree either
 // run the same runtime or both opt into Bundled.
-// On .NET 8 the two implementations are verifiably identical (the
-// differential tests in GraphemeSegmentationTests hold them equal), so
-// the choice only shows once a newer runtime's Unicode data moves past
-// 15.0.
+// On .NET 10 the two implementations are verifiably identical (the
+// differential tests in GraphemeSegmentationTests ensure it, and
+// neither side implements GB9c, see dotnet/runtime#111546), so the
+// choice only shows once a newer runtime's Unicode data moves past
+// 16.0.
 
 using System;
 using System.Globalization;
@@ -90,9 +91,11 @@ internal enum GraphemeClusterBreakType
 /// <summary>
 /// Computes UAX #29 extended grapheme cluster boundaries
 /// (https://www.unicode.org/reports/tr29/). The built-in state machine
-/// is compliant per Rev. 41
-/// (https://www.unicode.org/reports/tr29/tr29-41.html), the Unicode
-/// 15.0 edition of the spec,
+/// implements the rule set of Rev. 41
+/// (https://www.unicode.org/reports/tr29/tr29-41.html), the last
+/// edition before GB9c, over Unicode 16.0 break-property data,
+/// deliberately matching .NET 10's StringInfo, which also lacks GB9c
+/// (dotnet/runtime#111546),
 /// and its generated break-property table in
 /// GraphemeSegmentation.Data.cs is the other half of this partial
 /// class. The implementation is chosen by the process-wide setting
@@ -142,9 +145,19 @@ internal static partial class GraphemeSegmentation
     // and expect only the two differences the file header lists (no
     // decoder delegate, break types from the checked-in table). Keep
     // any future edits out of the state machine so that diff stays
-    // clean. Internal (not private) so the differential tests can
-    // compare it against StringInfo directly, independent of how the
-    // process-wide setting resolves.
+    // clean.
+    //
+    // One pasted comment below is stale, and stays stale on purpose.
+    // The "Algorithm given at" line links tr29 with no version number,
+    // and unicode.org now serves a newer revision there that added
+    // rule GB9c. This machine implements the older rev 41 rule set
+    // (the class doc above explains that choice and links tr29-41).
+    // Correcting the pasted line would break the diff against
+    // upstream, so it stays exactly as dotnet/runtime wrote it.
+    //
+    // Internal (not private) so the differential tests can compare it
+    // against StringInfo directly, independent of how the process-wide
+    // setting resolves.
     internal static int GetBundledLengthOfFirstExtendedGraphemeCluster(ReadOnlySpan<char> input)
     {
         // Algorithm given at https://www.unicode.org/reports/tr29/#Grapheme_Cluster_Boundary_Rules.
@@ -396,9 +409,9 @@ internal static partial class GraphemeSegmentation
     // The visible effect of that break class is that Other accepts trailing combining
     // marks, so a stray surrogate plus a combining mark segments as
     // one cluster.
-    // To ensure it operates the same: there are differential tests in 
+    // To ensure it operates the same: there are differential tests in
     // GraphemeSegmentationTests that compare
-    // this segmenter against .NET 8's StringInfo for every code point
+    // this segmenter against .NET 10's StringInfo for every code point
     // (lone surrogates included), the whole UnicodeExamples corpus and
     // its pairwise concatenations, and 100,000 randomized sequences.
     private static void DecodeRuneAt(

@@ -5,6 +5,7 @@ using InductorParser;
 using static InductorParser.Rules;
 
 using static InductorParser.Tests.CanaryHelper;
+using static InductorParser.Tests.TestHelpers;
 namespace InductorParser.Tests;
 
 // Probes parser behavior on Unicode inputs that are either technically
@@ -17,10 +18,11 @@ namespace InductorParser.Tests;
 //
 //   1. ENCODING-LEVEL ILL-FORMED INPUT: reported as MalformedInput
 //      or surfaces as an untyped token, never silently corrupts.
-//      These are (the only) cases truly defined as "ill formed"
-//      by the Unicode standard and are all examples where
-//      UTF-16 invariants are broken: lone surrogates, reversed surrogate
-//      pairs, the U+10FFFF maximum boundary. Only UTF-16 here because
+//      Lone surrogates and reversed surrogate pairs are the cases
+//      truly defined as "ill formed" by the Unicode standard (broken
+//      UTF-16 invariants). U+10FFFF is a valid scalar and lives in
+//      this group only as the boundary case right next to them, its
+//      own test says so. Only UTF-16 here because
 //      the parser takes a .NET string, and .NET strings are UTF-16
 //      internally. UTF-8 / UTF-32 / legacy-codepage decoding errors
 //      get resolved upstream by the caller's Encoding.GetString call
@@ -245,34 +247,37 @@ public class UnexpectedUnicodeTests
         // index 0". It has to walk past valid content and land on the first
         // genuinely ill-formed code unit, including correctly skipping a valid
         // surrogate PAIR (two chars that can't be mistaken for two lone
-        // surrogates).
+        // surrogates). Positions are the subject here, so each case asserts
+        // every unit ParseResult exposes, which also proves a MalformedInput
+        // result populates line, column, and token index, not just the char
+        // index.
         var grammar = And(Literal("ignored"), Eof()).Compile();  // default FormC, never runs
 
         // "a" (1 char) + waving hand (U+1F44B, a valid surrogate pair = 2
         // chars) + a lone surrogate. The pair is skipped, so the lone
-        // surrogate is the first ill-formed unit, at index 3.
+        // surrogate is the first ill-formed unit: char 3 on line 0, and
+        // token 2 because "a" and the waving hand are one cluster each.
         string afterValidPair = "a" + UnicodeExamples.WavingHandGrapheme + UnicodeExamples.HighSurrogateMinText;
         var afterPairResult = grammar.Parse(afterValidPair);
         Assert.That(afterPairResult.Outcome, Is.EqualTo(ParseOutcome.MalformedInput));
-        Assert.That(afterPairResult.ErrorCharIndex, Is.EqualTo(3),
-            "the valid surrogate pair is skipped; the lone surrogate is at index 3");
+        AssertErrorPosition(afterPairResult, charIndex: 3, line: 0, column: 3, TokenIndex: 2);
 
         // A lone surrogate in the MIDDLE, with valid text after it, still
-        // reports the surrogate's position (index 2), proving the finder stops
-        // at the first offender rather than running to the end.
+        // reports the surrogate's position (char 2, token 2 after "a" and
+        // "b"), proving the finder stops at the first offender rather than
+        // running to the end.
         string surrogateInMiddle = "ab" + UnicodeExamples.HighSurrogateMinText + "cd";
         var middleResult = grammar.Parse(surrogateInMiddle);
         Assert.That(middleResult.Outcome, Is.EqualTo(ParseOutcome.MalformedInput));
-        Assert.That(middleResult.ErrorCharIndex, Is.EqualTo(2),
-            "the lone surrogate between 'ab' and 'cd' is at index 2");
+        AssertErrorPosition(middleResult, charIndex: 2, line: 0, column: 2, TokenIndex: 2);
 
         // The non-surrogate branch (U+FFFE) is found at a non-zero position
         // too, mirroring the index-0 coverage in Noncharacter_FFFE_handling.
+        // Char 3 after the ASCII prefix, and token 3 for the same reason.
         string fffeAfterPrefix = "abc" + UnicodeExamples.NoncharacterFFFEText;
         var fffeResult = grammar.Parse(fffeAfterPrefix);
         Assert.That(fffeResult.Outcome, Is.EqualTo(ParseOutcome.MalformedInput));
-        Assert.That(fffeResult.ErrorCharIndex, Is.EqualTo(3),
-            "U+FFFE is found at index 3, after the ASCII prefix");
+        AssertErrorPosition(fffeResult, charIndex: 3, line: 0, column: 3, TokenIndex: 3);
     }
 
     [Test]
@@ -1106,9 +1111,10 @@ public class UnexpectedUnicodeTests
     [Test]
     public void Tag_character_outside_emoji_is_one_token()
     {
-        // U+E0001 LANGUAGE TAG. Used inside emoji tag sequences for
-        // subdivision flags. UAX #29 GCB=Extend, but at start of
-        // text the orphan ends up as its own one-character cluster.
+        // U+E0001 LANGUAGE TAG, a deprecated tag character that emoji
+        // tag sequences don't use (they're built from U+E0020..U+E007F,
+        // per UTS #51). Its UAX #29 break class is Control, so it's
+        // always its own one-character cluster, here and mid-text alike.
         string input = UnicodeExamples.LanguageTagText + "hello";
 
         // (1) Naive grammar fails: Literal("hello") doesn't match

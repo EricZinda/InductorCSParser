@@ -54,6 +54,19 @@ public static class RuneHelpers
     /// </summary>
     public static IEnumerable<int> EnumerateRuneValues(string text)
     {
+        if (text == null)
+            throw new ArgumentNullException(nameof(text));
+
+        return EnumerateRuneValuesCore(text);
+    }
+
+    // Split from the public method so the null check above throws at
+    // the call. An iterator method defers its whole body, null check
+    // included, so a single-method version would return normally on
+    // null and surface a NullReferenceException at the first MoveNext
+    // instead. Same trap class as the GraphemeHelpers.Count null fix.
+    private static IEnumerable<int> EnumerateRuneValuesCore(string text)
+    {
         for (int index = 0; index < text.Length;)
         {
             if (IsSurrogatePairAt(text, index))

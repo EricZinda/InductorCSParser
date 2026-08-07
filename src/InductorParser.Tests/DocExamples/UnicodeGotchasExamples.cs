@@ -328,43 +328,51 @@ public class UnicodeGotchasExamples
         Assert.That(lfOnly.Parse("a\nb").Success, Is.True);
     }
 
-    // "CRLF Line Endings" / fix recipe: a LineBreak rule that
-    // accepts LF, CR, or CRLF.
+    // "CRLF Line Endings" / fix recipe: the built-in EndOfLine() tries
+    // the CRLF pair as a unit before the single-rune terminators, so
+    // one rule covers LF, CR, and CRLF inputs.
     [Test]
-    public void CRLF_line_break_recipe_handles_all_three()
+    public void CRLF_end_of_line_recipe_handles_all_three()
     {
-        var lineBreak = Or(
-            Literal("\r\n"),
-            OneOf(TokenSet.Single('\r') | TokenSet.Single('\n'))
-        );
-        var grammar = And(Literal("a"), lineBreak, Literal("b"), Eof()).Compile();
+        var grammar = And(Literal("a"), EndOfLine(), Literal("b"), Eof()).Compile();
 
         Assert.That(grammar.Parse("a\r\nb").Success, Is.True);
         Assert.That(grammar.Parse("a\nb").Success, Is.True);
         Assert.That(grammar.Parse("a\rb").Success, Is.True);
     }
 
-    // "CRLF Line Endings" / line-comment recipe:
-    //   ZeroOrMore(And(Not(LineBreak), AnyToken())) stops just before
-    //   any LineBreak (including CRLF) and the trailing LineBreak/EOF
-    //   completes the comment.
+    // "CRLF Line Endings" / whitespace recipes: AnyWhitespace() spans a
+    // CRLF because it composes EndOfLine() first, while
+    // InlineWhitespace() rejects every line terminator including the
+    // CRLF pair.
+    [Test]
+    public void CRLF_whitespace_recipes_split_on_line_terminators()
+    {
+        var acrossLines = And(Literal("a"), AnyWhitespace(), Literal("b"), Eof()).Compile();
+        Assert.That(acrossLines.Parse("a \r\n b").Success, Is.True);
+
+        var sameLine = And(Literal("a"), InlineWhitespace(), Literal("b"), Eof()).Compile();
+        Assert.That(sameLine.Parse("a b").Success, Is.True);
+        Assert.That(sameLine.Parse("a\r\nb").Success, Is.False,
+            "InlineWhitespace rejects line terminators, including the CRLF pair");
+    }
+
+    // "CRLF Line Endings" / line-comment recipe: the rule-based stop
+    // Not(EndOfLine()) refuses the CRLF token that a single-rune
+    // NoneOf set would silently eat, and eofIsEol: true covers a
+    // comment at end of input.
     [Test]
     public void CRLF_line_comment_recipe()
     {
-        var lineBreak = Or(
-            Literal("\r\n"),
-            OneOf(TokenSet.Single('\r') | TokenSet.Single('\n'))
-        );
-
         var lineComment = And(
             Token('%'),
-            ZeroOrMore(And(Not(lineBreak), AnyToken())),
-            Or(OneOrMore(lineBreak), Eof())
+            ZeroOrMore(And(Not(EndOfLine()), AnyToken())),
+            EndOfLine(eofIsEol: true)
         ).Compile();
 
         Assert.That(lineComment.Parse("% comment\r\n").Success, Is.True);
         Assert.That(lineComment.Parse("% comment\n").Success, Is.True);
         Assert.That(lineComment.Parse("% comment").Success, Is.True,
-            "Eof alternative covers comment-at-end-of-input");
+            "eofIsEol: true covers comment-at-end-of-input");
     }
 }

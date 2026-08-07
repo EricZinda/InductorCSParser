@@ -1586,8 +1586,9 @@ public readonly partial struct TokenSet : IEquatable<TokenSet>
     /// grapheme).
     /// </summary>
     /// <remarks>
-    /// Matches what Java's \R, ECMAScript's "line terminator" concept, and most
-    /// modern regex engines treat as a newline. CRLF lives in the set as a
+    /// Matches what Java's \R and most modern regex engines treat as a
+    /// newline (ECMAScript's "line terminator" is the narrower LF / CR /
+    /// LS / PS subset). CRLF lives in the set as a
     /// multi-rune entry, so OneOf / NoneOf / ScanUntil / ScanWhile against this
     /// set all treat the CRLF grapheme as one terminator.
     /// </remarks>

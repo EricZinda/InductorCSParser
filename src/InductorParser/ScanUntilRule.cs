@@ -263,10 +263,21 @@ internal sealed class ScanUntilRule : Rule
         // the Read-based ScanFastPath. Everything else takes ScanGeneralPath,
         // which peeks sub-rules without consuming.
         //
-        // Lone surrogates (one-char tokens with RuneValue -1) are consumed as
-        // body unless the stopper set opts into surrogates. They reach this rule only under
-        // Compile(null), since otherwise string.Normalize rejects malformed
-        // UTF-16 before Parse() runs.
+        // Stray surrogates can only reach this rule under Compile(null).
+        // A normalizing Compile turns them into a MalformedInput result
+        // before any rule runs. So these comments only apply to that case:
+        //
+        // When one does appear, it's a one-char token with RuneValue -1,
+        // and the scan consumes it as body like any other unmatched
+        // token. To stop on a stray instead, build the stopper set with
+        // TokenSet.Surrogates or SurrogateRange. Those sets match a
+        // stray's code unit directly.
+        //
+        // The opt-in has a limit. In grapheme mode a stray followed by a
+        // combining mark fuses into a single two-char token (the Lexer.cs
+        // header covers this shape), and the code-unit match only applies
+        // to one-char tokens, so the fused token is consumed as body even
+        // when the set opted in.
         ScanResult result = _stopperRule == null && _escapeStartRule == null
             ? ScanFastPath(lexer)
             : ScanGeneralPath(lexer);

@@ -87,7 +87,8 @@ public readonly partial struct TokenSet
     // "-" is set difference. The General_Category operands (Lu..Nl, Mn, Mc,
     // Nd, Pc) come through CategoriesUnion, which reads the BCL's category
     // data, so they track whatever Unicode version the BCL ships. Every other
-    // operand is a hand-typed constant below, fixed at Unicode 17.0.
+    // operand is a hand-typed constant below, transcribed from the
+    // Unicode 17.0 UCD.
 
     // ID_Start = Lu + Ll + Lt + Lm + Lo + Nl + Other_ID_Start
     //          - Pattern_Syntax - Pattern_White_Space
@@ -157,9 +158,9 @@ public readonly partial struct TokenSet
         (0x0387, 0x0387),   // GREEK ANO TELEIA (Po)
         (0x1369, 0x1371),   // ETHIOPIC DIGIT ONE..NINE (No)
         (0x19DA, 0x19DA),   // NEW TAI LUE THAM DIGIT ONE (No)
-        (0x200C, 0x200D),   // ZERO WIDTH NON-JOINER, ZERO WIDTH JOINER (Cf), added to Other_ID_Continue in Unicode 16.0
-        (0x30FB, 0x30FB),   // KATAKANA MIDDLE DOT (Po), added in Unicode 16.0
-        (0xFF65, 0xFF65),   // HALFWIDTH KATAKANA MIDDLE DOT (Po), added in Unicode 16.0
+        (0x200C, 0x200D),   // ZERO WIDTH NON-JOINER, ZERO WIDTH JOINER (Cf), added to Other_ID_Continue in Unicode 15.1
+        (0x30FB, 0x30FB),   // KATAKANA MIDDLE DOT (Po), added in Unicode 15.1
+        (0xFF65, 0xFF65),   // HALFWIDTH KATAKANA MIDDLE DOT (Po), added in Unicode 15.1
     };
 
     // Code points that NFKx closure drops on the way from ID_Start to

@@ -13,19 +13,22 @@ namespace InductorParser.Tests;
 // asserts expected normalization shapes directly, driving the
 // NormalizationExamples table plus named edge cases (composition
 // exclusions, composite shifts, Hangul arithmetic, the same-instance
-// return). The second layer is differential: the built-in normalizer
-// deliberately matches .NET 8's string.Normalize and
-// string.IsNormalized, so the runtime is an oracle this test project
-// can compare against on every string it can build, and every
-// differential case checks both entry points (see
-// AssertNormalizesLikeRuntime for why Normalize alone isn't enough).
-// string.Normalize hands the work to ICU (the Unicode library
+// return). The second layer is differential: string.Normalize and
+// string.IsNormalized are oracles this test project can compare
+// against on every string it can build, and every differential case
+// checks both entry points (see AssertNormalizesLikeRuntime for why
+// Normalize alone isn't enough). string.Normalize hands the work to
+// ICU (the Unicode library
 // the OS normally supplies), so the test project ships its own ICU
-// 72.1 (same Unicode 15.0 data as the built-in tables) and
-// GlobalizationOracleFixture refuses to run the suite on anything
-// else, keeping the oracle from drifting with the host. These tests
-// run on CoreCLR only (Lexing/ doesn't sync to Unity), which is
-// exactly where the oracle is valid.
+// 72.1 and GlobalizationOracleFixture refuses to run the suite on
+// anything else, keeping the oracle from drifting with the host. ICU
+// 72.1 is Unicode 15.0 data while the built-in tables are Unicode
+// 16.0. The comparison stays exact for everything assigned through
+// 15.0 (the normalization stability policy), and the scalar sweeps
+// skip the code points 16.0 added (UnicodeVersionDelta), whose
+// behavior the NormalizationTest-16.0.0.txt conformance suite proves
+// instead. These tests run on CoreCLR only (Lexing/ doesn't sync to
+// Unity), which is exactly where the oracle is valid.
 //
 // Non-ASCII text in this file comes from the canary-protected
 // UnicodeExamples corpus, the NormalizationExamples table, or is built
@@ -280,6 +283,42 @@ public class UnicodeNormalizationTests
             UnicodeNormalization.NormalizeWithBundledImplementation(
                 input, NormalizationForm.FormKC),
             Is.EqualTo(composed));
+    }
+
+    [Test]
+    public void Unicode16_context_sensitive_composite_changes_after_a_preceding_letter()
+    {
+        // Unicode 16.0's Tulu-Tigalari script has the context-sensitive
+        // composites UAX #15 section 9.2 warns about. U+113C7 (VOWEL
+        // SIGN OO, decomposition U+113C2 U+113B8) round-trips through
+        // NFC by itself, but after U+1138B (LETTER EE) the exposed
+        // U+113C2 composes with the letter instead (U+1138E, LETTER AI,
+        // has decomposition U+1138B U+113C2), leaving U+113B8 behind:
+        // the U+113C7 the input held is gone from the NFC output. The
+        // runtime oracle can't check this (the app-local ICU 72.1 is
+        // Unicode 15.0 data), so this test drives the built-in
+        // implementation directly, and NormalizationTest-16.0.0.txt
+        // covers the full conformance story. See also the
+        // Unicode16ContextSensitiveCompositionPlaceholder note in
+        // NormalizationExamples.
+        string input = FromCodePoints(0x1138B, 0x113C7);
+        string recomposed = FromCodePoints(0x1138E, 0x113B8);
+        string decomposed = FromCodePoints(0x1138B, 0x113C2, 0x113B8);
+        Assert.That(
+            UnicodeNormalization.NormalizeWithBundledImplementation(
+                input, NormalizationForm.FormC),
+            Is.EqualTo(recomposed));
+        Assert.That(
+            UnicodeNormalization.NormalizeWithBundledImplementation(
+                input, NormalizationForm.FormD),
+            Is.EqualTo(decomposed));
+
+        // Alone, the composite is NFC-stable, which is what makes the
+        // change above context-sensitive rather than an exclusion.
+        Assert.That(
+            UnicodeNormalization.NormalizeWithBundledImplementation(
+                FromCodePoints(0x113C7), NormalizationForm.FormC),
+            Is.EqualTo(FromCodePoints(0x113C7)));
     }
 
     [Test]
@@ -553,6 +592,20 @@ public class UnicodeNormalizationTests
         string combiningDotBelow = FromCodePoints(0x0323);
         for (int codePoint = 0; codePoint <= 0x10FFFF; codePoint++)
         {
+            // The comparison proves nothing for the code points
+            // Unicode 16.0 added: the app-local ICU 72.1 is Unicode
+            // 15.0 and passes them through as unassigned, while the
+            // built-in tables give them their real 16.0 behavior.
+            // Everything assigned
+            // through 15.0 normalizes identically under both (the
+            // normalization stability policy), so this skip removes
+            // exactly the comparisons that mean nothing. The skipped
+            // code points are covered by the
+            // NormalizationTest-16.0.0.txt conformance suite and the
+            // [Explicit] UCD re-derivation test instead.
+            if (UnicodeVersionDelta.IsNewInUnicode16(codePoint))
+                continue;
+
             string alone = codePoint <= 0xFFFF
                 ? ((char)codePoint).ToString()
                 : char.ConvertFromUtf32(codePoint);

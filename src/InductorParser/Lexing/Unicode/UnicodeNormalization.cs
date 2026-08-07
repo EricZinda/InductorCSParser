@@ -14,7 +14,7 @@ namespace InductorParser.Lexing.Unicode;
 /// string.Normalize, and a built-in UAX #15 normalizer
 /// (https://www.unicode.org/reports/tr15/) whose generated tables in
 /// UnicodeNormalization.Data.cs are the other half of this partial
-/// class and are fixed at Unicode 15.0 like the built-in segmenter's table.
+/// class and hold the Unicode 16.0 data, like the built-in segmenter's table.
 /// The implementation is chosen by the process-wide setting surfaced
 /// as UnicodeEnvironment.Implementation, which governs this normalizer
 /// and the segmenter together (they can never diverge) and is resolved
@@ -30,7 +30,7 @@ namespace InductorParser.Lexing.Unicode;
 /// the combining classes are already in canonical order, the input is
 /// returned unchanged with one scan and no allocation. UAX #15 notes
 /// that much text is already NFC
-/// (https://www.unicode.org/reports/tr15/#Norm_Forms), making
+/// (https://www.unicode.org/reports/tr15/#Description_Norm), making
 /// this an important common case. Quick-check No proves the input
 /// needs normalization, while Maybe (a scalar that might compose with
 /// a preceding character) requires a full check. Normalize rebuilds

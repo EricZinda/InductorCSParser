@@ -61,13 +61,18 @@ public static class StateMachineParser
         // TryMatch's only abort surface is the ParseBudgetExceeded catch
         // below, and the throw is gated on the 1024-invocation periodic
         // check. Pre-flighting matches Rule.Parse's same-day fix for the
-        // recursive engine. Done before NormalizeIfRequested so a huge
+        // recursive engine. Done before TryNormalizeIfRequested so a huge
         // pre-canceled input doesn't pay the normalize cost either.
         if (options.Cancellation != null && options.Cancellation.IsCanceled)
             return false;
 
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
-        string parseInput = NormalizeIfRequested(input, rootRule.NormalizationForm);
+        // Input the normalizers reject is "didn't match" for
+        // matcher-mode callers, the same collapse the budget-abort
+        // catch below applies. The MalformedInput outcome only
+        // surfaces on the ParseResult-returning Parse path.
+        if (!TryNormalizeIfRequested(input, rootRule.NormalizationForm, out string parseInput, out _))
+            return false;
         Lexer lexer = RentLexer(parseInput, options);
         lexer.ConfigureOptions(options);
         Machine machine = default;
@@ -100,7 +105,7 @@ public static class StateMachineParser
         // and the parse would return Success. The recursive engine has the
         // same pre-flight at Rule.Parse for tiny parses; the SM engine
         // needs its own because callers invoking StateMachineParser.Parse
-        // directly bypass Rule.Parse. Done before NormalizeIfRequested so
+        // directly bypass Rule.Parse. Done before TryNormalizeIfRequested so
         // a huge pre-canceled input doesn't pay the normalize cost either.
         if (options.Cancellation != null && options.Cancellation.IsCanceled)
         {
@@ -117,7 +122,14 @@ public static class StateMachineParser
         // text), String.Normalize short-circuits and returns the same
         // reference, which makes the downstream position translation a
         // pass-through. NormalizeInput = null skips the step entirely.
-        string parseInput = NormalizeIfRequested(input, rootRule.NormalizationForm);
+        // Input the normalizers reject becomes the same MalformedInput
+        // result the recursive engine returns from Rule.ParseRecursive,
+        // positioned at the offending code unit.
+        if (!TryNormalizeIfRequested(input, rootRule.NormalizationForm, out string parseInput, out int malformedIndex))
+        {
+            string malformedMessage = Rule.BuildMalformedInputMessage(malformedIndex, input, options);
+            return ParseResult.MalformedInput(malformedIndex, malformedMessage, input, rootRule);
+        }
 
         Lexer lexer = RentLexer(parseInput, options);
 
@@ -320,7 +332,10 @@ public static class StateMachineParser
             return failureValue;
 
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
-        string parseInput = NormalizeIfRequested(input, rootRule.NormalizationForm);
+        // Input the normalizers reject collapses to the failure value,
+        // the same answer a budget abort produces below.
+        if (!TryNormalizeIfRequested(input, rootRule.NormalizationForm, out string parseInput, out _))
+            return failureValue;
         Lexer lexer = RentLexer(parseInput, options);
         lexer.ConfigureOptions(options);
         Machine machine = default;
@@ -365,7 +380,10 @@ public static class StateMachineParser
             return 0;
 
         CompiledProgram program = GetOrLower(rootRule, options.PreserveAllSymbols);
-        string parseInput = NormalizeIfRequested(input, rootRule.NormalizationForm);
+        // Input the normalizers reject collapses to zero, the same
+        // answer a budget abort produces below.
+        if (!TryNormalizeIfRequested(input, rootRule.NormalizationForm, out string parseInput, out _))
+            return 0;
         Lexer lexer = RentLexer(parseInput, options);
         lexer.ConfigureOptions(options);
         Machine machine = default;
@@ -396,11 +414,48 @@ public static class StateMachineParser
     // what the lexer sees. When the input is already in the target form,
     // the normalizer returns the same reference and the downstream
     // position-translation step is a pointer-equality pass-through. A
-    // null form skips normalization entirely. The form is read from the
-    // compiled rule (Rule.NormalizationForm), where it's committed at
-    // Compile time.
-    private static string NormalizeIfRequested(string input, NormalizationForm? form) =>
-        form.HasValue ? UnicodeNormalization.Normalize(input, form.Value) : input;
+    // null form skips normalization entirely, including the rejection
+    // scan, so callers that deliberately parse surrogate-bearing input
+    // opt out with Compile(null) the same way they do on the recursive
+    // engine. The form is read from the compiled rule
+    // (Rule.NormalizationForm), where it's committed at Compile time.
+    //
+    // Returns false when the input contains something the normalizers
+    // reject: an unpaired UTF-16 surrogate (ill-formed UTF-16), or
+    // U+FFFE (the noncharacter .NET's string.Normalize refuses).
+    // badIndex is the offending code unit's index. The scan runs before
+    // the Normalize call, mirroring Rule.ParseRecursive, because not
+    // every runtime's string.Normalize throws on such text (.NET's
+    // does, Unity's Mono returns it unchanged). The catch is the
+    // backstop for anything a runtime rejects beyond the scan, reported
+    // at index 0 the way the recursive engine reports it. Each entry
+    // point shapes the failure its own way: Parse builds the same
+    // MalformedInput result the recursive engine returns, and the
+    // matcher / counter entry points collapse it to their failure
+    // value, the same way they collapse budget aborts.
+    private static bool TryNormalizeIfRequested(
+        string input, NormalizationForm? form, out string parseInput, out int badIndex)
+    {
+        parseInput = input;
+        badIndex = 0;
+        if (!form.HasValue) return true;
+
+        int scanBadIndex = UnicodeNormalization.FindFirstUnnormalizableIndex(input);
+        if (scanBadIndex >= 0)
+        {
+            badIndex = scanBadIndex;
+            return false;
+        }
+        try
+        {
+            parseInput = UnicodeNormalization.Normalize(input, form.Value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
 
     private static long ReduceCountMatches(List<OutputOp> ops, string input, SymbolId matchId, long _)
     {
