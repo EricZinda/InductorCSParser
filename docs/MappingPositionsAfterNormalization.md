@@ -1,6 +1,6 @@
 # Mapping Positions Through Unicode Normalization
 
-This doc explains how we map a position in a normalized string back to a position in the caller's original input. Read this if you're working on `NormalizedPositionMap` or want to know why the position translation is shaped the way it is.
+This doc explains how we map a position in a normalized string back to a position in the caller's original input. Read this if you're working on `NormalizedPositionMap`, want to know why the position translation is shaped the way it is, or want to be convinced that position translation works.
 
 If you just want to use normalization in a grammar, start with these:
 
@@ -52,7 +52,7 @@ runtime mode would still need another solution.
 
 ICU therefore demonstrates an alternative approach, but not one this parser
 can use in all supported configurations, and it doesn't prove the
-comparison-based algorithm used here. The comparison-based algorithm is proved
+comparison-based algorithm used here. The algorithm this parser uses is proved
 independently below.
 
 ## The mapping algorithm
@@ -61,8 +61,8 @@ Let `N` be one Unicode normalization operation: FormC, FormD, FormKC, or
 FormKD.
 Let `O` be the original string and let `Z = N(O)` be the normalized string.
 Assume that normalization succeeds and every call uses this same `N`. Because
-.NET stores strings as UTF-16, the algorithm compares UTF-16 code units
-ordinally.
+.NET stores strings as UTF-16, the algorithm works with UTF-16 code units, and
+compares them ordinally.
 
 The algorithm divides `O` and `Z` into paired spans. Each original span
 contains one or more whole graphemes, and its paired span is its normalization:
@@ -87,7 +87,9 @@ pair of boundaries.
 The comparison alone establishes only that `N(C)` appears next in `Z`. The
 important question is whether that match could be accidental: could accepting
 it leave a suffix of `Z` that isn't the normalization of the remaining suffix
-of `O`? The proof below shows that this can't happen.
+of `O`? The proof below shows that this can't happen, and thus that
+continuing the algorithm on the remaining suffix of `O` will segment the
+entire string.
 
 ### Proof of correctness
 
@@ -504,11 +506,17 @@ Unicode Standard defines canonical equivalence precisely:
 >
 > (from [The Unicode Standard 16.0, Section 3.7, definition D70](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G743))
 
-UAX #15 identifies FormD as canonical decomposition:
+The Unicode Standard identifies FormD as canonical decomposition:
 
-> “Normalization Form D (NFD) — Canonical Decomposition” <!-- style-lint-ok: verbatim Unicode quote -->
+> “D118 Normalization Form D (NFD): The Canonical Decomposition of a coded
+> character sequence.”
 >
-> (from [UAX #15 for Unicode 16.0, Normalization Forms](https://www.unicode.org/reports/tr15/tr15-56.html#Norm_Forms))
+> (from [The Unicode Standard 16.0, Section 3.11, definition D118](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49623))
+
+Definition D68, quoted in
+[Fact 5](#fact-5-equal-decompositions-give-equal-normalized-forms), spells out
+what that Canonical Decomposition is: decompose fully, then reorder. That's
+the full canonical decomposition that definition D70 compares.
 
 Therefore, to prove that `O` and `Z` have identical full canonical
 decompositions, we must prove:
@@ -517,20 +525,21 @@ decompositions, we must prove:
 FormD(O) = FormD(Z)
 ```
 
-UAX #15 gives the two identities needed to prove that equality:
+UAX #15 gives the identities needed to prove that equality. Its Design Goals
+section states that “any chain of normalizations is equivalent to a single
+normalization” and lists the chains in a table. The table's `toNFD(x)` column
+reads:
 
-> `toNFD(toNFD(x)) = toNFD(x)`
->
-> `toNFD(toNFC(x)) = toNFD(x)`
+> `toNFD(x) = toNFD(toNFC(x)) = toNFD(toNFD(x))`
 >
 > (from [UAX #15 for Unicode 16.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-56.html#Design_Goals))
 
 In the notation used here, `toNFD` is `FormD` and `toNFC` is `FormC`.
 Recall that `Z = N(O)`. There are two cases:
 
-- If `N` is FormD, the first identity gives
+- If `N` is FormD, the `toNFD(toNFD(x))` entry gives
   `FormD(Z) = FormD(FormD(O)) = FormD(O)`.
-- If `N` is FormC, the second identity gives
+- If `N` is FormC, the `toNFD(toNFC(x))` entry gives
   `FormD(Z) = FormD(FormC(O)) = FormD(O)`.
 
 Thus, in either case:
@@ -556,6 +565,12 @@ direct-segmentation rule in Requirement 1) is what allows taking one grapheme
 from each string on every iteration and pairing them as canonically equivalent
 spellings of the same grapheme. Each side advances by the UTF-16 length of its
 own cluster, so the two offsets don't have to be equal.
+
+Note that this guarantee is descriptive prose in UAX #29, not a numbered
+definition or a conformance clause, so this step of the proof trusts the
+spec's stated intent. The comparison algorithm needs no such trust because it
+verifies every boundary it accepts, but this optimization skips that
+verification.
 
 It remains to connect that correspondence to the exact comparison skipped by
 the optimization. Each `Hi` is a substring of `Z`, and `Z = N(O)` is
@@ -767,20 +782,18 @@ For every string `X`:
 D(N(X)) = D(X)                                      (A1)
 ```
 
-UAX #15 gives the four cases explicitly:
+UAX #15's Design Goals section states that “any chain of normalizations is
+equivalent to a single normalization” and lists the chains in a table. The
+entries needed here come from the table's `toNFD(x)` and `toNFKD(x)` columns:
 
-> `toNFD(toNFD(x)) = toNFD(x)`
+> `toNFD(x) = toNFD(toNFC(x)) = toNFD(toNFD(x))`
 >
-> `toNFD(toNFC(x)) = toNFD(x)`
->
-> `toNFKD(toNFKD(x)) = toNFKD(x)`
->
-> `toNFKD(toNFKC(x)) = toNFKD(x)`
+> `toNFKD(x) = toNFKD(toNFKC(x)) = toNFKD(toNFKD(x))`
 >
 > (from [UAX #15 for Unicode 16.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-56.html#Design_Goals))
 
-The first two equations apply when `D` is FormD. The last two apply when `D`
-is FormKD. Together they prove equation (A1) for every possible `N`.
+The first chain applies when `D` is FormD. The second applies when `D` is
+FormKD. Together they prove equation (A1) for every possible `N`.
 
 ### Fact 3: Canonical ordering is stable
 
@@ -800,8 +813,12 @@ uses it:
 
 A code point with `ccc = 0` is called a *starter*. Because equal `ccc` values
 don't satisfy the D108 inequality, code points with equal classes never
-exchange places. Canonical ordering is therefore a stable sort within each
-stretch of nonstarters between starters.
+exchange places. D109 also runs until no Reorderable Pair remains, so when it
+finishes, every maximal stretch of nonstarters (between starters or at either
+end of the string) is in nondecreasing `ccc` order. Exchanging only adjacent
+out-of-order pairs is bubble sort, which produces the same result no matter
+what order the exchanges run in. Canonical ordering is therefore a stable
+sort within each maximal stretch of nonstarters.
 
 ### Fact 4: Decomposing a concatenation orders the two decompositions together
 
@@ -824,7 +841,11 @@ in that order. `D(X)` and `D(Y)` are already ordered internally. Ordering their
 concatenation performs any additional ordering required where they meet. By
 Fact 3, that ordering is stable. Stably ordering the pieces and then their
 concatenation produces the same result as stably ordering the complete
-decomposed sequence once. This proves equation (A2).
+decomposed sequence once: either way, each maximal stretch of nonstarters
+ends up in nondecreasing `ccc` order, and within each class the entries from
+`X` keep their original order and come before the entries from `Y`. The
+unchanged-prefix lemma's proof below walks through the same merge in detail.
+This proves equation (A2).
 
 ### Fact 5: Equal decompositions give equal normalized forms
 
@@ -862,7 +883,23 @@ guarantee:
 >
 > (from [The Unicode Standard 16.0, Section 3.7, definition D67](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G753))
 
-For FormC and FormD, `D` is the full canonical decomposition. Therefore:
+The remaining link is between `D` and the decompositions those definitions
+compare. When `N` is FormC or FormD, `D` is FormD, which definition D118
+(quoted in [Fact 1](#fact-1-every-cut-is-at-a-code-point-boundary)) defines as
+the Canonical Decomposition of a coded character sequence. The Unicode
+Standard defines that decomposition, reordering step included:
+
+> “D68 Canonical decomposition: The decomposition of a character or character
+> sequence that results from recursively applying the canonical mappings
+> found in the Unicode Character Database and those described in Section
+> 3.12, Conjoining Jamo Behavior, until no characters can be further
+> decomposed, and then reordering nonspacing marks according to Section 3.11,
+> Normalization Forms.”
+>
+> (from [The Unicode Standard 16.0, Section 3.7.2, definition D68](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G7425))
+
+D68 decomposes until nothing can decompose further, so its result is the full
+canonical decomposition that definition D70 compares. Therefore:
 
 ```text
 D(X) = D(Y)
@@ -871,9 +908,24 @@ D(X) = D(Y)
 means that `X` and `Y` are canonical equivalents under definition D70, and the
 first UAX #15 guarantee gives `N(X) = N(Y)`.
 
-For FormKC and FormKD, `D` is the full compatibility decomposition. The same
-equality means that `X` and `Y` are compatibility equivalents under definition
-D67, and the second UAX #15 guarantee again gives `N(X) = N(Y)`.
+When `N` is FormKC or FormKD, `D` is FormKD, which definition D119 defines as
+the Compatibility Decomposition of a coded character sequence. Its definition
+is D65:
+
+> “D65 Compatibility decomposition: The decomposition of a character or
+> character sequence that results from recursively applying both the
+> compatibility mappings and the canonical mappings found in the Unicode
+> Character Database, and those described in Section 3.12, Conjoining Jamo
+> Behavior, until no characters can be further decomposed, and then
+> reordering nonspacing marks according to Section 3.11, Normalization
+> Forms.”
+>
+> (from [The Unicode Standard 16.0, Section 3.7.1, definition D65](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G749))
+
+D65's result is the full compatibility decomposition that definition D67
+compares, so the same equality means that `X` and `Y` are compatibility
+equivalents under definition D67, and the second UAX #15 guarantee again gives
+`N(X) = N(Y)`.
 
 ### Fact 6: A substring of normalized text is normalized
 
@@ -1086,7 +1138,7 @@ followed `D(Q)`. The next paragraphs show how to recover that following string,
 even though ordering may mix combining marks where the strings meet.
 
 Fact 3 established that canonical ordering is a stable sort within each
-stretch of nonstarters between starters. Consequently:
+maximal stretch of nonstarters. Consequently:
 
 - a starter never moves
 - nonstarters finish in nondecreasing `ccc` order between starters
