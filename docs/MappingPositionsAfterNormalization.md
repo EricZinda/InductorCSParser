@@ -89,7 +89,7 @@ important question is whether that match could be accidental: could accepting
 it leave a suffix of `Z` that isn't the normalization of the remaining suffix
 of `O`? The proof below shows that this can't happen.
 
-### Proof of correctness
+## Proof of correctness
 
 The theorem to prove is that the algorithm terminates and produces chunks:
 
@@ -109,7 +109,7 @@ normalize to the remaining suffix of `Z`. This stronger statement rules out
 accidental prefix matches and allows the same operation to be repeated
 iteratively on each remaining suffix until the end of the string.
 
-#### Results used by the proof
+## Results used by the proof
 
 The proof uses these results. Their Unicode derivations and citations are in
 [Appendix A](#appendix-a-unicode-details-behind-the-comparison-proof):
@@ -151,7 +151,7 @@ The proof uses these results. Their Unicode derivations and citations are in
    It proves that, if the complete normalized prefix is unchanged, any such
    interaction can't leave a different normalized suffix behind.
 
-#### The invariant
+## The invariant
 
 Throughout the proof, `+` means string concatenation. A vertical bar `|` marks
 the boundary between the same concatenated strings. It isn't part of either
@@ -176,7 +176,7 @@ to repeat the same process on `U` to find the remaining pairs of boundaries.
 The invariant is true before the first iteration. At that point `P` is empty,
 `U = O`, `N(P)` is empty, and `Z = N(O)`.
 
-#### A successful comparison preserves the invariant
+## A successful comparison preserves the invariant
 
 The algorithm chooses a candidate `C` from the beginning of `U`, initially one
 whole grapheme, and lets `R` be everything after it:
@@ -287,7 +287,7 @@ requires proof:
 > “In using normalization functions, it is important to realize that none of
 > the Normalization Forms are closed under string concatenation.”
 >
-> (from [UAX #15 for Unicode 15.0, Concatenation of Normalized Strings](https://www.unicode.org/reports/tr15/tr15-53.html#Concatenation))
+> (from [UAX #15 for Unicode 16.0, Concatenation of Normalized Strings](https://www.unicode.org/reports/tr15/tr15-56.html#Concatenation))
 
 Therefore, even though `N(P)` and `N(C)` are each normalized, their
 concatenation may not be. So we need to prove that:
@@ -364,7 +364,7 @@ become invisible, as the
 shows. The unchanged-prefix lemma is precisely what makes the conclusion valid
 without tracking where each code point came from.
 
-#### The search can't get stuck
+## The search can't get stuck
 
 After a failed comparison, the algorithm adds one nonempty original grapheme
 to `C` and tries again. If every shorter candidate fails, `C` eventually
@@ -385,7 +385,7 @@ original grapheme boundary. Boundaries inside an original grapheme are
 deliberately not candidates because we want the mapper to return user-facing
 grapheme boundaries.
 
-#### Summary
+## Proof summary
 
 Initially the invariant is true. Every successful comparison preserves it at
 a later pair of boundaries, and a successful candidate is always eventually
@@ -404,7 +404,7 @@ accepted pair of boundaries is valid, every accepted original span is locally
 shortest among the whole-grapheme candidates, and the algorithm consumes all of
 `O` and `Z`.
 
-#### Turning the paired boundaries into a position
+## Turning the paired boundaries into a position
 
 If the requested position in `Z` is exactly an accepted boundary, the mapper
 returns its paired boundary in `O`. If it lies strictly inside an accepted
@@ -422,7 +422,7 @@ one extended grapheme cluster from `Z`, and pairs them without performing the
 comparison. It can repeat that step until both strings end.
 
 This proof of the simpler approach assumes that both strings are segmented with
-[UAX #29's default extended-grapheme-cluster rules](https://www.unicode.org/reports/tr29/tr29-41.html#Default_Grapheme_Cluster_Table)
+[UAX #29's default extended-grapheme-cluster rules](https://www.unicode.org/reports/tr29/tr29-45.html#Default_Grapheme_Cluster_Table)
 using Unicode data consistent with the normalizer.
 
 For this optimization to be valid, we must establish both of the following
@@ -440,17 +440,21 @@ UAX #29 identifies the relevant specification explicitly:
 > boundaries—language-specific rules in [CLDR] should be used where <!-- style-lint-ok: verbatim Unicode quote -->
 > available.”
 >
-> (from [UAX #29 for Unicode 15.0, Default Grapheme Cluster Boundary Specification](https://www.unicode.org/reports/tr29/tr29-41.html#Default_Grapheme_Cluster_Table))
+> (from [UAX #29 for Unicode 16.0, Default Grapheme Cluster Boundary Specification](https://www.unicode.org/reports/tr29/tr29-45.html#Default_Grapheme_Cluster_Table))
 
 For that grapheme-boundary specification, Section 2 explains how the rules can
 be applied directly:
 
-> “A boundary exists in text not normalized in form NFD if and only if it
-> would occur at the corresponding position in NFD text. However, the default
-> rules have been written to provide equivalent results for non-NFD text and
-> can be applied directly.”
+> “To maintain canonical equivalence, all of the following specifications are
+> defined on text normalized in form NFD, as defined in Unicode Standard Annex
+> #15, “Unicode Normalization Forms” [UAX15]. Boundaries never occur within a
+> combining character sequence or conjoining sequence, so the boundaries
+> within non-NFD text can be derived from corresponding boundaries in the NFD
+> form of that text. For convenience, the default rules have been written so
+> that they can be applied directly to non-NFD text and yield equivalent
+> results.”
 >
-> (from [UAX #29 for Unicode 15.0, Conformance](https://www.unicode.org/reports/tr29/tr29-41.html#Conformance))
+> (from [UAX #29 for Unicode 16.0, Conformance](https://www.unicode.org/reports/tr29/tr29-45.html#Conformance))
 
 In plain English, the specification uses FormD to define where the grapheme
 boundaries must be. However, an implementation can apply the grapheme rules
@@ -476,7 +480,7 @@ of `Z`, the second pairs with the second, and so on. Requirement 2 proves that.
 
 UAX #29 gives the guarantee needed for this requirement:
 
-> “A key feature of default Unicode grapheme clusters (both legacy and
+> “A key feature of Unicode grapheme clusters (both legacy and
 > extended) is that they remain unchanged across all *canonically equivalent*
 > [italics added] forms of the underlying text. Thus the boundaries remain
 > unchanged whether the text is in NFC or NFD. Using a grapheme cluster as the
@@ -484,7 +488,7 @@ UAX #29 gives the guarantee needed for this requirement:
 > basis for canonically equivalent matching. This is important for applications
 > from searching to regular expressions.”
 >
-> (from [UAX #29 for Unicode 15.0, Grapheme Cluster Boundaries](https://www.unicode.org/reports/tr29/tr29-41.html#Grapheme_Cluster_Boundaries))
+> (from [UAX #29 for Unicode 16.0, Grapheme Cluster Boundaries](https://www.unicode.org/reports/tr29/tr29-45.html#Grapheme_Cluster_Boundaries))
 
 An extended grapheme cluster is the span between two consecutive grapheme
 boundaries. Therefore, if `O` and `Z` are canonically equivalent, the quoted
@@ -498,13 +502,13 @@ Unicode Standard defines canonical equivalence precisely:
 > “Two character sequences are said to be canonical equivalents if their full
 > canonical decompositions are identical.”
 >
-> (from [The Unicode Standard 15.0, Section 3.7, definition D70](https://www.unicode.org/versions/Unicode15.0.0/ch03.pdf))
+> (from [The Unicode Standard 16.0, Section 3.7, definition D70](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G743))
 
 UAX #15 identifies FormD as canonical decomposition:
 
 > “Normalization Form D (NFD) — Canonical Decomposition” <!-- style-lint-ok: verbatim Unicode quote -->
 >
-> (from [UAX #15 for Unicode 15.0, Normalization Forms](https://www.unicode.org/reports/tr15/tr15-53.html#Norm_Forms))
+> (from [UAX #15 for Unicode 16.0, Normalization Forms](https://www.unicode.org/reports/tr15/tr15-56.html#Norm_Forms))
 
 Therefore, to prove that `O` and `Z` have identical full canonical
 decompositions, we must prove:
@@ -519,7 +523,7 @@ UAX #15 gives the two identities needed to prove that equality:
 >
 > `toNFD(toNFC(x)) = toNFD(x)`
 >
-> (from [UAX #15 for Unicode 15.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-53.html#Design_Goals))
+> (from [UAX #15 for Unicode 16.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-56.html#Design_Goals))
 
 In the notation used here, `toNFD` is `FormD` and `toNFC` is `FormC`.
 Recall that `Z = N(O)`. There are two cases:
@@ -559,7 +563,7 @@ normalized. UAX #15 states:
 
 > “all of the Normalization Forms are closed under substringing.”
 >
-> (from [UAX #15 for Unicode 15.0, Concatenation of Normalized Strings](https://www.unicode.org/reports/tr15/tr15-53.html#Concatenation))
+> (from [UAX #15 for Unicode 16.0, Concatenation of Normalized Strings](https://www.unicode.org/reports/tr15/tr15-56.html#Concatenation))
 
 Therefore `Hi` is normalized and `N(Hi) = Hi`.
 
@@ -571,7 +575,7 @@ equivalent. UAX #15 states:
 > - `toNFC(x) = toNFC(y)`
 > - `toNFD(x) = toNFD(y)`
 >
-> (from [UAX #15 for Unicode 15.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-53.html#Design_Goals))
+> (from [UAX #15 for Unicode 16.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-56.html#Design_Goals))
 
 Therefore `Gi` and `Hi` have the same FormC or FormD result:
 
@@ -613,8 +617,6 @@ used for these forms. They use the comparison algorithm proved above.
 This appendix proves the rule for normalizing a concatenation and the
 unchanged-prefix lemma used above.
 
-### Facts used by the appendix proofs
-
 For the selected normalization operation `N`, let `D` mean its corresponding
 Unicode-defined fully decomposed form:
 
@@ -641,7 +643,7 @@ The rule for normalizing a concatenation uses Facts 2, 4, and 5. The
 unchanged-prefix lemma uses all six. Each fact is established below before
 either proof uses it.
 
-#### Fact 1: Every cut is at a code-point boundary
+### Fact 1: Every cut is at a code-point boundary
 
 On the original side, each candidate `C` contains whole extended grapheme
 clusters. Unicode doesn't state in one rule that an extended grapheme cluster
@@ -656,7 +658,7 @@ the complete derivation.
 > boundaries as specified by Unicode Standard Annex #29, ‘Unicode Text
 > Segmentation.’”
 >
-> (from [The Unicode Standard 15.0, Section 3.6.2, definition D61](https://www.unicode.org/versions/Unicode15.0.0/ch03.pdf#Grapheme_Clusters))
+> (from [The Unicode Standard 16.0, Section 3.6.2, definition D61](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G41732))
 
 2. **Every UAX #29 boundary rule has one boundary position between its left
    and right sides.** UAX #29 defines the rule syntax as follows:
@@ -664,13 +666,13 @@ the complete derivation.
 > “Each rule consists of a left side, a boundary symbol (see Table 1), and a
 > right side.”
 >
-> (from [UAX #29 for Unicode 15.0, Notation](https://www.unicode.org/reports/tr29/tr29-41.html#Notation))
+> (from [UAX #29 for Unicode 16.0, Notation](https://www.unicode.org/reports/tr29/tr29-45.html#Notation))
 
 It also places this constraint on the rules:
 
 > “Single boundaries. Each rule has exactly one boundary position.”
 >
-> (from [UAX #29 for Unicode 15.0, Rule Constraints](https://www.unicode.org/reports/tr29/tr29-41.html#Rule_Constraints))
+> (from [UAX #29 for Unicode 16.0, Rule Constraints](https://www.unicode.org/reports/tr29/tr29-45.html#Rule_Constraints))
 
 3. **The operand `Any` represents one arbitrary code point, and `÷` represents
    a boundary.** The grapheme-boundary property table defines `Any` as:
@@ -678,13 +680,13 @@ It also places this constraint on the rules:
 > `Any`: “This is not a property value; it is used in the rules to represent <!-- style-lint-ok: verbatim Unicode quote -->
 > any code point.”
 >
-> (from [UAX #29 for Unicode 15.0, Grapheme_Cluster_Break Property Values](https://www.unicode.org/reports/tr29/tr29-41.html#Grapheme_Cluster_Break_Property_Values))
+> (from [UAX #29 for Unicode 16.0, Grapheme_Cluster_Break Property Values](https://www.unicode.org/reports/tr29/tr29-45.html#Grapheme_Cluster_Break_Property_Values))
 
 The boundary symbol `÷` is defined as:
 
 > `÷`: “Boundary (allow break here)”
 >
-> (from [UAX #29 for Unicode 15.0, Notation](https://www.unicode.org/reports/tr29/tr29-41.html#Notation))
+> (from [UAX #29 for Unicode 16.0, Notation](https://www.unicode.org/reports/tr29/tr29-45.html#Notation))
 
 4. **The catch-all rule places a boundary between any two adjacent code
    points unless an earlier rule applies.** The final grapheme-boundary rule
@@ -694,7 +696,7 @@ The boundary symbol `÷` is defined as:
 >
 > `GB999    Any    ÷    Any`
 >
-> (from [UAX #29 for Unicode 15.0, Grapheme Cluster Boundary Rules](https://www.unicode.org/reports/tr29/tr29-41.html#Grapheme_Cluster_Boundary_Rules))
+> (from [UAX #29 for Unicode 16.0, Grapheme Cluster Boundary Rules](https://www.unicode.org/reports/tr29/tr29-45.html#Grapheme_Cluster_Boundary_Rules))
 
 Each `Any` matches one code point. Because the two operands are adjacent,
 `Any ÷ Any` places `÷` in the gap between two adjacent code points. UAX #29
@@ -703,7 +705,7 @@ explains how earlier rules relate to this catch-all rule:
 > “The rules are numbered for reference and are applied in sequence to
 > determine whether there is a boundary at any given offset.”
 >
-> (from [UAX #29 for Unicode 15.0, Notation](https://www.unicode.org/reports/tr29/tr29-41.html#Notation))
+> (from [UAX #29 for Unicode 16.0, Notation](https://www.unicode.org/reports/tr29/tr29-45.html#Notation))
 
 Every earlier rule has the same single-boundary syntax established in step 2.
 At a gap between code points, an earlier rule may report either a boundary
@@ -720,7 +722,7 @@ could be reported.
 >
 > `GB2    Any    ÷    eot`
 >
-> (from [UAX #29 for Unicode 15.0, Grapheme Cluster Boundary Rules](https://www.unicode.org/reports/tr29/tr29-41.html#Grapheme_Cluster_Boundary_Rules))
+> (from [UAX #29 for Unicode 16.0, Grapheme Cluster Boundary Rules](https://www.unicode.org/reports/tr29/tr29-45.html#Grapheme_Cluster_Boundary_Rules))
 
 Therefore every extended grapheme-cluster boundary is at the start of the
 text, at its end, or between two code points. It's never inside a code point.
@@ -731,7 +733,7 @@ normalization forms operate:
 > “D12 Coded character sequence: An ordered sequence of one or more code
 > points.”
 >
-> (from [The Unicode Standard 15.0, Section 3.4, definition D12](https://www.unicode.org/versions/Unicode15.0.0/ch03.pdf#Characters_Encoding))
+> (from [The Unicode Standard 16.0, Section 3.4, definition D12](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G45138))
 
 This is the connection: whenever definitions D118-D121 refer to a “coded
 character sequence,” definition D12 says that sequence is made of code points.
@@ -750,14 +752,14 @@ a sequence of code points:
 > “D121 Normalization Form KC (NFKC): The Canonical Composition of the
 > Compatibility Decomposition of a coded character sequence.”
 >
-> (from [The Unicode Standard 15.0, Section 3.11, D118-D121](https://www.unicode.org/versions/Unicode15.0.0/ch03.pdf#Norm_Forms))
+> (from [The Unicode Standard 16.0, Section 3.11, D118-D121](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49623))
 
 Consequently, a complete normalization result `N(C)` contains whole code
 points, so its endpoint can't split a code point. Each comparison begins at
 an already established code-point boundary, and both possible new endpoints
 (the end of `C` and the end of `N(C)`) are also code-point boundaries.
 
-#### Fact 2: Normalization preserves the decomposition
+### Fact 2: Normalization preserves the decomposition
 
 For every string `X`:
 
@@ -775,12 +777,12 @@ UAX #15 gives the four cases explicitly:
 >
 > `toNFKD(toNFKC(x)) = toNFKD(x)`
 >
-> (from [UAX #15 for Unicode 15.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-53.html#Design_Goals))
+> (from [UAX #15 for Unicode 16.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-56.html#Design_Goals))
 
 The first two equations apply when `D` is FormD. The last two apply when `D`
 is FormKD. Together they prove equation (A1) for every possible `N`.
 
-#### Fact 3: Canonical ordering is stable
+### Fact 3: Canonical ordering is stable
 
 Each code point has a canonical combining class, abbreviated `ccc`. Definitions
 D108 and D109 state both the condition for reordering and the algorithm that
@@ -794,14 +796,14 @@ uses it:
 > exchange the positions of the characters in each Reorderable Pair until the
 > sequence contains no more Reorderable Pairs.”
 >
-> (from [The Unicode Standard 15.0, Canonical Ordering Algorithm, D108-D109](https://www.unicode.org/versions/Unicode15.0.0/ch03.pdf#Canonical_Ordering_Algorithm))
+> (from [The Unicode Standard 16.0, Canonical Ordering Algorithm, D108-D109](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49592))
 
 A code point with `ccc = 0` is called a *starter*. Because equal `ccc` values
 don't satisfy the D108 inequality, code points with equal classes never
 exchange places. Canonical ordering is therefore a stable sort within each
 stretch of nonstarters between starters.
 
-#### Fact 4: Decomposing a concatenation orders the two decompositions together
+### Fact 4: Decomposing a concatenation orders the two decompositions together
 
 For all strings `X` and `Y`:
 
@@ -815,7 +817,7 @@ Unicode definition D64 states:
 > of the characters in the sequence until no characters can be further
 > decomposed.”
 >
-> (from [The Unicode Standard 15.0, Section 3.7, definition D64](https://www.unicode.org/versions/Unicode15.0.0/ch03.pdf#Decomposition))
+> (from [The Unicode Standard 16.0, Section 3.7, definition D64](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G742))
 
 Therefore decomposing `X + Y` first produces the decompositions of `X` and `Y`
 in that order. `D(X)` and `D(Y)` are already ordered internally. Ordering their
@@ -824,7 +826,7 @@ Fact 3, that ordering is stable. Stably ordering the pieces and then their
 concatenation produces the same result as stably ordering the complete
 decomposed sequence once. This proves equation (A2).
 
-#### Fact 5: Equal decompositions give equal normalized forms
+### Fact 5: Equal decompositions give equal normalized forms
 
 The fact to be proved is:
 
@@ -844,7 +846,7 @@ UAX #15 states the result this fact needs directly:
 > - `toNFKC(x) = toNFKC(y)`
 > - `toNFKD(x) = toNFKD(y)`
 >
-> (from [UAX #15 for Unicode 15.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-53.html#Design_Goals))
+> (from [UAX #15 for Unicode 16.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-56.html#Design_Goals))
 
 The Unicode Standard defines the two kinds of equivalence used in that
 guarantee:
@@ -852,13 +854,13 @@ guarantee:
 > “D70 Canonical equivalent: Two character sequences are said to be canonical
 > equivalents if their full canonical decompositions are identical.”
 >
-> (from [The Unicode Standard 15.0, Section 3.7, definition D70](https://www.unicode.org/versions/Unicode15.0.0/ch03.pdf#Decomposition))
+> (from [The Unicode Standard 16.0, Section 3.7, definition D70](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G743))
 
 > “D67 Compatibility equivalent: Two character sequences are said to be
 > compatibility equivalents if their full compatibility decompositions are
 > identical.”
 >
-> (from [The Unicode Standard 15.0, Section 3.7, definition D67](https://www.unicode.org/versions/Unicode15.0.0/ch03.pdf#Decomposition))
+> (from [The Unicode Standard 16.0, Section 3.7, definition D67](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G753))
 
 For FormC and FormD, `D` is the full canonical decomposition. Therefore:
 
@@ -873,13 +875,13 @@ For FormKC and FormKD, `D` is the full compatibility decomposition. The same
 equality means that `X` and `Y` are compatibility equivalents under definition
 D67, and the second UAX #15 guarantee again gives `N(X) = N(Y)`.
 
-#### Fact 6: A substring of normalized text is normalized
+### Fact 6: A substring of normalized text is normalized
 
 UAX #15 states:
 
 > "all of the Normalization Forms are closed under substringing."
 >
-> (from [UAX #15 for Unicode 15.0, Concatenation of Normalized Strings](https://www.unicode.org/reports/tr15/tr15-53.html#Concatenation))
+> (from [UAX #15 for Unicode 16.0, Concatenation of Normalized Strings](https://www.unicode.org/reports/tr15/tr15-56.html#Concatenation))
 
 Therefore any substring cut from normalized text at code-point boundaries is
 normalized on its own. Fact 1 establishes that the cuts used here satisfy that
@@ -944,7 +946,7 @@ call to `N` handles any ordering or composition required across the join. UAX
 
 > “none of the Normalization Forms are closed under string concatenation.”
 >
-> (from [UAX #15 for Unicode 15.0, Concatenation of Normalized Strings](https://www.unicode.org/reports/tr15/tr15-53.html#Concatenation))
+> (from [UAX #15 for Unicode 16.0, Concatenation of Normalized Strings](https://www.unicode.org/reports/tr15/tr15-56.html#Concatenation))
 
 ### The unchanged-prefix lemma
 
@@ -970,7 +972,7 @@ UAX #15 calls this property *idempotence* and states:
 > - `toNFKC(toNFKC(x)) = toNFKC(x)`
 > - `toNFKD(toNFKD(x)) = toNFKD(x)`
 >
-> (from [UAX #15 for Unicode 15.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-53.html#Design_Goals))
+> (from [UAX #15 for Unicode 16.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-56.html#Design_Goals))
 
 #### Example: movement across the join can be invisible
 
@@ -1011,7 +1013,7 @@ U+1EAC U+0323
 That's exactly `Q + V`. The final prefix is still the exact `Q`, even though
 the dot originating in `V` crossed a decomposed code point originating in `Q`.
 The decomposition and combining classes are recorded in the
-[Unicode 15.0 Character Database](https://www.unicode.org/Public/15.0.0/ucd/UnicodeData.txt).
+[Unicode 16.0 Character Database](https://www.unicode.org/Public/16.0.0/ucd/UnicodeData.txt).
 
 The proof has three steps.
 
