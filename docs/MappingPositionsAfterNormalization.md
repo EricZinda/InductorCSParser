@@ -1,6 +1,6 @@
 # Mapping Positions Through Unicode Normalization
 
-This doc explains how we map a position in a normalized string back to a position in the caller's original input. Read this if you're working on `NormalizedPositionMap`, want to know why the position translation is shaped the way it is, or want to be convinced that position translation works.
+This doc explains how we map a position in a normalized string back to a position in the caller's original input. Read this if you're working on `NormalizedPositionMap`, want to know why the position translation is designed the way it is, or want to be convinced that position translation works.
 
 If you just want to use normalization in a grammar, start with these:
 
@@ -18,9 +18,15 @@ Unicode lets you write the same visible character multiple ways. The letter "é"
 *Normalization* converts text to one chosen representation. .NET's `string.Normalize(NormalizationForm form)` does this. The four forms split into two pairs:
 
 - `FormC` and `FormD` are the *canonical* forms. They convert between precomposed and decomposed Unicode (like "é" turning into "e" plus combining acute, or back). They don't expand ligatures, don't change ASCII width, and don't change anything visible.
-- `FormKC` and `FormKD` are the *compatibility* forms. They do everything the canonical forms do, then go further. They expand ligatures ("ﬁ" becomes "fi"), unify half-width and full-width Latin, flatten superscripts and other typographic variants, and handle other "looks similar but stored differently" cases.
+- `FormKC` and `FormKD` are the *compatibility* forms. They do everything the canonical forms do, then go further. They expand ligatures ("ﬁ" becomes the two characters "fi"), unify half-width and full-width Latin, flatten superscripts and other typographic variants, and handle other "looks similar but stored differently" cases.
 
-A *grapheme* is what a user thinks of as one character, even when it's stored as multiple chars. "é" is one grapheme whether stored as 1 char or 2. The parser's segmenter (`GraphemeSegmentation`) processes a string one grapheme at a time.
+An *extended grapheme cluster* is Unicode's default approximation of one
+user-perceived character, even when it's stored as multiple chars. "é" is one
+extended grapheme cluster whether stored as 1 char or 2. In this document,
+*grapheme* and *cluster* are readability shorthands for the extended grapheme
+clusters produced by the parser's `GraphemeSegmentation`. They don't mean a
+language-specific linguistic grapheme. The proof uses the full term wherever
+the distinction matters.
 
 ## The problem
 
@@ -46,13 +52,13 @@ directly.
 This parser, however, supports both its built-in normalizer and
 [.NET's `String.Normalize`](https://learn.microsoft.com/en-us/dotnet/api/system.string.normalize).
 The .NET API returns the normalized string but exposes no edit map. Even when
-the runtime uses ICU internally, its edits aren't exposed through
-`String.Normalize`. The built-in normalizer could produce its own edit map, but
+the .NET runtime uses ICU internally, its edits aren't exposed through
+`String.Normalize`. The normalizer built into the parser could produce its own edit map, but
 runtime mode would still need another solution.
 
 ICU therefore demonstrates an alternative approach, but not one this parser
-can use in all supported configurations, and it doesn't prove the
-comparison-based algorithm used here. The algorithm this parser uses is proved
+can use in all supported configurations, and it can use a different approach due to the data it has available. Thus it doesn't prove the validity of the
+comparison-based algorithm used here. The validity of the algorithm this parser uses is proved
 independently below.
 
 ## The mapping algorithm
@@ -62,27 +68,28 @@ FormKD.
 Let `O` be the original string and let `Z = N(O)` be the normalized string.
 Assume that normalization succeeds and every call uses this same `N`. Because
 .NET stores strings as UTF-16, the algorithm works with UTF-16 code units, and
-compares them ordinally.
+compares them ordinally (meaning as exact byte value comparisons).
 
 The algorithm divides `O` and `Z` into paired spans. Each original span
-contains one or more whole graphemes, and its paired span is its normalization:
+contains one or more whole extended grapheme clusters, and its paired span is
+its normalization. The corresponding spans are only valid when this is true:
 
 ```text
 O: |     C0     |     C1     | ... |     Ck     |
 Z: |    N(C0)   |    N(C1)   | ... |    N(Ck)   |
 ```
 
-The vertical lines are paired boundaries. Positions are measured as UTF-16
-indexes because that's the coordinate system used by .NET, but every boundary
-accepted by the proof is also between complete Unicode code points. A *span*
-is the text between two boundaries.
+The vertical lines are paired boundaries. Positions are UTF-16 indexes because
+that's the coordinate system used by .NET. Every boundary used by the algorithm
+is also a Unicode code-point boundary. A *span* is the text between two
+boundaries.
 
-For FormKC and FormKD, one original grapheme may not be enough to form the next
-pair. The algorithm therefore starts with the next unclaimed original
-grapheme, normalizes it, and compares the result with the next unclaimed text
-in `Z`. If they don't match, the algorithm adds another whole original
-grapheme and tries again. If they match, their endpoints are the proposed next
-pair of boundaries.
+For FormKC and FormKD, one original extended grapheme cluster may not be enough
+to form the next pair of boundaries since those forms can convert multiple graphemes to one normalized grapheme. The algorithm therefore starts with the next unclaimed
+original grapheme, normalizes it, and compares the result with the next
+unclaimed text in `Z`. If they don't match, the algorithm adds another whole
+original grapheme and tries again. If they match, their endpoints are the
+proposed next pair of boundaries.
 
 The comparison alone establishes only that `N(C)` appears next in `Z`. The
 important question is whether that match could be accidental: could accepting
@@ -105,38 +112,41 @@ such that:
 Z = N(C0) + N(C1) + ... + N(Ck)
 ```
 
-Furthermore, at every accepted boundary, the complete original prefix must
-normalize to the complete prefix of `Z`, and the remaining original suffix must
-normalize to the remaining suffix of `Z`. This stronger statement rules out
-accidental prefix matches and allows the same operation to be repeated
-iteratively on each remaining suffix until the end of the string.
+Furthermore, at every accepted pair of boundaries, the entire original string
+from its start to the original boundary must normalize to the normalized string
+from its start to the corresponding normalized boundary. Likewise, the
+original text after the boundary must normalize to the normalized text after
+its corresponding boundary. This stronger statement rules out accidental
+prefix matches and allows the same operation to be repeated iteratively on
+each remaining suffix until the end of the string.
 
 ### Results used by the proof
 
-The proof uses these results. Their Unicode derivations and citations are in
-[Appendix A](#appendix-a-unicode-details-behind-the-comparison-proof):
+The proof uses the following three results. [Appendix A](#appendix-a-unicode-details-behind-the-comparison-proof)
+establishes six supporting Unicode lemmas, then proves the two derived lemmas
+from them, with the relevant citations:
 
-1. **Normalizing a concatenation directly equals normalizing its parts, then
+1. **Lemma 7: Normalizing a concatenation directly equals normalizing its parts, then
    the whole**
-   ([proof](#normalizing-a-concatenation-directly-equals-normalizing-its-parts-then-the-whole)).
+   ([proof](#lemma-7-normalizing-a-concatenation-directly-equals-normalizing-its-parts-then-the-whole)).
    For any strings `X` and `Y`:
 
    ```text
    N(X + Y) = N(N(X) + N(Y))
    ```
 
-   The outer call to `N` is essential. Unicode doesn't guarantee that
+   The outer call to `N` on the right side is essential. Unicode doesn't guarantee that
    `N(X) + N(Y)` is normalized, as discussed in the linked proof.
 
-2. **A code-point-aligned substring of normalized text is normalized**
-   ([Fact 6](#fact-6-a-substring-of-normalized-text-is-normalized)).
+2. **Lemma 6: A code-point-aligned substring of normalized text is normalized**
+   ([Lemma 6](#lemma-6-a-substring-of-normalized-text-is-normalized)).
    Every prefix used below is code-point-aligned
-   ([Fact 1](#fact-1-every-cut-is-at-a-code-point-boundary))
+   ([Lemma 1](#lemma-1-every-comparison-cut-is-at-a-code-point-boundary))
    and, because it's a substring of normalized text, is therefore normalized
    by this result.
 
-3. **The unchanged-prefix lemma**
-   ([proof](#the-unchanged-prefix-lemma)).
+3. **Lemma 8: The unchanged-prefix lemma**
+   ([proof](#lemma-8-the-unchanged-prefix-lemma)).
    If `Q` and `V` are normalized and the following equality holds:
 
    ```text
@@ -156,12 +166,11 @@ The proof uses these results. Their Unicode derivations and citations are in
 ### The invariant
 
 Throughout the proof, `+` means string concatenation. A vertical bar `|` marks
-the boundary between the same concatenated strings. It isn't part of either
-string. Thus, `O = P + U` and `O = P | U` state the same equality: `O` consists
+a boundary between two concatenated strings. Thus, `O = P + U` and `O = P | U` state the same equality: `O` consists
 of `P` immediately followed by `U`. The proof uses the two notations
 interchangeably, using `|` when the boundary itself is important.
 
-Suppose the algorithm has already accepted an original prefix `P`. Let `U` be
+Now, for the invariant: Suppose the algorithm has already accepted an original prefix `P` (which might be empty). Let `U` be
 all the original text that remains. The accepted pair of boundaries must
 satisfy:
 
@@ -170,10 +179,12 @@ O = P    | U
 Z = N(P) | N(U)  (1)
 ```
 
-This is the algorithm's invariant. It says that the two accepted prefixes
-really correspond and that the complete unclaimed suffix of `Z` is exactly the
-normalization of the unclaimed suffix `U`. This is what allows the algorithm
-to repeat the same process on `U` to find the remaining pairs of boundaries.
+This is the algorithm's invariant. It says that the prefix of `Z` ending at the
+accepted boundary is exactly `N(P)`, the normalization of the original prefix
+`P`. It also says that the complete unclaimed suffix of `Z` is exactly `N(U)`,
+the normalization of the unclaimed original suffix `U`. This is what allows
+the algorithm to repeat the same process on `U` to find the remaining pairs of
+boundaries.
 
 The invariant is true before the first iteration. At that point `P` is empty,
 `U = O`, `N(P)` is empty, and `Z = N(O)`.
@@ -181,7 +192,7 @@ The invariant is true before the first iteration. At that point `P` is empty,
 ### A successful comparison preserves the invariant
 
 The algorithm chooses a candidate `C` from the beginning of `U`, initially one
-whole grapheme, and lets `R` be everything after it:
+whole extended grapheme cluster, and lets `R` be everything after it:
 
 ```text
 U = C + R
@@ -201,22 +212,28 @@ O = P    | C + R
 Z = N(P) | N(C + R)
 ```
 
-A successful comparison finds `N(C)` at the beginning of the unclaimed suffix
-`N(C + R)` in `Z`. Let `S` be everything after that exact match:
+The algorithm now normalizes the candidate `C` by itself, producing `N(C)`.
+It compares that result ordinally with the same number of UTF-16 code units at
+the beginning of `N(C + R)` since this is the unclaimed suffix of `Z`.
+
+The comparison succeeds only if those code units are exactly equal, so a
+successful comparison establishes that `N(C)` is a prefix of `N(C + R)`. Let
+`S` be everything in that suffix after the exact match:
 
 ```text
 O: |       P       |    C    |    R    |
 Z: |     N(P)      |  N(C)   |    S    |
 ```
 
-If that comparison succeeds, then this must be true:
+When the ordinal comparison between `N(C)` and the beginning of the unclaimed
+suffix `N(C + R)` succeeds, this must be true:
 
 ```text
 N(C + R) = N(C) + S  (2)
 ```
 
-Rule 1,
-“[Normalizing a concatenation directly equals normalizing its parts, then the whole](#normalizing-a-concatenation-directly-equals-normalizing-its-parts-then-the-whole),”
+Now, Lemma 7,
+“[Normalizing a concatenation directly equals normalizing its parts, then the whole](#lemma-7-normalizing-a-concatenation-directly-equals-normalizing-its-parts-then-the-whole),”
 states that for any strings `X` and `Y`:
 
 ```text
@@ -236,7 +253,7 @@ are equal:
 N(N(C) + N(R)) = N(C) + S  (4)
 ```
 
-“[The unchanged-prefix lemma](#the-unchanged-prefix-lemma)”
+“[Lemma 8: The unchanged-prefix lemma](#lemma-8-the-unchanged-prefix-lemma)”
 states:
 
 ```text
@@ -274,17 +291,18 @@ Z = N(P) | N(C) + N(R)  (6)
          ^ current accepted pair of boundaries
 ```
 
-To accept `C` and move the invariant to the next position, we must convert this
-to the invariant form:
+To accept `C` and move the invariant to the next boundary, we must convert this
+to the invariant form, which is:
 
 ```text
 O = P + C    | R
 Z = N(P + C) | N(R)  (7)
 ```
 
-Equation (6) says that the corresponding prefix of `Z` is `N(P) + N(C)`.
-Equation (7) requires that prefix to be `N(P + C)`. UAX #15 explains why this
-requires proof:
+Equation (6) says that the prefix of `Z` ending immediately after the matched
+`N(C)` is `N(P) + N(C)`. Before accepting the proposed boundary after `C`,
+equation (7) requires us to prove that this prefix is equal to `N(P + C)`.
+UAX #15 explains why that equality requires proof:
 
 > “In using normalization functions, it is important to realize that none of
 > the Normalization Forms are closed under string concatenation.”
@@ -304,13 +322,12 @@ Recall from equation (6) that:
 Z = N(P) + N(C) + N(R)
 ```
 
-The string `N(P) + N(C)` is therefore a prefix of the normalized string `Z`.
-Its `N(C)` part begins at the previously established code-point boundary and
-is a complete normalization output, so it contains only complete code points.
-Its end (and therefore the end of the prefix) is also a code-point boundary
-([Fact 1](#fact-1-every-cut-is-at-a-code-point-boundary)).
-By “[Fact 6: A substring of normalized text is normalized](#fact-6-a-substring-of-normalized-text-is-normalized),”
-the concatenation `N(P) + N(C)` is therefore also normalized. In other words:
+The prefix `N(P) + N(C)` starts at the beginning of `Z` and ends after the
+complete normalization result `N(C)`, so both of its ends are code-point
+boundaries ([Lemma 1](#lemma-1-every-comparison-cut-is-at-a-code-point-boundary)). It's
+therefore a code-point-aligned substring of normalized `Z` and is itself
+normalized by “[Lemma 6: A substring of normalized text is normalized](#lemma-6-a-substring-of-normalized-text-is-normalized).”
+In other words:
 
 ```text
 N(N(P) + N(C)) = N(P) + N(C)  (8)
@@ -319,21 +336,22 @@ N(N(P) + N(C)) = N(P) + N(C)  (8)
 Recall that we are trying to prove `N(P + C) = N(P) + N(C)`.
 To finish the proof, we must connect `N(P + C)` to `N(N(P) + N(C))`.
 
-Apply Rule 1,
-“[Normalizing a concatenation directly equals normalizing its parts, then the whole](#normalizing-a-concatenation-directly-equals-normalizing-its-parts-then-the-whole),”
+Apply Lemma 7,
+“[Normalizing a concatenation directly equals normalizing its parts, then the whole](#lemma-7-normalizing-a-concatenation-directly-equals-normalizing-its-parts-then-the-whole),”
 with `X = P` and `Y = C`:
 
 ```text
-N(P + C) = N(N(P) + N(C))
+N(P + C) = N(N(P) + N(C))  (9)
 ```
 
-Equation (8) replaces the right side with `N(P) + N(C)`, giving:
+Equation (8) shows that the right side of equation (9) is equal to
+`N(P) + N(C)`, giving:
 
 ```text
-N(P + C) = N(P) + N(C)  (9)
+N(P + C) = N(P) + N(C)  (10)
 ```
 
-Equation (9) is the proof we were looking for. It holds here because its
+Equation (10) is the proof we were looking for. It holds here because its
 right-hand side is a code-point-aligned substring of the normalized string
 `Z`. It isn't a general rule that `N(P + C) = N(P) + N(C)`.
 
@@ -344,16 +362,16 @@ O = P    | C + R
 Z = N(P) | N(C) + N(R)
 ```
 
-By equation (9), we can replace `N(P) + N(C)` with `N(P + C)`. Moving `C` into
+By equation (10), we can replace `N(P) + N(C)` with `N(P + C)`. Moving `C` into
 the accepted prefix then gives:
 
 ```text
 O = P + C    | R
-Z = N(P + C) | N(R)  (10)
+Z = N(P + C) | N(R)  (11)
              ^ newly accepted pair of boundaries
 ```
 
-Equation (10) is the original invariant, now at the newly accepted pair of
+Equation (11) is the original invariant, now at the newly accepted pair of
 boundaries. The algorithm can therefore accept `C` and repeat the same
 operation with `P + C` as the accepted prefix and `R` as the unclaimed suffix.
 
@@ -362,36 +380,60 @@ prefix of `Z` is exactly `N(P + C)` and that the text remaining in `Z` is
 exactly `N(R)`. It doesn't claim that no combining mark moved across the join
 during an intermediate normalization step. Such movement can occur and later
 become invisible, as the
-[example in the lemma proof](#example-movement-across-the-join-can-be-invisible)
-shows. The unchanged-prefix lemma is precisely what makes the conclusion valid
+[example in Lemma 8's proof](#example-movement-across-the-join-can-be-invisible)
+shows. Lemma 8 is precisely what makes the conclusion valid
 without tracking where each code point came from.
 
 ### The search can't get stuck
 
-After a failed comparison, the algorithm adds one nonempty original grapheme
-to `C` and tries again. If every shorter candidate fails, `C` eventually
-becomes the entire unclaimed suffix `U`. Then `R` is empty, and the invariant
-gives:
+The preceding section shows what happens when a comparison succeeds. Recall
+the full invariant at the currently accepted pair of boundaries:
+
+```text
+O = P    | U
+Z = N(P) | N(U)
+```
+
+Here, `P` is the accepted original prefix and `U` is the unclaimed original
+suffix. The candidate then splits `U` as:
+
+```text
+U = C + R
+```
+
+Here, `C` is the candidate being tested and `R` is the original text after it.
+When a comparison fails, the algorithm moves the next nonempty extended
+grapheme cluster from `R` into `C` and tries again. If every shorter candidate
+fails, `C` eventually contains all of `U`, leaving no original text after it:
+
+```text
+C = U
+R = empty
+```
+
+The invariant says that the unclaimed suffix of `Z` is `N(U)`. Because the
+final candidate is `C = U`, its normalization is the same string:
 
 ```text
 remaining Z = N(U) = N(C)
 ```
 
 That final candidate must match. The original string contains finitely many
-graphemes, so the algorithm can't keep growing `C` forever and can't run out
-of text without finding a successful candidate.
+extended grapheme clusters, so the algorithm can't keep growing `C` forever
+and can't run out of text without finding a successful candidate.
 
-Because candidates are tried in increasing order of their original grapheme
-count, the first successful `C` is the shortest successful span ending at an
-original grapheme boundary. Boundaries inside an original grapheme are
-deliberately not candidates because we want the mapper to return user-facing
-grapheme boundaries.
+The algorithm first tests the next original cluster alone, then the next two
+clusters together, and so on. Therefore, the first candidate that matches
+contains the fewest possible whole original clusters. The algorithm never
+tests a candidate ending inside a cluster because its position
+convention uses the parser's cluster boundaries.
 
 ### Proof summary
 
 Initially the invariant is true. Every successful comparison preserves it at
 a later pair of boundaries, and a successful candidate is always eventually
-found. Every accepted candidate consumes at least one original grapheme, so
+found. Every accepted candidate consumes at least one original extended
+grapheme cluster, so
 only finitely many iterations are possible. By induction, the algorithm
 reaches the ends of both strings and produces:
 
@@ -403,15 +445,15 @@ Z = N(C0) + N(C1) + ... + N(Ck)
 At every intermediate cut, not merely at the end, the original prefix and
 suffix normalize to the corresponding prefix and suffix of `Z`. Thus every
 accepted pair of boundaries is valid, every accepted original span is locally
-shortest among the whole-grapheme candidates, and the algorithm consumes all of
+shortest among the whole-cluster candidates, and the algorithm consumes all of
 `O` and `Z`.
 
 ### Turning the paired boundaries into a position
 
-If the requested position in `Z` is exactly an accepted boundary, the mapper
+If the requested position in `Z` is exactly an accepted boundary, the algorithm
 returns its paired boundary in `O`. If it lies strictly inside an accepted
 normalized span `N(Ci)`, normalization may provide no exact original boundary
-for it, so the mapper returns the beginning of the paired original span `Ci`.
+for it, so the algorithm returns the beginning of the paired original span `Ci`.
 This approach is the project's position convention, not a further Unicode
 theorem.
 
@@ -419,9 +461,10 @@ theorem.
 
 The general comparison algorithm proved above works for FormC and FormD.
 However, a simpler algorithm is possible for FormC and FormD due to the
-properties of Unicode: it takes one extended grapheme cluster from `O`, takes
-one extended grapheme cluster from `Z`, and pairs them without performing the
-comparison. It can repeat that step until both strings end.
+properties of Unicode. The simpler algorithm takes one extended grapheme
+cluster from `O` and one extended grapheme cluster from `Z`, and pairs them
+without performing the comparison. It can repeat that step until both strings
+end.
 
 This proof of the simpler approach assumes that both strings are segmented with
 [UAX #29's default extended-grapheme-cluster rules](https://www.unicode.org/reports/tr29/tr29-45.html#Default_Grapheme_Cluster_Table)
@@ -430,9 +473,8 @@ using Unicode data consistent with the normalizer.
 For this optimization to be valid, we must establish both of the following
 statements from the Unicode Standard:
 
-1. `O` and `Z` can each be segmented directly, as they are at the start of the
-   algorithm.
-2. `O` and `Z` have the same extended grapheme clusters in the same order.
+1. `O` and `Z` can each be segmented directly into extended grapheme clusters.
+2. The resulting clusters correspond one-for-one and in the same order.
 
 ### Requirement 1: `O` and `Z` can each be segmented directly
 
@@ -444,8 +486,8 @@ UAX #29 identifies the relevant specification explicitly:
 >
 > (from [UAX #29 for Unicode 16.0, Default Grapheme Cluster Boundary Specification](https://www.unicode.org/reports/tr29/tr29-45.html#Default_Grapheme_Cluster_Table))
 
-For that grapheme-boundary specification, Section 2 explains how the rules can
-be applied directly:
+For that extended-grapheme-cluster-boundary specification, Section 2 explains
+how the rules can be applied directly:
 
 > “To maintain canonical equivalence, all of the following specifications are
 > defined on text normalized in form NFD, as defined in Unicode Standard Annex
@@ -458,10 +500,10 @@ be applied directly:
 >
 > (from [UAX #29 for Unicode 16.0, Conformance](https://www.unicode.org/reports/tr29/tr29-45.html#Conformance))
 
-In plain English, the specification uses FormD to define where the grapheme
-boundaries must be. However, an implementation can apply the grapheme rules
-directly to a string without first converting it to FormD and obtain the
-equivalent grapheme segmentation.
+In plain English, the specification uses FormD to define where the extended-
+grapheme-cluster boundaries must be. However, an implementation can apply the
+extended-grapheme-cluster rules directly to a string without first converting
+it to FormD and obtain the equivalent segmentation.
 
 For `O`, this matters because `O` might not already be in any normalization
 form. The quoted rule permits segmenting it directly anyway. For `Z`, there
@@ -472,13 +514,15 @@ are two cases:
 2. If `N` is FormC, `Z` isn't necessarily in FormD, and the quotation above
    explicitly says that the default rules can be applied directly to it.
 
-Thus `Z` can be segmented directly in either case.
+Thus `O` and `Z` can each be segmented directly into extended grapheme
+clusters.
 
-This proves only that both segmentation operations are permitted. It doesn't,
-by itself, prove that the first grapheme of `O` pairs with the first grapheme
-of `Z`, the second pairs with the second, and so on. Requirement 2 proves that.
+This proves only that each segmentation can be performed directly. It doesn't,
+by itself, prove that the first extended grapheme cluster of `O` pairs with the
+first extended grapheme cluster of `Z`, the second pairs with the second, and
+so on. Requirement 2 proves that.
 
-### Requirement 2: `O` and `Z` have the same extended grapheme clusters in the same order
+### Requirement 2: The resulting clusters correspond one-for-one and in the same order
 
 UAX #29 gives the guarantee needed for this requirement:
 
@@ -492,11 +536,12 @@ UAX #29 gives the guarantee needed for this requirement:
 >
 > (from [UAX #29 for Unicode 16.0, Grapheme Cluster Boundaries](https://www.unicode.org/reports/tr29/tr29-45.html#Grapheme_Cluster_Boundaries))
 
-An extended grapheme cluster is the span between two consecutive grapheme
-boundaries. Therefore, if `O` and `Z` are canonically equivalent, the quoted
-guarantee gives them corresponding grapheme boundaries in the same order. The
-spans between those boundaries (the extended grapheme clusters) also correspond
-in the same order, although the boundaries may have different UTF-16 offsets.
+An extended grapheme cluster is the span between two consecutive extended-
+grapheme-cluster boundaries. Therefore, if `O` and `Z` are canonically
+equivalent, the quoted guarantee gives them corresponding cluster boundaries
+in the same order. The spans between those boundaries (the extended grapheme
+clusters) also correspond in the same order, although the boundaries may have
+different UTF-16 offsets.
 
 We must therefore prove that `O` and `Z` are canonically equivalent. The
 Unicode Standard defines canonical equivalence precisely:
@@ -514,7 +559,7 @@ The Unicode Standard identifies FormD as canonical decomposition:
 > (from [The Unicode Standard 16.0, Section 3.11, definition D118](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49623))
 
 Definition D68, quoted in
-[Fact 5](#fact-5-equal-decompositions-give-equal-normalized-forms), spells out
+[Lemma 5](#lemma-5-equal-decompositions-give-equal-normalized-forms), spells out
 what that Canonical Decomposition is: decompose fully, then reorder. That's
 the full canonical decomposition that definition D70 compares.
 
@@ -526,13 +571,19 @@ FormD(O) = FormD(Z)
 ```
 
 UAX #15 gives the identities needed to prove that equality. Its Design Goals
-section states that “any chain of normalizations is equivalent to a single
-normalization” and lists the chains in a table. The table's `toNFD(x)` column
-reads:
+section states:
 
-> `toNFD(x) = toNFD(toNFC(x)) = toNFD(toNFD(x))`
+> “Another consequence of the definitions is that any chain of normalizations
+> is equivalent to a single normalization”
 >
 > (from [UAX #15 for Unicode 16.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-56.html#Design_Goals))
+
+Immediately after that statement, the same section presents a table of
+two-step normalization chains, organized by the single normalization result
+to which each chain is equivalent. [Appendix A reproduces the complete
+table](#uax-15-two-step-normalization-table) and highlights the entries used
+here. Its `toNFD(x)` column says that applying NFD after either NFC or NFD
+produces the same result as applying NFD directly.
 
 In the notation used here, `toNFD` is `FormD` and `toNFC` is `FormC`.
 Recall that `Z = N(O)`. There are two cases:
@@ -561,16 +612,18 @@ Z = H0 + H1 + ... + Hm
 ```
 
 There's one `Hi` for every `Gi`. This UAX #29 guarantee (not merely the
-direct-segmentation rule in Requirement 1) is what allows taking one grapheme
-from each string on every iteration and pairing them as canonically equivalent
-spellings of the same grapheme. Each side advances by the UTF-16 length of its
-own cluster, so the two offsets don't have to be equal.
+direct-segmentation rule in Requirement 1) is what allows taking one extended
+grapheme cluster from each string on every iteration and pairing them as
+canonically equivalent spellings of the same cluster. Each side advances by
+the UTF-16 length of its own cluster, so the two offsets don't have to be equal.
 
 Note that this guarantee is descriptive prose in UAX #29, not a numbered
 definition or a conformance clause, so this step of the proof trusts the
-spec's stated intent. The comparison algorithm needs no such trust because it
-verifies every boundary it accepts, but this optimization skips that
-verification.
+spec's stated intent. The general comparison algorithm proved earlier doesn't
+rely on this statement because it verifies every proposed boundary by comparing
+`N(C)` with the next unclaimed portion of `Z`. The FormC/FormD lockstep
+optimization skips that comparison, so its proof relies on UAX #29's stated
+canonical-equivalence guarantee.
 
 It remains to connect that correspondence to the exact comparison skipped by
 the optimization. Each `Hi` is a substring of `Z`, and `Z = N(O)` is
@@ -599,40 +652,44 @@ N(Gi) = N(Hi) = Hi
 ```
 
 This is the exact comparison that the general algorithm would perform for its
-first, one-grapheme candidate. It always succeeds for FormC and FormD, so the
+first, one-cluster candidate. It always succeeds for FormC and FormD, so the
 implementation may skip the normalization and comparison and pair `Gi` with
 `Hi` directly.
 
 ### Conclusion: why the FormC/FormD algorithm is valid
 
-Requirement 1 establishes that the algorithm may find the grapheme boundaries
-directly in `O` and `Z`. Neither string has to be converted to FormD first.
+Requirement 1 establishes that `O` and `Z` can each be segmented directly.
 Requirement 2 establishes that canonical normalization preserves those
-graphemes in the same order, so there's exactly one `Hi` for every `Gi`.
+clusters in the same order, so there's exactly one `Hi` for every `Gi`.
 
-The algorithm may therefore take one grapheme from each string and pair them
-on every iteration. The two graphemes may occupy different numbers of UTF-16
-code units, so their numeric offsets may differ, but each side advances by its
-own grapheme's length. Because the two strings have the same number of
-graphemes, both sides reach the end together. The boundary after each `Hi`
-therefore maps to the boundary after its paired `Gi`. A position inside `Hi`
-maps to the start of `Gi`, as required by the position-mapping rule.
+The algorithm may therefore take one extended grapheme cluster from each
+string and pair them on every iteration. The two clusters may occupy different
+numbers of UTF-16 code units, so their numeric offsets may differ, but each
+side advances by its own cluster's length. Because the two strings have the
+same number of clusters, both sides reach the end together. The boundary after
+each `Hi` therefore maps to the boundary after its paired `Gi`. A position
+inside `Hi` maps to the start of `Gi`, as required by the position-mapping rule.
 
 ### Why this simple algorithm doesn't work for FormKC and FormKD
 
 UAX #29's guarantee applies to canonical equivalence. FormKC and FormKD also
 apply compatibility mappings, so their results don't have to be canonically
 equivalent to the original. Compatibility normalization can turn one original
-grapheme into several normalized graphemes or several original graphemes into
-one normalized grapheme. A one-for-one lockstep algorithm therefore can't be
-used for these forms. They use the comparison algorithm proved above.
+extended grapheme cluster into several normalized clusters or several original
+clusters into one normalized cluster. A one-for-one lockstep algorithm
+therefore can't be used for these forms. They use the comparison algorithm
+proved above.
 
 ## Appendix A: Unicode details behind the comparison proof
 
-This appendix proves the rule for normalizing a concatenation and the
-unchanged-prefix lemma used above.
+This appendix proves two derived lemmas used by the main comparison proof:
+Lemma 7, for normalizing a concatenation, and Lemma 8, the unchanged-prefix
+lemma. Both proofs depend on six supporting Unicode lemmas, established first.
+Some of those lemmas are also used independently in the main proof rather than
+only through the two derived results.
 
-For the selected normalization operation `N`, let `D` mean its corresponding
+Several of the lemmas compare strings through their fully decomposed forms. For
+the selected normalization operation `N`, let `D` denote its corresponding
 Unicode-defined fully decomposed form:
 
 | Selected `N` | `D` |
@@ -640,9 +697,9 @@ Unicode-defined fully decomposed form:
 | FormC or FormD | FormD |
 | FormKC or FormKD | FormKD |
 
-The two proofs below use these six facts, the validity of which is shown after:
+The six supporting lemmas are:
 
-1. Every cut used by the mapper is at a code-point boundary.
+1. Every cut used by the mapping algorithm is at a code-point boundary.
 2. Normalizing a string doesn't change its decomposition:
    `D(N(X)) = D(X)`.
 3. Canonical ordering is stable: code points with equal combining classes
@@ -654,20 +711,112 @@ The two proofs below use these six facts, the validity of which is shown after:
    normalized form: if `D(X) = D(Y)`, then `N(X) = N(Y)`.
 6. A substring of normalized text is normalized.
 
-The rule for normalizing a concatenation uses Facts 2, 4, and 5. The
-unchanged-prefix lemma uses all six. Each fact is established below before
-either proof uses it.
+Lemma 7 uses Lemmas 2, 4, and 5. Lemma 8 uses all six. Each supporting lemma
+is established below
+using definitions and statements from official Unicode sources before either
+proof uses it.
 
-### Fact 1: Every cut is at a code-point boundary
+### Lemma 1: Every comparison cut is at a code-point boundary
 
-On the original side, each candidate `C` contains whole extended grapheme
-clusters. Unicode doesn't state in one rule that an extended grapheme cluster
-begins and ends at code-point boundaries. That fact must be derived from the
-definition of a cluster and the formal syntax of the boundary rules. Here's
-the complete derivation.
+Here, a *cut* is where the comparison divides a string: at the end of a
+candidate `C` in the original text, or at the end of its complete normalization
+result `N(C)` in the normalized text. This lemma shows that neither cut can fall
+between the two UTF-16 code units of a supplementary code point. The proof
+needs this guarantee before treating a span of normalized text as a Unicode
+substring and applying Lemma 6.
 
-1. **An extended grapheme cluster is the text between two extended
-   grapheme-cluster boundaries.** Definition D61 states:
+We must prove that two kinds of comparison cuts are code-point-aligned:
+
+1. On the original side, candidates contain whole extended grapheme clusters.
+   We must show that the boundaries of those clusters can't split a code
+   point.
+2. On the normalized side, a cut occurs after a complete normalization result
+   `N(C)`. We must show that this result ends after a complete code point.
+
+We couldn't find an official Unicode statement that says either conclusion
+outright. Therefore, rather than assume code-point alignment, we must prove it.
+The two subsections below do so from the relevant Unicode definitions and
+rules.
+
+#### Original-side cuts
+
+The point to establish is that UAX #29's rules can manipulate breaks only
+before, between, or after complete code points. An arbitrary UTF-16 code-unit
+offset (such as the offset between the two code units of a surrogate pair)
+isn't a position these rules can make into a boundary. Once that is proved, the
+definition of an extended grapheme cluster shows that the boundaries of each
+candidate span `C` in the original text can't split a code point.
+
+**Why the rules can manipulate only code-point boundaries.** UAX #29 applies
+its rules in sequence to decide whether a boundary exists at an offset:
+
+> “The rules are numbered for reference and are applied in sequence to
+> determine whether there is a boundary at any given offset.”
+>
+> (from [UAX #29 for Unicode 16.0, Notation](https://www.unicode.org/reports/tr29/tr29-45.html#Notation))
+
+Each rule places a boundary symbol between a left and right expression:
+
+> “Each rule consists of a left side, a boundary symbol (see Table 1), and a
+> right side.”
+>
+> (from [UAX #29 for Unicode 16.0, Notation](https://www.unicode.org/reports/tr29/tr29-45.html#Notation))
+
+Each rule contains one boundary symbol, chosen from these two possibilities:
+
+> `÷` &nbsp; “Boundary (allow break here)”
+>
+> `×` &nbsp; “No boundary (do not allow break here)” <!-- style-lint-ok: verbatim Unicode quote -->
+>
+> (from [UAX #29 for Unicode 16.0, Notation](https://www.unicode.org/reports/tr29/tr29-45.html#Notation))
+
+The left and right expressions match sequences of boundary-property values:
+
+> “The left and right sides use the boundary property values in regular
+> expressions.”
+>
+> (from [UAX #29 for Unicode 16.0, Notation](https://www.unicode.org/reports/tr29/tr29-45.html#Notation))
+
+`sot` and `eot` mean “start of text” and “end of text,” respectively
+([UAX #29 for Unicode 16.0, Notation](https://www.unicode.org/reports/tr29/tr29-45.html#Notation)).
+The operand `Any` represents any code point:
+
+> “This is not a property value; it is used in the rules to represent any code <!-- style-lint-ok: verbatim Unicode quote -->
+> point.”
+>
+> (from [UAX #29 for Unicode 16.0, Grapheme_Cluster_Break Property Values, `Any`](https://www.unicode.org/reports/tr29/tr29-45.html#Grapheme_Cluster_Break_Property_Values))
+
+The following rules show how this notation can manipulate breaks only at the
+text edges or between complete code points:
+
+```text
+GB1      sot    ÷    Any
+GB2      Any    ÷    eot
+GB3      CR     ×    LF
+GB999    Any    ÷    Any
+```
+
+([UAX #29 for Unicode 16.0, Grapheme Cluster Boundary Rules](https://www.unicode.org/reports/tr29/tr29-45.html#Grapheme_Cluster_Boundary_Rules))
+
+- `GB1` manipulates the position before the first code point: it permits a
+  break at the start of the text.
+- `GB2` manipulates the position after the last code point: it permits a break
+  at the end of the text.
+- `GB3` manipulates the gap between the adjacent `CR` and `LF` code points: it
+  suppresses a break there.
+- `GB999` manipulates the gap between any two adjacent code points: it permits
+  a break there if no earlier rule has decided that position.
+
+`GB999` supplies a default decision for every internal gap because each `Any`
+matches a complete code point. An earlier rule can override that decision, as
+`GB3` does for a `CR` followed by `LF`, but it uses the same notation to change
+the decision at the gap. It can't move the gap inside either code point. The
+other rules likewise place their boundary symbol between expressions that match
+complete code points, so they can change the break decision at a gap but can't
+create a break inside a code point.
+
+The rules establish where extended grapheme-cluster boundaries can occur.
+Definition D61 then specifies what lies between those boundaries:
 
 > “Extended grapheme cluster: The text between extended grapheme cluster
 > boundaries as specified by Unicode Standard Annex #29, ‘Unicode Text
@@ -675,85 +824,101 @@ the complete derivation.
 >
 > (from [The Unicode Standard 16.0, Section 3.6.2, definition D61](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G41732))
 
-2. **Every UAX #29 boundary rule has one boundary position between its left
-   and right sides.** UAX #29 defines the rule syntax as follows:
+An extended grapheme cluster starts and ends at two of those boundaries. Since
+the rules can place them only at the text edges or between complete code
+points, the cluster can't start or end inside a code point. Each candidate
+`C` consists of whole clusters, so its start and end are code-point boundaries
+too.
 
-> “Each rule consists of a left side, a boundary symbol (see Table 1), and a
-> right side.”
->
-> (from [UAX #29 for Unicode 16.0, Notation](https://www.unicode.org/reports/tr29/tr29-45.html#Notation))
+#### Normalized-side cuts
 
-It also places this constraint on the rules:
+The question here is about *output*: can the complete normalization result
+`N(C)` end inside a code point? Defining the input as a coded character
+sequence isn't enough to answer that. We must check what the normalization
+steps produce.
 
-> “Single boundaries. Each rule has exactly one boundary position.”
->
-> (from [UAX #29 for Unicode 16.0, Rule Constraints](https://www.unicode.org/reports/tr29/tr29-45.html#Rule_Constraints))
-
-3. **The operand `Any` represents one arbitrary code point, and `÷` represents
-   a boundary.** The grapheme-boundary property table defines `Any` as:
-
-> `Any`: “This is not a property value; it is used in the rules to represent <!-- style-lint-ok: verbatim Unicode quote -->
-> any code point.”
->
-> (from [UAX #29 for Unicode 16.0, Grapheme_Cluster_Break Property Values](https://www.unicode.org/reports/tr29/tr29-45.html#Grapheme_Cluster_Break_Property_Values))
-
-The boundary symbol `÷` is defined as:
-
-> `÷`: “Boundary (allow break here)”
->
-> (from [UAX #29 for Unicode 16.0, Notation](https://www.unicode.org/reports/tr29/tr29-45.html#Notation))
-
-4. **The catch-all rule places a boundary between any two adjacent code
-   points unless an earlier rule applies.** The final grapheme-boundary rule
-   is:
-
-> “Otherwise, break everywhere.”
->
-> `GB999    Any    ÷    Any`
->
-> (from [UAX #29 for Unicode 16.0, Grapheme Cluster Boundary Rules](https://www.unicode.org/reports/tr29/tr29-45.html#Grapheme_Cluster_Boundary_Rules))
-
-Each `Any` matches one code point. Because the two operands are adjacent,
-`Any ÷ Any` places `÷` in the gap between two adjacent code points. UAX #29
-explains how earlier rules relate to this catch-all rule:
-
-> “The rules are numbered for reference and are applied in sequence to
-> determine whether there is a boundary at any given offset.”
->
-> (from [UAX #29 for Unicode 16.0, Notation](https://www.unicode.org/reports/tr29/tr29-45.html#Notation))
-
-Every earlier rule has the same single-boundary syntax established in step 2.
-At a gap between code points, an earlier rule may report either a boundary
-(`÷`) or no boundary (`×`). If none applies, `GB999` reports a boundary there.
-The rules don't supply any position inside a code point at which a boundary
-could be reported.
-
-5. **The start and end of the text are also boundaries.** Rules `GB1` and
-   `GB2` state:
-
-> “Break at the start and end of text, unless the text is empty.”
->
-> `GB1    sot    ÷    Any`
->
-> `GB2    Any    ÷    eot`
->
-> (from [UAX #29 for Unicode 16.0, Grapheme Cluster Boundary Rules](https://www.unicode.org/reports/tr29/tr29-45.html#Grapheme_Cluster_Boundary_Rules))
-
-Therefore every extended grapheme-cluster boundary is at the start of the
-text, at its end, or between two code points. It's never inside a code point.
-
-On the normalized side, the Unicode Standard defines the unit on which the
-normalization forms operate:
+The Unicode Standard defines a coded character sequence as:
 
 > “D12 Coded character sequence: An ordered sequence of one or more code
 > points.”
 >
 > (from [The Unicode Standard 16.0, Section 3.4, definition D12](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G45138))
 
-This is the connection: whenever definitions D118-D121 refer to a “coded
-character sequence,” definition D12 says that sequence is made of code points.
-Those definitions therefore define every normalization form as an operation on
-a sequence of code points:
+This matters because the operation definitions below use the word *character*.
+The normalization section explicitly explains that usage:
+
+> “The specification of Unicode Normalization Forms applies to all Unicode
+> coded character sequences (D12). For clarity of exposition in the definitions
+> and rules specified here, the terms “character” and “character sequence” are
+> used, but coded character sequences refer also to sequences containing
+> noncharacters or reserved code points. Unicode Normalization Forms are
+> specified for all Unicode code points, and not just for ordinary, assigned
+> graphic characters.”
+>
+> (from [The Unicode Standard 16.0, Section 3.11.3, Specification of Unicode Normalization Forms](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49576))
+
+Thus, *character* in the following normalization steps refers to a complete
+code-point element of the sequence, not to a UTF-16 code unit or part of a code
+point.
+
+The normalization steps operate on those complete code points and produce
+complete code points. First, a decomposition mapping replaces a character with
+a sequence of one or more characters:
+
+> “D62 Decomposition mapping: A mapping from a character to a sequence of one
+> or more characters that is a canonical or compatibility equivalent, and that
+> is listed in the character names list or described in Section 3.12,
+> Conjoining Jamo Behavior.”
+>
+> (from [The Unicode Standard 16.0, Section 3.7, definition D62](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G40097))
+
+Canonical ordering exchanges the positions of whole characters in a
+decomposed sequence:
+
+> “D109 Canonical Ordering Algorithm: In a decomposed character sequence D,
+> exchange the positions of the characters in each Reorderable Pair until the
+> sequence contains no more Reorderable Pairs.”
+>
+> (from [The Unicode Standard 16.0, Section 3.11, definition D109](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49593))
+
+To identify the operands of the composition rule, note that `C` in the Unicode
+rules quoted here names a single character being composed. It isn't the
+candidate span `C` used elsewhere in this document. A Starter `L` is defined
+as a code point:
+
+> “D107 Starter: Any code point (assigned or not) with combining class of zero
+> (ccc = 0).”
+>
+> (from [The Unicode Standard 16.0, Section 3.11, definition D107](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49580))
+
+It defines a Primary Composite `P` as a character:
+
+> “D114 Primary composite: A Canonical Decomposable Character (D69) which is
+> not a Full Composition Exclusion.”
+>
+> (from [The Unicode Standard 16.0, Section 3.11, definition D114](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49608))
+
+Rule R1 identifies `C` as a character in the coded character sequence:
+
+> “R1 Seek back (left) in the coded character sequence from the character C to
+> find the last Starter L preceding C in the character sequence.”
+>
+> (from [The Unicode Standard 16.0, Section 3.11, definition D117, rule R1](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49614))
+
+With `L`, `C`, and `P` thus identified as complete code-point elements, R2
+specifies the replacement and deletion:
+
+> “R2 If there is such an L, and C is not blocked from L, and there exists a <!-- style-lint-ok: verbatim Unicode quote -->
+> Primary Composite P which is canonically equivalent to the sequence
+> `<L, C>`, then replace L by P in the sequence and delete C from the sequence.”
+>
+> (from [The Unicode Standard 16.0, Section 3.11, definition D117, rule R2](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49614))
+
+R2 therefore replaces complete `L` with complete `P` and removes complete
+`C`. It doesn't modify only part of a code point.
+
+Definitions D118-D121 specify which of those steps each normalization form
+uses:
 
 > “D118 Normalization Form D (NFD): The Canonical Decomposition of a coded
 > character sequence.”
@@ -769,37 +934,71 @@ a sequence of code points:
 >
 > (from [The Unicode Standard 16.0, Section 3.11, D118-D121](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49623))
 
-Consequently, a complete normalization result `N(C)` contains whole code
-points, so its endpoint can't split a code point. Each comparison begins at
-an already established code-point boundary, and both possible new endpoints
-(the end of `C` and the end of `N(C)`) are also code-point boundaries.
+Thus, a complete normalization result `N(C)` is a sequence of whole code
+points, regardless of which of the four forms `N` selects. Its endpoint can't
+split a code point. Each comparison begins at an already established
+code-point boundary, and both possible new endpoints (the end of `C` and the
+end of `N(C)`) are also code-point boundaries.
 
-### Fact 2: Normalization preserves the decomposition
+### Lemma 2: Normalization preserves the decomposition
 
-For every string `X`:
+Recall from the beginning of this section that `D(X)` is the complete, canonically ordered decomposition of `X`:
+FormD when `N` is FormC or FormD, and FormKD when `N` is FormKC or FormKD.
+
+We will prove that, for every string `X`:
 
 ```text
 D(N(X)) = D(X)                                      (A1)
 ```
 
-UAX #15's Design Goals section states that “any chain of normalizations is
-equivalent to a single normalization” and lists the chains in a table. The
-entries needed here come from the table's `toNFD(x)` and `toNFKD(x)` columns:
+UAX #15's Design Goals section states:
 
-> `toNFD(x) = toNFD(toNFC(x)) = toNFD(toNFD(x))`
->
-> `toNFKD(x) = toNFKD(toNFKC(x)) = toNFKD(toNFKD(x))`
+> “Another consequence of the definitions is that any chain of normalizations
+> is equivalent to a single normalization”
 >
 > (from [UAX #15 for Unicode 16.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-56.html#Design_Goals))
 
-The first chain applies when `D` is FormD. The second applies when `D` is
-FormKD. Together they prove equation (A1) for every possible `N`.
+Immediately after that statement, the same section presents the following
+table of equivalent two-step normalization chains. The highlighted entries
+give the identities needed to prove equation (A1).
 
-### Fact 3: Canonical ordering is stable
+#### UAX #15 two-step normalization table
 
-Each code point has a canonical combining class, abbreviated `ccc`. Definitions
-D108 and D109 state both the condition for reordering and the algorithm that
-uses it:
+`toNFC(x)` means apply FormC to `x`, `toNFD(x)` means apply FormD,
+`toNFKC(x)` means apply FormKC, and `toNFKD(x)` means apply FormKD. In
+`toNFD(toNFC(x))`, the inner FormC step happens first, then FormD. Each
+entry below a column heading gives the same result as that heading. The table
+is transcribed from UAX #15. The highlighting is ours.
+
+> “
+>
+> | `toNFC(x)` | `toNFD(x)` | `toNFKC(x)` | `toNFKD(x)` |
+> | --- | --- | --- | --- |
+> | `=toNFC(toNFC(x))`<br>`=toNFC(toNFD(x))` | <mark><code>=toNFD(toNFC(x))</code></mark><br><mark><code>=toNFD(toNFD(x))</code></mark> | `=toNFC(toNFKC(x))`<br>`=toNFC(toNFKD(x))`<br>`=toNFKC(toNFC(x))`<br>`=toNFKC(toNFD(x))`<br>`=toNFKC(toNFKC(x))`<br>`=toNFKC(toNFKD(x))` | `=toNFD(toNFKC(x))`<br>`=toNFD(toNFKD(x))`<br>`=toNFKD(toNFC(x))`<br>`=toNFKD(toNFD(x))`<br><mark><code>=toNFKD(toNFKC(x))</code></mark><br><mark><code>=toNFKD(toNFKD(x))</code></mark> |
+>
+> ”
+>
+> (from [UAX #15 for Unicode 16.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-56.html#Design_Goals))
+
+The highlighted cells cover all four choices for `N`: the `toNFD(x)` column
+covers FormC and FormD, and the `toNFKD(x)` column covers FormKC and FormKD.
+In every case, decomposing after `N` gives the same result as decomposing `X`
+directly. This proves the claim we set out to establish in equation (A1):
+
+```text
+D(N(X)) = D(X)                                      (A1)
+```
+
+### Lemma 3: Canonical ordering is stable
+
+Here, *stable* has its standard sorting meaning: when two code points have the
+same sorting key, ordering doesn't reverse their relative order. This use of
+*stable* is unrelated to Unicode's guarantees about normalization remaining
+stable across Unicode versions.
+
+For canonical ordering, that sorting key is called the canonical combining class
+(`ccc`). Each code point has one. Definitions D108 and D109 state both the
+condition for reordering and the algorithm that uses it:
 
 > “D108 Reorderable pair: Two adjacent characters A and B in a coded character
 > sequence `<A, B>` are a Reorderable Pair if and only if
@@ -811,16 +1010,19 @@ uses it:
 >
 > (from [The Unicode Standard 16.0, Canonical Ordering Algorithm, D108-D109](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49592))
 
-A code point with `ccc = 0` is called a *starter*. Because equal `ccc` values
-don't satisfy the D108 inequality, code points with equal classes never
-exchange places. D109 also runs until no Reorderable Pair remains, so when it
-finishes, every maximal stretch of nonstarters (between starters or at either
-end of the string) is in nondecreasing `ccc` order. Exchanging only adjacent
-out-of-order pairs is bubble sort, which produces the same result no matter
-what order the exchanges run in. Canonical ordering is therefore a stable
-sort within each maximal stretch of nonstarters.
+D108 never permits two code points with the same `ccc` to exchange places.
+Since D109 swaps only adjacent code points, equal-`ccc` code points retain
+their original order. That's the stability property.
 
-### Fact 4: Decomposing a concatenation orders the two decompositions together
+Sorting is a separate point. A code point with `ccc = 0` is called a *starter*.
+D108 can't exchange a starter with a neighbor, so starters stay in place. D109
+stops only when no Reorderable Pair remains. At that point, every maximal
+stretch of nonstarters (between starters or at either end of the string) is in
+nondecreasing `ccc` order. That sorted order, together with the preserved order
+of equal-`ccc` code points, uniquely determines the result within each stretch.
+Canonical ordering is therefore a stable sort within each such stretch.
+
+### Lemma 4: Decomposing a concatenation orders the two decompositions together
 
 For all strings `X` and `Y`:
 
@@ -836,26 +1038,100 @@ Unicode definition D64 states:
 >
 > (from [The Unicode Standard 16.0, Section 3.7, definition D64](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G742))
 
-Therefore decomposing `X + Y` first produces the decompositions of `X` and `Y`
-in that order. `D(X)` and `D(Y)` are already ordered internally. Ordering their
-concatenation performs any additional ordering required where they meet. By
-Fact 3, that ordering is stable. Stably ordering the pieces and then their
-concatenation produces the same result as stably ordering the complete
-decomposed sequence once: either way, each maximal stretch of nonstarters
-ends up in nondecreasing `ccc` order, and within each class the entries from
-`X` keep their original order and come before the entries from `Y`. The
-unchanged-prefix lemma's proof below walks through the same merge in detail.
-This proves equation (A2).
+The point of D64 here is that raw decomposition expands each character (and any
+decomposable characters it produces) without changing the order of the original
+sequence. Thus the raw decomposition of `X + Y` is the raw decomposition of `X`
+followed by the raw decomposition of `Y`.
 
-### Fact 5: Equal decompositions give equal normalized forms
+UAX #15 states that ordering follows full decomposition:
 
-The fact to be proved is:
+> “Once a string has been fully decomposed, any sequences of combining marks
+> that it contains are put into a well-defined order.”
+>
+> (from [UAX #15 for Unicode 16.0, Description of the Normalization Process](https://www.unicode.org/reports/tr15/tr15-56.html#Description_of_the_Normalization_Process))
 
-```text
-D(X) = D(Y)  implies  N(X) = N(Y)
-```
+Applying `D` to `X` and `Y` separately performs both stages on each piece:
+recursive decomposition followed by canonical ordering.
+Consequently, `D(X)` and `D(Y)` have each already been canonically ordered, but
+their concatenation may still need additional ordering across the point where
+the pieces meet. Canonically ordering `D(X) + D(Y)` performs that remaining
+work. By Lemma 3, the ordering is stable, so this produces the same result as
+canonically ordering the complete raw decomposition of `X + Y` at once: each
+maximal stretch of nonstarters ends up in nondecreasing `ccc` order, and within
+each class the entries from `X` keep their original order and come before the
+entries from `Y`. Lemma 8's proof below walks through the
+same merge in detail. This proves equation (A2).
 
-UAX #15 states the result this fact needs directly:
+### Lemma 5: Equal decompositions give equal normalized forms
+
+We will prove that `D(X) = D(Y)` implies `N(X) = N(Y)` in four steps.
+
+#### Step 1: Start with the lemma's premise
+
+Assume `D(X) = D(Y)`.
+
+#### Step 2: Identify what `D` computes
+
+As defined at the start of this appendix, `D` is FormD when `N` is FormC or
+FormD, and FormKD when `N` is FormKC or FormKD. Unicode identifies these two
+forms as decompositions:
+
+> “D118 Normalization Form D (NFD): The Canonical Decomposition of a coded
+> character sequence.”
+>
+> “D119 Normalization Form KD (NFKD): The Compatibility Decomposition of a
+> coded character sequence.”
+>
+> (from [The Unicode Standard 16.0, Section 3.11, definitions D118-D119](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49623))
+
+The definitions of those decompositions include recursive decomposition and
+canonical ordering:
+
+> “D68 Canonical decomposition: The decomposition of a character or character
+> sequence that results from recursively applying the canonical mappings
+> found in the Unicode Character Database and those described in Section
+> 3.12, Conjoining Jamo Behavior, until no characters can be further
+> decomposed, and then reordering nonspacing marks according to Section 3.11,
+> Normalization Forms.”
+>
+> (from [The Unicode Standard 16.0, Section 3.7.2, definition D68](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G7425))
+
+> “D65 Compatibility decomposition: The decomposition of a character or
+> character sequence that results from recursively applying both the
+> compatibility mappings and the canonical mappings found in the Unicode
+> Character Database, and those described in Section 3.12, Conjoining Jamo
+> Behavior, until no characters can be further decomposed, and then
+> reordering nonspacing marks according to Section 3.11, Normalization
+> Forms.”
+>
+> (from [The Unicode Standard 16.0, Section 3.7.1, definition D65](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G749))
+
+Therefore `D(X) = D(Y)` means that `X` and `Y` have identical full canonical
+decompositions in the FormC/FormD case, or identical full compatibility
+decompositions in the FormKC/FormKD case.
+
+#### Step 3: Use Unicode's definition of equivalence
+
+Unicode defines equivalence by equality of those full decompositions:
+
+> “D70 Canonical equivalent: Two character sequences are said to be canonical
+> equivalents if their full canonical decompositions are identical.”
+>
+> (from [The Unicode Standard 16.0, Section 3.7, definition D70](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G743))
+
+> “D67 Compatibility equivalent: Two character sequences are said to be
+> compatibility equivalents if their full compatibility decompositions are
+> identical.”
+>
+> (from [The Unicode Standard 16.0, Section 3.7, definition D67](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G753))
+
+By Step 2, `X` and `Y` are therefore canonical equivalents when `N` is FormC
+or FormD, and compatibility equivalents when `N` is FormKC or FormKD.
+
+#### Step 4: Apply UAX #15's equal-normalization rule
+
+UAX #15 gives one equal-normalization rule for canonical equivalents and
+another for compatibility equivalents:
 
 > “If two strings x and y are canonical equivalents, then”
 >
@@ -869,65 +1145,18 @@ UAX #15 states the result this fact needs directly:
 >
 > (from [UAX #15 for Unicode 16.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-56.html#Design_Goals))
 
-The Unicode Standard defines the two kinds of equivalence used in that
-guarantee:
+Thus, given the premise `D(X) = D(Y)`, there are two cases:
 
-> “D70 Canonical equivalent: Two character sequences are said to be canonical
-> equivalents if their full canonical decompositions are identical.”
->
-> (from [The Unicode Standard 16.0, Section 3.7, definition D70](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G743))
+- If `N` is FormC or FormD, Step 3 shows that `X` and `Y` are canonical
+  equivalents. UAX #15 says they have equal normalization results under both
+  FormC and FormD.
+- If `N` is FormKC or FormKD, Step 3 shows that `X` and `Y` are compatibility
+  equivalents. UAX #15 says they have equal normalization results under both
+  FormKC and FormKD.
 
-> “D67 Compatibility equivalent: Two character sequences are said to be
-> compatibility equivalents if their full compatibility decompositions are
-> identical.”
->
-> (from [The Unicode Standard 16.0, Section 3.7, definition D67](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G753))
+In either case, the selected `N` gives `N(X) = N(Y)`, as required.
 
-The remaining link is between `D` and the decompositions those definitions
-compare. When `N` is FormC or FormD, `D` is FormD, which definition D118
-(quoted in [Fact 1](#fact-1-every-cut-is-at-a-code-point-boundary)) defines as
-the Canonical Decomposition of a coded character sequence. The Unicode
-Standard defines that decomposition, reordering step included:
-
-> “D68 Canonical decomposition: The decomposition of a character or character
-> sequence that results from recursively applying the canonical mappings
-> found in the Unicode Character Database and those described in Section
-> 3.12, Conjoining Jamo Behavior, until no characters can be further
-> decomposed, and then reordering nonspacing marks according to Section 3.11,
-> Normalization Forms.”
->
-> (from [The Unicode Standard 16.0, Section 3.7.2, definition D68](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G7425))
-
-D68 decomposes until nothing can decompose further, so its result is the full
-canonical decomposition that definition D70 compares. Therefore:
-
-```text
-D(X) = D(Y)
-```
-
-means that `X` and `Y` are canonical equivalents under definition D70, and the
-first UAX #15 guarantee gives `N(X) = N(Y)`.
-
-When `N` is FormKC or FormKD, `D` is FormKD, which definition D119 defines as
-the Compatibility Decomposition of a coded character sequence. Its definition
-is D65:
-
-> “D65 Compatibility decomposition: The decomposition of a character or
-> character sequence that results from recursively applying both the
-> compatibility mappings and the canonical mappings found in the Unicode
-> Character Database, and those described in Section 3.12, Conjoining Jamo
-> Behavior, until no characters can be further decomposed, and then
-> reordering nonspacing marks according to Section 3.11, Normalization
-> Forms.”
->
-> (from [The Unicode Standard 16.0, Section 3.7.1, definition D65](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G749))
-
-D65's result is the full compatibility decomposition that definition D67
-compares, so the same equality means that `X` and `Y` are compatibility
-equivalents under definition D67, and the second UAX #15 guarantee again gives
-`N(X) = N(Y)`.
-
-### Fact 6: A substring of normalized text is normalized
+### Lemma 6: A substring of normalized text is normalized
 
 UAX #15 states:
 
@@ -936,10 +1165,10 @@ UAX #15 states:
 > (from [UAX #15 for Unicode 16.0, Concatenation of Normalized Strings](https://www.unicode.org/reports/tr15/tr15-56.html#Concatenation))
 
 Therefore any substring cut from normalized text at code-point boundaries is
-normalized on its own. Fact 1 establishes that the cuts used here satisfy that
+normalized on its own. Lemma 1 establishes that the cuts used here satisfy that
 condition.
 
-### Normalizing a concatenation directly equals normalizing its parts, then the whole
+### Lemma 7: Normalizing a concatenation directly equals normalizing its parts, then the whole
 
 The rule to be proved is that, for any strings `X` and `Y`:
 
@@ -951,7 +1180,7 @@ In words, normalizing two concatenated strings produces the same result as
 normalizing each string first, concatenating those results, and then
 normalizing the complete concatenation.
 
-Fact 4, equation (A2), is the following general rule:
+Lemma 4, equation (A2), is the following general rule:
 
 ```text
 D(left + right)
@@ -965,18 +1194,30 @@ D(N(X) + N(Y))
     = canonically order (D(N(X)) + D(N(Y)))         (A3)
 ```
 
-Fact 2, equation (A1), says that `D(N(X)) = D(X)` and
+Lemma 2, equation (A1), says that `D(N(X)) = D(X)` and
 `D(N(Y)) = D(Y)`. Substitute those equal strings into equation (A3):
 
 ```text
 D(N(X) + N(Y))
     = canonically order (D(X) + D(Y))
-    = D(X + Y)                                      (A4)
+```
+
+Lemma 4, equation (A2), also says:
+
+```text
+D(X + Y) = canonically order (D(X) + D(Y))
+```
+
+The two decompositions equal the same ordered expression, so they equal each
+other:
+
+```text
+D(N(X) + N(Y)) = D(X + Y)                          (A4)
 ```
 
 Equation (A4) states that the two strings `N(X) + N(Y)` and `X + Y` have the
-same decomposition. Fact 5 says that two strings with the same decomposition
-have the same normalized form. Applying that fact directly to these
+same decomposition. Lemma 5 says that two strings with the same decomposition
+have the same normalized form. Applying that lemma directly to these
 two strings gives:
 
 ```text
@@ -1000,7 +1241,7 @@ call to `N` handles any ordering or composition required across the join. UAX
 >
 > (from [UAX #15 for Unicode 16.0, Concatenation of Normalized Strings](https://www.unicode.org/reports/tr15/tr15-56.html#Concatenation))
 
-### The unchanged-prefix lemma
+### Lemma 8: The unchanged-prefix lemma
 
 We must prove:
 
@@ -1012,25 +1253,14 @@ We must prove:
 >
 > then `S = V`.
 
-Here, saying that a string is *normalized* means that it's already in the
-normalization form `N`, so applying `N` again returns exactly the same string.
-This is stronger than merely saying that the second result is normalized.
-UAX #15 calls this property *idempotence* and states:
+#### Aside: movement across the join can be invisible
 
-> “All of the transformations are idempotent: that is,”
->
-> - `toNFC(toNFC(x)) = toNFC(x)`
-> - `toNFD(toNFD(x)) = toNFD(x)`
-> - `toNFKC(toNFKC(x)) = toNFKC(x)`
-> - `toNFKD(toNFKD(x)) = toNFKD(x)`
->
-> (from [UAX #15 for Unicode 16.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-56.html#Design_Goals))
-
-#### Example: movement across the join can be invisible
-
-It would be tempting to conclude that, if normalization leaves the prefix `Q`
-unchanged, no code point from `V` crossed the `Q | V` join. That conclusion is
-false.
+This aside rules out a tempting shortcut for proving Lemma 8: if normalization
+leaves the prefix `Q` unchanged, one might assume that no code point from `V`
+crossed the `Q | V` join and use that assumed lack of movement to conclude
+`S = V`.
+The assumption is false. The proof below instead uses equality of full
+decompositions and the behavior of canonical ordering.
 
 Let `N` be FormC, let `Q` be `Ậ` (U+1EAC, LATIN CAPITAL LETTER A WITH
 CIRCUMFLEX AND DOT BELOW), and let `V` be U+0323 COMBINING DOT BELOW. Both `Q`
@@ -1040,20 +1270,17 @@ and `V` are already normalized. Before normalization, their join is:
 U+1EAC[Q] | U+0323[V]
 ```
 
-The bracketed labels record where each code-point occurrence came from. They
-aren't part of the string. Decomposing U+1EAC produces `A`, a dot below, and a
-circumflex:
+The `[Q]` and `[V]` labels record where each code-point occurrence came from.
+They aren't part of the string. Decomposing U+1EAC produces `A`, a dot below,
+and a circumflex. The number before each nonstarter is its `ccc` value:
 
 ```text
-U+0041[Q]  U+0323[Q](ccc 220)  U+0302[Q](ccc 230)  U+0323[V](ccc 220)
+before ordering:   U+0041[Q] [220:U+0323[Q] | 230:U+0302[Q]] + [220:U+0323[V]]
+after ordering:    U+0041[Q] [220:U+0323[Q],U+0323[V] | 230:U+0302[Q]]
 ```
 
-Canonical ordering places class 220 before class 230, so the dot from `V`
-moves left across the circumflex from `Q`:
-
-```text
-U+0041[Q]  U+0323[Q](ccc 220)  U+0323[V](ccc 220)  U+0302[Q](ccc 230)
-```
+The second line shows that canonical ordering places class 220 before class
+230, so the dot from `V` moves left across the circumflex from `Q`.
 
 Canonical composition then rebuilds `Ậ` (U+1EAC) from the `A`, the first dot
 below, and the circumflex. The second dot remains, producing:
@@ -1067,12 +1294,12 @@ the dot originating in `V` crossed a decomposed code point originating in `Q`.
 The decomposition and combining classes are recorded in the
 [Unicode 16.0 Character Database](https://www.unicode.org/Public/16.0.0/ucd/UnicodeData.txt).
 
-The proof has three steps.
+Now back to the real proof: The proof has three steps.
 
 #### Proof step 1: `S` is normalized
 
-`N(Q + V)` is normalized. The premise says that it's exactly `Q + S`, so `S`
-is a suffix (and therefore a substring) of that normalized string. Fact 6 states
+`N(Q + V)` is normalized. The premise says that it is equal to `Q + S`, so `S`
+is a suffix (and therefore a substring) of that normalized string. Lemma 6 states
 that a substring of normalized text is normalized. Therefore `S` is normalized
 too.
 
@@ -1091,20 +1318,14 @@ Fully decompose both equal strings. In other words, apply the same function
 D(N(Q + V)) = D(Q + S)
 ```
 
-Fact 2, equation (A1), states that `D(N(X)) = D(X)`. Apply it with
-`X = Q + V`:
-
-```text
-D(N(Q + V)) = D(Q + V)
-```
-
-Substitute that equal expression into the preceding equation:
+Lemma 2, equation (A1), states that `D(N(X)) = D(X)`. With `X = Q + V`, it
+allows us to replace the left side `D(N(Q + V))` with `D(Q + V)`:
 
 ```text
 D(Q + V) = D(Q + S)                                (A6)
 ```
 
-Fact 4, equation (A2), states:
+Lemma 4, equation (A2), states:
 
 ```text
 D(left + right)
@@ -1130,46 +1351,46 @@ canonically order (D(Q) + D(V))
     = canonically order (D(Q) + D(S))               (A7)
 ```
 
-Recall the goal of this step: prove `D(V) = D(S)`. Equation (A7) already says
-that joining each of those strings to the same known `D(Q)` and canonically
-ordering the result produces identical strings. To reach the goal, we must show
-that a known `D(Q)` and the ordered result uniquely determine the string that
-followed `D(Q)`. The next paragraphs show how to recover that following string,
-even though ordering may mix combining marks where the strings meet.
+Recall the goal of this step: prove `D(V) = D(S)`. Equation (A7) has the same
+fixed `D(Q)` on both sides. To conclude that `D(V) = D(S)`, we must show that
+canonical ordering doesn't prevent us from cancelling that common
+contribution. The next paragraphs show how stable ordering lets us remove the
+code-point occurrences contributed by `D(Q)` and recover the complete string
+that followed it, even though ordering may mix combining marks where the
+strings meet.
 
-Fact 3 established that canonical ordering is a stable sort within each
+Lemma 3 established that canonical ordering is a stable sort within each
 maximal stretch of nonstarters. Consequently:
 
 - a starter never moves
 - nonstarters finish in nondecreasing `ccc` order between starters
 - code points with equal `ccc` values never exchange places
 
-`D(Q)`, `D(V)`, and `D(S)` are already ordered internally. Split the known
-string `D(Q)` into two parts:
+Why can a starter never move? As established in Lemma 3, canonical ordering
+works only by swapping adjacent code points when the left code point has a
+greater positive `ccc` value than the right one. A starter has `ccc = 0`, so it
+can't take part in such a swap. Because code points move only through adjacent
+swaps, no code point can cross a starter.
+
+Consequently, only the nonstarters immediately before and after the join can
+intermix. To isolate them, split the known string `D(Q)` into two parts:
 
 ```text
 D(Q) = unchanged prefix + trailing nonstarters
 ```
 
-The second part is the complete stretch of nonstarters at the end of `D(Q)`.
-It's empty if `D(Q)` ends with a starter. Split the string following `D(Q)` in
-the opposite way:
+The trailing nonstarters are the complete stretch of nonstarters at the end of
+`D(Q)`. They're empty if `D(Q)` ends with a starter. Split the string following
+`D(Q)` in the opposite way:
 
 ```text
 following string = leading nonstarters + unchanged rest
 ```
 
 The first part is the complete stretch of nonstarters at its beginning. The
-unchanged rest is empty or begins with its first starter.
-
-Fact 3 quoted D108: adjacent code points `A` and `B` can be exchanged only when
-`ccc(A) > ccc(B) > 0`. If `B` is a starter, then `ccc(B) = 0`, so the final
-inequality fails. If `A` is a starter, then `ccc(A) = 0`, so it can't be
-greater than the positive `ccc(B)`. A starter therefore can't participate in
-any exchange. D109 performs canonical ordering only through these adjacent
-exchanges, so another code point can't cross a starter: doing so would require
-an exchange with that starter. Canonical ordering can therefore change only the
-two stretches of nonstarters where the strings meet:
+unchanged rest is empty or begins with its first starter. `D(Q)`, `D(V)`, and
+`D(S)` are already ordered internally, so ordering their concatenation needs
+to merge only the two nonstarter stretches where the strings meet:
 
 ```text
 canonically order (D(Q) + following string)
@@ -1183,22 +1404,32 @@ points from `D(Q)`, and `r` labels code points from the following string:
 
 ```text
 before stable merge:   [220:q1 | 230:q2,q3] + [220:r1,r2 | 232:r3]
-stable merged run:      220:q1,r1,r2 | 230:q2,q3 | 232:r3
+after stable merge:     220:q1,r1,r2 | 230:q2,q3 | 232:r3
 ```
 
-For each `ccc` value, stable ordering puts the known entries from `D(Q)` before
-the entries from the following string. After the stable merge, remove `q1`
-from the start of the merged `220` group and remove `q2,q3` from the start of
-the merged `230` group. What remains is exactly
-`220:r1,r2 | 232:r3`, the leading nonstarters of the following string. If some
-`q` and `r` code points are identical, remove the known number of `q` entries
-from the front of that merged group. The remainder is still determined
-exactly.
+Stable ordering keeps a code-point occurrence from `D(Q)` before one from the
+following string when their `ccc` values are the same. After the stable merge,
+if you remove `q1` from the start of the merged `220` group and `q2,q3` from the
+start of the merged `230` group, what remains is exactly
+`220:r1,r2 | 232:r3`, the leading nonstarters of the following string. This shows how the
+merge may interleave the two nonstarter stretches, but it preserves the order
+within each stretch.
 
-The unchanged prefix is known from `D(Q)`, so remove it directly. The process
-above recovers the leading nonstarters, and the unchanged rest already appears
-unchanged after the merged stretch. Together, those two recovered parts are the
-complete string that followed `D(Q)`.
+This matters because the proof must recover the actual code-point sequence
+following `D(Q)` from the ordered result, not merely its `ccc` values. The `q`
+and `r` labels are only for the schematic. The actual output doesn't record
+origins. Even if some `q` and `r` code points are identical, `D(Q)` tells us how
+many `q` occurrences are at the front of each merged `ccc` group. Remove that
+many from the front of the group. What remains within the merged stretch is
+exactly the occurrences from the following string, so identical code-point
+values don't make the recovery ambiguous.
+
+We know that `D(Q)` has the unchanged prefix identified in the split above.
+Just as in the example, the code points contributed by `D(Q)` can be identified
+and removed: remove the unchanged prefix directly, then use the process above
+to remove its trailing nonstarters from the merged stretch. What remains is the
+leading nonstarters from the following string, followed by its unchanged rest.
+Together, those parts are the complete string that followed `D(Q)`.
 
 Now return to equation (A7):
 
@@ -1207,10 +1438,19 @@ canonically order (D(Q) + D(V))
     = canonically order (D(Q) + D(S))               (A7)
 ```
 
-Its two ordered results are identical, and both were produced using the same
-`D(Q)`. The recovery just described must therefore produce the same following
-string on each side. It produces `D(V)` on the left and `D(S)` on the right.
-Hence:
+Apply the recovery procedure described above to both sides of equation (A7):
+
+```text
+canonically order (D(Q) + D(V))  -- remove D(Q)'s contribution -->  D(V)
+canonically order (D(Q) + D(S))  -- remove D(Q)'s contribution -->  D(S)
+```
+
+The preceding argument proved that the first recovery produces exactly `D(V)`
+and the second produces exactly `D(S)`, rather than merely sequences with the
+same `ccc` values. Equation (A7) says that the two ordered input strings are
+identical. The recovery also uses the same `D(Q)` on both sides, so it removes
+the same contribution and must produce identical remaining sequences.
+Therefore:
 
 ```text
 D(V) = D(S)                                         (A8)
@@ -1222,9 +1462,8 @@ from the same known left input must have identical right inputs.
 
 #### Proof step 3: Equal decompositions give equal normalized strings
 
-Recall the unchanged-prefix lemma's setup. `V` is the string following `Q`
-before the concatenation is normalized. The normalized result begins with the
-same unchanged `Q`, and `S` is everything after it:
+This lemma assumes `N(Q + V) = Q + S`. Thus the input suffix after `Q` is `V`,
+while the output suffix after `Q` is `S`:
 
 ```text
 before normalization:   Q | V
@@ -1238,21 +1477,35 @@ D(V) = D(S)                                         (A8)
 ```
 
 Equation (A8) says directly that `S` and `V` have the same decomposition `D`.
-Fact 5 states that strings with the same decomposition have the same normalized
+Lemma 5 states that strings with the same decomposition have the same normalized
 form. Therefore:
 
 ```text
 N(V) = N(S)                                         (A9)
 ```
 
-The unchanged-prefix lemma begins by assuming that `Q` and `V` are normalized.
-By the meaning of *normalized* stated above, the assumption about `V` means:
+At the beginning of this lemma, we assumed that `V` is normalized. Proof step
+1 established that `S` is also normalized. Saying that a string is
+*normalized* means that
+it's already in the normalization form `N`, so applying `N` again returns
+exactly the same string. UAX #15 calls this property *idempotence* and states:
+
+> “All of the transformations are idempotent: that is,”
+>
+> - `toNFC(toNFC(x)) = toNFC(x)`
+> - `toNFD(toNFD(x)) = toNFD(x)`
+> - `toNFKC(toNFKC(x)) = toNFKC(x)`
+> - `toNFKD(toNFKD(x)) = toNFKD(x)`
+>
+> (from [UAX #15 for Unicode 16.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-56.html#Design_Goals))
+
+The assumption that `V` is normalized therefore means:
 
 ```text
 N(V) = V
 ```
 
-Proof step 1 established that `S` is also normalized, which means:
+Proof step 1 established that `S` is also normalized, so:
 
 ```text
 N(S) = S
@@ -1278,5 +1531,5 @@ first string `Q` unchanged as the complete prefix, then the text after `Q`
 must be the original second string `V`. Normalization can't leave `Q`
 unchanged while silently replacing `V` with some different suffix `S`.
 
-The facts used in the proof apply to FormC, FormD, FormKC, and FormKD, so the
-unchanged-prefix lemma holds for all four forms.
+The lemmas used in the proof apply to FormC, FormD, FormKC, and FormKD, so
+Lemma 8 holds for all four forms.
