@@ -617,26 +617,9 @@ because the Unicode Consortium curates the character data and the boundary
 rules to keep it true. For example, a few spacing marks such as U+09BE BENGALI
 VOWEL SIGN AA are given the `Grapheme_Extend` property specifically because
 they appear in the canonical decompositions of other vowel signs, so that the
-decomposed spelling stays one cluster. That makes the claim a property of a
-particular data version and a particular rule set.
-
-The lockstep optimization therefore assumes that the segmenter actually in use
-implements those rules with that data. The general comparison algorithm
-verifies every proposed boundary by comparing `N(C)` with the next unclaimed
-portion of `Z`, so if the segmenter disagreed with UAX #29 the comparison
-would fail, the candidate would grow, and the answer would still be right. The
-lockstep walk skips that comparison. If the two segmentations ever disagreed,
-it would produce wrong positions with nothing to catch them.
-
-The optimization is worth that trade because of what it saves. The lockstep
-walk reads one cached cluster length per step on each side, from the same
-cluster index the lexer already built for the normalized string. The
-comparison walk normalizes a fresh substring for every cluster from the start
-of the string up to the requested position, on every lookup.
-`Symbol.SourceRange` translates two positions per symbol and FormC is the
-default form, so without the lockstep walk a tree walk over source ranges
-would pay a normalization call per cluster per symbol instead of an array
-lookup.
+decomposed spelling stays one cluster. Relying on the guarantee therefore
+means trusting the Unicode Consortium to keep its data consistent with its own
+claim.
 
 It remains to connect that correspondence to the exact comparison skipped by
 the optimization. Each `Hi` is a substring of `Z`, and `Z = N(O)` is
