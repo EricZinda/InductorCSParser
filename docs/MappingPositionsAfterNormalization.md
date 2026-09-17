@@ -260,13 +260,18 @@ states:
 If Q and V are normalized and N(Q + V) = Q + S, then S = V
 ```
 
-Apply the lemma with `Q = N(C)` and `V = N(R)`. The lemma becomes:
+Apply the lemma with `Q = N(C)` and `V = N(R)`. We must verify all three of its
+premises to use that lemma:
 
-```text
-N(N(C) + N(R)) = N(C) + S,
-```
+1. `N(C)` is normalized because it's a normalization result.
+2. `N(R)` is normalized because it's a normalization result.
+3. Equation (4) above establishes the third premise:
 
-which is exactly equation (4). It therefore gives:
+   ```text
+   N(N(C) + N(R)) = N(C) + S
+   ```
+
+All three premises hold, so Lemma 8 gives:
 
 ```text
 S = N(R)  (5)
