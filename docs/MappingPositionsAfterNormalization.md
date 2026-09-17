@@ -34,9 +34,9 @@ By default, the parser normalizes input before lexing, so the positions the engi
 
 Two examples show why this isn't trivial.
 
-The easy case: the "ﬁ" ligature (one char) becomes "fi" (two chars) under FormKC. If the lexer fails at position 1 in the normalized string (between the 'f' and 'i'), there's no separate 'i' in the original. Both came from the one ligature char. The right answer is position 0 in the original, so editor highlighting points at the whole ligature.
+The "ﬁ" ligature: the "ﬁ" ligature (one char) becomes "fi" (two chars) under FormKC. If the lexer fails at position 1 in the normalized string (between the 'f' and 'i'), there's no separate 'i' in the original. Both came from the one ligature char. The right answer is position 0 in the original, so editor highlighting points at the whole ligature.
 
-The hard case: the two characters U+3131 and U+314F (Korean compatibility jamo, displayed as "ㄱㅏ") compose into one syllable character `가` (U+AC00) under FormKC. Two original chars become one normalized char. If the lexer fails at position 1 in the normalized string (end of `가`), the right answer in the original is position 2 (after both original chars). Simple char counting gets this wrong.
+Korean compatibility jamo: the two characters U+3131 and U+314F (Korean compatibility jamo, displayed as "ㄱㅏ") compose into one syllable character `가` (U+AC00) under FormKC. Two original chars become one normalized char. If the lexer fails at position 1 in the normalized string (end of `가`), the right answer in the original is position 2 (after both original chars). Simple char counting gets this wrong.
 
 ## Why not use ICU?
 
@@ -56,8 +56,7 @@ the .NET runtime uses ICU internally, its edits aren't exposed through
 `String.Normalize`. The normalizer built into the parser could produce its own edit map, but
 runtime mode would still need another solution.
 
-ICU therefore demonstrates an alternative approach, but not one this parser
-can use in all supported configurations, and it can use a different approach due to the data it has available. Thus it doesn't prove the validity of the
+ICU therefore demonstrates an alternative approach that is possible due to the data it has available. Unfortunately, it isn't one this parser can use in all supported configurations, so we need an alternative. Because it uses data that isn't available after normalization is done, it also doesn't prove the validity of the
 comparison-based algorithm used here. The validity of the algorithm this parser uses is proved
 independently below.
 
@@ -79,7 +78,7 @@ O: |     C0     |     C1     | ... |     Ck     |
 Z: |    N(C0)   |    N(C1)   | ... |    N(Ck)   |
 ```
 
-The vertical lines are paired boundaries. Positions are UTF-16 indexes because
+The vertical lines are paired boundaries. Boundary positions are UTF-16 indexes because
 that's the coordinate system used by .NET. Every boundary used by the algorithm
 is also a Unicode code-point boundary. A *span* is the text between two
 boundaries.
@@ -87,11 +86,11 @@ boundaries.
 For FormKC and FormKD, one original extended grapheme cluster may not be enough
 to form the next pair of boundaries since those forms can convert multiple graphemes to one normalized grapheme. The algorithm therefore starts with the next unclaimed
 original grapheme, normalizes it, and compares the result with the next
-unclaimed text in `Z`. If they don't match, the algorithm adds another whole
-original grapheme and tries again. If they match, their endpoints are the
+unclaimed text in `Z`. If no prefix of the unclaimed text in `Z` matches, the algorithm adds another whole
+original grapheme and tries again. If a match is found, their endpoints are the
 proposed next pair of boundaries.
 
-The comparison alone establishes only that `N(C)` appears next in `Z`. The
+The comparison alone establishes only that `N(C)` appears as a prefix of the unclaimed text in `Z`. The
 important question is whether that match could be accidental: could accepting
 it leave a suffix of `Z` that isn't the normalization of the remaining suffix
 of `O`? The proof below shows that this can't happen, and thus that
@@ -122,11 +121,19 @@ each remaining suffix until the end of the string.
 
 ### Results used by the proof
 
-The proof uses the following three results. [Appendix A](#appendix-a-unicode-details-behind-the-comparison-proof)
-establishes six supporting Unicode lemmas, then proves the two derived lemmas
-from them, with the relevant citations:
+The proof uses Lemmas 6, 7, and 8 below. All three are proved in
+[Appendix A](#appendix-a-unicode-details-behind-the-comparison-proof), with the
+relevant Unicode citations. The appendix first establishes Lemmas 1–6, then
+uses those supporting lemmas to prove the two derived results, Lemmas 7 and 8.
 
-1. **Lemma 7: Normalizing a concatenation directly equals normalizing its parts, then
+1. **Lemma 6: A code-point-aligned substring of normalized text is normalized**
+   ([proof](#lemma-6-a-substring-of-normalized-text-is-normalized)).
+   Every prefix used below is code-point-aligned
+   ([Lemma 1](#lemma-1-every-comparison-cut-is-at-a-code-point-boundary))
+   and, because it's a substring of normalized text, is therefore normalized
+   by this result.
+
+2. **Lemma 7: Normalizing a concatenation directly equals normalizing its parts, then
    the whole**
    ([proof](#lemma-7-normalizing-a-concatenation-directly-equals-normalizing-its-parts-then-the-whole)).
    For any strings `X` and `Y`:
@@ -137,13 +144,6 @@ from them, with the relevant citations:
 
    The outer call to `N` on the right side is essential. Unicode doesn't guarantee that
    `N(X) + N(Y)` is normalized, as discussed in the linked proof.
-
-2. **Lemma 6: A code-point-aligned substring of normalized text is normalized**
-   ([Lemma 6](#lemma-6-a-substring-of-normalized-text-is-normalized)).
-   Every prefix used below is code-point-aligned
-   ([Lemma 1](#lemma-1-every-comparison-cut-is-at-a-code-point-boundary))
-   and, because it's a substring of normalized text, is therefore normalized
-   by this result.
 
 3. **Lemma 8: The unchanged-prefix lemma**
    ([proof](#lemma-8-the-unchanged-prefix-lemma)).
