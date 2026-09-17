@@ -555,66 +555,48 @@ in the same order. The spans between those boundaries (the extended grapheme
 clusters) also correspond in the same order, although the boundaries may have
 different UTF-16 offsets.
 
-We must therefore prove that `O` and `Z` are canonically equivalent. The
-Unicode Standard defines canonical equivalence precisely:
+We must therefore prove that `O` and `Z` are canonically equivalent. UAX #15
+says as much in prose, at least for FormC:
+
+> “There are two forms of normalization that convert to composite characters:
+> Normalization Form C and Normalization Form KC. The difference between these
+> depends on whether the resulting text is to be a canonical equivalent to the
+> original unnormalized text or a compatibility equivalent to the original
+> unnormalized text.”
+>
+> (from [UAX #15 for Unicode 16.0, Normalization Forms](https://www.unicode.org/reports/tr15/tr15-56.html#Norm_Forms))
+
+That sentence is descriptive rather than a numbered definition, and it doesn't
+mention FormD at all, so let's prove the claim more formally. The Unicode
+Standard defines canonical equivalence precisely:
 
 > “Two character sequences are said to be canonical equivalents if their full
 > canonical decompositions are identical.”
 >
 > (from [The Unicode Standard 16.0, Section 3.7, definition D70](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G743))
 
-The Unicode Standard identifies FormD as canonical decomposition:
-
-> “D118 Normalization Form D (NFD): The Canonical Decomposition of a coded
-> character sequence.”
->
-> (from [The Unicode Standard 16.0, Section 3.11, definition D118](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49623))
-
-Definition D68, quoted in
-[Lemma 5](#lemma-5-equal-decompositions-give-equal-normalized-forms), spells out
-what that Canonical Decomposition is: decompose fully, then reorder. That's
-the full canonical decomposition that definition D70 compares.
-
-Therefore, to prove that `O` and `Z` have identical full canonical
-decompositions, we must prove:
+FormD is that full canonical decomposition (definitions D118 and D68, quoted
+in [Lemma 5](#lemma-5-equal-decompositions-give-equal-normalized-forms)). So
+by D70, proving that `O` and `Z` are canonically equivalent means proving:
 
 ```text
 FormD(O) = FormD(Z)
 ```
 
-UAX #15 gives the identities needed to prove that equality. Its Design Goals
-section states:
-
-> “Another consequence of the definitions is that any chain of normalizations
-> is equivalent to a single normalization”
->
-> (from [UAX #15 for Unicode 16.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-56.html#Design_Goals))
-
-Immediately after that statement, the same section presents a table of
-two-step normalization chains, organized by the single normalization result
-to which each chain is equivalent. [Appendix A reproduces the complete
-table](#uax-15-two-step-normalization-table) and highlights the entries used
-here. Its `toNFD(x)` column says that applying NFD after either NFC or NFD
-produces the same result as applying NFD directly.
-
-In the notation used here, `toNFD` is `FormD` and `toNFC` is `FormC`.
-Recall that `Z = N(O)`. There are two cases:
-
-- If `N` is FormD, the `toNFD(toNFD(x))` entry gives
-  `FormD(Z) = FormD(FormD(O)) = FormD(O)`.
-- If `N` is FormC, the `toNFD(toNFC(x))` entry gives
-  `FormD(Z) = FormD(FormC(O)) = FormD(O)`.
-
-Thus, in either case:
+[Lemma 2](#lemma-2-normalization-preserves-the-decomposition) already proves
+this. Its equation (A1) states that `D(N(X)) = D(X)` for every string `X`,
+where `D` is FormD whenever `N` is FormC or FormD. With `X = O` and
+`Z = N(O)`, it gives:
 
 ```text
 FormD(Z) = FormD(N(O)) = FormD(O)
 ```
 
 That equality is exactly the condition in definition D70, so `O` and `Z` are
-canonically equivalent. The UAX #29 guarantee now applies: segmenting each
-string directly produces the same number of extended grapheme clusters in the
-same order.
+canonically equivalent, for FormD as well as FormC.
+
+The UAX #29 guarantee now applies: segmenting each string directly produces
+the same number of extended grapheme clusters in the same order.
 
 Write those clusters as:
 
@@ -630,12 +612,31 @@ canonically equivalent spellings of the same cluster. Each side advances by
 the UTF-16 length of its own cluster, so the two offsets don't have to be equal.
 
 Note that this guarantee is descriptive prose in UAX #29, not a numbered
-definition or a conformance clause, so this step of the proof trusts the
-spec's stated intent. The general comparison algorithm proved earlier doesn't
-rely on this statement because it verifies every proposed boundary by comparing
-`N(C)` with the next unclaimed portion of `Z`. The FormC/FormD lockstep
-optimization skips that comparison, so its proof relies on UAX #29's stated
-canonical-equivalence guarantee.
+definition or a conformance clause. It spans two specifications, and it holds
+because the Unicode Consortium curates the character data and the boundary
+rules to keep it true. For example, a few spacing marks such as U+09BE BENGALI
+VOWEL SIGN AA are given the `Grapheme_Extend` property specifically because
+they appear in the canonical decompositions of other vowel signs, so that the
+decomposed spelling stays one cluster. That makes the claim a property of a
+particular data version and a particular rule set.
+
+The lockstep optimization therefore assumes that the segmenter actually in use
+implements those rules with that data. The general comparison algorithm
+verifies every proposed boundary by comparing `N(C)` with the next unclaimed
+portion of `Z`, so if the segmenter disagreed with UAX #29 the comparison
+would fail, the candidate would grow, and the answer would still be right. The
+lockstep walk skips that comparison. If the two segmentations ever disagreed,
+it would produce wrong positions with nothing to catch them.
+
+The optimization is worth that trade because of what it saves. The lockstep
+walk reads one cached cluster length per step on each side, from the same
+cluster index the lexer already built for the normalized string. The
+comparison walk normalizes a fresh substring for every cluster from the start
+of the string up to the requested position, on every lookup.
+`Symbol.SourceRange` translates two positions per symbol and FormC is the
+default form, so without the lockstep walk a tree walk over source ranges
+would pay a normalization call per cluster per symbol instead of an array
+lookup.
 
 It remains to connect that correspondence to the exact comparison skipped by
 the optimization. Each `Hi` is a substring of `Z`, and `Z = N(O)` is
