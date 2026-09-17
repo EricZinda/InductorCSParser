@@ -385,13 +385,15 @@ prefix of `Z` is exactly `N(P + C)` and that the text remaining in `Z` is
 exactly `N(R)`. It doesn't claim that no combining mark moved across the join
 during an intermediate normalization step. Such movement can occur and later
 become invisible, as the
-[example in Lemma 8's proof](#example-movement-across-the-join-can-be-invisible)
-shows. Lemma 8 is precisely what makes the conclusion valid
-without tracking where each code point came from.
+[example in Lemma 8's proof](#aside-movement-across-the-join-can-be-invisible)
+shows. [Lemma 8](#lemma-8-the-unchanged-prefix-lemma) is precisely what makes
+the conclusion valid without tracking where each code point came from.
 
 ### The search can't get stuck
 
-The preceding section shows what happens when a comparison succeeds. Recall
+The preceding section shows what happens when a comparison succeeds. Let's now look at what happens when it fails.
+
+Recall
 the full invariant at the currently accepted pair of boundaries:
 
 ```text
@@ -429,9 +431,14 @@ and can't run out of text without finding a successful candidate.
 
 The algorithm first tests the next original cluster alone, then the next two
 clusters together, and so on. Therefore, the first candidate that matches
-contains the fewest possible whole original clusters. The algorithm never
-tests a candidate ending inside a cluster because its position
-convention uses the parser's cluster boundaries.
+contains the fewest possible whole original clusters. Every candidate ends at
+one of the parser's cluster boundaries in the original.
+
+No extra rule is needed to keep a candidate from ending in the middle of a
+cluster. Each candidate is a sequence of whole extended grapheme clusters, so
+its end is a UAX #29 cluster boundary, and a cluster is by definition the text
+between two such boundaries (definition D61, quoted in
+[Lemma 1](#lemma-1-every-comparison-cut-is-at-a-code-point-boundary)).
 
 ### Proof summary
 
