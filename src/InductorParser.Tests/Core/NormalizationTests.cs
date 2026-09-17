@@ -11,6 +11,7 @@ using static InductorParser.Tests.TestHelpers;
 using static InductorParser.Tests.UnicodeExamples;
 
 using static InductorParser.Tests.CanaryHelper;
+using static InductorParser.Tests.PositionTranslationReference;
 namespace InductorParser.Tests;
 
 // Tests for Rule.Compile(NormalizationForm?). Two promises the feature has to keep:
@@ -1329,6 +1330,88 @@ public class NormalizationTests
         AssertTranslatorAgreesWithWholeString(Canary("AㄱㅏZ", "latin capital letter a + hangul letter kiyeok + hangul letter a + latin capital letter z", 0x0041, 0x3131, 0x314F, 0x005A), NormalizationForm.FormKD);
     }
 
+    // ============================================================
+    // Position-translation tests for the canonical forms. FormC and
+    // FormD use the lockstep walker in NormalizedPositionMap, which
+    // pairs the i-th cluster of the original with the i-th cluster of
+    // the normalized string and never normalizes anything, relying on
+    // UAX #29's promise that cluster boundaries don't move under
+    // canonical equivalence. The reference walk in
+    // PositionTranslationReference never assumes that promise, so
+    // agreement here checks it against the segmenter and normalizer
+    // this process actually resolved to. On .NET 10 that's StringInfo
+    // and string.Normalize, and the differential suites under
+    // Lexing/Unicode show the built-in implementations match them for
+    // every code point through Unicode 15.0. The opt-in sweep in
+    // NormalizationConformanceTests runs the same comparison over
+    // every line of NormalizationTest.txt.
+    // docs/MappingPositionsAfterNormalization.md, Optimization for
+    // FormC/D, says which assumption this is checking.
+    // ============================================================
+
+    private static readonly NormalizationForm[] CanonicalForms =
+    {
+        NormalizationForm.FormC,
+        NormalizationForm.FormD,
+    };
+
+    [Test]
+    public void Lockstep_translator_agrees_with_whole_string_for_every_example_row()
+    {
+        foreach (var row in NormalizationExamples.All)
+        {
+            if (row.Category == NormalizationExamples.NormalizationCategory.LoneSurrogateNotNormalizable)
+                continue;
+            foreach (NormalizationForm form in CanonicalForms)
+            {
+                AssertTranslatorAgreesWithWholeString(row.Source, form);
+                // The same row between two ASCII letters, so there's a
+                // cluster on each side of the interesting one and both
+                // of its boundaries get mapped.
+                AssertTranslatorAgreesWithWholeString("a" + row.Source + "z", form);
+            }
+        }
+    }
+
+    [Test]
+    public void Lockstep_translator_agrees_with_whole_string_for_the_doc_proof_examples()
+    {
+        // Sequences the doc's proof singles out, none of which is a
+        // NormalizationExamples row. Each is built from explicit hex
+        // code points so no editor can silently normalize the literal.
+        string[] inputs =
+        {
+            // U+1EAC + U+0323: the doc's Lemma 8 aside. FormC decomposes
+            // the precomposed letter, the second dot below reorders left
+            // across the circumflex, and composition rebuilds U+1EAC
+            // with the leftover dot after it. A combining mark crossed
+            // the join and the join still reads as unchanged.
+            "" + (char)0x1EAC + (char)0x0323,                       // looks like Ậ̣
+            // U+09C7 + U+09BE: the doc's Grapheme_Extend example. FormC
+            // composes the pair into U+09CB, so the original has two
+            // code points in one cluster and the normalized has one.
+            "" + (char)0x09C7 + (char)0x09BE,                       // looks like ো (decomposed vowel sign)
+            "" + (char)0x0995 + (char)0x09C7 + (char)0x09BE,        // looks like কো (base + decomposed vowel sign)
+            // U+1100 + U+1161: conjoining jamo that FormC composes into
+            // the syllable U+AC00. Same shape as the FormKC
+            // compatibility-jamo tests above, but canonical.
+            "" + (char)0x1100 + (char)0x1161,                       // looks like 가 (two jamo)
+            // U+0F40 + U+0F73: Tibetan KA + VOWEL SIGN II. U+0F73 has a
+            // non-starter decomposition to U+0F71 + U+0F72 and is a
+            // composition exclusion, so both FormC and FormD produce
+            // three code points from two.
+            "" + (char)0x0F40 + (char)0x0F73,                       // looks like ཀཱི
+        };
+        foreach (string input in inputs)
+        {
+            foreach (NormalizationForm form in CanonicalForms)
+            {
+                AssertTranslatorAgreesWithWholeString(input, form);
+                AssertTranslatorAgreesWithWholeString("a" + input + "z", form);
+            }
+        }
+    }
+
     [Test]
     public void ErrorCharIndex_for_parse_failure_after_Korean_compatibility_jamo_FormKC()
     {
@@ -1414,80 +1497,6 @@ public class NormalizationTests
             $"TranslateToOriginal allocated {allocated} bytes mapping a single position at "
             + $"normalized offset {length - 1}; it should reuse the cached grapheme boundaries "
             + "instead of allocating a substring per grapheme.");
-    }
-
-    // Iterate every position in the normalized string and compare
-    // TranslateToOriginal's per-grapheme answer against the spec-
-    // blessed whole-string prefix walk. The normalized form is
-    // re-allocated with new string(...) so the ReferenceEquals
-    // fast path inside TranslateToOriginal doesn't short-circuit
-    // before the per-grapheme walker runs (which would happen for
-    // inputs whose normalized form is content-identical to the
-    // original).
-    private static void AssertTranslatorAgreesWithWholeString(
-        string original, NormalizationForm form)
-    {
-        string normalized = new string(
-            NormalizationHelpers.Normalize(original, form).ToCharArray());
-        for (int i = 0; i <= normalized.Length; i++)
-        {
-            int translatorAnswer = NormalizedPositionMap.TranslateToOriginal(
-                original, normalized, i, form);
-            int wholeStringAnswer = WholeStringPositionMap(original, i, form);
-            Assert.That(translatorAnswer, Is.EqualTo(wholeStringAnswer),
-                $"position translation drifted at normalizedIndex={i}, form={form}");
-        }
-    }
-
-    // Brute-force reference: walk the original grapheme by grapheme
-    // and explicitly check at each boundary whether normalizing the
-    // PREFIX of the original up to that boundary produces a prefix
-    // of the full normalized string. That's the safe-boundary
-    // condition the doc spells out. Return the largest safe
-    // boundary at or before normalizedIndex.
-    //
-    // The brute force re-normalizes the full prefix every iteration
-    // (no chunk-since-last-verified optimization), which makes the
-    // implementation obviously correct at the cost of being O(N²).
-    // It's only used as a reference in tests. The walker in
-    // NormalizedPositionMap has the linear-amortized version. The walk
-    // segments and normalizes through the parser's own helpers
-    // (GraphemeHelpers, NormalizationHelpers), so the reference and the
-    // walker under test always answer from the same implementations,
-    // on every runtime this test syncs to.
-    private static int WholeStringPositionMap(string original, int normalizedIndex, NormalizationForm form)
-    {
-        string normalized = NormalizationHelpers.Normalize(original, form);
-        if (normalizedIndex <= 0) return 0;
-        if (normalizedIndex >= normalized.Length) return original.Length;
-
-        int bestSafeOrigPos = 0;
-        int origPos = 0;
-        while (origPos < original.Length)
-        {
-            int step = GraphemeHelpers.FirstClusterLength(original.AsSpan(origPos));
-            if (step <= 0) step = 1;
-            origPos += step;
-
-            string prefixNormalized = NormalizationHelpers.Normalize(original[..origPos], form);
-
-            // Safe boundary check: prefixNormalized must be an actual
-            // prefix of the full normalized string (not just length-
-            // compatible).
-            bool isSafe = prefixNormalized.Length <= normalized.Length
-                && string.CompareOrdinal(normalized, 0, prefixNormalized, 0, prefixNormalized.Length) == 0;
-
-            if (isSafe)
-            {
-                if (prefixNormalized.Length > normalizedIndex)
-                    return bestSafeOrigPos;
-                if (prefixNormalized.Length == normalizedIndex)
-                    return origPos;
-                bestSafeOrigPos = origPos;
-            }
-        }
-
-        return original.Length;
     }
 
     [Test]

@@ -478,9 +478,21 @@ cluster from `O` and one extended grapheme cluster from `Z`, and pairs them
 without performing the comparison. It can repeat that step until both strings
 end.
 
-This proof of the simpler approach assumes that both strings are segmented with
-[UAX #29's default extended-grapheme-cluster rules](https://www.unicode.org/reports/tr29/tr29-45.html#Default_Grapheme_Cluster_Table)
-using Unicode data consistent with the normalizer.
+This proof of the simpler approach assumes that the segmenter in use puts
+cluster boundaries at corresponding positions in canonically equivalent
+strings. UAX #29 guarantees that for its
+[default extended-grapheme-cluster rules](https://www.unicode.org/reports/tr29/tr29-45.html#Default_Grapheme_Cluster_Table)
+over Unicode's own data, and Requirement 2 quotes the guarantee. Neither
+segmenter this project ships runs exactly that configuration. The built-in
+`GraphemeSegmentation` omits GB9c to match .NET 10, and the runtime
+`StringInfo` segmenter has whatever rule set and data version the installed
+.NET has, which may not match the normalizer's. The project relies on the
+property holding for both anyway, and the test project checks it rather than
+proving it. `NormalizationTests` compares the lockstep walker against a
+brute-force reference that never assumes the property, for FormC and FormD
+over the curated example rows, and the opt-in `NormalizationConformanceTests`
+sweep does the same over every line of the Unicode 16 normalization
+conformance file.
 
 For this optimization to be valid, we must establish both of the following
 statements from the Unicode Standard:

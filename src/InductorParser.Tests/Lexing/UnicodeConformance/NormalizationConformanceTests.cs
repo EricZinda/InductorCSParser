@@ -273,4 +273,47 @@ public class NormalizationConformanceTests
         Assert.That(disagreements, Is.Empty,
             "code points outside Part1 must normalize to themselves");
     }
+
+    // The lockstep position walker for FormC and FormD (see
+    // NormalizedPositionMap) pairs the i-th cluster of the original with
+    // the i-th cluster of the normalized string without normalizing
+    // anything, relying on UAX #29's promise that cluster boundaries
+    // don't move under canonical equivalence. This sweep checks that
+    // promise against the segmenter and normalizer this process actually
+    // resolved to, by comparing the walker with the brute-force reference
+    // in PositionTranslationReference (which never assumes the promise)
+    // at every position of every source string in the conformance file.
+    // Each source runs bare and after a base letter, so the lone
+    // combining marks in Part 1 also get tested attached to something.
+    //
+    // Unlike the invariant tests above, this one doesn't go through
+    // ToForm's built-in normalizer: the walker and the reference both use
+    // the process-wide implementation (StringInfo and string.Normalize on
+    // .NET 10), because the point is to check the real configuration.
+    // The differential suites under Lexing/Unicode show the built-in
+    // implementations match those for every code point through Unicode
+    // 15.0. docs/MappingPositionsAfterNormalization.md, Optimization for
+    // FormC/D, says which assumption this is checking.
+    [Test]
+    public void Lockstep_position_walker_agrees_with_reference_on_every_source_line()
+    {
+        var canonicalForms = new[] { NormalizationForm.FormC, NormalizationForm.FormD };
+        var disagreements = new List<string>();
+        foreach (ConformanceLine line in LoadLines())
+        {
+            if (disagreements.Count >= 25) break;
+            string source = line.Columns[0];
+            foreach (NormalizationForm form in canonicalForms)
+            {
+                foreach (string input in new[] { source, "a" + source })
+                {
+                    string? disagreement = PositionTranslationReference.FindDisagreement(input, form);
+                    if (disagreement != null)
+                        disagreements.Add($"line {line.LineNumber}: {disagreement}");
+                }
+            }
+        }
+        Assert.That(disagreements, Is.Empty,
+            "the lockstep position walker disagrees with the reference walk");
+    }
 }
