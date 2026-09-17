@@ -478,22 +478,6 @@ cluster from `O` and one extended grapheme cluster from `Z`, and pairs them
 without performing the comparison. It can repeat that step until both strings
 end.
 
-This proof of the simpler approach assumes that the segmenter in use puts
-cluster boundaries at corresponding positions in canonically equivalent
-strings. UAX #29 guarantees that for its
-[default extended-grapheme-cluster rules](https://www.unicode.org/reports/tr29/tr29-45.html#Default_Grapheme_Cluster_Table)
-over Unicode's own data, and Requirement 2 quotes the guarantee. Neither
-segmenter this project ships runs exactly that configuration. The built-in
-`GraphemeSegmentation` omits GB9c to match .NET 10, and the runtime
-`StringInfo` segmenter has whatever rule set and data version the installed
-.NET has, which may not match the normalizer's. The project relies on the
-property holding for both anyway, and the test project checks it rather than
-proving it. `NormalizationTests` compares the lockstep walker against a
-brute-force reference that never assumes the property, for FormC and FormD
-over the curated example rows, and the opt-in `NormalizationConformanceTests`
-sweep does the same over every line of the Unicode 16 normalization
-conformance file.
-
 For this optimization to be valid, we must establish both of the following
 statements from the Unicode Standard:
 
@@ -529,22 +513,16 @@ grapheme-cluster boundaries must be. However, an implementation can apply the
 extended-grapheme-cluster rules directly to a string without first converting
 it to FormD and obtain the equivalent segmentation.
 
-For `O`, this matters because `O` might not already be in any normalization
-form. The quoted rule permits segmenting it directly anyway. For `Z`, there
-are two cases:
-
-1. If `N` is FormD, `Z` is already in the form on which Unicode bases the
-   boundary specification.
-2. If `N` is FormC, `Z` isn't necessarily in FormD, and the quotation above
-   explicitly says that the default rules can be applied directly to it.
-
-Thus `O` and `Z` can each be segmented directly into extended grapheme
-clusters.
+That covers any string, whatever its normalization form. So it covers `O`,
+which might not be in any normalization form at all, and `Z`, whichever form
+`N` produced. Both can be segmented directly into extended grapheme clusters.
 
 This proves only that each segmentation can be performed directly. It doesn't,
 by itself, prove that the first extended grapheme cluster of `O` pairs with the
 first extended grapheme cluster of `Z`, the second pairs with the second, and
-so on. Requirement 2 proves that.
+so on.
+[Requirement 2](#requirement-2-the-resulting-clusters-correspond-one-for-one-and-in-the-same-order)
+proves that.
 
 ### Requirement 2: The resulting clusters correspond one-for-one and in the same order
 
@@ -618,57 +596,51 @@ Z = H0 + H1 + ... + Hm
 ```
 
 There's one `Hi` for every `Gi`. This UAX #29 guarantee (not merely the
-direct-segmentation rule in Requirement 1) is what allows taking one extended
+direct-segmentation rule in
+[Requirement 1](#requirement-1-o-and-z-can-each-be-segmented-directly))
+is what allows taking one extended
 grapheme cluster from each string on every iteration and pairing them as
 canonically equivalent spellings of the same cluster. Each side advances by
 the UTF-16 length of its own cluster, so the two offsets don't have to be equal.
 
-Note that this guarantee is descriptive prose in UAX #29, not a numbered
-definition or a conformance clause. It spans two specifications, and it holds
-because the Unicode Consortium curates the character data and the boundary
-rules to keep it true. For example, a few spacing marks such as U+09BE BENGALI
-VOWEL SIGN AA are given the `Grapheme_Extend` property specifically because
-they appear in the canonical decompositions of other vowel signs, so that the
-decomposed spelling stays one cluster. Relying on the guarantee therefore
-means trusting the Unicode Consortium to keep its data consistent with its own
-claim.
-
-It remains to connect that correspondence to the exact comparison skipped by
-the optimization. Each `Hi` is a substring of `Z`, and `Z = N(O)` is
-normalized. UAX #15 states:
-
-> “all of the Normalization Forms are closed under substringing.”
->
-> (from [UAX #15 for Unicode 16.0, Concatenation of Normalized Strings](https://www.unicode.org/reports/tr15/tr15-56.html#Concatenation))
-
-Therefore `Hi` is normalized and `N(Hi) = Hi`.
-
-The UAX #29 guarantee above says that each paired `Gi` and `Hi` is canonically
-equivalent. UAX #15 states:
-
-> “If two strings x and y are canonical equivalents, then”
->
-> - `toNFC(x) = toNFC(y)`
-> - `toNFD(x) = toNFD(y)`
->
-> (from [UAX #15 for Unicode 16.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-56.html#Design_Goals))
-
-Therefore `Gi` and `Hi` have the same FormC or FormD result:
-
-```text
-N(Gi) = N(Hi) = Hi
-```
-
-This is the exact comparison that the general algorithm would perform for its
-first, one-cluster candidate. It always succeeds for FormC and FormD, so the
-implementation may skip the normalization and comparison and pair `Gi` with
-`Hi` directly.
-
 ### Conclusion: why the FormC/FormD algorithm is valid
 
-Requirement 1 establishes that `O` and `Z` can each be segmented directly.
-Requirement 2 establishes that canonical normalization preserves those
+[Requirement 1](#requirement-1-o-and-z-can-each-be-segmented-directly)
+establishes that `O` and `Z` can each be segmented directly.
+[Requirement 2](#requirement-2-the-resulting-clusters-correspond-one-for-one-and-in-the-same-order)
+establishes that canonical normalization preserves those
 clusters in the same order, so there's exactly one `Hi` for every `Gi`.
+
+That's already the whole job, because Unicode defines what it means for a
+position in one string to correspond to a position in a canonically equivalent
+string, and the definition asks for exactly what paired clusters deliver:
+
+> “Offset P into string X is canonically equivalent to offset Q into string Y
+> if and only if both of the following conditions are true: X[0, P] ≈ Y[0, Q],
+> and X[P, len(X)] ≈ Y[Q, len(Y)]”
+>
+> (from [UAX #15 for Unicode 16.0, Respecting Canonical Equivalence](https://www.unicode.org/reports/tr15/tr15-56.html#Canonical_Equivalence))
+
+Here `≈` means “is canonically equivalent to.” Take the boundary after `Gi` in
+`O` and the boundary after `Hi` in `Z`. The text before the first is
+`G0 + ... + Gi` and the text before the second is `H0 + ... + Hi`. Each `Gk` is
+canonically equivalent to its `Hk`, and
+[Lemma 4](#lemma-4-decomposing-a-concatenation-orders-the-two-decompositions-together)
+says a concatenation's decomposition is built from the decompositions of its
+parts, so the two prefixes have the same decomposition and are canonically
+equivalent. The same argument applies to the text after each boundary. Both of
+Unicode's conditions hold, so the two offsets correspond.
+
+Note what this argument doesn't need: it never normalizes anything, so the
+comparison-based invariant plays no part, and neither does the general
+algorithm.
+
+The same definition also covers a position that isn't on a boundary. UAX #15
+notes that an offset can have no counterpart at all, giving the example of a
+precomposed Å in one string against `A` plus a combining ring in the other,
+where the offset between the `A` and the ring matches nothing in the
+precomposed spelling. Those are the positions the map snaps back to the start
+of the cluster, which is the project's convention rather than a Unicode rule.
 
 The algorithm may therefore take one extended grapheme cluster from each
 string and pair them on every iteration. The two clusters may occupy different
@@ -687,6 +659,57 @@ extended grapheme cluster into several normalized clusters or several original
 clusters into one normalized cluster. A one-for-one lockstep algorithm
 therefore can't be used for these forms. They use the comparison algorithm
 proved above.
+
+### Caveats
+
+Two things about the proof above are worth stating plainly.
+
+#### Caveat 1: the guarantee is descriptive prose, not a conformance clause
+
+The UAX #29 guarantee quoted in
+[Requirement 2](#requirement-2-the-resulting-clusters-correspond-one-for-one-and-in-the-same-order)
+is descriptive prose, not a numbered definition or a conformance clause. It
+spans two specifications, and it holds because the character data is chosen to
+keep it true. UAX #29 says so when it lists what can continue a cluster:
+
+> “The continuing characters include nonspacing marks, the Join_Controls
+> (U+200C ZERO WIDTH NON-JOINER and U+200D ZERO WIDTH JOINER) used in Indic
+> languages, and a few spacing combining marks to ensure canonical
+> equivalence.”
+>
+> (from [UAX #29 for Unicode 16.0, Grapheme Cluster Boundaries](https://www.unicode.org/reports/tr29/tr29-45.html#Grapheme_Cluster_Boundaries))
+
+U+09BE BENGALI VOWEL SIGN AA is one of those spacing combining marks. It's
+listed under `Other_Grapheme_Extend` in
+[PropList.txt](https://www.unicode.org/Public/16.0.0/ucd/PropList.txt), which
+gives it `Grapheme_Extend` and therefore `Grapheme_Cluster_Break = Extend`,
+and it appears in the canonical decomposition of U+09CB BENGALI VOWEL SIGN O.
+
+Relying on the guarantee therefore means trusting the Unicode Consortium to
+keep its data consistent with its own claim. That trust is reasonable because
+UAX #29 presents the property as a key feature of grapheme clusters, not an
+accident of the current rules.
+
+#### Caveat 2: neither segmenter this project ships runs that exact configuration
+
+The guarantee is for UAX #29's
+[default extended-grapheme-cluster rules](https://www.unicode.org/reports/tr29/tr29-45.html#Default_Grapheme_Cluster_Table)
+over Unicode's own data, and neither segmenter this project ships runs
+exactly that configuration. The built-in `GraphemeSegmentation` omits GB9c to
+match .NET 10, and the runtime `StringInfo` segmenter has whatever rule set
+and data version the installed .NET has, which may not match the normalizer's.
+
+The gap is small: the built-in segmenter runs the Unicode 16
+rules over the Unicode 16 data minus GB9c, a rule that only joins more text
+into a cluster, and .NET 10's `StringInfo` is the same rule set over the same
+data (the differential tests under `Lexing/Unicode` ensure it). Rather than
+argue that the missing rule can't matter, the test project checks the
+property directly. `NormalizationTests` compares the lockstep walker against
+a brute-force reference that never assumes the property, for FormC and FormD
+over the curated example rows, and the opt-in `NormalizationConformanceTests`
+sweep does the same over every line of the Unicode 16 normalization
+conformance file, against whichever segmenter and normalizer the test process
+resolves to.
 
 ## Appendix A: Unicode details behind the comparison proof
 
