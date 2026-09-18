@@ -574,16 +574,27 @@ FormD(O) = FormD(Z)
 ```
 
 [Lemma 2](#lemma-2-normalization-preserves-the-decomposition) already proves
-this. Its equation (A1) states that `D(N(X)) = D(X)` for every string `X`,
-where `D` is FormD whenever `N` is FormC or FormD. With `X = O` and
-`Z = N(O)`, it gives:
+this. Its equation (A1) states, for every string `X`:
 
 ```text
-FormD(Z) = FormD(N(O)) = FormD(O)
+D(N(X)) = D(X)                                      (A1)
 ```
 
-That equality is exactly the condition in definition D70, so `O` and `Z` are
-canonically equivalent, for FormD as well as FormC.
+`D` is FormD whenever `N` is FormC or FormD, which is the case here. Setting
+`X = O` gives:
+
+```text
+FormD(N(O)) = FormD(O)
+```
+
+`Z` is defined as `N(O)`, so the left side is `FormD(Z)`:
+
+```text
+FormD(Z) = FormD(O)
+```
+
+That's the equality the goal above asked for, so `O` and `Z` are canonically
+equivalent under definition D70, for FormD as well as FormC.
 
 The UAX #29 guarantee now applies: segmenting each string directly produces
 the same number of extended grapheme clusters in the same order.
@@ -611,57 +622,6 @@ establishes that `O` and `Z` can each be segmented directly.
 establishes that canonical normalization preserves those
 clusters in the same order, so there's exactly one `Hi` for every `Gi`.
 
-That's already the whole job, because Unicode defines what it means for a
-position in one string to correspond to a position in a canonically equivalent
-string, and the definition asks for exactly what paired clusters deliver:
-
-> “Offset P into string X is canonically equivalent to offset Q into string Y
-> if and only if both of the following conditions are true: X[0, P] ≈ Y[0, Q],
-> and X[P, len(X)] ≈ Y[Q, len(Y)]”
->
-> (from [UAX #15 for Unicode 16.0, Respecting Canonical Equivalence](https://www.unicode.org/reports/tr15/tr15-56.html#Canonical_Equivalence))
-
-Here `≈` means “is canonically equivalent to.” Take the boundary after `Gi` in
-`O` and the boundary after `Hi` in `Z`. The text before the first is
-`G0 + ... + Gi` and the text before the second is `H0 + ... + Hi`, so the
-question is whether those two prefixes are canonically equivalent.
-
-Definition D70, quoted in
-[Requirement 2](#requirement-2-the-resulting-clusters-correspond-one-for-one-and-in-the-same-order),
-says that two sequences are canonically equivalent when their full canonical
-decompositions are identical. So what has to be shown is:
-
-```text
-D(G0 + ... + Gi) = D(H0 + ... + Hi)
-```
-
-[Lemma 4](#lemma-4-decomposing-a-concatenation-orders-the-two-decompositions-together),
-equation (A2), says how a concatenation decomposes:
-
-```text
-D(X + Y) = canonically order (D(X) + D(Y))
-```
-
-Applying it across each prefix, `D(G0 + ... + Gi)` is built from `D(G0)`
-through `D(Gi)`, and `D(H0 + ... + Hi)` from the matching `D(Hk)`. Each `Gk` is
-canonically equivalent to its `Hk`, so by D70 `D(Gk) = D(Hk)`. The two sides
-are therefore built from the same pieces in the same order, the equation above
-holds, and the prefixes are canonically equivalent.
-
-The same argument applies to the text after each boundary. Both of Unicode's
-conditions hold, so the two offsets correspond.
-
-Note what this argument doesn't need: it never normalizes anything, so the
-comparison-based invariant plays no part, and neither does the general
-algorithm.
-
-The same definition also covers a position that isn't on a boundary. UAX #15
-notes that an offset can have no counterpart at all, giving the example of a
-precomposed Å in one string against `A` plus a combining ring in the other,
-where the offset between the `A` and the ring matches nothing in the
-precomposed spelling. Those are the positions the map snaps back to the start
-of the cluster, which is the project's convention rather than a Unicode rule.
-
 The algorithm may therefore take one extended grapheme cluster from each
 string and pair them on every iteration. The two clusters may occupy different
 numbers of UTF-16 code units, so their numeric offsets may differ, but each
@@ -682,7 +642,7 @@ proved above.
 
 ### Caveats
 
-Two things about the proof above are worth stating plainly.
+Two things about the proof above are worth noting.
 
 #### Caveat 1: the guarantee is descriptive prose, not a conformance clause
 
