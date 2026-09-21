@@ -65,22 +65,11 @@ independently below.
 Let `N` be one Unicode normalization operation: FormC, FormD, FormKC, or
 FormKD.
 Let `O` be the original string and let `Z = N(O)` be the normalized string.
-Assume that normalization succeeds and every call uses this same `N`. Because
+Assume that normalization succeeds and every call uses this same `N`.
+Succeeding also means `O` has no unpaired surrogates (the appendix
+[explains why](#assumption-the-input-has-no-unpaired-surrogates)). Because
 .NET stores strings as UTF-16, the algorithm works with UTF-16 code units, and
 compares them ordinally (meaning as exact byte value comparisons).
-
-In this project, normalization succeeding also means `O` is well-formed
-UTF-16. A .NET string can hold an unpaired surrogate half, and such a string
-isn't a coded character sequence in Unicode's sense (definition D12, quoted in
-[Lemma 1](#lemma-1-every-comparison-cut-is-at-a-code-point-boundary)), so
-none of the Unicode definitions cited below apply to it. Whether
-`String.Normalize` rejects such input depends on the runtime: .NET throws,
-and Unity's Mono returns the text unchanged. The parser therefore doesn't rely
-on the runtime. Both normalizer modes scan for an unpaired surrogate before
-normalizing (`UnicodeNormalization.FindFirstUnnormalizableIndex`) and report
-an error if they find one. So `O`, and every candidate cut from it, is a
-sequence of whole code points, and Lemma 1 shows the same for `Z` and every
-other normalization result.
 
 The algorithm divides `O` and `Z` into paired spans. Each original span
 contains one or more whole extended grapheme clusters, and its paired span is
@@ -853,8 +842,25 @@ We must prove that two kinds of comparison cuts are code-point-aligned:
 
 We couldn't find an official Unicode statement that says either conclusion
 outright. Therefore, rather than assume code-point alignment, we must prove it.
-The two subsections below do so from the relevant Unicode definitions and
-rules.
+The first subsection below explains why the input has no unpaired surrogates,
+which both arguments depend on. The two after it then prove the two kinds of
+cuts from the relevant Unicode definitions and rules.
+
+#### Assumption: The input has no unpaired surrogates
+
+The main proof assumes that normalization succeeds. In this project, that also
+means `O` is well-formed UTF-16. A .NET string can hold an unpaired surrogate
+half, and such a string isn't a coded character sequence in Unicode's sense
+(definition D12, quoted [below](#normalized-side-cuts)), so none of the
+Unicode definitions this document cites apply to it. Whether
+`String.Normalize` rejects such input depends on the runtime: .NET throws,
+and Unity's Mono returns the text unchanged. The parser therefore doesn't rely
+on the runtime. Both normalizer modes scan for an unpaired surrogate before
+normalizing (`UnicodeNormalization.FindFirstUnnormalizableIndex`) and report
+an error if they find one. So `O`, and every candidate cut from it, is a
+sequence of whole code points. The
+[normalized-side subsection](#normalized-side-cuts) shows the same for `Z` and
+every other normalization result.
 
 #### Original-side cuts
 
