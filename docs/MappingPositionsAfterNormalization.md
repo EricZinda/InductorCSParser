@@ -69,6 +69,19 @@ Assume that normalization succeeds and every call uses this same `N`. Because
 .NET stores strings as UTF-16, the algorithm works with UTF-16 code units, and
 compares them ordinally (meaning as exact byte value comparisons).
 
+In this project, normalization succeeding also means `O` is well-formed
+UTF-16. A .NET string can hold an unpaired surrogate half, and such a string
+isn't a coded character sequence in Unicode's sense (definition D12, quoted in
+[Lemma 1](#lemma-1-every-comparison-cut-is-at-a-code-point-boundary)), so
+none of the Unicode definitions cited below apply to it. Whether
+`String.Normalize` rejects such input depends on the runtime: .NET throws,
+and Unity's Mono returns the text unchanged. The parser therefore doesn't rely
+on the runtime. Both normalizer modes scan for an unpaired surrogate before
+normalizing (`UnicodeNormalization.FindFirstUnnormalizableIndex`) and report
+an error if they find one. So `O`, and every candidate cut from it, is a
+sequence of whole code points, and Lemma 1 shows the same for `Z` and every
+other normalization result.
+
 The algorithm divides `O` and `Z` into paired spans. Each original span
 contains one or more whole extended grapheme clusters, and its paired span is
 its normalization. The corresponding spans are only valid when this is true:
@@ -582,9 +595,33 @@ Standard defines canonical equivalence precisely:
 >
 > (from [The Unicode Standard 16.0, Section 3.7.2, definition D70](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G743))
 
-FormD is that full canonical decomposition (definitions D118 and D68, quoted
-in [Lemma 5](#lemma-5-equal-decompositions-give-equal-normalized-forms)). So
-by D70, proving that `O` and `Z` are canonically equivalent means proving:
+FormD is that full canonical decomposition. Definition D118 (quoted in
+[Lemma 1](#lemma-1-every-comparison-cut-is-at-a-code-point-boundary)) says
+FormD is the Canonical Decomposition of a coded character sequence, and D68
+defines that operation, reordering step included:
+
+> “D68 Canonical decomposition: The decomposition of a character or character
+> sequence that results from recursively applying the canonical mappings
+> found in the Unicode Character Database and those described in Section
+> 3.12, Conjoining Jamo Behavior, until no characters can be further
+> decomposed, and then reordering nonspacing marks according to Section 3.11,
+> Normalization Forms.”
+>
+> (from [The Unicode Standard 16.0, Section 3.7.2, definition D68](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G7425))
+
+The core specification doesn't define “full canonical decomposition” as a
+separate term. This document reads it as the D68 operation applied to the
+whole sequence, reordering step included. That's the reading Unicode's own
+design statement requires:
+
+> “When two combining characters C1 and C2 do not typographically interact, <!-- style-lint-ok: verbatim Unicode quote -->
+> the sequence C1+ C2 is canonically equivalent to C2+ C1.”
+>
+> (from [The Unicode Standard 16.0, Section 3.11.2, Combining Classes](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G62779))
+
+Two such sequences have the same D68 result only after the reordering step,
+so a reading without it wouldn't make them canonical equivalents. So by D70,
+proving that `O` and `Z` are canonically equivalent means proving:
 
 ```text
 FormD(O) = FormD(Z)
@@ -1031,6 +1068,19 @@ split a code point. Each comparison begins at an already established
 code-point boundary, and both possible new endpoints (the end of `C` and the
 end of `N(C)`) are also code-point boundaries.
 
+One more step connects that to `Z` itself. The cut in `Z` sits at the UTF-16
+offset where the matched copy of `N(C)` ends, and the code units before it
+are exactly `N(P)` followed by `N(C)`, both sequences of whole code points.
+`Z` is well-formed UTF-16 because it's a normalization result. So the last
+code unit before the cut is either a code unit that is a whole code point on
+its own (a Basic Multilingual Plane character), which is a whole code point in
+`Z` too, or a low surrogate whose high surrogate is the code unit just before
+it, also inside the prefix. Either way the cut in `Z` falls between whole code
+points, which is what lets
+[Lemma 6](#lemma-6-a-substring-of-normalized-text-is-normalized) treat the
+prefix as a substring of `Z`. The same reasoning covers the cut after `Q` in
+Lemma 8, where `Q` is a normalization result and `N(Q + V)` is well-formed.
+
 ### Lemma 2: Normalization preserves the decomposition
 
 Recall from the beginning of this section that `D(X)` is the complete, canonically ordered decomposition of `X`:
@@ -1057,6 +1107,8 @@ UAX #15's Design Goals section states:
 The same section then says “For example, the following table lists equivalent
 chains of two transformations:” and presents the table below. The highlighted
 entries give the identities needed to prove equation (A1).
+[Lemma 5](#lemma-5-equal-decompositions-give-equal-normalized-forms) uses two
+more entries from the same table.
 
 #### UAX #15 two-step normalization table
 
@@ -1168,95 +1220,42 @@ same merge in detail. This proves equation (A2).
 
 ### Lemma 5: Equal decompositions give equal normalized forms
 
-We will prove that `D(X) = D(Y)` implies `N(X) = N(Y)` in four steps.
+We will prove that `D(X) = D(Y)` implies `N(X) = N(Y)`.
 
-#### Step 1: Start with the lemma's premise
+Each normalization form is a function of its decomposition alone, so equal
+decompositions can't produce different normalized forms. There are two cases.
 
-Assume `D(X) = D(Y)`.
+When `N` is FormD or FormKD, `N` is `D` itself (definitions D118 and D119,
+quoted in
+[Lemma 1](#lemma-1-every-comparison-cut-is-at-a-code-point-boundary)), so the
+premise `D(X) = D(Y)` already says `N(X) = N(Y)`.
 
-#### Step 2: Identify what `D` computes
+When `N` is FormC or FormKC, the
+[two-step normalization table](#uax-15-two-step-normalization-table) in
+Lemma 2 includes these two entries:
 
-As defined at the start of this appendix, `D` is FormD when `N` is FormC or
-FormD, and FormKD when `N` is FormKC or FormKD. Unicode identifies these two
-forms as decompositions:
+```text
+toNFC(x)  = toNFC(toNFD(x))
+toNFKC(x) = toNFKC(toNFKD(x))
+```
 
-> “D118 Normalization Form D (NFD): The Canonical Decomposition of a coded
-> character sequence.”
->
-> “D119 Normalization Form KD (NFKD): The Compatibility Decomposition of a
-> coded character sequence.”
->
-> (from [The Unicode Standard 16.0, Section 3.11.7, definitions D118-D119](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49623))
+In this document's notation, the first says `FormC(X) = FormC(FormD(X))` and
+the second says `FormKC(X) = FormKC(FormKD(X))`. With `D` matched to `N` as
+the table at the start of this appendix specifies, both read `N(X) = N(D(X))`.
+The premise says `D(X)` and `D(Y)` are the same string, and applying `N` to
+one string gives one result:
 
-The definitions of those decompositions include recursive decomposition and
-canonical ordering:
+```text
+N(X) = N(D(X)) = N(D(Y)) = N(Y)
+```
 
-> “D68 Canonical decomposition: The decomposition of a character or character
-> sequence that results from recursively applying the canonical mappings
-> found in the Unicode Character Database and those described in Section
-> 3.12, Conjoining Jamo Behavior, until no characters can be further
-> decomposed, and then reordering nonspacing marks according to Section 3.11,
-> Normalization Forms.”
->
-> (from [The Unicode Standard 16.0, Section 3.7.2, definition D68](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G7425))
-
-> “D65 Compatibility decomposition: The decomposition of a character or
-> character sequence that results from recursively applying both the
-> compatibility mappings and the canonical mappings found in the Unicode
-> Character Database, and those described in Section 3.12, Conjoining Jamo
-> Behavior, until no characters can be further decomposed, and then
-> reordering nonspacing marks according to Section 3.11, Normalization
-> Forms.”
->
-> (from [The Unicode Standard 16.0, Section 3.7.1, definition D65](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G749))
-
-Therefore `D(X) = D(Y)` means that `X` and `Y` have identical full canonical
-decompositions in the FormC/FormD case, or identical full compatibility
-decompositions in the FormKC/FormKD case.
-
-#### Step 3: Use Unicode's definition of equivalence
-
-Unicode defines equivalence by equality of those full decompositions:
-
-> “D70 Canonical equivalent: Two character sequences are said to be canonical
-> equivalents if their full canonical decompositions are identical.”
->
-> (from [The Unicode Standard 16.0, Section 3.7.2, definition D70](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G743))
-
-> “D67 Compatibility equivalent: Two character sequences are said to be
-> compatibility equivalents if their full compatibility decompositions are
-> identical.”
->
-> (from [The Unicode Standard 16.0, Section 3.7.1, definition D67](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G753))
-
-By Step 2, `X` and `Y` are therefore canonical equivalents when `N` is FormC
-or FormD, and compatibility equivalents when `N` is FormKC or FormKD.
-
-#### Step 4: Apply UAX #15's equal-normalization rule
-
-UAX #15 gives one equal-normalization rule for canonical equivalents and
-another for compatibility equivalents:
-
-> “If two strings x and y are canonical equivalents, then”
->
-> - `toNFC(x) = toNFC(y)`
-> - `toNFD(x) = toNFD(y)`
->
-> “If two strings are compatibility equivalents, then”
->
-> - `toNFKC(x) = toNFKC(y)`
-> - `toNFKD(x) = toNFKD(y)`
->
-> (from [UAX #15 for Unicode 16.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-56.html#Design_Goals))
-
-Thus, given the premise `D(X) = D(Y)`, there are two cases:
-
-- If `N` is FormC or FormD, Step 3 shows that `X` and `Y` are canonical
-  equivalents. UAX #15 says they have equal normalization results under both
-  FormC and FormD.
-- If `N` is FormKC or FormKD, Step 3 shows that `X` and `Y` are compatibility
-  equivalents. UAX #15 says they have equal normalization results under both
-  FormKC and FormKD.
+Definitions D120 and D121 (also quoted in Lemma 1) say the same thing
+directly. FormC is “the Canonical Composition of the Canonical Decomposition
+of a coded character sequence” and FormKC is “the Canonical Composition of the
+Compatibility Decomposition of a coded character sequence”, and the Canonical
+Composition Algorithm (definition D117, quoted in Lemma 1) is a deterministic
+procedure on the decomposed sequence. Equal decompositions feed equal input to
+the same procedure.
 
 In either case, the selected `N` gives `N(X) = N(Y)`, as required.
 
@@ -1403,9 +1402,11 @@ Now back to the real proof: The proof has three steps.
 #### Proof step 1: `S` is normalized
 
 `N(Q + V)` is normalized. The premise says that it is equal to `Q + S`, so `S`
-is a suffix (and therefore a substring) of that normalized string. Lemma 6 states
-that a substring of normalized text is normalized. Therefore `S` is normalized
-too.
+is a suffix (and therefore a substring) of that normalized string, and the cut
+after `Q` is at a code-point boundary by the argument at the end of
+[Lemma 1](#lemma-1-every-comparison-cut-is-at-a-code-point-boundary). Lemma 6
+states that a substring of normalized text is normalized. Therefore `S` is
+normalized too.
 
 #### Proof step 2: `S` and `V` have the same decomposition
 
