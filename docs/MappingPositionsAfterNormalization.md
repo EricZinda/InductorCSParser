@@ -122,7 +122,7 @@ each remaining suffix until the end of the string.
 ### Results used by the proof
 
 The proof uses Lemmas 6, 7, and 8 below. All three are proved in
-[Appendix A](#appendix-a-unicode-details-behind-the-comparison-proof), with the
+[the appendix](#appendix-unicode-details-behind-the-comparison-proof), with the
 relevant Unicode citations. The appendix first establishes Lemmas 1–6, then
 uses those supporting lemmas to prove the two derived results, Lemmas 7 and 8.
 
@@ -526,7 +526,8 @@ proves that.
 
 ### Requirement 2: The resulting clusters correspond one-for-one and in the same order
 
-UAX #29 gives the guarantee needed for this requirement:
+UAX #29 states the property needed for this requirement in two places. The
+Grapheme Cluster Boundaries section describes it:
 
 > “A key feature of Unicode grapheme clusters (both legacy and
 > extended) is that they remain unchanged across all *canonically equivalent*
@@ -538,12 +539,28 @@ UAX #29 gives the guarantee needed for this requirement:
 >
 > (from [UAX #29 for Unicode 16.0, Grapheme Cluster Boundaries](https://www.unicode.org/reports/tr29/tr29-45.html#Grapheme_Cluster_Boundaries))
 
+The implementation notes say the same thing more precisely, and spell out that
+the matching boundaries can sit at different offsets:
+
+> “The boundary specifications are stated in terms of text normalized
+> according to Normalization Form NFD (see Unicode Standard Annex #15,
+> “Unicode Normalization Forms” [UAX15]). In practice, normalization of
+> the input is not required. To ensure that the same results are returned <!-- style-lint-ok: verbatim Unicode quote -->
+> for canonically equivalent text (that is, the same boundary positions will
+> be found, although those may be represented by different offsets), the
+> grapheme cluster boundary specification has the following features:”
+>
+> - “There is never a break within a sequence of nonspacing marks.”
+> - “There is never a break between a base character and subsequent nonspacing
+>   marks.”
+>
+> (from [UAX #29 for Unicode 16.0, Implementation Notes, Normalization](https://www.unicode.org/reports/tr29/tr29-45.html#Normalization))
+
 An extended grapheme cluster is the span between two consecutive extended-
-grapheme-cluster boundaries. Therefore, if `O` and `Z` are canonically
-equivalent, the quoted guarantee gives them corresponding cluster boundaries
-in the same order. The spans between those boundaries (the extended grapheme
-clusters) also correspond in the same order, although the boundaries may have
-different UTF-16 offsets.
+grapheme-cluster boundaries. So if `O` and `Z` are canonically equivalent,
+these statements give them the same boundary positions, possibly at different
+UTF-16 offsets, and the spans between those boundaries (the extended grapheme
+clusters) correspond in the same order.
 
 We must therefore prove that `O` and `Z` are canonically equivalent. UAX #15
 says as much in prose, at least for FormC:
@@ -563,7 +580,7 @@ Standard defines canonical equivalence precisely:
 > “Two character sequences are said to be canonical equivalents if their full
 > canonical decompositions are identical.”
 >
-> (from [The Unicode Standard 16.0, Section 3.7, definition D70](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G743))
+> (from [The Unicode Standard 16.0, Section 3.7.2, definition D70](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G743))
 
 FormD is that full canonical decomposition (definitions D118 and D68, quoted
 in [Lemma 5](#lemma-5-equal-decompositions-give-equal-normalized-forms)). So
@@ -596,8 +613,25 @@ FormD(Z) = FormD(O)
 That's the equality the goal above asked for, so `O` and `Z` are canonically
 equivalent under definition D70, for FormD as well as FormC.
 
-The UAX #29 guarantee now applies: segmenting each string directly produces
-the same number of extended grapheme clusters in the same order.
+The UAX #29 statements now apply. The Conformance paragraph quoted in
+[Requirement 1](#requirement-1-o-and-z-can-each-be-segmented-directly) also
+explains why they hold, by defining every string's boundaries through its
+FormD form:
+
+> “Boundaries never occur within a combining character sequence or conjoining
+> sequence, so the boundaries within non-NFD text can be derived from
+> corresponding boundaries in the NFD form of that text.”
+>
+> (from [UAX #29 for Unicode 16.0, Conformance](https://www.unicode.org/reports/tr29/tr29-45.html#Conformance))
+
+Apply that sentence to each string. The boundaries of `O` are derived from the
+boundaries of `FormD(O)`, and the boundaries of `Z` are derived from the
+boundaries of `FormD(Z)`. The equality just proved says those are the same
+string, so both derivations start from one set of boundaries in one string.
+Each boundary in that set yields one boundary in `O` and one in `Z`, in the
+same left-to-right order. Segmenting each string directly therefore produces
+the same number of extended grapheme clusters in the same order, even though
+corresponding boundaries may sit at different UTF-16 offsets.
 
 Write those clusters as:
 
@@ -606,7 +640,7 @@ O = G0 + G1 + ... + Gm
 Z = H0 + H1 + ... + Hm
 ```
 
-There's one `Hi` for every `Gi`. This UAX #29 guarantee (not merely the
+There's one `Hi` for every `Gi`. This correspondence (not merely the
 direct-segmentation rule in
 [Requirement 1](#requirement-1-o-and-z-can-each-be-segmented-directly))
 is what allows taking one extended
@@ -646,11 +680,16 @@ Two things about the proof above are worth noting.
 
 #### Caveat 1: the guarantee is descriptive prose, not a conformance clause
 
-The UAX #29 guarantee quoted in
+The UAX #29 statements quoted in
 [Requirement 2](#requirement-2-the-resulting-clusters-correspond-one-for-one-and-in-the-same-order)
-is descriptive prose, not a numbered definition or a conformance clause. It
-spans two specifications, and it holds because the character data is chosen to
-keep it true. UAX #29 says so when it lists what can continue a cluster:
+are descriptive prose, not numbered definitions or conformance clauses. That
+includes the sentence from the Conformance section that the derivation there
+rests on: it sits in that section's explanatory text, not in one of its
+numbered clauses. The property spans two specifications, and it holds because
+the rules and the character data are chosen to keep it true. UAX #29 says so
+when it describes what can continue a legacy grapheme cluster (an extended
+grapheme cluster continues with everything a legacy one does, plus all spacing
+combining marks):
 
 > “The continuing characters include nonspacing marks, the Join_Controls
 > (U+200C ZERO WIDTH NON-JOINER and U+200D ZERO WIDTH JOINER) used in Indic
@@ -659,16 +698,47 @@ keep it true. UAX #29 says so when it lists what can continue a cluster:
 >
 > (from [UAX #29 for Unicode 16.0, Grapheme Cluster Boundaries](https://www.unicode.org/reports/tr29/tr29-45.html#Grapheme_Cluster_Boundaries))
 
-U+09BE BENGALI VOWEL SIGN AA is one of those spacing combining marks. It's
-listed under `Other_Grapheme_Extend` in
+Its implementation notes name one of those marks and say why it's there:
+
+> “The specification also avoids certain problems by explicitly assigning the
+> Extend property value to certain characters, such as U+09BE (&nbsp;া&nbsp;)
+> BENGALI VOWEL SIGN AA, to deal with particular compositions.”
+>
+> (from [UAX #29 for Unicode 16.0, Implementation Notes, Normalization](https://www.unicode.org/reports/tr29/tr29-45.html#Normalization))
+
+The composition in question is U+09CB BENGALI VOWEL SIGN O. Its canonical
+decomposition in the
+[Unicode 16.0 Character Database](https://www.unicode.org/Public/16.0.0/ucd/UnicodeData.txt)
+is U+09C7 BENGALI VOWEL SIGN E followed by U+09BE, and both halves have
+`ccc = 0`, so both are starters. The core specification points out that such
+pairs compose anyway:
+
+> “The character C in R1 is not necessarily a non-starter. It is necessary to <!-- style-lint-ok: verbatim Unicode quote -->
+> check all characters in the sequence, because there are sequences `<L, C>`
+> where both L and C are Starters, yet there is a Primary Composite P which is
+> canonically equivalent to that sequence. For example, Indic two-part vowels
+> often have canonical decompositions into sequences of two spacing vowel
+> signs, each of which has Canonical_Combining_Class = 0 and which is thus a
+> Starter by definition. Nevertheless, such a decomposed sequence has an
+> equivalent Primary Composite.”
+>
+> (from [The Unicode Standard 16.0, Section 3.11.6, note under rule R2](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49620))
+
+So FormD turns the one-character spelling U+09CB into two starters, and the
+segmentation rules have to keep those two starters in one cluster to match the
+single cluster the precomposed spelling forms. For legacy grapheme clusters,
+which don't otherwise include spacing marks, the explicit assignment is what
+does that. It's recorded as `Other_Grapheme_Extend` in
 [PropList.txt](https://www.unicode.org/Public/16.0.0/ucd/PropList.txt), which
-gives it `Grapheme_Extend` and therefore `Grapheme_Cluster_Break = Extend`,
-and it appears in the canonical decomposition of U+09CB BENGALI VOWEL SIGN O.
+gives U+09BE `Grapheme_Extend` and therefore `Grapheme_Cluster_Break = Extend`.
+The extended grapheme clusters this parser uses attach every spacing mark
+through rule GB9a (`× SpacingMark`), so U+09BE stays attached under either
+spelling there as well.
 
 Relying on the guarantee therefore means trusting the Unicode Consortium to
-keep its data consistent with its own claim. That trust is reasonable because
-UAX #29 presents the property as a key feature of grapheme clusters, not an
-accident of the current rules.
+keep its rules and data consistent with its own claim. That trust is
+reasonable because UAX #29 presents the property as a key feature of grapheme
+clusters, not an accident of the current rules.
 
 #### Caveat 2: neither segmenter this project ships runs that exact configuration
 
@@ -691,7 +761,7 @@ sweep does the same over every line of the Unicode 16 normalization
 conformance file, against whichever segmenter and normalizer the test process
 resolves to.
 
-## Appendix A: Unicode details behind the comparison proof
+## Appendix: Unicode details behind the comparison proof
 
 This appendix proves two derived lemmas used by the main comparison proof:
 Lemma 7, for normalizing a concatenation, and Lemma 8, the unchanged-prefix
@@ -699,7 +769,7 @@ lemma. Both proofs depend on six supporting Unicode lemmas, established first.
 Some of those lemmas are also used independently in the main proof rather than
 only through the two derived results.
 
-Several of the lemmas compare strings through their fully decomposed forms. For
+Several of the lemmas compare strings through their fully decomposed forms and use `N` and `D` to indicate this for shorthand. For
 the selected normalization operation `N`, let `D` denote its corresponding
 Unicode-defined fully decomposed form:
 
@@ -773,13 +843,23 @@ Each rule places a boundary symbol between a left and right expression:
 >
 > (from [UAX #29 for Unicode 16.0, Notation](https://www.unicode.org/reports/tr29/tr29-45.html#Notation))
 
-Each rule contains one boundary symbol, chosen from these two possibilities:
+Each rule has exactly one boundary symbol. UAX #29 states that as the first of
+its rule constraints:
+
+> “Single boundaries. Each rule has exactly one boundary position.”
+>
+> (from [UAX #29 for Unicode 16.0, Rule Constraints](https://www.unicode.org/reports/tr29/tr29-45.html#Rule_Constraints))
+
+Table 1 lists three boundary symbols. The third one doesn't appear in any of
+the grapheme cluster rules, which use only the first two:
 
 > `÷` &nbsp; “Boundary (allow break here)”
 >
 > `×` &nbsp; “No boundary (do not allow break here)” <!-- style-lint-ok: verbatim Unicode quote -->
 >
-> (from [UAX #29 for Unicode 16.0, Notation](https://www.unicode.org/reports/tr29/tr29-45.html#Notation))
+> `→` &nbsp; “Treat whatever on the left side as if it were what is on the right side”
+>
+> (from [UAX #29 for Unicode 16.0, Notation, Table 1](https://www.unicode.org/reports/tr29/tr29-45.html#Table_Boundary_Symbols))
 
 The left and right expressions match sequences of boundary-property values:
 
@@ -890,7 +970,7 @@ decomposed sequence:
 > exchange the positions of the characters in each Reorderable Pair until the
 > sequence contains no more Reorderable Pairs.”
 >
-> (from [The Unicode Standard 16.0, Section 3.11, definition D109](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49593))
+> (from [The Unicode Standard 16.0, Section 3.11.5, definition D109](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49593))
 
 To identify the operands of the composition rule, note that `C` in the Unicode
 rules quoted here names a single character being composed. It isn't the
@@ -900,21 +980,21 @@ as a code point:
 > “D107 Starter: Any code point (assigned or not) with combining class of zero
 > (ccc = 0).”
 >
-> (from [The Unicode Standard 16.0, Section 3.11, definition D107](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49580))
+> (from [The Unicode Standard 16.0, Section 3.11.4, definition D107](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49580))
 
 It defines a Primary Composite `P` as a character:
 
 > “D114 Primary composite: A Canonical Decomposable Character (D69) which is
 > not a Full Composition Exclusion.”
 >
-> (from [The Unicode Standard 16.0, Section 3.11, definition D114](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49608))
+> (from [The Unicode Standard 16.0, Section 3.11.6, definition D114](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49608))
 
 Rule R1 identifies `C` as a character in the coded character sequence:
 
 > “R1 Seek back (left) in the coded character sequence from the character C to
 > find the last Starter L preceding C in the character sequence.”
 >
-> (from [The Unicode Standard 16.0, Section 3.11, definition D117, rule R1](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49614))
+> (from [The Unicode Standard 16.0, Section 3.11.6, definition D117, rule R1](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49614))
 
 With `L`, `C`, and `P` thus identified as complete code-point elements, R2
 specifies the replacement and deletion:
@@ -923,7 +1003,7 @@ specifies the replacement and deletion:
 > Primary Composite P which is canonically equivalent to the sequence
 > `<L, C>`, then replace L by P in the sequence and delete C from the sequence.”
 >
-> (from [The Unicode Standard 16.0, Section 3.11, definition D117, rule R2](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49614))
+> (from [The Unicode Standard 16.0, Section 3.11.6, definition D117, rule R2](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49614))
 
 R2 therefore replaces complete `L` with complete `P` and removes complete
 `C`. It doesn't modify only part of a code point.
@@ -943,7 +1023,7 @@ uses:
 > “D121 Normalization Form KC (NFKC): The Canonical Composition of the
 > Compatibility Decomposition of a coded character sequence.”
 >
-> (from [The Unicode Standard 16.0, Section 3.11, D118-D121](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49623))
+> (from [The Unicode Standard 16.0, Section 3.11.7, D118-D121](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49623))
 
 Thus, a complete normalization result `N(C)` is a sequence of whole code
 points, regardless of which of the four forms `N` selects. Its endpoint can't
@@ -965,13 +1045,18 @@ D(N(X)) = D(X)                                      (A1)
 UAX #15's Design Goals section states:
 
 > “Another consequence of the definitions is that any chain of normalizations
-> is equivalent to a single normalization”
+> is equivalent to a single normalization, which is:”
+>
+> 1. “a compatibility normalization, if any normalization is a compatibility
+>    normalization”
+> 2. “a composition normalization, if the final normalization is a composition
+>    normalization”
 >
 > (from [UAX #15 for Unicode 16.0, Design Goals](https://www.unicode.org/reports/tr15/tr15-56.html#Design_Goals))
 
-Immediately after that statement, the same section presents the following
-table of equivalent two-step normalization chains. The highlighted entries
-give the identities needed to prove equation (A1).
+The same section then says “For example, the following table lists equivalent
+chains of two transformations:” and presents the table below. The highlighted
+entries give the identities needed to prove equation (A1).
 
 #### UAX #15 two-step normalization table
 
@@ -1019,7 +1104,7 @@ condition for reordering and the algorithm that uses it:
 > exchange the positions of the characters in each Reorderable Pair until the
 > sequence contains no more Reorderable Pairs.”
 >
-> (from [The Unicode Standard 16.0, Canonical Ordering Algorithm, D108-D109](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49592))
+> (from [The Unicode Standard 16.0, Section 3.11.5, Canonical Ordering Algorithm, D108-D109](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49592))
 
 D108 never permits two code points with the same `ccc` to exchange places.
 Since D109 swaps only adjacent code points, equal-`ccc` code points retain
@@ -1054,7 +1139,15 @@ decomposable characters it produces) without changing the order of the original
 sequence. Thus the raw decomposition of `X + Y` is the raw decomposition of `X`
 followed by the raw decomposition of `Y`.
 
-UAX #15 states that ordering follows full decomposition:
+The core specification states that ordering follows full decomposition:
+
+> “Logically, to get the NFD or NFKD (maximally decomposed) normalization form
+> for a Unicode string, one first computes the full decomposition of that
+> string and then applies the Canonical Ordering Algorithm to it.”
+>
+> (from [The Unicode Standard 16.0, Section 3.11.7, Definition of Normalization Forms](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49621))
+
+UAX #15 describes the same two stages:
 
 > “Once a string has been fully decomposed, any sequences of combining marks
 > that it contains are put into a well-defined order.”
@@ -1093,7 +1186,7 @@ forms as decompositions:
 > “D119 Normalization Form KD (NFKD): The Compatibility Decomposition of a
 > coded character sequence.”
 >
-> (from [The Unicode Standard 16.0, Section 3.11, definitions D118-D119](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49623))
+> (from [The Unicode Standard 16.0, Section 3.11.7, definitions D118-D119](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49623))
 
 The definitions of those decompositions include recursive decomposition and
 canonical ordering:
@@ -1128,13 +1221,13 @@ Unicode defines equivalence by equality of those full decompositions:
 > “D70 Canonical equivalent: Two character sequences are said to be canonical
 > equivalents if their full canonical decompositions are identical.”
 >
-> (from [The Unicode Standard 16.0, Section 3.7, definition D70](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G743))
+> (from [The Unicode Standard 16.0, Section 3.7.2, definition D70](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G743))
 
 > “D67 Compatibility equivalent: Two character sequences are said to be
 > compatibility equivalents if their full compatibility decompositions are
 > identical.”
 >
-> (from [The Unicode Standard 16.0, Section 3.7, definition D67](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G753))
+> (from [The Unicode Standard 16.0, Section 3.7.1, definition D67](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G753))
 
 By Step 2, `X` and `Y` are therefore canonical equivalents when `N` is FormC
 or FormD, and compatibility equivalents when `N` is FormKC or FormKD.
