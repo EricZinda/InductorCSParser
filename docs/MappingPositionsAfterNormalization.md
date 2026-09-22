@@ -123,17 +123,23 @@ each remaining suffix until the end of the string.
 
 ### Results used by the proof
 
-The proof uses Lemmas 7, 8, and 9 below. All three are proved in
+The proof uses Lemmas 1, 7, 8, and 9 below. All four are proved in
 [the appendix](#appendix-unicode-details-behind-the-comparison-proof), with the
 relevant Unicode citations.
 
-1. **Lemma 7: A code-point-aligned substring of normalized text is normalized**
+1. **Lemma 1: Extended grapheme cluster rules apply directly to any string**
+   ([proof](#lemma-1-extended-grapheme-cluster-rules-apply-directly-to-any-string)).
+   Each candidate `C` is one or more extended grapheme clusters found by
+   segmenting `O` as it is, without normalizing it first. This result says
+   that's the segmentation Unicode defines.
+
+2. **Lemma 7: A code-point-aligned substring of normalized text is normalized**
    ([proof](#lemma-7-a-substring-of-normalized-text-is-normalized)).
    Every prefix of `Z` used below is code-point-aligned
    ([Lemma 2](#lemma-2-every-comparison-cut-is-at-a-code-point-boundary))
    and, because it's a substring of normalized text, is therefore normalized.
 
-2. **Lemma 8: Normalizing a concatenation directly equals normalizing its parts, then
+3. **Lemma 8: Normalizing a concatenation directly equals normalizing its parts, then
    the whole**
    ([proof](#lemma-8-normalizing-a-concatenation-directly-equals-normalizing-its-parts-then-the-whole)).
    For any strings `X` and `Y`:
@@ -145,7 +151,7 @@ relevant Unicode citations.
    The outer call to `N` on the right side is essential. Unicode doesn't guarantee that
    `N(X) + N(Y)` is normalized, as discussed in the linked proof.
 
-3. **Lemma 9: The unchanged-prefix lemma**
+4. **Lemma 9: The unchanged-prefix lemma**
    ([proof](#lemma-9-the-unchanged-prefix-lemma)).
    If `Q` and `V` are normalized and the following equality holds:
 
@@ -192,7 +198,10 @@ The invariant is true before the first iteration. At that point `P` is empty,
 ### A successful comparison preserves the invariant
 
 The algorithm chooses a candidate `C` from the beginning of `U`, initially one
-whole extended grapheme cluster, and lets `R` be everything after it:
+whole extended grapheme cluster. The cluster comes from segmenting `O` as it
+is, which
+[Lemma 1](#lemma-1-extended-grapheme-cluster-rules-apply-directly-to-any-string)
+shows gives the segmentation Unicode defines. Let `R` be everything after `C`:
 
 ```text
 U = C + R
