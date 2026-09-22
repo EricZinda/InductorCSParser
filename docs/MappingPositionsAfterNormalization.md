@@ -661,65 +661,12 @@ Two things about the proof above are worth noting.
 
 #### Caveat 1: the guarantee is descriptive prose, not a conformance clause
 
-The UAX #29 statements quoted in
-[Requirement 2](#requirement-2-the-resulting-clusters-correspond-one-for-one-and-in-the-same-order)
-are descriptive prose, not numbered definitions or conformance clauses. That
-includes the sentence from the Conformance section that the derivation there
-rests on: it sits in that section's explanatory text, not in one of its
-numbered clauses. The property spans two specifications, and it holds because
-the rules and the character data are chosen to keep it true. UAX #29 says so
-when it describes what can continue a legacy grapheme cluster (an extended
-grapheme cluster continues with everything a legacy one does, plus all spacing
-combining marks):
-
-> “The continuing characters include nonspacing marks, the Join_Controls
-> (U+200C ZERO WIDTH NON-JOINER and U+200D ZERO WIDTH JOINER) used in Indic
-> languages, and a few spacing combining marks to ensure canonical
-> equivalence.”
->
-> (from [UAX #29 for Unicode 16.0, Grapheme Cluster Boundaries](https://www.unicode.org/reports/tr29/tr29-45.html#Grapheme_Cluster_Boundaries))
-
-Its implementation notes name one of those marks and say why it's there:
-
-> “The specification also avoids certain problems by explicitly assigning the
-> Extend property value to certain characters, such as U+09BE (&nbsp;া&nbsp;)
-> BENGALI VOWEL SIGN AA, to deal with particular compositions.”
->
-> (from [UAX #29 for Unicode 16.0, Implementation Notes, Normalization](https://www.unicode.org/reports/tr29/tr29-45.html#Normalization))
-
-The composition in question is U+09CB BENGALI VOWEL SIGN O. Its canonical
-decomposition in the
-[Unicode 16.0 Character Database](https://www.unicode.org/Public/16.0.0/ucd/UnicodeData.txt)
-is U+09C7 BENGALI VOWEL SIGN E followed by U+09BE, and both halves have
-`ccc = 0`, so both are starters. The core specification points out that such
-pairs compose anyway:
-
-> “The character C in R1 is not necessarily a non-starter. It is necessary to <!-- style-lint-ok: verbatim Unicode quote -->
-> check all characters in the sequence, because there are sequences `<L, C>`
-> where both L and C are Starters, yet there is a Primary Composite P which is
-> canonically equivalent to that sequence. For example, Indic two-part vowels
-> often have canonical decompositions into sequences of two spacing vowel
-> signs, each of which has Canonical_Combining_Class = 0 and which is thus a
-> Starter by definition. Nevertheless, such a decomposed sequence has an
-> equivalent Primary Composite.”
->
-> (from [The Unicode Standard 16.0, Section 3.11.6, note under rule R2](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49620))
-
-So FormD turns the one-character spelling U+09CB into two starters, and the
-segmentation rules have to keep those two starters in one cluster to match the
-single cluster the precomposed spelling forms. For legacy grapheme clusters,
-which don't otherwise include spacing marks, the explicit assignment is what
-does that. It's recorded as `Other_Grapheme_Extend` in
-[PropList.txt](https://www.unicode.org/Public/16.0.0/ucd/PropList.txt), which
-gives U+09BE `Grapheme_Extend` and therefore `Grapheme_Cluster_Break = Extend`.
-The extended grapheme clusters this parser uses attach every spacing mark
-through rule GB9a (`× SpacingMark`), so U+09BE stays attached under either
-spelling there as well.
-
-Relying on the guarantee therefore means trusting the Unicode Consortium to
-keep its rules and data consistent with its own claim. That trust is
-reasonable because UAX #29 presents the property as a key feature of grapheme
-clusters, not an accident of the current rules.
+UAX #29 explicitly states that grapheme clusters remain unchanged across
+canonically equivalent forms, but presents that guarantee in explanatory prose
+rather than as a separately numbered conformance requirement. This proof
+treats it as a promised property of Unicode's default extended-grapheme-cluster
+rules and data. Caveat 2 separately addresses the fact that the project's
+actual segmenters don't run that exact configuration.
 
 #### Caveat 2: neither segmenter this project ships runs that exact configuration
 
