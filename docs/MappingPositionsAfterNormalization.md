@@ -494,7 +494,7 @@ establishes this. UAX #29 defines extended grapheme cluster boundaries on
 FormD text, but its rules can be applied directly to a string in any form and
 give the same segmentation. So `O`, which might not be in any normalization
 form at all, and `Z`, whichever form `N` produced, can each be segmented as
-they are. The comparison algorithm relies on the same lemma to segment `O`.
+they are.
 
 This proves only that each segmentation can be performed directly. It doesn't,
 by itself, prove that the first extended grapheme cluster of `O` pairs with the
@@ -541,30 +541,24 @@ these statements give them the same boundary positions, possibly at different
 UTF-16 offsets, and the spans between those boundaries (the extended grapheme
 clusters) correspond in the same order.
 
-We must therefore prove that `O` and `Z` are canonically equivalent. UAX #15
-says as much in prose, at least for FormC:
+We must therefore prove that `O` and `Z` are canonically equivalent. The
+Unicode Standard defines canonical equivalence precisely:
 
-> “There are two forms of normalization that convert to composite characters:
-> Normalization Form C and Normalization Form KC. The difference between these
-> depends on whether the resulting text is to be a canonical equivalent to the
-> original unnormalized text or a compatibility equivalent to the original
-> unnormalized text.”
->
-> (from [UAX #15 for Unicode 16.0, Normalization Forms](https://www.unicode.org/reports/tr15/tr15-56.html#Norm_Forms))
-
-That sentence is descriptive rather than a numbered definition, and it doesn't
-mention FormD at all, so let's prove the claim more formally. The Unicode
-Standard defines canonical equivalence precisely:
-
-> “Two character sequences are said to be canonical equivalents if their full
-> canonical decompositions are identical.”
+> “D70 Canonical equivalent: Two character sequences are said to be canonical
+> equivalents if their full canonical decompositions are identical.”
 >
 > (from [The Unicode Standard 16.0, Section 3.7.2, definition D70](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G743))
 
-FormD is that full canonical decomposition. Definition D118 (quoted in
-[Lemma 2](#lemma-2-every-comparison-cut-is-at-a-code-point-boundary)) says
-FormD is the Canonical Decomposition of a coded character sequence, and D68
-defines that operation, reordering step included:
+The standard explains what *full* means for decomposition:
+
+> “A full decomposition of a character sequence results from decomposing each
+> of the characters in the sequence until no characters can be further
+> decomposed.”
+>
+> (from [The Unicode Standard 16.0, Section 3.7, definition D64](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G742))
+
+D68 defines canonical decomposition as performing that recursive canonical
+decomposition and then applying canonical ordering:
 
 > “D68 Canonical decomposition: The decomposition of a character or character
 > sequence that results from recursively applying the canonical mappings
@@ -575,19 +569,17 @@ defines that operation, reordering step included:
 >
 > (from [The Unicode Standard 16.0, Section 3.7.2, definition D68](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G7425))
 
-The core specification doesn't define “full canonical decomposition” as a
-separate term. This document reads it as the D68 operation applied to the
-whole sequence, reordering step included. That's the reading Unicode's own
-design statement requires:
+Finally, D118 identifies FormD as that canonical decomposition operation:
 
-> “When two combining characters C1 and C2 do not typographically interact, <!-- style-lint-ok: verbatim Unicode quote -->
-> the sequence C1+ C2 is canonically equivalent to C2+ C1.”
+> “D118 Normalization Form D (NFD): The Canonical Decomposition of a coded
+> character sequence.”
 >
-> (from [The Unicode Standard 16.0, Section 3.11.2, Combining Classes](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G62779))
+> (from [The Unicode Standard 16.0, Section 3.11.7, definition D118](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49623))
 
-Two such sequences have the same D68 result only after the reordering step,
-so a reading without it wouldn't make them canonical equivalents. So by D70,
-proving that `O` and `Z` are canonically equivalent means proving:
+In summary, D64 and D68 specify the full, canonically ordered decomposition,
+D118 identifies its result as FormD, and D70 says that equality of those
+decompositions is canonical equivalence. Therefore, proving that `O` and `Z`
+are canonically equivalent reduces to proving:
 
 ```text
 FormD(O) = FormD(Z)
