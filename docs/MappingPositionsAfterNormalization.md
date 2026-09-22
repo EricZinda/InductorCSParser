@@ -606,27 +606,13 @@ FormD(Z) = FormD(O)
 ```
 
 That's the equality the goal above asked for, so `O` and `Z` are canonically
-equivalent under definition D70, for FormD as well as FormC.
-
-The UAX #29 statements now apply. The Conformance paragraph quoted in
-[Requirement 1](#requirement-1-o-and-z-can-each-be-segmented-directly) also
-explains why they hold, by defining every string's boundaries through its
-FormD form:
-
-> “Boundaries never occur within a combining character sequence or conjoining
-> sequence, so the boundaries within non-NFD text can be derived from
-> corresponding boundaries in the NFD form of that text.”
->
-> (from [UAX #29 for Unicode 16.0, Conformance](https://www.unicode.org/reports/tr29/tr29-45.html#Conformance))
-
-Apply that sentence to each string. The boundaries of `O` are derived from the
-boundaries of `FormD(O)`, and the boundaries of `Z` are derived from the
-boundaries of `FormD(Z)`. The equality just proved says those are the same
-string, so both derivations start from one set of boundaries in one string.
-Each boundary in that set yields one boundary in `O` and one in `Z`, in the
-same left-to-right order. Segmenting each string directly therefore produces
-the same number of extended grapheme clusters in the same order, even though
-corresponding boundaries may sit at different UTF-16 offsets.
+equivalent under definition D70, for FormD as well as FormC. The UAX #29
+statements quoted at the beginning of this requirement therefore apply
+directly: their extended-grapheme-cluster boundaries correspond one-for-one in
+left-to-right order, although corresponding boundaries may occur at different
+UTF-16 offsets. Because each extended grapheme cluster is the span between two
+consecutive boundaries, the clusters also correspond one-for-one in the same
+order.
 
 Write those clusters as:
 
