@@ -768,7 +768,7 @@ which might not be in any normalization form at all, and `Z`, whichever form
 
 ### Lemma 2: Every comparison cut is at a code-point boundary
 
-Here, a *cut* is where the comparison divides a string: at the end of a
+Here, a *cut* is where the algorithm's comparison divides a string: at the end of a
 candidate `C` in the original text, or at the end of its complete normalization
 result `N(C)` in the normalized text. This lemma shows that neither cut can fall
 between the two UTF-16 code units of a supplementary code point. The proof
@@ -851,12 +851,19 @@ the grapheme cluster rules, which use only the first two:
 >
 > (from [UAX #29 for Unicode 16.0, Notation, Table 1](https://www.unicode.org/reports/tr29/tr29-45.html#Table_Boundary_Symbols))
 
-The left and right expressions match sequences of boundary-property values:
+Before applying the rules, each code point is classified with a
+boundary-property value such as `CR`, `LF`, `Extend`, or `SpacingMark`. The
+left and right expressions match the resulting sequence of code-point
+classifications:
 
 > “The left and right sides use the boundary property values in regular
 > expressions.”
 >
 > (from [UAX #29 for Unicode 16.0, Notation](https://www.unicode.org/reports/tr29/tr29-45.html#Notation))
+
+For example, `CR × LF` means that, when a complete code point classified as
+`CR` is followed by a complete code point classified as `LF`, no boundary is
+allowed in the gap between them.
 
 `sot` and `eot` mean “start of text” and “end of text,” respectively
 ([UAX #29 for Unicode 16.0, Notation](https://www.unicode.org/reports/tr29/tr29-45.html#Notation)).
@@ -962,10 +969,7 @@ decomposed sequence:
 >
 > (from [The Unicode Standard 16.0, Section 3.11.5, definition D109](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49593))
 
-To identify the operands of the composition rule, note that `C` in the Unicode
-rules quoted here names a single character being composed. It isn't the
-candidate span `C` used elsewhere in this document. A Starter `L` is defined
-as a code point:
+A Starter `L` is defined as a code point:
 
 > “D107 Starter: Any code point (assigned or not) with combining class of zero
 > (ccc = 0).”
@@ -978,6 +982,9 @@ It defines a Primary Composite `P` as a character:
 > not a Full Composition Exclusion.”
 >
 > (from [The Unicode Standard 16.0, Section 3.11.6, definition D114](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49608))
+
+In the Unicode rule below, `C` names a single character being composed. It
+isn't the candidate span `C` used elsewhere in this document.
 
 Rule R1 identifies `C` as a character in the coded character sequence:
 
