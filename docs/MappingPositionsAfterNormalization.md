@@ -438,14 +438,8 @@ and can't run out of text without finding a successful candidate.
 
 The algorithm first tests the next original cluster alone, then the next two
 clusters together, and so on. Therefore, the first candidate that matches
-contains the fewest possible whole original clusters. Every candidate ends at
-one of the parser's cluster boundaries in the original.
-
-No extra rule is needed to keep a candidate from ending in the middle of a
-cluster. Each candidate is a sequence of whole extended grapheme clusters, so
-its end is a UAX #29 cluster boundary, and a cluster is by definition the text
-between two such boundaries (definition D61, quoted in
-[Lemma 1](#lemma-1-every-comparison-cut-is-at-a-code-point-boundary)).
+contains the fewest possible whole original clusters. Every candidate is built
+from whole clusters, so none can end in the middle of one.
 
 ### Proof summary
 
