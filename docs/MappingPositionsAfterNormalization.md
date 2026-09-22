@@ -129,10 +129,9 @@ relevant Unicode citations.
 
 1. **Lemma 6: A code-point-aligned substring of normalized text is normalized**
    ([proof](#lemma-6-a-substring-of-normalized-text-is-normalized)).
-   Every prefix used below is code-point-aligned
+   Every prefix of `Z` used below is code-point-aligned
    ([Lemma 1](#lemma-1-every-comparison-cut-is-at-a-code-point-boundary))
-   and, because it's a substring of normalized text, is therefore normalized
-   by this result.
+   and, because it's a substring of normalized text, is therefore normalized.
 
 2. **Lemma 7: Normalizing a concatenation directly equals normalizing its parts, then
    the whole**
@@ -210,12 +209,12 @@ Substituting `U = C + R` gives:
 
 ```text
 O = P    | C + R
-Z = N(P) | N(C + R)
+Z = N(P) | N(C + R)  (2)
 ```
 
 The algorithm now normalizes the candidate `C` by itself, producing `N(C)`.
 It compares that result ordinally with the same number of UTF-16 code units at
-the beginning of `N(C + R)` since this is the unclaimed suffix of `Z`.
+the beginning of `N(C + R)`, the unclaimed suffix of `Z` in equation (2).
 
 The comparison succeeds only if those code units are exactly equal, so a
 successful comparison establishes that `N(C)` is a prefix of `N(C + R)`. Let
@@ -226,11 +225,18 @@ O: |       P       |    C    |    R    |
 Z: |     N(P)      |  N(C)   |    S    |
 ```
 
-When the ordinal comparison between `N(C)` and the beginning of the unclaimed
-suffix `N(C + R)` succeeds, this must be true:
+In the invariant's notation, that diagram says:
 
 ```text
-N(C + R) = N(C) + S  (2)
+O = P    | C + R
+Z = N(P) | N(C) + S  (3)
+```
+
+Equations (2) and (3) both describe `Z`, and both begin with the same accepted
+prefix `N(P)`, so the text after that prefix must be equal too:
+
+```text
+N(C + R) = N(C) + S  (4)
 ```
 
 Now, Lemma 7,
@@ -244,14 +250,14 @@ N(X + Y) = N(N(X) + N(Y))
 Apply the rule with `X = C` and `Y = R`:
 
 ```text
-N(C + R) = N(N(C) + N(R))  (3)
+N(C + R) = N(N(C) + N(R))  (5)
 ```
 
-Equations (2) and (3) have the same left-hand side, so their right-hand sides
+Equations (4) and (5) have the same left-hand side, so their right-hand sides
 are equal:
 
 ```text
-N(N(C) + N(R)) = N(C) + S  (4)
+N(N(C) + N(R)) = N(C) + S  (6)
 ```
 
 “[Lemma 8: The unchanged-prefix lemma](#lemma-8-the-unchanged-prefix-lemma)”
@@ -266,7 +272,7 @@ premises to use that lemma:
 
 1. `N(C)` is normalized because it's a normalization result.
 2. `N(R)` is normalized because it's a normalization result.
-3. Equation (4) above establishes the third premise:
+3. Equation (6) above establishes the third premise:
 
    ```text
    N(N(C) + N(R)) = N(C) + S
@@ -275,7 +281,7 @@ premises to use that lemma:
 All three premises hold, so Lemma 8 gives:
 
 ```text
-S = N(R)  (5)
+S = N(R)  (7)
 ```
 
 This proves that the remaining suffix `S` of `Z` is exactly `N(R)`, which is
@@ -293,7 +299,7 @@ it using what we now know is true:
 
 ```text
 O = P    | C + R
-Z = N(P) | N(C) + N(R)  (6)
+Z = N(P) | N(C) + N(R)  (8)
          ^ current accepted pair of boundaries
 ```
 
@@ -302,12 +308,12 @@ to the invariant form, which is:
 
 ```text
 O = P + C    | R
-Z = N(P + C) | N(R)  (7)
+Z = N(P + C) | N(R)  (9)
 ```
 
-Equation (6) says that the prefix of `Z` ending immediately after the matched
+Equation (8) says that the prefix of `Z` ending immediately after the matched
 `N(C)` is `N(P) + N(C)`. Before accepting the proposed boundary after `C`,
-equation (7) requires us to prove that this prefix is equal to `N(P + C)`.
+equation (9) requires us to prove that this prefix is equal to `N(P + C)`.
 UAX #15 explains why that equality requires proof:
 
 > “In using normalization functions, it is important to realize that none of
@@ -322,7 +328,7 @@ concatenation may not be. So we need to prove that:
 N(P + C) = N(P) + N(C)
 ```
 
-Recall from equation (6) that:
+Recall from equation (8) that:
 
 ```text
 Z = N(P) + N(C) + N(R)
@@ -336,7 +342,7 @@ normalized by “[Lemma 6: A substring of normalized text is normalized](#lemma-
 In other words:
 
 ```text
-N(N(P) + N(C)) = N(P) + N(C)  (8)
+N(N(P) + N(C)) = N(P) + N(C)  (10)
 ```
 
 Recall that we are trying to prove `N(P + C) = N(P) + N(C)`.
@@ -347,37 +353,37 @@ Apply Lemma 7,
 with `X = P` and `Y = C`:
 
 ```text
-N(P + C) = N(N(P) + N(C))  (9)
+N(P + C) = N(N(P) + N(C))  (11)
 ```
 
-Equation (8) shows that the right side of equation (9) is equal to
+Equation (10) shows that the right side of equation (11) is equal to
 `N(P) + N(C)`, giving:
 
 ```text
-N(P + C) = N(P) + N(C)  (10)
+N(P + C) = N(P) + N(C)  (12)
 ```
 
-Equation (10) is the proof we were looking for. It holds here because its
+Equation (12) is the proof we were looking for. It holds here because its
 right-hand side is a code-point-aligned substring of the normalized string
 `Z`. It isn't a general rule that `N(P + C) = N(P) + N(C)`.
 
-Now, recall that equation (6) gives the current known state:
+Now, recall that equation (8) gives the current known state:
 
 ```text
 O = P    | C + R
 Z = N(P) | N(C) + N(R)
 ```
 
-By equation (10), we can replace `N(P) + N(C)` with `N(P + C)`. Moving `C` into
+By equation (12), we can replace `N(P) + N(C)` with `N(P + C)`. Moving `C` into
 the accepted prefix then gives:
 
 ```text
 O = P + C    | R
-Z = N(P + C) | N(R)  (11)
+Z = N(P + C) | N(R)  (13)
              ^ newly accepted pair of boundaries
 ```
 
-Equation (11) is the original invariant, now at the newly accepted pair of
+Equation (13) is the original invariant, now at the newly accepted pair of
 boundaries. The algorithm can therefore accept `C` and repeat the same
 operation with `P + C` as the accepted prefix and `R` as the unclaimed suffix.
 
