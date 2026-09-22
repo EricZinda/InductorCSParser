@@ -294,17 +294,10 @@ S = N(R)  (7)
 ```
 
 This proves that the remaining suffix `S` of `Z` is exactly `N(R)`, which is
-the normalization of the remaining suffix `R` of `O`. The complete state is
-now:
-
-```text
-O: |       P       |    C    |    R    |
-Z: |     N(P)      |  N(C)   |  N(R)   |
-                   ^ current accepted pair of boundaries
-```
-
-At this point, the invariant is still positioned before `C`, but we can rewrite
-it using what we now know is true:
+the normalization of the remaining suffix `R` of `O`. Equations (4) and (7)
+together say `N(C + R) = N(C) + N(R)`, so the unclaimed suffix of `Z` in
+equation (2) splits into those two pieces. The accepted boundary hasn't moved
+yet, so the complete state is now:
 
 ```text
 O = P    | C + R
