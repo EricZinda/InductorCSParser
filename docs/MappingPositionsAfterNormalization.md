@@ -125,8 +125,7 @@ each remaining suffix until the end of the string.
 
 The proof uses Lemmas 6, 7, and 8 below. All three are proved in
 [the appendix](#appendix-unicode-details-behind-the-comparison-proof), with the
-relevant Unicode citations. The appendix first establishes Lemmas 1–6, then
-uses those supporting lemmas to prove the two derived results, Lemmas 7 and 8.
+relevant Unicode citations.
 
 1. **Lemma 6: A code-point-aligned substring of normalized text is normalized**
    ([proof](#lemma-6-a-substring-of-normalized-text-is-normalized)).
