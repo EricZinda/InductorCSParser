@@ -1028,18 +1028,11 @@ split a code point. Each comparison begins at an already established
 code-point boundary, and both possible new endpoints (the end of `C` and the
 end of `N(C)`) are also code-point boundaries.
 
-One more step connects that to `Z` itself. The cut in `Z` sits at the UTF-16
-offset where the matched copy of `N(C)` ends, and the code units before it
-are exactly `N(P)` followed by `N(C)`, both sequences of whole code points.
-`Z` is well-formed UTF-16 because it's a normalization result. So the last
-code unit before the cut is either a code unit that is a whole code point on
-its own (a Basic Multilingual Plane character), which is a whole code point in
-`Z` too, or a low surrogate whose high surrogate is the code unit just before
-it, also inside the prefix. Either way the cut in `Z` falls between whole code
-points, which is what lets
-[Lemma 7](#lemma-7-a-substring-of-normalized-text-is-normalized) treat the
-prefix as a substring of `Z`. The same reasoning covers the cut after `Q` in
-Lemma 9, where `Q` is a normalization result and `N(Q + V)` is well-formed.
+The comparison matches `N(C)` immediately after the already accepted prefix
+`N(P)`, so the text in `Z` before the proposed cut is exactly `N(P) + N(C)`.
+Both are complete normalization results and therefore sequences of complete
+code points. Their concatenation also ends at a code-point boundary. Because
+it's an exact prefix of `Z`, the proposed cut in `Z` is at that same boundary.
 
 ### Lemma 3: Normalization preserves the decomposition
 
@@ -1361,12 +1354,12 @@ Now back to the real proof: The proof has three steps.
 
 #### Proof step 1: `S` is normalized
 
-`N(Q + V)` is normalized. The premise says that it is equal to `Q + S`, so `S`
-is a suffix (and therefore a substring) of that normalized string, and the cut
-after `Q` is at a code-point boundary by the argument at the end of
-[Lemma 2](#lemma-2-every-comparison-cut-is-at-a-code-point-boundary). Lemma 7
-states that a substring of normalized text is normalized. Therefore `S` is
-normalized too.
+`N(Q + V)` is normalized. The premise says that it's equal to `Q + S`.
+Because `Q` is normalized, it's a sequence of complete code points. It's an
+exact prefix of `N(Q + V)`, so the cut after `Q` is a code-point boundary.
+Thus `S` is a code-point-aligned suffix (and therefore a substring) of
+normalized text. Lemma 7 states that such a substring is normalized.
+Therefore `S` is normalized too.
 
 #### Proof step 2: `S` and `V` have the same decomposition
 
