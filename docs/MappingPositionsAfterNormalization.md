@@ -1175,8 +1175,7 @@ same merge in detail. This proves equation (A2).
 
 We will prove that `D(X) = D(Y)` implies `N(X) = N(Y)`.
 
-Each normalization form is a function of its decomposition alone, so equal
-decompositions can't produce different normalized forms. There are two cases.
+There are two cases.
 
 When `N` is FormD or FormKD, `N` is `D` itself (definitions D118 and D119,
 quoted in
@@ -1192,15 +1191,17 @@ toNFC(x)  = toNFC(toNFD(x))
 toNFKC(x) = toNFKC(toNFKD(x))
 ```
 
-In this document's notation, the first says `FormC(X) = FormC(FormD(X))` and
-the second says `FormKC(X) = FormKC(FormKD(X))`. With `D` matched to `N` as
-the table at the start of this appendix specifies, both read `N(X) = N(D(X))`.
-The premise says `D(X)` and `D(Y)` are the same string, and applying `N` to
-one string gives one result:
+These entries give the required result directly:
 
-```text
-N(X) = N(D(X)) = N(D(Y)) = N(Y)
-```
+- If `N` is FormC, then `D` is FormD. The first entry says that normalizing
+  `X` to FormC gives the same result as normalizing `D(X)` to FormC. The same
+  is true for `Y`. The premise says that `D(X)` and `D(Y)` are the same string.
+  Normalizing that string to FormC must therefore give the same result in both
+  cases, so `FormC(X) = FormC(Y)`.
+- If `N` is FormKC, then `D` is FormKD. The second entry gives the same
+  argument. The premise says that `D(X)` and `D(Y)` are the same string.
+  Normalizing that string to FormKC must therefore give the same result in
+  both cases, so `FormKC(X) = FormKC(Y)`.
 
 Definitions D120 and D121 (also quoted in Lemma 2) say the same thing
 directly. FormC is “the Canonical Composition of the Canonical Decomposition
@@ -1315,8 +1316,7 @@ This aside rules out a tempting shortcut for proving Lemma 9: if normalization
 leaves the prefix `Q` unchanged, one might assume that no code point from `V`
 crossed the `Q | V` join and use that assumed lack of movement to conclude
 `S = V`.
-The assumption is false. The proof below instead uses equality of full
-decompositions and the behavior of canonical ordering.
+That assumption is false, let's see why.
 
 Let `N` be FormC, let `Q` be `Ậ` (U+1EAC, LATIN CAPITAL LETTER A WITH
 CIRCUMFLEX AND DOT BELOW), and let `V` be U+0323 COMBINING DOT BELOW. Both `Q`
@@ -1328,11 +1328,11 @@ U+1EAC[Q] | U+0323[V]
 
 The `[Q]` and `[V]` labels record where each code-point occurrence came from.
 They aren't part of the string. Decomposing U+1EAC produces `A`, a dot below,
-and a circumflex. The number before each nonstarter is its `ccc` value:
+and a circumflex. The number before each code point is its `ccc` value:
 
 ```text
-before ordering:   U+0041[Q] [220:U+0323[Q] | 230:U+0302[Q]] + [220:U+0323[V]]
-after ordering:    U+0041[Q] [220:U+0323[Q],U+0323[V] | 230:U+0302[Q]]
+before ordering:  0:U+0041[Q]  220:U+0323[Q]  230:U+0302[Q] | 220:U+0323[V]
+after ordering:   0:U+0041[Q]  220:U+0323[Q]  220:U+0323[V]  230:U+0302[Q]
 ```
 
 The second line shows that canonical ordering places class 220 before class
