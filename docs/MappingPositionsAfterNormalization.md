@@ -1405,9 +1405,9 @@ participate in a swap, and no code point can cross it. Code points with equal
 stretch of nonstarters is sorted by `ccc` without changing the relative order
 of equal-`ccc` code points.
 
-Therefore only the trailing nonstarters of `D(Q)` and the leading nonstarters
-of the following decomposition (`D(V)` on the left side of equation (A7), or
-`D(S)` on the right) can intermix.
+Therefore only the *trailing nonstarters* of `D(Q)` and the *leading
+nonstarters* of the following decomposition (`D(V)` on the left side of
+equation (A7), or `D(S)` on the right) can intermix.
 
 For brevity, we'll use the term *following string* to refer to `D(V)` on the left side of
 equation (A7) or `D(S)` on the right. Given the known `D(Q)` and the result of
@@ -1421,18 +1421,20 @@ parts:
 D(Q) = unchanged prefix + trailing nonstarters
 ```
 
-The trailing nonstarters are the complete stretch of nonstarters at the end of
-`D(Q)`. They're empty if `D(Q)` ends with a starter. Split the *following
-string* in the opposite way:
+The *trailing nonstarters* are the complete stretch of nonstarters at the end
+of `D(Q)`. They're empty if `D(Q)` ends with a starter. The *unchanged prefix*
+is everything in `D(Q)` before that stretch. Split the *following string* in
+the opposite way:
 
 ```text
 following string = leading nonstarters + unchanged rest
 ```
 
-The first part is the complete stretch of nonstarters at its beginning. The
-unchanged rest is empty or begins with its first starter. `D(Q)`, `D(V)`, and
-`D(S)` are already ordered internally, so ordering their concatenation needs
-to merge only the two nonstarter stretches where the strings meet:
+The *leading nonstarters* are the complete stretch of nonstarters at the
+beginning of the *following string*. The *unchanged rest* is empty or begins
+with its first starter. `D(Q)`, `D(V)`, and `D(S)` are already ordered
+internally, so ordering their concatenation needs to merge only the two
+nonstarter stretches where the strings meet:
 
 ```text
 canonically order (D(Q) + following string)
@@ -1453,8 +1455,8 @@ Stable ordering keeps a code-point occurrence from `D(Q)` before one from the
 *following string* when their `ccc` values are the same. After the stable merge,
 if you remove `q1` from the start of the merged `220` group and `q2,q3` from the
 start of the merged `230` group, what remains is exactly
-`220:r1 220:r2 232:r3`, the leading nonstarters of the *following string*. This
-shows how the merge may interleave the two nonstarter stretches, but it
+`220:r1 220:r2 232:r3`, the *leading nonstarters* of the *following string*.
+This shows how the merge may interleave the two nonstarter stretches, but it
 preserves the order within each stretch.
 
 This matters because the recovery procedure must recover the actual code-point
@@ -1467,10 +1469,10 @@ many from the front of the group. What remains within the merged stretch is
 exactly the occurrences from the *following string*, so identical code-point
 values don't make the recovery ambiguous.
 
-We know `D(Q)`, so use the process above to remove its trailing nonstarters
+We know `D(Q)`, so use the process above to remove its *trailing nonstarters*
 from the merged stretch. After removing `D(Q)`'s contribution, what remains is
-the leading nonstarters of the *following string* followed by its unchanged
-rest, which together make up the complete *following string*.
+the *leading nonstarters* of the *following string* followed by its *unchanged
+rest*, which together make up the complete *following string*.
 
 #### Proof step 4: Apply the recovery procedure to equation (A7)
 
@@ -1492,11 +1494,11 @@ The recovery procedure has exactly the same two inputs in both cases: the
 ordered sequence `T` and the known contribution `D(Q)`. It can therefore
 remove the contribution of `D(Q)` from `T` directly as follows:
 
-1. Remove the unchanged prefix of `D(Q)` from the start of `T`. Proof step 3
-   showed that only `D(Q)`'s trailing nonstarters can intermix with the
+1. Remove the *unchanged prefix* of `D(Q)` from the start of `T`. Proof step 3
+   showed that only `D(Q)`'s *trailing nonstarters* can intermix with the
    *following string*, so this prefix appears unchanged at the start of `T`.
 2. Within each merged `ccc` group, remove from the front the known number of
-   code-point occurrences contributed by the trailing nonstarters of `D(Q)`.
+   code-point occurrences contributed by the *trailing nonstarters* of `D(Q)`.
    Stable ordering preserves those occurrences and their relative order and
    places them before occurrences from the *following string* with the same
    `ccc`. Only their positions in the complete merged stretch may have
