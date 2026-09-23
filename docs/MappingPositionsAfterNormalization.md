@@ -1310,47 +1310,7 @@ We must prove:
 >
 > then `S = V`.
 
-#### Aside: movement across the join can be invisible
-
-This aside rules out a tempting shortcut for proving Lemma 9: if normalization
-leaves the prefix `Q` unchanged, one might assume that no code point from `V`
-crossed the `Q | V` join and use that assumed lack of movement to conclude
-`S = V`.
-That assumption is false, let's see why.
-
-Let `N` be FormC, let `Q` be `Ậ` (U+1EAC, LATIN CAPITAL LETTER A WITH
-CIRCUMFLEX AND DOT BELOW), and let `V` be U+0323 COMBINING DOT BELOW. Both `Q`
-and `V` are already normalized. Before normalization, their join is:
-
-```text
-U+1EAC[Q] | U+0323[V]
-```
-
-The `[Q]` and `[V]` labels record where each code-point occurrence came from.
-They aren't part of the string. Decomposing U+1EAC produces `A`, a dot below,
-and a circumflex. The number before each code point is its `ccc` value:
-
-```text
-before ordering:  0:U+0041[Q]  220:U+0323[Q]  230:U+0302[Q] | 220:U+0323[V]
-after ordering:   0:U+0041[Q]  220:U+0323[Q]  220:U+0323[V]  230:U+0302[Q]
-```
-
-The second line shows that canonical ordering places class 220 before class
-230, so the dot from `V` moves left across the circumflex from `Q`.
-
-Canonical composition then rebuilds `Ậ` (U+1EAC) from the `A`, the first dot
-below, and the circumflex. The second dot remains, producing:
-
-```text
-U+1EAC U+0323
-```
-
-That's exactly `Q + V`. The final prefix is still the exact `Q`, even though
-the dot originating in `V` crossed a decomposed code point originating in `Q`.
-The decomposition and combining classes are recorded in the
-[Unicode 16.0 Character Database](https://www.unicode.org/Public/16.0.0/ucd/UnicodeData.txt).
-
-Now back to the real proof: The proof has three steps.
+The proof has five steps.
 
 #### Proof step 1: `S` is normalized
 
@@ -1361,7 +1321,7 @@ Thus `S` is a code-point-aligned suffix (and therefore a substring) of
 normalized text. Lemma 7 states that such a substring is normalized.
 Therefore `S` is normalized too.
 
-#### Proof step 2: `S` and `V` have the same decomposition
+#### Proof step 2: Derive equality of the two ordered decompositions
 
 The lemma assumes:
 
@@ -1409,13 +1369,13 @@ canonically order (D(Q) + D(V))
     = canonically order (D(Q) + D(S))               (A7)
 ```
 
-Recall the goal of this step: prove `D(V) = D(S)`. Equation (A7) has the same
-fixed `D(Q)` on both sides. To conclude that `D(V) = D(S)`, we must show that
-canonical ordering doesn't prevent us from cancelling that common
-contribution. The next paragraphs show how stable ordering lets us remove the
-code-point occurrences contributed by `D(Q)` and recover the complete string
-that followed it, even though ordering may mix combining marks where the
-strings meet.
+#### Proof step 3: Define and justify the recovery procedure
+
+Equation (A7) has the same fixed `D(Q)` on both sides. To use that equality to
+prove `D(V) = D(S)`, we need a procedure that removes the contribution of
+`D(Q)` and recovers the complete string that followed it. This step defines
+that procedure and proves that it works even when canonical ordering mixes
+combining marks where the strings meet.
 
 Lemma 4 established that canonical ordering is a stable sort within each
 maximal stretch of nonstarters. Consequently:
@@ -1430,8 +1390,16 @@ greater positive `ccc` value than the right one. A starter has `ccc = 0`, so it
 can't take part in such a swap. Because code points move only through adjacent
 swaps, no code point can cross a starter.
 
-Consequently, only the nonstarters immediately before and after the join can
-intermix. To isolate them, split the known string `D(Q)` into two parts:
+##### Recovery procedure
+
+Given the known `D(Q)` and the result of canonically ordering `D(Q)` plus a
+following decomposition, this procedure recovers that complete following
+decomposition.
+
+Only the trailing nonstarters of `D(Q)` and the leading nonstarters of the
+following decomposition (`D(V)` on the left side of equation (A7), or `D(S)`
+on the right) can intermix. To separate their contributions, first split the
+known string `D(Q)` into two parts:
 
 ```text
 D(Q) = unchanged prefix + trailing nonstarters
@@ -1461,17 +1429,17 @@ Here's a schematic example. The numbers are `ccc` values, `q` labels code
 points from `D(Q)`, and `r` labels code points from the following string:
 
 ```text
-before stable merge:   [220:q1 | 230:q2,q3] + [220:r1,r2 | 232:r3]
-after stable merge:     220:q1,r1,r2 | 230:q2,q3 | 232:r3
+before stable merge:  220:q1  230:q2  230:q3  220:r1  220:r2  232:r3
+after stable merge:   220:q1  220:r1  220:r2  230:q2  230:q3  232:r3
 ```
 
 Stable ordering keeps a code-point occurrence from `D(Q)` before one from the
 following string when their `ccc` values are the same. After the stable merge,
 if you remove `q1` from the start of the merged `220` group and `q2,q3` from the
 start of the merged `230` group, what remains is exactly
-`220:r1,r2 | 232:r3`, the leading nonstarters of the following string. This shows how the
-merge may interleave the two nonstarter stretches, but it preserves the order
-within each stretch.
+`220:r1 220:r2 232:r3`, the leading nonstarters of the following string. This
+shows how the merge may interleave the two nonstarter stretches, but it
+preserves the order within each stretch.
 
 This matters because the proof must recover the actual code-point sequence
 following `D(Q)` from the ordered result, not merely its `ccc` values. The `q`
@@ -1489,26 +1457,37 @@ to remove its trailing nonstarters from the merged stretch. What remains is the
 leading nonstarters from the following string, followed by its unchanged rest.
 Together, those parts are the complete string that followed `D(Q)`.
 
-Now return to equation (A7):
+#### Proof step 4: Apply the recovery procedure to equation (A7)
+
+Equation (A7) states:
 
 ```text
 canonically order (D(Q) + D(V))
     = canonically order (D(Q) + D(S))               (A7)
 ```
 
-Apply the recovery procedure described above to both sides of equation (A7):
+Let `T` name the single ordered string on both sides of equation (A7):
 
 ```text
-canonically order (D(Q) + D(V))  -- remove D(Q)'s contribution -->  D(V)
-canonically order (D(Q) + D(S))  -- remove D(Q)'s contribution -->  D(S)
+T = canonically order (D(Q) + D(V))
+T = canonically order (D(Q) + D(S))
 ```
 
-The preceding argument proved that the first recovery produces exactly `D(V)`
-and the second produces exactly `D(S)`, rather than merely sequences with the
-same `ccc` values. Equation (A7) says that the two ordered input strings are
-identical. The recovery also uses the same `D(Q)` on both sides, so it removes
-the same contribution and must produce identical remaining sequences.
-Therefore:
+The recovery procedure has exactly the same two inputs in both cases: the
+ordered sequence `T` and the known contribution `D(Q)`. It therefore performs
+the same removals in both cases:
+
+1. It removes the unchanged prefix contributed by `D(Q)`.
+2. Within each merged `ccc` group, it removes from the front the known number
+   of code-point occurrences contributed by the trailing nonstarters of
+   `D(Q)`.
+3. Everything not removed is the recovered following string.
+
+In both cases, the procedure is applied to the same string `T` using the same
+known `D(Q)`. It therefore makes the same removals and leaves the same
+remainder. The preceding argument proved that this remainder is exactly
+`D(V)` in the first equality and exactly `D(S)` in the second, rather than
+merely strings with the same `ccc` values. Therefore:
 
 ```text
 D(V) = D(S)                                         (A8)
@@ -1518,7 +1497,7 @@ This argument doesn't assume that no nonstarter crossed the join during
 normalization. It proves only what is needed: identical ordered results made
 from the same known left input must have identical right inputs.
 
-#### Proof step 3: Equal decompositions give equal normalized strings
+#### Proof step 5: Equal decompositions give equal normalized strings
 
 This lemma assumes `N(Q + V) = Q + S`. Thus the input suffix after `Q` is `V`,
 while the output suffix after `Q` is `S`:
@@ -1528,7 +1507,7 @@ before normalization:   Q | V
 after normalization:    Q | S    because N(Q + V) = Q + S
 ```
 
-Proof step 2 established that these two suffixes have the same decomposition:
+Proof step 4 established that these two suffixes have the same decomposition:
 
 ```text
 D(V) = D(S)                                         (A8)
@@ -1591,3 +1570,75 @@ unchanged while silently replacing `V` with some different suffix `S`.
 
 The lemmas used in the proof apply to FormC, FormD, FormKC, and FormKD, so
 Lemma 9 holds for all four forms.
+
+#### Aside: movement across the join can be invisible
+
+A tempting proof of Lemma 9 would go like this:
+
+1. `Q` and `V` are each already normalized.
+2. Assume that, because `Q` remains unchanged at the start of the output,
+   normalization didn't move or combine any code points across the `Q | V`
+   join.
+3. Under that assumption, normalization acts on `Q` and `V` independently.
+   Because each is already normalized, the result must be `Q + V`.
+4. The lemma's premise also says that the result is `Q + S`. Therefore
+   `Q + V = Q + S`, and removing the common prefix `Q` gives `V = S`.
+
+The unsupported step is step 2: an unchanged output prefix doesn't prove that
+nothing crossed the join during normalization. The following example shows
+why.
+
+Let `N` be FormC, let `Q` be `Ậ` (U+1EAC, LATIN CAPITAL LETTER A WITH
+CIRCUMFLEX AND DOT BELOW), and let `V` be U+0323 COMBINING DOT BELOW. Both `Q`
+and `V` are already normalized. Before normalization, their join is:
+
+```text
+U+1EAC[Q] | U+0323[V]
+```
+
+The `[Q]` and `[V]` labels record where each code-point occurrence came from.
+They aren't part of the string. FormC first canonically decomposes the entire
+input and orders the resulting sequence before composing it again. To track
+what happens across the `Q | V` join, begin with the decomposition step.
+Decomposing U+1EAC produces `A`, a dot below, and a circumflex. U+0323 has no
+decomposition mapping, so decomposing `V` leaves it as U+0323. The number
+before each code point is its `ccc` value:
+
+```text
+before ordering:  0:U+0041[Q]  220:U+0323[Q]  230:U+0302[Q]  220:U+0323[V]
+after ordering:   0:U+0041[Q]  220:U+0323[Q]  220:U+0323[V]  230:U+0302[Q]
+```
+
+The second line shows that canonical ordering places class 220 before class
+230, so the dot from `V` moves left across the circumflex from `Q`.
+
+Canonical composition first combines U+0041 (`A`) with the U+0323 COMBINING
+DOT BELOW that came from `Q`, producing U+1EA0 (`Ạ`). The U+0323 from `V`
+can't combine with U+1EA0, so it remains between U+1EA0 and U+0302.
+Canonical composition can still combine characters on opposite sides of it.
+Unicode explicitly notes:
+
+> “a Non-blocked Pair need not be contiguous.” <!-- style-lint-ok: verbatim Unicode quote -->
+>
+> (from [The Unicode Standard 16.0, Section 3.11.6, definition D116](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49612))
+
+Under [definition D115's blocking rule](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G49610),
+the intervening U+0323 would block the following U+0302 only if its `ccc` were
+zero or at least U+0302's `ccc`. Its `ccc` is 220, which is less than U+0302's
+230, so it doesn't block the composition. U+1EA0 therefore combines with
+U+0302 COMBINING CIRCUMFLEX to produce U+1EAC (`Ậ`). The unabsorbed U+0323
+from `V` remains after U+1EAC:
+
+```text
+U+1EAC U+0323
+```
+
+That's exactly `Q + V`. The final prefix is still the exact `Q`, even though
+the dot originating in `V` crossed a decomposed code point originating in `Q`.
+The decomposition and combining classes are recorded in the
+[Unicode 16.0 Character Database](https://www.unicode.org/Public/16.0.0/ucd/UnicodeData.txt).
+
+The example doesn't disprove `S = V`. In fact, it satisfies `S = V`. To use
+the shortcut, we'd have to prove that anything crossing the join always
+“comes back” without changing the suffix, but that's essentially what Lemma 9
+is trying to prove. Assuming it would be circular.
