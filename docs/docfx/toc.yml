@@ -29,6 +29,8 @@
       href: docs/UnicodeInternalsArchitecture.md
 - name: Architecture
   items:
+    - name: Mapping Positions After Normalization
+      href: docs/MappingPositionsAfterNormalization.md
     - name: Code Architecture
       href: docs/CodeArchitecture.md
     - name: Error Reporting Architecture
@@ -37,8 +39,6 @@
       href: docs/TestArchitecture.md
     - name: Terminology
       href: docs/Terminology.md
-    - name: Mapping Positions After Normalization
-      href: docs/MappingPositionsAfterNormalization.md
 - name: API
   href: api/index.md
 - name: GitHub
